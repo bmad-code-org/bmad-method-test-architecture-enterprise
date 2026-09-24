@@ -59,19 +59,19 @@
 /*
  * WHAT STILL REACHES `fs` DIRECTLY, AND WHY
  *
- * Eight calls, none of them a read of a file's contents.
+ * Two calls, neither a read of a file's contents: the `mkdir` that creates the
+ * artifact directory, since the port writes bytes at a path and creates no
+ * directories, which is the package's boundary; and the `rm` that removes a
+ * staged workspace whose authorization was refused before the cache could take
+ * it over.
  *
- * - A hand-written copy tree and its walk: one `readdir`, one `mkdir` and one
- *   `copyFile`. The port cannot read a directory, and a copy is a byte read
- *   followed by a byte write that `test/lib/file-system-port.js` cannot express
- *   while it publishes `readBytes` with no `writeBytes` beside it.
- * - Five lifecycle calls: one `mkdtemp`, two `mkdir` that create the cache and
- *   artifact directories, and two `rm` that remove a staged workspace. The port
- *   writes bytes at a path and creates no directories, which is the package's
- *   boundary rather than an omission.
- *
- * Every read of a file's contents and every artifact write go through
- * `test/lib/file-system-port.js`: the trace ground truth, each cached leg
+ * The staging, the leg cache and the per-leg workspace are the runtime's
+ * (`cli/lib/evaluate/workspace.js`: `stageDirectories`, `cachingPort`,
+ * `cacheOnlyPort`, `requestKey`); this harness keeps its TeA data, which
+ * directories a suite's leg needs and how a leg is announced, and hands the
+ * runtime `test/lib/file-system-port.js`'s reader and writer and
+ * `test/lib/clock.js`, so every read of a file's contents and every artifact
+ * write still goes through the port: the trace ground truth, each cached leg
  * observation, the recorded baseline, and the cost report, the sealed brief and
  * the verdict files this harness writes.
  *
@@ -85,13 +85,13 @@
  */
 
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 
-const { digest, refuseScriptedRecord } = require('./lib/eval-record');
+const { refuseScriptedRecord } = require('./lib/eval-record');
 const { nowMs, nowIso, elapsedMsSince } = require('./lib/clock');
+const { cacheOnlyPort, cachingPort, requestKey, stageDirectories } = require('../cli/lib/evaluate/workspace');
 const { loadEvalQuality, validateArtifact } = require('./lib/eval-quality-inputs');
-const { cliObservation, createProbePort, readEnvironment } = require('./lib/probe-targets');
+const { createProbePort, readEnvironment } = require('./lib/probe-targets');
 const {
   collectingSink,
   ladderExitCode,
@@ -102,7 +102,9 @@ const {
   suites,
 } = require('./lib/probe-scoring');
 const { readJson, writeText } = require('./lib/file-system-port');
-const { stageWorkspace, traceArtifactPaths } = require('./eval-trace');
+const ciHarness = require('./eval-ci');
+const nfrHarness = require('./eval-nfr');
+const traceHarness = require('./eval-trace');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const REVIEW_FIXTURE_DIR = path.join('test', 'fixtures', 'test-review-eval');
@@ -110,7 +112,16 @@ const REVIEW_SKILL_DIR = path.join('src', 'workflows', 'testarch', 'bmad-testarc
 const DEFAULT_OUT = path.join(PROJECT_ROOT, 'test', 'eval-artifacts', 'contract-strength');
 const DEFAULT_CACHE = path.join(PROJECT_ROOT, 'test', 'eval-artifacts', 'preflight-cache');
 const BASELINE_PATH = path.join(PROJECT_ROOT, 'test', 'probes', 'expected-strength.json');
-const TRACE_GROUND_TRUTH = path.join(PROJECT_ROOT, 'test', 'fixtures', 'trace-eval', 'ground-truth.json');
+/**
+ * The suites whose legs each audit one fixture set: the set's own harness
+ * stages it, under the project root the leg's prompt names, and the artifact
+ * paths that set makes true are the leg's.
+ */
+const SET_STAGED_SUITES = {
+  trace: { harness: traceHarness, interfaceId: 'tea-trace-runner', artifactPaths: traceHarness.traceArtifactPaths },
+  nfr: { harness: nfrHarness, interfaceId: 'tea-nfr-runner', artifactPaths: nfrHarness.nfrArtifactPaths },
+  ci: { harness: ciHarness, interfaceId: 'tea-ci-runner', artifactPaths: ciHarness.ciArtifactPaths },
+};
 
 const colors = {
   reset: '[0m',
@@ -175,22 +186,6 @@ function parseArgs(argv) {
   return options;
 }
 
-/**
- * One directory copied into another.
- *
- * Hand-written rather than `fs.cpSync`, which is still experimental below Node
- * 22.3.0 and this package declares `>=22.0.0`.
- */
-function copyTree(from, to) {
-  fs.mkdirSync(to, { recursive: true });
-  for (const entry of fs.readdirSync(from, { withFileTypes: true })) {
-    const source = path.join(from, entry.name);
-    const target = path.join(to, entry.name);
-    if (entry.isDirectory()) copyTree(source, target);
-    else fs.copyFileSync(source, target);
-  }
-}
-
 /** A directory name a cache path can carry, from a suite identifier that may hold a slash. */
 const slug = (suiteId) => suiteId.replaceAll(/[^a-z\d]+/gi, '-');
 
@@ -198,13 +193,16 @@ const slug = (suiteId) => suiteId.replaceAll(/[^a-z\d]+/gi, '-');
  * The run directory one suite's legs execute in, and the artifact paths that
  * directory makes true.
  *
- * A trace leg is staged by the trace harness itself, so the set arrives exactly as
- * `npm run eval:trace` stages it, under the same project root its artifact override
- * names. Which set that is comes out of the leg's own prompt: each fixture set has
- * its own project root and the prompt is written against it, so a leg that traces
- * the clean set asks for the clean set. Staging one set for every leg is what made
- * the contract's two witness legs seeded runs, which is the scoping failure
- * `seeded-faults-scoped` reported against all three defect probes.
+ * A trace, NFR or CI leg is staged by its suite's own harness, so the set arrives
+ * exactly as `npm run eval:trace`, `eval:nfr` or `eval:ci` stages it, under the
+ * same project root its artifact override names. Which set that is comes out of
+ * the leg's own prompt: each fixture set has its own project root and the prompt
+ * is written against it, so a leg that traces the clean set asks for the clean
+ * set. Staging one set for every leg is what made the trace contract's two
+ * witness legs seeded runs, which is the scoping failure `seeded-faults-scoped`
+ * reported against all three defect probes. NFR and CI legs ran in an empty
+ * directory until Story 1.7's live run found every one of them reporting that
+ * its skill and project were missing.
  *
  * A test-review leg is the coupling `docs/explanation/eval-quality-command-adapter.md`
  * records: its `--files` are repository-relative, its `--json` is a bare
@@ -220,28 +218,28 @@ const slug = (suiteId) => suiteId.replaceAll(/[^a-z\d]+/gi, '-');
  * declaration is for.
  */
 async function stagedWorkspaceFor(suiteId, request) {
-  if (suiteId === 'trace') {
-    const read = await readJson(TRACE_GROUND_TRUTH);
-    if (!read.present) throw new Error(`${path.relative(PROJECT_ROOT, TRACE_GROUND_TRUTH)} is missing, so no trace leg can be staged`);
-    const groundTruth = read.value;
+  const setStaged = SET_STAGED_SUITES[suiteId];
+  if (setStaged !== undefined) {
+    const groundTruth = await setStaged.harness.loadGroundTruth();
+    if (groundTruth === null) throw new Error(`the ${suiteId} ground truth is missing or not JSON, so no ${suiteId} leg can be staged`);
     const prompt = String(request?.channels?.stdin?.value ?? '');
     const set = groundTruth.fixtureSets.find((entry) => prompt.includes(`\`{project-root}\`: \`${entry.projectRoot}\``));
     if (set === undefined) {
-      throw new Error('a trace leg sent a prompt naming no fixture set project root, so there is no set to stage for it');
+      throw new Error(`a ${suiteId} leg sent a prompt naming no fixture set project root, so there is no set to stage for it`);
     }
-    const staged = await stageWorkspace(set);
+    const staged = await setStaged.harness.stageWorkspace(set);
     return {
       root: staged.dir,
       cwd: staged.dir,
-      artifacts: { 'tea-trace-runner': traceArtifactPaths(set) },
+      artifacts: { [setStaged.interfaceId]: setStaged.artifactPaths(set) },
     };
   }
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), `tea-${slug(suiteId)}-preflight-`));
-  if (suiteId === 'test-review') {
-    copyTree(path.join(PROJECT_ROOT, REVIEW_FIXTURE_DIR), path.join(dir, REVIEW_FIXTURE_DIR));
-    copyTree(path.join(PROJECT_ROOT, REVIEW_SKILL_DIR), path.join(dir, REVIEW_SKILL_DIR));
-  }
-  return { root: dir, cwd: dir, artifacts: {} };
+  const staged = stageDirectories({
+    from: PROJECT_ROOT,
+    directories: suiteId === 'test-review' ? [REVIEW_FIXTURE_DIR, REVIEW_SKILL_DIR] : [],
+    prefix: `tea-${slug(suiteId)}-preflight-`,
+  });
+  return { ...staged, artifacts: {} };
 }
 
 /**
@@ -258,110 +256,25 @@ function permittedEnvironment(contract, operationId) {
   return readEnvironment(operation?.requestShape?.environment?.permittedKeys ?? []);
 }
 
-/** The cache key for one probe request: everything about it except which leg asked. */
-function requestKey(request) {
-  const { probeId, ...rest } = request;
-  return digest([JSON.stringify(rest)])
-    .replace('sha256:', '')
-    .slice(0, 32);
-}
-
-/**
- * The live port, with every observation cached to disk under its request.
- *
- * The cache is the resumability. A leg whose request was answered before is
- * returned from disk with this leg's own correlation identifiers written back
- * on, because the reducer indexes observations by `probeId` and the cached one
- * carries whichever leg happened to run first.
- *
- * A fresh workspace per spawned leg, and that is not tidiness. The first live
- * trace pre-flight ran both witness legs in one staged directory and the second
- * leg's artifact map read back a summary the first leg had written: the two
- * summaries were byte-identical while the two matrices differed, so the
- * differential the witness asserts was measured against a file the second run
- * never produced. `fixtureReset` is `null` on every TEA contract, so AD-10 plans
- * nothing to reset one, and a directory each is the only thing that makes a leg's
- * evidence its own.
- */
-function cachingPort({ makePort, contract, cacheDir, agent, force, counters, log }) {
-  fs.mkdirSync(cacheDir, { recursive: true });
-  return {
-    async probe(request, signal) {
-      const key = requestKey(request);
-      const file = path.join(cacheDir, `${key}.json`);
-      // The existence check that used to guard this read is gone: the read
-      // answers absence, and a leg with no cached observation falls through to
-      // the live one on that answer.
-      const cached = force ? { present: false } : await readJson(file);
-      if (cached.present) {
-        for (const counter of counters) counter.hits += 1;
-        log(`  ${colors.dim}cached${colors.reset} leg ${request.probeId} (${key})`);
-        // Narrowed like a live one. A cache written by an older build, or by a
-        // port that answered in another member, is a shape this harness cannot
-        // read, and reading it as a cli observation would score `undefined` as
-        // an exit code.
-        return cliObservation({
-          ...cached.value.observation,
-          probeId: request.probeId,
-          interfaceId: request.interfaceId,
-          operationId: request.operationId,
-        });
-      }
-      const augmented = {
-        ...request,
-        channels: {
-          ...request.channels,
-          option: { ...request.channels.option, agent },
-          environment: { ...permittedEnvironment(contract, request.operationId), ...request.channels.environment },
-        },
-      };
-      log(`  ${colors.yellow}running${colors.reset} leg ${request.probeId} (${key})`);
-      const { port: realPort, workspace } = await makePort(augmented);
-      const startedAt = await nowMs();
-      let observation;
-      try {
-        // This harness is the fourth port caller and the one that does not go
-        // through `probeCommand`, because it caches every observation itself.
-        // It narrows at the same boundary for the same reason.
-        observation = cliObservation(await realPort.probe(augmented, signal));
-      } finally {
-        fs.rmSync(workspace.root, { recursive: true, force: true });
-      }
-      const elapsedMs = await elapsedMsSince(startedAt);
-      const leg = { key, legId: request.probeId, operationId: request.operationId, elapsedMs, exitCode: observation.exitCode };
-      for (const counter of counters) {
-        counter.spawns += 1;
-        counter.elapsedMs += elapsedMs;
-        counter.legs.push(leg);
-      }
-      await writeText(
-        file,
-        `${JSON.stringify({ key, agent, at: await nowIso(), elapsedMs, request: { ...augmented, channels: { ...augmented.channels, environment: Object.keys(augmented.channels.environment) } }, observation }, null, 2)}\n`,
+/** The runtime's cache log events as this harness prints them. */
+function logLeg(event) {
+  switch (event.event) {
+    case 'cached': {
+      console.log(`  ${colors.dim}cached${colors.reset} leg ${event.legId} (${event.key})`);
+      break;
+    }
+    case 'running': {
+      console.log(`  ${colors.yellow}running${colors.reset} leg ${event.legId} (${event.key})`);
+      break;
+    }
+    case 'wrote': {
+      console.log(
+        `  ${colors.dim}wrote${colors.reset} ${path.relative(PROJECT_ROOT, event.file)} in ${(event.elapsedMs / 1000).toFixed(1)}s, exit ${event.exitCode}`,
       );
-      log(
-        `  ${colors.dim}wrote${colors.reset} ${path.relative(PROJECT_ROOT, file)} in ${(elapsedMs / 1000).toFixed(1)}s, exit ${observation.exitCode}`,
-      );
-      return observation;
-    },
-  };
-}
-
-/** A port that answers only from the cache and refuses to spend a call. */
-function cacheOnlyPort(cacheDir, counters) {
-  return {
-    async probe(request) {
-      const key = requestKey(request);
-      const file = path.join(cacheDir, `${key}.json`);
-      // The existence check that used to guard this read is gone: the read
-      // answers absence and the refusal is raised off that answer.
-      const cached = await readJson(file);
-      if (!cached.present) {
-        throw new Error(`--from-cache is set and leg ${request.probeId} (${key}) has no cached observation; run without it first`);
-      }
-      for (const counter of counters) counter.hits += 1;
-      return { ...cached.value.observation, probeId: request.probeId, interfaceId: request.interfaceId, operationId: request.operationId };
-    },
-  };
+      break;
+    }
+    default:
+  }
 }
 
 /** What one run of the legs cost, in the terms an operator planning the next one needs. */
@@ -401,11 +314,10 @@ async function runOneSuite(suite, options, stats) {
   // be hashed into a path.
   const cacheDir = path.join(options.cache, slug(options.agent), slug(suite.id));
   const interfaceIds = suite.contract.permittedInterfaces.map((iface) => iface.logicalId);
-  const log = (line) => console.log(line);
 
   let port;
   if (options.fromCache) {
-    port = cacheOnlyPort(cacheDir, [stats, suiteStats]);
+    port = cacheOnlyPort({ cacheDir, counters: [stats, suiteStats], readJson, hint: '; --from-cache is set, so run without it first' });
   } else {
     port = cachingPort({
       makePort: async (request) => {
@@ -421,12 +333,25 @@ async function runOneSuite(suite, options, stats) {
           throw error;
         }
       },
-      contract: suite.contract,
+      // The live request carries the agent in its option channel and the
+      // host's values for the environment the operation declares; the cache
+      // key is taken before either is added.
+      augment: (request) => ({
+        ...request,
+        channels: {
+          ...request.channels,
+          option: { ...request.channels.option, agent: options.agent },
+          environment: { ...permittedEnvironment(suite.contract, request.operationId), ...request.channels.environment },
+        },
+      }),
+      recordFields: { agent: options.agent },
       cacheDir,
-      agent: options.agent,
       force: options.force,
       counters: [stats, suiteStats],
-      log,
+      log: logLeg,
+      readJson,
+      writeText,
+      clock: { nowMs, nowIso, elapsedMsSince },
     });
   }
 
@@ -667,4 +592,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { baselineDifferences, parseArgs, requestKey, stagedWorkspaceFor, validateArtifact };
+module.exports = { baselineDifferences, cachingPort, parseArgs, requestKey, stageDirectories, stagedWorkspaceFor, validateArtifact };

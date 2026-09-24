@@ -191,6 +191,9 @@ jobs:
       - name: Drive tea-skill-runner and tea-evaluate preflight over a stub agent
         run: npm run test:evaluate-preflight
 
+      - name: Qualify a controlled mutation in a disposable workspace and prove its rollback
+        run: npm run test:evaluate-mutation
+
       - name: Test knowledge base (index sync, link resolution, workflow-copy parity)
         run: npm run test:knowledge
 

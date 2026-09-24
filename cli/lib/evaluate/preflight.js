@@ -1,62 +1,78 @@
 /**
- * `tea-evaluate preflight`: drive an evaluation's preflight legs against the
- * real target and take the verdict from the eval-quality CLI (AD-6).
+ * `tea-evaluate preflight`: qualify an evaluation's seeded probes in a
+ * disposable workspace, drive its preflight legs against the real target, and
+ * take the verdict from the eval-quality CLI (AD-6, AD-8).
  *
  * The steps, each stopping the run with its own exit when it fails:
  *
  *   1. `check` over the folder (exit 10 on any authoring defect);
- *   2. the target is launchable: a `cli` interface, no probe that seeds a
- *      defect, and every registry target present and executable in a
- *      disposable copy of `launch.root` (exit 12 otherwise; see below);
- *   3. `eval-quality compile` and `eval-quality seal` over the run's copy of
- *      `contract.json`, their outputs written into `runs/<invocationId>/` (a
- *      documented non-zero exit passes through);
- *   4. the legs, planned and driven by eval-quality's `runPreflight` through a
- *      recording port over the registry's command-line adapter in that copy,
- *      every observation written under `runs/<invocationId>/observations/` as
- *      it arrives; a leg the adapter refuses or cannot run is written under
- *      `runs/<invocationId>/faults/` and ends the run (exit 10 for a denial, 12
- *      otherwise);
- *   5. `eval-quality preflight --observations ... --run-id <invocationId>` over
+ *   2. the evaluation is one this release can run: a `cli` interface, and
+ *      every probe that seeds a defect on the `controlled-mutation` route
+ *      (exit 12 otherwise, before anything runs);
+ *   3. the pristine workspace (`workspace.js`: a detached worktree at the
+ *      evaluated commit, or a temp copy), every registry target present and
+ *      executable in it, and `runs/<invocationId>/run.json` recording what was
+ *      evaluated (exit 12 when the workspace cannot be made);
+ *   4. `eval-quality compile` and `eval-quality seal` over the run's copy of
+ *      `contract.json` (a documented non-zero exit passes through);
+ *   5. each seeded probe qualified through AD-8's six steps on the pristine
+ *      workspace (`mutation.js`), with the single-trial arm executor
+ *      (`arm.js`) and the deterministic evaluator (`evaluator.js`); its
+ *      evidence is written under `runs/<invocationId>/qualification/<probeId>/`
+ *      as far as the cycle got, and a step that fails exits 10, 11 or 12 with
+ *      no qualified probe written;
+ *   6. the adopter's tree compared with its state before the workspace was
+ *      made (exit 12 when `git status` or its uncommitted changes moved), and
+ *      only then the qualified probes written to `runs/<invocationId>/probes/`;
+ *   7. one mutated workspace per mutation, its mutation applied and its digest
+ *      held to the one the cycle measured;
+ *   8. the legs, planned and driven by eval-quality's `runPreflight` through a
+ *      recording port: a leg a defect's manifestation witness names runs in
+ *      that defect's mutated workspace, every other leg in the pristine one,
+ *      and each observation is written under `observations/` with the
+ *      workspace and working directory it ran in; a leg the adapter refuses or
+ *      cannot run is written under `faults/` and ends the run (exit 10 for a
+ *      denial, 12 otherwise);
+ *   9. `eval-quality preflight --observations ... --run-id <invocationId>` over
  *      the persisted files, whose exit code is the command's exit code.
  *
  * `runPreflight` also returns a verdict. It is discarded: an enforced verdict
  * comes from the CLI over persisted files, so CI can reproduce it by hand, and
- * the run's `engine/preflight.json` records the call that produced it.
- *
- * Seeded probes: a manifestation witness's leg runs against the mutated copy
- * of its defect's mutation (AD-6), which Story 1.7 builds, so this release
- * refuses an evaluation holding a probe that seeds a defect. Every other
- * committed probe seeds none, and the preflight plan reads nothing from a probe
- * that seeds none, so the probe list the CLI receives is empty.
- *
- * The copy: the legs run in a temp copy of `launch.root` (without `.git` and
- * the evaluation's own `runs/`), and the copy is removed when the command ends,
- * on an interrupting signal included. A symbolic link in the copy points into
- * the copy, and a link out of `launch.root` is refused (exit 12), so a write
- * under the copied tree stays in the copy, and an artifact the adapter reads
- * back is one this run wrote. Each directory `workspace.provision` lists is
- * linked in from the target, writable: a leg that writes under a provisioned
- * directory writes into the target's own directory. Story 1.7 replaces the
- * copy with the pristine and mutated workspaces AD-8 describes, whose
- * provisioned links are read-only.
+ * the run's `engine/preflight.json` records the call that produced it. Every
+ * workspace is removed when the command ends, on an interrupting signal
+ * included.
  */
 
 'use strict';
 
 const crypto = require('node:crypto');
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 
-const { checkEvaluation } = require('./check');
+const { hostEnvironmentPort, persistableRequest, runArm } = require('./arm');
+const { TEA_MANIFEST, checkEvaluation } = require('./check');
 const { MANIFEST_NAME } = require('./folder');
-const { loadEngine } = require('./engine');
+const { engineVersion, loadEngine } = require('./engine');
 const { runEngineStage } = require('./engine-cli');
+const { evaluateOracles, oraclesOfBehaviors } = require('./evaluator');
+const { QualificationError, applyReplaceExact, qualifiedProbe, runMutationCycle } = require('./mutation');
+const { createArtifactValidator } = require('./records');
 const { registryFromEvaluation } = require('./registry');
+const {
+  WorkspaceRefusal,
+  adopterTreeState,
+  cleanUpOnSignal,
+  createWorkspace,
+  joinAsSpelled,
+  realPathLoosely,
+  removeWorkspace,
+  treeDigest,
+} = require('./workspace');
 
 const CONTRACT_NAME = 'contract.json';
+const POLICY_PATH = 'policy/scoring-policy.json';
 const PROBE_FILE = /\.probe\.json$/;
+const QUALIFIED_ROUTE = 'controlled-mutation';
 
 /** The eval-quality fault a command-line adapter throws when its policy refuses a request. */
 const DENIAL_FAULT = 'forbidden-target';
@@ -64,15 +80,11 @@ const DENIAL_FAULT = 'forbidden-target';
 /** The errors `runPreflight` raises while planning, before any leg reaches the port; the CLI raises the same over the same files. */
 const PLANNING_FAULTS = new Set(['schema-parse-failure', 'schema-version-mismatch']);
 
-/** An injected environment value shorter than this is not scrubbed from output: it would match ordinary text. */
-const MIN_SCRUBBED_VALUE_LENGTH = 8;
-const SCRUBBED = '[redacted]';
-
 /** The result of one `tea-evaluate preflight`. */
 class PreflightOutcome {
   /**
    * @param {object} fields
-   * @param {'check'|'launch'|'engine'|'leg'|'verdict'} fields.stage where the run stopped
+   * @param {'check'|'launch'|'engine'|'qualification'|'leg'|'verdict'} fields.stage where the run stopped
    * @param {number} fields.exitCode
    * @param {string} fields.message
    * @param {Array<{file: string, rule: string, message: string}>} [fields.findings]
@@ -84,6 +96,15 @@ class PreflightOutcome {
     this.message = message;
     this.findings = findings;
     this.runDirectory = runDirectory;
+  }
+}
+
+/** A stop inside a run, carrying the outcome it ends with. */
+class RunStop extends Error {
+  constructor(outcome) {
+    super(outcome.message);
+    this.name = 'RunStop';
+    this.outcome = outcome;
   }
 }
 
@@ -106,18 +127,21 @@ function writeJson(file, value) {
   fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
 }
 
-/** Every committed probe that seeds a defect, by file name. */
-function seededProbeFiles(folder) {
+/** `relative` in POSIX form. */
+function posix(relative) {
+  return relative.split(path.sep).join('/');
+}
+
+/** Every committed probe that seeds a defect, sorted by file name, parsed. */
+function seededProbes(folder) {
   const directory = path.join(folder, 'probes');
   if (!fs.existsSync(directory)) return [];
   return fs
     .readdirSync(directory)
     .filter((name) => PROBE_FILE.test(name))
-    .filter((name) => {
-      const probe = readJson(path.join(directory, name));
-      return Array.isArray(probe.defects) && probe.defects.length > 0;
-    })
-    .sort();
+    .sort()
+    .map((name) => ({ file: `probes/${name}`, probe: readJson(path.join(directory, name)) }))
+    .filter(({ probe }) => Array.isArray(probe.defects) && probe.defects.length > 0);
 }
 
 /** A leg's file name: its order in the run, then its identifier made safe for a path. */
@@ -126,251 +150,63 @@ function legFileName(sequence, legId) {
 }
 
 /**
- * The request as it may be written to disk: environment values are replaced by
- * their keys, since a request carries the host's credentials.
- */
-function persistableRequest(request) {
-  return { ...request, channels: { ...request.channels, environment: Object.keys(request.channels?.environment ?? {}).sort() } };
-}
-
-/** `value` with every string in `secrets` replaced, walking arrays and objects. */
-function scrub(value, secrets) {
-  if (typeof value === 'string') return secrets.reduce((text, secret) => text.split(secret).join(SCRUBBED), value);
-  if (Array.isArray(value)) return value.map((item) => scrub(item, secrets));
-  if (value !== null && typeof value === 'object') {
-    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, scrub(item, secrets)]));
-  }
-  return value;
-}
-
-/**
- * An environment-probe port that records every leg.
+ * An environment-probe port that routes each leg to its workspace and records
+ * it.
  *
- * Each request gains the host's values for the environment keys its registry
- * entry permits, beneath the ones the leg declares, since a leg's command reads
- * its credentials from the environment and the command-line adapter hands the
- * child nothing but PATH and what the request carries. A request for a pair the
- * registry does not name goes to the adapter unchanged, so the adapter's own
- * policy refuses it. A request is recorded with its environment as keys only,
- * and every injected value is scrubbed from the observation before it is
- * written or returned, since a credential is never evidence.
+ * A leg named in `routes` (a manifestation witness's leg) runs through that
+ * route's port, every other leg through `pristine`'s. Every request goes
+ * through `hostEnvironmentPort`, so it carries the host's values for the keys
+ * its registry entry permits, and every injected value is scrubbed from what
+ * is written or returned. Each observation is written with the workspace
+ * label and working directory the leg ran in.
  *
+ * @param {object} options
+ * @param {{label: string, cwd: string, port: object}} options.pristine
+ * @param {Map<string, {label: string, cwd: string, port: object}>} [options.routes] by leg identifier
+ * @param {object} options.registry
+ * @param {string} options.runDirectory
  * @returns {{ port: {probe: Function}, observations: object[], calls: () => number, fault: () => object|null }}
  */
-function recordingPort({ port, registry, runDirectory }) {
+function recordingPort({ pristine, routes = new Map(), registry, runDirectory }) {
   const observations = [];
+  const ports = new Map();
+  const portFor = (route) => {
+    if (!ports.has(route)) ports.set(route, hostEnvironmentPort({ port: route.port, registry }));
+    return ports.get(route);
+  };
   let sequence = 0;
   let fault = null;
   const probe = async (request, signal) => {
     sequence += 1;
     const legSequence = sequence;
-    let augmented = request;
+    const route = routes.get(request?.probeId) ?? pristine;
     try {
-      const registered = request?.kind === 'cli' && registry.targetFor(request.interfaceId, request.executable) !== undefined;
-      const injected = registered ? registry.hostEnvironment(request.interfaceId, [], request.executable) : {};
-      augmented = registered
-        ? { ...request, channels: { ...request.channels, environment: { ...injected, ...request.channels.environment } } }
-        : request;
-      const secrets = Object.values(injected)
-        .filter((value) => value.length >= MIN_SCRUBBED_VALUE_LENGTH)
-        .sort((a, b) => b.length - a.length);
-      const observation = scrub(await port.probe(augmented, signal), secrets);
+      const answered = await portFor(route).probe(request, signal);
       writeJson(path.join(runDirectory, 'observations', legFileName(legSequence, request.probeId)), {
         legId: request.probeId,
         sequence: legSequence,
-        request: persistableRequest(augmented),
-        observation,
+        workspace: route.label,
+        cwd: route.cwd,
+        request: persistableRequest(answered.request),
+        observation: answered.observation,
       });
-      observations.push(observation);
-      return observation;
+      observations.push(answered.observation);
+      return answered.observation;
     } catch (error) {
       fault = {
         legId: request?.probeId ?? null,
         sequence: legSequence,
+        workspace: route.label,
+        cwd: route.cwd,
         code: typeof error?.code === 'string' ? error.code : null,
         message: String(error?.message ?? error),
-        request: persistableRequest(augmented),
+        request: persistableRequest(error?.request ?? request),
       };
       writeJson(path.join(runDirectory, 'faults', legFileName(legSequence, fault.legId)), fault);
       throw error;
     }
   };
   return { port: { probe }, observations, calls: () => sequence, fault: () => fault };
-}
-
-/** A target root the legs cannot run in a faithful, contained copy of; `preflight` refuses it with exit 12. */
-class CopyRefusal extends Error {
-  constructor(message) {
-    super(message);
-    this.name = 'CopyRefusal';
-  }
-}
-
-/** Whether `candidate` is `root` or a path inside it. */
-function isInside(root, candidate) {
-  const relative = path.relative(root, candidate);
-  return relative === '' || (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
-}
-
-/**
- * The real path of `candidate`, whose missing tail (a dangling link's target)
- * is joined to the real path of the part that exists. `candidate` is taken as
- * spelled: a `..` after a symbolic link climbs from the link's target, as the
- * system resolves it, so the caller must not normalize it first.
- */
-function realPathLoosely(candidate) {
-  const missing = [];
-  let existing = candidate;
-  for (;;) {
-    try {
-      return path.join(fs.realpathSync.native(existing), ...missing);
-    } catch {
-      const parent = path.dirname(existing);
-      if (parent === existing) return candidate;
-      missing.unshift(path.basename(existing));
-      existing = parent;
-    }
-  }
-}
-
-/** `path.join` without the normalization that would collapse a `..` after a symbolic link. */
-function joinAsSpelled(base, spelled) {
-  return path.isAbsolute(spelled) ? spelled : `${base}${path.sep}${spelled}`;
-}
-
-/** Where the symbolic link `source` leads, resolved by the system; a dangling or looping link through the loose walk. */
-function realTargetOf(source) {
-  try {
-    return fs.realpathSync.native(source);
-  } catch {
-    return realPathLoosely(joinAsSpelled(path.dirname(source), fs.readlinkSync(source)));
-  }
-}
-
-/** Every symbolic link under `directory`, without following one. */
-function symbolicLinksUnder(directory) {
-  const links = [];
-  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-    const full = path.join(directory, entry.name);
-    if (entry.isSymbolicLink()) links.push(full);
-    else if (entry.isDirectory()) links.push(...symbolicLinksUnder(full));
-  }
-  return links;
-}
-
-/**
- * Points every symbolic link the copy holds at the copy.
- *
- * A link is copied verbatim, then resolved against the target tree it came
- * from: a link whose target lies inside `launch.root` is rewritten as a
- * relative link to the same place in the copy, so a write through it lands in
- * the copy; a link whose target lies outside `launch.root` is refused, since a
- * leg writing through it would write into the adopter's files.
- */
-function containLinks(root, copy) {
-  for (const link of symbolicLinksUnder(copy)) {
-    const relative = path.relative(copy, link);
-    const source = path.join(root, relative);
-    const target = realTargetOf(source);
-    if (!isInside(root, target)) {
-      throw new CopyRefusal(
-        `${relative.split(path.sep).join('/')} in launch.root is a symbolic link to ${target}, outside launch.root; a leg writing through it would write outside the disposable copy, so provision its directory or remove the link`,
-      );
-    }
-    const contained = path.relative(path.dirname(link), path.join(copy, path.relative(root, target))) || '.';
-    if (fs.readlinkSync(link) === contained) continue;
-    const kind = fs.existsSync(target) && fs.statSync(target).isDirectory() ? 'dir' : 'file';
-    fs.unlinkSync(link);
-    fs.symlinkSync(contained, link, kind);
-  }
-}
-
-/**
- * A temp copy of the target root for the legs to run in: everything but `.git`,
- * the provisioned directories (linked in from the target instead) and the
- * evaluation's own `runs/`, with every symbolic link pointing into the copy.
- *
- * Refused with a `CopyRefusal`: a root that is not a directory, a temp
- * directory inside the root (the copy would copy itself), an entry that is
- * neither a file, a directory nor a link (a FIFO, a socket, a device), and a
- * link out of the root. A copy that fails part way is removed before the error
- * leaves this function.
- *
- * @param {object} options
- * @param {string} options.root the target root, by its real path
- * @param {string[]} options.provision `workspace.provision`
- * @param {string} options.runsDirectory the evaluation's `runs/`, by its real path
- * @returns {{ directory: string, root: string }} the temp directory to remove, and the copy's root
- */
-function stageCopy({ root, provision, runsDirectory }) {
-  if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) {
-    throw new CopyRefusal(`launch.root ${root} is not a directory`);
-  }
-  const temp = fs.realpathSync(os.tmpdir());
-  if (isInside(root, temp)) {
-    throw new CopyRefusal(
-      `the temp directory ${temp} is inside launch.root ${root}, so the copy would copy itself; point TMPDIR outside the evaluated project`,
-    );
-  }
-  const directory = fs.mkdtempSync(path.join(temp, 'tea-evaluate-copy-'));
-  try {
-    const copy = path.join(directory, 'target');
-    const provisioned = new Set(provision.map((entry) => path.join(root, ...entry.replace(/\/+$/, '').split('/'))));
-    fs.cpSync(root, copy, {
-      recursive: true,
-      verbatimSymlinks: true,
-      filter: (source) => {
-        if (source === path.join(root, '.git') || source === runsDirectory || provisioned.has(source)) return false;
-        const stats = fs.lstatSync(source);
-        if (!stats.isFile() && !stats.isDirectory() && !stats.isSymbolicLink()) {
-          throw new CopyRefusal(
-            `${path.relative(root, source).split(path.sep).join('/')} in launch.root is neither a file, a directory nor a symbolic link (a FIFO, a socket or a device), which the disposable copy cannot hold; remove it or provision its directory`,
-          );
-        }
-        return true;
-      },
-    });
-    containLinks(root, copy);
-    for (const target of provisioned) {
-      if (!fs.existsSync(target)) continue;
-      const link = path.join(copy, path.relative(root, target));
-      fs.mkdirSync(path.dirname(link), { recursive: true });
-      fs.symlinkSync(target, link, 'dir');
-    }
-    return { directory, root: copy };
-  } catch (error) {
-    fs.rmSync(directory, { recursive: true, force: true });
-    throw error;
-  }
-}
-
-/**
- * Removes the staged copy when the process is interrupted, since a signal ends
- * the process before any `finally` runs: aborts the in-flight leg (the adapter
- * kills its runner's process group, and the runner's supervisor, dying with
- * it, closes the lifeline that stops the agent's process group),
- * removes the copy, and raises the same signal again with the default action,
- * so the caller sees the process end by that signal.
- *
- * @returns {() => void} removes the handlers
- */
-function cleanUpOnSignal(directory, controller) {
-  const signals = process.platform === 'win32' ? ['SIGINT', 'SIGTERM', 'SIGHUP'] : ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGQUIT'];
-  const handlers = new Map();
-  const release = () => {
-    for (const [name, handler] of handlers) process.removeListener(name, handler);
-  };
-  for (const name of signals) {
-    const handler = () => {
-      release();
-      controller.abort();
-      fs.rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-      process.kill(process.pid, name);
-    };
-    handlers.set(name, handler);
-    process.on(name, handler);
-  }
-  return release;
 }
 
 /** `runs/`, created with a `.gitignore` that ignores everything in it, so no run lands in the adopter's commits (AD-12). */
@@ -382,16 +218,75 @@ function ensureRunsDirectory(folder) {
   return runs;
 }
 
+/** What an arm's oracles say together: `held` when every one holds, `violated` when one fails, otherwise `inconclusive`. */
+function armVerdict(oracles) {
+  if (oracles.every((oracle) => oracle.disposition === 'held')) return 'held';
+  return oracles.some((oracle) => oracle.disposition === 'violated') ? 'violated' : 'inconclusive';
+}
+
+/** An artifact reference to a file the run wrote, by its path relative to the evaluation folder. */
+function referenceTo(folder, file, digestBytes) {
+  return { storage: 'public', path: posix(path.relative(folder, file)), privateRef: null, digest: digestBytes(fs.readFileSync(file)) };
+}
+
+/**
+ * Writes one probe's qualification evidence as far as the cycle got: each arm
+ * that ran and the rollback record. Returns the files written, by name.
+ */
+function writeQualificationEvidence(directory, { probe, evidence, workspace, fault = null }) {
+  const files = {};
+  if (fault !== null) {
+    files.fault = path.join(directory, 'fault.json');
+    writeJson(files.fault, { probeId: probe.probeId, mutationId: evidence.mutationId, ...fault });
+  }
+  const arm = (name, result, digestField) => {
+    if (result === null) return;
+    files[name] = path.join(directory, `${name}.json`);
+    writeJson(files[name], {
+      probeId: probe.probeId,
+      mutationId: evidence.mutationId,
+      phase: name,
+      workspace,
+      targetArtifact: evidence.targetArtifact,
+      targetArtifactDigest: evidence[digestField],
+      verdict: result.verdict,
+      oracles: result.oracles,
+      steps: result.steps,
+    });
+  };
+  arm('baseline-pass', evidence.baseline, 'preDigest');
+  arm('mutated-fail', evidence.mutated, 'mutatedDigest');
+  files.rollback = path.join(directory, 'rollback.json');
+  writeJson(files.rollback, {
+    probeId: probe.probeId,
+    mutationId: evidence.mutationId,
+    targetArtifact: evidence.targetArtifact,
+    preDigest: evidence.preDigest,
+    mutatedDigest: evidence.mutatedDigest,
+    restoredDigest: evidence.restoredDigest,
+    reExecutionCap: evidence.reExecutionCap,
+    rePasses: evidence.rePasses.map((rePass) => ({
+      phase: rePass.phase,
+      verdict: rePass.verdict,
+      oracles: rePass.oracles,
+      steps: rePass.steps,
+    })),
+    rollbackVerified: evidence.rollbackVerified,
+  });
+  return files;
+}
+
 /**
  * Runs `tea-evaluate preflight` over one evaluation folder.
  *
  * @param {string} folder the resolved evaluation folder
  * @param {object} [options]
+ * @param {boolean} [options.fromWorkingTree] evaluate the working tree, uncommitted work included, in a temp copy
  * @param {NodeJS.ProcessEnv} [options.env] the environment the engine CLI stage runs under
  * @param {(line: string) => void} [options.log] progress lines for an operator
  * @returns {Promise<PreflightOutcome>}
  */
-async function runPreflightCommand(folder, { env = process.env, log = () => {} } = {}) {
+async function runPreflightCommand(folder, { fromWorkingTree = false, env = process.env, log = () => {} } = {}) {
   const findings = await checkEvaluation(folder);
   if (findings.length > 0) {
     return new PreflightOutcome({ stage: 'check', exitCode: 10, message: `${findings.length} authoring defect(s)`, findings });
@@ -405,38 +300,83 @@ async function runPreflightCommand(folder, { env = process.env, log = () => {} }
       message: `preflight drives cli targets; this evaluation declares interface ${JSON.stringify(evaluation.interface)}`,
     });
   }
-  const seeded = seededProbeFiles(folder);
-  if (seeded.length > 0) {
+  const seeded = seededProbes(folder);
+  const unqualifiable = seeded.filter(({ probe }) => probe.qualification?.route !== QUALIFIED_ROUTE);
+  if (unqualifiable.length > 0) {
     return new PreflightOutcome({
       stage: 'launch',
       exitCode: 12,
-      message: `${seeded.map((name) => `probes/${name}`).join(', ')} seed a defect, whose manifestation witness runs against the mutated copy of its mutation; this release builds no mutated copy, so a retry cannot pass`,
+      message: `${unqualifiable.map(({ file, probe }) => `${file} (route ${probe.qualification?.route})`).join(', ')} seed a defect on a route this release does not qualify; it qualifies seeded probes on the ${QUALIFIED_ROUTE} route only, so a retry cannot pass`,
     });
   }
 
   const root = realPathLoosely(joinAsSpelled(folder, evaluation.launch.root));
-  const provision = evaluation.workspace?.provision ?? [];
   const runsDirectory = ensureRunsDirectory(folder);
-  let staged;
-  try {
-    staged = stageCopy({ root, provision, runsDirectory });
-  } catch (error) {
-    if (!(error instanceof CopyRefusal)) throw error;
-    return new PreflightOutcome({ stage: 'launch', exitCode: 12, message: error.message });
-  }
+  const workspaces = [];
   const controller = new AbortController();
-  const release = cleanUpOnSignal(staged.directory, controller);
+  const release = cleanUpOnSignal(workspaces, controller);
   try {
-    return await runInCopy({ folder, evaluation, copyRoot: staged.root, runsDirectory, env, log, signal: controller.signal });
+    const readTree = () => adopterTreeState(root, { exclude: [runsDirectory] });
+    const before = readTree();
+    // Every workspace after the first reproduces it, so the run evaluates one
+    // set of bytes whatever changes in the project meanwhile.
+    const make = (label, basis = null) => {
+      const workspace = createWorkspace({
+        root,
+        kind: evaluation.workspace.kind,
+        provision: evaluation.workspace.provision,
+        exclude: [folder],
+        fromWorkingTree,
+        label,
+        basis,
+      });
+      workspaces.push(workspace);
+      return workspace;
+    };
+    const discard = (workspace) => {
+      workspaces.splice(workspaces.indexOf(workspace), 1);
+      removeWorkspace(workspace);
+    };
+    const pristine = make('pristine');
+    log(
+      `pristine workspace, ${pristine.kind === 'git-worktree' ? `a detached worktree at ${pristine.commit}` : `a temp copy${pristine.dirty ? ' of the working tree' : ''}`}: ${pristine.root}`,
+    );
+    if (pristine.kind === 'git-worktree' && before.status.length > 0) {
+      log('the working tree has uncommitted changes, which this run does not evaluate; pass --from-working-tree to evaluate them');
+    }
+    return await runInWorkspaces({
+      folder,
+      evaluation,
+      seeded,
+      pristine,
+      make,
+      discard,
+      before,
+      readTree,
+      runsDirectory,
+      env,
+      log,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error instanceof RunStop) return error.outcome;
+    if (error instanceof WorkspaceRefusal) return new PreflightOutcome({ stage: 'launch', exitCode: 12, message: error.message });
+    throw error;
   } finally {
     release();
-    fs.rmSync(staged.directory, { recursive: true, force: true });
+    for (const workspace of workspaces) {
+      try {
+        removeWorkspace(workspace);
+      } catch (error) {
+        log(`could not remove the ${workspace.label} workspace at ${workspace.directory}: ${error.message}`);
+      }
+    }
   }
 }
 
-async function runInCopy({ folder, evaluation, copyRoot, runsDirectory, env, log, signal }) {
-  const registry = registryFromEvaluation(evaluation, { root: copyRoot });
-  const problems = registry.targetProblems();
+async function runInWorkspaces({ folder, evaluation, seeded, pristine, make, discard, before, readTree, runsDirectory, env, log, signal }) {
+  const registry = registryFromEvaluation(evaluation, { root: pristine.root });
+  const problems = registry.targetProblems(pristine.root);
   if (problems.length > 0) {
     return new PreflightOutcome({ stage: 'launch', exitCode: 12, message: `the registry cannot launch: ${problems.join('; ')}` });
   }
@@ -446,10 +386,32 @@ async function runInCopy({ folder, evaluation, copyRoot, runsDirectory, env, log
   fs.mkdirSync(runDirectory, { recursive: true });
   log(`run ${invocationId}: ${runDirectory}`);
   const outcome = (fields) => new PreflightOutcome({ runDirectory, ...fields });
+  const stop = (fields) => new RunStop(outcome(fields));
+  const run = {
+    invocationId,
+    command: 'preflight',
+    teaVersion: TEA_MANIFEST.version,
+    evalQualityVersion: engineVersion(),
+    commit: pristine.commit,
+    dirty: pristine.dirty,
+    workspace: {
+      kind: pristine.kind,
+      commit: pristine.commit,
+      tree: pristine.tree,
+      treeDigest: pristine.treeDigest,
+      dirty: pristine.dirty,
+    },
+    workspaces: { pristine: pristine.root },
+    adopterTree: { repository: before.repository, unchanged: null },
+  };
+  const runPath = path.join(runDirectory, 'run.json');
+  writeJson(runPath, run);
+
   // The run keeps its own copy of the contract, so every stage below reads the
   // same bytes and the verdict can be reproduced from the run directory alone.
   const contractPath = path.join(runDirectory, CONTRACT_NAME);
   fs.copyFileSync(path.join(folder, CONTRACT_NAME), contractPath);
+  const contract = readJson(contractPath);
 
   for (const [stage, output] of [
     ['compile', 'eval-contract.json'],
@@ -465,15 +427,87 @@ async function runInCopy({ folder, evaluation, copyRoot, runsDirectory, env, log
     }
   }
 
-  const probesPath = path.join(runDirectory, 'probes.json');
-  writeJson(probesPath, []);
   const engine = await loadEngine();
-  const { port: adapter } = await registry.createProbePort({ cwd: copyRoot });
-  const recorder = recordingPort({ port: adapter, registry, runDirectory });
+  const { port: pristineAdapter } = await registry.createProbePort({ cwd: pristine.root, projectRoot: pristine.root });
+  // The adopter's tree, read again after the qualification and after the
+  // legs: a change stops the run with no qualified probe written (AD-8).
+  const treeUnchanged = (when) => {
+    const unchanged = JSON.stringify(readTree()) === JSON.stringify(before);
+    run.adopterTree.unchanged = unchanged;
+    writeJson(runPath, run);
+    if (!unchanged) {
+      throw stop({
+        stage: when,
+        exitCode: 12,
+        message: `the adopter's ${before.repository === null ? 'project (launch.root)' : `tree at ${before.repository} (its git status, file contents, refs or configuration)`} changed during the ${when === 'qualification' ? 'qualification' : 'legs'}, so no rollback is proved and no qualified probe is written; if you edited files meanwhile, run again`,
+      });
+    }
+  };
+
+  const qualified = [];
+  if (seeded.length > 0) {
+    const policy = readJson(path.join(folder, POLICY_PATH));
+    const validate = createArtifactValidator();
+    for (const { file, probe } of seeded) {
+      // Each probe is qualified in a workspace of its own, so nothing its
+      // mutated arm leaves behind reaches another probe or the legs.
+      const workspace = make(`qualify-${probe.probeId}`, pristine);
+      try {
+        qualified.push(
+          await qualifySeededProbe({
+            folder,
+            evaluation,
+            contract,
+            file,
+            probe,
+            pristine,
+            workspace,
+            registry,
+            policy,
+            engine,
+            validate,
+            runDirectory,
+            stop,
+            log,
+            signal,
+          }),
+        );
+      } finally {
+        discard(workspace);
+      }
+    }
+    treeUnchanged('qualification');
+  }
+
+  // One mutated workspace per mutation, for the legs its witnesses name.
+  const routes = new Map();
+  const mutatedByMutation = new Map();
+  for (const entry of qualified) {
+    let route = mutatedByMutation.get(entry.mutation.mutationId);
+    if (route === undefined) {
+      route = await mutatedRoute({ entry, pristine, make, registry, engine, stop, log });
+      mutatedByMutation.set(entry.mutation.mutationId, route);
+      run.workspaces[route.label] = route.cwd;
+      writeJson(runPath, run);
+    }
+    for (const defect of entry.probe.defects) {
+      if (defect.manifestationWitness !== null) routes.set(defect.manifestationWitness.legId, route);
+    }
+  }
+
+  const probesPath = path.join(runDirectory, 'probes.json');
+  const probes = qualified.map((entry) => entry.probe);
+  writeJson(probesPath, probes);
+  const recorder = recordingPort({
+    pristine: { label: 'pristine', cwd: pristine.root, port: pristineAdapter },
+    routes,
+    registry,
+    runDirectory,
+  });
   try {
     await engine.runPreflight({
-      contract: readJson(contractPath),
-      probes: [],
+      contract,
+      probes,
       runId: invocationId,
       port: recorder.port,
       signal,
@@ -521,6 +555,8 @@ async function runInCopy({ folder, evaluation, copyRoot, runsDirectory, env, log
     ],
     { runDirectory, env, log },
   );
+  treeUnchanged('verdict');
+  for (const entry of qualified) writeJson(path.join(runDirectory, 'probes', `${entry.probe.probeId}.probe.json`), entry.probe);
   return outcome({
     stage: 'verdict',
     exitCode: verdict.exitCode,
@@ -528,4 +564,157 @@ async function runInCopy({ folder, evaluation, copyRoot, runsDirectory, env, log
   });
 }
 
-module.exports = { CopyRefusal, PreflightOutcome, newInvocationId, recordingPort, runPreflightCommand, stageCopy };
+/**
+ * The mutated workspace one mutation's witness legs run in: a workspace of its
+ * own with the mutation applied, whose digest must equal the one the cycle
+ * measured, and whose registry targets must launch.
+ */
+async function mutatedRoute({ entry, pristine, make, registry, engine, stop, log }) {
+  const { mutation } = entry;
+  const workspace = make(`mutated-${mutation.mutationId}`, pristine);
+  let applied;
+  try {
+    applied = applyReplaceExact(workspace.root, mutation);
+  } catch (error) {
+    if (!(error instanceof QualificationError)) throw error;
+    throw stop({ stage: 'qualification', exitCode: error.exitCode, message: error.message });
+  }
+  const digest = engine.digestBytes(fs.readFileSync(applied.file));
+  if (digest !== entry.mutatedDigest) {
+    throw stop({
+      stage: 'launch',
+      exitCode: 12,
+      message: `the mutated workspace for ${mutation.mutationId} digests to ${digest}, not the ${entry.mutatedDigest} the qualification measured`,
+    });
+  }
+  const targetProblems = registry.targetProblems(workspace.root);
+  if (targetProblems.length > 0) {
+    throw stop({
+      stage: 'launch',
+      exitCode: 12,
+      message: `the registry cannot launch in the mutated workspace: ${targetProblems.join('; ')}`,
+    });
+  }
+  const { port } = await registry.createProbePort({ cwd: workspace.root, projectRoot: workspace.root });
+  log(`mutated workspace for ${mutation.mutationId}: ${workspace.root}`);
+  return { label: `mutated:${mutation.mutationId}`, cwd: workspace.root, port };
+}
+
+/**
+ * One seeded probe through AD-8's six steps on the pristine workspace, its
+ * evidence written as far as the cycle got, and the qualified probe built,
+ * validated against eval-quality's probe schema and admitted by its
+ * qualification gate. Throws a `RunStop` with the cycle's exit when a step
+ * fails.
+ */
+async function qualifySeededProbe({
+  folder,
+  evaluation,
+  contract,
+  file,
+  probe,
+  pristine,
+  workspace,
+  registry,
+  policy,
+  engine,
+  validate,
+  runDirectory,
+  stop,
+  log,
+  signal,
+}) {
+  const mutationId = probe.qualification.mutation;
+  const mutation = readJson(path.join(folder, 'mutations', `${mutationId}.mutation.json`));
+  const behaviorIds = [probe.behaviorId, ...probe.defects.map((defect) => defect.behaviorId)];
+  const oracleIds = oraclesOfBehaviors(contract, behaviorIds);
+  if (oracleIds.length === 0) {
+    throw stop({
+      stage: 'qualification',
+      exitCode: 10,
+      message: `${file}: the behaviors it discharges (${[...new Set(behaviorIds)].join(', ')}) declare no oracle, so no arm can pass or fail`,
+    });
+  }
+  const implementationRoot = path.join(pristine.root, ...(evaluation.launch.skillRoot ?? '.').split('/'));
+  if (!fs.existsSync(implementationRoot) || !fs.statSync(implementationRoot).isDirectory()) {
+    throw stop({
+      stage: 'launch',
+      exitCode: 12,
+      message: `launch.skillRoot ${evaluation.launch.skillRoot} is not a directory in the workspace, so there is no implementation to evaluate`,
+    });
+  }
+  const implementationDigest = treeDigest(implementationRoot, { exclude: [...pristine.provisioned, path.join(pristine.top, '.git')] });
+  const commitDigest = pristine.kind === 'git-worktree' ? engine.digestBytes(Buffer.from(pristine.commit, 'utf8')) : pristine.treeDigest;
+  const directory = path.join(runDirectory, 'qualification', probe.probeId);
+  log(`${file}: qualifying through ${mutationId} in ${workspace.root}`);
+  const { port: adapter } = await registry.createProbePort({ cwd: workspace.root, projectRoot: workspace.root });
+  const armPort = hostEnvironmentPort({ port: adapter, registry });
+  const runArmFor = async (phase) => {
+    let arm;
+    try {
+      arm = await runArm({ contract, port: armPort, registry, label: phase, signal });
+    } catch (error) {
+      // A request the registry refuses is an authoring defect, as a refused leg is.
+      if (error?.code === DENIAL_FAULT) error.exitCode = 10;
+      throw error;
+    }
+    const oracles = await evaluateOracles({
+      contract,
+      stepObservations: arm.stepObservations,
+      oracleIds,
+      regexMatchStepBudget: policy.regexMatchStepBudget,
+    });
+    return { phase, verdict: armVerdict(oracles), oracles, steps: arm.steps };
+  };
+  let evidence;
+  try {
+    evidence = await runMutationCycle({
+      root: workspace.root,
+      mutation,
+      runArm: runArmFor,
+      reExecutionCap: policy.reExecutionCap,
+      digestBytes: engine.digestBytes,
+      log,
+    });
+  } catch (error) {
+    if (error instanceof QualificationError) {
+      if (error.evidence !== null) {
+        writeQualificationEvidence(directory, { probe, evidence: error.evidence, workspace: workspace.label, fault: error.fault ?? null });
+      }
+      throw stop({ stage: 'qualification', exitCode: error.exitCode, message: `${file}: ${error.message}` });
+    }
+    throw error;
+  }
+  const files = writeQualificationEvidence(directory, { probe, evidence, workspace: workspace.label });
+  const candidate = qualifiedProbe({
+    probe,
+    mutation,
+    systemId: evaluation.evaluationId,
+    digests: { implementationDigest, commitDigest, artifactDigest: evidence.preDigest },
+    baselinePassEvidence: referenceTo(folder, files['baseline-pass'], engine.digestBytes),
+    mutatedFailEvidence: referenceTo(folder, files['mutated-fail'], engine.digestBytes),
+    rollbackVerified: evidence.rollbackVerified,
+  });
+  const problems = await validate('probe', candidate);
+  if (problems.length > 0) {
+    throw stop({
+      stage: 'qualification',
+      exitCode: 10,
+      message: `${file}: the qualified probe does not meet eval-quality's probe schema: ${problems.join('; ')}`,
+    });
+  }
+  const home =
+    candidate.defectSignature === null ? null : engine.resolveHomeOperation(candidate.defectSignature, contract.permittedInterfaces);
+  const admission = engine.qualifyProbe(candidate, home);
+  if (!admission.qualified) {
+    throw stop({
+      stage: 'qualification',
+      exitCode: 10,
+      message: `${file}: eval-quality's qualification gate refuses the qualified probe: ${admission.failures.map((failure) => `${failure.code} (${failure.detail})`).join('; ')}`,
+    });
+  }
+  log(`${file}: qualified; the restored digest matched and the baseline passed again`);
+  return { probe: candidate, mutation, mutatedDigest: evidence.mutatedDigest };
+}
+
+module.exports = { PreflightOutcome, newInvocationId, recordingPort, runPreflightCommand };

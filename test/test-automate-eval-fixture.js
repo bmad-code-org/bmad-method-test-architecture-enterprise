@@ -8,23 +8,29 @@
  * construction and nothing re-earns it. `test/fixtures/automate-eval` is a
  * seventh site, and the first one where the mutation is a real, reversible
  * edit to a real file, so this is the first place the claim can be checked
- * live. This script is that check, and it runs on every `npm test`: delete
- * the revert-and-recheck phase below and this fails, because the claim is
- * earned by the cycle actually running.
+ * live. This script is that check, and it runs on every `npm test`: the
+ * revert-and-recheck is a step of the cycle, and the claim is earned only by
+ * the cycle actually running it.
  *
  * THE CYCLE
  *
- * 1. Baseline: a scratch copy of the fixed `vouchers.js`, unmutated, redeems a
- *    voucher at a cart total exactly equal to `minimumSpend`. Accepted:
- *    `minimumSpend` is inclusive.
- * 2. Mutate: the same scratch copy, with the boundary check flipped from
- *    `cartTotal >= voucher.minimumSpend` to `cartTotal > voucher.minimumSpend`.
- *    Same input, run again. Wrongly rejected: the mutation is observable.
- * 3. Revert: the scratch copy restored to the committed bytes. Same input,
- *    run a third time. Accepted again: this is the pass that earns
- *    `rollbackVerified: true`.
+ * The cycle is the runtime's: `runMutationCycle` in
+ * `cli/lib/evaluate/mutation.js`, AD-8's six steps, over a disposable copy of
+ * the voucher service that `cli/lib/evaluate/workspace.js` makes. This script
+ * keeps only its TeA data: the voucher inputs, the three arms, and the
+ * evidence files its record cites.
  *
- * The mutation only ever touches the scratch copy under `os.tmpdir()`. The
+ * 1. Baseline: the unmutated copy redeems a voucher at a cart total exactly
+ *    equal to `minimumSpend`. Accepted: `minimumSpend` is inclusive.
+ * 2. Mutate: the same copy, with the boundary check flipped from
+ *    `cartTotal >= voucher.minimumSpend` to `cartTotal > voucher.minimumSpend`
+ *    (exactly one occurrence). Same input, run again. Wrongly rejected: the
+ *    mutation is observable.
+ * 3. Revert: the copy restored to the committed bytes, its digest held to the
+ *    pre-mutation digest, and the same input run a third time. Accepted again:
+ *    this is the pass that, with the digest, earns `rollbackVerified: true`.
+ *
+ * The mutation only ever touches the copy under the temp directory. The
  * tracked `vouchers.js` is read once, at the top, and never written.
  *
  * WHAT ELSE THIS CHECKS
@@ -41,7 +47,7 @@
  * README describes.
  *
  * `targetArtifact` is digested at `vouchers.js`'s real, currently-committed
- * bytes. The mutation itself lives only in the scratch copy, per
+ * bytes. The mutation itself lives only in the disposable copy, per
  * `test/fixtures/automate-eval/README.md`'s stated judgment. `baselinePassEvidence`
  * and `mutatedFailEvidence` are written by phases 1 and 2 above, and their
  * digests are held to the record, so an edit to the fixed implementation's
@@ -49,8 +55,8 @@
  * silently drifting out of date.
  *
  * Two rules the mutation cycle does not exercise, the discount cap and
- * expiry, are checked once against the same unmutated scratch copy, right
- * after the baseline phase.
+ * expiry, are checked once against the same unmutated copy, inside the
+ * baseline phase.
  *
  * A minimal HTTP smoke check starts the real server (`src/server.js`) as a
  * child process and exercises `GET /health` and one accept case and one
@@ -66,13 +72,14 @@
 const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const http = require('node:http');
-const os = require('node:os');
 const path = require('node:path');
 const vm = require('node:vm');
 
 const AjvModule = require('ajv/dist/2020');
 
 const { digest } = require('./lib/eval-record');
+const { QualificationError, runMutationCycle } = require('../cli/lib/evaluate/mutation');
+const { createWorkspace, removeWorkspace } = require('../cli/lib/evaluate/workspace');
 
 const Ajv = AjvModule.default ?? AjvModule;
 
@@ -83,8 +90,19 @@ const QUALIFICATION_PATH = `${FIXTURE_ROOT}/qualification.json`;
 const BASELINE_EVIDENCE_PATH = `${FIXTURE_ROOT}/evidence/baseline-pass.json`;
 const MUTATED_EVIDENCE_PATH = `${FIXTURE_ROOT}/evidence/mutated-fail.json`;
 
-const MUTATION_FROM = 'cartTotal >= voucher.minimumSpend';
-const MUTATION_TO = 'cartTotal > voucher.minimumSpend';
+const TARGET_PATH = `${SERVER_ROOT}/src/vouchers.js`;
+
+/** The boundary flip, as a replace-exact mutation of the service copy's `src/vouchers.js`; exactly one occurrence is required. */
+const VOUCHER_MUTATION = {
+  mutationId: 'M-001',
+  targetArtifact: 'src/vouchers.js',
+  operator: {
+    kind: 'replace-exact',
+    find: 'cartTotal >= voucher.minimumSpend',
+    replace: 'cartTotal > voucher.minimumSpend',
+    occurrences: 1,
+  },
+};
 
 // A cart total exactly at the voucher's minimumSpend: the boundary the mutation
 // exists to flip. 10% of 50 is 5, under the voucher's 20 discount cap, so this
@@ -300,6 +318,94 @@ async function runServerSmoke() {
   return smokeProblems;
 }
 
+/**
+ * Phase 1, the clean arm on the unmutated copy: a cart total exactly at
+ * `minimumSpend` is accepted. Writes `evidence/baseline-pass.json` and holds its
+ * digest to the record, then checks the discount cap and expiry once against
+ * the same unmutated copy, since the cycle holds everything but the boundary
+ * constant and both are I/O matrix rows this script covers.
+ */
+async function baselineArm(scratchDir, qualification, problems) {
+  const baselineResult = redeemAtBoundary(scratchDir);
+  console.log(`${colors.dim}phase 1 (baseline, unmutated):${colors.reset} ${JSON.stringify(baselineResult)}`);
+  if (baselineResult.accepted !== true) {
+    problems.push(
+      `baseline phase: a cart total exactly at minimumSpend should be accepted, and the fixed implementation returned ${JSON.stringify(baselineResult)}`,
+    );
+  }
+  const baselineEvidence = {
+    phase: 'baseline-pass',
+    targetArtifact: TARGET_PATH,
+    input: { voucher: BOUNDARY_VOUCHER, cartTotal: BOUNDARY_CART_TOTAL, redeemedOn: BOUNDARY_REDEEMED_ON },
+    result: baselineResult,
+    assertion: 'cartTotal equals minimumSpend exactly; the fixed implementation accepts the redemption.',
+  };
+  fs.writeFileSync(absolute(BASELINE_EVIDENCE_PATH), `${JSON.stringify(baselineEvidence, null, 2)}\n`);
+  const liveBaselineDigest = referenceDigest(BASELINE_EVIDENCE_PATH);
+  if (qualification.baselinePassEvidence.digest !== liveBaselineDigest) {
+    problems.push(
+      `baselinePassEvidence digest is stale: qualification.json reads ${qualification.baselinePassEvidence.digest}, ` +
+        `the live baseline run just wrote evidence digesting to ${liveBaselineDigest}.`,
+    );
+  }
+
+  const capResult = redeemFixtureCheck(scratchDir, CAP_VOUCHER, CAP_CART_TOTAL, OTHER_REDEEMED_ON);
+  console.log(`${colors.dim}fixture check (discount cap):${colors.reset} ${JSON.stringify(capResult)}`);
+  if (!(capResult.accepted === true && capResult.discount === CAP_VOUCHER.maxDiscount)) {
+    problems.push(
+      `discount-cap check: a percentage discount that would exceed maxDiscount (${CAP_VOUCHER.maxDiscount}) should be capped there, and the fixed implementation returned ${JSON.stringify(capResult)}`,
+    );
+  }
+  const expiredResult = redeemFixtureCheck(scratchDir, EXPIRED_VOUCHER, EXPIRED_CART_TOTAL, OTHER_REDEEMED_ON);
+  console.log(`${colors.dim}fixture check (expiry):${colors.reset} ${JSON.stringify(expiredResult)}`);
+  if (!(expiredResult.accepted === false && expiredResult.reason === 'expired')) {
+    problems.push(
+      `expiry check: a voucher whose expiresOn is before redeemedOn should be rejected as expired, and the fixed implementation returned ${JSON.stringify(expiredResult)}`,
+    );
+  }
+  return { verdict: baselineResult.accepted === true ? 'held' : 'violated', result: baselineResult };
+}
+
+/**
+ * Phase 2, the mutated arm: with the boundary check flipped to exclusive, the
+ * same cart total is wrongly rejected. Writes `evidence/mutated-fail.json` and
+ * holds its digest to the record.
+ */
+async function mutatedArm(scratchDir, qualification, problems) {
+  const mutatedResult = redeemAtBoundary(scratchDir);
+  const failedAsExpected = mutatedResult.accepted === false && mutatedResult.reason === 'below-minimum-spend';
+  console.log(`${colors.dim}phase 2 (mutated, boundary flipped to exclusive):${colors.reset} ${JSON.stringify(mutatedResult)}`);
+  if (!failedAsExpected) {
+    problems.push(
+      `mutated phase: the same cart total should be wrongly rejected once the boundary is exclusive, and the mutated copy returned ${JSON.stringify(mutatedResult)}`,
+    );
+  }
+  const mutatedEvidence = {
+    phase: 'mutated-fail',
+    targetArtifact: TARGET_PATH,
+    mutationOperator: qualification.mutationOperator,
+    input: { voucher: BOUNDARY_VOUCHER, cartTotal: BOUNDARY_CART_TOTAL, redeemedOn: BOUNDARY_REDEEMED_ON },
+    result: mutatedResult,
+    assertion: 'the same boundary input, after the minimum-spend check is mutated from >= to >, is wrongly rejected.',
+  };
+  fs.writeFileSync(absolute(MUTATED_EVIDENCE_PATH), `${JSON.stringify(mutatedEvidence, null, 2)}\n`);
+  const liveMutatedDigest = referenceDigest(MUTATED_EVIDENCE_PATH);
+  if (qualification.mutatedFailEvidence.digest !== liveMutatedDigest) {
+    problems.push(
+      `mutatedFailEvidence digest is stale: qualification.json reads ${qualification.mutatedFailEvidence.digest}, ` +
+        `the live mutated run just wrote evidence digesting to ${liveMutatedDigest}.`,
+    );
+  }
+  return { verdict: failedAsExpected ? 'violated' : 'inconclusive', result: mutatedResult };
+}
+
+/** Phase 3, the re-run on the restored copy: the boundary is inclusive again, which earns `rollbackVerified`. */
+async function revertedArm(scratchDir) {
+  const revertedResult = redeemAtBoundary(scratchDir);
+  console.log(`${colors.dim}phase 3 (reverted, boundary inclusive again):${colors.reset} ${JSON.stringify(revertedResult)}`);
+  return { verdict: revertedResult.accepted === true ? 'held' : 'violated', result: revertedResult };
+}
+
 async function main() {
   const preCycleProblems = [];
   const problems = [];
@@ -331,7 +437,7 @@ async function main() {
   // wrong evidence path is collected below and reported at the end, so
   // phases 1-3 still execute and regenerate evidence/*.json, matching the
   // recovery this fixture's README describes.
-  const expectedTargetPath = `${FIXTURE_ROOT}/voucher-service/src/vouchers.js`;
+  const expectedTargetPath = TARGET_PATH;
   if (qualification.targetArtifact.path === expectedTargetPath) {
     const liveTargetDigest = referenceDigest(expectedTargetPath);
     if (qualification.targetArtifact.digest !== liveTargetDigest) {
@@ -357,119 +463,43 @@ async function main() {
     );
   }
 
-  const originalBytes = fs.readFileSync(absolute(expectedTargetPath));
-  const scratchDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-automate-eval-fixture-'));
-  const scratchFile = path.join(scratchDir, 'vouchers.js');
+  // The cycle is the runtime's (`cli/lib/evaluate/mutation.js`, AD-8's six
+  // steps) over a disposable copy of the service the runtime makes
+  // (`cli/lib/evaluate/workspace.js`); this script supplies the voucher data,
+  // the three arms, and the evidence files its record cites. The tracked
+  // `vouchers.js` is never written: the mutation and its restore happen in the
+  // copy, and `rollbackVerified` is the cycle's own conjunction of a restored
+  // digest equal to the pre-mutation one and a re-run that passes again.
+  const workspace = createWorkspace({ root: absolute(SERVER_ROOT), kind: 'copy', provision: [], label: 'automate-eval-fixture' });
+  const scratchDir = path.join(workspace.root, 'src');
+  let rollbackVerifiedLive = false;
 
   try {
-    // Phase 1: baseline, unmutated.
-    fs.writeFileSync(scratchFile, originalBytes);
-    const baselineResult = redeemAtBoundary(scratchDir);
-    const baselinePassed = baselineResult.accepted === true;
-    console.log(`${colors.dim}phase 1 (baseline, unmutated):${colors.reset} ${JSON.stringify(baselineResult)}`);
-    if (!baselinePassed) {
-      problems.push(
-        `baseline phase: a cart total exactly at minimumSpend should be accepted, and the fixed implementation returned ${JSON.stringify(baselineResult)}`,
-      );
-    }
-
-    const baselineEvidence = {
-      phase: 'baseline-pass',
-      targetArtifact: expectedTargetPath,
-      input: { voucher: BOUNDARY_VOUCHER, cartTotal: BOUNDARY_CART_TOTAL, redeemedOn: BOUNDARY_REDEEMED_ON },
-      result: baselineResult,
-      assertion: 'cartTotal equals minimumSpend exactly; the fixed implementation accepts the redemption.',
-    };
-    fs.writeFileSync(absolute(BASELINE_EVIDENCE_PATH), `${JSON.stringify(baselineEvidence, null, 2)}\n`);
-    const liveBaselineDigest = referenceDigest(BASELINE_EVIDENCE_PATH);
-    if (qualification.baselinePassEvidence.digest !== liveBaselineDigest) {
-      problems.push(
-        `baselinePassEvidence digest is stale: qualification.json reads ${qualification.baselinePassEvidence.digest}, ` +
-          `the live baseline run just wrote evidence digesting to ${liveBaselineDigest}.`,
-      );
-    }
-
-    // Two more fixed-implementation rules, checked once against this same
-    // unmutated scratch copy: the discount cap and expiry. Neither is under the
-    // mutation cycle above, and both are I/O matrix rows this script covers, so
-    // this proves "fixed implementation" with a real assertion.
-    const capResult = redeemFixtureCheck(scratchDir, CAP_VOUCHER, CAP_CART_TOTAL, OTHER_REDEEMED_ON);
-    console.log(`${colors.dim}fixture check (discount cap):${colors.reset} ${JSON.stringify(capResult)}`);
-    if (!(capResult.accepted === true && capResult.discount === CAP_VOUCHER.maxDiscount)) {
-      problems.push(
-        `discount-cap check: a percentage discount that would exceed maxDiscount (${CAP_VOUCHER.maxDiscount}) should be capped there, and the fixed implementation returned ${JSON.stringify(capResult)}`,
-      );
-    }
-
-    const expiredResult = redeemFixtureCheck(scratchDir, EXPIRED_VOUCHER, EXPIRED_CART_TOTAL, OTHER_REDEEMED_ON);
-    console.log(`${colors.dim}fixture check (expiry):${colors.reset} ${JSON.stringify(expiredResult)}`);
-    if (!(expiredResult.accepted === false && expiredResult.reason === 'expired')) {
-      problems.push(
-        `expiry check: a voucher whose expiresOn is before redeemedOn should be rejected as expired, and the fixed implementation returned ${JSON.stringify(expiredResult)}`,
-      );
-    }
-
-    // Phase 2: the mutation, applied to the scratch copy only. Exactly one
-    // occurrence is required: `.replace()` on a string only ever touches the
-    // first one, and a second, unnoticed occurrence would leave part of the
-    // boundary check unmutated without the mismatch ever being reported.
-    const scratchText = fs.readFileSync(scratchFile, 'utf8');
-    const occurrences = scratchText.split(MUTATION_FROM).length - 1;
-    if (occurrences !== 1) {
-      throw new Error(
-        `the scratch copy of vouchers.js contains ${occurrences} occurrence(s) of "${MUTATION_FROM}", and the mutation operator needs exactly one to apply unambiguously`,
-      );
-    }
-    fs.writeFileSync(scratchFile, scratchText.replace(MUTATION_FROM, MUTATION_TO));
-    const mutatedResult = redeemAtBoundary(scratchDir);
-    const mutatedFailedAsExpected = mutatedResult.accepted === false && mutatedResult.reason === 'below-minimum-spend';
-    console.log(`${colors.dim}phase 2 (mutated, boundary flipped to exclusive):${colors.reset} ${JSON.stringify(mutatedResult)}`);
-    if (!mutatedFailedAsExpected) {
-      problems.push(
-        `mutated phase: the same cart total should be wrongly rejected once the boundary is exclusive, and the mutated copy returned ${JSON.stringify(mutatedResult)}`,
-      );
-    }
-
-    const mutatedEvidence = {
-      phase: 'mutated-fail',
-      targetArtifact: expectedTargetPath,
-      mutationOperator: qualification.mutationOperator,
-      input: { voucher: BOUNDARY_VOUCHER, cartTotal: BOUNDARY_CART_TOTAL, redeemedOn: BOUNDARY_REDEEMED_ON },
-      result: mutatedResult,
-      assertion: 'the same boundary input, after the minimum-spend check is mutated from >= to >, is wrongly rejected.',
-    };
-    fs.writeFileSync(absolute(MUTATED_EVIDENCE_PATH), `${JSON.stringify(mutatedEvidence, null, 2)}\n`);
-    const liveMutatedDigest = referenceDigest(MUTATED_EVIDENCE_PATH);
-    if (qualification.mutatedFailEvidence.digest !== liveMutatedDigest) {
-      problems.push(
-        `mutatedFailEvidence digest is stale: qualification.json reads ${qualification.mutatedFailEvidence.digest}, ` +
-          `the live mutated run just wrote evidence digesting to ${liveMutatedDigest}.`,
-      );
-    }
-
-    // Phase 3: revert the scratch copy to the committed bytes and recheck. This
-    // is the phase that earns rollbackVerified. Delete it, or short-circuit
-    // past it, and rollbackVerifiedLive below is never set to true by anything
-    // this run actually did.
-    fs.writeFileSync(scratchFile, originalBytes);
-    const revertedResult = redeemAtBoundary(scratchDir);
-    const rollbackVerifiedLive = revertedResult.accepted === true;
-    console.log(`${colors.dim}phase 3 (reverted, boundary inclusive again):${colors.reset} ${JSON.stringify(revertedResult)}`);
-    if (!rollbackVerifiedLive) {
-      problems.push(
-        `revert phase: reverting the scratch copy should restore acceptance, and it returned ${JSON.stringify(revertedResult)} instead`,
-      );
-    }
-
-    if (qualification.rollbackVerified !== true) {
-      problems.push('qualification.json does not declare rollbackVerified: true');
-    } else if (!rollbackVerifiedLive) {
-      problems.push(
-        "qualification.json declares rollbackVerified: true, but this run's own revert-and-recheck did not reproduce a pass, so the claim is not earned by this run",
-      );
-    }
+    const evidence = await runMutationCycle({
+      root: workspace.root,
+      mutation: VOUCHER_MUTATION,
+      reExecutionCap: 0,
+      runArm: async (phase) => {
+        if (phase === 'baseline') return baselineArm(scratchDir, qualification, problems);
+        if (phase === 'mutated') return mutatedArm(scratchDir, qualification, problems);
+        return revertedArm(scratchDir);
+      },
+    });
+    rollbackVerifiedLive = evidence.rollbackVerified;
+  } catch (error) {
+    if (!(error instanceof QualificationError)) throw error;
+    problems.push(`the mutation cycle stopped (exit ${error.exitCode}): ${error.message}`);
   } finally {
-    fs.rmSync(scratchDir, { recursive: true, force: true });
+    removeWorkspace(workspace);
+  }
+  if (fs.existsSync(workspace.directory)) problems.push(`the disposable copy of the service was left at ${workspace.directory}`);
+
+  if (qualification.rollbackVerified !== true) {
+    problems.push('qualification.json does not declare rollbackVerified: true');
+  } else if (!rollbackVerifiedLive) {
+    problems.push(
+      "qualification.json declares rollbackVerified: true, but this run's own revert-and-recheck did not reproduce a pass, so the claim is not earned by this run",
+    );
   }
 
   const smokeProblems = await runServerSmoke();
@@ -487,9 +517,13 @@ async function main() {
   return 0;
 }
 
-main()
-  .then((code) => process.exit(code))
-  .catch((error) => {
-    console.error(`${colors.red}the automate-eval fixture proof could not run:${colors.reset} ${error.stack ?? error}`);
-    process.exit(2);
-  });
+if (require.main === module) {
+  main()
+    .then((code) => process.exit(code))
+    .catch((error) => {
+      console.error(`${colors.red}the automate-eval fixture proof could not run:${colors.reset} ${error.stack ?? error}`);
+      process.exit(2);
+    });
+}
+
+module.exports = { VOUCHER_MUTATION, runMutationCycle };

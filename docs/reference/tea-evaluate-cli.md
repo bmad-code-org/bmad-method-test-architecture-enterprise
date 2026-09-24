@@ -1,12 +1,12 @@
 ---
 title: 'tea-evaluate CLI'
-description: 'The Evaluate runtime: check, digest and preflight an evaluation folder, and the generic skill runner, with their rules and exit codes'
+description: 'The Evaluate runtime: check, digest and preflight an evaluation folder, its disposable workspaces and controlled mutations, and the generic skill runner, with their rules and exit codes'
 ---
 
 # tea-evaluate CLI
 
 `tea-evaluate` is the runtime behind the Evaluate workflow (`bmad-testarch-evaluate`).
-It validates an evaluation folder and digests its corpus, so a stale index or a malformed artifact fails before anything runs, and it drives an evaluation's preflight against the real target.
+It validates an evaluation folder and digests its corpus, so a stale index or a malformed artifact fails before anything runs, and it drives an evaluation's preflight against the real target, qualifying each seeded probe's controlled mutation in a disposable workspace first.
 This release ships three subcommands, `check`, `digest` and `preflight`; the run, score, compare and CI subcommands arrive with later Evaluate stories.
 TeA also ships `tea-skill-runner`, the command an evaluation registers to run a skill.
 
@@ -29,6 +29,7 @@ Nothing defaults to the working directory.
   contract.json                 # the Behavioral Evaluation Contract
   probes/P-NNN.probe.json       # one committed probe per file, authored fields only
   mutations/M-NNN.mutation.json # one controlled mutation per file
+  policy/scoring-policy.json    # eval-quality's scoring policy; required once a probe takes the controlled-mutation route
   corpus/                       # the corpus the probes run against
   corpus-index.json             # written by tea-evaluate digest
   baseline/                     # committed qualified probes and baseline/qualification/ evidence
@@ -36,7 +37,7 @@ Nothing defaults to the working directory.
 ```
 
 The runtime owns the schemas of `evaluation.json`, the committed probe and the mutation file; they ship under `cli/lib/evaluate/schemas/` in the TeA package.
-`contract.json` meets the contract schema eval-quality publishes.
+`contract.json` and `policy/scoring-policy.json` meet the schemas eval-quality publishes.
 
 ## check
 
@@ -55,7 +56,7 @@ The rules:
 | `schema-version`           | an `evaluation.json` version the installed TeA does not know; the message names the installed TeA version and the versions it knows, and is reported alone                                             |
 | `runtime-owned-field`      | a committed probe carrying a field the runtime writes: lineage, the attested digests, the system identifier, evidence references, the rollback flag, or a qualification field the mutation file owns   |
 | `mutation-operator`        | a mutation whose operator is not `replace-exact` with exactly one occurrence                                                                                                                           |
-| `provisioned-target`       | a mutation target inside a directory the workspace provisions, which the copy links to the target's own directory                                                                                      |
+| `provisioned-target`       | a mutation target inside a directory the workspace provisions, which every workspace holds read-only                                                                                                   |
 | `web-interface`            | a contract interface of kind `web`; a web application is evaluated through `api`                                                                                                                       |
 | `written-file-signature`   | a defect signature addressing a file the target wrote: the `artifact` channel, or a predicate pointer under `/interactions/<id>/artifact` on any channel                                               |
 | `oracle-count`             | a behavior discharged by a defect or gameability probe that does not declare exactly one oracle                                                                                                        |
@@ -67,7 +68,7 @@ The rules:
 | `skill-root`               | a mutation whose `targetArtifact` is not inside `launch.skillRoot`, a `tea-skill-runner` leg or plan step whose `skill-root` is not `launch.skillRoot`, or a skill root inside a provisioned directory |
 | `skill-runner`             | a `tea-skill-runner` registry entry that does not declare exit codes 3 to 6, or a leg or plan step for it with no literal `timeout-ms` below the entry's `maxElapsedMs`                                |
 
-Beside those fifteen, `check` reports a file that does not parse (`json`), one that fails the runtime's schemas (`schema`) or eval-quality's (`engine-schema`), a file not named for its ID (`file-name`), a probe naming a behavior or mutation that does not exist (`reference`), a folder with no `contract.json` (`missing-file`), an ID declared twice in one file (`duplicate-id`), a registry that declares one interface and executable pair twice (`registry`), a symbolic link or file where `corpus/`, `probes/` or `mutations/` or an entry inside them should be (`corpus-file`), which `digest` refuses with exit 10 as well, and a symbolic link or other non-regular entry under `baseline/` (`baseline-file`).
+Beside those fifteen, `check` reports a file that does not parse (`json`), one that fails the runtime's schemas (`schema`) or eval-quality's (`engine-schema`), a file not named for its ID (`file-name`), a probe naming a behavior or mutation that does not exist (`reference`), a folder with no `contract.json`, or with no `policy/scoring-policy.json` once a probe takes the `controlled-mutation` route (`missing-file`), an ID declared twice in one file (`duplicate-id`), a registry that declares one interface and executable pair twice (`registry`), a symbolic link or file where `corpus/`, `probes/` or `mutations/` or an entry inside them should be (`corpus-file`), which `digest` refuses with exit 10 as well, and a symbolic link or other non-regular entry under `baseline/` (`baseline-file`).
 A `baseline/qualification/` reference must resolve to a regular file inside the folder.
 
 ## The registry
@@ -118,9 +119,66 @@ Address an exit code, stream or body only the defect produces.
 - `root`: the evaluated project's root, relative to the evaluation folder.
   It is POSIX, may climb out of the folder with `..`, and is never absolute.
   It resolves from the folder's real location: an `--evaluation` path through a symbolic link reaches the same root as the folder's own path.
-  Registry targets, the skill root and every mutation's `targetArtifact` resolve against it, and `preflight` runs its legs in a disposable copy of it.
+  Registry targets, the skill root and every mutation's `targetArtifact` resolve against it, and `preflight` runs its arms and legs in disposable workspaces made from it (see [The workspace](#the-workspace)).
 - `skillRoot`: the skill directory, holding `SKILL.md`, relative to `root`, with no `.` or `..` segment.
   Required when the evaluation's target kind is `skill`; it is the `--skill-root` every skill-runner leg must pass, and `check` refuses a mutation outside it or a leg passing another (`skill-root`).
+
+## The workspace
+
+Every run happens in disposable workspaces, so no mutation and no leg's write lands in your tree.
+`evaluation.json`'s `workspace` chooses the first one, the pristine workspace:
+
+- `kind: git`, with `launch.root` inside a git repository that has a commit: a detached worktree at `HEAD`, made with `git worktree add --detach` and your repository's hooks disabled.
+  The evaluated commit is recorded, and uncommitted changes are left out of the run, which says so on stderr.
+  `launch.root` must be tracked at that commit.
+- `kind: copy`, or `kind: git` with `launch.root` outside any git repository: a temp copy of `launch.root`, without `.git`, identified by its tree digest; no commit is recorded, since no commit names those bytes.
+- `preflight --from-working-tree`: a temp copy of the working tree, uncommitted work included, whatever the kind.
+  It is the one workspace recorded as `dirty: true`, and a dirty run cannot become a baseline.
+
+Every other workspace of the run (one per seeded probe's qualification, one per mutation) reproduces the pristine one: a worktree of the same commit, or a copy of the pristine copy, whose tree digest must match.
+The evaluation folder is left out of every workspace, so a target cannot read the contract, the probes or which defect a mutation plants.
+Each `workspace.provision` directory (for example `node_modules`, which a worktree lacks) is copied into the workspace, as a copy-on-write clone where the file system offers one, and its write bits are removed, so a write under it fails unless the writer restores the bits first (root ignores them).
+A mutation cannot target a file inside it (`provisioned-target`), and a provisioned directory that is itself a symbolic link is refused with exit 12.
+Every symbolic link under `launch.root` in the workspace resolves inside the workspace: a link into the project is re-pointed at the same place in the workspace, and a link that leads out of the project is refused with exit 12, as is a FIFO, a socket or a device, or a temp directory (`TMPDIR`) inside the project.
+Each link is resolved as the system resolves it, so a `..` after a link climbs from the link's target.
+A workspace is removed when the command ends, a worktree's entry in your repository included, and also on `SIGINT`, `SIGTERM`, `SIGHUP` or `SIGQUIT`, which stop the running leg and then end the command by the same signal.
+A `SIGKILL` runs no handler: a worktree it leaves behind is listed by `git worktree list` until `git worktree prune`.
+
+A worktree shares your repository's refs, configuration and objects, so a target running git in it can change them.
+`preflight` reads your project before the workspaces are made and again after the qualification and after the legs: in a git repository, `git status` (tracked and untracked paths), the content of every path it names, every ref and the repository's configuration; outside one, the tree digest of `launch.root` without the evaluation's `runs/`.
+A change exits 12 and no qualified probe is written, so a target that writes into your tree, commits, tags or reconfigures the repository fails the run.
+Gitignored paths are not read.
+
+`runs/<invocationId>/run.json` records what was evaluated: the TeA and eval-quality versions, the commit (`null` for a copy), `dirty`, the workspace's kind, commit, tree and tree digest, the path of every workspace that ran legs, and whether your project was unchanged.
+
+## Controlled mutations
+
+A mutation is `mutations/M-NNN.mutation.json`: a `targetArtifact` relative to `launch.root` and a `replace-exact` operator whose `find` text must occur in that file exactly once, overlapping occurrences counted.
+A probe that seeds a defect on the `controlled-mutation` route names its mutation, and `preflight` qualifies it through six steps in a workspace of its own, before any preflight leg runs, so nothing its arms leave behind reaches another probe or a leg:
+
+1. The clean arm: every interaction plan step once, with its literal bindings, through the registry.
+   Each oracle of the behaviors the probe discharges is resolved by eval-quality's `resolveCheck` over the arm's observations, and every one must hold.
+2. The mutation, applied in the workspace.
+3. The mutated arm, in which at least one of those oracles must be violated.
+4. The original bytes, restored with the file's original mode, also when the mutated arm could not run.
+5. The restored file's digest and mode, which must equal the pre-mutation ones.
+6. The clean arm again, until it passes, at most `1 + reExecutionCap` times (`reExecutionCap` from `policy/scoring-policy.json`).
+
+`rollbackVerified` is true only when step 5's digest and mode match and step 6 passes.
+The evidence goes to `runs/<invocationId>/qualification/<probeId>/`: `baseline-pass.json` and `mutated-fail.json` (each arm's requests, observations and oracle resolutions), `rollback.json` (`preDigest`, `mutatedDigest` and `restoredDigest` of the `targetArtifact`, each `sha256:` and the hex SHA-256 of its bytes, and every re-run), and `fault.json` when an arm could not run.
+The qualified probe, with the runtime's digests and references to that evidence, is checked against eval-quality's probe schema and its qualification gate, handed to `eval-quality preflight`, and written to `runs/<invocationId>/probes/` only once your project is confirmed unchanged after the legs.
+A step that fails writes no qualified probe:
+
+| Exit | Cause                                                                                                                                                                                                                     |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 10   | the `find` text occurs in the target other than exactly once, the target is not a regular file, an arm's request is one the registry does not authorize, or the qualified probe fails eval-quality's checks               |
+| 11   | the clean arm does not pass, or the mutated arm does not fail                                                                                                                                                             |
+| 12   | the mutation or the restore cannot be written, the restored digest or mode differs, an arm cannot run or exits an infrastructure code, the restored workspace does not pass again within the cap, or your project changed |
+
+A restored workspace that no longer passes is an unfit harness (exit 12): the target is byte for byte what it was, and eval-quality reads a re-execution cap exceeded as a harness that does not reproduce its result, never as a weak contract.
+Each mutation then gets a mutated workspace of its own, whose `targetArtifact` digest must equal the one the cycle measured.
+This release qualifies the `controlled-mutation` route only: a seeded probe on any other route exits 12 before any workspace is made.
+An interaction plan step binding a `captured`, `matcher` or `principal` value stops the arm with exit 12, since the run cannot send the request the contract means.
 
 ## digest
 
@@ -135,7 +193,7 @@ Run it after every change to those folders; `check` refuses a stale index.
 ## preflight
 
 ```bash
-npx tea-evaluate preflight --evaluation evals/my-evaluation
+npx tea-evaluate preflight --evaluation evals/my-evaluation [--from-working-tree]
 ```
 
 `preflight` asks whether the environment can measure anything at all, against the real target, before a run spends a trial on it.
@@ -143,23 +201,17 @@ Each invocation writes `runs/<invocationId>/` inside the evaluation folder, and 
 The steps run in order, each stopping the run with its own exit:
 
 1. `check` over the folder; any finding exits 10 and is printed as `check` prints it.
-2. The target must be launchable: a `cli` interface, and no probe that seeds a defect.
-   A seeded fault's leg runs against the mutated copy of its mutation, which a later Evaluate release builds, so this release refuses such an evaluation with exit 12 before any leg runs, and a retry cannot pass.
-3. `launch.root` is copied into a temp directory, without `.git` and the evaluation's own `runs/`.
-   A symbolic link inside the target is copied as a link to the same place in the copy, so a leg writing through it writes into the copy.
-   Each link is resolved as the system resolves it, so a `..` after a link climbs from the link's target.
-   The copy is refused with exit 12 for a symbolic link that leads out of `launch.root`, an entry that is neither a file, a directory nor a link (a FIFO, a socket, a device), or a temp directory (`TMPDIR`) inside `launch.root`.
-   Each `workspace.provision` directory is linked in from the target and stays writable: a leg that writes under a provisioned directory writes into your tree.
-   A later Evaluate release makes those links read-only.
-   Every registry target must be present and executable in the copy (exit 12 otherwise), and the legs run there.
-   The copy is removed when the command ends, and also on `SIGINT`, `SIGTERM`, `SIGHUP` or `SIGQUIT`, which stop the running leg and then end the command by the same signal.
+2. The evaluation must be one this release runs: a `cli` interface, and every seeded probe on the `controlled-mutation` route (exit 12 otherwise, and a retry cannot pass).
+3. The pristine workspace (see [The workspace](#the-workspace)), with every registry target present and executable in it (exit 12 otherwise), and `run.json`.
 4. `eval-quality compile` and `eval-quality seal` over the run's own copy of `contract.json`, writing `eval-contract.json` and `sealed-evaluator-brief.json`; a non-zero exit the CLI documents is passed through.
-5. The legs: eval-quality's `runPreflight` plans them from the contract (every sensitivity-witness leg and the minted control legs) and drives them through the command-line adapter the registry authorizes.
+5. Each seeded probe qualified through its controlled mutation (see [Controlled mutations](#controlled-mutations)), exiting 10, 11 or 12 when a step fails.
+6. The legs: eval-quality's `runPreflight` plans them from the contract and the qualified probes (every sensitivity-witness leg, the minted control legs, and each defect's manifestation-witness leg) and drives them through the command-line adapter the registry authorizes.
+   A manifestation witness's leg runs in its mutation's mutated workspace, and every other leg in the pristine workspace, each through an authorization whose working directory is that workspace.
    Each request carries the host's values for the environment keys its registry entry permits.
-   Every observation is written to `observations/` as it arrives, with the request beside it; a request's environment is recorded as its keys only, and every injected value of eight characters or more is replaced by `[redacted]` in the observation.
+   Every observation is written to `observations/` as it arrives, with the request, the workspace and the working directory beside it; a request's environment is recorded as its keys only, and every injected value of eight characters or more is replaced by `[redacted]` in the observation.
    A leg the registry does not authorize is refused by the adapter before it starts: the fault is written to `faults/` and the command exits 10.
    A leg that cannot run at all (a budget exceeded, a process that fails to start) is written there too and exits 12, as does any other failure that stops the legs.
-6. `eval-quality preflight --contract contract.json --probes probes.json --observations observations.json --run-id <invocationId>` over the files in the run directory.
+7. `eval-quality preflight --contract contract.json --probes probes.json --observations observations.json --run-id <invocationId>` over the files in the run directory, `probes.json` holding the qualified probes.
    Its `preflight-verdict.json` is the verdict, and its exit code is the command's exit code, verbatim: 0 when the preflight passed, 3 when it failed.
 
 `runPreflight` computes a verdict of its own, and `preflight` discards it: every verdict comes from the CLI over files you can rerun by hand from the run directory.
@@ -211,10 +263,11 @@ Exit 2 is left out on purpose: a usage error is a defect in the evaluation's own
 
 ## Exit codes
 
-| Exit | Meaning                                                                                                                                           |
-| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0    | success; for `preflight`, the preflight passed                                                                                                    |
-| 3-5  | `preflight` only: an eval-quality stage's own exit, passed through verbatim (3 is a failed preflight, 4 a contract defect, 5 a runtime fault)     |
-| 10   | authoring defect: `check` found at least one finding, `digest` met an entry it cannot index, or a `preflight` leg the registry does not authorize |
-| 12   | infrastructure: eval-quality is not installed where the runtime can reach it, or a `preflight` target that cannot launch or a leg that cannot run |
-| 64   | wiring defect: no `--evaluation` resolves, or the command line is malformed; for `preflight`, also an eval-quality stage's own 64, passed through |
+| Exit | Meaning                                                                                                                                                                                                                                                                                                                           |
+| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0    | success; for `preflight`, the preflight passed                                                                                                                                                                                                                                                                                    |
+| 3-5  | `preflight` only: an eval-quality stage's own exit, passed through verbatim (3 is a failed preflight, 4 a contract defect, 5 a runtime fault)                                                                                                                                                                                     |
+| 10   | authoring defect: `check` found at least one finding, `digest` met an entry it cannot index, or `preflight` met a leg the registry does not authorize or a mutation that cannot be applied exactly once                                                                                                                           |
+| 11   | evaluation weakness: a `preflight` mutation whose clean arm does not pass or whose mutated arm does not fail                                                                                                                                                                                                                      |
+| 12   | infrastructure: eval-quality is not installed where the runtime can reach it, or a `preflight` workspace that cannot be made, a target that cannot launch or exits an infrastructure code, a restore that fails, a restored workspace that does not pass again, a leg that cannot run, or a change to your project during the run |
+| 64   | wiring defect: no `--evaluation` resolves, or the command line is malformed; for `preflight`, also an eval-quality stage's own 64, passed through                                                                                                                                                                                 |

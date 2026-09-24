@@ -13,7 +13,8 @@
  * - `schema-version`: `evaluation.json` carries a version this runtime does not know.
  * - `runtime-owned-field`: a committed probe carries a field the runtime writes.
  * - `mutation-operator`: a mutation is not `replace-exact` with exactly one occurrence.
- * - `provisioned-target`: a mutation's `targetArtifact` sits inside a provisioned directory.
+ * - `provisioned-target`: a mutation's `targetArtifact` sits inside a provisioned directory, which every
+ *   workspace holds read-only.
  * - `web-interface`: the contract declares an interface of kind `web`.
  * - `written-file-signature`: a defect signature addresses a file the target wrote.
  * - `oracle-count`: a behavior a defect or gameability probe discharges does not declare exactly one oracle.
@@ -33,7 +34,11 @@
  *   `maxElapsedMs`: under the ceiling the runner reports its own timeout as exit 5, while at the
  *   ceiling the adapter kills the runner's process group, records a fault, and `preflight` exits 12.
  *
- * Beside them, `contract.json` must exist (`missing-file`), every indexed
+ * Beside them, `contract.json` must exist (`missing-file`), as must
+ * `policy/scoring-policy.json` when a probe takes the `controlled-mutation`
+ * route, since its `reExecutionCap` bounds the rollback proof and its
+ * `regexMatchStepBudget` bounds the evaluator (a policy present is always
+ * held to eval-quality's scoring-policy schema, `engine-schema`), every indexed
  * root and entry must be a real directory or regular file (`corpus-file`), as
  * must everything under `baseline/` (`baseline-file`), no ID may repeat within
  * its file (`duplicate-id`), no registry entry may repeat an interface and
@@ -50,7 +55,7 @@ const path = require('node:path');
 
 const AjvModule = require('ajv/dist/2020');
 
-const { loadEngine, engineSchemaPath } = require('./engine');
+const { engineSchemaPath, loadEngine, schemaVersionProblems } = require('./engine');
 const { MANIFEST_NAME } = require('./folder');
 const { addFormats } = require('./formats');
 const { repeatedPairs } = require('./registry');
@@ -65,6 +70,7 @@ const Ajv = AjvModule.default ?? AjvModule;
 
 const KNOWN_EVALUATION_SCHEMA_VERSIONS = [1];
 const CONTRACT_NAME = 'contract.json';
+const POLICY_NAME = 'policy/scoring-policy.json';
 const QUALIFICATION_PREFIX = 'baseline/qualification/';
 const MUTATION_ID_PATTERN = '^M-[0-9]{3,}$';
 const PROBE_FILE = /^(.+)\.probe\.json$/;
@@ -158,6 +164,7 @@ async function buildContext() {
       probe: runtimeSchema('committed-probe.schema.json'),
       mutation: runtimeSchema('mutation.schema.json'),
       contract: ajv.compile(contractSchema),
+      scoringPolicy: ajv.compile(readJsonFile(engineSchemaPath('scoring-policy.schema.json'))),
       defectSignature: ajv.compile({ $ref: `${branchPointer}/defectSignature` }),
       manifestationWitness: ajv.compile({ $ref: `${branchPointer}/defects/items/properties/manifestationWitness` }),
     },
@@ -359,7 +366,7 @@ function checkSkillRunner(report, evaluation, contract, provision) {
         report.add(
           MANIFEST_NAME,
           'skill-root',
-          `launch.skillRoot ${JSON.stringify(skillRoot)} is inside the provisioned directory ${JSON.stringify(directory)}, which the disposable copy links to the target's own directory, so a mutation of the skill would be planted in the target itself`,
+          `launch.skillRoot ${JSON.stringify(skillRoot)} is inside the provisioned directory ${JSON.stringify(directory)}, which every workspace holds as a read-only copy, so no mutation of the skill could be planted`,
         );
       }
     }
@@ -447,7 +454,7 @@ function checkMutations(report, folder, context, provision, skillRoot) {
           report.add(
             relative,
             'provisioned-target',
-            `targetArtifact ${JSON.stringify(mutation.targetArtifact)} is inside the provisioned directory ${JSON.stringify(directory)}, which the disposable copy links to the target's own directory, so the mutation would be planted in the target itself`,
+            `targetArtifact ${JSON.stringify(mutation.targetArtifact)} is inside the provisioned directory ${JSON.stringify(directory)}, which every workspace holds as a read-only copy, so the mutation could not be planted there`,
           );
         }
       }
@@ -815,7 +822,9 @@ function checkProbe(report, relative, probe, context, behaviors, mutations, regi
   }
 }
 
+/** Checks every committed probe; returns the qualification routes they take. */
 function checkProbes(report, folder, context, behaviors, mutations, registry) {
+  const routes = new Set();
   for (const entry of listDirectory(folder, 'probes') ?? []) {
     const relative = `probes/${entry.name}`;
     const match = PROBE_FILE.exec(entry.name);
@@ -832,8 +841,34 @@ function checkProbes(report, folder, context, behaviors, mutations, registry) {
     if (typeof probe.probeId === 'string' && probe.probeId !== match[1]) {
       report.add(relative, 'file-name', `probe ID ${JSON.stringify(probe.probeId)} does not match its file name`);
     }
+    if (typeof probe.qualification?.route === 'string') routes.add(probe.qualification.route);
     checkProbe(report, relative, probe, context, behaviors, mutations, registry);
   }
+  return routes;
+}
+
+/**
+ * `policy/scoring-policy.json`: required when a probe takes the
+ * `controlled-mutation` route, whose rollback proof re-runs the baseline within
+ * the policy's `reExecutionCap`, and held to eval-quality's published schema
+ * and schema version whenever it is present.
+ */
+function checkScoringPolicy(report, folder, context, routes) {
+  const file = path.join(folder, ...POLICY_NAME.split('/'));
+  if (!fs.existsSync(file)) {
+    if (routes.has('controlled-mutation')) {
+      report.add(
+        POLICY_NAME,
+        'missing-file',
+        `a probe takes the controlled-mutation route, whose rollback proof re-runs the baseline within the scoring policy's reExecutionCap, and the evaluation folder has no ${POLICY_NAME}`,
+      );
+    }
+    return;
+  }
+  const policy = parseInto(report, folder, POLICY_NAME);
+  if (policy === undefined) return;
+  for (const problem of schemaVersionProblems('scoring-policy', policy)) report.add(POLICY_NAME, 'engine-schema', problem);
+  validateInto(report, POLICY_NAME, 'engine-schema', context.validate.scoringPolicy, policy);
 }
 
 /**
@@ -955,7 +990,8 @@ async function checkEvaluation(folder) {
   context.contract = contractFor(folder);
   const mutations = checkMutations(report, folder, context, provision, skillRoot);
   checkSkillRunner(report, evaluation, context.contract, provision);
-  checkProbes(report, folder, context, behaviors, mutations, registry);
+  const routes = checkProbes(report, folder, context, behaviors, mutations, registry);
+  checkScoringPolicy(report, folder, context, routes);
   checkQualificationEvidence(report, folder, context);
 
   try {

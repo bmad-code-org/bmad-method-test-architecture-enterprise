@@ -962,6 +962,10 @@
           "reason": "a Node.js or POSIX platform name, not a TEA declaration"
         },
         {
+          "token": "HEAD",
+          "reason": "git's name for the checked-out commit, not a TEA declaration"
+        },
+        {
           "token": "TypeError",
           "reason": "a Node.js or POSIX platform name, not a TEA declaration"
         },

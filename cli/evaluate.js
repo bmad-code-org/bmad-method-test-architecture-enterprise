@@ -5,7 +5,9 @@
  * Subcommands in this release:
  *   tea-evaluate check  --evaluation <path>   validate the folder; exit 10 on any authoring defect
  *   tea-evaluate digest --evaluation <path>   write corpus-index.json and print corpusDigest
- *   tea-evaluate preflight --evaluation <path> drive the preflight legs and take the verdict from eval-quality
+ *   tea-evaluate preflight --evaluation <path> [--from-working-tree]
+ *                                             qualify the seeded probes in a disposable workspace, drive the
+ *                                             preflight legs and take the verdict from eval-quality
  *
  * `--evaluation` names the folder or its evaluation.json. Nothing else locates
  * an evaluation: no default path and no project configuration.
@@ -14,9 +16,14 @@
  *   0   success
  *   3-5 preflight only: an eval-quality stage's own exit, passed through verbatim
  *   10  authoring defect: every finding is printed, one per line (digest: an indexed entry it cannot digest;
- *       preflight: a leg the registry does not authorize)
- *   12  infrastructure: the optional eval-quality peer is not installed; preflight: a target that cannot
- *       launch, a leg that could not run, or an engine stage that could not run
+ *       preflight: a leg the registry does not authorize, or a mutation whose find text does not occur
+ *       exactly once)
+ *   11  preflight only: an evaluation weakness, a seeded probe whose baseline does not pass or whose mutated
+ *       arm does not fail
+ *   12  infrastructure: the optional eval-quality peer is not installed; preflight: a workspace that cannot
+ *       be made, a target that cannot launch or exits an infrastructure code, a restore that fails, a
+ *       restored workspace that does not pass again, a leg that could not run, a change to the adopter's
+ *       project during the run, or an engine stage that could not run
  *   64  wiring defect: no --evaluation resolves, or the command line is malformed (preflight: or eval-quality's own 64)
  */
 
@@ -100,12 +107,13 @@ async function runPreflight(options) {
   let outcome;
   try {
     outcome = await runPreflightCommand(folder, {
+      fromWorkingTree: options.fromWorkingTree === true,
       log: (line) => process.stderr.write(`${NAME} preflight: ${escapeUnprintable(line)}\n`),
     });
   } catch (error) {
     if (error instanceof EngineUnavailableError || error instanceof EngineStageError) throw error;
     // Anything else that stops a preflight (an unwritable run directory, a
-    // target the copy cannot stage) is infrastructure, and exit 1 means
+    // workspace that fails part way) is infrastructure, and exit 1 means
     // nothing in AD-10's table for tea-evaluate.
     process.stderr.write(`${NAME} preflight: ${escapeUnprintable(error?.stack ?? error)}\n`);
     return EXIT_CODES.infrastructure;
@@ -138,8 +146,11 @@ function buildProgram(run) {
     .action((options) => run(runDigest, options));
   program
     .command('preflight')
-    .description('Drive the preflight legs against the target and take the verdict from eval-quality preflight.')
+    .description(
+      'Qualify the seeded probes in a disposable workspace, drive the preflight legs and take the verdict from eval-quality preflight.',
+    )
     .option('--evaluation <path>', 'the evaluation folder, or its evaluation.json')
+    .option('--from-working-tree', 'evaluate the working tree, uncommitted work included, in a temp copy recorded as dirty')
     .action((options) => run(runPreflight, options));
   return program;
 }

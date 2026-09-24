@@ -1,5 +1,5 @@
 /**
- * `tea-skill-runner` and `tea-evaluate preflight`, end to end (Story 1.6).
+ * `tea-skill-runner` and `tea-evaluate preflight`, end to end (Stories 1.6 and 1.7).
  *
  * The runner cases spawn `cli/skill-runner.js` over the stub agent under
  * `test/fixtures/evaluate/stub-agent/`: a run names the skill it was handed; a
@@ -34,7 +34,8 @@
  *   the control leg's exit 4: `tea-evaluate` and the CLI run directly over the
  *   persisted files both exit 3;
  * - a failed `compile` or `seal` passes its exit through and stops the run; a
- *   stage exit eval-quality does not document for that stage, a seeded probe,
+ *   stage exit eval-quality does not document for that stage, a seeded probe
+ *   on a route this release does not qualify (historical),
  *   a missing registry target, an `mcp` interface, a leg over its output
  *   budget and a missing engine exit 12; an authoring defect exits 10; and no
  *   `--evaluation` exits 64;
@@ -42,7 +43,9 @@
  *   CLI's own exit, and one that fails after a leg exits 12;
  * - a leg that writes a file writes it into a disposable copy that is removed
  *   afterwards, and an interrupted run removes it too and leaves no process;
- *   the copy holds no `.git` and no `runs/`, links a provisioned directory in,
+ *   the copy holds no `.git` and not the evaluation folder (its `runs/`
+ *   included), holds a copy of a provisioned
+ *   directory (read-only, which test/test-evaluate-mutation.js asserts),
  *   points every symbolic link inside the target at the copy, and is refused
  *   (exit 12) for a link out of the target, a FIFO, or a temp directory inside
  *   the target; `--evaluation` through a link resolves `launch.root` from the
@@ -990,11 +993,28 @@ function checkFailingControl() {
 }
 
 function checkRefusals() {
+  // A seeded probe on a route this release does not qualify (historical) is
+  // refused before a workspace is made; controlled-mutation probes are
+  // qualified, which test/test-evaluate-mutation.js covers.
   const seeded = copyFixture(VALID_FIXTURE, PROJECT_ROOT);
-  const seededResult = runPreflight(seeded);
-  check(seededResult.status === 12, `preflight over a seeded probe exited ${seededResult.status}; expected 12\n${seededResult.output}`);
-  check(seededResult.stdout.includes('probes/P-002.probe.json'), `the seeded refusal does not name the probe:\n${seededResult.output}`);
+  editJson(seeded, path.join('probes', 'P-002.probe.json'), (value) => {
+    value.qualification = { route: 'historical', fixCommit: 'a1b2c3d' };
+    value.defects[0].source = 'natural';
+  });
+  const redigested = runEvaluate(['digest', '--evaluation', seeded]);
+  check(redigested.status === 0, `digest over the historical fixture exited ${redigested.status}\n${redigested.output}`);
+  const temp = privateTemp('seeded-temp');
+  const seededResult = runPreflight(seeded, { env: temp.env });
+  check(
+    seededResult.status === 12,
+    `preflight over a historical seeded probe exited ${seededResult.status}; expected 12\n${seededResult.output}`,
+  );
+  check(
+    seededResult.stdout.includes('probes/P-002.probe.json (route historical)'),
+    `the seeded refusal does not name the probe and its route:\n${seededResult.output}`,
+  );
   check(runDirectoryOf(seeded) === null, 'a refused seeded evaluation still started a run');
+  check(fs.readdirSync(temp.directory).length === 0, 'a refused seeded evaluation made a workspace');
 
   const missing = copyFixture();
   editJson(missing, 'evaluation.json', (value) => (value.registry[0].target = 'cli/no-such-runner.js'));
@@ -1129,8 +1149,9 @@ function checkCopyAndRunsIgnore() {
 }
 
 /**
- * The copy leaves `.git` and the evaluation's own `runs/` behind and links a
- * provisioned directory in, with the evaluation folder inside the target.
+ * The copy leaves `.git` and the evaluation folder (its `runs/` included)
+ * behind and holds a copy of a provisioned directory, with the evaluation
+ * folder inside the target.
  */
 function checkCopyContents() {
   const project = stubProject('contents');
@@ -1154,13 +1175,19 @@ function checkCopyContents() {
   const listed = /list: (.*)/.exec(firstLegStdout(run === undefined ? null : path.join(runs, run.name)))?.[1];
   const entries = listed === undefined ? [] : JSON.parse(listed);
   check(entries.includes('agent.js'), `the leg's working directory is not a copy of the target: ${JSON.stringify(entries)}`);
-  check(entries.includes('evals/stub/evaluation.json'), `the copy left out the evaluation folder's own files: ${JSON.stringify(entries)}`);
+  check(
+    !entries.some((entry) => entry.startsWith('evals/stub')),
+    `the copy holds the evaluation folder, whose probes and mutations name the planted defect: ${JSON.stringify(entries)}`,
+  );
   check(!entries.some((entry) => entry === '.git' || entry.startsWith('.git/')), `the copy holds .git: ${JSON.stringify(entries)}`);
   check(
     !entries.some((entry) => entry.startsWith('evals/stub/runs')),
     `the copy holds the evaluation's own runs/: ${JSON.stringify(entries)}`,
   );
-  check(entries.includes('vendor@'), `the provisioned directory is not a symbolic link in the copy: ${JSON.stringify(entries)}`);
+  check(
+    entries.includes('vendor/library.js') && !entries.includes('vendor@'),
+    `the provisioned directory is not a copy in the workspace: ${JSON.stringify(entries)}`,
+  );
 }
 
 /**

@@ -2,7 +2,7 @@
 title: 'Story 1.6: Probe a skill through the generic runner and tea-evaluate preflight'
 type: 'feature'
 created: '2026-09-24'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 1
 baseline_commit: 'd86ac42'

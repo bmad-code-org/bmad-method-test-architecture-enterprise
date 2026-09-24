@@ -1,0 +1,248 @@
+{
+  "schemaVersion": 5,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "contractId": "tea-evaluate-mutation-fixture",
+  "sourceSpecDigest": "sha256:7c1e0a3b5d9f2e4c6a8b0d2f4e6a8c0e1b3d5f7a9c1e3b5d7f9a1c3e5b7d9f1a",
+  "behaviors": [
+    {
+      "id": "B-001",
+      "description": "Under the committed strict policy the verdict command accepts the request it is given and exits 0.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The run says verdict: accepted on stdout and exits 0.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-evaluate-fixture",
+          "id": "strict-policy-accepts"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-evaluate-fixture",
+          "id": "policy-relaxed"
+        }
+      ],
+      "oracles": [
+        "O-001"
+      ]
+    }
+  ],
+  "oracles": [
+    {
+      "id": "O-001",
+      "polarity": "expects-hold",
+      "commentary": "The verdict command read the strict policy, so stdout says verdict: accepted, and the run exited 0.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The exit code and stdout of the judge run.",
+        "negativeDomain": "A run that exited non-zero, or whose stdout does not say verdict: accepted.",
+        "evidenceTargets": [
+          "/interactions/judge-run/exit-code",
+          "/interactions/judge-run/stdout"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/judge-run/exit-code"
+              },
+              {
+                "literal": 0
+              }
+            ]
+          },
+          {
+            "op": "containment",
+            "operands": [
+              {
+                "pointer": "/interactions/judge-run/stdout"
+              },
+              {
+                "literal": "verdict: accepted"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "rubrics": [],
+  "waivers": [],
+  "permittedInterfaces": [
+    {
+      "logicalId": "verdict",
+      "kind": "cli",
+      "operations": [
+        {
+          "operationId": "judge-request",
+          "invocation": {
+            "executable": "verdict",
+            "subcommandPath": []
+          },
+          "stateChangeMarker": false,
+          "requestShape": {
+            "argument": {
+              "requiredKeys": [],
+              "permittedKeys": [],
+              "types": {}
+            },
+            "option": {
+              "requiredKeys": [],
+              "permittedKeys": [],
+              "types": {}
+            },
+            "environment": {
+              "requiredKeys": [],
+              "permittedKeys": [],
+              "types": {}
+            },
+            "stdin": {
+              "requiredKeys": [
+                "prompt"
+              ],
+              "permittedKeys": [
+                "prompt"
+              ],
+              "types": {
+                "prompt": "string"
+              }
+            }
+          },
+          "artifacts": [],
+          "descriptorChannel": {
+            "kind": "stream",
+            "channel": "stdout"
+          },
+          "responseDescriptor": {
+            "requiredKeys": [],
+            "permittedKeys": [],
+            "types": {},
+            "successIndicator": null,
+            "channelRoles": null,
+            "collectionLocations": null
+          },
+          "volatilePointers": [],
+          "sensitivityWitness": {
+            "witnessId": "verdict-follows-the-request",
+            "channel": "stdin",
+            "legs": [
+              {
+                "legId": "witness-alpha",
+                "inputs": {
+                  "argument": {},
+                  "option": {},
+                  "environment": {},
+                  "stdin": {
+                    "kind": "text",
+                    "value": "Judge alpha."
+                  }
+                }
+              },
+              {
+                "legId": "witness-beta",
+                "inputs": {
+                  "argument": {},
+                  "option": {},
+                  "environment": {},
+                  "stdin": {
+                    "kind": "text",
+                    "value": "Judge beta."
+                  }
+                }
+              }
+            ],
+            "relation": {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "containment",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/witness-alpha/stdout"
+                    },
+                    {
+                      "literal": "request: Judge alpha."
+                    }
+                  ]
+                },
+                {
+                  "op": "not",
+                  "operands": [
+                    {
+                      "op": "containment",
+                      "operands": [
+                        {
+                          "pointer": "/interactions/witness-beta/stdout"
+                        },
+                        {
+                          "literal": "request: Judge alpha."
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "referenceSets": {},
+  "siblingGroups": {
+    "operations": [],
+    "parameters": []
+  },
+  "interactionPlan": [
+    {
+      "stepId": "judge-run",
+      "operationId": "judge-request",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": null,
+        "environment": null,
+        "stdin": {
+          "prompt": {
+            "literal": "Judge the request."
+          }
+        }
+      }
+    }
+  ],
+  "scopedResources": null,
+  "forbiddenInputs": [
+    "original-spec",
+    "source-code",
+    "repository",
+    "builder-transcript",
+    "implementation-logs",
+    "comparator-results",
+    "human-labels"
+  ],
+  "testData": {
+    "setup": "Nothing is staged by hand: tea-evaluate preflight makes a workspace of launch.root, the verdict project, and runs every arm and leg there.",
+    "cleanup": "Nothing to remove: the verdict command writes only its probe of the provisioned vendor directory, which the workspace holds read-only.",
+    "principals": null,
+    "resources": null
+  },
+  "budgets": {
+    "maxToolCalls": 1,
+    "maxWallClockMinutes": 1,
+    "maxCostUsd": "0.00"
+  },
+  "safetyLimits": [
+    "The verdict command makes no network call."
+  ],
+  "requiredEvidence": [
+    "The exit code and stdout of every run."
+  ],
+  "probeStepBound": 1,
+  "fixtureReset": null
+}

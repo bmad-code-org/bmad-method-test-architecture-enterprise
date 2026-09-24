@@ -471,7 +471,7 @@ function checkUsage() {
 }
 
 // ---------------------------------------------------------------------------
-// The eleven authoring defects, one per temp copy
+// The authoring defects, one per temp copy
 
 const DEFECT_CASES = [
   {
@@ -815,6 +815,26 @@ const HARDENING_CASES = [
     file: 'probes/P-002.probe.json',
     rule: 'duplicate-id',
     plant: (folder) => editJson(folder, 'probes/P-002.probe.json', (value) => value.defects.push({ ...value.defects[0] })),
+  },
+  {
+    name: 'a controlled-mutation probe with no scoring policy',
+    file: 'policy/scoring-policy.json',
+    rule: 'missing-file',
+    plant: (folder) => fs.rmSync(path.join(folder, 'policy', 'scoring-policy.json')),
+    expect: (output) => [[output.includes('reExecutionCap'), 'the finding does not say why the policy is needed']],
+  },
+  {
+    name: 'a scoring policy with no reExecutionCap',
+    file: 'policy/scoring-policy.json',
+    rule: 'engine-schema',
+    plant: (folder) => editJson(folder, 'policy/scoring-policy.json', (value) => delete value.reExecutionCap),
+  },
+  {
+    name: 'a scoring policy stamped with a version the engine does not read',
+    file: 'policy/scoring-policy.json',
+    rule: 'engine-schema',
+    plant: (folder) => editJson(folder, 'policy/scoring-policy.json', (value) => (value.schemaVersion += 1)),
+    expect: (output) => [[output.includes('"schemaVersion"'), 'the finding does not name the stamp']],
   },
   {
     name: 'a maxElapsedMs past the 2147483647 ms one timer holds',

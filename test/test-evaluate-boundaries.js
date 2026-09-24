@@ -11,7 +11,7 @@
  * natively, an extensionless script) is an `unscanned` violation. The rules
  * are closed: none of them tracks where a value came from.
  *
- * Seven rules (Stories 1.4 to 1.6, AD-1, AD-4, AD-5, AD-6):
+ * Eight rules (Stories 1.4 to 1.7, AD-1, AD-4, AD-5, AD-6, AD-8):
  *
  * - `engine-import`: only `cli/lib/evaluate/engine.js` loads a specifier that
  *   is `eval-quality`, starts with `eval-quality/` or contains
@@ -53,30 +53,40 @@
  *   adapter key other than `custom`, or `anthropic`, `openai`, `gemini`) in an
  *   identifier or a string, since vendor knowledge lives in
  *   `cli/lib/agent-adapters.js`.
+ * - `rollback-literal` (Story 1.7, AD-8): nothing under `cli/` writes
+ *   `rollbackVerified: true` as a literal: an object property (a quoted or
+ *   computed key included), an assignment (dot, bracket or a bare name), a
+ *   binding a shorthand property could carry, or `"rollbackVerified": true` in
+ *   a JSON file, since the flag is the rollback cycle's own result; the
+ *   twin-fixture pattern AD-8 rejects set it by hand.
  *
- * Story 1.5 also holds the move of the registry, the record builders and the
- * digest and provenance into the runtime (AD-5, R1-06), by definition in named
- * files, since a text scan for a call site would hit the legal calls across
- * `test/`:
+ * Stories 1.5 and 1.7 also hold the moves of harness code into the runtime
+ * (AD-5, R1-06), by definition in named files, since a text scan for a call
+ * site would hit the legal calls across `test/`:
  *
  * - `test/lib/probe-targets.js`, `test/lib/eval-quality-inputs.js` and
  *   `test/lib/eval-record.js` each `require` their runtime module
- *   (`cli/lib/evaluate/registry.js`, `records.js`, `digest.js`);
+ *   (`cli/lib/evaluate/registry.js`, `records.js`, `digest.js`), and Story
+ *   1.7's `test/eval-contract-strength.js` and
+ *   `test/test-automate-eval-fixture.js` require `workspace.js` and
+ *   `mutation.js`;
  * - the moved definitions (`function commandTargetPolicy`, the command target
- *   policy builder; `function sealedRunRecord`; `function repositoryState`) are
- *   declared exactly once, in their runtime module, and defined in no other
- *   runtime module;
+ *   policy builder; `function sealedRunRecord`; `function repositoryState`;
+ *   `function cachingPort` and `function stageDirectories`, the live
+ *   harness's leg cache and per-leg staging; `function runMutationCycle`, the
+ *   mutate, measure, restore cycle) are declared exactly once, in their
+ *   runtime module, and defined in no other runtime module;
  * - no function a moved runtime module exports (`registry.js`, `records.js`,
- *   `digest.js`, `bounded-probe.js`) is defined again under `test/lib/`: in any
- *   form in the three named files (a declaration, an arrow bound or assigned
- *   later, a method, or a local function exported under the name), and at the
- *   top level or in the exports of any other `test/lib/` file, so a partial
- *   move back or a copy of a runtime module fails; `digestFiles` in
- *   `eval-record.js`, which hands the runtime TEA's file-system port, is the one
- *   named wrapper; a function an exported factory builds and returns
- *   (`createRegistry`'s `targetProblems`, `createArtifactValidator`'s
- *   `validateArtifact`) counts as exported;
- * - every runtime function the three named files hand out is the runtime's own
+ *   `digest.js`, `bounded-probe.js`, `workspace.js`, `mutation.js`) is defined
+ *   again under `test/`: in any form in the five named files (a declaration,
+ *   an arrow bound or assigned later, a method, or a local function exported
+ *   under the name), and at the top level or in the exports of any other
+ *   `test/lib/` file, so a partial move back or a copy of a runtime module
+ *   fails; `digestFiles` in `eval-record.js`, which hands the runtime TEA's
+ *   file-system port, is the one named wrapper; a function an exported factory
+ *   builds and returns (`createRegistry`'s `targetProblems`,
+ *   `createArtifactValidator`'s `validateArtifact`) counts as exported;
+ * - every runtime function the five named files hand out is the runtime's own
  *   function object, checked by loading them in a child process, so a bound,
  *   aliased or member function fails; `probe-targets.js` exports its registry,
  *   which must be one `createRegistry` built, and frozen;
@@ -112,6 +122,7 @@ const AJV_STAGE = 'compile';
 const AJV_MODULES = new Set(['ajv', 'ajv/dist/2020']);
 const CREATE_REQUIRE = 'createRequire';
 const FORBIDDEN_CONFIG = '_bmad';
+const ROLLBACK_FLAG = 'rollbackVerified';
 const UNKNOWN = Symbol('unknown binding');
 const AJV_IMPORT = Symbol('ajv import');
 const CREATE_REQUIRE_FUNCTION = Symbol('createRequire');
@@ -449,6 +460,23 @@ function destructuredFrom(pattern, parentOf) {
   return;
 }
 
+/**
+ * The lines of a JSON file under `cli/` that hold `"rollbackVerified": true`:
+ * a template a module spreads into a record would carry the flag as data. A
+ * file that does not parse is read as text, so it cannot hide one either.
+ */
+function jsonRollbackLiterals(source) {
+  const pattern = new RegExp(`"${ROLLBACK_FLAG}"\\s*:\\s*true\\b`, 'g');
+  const lines = [];
+  for (const match of source.matchAll(pattern)) lines.push(lineAt(source, match.index));
+  return lines;
+}
+
+/** Whether `node` is the literal `true`. */
+function isTrueLiteral(node) {
+  return node?.type === 'Literal' && node.value === true;
+}
+
 /** The text of a string literal or a template's static part, or undefined for any other node. */
 function stringText(node) {
   if (node.type === 'Literal' && typeof node.value === 'string') return node.value;
@@ -541,6 +569,25 @@ function fileViolations({ source, ast, isEngine, isSkillRunner, file, projectRoo
       }
     }
 
+    // rollback-literal: `rollbackVerified` is computed, never written true.
+    if (node.type === 'Property' && propertyKey(node) === ROLLBACK_FLAG && isTrueLiteral(node.value)) {
+      report(node, 'rollback-literal', `writes ${ROLLBACK_FLAG}: true as a literal; the flag is the rollback cycle's own result`);
+    }
+    if (
+      node.type === 'AssignmentExpression' &&
+      ((node.left.type === 'MemberExpression' && memberKey(node.left) === ROLLBACK_FLAG) || isIdentifier(node.left, ROLLBACK_FLAG)) &&
+      isTrueLiteral(node.right)
+    ) {
+      report(node, 'rollback-literal', `assigns ${ROLLBACK_FLAG} = true; the flag is the rollback cycle's own result`);
+    }
+    if (node.type === 'VariableDeclarator' && isIdentifier(node.id, ROLLBACK_FLAG) && isTrueLiteral(node.init)) {
+      report(
+        node,
+        'rollback-literal',
+        `binds ${ROLLBACK_FLAG} to true, which a shorthand property would carry; the flag is the rollback cycle's own result`,
+      );
+    }
+
     // engine-stage: compile, allowed only on an Ajv instance.
     if (node.type === 'MemberExpression' && memberKey(node) === AJV_STAGE && !isAjvReceiver(node.object)) {
       report(node, 'engine-stage', `reaches "${AJV_STAGE}" on "${excerpt(node.object)}", which is not an Ajv instance`);
@@ -593,6 +640,16 @@ function scanCli(cliRoot) {
       }
     }
     const extension = path.extname(file);
+    if (extension === '.json') {
+      for (const line of jsonRollbackLiterals(source)) {
+        violations.push({
+          file: relative,
+          line,
+          rule: 'rollback-literal',
+          message: `holds "${ROLLBACK_FLAG}": true as data; the flag is the rollback cycle's own result`,
+        });
+      }
+    }
     if (DATA_EXTENSIONS.has(extension)) continue;
     if (!SOURCE_EXTENSIONS.has(extension)) {
       violations.push({
@@ -1138,6 +1195,56 @@ const PLANTS = [
     file: SKILL_RUNNER,
     source: "const KEY = 'ANTHROPIC_API_KEY';\nmodule.exports = { KEY };\n",
   },
+  // rollback-literal
+  {
+    name: 'a rollbackVerified: true property',
+    rule: 'rollback-literal',
+    file: 'lib/evaluate/qualified.js',
+    source: "const qualification = { route: 'controlled-mutation', rollbackVerified: true };\nmodule.exports = { qualification };\n",
+  },
+  {
+    name: 'a quoted rollbackVerified key set to true',
+    rule: 'rollback-literal',
+    file: 'lib/evaluate/qualified.js',
+    source: "module.exports = { 'rollbackVerified': true };\n",
+  },
+  {
+    name: 'rollbackVerified assigned true',
+    rule: 'rollback-literal',
+    file: 'lib/evaluate/qualified.js',
+    source: 'function mark(evidence) {\n  evidence.rollbackVerified = true;\n}\nmodule.exports = { mark };\n',
+  },
+  {
+    name: 'a computed rollbackVerified key set to true',
+    rule: 'rollback-literal',
+    file: 'lib/evaluate/qualified.js',
+    source: "module.exports = { ['rollbackVerified']: true };\n",
+  },
+  {
+    name: 'rollbackVerified bound to true and handed out in shorthand',
+    rule: 'rollback-literal',
+    file: 'lib/evaluate/qualified.js',
+    source: 'function qualify() {\n  const rollbackVerified = true;\n  return { rollbackVerified };\n}\nmodule.exports = { qualify };\n',
+  },
+  {
+    name: 'rollbackVerified reassigned true',
+    rule: 'rollback-literal',
+    file: 'lib/evaluate/qualified.js',
+    source:
+      'let rollbackVerified = false;\nfunction mark() {\n  rollbackVerified = true;\n}\nmodule.exports = { mark, get: () => rollbackVerified };\n',
+  },
+  {
+    name: 'a JSON template under cli/ holding rollbackVerified true',
+    rule: 'rollback-literal',
+    file: 'lib/evaluate/qualification-template.json',
+    source: '{\n  "route": "controlled-mutation",\n  "rollbackVerified": true\n}\n',
+  },
+  {
+    name: 'rollbackVerified assigned true by bracket access, outside the runtime',
+    rule: 'rollback-literal',
+    file: 'lib/other.js',
+    source: "function mark(evidence) {\n  evidence['rollbackVerified'] = true;\n}\nmodule.exports = { mark };\n",
+  },
   {
     name: 'a file that does not parse',
     rule: 'parse',
@@ -1210,6 +1317,20 @@ const CLEAN_PLANTS = [
     file: 'lib/evaluate/static-template.js',
     source:
       "const path = require(`node:path`);\nconst { createRequire } = require('node:module');\nconst load = createRequire(__filename);\nconst yaml = load('js-yaml');\nmodule.exports = { path, yaml };\n",
+  },
+  {
+    name: 'rollbackVerified computed, in shorthand, and set false',
+    file: 'lib/evaluate/rollback.js',
+    source: [
+      'function verify(evidence, rePassed) {',
+      '  evidence.rollbackVerified = evidence.restoredDigest === evidence.preDigest && rePassed;',
+      '  const rollbackVerified = evidence.rollbackVerified;',
+      '  // A rollbackVerified: true literal is what this rule refuses; this comment is not one.',
+      '  return { rollbackVerified, reset: { rollbackVerified: false } };',
+      '}',
+      'module.exports = { verify };',
+      '',
+    ].join('\n'),
   },
   {
     name: 'regular expression literals and template text that name the stages',
@@ -1308,6 +1429,20 @@ const MOVES = [
     runtimeModule: 'cli/lib/evaluate/digest.js',
     specifier: '../../cli/lib/evaluate/digest',
     definitions: ['repositoryState'],
+  },
+  // Story 1.7 (AD-5, AD-8): the live harness's per-leg staging and leg cache,
+  // and the mutate, measure, restore cycle, keep only TeA data.
+  {
+    testFile: 'test/eval-contract-strength.js',
+    runtimeModule: 'cli/lib/evaluate/workspace.js',
+    specifier: '../cli/lib/evaluate/workspace',
+    definitions: ['cachingPort', 'stageDirectories'],
+  },
+  {
+    testFile: 'test/test-automate-eval-fixture.js',
+    runtimeModule: 'cli/lib/evaluate/mutation.js',
+    specifier: '../cli/lib/evaluate/mutation',
+    definitions: ['runMutationCycle'],
   },
 ];
 /**
@@ -1524,7 +1659,7 @@ function requiredSpecifiers(ast) {
 
 /**
  * The identity half of the move check, run in a child Node process over
- * `root`: every function a named `test/lib/` file exports under a name its
+ * `root`: every function a named `test/` file exports under a name its
  * runtime module also exports must be the runtime's own function object, and
  * each named definition must be exported at all. For `probe-targets.js` the
  * runtime's functions include those of the registry the file exports, which
@@ -1633,8 +1768,8 @@ function moveViolations(root) {
   }
 
   // Every function a moved module declares lives only there: no other runtime
-  // module defines a named marker, the three named test/lib/ files define none
-  // of them in any form, and no other test/lib/ file defines one at its top
+  // module defines a named marker, the five named test/ files define none of
+  // them in any form, and no other test/lib/ file defines one at its top
   // level or in what it exports. So a partial move back, or a copy of a runtime
   // module into test/lib/, fails too.
   const owners = new Map();
@@ -1657,15 +1792,15 @@ function moveViolations(root) {
     : [];
   const namedTestFiles = new Set(MOVES.map((move) => move.testFile));
   const markers = new Set(MOVES.flatMap((move) => move.definitions));
-  for (const relative of [...testLibFiles, ...runtimeModules]) {
+  for (const relative of new Set([...testLibFiles, ...namedTestFiles, ...runtimeModules])) {
     const ast = parse(relative);
     if (ast === null) continue;
-    const isTestLib = relative.startsWith(`${TEST_LIB}/`);
-    const defined = isTestLib && !namedTestFiles.has(relative) ? topLevelFunctions(ast) : definedFunctions(ast);
+    const isTestFile = relative.startsWith(`${TEST_TREE}/`);
+    const defined = isTestFile && !namedTestFiles.has(relative) ? topLevelFunctions(ast) : definedFunctions(ast);
     for (const name of defined.keys()) {
       const owning = owners.get(name);
       if (owning === undefined || owning.has(relative) || WRAPPER_EXEMPTIONS[relative]?.has(name)) continue;
-      if (isTestLib || markers.has(name)) problems.push(`${relative} defines ${name}, which lives only in ${[...owning].join(', ')}`);
+      if (isTestFile || markers.has(name)) problems.push(`${relative} defines ${name}, which lives only in ${[...owning].join(', ')}`);
     }
   }
 
@@ -1692,14 +1827,66 @@ function moveViolations(root) {
 }
 
 /**
- * What a move plant's temp root holds: the trees the three named files load
- * (so the identity half can require them), the config, and a link to this
+ * What a move plant's temp root holds: the trees the named files load (so the
+ * identity half can require them), the config, and a link to this
  * repository's `node_modules`.
  */
-const MOVE_TREES = ['cli', 'test/lib', 'test/schema', 'package.json', CONFIG_FILE];
+const MOVE_TREES = ['cli', 'test', 'tools', 'package.json', CONFIG_FILE];
+/** What no named file loads and a live run may have filled: the live harness's own artifacts and leg cache. */
+const MOVE_TREE_SKIPS = new Set(['test/eval-artifacts']);
 
 /** Each plant undoes one part of the move in a temp copy and must be reported. */
 const MOVE_PLANTS = [
+  {
+    name: 'eval-contract-strength.js no longer requiring the workspace module',
+    edit: {
+      'test/eval-contract-strength.js': (text) => text.replace("require('../cli/lib/evaluate/workspace')", "require('./workspace-copy')"),
+    },
+    expect: 'does not require ../cli/lib/evaluate/workspace',
+  },
+  {
+    name: 'cachingPort moved back into eval-contract-strength.js',
+    edit: {
+      'test/eval-contract-strength.js': (text) =>
+        `${text.replace('const { cacheOnlyPort, cachingPort, requestKey,', 'const { cacheOnlyPort, requestKey,')}\nfunction cachingPort() {\n  return {};\n}\n`,
+    },
+    expect: 'test/eval-contract-strength.js defines cachingPort',
+  },
+  {
+    name: 'requestKey defined again in eval-contract-strength.js as an arrow',
+    edit: {
+      'test/eval-contract-strength.js': (text) =>
+        `${text.replace('cachingPort, requestKey, stageDirectories', 'cachingPort, stageDirectories')}\nconst requestKey = (request) => JSON.stringify(request);\n`,
+    },
+    expect: 'test/eval-contract-strength.js defines requestKey',
+  },
+  {
+    name: 'test-automate-eval-fixture.js no longer requiring the mutation module',
+    edit: {
+      'test/test-automate-eval-fixture.js': (text) => text.replace("require('../cli/lib/evaluate/mutation')", "require('./mutation-copy')"),
+    },
+    expect: 'does not require ../cli/lib/evaluate/mutation',
+  },
+  {
+    name: 'runMutationCycle moved back into test-automate-eval-fixture.js',
+    edit: {
+      'test/test-automate-eval-fixture.js': (text) =>
+        `${text.replace('const { QualificationError, runMutationCycle } = require(', 'const { QualificationError } = require(')}\nasync function runMutationCycle() {\n  return { rollbackVerified: false };\n}\n`,
+    },
+    expect: 'test/test-automate-eval-fixture.js defines runMutationCycle',
+  },
+  {
+    name: 'runMutationCycle removed from the mutation module',
+    edit: {
+      'cli/lib/evaluate/mutation.js': (text) => text.replace('async function runMutationCycle(', 'async function runCycleElsewhere('),
+    },
+    expect: 'cli/lib/evaluate/mutation.js declares function runMutationCycle 0 time(s)',
+  },
+  {
+    name: 'a second cachingPort in another runtime module',
+    edit: { 'cli/lib/evaluate/preflight.js': (text) => `${text}\nfunction cachingPort() {}\n` },
+    expect: 'cli/lib/evaluate/preflight.js defines cachingPort',
+  },
   {
     name: 'probe-targets.js no longer requiring the registry',
     edit: {
@@ -1934,7 +2121,10 @@ function proveMoveCheck() {
     try {
       for (const relative of MOVE_TREES) {
         fs.mkdirSync(path.dirname(path.join(root, relative)), { recursive: true });
-        fs.cpSync(path.join(PROJECT_ROOT, relative), path.join(root, relative), { recursive: true });
+        fs.cpSync(path.join(PROJECT_ROOT, relative), path.join(root, relative), {
+          recursive: true,
+          filter: (from) => !MOVE_TREE_SKIPS.has(path.relative(PROJECT_ROOT, from).split(path.sep).join('/')),
+        });
       }
       fs.symlinkSync(path.join(PROJECT_ROOT, 'node_modules'), path.join(root, 'node_modules'), 'dir');
       for (const [relative, edit] of Object.entries(plant.edit)) {
