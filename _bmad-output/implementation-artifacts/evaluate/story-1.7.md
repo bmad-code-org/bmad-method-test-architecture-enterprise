@@ -275,6 +275,18 @@ Two reviewers (runtime by execution, tests and compliance) read head 9274413; ea
 - S6, the staging name dropped from the cache path: `test:probe-corpus` exits 1 naming each suite.
 - S7, the witness back on the bare `UNKNOWN`: `test:contract-oracles` fails one check.
 
+## Final review round 3
+
+One bounded reviewer, by execution, at b9a3036; S1, the ancestor and workspace swaps, S5 during either arm, the FIFO variants, S3, S4 and the plan stories re-ran clean.
+
+| ID | Severity | Finding | Outcome |
+| --- | --- | --- | --- |
+| T1 | medium | the containment check and the write both went through path strings, and the command-line adapter leaves a target's surviving processes running, so a leftover process could swap the target's directory for a link between the check and the write; one of 30 runs of a racing stub had the runtime's own `rmSync` delete the adopter's `rules/policy.txt`, an uncommitted edit included | fixed: the plan records the real directory's device and inode, and every write and every step-5 read enters that directory, confirms its identity (exit 12 otherwise), and works on the target by its bare name (`rmSync`, then an exclusive `writeFileSync`), restoring the working directory in `finally`; a directory held as the working directory stays itself whatever happens to its path. Unit test: an `fs.rmSync` wrapper swaps the target's directory for a link to an outside directory on its first call; the cycle stops with 12 and the outside file keeps its bytes. The reference's rollback sentence now says what the code guarantees |
+
+### Final review round 3 revert check
+
+- T1, the write and reads back on the target's path (`work(planned.file)` in place of the bare name): "the runtime removed or rewrote the file outside the workspace the swapped link led to".
+
 ## Coordinator decisions after round 1
 
 ### Test-design baseline

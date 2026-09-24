@@ -76,7 +76,7 @@ function countOccurrences(bytes, find) {
  * @param {{mutationId: string, targetArtifact: string, operator: {find: string, replace: string}}} mutation
  * @param {object} [options]
  * @param {string} [options.within] the directory every write and read must stay inside; `root` by default
- * @returns {{ file: string, original: Buffer, mutated: Buffer, mode: number, realDirectory: string }}
+ * @returns {{ file: string, name: string, original: Buffer, mutated: Buffer, mode: number, realDirectory: string, identity: {dev: number, ino: number} }}
  * @throws {QualificationError} exit 10 for a target that is not a regular file or a `find` that does not occur exactly once, exit 12 for one outside `within`
  */
 function planReplaceExact(root, mutation, { within = root } = {}) {
@@ -104,6 +104,7 @@ function planReplaceExact(root, mutation, { within = root } = {}) {
   }
   const realWithin = fs.realpathSync.native(within);
   const realDirectory = fs.realpathSync.native(path.dirname(file));
+  const directoryStats = fs.statSync(realDirectory);
   if (!isInside(realWithin, realDirectory)) {
     throw new QualificationError(
       QUALIFICATION_EXITS.infrastructure,
@@ -125,7 +126,15 @@ function planReplaceExact(root, mutation, { within = root } = {}) {
     Buffer.from(mutation.operator.replace, 'utf8'),
     original.subarray(at + find.length),
   ]);
-  return { file, original, mutated, mode: stats.mode & 0o7777, realDirectory };
+  return {
+    file,
+    name: path.basename(file),
+    original,
+    mutated,
+    mode: stats.mode & 0o7777,
+    realDirectory,
+    identity: { dev: directoryStats.dev, ino: directoryStats.ino },
+  };
 }
 
 /**
@@ -168,19 +177,57 @@ function assertContained(planned, mutation, evidence, when) {
 }
 
 /**
- * Replaces `file` with a new file holding `bytes` at `mode`: the old one is
- * removed first, so the write lands in a file of its own even when the old
- * one shared its data with another path (a hard link). A failure is an
+ * Runs `work` with the process inside the target's real directory, confirmed
+ * to be the very directory the plan recorded (its device and inode), and
+ * restores the working directory afterwards. Every write and read of the
+ * target goes through here by its bare name, so a path swapped for a link
+ * between a check and a write, by a process a target left running say, can
+ * no longer carry the runtime out of the workspace: a directory held open
+ * as the working directory stays itself whatever happens to its path.
+ */
+function inTargetDirectory(planned, what, evidence, work) {
+  const previous = process.cwd();
+  try {
+    process.chdir(planned.realDirectory);
+  } catch (error) {
+    throw new QualificationError(
+      QUALIFICATION_EXITS.infrastructure,
+      `${what}: the directory holding the target cannot be entered: ${error.message}`,
+      evidence,
+    );
+  }
+  try {
+    const here = fs.statSync('.');
+    if (here.dev !== planned.identity.dev || here.ino !== planned.identity.ino) {
+      throw new QualificationError(
+        QUALIFICATION_EXITS.infrastructure,
+        `${what}: ${planned.realDirectory} is no longer the directory the plan recorded, so the runtime will not write or read the target through it`,
+        evidence,
+      );
+    }
+    return work(planned.name);
+  } finally {
+    process.chdir(previous);
+  }
+}
+
+/**
+ * Replaces the target with a new file holding `bytes` at its mode, inside the
+ * recorded directory: the old one is removed first and the new one created
+ * exclusively, so the write lands in a file of its own even when the old one
+ * shared its data with another path (a hard link). A failure is an
  * infrastructure stop (exit 12) naming `what`.
  */
-function writeOrStop(file, bytes, mode, what, evidence) {
-  try {
-    fs.rmSync(file, { force: true });
-    fs.writeFileSync(file, bytes, { mode });
-    fs.chmodSync(file, mode);
-  } catch (error) {
-    throw new QualificationError(QUALIFICATION_EXITS.infrastructure, `${what} could not be written: ${error.message}`, evidence);
-  }
+function writeOrStop(planned, bytes, what, evidence) {
+  inTargetDirectory(planned, what, evidence, (name) => {
+    try {
+      fs.rmSync(name, { force: true });
+      fs.writeFileSync(name, bytes, { mode: planned.mode, flag: 'wx' });
+      fs.chmodSync(name, planned.mode);
+    } catch (error) {
+      throw new QualificationError(QUALIFICATION_EXITS.infrastructure, `${what} could not be written: ${error.message}`, evidence);
+    }
+  });
 }
 
 /**
@@ -191,26 +238,30 @@ function writeOrStop(file, bytes, mode, what, evidence) {
  */
 function applyReplaceExact(root, mutation, options) {
   const planned = planReplaceExact(root, mutation, options);
-  writeOrStop(planned.file, planned.mutated, planned.mode, `${mutation.mutationId}'s mutation of ${mutation.targetArtifact}`, null);
+  writeOrStop(planned, planned.mutated, `${mutation.mutationId}'s mutation of ${mutation.targetArtifact}`, null);
   return planned;
 }
 
-/** A file's permission bits, or null when it cannot be read. */
-function modeOf(file) {
-  try {
-    return fs.lstatSync(file).mode & 0o7777;
-  } catch {
-    return null;
-  }
+/** The target's permission bits, read inside its recorded directory, or null when it cannot be read. */
+function modeOf(planned, evidence) {
+  return inTargetDirectory(planned, 'reading the restored mode', evidence, (name) => {
+    try {
+      return fs.lstatSync(name).mode & 0o7777;
+    } catch {
+      return null;
+    }
+  });
 }
 
-/** The digest of a file's current bytes, or null when it cannot be read. */
-function digestOfFile(file, digestBytes) {
-  try {
-    return digestBytes(fs.readFileSync(file));
-  } catch {
-    return null;
-  }
+/** The digest of the target's current bytes, read inside its recorded directory, or null when it cannot be read. */
+function digestOfFile(planned, digestBytes, evidence) {
+  return inTargetDirectory(planned, 'reading the target', evidence, (name) => {
+    try {
+      return digestBytes(fs.readFileSync(name));
+    } catch {
+      return null;
+    }
+  });
 }
 
 /**
@@ -273,8 +324,8 @@ async function runMutationCycle({ root, within = root, mutation, runArm, reExecu
 
   log(`${mutation.mutationId}: step 2, the mutation applied to ${mutation.targetArtifact}`);
   assertContained(planned, mutation, evidence, 'after the clean arm');
-  writeOrStop(planned.file, planned.mutated, planned.mode, `${mutation.mutationId}'s mutation of ${mutation.targetArtifact}`, evidence);
-  evidence.mutatedDigest = digestOfFile(planned.file, digestOf);
+  writeOrStop(planned, planned.mutated, `${mutation.mutationId}'s mutation of ${mutation.targetArtifact}`, evidence);
+  evidence.mutatedDigest = digestOfFile(planned, digestOf, evidence);
   try {
     log(`${mutation.mutationId}: step 3, the mutated arm`);
     evidence.mutated = await arm('mutated');
@@ -283,11 +334,11 @@ async function runMutationCycle({ root, within = root, mutation, runArm, reExecu
     assertContained(planned, mutation, evidence, 'after the mutated arm');
     restoreArtifact(planned, mutation, evidence);
     assertContained(planned, mutation, evidence, 'after the restore');
-    evidence.restoredDigest = digestOfFile(planned.file, digestOf);
+    evidence.restoredDigest = digestOfFile(planned, digestOf, evidence);
   }
 
   log(`${mutation.mutationId}: step 5, the restored digest checked`);
-  const restoredMode = modeOf(planned.file);
+  const restoredMode = modeOf(planned, evidence);
   if (evidence.restoredDigest !== evidence.preDigest || restoredMode !== planned.mode) {
     throw new QualificationError(
       QUALIFICATION_EXITS.infrastructure,
@@ -335,7 +386,7 @@ async function runMutationCycle({ root, within = root, mutation, runArm, reExecu
  * link) is removed first, and a directory there makes the restore fail.
  */
 function restoreArtifact(planned, mutation, evidence) {
-  writeOrStop(planned.file, planned.original, planned.mode, `the restore of ${mutation.targetArtifact}`, evidence);
+  writeOrStop(planned, planned.original, `the restore of ${mutation.targetArtifact}`, evidence);
 }
 
 /** The free-text operator eval-quality records, spelled from the operator itself. */

@@ -841,6 +841,56 @@ async function checkUnits() {
   );
   check(fs.readFileSync(outside, 'utf8') === 'mode: strict\n', 'the mutation was written into the file the target was hard-linked to');
 
+  // A process a target left running swaps the target's directory for a link
+  // to a directory outside the workspace between the runtime's check and its
+  // write (the wrapped rmSync makes the race deterministic): the write stays
+  // in the directory the plan recorded, and the outside file keeps its bytes.
+  const raceRoot = path.join(root, 'race');
+  fs.mkdirSync(path.join(raceRoot, 'rules'), { recursive: true });
+  fs.writeFileSync(path.join(raceRoot, POLICY), 'mode: strict\n');
+  const outsideRules = path.join(root, 'outside-rules');
+  fs.mkdirSync(outsideRules);
+  fs.writeFileSync(path.join(outsideRules, 'policy.txt'), 'mode: strict\n# an uncommitted edit outside\n');
+  const realRmSync = fs.rmSync;
+  let raced = false;
+  fs.rmSync = function racingRmSync(target, ...rest) {
+    if (!raced && String(target).endsWith('policy.txt')) {
+      raced = true;
+      fs.renameSync(path.join(raceRoot, 'rules'), path.join(raceRoot, 'rules-aside'));
+      fs.symlinkSync(outsideRules, path.join(raceRoot, 'rules'));
+    }
+    return realRmSync.call(fs, target, ...rest);
+  };
+  let raceStop = null;
+  try {
+    await runMutationCycle({
+      root: raceRoot,
+      mutation: {
+        mutationId: 'M-004',
+        targetArtifact: 'rules/policy.txt',
+        operator: { kind: 'replace-exact', find: 'mode: strict', replace: 'mode: lenient', occurrences: 1 },
+      },
+      digestBytes: sha256,
+      reExecutionCap: 0,
+      runArm: async (phase) => ({ verdict: phase === 'mutated' ? 'violated' : 'held' }),
+    });
+  } catch (error) {
+    if (!(error instanceof QualificationError)) throw error;
+    raceStop = error;
+  } finally {
+    fs.rmSync = realRmSync;
+  }
+  check(raced, 'the racing rmSync never ran, so the case proves nothing');
+  check(
+    raceStop?.exitCode === 12,
+    `a target directory swapped for a link mid-write stopped the cycle with ${raceStop?.exitCode ?? 'no error'}; expected 12`,
+  );
+  check(
+    fs.existsSync(path.join(outsideRules, 'policy.txt')) &&
+      fs.readFileSync(path.join(outsideRules, 'policy.txt'), 'utf8') === 'mode: strict\n# an uncommitted edit outside\n',
+    'the runtime removed or rewrote the file outside the workspace the swapped link led to',
+  );
+
   check(
     dispositionOf('true', 'expects-hold') === 'held' && dispositionOf('false', 'expects-hold') === 'violated',
     'an expects-hold oracle reads its resolution the wrong way',
