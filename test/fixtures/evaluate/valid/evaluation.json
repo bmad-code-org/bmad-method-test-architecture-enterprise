@@ -25,7 +25,10 @@
       ]
     }
   ],
-  "launch": {},
+  "launch": {
+    "root": "../../../..",
+    "skillRoot": "skill"
+  },
   "workspace": {
     "kind": "copy",
     "provision": [

@@ -57,6 +57,7 @@ const source = require('./lib/doc-claim-sources.js');
 const { EXIT, VERDICT_KEYS, SKIP_KEYS } = require('../cli/test-review.js');
 const { RECOMMENDATION_ENUM } = require('../cli/lib/parse-report.js');
 const { EXIT_CODES: EVALUATE_EXIT_CODES } = require('../cli/evaluate.js');
+const { EXIT_CODES: RUNNER_EXIT_CODES } = require('../cli/lib/runner-exit-codes.js');
 
 check('RECOMMENDATION_ENUM is re-exported unchanged from cli/lib/parse-report.js', () => {
   assert.deepStrictEqual(source.RECOMMENDATION_ENUM, RECOMMENDATION_ENUM);
@@ -102,11 +103,22 @@ check('MOBILE_ROW_IDS and PLAYWRIGHT_UTILS_ROW_IDS match an independent read of 
   assert.deepStrictEqual(source.PLAYWRIGHT_UTILS_ROW_IDS, playwrightUtilsIds);
 });
 
-check('EXIT_CODE_STRINGS is every exit code cli/test-review.js and cli/evaluate.js declare, stringified, each once', () => {
-  const expected = [...new Set([...Object.values(EXIT), ...Object.values(EVALUATE_EXIT_CODES)].map(String))];
-  assert.deepStrictEqual(source.EXIT_CODE_STRINGS, expected);
-  for (const code of ['10', '12', '64']) assert.ok(source.EXIT_CODE_STRINGS.includes(code), `tea-evaluate's exit ${code} is missing`);
-});
+check(
+  'EXIT_CODE_STRINGS is every exit code cli/test-review.js, cli/evaluate.js and the runner table declare, stringified, each once',
+  () => {
+    // Written out: test-review's 0 to 3, the runner table's 0 and 2 to 6, and tea-evaluate's 0, 10, 12 and 64.
+    assert.deepStrictEqual(
+      [...source.EXIT_CODE_STRINGS].sort((a, b) => a - b),
+      ['0', '1', '2', '3', '4', '5', '6', '10', '12', '64'],
+    );
+    for (const code of [...Object.values(EXIT), ...Object.values(EVALUATE_EXIT_CODES), ...Object.values(RUNNER_EXIT_CODES)]) {
+      assert.ok(source.EXIT_CODE_STRINGS.includes(String(code)), `declared exit ${code} is missing`);
+    }
+    for (const code of ['10', '12', '64']) assert.ok(source.EXIT_CODE_STRINGS.includes(code), `tea-evaluate's exit ${code} is missing`);
+    for (const code of ['2', '3', '4', '5', '6'])
+      assert.ok(source.EXIT_CODE_STRINGS.includes(code), `tea-skill-runner's exit ${code} is missing`);
+  },
+);
 
 check('VERDICT_SCHEMA requires every VERDICT_KEYS.always key and rejects an undeclared one', () => {
   const base = Object.fromEntries(Object.keys(VERDICT_KEYS.always).map((key) => [key, null]));

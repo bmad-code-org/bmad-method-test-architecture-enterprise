@@ -11,7 +11,7 @@
  * natively, an extensionless script) is an `unscanned` violation. The rules
  * are closed: none of them tracks where a value came from.
  *
- * Five rules (Story 1.4, AD-1, AD-5, AD-6):
+ * Seven rules (Stories 1.4 to 1.6, AD-1, AD-4, AD-5, AD-6):
  *
  * - `engine-import`: only `cli/lib/evaluate/engine.js` loads a specifier that
  *   is `eval-quality`, starts with `eval-quality/` or contains
@@ -42,6 +42,17 @@
  *   that resolves into the repository's `test/` tree, or a self-reference
  *   through this package's own name into `test/`, which the published package
  *   does not carry.
+ *
+ * - `install-probe` (Story 1.6, AD-4): `cli/skill-runner.js` takes its skill
+ *   from `--skill-root` alone, so it names no home directory (`homedir`, a
+ *   `HOME`, `USERPROFILE` or `XDG_CONFIG_HOME` read), no agent-specific or
+ *   installed skill location (`.claude`, `.agents`, `.codex`, `.cursor`,
+ *   `.gemini`, `_bmad` in a string), and does not load `lib/resolve-skill`,
+ *   which probes install locations for `tea-test-review`.
+ * - `vendor-name` (Story 1.6): `cli/skill-runner.js` names no vendor (an agent
+ *   adapter key other than `custom`, or `anthropic`, `openai`, `gemini`) in an
+ *   identifier or a string, since vendor knowledge lives in
+ *   `cli/lib/agent-adapters.js`.
  *
  * Story 1.5 also holds the move of the registry, the record builders and the
  * digest and provenance into the runtime (AD-5, R1-06), by definition in named
@@ -105,6 +116,29 @@ const UNKNOWN = Symbol('unknown binding');
 const AJV_IMPORT = Symbol('ajv import');
 const CREATE_REQUIRE_FUNCTION = Symbol('createRequire');
 const TEST_TREE = 'test';
+const SKILL_RUNNER = 'skill-runner.js';
+const INSTALL_IDENTIFIERS = new Set(['homedir', 'HOME', 'USERPROFILE', 'XDG_CONFIG_HOME']);
+const INSTALL_PATH = /(?:^|[/\\])\.(?:claude|agents|codex|cursor|gemini)(?:[/\\]|$)|_bmad/;
+const RESOLVE_SKILL = /(?:^|\/)resolve-skill(?:\.js)?$/;
+const VENDOR_NAMES = [
+  ...Object.keys(require('../cli/lib/agent-adapters').AGENT_ADAPTERS).filter((name) => name !== 'custom'),
+  'anthropic',
+  'openai',
+  'gemini',
+];
+const VENDOR_WORDS = new Set(VENDOR_NAMES);
+
+/**
+ * Whether a name or string names a vendor: split into words at case changes,
+ * digits and punctuation (`claudeArgs` is `claude args`, `OpenAIClient` is
+ * `open ai client`), then compared word by word and as adjacent pairs, so a
+ * vendor spelled as two words (`open` `ai`) is caught and a word that merely
+ * contains a vendor's letters (`strategy`) is not.
+ */
+function namesVendor(text) {
+  const words = (text.match(/[A-Z]+(?![a-z])|[A-Z]?[a-z]+/g) ?? []).map((word) => word.toLowerCase());
+  return words.some((word, index) => VENDOR_WORDS.has(word) || VENDOR_WORDS.has(`${word}${words[index + 1] ?? ''}`));
+}
 const PACKAGE_NAME = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8')).name;
 
 const colors = { reset: '\u001B[0m', red: '\u001B[31m', green: '\u001B[32m' };
@@ -415,8 +449,32 @@ function destructuredFrom(pattern, parentOf) {
   return;
 }
 
+/** The text of a string literal or a template's static part, or undefined for any other node. */
+function stringText(node) {
+  if (node.type === 'Literal' && typeof node.value === 'string') return node.value;
+  return node.type === 'TemplateElement' ? (node.value.cooked ?? node.value.raw) : undefined;
+}
+
+/** The `install-probe` and `vendor-name` rules over one node of `cli/skill-runner.js`. */
+function skillRunnerViolations(node, value, report) {
+  const text = stringText(node);
+  if (node.type === 'Identifier' && INSTALL_IDENTIFIERS.has(node.name)) {
+    report(node, 'install-probe', `names "${node.name}"; the skill runner reads its skill from --skill-root alone`);
+  }
+  if (text !== undefined && (INSTALL_IDENTIFIERS.has(text) || INSTALL_PATH.test(text))) {
+    report(node, 'install-probe', `names ${JSON.stringify(text)}; the skill runner probes no install location`);
+  }
+  if (value !== undefined && RESOLVE_SKILL.test(value)) {
+    report(node, 'install-probe', `loads ${value}, which probes install locations`);
+  }
+  const name = node.type === 'Identifier' ? node.name : text;
+  if (name !== undefined && namesVendor(name)) {
+    report(node, 'vendor-name', `names a vendor in ${JSON.stringify(name)}; vendor knowledge lives in cli/lib/agent-adapters.js`);
+  }
+}
+
 /** Every boundary violation in one parsed file. */
-function fileViolations({ source, ast, isEngine, file, projectRoot }) {
+function fileViolations({ source, ast, isEngine, isSkillRunner, file, projectRoot }) {
   const found = [];
   const report = (node, rule, message) => found.push({ line: node.loc.start.line, rule, message });
   const excerpt = (node) => {
@@ -454,6 +512,11 @@ function fileViolations({ source, ast, isEngine, file, projectRoot }) {
       if (value === undefined) {
         report(node, 'dynamic-specifier', `"${excerpt(node)}" takes a computed specifier; cli/ names every module it loads as a literal`);
       }
+    }
+
+    if (isSkillRunner) {
+      const loaded = specifier === undefined ? undefined : staticString(specifier);
+      skillRunnerViolations(node, loaded, report);
     }
 
     // engine-stage: the always-forbidden names.
@@ -557,6 +620,7 @@ function scanCli(cliRoot) {
       source,
       ast,
       isEngine: file === engineFile,
+      isSkillRunner: file === path.join(cliRoot, SKILL_RUNNER),
       file,
       projectRoot: path.dirname(cliRoot),
     });
@@ -1018,6 +1082,62 @@ const PLANTS = [
     file: 'lib/evaluate/config.js',
     source: "const CONFIG = '_bmad/tea/config.yaml';\nmodule.exports = { CONFIG };\n",
   },
+  // install-probe and vendor-name (Story 1.6)
+  {
+    name: 'the skill runner reading the home directory',
+    rule: 'install-probe',
+    file: SKILL_RUNNER,
+    source: "const os = require('node:os');\nconst root = os.homedir();\nmodule.exports = { root };\n",
+  },
+  {
+    name: 'the skill runner reading HOME from the environment',
+    rule: 'install-probe',
+    file: SKILL_RUNNER,
+    source: "const home = process.env['HOME'];\nmodule.exports = { home };\n",
+  },
+  {
+    name: 'the skill runner looking in an agent skills folder',
+    rule: 'install-probe',
+    file: SKILL_RUNNER,
+    source:
+      "const path = require('node:path');\nconst candidate = path.join(process.cwd(), '.claude/skills');\nmodule.exports = { candidate };\n",
+  },
+  {
+    name: 'the skill runner looking in an installed module layout by template',
+    rule: 'install-probe',
+    file: SKILL_RUNNER,
+    source: 'const candidate = `${process.cwd()}/_bmad/tea/workflows`;\nmodule.exports = { candidate };\n',
+  },
+  {
+    name: 'the skill runner loading the install-location resolver',
+    rule: 'install-probe',
+    file: SKILL_RUNNER,
+    source: "const { resolveSkill } = require('./lib/resolve-skill');\nmodule.exports = { resolveSkill };\n",
+  },
+  {
+    name: 'the skill runner defaulting to a vendor',
+    rule: 'vendor-name',
+    file: SKILL_RUNNER,
+    source: `const DEFAULT_AGENT = '${VENDOR_NAMES[0]}';\nmodule.exports = { DEFAULT_AGENT };\n`,
+  },
+  {
+    name: 'the skill runner naming a vendor inside a camelCase identifier',
+    rule: 'vendor-name',
+    file: SKILL_RUNNER,
+    source: `const ${VENDOR_NAMES[0]}Args = [];\nmodule.exports = { ${VENDOR_NAMES[0]}Args };\n`,
+  },
+  {
+    name: 'the skill runner naming a vendor as two words',
+    rule: 'vendor-name',
+    file: SKILL_RUNNER,
+    source: 'class OpenAIClient {}\nmodule.exports = { OpenAIClient };\n',
+  },
+  {
+    name: 'the skill runner naming a vendor credential',
+    rule: 'vendor-name',
+    file: SKILL_RUNNER,
+    source: "const KEY = 'ANTHROPIC_API_KEY';\nmodule.exports = { KEY };\n",
+  },
   {
     name: 'a file that does not parse',
     rule: 'parse',
@@ -1028,6 +1148,17 @@ const PLANTS = [
 
 /** Legitimate forms: each must scan clean, and the engine stub's own import must still be seen. */
 const CLEAN_PLANTS = [
+  {
+    name: 'a runner other than the skill runner defaulting to a vendor and reading the home directory',
+    file: 'trace-runner.js',
+    source: "const os = require('node:os');\nconst DEFAULT_AGENT = 'claude';\nmodule.exports = { DEFAULT_AGENT, home: os.homedir() };\n",
+  },
+  {
+    name: "the skill runner naming vendors and install locations only in comments, and a word holding a vendor's letters",
+    file: SKILL_RUNNER,
+    source:
+      "// No ~/.claude/skills lookup, no os.homedir(), no default of claude or codex.\nconst adapters = require('./lib/agent-adapters');\nconst strategy = 'legacy';\nmodule.exports = { adapters, strategy };\n",
+  },
   {
     name: 'engine digests, Ajv compile, and stage names in comments and messages',
     file: 'lib/evaluate/legit.js',
@@ -1137,6 +1268,14 @@ function proveScanner() {
 }
 
 function scanRepository() {
+  // The install-probe and vendor-name rules key on this path, so a renamed or
+  // moved runner would leave them scanning nothing.
+  const manifest = JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'package.json'), 'utf8'));
+  check(fs.existsSync(path.join(CLI_ROOT, SKILL_RUNNER)), `cli/${SKILL_RUNNER} is missing, so the skill runner's rules scan nothing`);
+  check(
+    manifest.bin?.['tea-skill-runner'] === `cli/${SKILL_RUNNER}`,
+    `package.json's tea-skill-runner bin is ${JSON.stringify(manifest.bin?.['tea-skill-runner'])}, not the file the skill runner's rules scan`,
+  );
   const { violations, engineImports } = scanCli(CLI_ROOT);
   for (const violation of violations) {
     check(false, `${violation.file}:${violation.line} [${violation.rule}] ${violation.message}`);

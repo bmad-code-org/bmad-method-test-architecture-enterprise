@@ -20,6 +20,7 @@ const { parseRegistryRows } = require('../../tools/validate-criteria-fragments.j
 const { EXIT, VERDICT_KEYS, SKIP_KEYS } = require('../../cli/test-review.js');
 const { RECOMMENDATION_ENUM } = require('../../cli/lib/parse-report.js');
 const { EXIT_CODES: EVALUATE_EXIT_CODES } = require('../../cli/evaluate.js');
+const { EXIT_CODES: RUNNER_EXIT_CODES } = require('../../cli/lib/runner-exit-codes.js');
 
 const PROJECT_ROOT = path.join(__dirname, '..', '..');
 
@@ -91,10 +92,15 @@ exports.SKIP_SCHEMA = schemaFromKeys(SKIP_KEYS);
 // ---------------------------------------------------------------------------
 
 /**
- * The exit codes `tea-test-review` and `tea-evaluate` document, as strings
- * (`readModuleStrings` reads an array of strings), each code once.
+ * The exit codes `tea-test-review`, `tea-evaluate` and the runners, whose table
+ * `tea-skill-runner` documents, spell, as strings (`readModuleStrings` reads an
+ * array of strings), each code once. `tea-evaluate preflight` also passes an
+ * eval-quality stage's exit through, and every one of those codes (3 to 5, and
+ * 64) is among them.
  */
-exports.EXIT_CODE_STRINGS = [...new Set([...Object.values(EXIT), ...Object.values(EVALUATE_EXIT_CODES)].map(String))];
+exports.EXIT_CODE_STRINGS = [
+  ...new Set([...Object.values(EXIT), ...Object.values(EVALUATE_EXIT_CODES), ...Object.values(RUNNER_EXIT_CODES)].map(String)),
+];
 
 // ---------------------------------------------------------------------------
 // dated

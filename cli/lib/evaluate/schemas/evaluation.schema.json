@@ -45,8 +45,24 @@
       }
     },
     "launch": {
-      "description": "How the target is launched. The story that first launches a target defines its shape; until then it is an open object.",
-      "type": "object"
+      "description": "Where the target lives, which every launch resolves against.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root"],
+      "properties": {
+        "root": {
+          "description": "The evaluated project's root, relative to the evaluation folder: POSIX, \".\" and \"..\" segments allowed so it can climb out of the folder, never absolute, with no empty segment, no trailing slash, and no control character (C0, DEL or C1), a line or paragraph separator, or a bidirectional formatting character. Registry targets, the skill root and every mutation's targetArtifact resolve against it, and tea-evaluate preflight runs its legs in a disposable copy of it.",
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?![A-Za-z]:)(?!/)(?![\\s\\S]*//)(?![\\s\\S]*/$)[^\\\\\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2066-\\u2069]+$"
+        },
+        "skillRoot": {
+          "description": "The skill directory, holding SKILL.md, relative to root: the --skill-root tea-skill-runner receives. Required when targetKind is skill; tea-evaluate check refuses a mutation whose targetArtifact is not inside it. POSIX and relative, with no drive letter, no \".\" or \"..\" segment, no empty segment, no trailing slash, and no control character (C0, DEL or C1), a line or paragraph separator, or a bidirectional formatting character.",
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?![A-Za-z]:)(?!/)(?![\\s\\S]*(?:^|/)\\.{1,2}(?:/|$))(?![\\s\\S]*//)(?![\\s\\S]*/$)[^\\\\\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2066-\\u2069]+$"
+        }
+      }
     },
     "workspace": {
       "description": "The disposable copy a run and a mutation happen in (AD-8).",
@@ -106,6 +122,17 @@
       }
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "required": ["targetKind"],
+        "properties": { "targetKind": { "const": "skill" } }
+      },
+      "then": {
+        "properties": { "launch": { "required": ["root", "skillRoot"] } }
+      }
+    }
+  ],
   "$defs": {
     "RegistryEntry": {
       "description": "One command a run may spawn. interfaceId and executable key it the way eval-quality's command target policy keys an authorization; the pair is unique within the registry.",
