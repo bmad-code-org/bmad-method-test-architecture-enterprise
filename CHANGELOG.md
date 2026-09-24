@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The `eval-quality` devDependency is raised from the exact pin 4.0.0 to 4.1.0, which publishes `parseCommandTargetPolicy` on `eval-quality/adapters` (eval-quality#159); `test:evaluate-check` now validates the registry's command target policy through it, and the roadmap's pin claim names 4.1.0.
 - The execution-target registry, the eval-quality record builders and the digest and provenance helpers move from `test/lib/` into the shipped runtime (Story 1.5, AD-5): `cli/lib/evaluate/registry.js`, `records.js`, `digest.js` and `bounded-probe.js`.
   `test/lib/probe-targets.js`, `eval-quality-inputs.js` and `eval-record.js` keep TeA's data (its nine commands as `RegistryEntry` data, its scoring policy path, its own eval result records and failure classes) and import the runtime modules, so TeA's harness and every adopter run go through one implementation; every existing test passes with its assertions unchanged.
   TeA's runners declare exit 1 (Node's exit for an uncaught exception, which no runner emits on purpose) and 3 to 6 as infrastructure codes, and `tea-test-review` declares 2 and 3.

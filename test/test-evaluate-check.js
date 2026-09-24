@@ -162,37 +162,33 @@ async function checkValidFixture() {
 // The registry (Story 1.5)
 
 /**
- * Problems eval-quality's own `CommandTargetPolicy` schema finds in `policy`,
+ * Problems eval-quality's own `CommandTargetPolicy` parser finds in `policy`,
  * or an empty list when it accepts it.
  *
- * The engine publishes no JSON Schema for a command target policy and exports
- * no parser for one ("nothing in this package parses this policy"), so the Zod
- * schema is read from the module that declares it,
- * `dist/core/schemas/probe-policy.js`. The package's `exports` map does not
- * name that module, and the `dependency-direction` gate admits no computed
- * import and no relative path out of the scan roots, so a child Node process
- * imports it by file URL and parses the policy it reads on stdin. A move
- * upstream fails the import by name, and the case is then re-pointed.
+ * `parseCommandTargetPolicy` on `eval-quality/adapters` refuses an invalid
+ * mapping with a `RuntimeFault` whose `cause` is the `ZodError` carrying every
+ * issue. A child Node process runs it, because the test tree loads the engine
+ * as an ES module, and prints the issues it reports.
  */
 function commandTargetPolicyProblems(policy) {
-  const engineRoot = path.dirname(path.dirname(engineSchemaPath('probe.schema.json')));
-  const declaration = path.join(engineRoot, 'dist', 'core', 'schemas', 'probe-policy.js');
   const script = [
     "import { readFileSync } from 'node:fs';",
-    "import { pathToFileURL } from 'node:url';",
-    'const { CommandTargetPolicy } = await import(pathToFileURL(process.argv[1]).href);',
-    "if (typeof CommandTargetPolicy?.safeParse !== 'function') throw new Error('no CommandTargetPolicy schema is exported');",
-    "const parsed = CommandTargetPolicy.safeParse(JSON.parse(readFileSync(0, 'utf8')));",
-    'process.stdout.write(JSON.stringify(parsed.success ? [] : parsed.error.issues));',
+    "import { parseCommandTargetPolicy } from 'eval-quality/adapters';",
+    'try {',
+    "  parseCommandTargetPolicy(JSON.parse(readFileSync(0, 'utf8')));",
+    "  process.stdout.write('[]');",
+    '} catch (error) {',
+    "  if (error?.code !== 'schema-parse-failure' || !Array.isArray(error.cause?.issues)) throw error;",
+    '  process.stdout.write(JSON.stringify(error.cause.issues));',
+    '}',
   ].join('\n');
-  const result = spawnSync(process.execPath, ['--input-type=module', '-e', script, declaration], {
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
+    cwd: PROJECT_ROOT,
     input: JSON.stringify(policy),
     encoding: 'utf8',
   });
   if (result.status !== 0) {
-    throw new Error(
-      `eval-quality's CommandTargetPolicy schema could not be read from ${declaration}; re-point this case\n${result.stderr}`,
-    );
+    throw new Error(`eval-quality's parseCommandTargetPolicy could not be run\n${result.stderr}`);
   }
   return JSON.parse(result.stdout);
 }

@@ -71,7 +71,7 @@ context:
 - **The rule.** `infrastructure-exit-code` resolves each defect signature (entries matched by executable; a `cli` signature names no interface) and each manifestation witness on a `cli` interface (entries matched by interface) through the engine's `resolveCheck` over an observation carrying one declared code and empty-text streams, with the contract's reference sets in scope, a witness's declared inputs, and each call-input clause of a signature tried true and false; any resolution other than `false` is a finding, and an expression the engine cannot resolve fails closed. `unregistered-executable` names a signature executable or witness interface no entry declares; `registry` names a repeated pair.
 - **TeA's codes.** Runners declare 1 and 3 to 6: Node exits 1 on an uncaught exception and no runner emits 1 on purpose. `tea-test-review` declares 2 and 3, since 1 is its failing verdict. AD-7's "3 to 6 for the skill runner" concerns the future generic runner and is unchanged.
 - **Fixture.** `test/fixtures/evaluate/valid/`'s registry entry points at `test/fixtures/evaluate/red-phase-gate.js`, a gate that exits 1 on purpose on an active test and maps every other failure to 3, so its `exit-code == 1` signature is honest; P-002's witness relation and M-001's expected failure say the same.
-- **The CommandTargetPolicy check.** eval-quality publishes no JSON Schema or parser for a command target policy, so `test/test-evaluate-check.js` imports the Zod schema from `dist/core/schemas/probe-policy.js` in a child process (the `dependency-direction` gate admits no computed import and no relative path out of the scan roots) and also proves that schema refuses an unknown key.
+- **The CommandTargetPolicy check.** `test/test-evaluate-check.js` parses the registry's policy with `parseCommandTargetPolicy` from `eval-quality/adapters` (eval-quality 4.1.0, released for this story as eval-quality#159) in a child process, and also proves the parser refuses an unknown key such as `infrastructureExitCodes`.
 - **Boundary scanner.** `dynamic-specifier` now covers all of `cli/` (every file already met it). `test-import` refuses a relative or self-referencing load into `test/`. The move check guards the three named markers by declaration and every function the moved modules export against redefinition under `test/lib/` (any form in the three named files; top level and exports elsewhere), with `digestFiles` the one named wrapper. An exported factory's products count as exports: `createRegistry`'s returned functions and `createArtifactValidator`'s `validateArtifact`. Only exported names are guarded, so a private helper name stays free. A syntax scan cannot see a move written as `gitState.bind(null)`, `require('./git-state').gitState`, a member of a local object or an alias, so an identity half loads the three files and their runtime modules in a child process and requires every runtime function they hand out to be the runtime's own function object; `probe-targets.js` exports its registry, which `isRegistry` must recognize and which must be frozen.
 - **Gaps closed on the way.** The relative-path pattern Story 1.4 wrote for `targetArtifact` and `provision` missed a `..` after a newline; fixed for every path field. `docs/explanation/eval-quality-command-adapter.md`, `eval-quality-adoption-guide.md`, the layering-lineage test's header, `test/lib/file-system-port.js` and `test/test-schema-versions.js` named the old locations. `evaluation.schema.json`'s `launch` description promised a Story 1.5 shape. An em dash in `probe-targets.js` prose. `test:schema-versions` now scans `cli/lib/evaluate/` for a literal stamp.
 
@@ -108,7 +108,7 @@ Three layers ran on opus: `bmad-code-review` (four sub-layers), `bmad-review` ad
 | 5 | code review, adversarial, test review | medium | move check guarded one sentinel per module | fixed: every function of the moved modules guarded, aliases and assignments detected, all `test/lib/` scanned; plants for each evasion |
 | 5b | code review, adversarial | medium | `test-import` missed computed and self-referencing specifiers | fixed: `dynamic-specifier` widened to all of `cli/`, self-reference refused |
 | 6 | code review, adversarial | medium | missing engine misreported, cause dropped, untested | fixed: cause kept, `EngineUnavailableError` everywhere, engine-absent cases |
-| 7 | code review | low | the check test reads an unexported eval-quality module | kept, with a named failure; no public eval-quality surface can hold the check, and the missing export is recorded under "Needs a decision: eval-quality export for CommandTargetPolicy" |
+| 7 | code review | low | the check test reads an unexported eval-quality module | kept, with a named failure; no public eval-quality surface can hold the check, and closed by eval-quality#159: 4.1.0 publishes `parseCommandTargetPolicy`, and the test now uses it |
 | 8 | code review, test review | low | new rules outside `STORY_RULES`; no pass-side cases; loose `exits 3` assertion | fixed |
 | 9 | code review, test review | low | doc said 3 to 6 for every TeA target; test-design said 2 to 6 | fixed in the doc and the plan |
 | 10 | code review, adversarial | medium | fixture exit 1 was a crash code for `tea-atdd-runner`; fixture codes drifted from TeA's | fixed: the fixture targets its own gate; TeA's runners declare 1 |
@@ -153,19 +153,12 @@ Each finding was verified against the branch at `0a6e8a1` before acting.
 
 Revert checks: each fix above was undone once and the named case failed (C2 to C5, A2, A4, D1 to D4 in `test:evaluate-check`; B1 and C1 in `test:evaluate-boundaries`; C6 in `test:layering-boundary-lineage`).
 
-## Needs a decision: eval-quality export for CommandTargetPolicy
+## eval-quality export for CommandTargetPolicy
 
-`test/test-evaluate-check.js` still imports `node_modules/eval-quality/dist/core/schemas/probe-policy.js`, a module eval-quality 4.0.0's `exports` map does not name, to parse the registry's policy with eval-quality's strict Zod `CommandTargetPolicy` and to prove that schema refuses an unknown key such as `infrastructureExitCodes`.
-Every public surface was checked, and none can hold the check:
-
-- `schemas/*`: the twelve published JSON Schemas are the interchange artifacts; none describes a command target policy (no file mentions `permittedSubcommandPaths` or `maxOutputBytes`).
-- `.` (root): `evaluateTarget` and the rest of `core/probe/target-policy` take the HTTP `ProbeTargetPolicy`; the root exports `ProbeTargetPolicy` and `ProbeTargetAuthorization` as types only, and nothing for the command policy.
-- `./adapters`: `createCommandLineAdapter` takes the policy as a plain object and never parses it (its own source says "nothing in this package parses `CommandTargetPolicy`"); `evaluateCommandTarget` lives in `dist/adapters/command-target-policy.js`, which `adapters/index` does not re-export, and it reads fields without refusing unknown keys.
-- `./conformance`: `runCommandLineProbeConformance` drives a policy through an adapter behaviorally, and `CommandTargetPolicy` is exported there as a type only, so an extra key passes.
-
-The missing export is a runtime `CommandTargetPolicy` Zod schema (or a `parseCommandTargetPolicy` function that applies it) from a public subpath, `eval-quality/adapters` being the natural home beside `createCommandLineAdapter`.
-A generated `schemas/command-target-policy.schema.json` would serve too, and TeA's test would then validate with Ajv as it does for the other published schemas.
-Once either ships, the test switches to it and the deep import goes; the gate's `dependency-direction` rule and the `cli/` boundary (only `engine.js` loads eval-quality) are unaffected, since this is test code.
+The first build read eval-quality's Zod `CommandTargetPolicy` from `dist/core/schemas/probe-policy.js`, a module 4.0.0's `exports` map does not name, because no public surface could parse a command target policy.
+eval-quality#159 added `parseCommandTargetPolicy` and `parseMcpTargetPolicy` to `eval-quality/adapters`, each throwing `RuntimeFault('schema-parse-failure', ...)` with the `ZodError` as its `cause`, and gated its release script on doc-claims after the 4.0.0 release had left that check failing on its main.
+It shipped as eval-quality 4.1.0.
+This story raises the devDependency pin to 4.1.0, moves the roadmap's pin claim and its `EVAL_QUALITY_PIN_IS_4_1_0` source with it, and switches the test to the public parser.
 
 ## Gaps closed after review
 
