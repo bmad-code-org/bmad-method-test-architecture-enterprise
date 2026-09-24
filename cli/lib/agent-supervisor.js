@@ -10,9 +10,9 @@
  * - The supervisor, `spawnSync`'s direct child, stays in the runner's process
  *   group, so a terminal's Ctrl-C or Ctrl-\ and a signal to the runner's whole
  *   group reach it. It forwards `SIGINT`, `SIGTERM`, `SIGHUP` and `SIGQUIT` to
- *   the group leader, exits when the runner is gone, and relays the leader's
- *   report to the runner. A Ctrl-Z suspends the runner and the supervisor;
- *   the agent runs on, bounded by its wall clock and the runner's end.
+ *   the group leader, exits when the runner is gone, and kills the leader's
+ *   group when the leader has not ended 5 s past the wall clock (a leader
+ *   stopped with `SIGSTOP`, say).
  * - The group leader, which the supervisor starts in a new session, starts the
  *   agent in its own process group and holds one end of a socket, the
  *   lifeline, whose other end only the supervisor holds. The kernel closes the
@@ -30,7 +30,13 @@
  * which the agent does not inherit: `{ status, signal }` for an agent that
  * ended, `{ timedOut: true }` for one that outlived the wall clock,
  * `{ spawnError: { code, message } }` for one that could not start, and
- * `{ failure }` when the leader ended without a report.
+ * `{ failure }` for a supervisor that ended before the agent, and for a leader
+ * that ended without a report. The leader writes its report on the runner's
+ * descriptor itself, which it inherits from the supervisor, and then kills the
+ * supervisor, which has nothing left to do. A Ctrl-Z suspends the runner and
+ * the supervisor while the agent runs on, bounded by its wall clock and the
+ * runner's end; the report and the agent's output wait in the runner's pipes
+ * until it resumes, however long it stays suspended.
  *
  * Windows has no process groups: the leader stays in the supervisor's
  * console, and signals, the lifeline and the timeout reach the agent alone.
@@ -38,7 +44,7 @@
  * Usage (from `run-agent.js` only):
  *   node agent-supervisor.js <runnerPid> <timeoutMs> <command> [args...]
  * and, for the group leader the supervisor starts:
- *   node agent-supervisor.js --group-leader <timeoutMs> <command> [args...]
+ *   node agent-supervisor.js --group-leader <supervisorPid> <timeoutMs> <command> [args...]
  */
 
 'use strict';
@@ -47,11 +53,23 @@ const fs = require('node:fs');
 const net = require('node:net');
 const { spawn } = require('node:child_process');
 
-/** The runner's report pipe in the supervisor, and the lifeline in the group leader. */
-const CHANNEL_FD = 3;
+/** The runner's report pipe, in the supervisor. */
+const RUNNER_REPORT_FD = 3;
+
+/** The lifeline, in the group leader. */
+const LIFELINE_FD = 3;
+
+/** The runner's report pipe, in the group leader, which inherits it from the supervisor. */
+const LEADER_REPORT_FD = 4;
+
+/** What the leader writes on the lifeline once it has reported, so the supervisor reports nothing of its own. */
+const REPORTED = 'reported\n';
 
 /** How long a signalled agent gets before `SIGKILL`. */
 const GRACE_MS = 2000;
+
+/** How long past the wall clock the supervisor waits for the leader: its grace period and some slack. */
+const BACKSTOP_MS = 5000;
 
 /** How often the supervisor checks that the runner is alive. */
 const POLL_MS = 100;
@@ -72,28 +90,30 @@ function after(ms, callback) {
   else setTimeout(callback, ms);
 }
 
-function write(outcome) {
+function write(fd, text) {
   try {
-    fs.writeSync(CHANNEL_FD, JSON.stringify(outcome));
+    fs.writeSync(fd, text);
   } catch {
-    // Whoever reads the outcome is gone.
+    // Whoever reads it is gone.
   }
 }
 
 /**
- * The group leader: starts the agent in its own process group and stops the
+ * The group leader: starts the agent in its own process group, stops the
  * group on the wall clock, on a forwarded signal, when the lifeline closes,
- * and when the agent exits.
+ * and when the agent exits, and reports to the runner.
  */
-function lead([timeoutArgument, command, ...args]) {
+function lead([supervisorArgument, timeoutArgument, command, ...args]) {
+  const supervisorPid = Number(supervisorArgument);
   // The leader receives every signal it sends its own group, and outlives
   // them so it can report how the agent ended.
   for (const name of STOPPING) process.on(name, () => {});
 
-  const lifeline = new net.Socket({ fd: CHANNEL_FD, readable: true, writable: true });
+  const lifeline = new net.Socket({ fd: LIFELINE_FD, readable: true, writable: true });
   lifeline.on('error', () => {});
   const agent = spawn(command, args, { stdio: 'inherit' });
   let timedOut = false;
+  let supervisorGone = false;
   let settled = false;
   let killTimer = null;
 
@@ -112,14 +132,31 @@ function lead([timeoutArgument, command, ...args]) {
   const finish = (outcome) => {
     if (settled) return;
     settled = true;
-    write(outcome);
-    // Everything left in the group ends with the turn, this process included.
-    if (GROUPS) signalGroup('SIGKILL');
+    // Straight to the runner, so a supervisor suspended with it cannot hold the report back.
+    write(LEADER_REPORT_FD, JSON.stringify(outcome));
+    write(LIFELINE_FD, REPORTED);
+    if (GROUPS) {
+      // The supervisor has nothing left to do, and a stopped one would keep the
+      // runner waiting. It is killed only while it is still this process's
+      // parent, so a reused pid is never hit.
+      try {
+        if (process.ppid === supervisorPid) process.kill(supervisorPid, 'SIGKILL');
+      } catch {
+        // The supervisor is already gone.
+      }
+      // Everything left in the group ends with the turn, this process included.
+      signalGroup('SIGKILL');
+    }
     process.exit(0);
   };
 
   agent.once('error', (error) => finish({ spawnError: { code: error.code ?? null, message: error.message } }));
-  agent.once('exit', (status, signal) => finish(timedOut ? { timedOut: true } : { status, signal }));
+  agent.once('exit', (status, signal) => {
+    if (timedOut) return finish({ timedOut: true });
+    if (supervisorGone)
+      return finish({ failure: 'the agent supervisor ended before the agent did, so its group leader stopped the agent' });
+    return finish({ status, signal });
+  });
 
   after(Number(timeoutArgument), () => {
     timedOut = true;
@@ -137,31 +174,37 @@ function lead([timeoutArgument, command, ...args]) {
   // supervisor forwarded a Ctrl-C, then exited with the runner) keeps the
   // signal it received.
   lifeline.once('close', () => {
-    if (killTimer === null) stop('SIGTERM');
+    if (killTimer !== null) return;
+    supervisorGone = true;
+    stop('SIGTERM');
   });
 }
 
 /**
  * The supervisor: starts the group leader, forwards signals to it, exits when
- * the runner is gone, and relays the leader's report to the runner.
+ * the runner is gone, kills the leader's group when the leader outlives the
+ * wall clock by `BACKSTOP_MS`, and reports to the runner when the leader ended
+ * without a report.
  */
 function supervise([runnerPidArgument, timeoutArgument, command, ...args]) {
   const runnerPid = Number(runnerPidArgument);
-  const leader = spawn(process.execPath, [__filename, LEADER_FLAG, timeoutArgument, command, ...args], {
-    stdio: ['inherit', 'inherit', 'inherit', 'pipe'],
+  const timeout = Number(timeoutArgument);
+  const leader = spawn(process.execPath, [__filename, LEADER_FLAG, String(process.pid), timeoutArgument, command, ...args], {
+    stdio: ['inherit', 'inherit', 'inherit', 'pipe', RUNNER_REPORT_FD],
     detached: GROUPS,
   });
-  const lifeline = leader.stdio[CHANNEL_FD];
+  const lifeline = leader.stdio[LIFELINE_FD];
   lifeline.on('error', () => {});
-  let reply = '';
+  let heard = '';
   lifeline.setEncoding('utf8');
-  lifeline.on('data', (chunk) => (reply += chunk));
+  lifeline.on('data', (chunk) => (heard += chunk));
+  let overdue = false;
 
-  const relay = (outcome) => {
-    write(outcome);
+  const fail = (failure) => {
+    write(RUNNER_REPORT_FD, JSON.stringify({ failure }));
     process.exit(0);
   };
-  leader.once('error', (error) => relay({ failure: `the agent's group leader could not start: ${error.message}` }));
+  leader.once('error', (error) => fail(`the agent's group leader could not start: ${error.message}`));
   // A leader killed on its own leaves its group behind.
   leader.once('exit', () => {
     try {
@@ -171,14 +214,22 @@ function supervise([runnerPidArgument, timeoutArgument, command, ...args]) {
     }
   });
   leader.once('close', (status, signal) => {
-    try {
-      const report = JSON.parse(reply);
-      if (report !== null && typeof report === 'object') return relay(report);
-    } catch {
-      // Fall through: no report.
-    }
+    if (heard.includes(REPORTED)) return process.exit(0);
+    if (overdue) return fail(`the agent's group leader gave no report ${BACKSTOP_MS}ms past the agent's ${timeout}ms wall clock`);
     const ending = signal ? `was killed by signal ${signal}` : `exited with code ${status}`;
-    return relay({ failure: `the agent's group leader ${ending} without reporting how the agent ended` });
+    return fail(`the agent's group leader ${ending} without reporting how the agent ended`);
+  });
+
+  // A leader that has not ended well past the wall clock cannot stop its
+  // group, so the group is killed with it.
+  after(timeout + BACKSTOP_MS, () => {
+    overdue = true;
+    try {
+      if (GROUPS) process.kill(-leader.pid, 'SIGKILL');
+      else leader.kill('SIGKILL');
+    } catch {
+      // The group is already gone.
+    }
   });
 
   for (const name of STOPPING) process.on(name, () => lifeline.write(`${name}\n`));

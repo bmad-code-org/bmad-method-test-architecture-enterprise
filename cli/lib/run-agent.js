@@ -19,7 +19,8 @@
  *   timeout sends the group SIGTERM and the agent SIGKILL after a grace
  *   period; the group is also stopped when the runner or the supervisor dies,
  *   and killed when the agent exits, so no process the agent started outlives
- *   the turn.
+ *   the turn. On Windows, which has no process groups, the timeout and the
+ *   signals reach the agent alone.
  * - options.spawnPrefix wraps the agent command for filesystem isolation
  *   (sandbox-exec/bwrap from isolate.js); with the chmod fallback it is empty.
  * - Each adapter's argv is responsible for scoping tool access and approval
@@ -34,8 +35,6 @@ const { AGENT_ADAPTERS, DEFAULT_CAPABILITIES, RUNNER_CAPABILITIES, resolveModel 
 const STDERR_TAIL_LINES = 20;
 const DEFAULT_TIMEOUT_MS = 1_800_000; // 30 minutes
 const SUPERVISOR = path.join(__dirname, 'agent-supervisor.js');
-/** How long past the agent's timeout spawnSync waits for the supervisor: its grace period and some slack. */
-const SUPERVISOR_BACKSTOP_MS = 5000;
 
 // USER is load-bearing, not cosmetic: without it claude/codex cannot read
 // their stored credentials (subscription/keychain/OAuth, all keyed by
@@ -64,25 +63,20 @@ function buildMinimalEnv(envPass = [], sourceEnv = process.env, adapterEnvNames 
 }
 
 /**
- * How the supervised agent ended, from the supervisor's report on file
- * descriptor 3: `{ status, signal }`, `{ timedOut }`, `{ spawnError }`, or
- * `{ failure }`. Only the supervisor reports a timeout: a supervisor that
- * could not start, died, or outlived spawnSync's backstop or output ceiling
- * without a report is a failure of the supervisor.
+ * How the supervised agent ended, from the report on file descriptor 3:
+ * `{ status, signal }`, `{ timedOut }`, `{ spawnError }`, or `{ failure }`.
+ * Output past `maxBuffer`, a supervisor that could not start, and one that
+ * ended with no report behind it are failures of the supervisor.
  */
-function supervisedOutcome(result, timeout) {
-  // Output past maxBuffer, or a supervisor that could not start.
-  if (result.error && result.error.code !== 'ETIMEDOUT') return { failure: result.error.message };
+function supervisedOutcome(result) {
+  if (result.error) return { failure: result.error.message };
   try {
     const report = JSON.parse(result.output?.[3] ?? '');
     if (report !== null && typeof report === 'object') return report;
   } catch {
     // Fall through: no report.
   }
-  if (result.error?.code === 'ETIMEDOUT') {
-    return { failure: `the agent supervisor gave no report ${SUPERVISOR_BACKSTOP_MS}ms past the agent's ${timeout}ms wall clock` };
-  }
-  const ending = result.signal ? `killed by signal ${result.signal}` : `exited with code ${result.status}`;
+  const ending = result.signal ? `was killed by signal ${result.signal}` : `exited with code ${result.status}`;
   return { failure: `the agent supervisor ${ending} without reporting how the agent ended` };
 }
 
@@ -159,9 +153,11 @@ function runAgent(
 
   // The agent runs in its own process group under the supervisor, which stops
   // the group on the wall clock, on a signal, when the runner or the
-  // supervisor dies, and when the agent exits, and reports how the agent ended
-  // on file descriptor 3. spawnSync's own timeout is a backstop that lets the
-  // supervisor's grace period run first.
+  // supervisor dies, and when the agent exits; the report on file descriptor 3
+  // says how the agent ended. spawnSync gets no timeout of its own: its timer
+  // counts time the runner spends suspended (Ctrl-Z), and on expiry it closes
+  // the pipes before reading what they hold, the agent's reply included. The
+  // group leader owns the wall clock, and the supervisor the backstop past it.
   const result = spawnSync(process.execPath, [SUPERVISOR, String(process.pid), String(timeout), command, ...args], {
     cwd,
     encoding: 'utf8',
@@ -169,12 +165,10 @@ function runAgent(
     env: buildMinimalEnv(envPass, process.env, adapter.envNames),
     maxBuffer: 64 * 1024 * 1024,
     stdio: ['pipe', 'pipe', 'pipe', 'pipe'],
-    // spawnSync takes a safe integer; the supervisor chains timers past any size.
-    timeout: Math.min(timeout + SUPERVISOR_BACKSTOP_MS, Number.MAX_SAFE_INTEGER),
-    // A supervisor still running here is broken; its end closes the lifeline, and the group leader stops the agent.
+    // Output past maxBuffer ends the supervisor at once; its end closes the lifeline, and the group leader stops the agent.
     killSignal: 'SIGKILL',
   });
-  const outcome = supervisedOutcome(result, timeout);
+  const outcome = supervisedOutcome(result);
 
   if (outcome.spawnError) {
     if (outcome.spawnError.code === 'ENOENT') {

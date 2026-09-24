@@ -386,11 +386,12 @@ function startRunner(args, input, { detached = false } = {}) {
     env: BASE_ENV,
     detached,
   });
+  let stdout = '';
   let stderr = '';
-  child.stdout.resume();
+  child.stdout.on('data', (chunk) => (stdout += chunk));
   child.stderr.on('data', (chunk) => (stderr += chunk));
   child.stdin.end(input);
-  const closed = ended(child).then((ending) => ({ ...ending, stderr }));
+  const closed = ended(child).then((ending) => ({ ...ending, stdout, stderr }));
   return { child, closed };
 }
 
@@ -402,11 +403,13 @@ function childrenOf(pid) {
 
 /**
  * The agent's process group outlives no ending of the runner or of the
- * supervisor between them, and the supervisor reports how the agent ended:
- * a signal to the runner's whole group, the supervisor killed or stopped on
- * its own, the runner gone before the supervisor looked, a child the agent
- * leaves behind when it exits, each forwarded signal, and a wall clock past
- * the 2^31-1 ms one Node timer holds.
+ * processes between them, and the runner learns how the agent ended: a signal
+ * to the runner's whole group, the supervisor killed or stopped on its own,
+ * the group leader killed or stopped on its own, the runner suspended past
+ * the wall clock, the runner gone before the supervisor looked, a child the
+ * agent leaves behind when it exits (under the runner, and under the group
+ * leader alone), each forwarded signal, and a wall clock past the 2^31-1 ms
+ * one Node timer holds.
  */
 async function checkSupervision() {
   if (process.platform === 'win32') return;
@@ -424,7 +427,7 @@ async function checkSupervision() {
     reap(groupChild);
   }
 
-  // The supervisor killed on its own: the lifeline closes, the group stops, and the runner reports no timeout.
+  // The supervisor killed on its own: the lifeline closes, the group stops, and the leader reports why.
   const supervisorPid = path.join(tempDir('supervisor-kill'), 'pid');
   const killed = startRunner(long, `Say alpha. STUB-ORPHAN ${supervisorPid} STUB-SLEEP 30000`);
   const killedChild = await pidFrom(supervisorPid);
@@ -434,8 +437,8 @@ async function checkSupervision() {
   const killedAt = Date.now();
   const killedEnding = await killed.closed;
   check(
-    killedEnding.code === EXIT_CODES['environment-transport'] && !/timed out/i.test(killedEnding.stderr),
-    `a runner whose supervisor was killed exited ${killedEnding.code}; expected ${EXIT_CODES['environment-transport']} with no timeout\n${killedEnding.stderr}`,
+    killedEnding.code === EXIT_CODES['environment-transport'] && killedEnding.stderr.includes('supervisor ended before the agent did'),
+    `a runner whose supervisor was killed exited ${killedEnding.code}; expected ${EXIT_CODES['environment-transport']} naming the supervisor's end\n${killedEnding.stderr}`,
   );
   check(
     Date.now() - killedAt < 10_000,
@@ -468,20 +471,84 @@ async function checkSupervision() {
     reap(leaderChild);
   }
 
-  // A supervisor that never reports (stopped here) is a transport failure once spawnSync's backstop runs out.
+  // The supervisor and the leader's whole group killed together: nothing is left to report, and the runner says so.
+  const bothPid = path.join(tempDir('both-kill'), 'pid');
+  const both = startRunner(long, `Say alpha. STUB-ORPHAN ${bothPid} STUB-SLEEP 30000`);
+  const bothChild = await pidFrom(bothPid);
+  const [bothSupervisor] = childrenOf(both.child.pid);
+  const [bothLeader] = childrenOf(bothSupervisor ?? 0);
+  if (bothLeader !== undefined) process.kill(-bothLeader, 'SIGKILL');
+  if (bothSupervisor !== undefined) process.kill(bothSupervisor, 'SIGKILL');
+  const bothEnding = await both.closed;
+  check(
+    bothEnding.code === EXIT_CODES['environment-transport'] &&
+      bothEnding.stderr.includes('the agent supervisor was killed by signal SIGKILL without reporting'),
+    `a runner whose supervisor and group leader were killed together exited ${bothEnding.code}; expected ${EXIT_CODES['environment-transport']} naming the supervisor's end\n${bothEnding.stderr}`,
+  );
+  reap(bothChild);
+
+  // The supervisor stopped on its own: the leader reports its timeout to the runner and kills the stopped supervisor.
   const stoppedPid = path.join(tempDir('supervisor-stop'), 'pid');
   const stopped = startRunner(['--timeout-ms', '1000'], `Say alpha. STUB-ORPHAN ${stoppedPid} STUB-SLEEP 30000`);
   const stoppedChild = await pidFrom(stoppedPid);
   const [stoppedSupervisor] = childrenOf(stopped.child.pid);
   if (stoppedSupervisor !== undefined) process.kill(stoppedSupervisor, 'SIGSTOP');
-  const stoppedEnding = await stopped.closed;
+  const stoppedEnding = await Promise.race([stopped.closed, delay(15_000).then(() => null)]);
   check(
-    stoppedEnding.code === EXIT_CODES['environment-transport'] && stoppedEnding.stderr.includes('gave no report'),
-    `a runner whose supervisor never reported exited ${stoppedEnding.code}; expected ${EXIT_CODES['environment-transport']}, a supervisor failure\n${stoppedEnding.stderr}`,
+    stoppedEnding !== null && stoppedEnding.code === EXIT_CODES['environment-timeout'],
+    `a runner whose supervisor was stopped ${stoppedEnding === null ? 'was still waiting after 15 s' : `exited ${stoppedEnding.code}`}; expected ${EXIT_CODES['environment-timeout']}, the leader's timeout\n${stoppedEnding?.stderr ?? ''}`,
   );
+  if (stoppedEnding === null) {
+    reap(stoppedSupervisor);
+    stopped.child.kill('SIGKILL');
+  }
   if (stoppedChild !== null) {
     check(await processEnds(stoppedChild), `a child the agent started (pid ${stoppedChild}) outlived its stopped supervisor`);
     reap(stoppedChild);
+  }
+
+  // The group leader stopped on its own: past the wall clock and the backstop, the supervisor kills its group.
+  const stoppedLeaderPid = path.join(tempDir('leader-stop'), 'pid');
+  const leaderStopped = startRunner(['--timeout-ms', '1000'], `Say alpha. STUB-ORPHAN ${stoppedLeaderPid} STUB-SLEEP 30000`);
+  const stoppedLeaderChild = await pidFrom(stoppedLeaderPid);
+  const [stoppedLeader] = childrenOf(childrenOf(leaderStopped.child.pid)[0] ?? 0);
+  check(stoppedLeader !== undefined, 'the supervisor started no group leader to stop');
+  if (stoppedLeader !== undefined) process.kill(stoppedLeader, 'SIGSTOP');
+  const leaderStoppedEnding = await Promise.race([leaderStopped.closed, delay(15_000).then(() => null)]);
+  check(
+    leaderStoppedEnding !== null &&
+      leaderStoppedEnding.code === EXIT_CODES['environment-transport'] &&
+      leaderStoppedEnding.stderr.includes('gave no report'),
+    `a runner whose group leader was stopped ${leaderStoppedEnding === null ? 'was still waiting after 15 s' : `exited ${leaderStoppedEnding.code}`}; expected ${EXIT_CODES['environment-transport']}, no report past the backstop\n${leaderStoppedEnding?.stderr ?? ''}`,
+  );
+  if (leaderStoppedEnding === null) leaderStopped.child.kill('SIGKILL');
+  // A regression must not leave the stopped leader's group behind.
+  try {
+    if (stoppedLeader !== undefined) process.kill(-stoppedLeader, 'SIGKILL');
+  } catch {
+    // The supervisor killed it.
+  }
+  if (stoppedLeaderChild !== null) {
+    check(await processEnds(stoppedLeaderChild), `a child the agent started (pid ${stoppedLeaderChild}) outlived its stopped group leader`);
+    reap(stoppedLeaderChild);
+  }
+
+  // The runner's whole group suspended, as a terminal's Ctrl-Z suspends it, past the wall clock and the
+  // supervisor's backstop: the agent answers meanwhile, and the runner reports that answer once resumed.
+  const suspendedPid = path.join(tempDir('suspended'), 'pid');
+  const suspended = startRunner(['--timeout-ms', '2000'], `Say alpha. STUB-LEAVE ${suspendedPid} STUB-SLEEP 300`, { detached: true });
+  const suspendedChild = await pidFrom(suspendedPid);
+  process.kill(-suspended.child.pid, 'SIGSTOP');
+  await delay(7500);
+  process.kill(-suspended.child.pid, 'SIGCONT');
+  const suspendedEnding = await suspended.closed;
+  check(
+    suspendedEnding.code === 0 && suspendedEnding.stdout.includes('skill: stub-skill'),
+    `a runner suspended past its wall clock exited ${suspendedEnding.code} with ${JSON.stringify(suspendedEnding.stdout)}; expected 0 and the agent's answer\n${suspendedEnding.stderr}`,
+  );
+  if (suspendedChild !== null) {
+    check(await processEnds(suspendedChild), `a child the agent left behind (pid ${suspendedChild}) outlived the suspended runner's turn`);
+    reap(suspendedChild);
   }
 
   // The runner gone before the supervisor first looks: its pid is not the supervisor's parent.
@@ -514,6 +581,28 @@ async function checkSupervision() {
   if (leftChild !== null) {
     check(await processEnds(leftChild), `a child the agent left behind (pid ${leftChild}) outlived the agent's exit`);
     reap(leftChild);
+  }
+
+  // The group leader alone, with no supervisor above it: an agent that leaves a child behind and exits.
+  const aloneFile = path.join(tempDir('leader-alone'), 'pid');
+  const aloneAgent = `const c = require('node:child_process').spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'], { stdio: 'ignore' }); c.unref(); require('node:fs').writeFileSync(${JSON.stringify(aloneFile)}, String(c.pid));`;
+  const notItsParent = spawnSync(process.execPath, ['-e', '0']).pid;
+  const alone = spawn(process.execPath, [SUPERVISOR, '--group-leader', String(notItsParent), '60000', process.execPath, '-e', aloneAgent], {
+    stdio: ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'],
+    detached: true,
+  });
+  let aloneReport = '';
+  alone.stdio[4].on('data', (chunk) => (aloneReport += chunk));
+  await ended(alone);
+  check(
+    aloneReport === '{"status":0,"signal":null}',
+    `the group leader alone reported ${JSON.stringify(aloneReport)}; expected the agent's exit 0`,
+  );
+  const aloneChild = await pidFrom(aloneFile, 1000);
+  check(aloneChild !== null, 'the agent under the group leader alone recorded no child');
+  if (aloneChild !== null) {
+    check(await processEnds(aloneChild), `a child the agent left behind (pid ${aloneChild}) outlived its group leader's exit`);
+    reap(aloneChild);
   }
 
   // Each forwarded signal, sent to the supervisor alone, reaches the agent's group.

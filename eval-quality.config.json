@@ -958,6 +958,10 @@
           "reason": "a Node.js or POSIX platform name, not a TEA declaration"
         },
         {
+          "token": "SIGSTOP",
+          "reason": "a Node.js or POSIX platform name, not a TEA declaration"
+        },
+        {
           "token": "TypeError",
           "reason": "a Node.js or POSIX platform name, not a TEA declaration"
         },

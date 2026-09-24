@@ -13,7 +13,7 @@ TeA also ships `tea-skill-runner`, the command an evaluation registers to run a 
 ## Prerequisites
 
 - Node.js 22.20 or later, with TeA installed (`npm install --save-dev bmad-method-test-architecture-enterprise`), which provides the `tea-evaluate` bin.
-- `eval-quality` 4.0.0 or later, installed beside TeA in the project that runs Evaluate (`npm install --save-dev eval-quality`).
+- `eval-quality` 4.1.1 or later, installed beside TeA in the project that runs Evaluate (`npm install --save-dev eval-quality`).
   TeA declares it as an optional peer dependency, so a project that installs TeA only for its other workflows never receives it.
   Without it, `tea-evaluate` exits 12 and names the missing package.
 
@@ -182,14 +182,14 @@ It never looks for a skill anywhere else, and it names no vendor: `--agent` is r
 The skill root and its `SKILL.md` must resolve inside the working directory, symbolic links included.
 The other options are those of TeA's own runners: `--agent-cmd`, `--agent-arg`, `--env-pass`, `--model`, `--timeout-ms`, and `--capability` (`read-only`, `scoped-artifact-writes` or `command-execution`; `scoped-artifact-writes` by default).
 
-| Exit | Meaning                                                                                                                                                                                                 |
-| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0    | the agent ran to completion                                                                                                                                                                             |
-| 2    | usage: a missing or malformed option, an empty prompt or one that is not UTF-8, or a skill root outside the working directory                                                                           |
-| 3    | configuration: an unknown agent, or a skill root that does not exist or holds no `SKILL.md`                                                                                                             |
-| 4    | transport: the agent failed to start or exited non-zero, the process supervising it ended without reporting, standard output closed before the reply was written, or the runner met an unexpected error |
-| 5    | timeout: the agent outlived `--timeout-ms`; its process group got `SIGTERM`, and the agent `SIGKILL` 2 s later if it was still running                                                                  |
-| 6    | parser: reserved by the shared runner table                                                                                                                                                             |
+| Exit | Meaning                                                                                                                                                                                                                   |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0    | the agent ran to completion                                                                                                                                                                                               |
+| 2    | usage: a missing or malformed option, an empty prompt or one that is not UTF-8, or a skill root outside the working directory                                                                                             |
+| 3    | configuration: an unknown agent, or a skill root that does not exist or holds no `SKILL.md`                                                                                                                               |
+| 4    | transport: the agent failed to start or exited non-zero, a process supervising it ended before the agent or without reporting, standard output closed before the reply was written, or the runner met an unexpected error |
+| 5    | timeout: the agent outlived `--timeout-ms`; its process group got `SIGTERM`, and the agent `SIGKILL` 2 s later if it was still running                                                                                    |
+| 6    | parser: reserved by the shared runner table                                                                                                                                                                               |
 
 A registry entry for the runner declares `infrastructureExitCodes` 3 to 6, and `check` holds it to that.
 Its target is the bin name `tea-skill-runner`, which `npm exec` resolves from the evaluation's installed TeA, or a path to `skill-runner.js`.
@@ -198,7 +198,11 @@ When the agent exits, every process left in that group receives `SIGKILL` at onc
 The group is also stopped when `--timeout-ms` runs out, when the runner's process group receives `SIGINT`, `SIGTERM`, `SIGHUP` or `SIGQUIT` (a terminal's Ctrl-C or `Ctrl-\` included), and when the runner or the supervisor process between it and the agent dies, by `SIGKILL` included.
 Stopping sends the group the signal received (`SIGTERM` for a timeout or a death), and the agent `SIGKILL` 2 s later if it is still running.
 A Ctrl-Z suspends the runner, and the agent runs on, bounded by `--timeout-ms` and the runner's end.
+Once resumed, the runner reports how the agent ended, however long it was suspended.
+Two processes supervise the agent: one in the runner's process group, and a group leader in the agent's.
+If the group leader has not ended 5 s after `--timeout-ms` runs out (it was stopped with `SIGSTOP`, say), the other kills it with its group, and the runner exits 4.
 A process that leaves the group, such as a daemon that starts its own session, is outside this control.
+On Windows, which has no process groups, the timeout and the signals reach the agent alone, and nothing the agent started is stopped.
 Set every leg's `--timeout-ms` below the entry's `maxElapsedMs`, so the runner reports a timeout as exit 5.
 At the ceiling, the adapter kills the runner's process group, records the leg as a fault, and `preflight` exits 12.
 Exit 2 is left out on purpose: a usage error is a defect in the evaluation's own wiring, and its preflight and oracles see it as a failed run.
