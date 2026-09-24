@@ -50,7 +50,7 @@ If you have BMad artifacts (stories, test designs, PRDs):
 ```text
 I'm testing the user profile feature we just implemented.
 Story: story-profile-management.md
-Test Design: test-design-epic-1.md
+Test Design: test-design/test-design-epic-1.md
 ```
 
 **Reference documents:**
@@ -420,6 +420,8 @@ Follow the patterns in existing tests:
 ```
 
 #### Definition of Done Summary:
+
+The checklist is part of the automation summary at `{test_artifacts}/automate/automation-summary-{run_key}.md`. The `run_key` names the scope: `story-{story_key}` or `epic-{epic_num}` when you name a story or epic, `target-{slug}` for a feature or path with neither, and `system` for a run across the whole codebase.
 
 ```markdown
 ## Test Quality Checklist

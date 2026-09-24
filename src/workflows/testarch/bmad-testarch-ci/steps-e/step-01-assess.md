@@ -44,6 +44,15 @@ Identify which output should be edited and load it.
 
 Ask the user to provide the output file path or select from known outputs.
 
+Known outputs for this workflow:
+
+- the pipeline file for the chosen `ci_platform`: `{project-root}/.github/workflows/test.yml`, `{project-root}/.gitlab-ci.yml`, `{project-root}/Jenkinsfile`, `{project-root}/azure-pipelines.yml`, `{project-root}/.harness/pipeline.yaml`, or `{project-root}/.circleci/config.yml`
+- `{test_artifacts}/ci/ci-pipeline-progress.md` (run checkpoint, one per project)
+
+Files written by older TEA versions sit at the root of `{test_artifacts}`: `{test_artifacts}/ci-pipeline-progress.md`. Offer them as candidates when present.
+
+When several files match, list each one with its scope and ask which to edit. Do not guess.
+
 ### 2. Load Target
 
 Read the provided output file in full.

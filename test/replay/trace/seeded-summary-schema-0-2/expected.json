@@ -14,8 +14,8 @@
   "scorerVersion": 4,
   "storedOutput": {
     "origin": "constructed",
-    "summary": "test-artifacts/e2e-trace-summary.json",
-    "matrix": "test-artifacts/traceability-matrix.md"
+    "summary": "test-artifacts/trace/e2e-trace-summary-epic-4.json",
+    "matrix": "test-artifacts/trace/traceability-matrix-epic-4.md"
   },
   "inputs": {
     "groundTruth": "test/fixtures/trace-eval/ground-truth.json",

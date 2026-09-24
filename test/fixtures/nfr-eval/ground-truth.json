@@ -48,14 +48,14 @@
     "fourAuditedDomains": {
       "file": "src/workflows/testarch/bmad-testarch-nfr/steps-c/step-04-evaluate-and-score.md",
       "section": "3. Dispatch 4 NFR Workers",
-      "lines": "142-174",
+      "lines": "150-193",
       "rule": "Step 4 dispatches exactly four domain workers: Security, Performance, Reliability, and Maintainability. A report missing one of the four has left a dispatched worker's domain unreported.",
       "requiredPhrase": "step-04d-subagent-maintainability.md"
     },
     "markUnknownThreshold": {
       "file": "src/workflows/testarch/bmad-testarch-nfr/steps-c/step-02-define-thresholds.md",
       "section": "2. Define Thresholds",
-      "lines": "77",
+      "lines": "116",
       "rule": "If a threshold is still unknown after checking all sources, mark it UNKNOWN and plan to report CONCERNS.",
       "requiredPhrase": "mark it **UNKNOWN** and plan to report **CONCERNS**"
     },
@@ -76,7 +76,7 @@
     "missingEvidenceIsConcerns": {
       "file": "src/workflows/testarch/bmad-testarch-nfr/steps-c/step-03-gather-evidence.md",
       "section": "3. Evidence Gaps",
-      "lines": "71",
+      "lines": "138",
       "rule": "If evidence is missing for a category, mark that category as CONCERNS.",
       "competingReading": "checklist.md's FAIL Criteria Verified is a four-limb OR whose second limb is \"Critical evidence is MISSING (documented)\", which would admit FAIL for a domain whose evidence is absent. This corpus rests on step-03 instead, because step-03 is the unconditional instruction on the execution path and the checklist is the validation pass that runs after it. The alternative was weighed rather than missed, and domainStatusAccuracy admits one such disagreement across the eight domain judgments, so a run reading it the other way costs one judgment and does not fail the suite.",
       "requiredPhrase": "If evidence is missing for a category, mark that category as **CONCERNS**"
@@ -112,21 +112,21 @@
     "releaseBlockerOnFail": {
       "file": "src/workflows/testarch/bmad-testarch-nfr/checklist.md",
       "section": "Release Blocker (FAIL)",
-      "lines": "323-325",
+      "lines": "328-330",
       "rule": "A release blocker is flagged when a critical NFR has FAIL status, so an audit carrying a FAIL domain reports FAIL overall.",
       "requiredPhrase": "Release blocker flagged if critical NFR has FAIL status"
     },
     "warningOnConcerns": {
       "file": "src/workflows/testarch/bmad-testarch-nfr/checklist.md",
       "section": "Warning (CONCERNS)",
-      "lines": "335-337",
+      "lines": "340-342",
       "rule": "Any NFR with CONCERNS status is flagged, so an audit whose worst domain is CONCERNS reports CONCERNS overall.",
       "requiredPhrase": "Any NFR with CONCERNS status flagged"
     },
     "passWhenAllPass": {
       "file": "src/workflows/testarch/bmad-testarch-nfr/checklist.md",
       "section": "Pass (PASS)",
-      "lines": "341-343",
+      "lines": "346-348",
       "rule": "PASS requires every NFR to have PASS status and no blockers or concerns to exist.",
       "requiredPhrase": "All NFRs have PASS status"
     }

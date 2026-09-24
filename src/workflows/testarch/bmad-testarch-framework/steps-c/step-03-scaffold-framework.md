@@ -3,7 +3,7 @@ name: 'step-03-scaffold-framework'
 description: 'Create framework scaffold with adaptive orchestration (agent-team, subagent, or sequential)'
 nextStepFile: '{skill-root}/steps-c/step-04-docs-and-scripts.md'
 knowledgeIndex: './resources/tea-index.csv'
-outputFile: '{test_artifacts}/framework-setup-progress.md'
+outputFile: '{test_artifacts}/framework/framework-setup-progress.md'
 ---
 
 # Step 3: Scaffold Framework
@@ -424,6 +424,7 @@ Regardless of mode, outputs must be identical in structure and quality.
 
   ```yaml
   ---
+  workflowStatus: 'in-progress'
   stepsCompleted: ['step-03-scaffold-framework']
   lastStep: 'step-03-scaffold-framework'
   lastSaved: '{date}'
@@ -433,6 +434,7 @@ Regardless of mode, outputs must be identical in structure and quality.
   Then write this step's output below the frontmatter.
 
 - **If `{outputFile}` already exists**, update:
+  - Set `workflowStatus: 'in-progress'`
   - Add `'step-03-scaffold-framework'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-03-scaffold-framework'`
   - Set `lastSaved: '{date}'`

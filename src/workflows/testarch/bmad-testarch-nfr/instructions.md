@@ -42,4 +42,4 @@ Load, read completely, and execute:
 If the user selects **Resume** mode, load, read completely, and execute:
 `{skill-root}/steps-c/step-01b-resume.md`
 
-This checks the output document for progress tracking frontmatter and routes to the next incomplete step.
+This selects the output document belonging to the run being resumed, reads its progress tracking frontmatter, and routes to the next incomplete step. Each run writes `nfr-assessment-{run_key}.md` under `{test_artifacts}/nfr/`, so every story, epic, and the system-level audit keep their own.

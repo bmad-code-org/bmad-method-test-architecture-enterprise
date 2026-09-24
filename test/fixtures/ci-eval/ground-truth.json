@@ -42,7 +42,7 @@
     "ciPlatformFromConfig": {
       "file": "src/workflows/testarch/bmad-testarch-ci/steps-c/step-01-preflight.md",
       "section": "5. Detect CI Platform",
-      "lines": "98-108",
+      "lines": "100-110",
       "rule": "When ci_platform is set explicitly to something other than auto, the run uses that value and skips detection.",
       "requiredPhrase": "use that value"
     },
@@ -77,7 +77,7 @@
     "unsafePatternsInRun": {
       "file": "src/workflows/testarch/bmad-testarch-ci/steps-v/step-01-validate.md",
       "section": "3a. Script Injection Scan",
-      "lines": "62-75",
+      "lines": "69-82",
       "rule": "${{ inputs.* }}, ${{ github.event.* }} and ${{ github.head_ref }} inside a run: block are flagged as FAIL by the workflow's own validation pass.",
       "requiredPhrase": "Unsafe patterns to flag (FAIL):"
     },
@@ -91,7 +91,7 @@
     "nodeVersionFromNvmrc": {
       "file": "src/workflows/testarch/bmad-testarch-ci/steps-c/step-01-preflight.md",
       "section": "6. Read Environment Context",
-      "lines": "116-127",
+      "lines": "118-129",
       "rule": "The Node version comes from .nvmrc when the project has one, and the pipeline uses that version rather than a hardcoded one.",
       "requiredPhrase": "Read `.nvmrc` if present"
     },

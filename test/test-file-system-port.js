@@ -261,10 +261,20 @@ const STORED_TRACE_SUMMARY = path.join(
   'trace',
   'seeded-correct-run',
   'test-artifacts',
-  'e2e-trace-summary.json',
+  'trace',
+  'e2e-trace-summary-epic-4.json',
 );
 const STORED_DESIGN = path.join(PROJECT_ROOT, 'test', 'replay', 'test-design', 'seeded-correct-run', 'design.md');
-const STORED_NFR_REPORT = path.join(PROJECT_ROOT, 'test', 'replay', 'nfr', 'gapped-correct-audit', 'test-artifacts', 'nfr-assessment.md');
+const STORED_NFR_REPORT = path.join(
+  PROJECT_ROOT,
+  'test',
+  'replay',
+  'nfr',
+  'gapped-correct-audit',
+  'test-artifacts',
+  'nfr',
+  'nfr-assessment-system.md',
+);
 // eval-quality's own published schema, read once per kind and cached: scoring
 // any probe at all validates an isolation manifest against it.
 const ISOLATION_MANIFEST_SCHEMA = path.join(PROJECT_ROOT, 'node_modules', 'eval-quality', 'schemas', 'isolation-manifest.schema.json');

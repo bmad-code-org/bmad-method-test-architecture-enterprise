@@ -32,27 +32,27 @@ The agent interacts with the browser through shell commands. Each command is a s
 
 ```bash
 # 1. Open a page
-playwright-cli -s=tea-explore open https://app.com/login
+playwright-cli -s=tea-test-design-<run_key> open https://app.com/login
 
 # 2. Take a snapshot — returns element references, not DOM trees
-playwright-cli -s=tea-explore snapshot
+playwright-cli -s=tea-test-design-<run_key> snapshot
 # Output: [{ref: "e15", role: "textbox", name: "Email"},
 #          {ref: "e21", role: "textbox", name: "Password"},
 #          {ref: "e33", role: "button", name: "Sign In"}]
 
 # 3. Interact using those references
-playwright-cli -s=tea-explore fill e15 "user@example.com"
-playwright-cli -s=tea-explore fill e21 "password123"
-playwright-cli -s=tea-explore click e33
+playwright-cli -s=tea-test-design-<run_key> fill e15 "user@example.com"
+playwright-cli -s=tea-test-design-<run_key> fill e21 "password123"
+playwright-cli -s=tea-test-design-<run_key> click e33
 
 # 4. Capture evidence
-playwright-cli -s=tea-explore screenshot --filename=login-flow.png
+playwright-cli -s=tea-test-design-<run_key> screenshot --filename=login-flow.png
 
 # 5. Clean up
-playwright-cli -s=tea-explore close
+playwright-cli -s=tea-test-design-<run_key> close
 ```
 
-The `-s=tea-explore` flag scopes everything to a named session, preventing state leakage between workflows.
+The `-s=tea-test-design-<run_key>` flag scopes every command to a named session that belongs to one workflow run. `<run_key>` is the scope key the workflow resolves in its first step (such as `story-1-2-user-authentication`, `epic-3`, or `system`), so a second run on the same machine opens its own browser. See [Session Isolation](#session-isolation).
 
 ## What TEA Uses It For
 
@@ -83,10 +83,10 @@ They work together naturally. The agent uses CLI to _understand_ your app, then 
 
 ```bash
 # Agent uses CLI to observe network traffic on the dashboard page
-playwright-cli -s=tea-discover open https://app.com/dashboard
-playwright-cli -s=tea-discover network
+playwright-cli -s=tea-automate-<run_key> open https://app.com/dashboard
+playwright-cli -s=tea-automate-<run_key> network
 # Output: GET /api/users → 200, POST /api/audit → 201, GET /api/settings → 200
-playwright-cli -s=tea-discover close
+playwright-cli -s=tea-automate-<run_key> close
 ```
 
 ```typescript
@@ -131,21 +131,23 @@ This gives the agent the full HTTP conversation — wrong payload, expired auth 
 
 ## Session Isolation
 
-Every CLI command targets a named session. This prevents workflows from interfering with each other:
+Every CLI command targets a named session. Session names are global to the machine: two runs that use the same name drive one browser, and either run's `close` shuts it for both. Name the session `tea-<workflow>-<run_key>`, where `<run_key>` is the scope key the workflow resolved in its first step, and use that exact name on every `open`, command, and `close` of the run. Workflows that resolve no `run_key` (`ci` and `framework`) name the session `tea-<workflow>-<timestamp>`.
 
 ```bash
-# Workflow A uses one session
-playwright-cli -s=tea-explore open https://app.com
+# test-design run for epic 3
+playwright-cli -s=tea-test-design-epic-3 open https://app.com
 
-# Workflow B uses a different session (can run in parallel)
-playwright-cli -s=tea-verify open https://app.com/admin
+# NFR run for story 1.2 on the same machine, in parallel
+playwright-cli -s=tea-nfr-story-1-2-user-authentication open https://app.com/admin
 ```
 
-For parallel safety (multiple agents on the same machine), append a unique suffix:
+When one run opens several sessions at once (for example, parallel subagents), append a unique suffix to the run's session name. `atdd` adds a timestamp suffix to every session it opens, and `automate` adds one to the sessions its E2E subagent opens:
 
 ```bash
-playwright-cli -s=tea-explore-<timestamp> open https://app.com
+playwright-cli -s=tea-atdd-story-1-2-user-authentication-<timestamp> open https://app.com
 ```
+
+Close sessions by name with `close`. `close-all` kills every session on the machine, including the browsers of other runs.
 
 ## Autonomous Trace Investigation (Playwright 1.59+)
 

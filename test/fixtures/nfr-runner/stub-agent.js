@@ -8,8 +8,9 @@
  * working directory, write the artifact the prompt names, print the final
  * response to stdout, exit nonzero on failure.
  *
- * A real NFR run leaves one file under the project's test-artifacts directory.
- * This stub copies a checked-in report there, chosen by which service the
+ * A real NFR run leaves one file in the project's test-artifacts/nfr/ folder,
+ * named with the run key step-01 resolves, which is `system` for every bundle
+ * because none carries a story or an epic. This stub copies a checked-in report there, chosen by which service the
  * workspace carries, so the runner can be driven against it. The reports are the
  * replay corpus's own correct runs, test/replay/nfr/gapped-correct-audit and
  * test/replay/nfr/clean-correct-audit, which `npm run test:eval-replay` already
@@ -26,6 +27,9 @@
  *   nothing   exit 0 without writing the report, so the caller reads `absent`
  *   fail      exits 3 without writing, so the runner reports environment-transport
  *   delete    write the report, remove one evidence file, exit 0
+ *   wrong-key write the report under `epic-1` in place of `system`, so the harness
+ *             finds its own path absent and the report beside it, and scores the run
+ *             as a behavior failure
  *
  * A real vendor CLI answers --version, and every harness pre-flight probes for it
  * before it will run anything. Answering it here is what lets the runner be driven
@@ -79,11 +83,11 @@ if (mode === 'nothing') {
 const named = /^- `\{project-root\}`: `([^`]+)`$/m.exec(prompt)?.[1] ?? null;
 const projectRoot = named === null ? process.cwd() : path.join(process.cwd(), named);
 const bundle = /atlas/.test(named ?? '') ? 'clean' : 'gapped';
-const source = path.join(__dirname, '..', '..', 'replay', 'nfr', `${bundle}-correct-audit`, 'test-artifacts', 'nfr-assessment.md');
-const artifactsDir = path.join(projectRoot, 'test-artifacts');
+const source = path.join(__dirname, '..', '..', 'replay', 'nfr', `${bundle}-correct-audit`, 'test-artifacts', 'nfr', 'nfr-assessment-system.md');
+const artifactsDir = path.join(projectRoot, 'test-artifacts', 'nfr');
 fs.mkdirSync(artifactsDir, { recursive: true });
 
-const reportPath = path.join(artifactsDir, 'nfr-assessment.md');
+const reportPath = path.join(artifactsDir, mode === 'wrong-key' ? 'nfr-assessment-epic-1.md' : 'nfr-assessment-system.md');
 fs.copyFileSync(source, reportPath);
 
 // The one thing the workflow says it never does. An NFR run audits evidence and

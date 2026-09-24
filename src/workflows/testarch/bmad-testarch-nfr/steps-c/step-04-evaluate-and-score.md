@@ -33,11 +33,14 @@ Select execution mode deterministically, then audit NFR evidence domains using a
 
 ### 1. Prepare Execution Context
 
-**Generate unique timestamp:**
+**Generate a unique timestamp** for temp file naming, and take `run_key` from Step 1:
 
 ```javascript
 const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+const runKey = '{run_key}'; // resolved in Step 1 and carried forward unchanged
 ```
+
+Every temp file name carries `run_key` before the timestamp. `/tmp` is shared by every worktree and parallel run on the machine, and an agent without a shell invents a round timestamp, so the timestamp alone cannot keep two runs for different scopes apart.
 
 **Prepare context:**
 
@@ -64,6 +67,7 @@ const subagentContext = {
     execution_mode: config.tea_execution_mode || 'auto',  // "auto" | "subagent" | "agent-team" | "sequential"
     capability_probe: parseBooleanFlag(config.tea_capability_probe, true),  // supports booleans and "false"/"true" strings
   },
+  run_key: runKey,
   timestamp: timestamp
 };
 ```
@@ -164,7 +168,7 @@ order. These rules apply in every execution mode.
 #### Subagent A: Security Evidence Audit
 
 - File: `./step-04a-subagent-security.md`
-- Output: `/tmp/tea-nfr-security-${timestamp}.json`
+- Output: `/tmp/tea-nfr-security-${runKey}-${timestamp}.json`
 - Execution:
   - `agent-team` or `subagent`: launch non-blocking
   - `sequential`: run blocking and wait
@@ -173,19 +177,19 @@ order. These rules apply in every execution mode.
 #### Subagent B: Performance Evidence Audit
 
 - File: `./step-04b-subagent-performance.md`
-- Output: `/tmp/tea-nfr-performance-${timestamp}.json`
+- Output: `/tmp/tea-nfr-performance-${runKey}-${timestamp}.json`
 - Status: Running... ⟳
 
 #### Subagent C: Reliability Evidence Audit
 
 - File: `./step-04c-subagent-reliability.md`
-- Output: `/tmp/tea-nfr-reliability-${timestamp}.json`
+- Output: `/tmp/tea-nfr-reliability-${runKey}-${timestamp}.json`
 - Status: Running... ⟳
 
 #### Subagent D: Maintainability Evidence Audit
 
 - File: `./step-04d-subagent-maintainability.md`
-- Output: `/tmp/tea-nfr-maintainability-${timestamp}.json`
+- Output: `/tmp/tea-nfr-maintainability-${runKey}-${timestamp}.json`
 - Status: Running... ⟳
 
 In `agent-team` and `subagent` modes, runtime decides worker scheduling and concurrency.
@@ -219,7 +223,9 @@ In `agent-team` and `subagent` modes, runtime decides worker scheduling and conc
 ### 5. Verify All Outputs Exist
 
 ```javascript
-const outputs = ['security', 'performance', 'reliability', 'maintainability'].map((domain) => `/tmp/tea-nfr-${domain}-${timestamp}.json`);
+const outputs = ['security', 'performance', 'reliability', 'maintainability'].map(
+  (domain) => `/tmp/tea-nfr-${domain}-${runKey}-${timestamp}.json`,
+);
 
 outputs.forEach((output) => {
   if (!fs.existsSync(output)) {

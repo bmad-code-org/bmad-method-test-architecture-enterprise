@@ -28,7 +28,8 @@ This checklist covers **two sequential phases**:
 - [ ] Story file read successfully (if applicable)
 - [ ] Oracle items extracted or inferred correctly
 - [ ] Story ID identified (e.g., 1.3)
-- [ ] `test-design.md` loaded (if available)
+- [ ] Test design loaded (if available): `{test_artifacts}/test-design/test-design-epic-{epic_num}.md` for an epic or for a story's epic (epic number from the story id), or `test-design-architecture.md` and `test-design-qa.md` at system level, falling back to the same names at the legacy root `{test_artifacts}/`
+- [ ] NFR evidence audit loaded (if available), first match of `nfr/nfr-assessment-{run_key}.md`, then for a story `nfr/nfr-assessment-epic-{epic_num}.md`, then `nfr/nfr-assessment-system.md`, then the legacy root `nfr-assessment.md`, with the file used named
 - [ ] `tech-spec.md` loaded (if available)
 - [ ] `PRD.md` loaded (if available)
 - [ ] Relevant knowledge fragments loaded from `tea-index.csv`
@@ -168,7 +169,7 @@ Knowledge fragments referenced:
 
 ### Traceability Matrix Markdown
 
-- [ ] File created at `{test_artifacts}/traceability-matrix.md`
+- [ ] File created at `{test_artifacts}/trace/traceability-matrix-{run_key}.md`, with `runScope`, `runKey`, `targetType`, `targetId`, and `targetLabel` in its frontmatter
 - [ ] Template from `trace-template.md` used
 - [ ] Full mapping table included
 - [ ] Coverage status section included
@@ -178,7 +179,7 @@ Knowledge fragments referenced:
 
 ### Machine-Readable JSON Output
 
-- [ ] `e2e-trace-summary.json` written to `{e2e_trace_summary_output}`
+- [ ] `e2e-trace-summary-{run_key}.json` written to `{e2e_trace_summary_output}`
 - [ ] JSON is valid and parseable
 - [ ] `schema_version` field present
 - [ ] `repo`, `collection_mode`, `collection_status`, `inventory_basis`, and `source_sha` fields populated
@@ -199,10 +200,10 @@ Knowledge fragments referenced:
 - [ ] `recommendations` array present (may be empty)
 - [ ] `waivers` present when `{waiver_register_input}` exists, carrying `register`, `filed`, `valid`, `invalid`, and one entry per waiver with its `id`, `covers`, `valid` flag, and `failed_checks`; absent when no register was found
 - [ ] `rejected_evidence` array present (may be empty), one entry per test whose name claims a criterion its assertions do not establish
-- [ ] `links.trace_report_path` points to `traceability-matrix.md`
+- [ ] `links.trace_report_path` points to this run's `{outputFile}` (`trace/traceability-matrix-{run_key}.md`)
 - [ ] `links.trace_report_url`, `links.artifact_url`, and `links.journey_evidence_url` fields present (may be empty)
-- [ ] `gate-decision.json` written to `{gate_decision_output}` when gate-eligible
-- [ ] `gate-decision.json` contains `evaluated_at`, `gate_basis`, `gate_status`, `rationale`, and per-criterion status fields
+- [ ] `gate-decision-{run_key}.json` written to `{gate_decision_output}` when gate-eligible
+- [ ] `gate-decision-{run_key}.json` contains `evaluated_at`, `gate_basis`, `gate_status`, `rationale`, and per-criterion status fields
 
 ### Updated Story File (if enabled)
 
@@ -253,7 +254,7 @@ Knowledge fragments referenced:
 
 ## PHASE 2: QUALITY GATE DECISION
 
-**Note**: Phase 2 always emits `e2e-trace-summary.json`; gate decision fields are populated only when `allow_gate: true` and `collection_status` resolves to `COLLECTED`.
+**Note**: Phase 2 always emits `{e2e_trace_summary_output}` (`trace/e2e-trace-summary-{run_key}.json`); gate decision fields are populated only when `allow_gate: true` and `collection_status` resolves to `COLLECTED`.
 
 ---
 
@@ -263,10 +264,10 @@ Knowledge fragments referenced:
 
 - [ ] Test execution results obtained (CI/CD pipeline, test framework reports)
 - [ ] Story/epic/release file identified and read
-- [ ] Test design document discovered or explicitly provided (if available)
+- [ ] Test design document discovered in `{test_artifacts}/test-design/` (legacy: the root of `{test_artifacts}`) or explicitly provided (if available)
 - [ ] Traceability matrix discovered or explicitly provided (available from Phase 1)
 - [ ] Waiver register read from `{waiver_register_input}` when the file exists (see Waiver Scenarios)
-- [ ] NFR evidence audit discovered or explicitly provided (if available)
+- [ ] NFR evidence audit discovered in `{test_artifacts}/nfr/` in the Step 1 lookup order (legacy: `nfr-assessment.md` at the root of `{test_artifacts}`) or explicitly provided (if available)
 - [ ] Code coverage report discovered or explicitly provided (if available)
 - [ ] Burn-in results discovered or explicitly provided (if available)
 
@@ -312,12 +313,12 @@ Knowledge fragments referenced:
 
 **Quality Assessments:**
 
-- [ ] P0/P1/P2/P3 scenarios extracted from test-design.md (if available)
-- [ ] Risk scores extracted from test-design.md (if available)
-- [ ] Coverage percentages extracted from traceability-matrix.md (available from Phase 1)
-- [ ] Coverage gaps extracted from traceability-matrix.md (available from Phase 1)
-- [ ] NFR status extracted from nfr-assessment.md (if available)
-- [ ] Security issues count extracted from nfr-assessment.md (if available)
+- [ ] P0/P1/P2/P3 scenarios extracted from `test-design/test-design-epic-{epic_num}.md` (for a story, its epic's plan) or the system-level test design docs (if available; legacy: same names at the root of `{test_artifacts}`)
+- [ ] Risk scores extracted from the same test design docs (if available)
+- [ ] Coverage percentages extracted from `trace/traceability-matrix-{run_key}.md` (available from Phase 1)
+- [ ] Coverage gaps extracted from `trace/traceability-matrix-{run_key}.md` (available from Phase 1)
+- [ ] NFR status extracted from the NFR audit Step 1 loaded (if available): `nfr/nfr-assessment-{run_key}.md`, then for a story `nfr/nfr-assessment-epic-{epic_num}.md`, then `nfr/nfr-assessment-system.md`, then the legacy root `nfr-assessment.md`
+- [ ] Security issues count extracted from the same NFR assessment (if available)
 
 **Code Coverage:**
 
@@ -433,8 +434,8 @@ Knowledge fragments referenced:
 **Outputs Saved:**
 
 - [ ] Gate decision document saved to `{outputFile}`
-- [ ] `e2e-trace-summary.json` saved to `{e2e_trace_summary_output}` (always)
-- [ ] `gate-decision.json` saved to `{gate_decision_output}` (when gate-eligible)
+- [ ] `e2e-trace-summary-{run_key}.json` saved to `{e2e_trace_summary_output}` (always)
+- [ ] `gate-decision-{run_key}.json` saved to `{gate_decision_output}` (when gate-eligible)
 - [ ] All outputs are valid and readable
 
 ---
@@ -562,9 +563,9 @@ Knowledge fragments referenced:
 
 ### Missing Evidence
 
-- [ ] If test-design.md missing, decision still possible with test results + trace
-- [ ] If traceability-matrix.md missing, decision still possible with test results (but Phase 1 should provide it)
-- [ ] If nfr-assessment.md missing, NFR validation marked as NOT ASSESSED
+- [ ] If no test design doc exists in `{test_artifacts}/test-design/` or the legacy root, decision still possible with test results + trace
+- [ ] If `trace/traceability-matrix-{run_key}.md` missing, decision still possible with test results (but Phase 1 should provide it)
+- [ ] If no NFR assessment exists in `{test_artifacts}/nfr/` or the legacy root, NFR validation marked as NOT ASSESSED
 - [ ] If code coverage missing, coverage criterion marked as NOT ASSESSED
 - [ ] User acknowledged gaps in evidence or provided alternative proof
 
@@ -642,8 +643,8 @@ This list is the definition of waiver validity. `steps-c/step-05-gate-decision.m
 - [ ] All quality evidence gathered
 - [ ] Decision criteria applied correctly
 - [ ] Decision rationale documented
-- [ ] `e2e-trace-summary.json` written and valid JSON
-- [ ] `gate-decision.json` written when gate-eligible
+- [ ] `e2e-trace-summary-{run_key}.json` written and valid JSON
+- [ ] `gate-decision-{run_key}.json` written when gate-eligible
 - [ ] Status file updated (if enabled)
 - [ ] Stakeholders notified (if enabled)
 

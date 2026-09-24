@@ -77,4 +77,54 @@ function workingTreeChanges(before, after) {
   return after.filter((line) => !known.has(line));
 }
 
-module.exports = { scratchDirectory, filesWritten, workingTreeState, workingTreeChanges };
+/**
+ * The deliverables a run wrote under some other run key, when the one the
+ * harness reads is absent.
+ *
+ * Every scoped workflow writes `{test_artifacts}/<workflow>/<name>-<run_key>.<ext>`,
+ * and the harness knows the one run key the prompt resolves to. A run that
+ * resolved another key wrote a complete deliverable where nothing reads it, which
+ * is a behavior the scorer has to see: reporting it as an artifact the
+ * environment never produced would hide a wrong run key behind exit 2. Read
+ * before the workspace is removed.
+ *
+ * @param {string} folder Absolute path of the workflow's output folder.
+ * @param {RegExp} family Matches the file names of the deliverables this workflow writes, any run key.
+ * @param {string[]} expected The file names the harness reads, which are never reported here.
+ * @returns {string[]} The sibling file names found, sorted; empty when the folder is absent.
+ */
+function misplacedDeliverables(folder, family, expected) {
+  if (!fs.existsSync(folder)) return [];
+  const wanted = new Set(expected);
+  return fs
+    .readdirSync(folder, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && family.test(entry.name) && !wanted.has(entry.name))
+    .map((entry) => entry.name)
+    .sort();
+}
+
+/**
+ * The reason and result-record evidence for a run whose deliverables landed under
+ * another run key, naming each file by its path under the project root.
+ *
+ * @param {string} folder The workflow's output folder relative to the project root, with `/` separators.
+ * @param {string[]} names What misplacedDeliverables found.
+ * @returns {{reason: string, evidence: {kind: string, value: string}[]}}
+ */
+function misplacedEvidence(folder, names) {
+  const paths = names.map((name) => `${folder}/${name}`);
+  const reason = `the run wrote its deliverables under another run key: ${paths.join(', ')}`;
+  return {
+    reason,
+    evidence: [...paths.map((value) => ({ kind: 'artifact', value })), { kind: 'summary', value: reason }],
+  };
+}
+
+module.exports = {
+  scratchDirectory,
+  filesWritten,
+  workingTreeState,
+  workingTreeChanges,
+  misplacedDeliverables,
+  misplacedEvidence,
+};

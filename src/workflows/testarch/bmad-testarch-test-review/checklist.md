@@ -40,6 +40,7 @@ Coverage analysis is out of scope for this workflow. Use `trace` for coverage me
 ### Step 1: Context Loading
 
 - [ ] Review scope determined (single/directory/suite)
+- [ ] Run identity (`run_scope`, `run_key`) resolved from the story, epic, suite, or reviewed target before the first save
 - [ ] Test file paths collected
 - [ ] Related artifacts discovered (story, test-design)
 - [ ] Knowledge base fragments loaded successfully
@@ -297,7 +298,7 @@ Row M10. Gate closes and reports `PASS (n/a)` when the flag is false, when `@seo
 **Inline Comments** (apply only when `generate_inline_comments` resolves `true`; the default `false` skips these items — the run is report-only):
 
 - [ ] Inline comments generated at violation locations
-- [ ] Comment format: `// TODO (TEA Review): [Issue] - See test-review-{filename}.md`
+- [ ] Comment format: `// TODO (TEA Review): [Issue] - See test-review-{run_key}.md`
 - [ ] Comments added to test files (no logic changes)
 - [ ] Test files remain valid and executable
 
@@ -321,7 +322,8 @@ Row M10. Gate closes and reports `PASS (n/a)` when the flag is false, when `@seo
 
 **Outputs Saved:**
 
-- [ ] Review report saved to `{output_file}`
+- [ ] Review report saved to `{test_artifacts}/test-review/test-review-{run_key}.md` (or `output_file_override` when set)
+- [ ] Report frontmatter records `runScope` and `runKey`, and no earlier run's content was merged into it
 - [ ] Inline comments written to test files (if enabled)
 - [ ] Quality badge saved (if enabled)
 - [ ] Story file updated (if enabled)

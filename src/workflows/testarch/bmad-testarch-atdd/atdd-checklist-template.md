@@ -1,4 +1,7 @@
 ---
+runScope: 'story'
+runKey: 'story-{story_key}'
+workflowStatus: 'in-progress'
 stepsCompleted: []
 lastStep: ''
 lastSaved: ''
@@ -6,7 +9,7 @@ workflowType: 'testarch-atdd'
 storyId: '{story_id}'
 storyKey: '{story_key}'
 storyFile: '{story_file}'
-atddChecklistPath: '{test_artifacts}/atdd-checklist-{story_key}.md'
+atddChecklistPath: '{test_artifacts}/atdd/atdd-checklist-{story_key}.md'
 generatedTestFiles:
   - '{api_test_file_path}'
   - '{e2e_test_file_path}'
@@ -49,7 +52,7 @@ inputDocuments: []
 - **Story ID:** `{story_id}`
 - **Story Key:** `{story_key}`
 - **Story File:** `{story_file}`
-- **Checklist Path:** `{test_artifacts}/atdd-checklist-{story_key}.md`
+- **Checklist Path:** `{test_artifacts}/atdd/atdd-checklist-{story_key}.md`
 - **Generated Test Files:** `{e2e_test_file_path}`, `{api_test_file_path}`, `{component_test_file_path}`
 
 If this story came from BMM `create-story`, mirror these artifact paths into the story's `Dev Notes` so `dev-story` can discover and activate the red-phase scaffolds.

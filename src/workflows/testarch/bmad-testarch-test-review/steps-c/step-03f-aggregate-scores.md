@@ -2,7 +2,7 @@
 name: 'step-03f-aggregate-scores'
 description: 'Aggregate quality dimension scores into overall 0-100 score'
 nextStepFile: '{skill-root}/steps-c/step-04-generate-report.md'
-outputFile: '{test_artifacts}/test-review.md'
+outputFile: '{test_artifacts}/test-review/test-review-{run_key}.md'
 ---
 
 # Step 3F: Aggregate Quality Scores
@@ -37,16 +37,17 @@ Read outputs from 4 quality subagents, aggregate violations by severity, and cal
 ### 1. Read All Subagent Outputs
 
 ```javascript
-// Use the SAME timestamp generated in Step 3 (do not regenerate).
+// Use the SAME run_key and timestamp Step 3 used (do not regenerate).
+const runKey = subagentContext?.run_key;
 const timestamp = subagentContext?.timestamp;
-if (!timestamp) {
-  throw new Error('Missing timestamp from Step 3 context. Pass Step 3 timestamp into Step 3F.');
+if (!runKey || !timestamp) {
+  throw new Error('Missing run_key or timestamp from Step 3 context. Pass both Step 3 values into Step 3F.');
 }
 const dimensions = ['determinism', 'isolation', 'maintainability', 'performance'];
 const results = {};
 
 dimensions.forEach((dim) => {
-  const outputPath = `/tmp/tea-test-review-${dim}-${timestamp}.json`;
+  const outputPath = `/tmp/tea-test-review-${dim}-${runKey}-${timestamp}.json`;
   results[dim] = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
 });
 ```
@@ -373,7 +374,7 @@ const reviewSummary = {
 };
 
 // Save for Step 4 (report generation)
-fs.writeFileSync(`/tmp/tea-test-review-summary-${timestamp}.json`, JSON.stringify(reviewSummary, null, 2), 'utf8');
+fs.writeFileSync(`/tmp/tea-test-review-summary-${runKey}-${timestamp}.json`, JSON.stringify(reviewSummary, null, 2), 'utf8');
 ```
 
 ---
@@ -411,13 +412,16 @@ fs.writeFileSync(`/tmp/tea-test-review-summary-${timestamp}.json`, JSON.stringif
 
 ### 7. Save Progress
 
-**Save this step's accumulated work to `{outputFile}`.** When `output_file_override` is non-empty it IS `{outputFile}`, replacing the step frontmatter default.
+**Save this step's accumulated work to `{outputFile}`.** `run_key` is the value step 1 resolved; never re-derive it. When `output_file_override` is non-empty it IS `{outputFile}`, replacing the step frontmatter default.
 
 - **If `{outputFile}` does not exist** (first save), create it using the workflow template (if available) with YAML frontmatter:
 
   ```yaml
   ---
   workflowType: 'testarch-test-review'
+  runScope: '{run_scope}'
+  runKey: '{run_key}'
+  workflowStatus: 'in-progress'
   stepsCompleted: ['step-03f-aggregate-scores']
   lastStep: 'step-03f-aggregate-scores'
   lastSaved: '{date}'
@@ -426,7 +430,9 @@ fs.writeFileSync(`/tmp/tea-test-review-summary-${timestamp}.json`, JSON.stringif
 
   Then write this step's output below the frontmatter.
 
-- **If `{outputFile}` already exists**, update:
+- **If `{outputFile}` already exists**, it is this run's report: step 1 created it or Resume selected it, so it never holds another run's work. Update:
+  - Leave `runScope` and `runKey` exactly as step 1 wrote them
+  - Set `workflowStatus: 'in-progress'`
   - Add `'step-03f-aggregate-scores'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-03f-aggregate-scores'`
   - Set `lastSaved: '{date}'`

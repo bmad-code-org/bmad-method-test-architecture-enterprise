@@ -135,7 +135,7 @@ A: "TodoMVC's core operations - creating, completing, and deleting todos"
 **Q: Any specific risks or concerns?**
 A: "We want to ensure the filter buttons (All, Active, Completed) work correctly"
 
-TEA will analyze and create `test-design-epic-1.md` with:
+TEA will analyze and create `test-design/test-design-epic-1.md` under your test artifacts folder with:
 
 1. **Risk Assessment**
    - Probability × Impact scoring
@@ -171,7 +171,7 @@ Run the automation workflow:
 A: "TodoMVC React app at <https://todomvc.com/examples/react/dist/> - focus on the test design we just created"
 
 **Q: Reference existing docs?**
-A: "Yes, use test-design-epic-1.md"
+A: "Yes, use test-design/test-design-epic-1.md"
 
 **Q: Any specific test scenarios?**
 A: "Cover the P0 and P1 scenarios from the test design"

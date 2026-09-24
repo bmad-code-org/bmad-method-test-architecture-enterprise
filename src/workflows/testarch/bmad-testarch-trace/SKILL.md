@@ -85,3 +85,5 @@ This workflow uses **tri-modal step-file architecture**:
 - **If E:** Load `{skill-root}/steps-e/step-01-assess.md`
 
 Create mode resolves the coverage oracle automatically in this order: formal requirements, contract/spec artifacts, resolvable external pointers (when `allow_external_pointer_resolution` is enabled), then synthetic journeys/requirements inferred from source (when `allow_synthetic_oracle` is enabled and no formal oracle exists).
+
+Create mode resolves the gate target and a `run_key` (`story-{story_key}`, `epic-{epic_num}`, `release-{slug}`, `hotfix-{slug}`, or `system`) before its first save, and writes every output under `{test_artifacts}/trace/` with that key in the filename: `traceability-matrix-{run_key}.md`, `e2e-trace-summary-{run_key}.json`, and `gate-decision-{run_key}.json`. A run for one scope never reads or writes another scope's outputs.

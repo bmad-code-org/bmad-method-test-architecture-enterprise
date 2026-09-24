@@ -513,8 +513,13 @@ async function checkFragmentSelectionOracles(evaluator) {
  * summary tagged the way the adapter tags a file, the matrix as text.
  */
 function traceArtifactsOf(directory, expected) {
-  const summaryPath = path.join(directory, expected.storedOutput?.summary ?? path.join('test-artifacts', 'e2e-trace-summary.json'));
-  const matrixPath = path.join(directory, expected.storedOutput?.matrix ?? path.join('test-artifacts', 'traceability-matrix.md'));
+  // The run key in both names comes from the fixture set, so a stored case names
+  // its own files and there is no default spelling to fall back to.
+  if (!expected.storedOutput?.summary || !expected.storedOutput?.matrix) {
+    unreadable(`${path.relative(PROJECT_ROOT, directory)}: expected.json names no storedOutput.summary and storedOutput.matrix`);
+  }
+  const summaryPath = path.join(directory, expected.storedOutput.summary);
+  const matrixPath = path.join(directory, expected.storedOutput.matrix);
   let summary = { kind: 'absent' };
   if (fs.existsSync(summaryPath)) {
     const text = fs.readFileSync(summaryPath, 'utf8');
@@ -929,7 +934,10 @@ async function checkTestDesignOracles(evaluator) {
 
 /** One stored nfr run as the artifact a probe observation would carry: the report as text. */
 function nfrArtifactsOf(directory, expected) {
-  const reportPath = path.join(directory, expected.storedOutput?.report ?? path.join('test-artifacts', 'nfr-assessment.md'));
+  // The run key in the name is the bundle's, so a stored case names its own file
+  // and there is no default spelling to fall back to.
+  if (!expected.storedOutput?.report) unreadable(`${path.relative(PROJECT_ROOT, directory)}: expected.json names no storedOutput.report`);
+  const reportPath = path.join(directory, expected.storedOutput.report);
   if (!fs.existsSync(reportPath)) return { report: { kind: 'absent' } };
   return { report: { kind: 'text', value: fs.readFileSync(reportPath, 'utf8') } };
 }

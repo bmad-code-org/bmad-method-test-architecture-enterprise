@@ -46,4 +46,4 @@ Load, read completely, and execute:
 If the user selects **Resume** mode, load, read completely, and execute:
 `{skill-root}/steps-c/step-01b-resume.md`
 
-This checks the output document for progress tracking frontmatter and routes to the next incomplete step.
+Each run writes one summary per scope at `{test_artifacts}/automate/automation-summary-{run_key}.md`, where `run_key` is `story-{story_key}`, `epic-{epic_num}`, `target-{slug}`, or `system`, and records `runScope` and `runKey` in its frontmatter. Resume selects the summary for the run being resumed (migrating a legacy `{test_artifacts}/automation-summary.md` into the `automate/` folder first), reads its progress tracking frontmatter, and routes to the next incomplete step.

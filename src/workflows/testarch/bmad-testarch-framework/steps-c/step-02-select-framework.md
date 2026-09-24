@@ -2,7 +2,7 @@
 name: 'step-02-select-framework'
 description: 'Select Playwright or Cypress and justify choice'
 nextStepFile: '{skill-root}/steps-c/step-03-scaffold-framework.md'
-outputFile: '{test_artifacts}/framework-setup-progress.md'
+outputFile: '{test_artifacts}/framework/framework-setup-progress.md'
 ---
 
 # Step 2: Framework Selection
@@ -103,6 +103,7 @@ State the selected framework and reasoning.
 
   ```yaml
   ---
+  workflowStatus: 'in-progress'
   stepsCompleted: ['step-02-select-framework']
   lastStep: 'step-02-select-framework'
   lastSaved: '{date}'
@@ -112,6 +113,7 @@ State the selected framework and reasoning.
   Then write this step's output below the frontmatter.
 
 - **If `{outputFile}` already exists**, update:
+  - Set `workflowStatus: 'in-progress'`
   - Add `'step-02-select-framework'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-02-select-framework'`
   - Set `lastSaved: '{date}'`

@@ -1,8 +1,9 @@
 ---
 name: 'step-01-preflight-and-context'
-description: 'Verify prerequisites and load story, framework, and knowledge base'
-outputFile: '{test_artifacts}/atdd-checklist-{story_key}.md'
+description: 'Verify prerequisites, load story, framework, and knowledge base, and resolve run identity'
+outputFile: '{test_artifacts}/atdd/atdd-checklist-{story_key}.md'
 nextStepFile: '{skill-root}/steps-c/step-02-generation-mode.md'
+resumeStepFile: '{skill-root}/steps-c/step-01b-resume.md'
 knowledgeIndex: './resources/tea-index.csv'
 ---
 
@@ -10,7 +11,7 @@ knowledgeIndex: './resources/tea-index.csv'
 
 ## STEP GOAL
 
-Verify prerequisites and load all required inputs before generating red-phase acceptance test scaffolds.
+Verify prerequisites, load all required inputs, and resolve the run identity that names this story's checklist before generating red-phase acceptance test scaffolds.
 
 ## MANDATORY EXECUTION RULES
 
@@ -78,17 +79,15 @@ If any are missing: **HALT** and notify the user.
 - Assign ids to unnamed criteria deterministically. Reserve all supplied ids first, then visit unnamed criteria in source order and assign the lowest unused `AC-<positive integer>` id
 - Persist each registry row as `{ id, idSource: supplied | generated, text }` and persist the exact ordered id set as `{criterion_ids}`. The same story content must always produce the same registry
 - Identify affected components and integrations
-- Derive and store `story_key` from the story filename when available (for BMM stories, this is the filename without `.md`, e.g. `1-2-user-authentication`)
 - Derive and store `story_id` from story metadata, the H1 heading, or the filename when available (for BMM stories, this is typically `{epic_num}.{story_num}`)
-- If a filename-based `story_key` is not available, create and persist a stable slug from the story title:
-  - lowercase the title
-  - collapse runs of whitespace to single `-`
-  - strip all non-alphanumeric and non-hyphen characters
-  - trim leading/trailing hyphens
-  - truncate to a safe max length (64 chars)
-- Use that slug as `story_key` and for `{outputFile}` basename so all checklist and handoff paths stay consistent
+- Derive and store `story_key`:
+  - With a story file, `story_key` is the BMM story file basename without `.md` (for example `1-2-user-authentication`)
+  - Without a story file, use `story_id` with `.` replaced by `-` (`1.2` becomes `1-2`)
+  - With neither, use a slug of the story title: lowercase; replace every run of characters outside `a-z` and `0-9` with a single `-`; trim leading and trailing `-`; truncate to 64 characters
+- Use that `story_key` for the `{outputFile}` basename so all checklist and handoff paths stay consistent
 - If `story_id` is still unavailable after metadata/H1/filename parsing, set it to the final `story_key` so `story_id` is never empty
 - Preserve `{story_file}` as a tracked artifact path for later handoff into BMM `dev-story`
+- If a test design covers this story, read it for P0-P3 priorities and risks. Look in `{test_artifacts}/test-design/` first (`test-design-epic-{epic_num}.md` for the story's epic, then the system-level `test-design-qa.md` and `test-design-architecture.md`), then the legacy root `{test_artifacts}/` for the same names. Record the path you loaded in `inputDocuments`, or state that no test design was found in either location.
 
 ---
 
@@ -177,27 +176,64 @@ Summarize loaded inputs and confirm with the user. Then proceed.
 
 ---
 
-## 7. Save Progress
+## 7. Resolve Run Identity
+
+An ATDD run always covers exactly one story, so its checklist filename carries the story's identity and a run for one story never touches another story's checklist. Resolve the identity **now**, before any progress is saved.
+
+Resolve the story in this order:
+
+1. Use the story the user named in this invocation.
+2. Otherwise use the story carried by the loaded artifacts: the story file name, or the story id from its metadata or H1 heading.
+3. If several stories are candidates and the run is interactive, list them and ask which one this run covers. **Halt** until the user answers. A headless or autonomous run with no resolvable story halts with "A story with acceptance criteria is required for ATDD." ATDD has no `system` fallback because a story is a hard prerequisite.
+
+Derive `story_key` from the resolved story as described in section 3, then set:
+
+- `run_scope` to `story`
+- `run_key` to `story-{story_key}`
+
+`story-{story_key}` follows the shared run_key grammar: `story_key` is the BMM story file basename without `.md` (for example `1-2-user-authentication`); without a story file, it is the story id with `.` replaced by `-` (`1.2` becomes `1-2`).
+
+Carry `story_key`, `run_scope`, and `run_key` forward through every remaining step. `{outputFile}` is `{test_artifacts}/atdd/atdd-checklist-{story_key}.md`.
+
+---
+
+## 8. Check for an Existing Checklist
+
+Check whether `{outputFile}` already exists. A checklist at this path belongs to a previous run for the **same** story; checklists for other stories live under their own filenames and are never read or written here.
+
+- **Does not exist:** this is a fresh run. Proceed to Save Progress.
+- **Exists with `workflowStatus: 'in-progress'`:** a previous run for this story was interrupted. Display its `lastStep` and `lastSaved`, then ask:
+
+  > "An unfinished ATDD run for `{run_key}` was last saved {lastSaved} at step {lastStep}. Resume it, or start over? Starting over replaces the checklist."
+
+  **Halt** until the user answers. A headless or autonomous run starts over. If they resume, load `{resumeStepFile}`, read it completely, and execute it. If they start over, replace `{outputFile}` entirely in Save Progress.
+
+- **Exists with `workflowStatus: 'completed'`**, or with no `workflowStatus` and `lastStep: 'step-05-validate-and-complete'`: a finished run for this story. Replace `{outputFile}` entirely in Save Progress.
+
+**Never merge two runs into one checklist.** A `stepsCompleted` array or checklist body carried over from a prior run makes the resume dashboard and the story handoff report work this run never performed.
+
+---
+
+## 9. Save Progress
 
 **Save this step's accumulated work to `{outputFile}`.**
 
-- **If `{outputFile}` does not exist** (first save), create it with YAML frontmatter:
+Create the `{test_artifacts}/atdd/` folder if it does not exist. Write the file with YAML frontmatter, replacing any prior content as decided in the previous section:
 
-  ```yaml
-  ---
-  stepsCompleted: ['step-01-preflight-and-context']
-  lastStep: 'step-01-preflight-and-context'
-  lastSaved: '{date}'
-  ---
-  ```
+```yaml
+---
+runScope: '{run_scope}'
+runKey: '{run_key}'
+workflowStatus: 'in-progress'
+stepsCompleted: ['step-01-preflight-and-context']
+lastStep: 'step-01-preflight-and-context'
+lastSaved: '{date}'
+---
+```
 
-  Then write this step's output below the frontmatter.
+Then write this step's output below the frontmatter.
 
-- **If `{outputFile}` already exists**, update:
-  - Add `'step-01-preflight-and-context'` to `stepsCompleted` array (only if not already present)
-  - Set `lastStep: 'step-01-preflight-and-context'`
-  - Set `lastSaved: '{date}'`
-  - Append this step's output to the appropriate section.
+`runScope` and `runKey` are this run's identity. Later steps carry both forward unchanged, and Resume mode refuses to continue a checklist whose `runKey` does not match the story being resumed.
 
 **Update frontmatter fields**:
 
@@ -216,8 +252,12 @@ Load next step: `{nextStepFile}`
 ### ✅ SUCCESS:
 
 - Step completed in full with required outputs
+- `story_key`, `run_scope`, and `run_key` resolved before the first save, and the checklist written to the path they name
+- Any pre-existing checklist for this story was reported to the user and either resumed or replaced
 
 ### ❌ SYSTEM FAILURE:
 
 - Skipped sequence steps or missing outputs
+- Saving progress before `story_key` is resolved
+- Appending this run's progress to a checklist left by a previous run
   **Master Rule:** Skipping steps is FORBIDDEN.

@@ -41,6 +41,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking: output paths.** Every TEA workflow now writes into its own folder under `{test_artifacts}`, and a file produced once per scope carries that scope in its name (#228).
+  The folders are `test-design/`, `atdd/`, `automate/`, `test-review/`, `nfr/`, `trace/`, `ci/`, and `framework/`.
+  Trace writes `trace/traceability-matrix-{run_key}.md`, `trace/e2e-trace-summary-{run_key}.json`, and `trace/gate-decision-{run_key}.json`; nfr-assess writes `nfr/nfr-assessment-{run_key}.md`; test-review writes `test-review/test-review-{run_key}.md`; automate writes `automate/automation-summary-{run_key}.md`; ATDD keeps `atdd-checklist-{story_key}.md` inside `atdd/`; test-design's documents and checkpoints move into `test-design/`; validation reports move into their workflow's folder.
+  `run_key` is `system`, `epic-{epic_num}`, `story-{story_key}`, trace's `release-{slug}` or `hotfix-{slug}`, or `target-{slug}` for automate and test-review, resolved in the first step before anything is written and recorded as `runScope` and `runKey` in the output's frontmatter.
+  Before this change, trace for epic 16 replaced epic 15's `gate-decision.json` and `e2e-trace-summary.json` and appended its report into epic 15's `traceability-matrix.md`, reproduced live against 1.27.2's skill; the same run now leaves every epic 15 file byte-identical.
+  A re-run of the same scope resumes an interrupted file or replaces a finished one, and two runs are never merged into one file.
+  Files written by earlier versions stay where they are. Resume migrates a flat file into its scoped path only while it is in progress: ATDD recovers the story from the checklist's `storyKey`, the other workflows ask which scope the file covers, and Resume never writes over a scoped file that already exists. A completed flat file is never moved.
+  Workflows that read another workflow's output look in its folder first and at the old root location second.
+  Scripts and CI jobs that read the old flat paths need the new ones; `docs/reference/configuration.md` has an old-to-new table under "Upgrading Scripts That Read Old Paths".
+  The `tea-test-review` CLI and its GitHub Action pass an explicit `--output` path and are unaffected.
+- test-design records `runScope` as `system` or `epic`, the values every other workflow uses; the old `system-level` and `epic-level` values are still accepted as aliases.
+- The eight workflows' Edit mode lists each workflow's concrete known outputs, including the old root locations, in place of a generic "select from known outputs".
+- The temp files TEA's subagent steps hand data through (`/tmp/tea-<workflow>-<part>-...json`) now carry the run's `run_key` beside the timestamp. A headless agent with no shell invents round timestamps, and `/tmp` is shared across worktrees, so two parallel runs for different scopes could read each other's handoff file. Named `playwright-cli` browser sessions now carry the `run_key` too (`tea-<workflow>-<run_key>`, with a timestamp suffix for atdd and automate; ci and framework, which have no `run_key`, use `tea-<workflow>-<timestamp>`), because session names are global to the machine and two parallel runs sharing a fixed name such as `tea-nfr` would drive and close one browser. The nfr and test-design evidence screenshots (`nfr/perf-{run_key}-<page>.png`, `test-design/exploration/explore-{run_key}-<page>.png`) carry it as well, so two runs capturing the same page keep both.
+  Automate's optional cleanup now also removes the mobile worker's temp file, which it previously left behind.
+- The eval harnesses, stub agents, stored trace and nfr replays, and the generated contracts and probes follow the new paths. Trace replays live at `test-artifacts/trace/*-epic-{4|5}.*` and nfr replays at `test-artifacts/nfr/nfr-assessment-system.md`, and `test:eval-replay` fails when a case's `storedOutput` differs from the path the harness reads.
+  The trace eval now scores `target.type` and `target.id`, which step 1 resolves itself; the replay scorer moves to version 14.
+  A new replay, `trace/seeded-system-shaped-target`, fails `target.id` on a summary that leaves the epic's id empty, and `target.id` compares as a string so `4` and `"4"` both pass.
+  A live trace, nfr or test-design run that writes its deliverable under another run key now scores as a quality failure (exit 1) naming the file it wrote; before, the harness reported the expected file as missing and exited 2.
+  `npm run test:install` gains a scoped-output suite: every per-scope create step and deliverable sits in its workflow's folder and names its scope, and every resume step declares a folder glob and the exact pre-folder path.
 - `runAgent` (`cli/lib/run-agent.js`), which every TeA runner and `tea-test-review` use, now runs the agent in its own process group under `cli/lib/agent-supervisor.js`.
   A timeout sends the group `SIGTERM`, and the agent `SIGKILL` 2 s later if it is still running.
   The group is also stopped when the runner's process group receives `SIGINT`, `SIGTERM`, `SIGHUP` or `SIGQUIT` (a terminal's Ctrl-C or `Ctrl-\` reaches the agent as the same signal), and when the runner or the supervisor dies, by `SIGKILL` included (a cancelled CI job, or an eval-quality adapter killing the runner at its ceiling, alone before 4.1.1 and with its process group from 4.1.1, or because the host that started it died, from 4.1.2).
@@ -75,8 +94,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Three inherited exclusion patterns matched no document here (`changelog`, `downloads/`, `reference/glossary/`) and are removed, and the build now fails on an exclusion pattern that matches nothing.
   The site's `ai-terms` meta tag no longer states a token count that had gone stale.
 
+### Removed
+
+- The three FUTURE output-folder keys `test_design_output`, `test_review_output`, and `trace_output` are removed from `src/module.yaml`, so install no longer prompts for them. No workflow ever read them, and the folder rule above replaces them. The installer saved them as relative paths without `{project-root}`, upstream BMAD has since dropped the `result:` processing that wrote them, and a configurable folder per workflow would multiply the places cross-workflow readers search. A `_bmad/tea/config.yaml` that still carries them is harmless. `risk_threshold` is now the one FUTURE key, and the README and configuration reference claims about FUTURE keys are rebound to checks that prove them.
+
 ### Fixed
 
+- Trace's step 4 read the gate target "from Step 1", but step 1 never resolved it; step 1 now resolves the gate type, target id and label, and step 4 reads them from the matrix frontmatter.
+  Trace's step 5 both rewrote the whole matrix and said "do NOT overwrite it"; it now replaces the report body once, keeps the frontmatter, and only updates the frontmatter afterwards.
+  A trace run that evaluates no gate removes an earlier `gate-decision-{run_key}.json` for the same scope, so a new summary is never paired with a stale decision.
+- ATDD's resume step read `{outputFile}` without resolving `story_key` first; it now selects the checklist by story like test-design's resume.
+- test-design's mode detection used `{implementation_artifacts}`, a BMM variable TEA never loads; it now names its source, `_bmad/bmm/config.yaml`, and falls back to `{output_folder}/implementation-artifacts`.
+- Nine of the trace eval's skill-rule citations in `test/fixtures/trace-eval/ground-truth.json` (every step-05 gate rule, `gateEligibility`, `liveEvidenceCap`, and `liveBlockerSeverity`) pointed at the wrong lines, and the drift check missed them because each stayed inside its section; all eleven citations are re-pinned and `node test/eval-trace.js --validate-only` reports no drift.
+  Six of the nfr eval's citations in `test/fixtures/nfr-eval/ground-truth.json` and three of the ci eval's in `test/fixtures/ci-eval/ground-truth.json` had drifted the same way; they are re-pinned, and both harnesses' `--validate-only` report no drift.
+- `docs/how-to/workflows/run-trace.md` and `docs/how-to/brownfield/use-tea-for-enterprise.md` described a `gate-decision-{gate_type}-{story_id}.md` file that trace never wrote.
+- `ci` and `framework` now apply the same re-run rule as the per-scope workflows: a completed checkpoint is replaced, an interrupted one asks whether to resume or start over, a headless run starts over, and two runs are never merged into one checkpoint.
+  test-design gains headless branches: an interrupted checkpoint for the same scope starts over, and an epic-level run whose epic stays ambiguous halts with a message naming the candidate epics, since an epic plan has no system-level fallback.
+  Trace now loads the NFR audit its checklist already expected, taking the first of `nfr/nfr-assessment-{run_key}.md`, the parent epic's `nfr/nfr-assessment-epic-{epic_num}.md` for a story, `nfr/nfr-assessment-system.md`, and the legacy root `nfr-assessment.md`.
+  Automate finds an ATDD checklist when only the story id is known.
+- `docs/how-to/workflows/run-trace.md` and `docs/how-to/brownfield/use-tea-for-enterprise.md` said trace reads test-review reports, and `run-trace.md`'s example gate decision showed a test quality score that trace never computes; both pages now list trace's real inputs, the test-design documents and the NFR audit.
 - `npm run test:probe-targets` failed intermittently (and with it `test:doc-invocations`, which runs it again) whenever another process on the host held port 4310, for example a second worktree's `npm test`.
   The ATDD fixture's `playwright.config.ts` pointed its `webServer` at the default port 4310 while `tea-atdd-red-check` served the fixture on an OS-assigned port, so Playwright started a second server on 4310 for every spec file and failed to load it when the port was taken.
   The config now points `webServer` at the server `LOCKER_BASE_URL` names, so Playwright reuses it and starts nothing.

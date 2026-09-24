@@ -3,7 +3,7 @@ name: 'step-03-configure-quality-gates'
 description: 'Configure burn-in, quality gates, and notifications'
 nextStepFile: '{skill-root}/steps-c/step-04-validate-and-summary.md'
 knowledgeIndex: './resources/tea-index.csv'
-outputFile: '{test_artifacts}/ci-pipeline-progress.md'
+outputFile: '{test_artifacts}/ci/ci-pipeline-progress.md'
 ---
 
 # Step 3: Quality Gates & Notifications
@@ -142,6 +142,7 @@ Configure:
 
   ```yaml
   ---
+  workflowStatus: 'in-progress'
   stepsCompleted: ['step-03-configure-quality-gates']
   lastStep: 'step-03-configure-quality-gates'
   lastSaved: '{date}'
@@ -151,6 +152,7 @@ Configure:
   Then write this step's output below the frontmatter.
 
 - **If `{outputFile}` already exists**, update:
+  - Set `workflowStatus: 'in-progress'`
   - Add `'step-03-configure-quality-gates'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-03-configure-quality-gates'`
   - Set `lastSaved: '{date}'`

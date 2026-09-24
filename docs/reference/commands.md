@@ -33,6 +33,8 @@ This page uses short workflow names. Two do not map to a command by adding a pre
 | `nfr-assess`       | `/bmad-testarch-nfr` · `$bmad-testarch-nfr`                 | `NR`      |
 | `trace`            | `/bmad-testarch-trace` · `$bmad-testarch-trace`             | `TR`      |
 
+Each workflow writes into its own folder under `{test_artifacts}`, and a file produced once per story, epic, or release carries that scope's `run_key` in its name, such as `epic-16`, `story-1-2-user-authentication`, `release-v1-2-0`, or `system`. The folders, the run key rules, and what happens to files from earlier TEA versions are in [Output Layout](/docs/reference/configuration.md#output-layout).
+
 To ship your own workflow, package it as custom content and attach it to `bmad-tea` via customization. See [Extend TEA with Custom Workflows](../how-to/customization/extend-tea-with-custom-workflows.md).
 
 ## Quick Index
@@ -164,22 +166,22 @@ To ship your own workflow, package it as custom content and attach it to `bmad-t
 
 **System-Level (TWO Documents plus a handoff):**
 
-- `test-design-architecture.md` - For Architecture/Dev teams
+- `{test_artifacts}/test-design/test-design-architecture.md` - For Architecture/Dev teams
   - Quick Guide (🚨 BLOCKERS / ⚠️ HIGH PRIORITY / 📋 INFO ONLY)
   - Risk assessment with scoring
   - Testability concerns and gaps
   - NFR thresholds, unknowns, and planned evidence
   - Mitigation plans
-- `test-design-qa.md` - For QA team
+- `{test_artifacts}/test-design/test-design-qa.md` - For QA team
   - Test execution recipe
   - Coverage plan (P0/P1/P2/P3 with checkboxes)
   - Sprint 0 setup requirements
   - NFR test coverage and evidence plan
-- `test-design/{project_name}-handoff.md` - System-level only. Bridges the test design outputs into epic/story decomposition, for BMAD's `create-epics-and-stories` workflow
+- `{test_artifacts}/test-design/{project_name}-handoff.md` - System-level only. Bridges the test design outputs into epic/story decomposition, for BMAD's `create-epics-and-stories` workflow
 
 **Epic-Level (ONE Document):**
 
-- `test-design-epic-N.md`
+- `{test_artifacts}/test-design/test-design-epic-N.md`
   - Risk assessment (probability × impact scores)
   - Test priorities (P0-P3)
   - Coverage strategy
@@ -209,7 +211,7 @@ Why the system-level split exists: [TEA Overview](/docs/explanation/tea-overview
 **Key Outputs:**
 
 - Red-phase test scaffolds (`tests/api/`, `tests/e2e/`) marked with `test.skip()`
-- Implementation checklist keyed to `story_key`
+- Implementation checklist keyed to `story_key`: `{test_artifacts}/atdd/atdd-checklist-{story_key}.md`
 - Story metadata / handoff paths for downstream `dev-story` consumption
 
 **Browser Automation (CLI/MCP):** Recording mode (for skeleton UI only; rare)
@@ -234,7 +236,7 @@ Why the system-level split exists: [TEA Overview](/docs/explanation/tea-overview
 
 - Comprehensive test suite (`tests/e2e/`, `tests/api/`)
 - Updated fixtures, README
-- `{test_artifacts}/automation-summary.md` (declared `default_output_file`, carries the Definition of Done checklist)
+- `{test_artifacts}/automate/automation-summary-{run_key}.md` (declared `default_output_file`, carries the Definition of Done checklist)
 
 **Browser Automation (CLI/MCP):** Healing + Recording modes (fix tests, verify selectors)
 
@@ -256,7 +258,7 @@ Why the system-level split exists: [TEA Overview](/docs/explanation/tea-overview
 
 **Key Outputs:**
 
-- `{test_artifacts}/test-review.md` with quality score (0-100) and grade (A-F)
+- `{test_artifacts}/test-review/test-review-{run_key}.md` with quality score (0-100) and grade (A-F)
 - Critical issues with fixes, and recommendations
 - A `## Quality Criteria Assessment` table: 14 criteria, each `PASS` / `PASS (n/a)` / `WARN` / `FAIL`
 - Coverage guidance is informational only; coverage scoring and gates are handled by `trace`
@@ -291,7 +293,7 @@ clamped to 0-100. The bonus has exactly six categories, each worth `0` or `5` wi
 
 **Key Outputs:**
 
-- `{test_artifacts}/nfr-assessment.md`
+- `{test_artifacts}/nfr/nfr-assessment-{run_key}.md`
 - Category assessments (PASS/CONCERNS/FAIL)
 - A Gate YAML snippet whose `audited_domains` block declares one status per domain (PASS, CONCERNS, FAIL or N/A), so reading a domain status does not mean parsing the report's prose
 - Mitigation plans
@@ -318,13 +320,13 @@ clamped to 0-100. The bonus has exactly six categories, each worth `0` or `5` wi
 - Coverage oracle items → test mapping
 - Coverage classification (FULL/PARTIAL/NONE)
 - Gap prioritization
-- Output: `{test_artifacts}/traceability-matrix.md`
+- Output: `{test_artifacts}/trace/traceability-matrix-{run_key}.md`
 
 ### Phase 2: Gate Decision
 
 - PASS/CONCERNS/FAIL/WAIVED decision
 - Evidence-based (coverage %, quality scores, NFRs)
-- Outputs: `{test_artifacts}/e2e-trace-summary.json` (machine-readable summary for CI), and `{test_artifacts}/gate-decision.json` when `allow_gate` is true and collection is gate-eligible
+- Outputs: `{test_artifacts}/trace/e2e-trace-summary-{run_key}.json` (machine-readable summary for CI), and `{test_artifacts}/trace/gate-decision-{run_key}.json` when `allow_gate` is true and collection is gate-eligible
 
 **Gate Rules:**
 

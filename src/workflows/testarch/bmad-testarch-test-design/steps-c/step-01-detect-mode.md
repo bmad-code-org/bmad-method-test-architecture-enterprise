@@ -3,7 +3,8 @@ name: 'step-01-detect-mode'
 description: 'Determine system-level vs epic-level mode, resolve run identity, and validate prerequisites'
 nextStepFile: '{skill-root}/steps-c/step-02-load-context.md'
 resumeStepFile: '{skill-root}/steps-c/step-01b-resume.md'
-outputFile: '{test_artifacts}/test-design-progress-{run_key}.md'
+outputFile: '{test_artifacts}/test-design/test-design-progress-{run_key}.md'
+legacyScopedOutputFile: '{test_artifacts}/test-design-progress-{run_key}.md'
 ---
 
 # Step 1: Detect Mode & Prerequisites
@@ -65,6 +66,8 @@ If user intent is unclear:
 - If `{implementation_artifacts}/sprint-status.yaml` exists → **Epic-Level Mode**
 - Otherwise → **System-Level Mode**
 
+`{implementation_artifacts}` is a BMM variable that TEA's config does not define. Read it from `implementation_artifacts` in `{project-root}/_bmad/bmm/config.yaml` when that file exists. Otherwise use `{output_folder}/implementation-artifacts`.
+
 ### C) Ambiguous → Ask
 
 If mode still unclear, ask the user to choose (A) or (B) and **halt** until they respond.
@@ -105,27 +108,26 @@ Every run writes a progress checkpoint whose filename carries the run's identity
 
 ### System-Level Mode
 
-Set `run_scope` to `system-level` and `run_key` to `system`. A project has one system-level test design, so every system-level run shares this checkpoint.
+Set `run_scope` to `system` and `run_key` to `system`. A project has one system-level test design, so every system-level run shares this checkpoint.
 
 ### Epic-Level Mode
 
-Set `run_scope` to `epic-level`, then resolve `epic_num` here rather than at output time:
+Set `run_scope` to `epic`, then resolve `epic_num` here rather than at output time:
 
 1. Use the epic the user named in this invocation.
 2. Otherwise take the epic number from the epic and story documents identified in the prerequisite check, reading it from document metadata, the H1 heading, or the filename.
-3. If `epic_num` is still ambiguous, list the candidate epics and ask the user which one this run covers. **Halt** until they answer.
+3. If `epic_num` is still ambiguous, list the candidate epics and ask the user which one this run covers. **Halt** until they answer. A headless or autonomous run cannot ask and cannot fall back to `system`, because an epic plan covers exactly one epic: it halts with "Epic-level test design needs one epic, and the inputs name several: {candidate epics}. Name the epic to plan and run again."
 
 Set `run_key` to `epic-{epic_num}`.
 
 If the epic carries no number, derive a stable slug from its title and use that in place of the number:
 
 - lowercase the title
-- collapse runs of whitespace to a single `-`
-- strip every character that is not alphanumeric or `-`
-- trim leading and trailing hyphens
+- replace every run of characters outside `a-z` and `0-9` with a single `-`
+- trim leading and trailing `-`
 - truncate to 64 characters
 
-Carry `epic_num`, `run_scope`, and `run_key` forward through every remaining step. Step 5 writes `{test_artifacts}/test-design-epic-{epic_num}.md` from the same `epic_num`, so a plan and its checkpoint always name the same run.
+Carry `epic_num`, `run_scope`, and `run_key` forward through every remaining step. Step 5 writes `{test_artifacts}/test-design/test-design-epic-{epic_num}.md` from the same `epic_num`, so a plan and its checkpoint always name the same run.
 
 ---
 
@@ -133,12 +135,14 @@ Carry `epic_num`, `run_scope`, and `run_key` forward through every remaining ste
 
 Check whether `{outputFile}` already exists. A checkpoint at this path belongs to a previous run of the **same** scope; checkpoints for other scopes live under their own filenames and are never read or written here.
 
+If `{outputFile}` does not exist, also check `{legacyScopedOutputFile}`, where runs before the `test-design/` folder wrote the checkpoint for this `run_key`. Treat an in-progress checkpoint there the same way: resuming it runs the legacy checkpoint migration in `{resumeStepFile}`, which moves it into the folder. Starting over leaves it untouched. A completed checkpoint there also stays where it is, and this run starts fresh in the folder.
+
 - **Does not exist:** this is a fresh run. Proceed to Save Progress.
 - **Exists with `workflowStatus: 'in-progress'`:** a previous run for this scope was interrupted. Display its `lastStep` and `lastSaved`, then ask:
 
   > "An unfinished test-design run for `{run_key}` was last saved {lastSaved} at step {lastStep}. Resume it, or start over? Starting over replaces the checkpoint."
 
-  **Halt** until the user answers. If they resume, load `{resumeStepFile}`, read it completely, and execute it. If they start over, replace `{outputFile}` entirely in Save Progress.
+  **Halt** until the user answers. A headless or autonomous run starts over. If they resume, load `{resumeStepFile}`, read it completely, and execute it. If they start over, replace `{outputFile}` entirely in Save Progress.
 
 - **Exists with `workflowStatus: 'completed'`:** a finished run for this scope. Replace `{outputFile}` entirely in Save Progress.
 
@@ -150,7 +154,7 @@ Check whether `{outputFile}` already exists. A checkpoint at this path belongs t
 
 **Save this step's accumulated work to `{outputFile}`.**
 
-Write the file with YAML frontmatter, replacing any prior content as decided in the previous section:
+Create the `{test_artifacts}/test-design/` folder if it does not exist. Write the file with YAML frontmatter, replacing any prior content as decided in the previous section:
 
 ```yaml
 ---

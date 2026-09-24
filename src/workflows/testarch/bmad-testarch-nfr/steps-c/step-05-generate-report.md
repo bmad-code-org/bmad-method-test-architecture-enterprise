@@ -1,7 +1,7 @@
 ---
 name: 'step-05-generate-report'
 description: 'Create NFR report and validation summary'
-outputFile: '{test_artifacts}/nfr-assessment.md'
+outputFile: '{test_artifacts}/nfr/nfr-assessment-{run_key}.md'
 ---
 
 # Step 5: Generate Report & Validate
@@ -128,10 +128,15 @@ report until all eleven checks pass.
 
 **Save this step's accumulated work to `{outputFile}`.**
 
+Step 1 created `{outputFile}` for this run's `run_key`, so the file holds only this run's work.
+
 - **If `{outputFile}` does not exist** (first save), create it using the workflow template (if available) with YAML frontmatter:
 
   ```yaml
   ---
+  runScope: '{run_scope}'
+  runKey: '{run_key}'
+  workflowStatus: 'completed'
   stepsCompleted: ['step-05-generate-report']
   lastStep: 'step-05-generate-report'
   lastSaved: '{date}'
@@ -141,6 +146,8 @@ report until all eleven checks pass.
   Then write this step's output below the frontmatter.
 
 - **If `{outputFile}` already exists**, update:
+  - Leave `runScope` and `runKey` exactly as step 1 wrote them
+  - Set `workflowStatus: 'completed'`
   - Add `'step-05-generate-report'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-05-generate-report'`
   - Set `lastSaved: '{date}'`

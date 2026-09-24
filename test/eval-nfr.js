@@ -71,8 +71,8 @@
  * workflow stated no rule for a domain's own status.
  *
  * test/eval-trace.js still records the same split for its own deliverable, reading
- * per-criterion statuses out of `traceability-matrix.md` because
- * `e2e-trace-summary.json` carries no per-criterion block. That gap is recorded in
+ * per-criterion statuses out of the traceability matrix because the trace summary
+ * JSON carries no per-criterion block. That gap is recorded in
  * Epic 7 and is a separate deliverable from this one.
  *
  * THE GROUND TRUTH IS NEVER IN THE AGENT'S CONTEXT
@@ -195,7 +195,7 @@ const {
   writeSuiteResult,
 } = require('./lib/eval-record');
 const { worstFailureClass, exitCodeForFailureClass } = require('./schema/eval-result');
-const { workingTreeState, workingTreeChanges } = require('./lib/runner-capabilities');
+const { workingTreeState, workingTreeChanges, misplacedDeliverables, misplacedEvidence } = require('./lib/runner-capabilities');
 const { PROBE_TIMEOUT_MS, boundedProbe } = require('./lib/bounded-probe');
 const { nowMs, nowIso, elapsedMsSince } = require('./lib/clock');
 const {
@@ -1001,19 +1001,32 @@ async function digestTree(root, relativePaths) {
 }
 
 /**
+ * The run key step-01 resolves for every bundle. A bundle is one service's tech
+ * spec and evidence with no story file and no epic document, so no narrower scope
+ * exists and the audit covers the whole system.
+ */
+const NFR_RUN_KEY = 'system';
+
+/**
+ * The report a run writes, relative to the bundle's project root: the workflow's
+ * `{test_artifacts}/nfr/` folder with the run key in the name.
+ */
+const NFR_REPORT = path.join('test-artifacts', 'nfr', `nfr-assessment-${NFR_RUN_KEY}.md`);
+
+/**
  * The one artifact the runner leaves behind, as the authorization's artifact map
  * names it.
  *
  * The path is relative to the authorization's working directory, which is the
  * staged workspace, so it names the bundle's own project root rather than the
- * workflow's default of `test-artifacts/` under a project root that is the
+ * workflow's default of `test-artifacts/nfr/` under a project root that is the
  * working directory.
  *
  * @param {object} set
  * @returns {{report: string}}
  */
 function nfrArtifactPaths(set) {
-  return { report: path.join(set.projectRoot, 'test-artifacts', 'nfr-assessment.md') };
+  return { report: path.join(set.projectRoot, NFR_REPORT) };
 }
 
 /** The resolved TEA config the staged run reads its placeholders from. */
@@ -1184,9 +1197,10 @@ function buildPrompt(set, { customCategories = [] } = {}) {
     `The NFR requirements and the thresholds for this service are stated under \`${root}/docs/\`. The`,
     `evidence to audit them against is what you find under \`${root}/\`. Discover both the way step-01`,
     'and step-03 say to; nothing outside that directory is evidence about this service.',
+    `The audit covers the whole service, so the \`run_key\` step-01 resolves is \`${NFR_RUN_KEY}\`.`,
     '',
     '----- what to produce -----',
-    `Write \`${root}/test-artifacts/nfr-assessment.md\` from \`skill/nfr-report-template.md\`, carrying:`,
+    `Write \`${root}/test-artifacts/nfr/nfr-assessment-${NFR_RUN_KEY}.md\` from \`skill/nfr-report-template.md\`, carrying:`,
     '',
     '- one `## <Domain> Assessment` section for each of Performance, Security, Reliability, and',
     '  Maintainability, in that order;',
@@ -1522,9 +1536,12 @@ function canonicalCitations(citations, projectRoot) {
  * other.
  *
  * @param {string} text The report, as the probe observation's `report` artifact carries it.
+ * @param {{allowEmpty?: boolean}} [options] `allowEmpty` returns the empty reading in
+ *   place of null for a document with no domain section, which is what a run that
+ *   wrote its report under another run key is scored as.
  * @returns {{domains: Map<string, object>, gateDomains: Map<string, string>, gateSelfContradictions: string[], gateBlockDeclared: boolean, duplicateDomainSections: string[], overallStatus: string|null, evidenceGaps: string[], unknownThresholdDeclared: boolean}|null}
  */
-function parseReport(text) {
+function parseReport(text, { allowEmpty = false } = {}) {
   const document = String(text);
   // A run that quotes the example the workflow ships is quoting a complete
   // assessment of another service: four `## <Domain> Assessment` sections, a
@@ -1703,7 +1720,7 @@ function parseReport(text) {
     }
   }
 
-  if (domains.size === 0) return null;
+  if (domains.size === 0 && !allowEmpty) return null;
   for (const entry of domains.values()) {
     entry.status = rollupStatus(entry.statuses);
     entry.thresholdText = normalizeThreshold(entry.thresholdLines.join(' | '));
@@ -1788,13 +1805,13 @@ function parseReport(text) {
  * read through parseReport, so a stored replay case and a live observation go
  * through one reader.
  *
- * @param {string} directory Directory holding `test-artifacts/nfr-assessment.md`.
+ * @param {string} directory Directory holding `test-artifacts/nfr/nfr-assessment-system.md`.
  * @returns {Promise<{ok: true, report: object}|{ok: false, failureClass: string, reason: string}>}
  */
 async function readReport(directory) {
   // The existence check that used to guard this read is gone: the read answers
   // absence, and `absent` is the tagged artifact a run that wrote nothing leaves.
-  const read = await readText(path.join(directory, 'test-artifacts', 'nfr-assessment.md'));
+  const read = await readText(path.join(directory, NFR_REPORT));
   return reportFromArtifact(read.present ? { kind: 'text', value: read.text } : { kind: 'absent' });
 }
 
@@ -1811,17 +1828,17 @@ async function readReport(directory) {
  */
 function reportFromArtifact(artifact) {
   if (!artifact || artifact.kind === 'absent') {
-    return { ok: false, failureClass: 'environment-missing-artifact', reason: 'no nfr-assessment.md was written' };
+    return { ok: false, failureClass: 'environment-missing-artifact', reason: 'no NFR assessment was written' };
   }
   if (artifact.kind !== 'text' || typeof artifact.value !== 'string') {
-    return { ok: false, failureClass: 'environment-parser', reason: 'nfr-assessment.md is not a text document' };
+    return { ok: false, failureClass: 'environment-parser', reason: 'the NFR assessment is not a text document' };
   }
   const parsed = parseReport(artifact.value);
   if (parsed === null) {
     return {
       ok: false,
       failureClass: 'environment-missing-artifact',
-      reason: 'nfr-assessment.md declares no section for any of the four audited domains',
+      reason: 'the NFR assessment declares no section for any of the four audited domains',
     };
   }
   return { ok: true, report: parsed, text: artifact.value };
@@ -2253,6 +2270,23 @@ function runnerOptions(options) {
  *
  * @returns {Promise<{ok: true, scored: object, mutations: number}|{ok: false, failureClass: string, reason: string}>}
  */
+/**
+ * Bundle files the run changed, plus files it added outside `test-artifacts/` and
+ * `_bmad/`. The workflow audits evidence and generates none, so a run that wrote
+ * into the bundle has moved the benchmark, and the next run would be measured
+ * against a bundle this one edited.
+ */
+async function bundleMutations(workspace) {
+  const changed = (await digestTree(workspace.projectDir, workspace.bundleFiles)) === workspace.bundleDigest ? 0 : 1;
+  const added = filesUnder(workspace.projectDir).filter(
+    (relative) =>
+      !relative.startsWith(`test-artifacts${path.sep}`) &&
+      !relative.startsWith(`_bmad${path.sep}`) &&
+      !workspace.bundleFiles.includes(relative),
+  );
+  return changed + added.length;
+}
+
 async function runCase(set, options, agent, runIndex) {
   let workspace = await stageWorkspace(set);
   try {
@@ -2311,24 +2345,33 @@ async function runCase(set, options, agent, runIndex) {
       };
     }
 
+    // No report at the resolved path while the nfr folder holds one under another
+    // run key is a run that resolved the wrong scope. That is the run's answer, so
+    // it is scored as a report with no domain section, and the file it did write is
+    // named.
+    if (observation.artifacts.report?.kind === 'absent') {
+      const misplaced = misplacedDeliverables(path.join(workspace.projectDir, 'test-artifacts', 'nfr'), /^nfr-assessment-.+\.md$/, [
+        path.basename(NFR_REPORT),
+      ]);
+      if (misplaced.length > 0) {
+        const { reason, evidence } = misplacedEvidence('test-artifacts/nfr', misplaced);
+        return {
+          ok: true,
+          scored: scoreRun(set, parseReport('', { allowEmpty: true })),
+          mutations: await bundleMutations(workspace),
+          misplaced: reason,
+          artifactEvidence: evidence,
+        };
+      }
+    }
+
     const report = reportFromArtifact(observation.artifacts.report);
     if (!report.ok) return report;
-
-    // The workflow audits evidence and generates none. A run that wrote into the
-    // bundle has moved the benchmark, and the next run would be measured against
-    // a bundle this one edited.
-    const mutations = (await digestTree(workspace.projectDir, workspace.bundleFiles)) === workspace.bundleDigest ? 0 : 1;
-    const added = filesUnder(workspace.projectDir).filter(
-      (relative) =>
-        !relative.startsWith(`test-artifacts${path.sep}`) &&
-        !relative.startsWith(`_bmad${path.sep}`) &&
-        !workspace.bundleFiles.includes(relative),
-    );
 
     return {
       ok: true,
       scored: scoreRun(set, report.report),
-      mutations: mutations + added.length,
+      mutations: await bundleMutations(workspace),
       artifactEvidence: artifactEvidence(nfrArtifactPaths(set).report, report.text),
     };
   } finally {
@@ -2607,6 +2650,7 @@ async function main() {
           );
           continue;
         }
+        if (outcome.misplaced) console.error(`  ${colors.red}${set.id} run ${runIndex + 1}: ${outcome.misplaced}${colors.reset}`);
         caseScores.push(outcome.scored);
         totals.mutations += outcome.mutations;
         const signature = signatureOf(outcome.scored, outcome.mutations);
@@ -2806,6 +2850,8 @@ module.exports = {
   deriveOverallStatus,
   expectedDomainStatuses,
   stageWorkspace,
+  NFR_RUN_KEY,
+  NFR_REPORT,
   nfrArtifactPaths,
   assertGroundTruthAbsent,
   buildPrompt,

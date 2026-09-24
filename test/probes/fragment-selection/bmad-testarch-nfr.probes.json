@@ -7,9 +7,9 @@
     "probeClass": "gameability",
     "behaviorId": "B-002",
     "systemId": "tea-fragment-selection-bmad-testarch-nfr",
-    "implementationDigest": "sha256:56e4819f02e6b3a5eef0fb86c1916973230cfcfb6df6870aba7cfece3d11a98e",
+    "implementationDigest": "sha256:80bbd1f2cfa7b52a5e6b8f4c593a034bb739853354c93948ac32de2550fba4fb",
     "artifactDigest": "sha256:338f1109bc9af85e46223635386e438e406fe7a72d9b0454287e0d22c484c819",
-    "commitDigest": "sha256:56e4819f02e6b3a5eef0fb86c1916973230cfcfb6df6870aba7cfece3d11a98e",
+    "commitDigest": "sha256:80bbd1f2cfa7b52a5e6b8f4c593a034bb739853354c93948ac32de2550fba4fb",
     "rationale": "A run that names every fragment in the index satisfies O-001 for nfr-backend-junit-no-browser, because every mandated fragment is in the list, and violates O-002, because so is every forbidden one. The containment oracle alone cannot tell that reply from a correct selection, and the exclusion oracle can.",
     "qualification": {
       "route": "gameability",
@@ -93,9 +93,9 @@
     "probeClass": "zero-action",
     "behaviorId": "B-001",
     "systemId": "tea-fragment-selection-bmad-testarch-nfr",
-    "implementationDigest": "sha256:56e4819f02e6b3a5eef0fb86c1916973230cfcfb6df6870aba7cfece3d11a98e",
+    "implementationDigest": "sha256:80bbd1f2cfa7b52a5e6b8f4c593a034bb739853354c93948ac32de2550fba4fb",
     "artifactDigest": "sha256:338f1109bc9af85e46223635386e438e406fe7a72d9b0454287e0d22c484c819",
-    "commitDigest": "sha256:56e4819f02e6b3a5eef0fb86c1916973230cfcfb6df6870aba7cfece3d11a98e",
+    "commitDigest": "sha256:80bbd1f2cfa7b52a5e6b8f4c593a034bb739853354c93948ac32de2550fba4fb",
     "rationale": "nfr-backend-junit-no-browser declares the exact set the step files mandate and the exact set they exclude, so a selection naming the first and none of the second is the run this contract exists to confirm.",
     "qualification": {
       "route": "clean-control",
@@ -105,7 +105,7 @@
         "privateRef": null,
         "digest": "sha256:338f1109bc9af85e46223635386e438e406fe7a72d9b0454287e0d22c484c819"
       },
-      "revisionCommitDigest": "sha256:56e4819f02e6b3a5eef0fb86c1916973230cfcfb6df6870aba7cfece3d11a98e",
+      "revisionCommitDigest": "sha256:80bbd1f2cfa7b52a5e6b8f4c593a034bb739853354c93948ac32de2550fba4fb",
       "noKnownDefectStatement": "nfr-backend-junit-no-browser's expected selection is derived from the bmad-testarch-nfr step files themselves, and npm run test:criteria-fragments fails when a fragment it names has left the index."
     },
     "expectedClean": true,

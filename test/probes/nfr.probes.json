@@ -7,9 +7,9 @@
     "probeClass": "defect",
     "behaviorId": "B-004",
     "systemId": "tea-nfr-gapped-harbor-billing-ledger",
-    "implementationDigest": "sha256:0d3db84c4f91073130312832723289f552ef93f863b30748fbf18ebd2216a02b",
-    "artifactDigest": "sha256:0d3db84c4f91073130312832723289f552ef93f863b30748fbf18ebd2216a02b",
-    "commitDigest": "sha256:0d3db84c4f91073130312832723289f552ef93f863b30748fbf18ebd2216a02b",
+    "implementationDigest": "sha256:e032331924aa66cb132dbee95d2b5ce70a1e150d4b632347b702cc6430422279",
+    "artifactDigest": "sha256:e032331924aa66cb132dbee95d2b5ce70a1e150d4b632347b702cc6430422279",
+    "commitDigest": "sha256:e032331924aa66cb132dbee95d2b5ce70a1e150d4b632347b702cc6430422279",
     "rationale": "performance is CONCERNS on gapped-harbor-billing-ledger, under skillRuleCitations.undefinedThresholdIsConcerns: A finding whose threshold was marked UNKNOWN in Step 2 must be CONCERNS, never PASS. An absent measurement is not evidence that the target was met. The bundle is the plant, and O-004 is the oracle that has to see its consequence in the report the run wrote.",
     "qualification": {
       "route": "controlled-mutation",
@@ -19,20 +19,20 @@
         "storage": "public",
         "path": "test/fixtures/nfr-eval/ground-truth.json",
         "privateRef": null,
-        "digest": "sha256:0d3db84c4f91073130312832723289f552ef93f863b30748fbf18ebd2216a02b"
+        "digest": "sha256:e032331924aa66cb132dbee95d2b5ce70a1e150d4b632347b702cc6430422279"
       },
       "expectedObservableFailure": "The performance findings of the report are recorded as CONCERNS, and the Gate YAML publishes overall_status FAIL.",
       "baselinePassEvidence": {
         "storage": "public",
-        "path": "test/replay/nfr/clean-correct-audit/test-artifacts/nfr-assessment.md",
+        "path": "test/replay/nfr/clean-correct-audit/test-artifacts/nfr/nfr-assessment-system.md",
         "privateRef": null,
-        "digest": "sha256:316d303b94e04bc906bd96200168f8b4b10db4784b7b5dc9ab2c4a2a1869c507"
+        "digest": "sha256:6a7a65b704585caada186c324aa5200b6bc7b2c454352f540799cfabf8606233"
       },
       "mutatedFailEvidence": {
         "storage": "public",
-        "path": "test/replay/nfr/gapped-correct-audit/test-artifacts/nfr-assessment.md",
+        "path": "test/replay/nfr/gapped-correct-audit/test-artifacts/nfr/nfr-assessment-system.md",
         "privateRef": null,
-        "digest": "sha256:4aa389f5006187424f2f832acf31cba8ee1d2198e9041494554f232825a40e2f"
+        "digest": "sha256:4ca9aac1a82f2f5a5cd08ff89dd03b5f9031da8625c265d48d0d1dce6a887f6a"
       },
       "rollbackVerified": true
     },
@@ -48,7 +48,7 @@
             "storage": "public",
             "path": "test/fixtures/nfr-eval/ground-truth.json",
             "privateRef": null,
-            "digest": "sha256:0d3db84c4f91073130312832723289f552ef93f863b30748fbf18ebd2216a02b"
+            "digest": "sha256:e032331924aa66cb132dbee95d2b5ce70a1e150d4b632347b702cc6430422279"
           }
         ],
         "source": "controlled-mutation",
@@ -64,7 +64,7 @@
             "environment": {},
             "stdin": {
               "kind": "text",
-              "value": "You are running the TEA workflow `bmad-testarch-nfr` against the project in `harbor-billing-ledger/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nResolve the workflow placeholders to these values:\n\n- `{project-root}`: `harbor-billing-ledger`\n- `{config_source}`: `harbor-billing-ledger/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `harbor-billing-ledger/test-artifacts`\n- `{skill-root}`: `skill`\n- `custom_nfr_categories`: ``\n\nThe NFR requirements and the thresholds for this service are stated under `harbor-billing-ledger/docs/`. The\nevidence to audit them against is what you find under `harbor-billing-ledger/`. Discover both the way step-01\nand step-03 say to; nothing outside that directory is evidence about this service.\n\n----- what to produce -----\nWrite `harbor-billing-ledger/test-artifacts/nfr-assessment.md` from `skill/nfr-report-template.md`, carrying:\n\n- one `## <Domain> Assessment` section for each of Performance, Security, Reliability, and\n  Maintainability, in that order;\n- inside each section, one finding per dimension the workflow evaluates, each stating its\n  `**Status:**`, its `**Threshold:**`, its `**Actual:**`, and its `**Evidence:**`;\n- an evidence citation that names the file it rests on, by a path under `harbor-billing-ledger/`;\n- the `## Evidence Gaps` section the template declares; and\n- the Gate YAML snippet the template ends with, carrying `overall_status` and the\n  `audited_domains` block, one status per domain.\n\nDo not add, edit, or delete any file under `harbor-billing-ledger/docs/`, `harbor-billing-ledger/evidence/`, or\n`harbor-billing-ledger/config/`. This workflow audits evidence and generates none.\n\nWhen you are done, print one line naming the file you wrote. Nothing else you print is read."
+              "value": "You are running the TEA workflow `bmad-testarch-nfr` against the project in `harbor-billing-ledger/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nResolve the workflow placeholders to these values:\n\n- `{project-root}`: `harbor-billing-ledger`\n- `{config_source}`: `harbor-billing-ledger/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `harbor-billing-ledger/test-artifacts`\n- `{skill-root}`: `skill`\n- `custom_nfr_categories`: ``\n\nThe NFR requirements and the thresholds for this service are stated under `harbor-billing-ledger/docs/`. The\nevidence to audit them against is what you find under `harbor-billing-ledger/`. Discover both the way step-01\nand step-03 say to; nothing outside that directory is evidence about this service.\nThe audit covers the whole service, so the `run_key` step-01 resolves is `system`.\n\n----- what to produce -----\nWrite `harbor-billing-ledger/test-artifacts/nfr/nfr-assessment-system.md` from `skill/nfr-report-template.md`, carrying:\n\n- one `## <Domain> Assessment` section for each of Performance, Security, Reliability, and\n  Maintainability, in that order;\n- inside each section, one finding per dimension the workflow evaluates, each stating its\n  `**Status:**`, its `**Threshold:**`, its `**Actual:**`, and its `**Evidence:**`;\n- an evidence citation that names the file it rests on, by a path under `harbor-billing-ledger/`;\n- the `## Evidence Gaps` section the template declares; and\n- the Gate YAML snippet the template ends with, carrying `overall_status` and the\n  `audited_domains` block, one status per domain.\n\nDo not add, edit, or delete any file under `harbor-billing-ledger/docs/`, `harbor-billing-ledger/evidence/`, or\n`harbor-billing-ledger/config/`. This workflow audits evidence and generates none.\n\nWhen you are done, print one line naming the file you wrote. Nothing else you print is read."
             }
           },
           "relation": {
@@ -155,9 +155,9 @@
     "probeClass": "defect",
     "behaviorId": "B-003",
     "systemId": "tea-nfr-gapped-harbor-billing-ledger",
-    "implementationDigest": "sha256:0d3db84c4f91073130312832723289f552ef93f863b30748fbf18ebd2216a02b",
-    "artifactDigest": "sha256:0d3db84c4f91073130312832723289f552ef93f863b30748fbf18ebd2216a02b",
-    "commitDigest": "sha256:0d3db84c4f91073130312832723289f552ef93f863b30748fbf18ebd2216a02b",
+    "implementationDigest": "sha256:e032331924aa66cb132dbee95d2b5ce70a1e150d4b632347b702cc6430422279",
+    "artifactDigest": "sha256:e032331924aa66cb132dbee95d2b5ce70a1e150d4b632347b702cc6430422279",
+    "commitDigest": "sha256:e032331924aa66cb132dbee95d2b5ce70a1e150d4b632347b702cc6430422279",
     "rationale": "reliability is FAIL on gapped-harbor-billing-ledger, under skillRuleCitations.failIsEvidenceBelowThreshold: FAIL is evidence that exists and does not meet the threshold. The bundle is the plant, and O-003 is the oracle that has to see its consequence in the report the run wrote.",
     "qualification": {
       "route": "controlled-mutation",
@@ -167,20 +167,20 @@
         "storage": "public",
         "path": "test/fixtures/nfr-eval/ground-truth.json",
         "privateRef": null,
-        "digest": "sha256:0d3db84c4f91073130312832723289f552ef93f863b30748fbf18ebd2216a02b"
+        "digest": "sha256:e032331924aa66cb132dbee95d2b5ce70a1e150d4b632347b702cc6430422279"
       },
       "expectedObservableFailure": "The reliability findings of the report are recorded as FAIL, and the Gate YAML publishes overall_status FAIL.",
       "baselinePassEvidence": {
         "storage": "public",
-        "path": "test/replay/nfr/clean-correct-audit/test-artifacts/nfr-assessment.md",
+        "path": "test/replay/nfr/clean-correct-audit/test-artifacts/nfr/nfr-assessment-system.md",
         "privateRef": null,
-        "digest": "sha256:316d303b94e04bc906bd96200168f8b4b10db4784b7b5dc9ab2c4a2a1869c507"
+        "digest": "sha256:6a7a65b704585caada186c324aa5200b6bc7b2c454352f540799cfabf8606233"
       },
       "mutatedFailEvidence": {
         "storage": "public",
-        "path": "test/replay/nfr/gapped-correct-audit/test-artifacts/nfr-assessment.md",
+        "path": "test/replay/nfr/gapped-correct-audit/test-artifacts/nfr/nfr-assessment-system.md",
         "privateRef": null,
-        "digest": "sha256:4aa389f5006187424f2f832acf31cba8ee1d2198e9041494554f232825a40e2f"
+        "digest": "sha256:4ca9aac1a82f2f5a5cd08ff89dd03b5f9031da8625c265d48d0d1dce6a887f6a"
       },
       "rollbackVerified": true
     },
@@ -196,7 +196,7 @@
             "storage": "public",
             "path": "test/fixtures/nfr-eval/ground-truth.json",
             "privateRef": null,
-            "digest": "sha256:0d3db84c4f91073130312832723289f552ef93f863b30748fbf18ebd2216a02b"
+            "digest": "sha256:e032331924aa66cb132dbee95d2b5ce70a1e150d4b632347b702cc6430422279"
           }
         ],
         "source": "controlled-mutation",
@@ -212,7 +212,7 @@
             "environment": {},
             "stdin": {
               "kind": "text",
-              "value": "You are running the TEA workflow `bmad-testarch-nfr` against the project in `harbor-billing-ledger/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nResolve the workflow placeholders to these values:\n\n- `{project-root}`: `harbor-billing-ledger`\n- `{config_source}`: `harbor-billing-ledger/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `harbor-billing-ledger/test-artifacts`\n- `{skill-root}`: `skill`\n- `custom_nfr_categories`: ``\n\nThe NFR requirements and the thresholds for this service are stated under `harbor-billing-ledger/docs/`. The\nevidence to audit them against is what you find under `harbor-billing-ledger/`. Discover both the way step-01\nand step-03 say to; nothing outside that directory is evidence about this service.\n\n----- what to produce -----\nWrite `harbor-billing-ledger/test-artifacts/nfr-assessment.md` from `skill/nfr-report-template.md`, carrying:\n\n- one `## <Domain> Assessment` section for each of Performance, Security, Reliability, and\n  Maintainability, in that order;\n- inside each section, one finding per dimension the workflow evaluates, each stating its\n  `**Status:**`, its `**Threshold:**`, its `**Actual:**`, and its `**Evidence:**`;\n- an evidence citation that names the file it rests on, by a path under `harbor-billing-ledger/`;\n- the `## Evidence Gaps` section the template declares; and\n- the Gate YAML snippet the template ends with, carrying `overall_status` and the\n  `audited_domains` block, one status per domain.\n\nDo not add, edit, or delete any file under `harbor-billing-ledger/docs/`, `harbor-billing-ledger/evidence/`, or\n`harbor-billing-ledger/config/`. This workflow audits evidence and generates none.\n\nWhen you are done, print one line naming the file you wrote. Nothing else you print is read."
+              "value": "You are running the TEA workflow `bmad-testarch-nfr` against the project in `harbor-billing-ledger/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nResolve the workflow placeholders to these values:\n\n- `{project-root}`: `harbor-billing-ledger`\n- `{config_source}`: `harbor-billing-ledger/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `harbor-billing-ledger/test-artifacts`\n- `{skill-root}`: `skill`\n- `custom_nfr_categories`: ``\n\nThe NFR requirements and the thresholds for this service are stated under `harbor-billing-ledger/docs/`. The\nevidence to audit them against is what you find under `harbor-billing-ledger/`. Discover both the way step-01\nand step-03 say to; nothing outside that directory is evidence about this service.\nThe audit covers the whole service, so the `run_key` step-01 resolves is `system`.\n\n----- what to produce -----\nWrite `harbor-billing-ledger/test-artifacts/nfr/nfr-assessment-system.md` from `skill/nfr-report-template.md`, carrying:\n\n- one `## <Domain> Assessment` section for each of Performance, Security, Reliability, and\n  Maintainability, in that order;\n- inside each section, one finding per dimension the workflow evaluates, each stating its\n  `**Status:**`, its `**Threshold:**`, its `**Actual:**`, and its `**Evidence:**`;\n- an evidence citation that names the file it rests on, by a path under `harbor-billing-ledger/`;\n- the `## Evidence Gaps` section the template declares; and\n- the Gate YAML snippet the template ends with, carrying `overall_status` and the\n  `audited_domains` block, one status per domain.\n\nDo not add, edit, or delete any file under `harbor-billing-ledger/docs/`, `harbor-billing-ledger/evidence/`, or\n`harbor-billing-ledger/config/`. This workflow audits evidence and generates none.\n\nWhen you are done, print one line naming the file you wrote. Nothing else you print is read."
             }
           },
           "relation": {
@@ -330,9 +330,9 @@
     "probeClass": "defect",
     "behaviorId": "B-003",
     "systemId": "tea-nfr-gapped-harbor-billing-ledger",
-    "implementationDigest": "sha256:0d3db84c4f91073130312832723289f552ef93f863b30748fbf18ebd2216a02b",
-    "artifactDigest": "sha256:0d3db84c4f91073130312832723289f552ef93f863b30748fbf18ebd2216a02b",
-    "commitDigest": "sha256:0d3db84c4f91073130312832723289f552ef93f863b30748fbf18ebd2216a02b",
+    "implementationDigest": "sha256:e032331924aa66cb132dbee95d2b5ce70a1e150d4b632347b702cc6430422279",
+    "artifactDigest": "sha256:e032331924aa66cb132dbee95d2b5ce70a1e150d4b632347b702cc6430422279",
+    "commitDigest": "sha256:e032331924aa66cb132dbee95d2b5ce70a1e150d4b632347b702cc6430422279",
     "rationale": "maintainability is CONCERNS on gapped-harbor-billing-ledger, under skillRuleCitations.missingEvidenceIsConcerns: If evidence is missing for a category, mark that category as CONCERNS. The bundle is the plant, and O-003 is the oracle that has to see its consequence in the report the run wrote.",
     "qualification": {
       "route": "controlled-mutation",
@@ -342,20 +342,20 @@
         "storage": "public",
         "path": "test/fixtures/nfr-eval/ground-truth.json",
         "privateRef": null,
-        "digest": "sha256:0d3db84c4f91073130312832723289f552ef93f863b30748fbf18ebd2216a02b"
+        "digest": "sha256:e032331924aa66cb132dbee95d2b5ce70a1e150d4b632347b702cc6430422279"
       },
       "expectedObservableFailure": "The maintainability findings of the report are recorded as CONCERNS, and the Gate YAML publishes overall_status FAIL.",
       "baselinePassEvidence": {
         "storage": "public",
-        "path": "test/replay/nfr/clean-correct-audit/test-artifacts/nfr-assessment.md",
+        "path": "test/replay/nfr/clean-correct-audit/test-artifacts/nfr/nfr-assessment-system.md",
         "privateRef": null,
-        "digest": "sha256:316d303b94e04bc906bd96200168f8b4b10db4784b7b5dc9ab2c4a2a1869c507"
+        "digest": "sha256:6a7a65b704585caada186c324aa5200b6bc7b2c454352f540799cfabf8606233"
       },
       "mutatedFailEvidence": {
         "storage": "public",
-        "path": "test/replay/nfr/gapped-correct-audit/test-artifacts/nfr-assessment.md",
+        "path": "test/replay/nfr/gapped-correct-audit/test-artifacts/nfr/nfr-assessment-system.md",
         "privateRef": null,
-        "digest": "sha256:4aa389f5006187424f2f832acf31cba8ee1d2198e9041494554f232825a40e2f"
+        "digest": "sha256:4ca9aac1a82f2f5a5cd08ff89dd03b5f9031da8625c265d48d0d1dce6a887f6a"
       },
       "rollbackVerified": true
     },
@@ -371,7 +371,7 @@
             "storage": "public",
             "path": "test/fixtures/nfr-eval/ground-truth.json",
             "privateRef": null,
-            "digest": "sha256:0d3db84c4f91073130312832723289f552ef93f863b30748fbf18ebd2216a02b"
+            "digest": "sha256:e032331924aa66cb132dbee95d2b5ce70a1e150d4b632347b702cc6430422279"
           }
         ],
         "source": "controlled-mutation",
@@ -387,7 +387,7 @@
             "environment": {},
             "stdin": {
               "kind": "text",
-              "value": "You are running the TEA workflow `bmad-testarch-nfr` against the project in `harbor-billing-ledger/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nResolve the workflow placeholders to these values:\n\n- `{project-root}`: `harbor-billing-ledger`\n- `{config_source}`: `harbor-billing-ledger/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `harbor-billing-ledger/test-artifacts`\n- `{skill-root}`: `skill`\n- `custom_nfr_categories`: ``\n\nThe NFR requirements and the thresholds for this service are stated under `harbor-billing-ledger/docs/`. The\nevidence to audit them against is what you find under `harbor-billing-ledger/`. Discover both the way step-01\nand step-03 say to; nothing outside that directory is evidence about this service.\n\n----- what to produce -----\nWrite `harbor-billing-ledger/test-artifacts/nfr-assessment.md` from `skill/nfr-report-template.md`, carrying:\n\n- one `## <Domain> Assessment` section for each of Performance, Security, Reliability, and\n  Maintainability, in that order;\n- inside each section, one finding per dimension the workflow evaluates, each stating its\n  `**Status:**`, its `**Threshold:**`, its `**Actual:**`, and its `**Evidence:**`;\n- an evidence citation that names the file it rests on, by a path under `harbor-billing-ledger/`;\n- the `## Evidence Gaps` section the template declares; and\n- the Gate YAML snippet the template ends with, carrying `overall_status` and the\n  `audited_domains` block, one status per domain.\n\nDo not add, edit, or delete any file under `harbor-billing-ledger/docs/`, `harbor-billing-ledger/evidence/`, or\n`harbor-billing-ledger/config/`. This workflow audits evidence and generates none.\n\nWhen you are done, print one line naming the file you wrote. Nothing else you print is read."
+              "value": "You are running the TEA workflow `bmad-testarch-nfr` against the project in `harbor-billing-ledger/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nResolve the workflow placeholders to these values:\n\n- `{project-root}`: `harbor-billing-ledger`\n- `{config_source}`: `harbor-billing-ledger/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `harbor-billing-ledger/test-artifacts`\n- `{skill-root}`: `skill`\n- `custom_nfr_categories`: ``\n\nThe NFR requirements and the thresholds for this service are stated under `harbor-billing-ledger/docs/`. The\nevidence to audit them against is what you find under `harbor-billing-ledger/`. Discover both the way step-01\nand step-03 say to; nothing outside that directory is evidence about this service.\nThe audit covers the whole service, so the `run_key` step-01 resolves is `system`.\n\n----- what to produce -----\nWrite `harbor-billing-ledger/test-artifacts/nfr/nfr-assessment-system.md` from `skill/nfr-report-template.md`, carrying:\n\n- one `## <Domain> Assessment` section for each of Performance, Security, Reliability, and\n  Maintainability, in that order;\n- inside each section, one finding per dimension the workflow evaluates, each stating its\n  `**Status:**`, its `**Threshold:**`, its `**Actual:**`, and its `**Evidence:**`;\n- an evidence citation that names the file it rests on, by a path under `harbor-billing-ledger/`;\n- the `## Evidence Gaps` section the template declares; and\n- the Gate YAML snippet the template ends with, carrying `overall_status` and the\n  `audited_domains` block, one status per domain.\n\nDo not add, edit, or delete any file under `harbor-billing-ledger/docs/`, `harbor-billing-ledger/evidence/`, or\n`harbor-billing-ledger/config/`. This workflow audits evidence and generates none.\n\nWhen you are done, print one line naming the file you wrote. Nothing else you print is read."
             }
           },
           "relation": {
@@ -505,19 +505,19 @@
     "probeClass": "zero-action",
     "behaviorId": "B-008",
     "systemId": "tea-nfr-clean-atlas-notification-relay",
-    "implementationDigest": "sha256:0d3db84c4f91073130312832723289f552ef93f863b30748fbf18ebd2216a02b",
-    "artifactDigest": "sha256:0d3db84c4f91073130312832723289f552ef93f863b30748fbf18ebd2216a02b",
-    "commitDigest": "sha256:0d3db84c4f91073130312832723289f552ef93f863b30748fbf18ebd2216a02b",
+    "implementationDigest": "sha256:e032331924aa66cb132dbee95d2b5ce70a1e150d4b632347b702cc6430422279",
+    "artifactDigest": "sha256:e032331924aa66cb132dbee95d2b5ce70a1e150d4b632347b702cc6430422279",
+    "commitDigest": "sha256:e032331924aa66cb132dbee95d2b5ce70a1e150d4b632347b702cc6430422279",
     "rationale": "clean-atlas-notification-relay states a threshold for all 4 of its domains and meets every one, so any gap the run reports is a false positive. It is the control that stops an nfr suite scoring well by refusing to pass anything.",
     "qualification": {
       "route": "clean-control",
       "baselinePassEvidence": {
         "storage": "public",
-        "path": "test/replay/nfr/clean-correct-audit/test-artifacts/nfr-assessment.md",
+        "path": "test/replay/nfr/clean-correct-audit/test-artifacts/nfr/nfr-assessment-system.md",
         "privateRef": null,
-        "digest": "sha256:316d303b94e04bc906bd96200168f8b4b10db4784b7b5dc9ab2c4a2a1869c507"
+        "digest": "sha256:6a7a65b704585caada186c324aa5200b6bc7b2c454352f540799cfabf8606233"
       },
-      "revisionCommitDigest": "sha256:0d3db84c4f91073130312832723289f552ef93f863b30748fbf18ebd2216a02b",
+      "revisionCommitDigest": "sha256:e032331924aa66cb132dbee95d2b5ce70a1e150d4b632347b702cc6430422279",
       "noKnownDefectStatement": "A relay service whose every threshold is stated and met"
     },
     "expectedClean": true,

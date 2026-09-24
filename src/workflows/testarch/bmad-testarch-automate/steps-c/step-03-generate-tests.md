@@ -43,11 +43,14 @@ Select execution mode deterministically, then generate tests using agent-team, s
 
 ### 1. Prepare Execution Context
 
-**Generate unique timestamp** for temp file naming:
+**Generate a unique timestamp** for temp file naming, and take `run_key` from Step 1:
 
 ```javascript
 const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+const runKey = '{run_key}'; // resolved in Step 1 and carried forward unchanged
 ```
+
+Every temp file name carries `run_key` before the timestamp. `/tmp` is shared by every worktree and parallel run on the machine, and an agent without a shell invents a round timestamp, so the timestamp alone cannot keep two runs for different scopes apart.
 
 **Prepare input context for subagents:**
 
@@ -79,6 +82,7 @@ const subagentContext = {
     capability_probe: parseBooleanFlag(config.tea_capability_probe, true),  // supports booleans and "false"/"true" strings
     provider_endpoint_map: /* from Step 2 coverage plan, if use_pactjs_utils enabled */,
   },
+  run_key: runKey,
   timestamp: timestamp
 };
 ```
@@ -232,7 +236,7 @@ When `pact_mcp` is `"mcp"`, the subagent can use SmartBear MCP tools to fetch ex
 **Dispatch worker:**
 
 - **Subagent File:** `./step-03a-subagent-api.md`
-- **Output File:** `/tmp/tea-automate-api-tests-${timestamp}.json`
+- **Output File:** `/tmp/tea-automate-api-tests-${runKey}-${timestamp}.json`
 - **Context:** Pass `subagentContext`
 - **Execution:**
   - `agent-team` or `subagent`: launch non-blocking
@@ -242,7 +246,7 @@ When `pact_mcp` is `"mcp"`, the subagent can use SmartBear MCP tools to fetch ex
 
 ```text
 🚀 Launching Subagent A: API Test Generation
-📝 Output: /tmp/tea-automate-api-tests-${timestamp}.json
+📝 Output: /tmp/tea-automate-api-tests-${runKey}-${timestamp}.json
 ⚙️ Mode: ${resolvedMode}
 ⏳ Status: Running...
 ```
@@ -256,7 +260,7 @@ When `pact_mcp` is `"mcp"`, the subagent can use SmartBear MCP tools to fetch ex
 **Dispatch worker:**
 
 - **Subagent File:** `./step-03b-subagent-e2e.md`
-- **Output File:** `/tmp/tea-automate-e2e-tests-${timestamp}.json`
+- **Output File:** `/tmp/tea-automate-e2e-tests-${runKey}-${timestamp}.json`
 - **Context:** Pass `subagentContext`
 - **Execution:**
   - `agent-team` or `subagent`: launch non-blocking
@@ -266,7 +270,7 @@ When `pact_mcp` is `"mcp"`, the subagent can use SmartBear MCP tools to fetch ex
 
 ```text
 🚀 Launching Subagent B: E2E Test Generation
-📝 Output: /tmp/tea-automate-e2e-tests-${timestamp}.json
+📝 Output: /tmp/tea-automate-e2e-tests-${runKey}-${timestamp}.json
 ⚙️ Mode: ${resolvedMode}
 ⏳ Status: Running...
 ```
@@ -282,7 +286,7 @@ When `pact_mcp` is `"mcp"`, the subagent can use SmartBear MCP tools to fetch ex
 **Dispatch worker:**
 
 - **Subagent File:** `./step-03b-subagent-backend.md`
-- **Output File:** `/tmp/tea-automate-backend-tests-${timestamp}.json`
+- **Output File:** `/tmp/tea-automate-backend-tests-${runKey}-${timestamp}.json`
 - **Context:** Pass `subagentContext`
 - **Execution:**
   - `agent-team` or `subagent`: launch non-blocking
@@ -292,7 +296,7 @@ When `pact_mcp` is `"mcp"`, the subagent can use SmartBear MCP tools to fetch ex
 
 ```text
 🚀 Launching Subagent B-backend: Backend Test Generation
-📝 Output: /tmp/tea-automate-backend-tests-${timestamp}.json
+📝 Output: /tmp/tea-automate-backend-tests-${runKey}-${timestamp}.json
 ⚙️ Mode: ${resolvedMode}
 ⏳ Status: Running...
 ```
@@ -308,7 +312,7 @@ When `pact_mcp` is `"mcp"`, the subagent can use SmartBear MCP tools to fetch ex
 **Dispatch worker:**
 
 - **Subagent File:** `./step-03b-subagent-mobile.md`
-- **Output File:** `/tmp/tea-automate-mobile-tests-${timestamp}.json`
+- **Output File:** `/tmp/tea-automate-mobile-tests-${runKey}-${timestamp}.json`
 - **Context:** Pass `subagentContext`
 - **Execution:**
   - `agent-team` or `subagent`: launch non-blocking
@@ -318,7 +322,7 @@ When `pact_mcp` is `"mcp"`, the subagent can use SmartBear MCP tools to fetch ex
 
 ```text
 🚀 Launching Subagent B-mobile: Mobile Test Generation
-📝 Output: /tmp/tea-automate-mobile-tests-${timestamp}.json
+📝 Output: /tmp/tea-automate-mobile-tests-${runKey}-${timestamp}.json
 ⚙️ Mode: ${resolvedMode}
 ⏳ Status: Running...
 ```
@@ -356,19 +360,19 @@ When `pact_mcp` is `"mcp"`, the subagent can use SmartBear MCP tools to fetch ex
 **Verify outputs exist (based on `{detected_stack}`):**
 
 ```javascript
-const apiOutputExists = fs.existsSync(`/tmp/tea-automate-api-tests-${timestamp}.json`);
+const apiOutputExists = fs.existsSync(`/tmp/tea-automate-api-tests-${runKey}-${timestamp}.json`);
 
 // Check based on detected_stack
 if (detected_stack === 'frontend' || detected_stack === 'fullstack') {
-  const e2eOutputExists = fs.existsSync(`/tmp/tea-automate-e2e-tests-${timestamp}.json`);
+  const e2eOutputExists = fs.existsSync(`/tmp/tea-automate-e2e-tests-${runKey}-${timestamp}.json`);
   if (!e2eOutputExists) throw new Error('E2E subagent output missing!');
 }
 if (detected_stack === 'backend' || detected_stack === 'fullstack') {
-  const backendOutputExists = fs.existsSync(`/tmp/tea-automate-backend-tests-${timestamp}.json`);
+  const backendOutputExists = fs.existsSync(`/tmp/tea-automate-backend-tests-${runKey}-${timestamp}.json`);
   if (!backendOutputExists) throw new Error('Backend subagent output missing!');
 }
 if (detected_stack === 'mobile') {
-  const mobileOutputExists = fs.existsSync(`/tmp/tea-automate-mobile-tests-${timestamp}.json`);
+  const mobileOutputExists = fs.existsSync(`/tmp/tea-automate-mobile-tests-${runKey}-${timestamp}.json`);
   if (!mobileOutputExists) throw new Error('Mobile subagent output missing!');
 }
 if (!apiOutputExists) throw new Error('API subagent output missing!');

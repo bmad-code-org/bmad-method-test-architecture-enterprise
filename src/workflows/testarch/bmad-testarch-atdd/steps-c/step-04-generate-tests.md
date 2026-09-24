@@ -45,11 +45,14 @@ Select execution mode deterministically, then generate red-phase API and E2E tes
 
 ### 1. Prepare Execution Context
 
-**Generate unique timestamp** for temp file naming:
+**Generate a unique timestamp** for temp file naming, and take `run_key` from Step 1:
 
 ```javascript
 const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+const runKey = '{run_key}'; // resolved in Step 1 and carried forward unchanged
 ```
+
+Every temp file name carries `run_key` before the timestamp. `/tmp` is shared by every worktree and parallel run on the machine, and an agent without a shell invents a round timestamp, so the timestamp alone cannot keep two runs for different scopes apart.
 
 **Prepare input context for both subagents:**
 
@@ -81,6 +84,7 @@ const subagentContext = {
     capability_probe: parseBooleanFlag(config.tea_capability_probe, true),  // supports booleans and "false"/"true" strings
     provider_endpoint_map: /* from Step 1/3 context, if use_pactjs_utils enabled */,
   },
+  run_key: runKey,
   timestamp: timestamp
 };
 ```
@@ -194,7 +198,7 @@ This contract does not apply to Cypress suites, Maestro flows, or Pact/Vitest co
 **Dispatch worker:**
 
 - **Subagent File:** `./step-04a-subagent-api-failing.md`
-- **Output File:** `/tmp/tea-atdd-api-tests-${timestamp}.json`
+- **Output File:** `/tmp/tea-atdd-api-tests-${runKey}-${timestamp}.json`
 - **Context:** Pass `subagentContext`
 - **Execution:**
   - `agent-team` or `subagent`: launch non-blocking
@@ -205,7 +209,7 @@ This contract does not apply to Cypress suites, Maestro flows, or Pact/Vitest co
 
 ```text
 🚀 Launching Subagent A: RED-PHASE API Test Generation
-📝 Output: /tmp/tea-atdd-api-tests-${timestamp}.json
+📝 Output: /tmp/tea-atdd-api-tests-${runKey}-${timestamp}.json
 ⚙️ Mode: ${resolvedMode}
 🔴 TDD Phase: RED (tests emitted as `test.skip()` scaffolds)
 ⏳ Status: Running...
@@ -218,7 +222,7 @@ This contract does not apply to Cypress suites, Maestro flows, or Pact/Vitest co
 **Dispatch worker:**
 
 - **Subagent File:** `./step-04b-subagent-e2e-failing.md`
-- **Output File:** `/tmp/tea-atdd-e2e-tests-${timestamp}.json`
+- **Output File:** `/tmp/tea-atdd-e2e-tests-${runKey}-${timestamp}.json`
 - **Context:** Pass `subagentContext`
 - **Execution:**
   - `agent-team` or `subagent`: launch non-blocking
@@ -229,7 +233,7 @@ This contract does not apply to Cypress suites, Maestro flows, or Pact/Vitest co
 
 ```text
 🚀 Launching Subagent B: RED-PHASE E2E Test Generation
-📝 Output: /tmp/tea-atdd-e2e-tests-${timestamp}.json
+📝 Output: /tmp/tea-atdd-e2e-tests-${runKey}-${timestamp}.json
 ⚙️ Mode: ${resolvedMode}
 🔴 TDD Phase: RED (tests emitted as `test.skip()` scaffolds)
 ⏳ Status: Running...
@@ -263,8 +267,8 @@ This contract does not apply to Cypress suites, Maestro flows, or Pact/Vitest co
 **Verify both outputs exist:**
 
 ```javascript
-const apiOutputExists = fs.existsSync(`/tmp/tea-atdd-api-tests-${timestamp}.json`);
-const e2eOutputExists = fs.existsSync(`/tmp/tea-atdd-e2e-tests-${timestamp}.json`);
+const apiOutputExists = fs.existsSync(`/tmp/tea-atdd-api-tests-${runKey}-${timestamp}.json`);
+const e2eOutputExists = fs.existsSync(`/tmp/tea-atdd-e2e-tests-${runKey}-${timestamp}.json`);
 
 if (!apiOutputExists || !e2eOutputExists) {
   throw new Error('One or both subagent outputs missing!');

@@ -1,7 +1,7 @@
 ---
 name: 'step-04-validate-and-summary'
 description: 'Validate pipeline and summarize'
-outputFile: '{test_artifacts}/ci-pipeline-progress.md'
+outputFile: '{test_artifacts}/ci/ci-pipeline-progress.md'
 ---
 
 # Step 4: Validate & Summarize
@@ -66,6 +66,7 @@ Report:
 
   ```yaml
   ---
+  workflowStatus: 'completed'
   stepsCompleted: ['step-04-validate-and-summary']
   lastStep: 'step-04-validate-and-summary'
   lastSaved: '{date}'
@@ -75,6 +76,7 @@ Report:
   Then write this step's output below the frontmatter.
 
 - **If `{outputFile}` already exists**, update:
+  - Set `workflowStatus: 'completed'`
   - Add `'step-04-validate-and-summary'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-04-validate-and-summary'`
   - Set `lastSaved: '{date}'`

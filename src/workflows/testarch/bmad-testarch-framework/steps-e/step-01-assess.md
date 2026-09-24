@@ -44,6 +44,15 @@ Identify which output should be edited and load it.
 
 Ask the user to provide the output file path or select from known outputs.
 
+Known outputs for this workflow:
+
+- `{test_dir}/README.md` and the scaffolded framework config, fixtures, and sample tests under `{test_dir}`
+- `{test_artifacts}/framework/framework-setup-progress.md` (run checkpoint, one per project)
+
+Files written by older TEA versions sit at the root of `{test_artifacts}`: `{test_artifacts}/framework-setup-progress.md`. Offer them as candidates when present.
+
+When several files match, list each one with its scope and ask which to edit. Do not guess.
+
 ### 2. Load Target
 
 Read the provided output file in full.

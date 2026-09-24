@@ -2,7 +2,7 @@
 name: 'step-03b-subagent-backend'
 description: 'Subagent: Generate backend tests only (unit, integration, contract)'
 subagent: true
-outputFile: '/tmp/tea-automate-backend-tests-{{timestamp}}.json'
+outputFile: '/tmp/tea-automate-backend-tests-{run_key}-{{timestamp}}.json'
 ---
 
 # Subagent 3B-backend: Generate Backend Tests
@@ -150,7 +150,7 @@ Identify fixtures/helpers needed for backend tests:
 
 ## OUTPUT FORMAT
 
-Write JSON to temp file: `/tmp/tea-automate-backend-tests-{{timestamp}}.json`
+Write JSON to temp file: `/tmp/tea-automate-backend-tests-{run_key}-{{timestamp}}.json`
 
 ```json
 {

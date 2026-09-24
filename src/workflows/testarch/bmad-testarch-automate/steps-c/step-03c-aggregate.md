@@ -1,7 +1,7 @@
 ---
 name: 'step-03c-aggregate'
 description: 'Aggregate subagent outputs and complete test infrastructure'
-outputFile: '{test_artifacts}/automation-summary.md'
+outputFile: '{test_artifacts}/automate/automation-summary-{run_key}.md'
 nextStepFile: '{skill-root}/steps-c/step-04-validate-and-summarize.md'
 ---
 
@@ -49,7 +49,7 @@ Read outputs from parallel subagents (API + E2E and/or Backend test generation b
 **Read API test subagent output (always):**
 
 ```javascript
-const apiTestsPath = '/tmp/tea-automate-api-tests-{{timestamp}}.json';
+const apiTestsPath = '/tmp/tea-automate-api-tests-{run_key}-{{timestamp}}.json';
 const apiTestsOutput = JSON.parse(fs.readFileSync(apiTestsPath, 'utf8'));
 ```
 
@@ -58,7 +58,7 @@ const apiTestsOutput = JSON.parse(fs.readFileSync(apiTestsPath, 'utf8'));
 ```javascript
 let e2eTestsOutput = null;
 if (detected_stack === 'frontend' || detected_stack === 'fullstack') {
-  const e2eTestsPath = '/tmp/tea-automate-e2e-tests-{{timestamp}}.json';
+  const e2eTestsPath = '/tmp/tea-automate-e2e-tests-{run_key}-{{timestamp}}.json';
   e2eTestsOutput = JSON.parse(fs.readFileSync(e2eTestsPath, 'utf8'));
 }
 ```
@@ -68,7 +68,7 @@ if (detected_stack === 'frontend' || detected_stack === 'fullstack') {
 ```javascript
 let backendTestsOutput = null;
 if (detected_stack === 'backend' || detected_stack === 'fullstack') {
-  const backendTestsPath = '/tmp/tea-automate-backend-tests-{{timestamp}}.json';
+  const backendTestsPath = '/tmp/tea-automate-backend-tests-{run_key}-{{timestamp}}.json';
   backendTestsOutput = JSON.parse(fs.readFileSync(backendTestsPath, 'utf8'));
 }
 ```
@@ -78,7 +78,7 @@ if (detected_stack === 'backend' || detected_stack === 'fullstack') {
 ```javascript
 let mobileTestsOutput = null;
 if (detected_stack === 'mobile') {
-  const mobileTestsPath = '/tmp/tea-automate-mobile-tests-{{timestamp}}.json';
+  const mobileTestsPath = '/tmp/tea-automate-mobile-tests-{run_key}-{{timestamp}}.json';
   mobileTestsOutput = JSON.parse(fs.readFileSync(mobileTestsPath, 'utf8'));
 }
 ```
@@ -386,7 +386,7 @@ const summary = {
 Save summary to temp file for validation step:
 
 ```javascript
-fs.writeFileSync('/tmp/tea-automate-summary-{{timestamp}}.json', JSON.stringify(summary, null, 2), 'utf8');
+fs.writeFileSync('/tmp/tea-automate-summary-{run_key}-{{timestamp}}.json', JSON.stringify(summary, null, 2), 'utf8');
 ```
 
 ---
@@ -397,8 +397,9 @@ fs.writeFileSync('/tmp/tea-automate-summary-{{timestamp}}.json', JSON.stringify(
 
 ```javascript
 fs.unlinkSync(apiTestsPath);
-if (e2eTestsOutput) fs.unlinkSync('/tmp/tea-automate-e2e-tests-{{timestamp}}.json');
-if (backendTestsOutput) fs.unlinkSync('/tmp/tea-automate-backend-tests-{{timestamp}}.json');
+if (e2eTestsOutput) fs.unlinkSync('/tmp/tea-automate-e2e-tests-{run_key}-{{timestamp}}.json');
+if (backendTestsOutput) fs.unlinkSync('/tmp/tea-automate-backend-tests-{run_key}-{{timestamp}}.json');
+if (mobileTestsOutput) fs.unlinkSync('/tmp/tea-automate-mobile-tests-{run_key}-{{timestamp}}.json');
 console.log('✅ Subagent temp files cleaned up');
 ```
 
@@ -457,6 +458,9 @@ Proceed to Step 4 when:
 
   ```yaml
   ---
+  runScope: '{run_scope}'
+  runKey: '{run_key}'
+  workflowStatus: 'in-progress'
   stepsCompleted: ['step-03c-aggregate']
   lastStep: 'step-03c-aggregate'
   lastSaved: '{date}'
@@ -465,7 +469,9 @@ Proceed to Step 4 when:
 
   Then write this step's output below the frontmatter.
 
-- **If `{outputFile}` already exists**, update:
+- **If `{outputFile}` already exists** (written earlier in this same run), update:
+  - Leave `runScope` and `runKey` exactly as step 1 wrote them
+  - Set `workflowStatus: 'in-progress'`
   - Add `'step-03c-aggregate'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-03c-aggregate'`
   - Set `lastSaved: '{date}'`

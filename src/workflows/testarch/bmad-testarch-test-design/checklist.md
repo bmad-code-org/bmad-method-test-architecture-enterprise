@@ -13,7 +13,7 @@
 
 - [ ] Story markdown with clear acceptance criteria exists
 - [ ] PRD or epic documentation available
-- [ ] Architecture documents available (test-design-architecture.md + test-design-qa.md from Phase 3, if exists)
+- [ ] Architecture documents available (test-design-architecture.md + test-design-qa.md from Phase 3 under `{test_artifacts}/test-design/`, or the legacy root `{test_artifacts}/`, if exists)
 - [ ] Requirements are testable and unambiguous
 
 ## Process Steps
@@ -71,7 +71,7 @@
 - [ ] Resource estimates calculated
 - [ ] Quality gate criteria defined
 - [ ] NFR planning summary included when NFRs are in scope
-- [ ] Output file written to correct location
+- [ ] Output file written under `{test_artifacts}/test-design/` (`test-design-epic-{epic_num}.md` for epic-level; `test-design-architecture.md` and `test-design-qa.md` for system-level)
 - [ ] Output file uses template structure
 
 ## Output Validation

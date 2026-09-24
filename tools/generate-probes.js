@@ -590,8 +590,8 @@ function buildTraceProbes() {
       expectedObservableFailure:
         `The traceability matrix classifies ${criterion.id} as ${criterion.trueCoverage} and the summary counts it in the ` +
         `${criterion.trueCoverage === 'NONE' ? 'gap buckets' : 'partial coverage items'}.`,
-      baselinePassEvidence: fileReference('test/replay/trace/clean-correct-run/test-artifacts/e2e-trace-summary.json'),
-      mutatedFailEvidence: fileReference('test/replay/trace/seeded-correct-run/test-artifacts/e2e-trace-summary.json'),
+      baselinePassEvidence: fileReference('test/replay/trace/clean-correct-run/test-artifacts/trace/e2e-trace-summary-epic-5.json'),
+      mutatedFailEvidence: fileReference('test/replay/trace/seeded-correct-run/test-artifacts/trace/e2e-trace-summary-epic-4.json'),
       rollbackVerified: true,
     },
     expectedClean: false,
@@ -662,7 +662,7 @@ function buildTraceProbes() {
       'a false positive. It is the control that stops a trace suite scoring well by calling everything a gap.',
     qualification: {
       route: 'clean-control',
-      baselinePassEvidence: fileReference('test/replay/trace/clean-correct-run/test-artifacts/e2e-trace-summary.json'),
+      baselinePassEvidence: fileReference('test/replay/trace/clean-correct-run/test-artifacts/trace/e2e-trace-summary-epic-5.json'),
       revisionCommitDigest: corpusDigest,
       noKnownDefectStatement: clean.purpose,
     },
@@ -1242,8 +1242,8 @@ function buildNfrProbes() {
   // The stored runs the two evidence fields point at. The clean bundle's audit is
   // the baseline: four PASS domains and no gap. The gapped bundle's audit is what
   // the plants produce, and it is the same document test/replay/nfr/ scores.
-  const baselineReport = 'test/replay/nfr/clean-correct-audit/test-artifacts/nfr-assessment.md';
-  const mutatedReport = 'test/replay/nfr/gapped-correct-audit/test-artifacts/nfr-assessment.md';
+  const baselineReport = 'test/replay/nfr/clean-correct-audit/test-artifacts/nfr/nfr-assessment-system.md';
+  const mutatedReport = 'test/replay/nfr/gapped-correct-audit/test-artifacts/nfr/nfr-assessment-system.md';
 
   const gappedOracles = nfrOraclesFor(contract, gapped.id);
   const unknownOracleId = nfrOracleReading(gappedOracles, NFR_UNKNOWN_TOKEN, gapped.id);

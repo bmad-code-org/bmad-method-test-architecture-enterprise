@@ -1,16 +1,17 @@
 ---
 name: 'step-01-load-context'
-description: 'Load knowledge base, determine scope, and resolve context artifacts'
+description: 'Load knowledge base, determine scope, resolve context artifacts, and resolve run identity'
 nextStepFile: '{skill-root}/steps-c/step-02-discover-tests.md'
+resumeStepFile: '{skill-root}/steps-c/step-01b-resume.md'
 knowledgeIndex: './resources/tea-index.csv'
-outputFile: '{test_artifacts}/test-review.md'
+outputFile: '{test_artifacts}/test-review/test-review-{run_key}.md'
 ---
 
 # Step 1: Load Context & Knowledge Base
 
 ## STEP GOAL
 
-Determine review scope, load required knowledge fragments, and resolve the read-only context set the tests are judged against.
+Determine review scope, load required knowledge fragments, resolve the read-only context set the tests are judged against, and resolve the run identity that names this run's report.
 
 ## MANDATORY EXECUTION RULES
 
@@ -151,28 +152,88 @@ Coverage mapping and coverage gates are out of scope in `test-review`. Route tho
 
 ---
 
-## 4. Save Progress
+## 4. Resolve Run Identity
 
-**Save this step's accumulated work to `{outputFile}`.** When `output_file_override` is non-empty it IS `{outputFile}`, replacing the step frontmatter default.
+Every run writes its report to a file whose name carries the run's identity, so a review of one story never overwrites or merges into a review of another. Resolve `run_scope` and `run_key` **now**, before any progress is saved.
 
-- **If `{outputFile}` does not exist** (first save), create it using the workflow template (if available) with YAML frontmatter:
+Apply the first rule that matches:
 
-  ```yaml
-  ---
-  workflowType: 'testarch-test-review'
-  stepsCompleted: ['step-01-load-context']
-  lastStep: 'step-01-load-context'
-  lastSaved: '{date}'
-  ---
-  ```
+1. **The user named a story or epic in this invocation.** Use it.
+2. **The context set read in section 3 carries exactly one story or epic.** A story comes from a BMM story file (a basename such as `1-2-user-authentication.md`, or an H1 such as `Story 1.2: User Authentication`). An epic comes from an epic document's metadata, H1 heading, or filename. Use only artifacts section 3 actually read. Never go looking for a story or epic to name the run.
+3. **The context set carries several stories or epics.** Interactive runs list the candidates and ask which one this review covers. **Halt** until the user answers. Headless runs never ask: they fall through to rule 4, and step 4 states in the report that the context named several scopes, so the run was keyed to its reviewed target.
+4. **No story or epic applies.** When `review_scope` is `suite`, the scope is the whole system. Otherwise the scope is the reviewed target: the project-relative path of the reviewed file (`single`) or directory (`directory`). When `review_files` sets the review set, the target is the one file it names, or the deepest directory that contains every file it names.
 
-  Then write this step's output below the frontmatter.
+Then set the identity from the resolved scope:
 
-- **If `{outputFile}` already exists**, update:
-  - Add `'step-01-load-context'` to `stepsCompleted` array (only if not already present)
-  - Set `lastStep: 'step-01-load-context'`
-  - Set `lastSaved: '{date}'`
-  - Append this step's output to the appropriate section of the document.
+| Resolved scope  | `run_scope` | `run_key`           |
+| --------------- | ----------- | ------------------- |
+| Story           | `story`     | `story-{story_key}` |
+| Epic            | `epic`      | `epic-{epic_num}`   |
+| Whole system    | `system`    | `system`            |
+| Reviewed target | `target`    | `target-{slug}`     |
+
+- `story_key` is the BMM story file basename without `.md` (for example `1-2-user-authentication`). Without a story file, use the story id with `.` replaced by `-` (`1.2` becomes `1-2`).
+- `epic_num` is the epic's number. An epic with no number uses the slug of its title.
+- `{slug}` is the slug of the target path. If the slug comes out empty (the target is the project root), the scope is the whole system: `system`.
+
+Slug rule:
+
+- lowercase the text
+- replace every run of characters outside `a-z` and `0-9` with a single `-`
+- trim leading and trailing `-`
+- truncate to 64 characters
+
+For example, `tests/e2e/checkout.spec.ts` becomes `target-tests-e2e-checkout-spec-ts`.
+
+`{outputFile}` is `{test_artifacts}/test-review/test-review-{run_key}.md`. When `output_file_override` is non-empty it IS `{outputFile}`, replacing that path; `run_scope` and `run_key` still resolve and are still recorded in the report frontmatter.
+
+Carry `run_scope` and `run_key` forward through every remaining step unchanged. Later steps never re-derive them.
+
+---
+
+## 5. Check for an Existing Report
+
+Check whether `{outputFile}` already exists. If it exists without `workflowStatus` (a report from before run status was recorded), infer it from `lastStep`: `step-04-generate-report` means `completed`, and any other step means `in-progress`.
+
+A report at this path belongs to a previous run of the **same** scope; reports for other scopes live under their own filenames and are never read or written here. Unless `output_file_override` names it, the pre-scoping report at `{test_artifacts}/test-review.md` is never this run's output: Resume migrates it, and Create leaves it untouched.
+
+- **Does not exist:** this is a fresh run. Proceed to Save Progress.
+- **Exists with `workflowStatus: 'in-progress'`:** a previous run for this scope was interrupted.
+  - Interactive runs display its `lastStep` and `lastSaved`, then ask:
+
+    > "An unfinished test review for `{run_key}` was last saved {lastSaved} at step {lastStep}. Resume it, or start over? Starting over replaces the report."
+
+    **Halt** until the user answers. If they resume, load `{resumeStepFile}`, read it completely, and execute it. If they start over, replace `{outputFile}` entirely in Save Progress.
+
+  - Headless runs never ask: they start over and replace `{outputFile}` entirely in Save Progress.
+
+- **Exists with `workflowStatus: 'completed'`:** a finished run for this scope. Replace `{outputFile}` entirely in Save Progress.
+
+**Never merge two runs into one report.** A `stepsCompleted` array or findings carried over from a prior run make the report describe work this run never performed.
+
+---
+
+## 6. Save Progress
+
+**Save this step's accumulated work to `{outputFile}`.** Create the `{test_artifacts}/test-review/` folder first if it does not exist (skip this when `output_file_override` sets the path).
+
+Create the file from the workflow template (if available), replacing any prior content as decided in the previous section, with YAML frontmatter:
+
+```yaml
+---
+workflowType: 'testarch-test-review'
+runScope: '{run_scope}'
+runKey: '{run_key}'
+workflowStatus: 'in-progress'
+stepsCompleted: ['step-01-load-context']
+lastStep: 'step-01-load-context'
+lastSaved: '{date}'
+---
+```
+
+Then write this step's output below the frontmatter.
+
+`runScope` and `runKey` are this run's identity. Later steps carry both forward unchanged, and Resume mode refuses to continue a report whose `runKey` does not match the run being resumed.
 
 **Update `inputDocuments`**: Set `inputDocuments` in the output template frontmatter to the list of artifact paths loaded in this step (e.g., knowledge fragments, test design documents, configuration files).
 
@@ -183,8 +244,13 @@ Load next step: `{nextStepFile}`
 ### ✅ SUCCESS:
 
 - Step completed in full with required outputs
+- `run_scope` and `run_key` resolved before the first save, and the report written to the path they name (or to `output_file_override`, with both still recorded)
+- Any pre-existing report for this scope was either resumed or replaced, and a headless run never asked
 
 ### ❌ SYSTEM FAILURE:
 
 - Skipped sequence steps or missing outputs
+- Saving progress before run identity is resolved, or writing to a report path that carries no run identity
+- Appending this run's output to a report left by a previous run
+- Naming the run after a story or epic that section 3 did not read
   **Master Rule:** Skipping steps is FORBIDDEN.

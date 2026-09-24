@@ -3,7 +3,7 @@ name: 'step-02-load-context'
 description: 'Load documents, configuration, and knowledge fragments for the chosen mode'
 nextStepFile: '{skill-root}/steps-c/step-03-risk-and-testability.md'
 knowledgeIndex: './resources/tea-index.csv'
-outputFile: '{test_artifacts}/test-design-progress-{run_key}.md'
+outputFile: '{test_artifacts}/test-design/test-design-progress-{run_key}.md'
 ---
 
 # Step 2: Load Context & Knowledge Base
@@ -88,7 +88,7 @@ Load:
 - Epic and story docs with acceptance criteria
 - PRD (if available)
 - Architecture / tech-spec (if available)
-- Prior system-level test-design outputs (if available)
+- Prior system-level test-design outputs (if available) from `{test_artifacts}/test-design/`, falling back to the legacy root `{test_artifacts}/`
 
 Extract:
 
@@ -113,15 +113,15 @@ If epic-level:
 **CLI Exploration Steps:**
 All commands use the same named session to target the correct browser:
 
-1. `playwright-cli -s=tea-explore open <target_url>`
-2. `playwright-cli -s=tea-explore snapshot` → capture page structure and element refs
-3. `playwright-cli -s=tea-explore screenshot --filename={test_artifacts}/exploration/explore-<page>.png`
+1. `playwright-cli -s=tea-test-design-{run_key} open <target_url>`
+2. `playwright-cli -s=tea-test-design-{run_key} snapshot` → capture page structure and element refs
+3. `playwright-cli -s=tea-test-design-{run_key} screenshot --filename={test_artifacts}/test-design/exploration/explore-{run_key}-<page>.png`
 4. Analyze snapshot output to identify testable elements and flows
-5. `playwright-cli -s=tea-explore close`
+5. `playwright-cli -s=tea-test-design-{run_key} close`
 
-Store artifacts under `{test_artifacts}/exploration/`
+Store artifacts under `{test_artifacts}/test-design/exploration/`
 
-> **Session Hygiene:** Always close sessions using `playwright-cli -s=tea-explore close`. Do NOT use `close-all` — it kills every session on the machine and breaks parallel execution.
+> **Session Hygiene:** Always close sessions using `playwright-cli -s=tea-test-design-{run_key} close`. Do NOT use `close-all` — it kills every session on the machine and breaks parallel execution.
 
 ---
 
@@ -153,7 +153,7 @@ Use `{knowledgeIndex}` to select and load only relevant fragments.
 **Epic-Level NFR Loading:**
 
 - Load `nfr-criteria.md` when the epic/story includes security, performance, reliability, scalability, compliance, maintainability, or operational requirements.
-- Use prior system-level NFR planning from `test-design-architecture.md` or `test-design-qa.md` if present.
+- Use prior system-level NFR planning from `test-design-architecture.md` or `test-design-qa.md` if present. Look in `{test_artifacts}/test-design/` first, then in the legacy root `{test_artifacts}/` where runs before the `test-design/` folder wrote them.
 
 **Playwright CLI (if `tea_browser_automation` is "cli" or "auto"):**
 

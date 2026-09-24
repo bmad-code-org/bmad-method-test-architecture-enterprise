@@ -23,7 +23,7 @@ variables:
   test_dir: "{project-root}/tests" # Root test directory
 
 # Output configuration
-default_output_file: "{test_artifacts}/atdd-checklist-{story_key}.md"
+default_output_file: "{test_artifacts}/atdd/atdd-checklist-{story_key}.md"
 
 # Required tools
 required_tools:

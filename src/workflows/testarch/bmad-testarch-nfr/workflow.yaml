@@ -24,7 +24,7 @@ variables:
   custom_nfr_categories: "" # Optional additional categories beyond standard (security, performance, reliability, maintainability)
 
 # Output configuration
-default_output_file: "{test_artifacts}/nfr-assessment.md"
+default_output_file: "{test_artifacts}/nfr/nfr-assessment-{run_key}.md"
 
 # Required tools
 required_tools:

@@ -1195,7 +1195,7 @@ function buildPrompt(set, { ciPlatform = PLATFORM } = {}) {
     '',
     '----- what to produce -----',
     `Write the pipeline configuration to the path step 2 resolves for \`ci_platform\` under \`${root}/\`, and write`,
-    `\`${root}/test-artifacts/ci-pipeline-progress.md\` as the steps direct.`,
+    `\`${root}/test-artifacts/ci/ci-pipeline-progress.md\` as the steps direct.`,
     '',
     `Do not edit or delete any file that was under \`${root}/\` when you started. This workflow adds a pipeline to a`,
     'project and changes nothing the project already had.',

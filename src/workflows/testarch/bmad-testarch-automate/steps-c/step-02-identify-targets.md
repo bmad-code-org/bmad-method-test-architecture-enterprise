@@ -1,7 +1,7 @@
 ---
 name: 'step-02-identify-targets'
 description: 'Identify automation targets and create coverage plan'
-outputFile: '{test_artifacts}/automation-summary.md'
+outputFile: '{test_artifacts}/automate/automation-summary-{run_key}.md'
 nextStepFile: '{skill-root}/steps-c/step-03-generate-tests.md'
 ---
 
@@ -41,7 +41,7 @@ Determine what needs to be tested and select appropriate test levels and priorit
 **BMad-Integrated:**
 
 - Map acceptance criteria to test scenarios
-- Check for existing ATDD outputs to avoid duplication
+- Check for existing ATDD outputs to avoid duplication. Look for the story's checklist at `{test_artifacts}/atdd/atdd-checklist-{story_key}.md` first, then the legacy root `{test_artifacts}/atdd-checklist-{story_key}.md`. When this run has no story file, `story_key` is only the dashed story id (`1-2`) while ATDD named its checklist from the story file (`1-2-user-authentication`): if neither exact name exists, look for `{test_artifacts}/atdd/atdd-checklist-{dashed story id}-*.md`, then the same pattern at the legacy root, and accept a match only when its frontmatter `storyId` or `storyKey` names this story. For an epic or wider scope, check every `atdd-checklist-*.md` for the in-scope stories in both locations. Name the checklists you found, and read their `generatedTestFiles` to see which scaffolds already exist.
 - Expand coverage with edge cases and negative paths
 
 **Standalone:**
@@ -58,12 +58,12 @@ Determine what needs to be tested and select appropriate test levels and priorit
 
 Use CLI to explore the application and identify testable pages/flows:
 
-1. `playwright-cli -s=tea-automate open <target_url>`
-2. `playwright-cli -s=tea-automate snapshot` → capture page structure and element refs
+1. `playwright-cli -s=tea-automate-{run_key} open <target_url>`
+2. `playwright-cli -s=tea-automate-{run_key} snapshot` → capture page structure and element refs
 3. Analyze snapshot output to identify testable elements and flows
-4. `playwright-cli -s=tea-automate close`
+4. `playwright-cli -s=tea-automate-{run_key} close`
 
-> **Session Hygiene:** Always close sessions using `playwright-cli -s=tea-automate close`. Do NOT use `close-all` — it kills every session on the machine and breaks parallel execution.
+> **Session Hygiene:** Always close sessions using `playwright-cli -s=tea-automate-{run_key} close`. Do NOT use `close-all` — it kills every session on the machine and breaks parallel execution.
 
 **If {detected_stack} is `backend` or `fullstack`:**
 
@@ -154,6 +154,9 @@ Produce a concise coverage plan:
 
   ```yaml
   ---
+  runScope: '{run_scope}'
+  runKey: '{run_key}'
+  workflowStatus: 'in-progress'
   stepsCompleted: ['step-02-identify-targets']
   lastStep: 'step-02-identify-targets'
   lastSaved: '{date}'
@@ -162,7 +165,9 @@ Produce a concise coverage plan:
 
   Then write this step's output below the frontmatter.
 
-- **If `{outputFile}` already exists**, update:
+- **If `{outputFile}` already exists** (written earlier in this same run), update:
+  - Leave `runScope` and `runKey` exactly as step 1 wrote them
+  - Set `workflowStatus: 'in-progress'`
   - Add `'step-02-identify-targets'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-02-identify-targets'`
   - Set `lastSaved: '{date}'`

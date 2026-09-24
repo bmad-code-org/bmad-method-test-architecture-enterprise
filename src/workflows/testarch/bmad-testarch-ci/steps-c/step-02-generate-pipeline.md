@@ -3,7 +3,7 @@ name: 'step-02-generate-pipeline'
 description: 'Generate CI pipeline configuration with adaptive orchestration (agent-team, subagent, or sequential)'
 nextStepFile: '{skill-root}/steps-c/step-03-configure-quality-gates.md'
 knowledgeIndex: './resources/tea-index.csv'
-outputFile: '{test_artifacts}/ci-pipeline-progress.md'
+outputFile: '{test_artifacts}/ci/ci-pipeline-progress.md'
 ---
 
 # Step 2: Generate CI Pipeline
@@ -270,6 +270,7 @@ Required CI secrets: `PACT_BROKER_BASE_URL`, `PACT_BROKER_TOKEN`
 
   ```yaml
   ---
+  workflowStatus: 'in-progress'
   stepsCompleted: ['step-02-generate-pipeline']
   lastStep: 'step-02-generate-pipeline'
   lastSaved: '{date}'
@@ -279,6 +280,7 @@ Required CI secrets: `PACT_BROKER_BASE_URL`, `PACT_BROKER_TOKEN`
   Then write this step's output below the frontmatter.
 
 - **If `{outputFile}` already exists**, update:
+  - Set `workflowStatus: 'in-progress'`
   - Add `'step-02-generate-pipeline'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-02-generate-pipeline'`
   - Set `lastSaved: '{date}'`

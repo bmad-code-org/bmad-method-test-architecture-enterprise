@@ -31,7 +31,7 @@ TEA's state today, as `test/evals/suite-manifest.json` registers it:
 | Transcript-harness infrastructure   | A trivial scripted three-turn session, driving `runTranscript` through a stub agent to prove the multi-turn engine itself; discharges no skill's coverage obligation                           | `test/eval-transcript.js`         |
 | Behavioral eval, `teach-me-testing` | One case, two turns, against a real vendor: turn 1 plays a full first session with a seeded wrong quiz answer and the review it triggers, turn 2 is a fresh process proving progress persisted | `test/eval-teach-me-testing.js`   |
 | Behavioral Evaluation Contracts     | Sixteen, all compiling, all generated, every oracle evaluated against stored evidence                                                                                                          | `test/contracts/`                 |
-| Replay corpus                       | 108 stored outputs scored with no model call: 3 selections, 6 atdd reports, 10 verdicts, 14 trace pairs, 26 nfr reports, 21 ci runs, 11 test-design documents, 17 replies                      | `test/replay/`                    |
+| Replay corpus                       | 123 stored outputs scored with no model call: 3 selections, 13 atdd reports, 10 verdicts, 15 trace pairs, 29 nfr reports, 21 ci runs, 12 test-design documents, 20 replies                     | `test/replay/`                    |
 
 Ten of TEA's eleven skills now have a real suite. The eleventh, `bmad-testarch-evaluate`, is named in `test/evals/suite-manifest.json`'s `deferred` array with its owner, missing evidence, and exit condition until Story 1.16 lands its own suite, which is what a suite list can only claim honestly instead of implying coverage a skill does not have.
 
@@ -41,7 +41,7 @@ Live baselines across the complete suite are recorded in `test/results/eval-all/
 
 ### An observable output
 
-The skill has to leave something behind that is not the conversation. `test-review` writes a JSON verdict and a markdown report. `trace` writes `test-artifacts/e2e-trace-summary.json` and `test-artifacts/traceability-matrix.md`. Fragment selection answers with a JSON object on standard output. Each of those is a thing an oracle can address.
+The skill has to leave something behind that is not the conversation. `test-review` writes a JSON verdict and a markdown report. `trace` writes `test-artifacts/trace/e2e-trace-summary-{run_key}.json` and `test-artifacts/trace/traceability-matrix-{run_key}.md`. Fragment selection answers with a JSON object on standard output. Each of those is a thing an oracle can address.
 
 If the skill's only output is a transcript, the rest of this guide does not apply to it yet. See [What does not transfer](#what-does-not-transfer).
 
@@ -238,14 +238,14 @@ Every harness supports the same three:
 
 ### Replay the scorers without a model
 
-A harness is mostly scoring logic, and scoring logic is code that needs its own regression test. `test/replay/` holds 108 stored outputs and `npm run test:eval-replay` scores them with no model call and no network. Two rules make the corpus worth having:
+A harness is mostly scoring logic, and scoring logic is code that needs its own regression test. `test/replay/` holds 123 stored outputs and `npm run test:eval-replay` scores them with no model call and no network. Two rules make the corpus worth having:
 
 - **Derive each expected result by hand from the ground truth**, before running the code under test. A result generated from the scorer proves the scorer agrees with itself.
 - **Carry a scorer version.** A parser or scorer change either reproduces every stored result or bumps `SCORER_VERSION` in an edit somebody has to review. `--accept` refuses to re-record until that bump happens.
 
 Deriving by hand is not ceremony. Writing the `trace` parser-rejection case by hand found a defect: `readMatrix` closed a criterion section only at the next criterion-shaped heading, so a `### Gap Analysis` heading left the last section open and a test cited beneath it was recorded as that criterion's evidence. The derivation gave 10 citations and the code gave 11.
 
-Two of the 108 stored outputs are real captures. The other 106 are constructed, because the only real outputs this repository has banked from live runs are both unscoreable.
+Two of the 123 stored outputs are real captures. The other 121 are constructed, because the only real outputs this repository has banked from live runs are both unscoreable.
 
 ## 5. Express the skill as a contract
 
@@ -299,7 +299,7 @@ The `npm test` chain is credential-free, makes no network call and no model call
 npm run test:eval-data          # fragment-selection corpus, static
 npm run test:eval-trace-data    # trace corpus, static
 npm run test:eval-schemas       # manifest against harness constants, and the preflight argv
-npm run test:eval-replay        # 108 stored outputs against the scorers
+npm run test:eval-replay        # 123 stored outputs against the scorers
 npm run test:contract-sources   # are the contracts what their sources generate?
 npm run test:contracts          # does the compiler still say what the baseline records?
 npm run test:contract-oracles   # does every oracle resolve, and agree with the scorer?

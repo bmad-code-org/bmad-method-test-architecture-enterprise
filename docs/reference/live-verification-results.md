@@ -24,7 +24,7 @@ Any producer can emit it. An agent that drove the app, a shell script wrapping a
 live_results_input: '{test_artifacts}/live-verification-results.json'
 ```
 
-Set a different path in the `trace` workflow's `workflow.yaml` if you produce the file elsewhere. When the file is absent, `trace` uses static test discovery only.
+The file sits at the root of `{test_artifacts}`, outside the `trace/` folder where `trace` writes its own outputs, because other tools and people produce it. Set a different path in the `trace` workflow's `workflow.yaml` if you produce the file elsewhere. When the file is absent, `trace` uses static test discovery only.
 
 ## File schema
 
@@ -58,7 +58,7 @@ The tables below distinguish **Enforced** fields, whose absence stops a record o
 | `source_sha`     | **Enforced.** The git commit the observations were made against. Per-result `source_sha` overrides it.   |
 | `results`        | **Enforced.** Must be an array. May be empty. Anything else makes the file unreadable.                   |
 | `observed_at`    | Recorded. ISO 8601 timestamp. Per-result `observed_at` overrides it.                                     |
-| `producer`       | Recorded. Free text naming whatever recorded the run. Reported back in `e2e-trace-summary.json`.         |
+| `producer`       | Recorded. Free text naming whatever recorded the run. Reported back in the run's trace summary.          |
 
 ### Result records
 
@@ -146,7 +146,7 @@ Because static discovery never runs, the `auth_negative_path_status` and `error_
 
 ## What you get back
 
-`e2e-trace-summary.json` (schema `0.2.0` and later) carries a `live_evidence` block:
+The run's summary, `trace/e2e-trace-summary-{run_key}.json` under `{test_artifacts}` (schema `0.2.0` and later), carries a `live_evidence` block:
 
 ```json
 {

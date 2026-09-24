@@ -699,11 +699,22 @@ async function checkTraceProbe(runDir) {
       JSON.stringify(observation.artifacts.matrix).slice(0, 200),
     );
     assert(
-      observation.stdout.kind === 'text' && /Wrote .*traceability-matrix\.md/.test(observation.stdout.value),
+      observation.stdout.kind === 'text' && /Wrote .*trace[\\/]traceability-matrix-system\.md/.test(observation.stdout.value),
       'the runner forwards what the agent printed',
       JSON.stringify(observation.stdout).slice(0, 200),
     );
-    assertTraceMetadata(observation.artifacts.summary.value, 'test-artifacts/traceability-matrix.md', 'the default trace summary');
+    assertTraceMetadata(
+      observation.artifacts.summary.value,
+      'test-artifacts/trace/traceability-matrix-system.md',
+      'the default trace summary',
+    );
+    // step-01 section 4 leaves the target id and label empty under `system`.
+    const target = observation.artifacts.summary.value?.target;
+    assert(
+      target?.id === null && target?.label === null,
+      'the default trace summary names no target id or label under the system run key',
+      JSON.stringify(target),
+    );
   }
 
   // The per-run override the harness supplies: the workspace holds project/, so
@@ -712,8 +723,8 @@ async function checkTraceProbe(runDir) {
   // read back says which artifact map won.
   const staged = await traceProbe(runDir, 'trace-staged', 'complete', {
     artifacts: {
-      summary: path.join('project', 'test-artifacts', 'e2e-trace-summary.json'),
-      matrix: path.join('project', 'test-artifacts', 'traceability-matrix.md'),
+      summary: path.join('project', 'test-artifacts', 'trace', 'e2e-trace-summary-epic-5.json'),
+      matrix: path.join('project', 'test-artifacts', 'trace', 'traceability-matrix-epic-5.md'),
     },
     stage: (cwd) => {
       fs.mkdirSync(path.join(cwd, 'project', 'docs', 'epics'), { recursive: true });
@@ -728,7 +739,7 @@ async function checkTraceProbe(runDir) {
   if (staged.ok && staged.observation.artifacts.summary.kind === 'json') {
     assertTraceMetadata(
       staged.observation.artifacts.summary.value,
-      'project/test-artifacts/traceability-matrix.md',
+      'project/test-artifacts/trace/traceability-matrix-epic-5.md',
       'the overridden trace summary',
     );
   }
@@ -818,7 +829,7 @@ async function checkNfrProbe(runDir) {
       JSON.stringify(observation.artifacts.report).slice(0, 200),
     );
     assert(
-      observation.stdout.kind === 'text' && /Wrote .*nfr-assessment\.md/.test(observation.stdout.value),
+      observation.stdout.kind === 'text' && /Wrote .*nfr[\\/]nfr-assessment-system\.md/.test(observation.stdout.value),
       'the runner forwards what the agent printed',
       JSON.stringify(observation.stdout).slice(0, 200),
     );
@@ -829,7 +840,7 @@ async function checkNfrProbe(runDir) {
   // authorization cwd. The prompt names that root, and the stub picks its report
   // by it, so the overall status read back says which artifact map won.
   const staged = await nfrProbe(runDir, 'nfr-staged', 'complete', {
-    artifacts: { report: path.join('atlas-notification-relay', 'test-artifacts', 'nfr-assessment.md') },
+    artifacts: { report: path.join('atlas-notification-relay', 'test-artifacts', 'nfr', 'nfr-assessment-system.md') },
     prompt: '- `{project-root}`: `atlas-notification-relay`\n',
   });
   assert(
@@ -1121,7 +1132,7 @@ function checkNfrHarnessSmoke(runDir) {
     JSON.stringify(runner?.repetitions),
   );
   assert(runner?.failures?.length === 0, 'every threshold is met on the correct audit', JSON.stringify(runner?.failures));
-  assertEmbeddedArtifactEvidence(complete.record, ['test-artifacts/nfr-assessment.md'], 'nfr');
+  assertEmbeddedArtifactEvidence(complete.record, ['test-artifacts/nfr/nfr-assessment-system.md'], 'nfr');
   assert(
     runner?.version === 'stub-agent 1.0.0',
     'the pre-flight recorded the version the stub answered --version with',
@@ -1266,7 +1277,12 @@ function checkTraceHarnessSmoke(runDir) {
   assert(runner?.failures?.length === 0, 'every threshold is met on the correct run', JSON.stringify(runner?.failures));
   assertEmbeddedArtifactEvidence(
     complete.record,
-    ['test-artifacts/e2e-trace-summary.json', 'test-artifacts/traceability-matrix.md'],
+    [
+      'test-artifacts/trace/e2e-trace-summary-epic-4.json',
+      'test-artifacts/trace/traceability-matrix-epic-4.md',
+      'test-artifacts/trace/e2e-trace-summary-epic-5.json',
+      'test-artifacts/trace/traceability-matrix-epic-5.md',
+    ],
     'trace',
   );
   assert(
@@ -1339,7 +1355,7 @@ function checkTestDesignHarnessSmoke(runDir) {
     'every declared repetition completed: two sets, two runs each',
     JSON.stringify(runner?.repetitions),
   );
-  assertEmbeddedArtifactEvidence(complete.record, ['test-artifacts/test-design-epic-7.md'], 'test-design');
+  assertEmbeddedArtifactEvidence(complete.record, ['test-artifacts/test-design/test-design-epic-7.md'], 'test-design');
   assert(runner?.failures?.length === 0, 'every threshold is met on the correct run', JSON.stringify(runner?.failures));
 
   // The gate again, read off the record itself, because the record is what a later

@@ -10,11 +10,11 @@
   ],
   "id": "seeded-rejected-evidence-omitted",
   "suite": "trace",
-  "scorerVersion": 4,
+  "scorerVersion": 14,
   "storedOutput": {
     "origin": "constructed",
-    "summary": "test-artifacts/e2e-trace-summary.json",
-    "matrix": "test-artifacts/traceability-matrix.md"
+    "summary": "test-artifacts/trace/e2e-trace-summary-epic-4.json",
+    "matrix": "test-artifacts/trace/traceability-matrix-epic-4.md"
   },
   "inputs": {
     "groundTruth": "test/fixtures/trace-eval/ground-truth.json",
@@ -50,7 +50,7 @@
     "arithmetic": { "checks": 40, "passed": 40, "failed": [] },
     "gateCriteria": { "checks": 12, "passed": 12, "failed": [] },
     "oracleResolution": { "checks": 7, "passed": 7, "failed": [] },
-    "runMetadata": { "checks": 10, "passed": 10, "failed": [] },
+    "runMetadata": { "checks": 12, "passed": 12, "failed": [] },
     "rejectedEvidence": {
       "checks": 3,
       "passed": 0,

@@ -1,7 +1,7 @@
 ---
 name: 'step-02-generation-mode'
 description: 'Choose AI generation or recording mode'
-outputFile: '{test_artifacts}/atdd-checklist-{story_key}.md'
+outputFile: '{test_artifacts}/atdd/atdd-checklist-{story_key}.md'
 nextStepFile: '{skill-root}/steps-c/step-03-test-strategy.md'
 ---
 
@@ -59,10 +59,10 @@ Use recording when UI interactions need live browser verification.
 
 If `auto`:
 
-> **Note:** `${timestamp}` is a placeholder the agent should replace with a unique value (e.g., epoch seconds) for session isolation.
+> **Note:** `{run_key}` is the `run_key` Step 1 resolved, and `${timestamp}` is a placeholder the agent should replace with a unique value (e.g., epoch seconds). Together they keep this run's browser session apart from sessions other runs on the machine opened.
 
 - **Simple recording** (snapshot selectors, capture structure): Use CLI
-  - `playwright-cli -s=tea-atdd-${timestamp} open <url>` → `playwright-cli -s=tea-atdd-${timestamp} snapshot` → extract refs
+  - `playwright-cli -s=tea-atdd-{run_key}-${timestamp} open <url>` → `playwright-cli -s=tea-atdd-{run_key}-${timestamp} snapshot` → extract refs
 - **Complex recording** (drag/drop, wizards, multi-step state): Use MCP
   - Full browser automation with rich tool semantics
 - **Fallback:** If preferred tool unavailable, use the other; if neither, skip recording
@@ -70,7 +70,7 @@ If `auto`:
 If `cli`:
 
 - Use Playwright CLI for all recording
-- `playwright-cli -s=tea-atdd-${timestamp} open <url>`, `snapshot`, `screenshot`, `click <ref>`, etc.
+- `playwright-cli -s=tea-atdd-{run_key}-${timestamp} open <url>`, `snapshot`, `screenshot`, `click <ref>`, etc.
 
 If `mcp`:
 
@@ -97,6 +97,9 @@ State the chosen mode and why. Then proceed.
 
   ```yaml
   ---
+  runScope: '{run_scope}'
+  runKey: '{run_key}'
+  workflowStatus: 'in-progress'
   stepsCompleted: ['step-02-generation-mode']
   lastStep: 'step-02-generation-mode'
   lastSaved: '{date}'
@@ -105,7 +108,9 @@ State the chosen mode and why. Then proceed.
 
   Then write this step's output below the frontmatter.
 
-- **If `{outputFile}` already exists**, update:
+- **If `{outputFile}` already exists** (written earlier in this same run), update:
+  - Leave `runScope` and `runKey` exactly as step 1 wrote them
+  - Set `workflowStatus: 'in-progress'`
   - Add `'step-02-generation-mode'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-02-generation-mode'`
   - Set `lastSaved: '{date}'`

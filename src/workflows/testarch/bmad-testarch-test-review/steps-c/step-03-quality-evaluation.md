@@ -47,12 +47,13 @@ Coverage is intentionally excluded from this workflow and handled by `trace`.
 
 ### 1. Prepare Execution Context
 
-**Resolve the run's unique timestamp:**
+**Resolve the run's unique timestamp, and take `run_key` from Step 1:**
 
 ```javascript
 // Headless: the orchestrating CLI states `tea_run_id` in the prompt. Use it verbatim.
 // Interactive, with no tea_run_id supplied:
 const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+const runKey = '{run_key}'; // resolved in Step 1 and carried forward unchanged
 ```
 
 When `tea_run_id` is stated, that value IS the timestamp. Do not generate one beside
@@ -60,6 +61,8 @@ it. An agent with no shell cannot run the line above and will emit a plausible-l
 string instead; nothing cleans `/tmp/tea-test-review-*`, and section 5 below checks
 only that the four files exist, so two runs that landed on the same invented value
 would aggregate each other's scores into one report.
+Every temp file name also carries `run_key` before the timestamp, so two runs that
+review different scopes write different files even when their timestamps match.
 
 **Prepare context for all subagents:**
 
@@ -96,6 +99,7 @@ const subagentContext = {
     pactjs_utils_installed: /* from Step 1: @seontechnologies/pactjs-utils in package.json */,
     pact_mcp: config.tea_pact_mcp || 'mcp',  // "mcp" | "none"; broker steps degrade when the tools are unreachable
   },
+  run_key: runKey,
   timestamp: timestamp
 };
 ```
@@ -200,9 +204,10 @@ resolve. Write all of the following into each worker's launch prompt literally:
 4. `playwright_utils_installed` and `pactjs_utils_installed`. A worker that cannot
    see them cannot resolve M9, M10 or L9's run-level precondition, and those rows
    vanish from the run the same silent way.
-5. The `timestamp` from section 1, already substituted into the worker's output
-   path. Do not ask a worker to generate one: four workers writing four different
-   timestamps produce four paths section 5 will not find, and the workflow aborts.
+5. The `run_key` and `timestamp` from section 1, already substituted into the
+   worker's output path. Do not ask a worker to generate either: four workers writing
+   four different timestamps produce four paths section 5 will not find, and the
+   workflow aborts.
 
 Every one of these failures is a quieter score rather than a louder error, so state
 the payload rather than assuming the worker can reach it.
@@ -210,7 +215,7 @@ the payload rather than assuming the worker can reach it.
 #### Subagent A: Determinism
 
 - File: `./step-03a-subagent-determinism.md`
-- Output: `/tmp/tea-test-review-determinism-${timestamp}.json`
+- Output: `/tmp/tea-test-review-determinism-${runKey}-${timestamp}.json`
 - Execution:
   - `agent-team` or `subagent`: launch non-blocking
   - `sequential`: run blocking and wait
@@ -219,19 +224,19 @@ the payload rather than assuming the worker can reach it.
 #### Subagent B: Isolation
 
 - File: `./step-03b-subagent-isolation.md`
-- Output: `/tmp/tea-test-review-isolation-${timestamp}.json`
+- Output: `/tmp/tea-test-review-isolation-${runKey}-${timestamp}.json`
 - Status: Running... ⟳
 
 #### Subagent C: Maintainability
 
 - File: `./step-03c-subagent-maintainability.md`
-- Output: `/tmp/tea-test-review-maintainability-${timestamp}.json`
+- Output: `/tmp/tea-test-review-maintainability-${runKey}-${timestamp}.json`
 - Status: Running... ⟳
 
 #### Subagent D: Performance
 
 - File: `./step-03e-subagent-performance.md`
-- Output: `/tmp/tea-test-review-performance-${timestamp}.json`
+- Output: `/tmp/tea-test-review-performance-${runKey}-${timestamp}.json`
 - Status: Running... ⟳
 
 In `agent-team` and `subagent` modes, runtime decides worker scheduling and concurrency.
@@ -264,7 +269,7 @@ where one the agent invented is only as unique as the string it happened to pick
 
 ```javascript
 const outputs = ['determinism', 'isolation', 'maintainability', 'performance'].map(
-  (dim) => `/tmp/tea-test-review-${dim}-${timestamp}.json`,
+  (dim) => `/tmp/tea-test-review-${dim}-${runKey}-${timestamp}.json`,
 );
 
 outputs.forEach((output) => {
@@ -295,7 +300,7 @@ indistinguishable afterwards from the parallel run that was asked for.
 
 ### 7. Proceed to Aggregation
 
-Pass the same `timestamp` value to Step 3F (do not regenerate it). Step 3F must read the exact temp files written in this step.
+Pass the same `run_key` and `timestamp` values to Step 3F (do not regenerate them). Step 3F must read the exact temp files written in this step.
 
 Load next step: `{nextStepFile}`
 

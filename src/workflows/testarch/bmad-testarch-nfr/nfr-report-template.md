@@ -1,4 +1,7 @@
 ---
+runScope: ''
+runKey: ''
+workflowStatus: ''
 stepsCompleted: []
 lastStep: ''
 lastSaved: ''

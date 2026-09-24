@@ -7,9 +7,9 @@
     "probeClass": "gameability",
     "behaviorId": "B-002",
     "systemId": "tea-fragment-selection-bmad-testarch-atdd",
-    "implementationDigest": "sha256:082e3e8ada3879a158b310ac780b48377f7a3df28e07899612e0687eec31e791",
+    "implementationDigest": "sha256:2ef4b8fb3e51e19b1cec8ba4becad7a5bf4c97c7923de30e82945bee67cd9add",
     "artifactDigest": "sha256:ca0769bdf32393fe83dd36b326a3fe4930e58869d3d65c0363232c34220c9bc4",
-    "commitDigest": "sha256:082e3e8ada3879a158b310ac780b48377f7a3df28e07899612e0687eec31e791",
+    "commitDigest": "sha256:2ef4b8fb3e51e19b1cec8ba4becad7a5bf4c97c7923de30e82945bee67cd9add",
     "rationale": "A run that names every fragment in the index satisfies O-001 for atdd-frontend-playwright, because every mandated fragment is in the list, and violates O-002, because so is every forbidden one. The containment oracle alone cannot tell that reply from a correct selection, and the exclusion oracle can.",
     "qualification": {
       "route": "gameability",
@@ -86,9 +86,9 @@
     "probeClass": "zero-action",
     "behaviorId": "B-001",
     "systemId": "tea-fragment-selection-bmad-testarch-atdd",
-    "implementationDigest": "sha256:082e3e8ada3879a158b310ac780b48377f7a3df28e07899612e0687eec31e791",
+    "implementationDigest": "sha256:2ef4b8fb3e51e19b1cec8ba4becad7a5bf4c97c7923de30e82945bee67cd9add",
     "artifactDigest": "sha256:ca0769bdf32393fe83dd36b326a3fe4930e58869d3d65c0363232c34220c9bc4",
-    "commitDigest": "sha256:082e3e8ada3879a158b310ac780b48377f7a3df28e07899612e0687eec31e791",
+    "commitDigest": "sha256:2ef4b8fb3e51e19b1cec8ba4becad7a5bf4c97c7923de30e82945bee67cd9add",
     "rationale": "atdd-frontend-playwright declares the exact set the step files mandate and the exact set they exclude, so a selection naming the first and none of the second is the run this contract exists to confirm.",
     "qualification": {
       "route": "clean-control",
@@ -98,7 +98,7 @@
         "privateRef": null,
         "digest": "sha256:ca0769bdf32393fe83dd36b326a3fe4930e58869d3d65c0363232c34220c9bc4"
       },
-      "revisionCommitDigest": "sha256:082e3e8ada3879a158b310ac780b48377f7a3df28e07899612e0687eec31e791",
+      "revisionCommitDigest": "sha256:2ef4b8fb3e51e19b1cec8ba4becad7a5bf4c97c7923de30e82945bee67cd9add",
       "noKnownDefectStatement": "atdd-frontend-playwright's expected selection is derived from the bmad-testarch-atdd step files themselves, and npm run test:criteria-fragments fails when a fragment it names has left the index."
     },
     "expectedClean": true,

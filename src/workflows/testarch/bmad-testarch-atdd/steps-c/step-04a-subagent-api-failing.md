@@ -2,7 +2,7 @@
 name: 'step-04a-subagent-api-failing'
 description: 'Subagent: Generate red-phase API test scaffolds (TDD red phase)'
 subagent: true
-outputFile: '/tmp/tea-atdd-api-tests-{{timestamp}}.json'
+outputFile: '/tmp/tea-atdd-api-tests-{run_key}-{{timestamp}}.json'
 ---
 
 # Subagent 4A: Generate Red-Phase API Test Scaffolds (TDD Red Phase)
@@ -237,7 +237,7 @@ Identify fixtures needed for API tests:
 
 ## OUTPUT FORMAT
 
-Write JSON to temp file: `/tmp/tea-atdd-api-tests-{{timestamp}}.json`
+Write JSON to temp file: `/tmp/tea-atdd-api-tests-{run_key}-{{timestamp}}.json`
 
 ```json
 {

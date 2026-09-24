@@ -8,7 +8,7 @@ config_source: "{project-root}/_bmad/tea/config.yaml"
 output_folder: "{config_source}:output_folder"
 test_artifacts: "{config_source}:test_artifacts"
 user_name: "{config_source}:user_name"
-project_name: "{config_source}:project_name" # Emitted as `repo` in e2e-trace-summary.json and gate-decision.json
+project_name: "{config_source}:project_name" # Emitted as `repo` in {e2e_trace_summary_output} and {gate_decision_output}
 communication_language: "{config_source}:communication_language"
 document_output_language: "{config_source}:document_output_language"
 date: system-generated
@@ -32,18 +32,21 @@ variables:
   gate_type: "story" # story | epic | release | hotfix - determines gate scope
   decision_mode: "deterministic" # deterministic (rule-based) | manual (team decision)
   collection_mode: "contract_static" # contract_static | inventory_only | runtime_manifest | deferred_shared | waived | restricted | inaccessible
-  allow_gate: true # Emit gate_status and gate-decision.json only when collection is gate-eligible
+  allow_gate: true # Emit gate_status and {gate_decision_output} only when collection is gate-eligible
   coverage_basis: "auto" # auto | acceptance_criteria | synthetic_requirements | openapi_endpoints | user_journeys; Step 1 must resolve and persist a concrete value before Step 4/5 export
   summary_confidence: "auto" # auto | high | medium | low; Step 1 must resolve and persist a concrete value before Step 4/5 export
   allow_external_pointer_resolution: true # Follow local placeholder pointers (e.g., Jira/Confluence) when compatible adapters exist
   allow_synthetic_oracle: true # Infer journeys/requirements from source when no formal oracle exists
 
 # Output configuration
-default_output_file: "{test_artifacts}/traceability-matrix.md"
-e2e_trace_summary_output: "{test_artifacts}/e2e-trace-summary.json" # Machine-readable summary consumed by CI/CD and reporting pipelines
-gate_decision_output: "{test_artifacts}/gate-decision.json" # Optional downstream gate signal for CI/CD enforcement
+# Every output lives in the trace/ folder and carries the run_key step-01 resolves (story-{story_key},
+# epic-{epic_num}, release-{slug}, hotfix-{slug}, or system), so a run for one scope never reads or
+# writes another scope's files. Inputs stay at the root of {test_artifacts}.
+default_output_file: "{test_artifacts}/trace/traceability-matrix-{run_key}.md"
+e2e_trace_summary_output: "{test_artifacts}/trace/e2e-trace-summary-{run_key}.json" # Machine-readable summary consumed by CI/CD and reporting pipelines
+gate_decision_output: "{test_artifacts}/trace/gate-decision-{run_key}.json" # Optional downstream gate signal for CI/CD enforcement
 
-# e2e-trace-summary.json schema (emitted by step-05 at workflow completion)
+# e2e-trace-summary-{run_key}.json schema (emitted by step-05 to {e2e_trace_summary_output} at workflow completion)
 # schema_version: "0.3.0"   (0.2.0 added the live_evidence block and the by_level.live bucket; 0.3.0 added the waivers block)
 # snapshot_at: ISO timestamp
 # repo / collection_mode / collection_status / inventory_basis / gate_basis / source_sha
@@ -64,7 +67,7 @@ gate_decision_output: "{test_artifacts}/gate-decision.json" # Optional downstrea
 #          (tests whose names claim a criterion their assertions do not establish; always present, may be empty)
 # recommendations: [ { priority, action, requirements[] } ]
 # links: { trace_report_path, trace_report_url, artifact_url, journey_evidence_url }
-# gate-decision.json carries its own schema_version "0.1.0" and a slim subset of the above.
+# gate-decision-{run_key}.json ({gate_decision_output}) carries its own schema_version "0.1.0" and a slim subset of the above.
 
 # live-verification-results.json schema (READ by step-02 from {live_results_input}; this workflow never writes it)
 # Any producer may emit this file: an agent, a shell script, a CI job, or a person recording an outcome by hand.

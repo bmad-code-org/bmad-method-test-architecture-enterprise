@@ -1,13 +1,19 @@
 ---
+runScope: 'epic'
+runKey: 'epic-6'
+targetType: 'epic'
+targetId: '6'
+targetLabel: 'Epic 6, Scheduled Report Delivery'
+workflowStatus: 'completed'
 stepsCompleted: ['step-01-load-context', 'step-02-discover-tests', 'step-03-map-criteria', 'step-04-analyze-gaps', 'step-05-gate-decision']
 lastStep: 'step-05-gate-decision'
 lastSaved: '2026-08-17'
 workflowType: 'testarch-trace'
 inputDocuments:
   - 'docs/epics/epic-6-scheduled-report-delivery.md'
-  - 'test-artifacts/test-design-epic-6.md'
+  - 'test-artifacts/test-design/test-design-epic-6.md'
   - 'test-results/junit-scheduled-reports.xml'
-  - 'test-artifacts/nfr-assessment-scheduled-reports.md'
+  - 'test-artifacts/nfr/nfr-assessment-epic-6.md'
 coverageBasis: 'acceptance_criteria'
 oracleConfidence: 'high'
 oracleResolutionMode: 'formal_requirements'
@@ -196,7 +202,7 @@ No blocker or warning issue was found in the 10 mapped tests. All mapped tests c
 - **Performance:** CONCERNS. Delivery throughput meets the provisional target, but the target is still awaiting Product approval.
 - **Reliability:** PASS. Ten-iteration provider retry burn-in is stable.
 - **Maintainability:** PASS. Coverage exceeds 80%, duplication is 2.1%, and worker errors reach the error tracker.
-- **Source:** `test-artifacts/nfr-assessment-scheduled-reports.md`
+- **Source:** `test-artifacts/nfr/nfr-assessment-epic-6.md`
 
 #### Flakiness Validation
 
@@ -312,23 +318,23 @@ traceability_and_gate:
       min_coverage: 80
     evidence:
       test_results: 'test-results/junit-scheduled-reports.xml'
-      traceability: 'test-artifacts/traceability-matrix.md'
-      nfr_assessment: 'test-artifacts/nfr-assessment-scheduled-reports.md'
+      traceability: 'test-artifacts/trace/traceability-matrix-epic-6.md'
+      nfr_assessment: 'test-artifacts/nfr/nfr-assessment-epic-6.md'
       code_coverage: 'coverage/scheduled-reports/coverage-summary.json'
     next_steps: 'Cover terminal provider failure and re-run trace'
 ```
 
 ## Machine-Readable Outputs
 
-- `test-artifacts/e2e-trace-summary.json`: schema version 0.3.0, gate status CONCERNS, complete oracle, inventory, coverage, heuristic, live-evidence, blocker, and link fields. No waiver register was filed for this gate, so the run emits no `waivers` block
-- `test-artifacts/gate-decision.json`: schema version 0.1.0, evaluated timestamp, priority-threshold gate basis, CONCERNS status, rationale, and per-criterion status
+- `test-artifacts/trace/e2e-trace-summary-epic-6.json`: schema version 0.3.0, gate status CONCERNS, complete oracle, inventory, coverage, heuristic, live-evidence, blocker, and link fields. No waiver register was filed for this gate, so the run emits no `waivers` block
+- `test-artifacts/trace/gate-decision-epic-6.json`: schema version 0.1.0, evaluated timestamp, priority-threshold gate basis, CONCERNS status, rationale, and per-criterion status
 
 ## Related Artifacts
 
 - **Epic:** `docs/epics/epic-6-scheduled-report-delivery.md`
-- **Test Design:** `test-artifacts/test-design-epic-6.md`
+- **Test Design:** `test-artifacts/test-design/test-design-epic-6.md`
 - **Test Results:** `test-results/junit-scheduled-reports.xml`
-- **NFR Evidence Audit:** `test-artifacts/nfr-assessment-scheduled-reports.md`
+- **NFR Evidence Audit:** `test-artifacts/nfr/nfr-assessment-epic-6.md`
 - **Code Coverage:** `coverage/scheduled-reports/coverage-summary.json`
 - **Test Directory:** `tests/`
 

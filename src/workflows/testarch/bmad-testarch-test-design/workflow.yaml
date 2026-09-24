@@ -34,13 +34,13 @@ outputs:
   # System-Level Mode (Phase 3) - TWO documents
   - id: test-design-architecture
     description: "System-level test architecture: Architectural concerns, testability gaps, NFR requirements for Architecture/Dev teams"
-    path: "{test_artifacts}/test-design-architecture.md"
+    path: "{test_artifacts}/test-design/test-design-architecture.md"
     mode: system-level
     audience: architecture
 
   - id: test-design-qa
     description: "System-level test design: Test execution recipe, coverage plan, pre-implementation setup for QA team"
-    path: "{test_artifacts}/test-design-qa.md"
+    path: "{test_artifacts}/test-design/test-design-qa.md"
     mode: system-level
     audience: qa
 
@@ -53,7 +53,7 @@ outputs:
   # Epic-Level Mode (Phase 4) - ONE document (unchanged)
   - id: epic-level
     description: "Epic-level test plan (Phase 4)"
-    path: "{test_artifacts}/test-design-epic-{epic_num}.md"
+    path: "{test_artifacts}/test-design/test-design-epic-{epic_num}.md"
     mode: epic-level
 # Note: No default_output_file - mode detection determines which outputs to write
 

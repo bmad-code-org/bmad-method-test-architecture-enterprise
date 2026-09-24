@@ -31,6 +31,7 @@ From `workflow.yaml`, resolve:
 
 - `config_source`, `test_artifacts`, `user_name`, `communication_language`, `document_output_language`, `date`
 - `test_dir`, `source_dir`, `live_results_input`, `coverage_levels`, `gate_type`, `decision_mode`, `collection_mode`
+- `default_output_file`, `e2e_trace_summary_output`, `gate_decision_output`: every output lives under `{test_artifacts}/trace/` and carries the `run_key` Step 1 resolves (`traceability-matrix-{run_key}.md`, `e2e-trace-summary-{run_key}.json`, `gate-decision-{run_key}.json`), so runs for different scopes never share a file
 
 ### 2. First Step
 
@@ -42,4 +43,4 @@ Load, read completely, and execute:
 If the user selects **Resume** mode, load, read completely, and execute:
 `{skill-root}/steps-c/step-01b-resume.md`
 
-This checks the output document for progress tracking frontmatter and routes to the next incomplete step.
+This selects the traceability matrix that belongs to the run being resumed, checks its `runKey` and progress frontmatter, and routes to the next incomplete step.

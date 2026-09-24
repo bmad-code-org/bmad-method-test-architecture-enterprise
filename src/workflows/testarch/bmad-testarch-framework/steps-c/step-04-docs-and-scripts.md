@@ -3,7 +3,7 @@ name: 'step-04-docs-and-scripts'
 description: 'Document setup and add package.json scripts'
 nextStepFile: '{skill-root}/steps-c/step-05-validate-and-summary.md'
 outputFile: '{test_dir}/README.md'
-progressFile: '{test_artifacts}/framework-setup-progress.md'
+progressFile: '{test_artifacts}/framework/framework-setup-progress.md'
 ---
 
 # Step 4: Documentation & Scripts
@@ -182,6 +182,7 @@ Add a short section to `{outputFile}` naming the installed rules, the fact that 
 
   ```yaml
   ---
+  workflowStatus: 'in-progress'
   stepsCompleted: ['step-04-docs-and-scripts']
   lastStep: 'step-04-docs-and-scripts'
   lastSaved: '{date}'
@@ -191,6 +192,7 @@ Add a short section to `{outputFile}` naming the installed rules, the fact that 
   Then write this step's output below the frontmatter.
 
 - **If `{progressFile}` already exists**, update:
+  - Set `workflowStatus: 'in-progress'`
   - Add `'step-04-docs-and-scripts'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-04-docs-and-scripts'`
   - Set `lastSaved: '{date}'`

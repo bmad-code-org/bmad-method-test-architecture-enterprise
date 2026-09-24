@@ -22,6 +22,7 @@
 
 const assert = require('node:assert');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 
 const failures = [];
@@ -153,7 +154,7 @@ check('FUTURE_KEYS matches an independent walk of module.yaml’s "⏭️ FUTURE
   for (let index = 0; index < lines.length; index += 1) {
     if (!/⏭️\s*FUTURE/.test(lines[index])) continue;
     // A marker's group runs through every consecutive prompted key that
-    // follows it, not only the first one: "Test output folders" covers three.
+    // follows it, not only the first one.
     for (const candidate of lines.slice(index + 1)) {
       if (/⏭️\s*FUTURE/.test(candidate)) break;
       const match = candidate.match(/^([A-Za-z_][A-Za-z0-9_-]*):/);
@@ -199,6 +200,131 @@ check('keyIsUnread’s word-boundary check finds a real bare-word reference, not
   // re-implementing its search, and a positive result here can only come from
   // the word-boundary regex actually matching prose.
   assert.strictEqual(source.keyIsUnread(probeKey), false, 'a bare-word reference with no surrounding braces should be found');
+});
+
+check('misplacedOutputs flags a flat output path and leaves inputs and legacy paths alone', () => {
+  // A staged fixture skill outside src/workflows, so the real tree's current
+  // state cannot make this pass or fail: one output inside the skill's own
+  // folder, one flat at the root (the misplacement), one `_input` key and one
+  // `legacy*` frontmatter key that are both flat on purpose.
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'doc-claim-sources-'));
+  try {
+    const skillDir = path.join(scratch, 'bmad-testarch-probe');
+    fs.mkdirSync(path.join(skillDir, 'steps-c'), { recursive: true });
+    fs.writeFileSync(
+      path.join(skillDir, 'workflow.yaml'),
+      [
+        'variables:',
+        '  some_input: "{test_artifacts}/some-input.json"',
+        'default_output_file: "{test_artifacts}/probe/probe-report-{run_key}.md"',
+        'summary_output: "{test_artifacts}/probe-summary.json"',
+        '',
+      ].join('\n'),
+    );
+    fs.writeFileSync(
+      path.join(skillDir, 'steps-c', 'step-01b-resume.md'),
+      [
+        '---',
+        "outputFile: '{test_artifacts}/probe/probe-report-{run_key}.md'",
+        "legacyOutputFile: '{test_artifacts}/probe-report.md'",
+        '---',
+        '',
+        '# Resume',
+        '',
+      ].join('\n'),
+    );
+    const declared = source.declaredOutputPaths(skillDir).map((entry) => entry.value);
+    assert.deepStrictEqual([...declared].sort(), [
+      '{test_artifacts}/probe-summary.json',
+      '{test_artifacts}/probe/probe-report-{run_key}.md',
+      '{test_artifacts}/probe/probe-report-{run_key}.md',
+    ]);
+    assert.deepStrictEqual(
+      source.misplacedOutputs(skillDir).map((entry) => entry.value),
+      ['{test_artifacts}/probe-summary.json'],
+    );
+  } finally {
+    fs.rmSync(scratch, { recursive: true, force: true });
+  }
+});
+
+check('misplacedOutputs flags a flat write target in a step body and leaves legacy lines and trace root inputs alone', () => {
+  // A staged fixture skill whose declared outputs all sit in its own folder, so
+  // the one misplacement is the screenshot a step body writes flat at the root.
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'doc-claim-sources-'));
+  try {
+    const skillDir = path.join(scratch, 'bmad-testarch-probe');
+    fs.mkdirSync(path.join(skillDir, 'steps-c'), { recursive: true });
+    fs.writeFileSync(
+      path.join(skillDir, 'steps-c', 'step-02-capture.md'),
+      [
+        '---',
+        "outputFile: '{test_artifacts}/probe/probe-report-{run_key}.md'",
+        '---',
+        '',
+        '# Capture',
+        '',
+        '1. `playwright-cli -s=tea-probe-{run_key} screenshot --filename={test_artifacts}/probe-{run_key}-home.png`',
+        '2. `playwright-cli -s=tea-probe-{run_key} screenshot --filename={test_artifacts}/probe/probe-{run_key}-home.png`',
+        '3. Fall back to the legacy root `{test_artifacts}/probe-report.md` when the scoped report is absent.',
+        '4. Read waivers from `{test_artifacts}/gate-waivers.md` and live results from `{test_artifacts}/live-verification-results.json`.',
+        '',
+      ].join('\n'),
+    );
+    assert.deepStrictEqual(
+      source.misplacedOutputs(skillDir).map((entry) => `${entry.source} ${entry.value}`),
+      ['steps-c/step-02-capture.md {test_artifacts}/probe-{run_key}-home.png'],
+    );
+  } finally {
+    fs.rmSync(scratch, { recursive: true, force: true });
+  }
+});
+
+check('declaredOutputPaths refuses step frontmatter that is not valid YAML, naming the file', () => {
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'doc-claim-sources-'));
+  try {
+    const skillDir = path.join(scratch, 'bmad-testarch-probe');
+    fs.mkdirSync(path.join(skillDir, 'steps-c'), { recursive: true });
+    fs.writeFileSync(
+      path.join(skillDir, 'steps-c', 'step-01-broken.md'),
+      "---\noutputFile: '{test_artifacts}/probe/x.md\n---\n\n# Broken\n",
+    );
+    assert.throws(
+      () => source.declaredOutputPaths(skillDir),
+      /doc-claim-sources: .*step-01-broken\.md has frontmatter that is not valid YAML/,
+    );
+  } finally {
+    fs.rmSync(scratch, { recursive: true, force: true });
+  }
+});
+
+check('ELEVEN_WIRED_ONE_FUTURE agrees with a literal list of the eleven wired keys and risk_threshold as the FUTURE one', () => {
+  // Literal on purpose: recomputing the lists with the module's own helpers would
+  // agree with the module whatever module.yaml said. A key added, removed or
+  // re-marked in module.yaml has to be restated here to pass.
+  const WIRED = [
+    'test_artifacts',
+    'tea_evaluations_folder',
+    'tea_use_playwright_utils',
+    'tea_use_pactjs_utils',
+    'tea_pact_mcp',
+    'tea_browser_automation',
+    'tea_execution_mode',
+    'tea_capability_probe',
+    'test_stack_type',
+    'ci_platform',
+    'test_framework',
+  ];
+  const parsed = require('yaml').parse(fs.readFileSync(path.join(__dirname, '..', 'src', 'module.yaml'), 'utf8'));
+  const prompted = Object.keys(parsed).filter((key) => typeof parsed[key] === 'object' && parsed[key] !== null && 'prompt' in parsed[key]);
+  assert.deepStrictEqual(source.FUTURE_KEYS, ['risk_threshold']);
+  assert.deepStrictEqual(
+    prompted.filter((key) => key !== 'risk_threshold'),
+    WIRED,
+  );
+  for (const key of WIRED) assert.strictEqual(source.keyIsUnread(key), false, `${key} is wired, so some workflow file reads it`);
+  assert.strictEqual(source.keyIsUnread('risk_threshold'), true, 'risk_threshold is FUTURE, so no workflow file reads it');
+  assert.strictEqual(source.ELEVEN_WIRED_ONE_FUTURE, true);
 });
 
 check('THIRTY_FOUR_CONCERNS matches an independent count of "CONCERNS" verdicts in expected-strength.json', () => {

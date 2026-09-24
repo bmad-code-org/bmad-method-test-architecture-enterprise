@@ -96,7 +96,7 @@ graph TB
         Automate --> TestReview1
         TestReview1 --> Trace1
         Trace1 -.->|next story| CreateStory
-        TestDesignNote["<b>Test design: 'How do I test THIS epic?'</b><br/>Creates test-design-epic-N.md per epic"]
+        TestDesignNote["<b>Test design: 'How do I test THIS epic?'</b><br/>Creates test-design/test-design-epic-N.md per epic"]
         TestDesign -.-> TestDesignNote
     end
 
@@ -137,21 +137,21 @@ Phase 3 order matters: run `test-design` first so NFR evidence needs can influen
 
 Both modes use the same workflow command. Make the scope explicit in your prompt.
 
-- **System-level (Phase 3):** run immediately after architecture/ADR drafting. Produces `test-design-architecture.md` (for Architecture and Dev: testability gaps, ASRs, NFR requirements, planned evidence) and `test-design-qa.md` (for QA: test execution recipe, coverage plan, Sprint 0 setup, NFR coverage plan). Feeds the implementation-readiness gate. When an ADR or architecture draft is produced, run this before that gate so the ADR carries a testability review and an ADR → test mapping, and keep it updated if ADRs change.
-- **Epic-level (Phase 4):** run per epic. Produces `test-design-epic-N.md` with risk, priorities, coverage plan, and epic-specific NFR planning when relevant.
+- **System-level (Phase 3):** run immediately after architecture/ADR drafting. Produces `test-design/test-design-architecture.md` (for Architecture and Dev: testability gaps, ASRs, NFR requirements, planned evidence) and `test-design/test-design-qa.md` (for QA: test execution recipe, coverage plan, Sprint 0 setup, NFR coverage plan). Feeds the implementation-readiness gate. When an ADR or architecture draft is produced, run this before that gate so the ADR carries a testability review and an ADR → test mapping, and keep it updated if ADRs change.
+- **Epic-level (Phase 4):** run per epic. Produces `test-design/test-design-epic-N.md` with risk, priorities, coverage plan, and epic-specific NFR planning when relevant.
 
 #### Phase 3 system-level example
 
 ```text
 /bmad-testarch-test-design
-Run system-level test-design for Phase 3 using docs/prd.md, docs/architecture.md, and docs/adr/*.md. Focus on architecture testability, ASRs, NFR thresholds, planned NFR evidence, integration risks, and Sprint 0 setup. Produce test-design-architecture.md and test-design-qa.md before implementation-readiness.
+Run system-level test-design for Phase 3 using docs/prd.md, docs/architecture.md, and docs/adr/*.md. Focus on architecture testability, ASRs, NFR thresholds, planned NFR evidence, integration risks, and Sprint 0 setup. Produce test-design/test-design-architecture.md and test-design/test-design-qa.md before implementation-readiness.
 ```
 
 #### Phase 4 per-epic example
 
 ```text
 /bmad-testarch-test-design
-Run epic-level test-design for Phase 4 on Epic 3 using docs/epics/epic-3.md and its stories. Use prior system-level test-design outputs if present. Produce test-design-epic-3.md with risk scores, P0-P3 scenarios, regression/integration/NFR coverage, and follow-on guidance for atdd and automate.
+Run epic-level test-design for Phase 4 on Epic 3 using docs/epics/epic-3.md and its stories. Use prior system-level test-design outputs if present. Produce test-design/test-design-epic-3.md with risk scores, P0-P3 scenarios, regression/integration/NFR coverage, and follow-on guidance for atdd and automate.
 ```
 
 Codex users run `$bmad-testarch-test-design` with the same scope-setting prompt.

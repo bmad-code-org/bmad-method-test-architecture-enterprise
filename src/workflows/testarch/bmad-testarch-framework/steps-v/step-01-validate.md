@@ -1,7 +1,7 @@
 ---
 name: 'step-01-validate'
 description: 'Validate workflow outputs against checklist'
-outputFile: '{test_artifacts}/framework-validation-report-{validation_scope}-{run_timestamp}.md'
+outputFile: '{test_artifacts}/framework/framework-validation-report-{validation_scope}-{run_timestamp}.md'
 validationChecklist: '{skill-root}/checklist.md'
 ---
 
@@ -47,9 +47,16 @@ Validate outputs using the workflow checklist and record findings.
 
 Use the artifact paths the user supplied with the Validate request. If none were supplied, list the likely outputs for this workflow and ask which exact file or files to validate. When several candidates exist, do not guess.
 
+Likely outputs for this workflow:
+
+- `{test_dir}/README.md` and the scaffolded framework config, fixtures, and sample tests under `{test_dir}`
+- `{test_artifacts}/framework/framework-setup-progress.md` (run checkpoint, one per project)
+
+Files written by older TEA versions sit at the root of `{test_artifacts}`: `{test_artifacts}/framework-setup-progress.md`. Offer them as candidates when present.
+
 Read the selected artifacts. Derive `validation_scope` from their shared story, epic, system, pull request, or other meaningful scope. Use an artifact basename without its extension when no broader scope is available. Normalize the value to lowercase ASCII with only letters, numbers, and single hyphens. Remove leading and trailing hyphens. Ask for a short scope label if normalization leaves an empty value.
 
-Set `run_timestamp` to the current UTC time with milliseconds in `YYYYMMDDTHHmmssSSSZ` format and resolve `{outputFile}` with both values. Atomically reserve that path using an exclusive-create operation that fails if the file already exists. A separate existence check followed by a normal write is forbidden. On collision, generate a fresh timestamp, resolve a new path, and retry exclusive creation until it succeeds. Initialize the reserved file with `validation_scope`, `run_timestamp`, `validated_artifacts`, and `status: IN_PROGRESS`. This run may update only the file it reserved. If the workflow stops, leave that reservation in place. Never delete, truncate, or reuse a report from another run. Always refuse to overwrite prior validation history.
+Set `run_timestamp` to the current UTC time with milliseconds in `YYYYMMDDTHHmmssSSSZ` format and resolve `{outputFile}` with both values. Create the `{test_artifacts}/framework/` folder if it does not exist. Atomically reserve that path using an exclusive-create operation that fails if the file already exists. A separate existence check followed by a normal write is forbidden. On collision, generate a fresh timestamp, resolve a new path, and retry exclusive creation until it succeeds. Initialize the reserved file with `validation_scope`, `run_timestamp`, `validated_artifacts`, and `status: IN_PROGRESS`. This run may update only the file it reserved. If the workflow stops, leave that reservation in place. Never delete, truncate, or reuse a report from another run. Always refuse to overwrite prior validation history.
 
 ### 2. Load Checklist
 

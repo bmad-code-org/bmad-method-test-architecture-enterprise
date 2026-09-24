@@ -148,7 +148,7 @@ const {
 } = require('./lib/eval-record');
 const { nowMs, nowIso, elapsedMsSince } = require('./lib/clock');
 const { worstFailureClass, exitCodeForFailureClass } = require('./schema/eval-result');
-const { workingTreeState, workingTreeChanges } = require('./lib/runner-capabilities');
+const { workingTreeState, workingTreeChanges, misplacedDeliverables, misplacedEvidence } = require('./lib/runner-capabilities');
 const { PROBE_TIMEOUT_MS, boundedProbe } = require('./lib/bounded-probe');
 const {
   createProbePort,
@@ -446,13 +446,13 @@ function projectRootOf(set) {
  * Where the workflow's epic-level deliverable lands for one set, relative to the
  * workspace root.
  *
- * `steps-c/step-05-generate-output.md` writes `{test_artifacts}/test-design-epic-{epic_num}.md`,
+ * `steps-c/step-05-generate-output.md` writes `{test_artifacts}/test-design/test-design-epic-{epic_num}.md`,
  * and the prompt resolves both placeholders against this set's staged project root.
  * Two sets therefore declare two paths, which is what lets one authorization serve
  * either without the artifact map naming a file the other run wrote.
  */
 function designArtifactPaths(set) {
-  return { design: path.posix.join(projectRootOf(set), 'test-artifacts', `test-design-epic-${set.epicNum}.md`) };
+  return { design: path.posix.join(projectRootOf(set), 'test-artifacts', 'test-design', `test-design-epic-${set.epicNum}.md`) };
 }
 
 /** Whitespace-collapsed, lowercased text, which is what every token and quote test reads. */
@@ -870,7 +870,7 @@ function buildPrompt(set, { designLevel = 'full' } = {}) {
     `- \`{test_artifacts}\`: \`${root}/test-artifacts\``,
     '- `{skill-root}`: `skill`',
     '- `mode`: `epic-level`',
-    '- `run_scope`: `epic-level`',
+    '- `run_scope`: `epic`',
     `- \`epic_num\`: \`${set.epicNum}\``,
     `- \`run_key\`: \`epic-${set.epicNum}\``,
     `- \`design_level\`: \`${designLevel}\``,
@@ -883,7 +883,7 @@ function buildPrompt(set, { designLevel = 'full' } = {}) {
     '----- what to produce -----',
     'Write the one deliverable epic-level mode declares:',
     '',
-    `- \`${root}/test-artifacts/test-design-epic-${set.epicNum}.md\`, from \`skill/test-design-template.md\`, carrying`,
+    `- \`${root}/test-artifacts/test-design/test-design-epic-${set.epicNum}.md\`, from \`skill/test-design-template.md\`, carrying`,
     '  the risk assessment and the test coverage plan the template lays out, with each risk row stating its',
     '  category, probability, impact and score, and each coverage row naming its test level and the risk it',
     '  covers.',
@@ -1151,6 +1151,9 @@ function readCoverage(tables) {
   }
   return rows;
 }
+
+/** The design a run that wrote none is scored against: no risk row and no coverage row. */
+const EMPTY_DESIGN = Object.freeze({ risks: [], unscoredTables: [], coverage: [], text: '' });
 
 /**
  * One produced document as the two collections the scorer reads.
@@ -1620,6 +1623,23 @@ function runnerOptions(options) {
  *
  * @returns {Promise<{ok: true, scored: object, mutations: number}|{ok: false, failureClass: string, reason: string}>}
  */
+/**
+ * Corpus files the run changed, plus files it added outside `test-artifacts/` and
+ * `_bmad/`. The workflow states that it does not change its inputs, so a run that
+ * edited the epic has moved the benchmark, and the next run would be measured
+ * against a corpus this one rewrote.
+ */
+async function corpusMutations(workspace) {
+  const changed = (await digestTree(workspace.projectDir, workspace.corpusFiles)) === workspace.corpusDigest ? 0 : 1;
+  const added = filesUnder(workspace.projectDir).filter(
+    (relative) =>
+      !relative.startsWith(`test-artifacts${path.sep}`) &&
+      !relative.startsWith(`_bmad${path.sep}`) &&
+      !workspace.corpusFiles.includes(relative),
+  );
+  return changed + added.length;
+}
+
 async function runCase(set, options, agent, runIndex, categories) {
   let workspace = await stageWorkspace(set);
   try {
@@ -1684,24 +1704,35 @@ async function runCase(set, options, agent, runIndex, categories) {
       };
     }
 
+    // No design at the resolved path while the test-design folder holds one under
+    // another run key is a run that resolved the wrong scope. That is the run's
+    // answer, so it is scored as a design with no risk row, and the file it did
+    // write is named. The run's own progress checkpoint is not a deliverable.
+    if (observation.artifacts.design?.kind === 'absent') {
+      const misplaced = misplacedDeliverables(
+        path.join(workspace.projectDir, 'test-artifacts', 'test-design'),
+        /^test-design-(?!progress-).+\.md$/,
+        [path.posix.basename(designArtifactPaths(set).design)],
+      );
+      if (misplaced.length > 0) {
+        const { reason, evidence } = misplacedEvidence('test-artifacts/test-design', misplaced);
+        return {
+          ok: true,
+          scored: scoreRun(set, EMPTY_DESIGN, categories),
+          mutations: await corpusMutations(workspace),
+          misplaced: reason,
+          artifactEvidence: evidence,
+        };
+      }
+    }
+
     const design = readDesign(observation.artifacts.design);
     if (!design.ok) return design;
-
-    // The workflow states that it does not change its inputs. A run that edited the
-    // epic has moved the benchmark, and the next run would be measured against a
-    // corpus this one rewrote.
-    const mutations = (await digestTree(workspace.projectDir, workspace.corpusFiles)) === workspace.corpusDigest ? 0 : 1;
-    const added = filesUnder(workspace.projectDir).filter(
-      (relative) =>
-        !relative.startsWith(`test-artifacts${path.sep}`) &&
-        !relative.startsWith(`_bmad${path.sep}`) &&
-        !workspace.corpusFiles.includes(relative),
-    );
 
     return {
       ok: true,
       scored: scoreRun(set, design.design, categories),
-      mutations: mutations + added.length,
+      mutations: await corpusMutations(workspace),
       artifactEvidence: artifactEvidence(designArtifactPaths(set).design, design.design.text),
     };
   } finally {
@@ -1995,6 +2026,7 @@ async function main() {
           );
           continue;
         }
+        if (outcome.misplaced) console.error(`  ${colors.red}${set.id} run ${runIndex + 1}: ${outcome.misplaced}${colors.reset}`);
         caseScores.push(outcome.scored);
         totals.mutations += outcome.mutations;
         const signature = signatureOf(outcome.scored, outcome.mutations);

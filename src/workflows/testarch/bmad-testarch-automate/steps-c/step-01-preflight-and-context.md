@@ -1,8 +1,9 @@
 ---
 name: 'step-01-preflight-and-context'
-description: 'Determine mode, verify framework, and load context and knowledge'
-outputFile: '{test_artifacts}/automation-summary.md'
+description: 'Determine mode, verify framework, load context and knowledge, and resolve run identity'
+outputFile: '{test_artifacts}/automate/automation-summary-{run_key}.md'
 nextStepFile: '{skill-root}/steps-c/step-02-identify-targets.md'
+resumeStepFile: '{skill-root}/steps-c/step-01b-resume.md'
 knowledgeIndex: './resources/tea-index.csv'
 ---
 
@@ -10,7 +11,7 @@ knowledgeIndex: './resources/tea-index.csv'
 
 ## STEP GOAL
 
-Determine execution mode, verify framework readiness, and load the necessary artifacts and knowledge fragments.
+Determine execution mode, verify framework readiness, load the necessary artifacts and knowledge fragments, and resolve the run identity that names this run's automation summary.
 
 ## MANDATORY EXECUTION RULES
 
@@ -91,7 +92,7 @@ If required framework configuration is missing: **HALT** with message "Run `fram
 
 - Story with acceptance criteria
 - PRD and/or tech spec
-- Test-design document (if exists)
+- Test-design document (if exists). Look in `{test_artifacts}/test-design/` first (`test-design-epic-{epic_num}.md` for the epic in scope, then the system-level `test-design-qa.md` and `test-design-architecture.md`), then the legacy root `{test_artifacts}/` for the same names. Record the path you loaded, or state that no test design was found in either location.
 
 ### Standalone
 
@@ -184,27 +185,68 @@ Summarize loaded artifacts, framework, and knowledge fragments, then proceed.
 
 ---
 
-## 6. Save Progress
+## 6. Resolve Run Identity
+
+Every run writes an automation summary whose filename carries the run's scope, so a run for one story, epic, or target never rewrites or appends into another scope's summary. Resolve `run_scope` and `run_key` **now**, before any progress is saved.
+
+### run_key grammar
+
+- `system`: the whole project or system, or no narrower scope could be resolved.
+- `epic-{epic_num}`: one epic.
+- `story-{story_key}`: one story. `story_key` is the BMM story file basename without `.md` (for example `1-2-user-authentication`). Without a story file, use the story id with `.` replaced by `-` (`1.2` becomes `1-2`).
+- `target-{slug}`: when no story or epic applies, the slug of the automated path or feature name. Use `target_feature` when it is set. For `target_files`, use the single file path, or the deepest directory the files share.
+
+Slug rule (used for every `{slug}` and for an epic title with no number): lowercase; replace every run of characters outside `a-z` and `0-9` with a single `-`; trim leading and trailing `-`; truncate to 64 characters.
+
+### Resolution order
+
+1. Use the scope the user named in this invocation (a story, an epic, a feature or path, or the whole system).
+2. Otherwise use the scope carried by the loaded artifacts: a story file gives `story-{story_key}`; an epic document gives `epic-{epic_num}` from its metadata, H1 heading, or filename; a `target_feature` or `target_files` value with no story or epic gives `target-{slug}`. When a story and its epic are both loaded, the story is the scope.
+3. If several candidates of the same kind remain (for example two stories) and the run is interactive, list them and ask which one this run covers. **Halt** until the user answers. A headless or autonomous run with no resolvable scope uses `system` and says so in the summary.
+
+Auto-discovery across the whole codebase with no story, epic, or target is `system`.
+
+Set `run_scope` to `story`, `epic`, `target`, or `system` to match the resolved `run_key`. Carry `run_scope` and `run_key` forward through every remaining step.
+
+---
+
+## 7. Check for an Existing Summary
+
+Check whether `{outputFile}` already exists. A summary at this path belongs to a previous run of the **same** scope; summaries for other scopes live under their own filenames and are never read or written here.
+
+- **Does not exist:** this is a fresh run. Proceed to Save Progress.
+- **Exists with `workflowStatus: 'in-progress'`:** a previous run for this scope was interrupted. Display its `lastStep` and `lastSaved`, then ask:
+
+  > "An unfinished automate run for `{run_key}` was last saved {lastSaved} at step {lastStep}. Resume it, or start over? Starting over replaces the summary."
+
+  **Halt** until the user answers. A headless or autonomous run starts over. If they resume, load `{resumeStepFile}`, read it completely, and execute it. If they start over, replace `{outputFile}` entirely in Save Progress.
+
+- **Exists with `workflowStatus: 'completed'`**, or with no `workflowStatus` and `lastStep: 'step-04-validate-and-summarize'`: a finished run for this scope. Replace `{outputFile}` entirely in Save Progress.
+
+**Never merge two runs into one summary.** Content carried over from a prior run makes the summary report tests, files, and coverage this run never produced.
+
+---
+
+## 8. Save Progress
 
 **Save this step's accumulated work to `{outputFile}`.**
 
-- **If `{outputFile}` does not exist** (first save), create it with YAML frontmatter:
+Create the `{test_artifacts}/automate/` folder if it does not exist. Write the file with YAML frontmatter, replacing any prior content as decided in the previous section:
 
-  ```yaml
-  ---
-  stepsCompleted: ['step-01-preflight-and-context']
-  lastStep: 'step-01-preflight-and-context'
-  lastSaved: '{date}'
-  ---
-  ```
+```yaml
+---
+runScope: '{run_scope}'
+runKey: '{run_key}'
+workflowStatus: 'in-progress'
+stepsCompleted: ['step-01-preflight-and-context']
+lastStep: 'step-01-preflight-and-context'
+lastSaved: '{date}'
+---
+```
 
-  Then write this step's output below the frontmatter.
+Then write this step's output below the frontmatter.
 
-- **If `{outputFile}` already exists**, update:
-  - Add `'step-01-preflight-and-context'` to `stepsCompleted` array (only if not already present)
-  - Set `lastStep: 'step-01-preflight-and-context'`
-  - Set `lastSaved: '{date}'`
-  - Append this step's output to the appropriate section.
+`runScope` and `runKey` are this run's identity. Later steps carry both forward unchanged and never re-derive them, and Resume mode refuses to continue a summary whose `runKey` does not match the run being resumed.
 
 **Update `inputDocuments`**: Set `inputDocuments` in the output template frontmatter to the list of artifact paths loaded in this step (e.g., knowledge fragments, test design documents, configuration files).
 
@@ -215,8 +257,12 @@ Load next step: `{nextStepFile}`
 ### ✅ SUCCESS:
 
 - Step completed in full with required outputs
+- `run_scope` and `run_key` resolved before the first save, and the summary written to the path they name
+- Any pre-existing summary for this scope was reported to the user and either resumed or replaced
 
 ### ❌ SYSTEM FAILURE:
 
 - Skipped sequence steps or missing outputs
+- Saving progress before run identity is resolved, or writing to a summary path that carries no run identity
+- Appending this run's progress to a summary left by a previous run
   **Master Rule:** Skipping steps is FORBIDDEN.

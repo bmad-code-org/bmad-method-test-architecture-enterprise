@@ -2,7 +2,7 @@
 name: 'step-04d-subagent-maintainability'
 description: 'Subagent: Maintainability NFR evidence audit'
 subagent: true
-outputFile: '/tmp/tea-nfr-maintainability-{{timestamp}}.json'
+outputFile: '/tmp/tea-nfr-maintainability-{run_key}-{{timestamp}}.json'
 ---
 
 # Subagent 4D: Maintainability NFR Evidence Audit

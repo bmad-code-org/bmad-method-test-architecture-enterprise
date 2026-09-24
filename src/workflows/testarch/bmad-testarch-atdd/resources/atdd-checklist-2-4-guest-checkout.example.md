@@ -1,4 +1,7 @@
 ---
+runScope: 'story'
+runKey: 'story-2-4-guest-checkout'
+workflowStatus: 'completed'
 stepsCompleted:
   [
     'step-01-preflight-and-context',
@@ -14,13 +17,13 @@ workflowType: 'testarch-atdd'
 storyId: '2.4'
 storyKey: '2-4-guest-checkout'
 storyFile: 'docs/stories/2-4-guest-checkout.md'
-atddChecklistPath: 'docs/test-artifacts/atdd-checklist-2-4-guest-checkout.md'
+atddChecklistPath: 'docs/test-artifacts/atdd/atdd-checklist-2-4-guest-checkout.md'
 generatedTestFiles:
   - 'tests/api/guest-checkout.spec.ts'
   - 'tests/e2e/guest-checkout.spec.ts'
 inputDocuments:
   - 'docs/stories/2-4-guest-checkout.md'
-  - 'docs/qa/test-design-2-4-guest-checkout.md'
+  - 'docs/test-artifacts/test-design/test-design-epic-2.md'
   - '_bmad/config.yaml'
 ---
 
@@ -57,7 +60,7 @@ Shoppers currently must create an account before they can pay, and cart abandonm
 - **Story ID:** `2.4`
 - **Story Key:** `2-4-guest-checkout`
 - **Story File:** `docs/stories/2-4-guest-checkout.md`
-- **Checklist Path:** `docs/test-artifacts/atdd-checklist-2-4-guest-checkout.md`
+- **Checklist Path:** `docs/test-artifacts/atdd/atdd-checklist-2-4-guest-checkout.md`
 - **Generated Test Files:** `tests/e2e/guest-checkout.spec.ts`, `tests/api/guest-checkout.spec.ts`
 
 If this story came from BMM `create-story`, mirror these artifact paths into the story's `Dev Notes` so `dev-story` can discover and activate the red-phase scaffolds.

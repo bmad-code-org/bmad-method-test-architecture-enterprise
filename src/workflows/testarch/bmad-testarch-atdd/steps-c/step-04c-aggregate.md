@@ -1,7 +1,7 @@
 ---
 name: 'step-04c-aggregate'
 description: 'Aggregate subagent outputs and complete ATDD test infrastructure'
-outputFile: '{test_artifacts}/atdd-checklist-{story_key}.md'
+outputFile: '{test_artifacts}/atdd/atdd-checklist-{story_key}.md'
 nextStepFile: '{skill-root}/steps-c/step-05-validate-and-complete.md'
 ---
 
@@ -50,14 +50,14 @@ Read outputs from parallel subagents (API + E2E red-phase test generation), aggr
 **Read API test subagent output:**
 
 ```javascript
-const apiTestsPath = '/tmp/tea-atdd-api-tests-{{timestamp}}.json';
+const apiTestsPath = '/tmp/tea-atdd-api-tests-{run_key}-{{timestamp}}.json';
 const apiTestsOutput = JSON.parse(fs.readFileSync(apiTestsPath, 'utf8'));
 ```
 
 **Read E2E test subagent output:**
 
 ```javascript
-const e2eTestsPath = '/tmp/tea-atdd-e2e-tests-{{timestamp}}.json';
+const e2eTestsPath = '/tmp/tea-atdd-e2e-tests-{run_key}-{{timestamp}}.json';
 const e2eTestsOutput = JSON.parse(fs.readFileSync(e2eTestsPath, 'utf8'));
 ```
 
@@ -273,15 +273,27 @@ UI components to implement:
 
 **Save checklist:**
 
+`{outputFile}` already holds this run's frontmatter and working notes from Steps 1-3. The checklist becomes the document body: replace everything below the frontmatter with `checklistContent`, and keep the frontmatter block (`runScope`, `runKey`, `workflowStatus`, `stepsCompleted`, and the story fields) exactly as this run wrote it. Save Progress below then updates the frontmatter for this step.
+
 ```javascript
-fs.writeFileSync(`{test_artifacts}/atdd-checklist-{story_key}.md`, checklistContent, 'utf8');
+const outputFile = `{test_artifacts}/atdd/atdd-checklist-{story_key}.md`;
+const existing = fs.readFileSync(outputFile, 'utf8');
+const frontmatter = existing.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n/)?.[0];
+if (!frontmatter) {
+  throw new Error(
+    `ATDD ERROR: ${outputFile} has no frontmatter from Step 1; re-run from Step 1 so the checklist carries runScope and runKey.`,
+  );
+}
+fs.writeFileSync(outputFile, `${frontmatter}\n${checklistContent}`, 'utf8');
 ```
+
+The file only ever holds this run's work: Step 1 replaced any earlier checklist for this story, and checklists for other stories live under their own filenames.
 
 **If `{story_file}` exists and is writable, attempt to link artifacts back into the story:**
 
 - Add or update a `### ATDD Artifacts` subsection under `## Dev Notes`
 - Record:
-  - `Checklist: {test_artifacts}/atdd-checklist-{story_key}.md`
+  - `Checklist: {test_artifacts}/atdd/atdd-checklist-{story_key}.md`
   - `API tests: {api_test_file_path}` when present
   - `E2E tests: {e2e_test_file_path}` when present
   - `Component tests: {component_test_file_path}` when present
@@ -333,7 +345,7 @@ const summary = {
 **Store summary for Step 5:**
 
 ```javascript
-fs.writeFileSync('/tmp/tea-atdd-summary-{{timestamp}}.json', JSON.stringify(summary, null, 2), 'utf8');
+fs.writeFileSync('/tmp/tea-atdd-summary-{run_key}-{{timestamp}}.json', JSON.stringify(summary, null, 2), 'utf8');
 ```
 
 ---
@@ -363,7 +375,7 @@ Display to user:
 - tests/api/[feature].spec.ts (with test.skip())
 - tests/e2e/[feature].spec.ts (with test.skip())
 - tests/fixtures/test-data.ts
-- {test_artifacts}/atdd-checklist-{story_key}.md
+- {test_artifacts}/atdd/atdd-checklist-{story_key}.md
 
 📝 Next Steps:
 1. Link ATDD artifacts into the story file if available
@@ -394,33 +406,20 @@ Proceed to Step 5 when:
 
 **Save this step's accumulated work to `{outputFile}`.**
 
-- **If `{outputFile}` does not exist** (first save), create it with YAML frontmatter:
+`{outputFile}` exists: Step 1 created it for this run, and section 6 wrote the checklist body into it. Update its frontmatter:
 
-  ```yaml
-  ---
-  stepsCompleted: ['step-04c-aggregate']
-  lastStep: 'step-04c-aggregate'
-  lastSaved: '{date}'
-  storyId: '{story_id}'
-  storyKey: '{story_key}'
-  storyFile: '{story_file}'
-  atddChecklistPath: '{outputFile}'
-  generatedTestFiles: []
-  ---
-  ```
+- Leave `runScope` and `runKey` exactly as step 1 wrote them
+- Set `workflowStatus: 'in-progress'`
+- Add `'step-04c-aggregate'` to `stepsCompleted` array (only if not already present)
+- Set `lastStep: 'step-04c-aggregate'`
+- Set `lastSaved: '{date}'`
+- Set `storyId` to `{story_id}`
+- Set `storyKey` to `{story_key}`
+- Set `storyFile` to `{story_file}`
+- Set `atddChecklistPath` to `{outputFile}`
+- Set `generatedTestFiles` deterministically to the list of present test paths in this order: API, E2E, Component (omit blanks / N/A values)
 
-  Then write this step's output below the frontmatter.
-
-- **If `{outputFile}` already exists**, update:
-  - Add `'step-04c-aggregate'` to `stepsCompleted` array (only if not already present)
-  - Set `lastStep: 'step-04c-aggregate'`
-  - Set `lastSaved: '{date}'`
-  - Set `storyId` to `{story_id}`
-  - Set `storyKey` to `{story_key}`
-  - Set `storyFile` to `{story_file}`
-  - Set `atddChecklistPath` to `{outputFile}`
-  - Set `generatedTestFiles` deterministically to the list of present test paths in this order: API, E2E, Component (omit blanks / N/A values)
-  - Append this step's output to the appropriate section.
+The checklist written in section 6 is this step's output. Do not append a second copy of it.
 
 Load next step: `{nextStepFile}`
 

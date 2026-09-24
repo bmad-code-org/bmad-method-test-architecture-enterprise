@@ -1,7 +1,7 @@
 ---
 name: 'step-05-gate-decision'
 description: 'Phase 2: Apply gate decision logic and generate outputs'
-outputFile: '{test_artifacts}/traceability-matrix.md'
+outputFile: '{test_artifacts}/trace/traceability-matrix-{run_key}.md'
 ---
 
 # Step 5: Phase 2 - Gate Decision
@@ -42,7 +42,7 @@ outputFile: '{test_artifacts}/traceability-matrix.md'
 
 ### 1. Read Phase 1 Coverage Matrix
 
-Read `{outputFile}` frontmatter for `tempCoverageMatrixPath`. Halt when missing — the fallback timestamp cannot be reconstructed reliably in a different execution context:
+Read `{outputFile}` frontmatter for `tempCoverageMatrixPath`. Halt when missing, because the timestamp in the temp file name cannot be reconstructed reliably in a different execution context:
 
 ```javascript
 const progressDoc = fs.readFileSync('{outputFile}', 'utf8');
@@ -461,9 +461,11 @@ const gateReport = {
 
 ---
 
-### 3b. Emit `e2e-trace-summary.json`
+### 3b. Emit `e2e-trace-summary-{run_key}.json`
 
 **After the gate report is assembled, write the machine-readable summary to `{e2e_trace_summary_output}`.**
+
+The path carries this run's `run_key` from the frontmatter of `{outputFile}`, so the summary, the gate decision, and the matrix of one run always name the same scope. Writing it replaces only the summary a previous run of the same `run_key` left; other scopes' summaries are never touched.
 
 This file is the portable, automation-friendly companion to the markdown report. Any CI/CD pipeline, reporting dashboard, or LLM agent can consume it without parsing markdown.
 
@@ -736,10 +738,10 @@ if (gateEligible) {
 }
 
 fs.writeFileSync('{e2e_trace_summary_output}', JSON.stringify(e2eTraceSummary, null, 2), 'utf8');
-console.log(`✅ e2e-trace-summary.json written to {e2e_trace_summary_output}`);
+console.log(`✅ e2e trace summary written to {e2e_trace_summary_output}`);
 ```
 
-**Optional: emit `gate-decision.json`** for pipelines that only need the gate signal without the full summary:
+**Optional: emit `gate-decision-{run_key}.json`** to `{gate_decision_output}` for pipelines that only need the gate signal without the full summary:
 
 ```javascript
 // Construct and write only when gate evaluation was performed and produced a meaningful decision.
@@ -762,7 +764,12 @@ if (gateEligible && ['PASS', 'CONCERNS', 'FAIL', 'WAIVED'].includes(gateDecision
     links: e2eTraceSummary.links,
   };
   fs.writeFileSync('{gate_decision_output}', JSON.stringify(gateDecisionSlim, null, 2), 'utf8');
-  console.log(`✅ gate-decision.json written to {gate_decision_output}`);
+  console.log(`✅ Gate decision written to {gate_decision_output}`);
+} else if (fs.existsSync('{gate_decision_output}')) {
+  // A gate decision left by an earlier run of this same run_key would contradict the summary this run
+  // just wrote, so a run that evaluates no gate removes it. Other scopes' gate decisions are never touched.
+  fs.unlinkSync('{gate_decision_output}');
+  console.log(`ℹ️ Removed the previous run's gate decision at {gate_decision_output}; this run evaluated no gate`);
 }
 ```
 
@@ -802,11 +809,23 @@ if (gateEligible && ['PASS', 'CONCERNS', 'FAIL', 'WAIVED'].includes(gateDecision
 {recommendations}
 ```
 
-**Save to:**
+**Save to `{outputFile}`.**
+
+The report replaces the working notes Steps 1 to 4 of this run accumulated below the frontmatter. The frontmatter block stays as it is, because it holds this run's identity (`runScope`, `runKey`, the target) and its progress state. The file belongs to this run alone: Step 1 created it for this `run_key`, so replacing its body never discards another run's work.
 
 ```javascript
-fs.writeFileSync('{outputFile}', reportContent, 'utf8');
+// `reportContent` is the rendered report body, without a frontmatter block of its own.
+const existingDoc = fs.readFileSync('{outputFile}', 'utf8');
+const existingFrontmatter = existingDoc.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n/)?.[0];
+if (!existingFrontmatter) {
+  throw new Error(
+    'TRACE ERROR: {outputFile} has no frontmatter from Step 1; re-run from Step 1 so the matrix carries runScope, runKey, and the gate target.',
+  );
+}
+fs.writeFileSync('{outputFile}', `${existingFrontmatter}\n${reportContent}`, 'utf8');
 ```
+
+This is the only write of report content in this step. Section 6 changes the frontmatter and appends the section 5 summary; it never writes the report again.
 
 ---
 
@@ -864,13 +883,15 @@ fs.writeFileSync('{outputFile}', reportContent, 'utf8');
 
 **Update the YAML frontmatter in `{outputFile}` to mark this final step complete.**
 
-Since step 4 (Generate Traceability Report) already wrote the report content to `{outputFile}`, do NOT overwrite it. Instead, update only the frontmatter at the top of the existing file:
+Section 4 (Generate Traceability Report) already wrote the report below the frontmatter it kept. Do not write the report a second time. Update only the frontmatter at the top of the file:
 
 - Add `'step-05-gate-decision'` to `stepsCompleted` array (only if not already present)
 - Set `lastStep: 'step-05-gate-decision'`
 - Set `lastSaved: '{date}'`
+- Set `workflowStatus: 'completed'`
+- Keep `runScope`, `runKey`, `targetType`, `targetId`, and `targetLabel` unchanged
 
-Then append the gate decision summary (from section 5 above) to the end of the existing report content.
+Then append the gate decision summary (from section 5 above) to the end of the report section 4 wrote.
 
 ---
 
@@ -881,8 +902,8 @@ Then append the gate decision summary (from section 5 above) to the end of the e
 - ✅ Phase 1 coverage matrix read successfully
 - ✅ Collection status resolved and gate decision logic applied when eligible
 - ✅ Waiver register read, validated, and reported when `{waiver_register_input}` exists
-- ✅ `e2e-trace-summary.json` written to `{e2e_trace_summary_output}`
-- ✅ `gate-decision.json` written to `{gate_decision_output}` (when gate-eligible)
+- ✅ `e2e-trace-summary-{run_key}.json` written to `{e2e_trace_summary_output}`
+- ✅ `gate-decision-{run_key}.json` written to `{gate_decision_output}` (when gate-eligible)
 - ✅ Traceability report generated
 - ✅ Gate decision displayed
 
@@ -897,8 +918,8 @@ Then append the gate decision summary (from section 5 above) to the end of the e
 - Coverage matrix read from Phase 1
 - Gate decision made with clear rationale when gate-eligible
 - Every filed waiver reported with its validity and its failed checks
-- `e2e-trace-summary.json` written and valid
-- `gate-decision.json` written when gate-eligible
+- `{e2e_trace_summary_output}` written and valid
+- `{gate_decision_output}` written when gate-eligible, and a previous run's copy for the same `run_key` removed when not
 - Report generated and saved
 - Decision communicated clearly
 
@@ -908,10 +929,11 @@ Then append the gate decision summary (from section 5 above) to the end of the e
 - Gate eligibility or gate decision logic incorrect
 - A waiver register present on disk and absent from the report
 - A waiver reported as accepted, or a gap dropped because a waiver covers it
-- `e2e-trace-summary.json` missing or invalid JSON
+- `{e2e_trace_summary_output}` missing or invalid JSON
+- Any output written to a path without this run's `run_key`, or another scope's output read or modified
 - Report missing or incomplete
 
-**Master Rule:** Gate decision MUST be deterministic based on clear criteria (P0 100%, P1 90/80, overall >=80) whenever `allow_gate` is true and `collection_status` is `COLLECTED`. A run with any requirement covered only by recorded live verification MUST NOT return PASS. A filed waiver MUST be validated and reported, and MUST leave the derived decision unchanged. `e2e-trace-summary.json` MUST be written before the workflow terminates.
+**Master Rule:** Gate decision MUST be deterministic based on clear criteria (P0 100%, P1 90/80, overall >=80) whenever `allow_gate` is true and `collection_status` is `COLLECTED`. A run with any requirement covered only by recorded live verification MUST NOT return PASS. A filed waiver MUST be validated and reported, and MUST leave the derived decision unchanged. `{e2e_trace_summary_output}` MUST be written before the workflow terminates.
 
 ## On Complete
 

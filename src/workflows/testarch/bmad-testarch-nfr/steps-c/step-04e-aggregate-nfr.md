@@ -2,7 +2,7 @@
 name: 'step-04e-aggregate-nfr'
 description: 'Aggregate NFR domain evidence audits into executive summary'
 nextStepFile: '{skill-root}/steps-c/step-05-generate-report.md'
-outputFile: '{test_artifacts}/nfr-assessment.md'
+outputFile: '{test_artifacts}/nfr/nfr-assessment-{run_key}.md'
 ---
 
 # Step 4E: Aggregate NFR Evidence Audit Results
@@ -32,7 +32,7 @@ const domains = ['security', 'performance', 'reliability', 'maintainability'];
 const assessments = {};
 
 domains.forEach((domain) => {
-  const outputPath = `/tmp/tea-nfr-${domain}-{{timestamp}}.json`;
+  const outputPath = `/tmp/tea-nfr-${domain}-{run_key}-{{timestamp}}.json`;
   assessments[domain] = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
 });
 ```
@@ -447,7 +447,7 @@ const executiveSummary = {
 };
 
 // Save for Step 5 (report generation)
-fs.writeFileSync('/tmp/tea-nfr-summary-{{timestamp}}.json', JSON.stringify(executiveSummary, null, 2), 'utf8');
+fs.writeFileSync('/tmp/tea-nfr-summary-{run_key}-{{timestamp}}.json', JSON.stringify(executiveSummary, null, 2), 'utf8');
 ```
 
 ---
@@ -485,10 +485,15 @@ fs.writeFileSync('/tmp/tea-nfr-summary-{{timestamp}}.json', JSON.stringify(execu
 
 **Save this step's accumulated work to `{outputFile}`.**
 
+Step 1 created `{outputFile}` for this run's `run_key`, so the file holds only this run's work.
+
 - **If `{outputFile}` does not exist** (first save), create it using the workflow template (if available) with YAML frontmatter:
 
   ```yaml
   ---
+  runScope: '{run_scope}'
+  runKey: '{run_key}'
+  workflowStatus: 'in-progress'
   stepsCompleted: ['step-04e-aggregate-nfr']
   lastStep: 'step-04e-aggregate-nfr'
   lastSaved: '{date}'
@@ -498,6 +503,8 @@ fs.writeFileSync('/tmp/tea-nfr-summary-{{timestamp}}.json', JSON.stringify(execu
   Then write this step's output below the frontmatter.
 
 - **If `{outputFile}` already exists**, update:
+  - Leave `runScope` and `runKey` exactly as step 1 wrote them
+  - Set `workflowStatus: 'in-progress'`
   - Add `'step-04e-aggregate-nfr'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-04e-aggregate-nfr'`
   - Set `lastSaved: '{date}'`

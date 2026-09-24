@@ -31,7 +31,7 @@ Before starting this workflow, verify:
 - [ ] Story markdown loaded (if `{story_file}` provided)
 - [ ] Acceptance criteria extracted from story (if available)
 - [ ] Tech-spec.md loaded (if `{use_tech_spec}` true and file exists)
-- [ ] Test-design.md loaded (if `{use_test_design}` true and file exists)
+- [ ] Test-design document loaded (if `{use_test_design}` true and a file exists in `{test_artifacts}/test-design/` or, for older runs, the `{test_artifacts}/` root)
 - [ ] PRD.md loaded (if `{use_prd}` true and file exists)
 - [ ] **Note**: Absence of BMad artifacts does NOT halt workflow
 
@@ -69,7 +69,7 @@ Before starting this workflow, verify:
 
 - [ ] Acceptance criteria mapped to test scenarios
 - [ ] Features implemented in story identified
-- [ ] Existing ATDD tests checked (if any)
+- [ ] Existing ATDD tests checked (if any), looking in `{test_artifacts}/atdd/` first and then the legacy `{test_artifacts}/` root
 - [ ] Expansion beyond ATDD planned (edge cases, negative paths)
 
 **Standalone Mode (if no story):**
@@ -397,7 +397,10 @@ Per `pactjs-utils-mandate.md`. Skip entirely when the flag is false, when `@seon
 
 ### Automation Summary Document
 
-- [ ] Output file created at `{output_summary}`
+- [ ] Output file created at `{test_artifacts}/automate/automation-summary-{run_key}.md`
+- [ ] `run_key` follows the shared grammar (`story-{story_key}`, `epic-{epic_num}`, `target-{slug}`, or `system`) and was resolved before the first save
+- [ ] Frontmatter carries `runScope` and `runKey` matching this run's scope
+- [ ] No summary for another scope was read or written, and no earlier run's content was merged into this summary
 - [ ] Document includes execution mode (BMad-Integrated, Standalone, Auto-discover)
 - [ ] Feature analysis included (source files, coverage gaps) - Standalone mode
 - [ ] Tests created listed (E2E, API, Component, Unit) with counts and paths

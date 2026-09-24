@@ -2,7 +2,7 @@
 name: 'step-04a-subagent-security'
 description: 'Subagent: Security NFR evidence audit'
 subagent: true
-outputFile: '/tmp/tea-nfr-security-{{timestamp}}.json'
+outputFile: '/tmp/tea-nfr-security-{run_key}-{{timestamp}}.json'
 ---
 
 # Subagent 4A: Security NFR Evidence Audit

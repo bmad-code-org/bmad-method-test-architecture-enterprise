@@ -1710,6 +1710,64 @@ async function main() {
     }
   }
 
+  // A run that resolves the wrong run key writes a complete deliverable where the
+  // harness does not read. That is a behavior of the run, so it has to score as a
+  // quality failure at exit 1 naming the file it wrote, and never as the exit 2 an
+  // environment that produced nothing gets.
+  for (const fixture of [
+    { id: 'trace', script: 'eval-trace.js', misplaced: 'test-artifacts/trace/traceability-matrix-system.md' },
+    { id: 'nfr', script: 'eval-nfr.js', misplaced: 'test-artifacts/nfr/nfr-assessment-epic-1.md' },
+    { id: 'test-design', script: 'eval-test-design.js', misplaced: /^test-artifacts\/test-design\/test-design-epic-\d+\.md$/ },
+  ]) {
+    const outputPath = path.join(os.tmpdir(), `eval-${fixture.id}-wrong-key-${process.pid}.json`);
+    try {
+      const wrongKeyRun = spawnSync(
+        process.execPath,
+        [
+          path.join(PROJECT_ROOT, 'test', fixture.script),
+          '--agent',
+          'custom',
+          '--agent-cmd',
+          path.join(PROJECT_ROOT, 'test', 'fixtures', `${fixture.id}-runner`, 'stub-agent.js'),
+          '--env-pass',
+          'STUB_MODE',
+          '--runs',
+          '1',
+          '--json',
+          outputPath,
+        ],
+        { cwd: PROJECT_ROOT, encoding: 'utf8', env: { ...process.env, STUB_MODE: 'wrong-key' }, timeout: 60_000 },
+      );
+      check(wrongKeyRun.status === 1, `${fixture.id} wrong-key run exits 1, got ${wrongKeyRun.status}: ${wrongKeyRun.stderr}`);
+      if (fs.existsSync(outputPath)) {
+        const emitted = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
+        const emittedRunner = emitted.runners[0];
+        check(validateEvalResult(emitted).success, `${fixture.id} wrong-key run emits a schema-valid artifact`);
+        check(
+          emittedRunner.failureClass === 'quality',
+          `${fixture.id} wrong-key run is classed quality, got ${emittedRunner.failureClass}`,
+        );
+        check(
+          emittedRunner.diagnostics.length > 0 &&
+            emittedRunner.diagnostics.every(
+              (entry) =>
+                entry.failureClass === 'quality' &&
+                entry.evidence.some(
+                  (item) =>
+                    item.kind === 'artifact' &&
+                    (typeof fixture.misplaced === 'string' ? item.value === fixture.misplaced : fixture.misplaced.test(item.value)),
+                ),
+            ),
+          `${fixture.id} wrong-key diagnostics name the file the run wrote under another key`,
+        );
+      } else {
+        check(false, `${fixture.id} wrong-key run wrote no result at ${outputPath}`);
+      }
+    } finally {
+      fs.rmSync(outputPath, { force: true });
+    }
+  }
+
   if (failures.length > 0) {
     console.error(`eval diagnostics: ${failures.length} failure(s) across ${checks} checks`);
     for (const failure of failures) console.error(`  - ${failure}`);

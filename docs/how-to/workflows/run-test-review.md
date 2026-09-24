@@ -82,9 +82,9 @@ tests/
 
 ### 3. Review the Quality Report
 
-TEA generates a comprehensive quality report with scoring.
+TEA generates a comprehensive quality report with scoring and writes it to `{test_artifacts}/test-review/test-review-{run_key}.md`. The `run_key` names what was reviewed: `story-{story_key}` or `epic-{epic_num}` when a story or epic is in context, `system` for the entire suite, and `target-{slug}` for a file or directory, such as `target-tests-e2e` for `tests/e2e/`. Reviews of different scopes never overwrite each other, and re-reviewing the same scope replaces its report.
 
-#### Report Structure (`test-review.md`):
+#### Report Structure (`test-review/test-review-{run_key}.md`):
 
 ````markdown
 # Test Quality Review Report
@@ -516,7 +516,7 @@ Share reports with team:
 
 ```text
 Team Meeting:
-- Review test-review.md
+- Review test-review/test-review-{run_key}.md
 - Discuss critical issues
 - Agree on patterns
 - Update team guidelines
@@ -524,7 +524,7 @@ Team Meeting:
 
 ### Compare Over Time
 
-Track improvement:
+Re-reviewing a scope replaces its report, so commit each report or copy its score into a trend table to track improvement:
 
 ```markdown
 ## Quality Trend

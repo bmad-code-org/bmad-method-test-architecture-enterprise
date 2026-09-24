@@ -2,7 +2,7 @@
 name: 'step-02-define-thresholds'
 description: 'Identify NFR categories and thresholds'
 nextStepFile: '{skill-root}/steps-c/step-03-gather-evidence.md'
-outputFile: '{test_artifacts}/nfr-assessment.md'
+outputFile: '{test_artifacts}/nfr/nfr-assessment-{run_key}.md'
 ---
 
 # Step 2: Define NFR Categories & Thresholds
@@ -40,7 +40,7 @@ Establish the NFR categories to assess and the thresholds used for validation.
 
 Before deriving thresholds from raw documents, check if a `test-design` output exists with NFR planning:
 
-- Look for `test-design-architecture.md`, `test-design-qa.md`, or any test-design output in `{test_artifacts}/` that contains an NFR section.
+- Look for `test-design-architecture.md`, `test-design-qa.md`, or a `test-design-epic-{epic_num}.md` covering this run's scope that contains an NFR section. Search `{test_artifacts}/test-design/` first, then the legacy root `{test_artifacts}/` where runs before the `test-design/` folder wrote them.
 - If found, **load it as the primary source of NFR categories and thresholds**. Use those values directly; do not re-derive them from scratch.
 - Only fall back to raw documents (tech-spec, PRD, story) for categories or thresholds that are still missing or marked **UNKNOWN** in the test-design output.
 - If no test-design NFR plan exists, proceed with step 1 using raw documents.
@@ -135,10 +135,15 @@ Step 5 solely for the recorded-only report table.
 
 **Save this step's accumulated work to `{outputFile}`.**
 
+Step 1 created `{outputFile}` for this run's `run_key`, so the file holds only this run's work.
+
 - **If `{outputFile}` does not exist** (first save), create it using the workflow template (if available) with YAML frontmatter:
 
   ```yaml
   ---
+  runScope: '{run_scope}'
+  runKey: '{run_key}'
+  workflowStatus: 'in-progress'
   stepsCompleted: ['step-02-define-thresholds']
   lastStep: 'step-02-define-thresholds'
   lastSaved: '{date}'
@@ -148,6 +153,8 @@ Step 5 solely for the recorded-only report table.
   Then write this step's output below the frontmatter.
 
 - **If `{outputFile}` already exists**, update:
+  - Leave `runScope` and `runKey` exactly as step 1 wrote them
+  - Set `workflowStatus: 'in-progress'`
   - Add `'step-02-define-thresholds'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-02-define-thresholds'`
   - Set `lastSaved: '{date}'`
