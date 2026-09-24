@@ -229,7 +229,7 @@ Each finding was verified against the code first.
 | H5 | — | the record called `nfr P-001`'s failure a measurement | corrected in Verification |
 | C1 | — | the preflight header and the qualification JSDoc still described qualifying on the pristine workspace | fixed |
 | CR1 | — | AD-8 said `targetArtifact` is repo-relative | valid: the runtime, `check` and the schema resolve it against `launch.root`; AD-8 is amended (dated), and the schema and the docs now say relative to `launch.root`, not the repository, when they differ |
-| CR2 | — | the docs promised no write to adopter state | valid: the workspace section now says the runtime writes nothing into the tree and a target that writes outside its workspace (an absolute path, the shared git state) is detected afterwards with exit 12, not prevented |
+| CR2 | — | the docs promised no write to adopter state | valid: the workspace section now says the runtime writes nothing into the tree and a target that writes outside its workspace (an absolute path, the shared git state) is detected afterwards and exits 12 |
 
 ### Final review round 1 revert checks
 
@@ -249,6 +249,43 @@ Each fix was undone once in the working tree, the named suite run, the failure o
 - H3, `force` without the written set: "under force, a second leg sending one request spawned 2 time(s)".
 - H4, NFR staging removed from `stagedWorkspaceFor`: `test:probe-corpus` reports "nfr gapped-harbor-billing-ledger: the staged workspace holds no harbor-billing-ledger/" and "no skill/".
 
+## Coordinator decisions after round 1
+
+### Test-design baseline
+
+The decision to re-record the test-design baseline from the live run rested on the baseline having been measured by agents in an empty directory; checking it showed it was not.
+`test/probes/expected-strength.json` is one file two gates read: `npm run test:probe-corpus` (in `npm test`) regenerates every field from the stored replay under `test/replay/test-design/` and fails on any difference, and `eval:preflight` compares its live outcomes with the same fields.
+The test-design replay port answers every leg, the manifestation leg included, with the stored correct run of its set, so its seeded witnesses never fire and each defect probe reduces to `failed: seeded-fault-fired` by construction.
+Writing a live outcome into the file fails the deterministic gate: setting `test-design` P-008 to `passed` made `test:probe-corpus` report the file out of date.
+So the baseline stays the replay's, and the live moves are recorded here as measurements, which is how the file's own `eval:preflight` contract treats a moved outcome.
+
+| Probe | Baseline (replay) | Staged live | Why |
+| --- | --- | --- | --- |
+| P-008 | failed: seeded-fault-fired | passed | the witness fires on the live seeded run: its document registers `cross-tenant-data-leak`, which the seeded epic rules out |
+| P-009 | failed: seeded-fault-fired | passed | the same for `browser-and-accessibility-regression` |
+| P-010 | failed: seeded-fault-fired | passed | the same for `data-residency-compliance` |
+| P-012 | failed: seeded-fault-fired | failed: seeded-faults-scoped | the witness fires on the clean `witness-design-level-minimal` leg |
+| P-013 | failed: seeded-fault-fired | failed: seeded-faults-scoped | the same |
+| P-014 | failed: seeded-fault-fired | failed: seeded-faults-scoped | the same |
+
+The other ten test-design probes reduce to the baseline live.
+
+Whether P-012 to P-014's witnesses are overbroad the way NFR's bare `UNKNOWN` was: they are document-global vocabulary readings (the epic marker and the negated oracle check), and the minimal clean document trips P-013 through prose alone.
+A witness scoped to a structured field was tried against the cached live documents: a risk-register row (`| R-NNN |`) in the ruled-out risk's own category carrying its deciding vocabulary.
+The stored `clean-over-reported` replay still matches it (R-002 DATA "corrupt the stored record", R-001 SEC "expose sensitive personal data to an unauthorized person", R-003 PERF "slow the home screen render and degrade startup latency"), and so do the clean staged legs: the minimal document's R-005 DATA row ("no order, queue entry or setting can be altered or lost") and R-007 PERF row ("render budget"), and the full document's R-006 PERF row ("render cost") and R-007 SEC row ("adds personal data").
+The tightening therefore moves none of the three outcomes, and it would split the witness from the oracle it negates, which the generator keeps equal on purpose, so the witnesses are unchanged.
+This is a contract weakness finding, measured and kept: the live `bmad-testarch-test-design` run registers risks its epic rules out as low-score rows ("Document", score 1 to 3), and oracles O-008 to O-010 and O-012 to O-014, which read vocabulary without regard to a row's score or its guard wording, cannot tell such a guard row from an invented risk. P-008 to P-010 passing live is the same behavior seen on the seeded set.
+Closing it belongs to the test-design contract (a register reading that separates a scored risk from a documented guard, or a skill rule that leaves ruled-out categories out of the register), outside this story.
+
+### `fragment-selection/bmad-testarch-ci` P-001 and P-002
+
+Re-run live once with `--force`, which now runs each request once: 2 legs run and 6 from the cache, and both probes matched the baseline (exit 0, "every probe matched the outcome test/probes/expected-strength.json records").
+The one moved sample was request `9ef586ea…`, which returned `{"fragments":[]}` at 20:31:22Z; the re-run of the same request returned `{"fragments":["ci-burn-in.md"]}`, the answer the suite's other leg gives, so the empty answer was sampling variance of the live agent.
+
+### Documentation wording
+
+The workspace section's two sentences that ended in a negation now say what the run does: a write outside the workspace "is detected afterwards, and the run exits 12", and for the shared git state "the run detects such a change afterwards and exits 12".
+
 ## Verification
 
 **Commands:**
@@ -258,6 +295,7 @@ Final review round 1 (after the rebase onto ccde995 and the fixes):
 - `npm test` -- exit 0 (`test:evaluate-mutation` 381 checks, `test:evaluate-boundaries` 296)
 - `npm run test:release-metadata`, `npm run docs:validate-links`, `npm run docs:build` -- exit 0
 - the Build Rules engine check -- exit 0
+- after the coordinator decisions: `npm test` exit 0; `npm run docs:validate-links` and `npm run docs:build` exit 0; `eval:preflight` for `fragment-selection/bmad-testarch-ci` re-run live, matching the baseline
 - `npm run eval:preflight` -- run live after the staging and cache fixes: 28 legs run, 162 answered from the cache, 4524 s in the model, exit 2 with eight preflight outcomes moved.
   NFR (P-001 to P-004 passed), CI (P-001 to P-003 failing `seeded-fault-fired` and `seeded-faults-scoped`, P-004 passed), trace, test-review, routing and every other fragment-selection suite reduce to `test/probes/expected-strength.json`.
   Six moves are test-design's, whose legs are staged for the first time: P-008 to P-010 now pass where the baseline recorded `seeded-fault-fired`, P-012 to P-014 fail `seeded-faults-scoped` where it recorded `seeded-fault-fired`, and the other ten reduce to the baseline; the baseline's test-design outcomes were measured by agents running in an empty directory, so re-recording them is the owner's call.

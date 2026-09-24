@@ -126,7 +126,7 @@ Address an exit code, stream or body only the defect produces.
 ## The workspace
 
 Every mutation and every arm and leg of a run happens in a disposable workspace, so the runtime itself writes nothing into your tree.
-A target that writes outside its workspace anyway (through an absolute path, or through the git state a worktree shares with your repository) is detected afterwards and the run exits 12, as the end of this section describes; it is not prevented.
+A target that writes outside its workspace anyway (through an absolute path, or through the git state a worktree shares with your repository) is detected afterwards, and the run exits 12, as the end of this section describes.
 `evaluation.json`'s `workspace` chooses the first one, the pristine workspace:
 
 - `kind: git`, with `launch.root` inside a git repository that has a commit: a detached worktree at `HEAD`, made with `git worktree add --detach` and your repository's hooks disabled.
@@ -145,7 +145,7 @@ Each link is resolved as the system resolves it, so a `..` after a link climbs f
 A workspace is removed when the command ends, a worktree's entry in your repository included, and also on `SIGINT`, `SIGTERM`, `SIGHUP` or `SIGQUIT`, which stop the running leg and then end the command by the same signal.
 A `SIGKILL` runs no handler: a worktree it leaves behind is listed by `git worktree list` until `git worktree prune`.
 
-A worktree shares your repository's git directory (its refs, configuration, hooks, `info/` and objects), so a target running git in it can change them; the run detects such a change, it does not prevent one.
+A worktree shares your repository's git directory (its refs, configuration, hooks, `info/` and objects), so a target running git in it can change them; the run detects such a change afterwards and exits 12.
 `preflight` reads your project before the workspaces are made and again after the qualification and after the legs: in a git repository, `git status` (tracked and untracked paths), the content of every path it names, every ref, and the common git directory without its object store, reflogs, worktree records, index and submodule or LFS stores; outside one, the tree digest of `launch.root` without the evaluation's `runs/`.
 A change exits 12, no qualified probe is written and the probe list handed to the CLI is removed, so a target that writes into your tree, commits, tags or reconfigures the repository fails the run.
 The rollback cycle also refuses to write or read the `targetArtifact` through a directory an arm replaced with a symbolic link (exit 12).
