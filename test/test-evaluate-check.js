@@ -457,6 +457,17 @@ function checkUsage() {
   const resolved = resolveEvaluationFolder(VALID);
   check(resolved.ok && resolved.folder === VALID, 'resolveEvaluationFolder did not resolve the valid fixture folder');
   check(!resolveEvaluationFolder().ok, 'resolveEvaluationFolder resolved an absent flag');
+
+  // `link/../evaluation` climbs from the link's target, as the system resolves it.
+  const base = fs.realpathSync(tempDir('climb'));
+  fs.mkdirSync(path.join(base, 'real', 'deep'), { recursive: true });
+  fs.cpSync(VALID, path.join(base, 'real', 'evaluation'), { recursive: true });
+  fs.symlinkSync(path.join('real', 'deep'), path.join(base, 'link'), 'dir');
+  const climbed = resolveEvaluationFolder(['link', '..', 'evaluation'].join(path.sep), base);
+  check(
+    climbed.ok && climbed.folder === path.join(base, 'real', 'evaluation'),
+    `--evaluation link/../evaluation resolved to ${JSON.stringify(climbed)}; expected the folder beside the link's target`,
+  );
 }
 
 // ---------------------------------------------------------------------------

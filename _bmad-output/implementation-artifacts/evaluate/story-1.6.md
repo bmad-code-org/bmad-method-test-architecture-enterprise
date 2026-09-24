@@ -233,6 +233,84 @@ Each fix was undone once in the working tree, `node test/test-evaluate-preflight
 - T6 (host value over the leg's): "the leg that declares its own value received '[redacted]'".
 - T7 (`substituted` hard-coded false): "the preflight call under the shim is not recorded as substituted: true".
 
+## Final review round 2
+
+Two opus reviewers reviewed head bc5dc80; the adversarial one worked by execution, with probe scripts this round reran against the fix.
+Each finding was verified against the code before acting, and every fix below has a test that fails when the fix is undone, except where the revert observation says otherwise.
+
+### Supervision design
+
+The agent runs in its own process group, and a second process, the group leader, starts it there and holds one end of a socket (the lifeline) whose other end only the supervisor holds.
+The supervisor stays in the runner's process group, so a terminal's Ctrl-C or `Ctrl-\` and a signal to the runner's group reach it, and it forwards them to the leader over the lifeline; the kernel closes the lifeline however the supervisor ends, `SIGKILL` included, and the leader then stops the group.
+The leader also owns the wall clock (chained timers, so any `--timeout-ms` holds) and kills what is left of the group when the agent exits; the supervisor kills the group if the leader is killed on its own, and exits when the runner is gone, which closes the lifeline.
+
+Alternatives considered:
+
+- No new session at all (the agent stays in the runner's group, as at 4662ab3): terminal keys and a group `SIGKILL` reach everything, but a timeout can then only signal the agent itself, since signalling the group would kill the runner, so the agent's children outlive a timeout.
+  Rejected because the timeout case is the reason the supervisor exists.
+- One detached process that polls its parent (the round 1 design with the poll carrying all the weight): a group `SIGKILL` kills the runner, the poll notices within 100 ms, and the group stops; but a `SIGKILL` to that process itself orphans the agent, and there is no lifeline to notice.
+  Rejected for the supervisor-death case.
+- The chosen design keeps one poll: a runner killed on its own (eval-quality's adapter at `maxElapsedMs`) closes no pipe the supervisor can watch, since `spawnSync` closes the agent's stdin once the prompt is written and Node offers no `pipe()` to open another before it.
+  The poll compares `process.ppid` with the runner's pid passed on the command line, so a runner that died before the supervisor started is caught on the first check.
+- Ctrl-Z: forwarding `SIGTSTP` does nothing, because the agent's group has no parent in its session (an orphaned group), and the kernel drops job-control stops sent to one.
+  `SIGSTOP` to the group worked in a pty (Ctrl-Z, then `fg`, completed the run), and was rejected: a job suspended that way and then killed with `kill -9 %1` leaves the agent's group stopped forever, since the leader is stopped too and nothing outside the group resumes it.
+  Ctrl-Z therefore suspends the runner and the supervisor while the agent runs on, bounded by `--timeout-ms` and the runner's end, and the docs say so.
+
+### Findings
+
+| ID | Finding | Outcome |
+| --- | --- | --- |
+| S1 | `detached: true` took the agent out of the runner's group, so a group `SIGKILL` (a cancelled CI job), a `Ctrl-\` and a `SIGKILL` to the supervisor alone left the agent's group running, and `runAgent` reported the last as a timeout | fixed by the lifeline design above; `SIGQUIT` joins the forwarded signals and `preflight`'s interrupt handlers; `run-agent.js` reads the supervisor's report first and turns an `ETIMEDOUT` with no report into a transport failure ("gave no report"), so only the supervisor reports a timeout, and the backstop kills a hung supervisor with `SIGKILL`, which closes the lifeline; tests: a `SIGKILL` to the runner's group, the supervisor killed alone (exit 4, no timeout, back within 10 s), the group leader killed alone, a stopped supervisor (exit 4, "gave no report"), and `preflight` interrupted by `SIGQUIT` to its group |
+| S2 | the parent watch read `process.ppid` at start, which is already 1 when the runner died first (7 of 21 trials orphaned the agent), and never updates on Windows | fixed: the runner's pid is passed on the command line, the runner is gone when `process.ppid` differs from it (checked once at start, then every 100 ms), and on Windows when `process.kill(pid, 0)` finds no process; exiting closes the lifeline; test: a supervisor started with a runner pid that is not its parent ends within 5 s and its agent's child dies; `race.js` rerun: 21 trials, 0 orphans |
+| S3 | a `--timeout-ms` above 2147483647 timed out at once (Node clamps a longer `setTimeout` to 1 ms) | fixed: the leader chains timers of at most 2^31-1 ms, and `spawnSync`'s backstop is capped at `Number.MAX_SAFE_INTEGER`; test: `--timeout-ms 2147483648` answers with exit 0 |
+| S4a | nothing tested that the group dies when the agent exits: the stub's child was ref'd, so the stub never exited first | fixed: `STUB-LEAVE <file>` starts an unref'd child and exits 0; test: the runner exits 0 and the child dies |
+| S4b | nothing tested signal forwarding | fixed: `SIGINT`, `SIGTERM`, `SIGHUP` and `SIGQUIT` each sent to the supervisor alone end the runner with exit 4 naming the signal, and the agent's child dies |
+| S5 | the docs said `SIGTERM` then `SIGKILL` 2 s later for the group, while the code `SIGKILL`s the rest of the group the moment the agent exits; nothing said output a descendant writes after the agent exits is dropped | fixed in wording: `tea-evaluate-cli.md` (exit 5 row and the process paragraph), `tea-test-review-cli.md` (`--timeout-ms` row and **Agent execution**), the custom runner contract in `agent-adapters.js`, `run-agent.js`'s header and JSDoc, and CHANGELOG now say the group gets `SIGTERM` and the agent `SIGKILL` 2 s later if still running, and every process left in the group gets `SIGKILL` when the agent exits, so later output is dropped |
+| P1 | `containLinks` and `launch.root` resolved links lexically, so `x -> sub/../c` with `sub -> a/b` read the root's `c` in the copy, and `trick -> selfroot/../out/victim.txt` escaped the root in the source while the copy accepted it | fixed: a link's target is `fs.realpathSync.native` of the link, and the loose walk (for a dangling or looping link) now joins the target as spelled and resolves each existing prefix with `realpathSync.native`; `launch.root` is joined as spelled the same way; tests: `x` reads `A-C` in the copy, and `case/trick` is refused with exit 12 naming it |
+| P2 | the C6 case (an absolute skill root spelled through a link to the working directory) was vacuous once round 1 moved temp directories under their real path | fixed: the case builds an explicit link to the working directory and runs the runner from it with `--skill-root` spelled through the link |
+| P3 | `check.js` and CHANGELOG gave a stale reason for the `skill-runner` rule | fixed: under the ceiling the runner reports its own timeout as exit 5, and at the ceiling the adapter kills the runner's process group, records a fault, and `preflight` exits 12 |
+| P4 | `folder.js` comment in the negation form | fixed: "every path relative to the folder resolves against the folder's real location, symbolic links included" |
+| E1 | coordinator addition: eval-quality 4.1.1 kills the target's whole process group on `maxElapsedMs`, `maxOutputBytes` and abort (eval-quality#160) | done: devDependency 4.1.1 (`package.json`, `package-lock.json`, no `file:` or `.tgz` spec); the roadmap's pin claim, its `EVAL_QUALITY_PIN_IS_4_1_1` source and test, the command-adapter page's outcome sentence, CHANGELOG, `check.js`, `preflight.js`, `tea-evaluate-cli.md` and a test comment now say the adapter kills the runner's process group at the ceiling; round 1's note that the adapter kills only the runner is closed by this pin |
+
+Found on the way:
+
+- Ctrl-Z, probed in a pty under `bash -i`: see the design notes; the docs and CHANGELOG say the agent runs on under a suspended runner.
+- `test/test-evaluate-preflight.js` exited 0 with no verdict printed when a case awaited a `close` event that had already fired (Node exits once nothing is pending); an `exit` hook now fails the suite with a message when `main` never finished, and the new early-runner case attaches its listener at spawn.
+- `resolveEvaluationFolder` resolved `--evaluation` lexically as well; it now joins the value as spelled and takes `realpathSync.native` of the folder, and `test-evaluate-check.js` resolves `link/../evaluation` to the folder beside the link's target.
+- `doc-claims` refused `SIGQUIT` in the reference until it joined the platform names in `eval-quality.config.json`'s foreign symbols.
+- `package-lock.json`'s root entry lacked the `tea-skill-runner` bin this story added; the 4.1.1 install wrote it.
+- eval-quality 4.1.1 spawns the target as the leader of a new session, so a `SIGKILL` to `tea-evaluate preflight`'s process group no longer reaches the runner: `grpsig.js SIGKILL` left the runner, its supervisor and the agent's child running until the leg's `--timeout-ms` (30 s in the probe), where 4.1.0 killed them with the group.
+  The runner is bounded by its own `--timeout-ms`, which `check` holds below `maxElapsedMs`.
+  The fix is the same lifeline in eval-quality's adapter (a pipe the target's group watches, closed when the caller dies), and belongs to eval-quality; it is raised with the coordinator.
+  `SIGQUIT` and `SIGINT` to the same group left nothing, since `preflight`'s handlers abort the leg and the adapter kills the runner's group.
+
+### Final review round 2 revert checks
+
+Each fix was undone once in the working tree, `node test/test-evaluate-preflight.js` (or `node test/test-evaluate-check.js` for the folder) run, the named failures observed, and the fix restored.
+
+- S1, the leader's lifeline `close` handler removed: "a child the agent started … outlived its runner's SIGKILL", "… outlived a SIGKILL to the runner's process group", "a runner whose supervisor was killed took 60008 ms to return", "… outlived a runner that was gone before its supervisor started", and "a process the leg interrupted by SIGTERM started … outlived the preflight".
+- S1, `ETIMEDOUT` mapped back to `{ timedOut: true }`: "a runner whose supervisor never reported exited 5; expected 4, a supervisor failure".
+- S1, `SIGQUIT` dropped from `preflight`'s interrupt handlers: "the preflight interrupted by SIGQUIT left its copy".
+- S2, the parent captured at start: "a supervisor whose runner was gone before it started kept its agent running for 5 s".
+- S3, one plain `setTimeout`: "--timeout-ms 2147483648 exited 5; expected 0".
+- S4a, both group kills removed (the leader's at the agent's exit and the supervisor's when the leader exits): "a child the agent left behind … outlived the agent's exit".
+  Each alone passes that case, since the other covers it; the supervisor's kill alone removed fails "a runner whose group leader was killed took 60005 ms to return".
+  The leader's kill is the only one left when the supervisor is already gone, a case no test isolates, since stopping the group on the lifeline also kills such a child.
+- S4b, the supervisor's forwarding handlers made no-ops: four failures, "a runner whose supervisor received SIGINT exited 0; expected the agent killed by SIGINT" and the same for `SIGTERM`, `SIGHUP` and `SIGQUIT`.
+- P1, lexical link resolution: "a link through sub/../c read "ROOT-C" in the copy", "preflight over a link that climbs out past another link exited 0; expected 12", and the refusal naming case.
+- P2, the absolute-value guard dropped from `resolveSkillRoot`: "an absolute skill root spelled through a linked working directory exited 2".
+- The folder, `path.resolve` restored: "--evaluation link/../evaluation resolved to {"ok":false,…}".
+
+### Final review round 2 execution probes
+
+Each reviewer probe was rerun against the fix (copies under the session scratchpad, pointed at this worktree).
+
+- `ra.js`: a normal reply, stderr, exit 3, a missing command (`AGENT_NOT_FOUND`), the prompt on stdin, and a 500 ms timeout match 4662ab3's exits and output; `sh -c '(sleep 0.3; echo late) & echo early'` returns `early\n`, the documented drop.
+- A group, supervisor, leader and runner `SIGKILL`, and each forwarded signal to the supervisor: nothing left after 3 s, and the runner reports a transport failure or the agent's signal.
+- `race.js` (runner `SIGKILL` 30 to 90 ms after start): 21 trials, 0 orphans.
+- `ttyprobe.py` Ctrl-C and `Ctrl-\` in a pty: nothing left, the runner ends by `SIGINT` and `SIGQUIT`; the same keys under `bash -i`: nothing left, `Quit: 3` and exit 131 for `Ctrl-\`.
+- `grpsig.js` against `tea-evaluate preflight`: `SIGQUIT` and `SIGINT` to its group leave no copy and no process; `SIGKILL` is the eval-quality finding above.
+
 ## Verification
 
 **Commands:**
@@ -250,3 +328,13 @@ Final review round 1 (after the fixes):
 - `npm run docs:validate-links` -- exit 0
 - `npm run docs:build` -- exit 0
 - the Build Rules engine check -- exit 0
+
+Final review round 2 (after the fixes and the eval-quality 4.1.1 pin):
+
+- `npm test` -- exit 0 (run before the last wording change to the runner's exit 4 row; `format:check`, `lint:md`, `test:doc-claims` and `test:doc-claim-sources` rerun after it, exit 0)
+- `npm run test:cli` -- exit 0
+- `npm run test:evaluate-preflight` -- three consecutive runs, exit 0 each, 203 checks
+- `npm run test:release-metadata` -- exit 0
+- `npm run docs:validate-links` -- exit 0
+- `npm run docs:build` -- exit 0
+- the Build Rules engine check -- exit 0; `package.json` and `package-lock.json` name `eval-quality` 4.1.1 from the registry, with no `file:` or `.tgz` spec

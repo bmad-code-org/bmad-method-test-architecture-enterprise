@@ -147,11 +147,12 @@ The steps run in order, each stopping the run with its own exit:
    A seeded fault's leg runs against the mutated copy of its mutation, which a later Evaluate release builds, so this release refuses such an evaluation with exit 12 before any leg runs, and a retry cannot pass.
 3. `launch.root` is copied into a temp directory, without `.git` and the evaluation's own `runs/`.
    A symbolic link inside the target is copied as a link to the same place in the copy, so a leg writing through it writes into the copy.
+   Each link is resolved as the system resolves it, so a `..` after a link climbs from the link's target.
    The copy is refused with exit 12 for a symbolic link that leads out of `launch.root`, an entry that is neither a file, a directory nor a link (a FIFO, a socket, a device), or a temp directory (`TMPDIR`) inside `launch.root`.
    Each `workspace.provision` directory is linked in from the target and stays writable: a leg that writes under a provisioned directory writes into your tree.
    A later Evaluate release makes those links read-only.
    Every registry target must be present and executable in the copy (exit 12 otherwise), and the legs run there.
-   The copy is removed when the command ends, and also on `SIGINT`, `SIGTERM` or `SIGHUP`, which stop the running leg and then end the command by the same signal.
+   The copy is removed when the command ends, and also on `SIGINT`, `SIGTERM`, `SIGHUP` or `SIGQUIT`, which stop the running leg and then end the command by the same signal.
 4. `eval-quality compile` and `eval-quality seal` over the run's own copy of `contract.json`, writing `eval-contract.json` and `sealed-evaluator-brief.json`; a non-zero exit the CLI documents is passed through.
 5. The legs: eval-quality's `runPreflight` plans them from the contract (every sensitivity-witness leg and the minted control legs) and drives them through the command-line adapter the registry authorizes.
    Each request carries the host's values for the environment keys its registry entry permits.
@@ -181,20 +182,25 @@ It never looks for a skill anywhere else, and it names no vendor: `--agent` is r
 The skill root and its `SKILL.md` must resolve inside the working directory, symbolic links included.
 The other options are those of TeA's own runners: `--agent-cmd`, `--agent-arg`, `--env-pass`, `--model`, `--timeout-ms`, and `--capability` (`read-only`, `scoped-artifact-writes` or `command-execution`; `scoped-artifact-writes` by default).
 
-| Exit | Meaning                                                                                                                                             |
-| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0    | the agent ran to completion                                                                                                                         |
-| 2    | usage: a missing or malformed option, an empty prompt or one that is not UTF-8, or a skill root outside the working directory                       |
-| 3    | configuration: an unknown agent, or a skill root that does not exist or holds no `SKILL.md`                                                         |
-| 4    | transport: the agent failed to start or exited non-zero, standard output closed before the reply was written, or the runner met an unexpected error |
-| 5    | timeout: the agent outlived `--timeout-ms`; its process group got `SIGTERM`, then `SIGKILL` 2 s later                                               |
-| 6    | parser: reserved by the shared runner table                                                                                                         |
+| Exit | Meaning                                                                                                                                                                                                 |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0    | the agent ran to completion                                                                                                                                                                             |
+| 2    | usage: a missing or malformed option, an empty prompt or one that is not UTF-8, or a skill root outside the working directory                                                                           |
+| 3    | configuration: an unknown agent, or a skill root that does not exist or holds no `SKILL.md`                                                                                                             |
+| 4    | transport: the agent failed to start or exited non-zero, the process supervising it ended without reporting, standard output closed before the reply was written, or the runner met an unexpected error |
+| 5    | timeout: the agent outlived `--timeout-ms`; its process group got `SIGTERM`, and the agent `SIGKILL` 2 s later if it was still running                                                                  |
+| 6    | parser: reserved by the shared runner table                                                                                                                                                             |
 
 A registry entry for the runner declares `infrastructureExitCodes` 3 to 6, and `check` holds it to that.
 Its target is the bin name `tea-skill-runner`, which `npm exec` resolves from the evaluation's installed TeA, or a path to `skill-runner.js`.
-The agent runs as the leader of its own process group, and every process in that group is stopped when the agent exits, when `--timeout-ms` runs out, and when the runner itself dies.
+The agent runs in its own process group.
+When the agent exits, every process left in that group receives `SIGKILL` at once, so output such a process would write later is lost.
+The group is also stopped when `--timeout-ms` runs out, when the runner's process group receives `SIGINT`, `SIGTERM`, `SIGHUP` or `SIGQUIT` (a terminal's Ctrl-C or `Ctrl-\` included), and when the runner or the supervisor process between it and the agent dies, by `SIGKILL` included.
+Stopping sends the group the signal received (`SIGTERM` for a timeout or a death), and the agent `SIGKILL` 2 s later if it is still running.
+A Ctrl-Z suspends the runner, and the agent runs on, bounded by `--timeout-ms` and the runner's end.
+A process that leaves the group, such as a daemon that starts its own session, is outside this control.
 Set every leg's `--timeout-ms` below the entry's `maxElapsedMs`, so the runner reports a timeout as exit 5.
-At the ceiling, the adapter kills the runner and records the leg as a fault, and `preflight` exits 12.
+At the ceiling, the adapter kills the runner's process group, records the leg as a fault, and `preflight` exits 12.
 Exit 2 is left out on purpose: a usage error is a defect in the evaluation's own wiring, and its preflight and oracles see it as a failed run.
 
 ## Exit codes

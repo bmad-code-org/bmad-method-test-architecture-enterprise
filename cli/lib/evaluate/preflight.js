@@ -212,19 +212,38 @@ function isInside(root, candidate) {
   return relative === '' || (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
 }
 
-/** The real path of `candidate`, whose missing tail (a dangling link's target) is joined to the real path of the part that exists. */
+/**
+ * The real path of `candidate`, whose missing tail (a dangling link's target)
+ * is joined to the real path of the part that exists. `candidate` is taken as
+ * spelled: a `..` after a symbolic link climbs from the link's target, as the
+ * system resolves it, so the caller must not normalize it first.
+ */
 function realPathLoosely(candidate) {
   const missing = [];
   let existing = candidate;
   for (;;) {
     try {
-      return path.join(fs.realpathSync(existing), ...missing);
+      return path.join(fs.realpathSync.native(existing), ...missing);
     } catch {
       const parent = path.dirname(existing);
       if (parent === existing) return candidate;
       missing.unshift(path.basename(existing));
       existing = parent;
     }
+  }
+}
+
+/** `path.join` without the normalization that would collapse a `..` after a symbolic link. */
+function joinAsSpelled(base, spelled) {
+  return path.isAbsolute(spelled) ? spelled : `${base}${path.sep}${spelled}`;
+}
+
+/** Where the symbolic link `source` leads, resolved by the system; a dangling or looping link through the loose walk. */
+function realTargetOf(source) {
+  try {
+    return fs.realpathSync.native(source);
+  } catch {
+    return realPathLoosely(joinAsSpelled(path.dirname(source), fs.readlinkSync(source)));
   }
 }
 
@@ -252,7 +271,7 @@ function containLinks(root, copy) {
   for (const link of symbolicLinksUnder(copy)) {
     const relative = path.relative(copy, link);
     const source = path.join(root, relative);
-    const target = realPathLoosely(path.resolve(path.dirname(source), fs.readlinkSync(source)));
+    const target = realTargetOf(source);
     if (!isInside(root, target)) {
       throw new CopyRefusal(
         `${relative.split(path.sep).join('/')} in launch.root is a symbolic link to ${target}, outside launch.root; a leg writing through it would write outside the disposable copy, so provision its directory or remove the link`,
@@ -328,14 +347,15 @@ function stageCopy({ root, provision, runsDirectory }) {
 /**
  * Removes the staged copy when the process is interrupted, since a signal ends
  * the process before any `finally` runs: aborts the in-flight leg (the adapter
- * kills its runner, whose supervisor then stops the agent's process group),
+ * kills its runner's process group, and the runner's supervisor, dying with
+ * it, closes the lifeline that stops the agent's process group),
  * removes the copy, and raises the same signal again with the default action,
  * so the caller sees the process end by that signal.
  *
  * @returns {() => void} removes the handlers
  */
 function cleanUpOnSignal(directory, controller) {
-  const signals = ['SIGINT', 'SIGTERM', 'SIGHUP'];
+  const signals = process.platform === 'win32' ? ['SIGINT', 'SIGTERM', 'SIGHUP'] : ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGQUIT'];
   const handlers = new Map();
   const release = () => {
     for (const [name, handler] of handlers) process.removeListener(name, handler);
@@ -394,7 +414,7 @@ async function runPreflightCommand(folder, { env = process.env, log = () => {} }
     });
   }
 
-  const root = realPathLoosely(path.resolve(folder, evaluation.launch.root));
+  const root = realPathLoosely(joinAsSpelled(folder, evaluation.launch.root));
   const provision = evaluation.workspace?.provision ?? [];
   const runsDirectory = ensureRunsDirectory(folder);
   let staged;

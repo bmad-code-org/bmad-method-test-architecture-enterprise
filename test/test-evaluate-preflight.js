@@ -70,6 +70,7 @@ const { ENGINE_CLI_ENV, engineCliPath } = require('../cli/lib/evaluate/engine');
 const PROJECT_ROOT = path.join(__dirname, '..');
 const EVALUATE = path.join(PROJECT_ROOT, 'cli', 'evaluate.js');
 const RUNNER = path.join(PROJECT_ROOT, 'cli', 'skill-runner.js');
+const SUPERVISOR = path.join(PROJECT_ROOT, 'cli', 'lib', 'agent-supervisor.js');
 const FIXTURES = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate');
 const PREFLIGHT_FIXTURE = path.join(FIXTURES, 'preflight');
 const VALID_FIXTURE = path.join(FIXTURES, 'valid');
@@ -273,16 +274,18 @@ function checkRunner() {
     `a SKILL.md linked outside the working directory exited ${linkedEntry.status}; expected ${EXIT_CODES.usage}\n${linkedEntry.output}`,
   );
 
-  // An absolute skill root spelled through the link the temp directory sits under, and one holding a backtick.
+  // An absolute skill root spelled through a symbolic link to the working directory, and one holding a backtick.
   const spelled = tempDir('runner-spelled');
   fs.cpSync(path.join(PROJECT_ROOT, STUB_SKILL), path.join(spelled, 'skill'), { recursive: true });
+  const linkedCwd = path.join(tempDir('runner-linked-cwd'), 'linked');
+  fs.symlinkSync(spelled, linkedCwd, 'dir');
   const absoluteSpelled = runRunner(
-    ['--skill-root', path.join(spelled, 'skill'), '--agent', 'custom', '--agent-cmd', path.join(PROJECT_ROOT, STUB_AGENT)],
-    { cwd: spelled },
+    ['--skill-root', path.join(linkedCwd, 'skill'), '--agent', 'custom', '--agent-cmd', path.join(PROJECT_ROOT, STUB_AGENT)],
+    { cwd: linkedCwd },
   );
   check(
     absoluteSpelled.status === 0,
-    `an absolute skill root inside a linked working directory exited ${absoluteSpelled.status}\n${absoluteSpelled.output}`,
+    `an absolute skill root spelled through a linked working directory exited ${absoluteSpelled.status}\n${absoluteSpelled.output}`,
   );
   fs.cpSync(path.join(PROJECT_ROOT, STUB_SKILL), path.join(spelled, 'sk`ill'), { recursive: true });
   const backtick = runRunner(['--skill-root', 'sk`ill', '--agent', 'custom', '--agent-cmd', path.join(PROJECT_ROOT, STUB_AGENT)], {
@@ -358,7 +361,7 @@ async function checkRunnerProcesses() {
     reap(orphan);
   }
 
-  // The runner killed outright, as eval-quality's adapter kills it on its own ceiling.
+  // The runner killed on its own, as eval-quality's adapter before 4.1.1 kills it at its ceiling.
   const killedPid = path.join(tempDir('orphan-killed'), 'pid');
   const killed = spawn(process.execPath, [RUNNER, '--skill-root', STUB_SKILL, ...STUB_OPTIONS], {
     cwd: PROJECT_ROOT,
@@ -374,6 +377,169 @@ async function checkRunnerProcesses() {
     check(await processEnds(survivor), `a child the agent started (pid ${survivor}) outlived its runner's SIGKILL`);
     reap(survivor);
   }
+}
+
+/** A runner started in the background on `input`, with its output collected and its ending awaited. */
+function startRunner(args, input, { detached = false } = {}) {
+  const child = spawn(process.execPath, [RUNNER, '--skill-root', STUB_SKILL, ...STUB_OPTIONS, ...args], {
+    cwd: PROJECT_ROOT,
+    env: BASE_ENV,
+    detached,
+  });
+  let stderr = '';
+  child.stdout.resume();
+  child.stderr.on('data', (chunk) => (stderr += chunk));
+  child.stdin.end(input);
+  const closed = ended(child).then((ending) => ({ ...ending, stderr }));
+  return { child, closed };
+}
+
+/** The pids of the children of `pid`. */
+function childrenOf(pid) {
+  const listed = spawnSync('pgrep', ['-P', String(pid)], { encoding: 'utf8' });
+  return listed.stdout.split(/\s+/).filter(Boolean).map(Number);
+}
+
+/**
+ * The agent's process group outlives no ending of the runner or of the
+ * supervisor between them, and the supervisor reports how the agent ended:
+ * a signal to the runner's whole group, the supervisor killed or stopped on
+ * its own, the runner gone before the supervisor looked, a child the agent
+ * leaves behind when it exits, each forwarded signal, and a wall clock past
+ * the 2^31-1 ms one Node timer holds.
+ */
+async function checkSupervision() {
+  if (process.platform === 'win32') return;
+  const long = ['--timeout-ms', '1200000'];
+
+  // The runner's whole group killed, as a cancelled CI job or `timeout -s KILL` kills it.
+  const groupPid = path.join(tempDir('group-kill'), 'pid');
+  const group = startRunner(long, `Say alpha. STUB-ORPHAN ${groupPid} STUB-SLEEP 30000`, { detached: true });
+  const groupChild = await pidFrom(groupPid);
+  check(groupChild !== null, 'the agent under a group-killed runner recorded no child pid');
+  process.kill(-group.child.pid, 'SIGKILL');
+  await group.closed;
+  if (groupChild !== null) {
+    check(await processEnds(groupChild), `a child the agent started (pid ${groupChild}) outlived a SIGKILL to the runner's process group`);
+    reap(groupChild);
+  }
+
+  // The supervisor killed on its own: the lifeline closes, the group stops, and the runner reports no timeout.
+  const supervisorPid = path.join(tempDir('supervisor-kill'), 'pid');
+  const killed = startRunner(long, `Say alpha. STUB-ORPHAN ${supervisorPid} STUB-SLEEP 30000`);
+  const killedChild = await pidFrom(supervisorPid);
+  const [supervisor] = childrenOf(killed.child.pid);
+  check(supervisor !== undefined, 'the runner started no supervisor');
+  if (supervisor !== undefined) process.kill(supervisor, 'SIGKILL');
+  const killedAt = Date.now();
+  const killedEnding = await killed.closed;
+  check(
+    killedEnding.code === EXIT_CODES['environment-transport'] && !/timed out/i.test(killedEnding.stderr),
+    `a runner whose supervisor was killed exited ${killedEnding.code}; expected ${EXIT_CODES['environment-transport']} with no timeout\n${killedEnding.stderr}`,
+  );
+  check(
+    Date.now() - killedAt < 10_000,
+    `a runner whose supervisor was killed took ${Date.now() - killedAt} ms to return; the agent's group outlived it`,
+  );
+  if (killedChild !== null) {
+    check(await processEnds(killedChild), `a child the agent started (pid ${killedChild}) outlived its supervisor's SIGKILL`);
+    reap(killedChild);
+  }
+
+  // The group leader killed on its own: the supervisor kills what is left of its group.
+  const leaderPid = path.join(tempDir('leader-kill'), 'pid');
+  const leaderRun = startRunner(long, `Say alpha. STUB-ORPHAN ${leaderPid} STUB-SLEEP 30000`);
+  const leaderChild = await pidFrom(leaderPid);
+  const [leader] = childrenOf(childrenOf(leaderRun.child.pid)[0] ?? 0);
+  check(leader !== undefined, 'the supervisor started no group leader');
+  if (leader !== undefined) process.kill(leader, 'SIGKILL');
+  const leaderKilledAt = Date.now();
+  const leaderEnding = await leaderRun.closed;
+  check(
+    Date.now() - leaderKilledAt < 10_000,
+    `a runner whose group leader was killed took ${Date.now() - leaderKilledAt} ms to return; the agent's group outlived the leader`,
+  );
+  check(
+    leaderEnding.code === EXIT_CODES['environment-transport'] && leaderEnding.stderr.includes('group leader was killed by signal SIGKILL'),
+    `a runner whose group leader was killed exited ${leaderEnding.code}; expected ${EXIT_CODES['environment-transport']} naming the leader\n${leaderEnding.stderr}`,
+  );
+  if (leaderChild !== null) {
+    check(await processEnds(leaderChild), `a child the agent started (pid ${leaderChild}) outlived its group leader's SIGKILL`);
+    reap(leaderChild);
+  }
+
+  // A supervisor that never reports (stopped here) is a transport failure once spawnSync's backstop runs out.
+  const stoppedPid = path.join(tempDir('supervisor-stop'), 'pid');
+  const stopped = startRunner(['--timeout-ms', '1000'], `Say alpha. STUB-ORPHAN ${stoppedPid} STUB-SLEEP 30000`);
+  const stoppedChild = await pidFrom(stoppedPid);
+  const [stoppedSupervisor] = childrenOf(stopped.child.pid);
+  if (stoppedSupervisor !== undefined) process.kill(stoppedSupervisor, 'SIGSTOP');
+  const stoppedEnding = await stopped.closed;
+  check(
+    stoppedEnding.code === EXIT_CODES['environment-transport'] && stoppedEnding.stderr.includes('gave no report'),
+    `a runner whose supervisor never reported exited ${stoppedEnding.code}; expected ${EXIT_CODES['environment-transport']}, a supervisor failure\n${stoppedEnding.stderr}`,
+  );
+  if (stoppedChild !== null) {
+    check(await processEnds(stoppedChild), `a child the agent started (pid ${stoppedChild}) outlived its stopped supervisor`);
+    reap(stoppedChild);
+  }
+
+  // The runner gone before the supervisor first looks: its pid is not the supervisor's parent.
+  const gone = spawnSync(process.execPath, ['-e', '0']).pid;
+  const earlyPid = path.join(tempDir('runner-early'), 'pid');
+  const agent = `const c = require('node:child_process').spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'], { stdio: 'ignore' }); require('node:fs').writeFileSync(${JSON.stringify(earlyPid)}, String(c.pid)); setTimeout(() => {}, 30000);`;
+  const orphaned = spawn(process.execPath, [SUPERVISOR, String(gone), '1200000', process.execPath, '-e', agent], { stdio: 'ignore' });
+  const orphanedEnds = ended(orphaned);
+  const supervisorEnded = await Promise.race([orphanedEnds.then(() => true), delay(5000).then(() => false)]);
+  check(supervisorEnded, 'a supervisor whose runner was gone before it started kept its agent running for 5 s');
+  if (!supervisorEnded) orphaned.kill('SIGKILL');
+  await orphanedEnds;
+  // The group leader stops the agent, and SIGKILLs it after its grace period, once the lifeline closes.
+  await delay(2500);
+  const earlyChild = fs.existsSync(earlyPid) ? Number(fs.readFileSync(earlyPid, 'utf8')) : null;
+  if (earlyChild !== null) {
+    check(
+      await processEnds(earlyChild),
+      `a child the agent started (pid ${earlyChild}) outlived a runner that was gone before its supervisor started`,
+    );
+    reap(earlyChild);
+  }
+
+  // The agent answers and exits, leaving a child behind.
+  const leftPid = path.join(tempDir('left-behind'), 'pid');
+  const left = runRunner(['--skill-root', STUB_SKILL, ...STUB_OPTIONS], { input: `Say alpha. STUB-LEAVE ${leftPid}` });
+  check(left.status === 0, `an agent that leaves a child behind exited ${left.status}; expected 0\n${left.output}`);
+  const leftChild = await pidFrom(leftPid, 1000);
+  check(leftChild !== null, 'the agent recorded no child it left behind');
+  if (leftChild !== null) {
+    check(await processEnds(leftChild), `a child the agent left behind (pid ${leftChild}) outlived the agent's exit`);
+    reap(leftChild);
+  }
+
+  // Each forwarded signal, sent to the supervisor alone, reaches the agent's group.
+  for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGQUIT']) {
+    const pidFile = path.join(tempDir(`forward-${signal}`), 'pid');
+    const run = startRunner(long, `Say alpha. STUB-ORPHAN ${pidFile} STUB-SLEEP 30000`);
+    const forwardedChild = await pidFrom(pidFile);
+    const [forwardingSupervisor] = childrenOf(run.child.pid);
+    if (forwardingSupervisor !== undefined) process.kill(forwardingSupervisor, signal);
+    const ending = await run.closed;
+    check(
+      ending.code === EXIT_CODES['environment-transport'] && ending.stderr.includes(`killed by signal ${signal}`),
+      `a runner whose supervisor received ${signal} exited ${ending.code}; expected the agent killed by ${signal}\n${ending.stderr}`,
+    );
+    if (forwardedChild !== null) {
+      check(await processEnds(forwardedChild), `a child the agent started (pid ${forwardedChild}) outlived a forwarded ${signal}`);
+      reap(forwardedChild);
+    }
+  }
+
+  // A wall clock past the 2^31-1 ms one Node timer holds.
+  const far = runRunner(['--skill-root', STUB_SKILL, ...STUB_OPTIONS, '--timeout-ms', String(2 ** 31)]);
+  check(
+    far.status === 0 && far.stdout.includes('skill: stub-skill'),
+    `--timeout-ms ${2 ** 31} exited ${far.status}; expected 0\n${far.output}`,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -864,6 +1030,35 @@ function checkLinks() {
     );
   }
 
+  // A `..` after a link climbs from the link's target: x reads a/c, never the root's own c.
+  const climbing = stubProject('link-climb');
+  fs.mkdirSync(path.join(climbing, 'a', 'b'), { recursive: true });
+  fs.writeFileSync(path.join(climbing, 'a', 'c'), 'A-C\n');
+  fs.writeFileSync(path.join(climbing, 'c'), 'ROOT-C\n');
+  fs.symlinkSync(path.join('a', 'b'), path.join(climbing, 'sub'), 'dir');
+  fs.symlinkSync(['sub', '..', 'c'].join(path.sep), path.join(climbing, 'x'));
+  const climbingFolder = copyFixture(PREFLIGHT_FIXTURE, climbing);
+  firstLegSays(climbingFolder, 'STUB-READ x');
+  const climbed = runPreflight(climbingFolder);
+  check(climbed.status === 0, `preflight over a link climbing past a link exited ${climbed.status}; expected 0\n${climbed.output}`);
+  const readBack = /read: (.*)/.exec(firstLegStdout(runDirectoryOf(climbingFolder)))?.[1];
+  check(readBack === 'A-C', `a link through sub/../c read ${JSON.stringify(readBack)} in the copy; the target itself reads "A-C"`);
+
+  // A link that leaves the root only once the system climbs past another link.
+  const tricked = stubProject('link-trick');
+  fs.mkdirSync(path.join(path.dirname(tricked), 'out'));
+  fs.writeFileSync(path.join(path.dirname(tricked), 'out', 'victim.txt'), 'outside\n');
+  fs.mkdirSync(path.join(tricked, 'case'));
+  fs.symlinkSync('..', path.join(tricked, 'case', 'selfroot'), 'dir');
+  fs.symlinkSync(['selfroot', '..', 'out', 'victim.txt'].join(path.sep), path.join(tricked, 'case', 'trick'));
+  const trickedFolder = copyFixture(PREFLIGHT_FIXTURE, tricked);
+  const trick = runPreflight(trickedFolder);
+  check(
+    trick.status === 12,
+    `preflight over a link that climbs out past another link exited ${trick.status}; expected 12\n${trick.output}`,
+  );
+  check(trick.stdout.includes('case/trick'), `the refusal does not name the climbing link:\n${trick.output}`);
+
   const escaping = stubProject('link-out');
   fs.writeFileSync(path.join(path.dirname(escaping), 'outside.txt'), 'outside\n');
   fs.symlinkSync(path.join('..', 'outside.txt'), path.join(escaping, 'escape'));
@@ -902,27 +1097,40 @@ function checkCopyRefusals() {
   check(fs.readdirSync(temp.directory).length === 0, 'the partial copy of a target holding a FIFO was left in the temp directory');
 }
 
-/** An interrupted preflight removes its copy and leaves no process behind, and ends by the signal it received. */
+/**
+ * An interrupted preflight removes its copy and leaves no process behind, and
+ * ends by the signal it received: `SIGTERM` to the command alone, and
+ * `SIGQUIT` to its whole process group, as a terminal's Ctrl-\\ sends it.
+ */
 async function checkInterrupted() {
-  const project = stubProject('interrupt');
-  const folder = copyFixture(PREFLIGHT_FIXTURE, project);
-  const pidFile = path.join(tempDir('interrupt-pid'), 'pid');
-  firstLegSays(folder, `STUB-ORPHAN ${pidFile} STUB-SLEEP 25000`);
-  const temp = privateTemp('interrupt-temp');
-  const child = spawn(process.execPath, [EVALUATE, 'preflight', '--evaluation', folder], {
-    cwd: PROJECT_ROOT,
-    env: { ...BASE_ENV, PATH: runnerPath(), ...temp.env },
-    stdio: 'ignore',
-  });
-  const orphan = await pidFrom(pidFile);
-  check(orphan !== null, 'the interrupted leg never started');
-  child.kill('SIGTERM');
-  const closed = await ended(child);
-  check(closed.signal === 'SIGTERM', `the interrupted preflight ended by ${closed.signal ?? `exit ${closed.code}`}; expected SIGTERM`);
-  check(fs.readdirSync(temp.directory).length === 0, `the interrupted preflight left its copy: ${fs.readdirSync(temp.directory)}`);
-  if (orphan !== null) {
-    check(await processEnds(orphan), `a process the interrupted leg started (pid ${orphan}) outlived the preflight`);
-    reap(orphan);
+  const cases = [['SIGTERM', false]];
+  if (process.platform !== 'win32') cases.push(['SIGQUIT', true]);
+  for (const [signal, toGroup] of cases) {
+    const project = stubProject(`interrupt-${signal}`);
+    const folder = copyFixture(PREFLIGHT_FIXTURE, project);
+    const pidFile = path.join(tempDir(`interrupt-pid-${signal}`), 'pid');
+    firstLegSays(folder, `STUB-ORPHAN ${pidFile} STUB-SLEEP 25000`);
+    const temp = privateTemp(`interrupt-temp-${signal}`);
+    const child = spawn(process.execPath, [EVALUATE, 'preflight', '--evaluation', folder], {
+      cwd: PROJECT_ROOT,
+      env: { ...BASE_ENV, PATH: runnerPath(), ...temp.env },
+      stdio: 'ignore',
+      detached: toGroup,
+    });
+    const orphan = await pidFrom(pidFile);
+    check(orphan !== null, `the leg interrupted by ${signal} never started`);
+    if (toGroup) process.kill(-child.pid, signal);
+    else child.kill(signal);
+    const closed = await ended(child);
+    check(closed.signal === signal, `the preflight interrupted by ${signal} ended by ${closed.signal ?? `exit ${closed.code}`}`);
+    check(
+      fs.readdirSync(temp.directory).length === 0,
+      `the preflight interrupted by ${signal} left its copy: ${fs.readdirSync(temp.directory)}`,
+    );
+    if (orphan !== null) {
+      check(await processEnds(orphan), `a process the leg interrupted by ${signal} started (pid ${orphan}) outlived the preflight`);
+      reap(orphan);
+    }
   }
 }
 
@@ -1060,6 +1268,7 @@ async function main() {
   try {
     checkRunner();
     await checkRunnerProcesses();
+    await checkSupervision();
     checkPasses();
     checkRemovedEntry();
     checkShim();
@@ -1087,11 +1296,22 @@ async function main() {
   return 0;
 }
 
+// A case awaiting an event that already fired leaves nothing pending, and
+// Node would exit 0 with no verdict printed.
+let finished = false;
+process.on('exit', () => {
+  if (finished) return;
+  console.error(`${colors.red}the preflight checks stopped before finishing; a case awaited an event that never came${colors.reset}`);
+  process.exitCode = 1;
+});
+
 main().then(
   (code) => {
+    finished = true;
     process.exitCode = code;
   },
   (error) => {
+    finished = true;
     console.error(error);
     process.exitCode = 1;
   },

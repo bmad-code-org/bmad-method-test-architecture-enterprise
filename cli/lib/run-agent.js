@@ -15,10 +15,11 @@
  * - The child receives a minimal environment (PATH, HOME, locale, proxy, and
  *   the selected adapter's vendor variables only) plus names explicitly
  *   allowed with --env-pass.
- * - The agent runs under agent-supervisor.js as the leader of its own process
- *   group. A timeout sends the group SIGTERM, then SIGKILL after a grace
- *   period; the group is also killed when the agent exits and when the runner
- *   dies, so no process the agent started outlives the turn.
+ * - The agent runs in its own process group under agent-supervisor.js. A
+ *   timeout sends the group SIGTERM and the agent SIGKILL after a grace
+ *   period; the group is also stopped when the runner or the supervisor dies,
+ *   and killed when the agent exits, so no process the agent started outlives
+ *   the turn.
  * - options.spawnPrefix wraps the agent command for filesystem isolation
  *   (sandbox-exec/bwrap from isolate.js); with the chmod fallback it is empty.
  * - Each adapter's argv is responsible for scoping tool access and approval
@@ -65,18 +66,21 @@ function buildMinimalEnv(envPass = [], sourceEnv = process.env, adapterEnvNames 
 /**
  * How the supervised agent ended, from the supervisor's report on file
  * descriptor 3: `{ status, signal }`, `{ timedOut }`, `{ spawnError }`, or
- * `{ failure }` when the supervisor itself could not report (it could not
- * start, spawnSync's backstop or output ceiling stopped it, or it died).
+ * `{ failure }`. Only the supervisor reports a timeout: a supervisor that
+ * could not start, died, or outlived spawnSync's backstop or output ceiling
+ * without a report is a failure of the supervisor.
  */
-function supervisedOutcome(result) {
-  if (result.error) {
-    return result.error.code === 'ETIMEDOUT' ? { timedOut: true } : { failure: result.error.message };
-  }
+function supervisedOutcome(result, timeout) {
+  // Output past maxBuffer, or a supervisor that could not start.
+  if (result.error && result.error.code !== 'ETIMEDOUT') return { failure: result.error.message };
   try {
     const report = JSON.parse(result.output?.[3] ?? '');
     if (report !== null && typeof report === 'object') return report;
   } catch {
     // Fall through: no report.
+  }
+  if (result.error?.code === 'ETIMEDOUT') {
+    return { failure: `the agent supervisor gave no report ${SUPERVISOR_BACKSTOP_MS}ms past the agent's ${timeout}ms wall clock` };
   }
   const ending = result.signal ? `killed by signal ${result.signal}` : `exited with code ${result.status}`;
   return { failure: `the agent supervisor ${ending} without reporting how the agent ended` };
@@ -93,7 +97,7 @@ function supervisedOutcome(result) {
  * @param {string[]} [options.agentArgs] - Extra args appended after the adapter's own argv (--agent-arg passthrough).
  * @param {string} [options.model] - Model to pin for this run; defaults to the adapter's defaultModel.
  * @param {number} [options.timeout] - Wall-clock timeout in ms (default 1800000); on expiry the agent's
- *   process group receives SIGTERM, then SIGKILL after the supervisor's grace period.
+ *   process group receives SIGTERM, and the agent SIGKILL after the supervisor's grace period.
  * @param {string} [options.cwd] - Working directory for the agent.
  * @param {string[]} [options.envPass] - Extra env var names allowed through to the child.
  * @param {string[]} [options.spawnPrefix] - Isolation wrapper (e.g. sandbox-exec -f profile).
@@ -153,21 +157,24 @@ function runAgent(
   const command = isolated ? spawnPrefix[0] : resolvedCommand;
   const args = isolated ? [...spawnPrefix.slice(1), resolvedCommand, ...agentArgv] : agentArgv;
 
-  // The agent runs under the supervisor, which kills the agent's whole process
-  // group on the wall clock, when the runner dies, and when the agent exits,
-  // and reports how the agent ended on file descriptor 3. spawnSync's own
-  // timeout is a backstop that lets the supervisor's grace period run first.
-  const result = spawnSync(process.execPath, [SUPERVISOR, String(timeout), command, ...args], {
+  // The agent runs in its own process group under the supervisor, which stops
+  // the group on the wall clock, on a signal, when the runner or the
+  // supervisor dies, and when the agent exits, and reports how the agent ended
+  // on file descriptor 3. spawnSync's own timeout is a backstop that lets the
+  // supervisor's grace period run first.
+  const result = spawnSync(process.execPath, [SUPERVISOR, String(process.pid), String(timeout), command, ...args], {
     cwd,
     encoding: 'utf8',
     input,
     env: buildMinimalEnv(envPass, process.env, adapter.envNames),
     maxBuffer: 64 * 1024 * 1024,
     stdio: ['pipe', 'pipe', 'pipe', 'pipe'],
-    timeout: timeout + SUPERVISOR_BACKSTOP_MS,
-    killSignal: 'SIGTERM',
+    // spawnSync takes a safe integer; the supervisor chains timers past any size.
+    timeout: Math.min(timeout + SUPERVISOR_BACKSTOP_MS, Number.MAX_SAFE_INTEGER),
+    // A supervisor still running here is broken; its end closes the lifeline, and the group leader stops the agent.
+    killSignal: 'SIGKILL',
   });
-  const outcome = supervisedOutcome(result);
+  const outcome = supervisedOutcome(result, timeout);
 
   if (outcome.spawnError) {
     if (outcome.spawnError.code === 'ENOENT') {

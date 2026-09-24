@@ -19,6 +19,11 @@
  *   STUB-ORPHAN <file>  start a child that sleeps for a minute and write its
  *                    pid to that absolute path, before any sleep (a case that
  *                    asserts nothing the agent started outlives the turn)
+ *   STUB-LEAVE <file>  the same, but answer and exit 0 without waiting for
+ *                    the child (a case that asserts the child dies with the
+ *                    agent's exit)
+ *   STUB-READ <path> also print the contents of that file, relative to the
+ *                    working directory
  *   STUB-BIG <n>     print n bytes of filler after the reply
  *   STUB-LIST        also print every path under the working directory, as
  *                    JSON, a symbolic link marked with a trailing `@` and not
@@ -43,10 +48,15 @@ const skill = fs.readFileSync(path.join(skillRoot, 'SKILL.md'), 'utf8');
 const name = /^name:\s*(\S+)/m.exec(skill)?.[1] ?? '(unnamed)';
 const request = prompt.slice(prompt.indexOf(REQUEST_MARKER) + REQUEST_MARKER.length).trim();
 
-const orphan = /STUB-ORPHAN (\S+)/.exec(request);
-if (orphan !== null) {
+for (const [marker, waits] of [
+  ['STUB-ORPHAN', true],
+  ['STUB-LEAVE', false],
+]) {
+  const file = new RegExp(`${marker} (\\S+)`).exec(request)?.[1];
+  if (file === undefined) continue;
   const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'], { stdio: 'ignore' });
-  fs.writeFileSync(orphan[1], String(child.pid));
+  if (!waits) child.unref();
+  fs.writeFileSync(file, String(child.pid));
 }
 const sleep = /STUB-SLEEP (\d+)/.exec(request);
 if (sleep !== null) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, Number(sleep[1]));
@@ -66,7 +76,9 @@ function listing(directory, prefix = '') {
     return [relative];
   });
 }
+const read = /STUB-READ (\S+)/.exec(request);
+const readBack = read === null ? '' : `read: ${fs.readFileSync(read[1], 'utf8').trim()}\n`;
 const listed = request.includes('STUB-LIST') ? `list: ${JSON.stringify(listing('.').sort())}\n` : '';
 const big = /STUB-BIG (\d+)/.exec(request);
 const filler = big === null ? '' : `${'x'.repeat(Number(big[1]))}\n`;
-process.stdout.write(`skill: ${name}\nrequest: ${request}\n${echoed}${listed}${filler}`);
+process.stdout.write(`skill: ${name}\nrequest: ${request}\n${echoed}${readBack}${listed}${filler}`);

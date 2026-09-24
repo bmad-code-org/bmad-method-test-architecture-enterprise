@@ -30,8 +30,8 @@
  *   a provisioned directory, so a mutation would change a file the runner never reads (AD-4).
  * - `skill-runner`: a registry entry for `tea-skill-runner` does not declare the runner's infrastructure
  *   exit codes, or a leg or plan step for it carries no literal `timeout-ms` below the entry's
- *   `maxElapsedMs`; the adapter's own timeout kills the runner alone, and the agent it started would
- *   outlive it.
+ *   `maxElapsedMs`: under the ceiling the runner reports its own timeout as exit 5, while at the
+ *   ceiling the adapter kills the runner's process group, records a fault, and `preflight` exits 12.
  *
  * Beside them, `contract.json` must exist (`missing-file`), every indexed
  * root and entry must be a real directory or regular file (`corpus-file`), as
@@ -348,7 +348,7 @@ function optionSetsByOperation(contract) {
  * The `skill-root` and `skill-runner` rules over the registry, the launch and
  * the contract (AD-4): the runner must run the skill the launch names, declare
  * its own infrastructure codes, and time its agent out before the adapter kills
- * the runner.
+ * the runner's process group.
  */
 function checkSkillRunner(report, evaluation, contract, provision) {
   const skillRoot = typeof evaluation.launch?.skillRoot === 'string' ? evaluation.launch.skillRoot : undefined;
