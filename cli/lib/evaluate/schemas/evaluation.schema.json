@@ -51,7 +51,7 @@
       "required": ["root"],
       "properties": {
         "root": {
-          "description": "The evaluated project's root, relative to the evaluation folder: POSIX, \".\" and \"..\" segments allowed so it can climb out of the folder, never absolute, with no empty segment, no trailing slash, and no control character (C0, DEL or C1), a line or paragraph separator, or a bidirectional formatting character. Registry targets, the skill root and every mutation's targetArtifact resolve against it, and tea-evaluate preflight runs its legs in a disposable copy of it.",
+          "description": "The evaluated project's root, relative to the evaluation folder: POSIX, \".\" and \"..\" segments allowed so it can climb out of the folder, never absolute, with no empty segment, no trailing slash, and no control character (C0, DEL or C1), a line or paragraph separator, or a bidirectional formatting character. Registry targets, the skill root and every mutation's targetArtifact resolve against it, and tea-evaluate preflight runs its arms and legs in disposable workspaces made from it.",
           "type": "string",
           "minLength": 1,
           "pattern": "^(?![A-Za-z]:)(?!/)(?![\\s\\S]*//)(?![\\s\\S]*/$)[^\\\\\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2066-\\u2069]+$"
@@ -65,17 +65,17 @@
       }
     },
     "workspace": {
-      "description": "The disposable copy a run and a mutation happen in (AD-8).",
+      "description": "The disposable workspace a run and a mutation happen in (AD-8). The runtime writes nothing into the adopter's tree; a target that writes outside its workspace is detected and the run exits 12.",
       "type": "object",
       "additionalProperties": false,
       "required": ["kind", "provision"],
       "properties": {
         "kind": {
-          "description": "git: a detached worktree at the evaluated commit. copy: a temp copy identified by its tree digest.",
+          "description": "git: a detached worktree at the evaluated commit (HEAD) when launch.root is in a git repository, and a temp copy otherwise. copy: a temp copy identified by its tree digest. tea-evaluate preflight --from-working-tree makes a temp copy of the working tree whatever the kind, and records the run as dirty.",
           "enum": ["git", "copy"]
         },
         "provision": {
-          "description": "Relative directories linked into the copy from the target (for example node_modules), so the copy shares them with the target: a write under one lands in the target until a later Evaluate release makes the links read-only. A mutation may not target a file inside one. Each is POSIX and relative, with no drive letter, no \".\" or \"..\" segment, no empty segment, and no control character (C0, DEL or C1), a line or paragraph separator, or a bidirectional formatting character, so none can name the whole target; a trailing slash is allowed.",
+          "description": "Relative directories copied into every workspace from the target (for example node_modules, which a worktree lacks) with their write bits removed, so a leg can read one and cannot write it. A mutation may not target a file inside one. Each is POSIX and relative, with no drive letter, no \".\" or \"..\" segment, no empty segment, and no control character (C0, DEL or C1), a line or paragraph separator, or a bidirectional formatting character, so none can name the whole target; a trailing slash is allowed.",
           "type": "array",
           "uniqueItems": true,
           "items": {

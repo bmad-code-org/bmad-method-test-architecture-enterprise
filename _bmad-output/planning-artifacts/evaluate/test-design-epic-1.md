@@ -38,7 +38,7 @@ inputDocuments:
 
 ## Executive Summary
 
-**Scope:** full epic-level test design for Stories 1.1 to 1.26 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; their scenarios, risks and gates are below, and sections appear in execution order. The stories are built overnight by `/bmad-build` workers in order, uncommitted, so every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
+**Scope:** full epic-level test design for Stories 1.1 to 1.28 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; their scenarios, risks and gates are below, and sections appear in execution order. The stories are built overnight by `/bmad-build` workers in order, uncommitted, so every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
 
 **Risk summary:**
 
@@ -263,7 +263,7 @@ Levels: integration, static. File: `test/test-evaluate-mutation.js` (`test:evalu
 
 | AC | Test | Level | P | Revert check |
 | --- | --- | --- | --- | --- |
-| Git target copied with `git worktree add --detach`; provisioned links read-only; `--from-working-tree` and non-git use temp copy with `dirty: true` | Three cases: git target (assert `git worktree list` shows the detached copy during the run and none after); uncommitted edit with `--from-working-tree` (assert `run.json.dirty === true`); non-git temp directory | Integration | P1 | Copying with `cp` loses the detached-worktree assertion |
+| Git target copied with `git worktree add --detach`; provisioned directories read-only copies; `--from-working-tree` uses a temp copy with `dirty: true`; a `copy` workspace and a non-git target use a temp copy with `dirty: false` (amended 2026-09-24 in Story 1.7: the row said a non-git target records `dirty: true`, which the corrected criterion contradicts, and a link cannot be read-only) | Four cases: git target (the stub reports a worktree's `.git` file from its own working directory during the run, and `git worktree list` shows none after; a write under the provisioned directory is denied); uncommitted edit with `--from-working-tree` (assert `run.json.dirty === true`); `copy` workspace; non-git temp directory | Integration | P1 | Copying with `cp` loses the detached-worktree assertion |
 | Six AD-8 steps in order; `rollbackVerified` only after restored digest equals pre and baseline re-passes within `reExecutionCap` | The story builds the single-trial arm executor and `resolveCheck` evaluator AD-8 needs. Evidence files hold `preDigest`, `mutatedDigest`, `restoredDigest`; assert `mutatedDigest !== preDigest` and `restoredDigest === preDigest`; the stub prints the sha256 of its `targetArtifact`, and the baseline re-pass leg's stdout equals `preDigest` | Integration | P0 | Replacing restore with a no-op makes the re-pass stdout equal `mutatedDigest` and no probe is emitted, which the test asserts |
 | Adopter tree unchanged | `git status --porcelain` and a sha256 of every tracked file, before and after, on the pass path and each failure path | Integration | P0 | Mutating in place changes the digest set |
 | Failure exits 10, 11, 12 with no probe | Occurrence count 0 and 2 exit 10; baseline that fails and mutation that does not manifest exit 11; unwritable workspace and a restore that throws exit 12; each asserts no qualified probe in `runs/` | Integration | P0 | Removing any guard changes the exit |
@@ -510,6 +510,27 @@ File: `test/test-evaluate-learned-framework.js` (`test:evaluate-learned-framewor
 | Minimal example executed against a known pass and fail before mapping | Transcript order in completion notes | Live evidence | P1 | Recorded evidence |
 | Clean `passed-clean-control`; mutated `caught`; no `cli/` change | Deterministic re-run; `git diff --stat -- cli/` recorded | Integration over real eval-quality | P0 | Breaking the mapping changes the outcome |
 
+### Story 1.27: Tell a documented guard from an invented risk in the test-design contract
+
+Levels: unit, integration, live evidence. Files: `test/test-contract-oracles.js` (`test:contract-oracles`), `test/test-probe-corpus.js` (`test:probe-corpus`).
+
+| AC | Test | Level | P | Revert check |
+| --- | --- | --- | --- | --- |
+| Fix placed in the oracles or the skill, with the reason recorded | Outcome record | Static | P1 | Recorded evidence |
+| Guard row versus scored risk | Two `test:contract-oracles` cases: a "Document" guard row leaves O-008 unfired; the same category scored as a risk fires it | Unit | P0 | Reverting the oracle change fails one case |
+| Witness equals the negated oracle; contract, probes and replays move together | `test:contracts`, `test:probe-corpus` | Integration | P0 | A witness edited alone fails the corpus digest and the generator check |
+| Live test-design reduces to the baseline | `node test/eval-contract-strength.js --suite test-design --preflight-only` on the staged harness, recorded | Live evidence | P1 | Recorded evidence |
+
+### Story 1.28: Recover from a killed run
+
+Levels: integration. Files: the supervision tests for `cli/lib/agent-supervisor.js`, `test/test-evaluate-mutation.js` (`test:evaluate-mutation`).
+
+| AC | Test | Level | P | Revert check |
+| --- | --- | --- | --- | --- |
+| Leader and supervisor killed together: the group stops and the runner returns in bounded time | Kill both, assert no process of the group remains and the runner returns a transport failure | Integration | P0 | Reverting the change makes the case time out |
+| A dead run's workspaces and worktree registration reclaimed | Kill a run during qualification, run `preflight` again, assert the temp directory and `git worktree list` are clean and the adopter's status and refs unchanged | Integration | P0 | Reverting the reclaim leaves the workspace and the registration |
+| A live run's workspace left alone | A marker naming a live process survives the next run | Integration | P1 | Reclaiming every marked workspace fails it |
+
 ## The Dogfood Proof (AD-15)
 
 ### What the run must produce
@@ -554,7 +575,7 @@ Staged, uncommitted overnight: `test/evaluations/bmad-testarch-evaluate/` (`eval
 | P0 | 81 | 71 to 106 hours |
 | P1 | 67 | 37 to 61 hours |
 | P2 | 12 | 5 to 9 hours |
-| Total | 160 | 113 to 176 hours, spread over twenty-six stories |
+| Total | 160 | 113 to 176 hours, spread over twenty-eight stories |
 
 ## Quality Gate Criteria
 

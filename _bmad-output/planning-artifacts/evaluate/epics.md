@@ -151,6 +151,7 @@ None. Evaluate has no graphical interface.
 ### Epic 1: The Evaluate authoring loop
 
 An adopter describes a target, answers Evaluate's questions, chooses or builds the evaluation layer and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches the seeded defect, with the gaps named and closed. The epic closes by running Evaluate on `bmad-testarch-evaluate` itself, then proving the guidance on two more target kinds, on seeded weaknesses and on an evaluation framework its guides never name.
+Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 and 1.28.
 
 **FRs covered:** FR1 to FR10, FR13, FR14.
 
@@ -192,12 +193,14 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 24 | 1.24 | 1.16 |
 | 25 | 1.25 | 1.24 |
 | 26 | 1.26 | 1.23, 1.25 |
-| 27 | 2.1 | 1.16, 1.26 |
-| 28 | 2.2 | 2.1 |
-| 29 | 2.3 | 2.2 |
-| 30 | 2.4 | 2.3 |
-| 31 | 2.5 | 2.4 |
-| 32 | H.1 | 2.5 |
+| 27 | 1.27 | 1.7 |
+| 28 | 1.28 | 1.7 |
+| 29 | 2.1 | 1.16, 1.26 |
+| 30 | 2.2 | 2.1 |
+| 31 | 2.3 | 2.2 |
+| 32 | 2.4 | 2.3 |
+| 33 | 2.5 | 2.4 |
+| 34 | H.1 | 2.5 |
 
 ## Epic 1: The Evaluate authoring loop
 
@@ -372,7 +375,7 @@ So that a real observation reaches `eval-quality preflight` with no authorizatio
 **And** with `TEA_EVALUATE_ENGINE_CLI` pointed at a shim that logs its argv, exits 0 for `compile` and `seal`, and exits 5 for `preflight --observations ... --run-id`, `tea-evaluate preflight` exits 5 and the log shows that preflight argv, which proves the verdict comes from the CLI (the library verdict from `runPreflight` would be byte-identical, so a byte comparison alone cannot prove the source)
 **And** a deterministic test, `test/test-evaluate-preflight.js`, chained into `npm test` as `test:evaluate-preflight` with its own `quality.yaml` step, runs it against a stub agent command under `test/fixtures/evaluate/` and asserts a passed `PreflightVerdict` with no `interface-not-authorized` or `executable-not-authorized` denial (amended 2026-09-24 in Story 1.6: eval-quality's command-line adapter throws either denial as one `forbidden-target` fault whose message does not name the reason, so the runtime records a leg's fault under `runs/<invocationId>/faults/` and exits 10, and the test asserts no fault and none of the three names in the files the runtime writes about legs and the verdict: `observations/`, `faults/`, `observations.json` and `preflight-verdict.json`; amended again 2026-09-24 in Story 1.6 final review: `engine/` holds the engine's own stdout and stderr, which may name its vocabulary, so "anywhere in the run" named more than the test scans)
 **And** removing the stub's registry entry makes that test observe a denial and fail (amended 2026-09-24 in Story 1.6: a registry holds at least one entry, so the test replaces the stub's entry with one for another executable)
-**And** the probe list `preflight` hands the CLI holds no probe that seeds a defect: a manifestation witness's leg runs against the mutated copy Story 1.7 builds, so an evaluation holding one exits 12 before any leg runs, and the preflight plan reads nothing from a probe that seeds none (amended 2026-09-24 in Story 1.6: a probe cannot be materialized in eval-quality's `Probe` shape before its qualification evidence exists)
+**And** the probe list `preflight` hands the CLI holds no probe that seeds a defect: a manifestation witness's leg runs against the mutated copy Story 1.7 builds, so an evaluation holding one exits 12 before any leg runs, and the preflight plan reads nothing from a probe that seeds none (amended 2026-09-24 in Story 1.6: a probe cannot be materialized in eval-quality's `Probe` shape before its qualification evidence exists; superseded 2026-09-24 in Story 1.7: a seeded probe on the `controlled-mutation` route is qualified first and reaches the CLI with its witness leg routed to the mutated copy, and one on any other route still exits 12 before any workspace is made)
 **And** the legs run in a temp copy of `launch.root` that is removed afterwards, a symbolic link inside the target pointing into the copy and one out of it refused, so a write under the copied tree stays in the copy, while each `workspace.provision` directory is linked in from the target, writable, until Story 1.7's read-only provisioning, and `check` holds every skill-runner leg to `launch.skillRoot` and to a `--timeout-ms` below its entry's `maxElapsedMs` (amended 2026-09-24 in Story 1.6 review: the first build ran legs in `launch.root` itself and never tied the legs' `--skill-root` to `launch.skillRoot`; Story 1.7 replaces the copy with AD-8's pristine and mutated workspaces; amended again 2026-09-24 in Story 1.6 final review: the provisioned links were writable while the criterion said a leg writes nothing into the adopter's tree, and a copied symbolic link could lead a write out of the copy)
 
 **Dependencies:** 1.5.
@@ -388,9 +391,9 @@ So that `rollbackVerified: true` is a measured fact and my working tree is never
 
 **Given** `test/test-automate-eval-fixture.js` holds the one live mutate, measure, restore cycle
 **When** `cli/lib/evaluate/workspace.js` and `mutation.js` generalize it, with `cachingPort` and `stagedWorkspaceFor` from `test/eval-contract-strength.js`
-**Then** a git target is copied with `git worktree add --detach` at the evaluated commit, provisioned with read-only links to the directories `evaluation.json` lists, a declared `copy` workspace or a non-git target uses a temp copy identified by its tree digest and records `dirty: false` in `run.json`, and `--from-working-tree` uses a temp copy and records `dirty: true`; a `test:evaluate-mutation` case asserts `dirty: false` for a `copy` fixture and `dirty: true` under `--from-working-tree`, and hard-coding either value fails it
+**Then** a git target is copied with `git worktree add --detach` at the evaluated commit, provisioned with read-only copies of the directories `evaluation.json` lists, a declared `copy` workspace or a non-git target uses a temp copy identified by its tree digest and records `dirty: false` in `run.json`, and `--from-working-tree` uses a temp copy and records `dirty: true`; a `test:evaluate-mutation` case asserts `dirty: false` for a `copy` fixture and `dirty: true` under `--from-working-tree`, and hard-coding either value fails it (amended 2026-09-24 in Story 1.7: no unprivileged process can make a symbolic link read-only, so a link would share the target's own directory with every leg; each provisioned directory is copied into the workspace, as a copy-on-write clone where the file system offers one, and its write bits removed)
 **And** the story builds the single-trial arm executor and the deterministic `resolveCheck` evaluator that AD-8 steps 1, 3 and 6 need; Story 1.8 adds trial sets, sealing and scoring
-**And** each mutation runs the six AD-8 steps in order, sets `rollbackVerified` only after the restored digest matches and the baseline leg re-passes within `reExecutionCap`, and writes digested evidence files
+**And** each mutation runs the six AD-8 steps in order, sets `rollbackVerified` only after the restored digest matches and the baseline leg re-passes within `reExecutionCap`, and writes digested evidence files (amended 2026-09-24 in Story 1.7: the cycle runs inside `tea-evaluate preflight`, ahead of its legs, since eval-quality's `preflight` parses its probe list against the full `Probe` schema, whose `controlled-mutation` route requires the cycle's evidence and rollback flag; the qualified probe is written to `runs/<invocationId>/probes/` and handed to the CLI, `reExecutionCap` comes from `policy/scoring-policy.json`, which `check` requires once a probe takes the route, and AD-5's seven subcommands stay seven)
 **And** `git status --porcelain` of the adopter tree is identical before and after, and scratch is removed in `finally`
 
 **Given** the failure cases
@@ -885,6 +888,51 @@ So that TeA's support for evaluation frameworks has no fixed list (CAP-13, AD-21
 
 **Dependencies:** 1.23, 1.25.
 **Gate:** `npm test`, `npm run test:release-metadata`.
+
+### Story 1.27: Tell a documented guard from an invented risk in the test-design contract
+
+Added 2026-09-24 by the owner from Story 1.7's staged live run.
+
+As a maintainer of TeA's test-design evaluation,
+I want the contract to tell a risk the epic rules out and the document records as a guard from a risk the skill invented,
+So that the live `eval:preflight` measures the skill's real over-reporting and every test-design probe reduces to its baseline live.
+
+**Acceptance Criteria:**
+
+**Given** Story 1.7's staged live run, in which `bmad-testarch-test-design` registers risks its epic rules out as low-score rows ("Document", score 1 to 3), and oracles O-008 to O-010 and O-012 to O-014 read vocabulary across the whole document, so P-008 to P-010 pass and P-012 to P-014 fail `seeded-faults-scoped` against `test/probes/expected-strength.json` (evidence in `story-1.7.md`, "Coordinator decisions after round 1")
+**When** the story decides where the fix belongs, by reading the skill's instructions and the live documents recorded there
+**Then** either the oracles read the risk register row by row and count a ruled-out category only when its row carries a score above the guard band, or the skill's instructions keep ruled-out categories out of the register; the story records which, and why, in its outcome record
+**And** each probe's witness stays equal to the oracle it negates, as the probe generator requires
+**And** `test/contracts/test-design.contract.json`, `test/probes/test-design.probes.json` and the stored replays under `test/replay/test-design/` change together, and `test:contracts`, `test:contract-oracles` and `test:probe-corpus` pass
+**And** a `test:contract-oracles` case holds a clean register recording a ruled-out category as a "Document" guard row and asserts O-008 unfired, and a second holds the same category scored as a risk and asserts it fired; reverting the oracle change fails one of them
+**And** a live `node test/eval-contract-strength.js --suite test-design --preflight-only` run on the staged harness reduces every test-design probe to the outcome `expected-strength.json` records, and the outcome record holds the run
+
+**Dependencies:** 1.7.
+**Gate:** `npm test`.
+
+### Story 1.28: Recover from a killed run
+
+Added 2026-09-24 by the owner from the gaps Stories 1.6 and 1.7 accepted.
+
+As an adopter whose CI job or terminal killed a run,
+I want the agent's processes stopped and the run's workspaces reclaimed,
+So that a `SIGKILL` leaves no running agent, no temp copy and no worktree registered in my repository.
+
+**Acceptance Criteria:**
+
+**Given** Story 1.6's supervision, where a `SIGKILL` to the group leader and the supervisor together leaves the agent's process group running and the runner waiting for good (`story-1.6.md`, round 4 execution probes)
+**When** both are killed together
+**Then** the agent's group stops and the runner returns a transport failure within a bounded time the reference names, held by a case in the supervision tests; reverting the change makes that case time out
+
+**Given** a `tea-evaluate preflight` killed by `SIGKILL` while its workspaces exist
+**When** the next `preflight` runs against the same project
+**Then** it removes every workspace a dead run left, identified by a marker the runtime writes into each workspace naming its run and process, and removes the detached worktree's registration from the adopter's repository, touching nothing it did not create, and reports what it reclaimed
+**And** a case in `test/test-evaluate-mutation.js` kills a run during qualification, asserts the temp directory holds its workspace and `git worktree list` shows its worktree, runs `preflight` again, and asserts both are gone and the adopter's `git status --porcelain` and refs are unchanged; reverting the reclaim fails it
+**And** a workspace whose marker names a live process is left alone, and a case asserts it
+**And** `docs/reference/tea-evaluate-cli.md` states what a killed run leaves and when it is reclaimed
+
+**Dependencies:** 1.7.
+**Gate:** `npm test`.
 
 ## Epic 2: Continuous proof in CI
 

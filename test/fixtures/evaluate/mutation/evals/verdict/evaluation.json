@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "evaluationId": "verdict-mutation",
+  "targetKind": "agent",
+  "interface": "cli",
+  "registry": [
+    {
+      "interfaceId": "verdict",
+      "executable": "verdict",
+      "target": "bin/verdict.js",
+      "subcommandPaths": [[]],
+      "artifacts": {},
+      "environmentKeys": ["VERDICT_LINK", "VERDICT_PID", "VERDICT_SECRET", "VERDICT_TOUCH"],
+      "maxElapsedMs": 30000,
+      "infrastructureExitCodes": [3]
+    }
+  ],
+  "launch": {
+    "root": "../.."
+  },
+  "workspace": {
+    "kind": "git",
+    "provision": ["vendor"]
+  },
+  "arms": ["clean", "mutated"],
+  "trials": 1,
+  "tiers": ["pr"],
+  "strengthFloor": {
+    "defect": 1,
+    "zero-action": 1
+  }
+}

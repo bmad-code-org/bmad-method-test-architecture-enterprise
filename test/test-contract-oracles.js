@@ -1015,6 +1015,43 @@ async function checkNfrOracles(evaluator) {
   );
 }
 
+/**
+ * The NFR corpus's UNKNOWN manifestation witness reads the threshold field
+ * the report template spells, so a clean report that mentions the word in
+ * prose (a gap it ruled out) leaves it unfired, and a report whose threshold
+ * is recorded as UNKNOWN fires it. A bare `UNKNOWN` literal fired on both.
+ */
+function checkNfrUnknownWitness(evaluator) {
+  console.log('\nnfr.probes.json UNKNOWN witness over a report that names the word in prose');
+  const probes = readJson(path.join(PROJECT_ROOT, 'test', 'probes', 'nfr.probes.json'), 'the nfr probes');
+  const witnesses = probes
+    .flatMap((probe) => probe.defects ?? [])
+    .map((defect) => defect.manifestationWitness)
+    .filter((witness) => witness !== null && JSON.stringify(witness.relation).includes('UNKNOWN'));
+  assert(witnesses.length === 1, 'exactly one NFR manifestation witness reads UNKNOWN', `${witnesses.length} found`);
+  const [witness] = witnesses;
+  if (witness === undefined) return;
+  const resolve = (report) =>
+    evaluator.resolveCheck(
+      witness.relation,
+      evaluator.makeResolveOperand(
+        {
+          [witness.legId]: observation({ operationId: NFR_OPERATION, exitCode: 0, artifacts: { report: { kind: 'text', value: report } } }),
+        },
+        {},
+      ),
+      () => false,
+      {},
+      REGEX_STEP_BUDGET,
+      'nfr-unknown-witness',
+    ).resolution;
+  const prose =
+    '## Performance Assessment\n\n- **Status:** PASS\n- **Threshold:** p95 under 200 ms\n\nNo target here is UNKNOWN; every one is stated in docs/.\n';
+  assert(resolve(prose) === 'false', 'the witness stays unfired on a clean report that names UNKNOWN in prose', resolve(prose));
+  const recorded = '## Performance Assessment\n\n- **Status:** CONCERNS\n- **Threshold:** UNKNOWN. No response-time target is recorded.\n';
+  assert(resolve(recorded) === 'true', 'the witness fires on a report whose threshold is recorded as UNKNOWN', resolve(recorded));
+}
+
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
 // ci
@@ -1195,6 +1232,7 @@ async function main() {
   await checkTestDesignOracles(evaluator);
   await checkTraceOracles(evaluator);
   await checkNfrOracles(evaluator);
+  checkNfrUnknownWitness(evaluator);
   await checkCiOracles(evaluator);
   checkAtddOracles(evaluator);
 

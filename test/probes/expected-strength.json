@@ -1,7 +1,7 @@
 {
   "nfr": {
     "contractId": "tea-nfr-behavioral",
-    "corpusDigest": "sha256:627c9fc31b23beba2a46e2c02f5cb43148923aacbc32cf2ee46d2bfa449a31b7",
+    "corpusDigest": "sha256:d77f83335360de94eef0d378992aa69e8112303ec99a99629941a62988964f3f",
     "probeCount": 4,
     "strength": {
       "defect": {

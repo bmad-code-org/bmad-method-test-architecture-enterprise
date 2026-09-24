@@ -1312,11 +1312,15 @@ function buildNfrProbes() {
               environment: {},
               stdin: { kind: 'text', value: buildNfrPrompt(gapped) },
             },
+            // The UNKNOWN relation reads the threshold field the template
+            // spells, not the bare word: a clean report may mention UNKNOWN in
+            // prose (a gap it ruled out), and the relation would then fire on a
+            // clean leg, which is the scoping failure preflight reports.
             relation:
               oracleId === unknownOracleId
                 ? {
                     op: 'containment',
-                    operands: [{ pointer: `/interactions/${legId}/artifact/report` }, { literal: NFR_UNKNOWN_TOKEN }],
+                    operands: [{ pointer: `/interactions/${legId}/artifact/report` }, { literal: `**Threshold:** ${NFR_UNKNOWN_TOKEN}` }],
                   }
                 : overallStatusAny(`/interactions/${legId}/artifact/report`, gapped.expectedOverallStatus),
           },
