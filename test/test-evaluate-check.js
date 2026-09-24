@@ -17,13 +17,19 @@
  *   moves when a `corpus/` byte moves;
  * - a packed install (`npm pack`, installed with `--omit=dev` beside the
  *   repository's own engine) runs `tea-evaluate check` to exit 0, which proves
- *   every module the runtime needs ships in TeA's `dependencies`.
+ *   every module the runtime needs ships in TeA's `dependencies`, and runs
+ *   `tea-skill-runner` over the stub agent (Story 1.6).
  *
  * Story 1.5 adds the registry: the fixture's `evaluation.json` registry builds a
  * `CommandTargetPolicy` that eval-quality's own `CommandTargetPolicy` schema
  * accepts, a registry entry the runtime's `RegistryEntry` schema refuses is
  * refused by the builder, and a defect signature one of an entry's
  * `infrastructureExitCodes` could satisfy exits 10 (AD-7).
+ *
+ * Story 1.6 gives `launch` its shape (`root`, and `skillRoot` for a skill) and
+ * adds the `skill-root` rule: a mutation whose `targetArtifact` is not inside
+ * the skill root exits 10, a sibling directory sharing its name as a prefix
+ * included.
  *
  * Usage: node test/test-evaluate-check.js
  */
@@ -451,6 +457,17 @@ function checkUsage() {
   const resolved = resolveEvaluationFolder(VALID);
   check(resolved.ok && resolved.folder === VALID, 'resolveEvaluationFolder did not resolve the valid fixture folder');
   check(!resolveEvaluationFolder().ok, 'resolveEvaluationFolder resolved an absent flag');
+
+  // `link/../evaluation` climbs from the link's target, as the system resolves it.
+  const base = fs.realpathSync(tempDir('climb'));
+  fs.mkdirSync(path.join(base, 'real', 'deep'), { recursive: true });
+  fs.cpSync(VALID, path.join(base, 'real', 'evaluation'), { recursive: true });
+  fs.symlinkSync(path.join('real', 'deep'), path.join(base, 'link'), 'dir');
+  const climbed = resolveEvaluationFolder(['link', '..', 'evaluation'].join(path.sep), base);
+  check(
+    climbed.ok && climbed.folder === path.join(base, 'real', 'evaluation'),
+    `--evaluation link/../evaluation resolved to ${JSON.stringify(climbed)}; expected the folder beside the link's target`,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -620,6 +637,55 @@ const DEFECT_CASES = [
     rule: 'registry',
     plant: (folder) => editJson(folder, 'evaluation.json', (value) => value.registry.push({ ...value.registry[0] })),
   },
+  {
+    name: 'a mutation targetArtifact outside the skill root',
+    file: 'mutations/M-001.mutation.json',
+    rule: 'skill-root',
+    plant: (folder) =>
+      editJson(folder, 'mutations/M-001.mutation.json', (value) => (value.targetArtifact = 'docs/step-04-generate-tests.md')),
+  },
+  {
+    name: 'a mutation targetArtifact in a sibling directory that shares the skill root as a name prefix',
+    file: 'mutations/M-001.mutation.json',
+    rule: 'skill-root',
+    plant: (folder) =>
+      editJson(folder, 'mutations/M-001.mutation.json', (value) => (value.targetArtifact = 'skill-extras/step-04-generate-tests.md')),
+  },
+  {
+    name: 'a mutation targetArtifact that climbs out of the skill root after entering it',
+    file: 'mutations/M-001.mutation.json',
+    rule: 'skill-root',
+    plant: (folder) =>
+      editJson(folder, 'mutations/M-001.mutation.json', (value) => (value.targetArtifact = 'skill/../docs/step-04-generate-tests.md')),
+  },
+  {
+    name: 'a skill evaluation whose launch declares no skillRoot',
+    file: 'evaluation.json',
+    rule: 'schema',
+    plant: (folder) => editJson(folder, 'evaluation.json', (value) => delete value.launch.skillRoot),
+    expect: (output) => [[output.includes("required property 'skillRoot'"), 'the finding does not name the missing skillRoot']],
+  },
+  {
+    name: 'a launch with no root',
+    file: 'evaluation.json',
+    rule: 'schema',
+    plant: (folder) => editJson(folder, 'evaluation.json', (value) => delete value.launch.root),
+    expect: (output) => [[output.includes("required property 'root'"), 'the finding does not name the missing root']],
+  },
+  {
+    name: 'an absolute launch root',
+    file: 'evaluation.json',
+    rule: 'schema',
+    plant: (folder) => editJson(folder, 'evaluation.json', (value) => (value.launch.root = '/srv/project')),
+    expect: (output) => [[output.includes('/launch/root'), 'the finding does not name /launch/root']],
+  },
+  {
+    name: 'a skill root that climbs out of the launch root',
+    file: 'evaluation.json',
+    rule: 'schema',
+    plant: (folder) => editJson(folder, 'evaluation.json', (value) => (value.launch.skillRoot = '../skill')),
+    expect: (output) => [[output.includes('/launch/skillRoot'), 'the finding does not name /launch/skillRoot']],
+  },
 ];
 
 const STORY_RULES = [
@@ -637,6 +703,7 @@ const STORY_RULES = [
   'infrastructure-exit-code',
   'unregistered-executable',
   'registry',
+  'skill-root',
 ];
 
 /** A file outside the evaluation folder, for the symbolic-link cases to point at. */
@@ -748,6 +815,12 @@ const HARDENING_CASES = [
     file: 'probes/P-002.probe.json',
     rule: 'duplicate-id',
     plant: (folder) => editJson(folder, 'probes/P-002.probe.json', (value) => value.defects.push({ ...value.defects[0] })),
+  },
+  {
+    name: 'a maxElapsedMs past the 2147483647 ms one timer holds',
+    file: 'evaluation.json',
+    rule: 'schema',
+    plant: (folder) => editJson(folder, 'evaluation.json', (value) => (value.registry[0].maxElapsedMs = 2 ** 31)),
   },
   {
     name: 'a provisioned directory of "."',
@@ -1350,6 +1423,27 @@ function checkPackedInstall() {
   check(
     run.status === 0,
     `tea-evaluate check from the packed install exited ${run.status}; expected 0\n${run.stdout}${run.stderr}${run.error ?? ''}`,
+  );
+
+  // The generic skill runner ships as a bin and runs from the tarball over the
+  // repository's stub agent (Story 1.6).
+  const runnerBin = path.join(project, 'node_modules', '.bin', 'tea-skill-runner');
+  check(fs.existsSync(runnerBin), 'the packed install registers no tea-skill-runner bin');
+  const stub = spawnSync(
+    runnerBin,
+    [
+      '--skill-root',
+      'test/fixtures/evaluate/stub-agent/skill',
+      '--agent',
+      'custom',
+      '--agent-cmd',
+      'test/fixtures/evaluate/stub-agent/agent.js',
+    ],
+    { cwd: PROJECT_ROOT, input: 'Say alpha.', encoding: 'utf8' },
+  );
+  check(
+    stub.status === 0 && stub.stdout.includes('skill: stub-skill'),
+    `tea-skill-runner from the packed install exited ${stub.status}; expected 0 naming the stub skill\n${stub.stdout}${stub.stderr}${stub.error ?? ''}`,
   );
 
   // The runtime modules no subcommand loads yet still load from the tarball,

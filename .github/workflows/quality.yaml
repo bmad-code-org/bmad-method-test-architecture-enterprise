@@ -188,6 +188,9 @@ jobs:
       - name: Hold tea-evaluate's engine boundary over cli/
         run: npm run test:evaluate-boundaries
 
+      - name: Drive tea-skill-runner and tea-evaluate preflight over a stub agent
+        run: npm run test:evaluate-preflight
+
       - name: Test knowledge base (index sync, link resolution, workflow-copy parity)
         run: npm run test:knowledge
 

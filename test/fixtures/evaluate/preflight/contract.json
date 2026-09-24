@@ -1,0 +1,286 @@
+{
+  "schemaVersion": 5,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "contractId": "tea-evaluate-preflight-fixture",
+  "sourceSpecDigest": "sha256:4a8e6f1f2a7c1d7e0c6b8a0d7c0e2f5b9a3d1c4e6f8a0b2c4d6e8f0a1b3c5d7e",
+  "behaviors": [
+    {
+      "id": "B-001",
+      "description": "The skill runner hands the agent the skill it was given and the request, and the run exits clean.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The run names the stub skill on stdout and exits 0.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-evaluate-fixture",
+          "id": "skill-root-handed-over"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-evaluate-fixture",
+          "id": "wrong-skill-evaluated"
+        }
+      ],
+      "oracles": [
+        "O-001"
+      ]
+    }
+  ],
+  "oracles": [
+    {
+      "id": "O-001",
+      "polarity": "expects-hold",
+      "commentary": "The agent read SKILL.md under the skill root the runner was given, so stdout names that skill, and the run exited 0.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The exit code and stdout of the answer run.",
+        "negativeDomain": "A run that exited non-zero, or whose stdout names no skill or another skill.",
+        "evidenceTargets": [
+          "/interactions/answer-run/exit-code",
+          "/interactions/answer-run/stdout"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/answer-run/exit-code"
+              },
+              {
+                "literal": 0
+              }
+            ]
+          },
+          {
+            "op": "containment",
+            "operands": [
+              {
+                "pointer": "/interactions/answer-run/stdout"
+              },
+              {
+                "literal": "skill: stub-skill"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "rubrics": [],
+  "waivers": [],
+  "permittedInterfaces": [
+    {
+      "logicalId": "stub-skill",
+      "kind": "cli",
+      "operations": [
+        {
+          "operationId": "answer-request",
+          "invocation": {
+            "executable": "tea-skill-runner",
+            "subcommandPath": []
+          },
+          "stateChangeMarker": false,
+          "requestShape": {
+            "argument": {
+              "requiredKeys": [],
+              "permittedKeys": [],
+              "types": {}
+            },
+            "option": {
+              "requiredKeys": [
+                "agent",
+                "agent-cmd",
+                "skill-root",
+                "timeout-ms"
+              ],
+              "permittedKeys": [
+                "agent",
+                "agent-cmd",
+                "skill-root",
+                "timeout-ms"
+              ],
+              "types": {
+                "agent": "string",
+                "agent-cmd": "string",
+                "skill-root": "string",
+                "timeout-ms": "string"
+              }
+            },
+            "environment": {
+              "requiredKeys": [],
+              "permittedKeys": [],
+              "types": {}
+            },
+            "stdin": {
+              "requiredKeys": [
+                "prompt"
+              ],
+              "permittedKeys": [
+                "prompt"
+              ],
+              "types": {
+                "prompt": "string"
+              }
+            }
+          },
+          "artifacts": [],
+          "descriptorChannel": {
+            "kind": "stream",
+            "channel": "stdout"
+          },
+          "responseDescriptor": {
+            "requiredKeys": [],
+            "permittedKeys": [],
+            "types": {},
+            "successIndicator": null,
+            "channelRoles": null,
+            "collectionLocations": null
+          },
+          "volatilePointers": [],
+          "sensitivityWitness": {
+            "witnessId": "reply-follows-the-prompt",
+            "channel": "stdin",
+            "legs": [
+              {
+                "legId": "witness-alpha",
+                "inputs": {
+                  "argument": {},
+                  "option": {
+                    "skill-root": "skill",
+                    "agent": "custom",
+                    "agent-cmd": "./agent.js",
+                    "timeout-ms": "30000"
+                  },
+                  "environment": {},
+                  "stdin": {
+                    "kind": "text",
+                    "value": "Say alpha."
+                  }
+                }
+              },
+              {
+                "legId": "witness-beta",
+                "inputs": {
+                  "argument": {},
+                  "option": {
+                    "skill-root": "skill",
+                    "agent": "custom",
+                    "agent-cmd": "./agent.js",
+                    "timeout-ms": "30000"
+                  },
+                  "environment": {},
+                  "stdin": {
+                    "kind": "text",
+                    "value": "Say beta."
+                  }
+                }
+              }
+            ],
+            "relation": {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "containment",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/witness-alpha/stdout"
+                    },
+                    {
+                      "literal": "alpha"
+                    }
+                  ]
+                },
+                {
+                  "op": "not",
+                  "operands": [
+                    {
+                      "op": "containment",
+                      "operands": [
+                        {
+                          "pointer": "/interactions/witness-beta/stdout"
+                        },
+                        {
+                          "literal": "alpha"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "referenceSets": {},
+  "siblingGroups": {
+    "operations": [],
+    "parameters": []
+  },
+  "interactionPlan": [
+    {
+      "stepId": "answer-run",
+      "operationId": "answer-request",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": {
+          "skill-root": {
+            "literal": "skill"
+          },
+          "agent": {
+            "literal": "custom"
+          },
+          "agent-cmd": {
+            "literal": "./agent.js"
+          },
+          "timeout-ms": {
+            "literal": "30000"
+          }
+        },
+        "environment": null,
+        "stdin": {
+          "prompt": {
+            "literal": "Say alpha."
+          }
+        }
+      }
+    }
+  ],
+  "scopedResources": null,
+  "forbiddenInputs": [
+    "original-spec",
+    "source-code",
+    "repository",
+    "builder-transcript",
+    "implementation-logs",
+    "comparator-results",
+    "human-labels"
+  ],
+  "testData": {
+    "setup": "Nothing is staged by hand: tea-evaluate preflight copies launch.root, the stub project under test/fixtures/evaluate/stub-agent/, into a temp directory and runs every leg there.",
+    "cleanup": "Nothing to remove: the stub agent writes no file.",
+    "principals": null,
+    "resources": null
+  },
+  "budgets": {
+    "maxToolCalls": 1,
+    "maxWallClockMinutes": 1,
+    "maxCostUsd": "0.00"
+  },
+  "safetyLimits": [
+    "The stub agent writes no file and makes no network call."
+  ],
+  "requiredEvidence": [
+    "The exit code and stdout of every run."
+  ],
+  "probeStepBound": 1,
+  "fixtureReset": null
+}
