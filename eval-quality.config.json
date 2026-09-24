@@ -946,6 +946,14 @@
           "reason": "a Node.js or POSIX platform name, not a TEA declaration"
         },
         {
+          "token": "SIGINT",
+          "reason": "a Node.js or POSIX platform name, not a TEA declaration"
+        },
+        {
+          "token": "SIGHUP",
+          "reason": "a Node.js or POSIX platform name, not a TEA declaration"
+        },
+        {
           "token": "TypeError",
           "reason": "a Node.js or POSIX platform name, not a TEA declaration"
         },

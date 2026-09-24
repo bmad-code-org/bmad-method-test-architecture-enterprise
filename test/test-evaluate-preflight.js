@@ -4,40 +4,54 @@
  * The runner cases spawn `cli/skill-runner.js` over the stub agent under
  * `test/fixtures/evaluate/stub-agent/`: a run names the skill it was handed; a
  * missing `--skill-root`, a skill root or `SKILL.md` outside the working
- * directory (a symbolic link included) and every other malformed command line
- * exit 2 (usage); a missing skill, a failing agent and a timeout exit 3, 4 and
- * 5; and an unexpected error exits 4. The registry entry the preflight fixture
- * declares for the runner carries exactly its infrastructure codes, 3 to 6.
+ * directory (a symbolic link included), a prompt that is not UTF-8 and every
+ * other malformed command line exit 2 (usage); a missing skill, a failing
+ * agent and a timeout exit 3, 4 and 5; an unexpected error and a reader that
+ * closes standard output early exit 4; and a process the agent started dies
+ * with a timeout and with a runner killed outright. The registry entry the
+ * preflight fixture declares for the runner carries exactly its
+ * infrastructure codes, 3 to 6.
  *
  * The preflight cases run the real `tea-evaluate preflight` over a temp copy of
  * `test/fixtures/evaluate/preflight/`, whose `launch.root` is pointed back at
- * the stub project, against the real installed eval-quality, with the runner on
+ * the stub project (or a temp copy of it, for a case that changes or writes
+ * the target), against the real installed eval-quality, with the runner on
  * PATH under its bin name:
  *
  * - the stub passes: exit 0, a passed `PreflightVerdict` from the CLI, every
  *   leg's observation under `runs/<invocationId>/observations/`, and no denial
  *   (`forbidden-target`, `interface-not-authorized`, `executable-not-authorized`)
- *   in what the run recorded;
+ *   in the files the runtime writes about legs and the verdict;
  * - with the stub's registry entry replaced by an entry for another executable,
  *   the same assertions fail on the recorded denial, and the command exits 10,
  *   as it does for an entry under another interface;
  * - with `TEA_EVALUATE_ENGINE_CLI` at a shim that logs its argv, exits 0 for
  *   `compile` and `seal` and 5 for `preflight`, the command exits 5 and the log
  *   holds the preflight argv with `--observations` and this run's `--run-id`, so
- *   the verdict came from the CLI (the library's own verdict would pass);
+ *   the verdict came from the CLI (the library's own verdict would pass), and
+ *   each stage record says whether the shim substituted the CLI;
  * - a witness leg whose agent exits non-zero fails the clean-control check on
  *   the control leg's exit 4: `tea-evaluate` and the CLI run directly over the
  *   persisted files both exit 3;
- * - a failed `compile` or `seal` passes its exit through and stops the run, an
- *   undocumented stage exit, a seeded probe, a missing registry target, an
- *   `mcp` interface, a leg over its output budget and a missing engine exit 12,
- *   an authoring defect exits 10, and no `--evaluation` exits 64;
+ * - a failed `compile` or `seal` passes its exit through and stops the run; a
+ *   stage exit eval-quality does not document for that stage, a seeded probe,
+ *   a missing registry target, an `mcp` interface, a leg over its output
+ *   budget and a missing engine exit 12; an authoring defect exits 10; and no
+ *   `--evaluation` exits 64;
+ * - a `runPreflight` that refuses its plan before any leg falls through to the
+ *   CLI's own exit, and one that fails after a leg exits 12;
  * - a leg that writes a file writes it into a disposable copy that is removed
- *   afterwards, `runs/` carries a `.gitignore`, and a permitted environment
- *   value reaches the agent and is scrubbed from everything the run recorded;
- * - `check` refuses a runner leg with another skill root or no `--timeout-ms`
- *   below the entry's ceiling, a runner entry missing an infrastructure code,
- *   and a skill root inside a provisioned directory.
+ *   afterwards, and an interrupted run removes it too and leaves no process;
+ *   the copy holds no `.git` and no `runs/`, links a provisioned directory in,
+ *   points every symbolic link inside the target at the copy, and is refused
+ *   (exit 12) for a link out of the target, a FIFO, or a temp directory inside
+ *   the target; `--evaluation` through a link resolves `launch.root` from the
+ *   folder's real location; `runs/` carries a `.gitignore`; and a permitted
+ *   environment value reaches the agent beneath a leg's own value and is
+ *   scrubbed from everything the run recorded;
+ * - `check` refuses a runner leg or plan step with another skill root or no
+ *   `--timeout-ms` below the entry's ceiling, a runner entry missing an
+ *   infrastructure code, and a skill root inside a provisioned directory.
  *
  * Usage: node test/test-evaluate-preflight.js
  */
@@ -47,7 +61,7 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
+const { spawn, spawnSync } = require('node:child_process');
 
 const { INFRASTRUCTURE_EXIT_CODES } = require('../cli/skill-runner');
 const { EXIT_CODES } = require('../cli/lib/runner-exit-codes');
@@ -64,12 +78,17 @@ const STUB_AGENT = 'test/fixtures/evaluate/stub-agent/agent.js';
 const STUB_SKILL = 'test/fixtures/evaluate/stub-agent/skill';
 const SHIM = path.join(FIXTURES, 'engine-shim.js');
 const HIDE_ENGINE = path.join(FIXTURES, 'engine-absent', 'hide-engine.cjs');
+const WRAP_ENGINE = path.join(FIXTURES, 'engine-wrapped', 'wrap-engine.cjs');
 const DENIALS = ['forbidden-target', 'interface-not-authorized', 'executable-not-authorized'];
 
 /** This process's environment with every variable the cases set themselves removed, so a developer's shell cannot reroute a case. */
 const BASE_ENV = Object.fromEntries(
   Object.entries(process.env).filter(
-    ([name]) => name !== ENGINE_CLI_ENV && !name.startsWith('TEA_EVALUATE_SHIM_') && name !== 'TEA_STUB_SECRET',
+    ([name]) =>
+      name !== ENGINE_CLI_ENV &&
+      !name.startsWith('TEA_EVALUATE_SHIM_') &&
+      name !== 'TEA_EVALUATE_WRAP_RUNPREFLIGHT' &&
+      name !== 'TEA_STUB_SECRET',
   ),
 );
 
@@ -85,7 +104,7 @@ function check(condition, message) {
 }
 
 function tempDir(label) {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), `tea-evaluate-preflight-${label}-`));
+  const directory = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), `tea-evaluate-preflight-${label}-`));
   scratch.push(directory);
   return directory;
 }
@@ -99,6 +118,62 @@ function editJson(folder, relative, edit) {
   const value = readJson(file);
   edit(value);
   fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+/** A private temp directory for a case, and the environment that points every temp lookup at it. */
+function privateTemp(label) {
+  const directory = tempDir(label);
+  return { directory, env: { TMPDIR: directory, TMP: directory, TEMP: directory } };
+}
+
+/** A temp copy of the stub project, for a case that changes the target or must not write into the tracked fixture. */
+function stubProject(label) {
+  const project = path.join(tempDir(label), 'project');
+  fs.cpSync(STUB_PROJECT, project, { recursive: true });
+  return project;
+}
+
+const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+/** Whether the process `pid` is gone within `withinMs`. */
+async function processEnds(pid, withinMs = 5000) {
+  const deadline = Date.now() + withinMs;
+  for (;;) {
+    try {
+      process.kill(pid, 0);
+    } catch (error) {
+      if (error.code === 'ESRCH') return true;
+    }
+    if (Date.now() > deadline) return false;
+    await delay(50);
+  }
+}
+
+/** Waits for `file` to hold a pid; null when it never does within `withinMs`. */
+async function pidFrom(file, withinMs = 20_000) {
+  const deadline = Date.now() + withinMs;
+  while (Date.now() <= deadline) {
+    if (fs.existsSync(file)) {
+      const pid = Number(fs.readFileSync(file, 'utf8'));
+      if (pid > 0) return pid;
+    }
+    await delay(50);
+  }
+  return null;
+}
+
+/** Resolves with how a spawned child ended. */
+function ended(child) {
+  return new Promise((resolve) => child.once('close', (code, signal) => resolve({ code, signal })));
+}
+
+/** Kills a pid a failing case left running, so a regression cannot leak processes past the suite. */
+function reap(pid) {
+  try {
+    if (pid !== null) process.kill(pid, 'SIGKILL');
+  } catch {
+    // Already gone.
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -241,6 +316,66 @@ function checkRunner() {
   );
 }
 
+/**
+ * The runner's own process handling: a prompt that is not UTF-8 is a usage
+ * error, a reader that closes standard output early is transport (4) and no
+ * crash, and nothing the agent started outlives a timeout or a killed runner.
+ */
+async function checkRunnerProcesses() {
+  const invalid = runRunner(['--skill-root', STUB_SKILL, ...STUB_OPTIONS], { input: Buffer.from([0x53, 0x61, 0x79, 0x20, 0xff, 0xfe]) });
+  check(
+    invalid.status === EXIT_CODES.usage,
+    `a prompt that is not UTF-8 exited ${invalid.status}; expected ${EXIT_CODES.usage}\n${invalid.output}`,
+  );
+  check(invalid.stderr.includes('not valid UTF-8'), `the invalid prompt was not named on stderr:\n${invalid.output}`);
+
+  // A reader that takes the first chunk of a large reply and closes the pipe.
+  const piped = spawn(process.execPath, [RUNNER, '--skill-root', STUB_SKILL, ...STUB_OPTIONS], { cwd: PROJECT_ROOT, env: BASE_ENV });
+  let stderr = '';
+  piped.stderr.on('data', (chunk) => (stderr += chunk));
+  piped.stdout.once('data', () => piped.stdout.destroy());
+  piped.stdin.end('Say alpha. STUB-BIG 4000000');
+  const closed = await ended(piped);
+  check(
+    closed.code === EXIT_CODES['environment-transport'],
+    `the runner whose reader closed early exited ${closed.code} (${closed.signal}); expected ${EXIT_CODES['environment-transport']}\n${stderr}`,
+  );
+  check(stderr.includes("could not write the agent's output"), `the closed reader was not named on stderr:\n${stderr}`);
+
+  // An agent that starts a child and then outlives --timeout-ms.
+  const timedOutPid = path.join(tempDir('orphan-timeout'), 'pid');
+  const timedOut = runRunner(['--skill-root', STUB_SKILL, ...STUB_OPTIONS, '--timeout-ms', '500'], {
+    input: `Say alpha. STUB-ORPHAN ${timedOutPid} STUB-SLEEP 10000`,
+  });
+  check(
+    timedOut.status === EXIT_CODES['environment-timeout'],
+    `the orphaning agent's timeout exited ${timedOut.status}\n${timedOut.output}`,
+  );
+  const orphan = await pidFrom(timedOutPid, 1000);
+  check(orphan !== null, 'the orphaning agent recorded no child pid');
+  if (orphan !== null) {
+    check(await processEnds(orphan), `a child the agent started (pid ${orphan}) outlived the runner's timeout`);
+    reap(orphan);
+  }
+
+  // The runner killed outright, as eval-quality's adapter kills it on its own ceiling.
+  const killedPid = path.join(tempDir('orphan-killed'), 'pid');
+  const killed = spawn(process.execPath, [RUNNER, '--skill-root', STUB_SKILL, ...STUB_OPTIONS], {
+    cwd: PROJECT_ROOT,
+    env: BASE_ENV,
+    stdio: ['pipe', 'ignore', 'ignore'],
+  });
+  killed.stdin.end(`Say alpha. STUB-ORPHAN ${killedPid} STUB-SLEEP 30000`);
+  const survivor = await pidFrom(killedPid);
+  killed.kill('SIGKILL');
+  await ended(killed);
+  check(survivor !== null, 'the agent under a killed runner recorded no child pid');
+  if (survivor !== null) {
+    check(await processEnds(survivor), `a child the agent started (pid ${survivor}) outlived its runner's SIGKILL`);
+    reap(survivor);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // tea-evaluate preflight
 
@@ -352,6 +487,10 @@ function checkPasses() {
   const runIdAt = argv.indexOf('--run-id');
   check(runIdAt > 0 && argv[runIdAt + 1] === invocationId, `the preflight call's --run-id is not the invocation's: ${argv}`);
   check(argv.includes('--observations'), `the preflight call carries no --observations: ${argv}`);
+  check(
+    fs.existsSync(callPath) && readJson(callPath).substituted === false,
+    'the preflight call over the installed CLI is not recorded as substituted: false',
+  );
   for (const artifact of ['eval-contract.json', 'sealed-evaluator-brief.json', 'probes.json']) {
     check(fs.existsSync(path.join(runDirectory, artifact)), `the run holds no ${artifact}`);
   }
@@ -412,6 +551,29 @@ function checkShim() {
     runDirectory !== null && !fs.existsSync(path.join(runDirectory, 'preflight-verdict.json')),
     'a verdict file exists though the shim wrote none, so something other than the CLI wrote a verdict',
   );
+  const shimRecord = runDirectory === null ? null : path.join(runDirectory, 'engine', 'preflight.json');
+  check(
+    shimRecord !== null && fs.existsSync(shimRecord) && readJson(shimRecord).substituted === true,
+    'the preflight call under the shim is not recorded as substituted: true',
+  );
+
+  // Exits eval-quality documents for another stage only: 2 is a score verdict, 3 is no compile exit.
+  for (const [stage, code] of [
+    ['PREFLIGHT', '2'],
+    ['COMPILE', '3'],
+  ]) {
+    const undocumented = runPreflight(copyFixture(), {
+      env: {
+        [ENGINE_CLI_ENV]: SHIM,
+        TEA_EVALUATE_SHIM_LOG: path.join(tempDir('shim-stage'), 'argv.log'),
+        [`TEA_EVALUATE_SHIM_EXIT_${stage}`]: code,
+      },
+    });
+    check(
+      undocumented.status === 12,
+      `preflight whose ${stage.toLowerCase()} exits ${code}, which eval-quality does not document for it, exited ${undocumented.status}; expected 12\n${undocumented.output}`,
+    );
+  }
 
   const compileFolder = copyFixture();
   const compileLog = path.join(tempDir('shim-compile'), 'argv.log');
@@ -561,10 +723,16 @@ function checkEnvironmentValuesStayOut() {
   const secret = 'tea-stub-secret-value-7f3a91';
   editJson(folder, 'evaluation.json', (value) => (value.registry[0].environmentKeys = ['TEA_STUB_SECRET']));
   addRunnerOption(folder, 'env-pass', 'TEA_STUB_SECRET');
+  const declared = 'leg-declared-value-2b8c';
   editJson(folder, 'contract.json', (contract) => {
-    for (const leg of contract.permittedInterfaces[0].operations[0].sensitivityWitness.legs) {
+    const operation = contract.permittedInterfaces[0].operations[0];
+    operation.requestShape.environment.permittedKeys.push('TEA_STUB_SECRET');
+    operation.requestShape.environment.types.TEA_STUB_SECRET = 'string';
+    for (const leg of operation.sensitivityWitness.legs) {
       leg.inputs.stdin.value = `${leg.inputs.stdin.value} STUB-ENV TEA_STUB_SECRET`;
     }
+    // One leg declares its own value, which wins over the host's.
+    operation.sensitivityWitness.legs[1].inputs.environment.TEA_STUB_SECRET = declared;
   });
   const result = runPreflight(folder, { env: { TEA_STUB_SECRET: secret } });
   check(result.status === 0, `preflight with a permitted environment key exited ${result.status}; expected 0\n${result.output}`);
@@ -582,25 +750,238 @@ function checkEnvironmentValuesStayOut() {
   for (const file of filesUnder(runDirectory ?? folder)) {
     if (fs.statSync(file).isFile()) check(!fs.readFileSync(file, 'utf8').includes(secret), `${file} holds an environment value`);
   }
+  const echoes = Object.fromEntries(
+    filesUnder(path.join(runDirectory ?? folder, 'observations')).map((file) => {
+      const entry = readJson(file);
+      return [entry.legId, /env: (.*)/.exec(entry.observation?.stdout?.value ?? '')?.[1] ?? null];
+    }),
+  );
+  check(
+    echoes['witness-beta'] === declared,
+    `the leg that declares its own value received ${JSON.stringify(echoes['witness-beta'])}; its declared value beats the host's`,
+  );
+  check(
+    echoes['witness-alpha'] === '[redacted]',
+    `a leg that declares no value received ${JSON.stringify(echoes['witness-alpha'])}; expected the host's, scrubbed`,
+  );
+}
+
+/** Appends `text` to the first witness leg's prompt. */
+function firstLegSays(folder, text) {
+  editJson(folder, 'contract.json', (contract) => {
+    const legs = contract.permittedInterfaces[0].operations[0].sensitivityWitness.legs;
+    legs[0].inputs.stdin.value = `${legs[0].inputs.stdin.value} ${text}`;
+  });
+}
+
+/** The first witness leg's observed stdout, or ''. */
+function firstLegStdout(runDirectory) {
+  const first = runDirectory === null ? undefined : filesUnder(path.join(runDirectory, 'observations'))[0];
+  return first === undefined ? '' : (readJson(first).observation?.stdout?.value ?? '');
 }
 
 function checkCopyAndRunsIgnore() {
-  const folder = copyFixture();
-  editJson(folder, 'contract.json', (contract) => {
-    const legs = contract.permittedInterfaces[0].operations[0].sensitivityWitness.legs;
-    legs[0].inputs.stdin.value = `${legs[0].inputs.stdin.value} STUB-WRITE`;
-  });
-  const copies = () => new Set(fs.readdirSync(os.tmpdir()).filter((name) => name.startsWith('tea-evaluate-copy-')));
-  const before = copies();
-  const result = runPreflight(folder);
-  check(
-    [...copies()].every((name) => before.has(name)),
-    'the disposable copy of the target root was left in the temp directory',
-  );
+  const project = stubProject('copy');
+  const folder = copyFixture(PREFLIGHT_FIXTURE, project);
+  firstLegSays(folder, 'STUB-WRITE');
+  const temp = privateTemp('copy-temp');
+  const result = runPreflight(folder, { env: temp.env });
+  check(fs.readdirSync(temp.directory).length === 0, 'the disposable copy of the target root was left in the temp directory');
   check(result.status === 0, `preflight whose leg writes a file exited ${result.status}; expected 0\n${result.output}`);
-  check(!fs.existsSync(path.join(STUB_PROJECT, 'stub-wrote.txt')), 'a leg wrote into the target root; legs run in a disposable copy');
+  check(!fs.existsSync(path.join(project, 'stub-wrote.txt')), 'a leg wrote into the target root; legs run in a disposable copy');
   const ignore = path.join(folder, 'runs', '.gitignore');
   check(fs.existsSync(ignore) && fs.readFileSync(ignore, 'utf8') === '*\n', 'runs/ carries no .gitignore that ignores every run');
+}
+
+/**
+ * The copy leaves `.git` and the evaluation's own `runs/` behind and links a
+ * provisioned directory in, with the evaluation folder inside the target.
+ */
+function checkCopyContents() {
+  const project = stubProject('contents');
+  fs.mkdirSync(path.join(project, '.git'));
+  fs.writeFileSync(path.join(project, '.git', 'HEAD'), 'ref: refs/heads/main\n');
+  fs.mkdirSync(path.join(project, 'vendor'));
+  fs.writeFileSync(path.join(project, 'vendor', 'library.js'), '// provisioned\n');
+  const folder = path.join(project, 'evals', 'stub');
+  fs.cpSync(PREFLIGHT_FIXTURE, folder, { recursive: true, filter: (from) => path.basename(from) !== 'runs' });
+  fs.mkdirSync(path.join(folder, 'runs', 'earlier-run'), { recursive: true });
+  fs.writeFileSync(path.join(folder, 'runs', 'earlier-run', 'marker.json'), '{}\n');
+  editJson(folder, 'evaluation.json', (value) => {
+    value.launch.root = '../..';
+    value.workspace.provision = ['vendor'];
+  });
+  firstLegSays(folder, 'STUB-LIST');
+  const result = runPreflight(folder);
+  check(result.status === 0, `preflight with the evaluation inside its target exited ${result.status}; expected 0\n${result.output}`);
+  const runs = path.join(folder, 'runs');
+  const run = fs.readdirSync(runs, { withFileTypes: true }).find((entry) => entry.isDirectory() && entry.name !== 'earlier-run');
+  const listed = /list: (.*)/.exec(firstLegStdout(run === undefined ? null : path.join(runs, run.name)))?.[1];
+  const entries = listed === undefined ? [] : JSON.parse(listed);
+  check(entries.includes('agent.js'), `the leg's working directory is not a copy of the target: ${JSON.stringify(entries)}`);
+  check(entries.includes('evals/stub/evaluation.json'), `the copy left out the evaluation folder's own files: ${JSON.stringify(entries)}`);
+  check(!entries.some((entry) => entry === '.git' || entry.startsWith('.git/')), `the copy holds .git: ${JSON.stringify(entries)}`);
+  check(
+    !entries.some((entry) => entry.startsWith('evals/stub/runs')),
+    `the copy holds the evaluation's own runs/: ${JSON.stringify(entries)}`,
+  );
+  check(entries.includes('vendor@'), `the provisioned directory is not a symbolic link in the copy: ${JSON.stringify(entries)}`);
+}
+
+/**
+ * A symbolic link in the target is contained: a relative skill root link and
+ * a link a leg writes through stay in the copy, and a link out of the root is
+ * refused.
+ */
+function checkLinks() {
+  const linkedSkill = stubProject('link-skill');
+  fs.mkdirSync(path.join(linkedSkill, 'skills'));
+  fs.renameSync(path.join(linkedSkill, 'skill'), path.join(linkedSkill, 'skills', 'stub'));
+  fs.symlinkSync(path.join('skills', 'stub'), path.join(linkedSkill, 'skill'), 'dir');
+  const skillFolder = copyFixture(PREFLIGHT_FIXTURE, linkedSkill);
+  const skillResult = runPreflight(skillFolder);
+  check(
+    skillResult.status === 0,
+    `preflight whose skill root is a relative link inside the target exited ${skillResult.status}; expected 0\n${skillResult.output}`,
+  );
+  check(firstLegStdout(runDirectoryOf(skillFolder)).includes('skill: stub-skill'), 'the linked skill root did not reach the agent');
+
+  for (const [name, spell] of [
+    ['a relative', () => path.join('data', 'victim.txt')],
+    ['an absolute', (project) => path.join(project, 'data', 'victim.txt')],
+  ]) {
+    const project = stubProject(`link-${name.split(' ')[1]}`);
+    fs.mkdirSync(path.join(project, 'data'));
+    fs.writeFileSync(path.join(project, 'data', 'victim.txt'), 'original\n');
+    fs.symlinkSync(spell(project), path.join(project, 'stub-wrote.txt'));
+    const folder = copyFixture(PREFLIGHT_FIXTURE, project);
+    firstLegSays(folder, 'STUB-WRITE');
+    const result = runPreflight(folder);
+    check(result.status === 0, `preflight writing through ${name} link exited ${result.status}; expected 0\n${result.output}`);
+    check(
+      fs.readFileSync(path.join(project, 'data', 'victim.txt'), 'utf8') === 'original\n',
+      `a leg wrote through ${name} link into the target's data/victim.txt`,
+    );
+  }
+
+  const escaping = stubProject('link-out');
+  fs.writeFileSync(path.join(path.dirname(escaping), 'outside.txt'), 'outside\n');
+  fs.symlinkSync(path.join('..', 'outside.txt'), path.join(escaping, 'escape'));
+  const escapingFolder = copyFixture(PREFLIGHT_FIXTURE, escaping);
+  const temp = privateTemp('link-out-temp');
+  const escaped = runPreflight(escapingFolder, { env: temp.env });
+  check(escaped.status === 12, `preflight over a link out of launch.root exited ${escaped.status}; expected 12\n${escaped.output}`);
+  check(escaped.stdout.includes('escape'), `the refusal does not name the link:\n${escaped.output}`);
+  check(runDirectoryOf(escapingFolder) === null, 'a target with a link out of launch.root still started a run');
+  check(fs.readdirSync(temp.directory).length === 0, 'the refused copy was left in the temp directory');
+}
+
+/** A copy the command cannot make is refused with exit 12 and leaves no temp copy behind. */
+function checkCopyRefusals() {
+  const project = stubProject('tmp-inside');
+  fs.mkdirSync(path.join(project, 'tmp'));
+  const folder = copyFixture(PREFLIGHT_FIXTURE, project);
+  const inside = path.join(project, 'tmp');
+  const result = runPreflight(folder, { env: { TMPDIR: inside, TMP: inside, TEMP: inside } });
+  check(
+    result.status === 12,
+    `preflight whose temp directory is inside launch.root exited ${result.status}; expected 12\n${result.output}`,
+  );
+  check(result.stdout.includes('TMPDIR'), `the refusal does not say how to fix it:\n${result.output}`);
+  check(fs.readdirSync(inside).length === 0, `a temp copy was left inside launch.root: ${fs.readdirSync(inside)}`);
+
+  if (process.platform === 'win32') return;
+  const fifoProject = stubProject('fifo');
+  const made = spawnSync('mkfifo', [path.join(fifoProject, 'pipe')]);
+  check(made.status === 0, `mkfifo failed: ${made.stderr}`);
+  const fifoFolder = copyFixture(PREFLIGHT_FIXTURE, fifoProject);
+  const temp = privateTemp('fifo-temp');
+  const fifo = runPreflight(fifoFolder, { env: temp.env });
+  check(fifo.status === 12, `preflight over a target holding a FIFO exited ${fifo.status}; expected 12\n${fifo.output}`);
+  check(fifo.stdout.includes('pipe') && fifo.stdout.includes('FIFO'), `the FIFO refusal does not name the entry:\n${fifo.output}`);
+  check(fs.readdirSync(temp.directory).length === 0, 'the partial copy of a target holding a FIFO was left in the temp directory');
+}
+
+/** An interrupted preflight removes its copy and leaves no process behind, and ends by the signal it received. */
+async function checkInterrupted() {
+  const project = stubProject('interrupt');
+  const folder = copyFixture(PREFLIGHT_FIXTURE, project);
+  const pidFile = path.join(tempDir('interrupt-pid'), 'pid');
+  firstLegSays(folder, `STUB-ORPHAN ${pidFile} STUB-SLEEP 25000`);
+  const temp = privateTemp('interrupt-temp');
+  const child = spawn(process.execPath, [EVALUATE, 'preflight', '--evaluation', folder], {
+    cwd: PROJECT_ROOT,
+    env: { ...BASE_ENV, PATH: runnerPath(), ...temp.env },
+    stdio: 'ignore',
+  });
+  const orphan = await pidFrom(pidFile);
+  check(orphan !== null, 'the interrupted leg never started');
+  child.kill('SIGTERM');
+  const closed = await ended(child);
+  check(closed.signal === 'SIGTERM', `the interrupted preflight ended by ${closed.signal ?? `exit ${closed.code}`}; expected SIGTERM`);
+  check(fs.readdirSync(temp.directory).length === 0, `the interrupted preflight left its copy: ${fs.readdirSync(temp.directory)}`);
+  if (orphan !== null) {
+    check(await processEnds(orphan), `a process the interrupted leg started (pid ${orphan}) outlived the preflight`);
+    reap(orphan);
+  }
+}
+
+/** `--evaluation` through a symbolic link resolves `launch.root` against the folder's real location. */
+function checkLinkedEvaluation() {
+  const base = tempDir('linked');
+  const real = path.join(base, 'real');
+  const decoy = path.join(base, 'decoy');
+  fs.cpSync(STUB_PROJECT, path.join(real, 'project'), { recursive: true });
+  fs.cpSync(STUB_PROJECT, path.join(decoy, 'project'), { recursive: true });
+  const decoySkill = path.join(decoy, 'project', 'skill', 'SKILL.md');
+  fs.writeFileSync(decoySkill, fs.readFileSync(decoySkill, 'utf8').replace(/^name:.*$/m, 'name: decoy-skill'));
+  const folder = path.join(real, 'evaluation');
+  fs.cpSync(PREFLIGHT_FIXTURE, folder, { recursive: true, filter: (from) => path.basename(from) !== 'runs' });
+  editJson(folder, 'evaluation.json', (value) => (value.launch.root = '../project'));
+  const link = path.join(decoy, 'evaluation');
+  fs.symlinkSync(folder, link, 'dir');
+  const result = runPreflight(link);
+  check(result.status === 0, `preflight through a linked evaluation folder exited ${result.status}; expected 0\n${result.output}`);
+  const stdout = firstLegStdout(runDirectoryOf(folder));
+  check(
+    stdout.includes('skill: stub-skill'),
+    `preflight through a link ran the target beside the link: ${JSON.stringify(stdout.split('\n')[0])}`,
+  );
+}
+
+/** A `runPreflight` failure falls through to the CLI only when it refused the plan before any leg. */
+function checkPlanningFallthrough() {
+  const structural = copyFixture();
+  const refused = runPreflight(structural, {
+    node: ['--require', WRAP_ENGINE],
+    env: { TEA_EVALUATE_WRAP_RUNPREFLIGHT: 'structural-before-legs' },
+  });
+  const refusedRun = runDirectoryOf(structural);
+  const refusedCall = refusedRun === null ? null : path.join(refusedRun, 'engine', 'preflight.json');
+  check(
+    refusedCall !== null && fs.existsSync(refusedCall),
+    `a plan refused before any leg did not reach the CLI's preflight (exit ${refused.status})\n${refused.output}`,
+  );
+  check(
+    refusedCall !== null && fs.existsSync(refusedCall) && readJson(refusedCall).exitCode === refused.status,
+    `a plan refused before any leg exited ${refused.status}, not the CLI's own exit\n${refused.output}`,
+  );
+
+  const midway = copyFixture();
+  const stopped = runPreflight(midway, {
+    node: ['--require', WRAP_ENGINE],
+    env: { TEA_EVALUATE_WRAP_RUNPREFLIGHT: 'error-after-one-leg' },
+  });
+  check(stopped.status === 12, `legs that stopped after one exited ${stopped.status}; expected 12\n${stopped.output}`);
+  const stoppedRun = runDirectoryOf(midway);
+  check(
+    stoppedRun !== null && !fs.existsSync(path.join(stoppedRun, 'engine', 'preflight.json')),
+    'legs that stopped after one still asked the CLI for a verdict',
+  );
+  check(
+    stoppedRun !== null && filesUnder(path.join(stoppedRun, 'observations')).length === 1,
+    'the wrapped engine did not run exactly one leg before failing',
+  );
 }
 
 function checkInterfaceDenialAndRefusals() {
@@ -650,6 +1031,21 @@ function checkRunnerRules() {
         }),
     ],
     ['a runner --timeout-ms at the entry ceiling', 'skill-runner', (folder) => addRunnerOption(folder, 'timeout-ms', '60000')],
+    [
+      'a plan step alone handing the runner another skill root',
+      'skill-root',
+      (folder) =>
+        editJson(
+          folder,
+          'contract.json',
+          (contract) => (contract.interactionPlan[0].inputBinding.option['skill-root'] = { literal: 'other-skill' }),
+        ),
+    ],
+    [
+      'a plan step alone with no --timeout-ms',
+      'skill-runner',
+      (folder) => editJson(folder, 'contract.json', (contract) => delete contract.interactionPlan[0].inputBinding.option['timeout-ms']),
+    ],
   ];
   for (const [name, rule, plant] of cases) {
     const folder = copyFixture();
@@ -660,9 +1056,10 @@ function checkRunnerRules() {
   }
 }
 
-function main() {
+async function main() {
   try {
     checkRunner();
+    await checkRunnerProcesses();
     checkPasses();
     checkRemovedEntry();
     checkShim();
@@ -670,6 +1067,12 @@ function main() {
     checkRefusals();
     checkEnvironmentValuesStayOut();
     checkCopyAndRunsIgnore();
+    checkCopyContents();
+    checkLinks();
+    checkCopyRefusals();
+    await checkInterrupted();
+    checkLinkedEvaluation();
+    checkPlanningFallthrough();
     checkInterfaceDenialAndRefusals();
     checkRunnerRules();
   } finally {
@@ -684,4 +1087,12 @@ function main() {
   return 0;
 }
 
-process.exitCode = main();
+main().then(
+  (code) => {
+    process.exitCode = code;
+  },
+  (error) => {
+    console.error(error);
+    process.exitCode = 1;
+  },
+);

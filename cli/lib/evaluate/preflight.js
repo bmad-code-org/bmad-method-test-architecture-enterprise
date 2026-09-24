@@ -31,11 +31,15 @@
  * that seeds none, so the probe list the CLI receives is empty.
  *
  * The copy: the legs run in a temp copy of `launch.root` (without `.git` and
- * the evaluation's own `runs/`), with each directory `workspace.provision`
- * lists linked in from the target, and the copy is removed when the command
- * ends. A leg therefore writes nothing into the adopter's tree, and an
- * artifact the adapter reads back is one this run wrote. Story 1.7 replaces the
- * copy with the pristine and mutated workspaces AD-8 describes.
+ * the evaluation's own `runs/`), and the copy is removed when the command ends,
+ * on an interrupting signal included. A symbolic link in the copy points into
+ * the copy, and a link out of `launch.root` is refused (exit 12), so a write
+ * under the copied tree stays in the copy, and an artifact the adapter reads
+ * back is one this run wrote. Each directory `workspace.provision` lists is
+ * linked in from the target, writable: a leg that writes under a provisioned
+ * directory writes into the target's own directory. Story 1.7 replaces the
+ * copy with the pristine and mutated workspaces AD-8 describes, whose
+ * provisioned links are read-only.
  */
 
 'use strict';
@@ -194,28 +198,159 @@ function recordingPort({ port, registry, runDirectory }) {
   return { port: { probe }, observations, calls: () => sequence, fault: () => fault };
 }
 
+/** A target root the legs cannot run in a faithful, contained copy of; `preflight` refuses it with exit 12. */
+class CopyRefusal extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'CopyRefusal';
+  }
+}
+
+/** Whether `candidate` is `root` or a path inside it. */
+function isInside(root, candidate) {
+  const relative = path.relative(root, candidate);
+  return relative === '' || (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
+}
+
+/** The real path of `candidate`, whose missing tail (a dangling link's target) is joined to the real path of the part that exists. */
+function realPathLoosely(candidate) {
+  const missing = [];
+  let existing = candidate;
+  for (;;) {
+    try {
+      return path.join(fs.realpathSync(existing), ...missing);
+    } catch {
+      const parent = path.dirname(existing);
+      if (parent === existing) return candidate;
+      missing.unshift(path.basename(existing));
+      existing = parent;
+    }
+  }
+}
+
+/** Every symbolic link under `directory`, without following one. */
+function symbolicLinksUnder(directory) {
+  const links = [];
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    const full = path.join(directory, entry.name);
+    if (entry.isSymbolicLink()) links.push(full);
+    else if (entry.isDirectory()) links.push(...symbolicLinksUnder(full));
+  }
+  return links;
+}
+
+/**
+ * Points every symbolic link the copy holds at the copy.
+ *
+ * A link is copied verbatim, then resolved against the target tree it came
+ * from: a link whose target lies inside `launch.root` is rewritten as a
+ * relative link to the same place in the copy, so a write through it lands in
+ * the copy; a link whose target lies outside `launch.root` is refused, since a
+ * leg writing through it would write into the adopter's files.
+ */
+function containLinks(root, copy) {
+  for (const link of symbolicLinksUnder(copy)) {
+    const relative = path.relative(copy, link);
+    const source = path.join(root, relative);
+    const target = realPathLoosely(path.resolve(path.dirname(source), fs.readlinkSync(source)));
+    if (!isInside(root, target)) {
+      throw new CopyRefusal(
+        `${relative.split(path.sep).join('/')} in launch.root is a symbolic link to ${target}, outside launch.root; a leg writing through it would write outside the disposable copy, so provision its directory or remove the link`,
+      );
+    }
+    const contained = path.relative(path.dirname(link), path.join(copy, path.relative(root, target))) || '.';
+    if (fs.readlinkSync(link) === contained) continue;
+    const kind = fs.existsSync(target) && fs.statSync(target).isDirectory() ? 'dir' : 'file';
+    fs.unlinkSync(link);
+    fs.symlinkSync(contained, link, kind);
+  }
+}
+
 /**
  * A temp copy of the target root for the legs to run in: everything but `.git`,
  * the provisioned directories (linked in from the target instead) and the
- * evaluation's own `runs/`.
+ * evaluation's own `runs/`, with every symbolic link pointing into the copy.
  *
+ * Refused with a `CopyRefusal`: a root that is not a directory, a temp
+ * directory inside the root (the copy would copy itself), an entry that is
+ * neither a file, a directory nor a link (a FIFO, a socket, a device), and a
+ * link out of the root. A copy that fails part way is removed before the error
+ * leaves this function.
+ *
+ * @param {object} options
+ * @param {string} options.root the target root, by its real path
+ * @param {string[]} options.provision `workspace.provision`
+ * @param {string} options.runsDirectory the evaluation's `runs/`, by its real path
  * @returns {{ directory: string, root: string }} the temp directory to remove, and the copy's root
  */
 function stageCopy({ root, provision, runsDirectory }) {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-evaluate-copy-'));
-  const copy = path.join(directory, 'target');
-  const provisioned = new Set(provision.map((entry) => path.join(root, ...entry.replace(/\/+$/, '').split('/'))));
-  fs.cpSync(root, copy, {
-    recursive: true,
-    filter: (source) => source !== path.join(root, '.git') && source !== runsDirectory && !provisioned.has(source),
-  });
-  for (const target of provisioned) {
-    if (!fs.existsSync(target)) continue;
-    const link = path.join(copy, path.relative(root, target));
-    fs.mkdirSync(path.dirname(link), { recursive: true });
-    fs.symlinkSync(target, link);
+  if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) {
+    throw new CopyRefusal(`launch.root ${root} is not a directory`);
   }
-  return { directory, root: copy };
+  const temp = fs.realpathSync(os.tmpdir());
+  if (isInside(root, temp)) {
+    throw new CopyRefusal(
+      `the temp directory ${temp} is inside launch.root ${root}, so the copy would copy itself; point TMPDIR outside the evaluated project`,
+    );
+  }
+  const directory = fs.mkdtempSync(path.join(temp, 'tea-evaluate-copy-'));
+  try {
+    const copy = path.join(directory, 'target');
+    const provisioned = new Set(provision.map((entry) => path.join(root, ...entry.replace(/\/+$/, '').split('/'))));
+    fs.cpSync(root, copy, {
+      recursive: true,
+      verbatimSymlinks: true,
+      filter: (source) => {
+        if (source === path.join(root, '.git') || source === runsDirectory || provisioned.has(source)) return false;
+        const stats = fs.lstatSync(source);
+        if (!stats.isFile() && !stats.isDirectory() && !stats.isSymbolicLink()) {
+          throw new CopyRefusal(
+            `${path.relative(root, source).split(path.sep).join('/')} in launch.root is neither a file, a directory nor a symbolic link (a FIFO, a socket or a device), which the disposable copy cannot hold; remove it or provision its directory`,
+          );
+        }
+        return true;
+      },
+    });
+    containLinks(root, copy);
+    for (const target of provisioned) {
+      if (!fs.existsSync(target)) continue;
+      const link = path.join(copy, path.relative(root, target));
+      fs.mkdirSync(path.dirname(link), { recursive: true });
+      fs.symlinkSync(target, link, 'dir');
+    }
+    return { directory, root: copy };
+  } catch (error) {
+    fs.rmSync(directory, { recursive: true, force: true });
+    throw error;
+  }
+}
+
+/**
+ * Removes the staged copy when the process is interrupted, since a signal ends
+ * the process before any `finally` runs: aborts the in-flight leg (the adapter
+ * kills its runner, whose supervisor then stops the agent's process group),
+ * removes the copy, and raises the same signal again with the default action,
+ * so the caller sees the process end by that signal.
+ *
+ * @returns {() => void} removes the handlers
+ */
+function cleanUpOnSignal(directory, controller) {
+  const signals = ['SIGINT', 'SIGTERM', 'SIGHUP'];
+  const handlers = new Map();
+  const release = () => {
+    for (const [name, handler] of handlers) process.removeListener(name, handler);
+  };
+  for (const name of signals) {
+    const handler = () => {
+      release();
+      controller.abort();
+      fs.rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      process.kill(process.pid, name);
+    };
+    handlers.set(name, handler);
+    process.on(name, handler);
+  }
+  return release;
 }
 
 /** `runs/`, created with a `.gitignore` that ignores everything in it, so no run lands in the adopter's commits (AD-12). */
@@ -259,18 +394,27 @@ async function runPreflightCommand(folder, { env = process.env, log = () => {} }
     });
   }
 
-  const root = path.resolve(folder, evaluation.launch.root);
+  const root = realPathLoosely(path.resolve(folder, evaluation.launch.root));
   const provision = evaluation.workspace?.provision ?? [];
   const runsDirectory = ensureRunsDirectory(folder);
-  const staged = stageCopy({ root, provision, runsDirectory });
+  let staged;
   try {
-    return await runInCopy({ folder, evaluation, copyRoot: staged.root, runsDirectory, env, log });
+    staged = stageCopy({ root, provision, runsDirectory });
+  } catch (error) {
+    if (!(error instanceof CopyRefusal)) throw error;
+    return new PreflightOutcome({ stage: 'launch', exitCode: 12, message: error.message });
+  }
+  const controller = new AbortController();
+  const release = cleanUpOnSignal(staged.directory, controller);
+  try {
+    return await runInCopy({ folder, evaluation, copyRoot: staged.root, runsDirectory, env, log, signal: controller.signal });
   } finally {
+    release();
     fs.rmSync(staged.directory, { recursive: true, force: true });
   }
 }
 
-async function runInCopy({ folder, evaluation, copyRoot, runsDirectory, env, log }) {
+async function runInCopy({ folder, evaluation, copyRoot, runsDirectory, env, log, signal }) {
   const registry = registryFromEvaluation(evaluation, { root: copyRoot });
   const problems = registry.targetProblems();
   if (problems.length > 0) {
@@ -312,7 +456,7 @@ async function runInCopy({ folder, evaluation, copyRoot, runsDirectory, env, log
       probes: [],
       runId: invocationId,
       port: recorder.port,
-      signal: new AbortController().signal,
+      signal,
       // Leg progress only. The library's closing line reports the verdict this
       // command discards, and printing it would name a second verdict source.
       sink: (diagnostic) => {
@@ -364,4 +508,4 @@ async function runInCopy({ folder, evaluation, copyRoot, runsDirectory, env, log
   });
 }
 
-module.exports = { PreflightOutcome, newInvocationId, recordingPort, runPreflightCommand, stageCopy };
+module.exports = { CopyRefusal, PreflightOutcome, newInvocationId, recordingPort, runPreflightCommand, stageCopy };

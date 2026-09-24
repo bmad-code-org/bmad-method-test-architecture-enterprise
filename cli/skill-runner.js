@@ -31,10 +31,12 @@
  *   tea-skill-runner --skill-root skills/my-skill --agent custom --agent-cmd ./my-runner < prompt.txt
  *
  * Exit codes: 0 the agent ran to completion; 2 a usage error (a missing or
- * malformed option, an empty prompt, a skill root outside the working
- * directory); 3 to 6 the infrastructure classes of `cli/lib/runner-exit-codes.js`
- * (configuration, transport, timeout, parser). An unexpected error is reported
- * as transport (4), so no failure reaches the caller as Node's own exit 1. A
+ * malformed option, an empty prompt or one that is not UTF-8, a skill root
+ * outside the working directory); 3 to 6 the infrastructure classes of
+ * `cli/lib/runner-exit-codes.js` (configuration, transport, timeout, parser).
+ * An unexpected error, and a standard output closed before the agent's reply
+ * was written, are reported as transport (4), so no failure reaches the
+ * caller as Node's own exit 1. A
  * registry entry for this runner declares `infrastructureExitCodes` 3 to 6
  * (`INFRASTRUCTURE_EXIT_CODES`), so exit 2 reaches CI as a wiring defect.
  */
@@ -74,11 +76,23 @@ function collect(value, previous) {
   return [...previous, value];
 }
 
+/**
+ * The prompt, decoded strictly: bytes that are not UTF-8 are a usage error,
+ * since a lossy decode would hand the agent replacement characters in place of
+ * what the caller sent. A byte order mark is kept, so the agent receives the
+ * caller's bytes unchanged.
+ */
 function readPrompt() {
+  let bytes;
   try {
-    return fs.readFileSync(0, 'utf8');
+    bytes = fs.readFileSync(0);
   } catch (error) {
     throw new RunnerExit('usage', `could not read the prompt from standard input: ${error.message}`);
+  }
+  try {
+    return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
+  } catch {
+    throw new RunnerExit('usage', 'the prompt on standard input is not valid UTF-8');
   }
 }
 
@@ -245,7 +259,18 @@ function main(argv) {
   }
 }
 
+/**
+ * A standard output the reader closed early (`| head`) raises EPIPE after
+ * `main` has returned. The agent's reply did not reach the caller, which is
+ * transport (4); left unhandled it would crash the runner with Node's exit 1.
+ */
+function onStdoutError(error) {
+  process.stderr.write(`${NAME}: could not write the agent's output: ${error.message}\n`);
+  process.exitCode = EXIT_CODES['environment-transport'];
+}
+
 if (require.main === module) {
+  process.stdout.on('error', onStdoutError);
   process.exitCode = main(process.argv);
 }
 

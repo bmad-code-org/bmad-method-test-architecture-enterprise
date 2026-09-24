@@ -33,13 +33,25 @@ class EngineStageError extends Error {
 const MAX_STAGE_OUTPUT_BYTES = 64 * 1024 * 1024;
 
 /**
- * The exits an eval-quality stage documents, which pass through: 0 success,
- * 2 FAIL, 3 Invalid or a failed preflight, 4 a structural failure, 5 a runtime
- * fault, 64 usage. Exit 1 is left out: it is a CONCERNS promoted by `--strict`,
- * which `tea-evaluate` never passes, so a 1 is a crashed process with no verdict
- * behind it. Any code outside the set is reported as a stage that could not run.
+ * The exits each eval-quality stage documents, which pass through; any other
+ * code is reported as a stage that could not run.
+ *
+ * eval-quality's exit table (`EXIT_CODE_TABLE` in its `dist/cli/render.js`,
+ * and `exitCodeFor` in `dist/cli/exit-codes.js`): 0 success, 1 a CONCERNS
+ * promoted by `--strict`, 2 FAIL, 3 Invalid or a failed preflight, 4 a
+ * structural failure, 5 a runtime fault, 64 usage. Only `score` reaches a
+ * verdict, so 2 is a `score` exit alone, and only `preflight` and `score` can
+ * be Invalid, so 3 is theirs. Exit 1 is left out everywhere: it is a CONCERNS
+ * promoted by `--strict`, which `tea-evaluate` never passes, so a 1 is a
+ * crashed process with no verdict behind it. The stages are string keys, since
+ * `test:evaluate-boundaries` forbids the stage names as identifiers.
  */
-const DOCUMENTED_EXITS = new Set([0, 2, 3, 4, 5, 64]);
+const DOCUMENTED_EXITS = new Map([
+  ['compile', new Set([0, 4, 5, 64])],
+  ['seal', new Set([0, 4, 5, 64])],
+  ['preflight', new Set([0, 3, 4, 5, 64])],
+  ['score', new Set([0, 2, 3, 4, 5, 64])],
+]);
 
 /**
  * Spawns `eval-quality <stage> ...args` and records the call.
@@ -88,9 +100,9 @@ function runEngineStage(stage, args, { runDirectory, env = process.env, log = ()
   // A stage killed by a signal has no exit code of its own, and none is made up
   // for it here.
   if (exitCode === null) throw new EngineStageError(`eval-quality ${stage} was killed by ${result.signal} and reported no exit code`);
-  if (!DOCUMENTED_EXITS.has(exitCode)) {
+  if (!DOCUMENTED_EXITS.get(stage)?.has(exitCode)) {
     throw new EngineStageError(
-      `eval-quality ${stage} exited ${exitCode}, which is no exit the CLI documents; its output is in ${recordPath}`,
+      `eval-quality ${stage} exited ${exitCode}, which is no exit the CLI documents for ${stage}; its output is in ${recordPath}`,
     );
   }
   return { exitCode, stdout: record.stdout, stderr: record.stderr, recordPath };

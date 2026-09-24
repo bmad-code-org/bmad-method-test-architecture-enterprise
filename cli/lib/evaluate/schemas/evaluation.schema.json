@@ -75,7 +75,7 @@
           "enum": ["git", "copy"]
         },
         "provision": {
-          "description": "Relative directories linked read-only into the copy (for example node_modules). A mutation may not target a file inside one. Each is POSIX and relative, with no drive letter, no \".\" or \"..\" segment, no empty segment, and no control character (C0, DEL or C1), a line or paragraph separator, or a bidirectional formatting character, so none can name the whole target; a trailing slash is allowed.",
+          "description": "Relative directories linked into the copy from the target (for example node_modules), so the copy shares them with the target: a write under one lands in the target until a later Evaluate release makes the links read-only. A mutation may not target a file inside one. Each is POSIX and relative, with no drive letter, no \".\" or \"..\" segment, no empty segment, and no control character (C0, DEL or C1), a line or paragraph separator, or a bidirectional formatting character, so none can name the whole target; a trailing slash is allowed.",
           "type": "array",
           "uniqueItems": true,
           "items": {

@@ -76,7 +76,7 @@ context:
   The existing per-workflow runners stay: each is a registry target of TeA's own harness and a declaration source for `tools/generate-contracts.js`.
 - **The launch.** Story 1.6 is the first story to launch a target, so it gives `launch` its shape: `root` (the evaluated project relative to the evaluation folder, `..` allowed) and `skillRoot` (relative to `root`, required by an `if`/`then` when `targetKind` is `skill`).
   `check` does not test that either exists, because `check` runs over temp copies whose relative root lands elsewhere; `preflight` runs the registry's `targetProblems` and the runner reports a missing skill with exit 3.
-- **Preflight.** `cli/lib/evaluate/preflight.js` runs `check`, refuses a non-`cli` interface or a probe that seeds a defect with exit 12, copies `launch.root` into a temp directory (without `.git` and the evaluation's `runs/`, provisioned directories linked in, removed in `finally`), refuses an unlaunchable registry target in the copy with exit 12, copies `contract.json` into the run, runs `compile` and `seal` over that copy through `engine-cli.js`, drives `runPreflight` through a recording port over `registry.createProbePort({ cwd: copy })`, and passes through the exit of the CLI's `preflight`.
+- **Preflight.** `cli/lib/evaluate/preflight.js` runs `check`, refuses a non-`cli` interface or a probe that seeds a defect with exit 12, copies `launch.root` into a temp directory (without `.git` and the evaluation's `runs/`, provisioned directories linked in writable, removed in `finally` and on an interrupting signal; after final review round 1, symbolic links are contained and a link out of the root, a special file or a temp directory inside the root is refused), refuses an unlaunchable registry target in the copy with exit 12, copies `contract.json` into the run, runs `compile` and `seal` over that copy through `engine-cli.js`, drives `runPreflight` through a recording port over `registry.createProbePort({ cwd: copy })`, and passes through the exit of the CLI's `preflight`.
   `runs/` gets a `.gitignore` holding `*` on first use.
   The recording port adds the host's values for the registry entry's `environmentKeys` beneath the leg's own environment (the command-line adapter hands a child only PATH and the request's keys) and persists each request with its environment reduced to keys.
   Every injected value of eight characters or more is scrubbed from the observation before it is written or returned.
@@ -87,7 +87,7 @@ context:
   A `runPreflight` error with no recorded fault falls through to the CLI only when no leg reached the port and it is a planning refusal (`StructuralFailure`, or a `schema-parse-failure` or `schema-version-mismatch` fault); anything else exits 12.
 - **Probe list.** A probe reaches the CLI only in eval-quality's full `Probe` shape, whose every qualification route requires evidence references that exist only after the arms run (Stories 1.7 and 1.8).
   The preflight plan reads nothing from a clean control, and a seeded probe's witness leg must run against the mutated copy Story 1.7 builds, so `probes.json` is `[]` and an evaluation holding a seeded probe is refused with exit 12 before any leg.
-- **Engine CLI.** `engine-cli.js` spawns `engineCliPath()` (a `.js` path under this process's Node), records the executable, whether `TEA_EVALUATE_ENGINE_CLI` substituted it, argv, exit code, stdout and stderr in `engine/<stage>.json` (also when the spawn fails), announces a substitution, and raises `EngineStageError` (exit 12) when the stage cannot start, dies by a signal, or exits with a code outside the CLI's documented 0, 2, 3, 4, 5 and 64.
+- **Engine CLI.** `engine-cli.js` spawns `engineCliPath()` (a `.js` path under this process's Node), records the executable, whether `TEA_EVALUATE_ENGINE_CLI` substituted it, argv, exit code, stdout and stderr in `engine/<stage>.json` (also when the spawn fails), announces a substitution, and raises `EngineStageError` (exit 12) when the stage cannot start, dies by a signal, or exits with a code eval-quality does not document for that stage (after final review round 1: `compile` and `seal` 0, 4, 5, 64; `preflight` 0, 3, 4, 5, 64; `score` 0, 2, 3, 4, 5, 64).
   `cli/evaluate.js` maps any other error that stops a preflight to 12 and escapes every printed line.
 - **Check rules for the runner.** `skill-root` also refuses a runner leg or plan step whose `skill-root` is not `launch.skillRoot`, and a skill root inside a provisioned directory; `skill-runner` refuses a runner entry (target basename `tea-skill-runner` or `skill-runner.js`) missing 3 to 6, and a runner leg or plan step with no literal `timeout-ms` below the entry's `maxElapsedMs`.
   The preflight fixture's target is now the stub project (`launch.root: ../stub-agent`), with the runner registered by its bin name, which the test puts on PATH the way `npm exec` does.
@@ -124,6 +124,9 @@ Review round (each fix undone once, the named case failing):
 - 2026-09-24: epics.md Story 1.6, the removed-entry criterion, amended: a registry holds at least one entry, so the test replaces the stub's entry with one for another executable (and, after review, one under another interface).
 - 2026-09-24: epics.md Story 1.6 gains a criterion: the probe list the CLI receives holds no probe that seeds a defect, and such an evaluation exits 12 before any leg, because a `Probe` cannot be materialized before its qualification evidence exists and a witness leg needs Story 1.7's mutated copy.
 - 2026-09-24 (review round 1): epics.md Story 1.6 gains a criterion: legs run in a temp copy of `launch.root`, and `check` ties every runner leg to `launch.skillRoot` and to a `--timeout-ms` below its entry's ceiling. The first build ran legs in `launch.root` and never compared the legs' skill root with the launch's.
+
+- 2026-09-24 (final review round 1): epics.md Story 1.6, the copy criterion, amended: the provisioned directories are linked in writable, so the claim that a leg writes nothing into the adopter's tree was false for them; the criterion now says a write under the copied tree stays in the copy, symbolic links included, and provisioned directories stay writable until Story 1.7's read-only provisioning (coordinator decision F2).
+- 2026-09-24 (final review round 1): epics.md Story 1.6, the no-denial criterion, and test-design-epic-1.md's "No authorization denial" row amended: the denial scan names `observations/`, `faults/`, `observations.json` and `preflight-verdict.json`, the files the test reads, where both said "anywhere in the run" (W1).
 
 ## Review Triage Log
 
@@ -176,6 +179,60 @@ C = code review, T = test review, A = adversarial.
 | T10, T11 | low | crash case asserted only the code; an unguarded log read | fixed |
 | T12 | low | circular expectation in `test-doc-claim-sources.js` | fixed: a literal list plus a declared-codes check |
 
+## Final review round 1
+
+Three opus reviewers (compliance, adversarial by execution, test quality) reviewed head 4662ab3.
+Each finding was verified against the code before acting; every fix below has a test that fails when the fix is undone.
+
+| ID | Finding | Outcome |
+| --- | --- | --- |
+| F1 | `cpSync` rewrote relative symbolic links as absolute links into the adopter's tree | fixed: `verbatimSymlinks: true`, then `containLinks` re-points every link whose real target is inside `launch.root` at the same place in the copy and refuses a link out of it (exit 12); tests: a relative skill-root link passes, writing through a relative or an absolute link leaves the target's file untouched, a link out of the root exits 12 |
+| F2 | provisioned directories linked writable while code, schema, docs, AC and CHANGELOG said read-only or "writes nothing" | fixed per the coordinator's decision: every claim now says the copy links provisioned directories to the target's own directory, writable until Story 1.7; `check.js` messages, the schema description, the `preflight.js` header, `docs/reference/tea-evaluate-cli.md`, the epics AC (Spec Change Log) and CHANGELOG |
+| F3a | `mkdtempSync` outside `try`; a `cpSync` throw left the copy, inside the adopter's tree when `TMPDIR` is | fixed: `stageCopy` removes its directory on any error, and a temp directory inside `launch.root` is refused (exit 12) naming `TMPDIR`; tests: `TMPDIR` inside the root exits 12 with nothing left there, a refused copy leaves the private temp directory empty |
+| F3b | a FIFO in the target crashed `cpSync` with a partial copy | fixed: the copy filter refuses any entry that is not a file, directory or link, naming it (exit 12); test with `mkfifo` (skipped on Windows) |
+| F3c | `SIGINT`/`SIGTERM` mid-leg left the copy, the runner and the agent | fixed: `cleanUpOnSignal` aborts the leg's controller (now passed to `runPreflight`), removes the copy and re-raises the signal; test: `SIGTERM` mid-leg ends the command by `SIGTERM`, the private temp directory is empty, and the agent's child is gone |
+| F4 | `--evaluation` through a symbolic link resolved `launch.root` against the link's parents | fixed: `resolveEvaluationFolder` returns the folder's real path, and `preflight` realpaths `launch.root`; test: a link beside a decoy project runs the real project's skill |
+| F5 | one exit set for every stage | fixed: per-stage sets from eval-quality 4.1.0's `EXIT_CODE_TABLE` and `exitCodeFor`: `compile`/`seal` 0, 4, 5, 64; `preflight` 0, 3, 4, 5, 64; `score` 0, 2, 3, 4, 5, 64; tests: the shim's preflight exit 2 and compile exit 3 both give 12 |
+| F6 | EPIPE on the runner's stdout crashed it with exit 1 | fixed: a stdout error handler reports it and exits 4 (transport); test: a reader that closes after the first chunk of a 4 MB reply sees exit 4 |
+| F7 | the prompt was decoded lossily | fixed: strict `TextDecoder` (BOM kept), invalid UTF-8 exits 2; docs say the prompt passes unchanged after the preamble; test with bytes `ff fe` |
+| F8 | `runAgent` killed only the direct child on timeout (pre-existing, every runner) | fixed: `cli/lib/agent-supervisor.js` runs between `spawnSync` and the agent, starts the agent as a process-group leader, and stops the group with `SIGTERM` then `SIGKILL` after 2 s on timeout, on the runner's death (parent polling), and after the agent exits; it forwards `SIGINT`/`SIGTERM`/`SIGHUP` so a terminal Ctrl-C still reaches the agent, and reports the outcome on fd 3; Windows falls back to the direct child; exit codes unchanged. A plain detached `spawnSync` was rejected: it takes the agent out of the terminal's foreground group, so Ctrl-C would kill the runner and leave the agent running. Tests: a child the agent started dies with a 500 ms timeout and with a `SIGKILL`ed runner |
+| T1 | no case drifting only the plan step's options | fixed: two `check` cases, plan-step `skill-root` and plan-step `timeout-ms` alone, exit 10 with their rule tags |
+| T2 | planning-refusal fallthrough untested | fixed: `test/fixtures/evaluate/engine-wrapped/` preloads ESM hooks that wrap eval-quality's `runPreflight`; a `StructuralFailure` before any leg reaches the CLI and exits with its code, a plain `Error` after one leg exits 12 with no `engine/preflight.json` |
+| T3 | copy exclusions and provision links never ran | fixed: a project holding `.git/`, a provisioned `vendor/` and the evaluation folder with an earlier `runs/` entry, `launch.root` `../..`; the stub's `STUB-LIST` shows no `.git`, no `runs/`, and `vendor@` |
+| T4 | the copy check read the shared `os.tmpdir()` | fixed: a private `TMPDIR`/`TMP`/`TEMP`, asserted empty after |
+| T5 | the copy check wrote into the tracked stub fixture on regression | fixed: every case that writes or changes the target runs against a temp copy of the stub project |
+| T6 | environment precedence untested | fixed: `witness-beta` declares its own `TEA_STUB_SECRET` and must echo it, while `witness-alpha` echoes the scrubbed host value |
+| T7 | `substituted` unasserted | fixed: `false` over the installed CLI, `true` under the shim |
+| W1 | "anywhere in the run" overstated the denial scan | fixed in wording: epics.md and test-design-epic-1.md name the four scanned locations (Spec Change Log) |
+
+Found on the way: the test's temp directories are now created under the real path of `os.tmpdir()`, since `launch.root` resolves from the folder's real path (F4) and macOS's `/var` is a link.
+`docs/reference/tea-test-review-cli.md` said a timeout sends `SIGTERM`; it now describes the group stop, since F8 changes the shared `runAgent`.
+An em dash in `run-agent.js`'s header was replaced while editing it.
+`eval-quality.config.json`'s doc-claims foreign symbols gain `SIGINT` and `SIGHUP`, which the reference now names beside `SIGTERM` and `SIGKILL`.
+The per-stage exit sets are a `Map` keyed by strings, since `test:evaluate-boundaries` forbids `seal` as an identifier or key under `cli/`; the first full gate caught an object literal.
+Not fixed here: eval-quality's command-line adapter kills only the runner at `maxElapsedMs`; F8's parent polling now stops the agent's group in that case, and the adapter-side process-group kill stays with eval-quality.
+
+### Final review round 1 revert checks
+
+Each fix was undone once in the working tree, `node test/test-evaluate-preflight.js` run, the named failures observed, and the fix restored.
+
+- F1 (`verbatimSymlinks` and `containLinks` removed): "preflight whose skill root is a relative link inside the target exited 3; expected 0", "a leg wrote through a relative link into the target's data/victim.txt", the same for an absolute link, and "preflight over a link out of launch.root exited 0; expected 12". Removing `verbatimSymlinks` alone passes, since `containLinks` also re-points the absolute links `cpSync` writes.
+- F3a (temp-inside check and cleanup removed): "a temp copy was left inside launch.root: tea-evaluate-copy-…", "the refused copy was left in the temp directory", and the FIFO case's leftover; cleanup alone removed: the two leftover checks.
+- F3b (special-file refusal removed): "the FIFO refusal does not name the entry" (the crash still exits 12 through the catch-all).
+- F3c (signal handlers not installed): "the interrupted preflight left its copy: tea-evaluate-copy-…" and "a process the interrupted leg started (pid …) outlived the preflight".
+- F4 (lexical folder and root): "preflight through a link ran the target beside the link: 'skill: decoy-skill'".
+- F5 (the old single set): "preflight whose preflight exits 2 … exited 2; expected 12" and "preflight whose compile exits 3 … exited 3; expected 12".
+- F6 (stdout handler removed): "the runner whose reader closed early exited 1 (null); expected 4".
+- F7 (lossy decode): "a prompt that is not UTF-8 exited 0; expected 2".
+- F8 (`run-agent.js` at 4662ab3): "a child the agent started (pid …) outlived the runner's timeout", "… outlived its runner's SIGKILL", and "a process the interrupted leg started … outlived the preflight".
+- T1 (plan steps dropped from `optionSetsByOperation`): both plan-only cases "exited 0; expected 10".
+- T2 (fallthrough never): "a plan refused before any leg did not reach the CLI's preflight (exit 12)"; (fallthrough always): "legs that stopped after one exited 3; expected 12" and "still asked the CLI for a verdict".
+- T3 (`.git` exclusion removed): "the copy holds .git"; (`runs/` exclusion removed): "the copy holds the evaluation's own runs/"; (provisioned directory copied): "the provisioned directory is not a symbolic link in the copy".
+- T4 (copy not removed in `finally`): "the disposable copy of the target root was left in the temp directory".
+- T5 (legs run in `launch.root` itself): seven failures, "a leg wrote into the target root" among them, and `git status` showed no file written into `test/fixtures/evaluate/stub-agent/`.
+- T6 (host value over the leg's): "the leg that declares its own value received '[redacted]'".
+- T7 (`substituted` hard-coded false): "the preflight call under the shim is not recorded as substituted: true".
+
 ## Verification
 
 **Commands:**
@@ -185,3 +242,11 @@ C = code review, T = test review, A = adversarial.
 - `npm run docs:validate-links` -- exit 0
 - `npm run docs:build` -- exit 0
 - the Build Rules engine check -- exit 0 at the start and at the end; `git diff -- package.json package-lock.json` shows no `file:` or `.tgz` spec
+
+Final review round 1 (after the fixes):
+
+- `npm test` -- exit 0 (the first run exit 1: `test:evaluate-boundaries` on a `seal` object key in `engine-cli.js`, then `test:doc-claims` on `SIGINT` and `SIGHUP`; both fixed)
+- `npm run test:release-metadata` -- exit 0
+- `npm run docs:validate-links` -- exit 0
+- `npm run docs:build` -- exit 0
+- the Build Rules engine check -- exit 0

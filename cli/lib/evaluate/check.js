@@ -359,7 +359,7 @@ function checkSkillRunner(report, evaluation, contract, provision) {
         report.add(
           MANIFEST_NAME,
           'skill-root',
-          `launch.skillRoot ${JSON.stringify(skillRoot)} is inside the provisioned directory ${JSON.stringify(directory)}, which the disposable copy links read-only, so no mutation of the skill can be planted`,
+          `launch.skillRoot ${JSON.stringify(skillRoot)} is inside the provisioned directory ${JSON.stringify(directory)}, which the disposable copy links to the target's own directory, so a mutation of the skill would be planted in the target itself`,
         );
       }
     }
@@ -447,7 +447,7 @@ function checkMutations(report, folder, context, provision, skillRoot) {
           report.add(
             relative,
             'provisioned-target',
-            `targetArtifact ${JSON.stringify(mutation.targetArtifact)} is inside the provisioned directory ${JSON.stringify(directory)}, which the disposable copy links read-only`,
+            `targetArtifact ${JSON.stringify(mutation.targetArtifact)} is inside the provisioned directory ${JSON.stringify(directory)}, which the disposable copy links to the target's own directory, so the mutation would be planted in the target itself`,
           );
         }
       }

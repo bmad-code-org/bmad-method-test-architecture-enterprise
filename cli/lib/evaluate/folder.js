@@ -4,7 +4,8 @@
  * The flag names either the folder or its `evaluation.json`. Nothing else is
  * consulted: no default folder and no project configuration, so an evaluation
  * that does not resolve is a wiring defect the caller fixes (exit 64), never a
- * guess this runtime makes.
+ * guess this runtime makes. The folder is returned by its real path, so a link
+ * to it resolves the folder's own relative paths the same way as the folder.
  */
 
 'use strict';
@@ -36,7 +37,11 @@ function resolveEvaluationFolder(value, cwd = process.cwd()) {
   if (!isFile(manifestPath)) {
     return { ok: false, reason: `--evaluation ${value} does not resolve: no ${MANIFEST_NAME} at ${manifestPath}` };
   }
-  return { ok: true, folder: path.dirname(manifestPath), manifestPath };
+  // The folder by its real path: `launch.root` and every other path relative to
+  // the folder resolve against where the folder is, never against the parents
+  // of a symbolic link that reached it.
+  const folder = fs.realpathSync(path.dirname(manifestPath));
+  return { ok: true, folder, manifestPath: path.join(folder, MANIFEST_NAME) };
 }
 
 module.exports = { MANIFEST_NAME, resolveEvaluationFolder };
