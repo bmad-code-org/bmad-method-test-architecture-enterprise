@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:tea:evaluate:schema:evaluator-conditions",
   "title": "policy/evaluator-conditions.json",
-  "description": "The committed fixed conditions of every run of an evaluation (AD-7): the model a run uses, which tea-evaluate run writes into each run's EvaluatorConfiguration beside the sealedBriefDigest it takes from seal. An evaluation whose target and evaluator use no model leaves this file out, and the run records modelSnapshot none and a systemPromptDigest over the empty byte string. The tea-evaluate runtime owns this schema.",
+  "description": "The committed fixed conditions of every run of an evaluation (AD-7): the model a run uses (and, when the contract declares a rubric, the model its judge uses), which tea-evaluate run writes into each run's EvaluatorConfiguration beside the sealedBriefDigest it takes from seal. An evaluation whose target and evaluator use no model leaves this file out, and the run records modelSnapshot none and a systemPromptDigest over the empty byte string. The tea-evaluate runtime owns this schema.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schemaVersion", "modelSnapshot", "systemPromptDigest"],
@@ -20,6 +20,19 @@
       "description": "eval-quality's digestBytes over the system prompt that model runs under: sha256: and 64 lowercase hexadecimal characters.",
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "judge": {
+      "description": "The rubric judge's fixed condition, required when the contract declares a rubric: the model snapshot evaluation.json's judge runs, which each run records in its EvaluatorConfiguration's judgeConfiguration beside the digest of the runtime's judge instruction template.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["modelSnapshot"],
+      "properties": {
+        "modelSnapshot": {
+          "description": "The judge's model, as its vendor names the exact snapshot.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
     }
   }
 }

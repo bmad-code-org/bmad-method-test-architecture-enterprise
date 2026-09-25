@@ -32,8 +32,8 @@
  * - `trials`: `evaluation.json`'s `trials` is below the scoring policy's `minimumTrialCount`, so every trial
  *   set a run seals would fall short of the minimum the scores read (AD-7).
  * - `arms`: a probe needs an arm `evaluation.json`'s `arms` does not declare (a clean control the `clean`
- *   arm, a seeded probe on the `controlled-mutation` route the `mutated` arm), or `arms` declares one no
- *   probe runs on.
+ *   arm, a probe on the `controlled-mutation` route the `mutated` arm, one on the `historical` route the
+ *   `historical` arm, a gameability probe the `gameability` arm), or `arms` declares one no probe runs on.
  * - `mutation-route`: a probe on the `controlled-mutation` route seeds no defect.
  * - `evaluator-conditions`: a registry entry runs `tea-skill-runner`, which always runs an agent, and the
  *   folder has no `policy/evaluator-conditions.json`, or one that declares `modelSnapshot` `none` (NFR8).
@@ -41,10 +41,22 @@
  *   exit codes, or a leg or plan step for it carries no literal `timeout-ms` below the entry's
  *   `maxElapsedMs`: under the ceiling the runner reports its own timeout as exit 5, while at the
  *   ceiling the adapter kills the runner's process group, records a fault, and `preflight` exits 12.
+ * - `gameability` (Story 1.9): a probe on the `gameability` route is not a `gameability`-class probe
+ *   with `expectedClean: false` and no defects (it launches nothing, so nothing can witness a defect),
+ *   its `naiveOracle` is an oracle of its own behavior (the naive oracle belongs to another behavior),
+ *   or its degenerate response, `corpus/gameability/<probeId>.json`, is absent, fails its schema
+ *   (`schema`), answers a plan step the contract does not declare or leaves one unanswered, or exits
+ *   a code the step's registry entry declares as infrastructure.
+ * - `historical` (Story 1.9): a probe on the `historical` route does not carry `expectedClean: false`, seeds
+ *   no defect, or seeds one whose `source` is not `natural`, the only source eval-quality admits there.
+ * - `judge` (Story 1.9): the contract declares a rubric and `evaluation.json` has no `judge`, or
+ *   `policy/evaluator-conditions.json` names no `judge.modelSnapshot`; the contract declares no rubric and
+ *   either file carries a `judge` block, which nothing would use; or `judge` names an agent adapter TeA
+ *   does not have, the `custom` adapter with no `agentCommand`, or a `model` its adapter refuses.
  *
  * Beside them, `contract.json` must exist (`missing-file`), as must
- * `policy/scoring-policy.json` when a probe takes the `controlled-mutation`
- * route, since its `reExecutionCap` bounds the rollback proof and its
+ * `policy/scoring-policy.json` when a probe takes the `controlled-mutation`,
+ * `historical` or `gameability` route, since its `reExecutionCap` bounds the rollback proof and its
  * `regexMatchStepBudget` bounds the evaluator (a policy present is always
  * held to eval-quality's scoring-policy schema, `engine-schema`), a
  * `policy/evaluator-conditions.json` that is present must meet the runtime's
@@ -69,6 +81,8 @@ const { engineSchemaPath, loadEngine, schemaVersionProblems } = require('./engin
 const { MANIFEST_NAME } = require('./folder');
 const { addFormats } = require('./formats');
 const { repeatedPairs } = require('./registry');
+const { AGENT_ADAPTERS, resolveModel } = require('../agent-adapters');
+const { degenerateResponsePath } = require('./gameability');
 
 /** The skill runner's infrastructure exit codes (`cli/skill-runner.js`), which a registry entry for it must declare. */
 const SKILL_RUNNER_INFRASTRUCTURE_CODES = [3, 4, 5, 6];
@@ -83,10 +97,14 @@ const CONTRACT_NAME = 'contract.json';
 const POLICY_NAME = 'policy/scoring-policy.json';
 const CONDITIONS_NAME = 'policy/evaluator-conditions.json';
 /** The arm each scored route runs on. */
-const ARM_OF_ROUTE = { 'clean-control': 'clean', 'controlled-mutation': 'mutated' };
-/** What makes each arm used: a clean control runs on `clean`, and any probe that seeds a defect on `mutated`, whatever its route. */
-const SEEDED = 'seeded';
-const USES_OF_ARM = { clean: 'clean-control', mutated: SEEDED };
+const ARM_OF_ROUTE = { 'clean-control': 'clean', 'controlled-mutation': 'mutated', historical: 'historical', gameability: 'gameability' };
+/** What makes each arm used: the route whose probes run on it, and how a finding names that route's probes. */
+const USES_OF_ARM = {
+  clean: { route: 'clean-control', probes: 'is a clean control' },
+  mutated: { route: 'controlled-mutation', probes: 'takes the controlled-mutation route' },
+  historical: { route: 'historical', probes: 'takes the historical route' },
+  gameability: { route: 'gameability', probes: 'is a gameability probe' },
+};
 const QUALIFICATION_PREFIX = 'baseline/qualification/';
 const MUTATION_ID_PATTERN = '^M-[0-9]{3,}$';
 const PROBE_FILE = /^(.+)\.probe\.json$/;
@@ -180,6 +198,7 @@ async function buildContext() {
       probe: runtimeSchema('committed-probe.schema.json'),
       mutation: runtimeSchema('mutation.schema.json'),
       evaluatorConditions: runtimeSchema('evaluator-conditions.schema.json'),
+      degenerateResponse: runtimeSchema('degenerate-response.schema.json'),
       contract: ajv.compile(contractSchema),
       scoringPolicy: ajv.compile(readJsonFile(engineSchemaPath('scoring-policy.schema.json'))),
       defectSignature: ajv.compile({ $ref: `${branchPointer}/defectSignature` }),
@@ -807,6 +826,28 @@ function checkProbe(report, relative, probe, context, behaviors, mutations, regi
     );
   }
 
+  if (
+    (route === 'gameability' || probe.probeClass === 'gameability') &&
+    (route !== 'gameability' || probe.probeClass !== 'gameability' || probe.expectedClean !== false || defects.length > 0)
+  ) {
+    report.add(
+      relative,
+      'gameability',
+      `a gameability probe is probeClass "gameability" on the gameability route with expectedClean false and no defects, since its arm launches nothing that could witness one; got probeClass ${JSON.stringify(probe.probeClass)}, route ${JSON.stringify(route ?? null)}, expectedClean ${JSON.stringify(probe.expectedClean)}, ${defects.length} defect(s)`,
+    );
+  }
+
+  if (route === 'historical') {
+    const unnatural = defects.filter((defect) => defect?.source !== 'natural');
+    if (defects.length === 0 || unnatural.length > 0 || probe.expectedClean !== false) {
+      report.add(
+        relative,
+        'historical',
+        `a probe on the historical route seeds the natural defect its fix commit removed, so it carries expectedClean false and at least one defect, each with source "natural"; got expectedClean ${JSON.stringify(probe.expectedClean)}, ${defects.length} defect(s), ${unnatural.length} not natural`,
+      );
+    }
+  }
+
   if (route === 'controlled-mutation' && (defects.length === 0 || probe.expectedClean !== false)) {
     report.add(
       relative,
@@ -848,9 +889,137 @@ function checkProbe(report, relative, probe, context, behaviors, mutations, regi
 }
 
 /**
- * Checks every committed probe; returns the qualification routes they take,
- * and under the pseudo-route `seeded` whether any probe seeds a defect.
+ * A gameability probe's naive oracle and its committed degenerate response
+ * (`corpus/gameability/<probeId>.json`): the oracle is one the contract
+ * declares for another behavior, and the response answers every plan step,
+ * and only those, with an exit code no registry entry of the step's command
+ * reads as a target that could not run.
  */
+function checkGameability(report, folder, relative, probe, context, behaviors, registry) {
+  const naive = probe.qualification?.naiveOracle;
+  if (typeof naive === 'string' && context.contract !== undefined) {
+    const declared = (Array.isArray(context.contract.oracles) ? context.contract.oracles : []).some((oracle) => oracle?.id === naive);
+    if (!declared) {
+      report.add(relative, 'reference', `qualification.naiveOracle names ${naive}, which ${CONTRACT_NAME} does not declare`);
+    } else if ((behaviors?.get(probe.behaviorId)?.oracles ?? []).includes(naive)) {
+      report.add(
+        relative,
+        'gameability',
+        `qualification.naiveOracle ${naive} is an oracle of the probe's own behavior ${probe.behaviorId}; the naive oracle belongs to another behavior, and ${probe.behaviorId}'s own oracle is the disciplined one that must reject the degenerate response`,
+      );
+    }
+  }
+  if (typeof probe.probeId !== 'string') return;
+  const responseFile = degenerateResponsePath(probe.probeId);
+  let stats;
+  try {
+    stats = fs.lstatSync(path.join(folder, ...responseFile.split('/')));
+  } catch {
+    stats = null;
+  }
+  if (stats === null || !stats.isFile()) {
+    report.add(
+      responseFile,
+      'gameability',
+      `${relative} takes the gameability route and ${responseFile} is ${stats === null ? 'absent' : 'not a regular file'}; it holds the degenerate response's bytes, which the gameability arm answers the plan from`,
+    );
+    return;
+  }
+  const response = parseInto(report, folder, responseFile);
+  if (response === undefined || !validateInto(report, responseFile, 'schema', context.validate.degenerateResponse, response)) return;
+  const plan = Array.isArray(context.contract?.interactionPlan) ? context.contract.interactionPlan : [];
+  const planned = new Set(plan.map((step) => step?.stepId).filter((stepId) => typeof stepId === 'string'));
+  for (const stepId of planned) {
+    if (!Object.hasOwn(response.steps, stepId)) {
+      report.add(
+        responseFile,
+        'gameability',
+        `answers no response for interaction plan step ${stepId}, so the gameability arm cannot run the plan`,
+      );
+    }
+  }
+  for (const stepId of Object.keys(response.steps)) {
+    if (!planned.has(stepId)) {
+      report.add(responseFile, 'gameability', `answers step ${stepId}, which the contract's interaction plan does not declare`);
+      continue;
+    }
+    const step = plan.find((candidate) => candidate?.stepId === stepId);
+    const operation = (Array.isArray(context.contract?.permittedInterfaces) ? context.contract.permittedInterfaces : [])
+      .flatMap((iface) => (Array.isArray(iface?.operations) ? iface.operations.map((candidate) => ({ iface, operation: candidate })) : []))
+      .find((candidate) => candidate.operation?.operationId === step?.operationId);
+    const entries = (registry ?? []).filter(
+      (entry) => entry?.interfaceId === operation?.iface?.logicalId && entry?.executable === operation?.operation?.invocation?.executable,
+    );
+    const { exitCode } = response.steps[stepId];
+    if (infrastructureCodesOf(entries).includes(exitCode)) {
+      report.add(
+        responseFile,
+        'gameability',
+        `step ${stepId} exits ${exitCode}, which its registry entry declares as an infrastructure exit code, so the arm would read the degenerate response as a target that could not run`,
+      );
+    }
+  }
+}
+
+/**
+ * `evaluation.json`'s `judge` and the judge's model snapshot in
+ * `policy/evaluator-conditions.json`: both required when the contract
+ * declares a rubric, and the judge's adapter, command and model ones TeA's
+ * agent adapters can run.
+ */
+function checkJudge(report, folder, evaluation, contract) {
+  const rubrics = Array.isArray(contract?.rubrics) ? contract.rubrics : [];
+  const judge = evaluation.judge;
+  let conditions;
+  try {
+    conditions = readJsonFile(path.join(folder, ...CONDITIONS_NAME.split('/')));
+  } catch {
+    conditions = undefined;
+  }
+  // A judge block beside a contract with no rubric is never used, so it is refused rather than ignored.
+  if (contract !== undefined && rubrics.length === 0) {
+    const unused = `${CONTRACT_NAME} declares no rubric, so no judge runs and this block is never used; remove it`;
+    if (judge !== undefined) report.add(MANIFEST_NAME, 'judge', `declares judge: ${unused}`);
+    if (conditions !== null && typeof conditions === 'object' && Object.hasOwn(conditions, 'judge')) {
+      report.add(CONDITIONS_NAME, 'judge', `declares judge: ${unused}`);
+    }
+  }
+  if (rubrics.length > 0) {
+    if (judge === undefined) {
+      report.add(
+        MANIFEST_NAME,
+        'judge',
+        `${CONTRACT_NAME} declares ${rubrics.length} rubric(s), and evaluation.json declares no judge to score them; declare judge with its agent adapter and timeoutMs`,
+      );
+    }
+    if (typeof conditions?.judge?.modelSnapshot !== 'string' || conditions.judge.modelSnapshot.length === 0) {
+      report.add(
+        CONDITIONS_NAME,
+        'judge',
+        `${CONTRACT_NAME} declares ${rubrics.length} rubric(s), and ${CONDITIONS_NAME} names no judge.modelSnapshot, the model every judge call runs and every run records as a fixed condition`,
+      );
+    }
+  }
+  if (judge === null || typeof judge !== 'object' || typeof judge.agent !== 'string') return;
+  if (!Object.hasOwn(AGENT_ADAPTERS, judge.agent)) {
+    report.add(
+      MANIFEST_NAME,
+      'judge',
+      `judge.agent ${JSON.stringify(judge.agent)} is not an agent adapter TeA has (${Object.keys(AGENT_ADAPTERS).join(', ')})`,
+    );
+    return;
+  }
+  if (AGENT_ADAPTERS[judge.agent].command === null && typeof judge.agentCommand !== 'string') {
+    report.add(MANIFEST_NAME, 'judge', `judge.agent ${judge.agent} runs no command of its own, so judge.agentCommand must name one`);
+  }
+  try {
+    resolveModel(judge.agent, judge.model, Array.isArray(judge.agentArgs) ? judge.agentArgs : []);
+  } catch (error) {
+    report.add(MANIFEST_NAME, 'judge', `judge's model cannot run: ${error.message}`);
+  }
+}
+
+/** Checks every committed probe; returns the qualification routes they take. */
 function checkProbes(report, folder, context, behaviors, mutations, registry) {
   const routes = new Set();
   for (const entry of listDirectory(folder, 'probes') ?? []) {
@@ -870,8 +1039,8 @@ function checkProbes(report, folder, context, behaviors, mutations, registry) {
       report.add(relative, 'file-name', `probe ID ${JSON.stringify(probe.probeId)} does not match its file name`);
     }
     if (typeof probe.qualification?.route === 'string') routes.add(probe.qualification.route);
-    if (Array.isArray(probe.defects) && probe.defects.length > 0) routes.add(SEEDED);
     checkProbe(report, relative, probe, context, behaviors, mutations, registry);
+    if (probe.qualification?.route === 'gameability') checkGameability(report, folder, relative, probe, context, behaviors, registry);
   }
   return routes;
 }
@@ -879,8 +1048,9 @@ function checkProbes(report, folder, context, behaviors, mutations, registry) {
 /**
  * `policy/scoring-policy.json`: required when a probe takes the
  * `controlled-mutation` route, whose rollback proof re-runs the baseline within
- * the policy's `reExecutionCap`, and held to eval-quality's published schema
- * and schema version whenever it is present.
+ * the policy's `reExecutionCap`, or the `historical` or `gameability` route,
+ * whose qualification arms the evaluator judges within its `regexMatchStepBudget`, and held to
+ * eval-quality's published schema and schema version whenever it is present.
  */
 function checkScoringPolicy(report, folder, context, routes) {
   const file = path.join(folder, ...POLICY_NAME.split('/'));
@@ -890,6 +1060,12 @@ function checkScoringPolicy(report, folder, context, routes) {
         POLICY_NAME,
         'missing-file',
         `a probe takes the controlled-mutation route, whose rollback proof re-runs the baseline within the scoring policy's reExecutionCap, and the evaluation folder has no ${POLICY_NAME}`,
+      );
+    } else if (routes.has('historical') || routes.has('gameability')) {
+      report.add(
+        POLICY_NAME,
+        'missing-file',
+        `a probe takes the ${routes.has('historical') ? 'historical' : 'gameability'} route, whose qualification arms are judged within the scoring policy's regexMatchStepBudget, and the evaluation folder has no ${POLICY_NAME}`,
       );
     }
     return;
@@ -920,11 +1096,11 @@ function checkArmsAndTrials(report, evaluation, routes, policy) {
     if (routes.has(route) && !arms.includes(arm)) {
       report.add(MANIFEST_NAME, 'arms', `a probe takes the ${route} route, which runs on the ${arm} arm, and arms does not declare ${arm}`);
     }
-    if (!routes.has(USES_OF_ARM[arm]) && arms.includes(arm)) {
+    if (!routes.has(USES_OF_ARM[arm].route) && arms.includes(arm)) {
       report.add(
         MANIFEST_NAME,
         'arms',
-        `arms declares ${arm}, and no probe ${arm === 'clean' ? 'is a clean control' : 'seeds a defect'} to run on it, so a run would run no ${arm} arm`,
+        `arms declares ${arm}, and no probe ${USES_OF_ARM[arm].probes} to run on it, so a run would run no ${arm} arm`,
       );
     }
   }
@@ -1083,6 +1259,7 @@ async function checkEvaluation(folder) {
   const policy = checkScoringPolicy(report, folder, context, routes);
   checkArmsAndTrials(report, evaluation, routes, policy);
   checkEvaluatorConditions(report, folder, context, registry);
+  checkJudge(report, folder, evaluation, context.contract);
   checkQualificationEvidence(report, folder, context);
 
   try {

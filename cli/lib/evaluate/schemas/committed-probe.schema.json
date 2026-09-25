@@ -48,7 +48,14 @@
           "then": {
             "additionalProperties": false,
             "required": ["route", "fixCommit"],
-            "properties": { "route": true, "fixCommit": { "type": "string", "minLength": 1 } }
+            "properties": {
+              "route": true,
+              "fixCommit": {
+                "description": "The commit that fixed the defect, as any revision git resolves to a commit (a full or abbreviated id, or a ref); the run records its full id. The pre-fix revision is its first parent.",
+                "type": "string",
+                "minLength": 1
+              }
+            }
           }
         },
         {
@@ -66,8 +73,20 @@
           "if": { "required": ["route"], "properties": { "route": { "const": "gameability" } } },
           "then": {
             "additionalProperties": false,
-            "required": ["route", "degenerateResponse"],
-            "properties": { "route": true, "degenerateResponse": { "type": "string", "minLength": 1 } }
+            "required": ["route", "degenerateResponse", "naiveOracle"],
+            "properties": {
+              "route": true,
+              "degenerateResponse": {
+                "description": "The degenerate response described in prose, as eval-quality keeps it; its bytes are committed at corpus/gameability/<probeId>.json.",
+                "type": "string",
+                "minLength": 1
+              },
+              "naiveOracle": {
+                "description": "TeA's own field: the O-NNN identifier of an oracle of another behavior, which the degenerate response satisfies while the probe behavior's own oracle rejects it. It meets the oracle ID pattern eval-quality's contract schema publishes.",
+                "type": "string",
+                "pattern": "^O-[0-9]{3,}$"
+              }
+            }
           }
         },
         {

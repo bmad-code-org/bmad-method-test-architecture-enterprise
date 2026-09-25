@@ -118,6 +118,64 @@ const withOptionClauses = (count, ...rest) => ({
 });
 
 /**
+ * Plants P-003, a gameability probe on B-001 whose naive oracle is O-002, with
+ * its degenerate response at corpus/gameability/P-003.json and the
+ * gameability arm declared (Story 1.9); `probe` and `response` edit each
+ * before it is written, and `response: null` leaves the file out.
+ */
+function plantGameability(folder, { probe = () => {}, response = () => {} } = {}) {
+  const signature = JSON.parse(fs.readFileSync(path.join(folder, 'probes', 'P-002.probe.json'), 'utf8')).defectSignature;
+  const planted = {
+    probeId: 'P-003',
+    probeClass: 'gameability',
+    behaviorId: 'B-001',
+    expectedClean: false,
+    rationale: 'Gameability: a shortcut run that writes nothing and exits 1 passes a naive check.',
+    defects: [],
+    defectSignature: signature,
+    qualification: { route: 'gameability', degenerateResponse: 'Exits 1 having written nothing.', naiveOracle: 'O-002' },
+  };
+  probe(planted);
+  fs.writeFileSync(path.join(folder, 'probes', 'P-003.probe.json'), `${JSON.stringify(planted, null, 2)}\n`);
+  const degenerate = { schemaVersion: 1, steps: { 'tea-atdd-runner-run': { stdout: '', stderr: '', exitCode: 1 } } };
+  if (response !== null) {
+    response(degenerate);
+    fs.mkdirSync(path.join(folder, 'corpus', 'gameability'), { recursive: true });
+    fs.writeFileSync(path.join(folder, 'corpus', 'gameability', 'P-003.json'), `${JSON.stringify(degenerate, null, 2)}\n`);
+  }
+  editJson(folder, 'evaluation.json', (value) => value.arms.push('gameability'));
+}
+
+/** Declares R-001 in the contract, the judge in evaluation.json and its model in the evaluator conditions (Story 1.9); `edit` changes the three before they are written. */
+function plantRubric(folder, edit = () => {}) {
+  const rubric = {
+    id: 'R-001',
+    scaleLevels: [
+      { level: 0, anchor: 'The scaffold holds an active test.' },
+      { level: 1, anchor: 'Every test in the scaffold is skipped.' },
+    ],
+    failureModePenalties: [{ name: 'active-test', description: 'An active test counts as no scaffold.' }],
+    maxLength: 200,
+    criteria: [{ id: 'RC-001', text: 'Are the scaffold tests all skipped?', evidence: '/interactions/tea-atdd-runner-run/exit-code' }],
+  };
+  const judge = { agent: 'custom', agentCommand: 'stub-judge', agentArgs: [], timeoutMs: 60_000 };
+  const conditions = {
+    schemaVersion: 1,
+    modelSnapshot: 'a-model-snapshot',
+    systemPromptDigest: `sha256:${'0'.repeat(64)}`,
+    judge: { modelSnapshot: 'a-judge-snapshot' },
+  };
+  const planted = { rubric, judge, conditions };
+  edit(planted);
+  editJson(folder, 'contract.json', (value) => (value.rubrics = [planted.rubric]));
+  editJson(folder, 'evaluation.json', (value) => {
+    if (planted.judge === null) delete value.judge;
+    else value.judge = planted.judge;
+  });
+  fs.writeFileSync(path.join(folder, 'policy', 'evaluator-conditions.json'), `${JSON.stringify(planted.conditions, null, 2)}\n`);
+}
+
+/**
  * Characters a path field refuses beyond C0 and DEL, one per class: C1
  * controls, the line and paragraph separators, and the bidirectional
  * formatting characters (embeddings and overrides, isolates, marks).
@@ -864,6 +922,191 @@ const HARDENING_CASES = [
     expect: (output) => [[output.includes('arms declares mutated'), 'the finding does not name the unused arm']],
   },
   {
+    name: 'an arm declared for the historical route with no historical probe',
+    file: 'evaluation.json',
+    rule: 'arms',
+    plant: (folder) => editJson(folder, 'evaluation.json', (value) => value.arms.push('historical')),
+    expect: (output) => [
+      [output.includes('arms declares historical, and no probe takes the historical route'), 'the finding does not name the unused arm'],
+    ],
+  },
+  {
+    name: 'a gameability probe with no gameability arm declared',
+    file: 'evaluation.json',
+    rule: 'arms',
+    plant: (folder) => {
+      plantGameability(folder);
+      editJson(folder, 'evaluation.json', (value) => (value.arms = ['clean', 'mutated']));
+    },
+    expect: (output) => [[output.includes('takes the gameability route'), 'the finding does not name the route']],
+  },
+  {
+    name: 'a defect-class probe on the gameability route',
+    file: 'probes/P-003.probe.json',
+    rule: 'gameability',
+    plant: (folder) => plantGameability(folder, { probe: (probe) => (probe.probeClass = 'defect') }),
+  },
+  {
+    name: 'a gameability probe that seeds a defect',
+    file: 'probes/P-003.probe.json',
+    rule: 'gameability',
+    plant: (folder) =>
+      plantGameability(folder, {
+        probe: (probe) => {
+          const seeded = JSON.parse(fs.readFileSync(path.join(folder, 'probes', 'P-002.probe.json'), 'utf8'));
+          probe.defects = seeded.defects;
+        },
+      }),
+  },
+  {
+    name: "a gameability probe whose naive oracle is its own behavior's",
+    file: 'probes/P-003.probe.json',
+    rule: 'gameability',
+    plant: (folder) => plantGameability(folder, { probe: (probe) => (probe.qualification.naiveOracle = 'O-001') }),
+    expect: (output) => [[output.includes('belongs to another behavior'), 'the finding does not say where the naive oracle belongs']],
+  },
+  {
+    name: 'a gameability probe whose naive oracle the contract does not declare',
+    file: 'probes/P-003.probe.json',
+    rule: 'reference',
+    plant: (folder) => plantGameability(folder, { probe: (probe) => (probe.qualification.naiveOracle = 'O-009') }),
+  },
+  {
+    name: 'a gameability probe whose naive oracle is off the oracle ID pattern',
+    file: 'probes/P-003.probe.json',
+    rule: 'schema',
+    plant: (folder) => plantGameability(folder, { probe: (probe) => (probe.qualification.naiveOracle = 'naive') }),
+  },
+  {
+    name: 'a gameability probe with no naive oracle',
+    file: 'probes/P-003.probe.json',
+    rule: 'schema',
+    plant: (folder) => plantGameability(folder, { probe: (probe) => delete probe.qualification.naiveOracle }),
+  },
+  {
+    name: 'a gameability probe with no degenerate response file',
+    file: 'corpus/gameability/P-003.json',
+    rule: 'gameability',
+    plant: (folder) => plantGameability(folder, { response: null }),
+    expect: (output) => [[output.includes('is absent'), 'the finding does not say the file is absent']],
+  },
+  {
+    name: 'a degenerate response off its schema',
+    file: 'corpus/gameability/P-003.json',
+    rule: 'schema',
+    plant: (folder) => plantGameability(folder, { response: (response) => (response.steps['tea-atdd-runner-run'].exitCode = '1') }),
+  },
+  {
+    name: 'a degenerate response that leaves a plan step unanswered and answers another',
+    file: 'corpus/gameability/P-003.json',
+    rule: 'gameability',
+    plant: (folder) =>
+      plantGameability(folder, {
+        response: (response) => {
+          response.steps = { 'another-step': response.steps['tea-atdd-runner-run'] };
+        },
+      }),
+    expect: (output) => [
+      [output.includes('answers no response for interaction plan step tea-atdd-runner-run'), 'the unanswered step is not named'],
+      [output.includes('answers step another-step'), 'the undeclared step is not named'],
+    ],
+  },
+  {
+    name: 'a degenerate response that exits an infrastructure code',
+    file: 'corpus/gameability/P-003.json',
+    rule: 'gameability',
+    plant: (folder) => plantGameability(folder, { response: (response) => (response.steps['tea-atdd-runner-run'].exitCode = 3) }),
+    expect: (output) => [[output.includes('infrastructure exit code'), 'the finding does not name the infrastructure code']],
+  },
+  {
+    name: 'a historical probe whose defect is a controlled mutation',
+    file: 'probes/P-002.probe.json',
+    rule: 'historical',
+    plant: (folder) => {
+      editJson(folder, 'probes/P-002.probe.json', (value) => (value.qualification = { route: 'historical', fixCommit: 'HEAD~1' }));
+      editJson(folder, 'evaluation.json', (value) => (value.arms = ['clean', 'historical']));
+    },
+    expect: (output) => [[output.includes('1 not natural'), 'the finding does not count the defect that is not natural']],
+  },
+  {
+    name: 'a historical probe with no scoring policy',
+    file: 'policy/scoring-policy.json',
+    rule: 'missing-file',
+    plant: (folder) => {
+      editJson(folder, 'probes/P-002.probe.json', (value) => {
+        value.qualification = { route: 'historical', fixCommit: 'HEAD~1' };
+        value.defects[0].source = 'natural';
+      });
+      editJson(folder, 'evaluation.json', (value) => (value.arms = ['clean', 'historical']));
+      fs.rmSync(path.join(folder, 'mutations'), { recursive: true });
+      fs.rmSync(path.join(folder, 'policy', 'scoring-policy.json'));
+    },
+    expect: (output) => [[output.includes('regexMatchStepBudget'), 'the finding does not say why the policy is needed']],
+  },
+  {
+    name: 'a rubric with no judge declared',
+    file: 'evaluation.json',
+    rule: 'judge',
+    plant: (folder) => plantRubric(folder, (planted) => (planted.judge = null)),
+    expect: (output) => [[output.includes('declares no judge'), 'the finding does not say the judge is missing']],
+  },
+  {
+    name: 'a rubric with no judge model in the evaluator conditions',
+    file: 'policy/evaluator-conditions.json',
+    rule: 'judge',
+    plant: (folder) => plantRubric(folder, ({ conditions }) => delete conditions.judge),
+    expect: (output) => [[output.includes('judge.modelSnapshot'), 'the finding does not name the snapshot']],
+  },
+  {
+    name: 'a judge declared beside a contract with no rubric',
+    file: 'evaluation.json',
+    rule: 'judge',
+    plant: (folder) =>
+      editJson(folder, 'evaluation.json', (value) => (value.judge = { agent: 'custom', agentCommand: 'stub-judge', timeoutMs: 60_000 })),
+    expect: (output) => [[output.includes('declares no rubric'), 'the finding does not say the contract declares no rubric']],
+  },
+  {
+    name: 'a judge model in the evaluator conditions beside a contract with no rubric',
+    file: 'policy/evaluator-conditions.json',
+    rule: 'judge',
+    plant: (folder) =>
+      fs.writeFileSync(
+        path.join(folder, 'policy', 'evaluator-conditions.json'),
+        JSON.stringify({
+          schemaVersion: 1,
+          modelSnapshot: 'none',
+          systemPromptDigest: `sha256:${'0'.repeat(64)}`,
+          judge: { modelSnapshot: null },
+        }),
+      ),
+    expect: (output) => [[output.includes('never used; remove it'), 'the finding does not say to remove the block']],
+  },
+  {
+    name: 'a judge on an agent adapter TeA does not have',
+    file: 'evaluation.json',
+    rule: 'judge',
+    plant: (folder) => plantRubric(folder, ({ judge }) => (judge.agent = 'no-such-agent')),
+  },
+  {
+    name: 'a judge on the custom adapter with no command',
+    file: 'evaluation.json',
+    rule: 'judge',
+    plant: (folder) => plantRubric(folder, ({ judge }) => delete judge.agentCommand),
+  },
+  {
+    name: 'a judge model on an adapter that takes none',
+    file: 'evaluation.json',
+    rule: 'judge',
+    plant: (folder) => plantRubric(folder, ({ judge }) => (judge.model = 'a-model')),
+    expect: (output) => [[output.includes('--model is not supported'), 'the finding does not say the adapter takes no model']],
+  },
+  {
+    name: 'a judge with no timeout',
+    file: 'evaluation.json',
+    rule: 'schema',
+    plant: (folder) => plantRubric(folder, ({ judge }) => delete judge.timeoutMs),
+  },
+  {
     name: 'a controlled-mutation probe that seeds no defect',
     file: 'probes/P-002.probe.json',
     rule: 'mutation-route',
@@ -1193,6 +1436,25 @@ const HARDENING_CASES = [
 
 /** Legitimate folders the Story 1.5 rules must leave alone: each exits 0. */
 const CLEAN_CASES = [
+  {
+    name: 'a gameability probe with its naive oracle, its degenerate response and its arm',
+    plant: (folder) => plantGameability(folder),
+  },
+  {
+    name: 'a rubric with its judge and the judge model',
+    plant: (folder) => plantRubric(folder),
+  },
+  {
+    name: 'a historical probe with a natural defect, its arm and a fix commit named by any revision',
+    plant: (folder) => {
+      editJson(folder, 'probes/P-002.probe.json', (value) => {
+        value.qualification = { route: 'historical', fixCommit: 'HEAD~1' };
+        value.defects[0].source = 'natural';
+      });
+      editJson(folder, 'evaluation.json', (value) => (value.arms = ['clean', 'historical']));
+      fs.rmSync(path.join(folder, 'mutations'), { recursive: true });
+    },
+  },
   {
     name: 'two entries sharing an interface with different executables',
     plant: (folder) =>

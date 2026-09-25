@@ -9,8 +9,10 @@
  *                                             qualify the seeded probes in a disposable workspace, drive the
  *                                             preflight legs and take the verdict from eval-quality
  *   tea-evaluate run --evaluation <path> [--from-working-tree]
- *                                             the preflight, then each arm `trials` times in fresh workspaces,
- *                                             sealed as one trial set per probe under runs/<invocationId>/
+ *                                             the preflight, then each arm (clean, mutated, historical,
+ *                                             gameability) `trials` times in fresh workspaces, judged by the
+ *                                             deterministic evaluator and any rubric judge, sealed as one
+ *                                             trial set per probe under runs/<invocationId>/
  *   tea-evaluate score --evaluation <path> [--run <invocationId>]
  *                                             eval-quality score once per probe over a completed run's trial sets
  *
@@ -28,13 +30,16 @@
  *       behavior declares no oracle, or a materialized probe eval-quality's checks refuse; score: a run
  *       artifact that does not meet its schema or does not agree with its run, before any engine call
  *   11  preflight and run: an evaluation weakness, a seeded probe whose baseline does not pass or whose mutated
- *       arm does not fail, or a clean control whose baseline does not pass
+ *       arm does not fail, a historical probe that does not fail before its fix or pass after it, a clean
+ *       control whose baseline does not pass, or a gameability probe whose degenerate response the naive
+ *       oracle rejects or the disciplined oracle accepts
  *   12  infrastructure: the optional eval-quality peer is not installed; preflight: a workspace that cannot
  *       be made, a target that cannot launch, a qualification arm step that exits an infrastructure code,
  *       a restore that fails, a restored workspace that does not pass again, a leg that could not run, a
  *       change to the adopter's project during the run, or an engine stage that could not run; run: also a
  *       trial that cannot run, exits an infrastructure code or is stopped by a signal from outside, which yields no record,
- *       or a mutated trial whose digest differs from the qualification's; preflight and run: a run directory holding an
+ *       a mutated trial whose digest differs from the qualification's, a rubric judge that cannot answer, or
+ *       a run whose every probe was refused; preflight and run: a run directory holding an
  *       entry the runtime did not write or a file whose bytes differ from the ones it wrote; score: a score call that could not
  *       run or exited with a code the CLI does not document
  *   64  wiring defect: no --evaluation resolves, or the command line is malformed (preflight, run and score: or

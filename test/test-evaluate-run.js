@@ -1212,28 +1212,27 @@ function checkRefusals() {
     `run with no probe exited ${noProbeRun.status}; expected 10 from check's arms rule\n${noProbeRun.output}`,
   );
 
-  const gameability = makeProject('gameability', {
+  // Story 1.9 runs the gameability and historical routes (test/test-evaluate-arms.js); a canary is still refused.
+  const canary = makeProject('canary', {
     edit: ({ folder }) => {
-      const seeded = readJson(path.join(folder, 'probes', 'P-002.probe.json'));
       const probe = {
         probeId: 'P-003',
-        probeClass: 'gameability',
+        probeClass: 'canary',
         behaviorId: 'B-001',
         expectedClean: false,
-        rationale: 'A degenerate answer that says accepted without judging.',
+        rationale: 'A canary whose non-detection would indict the fixture.',
         defects: [],
-        defectSignature: seeded.defectSignature,
-        qualification: { route: 'gameability', degenerateResponse: 'verdict: accepted, whatever the request' },
+        qualification: { route: 'canary', indicts: 'fixture' },
       };
       fs.writeFileSync(path.join(folder, 'probes', 'P-003.probe.json'), `${JSON.stringify(probe, null, 2)}\n`);
     },
   });
-  const gameabilityRun = evaluate(['run', '--evaluation', gameability.folder], gameability.env);
+  const canaryRun = evaluate(['run', '--evaluation', canary.folder], canary.env);
   check(
-    gameabilityRun.status === 12 && /P-003\.probe\.json \(route gameability\)/.test(gameabilityRun.output),
-    `run with a gameability probe exited ${gameabilityRun.status}; expected 12 naming its route\n${gameabilityRun.output}`,
+    canaryRun.status === 12 && /P-003\.probe\.json \(route canary\)/.test(canaryRun.output),
+    `run with a canary probe exited ${canaryRun.status}; expected 12 naming its route\n${canaryRun.output}`,
   );
-  for (const project of [noPolicy, noProbe, gameability]) {
+  for (const project of [noPolicy, noProbe, canary]) {
     check(fs.readdirSync(project.env.TMPDIR).length === 0, 'a refused run made a workspace');
   }
 
@@ -1644,10 +1643,18 @@ async function checkTemplatesAndIgnores() {
   const ajv = new Ajv({ strict: false, allErrors: true });
   const conditionsSchema = ajv.compile(readJson(CONDITIONS_SCHEMA));
   const conditions = readJson(path.join(ASSETS, 'evaluator-conditions.template.json'));
-  check(conditions.modelSnapshot === null && conditions.systemPromptDigest === null, 'the evaluator-conditions template carries a model');
+  check(
+    conditions.modelSnapshot === null && conditions.systemPromptDigest === null && conditions.judge?.modelSnapshot === null,
+    'the evaluator-conditions template carries a model',
+  );
   check(!conditionsSchema(conditions), 'the unfilled evaluator-conditions template passes the runtime schema');
   check(
-    conditionsSchema({ ...conditions, modelSnapshot: 'a-model', systemPromptDigest: sha256(Buffer.from('prompt')) }),
+    conditionsSchema({
+      ...conditions,
+      modelSnapshot: 'a-model',
+      systemPromptDigest: sha256(Buffer.from('prompt')),
+      judge: { modelSnapshot: 'a-judge-model' },
+    }),
     `a filled evaluator-conditions template fails the runtime schema: ${JSON.stringify(conditionsSchema.errors)}`,
   );
 

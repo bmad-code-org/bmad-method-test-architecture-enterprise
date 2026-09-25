@@ -197,6 +197,9 @@ jobs:
       - name: Run the clean and mutated arms as sealed trial sets and score them
         run: npm run test:evaluate-run
 
+      - name: Qualify gameability and historical probes and judge rubrics
+        run: npm run test:evaluate-arms
+
       - name: Test knowledge base (index sync, link resolution, workflow-copy parity)
         run: npm run test:knowledge
 

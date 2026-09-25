@@ -87,12 +87,46 @@
       }
     },
     "arms": {
-      "description": "The condition arms a run executes.",
+      "description": "The condition arms a run executes: clean for the clean controls, mutated for the controlled-mutation probes (one arm per mutation), historical for the historical probes (one arm per pre-fix revision) and gameability for the gameability probes (one arm per probe, launching nothing).",
       "type": "array",
       "minItems": 1,
       "uniqueItems": true,
       "items": {
-        "enum": ["clean", "mutated"]
+        "enum": ["clean", "mutated", "historical", "gameability"]
+      }
+    },
+    "judge": {
+      "description": "The rubric judge tea-evaluate run calls once per trial when the contract declares a rubric, through TeA's agent adapters; tea-evaluate check requires it then, and requires policy/evaluator-conditions.json to name the judge's model snapshot. A contract with no rubric makes no judge call whatever this says.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["agent", "timeoutMs"],
+      "properties": {
+        "agent": {
+          "description": "The agent adapter the judge runs through, by its key in TeA's adapter table; tea-evaluate check refuses a key the table does not hold.",
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "agentCommand": {
+          "description": "The executable to run in place of the adapter's default command; the custom adapter has none and requires it.",
+          "type": "string",
+          "minLength": 1
+        },
+        "agentArgs": {
+          "description": "Arguments appended after the adapter's own argv; the custom adapter's whole argv.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "model": {
+          "description": "The model the adapter runs, in place of its pinned default; an adapter with no model flag refuses one.",
+          "type": "string",
+          "minLength": 1
+        },
+        "timeoutMs": {
+          "description": "The wall clock one judge call gets, in milliseconds; a judge still running then is stopped, and the trial yields no record.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        }
       }
     },
     "trials": {

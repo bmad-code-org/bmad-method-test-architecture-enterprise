@@ -35,7 +35,8 @@
  *   persisted files both exit 3;
  * - a failed `compile` or `seal` passes its exit through and stops the run; a
  *   stage exit eval-quality does not document for that stage, a seeded probe
- *   on a route this release does not qualify (historical),
+ *   on a route no release qualifies (canary; Story 1.9 qualifies the
+ *   historical route, which `test/test-evaluate-arms.js` covers),
  *   a missing registry target, an `mcp` interface, a leg over its output
  *   budget and a missing engine exit 12; an authoring defect exits 10; and no
  *   `--evaluation` exits 64;
@@ -1037,24 +1038,26 @@ function checkFailingControl() {
 }
 
 function checkRefusals() {
-  // A seeded probe on a route this release does not qualify (historical) is
-  // refused before a workspace is made; controlled-mutation probes are
-  // qualified, which test/test-evaluate-mutation.js covers.
+  // A seeded probe on a route no release qualifies (canary) is refused before
+  // a workspace is made; controlled-mutation probes are qualified, which
+  // test/test-evaluate-mutation.js covers, and historical probes since Story
+  // 1.9, which test/test-evaluate-arms.js covers.
   const seeded = copyFixture(VALID_FIXTURE, PROJECT_ROOT);
   editJson(seeded, path.join('probes', 'P-002.probe.json'), (value) => {
-    value.qualification = { route: 'historical', fixCommit: 'a1b2c3d' };
-    value.defects[0].source = 'natural';
+    value.probeClass = 'canary';
+    value.qualification = { route: 'canary', indicts: 'fixture' };
   });
+  editJson(seeded, 'evaluation.json', (value) => (value.arms = ['clean']));
   const redigested = runEvaluate(['digest', '--evaluation', seeded]);
-  check(redigested.status === 0, `digest over the historical fixture exited ${redigested.status}\n${redigested.output}`);
+  check(redigested.status === 0, `digest over the canary fixture exited ${redigested.status}\n${redigested.output}`);
   const temp = privateTemp('seeded-temp');
   const seededResult = runPreflight(seeded, { env: temp.env });
   check(
     seededResult.status === 12,
-    `preflight over a historical seeded probe exited ${seededResult.status}; expected 12\n${seededResult.output}`,
+    `preflight over a canary that seeds a defect exited ${seededResult.status}; expected 12\n${seededResult.output}`,
   );
   check(
-    seededResult.stdout.includes('probes/P-002.probe.json (route historical)'),
+    seededResult.stdout.includes('probes/P-002.probe.json (route canary)'),
     `the seeded refusal does not name the probe and its route:\n${seededResult.output}`,
   );
   check(runDirectoryOf(seeded) === null, 'a refused seeded evaluation still started a run');
