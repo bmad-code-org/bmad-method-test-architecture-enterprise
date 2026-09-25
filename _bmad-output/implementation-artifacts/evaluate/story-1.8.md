@@ -130,6 +130,9 @@ Each change was undone once in a scratch copy of the final tree (node_modules li
 - 2026-09-24, final review round 1: ARCHITECTURE-SPINE.md AD-10's exit table gains `score`'s 64 and 12 and exit 12 for a run directory the runtime did not write alone (C3); AD-7's isolation-manifest bullet amended for the observed lists and the run directory, and its provenance amendment notes that eval-quality 4.1.4's schema states the role reading.
 - 2026-09-24, final review round 1: test-design Story 1.8 gains rows for the run directory and for `score`'s anchors.
 - 2026-09-24, final review round 1: the eval-quality pin and peer floor moved to 4.1.4 at the coordinator's direction (package.json, the lockfile, guard-publish and release-metadata floors, the roadmap claim, the CLI reference, the engine's install hint, eval-quality-facts.md, AD-7, epics.md and CHANGELOG).
+- 2026-09-24, final review round 2: epics.md Story 1.31 gains the case clause and revert check on its platform-refusal criterion (X7) and a criterion confining processes the target leaves running, with its case and revert check (A1); its test-design section gains a row for each.
+- 2026-09-24, final review round 2: ARCHITECTURE-SPINE.md AD-7's run-directory amendment reworded to what the code holds (the write confirmation before and after, `completed` written last, and the anchors holding only while nothing else can write the run directory until Story 1.31); AD-10's exit 12 row names a directory the target replaced or moved (X6, A1, A2, A3).
+- 2026-09-24, final review round 2: test-design Story 1.8's run-directory and anchor rows cover the round 2 cases, and a row for `score`'s regular-file reads is added.
 
 ## Review Triage Log
 
@@ -266,6 +269,40 @@ Each guard was undone in a scratch copy (node_modules linked), the named suite r
 - The signal handler's `run.json` write removed: "the preflight interrupted by SIGTERM recorded undefined".
 - `stoppedBy` dropped from the report: "a runner whose agent outlived a forwarded SIGQUIT exited 4; expected the grace SIGKILL reported with the SIGQUIT".
 
+### Final review round 2 (fixcheck and attacks lenses, executed on 219c6a6 with eval-quality 4.1.4)
+
+Each finding was reproduced by a reviewer and verified again against 219c6a6 before the fix; the coordinator's decisions for A1 and X6 are applied as written.
+X6 and A3 share one root cause: `inDirectory` confirmed a directory by device and inode after entering it by path, so a directory moved elsewhere with a link left in its place passed.
+
+| ID | Severity | Finding | Resolution |
+| --- | --- | --- | --- |
+| X1 | medium | the forwarded-`SIGQUIT` case accepted the grace `SIGKILL` line, which a leader that never signals the group also prints | fixed: the stub agent's `STUB-WITNESS` starts a process in the agent's group that records each stopping signal it receives, its pid file appearing only once its handlers are in place; the loop accepts the `SIGKILL` ending for `SIGQUIT` only when the witness recorded the `SIGQUIT` (it had the whole grace period to), and the outliving case asserts the witness recorded it; guarding test: `test:evaluate-preflight` |
+| X2 | medium | the device and inode check was untested | fixed: the `link-trials` stub case swaps `trials/clean` for a link to `rules/` during `trial-clean-2` (exit 12 naming the directory, `rules/` unchanged, `git status` empty), and the `recreate-trials` case replaces it with a directory of the target's own, which only the device and inode check refuses before the write (nothing written into it); `trial-clean-2`, since `trials/clean` does not exist until trial 1's evidence is written |
+| X3 | medium | the "no recorded digest" finding was untested | fixed: a record copied as `record-9.json`, rewritten to a pass and named in the index in its original's place exits 10 with "has no digest in run.json" and no engine call |
+| X4 | low | the tree read before sealing was untested | fixed: `wrap-run-directory.cjs` now takes `TEA_EVALUATE_VERIFY_AT` and `TEA_EVALUATE_VERIFY_DO`; the `touch` act appends to the tracked `rules/policy.txt` at the after-the-trials verification, and the run exits 12 ("changed during the sealing"), records `completed: false`, keeps no index, and `score` exits 64 |
+| X5 | low | the manifest reference's path comparison was untested | fixed with the test (preferred over dropping the claim): P-001's record naming P-002's manifest, its digest intact, exits 10 with "is not its set's" |
+| X6 | low | the CLI reference, CHANGELOG and AD-7 amendment claimed no write lands outside the run directory, which a moved directory defeated | fixed at the cause with A3, then reworded to claim exactly what the code holds: a directory replaced, swapped for a link or moved behind a link stops the command before the runtime writes through it, and a file written while its directory was being moved is removed again, a failed removal named; "only the runtime writes" is gone from the reference, the module header and AD-7; AD-10's exit 12 row names a directory the target replaced or moved |
+| X7 | low | Story 1.31's platform-refusal criterion named no case | fixed: the criterion gains "and a case asserts the refusal and the recorded opt-out" with its revert check, and the test-design row names both cases |
+| A1 | medium | a process the target leaves running rewrote P-002's records and `run.json`'s anchors after `run` exited; `score` exited 2 | reworded as the coordinator decided, in the CLI reference and CHANGELOG: "`score` holds each file to the digest `run.json` recorded; a process that can write the run directory after the run, a target's leftover process included, can rewrite both, and Story 1.31 closes that"; the AD-7 amendment says the same; Story 1.31 gains a criterion (leftover processes confined until they end or the run ends, with a case whose leftover process rewrites a sealed record and its anchor after `run` exits and `score` refuses the run, and its revert check) and a test-design row; no engine change, since full containment needs the sandbox |
+| A2 | medium | `completed: true` was written before the last tree read and verification, and a retraction that failed was swallowed | fixed: the tree read and verification run first and `completed: true` is the run's last write; `runPipeline` tries each retraction step on its own and appends every one it cannot take to the outcome message ("the run directory does not record this end, since the runtime could not ..."); guarding test: the `move-root` act moves the run directory away before the last verification, and the run exits 12 naming the end it could not record, no `run.json` says completed, and `score` exits 64 |
+| A3 | low | a leftover process moved `trials/` into the project behind a link and trial 2's evidence landed there | fixed: `confirm` also requires the path the system reports for the working directory (Node caches `process.cwd()` until the next `chdir`, so it enters `.` again first) to be the recorded one, before and after each write; a write whose directory moved during the write is undone (`unlinkSync`, `rmdirSync` for a directory) before the refusal; guarding tests: the `move-trials` stub case (exit 12 naming where `trials/clean` now lies, the moved directory holding only trial 1's evidence) and a writer unit that moves the directory out from inside the write (refused, the file removed) |
+| A4 | low | reads opened a FIFO without `O_NONBLOCK`, and `score` read with plain `readFileSync` | fixed: `READ` adds `O_NONBLOCK`; `score` reads every input through `regularFileBytes` (non-blocking, no link followed, `fstat` must say a regular file), a FIFO or link a finding; guarding tests: a writer unit reads a file swapped for a FIFO in a child process with a 20 s deadline, and `score` over a record swapped for a FIFO exits 10 naming it within 30 s, with no engine call |
+
+### Revert checks, final review round 2
+
+Each guard was undone in a scratch copy (node_modules linked), the named suite run, and the copy restored.
+
+Every one fails.
+
+- X1, `stop` back to `if (signal !== 'SIGQUIT') signalGroup(signal);`: both `SIGQUIT` cases fail, "its witness recorded []" and "the agent's group never received the forwarded SIGQUIT".
+- X2, the device and inode check off: the `link-trials` and `recreate-trials` cases fail, "a run wrote trial evidence into a trials/clean the target made"; with the reported-path check also off, "a run wrote through a link into the project's rules/" and `git status` shows `?? rules/trial-2.json`.
+- X3, the unrecorded-digest finding dropped: "score over a record the run never sealed exited 4", and the engine was called.
+- X4, the tree read before sealing removed: the run exits 0, records `completed: true`, keeps the index, and `score` exits 0.
+- X5, the set's-own-manifest comparison removed: the case loses its reason.
+- A3, the reported-path check off: the `move-trials` case finds `clean/trial-2.json` in the moved directory, the writer unit's write is not refused, and the moved-root case loses its named end; the check after the write off alone: the writer unit leaves the file where the directory went.
+- A2, `completed: true` written before the last tree read and verification: the moved run's `run.json` says completed and `score` exits 0; the failed retraction swallowed again: the exit message no longer names the end the runtime could not record.
+- A4, `O_NONBLOCK` dropped from `READ`: the FIFO read unit times out (ETIMEDOUT); `score` reading with a blocking open: `score` over the FIFO record never returns within its 30 s deadline.
+
 ## Verification
 
 **Commands:**
@@ -282,3 +319,9 @@ Each guard was undone in a scratch copy (node_modules linked), the named suite r
 - `npm test` -- exit 0 (`test:evaluate-run` 331 checks, `test:evaluate-preflight` 225, `test:evaluate-mutation` 417, `test:evaluate-check` 408, `test:evaluate-boundaries` 296); the first full run stopped at `test:evaluate-boundaries` on identifiers named after the `seal` stage and at `test:direction` on a writer method named `import`, both renamed
 - `npm run test:release-metadata`, `npm run docs:validate-links`, `npm run docs:build`, `npm run lint`, `npm run lint:md`, `npm run format:check` -- exit 0
 - the forwarded-`SIGQUIT` case looped 30 times with every core loaded, 30 of 30 passing
+
+**Final review round 2:**
+
+- `npm test` -- exit 0 (`test:evaluate-run` 359 checks, `test:evaluate-preflight` 230, `test:evaluate-mutation` 417, `test:evaluate-check` 408, `test:evaluate-boundaries` 296)
+- `npm run lint`, `npm run format:check`, `npm run lint:md`, `npm run docs:validate-links`, `npm run docs:build` -- exit 0
+- eval-quality stays at 4.1.4, the pin and floor; package.json and the lockfile are unchanged

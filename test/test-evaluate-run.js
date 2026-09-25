@@ -41,13 +41,21 @@
  *   directory, a record or manifest rewritten after the run (its digest no
  *   longer the one `run.json` recorded), a reference out of the run
  *   directory, and a run.json that does not say completed each exit 10 (64
- *   for the last) with no call.
+ *   for the last) with no call, and so do a record the run never sealed,
+ *   named in the index under a new name, a manifest reference naming the
+ *   other set's manifest, and a record swapped for a FIFO (never waited on).
  * - A trial that exits an infrastructure code: no record, exit 12, and
  *   `score` refuses the incomplete run with 64. A target that writes into the
  *   project during a trial exits 12, and so does one that plants a link in
  *   the run directory where a record would go (the adopter's tree untouched)
- *   or rewrites the compiled contract; a run whose last verification fails
- *   after its index and run.json were written ends incomplete, with no index;
+ *   or rewrites the compiled contract, and so does one that swaps
+ *   `trials/clean` for a link into the project, replaces it, or moves
+ *   `trials/` into the project behind a link (nothing written there); a run
+ *   whose last verification fails after its index was written ends
+ *   incomplete, with no index, and so does one whose project changes while
+ *   it seals; a run directory moved away before the last verification leaves
+ *   no run.json saying completed and an exit message naming the end the
+ *   runtime could not record;
  *   a clean control whose baseline does not pass exits 11; `run` refuses a
  *   folder with no policy or no probe (10), a probe on a route it does not
  *   run (12), and a `runs/` or `runs/.gitignore` a target left as a link
@@ -63,6 +71,9 @@
  * - A project below its repository's top: the implementation digest is the
  *   tracked tree of that directory, moved by a commit inside it and not by
  *   one beside it.
+ * - The run directory's writer: a file written while its directory is moved
+ *   out is removed again and the write refused, and a read of a file swapped
+ *   for a FIFO is refused at once.
  * - Units: the deterministic evaluator's judgment of a trial (quotation
  *   channels and fallbacks, the severity of an oracle two behaviors share),
  *   the set-level recommendation, and the combined exit.
@@ -88,6 +99,7 @@ const { ArmError, runArm, stoppedFromOutside } = require('../cli/lib/evaluate/ar
 const { uncommittedUnder } = require('../cli/lib/evaluate/preflight');
 const { judgeTrial } = require('../cli/lib/evaluate/evaluator');
 const { recordObservation, createArtifactValidator } = require('../cli/lib/evaluate/records');
+const { RunDirectory, RunDirectoryError } = require('../cli/lib/evaluate/run-directory');
 const { setRecommendation } = require('../cli/lib/evaluate/run');
 const { combinedExit } = require('../cli/lib/evaluate/score');
 
@@ -177,12 +189,12 @@ function git(project, args) {
   return result.stdout;
 }
 
-function evaluate(args, env = {}, node = []) {
+function evaluate(args, env = {}, node = [], { timeout = SPAWN_TIMEOUT_MS } = {}) {
   const result = spawnSync(process.execPath, [...node, EVALUATE, ...args], {
     cwd: PROJECT_ROOT,
     encoding: 'utf8',
     env: { ...BASE_ENV, ...env },
-    timeout: SPAWN_TIMEOUT_MS,
+    timeout,
     killSignal: 'SIGKILL',
   });
   if (result.error) throw new Error(`tea-evaluate ${args.join(' ')} did not finish: ${result.error.message}`);
@@ -633,6 +645,15 @@ function checkRefusedArtifacts({ engine, folder, runDirectory, shimEnv }) {
     'trial-sets/P-001/record-2.json',
     /its actions artifact contract\.json lies outside this run directory/,
   );
+  // A record whose manifest reference names the other set's manifest, digest and all.
+  const otherManifest = readJson(path.join(runDirectory, 'trial-sets', 'P-002', 'record-1.json')).isolationManifestArtifact;
+  tamper(
+    "a record whose isolation-manifest reference names another set's manifest",
+    'trial-sets/P-001/record-1.json',
+    (value) => (value.isolationManifestArtifact = otherManifest),
+    'trial-sets/P-001/record-1.json',
+    /its isolation manifest \S+trial-sets\/P-002\/isolation-manifest\.json is not its set's \S+trial-sets\/P-001\/isolation-manifest\.json/,
+  );
 
   // Rewrites that keep every file on its schema and every reference agreeing
   // with its file: only the digests run.json recorded tell them from the run.
@@ -692,6 +713,56 @@ function checkRefusedArtifacts({ engine, folder, runDirectory, shimEnv }) {
     ],
     'trial-sets/P-001/isolation-manifest.json',
   );
+
+  // A record copied under a name the run never sealed, rewritten to a pass,
+  // and named in the index in place of the one it copies: it meets its
+  // schema and its references, and only its missing digest in run.json
+  // tells it from the run.
+  const indexPath = path.join(runDirectory, 'trial-sets.json');
+  const indexBytes = fs.readFileSync(indexPath);
+  const copied = path.join(runDirectory, 'trial-sets', 'P-002', 'record-9.json');
+  try {
+    const copy = readJson(path.join(runDirectory, 'trial-sets', 'P-002', 'record-1.json'));
+    copy.findings = [];
+    copy.evaluatorRecommendation = 'PASS';
+    copy.oracleDispositions = copy.oracleDispositions.map((entry) => ({ ...entry, disposition: 'held' }));
+    fs.writeFileSync(copied, engine.serializeArtifact(copy, 'SealedRunRecord'));
+    const renamed = JSON.parse(indexBytes.toString('utf8'));
+    const set = renamed.trialSets.find((entry) => entry.probeId === 'P-002');
+    set.records = set.records.map((relative) =>
+      relative === 'trial-sets/P-002/record-1.json' ? 'trial-sets/P-002/record-9.json' : relative,
+    );
+    fs.writeFileSync(indexPath, JSON.stringify(renamed));
+    fs.rmSync(log, { force: true });
+    const unsealed = evaluate(['score', '--evaluation', folder], shimEnv);
+    check(
+      unsealed.status === 10 && /trial-sets\/P-002\/record-9\.json: \[run-integrity\] has no digest in run\.json/.test(unsealed.stdout),
+      `score over a record the run never sealed exited ${unsealed.status}; expected 10 saying it has no digest in run.json\n${unsealed.output}`,
+    );
+    check(loggedCalls(log).length === 0, 'score called the engine over a record the run never sealed');
+  } finally {
+    fs.writeFileSync(indexPath, indexBytes);
+    fs.rmSync(copied, { force: true });
+  }
+
+  // A FIFO swapped in for a record: score refuses it at once and never waits on it.
+  const fifoRecord = path.join(runDirectory, 'trial-sets', 'P-001', 'record-1.json');
+  const fifoBytes = fs.readFileSync(fifoRecord);
+  try {
+    fs.rmSync(fifoRecord);
+    const made = spawnSync('mkfifo', [fifoRecord]);
+    check(made.status === 0, `mkfifo could not make a FIFO for the score case: ${made.stderr}`);
+    fs.rmSync(log, { force: true });
+    const fifo = evaluate(['score', '--evaluation', folder], shimEnv, [], { timeout: 30_000 });
+    check(
+      fifo.status === 10 && /trial-sets\/P-001\/record-1\.json: \[\S+\] .*is not a regular file the run wrote/.test(fifo.stdout),
+      `score over a record swapped for a FIFO exited ${fifo.status}; expected 10 naming it as no regular file\n${fifo.output}`,
+    );
+    check(loggedCalls(log).length === 0, 'score called the engine over a record swapped for a FIFO');
+  } finally {
+    fs.rmSync(fifoRecord, { force: true });
+    fs.writeFileSync(fifoRecord, fifoBytes);
+  }
 
   // A run.json that does not say the run completed has nothing to score, its index notwithstanding.
   const runFile = path.join(runDirectory, 'run.json');
@@ -937,12 +1008,12 @@ function checkStoppedRuns() {
     'a run whose compiled contract was rewritten wrote trial sets',
   );
 
-  // The last verification fails after the index and a completed run.json were
-  // written: the run ends incomplete, its index retracted, and score refuses it.
+  // The last verification fails after the index was written: the run ends
+  // incomplete, its index retracted, and score refuses it.
   const unsealed = makeProject('unsealed');
   const unsealedRun = evaluate(
     ['run', '--evaluation', unsealed.folder],
-    { ...unsealed.env, TEA_EVALUATE_FAIL_VERIFY: 'after the trial sets were sealed' },
+    { ...unsealed.env, TEA_EVALUATE_VERIFY_AT: 'after the trial sets were sealed', TEA_EVALUATE_VERIFY_DO: 'fail' },
     ['--require', WRAP_RUN_DIRECTORY],
   );
   check(unsealedRun.status === 12, `a run whose last verification failed exited ${unsealedRun.status}; expected 12\n${unsealedRun.output}`);
@@ -959,6 +1030,126 @@ function checkStoppedRuns() {
   check(
     unsealedScore.status === 64,
     `score over a run that did not seal exited ${unsealedScore.status}; expected 64\n${unsealedScore.output}`,
+  );
+
+  // The project changes while the trial sets are sealed, after the last
+  // trial's read: the read before run.json says completed stops the run.
+  const sealing = makeProject('sealing-touch');
+  const sealingRun = evaluate(
+    ['run', '--evaluation', sealing.folder],
+    {
+      ...sealing.env,
+      TEA_EVALUATE_VERIFY_AT: 'after the trials',
+      TEA_EVALUATE_VERIFY_DO: 'touch',
+      TEA_EVALUATE_VERIFY_FILE: path.join(sealing.project, 'rules', 'policy.txt'),
+    },
+    ['--require', WRAP_RUN_DIRECTORY],
+  );
+  check(
+    sealingRun.status === 12 && /changed during the sealing of the trial sets/.test(sealingRun.output),
+    `a run whose project changed while it sealed its trial sets exited ${sealingRun.status}; expected 12\n${sealingRun.output}`,
+  );
+  const sealingDirectory = runDirectoryOf(sealing.folder);
+  if (sealingDirectory !== null) {
+    const sealingRecord = written(path.join(sealingDirectory, 'run.json'), "the sealing run's run.json") ?? {};
+    check(
+      sealingRecord.completed === false && sealingRecord.outcome?.exitCode === 12,
+      `a run whose project changed while it sealed records ${JSON.stringify({ completed: sealingRecord.completed, outcome: sealingRecord.outcome })}`,
+    );
+    check(
+      !fs.existsSync(path.join(sealingDirectory, 'trial-sets.json')),
+      'a run whose project changed while it sealed kept trial-sets.json',
+    );
+  }
+  const sealingScore = evaluate(['score', '--evaluation', sealing.folder], sealing.env);
+  check(sealingScore.status === 64, `score over a run whose project changed while it sealed exited ${sealingScore.status}; expected 64`);
+
+  // A process the target left running moves the whole run directory away
+  // and leaves a link, just before the last verification: the run exits 12,
+  // no run.json anywhere says completed, the outcome names the end the
+  // runtime could not record there, and score refuses the run.
+  const movedRoot = makeProject('moved-root');
+  const movedTo = path.join(tempDir('moved-root-away'), 'run');
+  const movedRun = evaluate(
+    ['run', '--evaluation', movedRoot.folder],
+    {
+      ...movedRoot.env,
+      TEA_EVALUATE_VERIFY_AT: 'after the trial sets were sealed',
+      TEA_EVALUATE_VERIFY_DO: 'move-root',
+      TEA_EVALUATE_VERIFY_FILE: movedTo,
+    },
+    ['--require', WRAP_RUN_DIRECTORY],
+  );
+  check(
+    movedRun.status === 12 &&
+      /the run directory does not record this end/.test(movedRun.output) &&
+      /could not record this end in run\.json: .*now lies at/.test(movedRun.output),
+    `a run whose directory was moved before its last verification exited ${movedRun.status}; expected 12 naming the end it could not record\n${movedRun.output}`,
+  );
+  const movedRecord = fs.existsSync(path.join(movedTo, 'run.json')) ? readJson(path.join(movedTo, 'run.json')) : {};
+  check(movedRecord.completed !== true, 'a run whose directory was moved before its last verification left a run.json that says completed');
+  const movedScore = evaluate(['score', '--evaluation', movedRoot.folder], movedRoot.env);
+  check(
+    movedScore.status === 64,
+    `score over a run whose directory was moved before its last verification exited ${movedScore.status}; expected 64\n${movedScore.output}`,
+  );
+
+  // A target that swaps trials/clean for a link into the project, replaces it
+  // with a directory of its own, or moves trials/ into the project and leaves
+  // a link: the next trial's evidence is refused (exit 12) and lands nowhere.
+  const linked = makeProject('link-trials');
+  const rulesBefore = fs.readdirSync(path.join(linked.project, 'rules')).sort();
+  const linkedRun = evaluate(['run', '--evaluation', linked.folder], {
+    ...linked.env,
+    VERDICT_WHEN: 'trial-clean-2',
+    VERDICT_DO: 'link-trials',
+  });
+  check(
+    linkedRun.status === 12 &&
+      /trials\/clean is no longer the directory the runtime made, so the runtime will not write/.test(linkedRun.output),
+    `a run whose trials/clean became a link into the project exited ${linkedRun.status}; expected 12 naming the directory\n${linkedRun.output}`,
+  );
+  check(
+    JSON.stringify(fs.readdirSync(path.join(linked.project, 'rules')).sort()) === JSON.stringify(rulesBefore),
+    `a run wrote through a link into the project's rules/: ${JSON.stringify(fs.readdirSync(path.join(linked.project, 'rules')))}`,
+  );
+  check(
+    git(linked.repository, ['status', '--porcelain']).toString().trim() === '',
+    `the adopter's tree changed under a linked trials/clean: ${git(linked.repository, ['status', '--porcelain'])}`,
+  );
+
+  const recreated = makeProject('recreate-trials');
+  const recreatedRun = evaluate(['run', '--evaluation', recreated.folder], {
+    ...recreated.env,
+    VERDICT_WHEN: 'trial-clean-2',
+    VERDICT_DO: 'recreate-trials',
+  });
+  check(
+    recreatedRun.status === 12 &&
+      /trials\/clean is no longer the directory the runtime made, so the runtime will not write/.test(recreatedRun.output),
+    `a run whose trials/clean was replaced exited ${recreatedRun.status}; expected 12 at the next write\n${recreatedRun.output}`,
+  );
+  const recreatedDirectory = runDirectoryOf(recreated.folder);
+  check(
+    recreatedDirectory === null || fs.readdirSync(path.join(recreatedDirectory, 'trials', 'clean')).length === 0,
+    'a run wrote trial evidence into a trials/clean the target made',
+  );
+
+  const moved = makeProject('move-trials');
+  const movedTrialsRun = evaluate(['run', '--evaluation', moved.folder], {
+    ...moved.env,
+    VERDICT_WHEN: 'trial-clean-2',
+    VERDICT_DO: 'move-trials',
+  });
+  check(
+    movedTrialsRun.status === 12 && /trials\/clean now lies at \S+stolen\/clean, so the runtime will not write/.test(movedTrialsRun.output),
+    `a run whose trials/ was moved into the project exited ${movedTrialsRun.status}; expected 12 naming where it lies\n${movedTrialsRun.output}`,
+  );
+  const stolen = path.join(moved.repository, 'stolen');
+  const stolenEntries = fs.existsSync(stolen) ? fs.readdirSync(stolen, { recursive: true }).sort() : [];
+  check(
+    JSON.stringify(stolenEntries) === JSON.stringify(['clean', path.join('clean', 'trial-1.json')]),
+    `the runtime wrote into the trials/ moved into the project, which holds ${JSON.stringify(stolenEntries)}`,
   );
 
   const rejecting = makeProject('clean-fails');
@@ -1466,6 +1657,66 @@ async function checkTemplatesAndIgnores() {
   }
 }
 
+/**
+ * The run directory's writer on its own: a directory moved out while a file
+ * is being written into it (the move made from inside the write) has that
+ * file removed again and the write refused, and a read of a file swapped for
+ * a FIFO returns a refusal at once (in a child process with a deadline, so a
+ * read that blocks fails the check and never hangs the suite).
+ */
+function checkRunDirectoryWriter() {
+  const base = tempDir('writer');
+  const runs = path.join(base, 'runs');
+  fs.mkdirSync(runs);
+  const writer = RunDirectory.create(runs, 'moved-while-writing');
+  writer.writeJson('trials/clean/trial-1.json', { trialIndex: 1 });
+  const away = path.join(base, 'away');
+  const writeSync = fs.writeSync;
+  let refusal = null;
+  fs.writeSync = (...args) => {
+    fs.writeSync = writeSync;
+    fs.renameSync(path.join(writer.root, 'trials'), away);
+    fs.symlinkSync(away, path.join(writer.root, 'trials'));
+    return writeSync(...args);
+  };
+  try {
+    writer.writeJson('trials/clean/trial-2.json', { trialIndex: 2 });
+  } catch (error) {
+    refusal = error;
+  } finally {
+    fs.writeSync = writeSync;
+  }
+  check(
+    refusal instanceof RunDirectoryError && /now lies at/.test(refusal.message) && /was removed/.test(refusal.message),
+    `a write whose directory was moved out while it wrote ended ${refusal === null ? 'without a refusal' : `with ${refusal.message}`}`,
+  );
+  check(
+    !fs.existsSync(path.join(away, 'clean', 'trial-2.json')),
+    'a file written while its directory was moved out of the run directory stayed where the directory went',
+  );
+
+  const script = `
+const fs = require('node:fs');
+const path = require('node:path');
+const { spawnSync } = require('node:child_process');
+const { RunDirectory } = require(${JSON.stringify(path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate', 'run-directory.js'))});
+const writer = RunDirectory.create(process.argv[1], 'fifo');
+writer.writeJson('eval-contract.json', {});
+fs.rmSync(path.join(writer.root, 'eval-contract.json'));
+if (spawnSync('mkfifo', [path.join(writer.root, 'eval-contract.json')]).status !== 0) process.exit(3);
+try {
+  writer.read('eval-contract.json');
+  process.stdout.write('read');
+} catch (error) {
+  process.stdout.write(error.message);
+}`;
+  const fifo = spawnSync(process.execPath, ['-e', script, runs], { encoding: 'utf8', timeout: 20_000, killSignal: 'SIGKILL' });
+  check(
+    fifo.status === 0 && /eval-contract\.json is no longer a file/.test(fifo.stdout),
+    `a read of a file swapped for a FIFO ${fifo.error ? `did not return: ${fifo.error.message}` : `exited ${fifo.status} saying ${JSON.stringify(fifo.stdout)}`}`,
+  );
+}
+
 /** Runs one case; an exception is a failed check, so the cases after it still run and every failure is reported. */
 async function runCase(name, body) {
   try {
@@ -1478,6 +1729,7 @@ async function runCase(name, body) {
 async function main() {
   try {
     await runCase('the units', checkUnits);
+    await runCase('the run directory writer', checkRunDirectoryWriter);
     await runCase('the templates and ignores', checkTemplatesAndIgnores);
     await runCase('the run and its scores', checkRunAndScore);
     await runCase('the stopped runs', checkStoppedRuns);

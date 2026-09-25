@@ -1,5 +1,5 @@
 /**
- * A run directory, `runs/<invocationId>/`, that only the runtime writes
+ * A run directory, `runs/<invocationId>/`, whose every write and read the runtime guards
  * (AD-7, AD-12).
  *
  * The runtime does not sandbox the target's file system, so a target can find
@@ -13,13 +13,19 @@
  *   - the run directory is created exclusively, and each directory in it is
  *     created exclusively by the runtime and recorded by device and inode;
  *   - a write runs with the process inside the recorded directory, confirmed
- *     to be that very directory, and creates its file by bare name,
- *     exclusively and without following a link, so a planted entry stops the
- *     write (exit 12) and a directory swapped for a link cannot move it;
- *     `run.json`, the one file rewritten, is replaced through a new file
- *     renamed over it, which replaces a link without following it;
+ *     before and after the write to be that very directory at its recorded
+ *     place (its device and inode, and the path the system reports for the
+ *     working directory, which names where a moved directory now lies), and
+ *     creates its file by bare name, exclusively and without following a
+ *     link, so a planted entry stops the write (exit 12), and so does a
+ *     directory the target replaced, swapped for a link, or moved out and
+ *     left a link in its place; a file written while its directory was being
+ *     moved is removed again before the write is refused; `run.json`, the one
+ *     file rewritten, is replaced through a new file renamed over it, which
+ *     replaces a link without following it;
  *   - each file's digest is held in memory as it is written, and a read hands
- *     back only the bytes the runtime wrote;
+ *     back only the bytes the runtime wrote, opened without blocking, so a
+ *     FIFO a target swapped in is refused and never waited on;
  *   - `verify` walks the directory without following links and reports every
  *     entry the runtime did not write, every entry it wrote that is gone or
  *     changed kind, and every file whose bytes differ from the ones written.
@@ -35,7 +41,8 @@ const path = require('node:path');
 
 const NO_FOLLOW = fs.constants.O_NOFOLLOW ?? 0;
 const CREATE = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | NO_FOLLOW;
-const READ = fs.constants.O_RDONLY | NO_FOLLOW;
+/** Non-blocking, so opening a FIFO a target swapped in returns at once and `fstat` refuses it. */
+const READ = fs.constants.O_RDONLY | NO_FOLLOW | (fs.constants.O_NONBLOCK ?? 0);
 
 /** Something in the run directory the runtime did not write or cannot trust; the commands exit 12. */
 class RunDirectoryError extends Error {
@@ -106,11 +113,16 @@ class RunDirectory {
 
   /**
    * Runs `work` with the process inside the recorded directory `directory`
-   * (relative to the root), confirmed by device and inode, and restores the
-   * working directory afterwards.
+   * (relative to the root), confirmed before and after `work` by `confirm`,
+   * and restores the working directory afterwards. When the confirmation
+   * after `work` fails, `undo` (still inside the directory, wherever it now
+   * lies) takes back what `work` wrote before the refusal is thrown.
+   *
+   * @param {string} directory
+   * @param {() => any} work
+   * @param {{ undo?: (() => void) | null }} [options]
    */
-  inDirectory(directory, work) {
-    const identity = this.directories.get(directory);
+  inDirectory(directory, work, { undo = null } = {}) {
     const real = path.join(this.realRoot, ...(directory === '' ? [] : directory.split('/')));
     const previous = process.cwd();
     try {
@@ -119,15 +131,55 @@ class RunDirectory {
       throw new RunDirectoryError(`the run directory's ${directory || 'root'} cannot be entered: ${error.message}`);
     }
     try {
-      const here = fs.statSync('.');
-      if (here.dev !== identity.dev || here.ino !== identity.ino) {
-        throw new RunDirectoryError(
-          `${real} is no longer the directory the runtime made, so the runtime will not write or read through it (the target may have replaced it)`,
-        );
+      this.confirm(directory, real);
+      const result = work();
+      try {
+        this.confirm(directory, real);
+      } catch (error) {
+        if (undo === null) throw error;
+        try {
+          undo();
+        } catch (undoError) {
+          throw new RunDirectoryError(
+            `${error.message}; what the runtime had just written there could not be removed: ${undoError.message}`,
+          );
+        }
+        throw new RunDirectoryError(`${error.message}; what the runtime had just written there was removed`);
       }
-      return work();
+      return result;
     } finally {
       process.chdir(previous);
+    }
+  }
+
+  /**
+   * Throws unless the working directory is the recorded directory
+   * `directory` at its recorded place `real`: the same device and inode (a
+   * directory replaced, or swapped for a link, has others) and the path the
+   * system reports for it (a directory moved elsewhere keeps its inode, and a
+   * link left in its place would lead the runtime to it).
+   */
+  confirm(directory, real) {
+    const identity = this.directories.get(directory);
+    const here = fs.statSync('.');
+    if (here.dev !== identity.dev || here.ino !== identity.ino) {
+      throw new RunDirectoryError(
+        `${real} is no longer the directory the runtime made, so the runtime will not write or read through it (the target may have replaced it)`,
+      );
+    }
+    let reported;
+    try {
+      // Node keeps the working directory's path from the last chdir; entering
+      // '.' again makes it ask the system where the directory lies now.
+      process.chdir('.');
+      reported = process.cwd();
+    } catch (error) {
+      throw new RunDirectoryError(`${real} cannot be located any more, so the runtime will not write or read through it: ${error.message}`);
+    }
+    if (reported !== real) {
+      throw new RunDirectoryError(
+        `${real} now lies at ${reported}, so the runtime will not write or read through it (the target may have moved it and left a link in its place)`,
+      );
     }
   }
 
@@ -137,19 +189,23 @@ class RunDirectory {
     const parent = path.posix.dirname(directory) === '.' ? '' : path.posix.dirname(directory);
     this.ensureDirectory(parent);
     const name = path.posix.basename(directory);
-    this.inDirectory(parent, () => {
-      try {
-        fs.mkdirSync(name);
-      } catch (error) {
-        throw new RunDirectoryError(
-          error.code === 'EEXIST'
-            ? `the run directory already holds ${directory}, which the runtime did not make (the target may have planted it)`
-            : `${directory} cannot be created in the run directory: ${error.message}`,
-        );
-      }
-      const stats = fs.lstatSync(name);
-      this.directories.set(directory, { dev: stats.dev, ino: stats.ino });
-    });
+    const stats = this.inDirectory(
+      parent,
+      () => {
+        try {
+          fs.mkdirSync(name);
+        } catch (error) {
+          throw new RunDirectoryError(
+            error.code === 'EEXIST'
+              ? `the run directory already holds ${directory}, which the runtime did not make (the target may have planted it)`
+              : `${directory} cannot be created in the run directory: ${error.message}`,
+          );
+        }
+        return fs.lstatSync(name);
+      },
+      { undo: () => fs.rmdirSync(name) },
+    );
+    this.directories.set(directory, { dev: stats.dev, ino: stats.ino });
   }
 
   /**
@@ -163,23 +219,28 @@ class RunDirectory {
     const buffer = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes);
     const directory = path.posix.dirname(relative) === '.' ? '' : path.posix.dirname(relative);
     this.ensureDirectory(directory);
-    this.inDirectory(directory, () => {
-      let descriptor;
-      try {
-        descriptor = fs.openSync(path.posix.basename(relative), CREATE, 0o644);
-      } catch (error) {
-        throw new RunDirectoryError(
-          error.code === 'EEXIST' || error.code === 'ELOOP'
-            ? `the run directory already holds ${relative}, which the runtime did not write (the target may have planted it)`
-            : `${relative} cannot be written in the run directory: ${error.message}`,
-        );
-      }
-      try {
-        fs.writeSync(descriptor, buffer);
-      } finally {
-        fs.closeSync(descriptor);
-      }
-    });
+    const name = path.posix.basename(relative);
+    this.inDirectory(
+      directory,
+      () => {
+        let descriptor;
+        try {
+          descriptor = fs.openSync(name, CREATE, 0o644);
+        } catch (error) {
+          throw new RunDirectoryError(
+            error.code === 'EEXIST' || error.code === 'ELOOP'
+              ? `the run directory already holds ${relative}, which the runtime did not write (the target may have planted it)`
+              : `${relative} cannot be written in the run directory: ${error.message}`,
+          );
+        }
+        try {
+          fs.writeSync(descriptor, buffer);
+        } finally {
+          fs.closeSync(descriptor);
+        }
+      },
+      { undo: () => fs.unlinkSync(name) },
+    );
     this.files.set(relative, sha256(buffer));
     return this.pathOf(relative);
   }
@@ -201,25 +262,29 @@ class RunDirectory {
     this.ensureDirectory(directory);
     const name = path.posix.basename(relative);
     const staged = `.${name}.${crypto.randomBytes(6).toString('hex')}.tmp`;
-    this.inDirectory(directory, () => {
-      let descriptor;
-      try {
-        descriptor = fs.openSync(staged, CREATE, 0o644);
-      } catch (error) {
-        throw new RunDirectoryError(`${relative} cannot be rewritten in the run directory: ${error.message}`);
-      }
-      try {
-        fs.writeSync(descriptor, buffer);
-      } finally {
-        fs.closeSync(descriptor);
-      }
-      try {
-        fs.renameSync(staged, name);
-      } catch (error) {
-        fs.rmSync(staged, { force: true });
-        throw new RunDirectoryError(`${relative} cannot be rewritten in the run directory: ${error.message}`);
-      }
-    });
+    this.inDirectory(
+      directory,
+      () => {
+        let descriptor;
+        try {
+          descriptor = fs.openSync(staged, CREATE, 0o644);
+        } catch (error) {
+          throw new RunDirectoryError(`${relative} cannot be rewritten in the run directory: ${error.message}`);
+        }
+        try {
+          fs.writeSync(descriptor, buffer);
+        } finally {
+          fs.closeSync(descriptor);
+        }
+        try {
+          fs.renameSync(staged, name);
+        } catch (error) {
+          fs.rmSync(staged, { force: true });
+          throw new RunDirectoryError(`${relative} cannot be rewritten in the run directory: ${error.message}`);
+        }
+      },
+      { undo: () => fs.unlinkSync(name) },
+    );
     this.files.set(relative, sha256(buffer));
     return this.pathOf(relative);
   }

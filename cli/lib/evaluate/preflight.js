@@ -390,12 +390,25 @@ async function runPipeline(folder, options) {
   if (state.run !== null && !state.sealed) {
     state.run.outcome = { stage: outcome.stage, exitCode: outcome.exitCode, message: outcome.message };
     if (state.run.command === 'run') state.run.completed = false;
-    try {
-      for (const file of state.retractUnlessSealed) state.writer.remove(file);
-      state.writer.replaceJson('run.json', state.run);
-    } catch (error) {
-      if (!(error instanceof RunDirectoryError)) throw error;
-      // The outcome already says why the run directory cannot be trusted.
+    // Each step is tried on its own, and one the runtime cannot take is named
+    // in the outcome, so nobody reads the run directory as this end recorded.
+    const failed = [];
+    for (const [what, step] of [
+      ...state.retractUnlessSealed.map((file) => [`remove ${file}`, () => state.writer.remove(file)]),
+      ['record this end in run.json', () => state.writer.replaceJson('run.json', state.run)],
+    ]) {
+      try {
+        step();
+      } catch (error) {
+        if (!(error instanceof RunDirectoryError)) throw error;
+        failed.push(`could not ${what}: ${error.message}`);
+      }
+    }
+    if (failed.length > 0) {
+      return new PreflightOutcome({
+        ...outcome,
+        message: `${outcome.message}\nthe run directory does not record this end, since the runtime ${failed.join('; and ')}`,
+      });
     }
   }
   return outcome;

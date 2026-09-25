@@ -28,11 +28,12 @@
  *      evaluator configuration for the run, carrying the seal's
  *      `sealedBriefDigest`; each validated against the schema eval-quality
  *      publishes before it is written;
- *   5. `trial-sets.json`, the index `tea-evaluate score` reads, then `run.json`
- *      completed with the digests of every file `score` reads, the runner and
- *      model identity, the trial count and the duration; then the adopter's
- *      project read once more and the run directory verified again, so a run
- *      is complete only once nothing it wrote was touched.
+ *   5. `trial-sets.json`, the index `tea-evaluate score` reads; then the
+ *      adopter's project read once more and the run directory verified again;
+ *      and only then, as the run's last write, `run.json` completed with the
+ *      digests of every file `score` reads, the runner and model identity, the
+ *      trial count and the duration, so no `run.json` says completed before
+ *      nothing the run wrote was found touched.
  *
  * A trial step that exits one of its registry entry's
  * `infrastructureExitCodes`, or that a signal from outside stops, is a target
@@ -614,6 +615,10 @@ async function runTrialSets(given) {
     exitCode: 0,
     message: `${trialSets.length} trial set(s) of ${trialCount} trial(s) sealed over ${arms.map((arm) => arm.conditionArm).join(', ')}; score them with tea-evaluate score --run ${invocationId}`,
   });
+  // The project must be as it was, and the run directory exactly what the
+  // runtime wrote, before run.json says completed; that write is the run's last.
+  treeUnchanged('sealing', { record: false });
+  writer.verify('after the trial sets were sealed');
   Object.assign(run, {
     artifacts,
     contractDigest,
@@ -632,10 +637,6 @@ async function runTrialSets(given) {
     outcome: { stage: result.stage, exitCode: result.exitCode, message: result.message },
   });
   writeRun();
-  // The last write is done: the project must be as it was, and the run
-  // directory exactly what the runtime wrote, or the run is not complete.
-  treeUnchanged('sealing', { record: false });
-  writer.verify('after the trial sets were sealed');
   markSealed();
   return result;
 }

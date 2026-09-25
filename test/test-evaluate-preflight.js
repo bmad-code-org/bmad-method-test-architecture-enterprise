@@ -412,7 +412,8 @@ function childrenOf(pid) {
  * the wall clock, the runner gone before the supervisor looked, a child the
  * agent leaves behind when it exits (under the runner, and under the group
  * leader alone), a process the agent leaves in a new session holding its
- * pipes, each forwarded signal, an agent that outlives a forwarded signal
+ * pipes, each forwarded signal (received by the agent's group, as a witness
+ * process in it records), an agent that outlives a forwarded signal
  * (reported as the grace period's SIGKILL after that signal), and a wall
  * clock past the 2^31-1 ms one Node timer holds.
  */
@@ -693,38 +694,62 @@ async function checkSupervision() {
   // action writes a core file, and where the kernel hands cores to a collector (a Linux CI runner) the
   // dump can outlast the leader's grace period, whose SIGKILL the kernel then records as the agent's end;
   // the report still names the SIGQUIT that stopped the group. The other three end the agent at once.
+  // A witness in the agent's group records each signal that reaches it: an agent the kernel reports
+  // killed by the forwarded signal received it, and one ended by the grace SIGKILL instead must have
+  // left the witness a SIGQUIT to record in the grace period it outlived, so a leader that never
+  // sends SIGQUIT to the group fails the case.
+  const receivedBy = (witnessFile) => {
+    const file = `${witnessFile}.signals`;
+    return fs.existsSync(file) ? fs.readFileSync(file, 'utf8').trim().split('\n') : [];
+  };
   for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGQUIT']) {
-    const pidFile = path.join(tempDir(`forward-${signal}`), 'pid');
-    const run = startRunner(long, `Say alpha. STUB-ORPHAN ${pidFile} STUB-SLEEP 30000`);
+    const directory = tempDir(`forward-${signal}`);
+    const pidFile = path.join(directory, 'pid');
+    const witnessFile = path.join(directory, 'witness');
+    const run = startRunner(long, `Say alpha. STUB-ORPHAN ${pidFile} STUB-WITNESS ${witnessFile} STUB-SLEEP 30000`);
     const forwardedChild = await pidFrom(pidFile);
+    const witness = await pidFrom(witnessFile);
     const [forwardingSupervisor] = childrenOf(run.child.pid);
     if (forwardingSupervisor !== undefined) process.kill(forwardingSupervisor, signal);
     const ending = await run.closed;
-    const endings = [`killed by signal ${signal}.`];
-    if (signal === 'SIGQUIT')
-      endings.push(`killed by signal SIGKILL once it outlived the grace period after a ${signal} to its process group.`);
+    const killedBySignal = ending.stderr.includes(`killed by signal ${signal}.`);
+    const outlived =
+      signal === 'SIGQUIT' &&
+      ending.stderr.includes(`killed by signal SIGKILL once it outlived the grace period after a ${signal} to its process group.`) &&
+      receivedBy(witnessFile).includes(signal);
     check(
-      ending.code === EXIT_CODES['environment-transport'] && endings.some((text) => ending.stderr.includes(text)),
-      `a runner whose supervisor received ${signal} exited ${ending.code}; expected the agent killed by ${signal}\n${ending.stderr}`,
+      ending.code === EXIT_CODES['environment-transport'] && (killedBySignal || outlived),
+      `a runner whose supervisor received ${signal} exited ${ending.code}; expected the agent killed by ${signal}, or for SIGQUIT the grace SIGKILL with the SIGQUIT received by the agent's group (its witness recorded ${JSON.stringify(receivedBy(witnessFile))})\n${ending.stderr}`,
     );
-    if (forwardedChild !== null) {
-      check(await processEnds(forwardedChild), `a child the agent started (pid ${forwardedChild}) outlived a forwarded ${signal}`);
-      reap(forwardedChild);
+    for (const pid of [forwardedChild, witness]) {
+      if (pid === null) continue;
+      check(await processEnds(pid), `a child the agent started (pid ${pid}) outlived a forwarded ${signal}`);
+      reap(pid);
     }
   }
   // An agent that goes on running after a forwarded SIGQUIT, as one still writing its core does, ends by
   // the grace period's SIGKILL, and the report names the SIGQUIT that asked for the stop.
-  const outlivingPid = path.join(tempDir('outlive'), 'pid');
-  const outliving = startRunner(long, `Say alpha. STUB-OUTLIVE SIGQUIT STUB-ORPHAN ${outlivingPid} STUB-SLEEP 30000`);
+  const outlivingDirectory = tempDir('outlive');
+  const outlivingPid = path.join(outlivingDirectory, 'pid');
+  const outlivingWitness = path.join(outlivingDirectory, 'witness');
+  const outliving = startRunner(
+    long,
+    `Say alpha. STUB-OUTLIVE SIGQUIT STUB-ORPHAN ${outlivingPid} STUB-WITNESS ${outlivingWitness} STUB-SLEEP 30000`,
+  );
   const outlivingChild = await pidFrom(outlivingPid);
+  const outlivingWitnessPid = await pidFrom(outlivingWitness);
   const [outlivingSupervisor] = childrenOf(outliving.child.pid);
   if (outlivingSupervisor !== undefined) process.kill(outlivingSupervisor, 'SIGQUIT');
   const outlived = await outliving.closed;
-  if (outlivingChild !== null) reap(outlivingChild);
+  for (const pid of [outlivingChild, outlivingWitnessPid]) if (pid !== null) reap(pid);
   check(
     outlived.code === EXIT_CODES['environment-transport'] &&
       outlived.stderr.includes('killed by signal SIGKILL once it outlived the grace period after a SIGQUIT to its process group.'),
     `a runner whose agent outlived a forwarded SIGQUIT exited ${outlived.code}; expected the grace SIGKILL reported with the SIGQUIT\n${outlived.stderr}`,
+  );
+  check(
+    receivedBy(outlivingWitness).includes('SIGQUIT'),
+    `the agent's group never received the forwarded SIGQUIT (its witness recorded ${JSON.stringify(receivedBy(outlivingWitness))}), so the grace SIGKILL proves nothing about forwarding`,
   );
 
   // A wall clock past the 2^31-1 ms one Node timer holds.

@@ -75,6 +75,15 @@
  *   forge                   answer as usual, then rewrite that run
  *                           directory's compiled contract, B-001's severity
  *                           lowered to low
+ *   link-trials             answer as usual, then replace that run
+ *                           directory's trials/clean with a symbolic link to
+ *                           the adopter's rules/ directory
+ *   recreate-trials         answer as usual, then replace that run
+ *                           directory's trials/clean with a new, empty
+ *                           directory of the same name
+ *   move-trials             answer as usual, then move that run directory's
+ *                           trials/ into the adopter's project as stolen/ and
+ *                           leave a symbolic link to it in its place
  */
 
 'use strict';
@@ -151,7 +160,7 @@ if (text.includes('sabotage: adopter') && process.env.VERDICT_TOUCH) {
   fs.appendFileSync(process.env.VERDICT_TOUCH, 'written by the verdict stub outside its workspace\n');
 }
 if (act === 'touch' && process.env.VERDICT_TOUCH) fs.appendFileSync(process.env.VERDICT_TOUCH, `written by the verdict stub in ${workspaceDirectory}\n`);
-if (act === 'plant' || act === 'forge') {
+if (['plant', 'forge', 'link-trials', 'recreate-trials', 'move-trials'].includes(act)) {
   const common = spawnSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { encoding: 'utf8' }).stdout.trim();
   const runs = path.join(path.dirname(common), 'evals', 'verdict', 'runs');
   const newest = fs
@@ -169,6 +178,17 @@ if (act === 'plant' || act === 'forge') {
     const contract = JSON.parse(fs.readFileSync(compiled, 'utf8'));
     contract.behaviors[0].severity = 'low';
     fs.writeFileSync(compiled, JSON.stringify(contract));
+  }
+  const trials = path.join(run, 'trials');
+  if (act === 'link-trials' || act === 'recreate-trials') {
+    fs.rmSync(path.join(trials, 'clean'), { recursive: true, force: true });
+    if (act === 'link-trials') fs.symlinkSync(path.join(path.dirname(common), 'rules'), path.join(trials, 'clean'));
+    else fs.mkdirSync(path.join(trials, 'clean'));
+  }
+  if (act === 'move-trials') {
+    const stolen = path.join(path.dirname(common), 'stolen');
+    fs.renameSync(trials, stolen);
+    fs.symlinkSync(stolen, trials);
   }
 }
 if (text.includes('sabotage: refs')) spawnSync('git', ['tag', '--force', 'verdict-sabotage'], { stdio: 'ignore' });

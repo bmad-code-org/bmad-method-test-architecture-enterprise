@@ -9,8 +9,10 @@
  * neither has a `preflight` invocation: both exit 64, since the command was
  * pointed at nothing it can score.
  *
- * Before any engine call, every input is read from the run directory and
- * checked (exit 10 on any finding, naming the file):
+ * Before any engine call, every input is read from the run directory as a
+ * regular file, opened without blocking and without following a link (a FIFO
+ * or a link there is a finding, never waited on), and checked (exit 10 on any
+ * finding, naming the file):
  *
  *   - `trial-sets.json` against the runtime's own schema, with each probe
  *     named once;
@@ -82,10 +84,41 @@ class ScoreOutcome {
   }
 }
 
+/** Opening for a read never waits on a FIFO and never follows a link. */
+const READ_REGULAR = fs.constants.O_RDONLY | (fs.constants.O_NONBLOCK ?? 0) | (fs.constants.O_NOFOLLOW ?? 0);
+
+/**
+ * The bytes of `file`, which must be a regular file: it is opened without
+ * blocking and without following a link, so a FIFO, a device or a link left
+ * in the run directory is refused at once and never waited on.
+ *
+ * @returns {Buffer}
+ */
+function regularFileBytes(file) {
+  let descriptor;
+  try {
+    descriptor = fs.openSync(file, READ_REGULAR);
+  } catch (error) {
+    if (error.code === 'ELOOP' || error.code === 'EMLINK') throw new Error('is a symbolic link, not a regular file the run wrote');
+    throw error;
+  }
+  try {
+    if (!fs.fstatSync(descriptor).isFile()) throw new Error('is not a regular file the run wrote');
+    return fs.readFileSync(descriptor);
+  } finally {
+    fs.closeSync(descriptor);
+  }
+}
+
+/** `file` parsed as JSON, read by `regularFileBytes`. */
+function regularJson(file) {
+  return JSON.parse(regularFileBytes(file).toString('utf8'));
+}
+
 /** A run directory's `run.json`, or null when it has none that parses. */
 function runRecordOf(directory) {
   try {
-    return readJson(path.join(directory, 'run.json'));
+    return regularJson(path.join(directory, 'run.json'));
   } catch {
     return null;
   }
@@ -156,7 +189,7 @@ async function inputFindings({ folder, runDirectory, index, record, engine }) {
     if (parsed.has(file)) return parsed.get(file);
     let value = null;
     try {
-      value = readJson(file);
+      value = regularJson(file);
     } catch (error) {
       add(relative, 'json', `cannot be read as JSON: ${error.message}`);
     }
@@ -175,7 +208,13 @@ async function inputFindings({ folder, runDirectory, index, record, engine }) {
     if (expectedPath !== null && reference.path !== expectedPath) return `its ${what} ${reference.path} is not its set's ${expectedPath}`;
     const file = path.join(folder, ...reference.path.split('/'));
     if (!fs.existsSync(file)) return `its ${what} ${reference.path} is not there`;
-    const actual = engine.digestBytes(fs.readFileSync(file));
+    let bytes;
+    try {
+      bytes = regularFileBytes(file);
+    } catch (error) {
+      return `its ${what} ${reference.path} ${error.message}`;
+    }
+    const actual = engine.digestBytes(bytes);
     return actual === reference.digest
       ? null
       : `its ${what} ${reference.path} digests to ${actual}, not the ${reference.digest} it records`;
@@ -187,7 +226,14 @@ async function inputFindings({ folder, runDirectory, index, record, engine }) {
       add(relative, 'run-integrity', `has no digest in run.json, so it is not a file the run sealed as ${what}`);
       return;
     }
-    const actual = engine.digestBytes(fs.readFileSync(file));
+    let bytes;
+    try {
+      bytes = regularFileBytes(file);
+    } catch (error) {
+      add(relative, 'run-integrity', `${error.message}, so it is not ${what} the run sealed`);
+      return;
+    }
+    const actual = engine.digestBytes(bytes);
     if (actual !== expected) add(relative, 'run-integrity', `digests to ${actual}, not the ${expected} run.json recorded for ${what}`);
   };
   const recorded = record.artifacts ?? {};
@@ -296,7 +342,7 @@ async function runScoreCommand(folder, { run: invocationId, env = process.env, l
 
   let index;
   try {
-    index = readJson(path.join(runDirectory, TRIAL_SETS_NAME));
+    index = regularJson(path.join(runDirectory, TRIAL_SETS_NAME));
   } catch (error) {
     return new ScoreOutcome({
       exitCode: AUTHORING,
