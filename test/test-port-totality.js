@@ -77,7 +77,11 @@ const colors = {
 const PROBE_KINDS = {
   cli: { handled: true, reason: 'every TEA contract declares the cli interface kind, and TEA reads this member' },
   api: { handled: false, reason: 'TEA measures no system under test that speaks HTTP' },
-  mcp: { handled: false, reason: 'TEA measures no tool server; its commands are spawned processes' },
+  mcp: {
+    handled: false,
+    reason:
+      "TEA's own contracts measure no tool server, so its harness reads commands alone; tea-evaluate reads this member for an adopter's tool server in cli/lib/evaluate/arm.js, which test/test-evaluate-mcp.js holds end to end",
+  },
 };
 
 /**
@@ -85,9 +89,12 @@ const PROBE_KINDS = {
  *
  * `file` is the check that runs it. `reason` is why no check does, and a reason
  * is one of two things, and as of this release every remaining reason is the
- * second. `environment-probe` and `mcp-probe` are the api and mcp arms, TEA
- * measures neither an HTTP service nor a tool server, and the package ships no
- * adapter for the first, so neither has a subject to run against. The adoption
+ * second. `environment-probe` and `mcp-probe` are the api and mcp arms. TEA
+ * measures no HTTP service and the package ships no adapter for it, so the
+ * first has no subject. TEA's own contracts measure no tool server either, and
+ * `tea-evaluate` hands an adopter's server to the package's `createMcpAdapter`
+ * with nothing wrapped around its execution, so the second's subject would be
+ * the package's own adapter, which the package certifies itself. The adoption
  * reasons are gone: corpus, clock and file-system each name a check now. A
  * decline is not deferral and each one says which it is.
  *
@@ -113,7 +120,10 @@ const CONFORMANCE_ARMS = {
   corpus: { file: 'test/test-corpus-conformance.js' },
   clock: { file: 'test/test-probe-conformance.js' },
   'file-system': { file: 'test/test-file-system-conformance.js' },
-  'mcp-probe': { reason: 'TEA authorizes no tool server, so this arm has no subject to run against' },
+  'mcp-probe': {
+    reason:
+      "TEA's own contracts measure no tool server, and tea-evaluate hands an adopter's server to createMcpAdapter with nothing wrapped around its execution, so this arm would certify the package's own adapter; test/test-evaluate-mcp.js holds TEA's use of it end to end",
+  },
 };
 
 /**

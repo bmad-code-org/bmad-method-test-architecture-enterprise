@@ -1581,7 +1581,13 @@ async function checkUnits() {
   const answering = (exitCode) => ({
     probe: async (request) => ({
       request,
-      observation: { exitCode, stdout: { kind: 'text', value: 'verdict: rejected\n' }, stderr: { kind: 'absent' }, artifacts: {} },
+      observation: {
+        kind: 'cli',
+        exitCode,
+        stdout: { kind: 'text', value: 'verdict: rejected\n' },
+        stderr: { kind: 'absent' },
+        artifacts: {},
+      },
     }),
   });
   const registry = { targetFor: () => ({ infrastructureExitCodes: [3] }) };

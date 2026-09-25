@@ -37,11 +37,17 @@
       "enum": ["cli", "api", "mcp"]
     },
     "registry": {
-      "description": "The execution-target registry: every command a run may spawn, each one RegistryEntry. The runtime builds eval-quality's default-deny CommandTargetPolicy from these entries, so a target the registry does not name is denied before a process starts.",
+      "description": "The execution-target registry: every command a run may spawn (a RegistryEntry) and every stdio MCP tool server it may start (an McpRegistryEntry, kind mcp). The runtime builds eval-quality's default-deny CommandTargetPolicy and McpTargetPolicy from these entries for the workspace each call runs in, so a target the registry does not name is denied before a process starts.",
       "type": "array",
       "minItems": 1,
       "items": {
-        "$ref": "#/$defs/RegistryEntry"
+        "if": {
+          "type": "object",
+          "required": ["kind"],
+          "properties": { "kind": { "const": "mcp" } }
+        },
+        "then": { "$ref": "#/$defs/McpRegistryEntry" },
+        "else": { "$ref": "#/$defs/RegistryEntry" }
       }
     },
     "launch": {
@@ -316,6 +322,10 @@
         "infrastructureExitCodes"
       ],
       "properties": {
+        "kind": {
+          "description": "The interface kind this entry serves: cli, the default when absent.",
+          "const": "cli"
+        },
         "interfaceId": {
           "description": "The logical interface identifier the contract names (a kebab-case slug).",
           "type": "string",
@@ -388,6 +398,70 @@
             "minimum": 1,
             "maximum": 255
           }
+        }
+      }
+    },
+    "McpRegistryEntry": {
+      "description": "One stdio MCP tool server a run may start (AD-4: a tool-use target whose interface is mcp). The runtime turns each into an McpTargetAuthorization of eval-quality's default-deny McpTargetPolicy, validated through its parseMcpTargetPolicy, for the workspace each call runs in, and calls the server through its createMcpAdapter: one session per call, the server started with targetArgs, working in that workspace, with the host's values for environmentKeys as its environment. eval-quality's policy admits one entry per interfaceId, since for this mechanism the interface is the server.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "interfaceId", "target", "targetArgs", "tools", "environmentKeys", "maxElapsedMs"],
+      "properties": {
+        "kind": {
+          "description": "mcp: this entry is a tool server.",
+          "const": "mcp"
+        },
+        "interfaceId": {
+          "description": "The logical interface identifier the contract names for the server (a kebab-case slug).",
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "target": {
+          "description": "What the adapter starts: a POSIX path relative to the root the runtime resolves the registry against (the evaluated project, so the path lands in the workspace), or a bare command name the adapter resolves through the host PATH. Never absolute, and never with a \".\" or \"..\" segment, an empty segment, a trailing slash, or a control character (C0, DEL or C1), a line or paragraph separator, or a bidirectional formatting character.",
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?![A-Za-z]:)(?!/)(?![\\s\\S]*(?:^|/)\\.{1,2}(?:/|$))(?![\\s\\S]*//)(?![\\s\\S]*/$)[^\\\\\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2066-\\u2069]+$"
+        },
+        "targetArgs": {
+          "description": "The argument vector the server starts with, passed as an array so no value is joined into a shell string; a relative path in it resolves against the workspace, the server's working directory, so every file the server runs is the workspace's copy. No argument is an absolute path, carries one after an = sign, names a file: URL, or has a \"..\" segment, since any of them would run or read the adopter's live tree in place of the workspace (AD-8). Empty starts target with no arguments.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(?![\\s\\S]*[Ff][Ii][Ll][Ee]:)(?![A-Za-z]:[\\\\/])(?![/\\\\])(?![\\s\\S]*=(?:[/\\\\]|[A-Za-z]:[\\\\/]))(?![\\s\\S]*(?:^|[/\\\\=])\\.\\.(?:[/\\\\]|$))[\\s\\S]*$"
+          }
+        },
+        "tools": {
+          "description": "The tools this server may be asked to call, in its own spelling, compared literally by eval-quality: a call naming a tool absent from this list is denied (tool-not-authorized) before the server starts, even when the server publishes it. eval-quality's parseMcpTargetPolicy decides which names are valid.",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "environmentKeys": {
+          "description": "Environment keys whose host values the server starts with (its serverEnvironment), over the host PATH; a tool call carries only its arguments, so a server needing a credential receives it here. PATH is never one: target may name a bare command, and a declared PATH would choose which binary runs.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+            "not": {
+              "pattern": "^[Pp][Aa][Tt][Hh]$"
+            }
+          }
+        },
+        "maxElapsedMs": {
+          "description": "Wall-clock ceiling for one call, in milliseconds: the server's start, the initialize handshake, the tool call and its teardown. At most 2147483647, the longest delay one timer holds.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "maxOutputBytes": {
+          "description": "Ceiling on the bytes the server writes on stdout and, separately, on stderr in one call, in bytes. Defaults to 8 MiB.",
+          "type": "integer",
+          "minimum": 1
         }
       }
     }

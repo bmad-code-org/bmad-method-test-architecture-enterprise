@@ -1,0 +1,12 @@
+{
+  "probeId": "P-001",
+  "probeClass": "zero-action",
+  "behaviorId": "B-001",
+  "expectedClean": true,
+  "rationale": "Clean control: under the committed strict policy the grader accepts the answer.",
+  "defects": [],
+  "qualification": {
+    "route": "clean-control",
+    "noKnownDefectStatement": "The strict policy has no known defect."
+  }
+}

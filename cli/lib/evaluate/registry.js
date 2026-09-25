@@ -1,6 +1,14 @@
 /**
  * The execution-target registry, and the environment-probe port over it.
  *
+ * Two kinds of entry share one list. A command entry (`RegistryEntry`, `kind`
+ * absent or `cli`) maps a logical executable to a file the command-line adapter
+ * spawns; a tool-server entry (`McpRegistryEntry`, `kind: "mcp"`, Story 1.10)
+ * maps a logical interface to a stdio MCP server eval-quality's
+ * `createMcpAdapter` starts, one session per call. For both, eval-quality's
+ * default-deny policy decides every call (AD-1): this file only builds the
+ * mapping, for the workspace a call runs in.
+ *
  * eval-quality's `createCommandLineAdapter` spawns a command with the decisions
  * stated: `shell: false` always, argv built options-then-positionals, the child
  * environment closed to PATH plus what the request declares, `maxElapsedMs` and
@@ -37,6 +45,7 @@ const Ajv = AjvModule.default ?? AjvModule;
 
 const EVALUATION_SCHEMA_PATH = path.join(__dirname, 'schemas', 'evaluation.schema.json');
 const REGISTRY_ENTRY_DEFINITION = 'RegistryEntry';
+const MCP_REGISTRY_ENTRY_DEFINITION = 'McpRegistryEntry';
 
 /**
  * Eight megabytes of captured output per stream and per artifact, the ceiling an
@@ -48,33 +57,40 @@ const REGISTRY_ENTRY_DEFINITION = 'RegistryEntry';
  */
 const MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
 
-let validateEntry;
+const validators = new Map();
 
 /** Every registry `createRegistry` has built, so `isRegistry` can tell one from a look-alike object. */
 const BUILT_REGISTRIES = new WeakSet();
 
+/** Whether a registry entry is a tool-server entry, which its `kind` alone says. */
+function isMcpEntry(entry) {
+  return entry !== null && typeof entry === 'object' && entry.kind === 'mcp';
+}
+
 /**
- * The `RegistryEntry` validator, compiled on first use from the runtime's own
+ * The validator of one entry definition (`RegistryEntry` or
+ * `McpRegistryEntry`), compiled on first use from the runtime's own
  * `evaluation.json` schema, so loading this module reads nothing.
  */
-function entryValidator() {
-  if (validateEntry === undefined) {
+function entryValidator(definition) {
+  if (!validators.has(definition)) {
     const evaluationSchema = JSON.parse(fs.readFileSync(EVALUATION_SCHEMA_PATH, 'utf8'));
-    if (evaluationSchema.$defs?.[REGISTRY_ENTRY_DEFINITION] === undefined) {
-      throw new Error(`the runtime's evaluation.json schema declares no $defs/${REGISTRY_ENTRY_DEFINITION}`);
+    if (evaluationSchema.$defs?.[definition] === undefined) {
+      throw new Error(`the runtime's evaluation.json schema declares no $defs/${definition}`);
     }
     const ajv = new Ajv({ strict: false, allErrors: true });
     ajv.addSchema(evaluationSchema);
-    validateEntry = ajv.compile({ $ref: `${evaluationSchema.$id}#/$defs/${REGISTRY_ENTRY_DEFINITION}` });
+    validators.set(definition, ajv.compile({ $ref: `${evaluationSchema.$id}#/$defs/${definition}` }));
   }
-  return validateEntry;
+  return validators.get(definition);
 }
 
 /**
  * Everything wrong with a list of registry entries: each entry against the
- * `RegistryEntry` schema, and every `(interfaceId, executable)` pair that
- * repeats, since eval-quality would try two authorizations for one pair in
- * declaration order, and the first that allows wins.
+ * schema of its kind, every `(interfaceId, executable)` pair that repeats,
+ * since eval-quality would try two authorizations for one pair in declaration
+ * order, and the first that allows wins, and every interface two kinds or two
+ * tool servers share (`sharedInterfaces`).
  *
  * @param {unknown} entries
  * @returns {string[]} Empty when the registry is sound.
@@ -83,8 +99,8 @@ function registryProblems(entries) {
   if (!Array.isArray(entries)) return ['the registry must be an array of RegistryEntry objects'];
   if (entries.length === 0) return ['the registry names no execution target, so every request would be denied'];
   const problems = [];
-  const validate = entryValidator();
   for (const [index, entry] of entries.entries()) {
+    const validate = entryValidator(isMcpEntry(entry) ? MCP_REGISTRY_ENTRY_DEFINITION : REGISTRY_ENTRY_DEFINITION);
     if (validate(entry)) continue;
     for (const error of validate.errors ?? []) {
       const detail = error.params?.missingProperty ?? error.params?.additionalProperty;
@@ -93,7 +109,7 @@ function registryProblems(entries) {
       );
     }
   }
-  return [...problems, ...repeatedPairs(entries)];
+  return [...problems, ...repeatedPairs(entries), ...sharedInterfaces(entries)];
 }
 
 /**
@@ -116,6 +132,34 @@ function repeatedPairs(entries) {
       );
     }
     seen.add(pair);
+  }
+  return problems;
+}
+
+/**
+ * Every interface a command entry and a tool-server entry both name, as one
+ * line each. An interface is one kind in a contract, so an entry of the other
+ * kind would leave its calls denied at the interface. The schema cannot say
+ * it, so `check` reports it beside its schema findings. Two tool servers for
+ * one interface are eval-quality's to refuse: its `McpTargetPolicy` admits one
+ * authorization per interface (`mcpRegistryProblems`).
+ *
+ * @param {unknown[]} entries
+ * @returns {string[]}
+ */
+function sharedInterfaces(entries) {
+  const problems = [];
+  const kinds = new Map();
+  for (const [index, entry] of entries.entries()) {
+    if (typeof entry?.interfaceId !== 'string') continue;
+    const kind = isMcpEntry(entry) ? 'mcp' : 'cli';
+    const seen = kinds.get(entry.interfaceId);
+    if (seen === undefined) kinds.set(entry.interfaceId, kind);
+    else if (seen !== kind) {
+      problems.push(
+        `registry[${index}] names interface ${JSON.stringify(entry.interfaceId)} as ${kind}, which an earlier entry names as ${seen}`,
+      );
+    }
   }
   return problems;
 }
@@ -203,8 +247,8 @@ function observedText(channel) {
 function cliObservation(observation) {
   if (observation?.kind === 'cli') return observation;
   throw new Error(
-    `the port answered a ${JSON.stringify(observation?.kind ?? null)} observation and this registry reads the cli member of ProbeObservation alone; ` +
-      'every registry entry is a cli target, so a member outside it comes from a port the registry did not authorize',
+    `the port answered a ${JSON.stringify(observation?.kind ?? null)} observation where a command's cli member of ProbeObservation was read; ` +
+      'a command request is answered in that member alone, so any other comes from a port that did not run the command',
   );
 }
 
@@ -216,7 +260,7 @@ function isBareCommand(target) {
 /**
  * A registry over validated entries, resolved against one root.
  *
- * @param {unknown} entries RegistryEntry objects.
+ * @param {unknown} entries RegistryEntry and McpRegistryEntry objects.
  * @param {object} options
  * @param {string} options.root The directory each relative `target` resolves against; a relative one is resolved against the working directory once, here.
  * @returns {object}
@@ -233,6 +277,8 @@ function createRegistry(entries, { root } = {}) {
   const problems = registryProblems(entries);
   if (problems.length > 0) throw new Error(`the execution-target registry is not valid:\n  ${problems.join('\n  ')}`);
   const registered = deepFreeze(structuredClone(entries));
+  const commandEntries = registered.filter((entry) => !isMcpEntry(entry));
+  const serverEntries = registered.filter(isMcpEntry);
 
   /** An entry's own keys plus the caller's extra names, sorted, with PATH refused. */
   function keysWithExtras(interfaceId, own, extraNames = []) {
@@ -250,9 +296,19 @@ function createRegistry(entries, { root } = {}) {
     return registered.find((entry) => entry.interfaceId === interfaceId);
   }
 
-  /** @returns {object|undefined} */
+  /** The command entry for one `(interfaceId, executable)` pair. @returns {object|undefined} */
   function targetFor(interfaceId, executable) {
-    return registered.find((entry) => entry.interfaceId === interfaceId && entry.executable === executable);
+    return commandEntries.find((entry) => entry.interfaceId === interfaceId && entry.executable === executable);
+  }
+
+  /** The tool-server entry for one interface. @returns {object|undefined} */
+  function serverFor(interfaceId) {
+    return serverEntries.find((entry) => entry.interfaceId === interfaceId);
+  }
+
+  /** How one entry is named in a problem: its executable, or a tool server's interface. */
+  function labelOf(entry) {
+    return isMcpEntry(entry) ? `${entry.interfaceId} (tool server)` : entry.executable;
   }
 
   /**
@@ -268,7 +324,7 @@ function createRegistry(entries, { root } = {}) {
     const resolved = path.join(projectRoot, ...entry.target.split('/'));
     const inside = path.relative(projectRoot, resolved);
     if (inside === '' || inside === '..' || inside.startsWith(`..${path.sep}`) || path.isAbsolute(inside)) {
-      throw new Error(`${entry.executable}: target ${JSON.stringify(entry.target)} resolves outside ${projectRoot}`);
+      throw new Error(`${labelOf(entry)}: target ${JSON.stringify(entry.target)} resolves outside ${projectRoot}`);
     }
     return resolved;
   }
@@ -289,7 +345,7 @@ function createRegistry(entries, { root } = {}) {
    * @returns {string[]}
    */
   function permittedEnvironmentKeys(interfaceId, extraNames = []) {
-    const entries = registered.filter((entry) => entry.interfaceId === interfaceId);
+    const entries = commandEntries.filter((entry) => entry.interfaceId === interfaceId);
     if (entries.length === 0) throw new Error(`no execution target is registered for interface ${interfaceId}`);
     return keysWithExtras(
       interfaceId,
@@ -311,7 +367,7 @@ function createRegistry(entries, { root } = {}) {
    * @returns {Record<string, string>}
    */
   function hostEnvironment(interfaceId, extraNames = [], executable) {
-    const entries = registered.filter((entry) => entry.interfaceId === interfaceId);
+    const entries = commandEntries.filter((entry) => entry.interfaceId === interfaceId);
     if (entries.length === 0) throw new Error(`no execution target is registered for interface ${interfaceId}`);
     const chosen = executable === undefined ? entries : entries.filter((entry) => entry.executable === executable);
     if (chosen.length !== 1) {
@@ -325,7 +381,22 @@ function createRegistry(entries, { root } = {}) {
   }
 
   /**
-   * eval-quality's `CommandTargetPolicy` over the requested entries.
+   * The environment one tool server starts with: the host's values for the
+   * keys its entry names (`serverEnvironment` in its authorization). A tool
+   * call carries only its arguments, so this is where a server's credential
+   * reaches it, and every value is scrubbed from what comes back.
+   *
+   * @param {string} interfaceId
+   * @returns {Record<string, string>}
+   */
+  function serverEnvironment(interfaceId) {
+    const entry = serverFor(interfaceId);
+    if (entry === undefined) throw new Error(`no tool server is registered for interface ${interfaceId}`);
+    return readEnvironment(keysWithExtras(interfaceId, entry.environmentKeys));
+  }
+
+  /**
+   * eval-quality's `CommandTargetPolicy` over the requested command entries.
    *
    * The three per-interface overrides are keyed by interface id, and a key the
    * policy does not carry widens nothing, so one is refused:
@@ -348,8 +419,9 @@ function createRegistry(entries, { root } = {}) {
         'commandTargetPolicy requires a cwd; an authorization with no working directory resolves every relative path somewhere else',
       );
     }
-    const selected = interfaceIds === undefined ? registered : registered.filter((entry) => interfaceIds.includes(entry.interfaceId));
-    const missing = (interfaceIds ?? []).filter((id) => entryFor(id) === undefined);
+    const selected =
+      interfaceIds === undefined ? commandEntries : commandEntries.filter((entry) => interfaceIds.includes(entry.interfaceId));
+    const missing = (interfaceIds ?? []).filter((id) => !commandEntries.some((entry) => entry.interfaceId === id));
     if (missing.length > 0) {
       throw new Error(`no execution target is registered for interface(s) ${missing.join(', ')}`);
     }
@@ -386,14 +458,85 @@ function createRegistry(entries, { root } = {}) {
   }
 
   /**
-   * eval-quality's command-line adapter over `commandTargetPolicy(options)`.
+   * eval-quality's `McpTargetPolicy` over every tool-server entry: each an
+   * `McpTargetAuthorization` whose server starts in `cwd` (the workspace the
+   * call runs in) from its target resolved against `projectRoot`, with the
+   * host's values for its environment keys. An empty list is eval-quality's
+   * legal deny-all.
    *
-   * @returns {Promise<{port: object, policy: object}>}
+   * @param {object} options
+   * @param {string} options.cwd the working directory every server starts in
+   * @param {string} [options.projectRoot] the root relative targets resolve against; the registry's own by default
+   * @returns {{authorizations: object[]}}
+   */
+  function mcpTargetPolicy({ cwd, projectRoot = registryRoot }) {
+    if (typeof cwd !== 'string' || cwd.length === 0) {
+      throw new Error(
+        'mcpTargetPolicy requires a cwd; a tool server with no working directory resolves every relative path somewhere else',
+      );
+    }
+    return {
+      authorizations: serverEntries.map((entry) => ({
+        interfaceId: entry.interfaceId,
+        target: targetPath(entry, projectRoot),
+        targetArgs: [...entry.targetArgs],
+        tools: [...entry.tools],
+        cwd,
+        serverEnvironment: serverEnvironment(entry.interfaceId),
+        maxElapsedMs: entry.maxElapsedMs,
+        maxOutputBytes: entry.maxOutputBytes ?? MAX_OUTPUT_BYTES,
+      })),
+    };
+  }
+
+  /**
+   * The workspace's one port: eval-quality's command-line adapter over
+   * `commandTargetPolicy(options)` for a `cli` request, and its MCP adapter
+   * over `mcpTargetPolicy(options)`, validated by its own
+   * `parseMcpTargetPolicy`, for an `mcp` one. Each adapter denies whatever
+   * its policy does not grant, a request of another kind included.
+   *
+   * @returns {Promise<{port: {probe: Function}, policy: object, mcpPolicy: object}>}
    */
   async function createProbePort(options) {
     const policy = commandTargetPolicy(options);
-    const { createCommandLineAdapter } = await loadAdapters();
-    return { port: createCommandLineAdapter(policy), policy };
+    const adapters = await loadAdapters();
+    const mcpPolicy = adapters.parseMcpTargetPolicy(mcpTargetPolicy(options));
+    const commandAdapter = adapters.createCommandLineAdapter(policy);
+    const mcpAdapter = adapters.createMcpAdapter(mcpPolicy);
+    const port = {
+      probe: (request, signal) => (request?.kind === 'mcp' ? mcpAdapter : commandAdapter).probe(request, signal),
+    };
+    return { port, policy, mcpPolicy };
+  }
+
+  /**
+   * The ceiling one call of `operation`, declared under `interfaceId`, runs
+   * under: its tool server's `maxElapsedMs`, or its command's; 0 when the
+   * registry serves neither.
+   *
+   * @param {string} interfaceId
+   * @param {object} [operation] the contract operation
+   * @returns {number}
+   */
+  function ceilingMs(interfaceId, operation) {
+    const entry =
+      typeof operation?.toolName === 'string' ? serverFor(interfaceId) : targetFor(interfaceId, operation?.invocation?.executable);
+    return entry?.maxElapsedMs ?? 0;
+  }
+
+  /**
+   * Every tool the registry grants, as the isolation manifest's allow list
+   * names it: `<interfaceId>/<executable>` for a command and
+   * `<interfaceId>/<tool>` for each tool of a server, sorted.
+   *
+   * @returns {string[]}
+   */
+  function toolInventory() {
+    return [
+      ...commandEntries.map((entry) => `${entry.interfaceId}/${entry.executable}`),
+      ...serverEntries.flatMap((entry) => entry.tools.map((tool) => `${entry.interfaceId}/${tool}`)),
+    ].sort();
   }
 
   /**
@@ -418,17 +561,17 @@ function createRegistry(entries, { root } = {}) {
       if (isBareCommand(entry.target)) continue;
       const absolute = targetPath(entry, projectRoot);
       if (!fs.existsSync(absolute)) {
-        problems.push(`${entry.executable}: ${entry.target} does not exist`);
+        problems.push(`${labelOf(entry)}: ${entry.target} does not exist`);
         continue;
       }
       const stat = fs.statSync(absolute);
       if (!stat.isFile()) {
-        problems.push(`${entry.executable}: ${entry.target} is not a file`);
+        problems.push(`${labelOf(entry)}: ${entry.target} is not a file`);
         continue;
       }
       const { mode } = stat;
       if ((mode & 0o111) === 0) {
-        problems.push(`${entry.executable}: ${entry.target} is not executable (mode ${(mode & 0o777).toString(8)})`);
+        problems.push(`${labelOf(entry)}: ${entry.target} is not executable (mode ${(mode & 0o777).toString(8)})`);
       }
     }
     return problems;
@@ -437,13 +580,18 @@ function createRegistry(entries, { root } = {}) {
   const registry = Object.freeze({
     entries: registered,
     root: registryRoot,
+    ceilingMs,
     commandTargetPolicy,
     createProbePort,
     hostEnvironment,
+    mcpTargetPolicy,
     permittedEnvironmentKeys,
+    serverEnvironment,
+    serverFor,
     targetFor,
     targetPath,
     targetProblems,
+    toolInventory,
   });
   BUILT_REGISTRIES.add(registry);
   return registry;
@@ -460,6 +608,41 @@ function isRegistry(value) {
 }
 
 /**
+ * Every tool-server entry eval-quality's own `parseMcpTargetPolicy` refuses,
+ * as one line: the policy the entries would become, with a placeholder
+ * working directory and each environment key standing for a value, handed to
+ * the parser before any run builds it. Each entry is first held to its schema
+ * (`registryProblems`); an entry off it is left to that finding.
+ *
+ * @param {unknown} entries
+ * @returns {Promise<string[]>}
+ */
+async function mcpRegistryProblems(entries) {
+  if (!Array.isArray(entries)) return [];
+  const servers = entries.filter((entry) => isMcpEntry(entry) && entryValidator(MCP_REGISTRY_ENTRY_DEFINITION)(entry));
+  if (servers.length === 0) return [];
+  const { parseMcpTargetPolicy } = await loadAdapters();
+  try {
+    parseMcpTargetPolicy({
+      authorizations: servers.map((entry) => ({
+        interfaceId: entry.interfaceId,
+        target: entry.target,
+        targetArgs: entry.targetArgs,
+        tools: entry.tools,
+        cwd: '.',
+        serverEnvironment: Object.fromEntries(entry.environmentKeys.map((key) => [key, ''])),
+        maxElapsedMs: entry.maxElapsedMs,
+        maxOutputBytes: entry.maxOutputBytes ?? MAX_OUTPUT_BYTES,
+      })),
+    });
+  } catch (error) {
+    if (error?.name !== 'RuntimeFault') throw error;
+    return [`eval-quality's parseMcpTargetPolicy refuses the tool-server entries: ${error.message}`];
+  }
+  return [];
+}
+
+/**
  * The registry an `evaluation.json` declares, resolved against `root`.
  *
  * @param {{registry?: unknown}} evaluation The parsed manifest.
@@ -472,14 +655,18 @@ function registryFromEvaluation(evaluation, options) {
 
 module.exports = {
   MAX_OUTPUT_BYTES,
+  MCP_REGISTRY_ENTRY_DEFINITION,
   REGISTRY_ENTRY_DEFINITION,
   cliObservation,
   createRegistry,
+  isMcpEntry,
   isRegistry,
+  mcpRegistryProblems,
   observedText,
   probeRequest,
   readEnvironment,
   registryFromEvaluation,
   registryProblems,
   repeatedPairs,
+  sharedInterfaces,
 };

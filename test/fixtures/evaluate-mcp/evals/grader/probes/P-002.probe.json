@@ -1,0 +1,76 @@
+{
+  "probeId": "P-002",
+  "probeClass": "defect",
+  "behaviorId": "B-001",
+  "expectedClean": false,
+  "rationale": "Seeded defect: M-001 relaxes the policy to lenient, and the grader then rejects the answer.",
+  "defects": [
+    {
+      "defectId": "D-001",
+      "behaviorId": "B-001",
+      "summary": "The relaxed policy makes the grader reject an answer it must accept.",
+      "severity": "critical",
+      "source": "controlled-mutation",
+      "manifestationWitness": {
+        "legId": "manifest-lenient",
+        "interfaceId": "grader",
+        "operationId": "grade-answer",
+        "inputs": {
+          "arguments": {
+            "answer": "forty-two"
+          }
+        },
+        "relation": {
+          "op": "equality",
+          "operands": [
+            {
+              "pointer": "/interactions/manifest-lenient/response-body/verdict"
+            },
+            {
+              "literal": "rejected"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "defectSignature": {
+    "interfaceKind": "mcp",
+    "toolName": "grade_answer",
+    "observableChannel": "response-body",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": null,
+          "header": null,
+          "body": null,
+          "argument": null,
+          "option": null,
+          "environment": null,
+          "stdin": null,
+          "arguments": {
+            "answer": {
+              "matcher": "any"
+            }
+          }
+        }
+      },
+      "predicate": {
+        "op": "equality",
+        "operands": [
+          {
+            "pointer": "/interactions/observed/response-body/verdict"
+          },
+          {
+            "literal": "rejected"
+          }
+        ]
+      }
+    }
+  },
+  "qualification": {
+    "route": "controlled-mutation",
+    "mutation": "M-001"
+  }
+}

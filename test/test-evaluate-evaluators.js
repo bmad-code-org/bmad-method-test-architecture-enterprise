@@ -49,13 +49,14 @@
  *   the bridge; its call is recorded `evaluator-chosen` beside the plan's
  *   `baseline` observation, and the clean arm resolves `passed-clean-control`
  *   and the mutated arm `caught`. An unlisted executable is denied with
- *   eval-quality's reason and never launches; an agent that fails, answers
+ *   eval-quality's reason code (`executable-not-authorized`) and never
+ *   launches; an agent that fails, answers
  *   with no block, with a forged nonce or with two blocks yields exit 12; a
  *   call carrying the nonce is refused unsent and uncounted.
  * - The bridge, driven by an MCP client: one tool per interface with a
  *   kind-generic shape, an authorized call recorded with the routed working
  *   directory, an unlisted executable, an `mcp` and an `api` call denied by
- *   eval-quality with no launch, an authorized call matching no operation
+ *   eval-quality with no launch, each recorded with its reason code, an authorized call matching no operation
  *   recorded as unmatched, and the budget held; a gameability router denying
  *   an ungranted call as the real arm does.
  * - Records: a harness's sealed records are validated and copied unchanged,
@@ -1144,7 +1145,10 @@ async function checkSealedBriefAgentEdges() {
     const evidence = readJson(path.join(runDirectory, 'evaluator', 'clean', 'trial-1.json'));
     const [denied] = evidence.calls ?? [];
     check(
-      denied?.denied?.code === 'forbidden-target' && denied.denied.detail.includes('"not-registered"') && denied.observation === undefined,
+      denied?.denied?.code === 'forbidden-target' &&
+        denied.denied.reason === 'executable-not-authorized' &&
+        denied.denied.detail.includes('"not-registered"') &&
+        denied.observation === undefined,
       `the denied call is recorded as ${JSON.stringify(denied)}`,
     );
     const [first] = captures(capture);
@@ -1470,7 +1474,8 @@ async function checkBridge() {
     `the bridge recorded ${JSON.stringify(router.observations.map((observation) => [observation.observationId, observation.sequence, observation.provenance, observation.operationId]))}`,
   );
   const outcomes = router.calls.map((entry) => {
-    if (entry.denied !== undefined) return `denied:${entry.denied.reason ?? entry.denied.code}`;
+    // Every denial carries eval-quality's own reason code, for a command, a tool call and an HTTP request alike (Story 1.10).
+    if (entry.denied !== undefined) return `denied:${entry.denied.code}:${entry.denied.reason}`;
     if (entry.unmatched) return 'unmatched';
     if (entry.refused !== undefined) return 'refused';
     return entry.operationId;
@@ -1479,9 +1484,9 @@ async function checkBridge() {
     JSON.stringify(outcomes) ===
       JSON.stringify([
         'judge-request',
-        'denied:forbidden-target',
-        'denied:forbidden-target',
-        'denied:interface-not-authorized',
+        'denied:forbidden-target:executable-not-authorized',
+        'denied:forbidden-target:interface-not-authorized',
+        'denied:forbidden-target:interface-not-authorized',
         'unmatched',
         'refused',
         'judge-request',

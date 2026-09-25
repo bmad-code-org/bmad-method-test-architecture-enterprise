@@ -46,8 +46,9 @@
  *   with `expectedClean: false` and no defects (it launches nothing, so nothing can witness a defect),
  *   its `naiveOracle` is an oracle of its own behavior (the naive oracle belongs to another behavior),
  *   or its degenerate response, `corpus/gameability/<probeId>.json`, is absent, fails its schema
- *   (`schema`), answers a plan step the contract does not declare or leaves one unanswered, or exits
- *   a code the step's registry entry declares as infrastructure.
+ *   (`schema`), answers a plan step the contract does not declare or leaves one unanswered, answers a
+ *   command step with a tool call's response or a tool-call step with a command's, or exits a code the
+ *   step's registry entry declares as infrastructure.
  * - `historical` (Story 1.9): a probe on the `historical` route does not carry `expectedClean: false`, seeds
  *   no defect, or seeds one whose `source` is not `natural`, the only source eval-quality admits there.
  * - `judge` (Story 1.9): the contract declares a rubric and `evaluation.json` has no `judge`, or
@@ -78,7 +79,11 @@
  * root and entry must be a real directory or regular file (`corpus-file`), as
  * must everything under `baseline/` (`baseline-file`), no ID may repeat within
  * its file (`duplicate-id`), no registry entry may repeat an interface and
- * executable pair (`registry`), and a file must
+ * executable pair, name an interface another kind of entry names, serve an
+ * interface as a kind other than the one the contract declares for it, or be
+ * a tool server eval-quality's `parseMcpTargetPolicy` refuses (two for one
+ * interface among them) (`registry`, Story 1.10), `interface` must be a kind
+ * the contract declares (`reference`), and a file must
  * parse (`json`), match its schema (`schema` for the runtime's own schemas,
  * `engine-schema` for eval-quality's), be named for its ID (`file-name`), and
  * name only behaviors and mutations that exist (`reference`).
@@ -94,7 +99,7 @@ const AjvModule = require('ajv/dist/2020');
 const { engineSchemaPath, loadEngine, schemaVersionProblems } = require('./engine');
 const { MANIFEST_NAME } = require('./folder');
 const { addFormats } = require('./formats');
-const { repeatedPairs } = require('./registry');
+const { isMcpEntry, mcpRegistryProblems, repeatedPairs, sharedInterfaces } = require('./registry');
 const { AGENT_ADAPTERS, bridgedArgsRefused, resolveModel } = require('../agent-adapters');
 const { EVALUATOR_DIRECTORY, EvaluatorLayerError, evaluatorFiles, evaluatorOf, isKnownEvaluator } = require('./evaluators');
 const { degenerateResponsePath } = require('./gameability');
@@ -963,10 +968,22 @@ function checkGameability(report, folder, relative, probe, context, behaviors, r
     const operation = (Array.isArray(context.contract?.permittedInterfaces) ? context.contract.permittedInterfaces : [])
       .flatMap((iface) => (Array.isArray(iface?.operations) ? iface.operations.map((candidate) => ({ iface, operation: candidate })) : []))
       .find((candidate) => candidate.operation?.operationId === step?.operationId);
+    const answer = response.steps[stepId];
+    const toolCallStep = operation?.iface?.kind === 'mcp';
+    const toolCallAnswer = typeof answer.isError === 'boolean';
+    if (operation !== undefined && toolCallStep !== toolCallAnswer) {
+      report.add(
+        responseFile,
+        'gameability',
+        `answers step ${stepId}, a ${toolCallStep ? 'tool call' : 'command'}, with a ${toolCallAnswer ? "tool call's" : "command's"} response, so the gameability arm cannot answer it`,
+      );
+      continue;
+    }
+    if (toolCallAnswer) continue;
     const entries = (registry ?? []).filter(
       (entry) => entry?.interfaceId === operation?.iface?.logicalId && entry?.executable === operation?.operation?.invocation?.executable,
     );
-    const { exitCode } = response.steps[stepId];
+    const { exitCode } = answer;
     if (infrastructureCodesOf(entries).includes(exitCode)) {
       report.add(
         responseFile,
@@ -1417,6 +1434,41 @@ function checkQualificationEvidence(report, folder, context) {
   }
 }
 
+/**
+ * `evaluation.json`'s `interface` is a kind the contract declares (`reference`),
+ * and each registry entry serves its interface as the kind the contract declares
+ * for it: a command entry a `cli` interface and a tool-server entry an `mcp`
+ * one. An entry of the other kind would leave the interface's calls denied at
+ * the interface by eval-quality, the first signal a run that measured nothing.
+ * An interface the contract does not declare is left alone, as a command entry
+ * for one always was.
+ */
+function checkRegistryKinds(report, evaluation, registry, contract) {
+  if (!Array.isArray(contract?.permittedInterfaces)) return;
+  // `interface` names the kind the contract declares, so a run drives the kind it says it does.
+  const declaredKinds = [...new Set(contract.permittedInterfaces.map((iface) => iface?.kind).filter((kind) => typeof kind === 'string'))];
+  if (typeof evaluation.interface === 'string' && declaredKinds.length > 0 && !declaredKinds.includes(evaluation.interface)) {
+    report.add(
+      MANIFEST_NAME,
+      'reference',
+      `interface ${JSON.stringify(evaluation.interface)} names a kind no interface of ${CONTRACT_NAME} declares (it declares ${declaredKinds.join(', ')})`,
+    );
+  }
+  if (!Array.isArray(registry)) return;
+  for (const [index, entry] of registry.entries()) {
+    const declared = contract.permittedInterfaces.find((candidate) => candidate?.logicalId === entry?.interfaceId);
+    if (declared === undefined) continue;
+    const kind = isMcpEntry(entry) ? 'mcp' : 'cli';
+    if (declared.kind !== kind) {
+      report.add(
+        MANIFEST_NAME,
+        'registry',
+        `registry[${index}] serves interface ${JSON.stringify(entry.interfaceId)} as ${kind}, and ${CONTRACT_NAME} declares it ${JSON.stringify(declared.kind)}; a ${kind === 'mcp' ? 'tool-server' : 'command'} entry serves ${kind} calls only`,
+      );
+    }
+  }
+}
+
 function schemaVersionMessage(version) {
   return (
     `evaluation.json schemaVersion ${JSON.stringify(version ?? null)} is not known to the installed TeA ` +
@@ -1447,7 +1499,10 @@ async function checkEvaluation(folder) {
   const context = await buildContext();
   validateInto(report, MANIFEST_NAME, 'schema', context.validate.evaluation, evaluation);
   const registry = Array.isArray(evaluation.registry) ? evaluation.registry : undefined;
-  for (const problem of registry === undefined ? [] : repeatedPairs(registry)) report.add(MANIFEST_NAME, 'registry', problem);
+  for (const problem of registry === undefined ? [] : [...repeatedPairs(registry), ...sharedInterfaces(registry)]) {
+    report.add(MANIFEST_NAME, 'registry', problem);
+  }
+  for (const problem of await mcpRegistryProblems(registry)) report.add(MANIFEST_NAME, 'registry', problem);
   const provision = Array.isArray(evaluation.workspace?.provision)
     ? evaluation.workspace.provision.filter((entry) => typeof entry === 'string' && entry.length > 0)
     : [];
@@ -1457,6 +1512,7 @@ async function checkEvaluation(folder) {
 
   const behaviors = checkContract(report, folder, context);
   context.contract = contractFor(folder);
+  checkRegistryKinds(report, evaluation, registry, context.contract);
   const mutations = checkMutations(report, folder, context, provision, skillRoot);
   checkSkillRunner(report, evaluation, context.contract, provision);
   const routes = checkProbes(report, folder, context, behaviors, mutations, registry);

@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-22-2026 18:09
-last_updated: 09-25-2026 12:34
+last_updated: 09-25-2026 16:06
 project: "bmad-method-test-architecture-enterprise: Evaluate"
 project_key: NOKEY
 tracking_system: file-system
@@ -45,8 +45,8 @@ development_status:
   1-7-mutate-only-in-a-disposable-copy-and-prove-the-rollback: done
   1-8-run-the-clean-and-mutated-arms-and-score-them: done
   1-9-qualify-gameability-and-historical-probes-and-judge-rubrics: done
-  1-17-drive-any-evaluation-layer-through-one-import-contract: review
-  1-10-evaluate-a-stdio-mcp-tool-server: backlog
+  1-17-drive-any-evaluation-layer-through-one-import-contract: done
+  1-10-evaluate-a-stdio-mcp-tool-server: review
   1-11-scaffold-the-http-probe-port-for-api-targets: backlog
   1-18-evaluate-a-workflow-target-through-after-and-captured-bindi: backlog
   1-19-evaluate-a-tool-use-calling-agent-through-its-own-command-j: backlog

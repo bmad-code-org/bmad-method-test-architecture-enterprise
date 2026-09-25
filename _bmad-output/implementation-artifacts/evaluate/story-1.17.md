@@ -2,7 +2,7 @@
 title: 'Story 1.17: Drive any evaluation layer through one import contract'
 type: 'feature'
 created: '2026-09-25'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '2ccdd15d18199e5b1e16dd4b72e4e73c905e74eb'

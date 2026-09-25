@@ -6,7 +6,7 @@
  * The steps, each stopping the run with its own exit when it fails:
  *
  *   1. `check` over the folder (exit 10 on any authoring defect);
- *   2. the evaluation is one this release can run: a `cli` interface, and
+ *   2. the evaluation is one this release can run: a `cli` or `mcp` interface, and
  *      every probe that seeds a defect on the `controlled-mutation` or
  *      `historical` route (exit 12 otherwise, before anything runs);
  *   3. the pristine workspace (`workspace.js`: a detached worktree at the
@@ -65,7 +65,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const { admissionRefusal, armVerdict, referenceTo } = require('./admission');
-const { hostEnvironmentPort, persistableRequest, runArm } = require('./arm');
+const { causeNote, faultRecord, hostEnvironmentPort, persistableRequest, reasonNote, runArm } = require('./arm');
 const { TEA_MANIFEST, checkEvaluation } = require('./check');
 const { MANIFEST_NAME } = require('./folder');
 const { engineVersion, loadEngine } = require('./engine');
@@ -95,10 +95,12 @@ const {
 const CONTRACT_NAME = 'contract.json';
 const POLICY_PATH = 'policy/scoring-policy.json';
 const PROBE_FILE = /\.probe\.json$/;
+/** The interface kinds this release drives; an `api` target waits for Story 1.11's HTTP port. */
+const DRIVEN_INTERFACES = ['cli', 'mcp'];
 /** The routes a seeded probe qualifies on; `run` also materializes clean controls and gameability probes. */
 const QUALIFIED_ROUTES = ['controlled-mutation', 'historical'];
 
-/** The eval-quality fault a command-line adapter throws when its policy refuses a request. */
+/** The eval-quality fault the command-line and MCP adapters throw when their policy refuses a request. */
 const DENIAL_FAULT = 'forbidden-target';
 
 /** The errors `runPreflight` raises while planning, before any leg reaches the port; the CLI raises the same over the same files. */
@@ -236,8 +238,7 @@ function recordingPort({ pristine, routes = new Map(), registry, writer }) {
         sequence: legSequence,
         workspace: route.label,
         cwd: route.cwd,
-        code: typeof error?.code === 'string' ? error.code : null,
-        message: String(error?.message ?? error),
+        ...faultRecord(error),
         request: persistableRequest(error?.request ?? request),
       };
       writer.writeJson(`faults/${legFileName(legSequence, fault.legId)}`, fault);
@@ -446,11 +447,11 @@ async function pipeline(
   }
 
   const evaluation = readJson(path.join(folder, MANIFEST_NAME));
-  if (evaluation.interface !== 'cli') {
+  if (!DRIVEN_INTERFACES.includes(evaluation.interface)) {
     return new PreflightOutcome({
       stage: 'launch',
       exitCode: 12,
-      message: `preflight drives cli targets; this evaluation declares interface ${JSON.stringify(evaluation.interface)}`,
+      message: `preflight drives ${DRIVEN_INTERFACES.join(' and ')} targets; this evaluation declares interface ${JSON.stringify(evaluation.interface)}`,
     });
   }
   const seeded = seededProbes(folder);
@@ -869,7 +870,7 @@ async function runInWorkspaces({
         return outcome({
           stage: 'leg',
           exitCode: fault.code === DENIAL_FAULT ? 10 : 12,
-          message: `leg ${fault.legId} ${fault.code === DENIAL_FAULT ? 'was denied by the registry' : 'could not run'}: ${fault.message}`,
+          message: `leg ${fault.legId} ${fault.code === DENIAL_FAULT ? `was denied by the registry${reasonNote(fault)}` : 'could not run'}: ${fault.message}${causeNote(fault)}`,
         });
       }
       const planning =

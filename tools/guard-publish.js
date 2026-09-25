@@ -24,7 +24,7 @@
  * It also refuses a manifest that would ship Evaluate broken: the
  * `tea-evaluate` bin must point at a file the package carries, and
  * `eval-quality` must be an optional peer whose range admits no release older
- * than 4.1.4: 4.0.0 is the first engine carrying the target-policy export and
+ * than 4.2.0: 4.0.0 is the first engine carrying the target-policy export and
  * trial-set scoring Evaluate needs, 4.1.1 the first whose command-line adapter
  * kills the target's process group at its ceiling, 4.1.2 the first that also
  * kills it when the host dies, by `SIGKILL` included, all of which
@@ -32,7 +32,9 @@
  * the reasons of an Invalid result to stderr, which `tea-evaluate score`
  * persists for AD-10 to classify, and 4.1.4 the first whose record schema
  * defines `provenance` by the observation's role, the reading `tea-evaluate
- * run` records every scored trial step under. Optional, because npm 7 and later install a
+ * run` records every scored trial step under, and 4.2.0 the first whose
+ * command-line and MCP adapters carry the policy's `reason` on a denial, which
+ * `tea-evaluate` records beside the fault code. Optional, because npm 7 and later install a
  * required peer automatically and would pull the engine into every project that
  * installs TeA for its other workflows.
  *
@@ -50,7 +52,7 @@ const semver = require('semver');
 const PROJECT_ROOT = path.join(__dirname, '..');
 const EVALUATE_BIN = 'tea-evaluate';
 const ENGINE_PACKAGE = 'eval-quality';
-const ENGINE_FLOOR = '4.1.4';
+const ENGINE_FLOOR = '4.2.0';
 
 const EXPECTED_REPOSITORY = 'bmad-code-org/bmad-method-test-architecture-enterprise';
 const EXPECTED_WORKFLOW = 'Publish';
