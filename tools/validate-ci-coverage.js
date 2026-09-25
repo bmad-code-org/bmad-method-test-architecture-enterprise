@@ -22,8 +22,9 @@
  * while failing on a laptop.
  *
  * So this compares the two and fails on a chain entry that neither a full
- * shard matrix nor a named step runs, and on a shard matrix that skips a
- * shard. The reverse is allowed: a workflow may run more than the chain does,
+ * shard matrix nor a named step runs, and on a sharded job that could skip a
+ * shard or hide its failure (`shardRunProblems` lists each way). The reverse
+ * is allowed: a workflow may run more than the chain does,
  * which is how the docs job's link check and site build work.
  *
  * The reverse direction has its own gap: nothing held every OTHER script in
@@ -63,13 +64,27 @@ const colors = {
   dim: '[2m',
 };
 
-/** The script names `npm test` chains, in order. */
+/** One part of the `npm test` chain the shards can run: a bare `npm run <script>`. */
+const CHAIN_PART = /^npm run ([\w:.-]+)$/;
+
+/**
+ * The script names `npm test` chains, in order.
+ *
+ * Throws on any `&&` part that is not a bare `npm run <script>`: CI runs the
+ * chain only through tools/test-shards.js, which runs scripts by name, so a
+ * part like `node test/x.js` would run on a laptop and never in CI.
+ */
 function chainedScripts(manifest) {
-  return manifest.scripts.test
-    .split('&&')
-    .map((part) => part.trim())
-    .filter((part) => part.startsWith('npm run '))
-    .map((part) => part.slice('npm run '.length).trim());
+  return manifest.scripts.test.split('&&').map((raw) => {
+    const part = raw.trim();
+    const match = CHAIN_PART.exec(part);
+    if (!match) {
+      throw new Error(
+        `package.json's test chain holds ${JSON.stringify(part)}, which is not a bare \`npm run <script>\`; CI runs the chain through tools/test-shards.js, which runs only named scripts, so define it as a script and chain \`npm run\` of that`,
+      );
+    }
+    return match[1];
+  });
 }
 
 /**
@@ -94,42 +109,99 @@ function scriptsRunInCi() {
 const SHARD_INVOCATION = /node tools\/test-shards\.js --shard \$\{\{ matrix\.shard \}\}\/(\d+)\b/g;
 
 /**
- * Every workflow job that runs the chain through tools/test-shards.js: the
- * workflow file, the job id, the shard count its command passes, and the
- * `strategy.matrix.shard` list the job runs that command over.
+ * The whole run line a shard step may hold: the invocation and, in any order,
+ * its `--coverage-dir` and `--timings` flags with double-quoted values that
+ * expand only environment variables and `${{ matrix.shard }}`. Anything else
+ * on the line (`--list`, `|| true`, `; true`, `&&`, a pipe, a command
+ * substitution) could drop the shard's scripts or hide their failures.
+ */
+const SHARD_RUN_LINE =
+  /^node tools\/test-shards\.js --shard \$\{\{ matrix\.shard \}\}\/\d+(?: --(?:coverage-dir|timings) "(?:[^"`$]|\$[A-Z_]+|\$\{\{ matrix\.shard \}\})*")*$/;
+
+/**
+ * The workflow jobs in one workflow file's text that run the chain through
+ * tools/test-shards.js, with what `shardRunProblems` needs to judge each: the
+ * shard count the command passes, the parsed workflow, job and step.
  *
  * A YAML parse, unlike `scriptsRunInCi`, because the claim ties a step's
- * command to its own job's matrix, and a text scan cannot say which job a
- * matrix belongs to.
+ * command to its own job's matrix and conditions, and a text scan cannot say
+ * which job a matrix belongs to.
  */
-function shardedChainRuns(workflowRoot = WORKFLOW_ROOT) {
+function shardedChainRunsIn(name, text) {
+  const workflow = yaml.load(text);
   const runs = [];
-  const files = fs.existsSync(workflowRoot) ? fs.readdirSync(workflowRoot).sort() : [];
-  for (const name of files) {
-    if (!name.endsWith('.yml') && !name.endsWith('.yaml')) continue;
-    const doc = yaml.load(fs.readFileSync(path.join(workflowRoot, name), 'utf8'));
-    for (const [job, definition] of Object.entries(doc?.jobs ?? {})) {
-      for (const step of definition?.steps ?? []) {
-        if (typeof step?.run !== 'string') continue;
-        for (const match of step.run.matchAll(SHARD_INVOCATION)) {
-          runs.push({ file: name, job, total: Number.parseInt(match[1], 10), shards: definition?.strategy?.matrix?.shard });
-        }
+  for (const [job, definition] of Object.entries(workflow?.jobs ?? {})) {
+    for (const step of definition?.steps ?? []) {
+      if (typeof step?.run !== 'string') continue;
+      for (const match of step.run.matchAll(SHARD_INVOCATION)) {
+        runs.push({ file: name, job, total: Number.parseInt(match[1], 10), workflow, definition, step });
       }
     }
   }
   return runs;
 }
 
-/** Why one sharded run fails to cover the whole chain, or an empty list when it covers it. */
+/** Every workflow job that runs the chain through tools/test-shards.js, across every workflow file. */
+function shardedChainRuns(workflowRoot = WORKFLOW_ROOT) {
+  const files = fs.existsSync(workflowRoot) ? fs.readdirSync(workflowRoot).sort() : [];
+  return files
+    .filter((name) => name.endsWith('.yml') || name.endsWith('.yaml'))
+    .flatMap((name) => shardedChainRunsIn(name, fs.readFileSync(path.join(workflowRoot, name), 'utf8')));
+}
+
+/** The events a workflow's `on` names, whichever of its three shapes it takes. */
+function triggers(workflow) {
+  const on = workflow?.on ?? workflow?.true;
+  if (typeof on === 'string') return [on];
+  if (Array.isArray(on)) return on;
+  return on && typeof on === 'object' ? Object.keys(on) : [];
+}
+
+/**
+ * Why one sharded run fails to run the whole chain on every pull request and
+ * fail CI when any of it fails, or an empty list when it does. Each refusal
+ * names a way a green run could skip a shard or swallow its failures.
+ */
 function shardRunProblems(run) {
   const where = `${run.file} job ${run.job}`;
   if (!Number.isInteger(run.total) || run.total < 1) return [`${where} passes a shard count of ${run.total}; it has to be 1 or more`];
+  const problems = [];
   const expected = Array.from({ length: run.total }, (_, index) => index + 1);
-  const listed = Array.isArray(run.shards) ? run.shards : [];
-  if (JSON.stringify(listed) === JSON.stringify(expected)) return [];
-  return [
-    `${where} runs tools/test-shards.js as ${run.total} shards over matrix.shard ${JSON.stringify(run.shards ?? null)}; the matrix has to list exactly ${JSON.stringify(expected)}`,
-  ];
+  const matrix = run.definition?.strategy?.matrix;
+  const shards = matrix?.shard;
+  if (JSON.stringify(Array.isArray(shards) ? shards : []) !== JSON.stringify(expected)) {
+    problems.push(
+      `${where} runs tools/test-shards.js as ${run.total} shards over matrix.shard ${JSON.stringify(shards ?? null)}; the matrix has to list exactly ${JSON.stringify(expected)}`,
+    );
+  }
+  const extraKeys = matrix && typeof matrix === 'object' ? Object.keys(matrix).filter((key) => key !== 'shard') : [];
+  if (extraKeys.length > 0) {
+    problems.push(
+      `${where}'s matrix carries ${extraKeys.join(', ')}; only \`shard\` is allowed, since include and exclude add or drop shards`,
+    );
+  }
+  for (const [owner, holder] of [
+    ['job', run.definition],
+    ['shard step', run.step],
+  ]) {
+    for (const key of ['if', 'continue-on-error']) {
+      if (holder && Object.hasOwn(holder, key)) {
+        problems.push(`${where}'s ${owner} sets \`${key}\`, which can skip the shard or keep its failure from failing CI`);
+      }
+    }
+  }
+  if (run.step && Object.hasOwn(run.step, 'shell')) {
+    problems.push(`${where}'s shard step sets \`shell\`, which can change how its run line runs or what its exit means`);
+  }
+  if (typeof run.step?.run !== 'string' || !SHARD_RUN_LINE.test(run.step.run.trim())) {
+    problems.push(
+      `${where}'s shard step runs ${JSON.stringify(run.step?.run ?? null)}; it may hold only \`node tools/test-shards.js --shard \${{ matrix.shard }}/N\` and its --coverage-dir and --timings flags`,
+    );
+  }
+  if (!triggers(run.workflow).includes('pull_request')) {
+    problems.push(`${run.file} does not run on pull_request, so its shards do not gate a pull request`);
+  }
+  return problems;
 }
 
 /**
@@ -209,7 +281,13 @@ function staleDeliberatelyLocalEntries(manifest) {
 
 function main() {
   const manifest = JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'package.json'), 'utf8'));
-  const chained = chainedScripts(manifest);
+  let chained;
+  try {
+    chained = chainedScripts(manifest);
+  } catch (error) {
+    console.error(`${colors.red}${error.message}${colors.reset}`);
+    return 1;
+  }
   if (chained.length === 0) {
     console.error(`${colors.red}package.json's test script chains no npm run steps${colors.reset}`);
     return 1;
@@ -296,6 +374,7 @@ module.exports = {
   scriptsCoveredInCi,
   scriptsRunInCi,
   shardedChainRuns,
+  shardedChainRunsIn,
   shardRunProblems,
   staleDeliberatelyLocalEntries,
   uncoveredScripts,

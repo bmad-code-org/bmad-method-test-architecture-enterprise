@@ -705,50 +705,45 @@ async function runInWorkspaces({
   if (seeded.length > 0) {
     for (const { file, probe } of seeded) {
       if (probe.qualification.route === 'historical') {
-        const revisions = historicalRevisions({
-          pristine,
-          fixCommit: probe.qualification.fixCommit,
-          roots: [root, path.join(root, ...(evaluation.launch.skillRoot ?? '.').split('/'))],
-          // A bare command resolves through PATH, not the tree, so only a path target is looked for at the pre-fix revision.
-          targets: registry.entries
-            .filter((entry) => entry.target.includes('/'))
-            .map((entry) => path.join(root, ...entry.target.split('/'))),
-        });
+        const revisions = historicalRevisions({ pristine, fixCommit: probe.qualification.fixCommit });
         if (revisions.defect !== undefined) {
           return outcome({ stage: 'check', exitCode: 10, message: `${file}: ${revisions.defect}` });
         }
-        if (revisions.refused !== undefined) {
-          // A refused probe runs nowhere; the rest of the run goes on without it (AD-8).
-          const refusal = { probeId: probe.probeId, file, route: 'historical', reason: revisions.refused };
+        // A refused probe runs nowhere; the rest of the run goes on without it (AD-8).
+        const refuse = (reason) => {
+          const refusal = { probeId: probe.probeId, file, route: 'historical', reason };
           run.refused.push(refusal);
           writer.writeJson(`refused/${probe.probeId}.json`, refusal);
           writeRun();
-          log(`${file}: refused: ${revisions.refused}`);
+          log(`${file}: refused: ${reason}`);
+        };
+        if (revisions.refused !== undefined) {
+          refuse(revisions.refused);
           continue;
         }
-        qualified.push(
-          await qualifyHistoricalProbe({
-            folder,
-            root,
-            evaluation,
-            contract,
-            file,
-            probe,
-            revisions,
-            pristine,
-            make,
-            discard,
-            registry,
-            policy,
-            engine,
-            validate,
-            digests,
-            writer,
-            stop,
-            log,
-            signal,
-          }),
-        );
+        const historical = await qualifyHistoricalProbe({
+          folder,
+          root,
+          evaluation,
+          contract,
+          file,
+          probe,
+          revisions,
+          pristine,
+          make,
+          discard,
+          registry,
+          policy,
+          engine,
+          validate,
+          digests,
+          writer,
+          stop,
+          log,
+          signal,
+        });
+        if (historical.refused === undefined) qualified.push(historical);
+        else refuse(historical.refused);
         continue;
       }
       // Each probe is qualified in a workspace of its own, so nothing its

@@ -60,7 +60,7 @@ const {
   extractFindings,
   FINDING_KEYS,
 } = require('../cli/lib/parse-report');
-const { VERDICT_KEYS, SKIP_KEYS, DEFAULT_TIMEOUT_MS, defaultTimeoutMs } = require('../cli/test-review');
+const { VERDICT_KEYS, SKIP_KEYS, DEFAULT_TIMEOUT_MS, defaultTimeoutMs, heartbeatSecondsFrom } = require('../cli/test-review');
 const {
   computeConventionBaseline,
   strideSelect,
@@ -3347,6 +3347,32 @@ async function runTests() {
           `closed=${killed.closed} closeMs=${killed.closeMs} surviving heartbeat pids=${JSON.stringify(survivors)}`,
         );
       }
+
+      // Node fires a timer past 2^31-1 ms, or one with a non-finite delay,
+      // after 1 ms, so an out-of-range interval would print about a line per
+      // millisecond. The CLI falls back to its default and the heartbeat
+      // refuses one outright.
+      const intervals = ['Infinity', '1e9', '2147484', '0.001', '0', '-1', 'abc', ''].map((value) =>
+        heartbeatSecondsFrom({ TEA_TEST_REVIEW_HEARTBEAT_SECONDS: value }),
+      );
+      assert(
+        intervals.every((seconds) => seconds === 15) &&
+          heartbeatSecondsFrom({}) === 15 &&
+          heartbeatSecondsFrom({ TEA_TEST_REVIEW_HEARTBEAT_SECONDS: '0.2' }) === 0.2 &&
+          heartbeatSecondsFrom({ TEA_TEST_REVIEW_HEARTBEAT_SECONDS: '3600' }) === 3600,
+        'an out-of-range TEA_TEST_REVIEW_HEARTBEAT_SECONDS falls back to the 15 s default; 0.2 and 3600 are honoured',
+        JSON.stringify(intervals),
+      );
+      const heartbeatScript = path.join(repoRoot, 'cli', 'lib', 'heartbeat.js');
+      const refusals = ['Infinity', '2147484', '0.001'].map(
+        (seconds) =>
+          spawnSync(process.execPath, [heartbeatScript, String(process.pid), seconds], { encoding: 'utf8', timeout: 5000 }).status,
+      );
+      assert(
+        refusals.every((status) => status === 64),
+        'the heartbeat exits 64 at once for an interval outside 0.05 to 3600 s',
+        JSON.stringify(refusals),
+      );
       assert(
         approveRun.stdout.includes('"recommendation": "Approve with Comments"'),
         'approve run prints the verdict JSON',

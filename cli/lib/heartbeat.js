@@ -20,12 +20,26 @@
  * whatever still reads that stderr.
  *
  * Usage: node heartbeat.js <parentPid> <intervalSeconds>
+ *
+ * Exits 64 at once for an interval outside 0.05 to 3600 s.
  */
 
 'use strict';
 
 /** How often the heartbeat checks that the CLI is alive. */
 const POLL_MS = 100;
+
+/**
+ * The interval range the heartbeat accepts, in seconds. Node fires a timer
+ * past 2^31-1 ms, or one given a non-finite delay, after 1 ms, so an interval
+ * out of range would print about a line per millisecond.
+ */
+const MIN_INTERVAL_SECONDS = 0.05;
+const MAX_INTERVAL_SECONDS = 3600;
+
+function validInterval(seconds) {
+  return Number.isFinite(seconds) && seconds >= MIN_INTERVAL_SECONDS && seconds <= MAX_INTERVAL_SECONDS;
+}
 
 function parentGone(parentPid) {
   if (process.platform !== 'win32') return process.ppid !== parentPid;
@@ -40,7 +54,7 @@ function parentGone(parentPid) {
 function beat([parentArgument, intervalArgument]) {
   const parentPid = Number(parentArgument);
   const intervalSeconds = Number(intervalArgument);
-  if (!Number.isInteger(parentPid) || parentPid < 1 || !(intervalSeconds > 0)) process.exit(64);
+  if (!Number.isInteger(parentPid) || parentPid < 1 || !validInterval(intervalSeconds)) process.exit(64);
   const started = Date.now();
   const watch = () => {
     if (parentGone(parentPid)) process.exit(0);
@@ -54,3 +68,5 @@ function beat([parentArgument, intervalArgument]) {
 }
 
 if (require.main === module) beat(process.argv.slice(2));
+
+module.exports = { MAX_INTERVAL_SECONDS, MIN_INTERVAL_SECONDS, validInterval };

@@ -135,10 +135,16 @@ jobs:
   # script, and exits 1 when any failed. Each script's raw V8 coverage lands in
   # $RUNNER_TEMP/v8 under a shard-and-script prefix for the coverage job.
   #
-  # The shard count appears twice, in the matrix list and in the tool's
-  # `--shard ${{ matrix.shard }}/5` argument; test:shards and test:ci-coverage
-  # both fail when the list is not exactly 1 through that count. To change the
-  # count, change both and read the balance off
+  # The shard count appears three times: in the matrix list, in the tool's
+  # `--shard ${{ matrix.shard }}/5` argument, and in the coverage job's
+  # `--shards 5`. test:shards and test:ci-coverage fail when the list is not
+  # exactly 1 through that count, and test:shards when the coverage job's count
+  # differs. They also refuse a matrix with include, exclude or any key besides
+  # shard, an `if` or `continue-on-error` on this job or its shard step, a
+  # `shell` on that step, a run line holding anything besides the invocation
+  # and its --coverage-dir and --timings flags, and a workflow that does not
+  # run on pull_request: each is a way a green run could skip a shard or hide
+  # its failure. To change the count, change all three and read the balance off
   # `node tools/test-shards.js --list --shard <i>/<n>` for each shard.
   chain:
     name: chain (${{ matrix.shard }}/5)
@@ -230,7 +236,7 @@ jobs:
           name: v8-${{ matrix.shard }}
           path: ${{ runner.temp }}/v8
           retention-days: 1
-          if-no-files-found: warn
+          if-no-files-found: error
 
       # Merge every shard's file with `jq -S -s add shard-*.json` and commit the
       # result as tools/test-shard-weights.json to rebalance the shards.
@@ -336,7 +342,9 @@ jobs:
   # A failed shard fails this job before the report. A script that failed
   # partway recorded only part of its coverage, and a shard that timed out
   # recorded none for the scripts it never reached, so a threshold verdict
-  # over that merge would measure the failure.
+  # over that merge would measure the failure. A shard whose artifact never
+  # arrived leaves no failure behind and the other shards' coverage can still
+  # clear the thresholds, so the report also waits on every shard's manifest.
   coverage:
     needs: chain
     if: ${{ !cancelled() }}
@@ -375,6 +383,9 @@ jobs:
           pattern: v8-*
           merge-multiple: true
           path: ${{ runner.temp }}/v8
+
+      - name: Prove every shard's coverage arrived and together covers the chain
+        run: node tools/test-shards.js --check-manifests "$RUNNER_TEMP/v8" --shards 5
 
       - name: Merge the shards' coverage and enforce the threshold
         run: npx c8 report --temp-directory "$RUNNER_TEMP/v8"

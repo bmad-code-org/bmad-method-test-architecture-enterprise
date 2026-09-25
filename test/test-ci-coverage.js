@@ -15,7 +15,9 @@
  * `scriptsCoveredInCi` gets the same treatment: a chain run through
  * tools/test-shards.js over a full 1..N matrix covers every chained script,
  * an incomplete matrix covers none of them, and with no sharded run a chained
- * script counts only when a workflow names it.
+ * script counts only when a workflow names it. `shardRunProblems` refuses each
+ * way a green run could skip a shard or swallow its failure, one case each,
+ * and `chainedScripts` refuses a chain part that is not a bare `npm run`.
  *
  * Usage: node test/test-ci-coverage.js
  */
@@ -29,6 +31,8 @@ const {
   chainedScripts,
   DELIBERATELY_LOCAL,
   scriptsCoveredInCi,
+  shardedChainRunsIn,
+  shardRunProblems,
   staleDeliberatelyLocalEntries,
   uncoveredScripts,
 } = require('../tools/validate-ci-coverage');
@@ -94,9 +98,40 @@ function checkStaleDeliberatelyLocalEntriesClearsAPresentScript() {
   );
 }
 
-const FULL_SHARD_RUN = { file: 'quality.yaml', job: 'chain', total: 2, shards: [1, 2] };
+const GOOD_RUN_LINE =
+  'node tools/test-shards.js --shard ${{ matrix.shard }}/2 --coverage-dir "$RUNNER_TEMP/v8" --timings "$RUNNER_TEMP/t-${{ matrix.shard }}.json"';
+
+/** A workflow that shards the chain two ways, with one part swapped out per case. */
+function shardWorkflow({ on = 'pull_request:', matrix = 'shard: [1, 2]', job = '', step = '', run = GOOD_RUN_LINE } = {}) {
+  return [
+    'on:',
+    `  ${on}`,
+    'jobs:',
+    '  chain:',
+    '    runs-on: ubuntu-latest',
+    ...(job ? [`    ${job}`] : []),
+    '    strategy:',
+    '      matrix:',
+    ...matrix.split('\n').map((line) => `        ${line}`),
+    '    steps:',
+    '      - name: Run this shard',
+    ...(step ? [`        ${step}`] : []),
+    `        run: ${JSON.stringify(run)}`,
+    '',
+  ].join('\n');
+}
+
+function runsOf(text) {
+  return shardedChainRunsIn('x.yaml', text);
+}
+
+const FULL_SHARD_RUN = runsOf(shardWorkflow())[0];
 
 function checkShardedChainCoversEveryChainedScript() {
+  check(
+    FULL_SHARD_RUN && shardRunProblems(FULL_SHARD_RUN).length === 0,
+    `the well-formed shard workflow was refused: ${JSON.stringify(FULL_SHARD_RUN && shardRunProblems(FULL_SHARD_RUN))}`,
+  );
   const covered = scriptsCoveredInCi(['test:a', 'test:b'], new Set(), [FULL_SHARD_RUN]);
   check(
     covered.has('test:a') && covered.has('test:b'),
@@ -113,8 +148,59 @@ function checkChainedScriptNeitherShardedNorNamedIsMissing() {
 }
 
 function checkIncompleteShardMatrixCoversNothing() {
-  const covered = scriptsCoveredInCi(['test:a'], new Set(), [{ ...FULL_SHARD_RUN, total: 3 }]);
+  const run = runsOf(shardWorkflow({ run: GOOD_RUN_LINE.replace('/2 ', '/3 ') }))[0];
+  const covered = scriptsCoveredInCi(['test:a'], new Set(), [run]);
   check(!covered.has('test:a'), 'a shard matrix of [1, 2] for a 3-way split still counted the chain as run in CI');
+}
+
+/**
+ * Every way a green run could skip a shard or swallow its failure, each of
+ * which has to be refused on its own.
+ */
+const REFUSED_SHARD_WORKFLOWS = {
+  'a matrix exclude': { matrix: 'shard: [1, 2]\nexclude:\n  - shard: 2' },
+  'a matrix include': { matrix: 'shard: [1, 2]\ninclude:\n  - shard: 3' },
+  'a second matrix key': { matrix: 'shard: [1, 2]\nos: [ubuntu-latest]' },
+  'a job-level if': { job: "if: github.event_name == 'push'" },
+  'a job-level continue-on-error': { job: 'continue-on-error: true' },
+  'a step-level if': { step: 'if: matrix.shard != 2' },
+  'a step-level continue-on-error': { step: 'continue-on-error: true' },
+  'a step-level shell': { step: 'shell: bash {0}' },
+  '--list on the run line': { run: GOOD_RUN_LINE.replace('/2 ', '/2 --list ') },
+  '|| true after the invocation': { run: `${GOOD_RUN_LINE} || true` },
+  '; true after the invocation': { run: `${GOOD_RUN_LINE}; true` },
+  '&& after the invocation': { run: `${GOOD_RUN_LINE} && echo done` },
+  'a pipe after the invocation': { run: `${GOOD_RUN_LINE} | tee log.txt` },
+  'a command substitution in a flag value': { run: GOOD_RUN_LINE.replace('$RUNNER_TEMP/v8', '$(false)') },
+  'a second line in the run block': { run: `${GOOD_RUN_LINE}\nexit 0` },
+  'a workflow that does not run on pull_request': { on: 'push:' },
+};
+
+function checkEveryBypassIsRefused() {
+  for (const [name, parts] of Object.entries(REFUSED_SHARD_WORKFLOWS)) {
+    const [run] = runsOf(shardWorkflow(parts));
+    check(run !== undefined, `${name}: the shard invocation was not found at all`);
+    if (!run) continue;
+    check(shardRunProblems(run).length > 0, `${name} passed shardRunProblems`);
+    check(!scriptsCoveredInCi(['test:a'], new Set(), [run]).has('test:a'), `${name} still counted the chain as run in CI`);
+  }
+}
+
+function checkChainOfNonNpmRunPartFails() {
+  let message = '';
+  try {
+    chainedScripts({ scripts: { test: 'npm run test:a && node test/x.js' } });
+  } catch (error) {
+    message = error.message;
+  }
+  check(
+    message.includes('"node test/x.js"'),
+    `a chain part that is not a bare npm run was not refused by name: ${JSON.stringify(message)}`,
+  );
+  check(
+    JSON.stringify(chainedScripts({ scripts: { test: 'npm run test:a && npm run lint:md' } })) === '["test:a","lint:md"]',
+    'a chain of bare npm run parts did not parse',
+  );
 }
 
 function checkRealRepoIsClean() {
@@ -142,6 +228,8 @@ function main() {
   checkShardedChainCoversEveryChainedScript();
   checkChainedScriptNeitherShardedNorNamedIsMissing();
   checkIncompleteShardMatrixCoversNothing();
+  checkEveryBypassIsRefused();
+  checkChainOfNonNpmRunPartFails();
   checkRealRepoIsClean();
 
   if (failures.length > 0) {

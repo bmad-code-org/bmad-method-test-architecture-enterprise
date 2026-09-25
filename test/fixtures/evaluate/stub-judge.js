@@ -17,10 +17,12 @@
  *   garbage     reply with text that is not JSON
  *   echo        print each criterion's evidence, as a judge quoting it would,
  *               then its answer
+ *   quote       print each criterion's evidence and give no answer of its own
  *   write       write a file into its working directory, then answer
  *   hang        wait a minute before answering, past any short timeoutMs
- *   sleep       write its pid to the file `--pid` names, wait 5 s, then answer
- *               (a case that signals the run while the judge runs)
+ *   sleep       write its pid to the file `--pid` names (a temp file renamed
+ *               into place, so a reader never sees it empty), wait 5 s, then
+ *               answer (a case that signals the run while the judge runs)
  */
 
 'use strict';
@@ -55,13 +57,18 @@ if (mode === 'garbage') {
 if (mode === 'write') fs.writeFileSync('scratch.txt', 'a judge that writes\n');
 if (mode === 'hang') wait(60_000);
 if (mode === 'sleep') {
-  fs.writeFileSync(option('--pid'), String(process.pid));
+  fs.writeFileSync(`${option('--pid')}.partial`, String(process.pid));
+  fs.renameSync(`${option('--pid')}.partial`, option('--pid'));
   wait(5000);
 }
 const material = JSON.parse(prompt.slice(prompt.indexOf(HEADING) + HEADING.length));
-if (mode === 'echo') {
+if (mode === 'echo' || mode === 'quote') {
   for (const rubric of material.rubrics) {
     for (const criterion of rubric.criteria) process.stdout.write(`The evidence reads:\n${criterion.evidence}\n`);
+  }
+  if (mode === 'quote') {
+    process.stdout.write('I will not score this.\n');
+    process.exit(0);
   }
 }
 const scores = material.rubrics.flatMap((rubric) => {

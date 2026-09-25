@@ -9,7 +9,10 @@
  * the shards cover the chain exactly once, in chain order, and come out the
  * same on every run; that a script with no weight lands on the lightest shard;
  * that the weights file names no script the chain has dropped; and that the
- * quality workflow's matrix lists exactly 1 through the count it passes.
+ * quality workflow's matrix lists exactly 1 through the count it passes; that
+ * the coverage job checks shard manifests for that same count, and that the
+ * manifest check refuses a missing, foreign, duplicate or incomplete set; and
+ * that a shard keeps going past a failing or signal-killed script.
  *
  * Usage: node test/test-test-shards.js
  */
@@ -25,8 +28,10 @@ const { chainedScripts, shardedChainRuns, shardRunProblems } = require('../tools
 const {
   collectCoverage,
   includeUrlPrefixes,
+  manifestProblems,
   parseShard,
   planShards,
+  readShardManifests,
   readWeights,
   runShard,
   staleWeights,
@@ -127,13 +132,37 @@ function checkWorkflowMatrix() {
       `quality.yaml shards the chain ${run.total} ways; this file proves 1 to ${MAX_SHARDS}`,
     );
   }
-  check(shardRunProblems({ file: 'x.yaml', job: 'chain', total: 4, shards: [1, 2, 4] }).length === 1, 'a matrix skipping shard 3 passed');
-  check(
-    shardRunProblems({ file: 'x.yaml', job: 'chain', total: 3, shards: [1, 2, 3, 4] }).length === 1,
-    'a matrix listing a 4th shard passed',
+  // The coverage job's manifest check has to expect the same shard count, or
+  // it would pass with shards missing or fail on a correct merge.
+  const workflow = fs.readFileSync(path.join(PROJECT_ROOT, '.github', 'workflows', 'quality.yaml'), 'utf8');
+  const expected = [...workflow.matchAll(/node tools\/test-shards\.js --check-manifests "\$RUNNER_TEMP\/v8" --shards (\d+)/g)].map(
+    (match) => Number.parseInt(match[1], 10),
   );
-  check(shardRunProblems({ file: 'x.yaml', job: 'chain', total: 3, shards: undefined }).length === 1, 'a job with no shard matrix passed');
-  check(shardRunProblems({ file: 'x.yaml', job: 'chain', total: 3, shards: [1, 2, 3] }).length === 0, 'a full 1..3 matrix was refused');
+  check(
+    runs.length === 1 && JSON.stringify(expected) === JSON.stringify([runs[0].total]),
+    `quality.yaml's coverage job checks shard manifests for ${JSON.stringify(expected)} shard(s); the chain job runs ${runs[0]?.total}`,
+  );
+}
+
+function checkManifestProblems() {
+  const chain = ['test:a', 'test:b', 'test:c'];
+  const full = [
+    { shard: 1, total: 2, scripts: ['test:a', 'test:c'] },
+    { shard: 2, total: 2, scripts: ['test:b'] },
+  ];
+  check(manifestProblems(full, chain, 2).length === 0, `a complete set of manifests was refused: ${manifestProblems(full, chain, 2)}`);
+  const cases = {
+    'a missing shard': [full[0]],
+    'a manifest from another shard count': [full[0], { ...full[1], total: 3 }],
+    'a duplicate shard': [full[0], full[1], full[1]],
+    'a chained script no shard ran': [full[0], { ...full[1], scripts: [] }],
+    'a script the chain does not call': [full[0], { ...full[1], scripts: ['test:b', 'test:gone'] }],
+    'a script two shards ran': [full[0], { ...full[1], scripts: ['test:b', 'test:a'] }],
+    'an unreadable manifest': [full[0], full[1], { unreadable: 'shard-manifest-3.json' }],
+  };
+  for (const [name, manifests] of Object.entries(cases)) {
+    check(manifestProblems(manifests, chain, 2).length > 0, `${name} passed the manifest check`);
+  }
 }
 
 function checkShardArgument() {
@@ -199,7 +228,12 @@ function checkShardRunKeepsGoingPastAFailure() {
     const manifest = {
       name: 'shard-run-fixture',
       private: true,
-      scripts: { 'test:first': 'node lib/hit.js', 'test:broken': 'node -e "process.exit(3)"', 'test:last': 'node lib/hit.js' },
+      scripts: {
+        'test:first': 'node lib/hit.js',
+        'test:broken': 'node -e "process.exit(3)"',
+        'test:killed': 'node -e "process.kill(process.pid, 9)"',
+        'test:last': 'node lib/hit.js',
+      },
       c8: { include: ['lib/**'] },
     };
     fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify(manifest));
@@ -209,7 +243,7 @@ function checkShardRunKeepsGoingPastAFailure() {
     const timings = path.join(root, 'timings', 'shard-2.json');
     const lines = [];
     const status = runShard(
-      ['test:first', 'test:broken', 'test:last'],
+      ['test:first', 'test:broken', 'test:killed', 'test:last'],
       { index: 2, total: 3 },
       {
         root,
@@ -226,13 +260,23 @@ function checkShardRunKeepsGoingPastAFailure() {
       output.includes('::error title=npm run test%3Abroken::npm run test:broken failed (3) in shard 2/3'),
       `the failing script got no escaped ::error annotation:\n${output}`,
     );
+    check(
+      output.includes('::error title=npm run test%3Akilled::npm run test:killed failed'),
+      `a script killed by a signal did not fail the shard with an annotation:\n${output}`,
+    );
     check(/ok {4}npm run test:last/.test(output), `the script after the failure did not run to a pass:\n${output}`);
     const recorded = fs.existsSync(timings) ? Object.keys(JSON.parse(fs.readFileSync(timings, 'utf8'))) : [];
     check(
-      JSON.stringify(recorded) === JSON.stringify(['test:broken', 'test:first', 'test:last']),
-      `timings recorded ${JSON.stringify(recorded)}; expected all three scripts`,
+      JSON.stringify(recorded) === JSON.stringify(['test:broken', 'test:first', 'test:killed', 'test:last']),
+      `timings recorded ${JSON.stringify(recorded)}; expected all four scripts`,
     );
-    const files = fs.existsSync(coverageDir) ? fs.readdirSync(coverageDir) : [];
+    const [shardManifest] = readShardManifests(coverageDir);
+    check(
+      JSON.stringify(shardManifest) ===
+        JSON.stringify({ shard: 2, total: 3, scripts: ['test:first', 'test:broken', 'test:killed', 'test:last'] }),
+      `the shard wrote the manifest ${JSON.stringify(shardManifest)}; expected shard 2 of 3 naming all four scripts`,
+    );
+    const files = fs.existsSync(coverageDir) ? fs.readdirSync(coverageDir).filter((name) => !name.startsWith('shard-manifest-')) : [];
     const prefixes = [...new Set(files.map((name) => name.replace(/coverage-.*$/, '')))].sort();
     check(
       JSON.stringify(prefixes) === JSON.stringify(['shard-2-test_first-', 'shard-2-test_last-']),
@@ -259,6 +303,7 @@ function main() {
   checkUnweightedScriptLandsOnLightestShard(chain, weights);
   checkWeights(chain, weights);
   checkWorkflowMatrix();
+  checkManifestProblems();
   checkShardArgument();
   checkCoverageCollection(manifest);
   checkShardRunKeepsGoingPastAFailure();

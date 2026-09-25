@@ -57,9 +57,16 @@ const GIT_CHECKOUT_TIMEOUT_MS = 10 * 60_000;
 
 /** A workspace the run cannot make faithfully and contained; `tea-evaluate` refuses it with exit 12. */
 class WorkspaceRefusal extends Error {
-  constructor(message) {
+  /**
+   * @param {string} message
+   * @param {object} [options]
+   * @param {boolean} [options.atRevision] the commit checked out cannot hold the target (no `launch.root`, or
+   *   submodules under it), a property of that revision rather than of the machine
+   */
+  constructor(message, { atRevision = false } = {}) {
     super(message);
     this.name = 'WorkspaceRefusal';
+    this.atRevision = atRevision;
   }
 }
 
@@ -567,11 +574,13 @@ function createWorkspace({ root, kind, provision = [], exclude = [], fromWorking
       if (submodules.length > 0) {
         throw new WorkspaceRefusal(
           `launch.root holds git submodule(s) ${submodules.join(', ')} at commit ${workspace.commit}, which a worktree checks out empty, so the run would evaluate a project missing their files; evaluate the submodule's own repository, or pass --from-working-tree to copy the checked-out tree`,
+          { atRevision: true },
         );
       }
       if (!isDirectory(workspace.root)) {
         throw new WorkspaceRefusal(
           `launch.root ${posix(path.relative(workspace.repository, root)) || '.'} is not tracked at commit ${workspace.commit}, so the worktree does not hold it; commit it or pass --from-working-tree`,
+          { atRevision: true },
         );
       }
       for (const entry of excluded) fs.rmSync(path.join(workspace.root, path.relative(root, entry)), { recursive: true, force: true });
@@ -913,6 +922,7 @@ module.exports = {
   cleanUpOnSignal,
   containLinks,
   createWorkspace,
+  isDirectory,
   isInside,
   joinAsSpelled,
   makeReadOnly,

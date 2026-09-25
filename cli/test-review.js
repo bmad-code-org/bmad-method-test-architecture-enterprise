@@ -68,8 +68,16 @@ const { AGENT_ADAPTERS, resolveModel } = require('./lib/agent-adapters');
 const { withIsolation, selectBackend } = require('./lib/isolate');
 const { resolveTeaConfig, PACT_MCP_VALUES, EXECUTION_MODE_VALUES } = require('./lib/resolve-tea-config');
 const { TEA_CLI_VERSION, buildReviewProvenance } = require('./lib/review-provenance');
+const { validInterval } = require('./lib/heartbeat');
 
 const HEARTBEAT_SCRIPT = path.join(__dirname, 'lib', 'heartbeat.js');
+const DEFAULT_HEARTBEAT_SECONDS = 15;
+
+/** The heartbeat interval TEA_TEST_REVIEW_HEARTBEAT_SECONDS asks for, or the default when it is unset or out of range. */
+function heartbeatSecondsFrom(env) {
+  const requested = Number(env.TEA_TEST_REVIEW_HEARTBEAT_SECONDS);
+  return env.TEA_TEST_REVIEW_HEARTBEAT_SECONDS !== undefined && validInterval(requested) ? requested : DEFAULT_HEARTBEAT_SECONDS;
+}
 
 const EXIT = {
   PASS: 0,
@@ -906,9 +914,8 @@ function main() {
   // this process (see that file for why it is a process of its own, and how
   // it ends when this one is gone). TEA_TEST_REVIEW_HEARTBEAT_SECONDS
   // shortens the 15 s interval so the CLI's tests can watch it within a few
-  // seconds.
-  const heartbeatSeconds =
-    Number(process.env.TEA_TEST_REVIEW_HEARTBEAT_SECONDS) > 0 ? Number(process.env.TEA_TEST_REVIEW_HEARTBEAT_SECONDS) : 15;
+  // seconds; a value outside the heartbeat's accepted range falls back to 15.
+  const heartbeatSeconds = heartbeatSecondsFrom(process.env);
   const startHeartbeat = () => {
     console.error(`tea-test-review: agent running (${options.agent}, model ${resolvedModel})...`);
     const heartbeat = spawn(process.execPath, [HEARTBEAT_SCRIPT, String(process.pid), String(heartbeatSeconds)], {
@@ -1146,4 +1153,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { EXIT, VERDICT_KEYS, SKIP_KEYS, DEFAULT_AGENT, DEFAULT_TIMEOUT_MS, defaultTimeoutMs };
+module.exports = { EXIT, VERDICT_KEYS, SKIP_KEYS, DEFAULT_AGENT, DEFAULT_TIMEOUT_MS, defaultTimeoutMs, heartbeatSecondsFrom };

@@ -36,7 +36,8 @@
  *   `historical` arm, a gameability probe the `gameability` arm), or `arms` declares one no probe runs on.
  * - `mutation-route`: a probe on the `controlled-mutation` route seeds no defect.
  * - `evaluator-conditions`: a registry entry runs `tea-skill-runner`, which always runs an agent, and the
- *   folder has no `policy/evaluator-conditions.json`, or one that declares `modelSnapshot` `none` (NFR8).
+ *   folder has no `policy/evaluator-conditions.json`, or one that declares `modelSnapshot` `none` (NFR8); or
+ *   the file declares `modelSnapshot` `none` with a `systemPromptDigest` other than the empty byte string's.
  * - `skill-runner`: a registry entry for `tea-skill-runner` does not declare the runner's infrastructure
  *   exit codes, or a leg or plan step for it carries no literal `timeout-ms` below the entry's
  *   `maxElapsedMs`: under the ceiling the runner reports its own timeout as exit 5, while at the
@@ -1135,6 +1136,19 @@ function checkEvaluatorConditions(report, folder, context, registry) {
   const conditions = parseInto(report, folder, CONDITIONS_NAME);
   if (conditions === undefined) return;
   validateInto(report, CONDITIONS_NAME, 'schema', context.validate.evaluatorConditions, conditions);
+  // A run that uses no model records the digest of the empty byte string, since no system prompt ran.
+  const emptyDigest = context.engine.digestBytes(new Uint8Array(0));
+  if (
+    conditions?.modelSnapshot === 'none' &&
+    typeof conditions.systemPromptDigest === 'string' &&
+    conditions.systemPromptDigest !== emptyDigest
+  ) {
+    report.add(
+      CONDITIONS_NAME,
+      'evaluator-conditions',
+      `declares modelSnapshot none with systemPromptDigest ${conditions.systemPromptDigest}; with no model there is no system prompt, so it must be ${emptyDigest}, the digest of the empty byte string`,
+    );
+  }
   if (runner !== undefined && conditions?.modelSnapshot === 'none') {
     report.add(
       CONDITIONS_NAME,

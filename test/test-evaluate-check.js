@@ -58,6 +58,8 @@ const Ajv = AjvModule.default ?? AjvModule;
 const PROJECT_ROOT = path.join(__dirname, '..');
 const CLI = path.join(PROJECT_ROOT, 'cli', 'evaluate.js');
 const VALID = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'valid');
+/** eval-quality's `digestBytes` over the empty byte string, the system prompt digest of a run that uses no model. */
+const EMPTY_DIGEST = 'sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
 const TEA_MANIFEST = JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'package.json'), 'utf8'));
 
 const colors = { reset: '\u001B[0m', red: '\u001B[31m', green: '\u001B[32m' };
@@ -1134,7 +1136,7 @@ const HARDENING_CASES = [
         JSON.stringify({
           schemaVersion: 1,
           modelSnapshot: 'none',
-          systemPromptDigest: `sha256:${'0'.repeat(64)}`,
+          systemPromptDigest: EMPTY_DIGEST,
           judge: { modelSnapshot: null },
         }),
       ),
@@ -1186,6 +1188,17 @@ const HARDENING_CASES = [
     expect: (output) => [[output.includes('which always runs an agent'), 'the finding does not say why the conditions are needed']],
   },
   {
+    name: 'evaluator conditions naming no model with a system prompt digest other than the empty one',
+    file: 'policy/evaluator-conditions.json',
+    rule: 'evaluator-conditions',
+    plant: (folder) =>
+      fs.writeFileSync(
+        path.join(folder, 'policy', 'evaluator-conditions.json'),
+        JSON.stringify({ schemaVersion: 1, modelSnapshot: 'none', systemPromptDigest: `sha256:${'0'.repeat(64)}` }),
+      ),
+    expect: (output) => [[output.includes(EMPTY_DIGEST), 'the finding does not name the digest of the empty byte string']],
+  },
+  {
     name: 'a tea-skill-runner registry entry whose evaluator conditions say none',
     file: 'policy/evaluator-conditions.json',
     rule: 'evaluator-conditions',
@@ -1193,7 +1206,7 @@ const HARDENING_CASES = [
       editJson(folder, 'evaluation.json', (value) => (value.registry[0].target = 'tea-skill-runner'));
       fs.writeFileSync(
         path.join(folder, 'policy', 'evaluator-conditions.json'),
-        JSON.stringify({ schemaVersion: 1, modelSnapshot: 'none', systemPromptDigest: `sha256:${'0'.repeat(64)}` }),
+        JSON.stringify({ schemaVersion: 1, modelSnapshot: 'none', systemPromptDigest: EMPTY_DIGEST }),
       );
     },
     expect: (output) => [[output.includes('declares modelSnapshot none'), 'the finding does not name the none model']],

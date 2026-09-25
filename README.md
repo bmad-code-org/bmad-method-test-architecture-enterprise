@@ -702,7 +702,7 @@ npm run release:major
 
 The workflow performs these steps:
 
-1. ✅ **Validation**: Runs the full `npm test` chain: schema checks, install tests, knowledge checks, criteria-to-fragment traceability, enforce-hook coverage, eval data validation, release metadata, changelog, workflow descriptions, linting, markdown linting, and formatting. The CLI suite (`npm run test:cli`) runs as its own CI job because it takes over twelve minutes
+1. ✅ **Validation**: Runs the full `npm test` chain: schema checks, install tests, knowledge checks, criteria-to-fragment traceability, enforce-hook coverage, eval data validation, release metadata, changelog, workflow descriptions, linting, markdown linting, and formatting. The chain includes the CLI suite (`npm run test:cli`).
 2. ✅ **Version Bump**:
 
 - `next`: derives the next prerelease version and publishes it with dist-tag `next`

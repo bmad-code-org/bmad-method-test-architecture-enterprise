@@ -75,7 +75,7 @@ Each materialized probe qualifies through eval-quality's `qualifyProbe` with no 
 - [x] new `cli/lib/evaluate/gameability.js`, `run.js` -- synthetic port, naive and disciplined evidence, materialized probe, `gameability:<id>` trials.
 - [x] new `cli/lib/evaluate/judge.js`, `records.js`, `run.js` -- the rubric judge, `judgeResults`, `judgeConfiguration`.
 - [x] `cli/lib/evaluate/check.js`, `cli/lib/evaluate/schemas/` -- new rules and fields, each a `test:evaluate-check` case.
-- [x] `test/test-evaluate-arms.js`, fixtures under `test/fixtures/evaluate/` (a stub judge through the `custom` adapter, a launch marker recording the workspace label), `package.json` `test:evaluate-arms`, `.github/workflows/quality.yaml` step; flip the two refusal cases.
+- [x] `test/test-evaluate-arms.js`, fixtures under `test/fixtures/evaluate/` (a stub judge through the `custom` adapter, a launch marker recording the workspace label), `package.json` `test:evaluate-arms` in the `npm test` chain (which CI's `chain` matrix runs since the CI change below); flip the two refusal cases.
 - [x] `docs/reference/tea-evaluate-cli.md`, CHANGELOG, sprint-status (1.8 `done`, 1.9 `review`), planning amendments (AD-7 arm label, historical `artifactDigest`, judge fields; AD-8 route trigger; Story 1.9 criterion names the new fields).
 
 **Acceptance Criteria:** epics.md Story 1.9; each revert check in test-design-epic-1.md's Story 1.9 table is exercised once and recorded below.
@@ -99,7 +99,7 @@ Each change was undone once through an environment switch planted in the runtime
 
 - Gameability arm launching the target (the degenerate branch of `runTrial` skipped): "the gameability arm launched the target", with marker lines from `trial-gameability-P-003-1..3`; 9 failures.
 - Historical pre-fix revision routed to HEAD (`historicalRevisions` returning the evaluated commit as `preFix`): "a historical run exited 11; expected 0", the fail-before arm holding; 5 failures.
-- An unconditional judge call (the no-rubric guard in `judgeRubrics` removed): since review round 2 no judge can be wired beside a contract with no rubric, so the guard is the unit case, where the stub judge's call log is no longer absent ("judgeRubrics called the judge for a contract with no rubric"). Observed once with the guard removed in round 1, when the end-to-end case still wired a judge: "a contract with no rubric called the judge 6 times; expected none"; 11 failures.
+- An unconditional judge call (the no-rubric guard in `judgeRubrics` removed): since the build review's Analyze follow-up no judge can be wired beside a contract with no rubric, so the guard is the unit case, where the stub judge's call log is no longer absent ("judgeRubrics called the judge for a contract with no rubric"). Observed once with the guard removed in round 1, when the end-to-end case still wired a judge: "a contract with no rubric called the judge 6 times; expected none"; 11 failures.
 
 ## Spec Change Log
 
@@ -157,6 +157,72 @@ The pre-pass's "missing ## Overview section" (high) is skipped as in Story 1.8: 
 | architecture-2 | medium | the `references/harness.md` placeholder says the stage generates the evaluator configuration and isolation manifest, which `run` writes | skipped: the stage guides are placeholders Story 1.14 fills, and its harness criterion already assigns the templates |
 | customization-1, customization-2, enhancement-1 to enhancement-3, leanness-1 to leanness-4 | medium, low | pre-existing `SKILL.md` and `customize.toml` wording and resume behavior, unchanged by this story | skipped: the prompt content belongs to Stories 1.12 to 1.14, and the customization findings are shared by every TEA skill |
 
+### Final review round 1 (relay step 4: adversarial A, edge cases E, test quality T, compliance C; all opus, on 33ed5e8)
+
+All fixed in 00221cf unless the row says otherwise.
+CodeRabbit's one thread (the layout comment omitting gameability) is C4; it was answered and resolved on the pull request.
+
+| ID | Verdict | Finding | Resolution |
+| --- | --- | --- | --- |
+| A1 | high | a target printing its own `{"scores":[...]}` had its forged score taken when the judge quoted the evidence first | fixed: a reply carrying more than one scores object unscores every criterion; arms case with a forging target and an echoing judge (round 2 found the single-object variant: see there) |
+| A2 | medium | a `fixCommit` that names no commit dropped the probe silently, and `score` never said so | fixed: exit 10 in a full-history repository, a shallow-history refusal otherwise, and `score` reports every refused probe |
+| A3, E-L1 | low | `fixCommit` accepted moving refs | fixed: a hexadecimal commit id is required (schema and `check`) |
+| E-M1 | medium | a signal during a judge call was lost or reported as an infrastructure failure | fixed: two `setImmediate` turns after `runAgent`, then the run's abort signal is honoured as a stop from outside; SIGINT case |
+| E-M2, C3 | medium | "read-only" was not held for `agy` or `custom` | fixed: `agy` carries `runsReadOnly: false` and `check` refuses it as judge; a judge that leaves anything in its empty directory fails with exit 12; the CLI reference says what binds per adapter |
+| E-L2 | low | a revision without a root, target or tree stopped the run with 12 | fixed for roots at both revisions and targets and submodules at the pre-fix revision (round 2 found the fix-revision half: see there) |
+| E-L3 | low | a shallow clone was misreported as "no parent" or "does not resolve" | fixed with A2 |
+| E-L4 | low | the template example's IDs could equal a real contract's | fixed: placeholders |
+| C1 | medium | the remote-deployment half of the historical route is not delivered and no story owned it | AD-8 and the Story 1.9 criterion-2 amendment say so honestly; Story 1.32 appended to Epic 1 |
+| C2 | low | Story 1.17's criteria did not scope the new `judge` rule | fixed: dated amendment, the rule and the judge call bind only the `deterministic` evaluator kind |
+| C4 | low | the layout comment omitted gameability's scoring-policy requirement | fixed |
+| C5 | low | the `assets/` edits went in by hand, outside the builder | recorded: the two data-file edits were gated by builder Analyze (0 critical, 0 high), as Story 1.8's were |
+| C6 | low | the record contradicted itself on the template and on status, and 1.5, 1.7 and 1.8 still read `in-review` | fixed |
+| T1 | medium | the runtime's own `admissionRefusal` gate was never exercised | fixed: stub-engine unit cases for both builders, exit 10 |
+| T2 | medium | the prompt scan checked a hand list | fixed: every string leaf of `contract.json` except the rubric's own text |
+| T3 | low | round-1 fix E2 was untested | fixed: `recordedJudgeModel` unit cases |
+| T4 | low | round-1 fix E7 was untested | fixed: injected-git unit case for status 128 |
+| T5 | low | four `check` clauses had no case | fixed |
+| T6 | low | the judge's isolation was untested | fixed: cwd log, `hang` and `write` modes |
+| T7 | low | the end-to-end zero-call count could not fail | fixed: relabelled, and the unit case is the R1-19 guard |
+
+### Final review round 2 (adversarial A, edge cases E, test quality T, compliance C; all opus, on d18f40a)
+
+All fixed in the commit after d18f40a unless the row says otherwise.
+
+| ID | Verdict | Finding | Resolution |
+| --- | --- | --- | --- |
+| A1, E3 | high | a shard's coverage could be missing from the merge while CI stayed green (all five leave-one-out merges passed the thresholds) | fixed: each shard writes a manifest of the scripts it ran, the upload errors on no files, and the coverage job refuses unless manifests for every shard together name exactly the chain |
+| A2, E2, T1 | high | `exclude`, `include`, a job or step `if`, `continue-on-error`, `\|\| true` and `--list` passed both guards while dropping a shard or its failures | fixed: the guard reads the parsed job and step and refuses each, plus `shell` and a workflow without `pull_request`; one case per bypass |
+| A3, E1 | medium | a chain part that is not `npm run <name>` was dropped silently | fixed: the parser refuses it by name |
+| A4 | medium | a judge that only quoted the target's forged scores object had it taken | fixed: a scores object whose text appears in the evidence the judge was given is never taken |
+| A5, E5 | medium | the target and submodule checks covered only the pre-fix revision | fixed: both revisions' worktrees meet the launch checks before either arm runs |
+| E4, A6 | medium | a symlinked target, a target under a provisioned directory and a symlinked skill root were refused with a false reason | fixed: the checks run on the revision's worktree through `registry.targetProblems`, which follows links and sees provisioned copies |
+| A7 | low | a branch spelled like a commit id resolved through the branch | fixed: the resolved id must start with the spelling, else exit 10 |
+| A8, E6b | low | an out-of-range heartbeat interval fired every millisecond | fixed: 0.05 to 3600 seconds, with a fallback in the CLI and exit 64 in the heartbeat |
+| E6a | low | a script named `..` made the raw coverage directory the temp root, which the tool then removed | fixed: raw directories are named by position |
+| T2 | medium | the submodule and non-executable refusals had no case | fixed: seven refusals beside a running clean control |
+| T3 | low | the judge's `signal?.aborted` branch and `signal` stage mapping could not run, since the signal handler re-kills the process | fixed: the dead branch is removed and the yields stay |
+| T4 | low | the SIGINT case could read an empty pid file and signal its whole process group | fixed: the stub renames its pid file into place and the case signals only a positive pid |
+| T-other | low | a script a signal ends had no shard case | fixed |
+| C1 | medium | the story record did not log final review round 1 or the CI change | fixed: the round 1 table and this section |
+| C2 | medium | the plan still required a `quality.yaml` step per script and named the `validate` job | fixed: dated amendments to the Build Rule, the criteria from Story 1.9 on, AD-11, AD-15 and both test designs; Stories 1.2 to 1.8, already done, keep their wording |
+| C3 | low | README and `publish.yaml` still described `test:cli` as its own job, and publish ran it twice | fixed |
+| C4 | low | Stories 1.28 to 1.32 had criteria with no revert check, and Story 1.17's amendment had no test-design row | fixed |
+| C5 | medium | the evaluator-conditions schema description contradicted the judge rule | fixed |
+| Analyze determinism-1 | medium | the README asked for the empty-byte digest without its value, and `check` held only its pattern | fixed: `check` requires the literal beside `modelSnapshot: none` and the README states it |
+| Analyze architecture-5 | low | the README summary omitted the judge block | fixed |
+| Analyze architecture-4, leanness-5 | low | no stage guide routes to the assets README | skipped: the stage guides are placeholders Stories 1.13 and 1.14 fill |
+
+The weights were refreshed from the first sharded run's timings (shards had measured 184 to 340 seconds of tests; the refreshed plan puts each at about 236 seconds).
+
+### CI wall time (owner request during final review round 1, d18f40a)
+
+The `coverage` job ran the whole chain serially under c8 and hit its 20-minute timeout on 33ed5e8 (Story 1.8's took 19 minutes).
+The owner asked for parallelization.
+`tools/test-shards.js` splits the `npm test` chain five ways by committed weights, `chain (1/5)` to `chain (5/5)` replace `validate` and `cli`, and `coverage` merges every shard's raw V8 coverage.
+Suite 7 of the test-review CLI took 9.4 minutes because the CLI's heartbeat orphaned a `sleep 15` that held its stderr open; the heartbeat is now one Node process that also exits when the CLI is gone, the file runs in about 14 seconds, and `test:cli` joined the chain.
+The first sharded run on d18f40a took 6 minutes 45 seconds end to end.
+
 ## Verification
 
 **Commands:**
@@ -167,6 +233,7 @@ The pre-pass's "missing ## Overview section" (high) is skipped as in Story 1.8: 
 **Results:**
 
 - the Build Rules engine check -- exit 0 at the start and at the end on eval-quality 4.1.4; `git diff -- package.json package-lock.json` names no `file:` or `.tgz` spec
-- `npm run test:evaluate-arms` -- 131 checks pass in about 30 s over the real eval-quality 4.1.4
-- `npm test` -- exit 0 (`test:evaluate-check` 461 checks, `test:evaluate-run` 389, `test:evaluate-preflight` 230, `test:evaluate-mutation` 423, `test:evaluate-boundaries` 296, `test:evaluate-arms` 131); the first full run stopped at `test:doc-counts` (README's chain length, now eighty-three) and at `lint` (two autofixable test-file findings)
+- `npm run test:evaluate-arms` -- 131 checks at the first build, 232 after final review round 2, over the real eval-quality 4.1.4
+- `npm test` -- exit 0 at each commit of the pull request (the pre-commit hook runs it); the first full run stopped at `test:doc-counts` (README's chain length) and at `lint` (two autofixable test-file findings); the chain is eighty-five scripts after the CI change
+- CI on d18f40a (the first sharded run) -- every job green, 6 minutes 45 seconds end to end
 - `npm run test:release-metadata`, `npm run docs:validate-links`, `npm run docs:build`, `npm run lint`, `npm run lint:md`, `npm run format:check` -- exit 0

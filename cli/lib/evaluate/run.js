@@ -430,7 +430,7 @@ async function runTrial(context) {
  * no record.
  */
 async function concludeTrial(
-  { arm, trialIndex, contract, evaluation, policy, writer, stop, signal },
+  { arm, trialIndex, contract, evaluation, policy, writer, stop },
   { label, evidenceFile, executed, elapsedMs, evidence, mounts, toolCalls },
 ) {
   const judgments = {};
@@ -454,15 +454,11 @@ async function concludeTrial(
   };
   let judged;
   try {
-    judged = await judgeRubrics({ contract, stepObservations: executed.stepObservations, judge: evaluation.judge, signal });
+    judged = await judgeRubrics({ contract, stepObservations: executed.stepObservations, judge: evaluation.judge });
   } catch (error) {
     if (!(error instanceof JudgeError)) throw error;
     writer.writeJson(evidenceFile, { ...written, judge: { fault: error.message, stdout: error.stdout, stderr: error.stderr } });
-    throw stop({
-      stage: error.stoppedFromOutside ? 'signal' : 'trial',
-      exitCode: 12,
-      message: `${label} yields no record: ${error.message}`,
-    });
+    throw stop({ stage: 'trial', exitCode: 12, message: `${label} yields no record: ${error.message}` });
   }
   // A trial no judge scored keeps the evidence shape of a run with no rubric.
   writer.writeJson(

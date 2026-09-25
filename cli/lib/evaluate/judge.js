@@ -24,12 +24,14 @@
  * its rubric's `maxLength` each become that
  * criterion's `score: null` with a note saying why, which eval-quality reads as
  * `judge-error` (Invalid): the runtime reports what the judge said and decides
- * nothing. A reply carrying more than one scores object leaves every
- * criterion unscored, since the evidence it may quote can carry one of its
- * own. An agent that cannot run, times out, exits non-zero or writes into
+ * nothing. A scores object the evidence itself carries (a target can print
+ * one, and a judge quoting the evidence repeats it) is never the answer, and
+ * a reply carrying more than one other scores object leaves every criterion
+ * unscored. An agent that cannot run, times out, exits non-zero or writes into
  * its read-only directory throws `JudgeError`, and the trial yields no record
- * (exit 12); a signal that stopped the run during the call is taken by the
- * run's own handler before the call's end is read.
+ * (exit 12); a signal that reached the run during the call is taken by the
+ * run's own handler, which ends the process by it, before the call's end is
+ * read.
  *
  * Story 1.21 runs the same path over its calibration items, so `judgeRubrics`
  * takes the observations to judge and nothing else from the run.
@@ -60,12 +62,11 @@ const MATERIAL_HEADING = 'Rubrics and evidence (JSON):';
 
 /** A judge that could not answer: an agent that cannot run, times out or exits non-zero. */
 class JudgeError extends Error {
-  constructor(message, { stdout = '', stderr = '', stoppedFromOutside = false } = {}) {
+  constructor(message, { stdout = '', stderr = '' } = {}) {
     super(message);
     this.name = 'JudgeError';
     this.stdout = stdout;
     this.stderr = stderr;
-    this.stoppedFromOutside = stoppedFromOutside;
   }
 }
 
@@ -117,8 +118,14 @@ function evidenceOf(engine, stepObservations, pointer) {
  * @returns {Promise<string>}
  */
 async function judgePrompt({ contract, stepObservations }) {
+  const material = await judgeMaterial({ contract, stepObservations });
+  return `${JUDGE_INSTRUCTIONS}\n\n${MATERIAL_HEADING}\n${JSON.stringify(material, null, 2)}\n`;
+}
+
+/** What a judge call carries after the template: each rubric with its criteria and the evidence each points at. */
+async function judgeMaterial({ contract, stepObservations }) {
   const engine = await loadEngine();
-  const material = {
+  return {
     rubrics: (contract.rubrics ?? []).map((rubric) => ({
       rubricId: rubric.id,
       scaleLevels: (rubric.scaleLevels ?? []).map((level) => ({ level: level.level, anchor: level.anchor })),
@@ -134,15 +141,12 @@ async function judgePrompt({ contract, stepObservations }) {
       })),
     })),
   };
-  return `${JUDGE_INSTRUCTIONS}\n\n${MATERIAL_HEADING}\n${JSON.stringify(material, null, 2)}\n`;
 }
 
 /**
- * Every JSON object in a reply that carries a `scores` list: each balanced
- * `{...}` span (strings skipped), taken from each `{` in turn, that parses, a
- * scores object's own entries not counted again. A reply carrying more than
- * one cannot be read as the judge's answer, since the evidence it may quote
- * (a target's stdout) can hold a scores object of its own.
+ * Every JSON object in a reply that carries a `scores` list, with the text it
+ * was read from: each balanced `{...}` span (strings skipped), taken from each
+ * `{` in turn, that parses, a scores object's own entries not counted again.
  */
 function scoreObjects(reply) {
   const text = String(reply);
@@ -157,7 +161,7 @@ function scoreObjects(reply) {
       continue;
     }
     if (Array.isArray(parsed?.scores)) {
-      found.push(parsed);
+      found.push({ parsed, text: text.slice(start, end + 1) });
       start = end;
     }
   }
@@ -197,25 +201,35 @@ function balancedEnd(text, start) {
 
 /**
  * One `JudgeResult` per criterion the contract's rubrics declare, from the
- * judge's reply. A criterion the reply does not score once with one of its
- * rubric's levels gets `score: null` and a note naming why.
+ * judge's reply. The evidence the judge was given (a target's stdout, say) can
+ * carry a scores object of its own, which a judge quoting it repeats, so a
+ * scores object found in that evidence is never the judge's answer; of the
+ * rest, exactly one must remain. A criterion the reply does not score once
+ * with one of its rubric's levels gets `score: null` and a note naming why.
  *
  * @param {object} contract
  * @param {string} reply the judge's stdout
+ * @param {unknown[]} [evidence] the evidence values the judge was given
  * @returns {Array<{ rubricId: string, criterionId: string, score: number|null, note: string|null }>}
  */
-function judgeResultsFrom(contract, reply) {
-  const objects = scoreObjects(reply);
-  const entries = objects.length === 1 ? objects[0].scores : null;
+function judgeResultsFrom(contract, reply, evidence = []) {
+  const quoted = evidence.map((value) => (typeof value === 'string' ? value : (JSON.stringify(value) ?? '')));
+  const found = scoreObjects(reply);
+  const objects = found.filter(
+    ({ parsed, text }) => !quoted.some((value) => value.includes(text) || value.includes(JSON.stringify(parsed))),
+  );
+  const entries = objects.length === 1 ? objects[0].parsed.scores : null;
   return (contract.rubrics ?? []).flatMap((rubric) => {
     const levels = (rubric.scaleLevels ?? []).map((level) => level.level);
     return rubric.criteria.map((criterion) => {
       const unscored = (note) => ({ rubricId: rubric.id, criterionId: criterion.id, score: null, note });
       if (entries === null) {
         return unscored(
-          objects.length === 0
-            ? 'the judge did not reply with a JSON object carrying a scores list'
-            : `the judge's reply carries ${objects.length} JSON objects with a scores list, so none is taken as its answer`,
+          objects.length > 1
+            ? `the judge's reply carries ${objects.length} JSON objects with a scores list, so none is taken as its answer`
+            : found.length > 0
+              ? 'the judge replied with no scores object of its own, only ones quoted from the evidence it was given'
+              : 'the judge did not reply with a JSON object carrying a scores list',
         );
       }
       const matching = entries.filter((entry) => entry?.rubricId === rubric.id && entry?.criterionId === criterion.id);
@@ -246,9 +260,11 @@ function judgeResultsFrom(contract, reply) {
  * @returns {Promise<{ called: boolean, results: object[], prompt: string|null, stdout: string, stderr: string }>}
  * @throws {JudgeError}
  */
-async function judgeRubrics({ contract, stepObservations, judge, signal }) {
+async function judgeRubrics({ contract, stepObservations, judge }) {
   if ((contract.rubrics ?? []).length === 0) return { called: false, results: [], prompt: null, stdout: '', stderr: '' };
-  const prompt = await judgePrompt({ contract, stepObservations });
+  const material = await judgeMaterial({ contract, stepObservations });
+  const prompt = `${JUDGE_INSTRUCTIONS}\n\n${MATERIAL_HEADING}\n${JSON.stringify(material, null, 2)}\n`;
+  const evidence = material.rubrics.flatMap((rubric) => rubric.criteria.map((criterion) => criterion.evidence));
   // The judge runs in an empty directory of its own, which holds nothing of the evaluation.
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-evaluate-judge-'));
   let answered;
@@ -272,13 +288,10 @@ async function judgeRubrics({ contract, stepObservations, judge, signal }) {
   }
   // runAgent blocks the event loop, so a signal that arrived meanwhile is still pending. The loop reads
   // it in its poll phase, which the first immediate may run ahead of; the second runs after a full turn,
-  // so the run's handler has taken the signal before this call's end is read.
+  // so the run's handler takes the signal (and ends the process by it) before this call's end is read.
   await new Promise(setImmediate);
   await new Promise(setImmediate);
   const streams = { stdout: failure?.stdout ?? answered?.stdout, stderr: failure?.stderr ?? answered?.stderr };
-  if (signal?.aborted) {
-    throw new JudgeError('the rubric judge was stopped by a signal from outside the run', { ...streams, stoppedFromOutside: true });
-  }
   if (failure !== null) throw new JudgeError(`the rubric judge could not answer: ${failure?.message ?? failure}`, streams);
   // A judge runs read-only; one that wrote into its directory broke that bound, whatever it replied.
   if (written.length > 0) {
@@ -287,7 +300,13 @@ async function judgeRubrics({ contract, stepObservations, judge, signal }) {
       streams,
     );
   }
-  return { called: true, results: judgeResultsFrom(contract, answered.stdout), prompt, stdout: answered.stdout, stderr: answered.stderr };
+  return {
+    called: true,
+    results: judgeResultsFrom(contract, answered.stdout, evidence),
+    prompt,
+    stdout: answered.stdout,
+    stderr: answered.stderr,
+  };
 }
 
 module.exports = {

@@ -29,6 +29,13 @@
  * works where every shard checked the repository out to the same path, which
  * every GitHub-hosted job does.
  *
+ * Each shard also writes `shard-manifest-<i>.json` into D, naming its index,
+ * the shard count and the scripts it ran. A shard whose artifact never reached
+ * the merge would otherwise just be absent, and the other shards' coverage can
+ * clear the thresholds without it, so the coverage job runs
+ * `--check-manifests D --shards N` first and fails unless shards 1 through N
+ * each left a manifest and together they ran exactly the chain.
+ *
  * A failing script does not stop the shard: every other script still runs, so
  * one red run names every failure in the shard. Each failure is annotated with
  * `::error title=npm run <script>::`, and the shard exits 1 after printing its
@@ -42,6 +49,7 @@
  * Usage:
  *   node tools/test-shards.js --shard <i>/<n> [--coverage-dir D] [--timings out.json]
  *   node tools/test-shards.js --shard <i>/<n> --list
+ *   node tools/test-shards.js --check-manifests D --shards <n>
  */
 
 'use strict';
@@ -126,9 +134,16 @@ function parseCliArgs(argv) {
       'coverage-dir': { type: 'string' },
       timings: { type: 'string' },
       list: { type: 'boolean', default: false },
+      'check-manifests': { type: 'string' },
+      shards: { type: 'string' },
     },
     strict: true,
   });
+  if (values['check-manifests'] !== undefined) {
+    const total = /^\d+$/.test(values.shards ?? '') ? Number.parseInt(values.shards, 10) : 0;
+    if (total < 1) throw new Error('--check-manifests <dir> needs --shards <n>, a positive integer');
+    return { checkManifests: path.resolve(values['check-manifests']), total };
+  }
   if (values.shard === undefined) throw new Error('--shard <i>/<n> is required');
   return {
     shard: parseShard(values.shard),
@@ -136,6 +151,60 @@ function parseCliArgs(argv) {
     timings: values.timings === undefined ? undefined : path.resolve(values.timings),
     list: values.list,
   };
+}
+
+/** The file a shard writes into its coverage directory to say which scripts it ran. */
+function shardManifestName(index) {
+  return `shard-manifest-${index}.json`;
+}
+
+/** Every shard manifest in a merged coverage directory, parsed; an unreadable one comes back as `{ unreadable: name }`. */
+function readShardManifests(dir) {
+  if (!fs.existsSync(dir)) return [];
+  return fs
+    .readdirSync(dir)
+    .filter((name) => /^shard-manifest-\d+\.json$/.test(name))
+    .sort()
+    .map((name) => {
+      try {
+        return JSON.parse(fs.readFileSync(path.join(dir, name), 'utf8'));
+      } catch {
+        return { unreadable: name };
+      }
+    });
+}
+
+/**
+ * Why a merged coverage directory's shard manifests do not prove every shard
+ * of `total` ran and together ran exactly `chain`, or an empty list when they
+ * do. A shard whose artifact never arrived leaves no manifest, and the merged
+ * coverage of the other shards can still clear the thresholds without it.
+ */
+function manifestProblems(manifests, chain, total) {
+  const problems = [];
+  const seen = new Map();
+  for (const entry of manifests) {
+    if (entry.unreadable) {
+      problems.push(`${entry.unreadable} is not readable JSON`);
+      continue;
+    }
+    if (entry.total !== total) problems.push(`shard ${entry.shard}'s manifest says ${entry.total} shards; this merge expects ${total}`);
+    if (seen.has(entry.shard)) problems.push(`shard ${entry.shard} has more than one manifest`);
+    seen.set(entry.shard, Array.isArray(entry.scripts) ? entry.scripts : []);
+  }
+  for (let index = 1; index <= total; index += 1) {
+    if (!seen.has(index)) problems.push(`shard ${index}/${total} left no manifest, so its coverage is missing from the merge`);
+  }
+  const ran = [...seen.values()].flat();
+  const counts = new Map();
+  for (const script of ran) counts.set(script, (counts.get(script) ?? 0) + 1);
+  const missing = chain.filter((script) => !counts.has(script));
+  if (missing.length > 0 && problems.length === 0) problems.push(`no shard ran ${missing.join(', ')}`);
+  const extra = [...counts.keys()].filter((script) => !chain.includes(script));
+  if (extra.length > 0) problems.push(`shards ran ${extra.join(', ')}, which the npm test chain does not call`);
+  const twice = [...counts].filter(([, count]) => count > 1).map(([script]) => script);
+  if (twice.length > 0) problems.push(`more than one shard ran ${twice.join(', ')}`);
+  return problems;
 }
 
 /**
@@ -223,9 +292,10 @@ function runShard(
   const scratch = coverageDir ? fs.mkdtempSync(path.join(os.tmpdir(), 'tea-test-shard-')) : null;
 
   const results = [];
-  for (const script of scripts) {
+  for (const [position, script] of scripts.entries()) {
     const env = { ...process.env };
-    const rawDir = scratch ? path.join(scratch, safeName(script)) : null;
+    // Named by position: a script name is not a safe path segment (`..` is one).
+    const rawDir = scratch ? path.join(scratch, String(position)) : null;
     if (rawDir) {
       fs.mkdirSync(rawDir, { recursive: true });
       env.NODE_V8_COVERAGE = rawDir;
@@ -246,6 +316,10 @@ function runShard(
     results.push({ script, seconds, passed });
   }
   if (scratch) fs.rmSync(scratch, { recursive: true, force: true });
+  if (coverageDir) {
+    const record = { shard: index, total, scripts: results.map((result) => result.script) };
+    fs.writeFileSync(path.join(coverageDir, shardManifestName(index)), `${JSON.stringify(record, null, 2)}\n`);
+  }
 
   const failed = results.filter((result) => !result.passed);
   const totalSeconds = results.reduce((sum, result) => sum + result.seconds, 0);
@@ -273,12 +347,29 @@ function main(argv = process.argv.slice(2)) {
     options = parseCliArgs(argv);
   } catch (error) {
     console.error(`test-shards: ${error.message}`);
-    console.error('usage: node tools/test-shards.js --shard <i>/<n> [--coverage-dir D] [--timings out.json] [--list]');
+    console.error(
+      'usage: node tools/test-shards.js --shard <i>/<n> [--coverage-dir D] [--timings out.json] [--list]\n' +
+        '       node tools/test-shards.js --check-manifests D --shards <n>',
+    );
     return 2;
   }
   const manifest = readManifest();
+  let chain;
+  try {
+    chain = chainedScripts(manifest);
+  } catch (error) {
+    console.error(`test-shards: ${error.message}`);
+    return 2;
+  }
+  if (options.checkManifests) {
+    const problems = manifestProblems(readShardManifests(options.checkManifests), chain, options.total);
+    for (const problem of problems) console.log(`::error title=shard manifests::${problem}`);
+    if (problems.length > 0) return 1;
+    console.log(`all ${options.total} shard manifests are present and together ran the ${chain.length} chained scripts exactly once`);
+    return 0;
+  }
   const weights = readWeights();
-  const plan = planShards(chainedScripts(manifest), weights, options.shard.total);
+  const plan = planShards(chain, weights, options.shard.total);
   if (options.list) return list(plan, options.shard, weights);
   return runShard(plan[options.shard.index - 1].scripts, options.shard, {
     manifest,
@@ -293,8 +384,10 @@ module.exports = {
   collectCoverage,
   DEFAULT_WEIGHT,
   includeUrlPrefixes,
+  manifestProblems,
   parseShard,
   planShards,
+  readShardManifests,
   readWeights,
   runShard,
   staleWeights,

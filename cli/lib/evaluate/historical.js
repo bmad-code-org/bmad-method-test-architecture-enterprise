@@ -38,7 +38,7 @@ const { admissionRefusal, armVerdict, referenceTo } = require('./admission');
 const { hostEnvironmentPort, runArm } = require('./arm');
 const { expectedSchemaVersion } = require('./engine');
 const { evaluateOracles, oraclesOfBehaviors } = require('./evaluator');
-const { runGit, trackedTreeDigest } = require('./workspace');
+const { WorkspaceRefusal, isDirectory, runGit, trackedTreeDigest } = require('./workspace');
 
 /** The eval-quality fault a command-line adapter throws when its policy refuses a request. */
 const DENIAL_FAULT = 'forbidden-target';
@@ -58,20 +58,18 @@ const PHASES = [
  * parent the clone cut off, refuse the probe, naming the shallow history. So
  * do a pristine workspace that is not a git worktree, a fix commit that is
  * not an ancestor of the evaluated commit (git's own error when it cannot
- * tell), one with no parent, and a revision where the target cannot run:
- * `launch.root` or the skill root not a directory at either revision, a
- * submodule under `launch.root` at the pre-fix revision (a worktree checks it
- * out empty), or a registry target that is not an executable file there.
+ * tell), and one with no parent. A `fixCommit` that resolves through a ref of
+ * the same spelling (a branch named like an id) is an authoring defect too.
+ * Whether the target can run at each revision is `qualifyHistoricalProbe`'s
+ * question, answered on the worktrees themselves.
  *
  * @param {object} options
  * @param {object} options.pristine the run's pristine workspace
  * @param {string} options.fixCommit the committed probe's `qualification.fixCommit`
- * @param {string[]} [options.roots] absolute directories both revisions must hold (`launch.root`, the skill root)
- * @param {string[]} [options.targets] absolute paths of the registry targets the pre-fix revision must hold as executables
  * @param {typeof runGit} [options.git] how git is asked, for a test to answer in its place
  * @returns {{ fix: string, preFix: string } | { refused: string } | { defect: string }}
  */
-function historicalRevisions({ pristine, fixCommit, roots = [], targets = [], git = runGit }) {
+function historicalRevisions({ pristine, fixCommit, git = runGit }) {
   if (pristine.kind !== 'git-worktree') {
     return {
       refused: `the pristine workspace is a temp copy${pristine.dirty ? ' of the working tree' : ''}, not a git worktree, so the run has no revisions to address; evaluate a committed git target without --from-working-tree`,
@@ -89,6 +87,12 @@ function historicalRevisions({ pristine, fixCommit, roots = [], targets = [], gi
       : { defect: `fixCommit ${fixCommit} names no commit in ${pristine.repository}` };
   }
   const fix = resolved.stdout.trim();
+  // An id that resolves through a branch or tag of the same spelling is a ref, which moves as history advances.
+  if (!fix.startsWith(fixCommit)) {
+    return {
+      defect: `fixCommit ${fixCommit} resolves to ${fix} through a ref of that name, not as a commit id; name the commit by its own id`,
+    };
+  }
   const ancestor = ask(['merge-base', '--is-ancestor', fix, pristine.commit]);
   if (!ancestor.ok) {
     return {
@@ -107,38 +111,6 @@ function historicalRevisions({ pristine, fixCommit, roots = [], targets = [], gi
     };
   }
   const preFix = parent.stdout.trim();
-  const relative = (absolute) => path.relative(pristine.repository, absolute).split(path.sep).join('/');
-  for (const [name, revision] of [
-    ['pre-fix', preFix],
-    ['fix', fix],
-  ]) {
-    for (const root of roots) {
-      const at = relative(root);
-      if (at === '') continue;
-      const kind = ask(['cat-file', '-t', `${revision}:${at}`]);
-      if (!kind.ok || kind.stdout.trim() !== 'tree') {
-        return { refused: `the ${name} revision ${revision} holds no directory ${at}, so the target cannot run there` };
-      }
-    }
-  }
-  const [launchRoot] = roots;
-  if (launchRoot !== undefined) {
-    const listed = ask(['ls-tree', '-r', '-z', preFix, '--', relative(launchRoot) || '.']);
-    const submodules = listed.ok ? listed.stdout.split('\u0000').filter((record) => record.startsWith('160000 ')) : [];
-    if (submodules.length > 0) {
-      return {
-        refused: `the pre-fix revision ${preFix} holds git submodule(s) ${submodules.map((record) => record.slice(record.indexOf('\t') + 1)).join(', ')} under launch.root, which a worktree checks out empty`,
-      };
-    }
-  }
-  for (const target of targets) {
-    const at = relative(target);
-    const listed = ask(['ls-tree', '-z', preFix, '--', at]);
-    const record = listed.ok ? listed.stdout.split('\u0000').find((line) => line.endsWith(`\t${at}`)) : undefined;
-    if (record === undefined || !record.startsWith('100755 blob ')) {
-      return { refused: `the pre-fix revision ${preFix} holds no executable registry target ${at}, so the target cannot run there` };
-    }
-  }
   return { fix, preFix };
 }
 
@@ -225,80 +197,110 @@ async function qualifyHistoricalProbe({
   }
   const directory = `qualification/${probe.probeId}`;
   const evidence = {};
-  for (const { phase, revision, expected, meaning } of PHASES) {
-    const commit = revisions[revision];
-    log(`${file}: the ${phase} arm at ${commit}`);
-    const workspace = make(`qualify-${probe.probeId}-${phase}`, null, { commit });
-    let result;
-    try {
-      result = await revisionArm({ contract, workspace, registry, oracleIds, policy, writer, directory, phase, file, stop, signal });
-    } finally {
-      discard(workspace);
+  // Both revisions' worktrees are made and checked before either arm runs, so a revision the target cannot
+  // run at refuses the probe, with the reason, before any evidence is written. The checks are the ones a
+  // launch meets: the worktree holds launch.root with no submodule under it, the skill root is a directory,
+  // and every registry target is present and executable (links followed, provisioned copies included).
+  const workspaces = {};
+  try {
+    for (const { phase, revision } of PHASES) {
+      const commit = revisions[revision];
+      let workspace;
+      try {
+        workspace = make(`qualify-${probe.probeId}-${phase}`, null, { commit });
+      } catch (error) {
+        if (error instanceof WorkspaceRefusal && error.atRevision)
+          return { refused: `the ${revision === 'fix' ? 'fix' : 'pre-fix'} revision ${commit} cannot run the target: ${error.message}` };
+        throw error;
+      }
+      workspaces[phase] = workspace;
+      const skillRoot = path.join(workspace.root, ...(evaluation.launch.skillRoot ?? '.').split('/'));
+      const problems = [
+        ...(isDirectory(skillRoot) ? [] : [`launch.skillRoot ${evaluation.launch.skillRoot} is not a directory`]),
+        ...registry.targetProblems(workspace.root),
+      ];
+      if (problems.length > 0) {
+        return {
+          refused: `the ${revision === 'fix' ? 'fix' : 'pre-fix'} revision ${commit} cannot run the target: ${problems.join('; ')}`,
+        };
+      }
     }
-    const evidenceFile = `${directory}/${phase}.json`;
-    writer.writeJson(evidenceFile, {
-      probeId: probe.probeId,
-      phase,
-      commit,
-      fixCommit: revisions.fix,
-      workspace: workspace.label,
-      verdict: result.verdict,
-      oracles: result.oracles,
-      steps: result.steps,
-    });
-    if (result.verdict !== expected) {
-      throw stop({
-        stage: 'qualification',
-        exitCode: 11,
-        message: `${file}: the ${phase} arm at ${commit} is ${result.verdict} where ${meaning} (${expected}), so the probe does not qualify; the evidence is in ${path.relative(folder, writer.pathOf(evidenceFile))}`,
-      });
-    }
-    evidence[phase] = { file: evidenceFile };
+    return await qualifyAcrossRevisions({ workspaces });
+  } finally {
+    for (const workspace of Object.values(workspaces)) discard(workspace);
   }
-  const failBeforeEvidence = referenceTo(folder, writer, evidence['fail-before'].file, engine.digestBytes);
-  const skillRoot = (evaluation.launch.skillRoot ?? '.').split('/');
-  const candidate = {
-    schemaVersion: expectedSchemaVersion('probe'),
-    parentDigest: null,
-    revisionCount: 0,
-    probeId: probe.probeId,
-    probeClass: probe.probeClass,
-    behaviorId: probe.behaviorId,
-    systemId: evaluation.evaluationId,
-    implementationDigest: digests.implementationDigest,
-    // The defect lives in the pre-fix revision, so that revision's tracked tree is the artifact under test.
-    artifactDigest: trackedTreeDigest({
-      repository: pristine.repository,
-      commit: revisions.preFix,
-      directory: path.join(root, ...skillRoot),
-      exclude: [folder],
-    }),
-    commitDigest: digests.commitDigest,
-    rationale: probe.rationale,
-    qualification: {
-      route: 'historical',
-      failBeforeEvidence,
-      passAfterEvidence: referenceTo(folder, writer, evidence['pass-after'].file, engine.digestBytes),
-      fixCommitDigest: engine.digestBytes(Buffer.from(revisions.fix, 'utf8')),
-      // Both arms are judged by the one compiled contract the run read before any arm ran, so the oracle is the same at both revisions.
-      oracleStableAcrossRevisions: true,
-    },
-    expectedClean: false,
-    defects: probe.defects.map((defect) => ({
-      defectId: defect.defectId,
-      behaviorId: defect.behaviorId,
-      summary: defect.summary,
-      severity: defect.severity,
-      oracleEvidence: [failBeforeEvidence],
-      source: defect.source,
-      manifestationWitness: defect.manifestationWitness,
-    })),
-    defectSignature: probe.defectSignature ?? null,
-  };
-  const refusal = await admissionRefusal({ candidate, contract, engine, validate });
-  if (refusal !== null) throw stop({ stage: 'qualification', exitCode: 10, message: `${file}: ${refusal}` });
-  log(`${file}: qualified; it fails at ${revisions.preFix} and passes at ${revisions.fix}`);
-  return { probe: candidate, historical: { fix: revisions.fix, preFix: revisions.preFix } };
+
+  async function qualifyAcrossRevisions({ workspaces: made }) {
+    for (const { phase, revision, expected, meaning } of PHASES) {
+      const commit = revisions[revision];
+      log(`${file}: the ${phase} arm at ${commit}`);
+      const workspace = made[phase];
+      const result = await revisionArm({ contract, workspace, registry, oracleIds, policy, writer, directory, phase, file, stop, signal });
+      const evidenceFile = `${directory}/${phase}.json`;
+      writer.writeJson(evidenceFile, {
+        probeId: probe.probeId,
+        phase,
+        commit,
+        fixCommit: revisions.fix,
+        workspace: workspace.label,
+        verdict: result.verdict,
+        oracles: result.oracles,
+        steps: result.steps,
+      });
+      if (result.verdict !== expected) {
+        throw stop({
+          stage: 'qualification',
+          exitCode: 11,
+          message: `${file}: the ${phase} arm at ${commit} is ${result.verdict} where ${meaning} (${expected}), so the probe does not qualify; the evidence is in ${path.relative(folder, writer.pathOf(evidenceFile))}`,
+        });
+      }
+      evidence[phase] = { file: evidenceFile };
+    }
+    const failBeforeEvidence = referenceTo(folder, writer, evidence['fail-before'].file, engine.digestBytes);
+    const skillRoot = (evaluation.launch.skillRoot ?? '.').split('/');
+    const candidate = {
+      schemaVersion: expectedSchemaVersion('probe'),
+      parentDigest: null,
+      revisionCount: 0,
+      probeId: probe.probeId,
+      probeClass: probe.probeClass,
+      behaviorId: probe.behaviorId,
+      systemId: evaluation.evaluationId,
+      implementationDigest: digests.implementationDigest,
+      // The defect lives in the pre-fix revision, so that revision's tracked tree is the artifact under test.
+      artifactDigest: trackedTreeDigest({
+        repository: pristine.repository,
+        commit: revisions.preFix,
+        directory: path.join(root, ...skillRoot),
+        exclude: [folder],
+      }),
+      commitDigest: digests.commitDigest,
+      rationale: probe.rationale,
+      qualification: {
+        route: 'historical',
+        failBeforeEvidence,
+        passAfterEvidence: referenceTo(folder, writer, evidence['pass-after'].file, engine.digestBytes),
+        fixCommitDigest: engine.digestBytes(Buffer.from(revisions.fix, 'utf8')),
+        // Both arms are judged by the one compiled contract the run read before any arm ran, so the oracle is the same at both revisions.
+        oracleStableAcrossRevisions: true,
+      },
+      expectedClean: false,
+      defects: probe.defects.map((defect) => ({
+        defectId: defect.defectId,
+        behaviorId: defect.behaviorId,
+        summary: defect.summary,
+        severity: defect.severity,
+        oracleEvidence: [failBeforeEvidence],
+        source: defect.source,
+        manifestationWitness: defect.manifestationWitness,
+      })),
+      defectSignature: probe.defectSignature ?? null,
+    };
+    const refusal = await admissionRefusal({ candidate, contract, engine, validate });
+    if (refusal !== null) throw stop({ stage: 'qualification', exitCode: 10, message: `${file}: ${refusal}` });
+    log(`${file}: qualified; it fails at ${revisions.preFix} and passes at ${revisions.fix}`);
+    return { probe: candidate, historical: { fix: revisions.fix, preFix: revisions.preFix } };
+  }
 }
 
 /**
