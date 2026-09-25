@@ -32,6 +32,13 @@
  *     isolation manifest are the ones `run.json` recorded, a file it recorded
  *     no digest for included.
  *
+ * A `records` run's sets are an adopter harness's own records, copied into the
+ * run byte for byte (AD-21): their run IDs, evidence references and digest
+ * agreement are the harness's and eval-quality's to judge, so those checks
+ * are left out and the index must name exactly the records the run copied;
+ * every other check, the schemas and the digests `run.json` recorded
+ * included, holds as for any run.
+ *
  * An isolation manifest that is absent is passed on as absent, never filled
  * in: eval-quality reads a trial set with none as Invalid.
  *
@@ -237,6 +244,9 @@ async function inputFindings({ folder, runDirectory, index, record, engine }) {
     if (actual !== expected) add(relative, 'run-integrity', `digests to ${actual}, not the ${expected} run.json recorded for ${what}`);
   };
   const recorded = record.artifacts ?? {};
+  // A records run's sets are an adopter harness's own records, copied unchanged: their run IDs, references and
+  // digests are the harness's, and eval-quality judges their agreement; the run anchors their bytes all the same.
+  const imported = record.evaluator?.kind === 'records';
 
   await read(index.contract, 'eval-contract');
   anchored(index.contract, recorded.contract, 'the compiled contract');
@@ -268,14 +278,26 @@ async function inputFindings({ folder, runDirectory, index, record, engine }) {
     seen.add(set.probeId);
     // AD-7: a set's runId is derived from this invocation and its probe, so a set another run sealed cannot pass as this one's.
     const derived = `${record.invocationId}-${set.probeId}`;
-    if (set.runId !== derived) {
+    if (!imported && set.runId !== derived) {
       add(TRIAL_SETS_NAME, 'run-integrity', `names runId ${set.runId} for ${set.probeId}, not the ${derived} this run derives`);
     }
     const probe = await read(set.probe, 'probe');
     if (probe !== null && probe.probeId !== set.probeId)
       add(set.probe, 'run-integrity', `is probe ${probe.probeId}, not the ${set.probeId} its trial set scores`);
     anchored(set.probe, recorded.probes?.[set.probeId], `probe ${set.probeId}`);
-    if (set.records.length !== record.trialCount) {
+    if (imported) {
+      // The harness chose how many records a set holds; the index must name exactly the ones the run copied.
+      const copied = Object.keys(recorded.records ?? {})
+        .filter((relative) => relative.startsWith(`trial-sets/${set.probeId}/`))
+        .sort();
+      if (JSON.stringify([...set.records].sort()) !== JSON.stringify(copied)) {
+        add(
+          TRIAL_SETS_NAME,
+          'run-integrity',
+          `names records ${JSON.stringify(set.records)} for ${set.probeId}, and the run copied ${JSON.stringify(copied)}`,
+        );
+      }
+    } else if (set.records.length !== record.trialCount) {
       add(
         TRIAL_SETS_NAME,
         'run-integrity',
@@ -287,7 +309,7 @@ async function inputFindings({ folder, runDirectory, index, record, engine }) {
       seenRecords.add(relative);
       const sealed = await read(relative, 'sealed-run-record');
       anchored(relative, recorded.records?.[relative], `a record of ${set.probeId}`);
-      if (sealed === null) continue;
+      if (sealed === null || imported) continue;
       if (sealed.runId !== set.runId || sealed.conditionArm !== set.conditionArm) {
         add(
           relative,

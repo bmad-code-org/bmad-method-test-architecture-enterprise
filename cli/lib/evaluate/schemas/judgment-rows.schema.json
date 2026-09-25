@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:tea:evaluate:schema:judgment-rows",
+  "title": "Judgment rows",
+  "description": "AD-21's import contract: what a command or sealed-brief-agent evaluator answers for one trial. The runtime converts the rows into a SealedRunRecord's findings, oracle dispositions and judge results through evaluator/mapping.json alone, and adds to this schema, per evaluation, that each row's key is one the mapping declares and appears at most once. Quotes and citations reach eval-quality score exactly as stated: the runtime checks nothing eval-quality's ingest checks. The tea-evaluate runtime owns this schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["rows"],
+  "properties": {
+    "rows": {
+      "description": "One row per mapped key the evaluator judged in this trial.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/Row" }
+    },
+    "recommendation": {
+      "description": "The evaluator's own recommendation for the trial, recorded for every probe the trial judges. When absent, a probe's is FAIL when the rows filed a finding against it and PASS otherwise; a trial set records the most severe across its trials, since eval-quality holds the recommendation equal across a set.",
+      "enum": ["PASS", "CONCERNS", "FAIL"]
+    }
+  },
+  "$defs": {
+    "Identifier": {
+      "description": "eval-quality's identifier: a kebab-case slug.",
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "Row": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "outcome", "observationIds"],
+      "properties": {
+        "key": {
+          "description": "A key evaluator/mapping.json declares.",
+          "type": "string",
+          "minLength": 1
+        },
+        "outcome": {
+          "description": "pass: the bound oracle held. fail: it was violated, which files a defect finding. score: a score for the bound rubric criterion.",
+          "enum": ["pass", "fail", "score"]
+        },
+        "score": {
+          "description": "The criterion's score, one of the levels its binding restates; required on a score row and absent otherwise.",
+          "type": "integer"
+        },
+        "observationIds": {
+          "description": "The trial's observations the judgment rests on, as the runtime identified them to the evaluator.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/Identifier" }
+        },
+        "quote": {
+          "description": "Text quoted verbatim from a cited observation's channel; required on a fail row.",
+          "type": "string",
+          "minLength": 1
+        },
+        "quoteChannel": {
+          "description": "The channel the quote comes from, in eval-quality's quotation vocabulary; required on a fail row.",
+          "enum": ["response-body", "response-headers", "response-status", "call-inputs", "stdout", "stderr", "exit-code", "artifact"]
+        },
+        "artifactId": {
+          "description": "The written file the quote comes from: required when quoteChannel is artifact, and absent on every other channel.",
+          "$ref": "#/$defs/Identifier"
+        },
+        "confidence": {
+          "description": "The evaluator's confidence in the row, from 0 to 1; required on a fail row, whose finding carries it.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "comment": {
+          "description": "What the evaluator found, in one or more sentences; required on a fail row, whose finding carries it as its summary.",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "outcome": { "const": "score" } }, "required": ["outcome"] },
+          "then": { "required": ["score"] },
+          "else": { "not": { "required": ["score"] } }
+        },
+        {
+          "if": { "properties": { "outcome": { "const": "fail" } }, "required": ["outcome"] },
+          "then": { "required": ["quote", "quoteChannel", "confidence", "comment"] }
+        },
+        {
+          "if": { "properties": { "quoteChannel": { "const": "artifact" } }, "required": ["quoteChannel"] },
+          "then": { "required": ["artifactId"] },
+          "else": { "not": { "required": ["artifactId"] } }
+        },
+        {
+          "if": { "required": ["quote"] },
+          "then": { "required": ["quoteChannel"] }
+        },
+        {
+          "if": { "required": ["quoteChannel"] },
+          "then": { "required": ["quote"] }
+        }
+      ]
+    }
+  }
+}

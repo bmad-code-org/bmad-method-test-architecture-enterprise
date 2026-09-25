@@ -60,6 +60,14 @@
  *   `"rollbackVerified": true` in
  *   a JSON file, since the flag is the rollback cycle's own result; the
  *   twin-fixture pattern AD-8 rejects set it by hand.
+ * - `framework-name` (Story 1.17, AD-21): no file under `cli/`, in any
+ *   extension, names an evaluation framework or library from
+ *   `FRAMEWORK_NAMES` anywhere in its text (code, a string, a dynamic path,
+ *   a comment or data), compared without case. The binding guard is the
+ *   `cli` layer's dependency-direction `allow` list, which names no
+ *   framework, so an import of any framework fails `test:direction` whatever
+ *   it is called (`test:evaluate-evaluators` plants one); this scan is the
+ *   secondary check, which also catches a name no import carries.
  *
  * Stories 1.5 and 1.7 also hold the moves of harness code into the runtime
  * (AD-5, R1-06), by definition in named files, since a text scan for a call
@@ -139,6 +147,25 @@ const VENDOR_NAMES = [
   'gemini',
 ];
 const VENDOR_WORDS = new Set(VENDOR_NAMES);
+/**
+ * Evaluation frameworks and libraries whose code belongs in an adopter's
+ * `evaluator/` folder and never under `cli/` (AD-21). The list is secondary
+ * and illustrative: the dependency-direction allow list refuses any
+ * framework import whatever its name.
+ */
+const FRAMEWORK_NAMES = [
+  'agentevals',
+  'openevals',
+  'promptfoo',
+  'deepeval',
+  'inspect_ai',
+  'inspect-ai',
+  'langsmith',
+  'langfuse',
+  'ragas',
+  'trulens',
+  'braintrust',
+];
 
 /**
  * Whether a name or string names a vendor: split into words at case changes,
@@ -640,6 +667,19 @@ function scanCli(cliRoot) {
   for (const file of files) {
     const relative = toRelative(file);
     const source = fs.readFileSync(file, 'utf8');
+    const lowered = source.toLowerCase();
+    for (const name of FRAMEWORK_NAMES) {
+      let offset = lowered.indexOf(name);
+      while (offset !== -1) {
+        violations.push({
+          file: relative,
+          line: lineAt(source, offset),
+          rule: 'framework-name',
+          message: `names the evaluation framework "${name}"; framework code lives in an adopter's evaluator/ folder, never in the runtime (AD-21)`,
+        });
+        offset = lowered.indexOf(name, offset + 1);
+      }
+    }
     if (file.startsWith(runtimeDirectory)) {
       let offset = source.indexOf(FORBIDDEN_CONFIG);
       while (offset !== -1) {
@@ -717,6 +757,25 @@ const LOADER = "const { loadEngine } = require('./engine');\n";
 
 /** Each plant is written beside the engine stub (with any `extra` files) and must be reported under its rule, at its file, and nowhere else. */
 const PLANTS = [
+  // framework-name (Story 1.17)
+  {
+    name: 'an import of an evaluation framework',
+    file: 'lib/evaluate/judge-with-framework.js',
+    rule: 'framework-name',
+    source: "'use strict';\nmodule.exports = require('agentevals');\n",
+  },
+  {
+    name: 'an evaluation framework named in a dynamic path',
+    file: 'lib/evaluate/framework-path.js',
+    rule: 'framework-name',
+    source: "'use strict';\nconst where = ['node_modules', 'PromptFoo', 'dist'].join('/');\nmodule.exports = { where };\n",
+  },
+  {
+    name: 'an evaluation framework named in data',
+    file: 'lib/evaluate/frameworks.json',
+    rule: 'framework-name',
+    source: '{ "evaluator": "langsmith" }\n',
+  },
   // test-import
   {
     name: 'a runtime module requiring a test/lib file',

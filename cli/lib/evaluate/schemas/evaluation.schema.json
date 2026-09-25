@@ -96,7 +96,7 @@
       }
     },
     "judge": {
-      "description": "The rubric judge tea-evaluate run calls once per trial when the contract declares a rubric, through TeA's agent adapters; tea-evaluate check requires it then, and requires policy/evaluator-conditions.json to name the judge's model snapshot. A contract with no rubric makes no judge call whatever this says.",
+      "description": "The rubric judge tea-evaluate run calls once per trial when the contract declares a rubric and the evaluator is the deterministic one, through TeA's agent adapters; tea-evaluate check requires it then, and requires policy/evaluator-conditions.json to name the judge's model snapshot. Under any other evaluator kind the evaluator scores the rubric, so no judge is called and check refuses this block as unused; a contract with no rubric makes no judge call whatever this says.",
       "type": "object",
       "additionalProperties": false,
       "required": ["agent", "timeoutMs"],
@@ -128,6 +128,139 @@
           "maximum": 2147483647
         }
       }
+    },
+    "evaluator": {
+      "description": "The evaluation layer that judges every scored trial (AD-21). Absent, the run judges with the deterministic evaluator. Each kind reaches eval-quality score as sealed run records: deterministic resolves each oracle with eval-quality's resolveCheck; command runs an adopter executable under evaluator/ once per trial and converts the judgment rows it prints through evaluator/mapping.json; sealed-brief-agent runs an agent through TeA's agent adapters on the sealed brief alone, acting on the target only through the runtime's MCP bridge, and converts its judgment rows the same way; records takes the sealed run records an adopter harness wrote and passes them to score unchanged.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "description": "Which evaluation layer judges the trials.",
+          "enum": ["deterministic", "sealed-brief-agent", "command", "records"]
+        },
+        "command": {
+          "description": "command: the executable the runtime starts once per trial, a POSIX path under evaluator/ (relative to the evaluation folder, with no \".\" or \"..\" segment), so the evaluator tree digest covers it. It must be a regular executable file; it receives { sealedBrief, observations } on stdin and prints { rows, recommendation? } on stdout.",
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?![\\s\\S]*(?:^|/)\\.{1,2}(?:/|$))(?![\\s\\S]*//)(?![\\s\\S]*/$)evaluator/[^\\\\\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2066-\\u2069]+$"
+        },
+        "args": {
+          "description": "command: arguments the executable receives, in order.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "environmentKeys": {
+          "description": "command and sealed-brief-agent: environment keys passed from the host to the evaluator beside the base set (PATH, HOME, USER, LOGNAME, locale and proxy variables, and a built-in agent adapter's own credential variables), such as a model credential a model-graded evaluator or a custom agent needs. PATH is in the base set already.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+          }
+        },
+        "timeoutMs": {
+          "description": "command and sealed-brief-agent: the wall clock one trial's evaluator gets, in milliseconds; an evaluator still running then has its process group stopped, and the trial yields no record (exit 12).",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "agent": {
+          "description": "sealed-brief-agent: the agent adapter the evaluator runs through, by its key in TeA's adapter table; tea-evaluate check refuses one that cannot run with the bridge as its only tools.",
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "agentCommand": {
+          "description": "sealed-brief-agent: the executable to run in place of the adapter's default command; the custom adapter has none and requires it.",
+          "type": "string",
+          "minLength": 1
+        },
+        "agentArgs": {
+          "description": "sealed-brief-agent: arguments appended after the adapter's own argv; the custom adapter's whole argv, before the --mcp-config the runtime adds.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "model": {
+          "description": "sealed-brief-agent: the model the adapter runs, in place of its pinned default; an adapter with no model flag refuses one.",
+          "type": "string",
+          "minLength": 1
+        },
+        "records": {
+          "description": "records: the directory the adopter's harness writes its sealed records to, relative to the evaluation folder (POSIX, with no \".\" or \"..\" segment): evaluator-configuration.json, and one directory per probe holding its SealedRunRecord files and, optionally, isolation-manifest.json.",
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?![A-Za-z]:)(?!/)(?![\\s\\S]*(?:^|/)\\.{1,2}(?:/|$))(?![\\s\\S]*//)(?![\\s\\S]*/$)[^\\\\\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2066-\\u2069]+$"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "const": "deterministic"
+              }
+            }
+          },
+          "then": {
+            "propertyNames": {
+              "enum": ["kind"]
+            }
+          }
+        },
+        {
+          "if": {
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "const": "command"
+              }
+            }
+          },
+          "then": {
+            "required": ["command", "timeoutMs"],
+            "propertyNames": {
+              "enum": ["kind", "command", "args", "environmentKeys", "timeoutMs"]
+            }
+          }
+        },
+        {
+          "if": {
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "const": "sealed-brief-agent"
+              }
+            }
+          },
+          "then": {
+            "required": ["agent", "timeoutMs"],
+            "propertyNames": {
+              "enum": ["kind", "agent", "agentCommand", "agentArgs", "model", "environmentKeys", "timeoutMs"]
+            }
+          }
+        },
+        {
+          "if": {
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "const": "records"
+              }
+            }
+          },
+          "then": {
+            "required": ["records"],
+            "propertyNames": {
+              "enum": ["kind", "records"]
+            }
+          }
+        }
+      ]
     },
     "trials": {
       "description": "Trials per probe per arm.",

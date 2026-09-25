@@ -351,7 +351,7 @@ function validateLlmSize(content) {
   const charCount = content.length;
 
   if (charCount > LLM_MAX_CHARS) {
-    console.error(`    ERROR: Exceeds ${LLM_MAX_CHARS.toLocaleString()} char limit`);
+    console.error(`    ERROR: ${charCount.toLocaleString()} chars exceeds the ${LLM_MAX_CHARS.toLocaleString()} char limit`);
     process.exit(1);
   } else if (charCount > LLM_WARN_CHARS) {
     console.warn(`    \u001B[33mWARNING: Approaching ${LLM_WARN_CHARS.toLocaleString()} char limit\u001B[0m`);

@@ -323,6 +323,7 @@ File: `test/test-evaluate-evaluators.js` (`test:evaluate-evaluators`), stub eval
 | Row cardinality: unmapped key or duplicate key fails the row schema, exit 12; zero rows for a trial with a mapped oracle exits 12 | Three stub evaluators, one per shape | Integration | P1 | Accepting a duplicate row produces two findings for one oracle, which the case catches |
 | `evaluator.timeoutMs` required for `command`; a hung evaluator's process group is killed at the timeout, its streams persisted, no record, exit 12 | `test:evaluate-check` case for a missing timeout; a stub that never exits | Integration | P0 | Removing the timeout leaves the test hanging until the harness timeout, which fails it |
 | No framework name under `cli/` | `test:evaluate-boundaries` scan over a name list held in the test | Static | P0 | Adding `require('agentevals')` under `cli/` fails |
+| The bridge's `api` and `mcp` tools and the added `check` refusals (added 2026-09-25 in Story 1.17, from its amendments to this story) | An MCP client's `api` call, denied `interface-not-authorized` by eval-quality's `evaluateTarget`, and `mcp` call, denied by eval-quality's MCP adapter with the `forbidden-target` fault whose detail names no authorization for the interface, each with no launch; a gameability router answering from the degenerate response; `check` cases for an oracle bound to the wrong behavior, an unbound rubric criterion, a non-executable command and an adapter with no bridged run | Integration and contract | P1 | A bridge that sends an `api` or `mcp` call anywhere records no denial; deleting a `check` rule turns its case to exit 0 |
 | The `judge` rule and TeA's judge call bind only the `deterministic` kind (added 2026-09-25 in Story 1.9, from its amendment to this story) | `check` over a rubric with a `command`, `sealed-brief-agent` and `records` evaluator and no `judge`, each exit 0, and one with a `judge` under a non-deterministic kind, exit 10 as unused; a `command` evaluator bound to rubric criteria runs with zero stub-judge calls | Contract and integration | P1 | Keeping the rule for every kind makes the `command` case exit 10; calling the judge under every kind makes the count non-zero |
 
 ### Story 1.10: Evaluate a stdio MCP tool server
@@ -581,6 +582,25 @@ Levels: integration over real eval-quality, contract. Files: `test/test-evaluate
 | An unauthorized deployment refuses the probe, the rest runs | A deployment outside the registry's api policy; assert the refusal in `run.json` and `refused/` and exit 0 | Integration | P1 | Dropping the refusal sends a denied request and exits 10 |
 | `check` holds the deployment pair | One deployment only, and both deployments with a `fixCommit`, each exit 10 under `historical` | Contract | P1 | Dropping the rule lets `run` stop at qualification with exit 12 |
 | The reference and AD-8 name both kinds of historical probe | Read the reference's historical section by its exact heading; assert it names worktree and deployment probes | Static | P2 | Deleting the deployment passage fails it |
+
+### Story 1.33: Record eval-quality's denial reason for every denied call
+
+Added 2026-09-25 in Story 1.17. Levels: integration over real eval-quality, static. File: `test/test-evaluate-evaluators.js` (`test:evaluate-evaluators`).
+
+| AC | Test | Level | P | Revert check |
+| --- | --- | --- | --- | --- |
+| A denied `cli`, `mcp` or `api` call carries eval-quality's reason code | An MCP client drives the bridge with an unlisted executable, tool and address; assert `executable-not-authorized`, `tool-not-authorized` and `address-not-authorized` | Integration over real eval-quality | P1 | Recording the fault's detail alone leaves `reason` absent |
+| The reference names the reason codes | Read the section by its exact heading; assert each code | Static | P2 | Removing a code from the section fails it |
+
+### Story 1.34: Qualify a sealed-brief agent evaluator before its verdicts count
+
+Added 2026-09-25 in Story 1.17. Levels: integration over real eval-quality, contract. Files: `test/test-evaluate-evaluators.js` (`test:evaluate-evaluators`), `test/test-evaluate-check.js` (`test:evaluate-check`).
+
+| AC | Test | Level | P | Revert check |
+| --- | --- | --- | --- | --- |
+| The agent is qualified on each arm before the trials, below `minimumAgreement` exit 11 | A stub agent that omits stdin on one attempt of two; agreement 0.5 against 0.9 | Integration over real eval-quality | P0 | Dropping the qualification seals records eval-quality reads as Invalid |
+| `check` requires `evaluatorQualification` for a sealed-brief agent | One case, exit 10 under `evaluator` | Contract | P1 | Dropping the rule lets the run reach its trials unqualified |
+| Outcomes copied from the evidence artifacts | Byte comparison of each outcome with its artifact | Integration | P1 | Writing an outcome the artifact does not hold fails the comparison |
 
 ## The Dogfood Proof (AD-15)
 

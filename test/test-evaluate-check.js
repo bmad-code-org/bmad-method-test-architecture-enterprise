@@ -31,6 +31,16 @@
  * the skill root exits 10, a sibling directory sharing its name as a prefix
  * included.
  *
+ * Story 1.17 adds the `evaluator` rule and narrows `judge` to the
+ * deterministic evaluator: an unknown kind, a command evaluator with no
+ * mapping or no timeout, a mapping key bound to what the contract does not
+ * declare or to levels off a criterion's anchored scale, an unbound rubric
+ * criterion, a non-executable command, a missing records directory, a
+ * sealed-brief agent with no model snapshot or on an adapter with no bridged
+ * run, an unused evaluator block, and a judge beside a rubric the evaluator
+ * scores each exit 10; a rubric under each non-deterministic kind with no
+ * judge exits 0.
+ *
  * Usage: node test/test-evaluate-check.js
  */
 
@@ -1513,6 +1523,377 @@ const HARDENING_CASES = [
   },
 ];
 
+/** The stub command evaluator Story 1.17's run cases use, copied into a folder's evaluator/. */
+const COMMAND_STUB = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'evaluators', 'command', 'evaluator', 'rows.js');
+/** A command evaluator's evaluation.json block. */
+const COMMAND_EVALUATOR = { kind: 'command', command: 'evaluator/rows.js', timeoutMs: 60_000 };
+/** A sealed-brief agent evaluator's evaluation.json block. */
+const AGENT_EVALUATOR = { kind: 'sealed-brief-agent', agent: 'custom', agentCommand: 'stub-agent', timeoutMs: 60_000 };
+/** A rubric the evaluator scores itself, with no TeA judge (Story 1.17). */
+const EVALUATOR_RUBRIC = {
+  id: 'R-001',
+  scaleLevels: [
+    { level: 0, anchor: 'The scaffold holds an active test.' },
+    { level: 1, anchor: 'Every test in the scaffold is skipped.' },
+  ],
+  failureModePenalties: [{ name: 'active-test', description: 'An active test counts as no scaffold.' }],
+  maxLength: 200,
+  criteria: [{ id: 'RC-001', text: 'Are the scaffold tests all skipped?', evidence: '/interactions/tea-atdd-runner-run/exit-code' }],
+};
+
+/**
+ * Wires an evaluator into the valid fixture (Story 1.17): `evaluator` into
+ * evaluation.json, `mapping` (unless null) as evaluator/mapping.json binding
+ * both oracles by default, the stub executable for a command evaluator, and
+ * `conditions` (unless null) as policy/evaluator-conditions.json; `rubric`
+ * adds R-001 to the contract, bound as `skipped`.
+ */
+function plantEvaluator(folder, evaluator, { mapping, conditions = null, rubric = false } = {}) {
+  const keys = { accepted: { oracleId: 'O-001', behaviorId: 'B-001' }, answered: { oracleId: 'O-002', behaviorId: 'B-002' } };
+  if (rubric) keys.skipped = { rubricId: 'R-001', criterionId: 'RC-001', levels: [0, 1] };
+  const planted = mapping === undefined ? { schemaVersion: 1, keys } : mapping;
+  editJson(folder, 'evaluation.json', (value) => (value.evaluator = evaluator));
+  if (rubric) editJson(folder, 'contract.json', (value) => (value.rubrics = [EVALUATOR_RUBRIC]));
+  if (planted !== null) {
+    fs.mkdirSync(path.join(folder, 'evaluator'), { recursive: true });
+    fs.writeFileSync(path.join(folder, 'evaluator', 'mapping.json'), `${JSON.stringify(planted, null, 2)}\n`);
+  }
+  if (evaluator.kind === 'command') {
+    fs.mkdirSync(path.join(folder, 'evaluator'), { recursive: true });
+    fs.copyFileSync(COMMAND_STUB, path.join(folder, 'evaluator', 'rows.js'));
+    fs.chmodSync(path.join(folder, 'evaluator', 'rows.js'), 0o755);
+  }
+  if (conditions !== null)
+    fs.writeFileSync(path.join(folder, 'policy', 'evaluator-conditions.json'), `${JSON.stringify(conditions, null, 2)}\n`);
+}
+
+/** Evaluator conditions naming the sealed-brief agent's model and no target model. */
+const AGENT_CONDITIONS = {
+  schemaVersion: 1,
+  modelSnapshot: 'none',
+  systemPromptDigest: EMPTY_DIGEST,
+  evaluator: { modelSnapshot: 'an-evaluator-snapshot' },
+};
+
+/** The mapping with its first key's binding replaced. */
+const mappingWith = (binding) => ({ schemaVersion: 1, keys: { accepted: binding } });
+
+/** Story 1.17's evaluator cases: each exits 10 naming its file and rule. */
+const EVALUATOR_CASES = [
+  {
+    name: 'an evaluator of an unknown kind',
+    file: 'evaluation.json',
+    rule: 'schema',
+    plant: (folder) => editJson(folder, 'evaluation.json', (value) => (value.evaluator = { kind: 'framework-of-the-week' })),
+    expect: (output) => [[output.includes('/evaluator/kind'), 'the finding does not name evaluator.kind']],
+  },
+  {
+    name: 'a command evaluator with no evaluator/mapping.json',
+    file: 'evaluator/mapping.json',
+    rule: 'evaluator',
+    plant: (folder) => plantEvaluator(folder, COMMAND_EVALUATOR, { mapping: null }),
+    expect: (output) => [[output.includes('has none'), 'the finding does not say the mapping is missing']],
+  },
+  {
+    name: 'a command evaluator with no timeoutMs',
+    file: 'evaluation.json',
+    rule: 'schema',
+    plant: (folder) => plantEvaluator(folder, { kind: 'command', command: 'evaluator/rows.js' }),
+    expect: (output) => [[output.includes('timeoutMs'), 'the finding does not name timeoutMs']],
+  },
+  {
+    name: 'a mapping key bound to an oracle the contract does not declare',
+    file: 'evaluator/mapping.json',
+    rule: 'evaluator',
+    plant: (folder) => plantEvaluator(folder, COMMAND_EVALUATOR, { mapping: mappingWith({ oracleId: 'O-009', behaviorId: 'B-001' }) }),
+    expect: (output) => [
+      [output.includes('binds oracle O-009, which the contract does not declare'), 'the finding does not name the oracle'],
+    ],
+  },
+  {
+    name: 'a mapping key bound to a behavior the contract does not declare',
+    file: 'evaluator/mapping.json',
+    rule: 'evaluator',
+    plant: (folder) => plantEvaluator(folder, COMMAND_EVALUATOR, { mapping: mappingWith({ oracleId: 'O-001', behaviorId: 'B-009' }) }),
+    expect: (output) => [
+      [output.includes('binds behavior B-009, which the contract does not declare'), 'the finding does not name the behavior'],
+    ],
+  },
+  {
+    name: 'a mapping key binding an oracle to a behavior that does not declare it',
+    file: 'evaluator/mapping.json',
+    rule: 'evaluator',
+    plant: (folder) => plantEvaluator(folder, COMMAND_EVALUATOR, { mapping: mappingWith({ oracleId: 'O-001', behaviorId: 'B-002' }) }),
+    expect: (output) => [[output.includes('which does not declare that oracle'), 'the finding does not say the behavior lacks the oracle']],
+  },
+  {
+    name: 'a mapping key bound to a rubric criterion the contract does not declare',
+    file: 'evaluator/mapping.json',
+    rule: 'evaluator',
+    plant: (folder) =>
+      plantEvaluator(folder, COMMAND_EVALUATOR, {
+        rubric: true,
+        mapping: { schemaVersion: 1, keys: { skipped: { rubricId: 'R-001', criterionId: 'RC-009', levels: [0, 1] } } },
+      }),
+    expect: (output) => [[output.includes('binds criterion RC-009'), 'the finding does not name the criterion']],
+  },
+  {
+    name: "a rubric binding whose levels differ from the criterion's anchored levels",
+    file: 'evaluator/mapping.json',
+    rule: 'evaluator',
+    plant: (folder) =>
+      plantEvaluator(folder, COMMAND_EVALUATOR, {
+        rubric: true,
+        mapping: { schemaVersion: 1, keys: { skipped: { rubricId: 'R-001', criterionId: 'RC-001', levels: [0, 1, 2] } } },
+      }),
+    expect: (output) => [[output.includes('whose anchored scale levels are [0,1]'), 'the finding does not name the anchored levels']],
+  },
+  {
+    name: 'a rubric criterion no mapping key binds under a command evaluator',
+    file: 'evaluator/mapping.json',
+    rule: 'evaluator',
+    plant: (folder) => {
+      plantEvaluator(folder, COMMAND_EVALUATOR);
+      editJson(folder, 'contract.json', (value) => (value.rubrics = [EVALUATOR_RUBRIC]));
+    },
+    expect: (output) => [
+      [output.includes('no key binds rubric criterion R-001/RC-001'), 'the finding does not name the unbound criterion'],
+    ],
+  },
+  {
+    name: 'a mapping key off its pattern',
+    file: 'evaluator/mapping.json',
+    rule: 'schema',
+    plant: (folder) =>
+      plantEvaluator(folder, COMMAND_EVALUATOR, {
+        mapping: { schemaVersion: 1, keys: { '-bad key': { oracleId: 'O-001', behaviorId: 'B-001' } } },
+      }),
+  },
+  {
+    name: 'a command evaluator whose executable is not executable',
+    file: 'evaluation.json',
+    rule: 'evaluator',
+    plant: (folder) => {
+      plantEvaluator(folder, COMMAND_EVALUATOR);
+      fs.chmodSync(path.join(folder, 'evaluator', 'rows.js'), 0o644);
+    },
+    expect: (output) => [[output.includes('is not executable'), 'the finding does not say the executable bit is missing']],
+  },
+  {
+    name: 'a records evaluator whose record directory is absent',
+    file: 'evaluation.json',
+    rule: 'evaluator',
+    plant: (folder) => plantEvaluator(folder, { kind: 'records', records: 'harness-records' }, { mapping: null }),
+    expect: (output) => [[output.includes('harness-records, which is not a directory'), 'the finding does not name the directory']],
+  },
+  {
+    name: 'a sealed-brief agent with no evaluator model in the evaluator conditions',
+    file: 'policy/evaluator-conditions.json',
+    rule: 'evaluator',
+    plant: (folder) => plantEvaluator(folder, AGENT_EVALUATOR),
+    expect: (output) => [[output.includes('evaluator.modelSnapshot'), 'the finding does not name the snapshot']],
+  },
+  {
+    name: 'a sealed-brief agent on an adapter with no bridged run',
+    file: 'evaluation.json',
+    rule: 'evaluator',
+    plant: (folder) =>
+      plantEvaluator(folder, { ...AGENT_EVALUATOR, agent: 'codex', agentCommand: undefined }, { conditions: AGENT_CONDITIONS }),
+    expect: (output) => [[output.includes('has no bridged run'), 'the finding does not say the adapter cannot run bridged']],
+  },
+  {
+    name: 'an evaluator model in the evaluator conditions beside the deterministic evaluator',
+    file: 'policy/evaluator-conditions.json',
+    rule: 'evaluator',
+    plant: (folder) =>
+      fs.writeFileSync(path.join(folder, 'policy', 'evaluator-conditions.json'), `${JSON.stringify(AGENT_CONDITIONS, null, 2)}\n`),
+    expect: (output) => [[output.includes('declares evaluator'), 'the finding does not say the block is unused']],
+  },
+  {
+    name: 'a judge declared beside a rubric a command evaluator scores',
+    file: 'evaluation.json',
+    rule: 'judge',
+    plant: (folder) => {
+      plantEvaluator(folder, COMMAND_EVALUATOR, { rubric: true });
+      editJson(folder, 'evaluation.json', (value) => (value.judge = { agent: 'custom', agentCommand: 'stub-judge', timeoutMs: 60_000 }));
+    },
+    expect: (output) => [[output.includes("scores the contract's rubrics itself"), 'the finding does not say the judge is unused']],
+  },
+];
+
+/** More of Story 1.17's refusals: the rest of the `evaluator` rule's branches, each exit 10. */
+EVALUATOR_CASES.push(
+  {
+    name: 'a symbolic link under evaluator/',
+    file: 'evaluator',
+    rule: 'evaluator',
+    plant: (folder) => {
+      plantEvaluator(folder, COMMAND_EVALUATOR);
+      fs.symlinkSync(path.join(folder, 'contract.json'), path.join(folder, 'evaluator', 'linked.json'));
+    },
+    expect: (output) => [[output.includes('evaluator/linked.json is not a regular file'), 'the finding does not name the link']],
+  },
+  {
+    name: 'two mapping keys bound to one oracle',
+    file: 'evaluator/mapping.json',
+    rule: 'evaluator',
+    plant: (folder) =>
+      plantEvaluator(folder, COMMAND_EVALUATOR, {
+        mapping: {
+          schemaVersion: 1,
+          keys: { accepted: { oracleId: 'O-001', behaviorId: 'B-001' }, again: { oracleId: 'O-001', behaviorId: 'B-001' } },
+        },
+      }),
+    expect: (output) => [[output.includes('both bind oracle O-001'), 'the finding does not name the doubly bound oracle']],
+  },
+  {
+    name: 'two mapping keys bound to one rubric criterion',
+    file: 'evaluator/mapping.json',
+    rule: 'evaluator',
+    plant: (folder) =>
+      plantEvaluator(folder, COMMAND_EVALUATOR, {
+        rubric: true,
+        mapping: {
+          schemaVersion: 1,
+          keys: {
+            skipped: { rubricId: 'R-001', criterionId: 'RC-001', levels: [0, 1] },
+            again: { rubricId: 'R-001', criterionId: 'RC-001', levels: [0, 1] },
+          },
+        },
+      }),
+    expect: (output) => [[output.includes('both bind criterion R-001/RC-001'), 'the finding does not name the doubly bound criterion']],
+  },
+  {
+    name: 'a sealed-brief agent with no evaluator/mapping.json',
+    file: 'evaluator/mapping.json',
+    rule: 'evaluator',
+    plant: (folder) => plantEvaluator(folder, AGENT_EVALUATOR, { mapping: null, conditions: AGENT_CONDITIONS }),
+  },
+  {
+    name: 'a sealed-brief agent with no timeoutMs',
+    file: 'evaluation.json',
+    rule: 'schema',
+    plant: (folder) =>
+      plantEvaluator(folder, { kind: 'sealed-brief-agent', agent: 'custom', agentCommand: 'stub-agent' }, { conditions: AGENT_CONDITIONS }),
+    expect: (output) => [[output.includes('timeoutMs'), 'the finding does not name timeoutMs']],
+  },
+  {
+    name: 'a sealed-brief agent on an adapter TeA does not have',
+    file: 'evaluation.json',
+    rule: 'evaluator',
+    plant: (folder) => plantEvaluator(folder, { ...AGENT_EVALUATOR, agent: 'constructor' }, { conditions: AGENT_CONDITIONS }),
+    expect: (output) => [[output.includes('is not an agent adapter TeA has'), 'the finding does not say the adapter is unknown']],
+  },
+  {
+    name: 'a sealed-brief agent on the custom adapter with no command',
+    file: 'evaluation.json',
+    rule: 'evaluator',
+    plant: (folder) =>
+      plantEvaluator(folder, { kind: 'sealed-brief-agent', agent: 'custom', timeoutMs: 60_000 }, { conditions: AGENT_CONDITIONS }),
+    expect: (output) => [[output.includes('evaluator.agentCommand must name one'), 'the finding does not ask for agentCommand']],
+  },
+  {
+    name: 'a sealed-brief agent with a model its adapter refuses',
+    file: 'evaluation.json',
+    rule: 'evaluator',
+    plant: (folder) => plantEvaluator(folder, { ...AGENT_EVALUATOR, model: 'a-model' }, { conditions: AGENT_CONDITIONS }),
+    expect: (output) => [[output.includes("the evaluator's model cannot run"), 'the finding does not say the model cannot run']],
+  },
+  {
+    name: 'a sealed-brief agent whose passthrough reopens built-in tools',
+    file: 'evaluation.json',
+    rule: 'evaluator',
+    plant: (folder) =>
+      plantEvaluator(
+        folder,
+        { kind: 'sealed-brief-agent', agent: 'claude', agentArgs: ['--tools', 'default'], timeoutMs: 60_000 },
+        { conditions: AGENT_CONDITIONS },
+      ),
+    expect: (output) => [[output.includes('evaluator.agentArgs carries --tools'), 'the finding does not name the flag']],
+  },
+  {
+    name: 'a judge model in the evaluator conditions beside a rubric a command evaluator scores',
+    file: 'policy/evaluator-conditions.json',
+    rule: 'judge',
+    plant: (folder) =>
+      plantEvaluator(folder, COMMAND_EVALUATOR, {
+        rubric: true,
+        conditions: { schemaVersion: 1, modelSnapshot: 'none', systemPromptDigest: EMPTY_DIGEST, judge: { modelSnapshot: 'a-judge' } },
+      }),
+    expect: (output) => [[output.includes("scores the contract's rubrics itself"), 'the finding does not say the judge is unused']],
+  },
+  {
+    name: 'an evaluator model in the evaluator conditions beside a records evaluator',
+    file: 'policy/evaluator-conditions.json',
+    rule: 'evaluator',
+    plant: (folder) => {
+      plantEvaluator(folder, { kind: 'records', records: 'harness-records' }, { mapping: null, conditions: AGENT_CONDITIONS });
+      fs.mkdirSync(path.join(folder, 'harness-records'));
+    },
+    expect: (output) => [[output.includes('declares evaluator'), 'the finding does not say the block is unused']],
+  },
+  {
+    name: 'a command outside evaluator/',
+    file: 'evaluation.json',
+    rule: 'schema',
+    plant: (folder) => plantEvaluator(folder, { ...COMMAND_EVALUATOR, command: 'evaluator/../contract.json' }),
+    expect: (output) => [[output.includes('/evaluator/command'), 'the finding does not name evaluator.command']],
+  },
+  {
+    name: 'a command evaluator whose executable is missing',
+    file: 'evaluation.json',
+    rule: 'evaluator',
+    plant: (folder) => plantEvaluator(folder, { ...COMMAND_EVALUATOR, command: 'evaluator/missing.js' }),
+    expect: (output) => [
+      [output.includes('evaluator/missing.js, which is not a regular file'), 'the finding does not name the missing file'],
+    ],
+  },
+  {
+    name: 'a records directory reached through a link',
+    file: 'evaluation.json',
+    rule: 'evaluator',
+    plant: (folder) => {
+      plantEvaluator(folder, { kind: 'records', records: 'linked/records' }, { mapping: null });
+      const outside = fs.mkdtempSync(path.join(path.dirname(folder), 'outside-'));
+      fs.mkdirSync(path.join(outside, 'records'));
+      fs.symlinkSync(outside, path.join(folder, 'linked'));
+    },
+    expect: (output) => [[output.includes('reached through no link'), 'the finding does not say the link is refused']],
+  },
+);
+
+/** Story 1.17's legitimate evaluator folders: each exits 0, a rubric under a non-deterministic kind with no judge included. */
+const EVALUATOR_CLEAN_CASES = [
+  { name: 'a command evaluator with its mapping and executable', plant: (folder) => plantEvaluator(folder, COMMAND_EVALUATOR) },
+  {
+    name: 'a command evaluator that names the model it calls',
+    plant: (folder) =>
+      plantEvaluator(folder, COMMAND_EVALUATOR, {
+        conditions: { schemaVersion: 1, modelSnapshot: 'none', systemPromptDigest: EMPTY_DIGEST, evaluator: { modelSnapshot: 'a-grader' } },
+      }),
+  },
+  {
+    name: 'a rubric a command evaluator scores, with no judge',
+    plant: (folder) => plantEvaluator(folder, COMMAND_EVALUATOR, { rubric: true }),
+  },
+  {
+    name: 'a rubric a sealed-brief agent scores, with no judge',
+    plant: (folder) => plantEvaluator(folder, AGENT_EVALUATOR, { rubric: true, conditions: AGENT_CONDITIONS }),
+  },
+  {
+    name: 'a rubric a records evaluator scores, with no judge',
+    plant: (folder) => {
+      plantEvaluator(folder, { kind: 'records', records: 'harness-records' }, { mapping: null });
+      editJson(folder, 'contract.json', (value) => (value.rubrics = [EVALUATOR_RUBRIC]));
+      fs.mkdirSync(path.join(folder, 'harness-records'));
+    },
+  },
+  {
+    name: 'an explicit deterministic evaluator',
+    plant: (folder) => editJson(folder, 'evaluation.json', (value) => (value.evaluator = { kind: 'deterministic' })),
+  },
+];
+
 /** Legitimate folders the Story 1.5 rules must leave alone: each exits 0. */
 const CLEAN_CASES = [
   {
@@ -1609,7 +1990,7 @@ const CLEAN_CASES = [
 ];
 
 async function runCleanCases() {
-  for (const testCase of CLEAN_CASES) {
+  for (const testCase of [...CLEAN_CASES, ...EVALUATOR_CLEAN_CASES]) {
     const folder = copyValid();
     testCase.plant(folder);
     await writeCorpusIndex(folder);
@@ -1648,6 +2029,7 @@ async function checkDefectCases() {
   const covered = new Set(DEFECT_CASES.map((testCase) => testCase.rule));
   for (const rule of STORY_RULES) check(covered.has(rule), `no defect case covers the story's ${rule} rule`);
   await runCases(HARDENING_CASES);
+  await runCases(EVALUATOR_CASES);
   await runCleanCases();
 
   // Two defects in one copy: both are listed, not only the first.

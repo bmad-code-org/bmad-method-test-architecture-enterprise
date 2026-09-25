@@ -24,7 +24,7 @@ inputDocuments:
 
 ## Overview
 
-This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and thirty-seven stories (Stories 1.27 to 1.32 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
+This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and thirty-nine stories (Stories 1.27 to 1.34 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
 
 Evaluate is fully stacked. The stack runs system under test, then the evaluation (the mechanism that runs the system, collects evidence and makes judgments), then the Behavioral Evaluation Contract (what behavior matters, what evidence counts, how success and failure resolve), then eval-quality (contract sanity, evidence support, and whether the evaluation catches defects). TeA owns every layer above eval-quality, including each concern eval-quality states it leaves to the caller, so an adopter can evaluate any target end to end. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3 onward, Epic 2 and H.1 to close the plan gap audit; the Traceability section maps each audit item to the story that closes it.
 
@@ -151,7 +151,7 @@ None. Evaluate has no graphical interface.
 ### Epic 1: The Evaluate authoring loop
 
 An adopter describes a target, answers Evaluate's questions, chooses or builds the evaluation layer and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches the seeded defect, with the gaps named and closed. The epic closes by running Evaluate on `bmad-testarch-evaluate` itself, then proving the guidance on two more target kinds, on seeded weaknesses and on an evaluation framework its guides never name.
-Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.32.
+Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.34.
 
 **FRs covered:** FR1 to FR10, FR13, FR14.
 
@@ -177,8 +177,8 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 8 | 1.8 | 1.7 |
 | 9 | 1.9 | 1.8 |
 | 10 | 1.17 | 1.9 |
-| 11 | 1.10 | 1.8 |
-| 12 | 1.11 | 1.1, 1.8 |
+| 11 | 1.10 | 1.8, 1.17 |
+| 12 | 1.11 | 1.1, 1.8, 1.17 |
 | 13 | 1.32 | 1.9, 1.11 |
 | 14 | 1.18 | 1.8 |
 | 15 | 1.19 | 1.17 |
@@ -199,12 +199,14 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 30 | 1.29 | 1.8 |
 | 31 | 1.30 | 1.8 |
 | 32 | 1.31 | 1.8 |
-| 33 | 2.1 | 1.16, 1.26 |
-| 34 | 2.2 | 2.1 |
-| 35 | 2.3 | 2.2 |
-| 36 | 2.4 | 2.3 |
-| 37 | 2.5 | 2.4 |
-| 38 | H.1 | 2.5 |
+| 33 | 1.33 | 1.10, 1.11, 1.17 |
+| 34 | 1.34 | 1.17, 1.21 |
+| 35 | 2.1 | 1.16, 1.26 |
+| 36 | 2.2 | 2.1 |
+| 37 | 2.3 | 2.2 |
+| 38 | 2.4 | 2.3 |
+| 39 | 2.5 | 2.4 |
+| 40 | H.1 | 2.5 |
 
 ## Epic 1: The Evaluate authoring loop
 
@@ -478,14 +480,14 @@ So that every evaluation layer reaches `eval-quality score` as sealed run record
 
 **Given** `evaluation.json`'s new `evaluator` field, whose `kind` is `deterministic` (Story 1.8's `resolveCheck` evaluator, the default), `sealed-brief-agent`, `command` or `records`
 **When** `tea-evaluate check` reads it
-**Then** it exits 10 for an unknown kind, a `command` evaluator with no `evaluator/mapping.json`, a mapping key bound to an oracle, behavior or rubric criterion the contract does not declare, a rubric binding whose `levels` differ from that criterion's anchored scale levels, and a `records` evaluator whose record directory is absent, each a case in `test:evaluate-check` (amended 2026-09-25 in Story 1.9: Story 1.9's `judge` rule and TeA's per-trial judge call bind every contract that declares a rubric, while Story 1.21 names a `sealed-brief-agent` or a `command` evaluator bound to rubric criteria as the rubric's scorer; so this story narrows both to the `deterministic` kind: under any other kind `check` does not require `evaluation.json`'s `judge` for a rubric and refuses one as unused, and `run` makes no TeA judge call, a `test:evaluate-check` case per kind and a `test:evaluate-evaluators` case counting zero stub-judge calls under a `command` evaluator; keeping the rule for every kind makes the `command` case exit 10, which the case catches)
+**Then** it exits 10 for an unknown kind, a `command` evaluator with no `evaluator/mapping.json`, a mapping key bound to an oracle, behavior or rubric criterion the contract does not declare, a rubric binding whose `levels` differ from that criterion's anchored scale levels, and a `records` evaluator whose record directory is absent, each a case in `test:evaluate-check` (amended 2026-09-25 in Story 1.9: Story 1.9's `judge` rule and TeA's per-trial judge call bind every contract that declares a rubric, while Story 1.21 names a `sealed-brief-agent` or a `command` evaluator bound to rubric criteria as the rubric's scorer; so this story narrows both to the `deterministic` kind: under any other kind `check` does not require `evaluation.json`'s `judge` for a rubric and refuses one as unused, and `run` makes no TeA judge call, a `test:evaluate-check` case per kind and a `test:evaluate-evaluators` case counting zero stub-judge calls under a `command` evaluator; keeping the rule for every kind makes the `command` case exit 10, which the case catches) (amended 2026-09-25 in Story 1.17: an unknown kind, and a `command` or `sealed-brief-agent` evaluator with no `timeoutMs`, fail the `evaluation.json` schema under the rule `schema`; every other refusal is the new `evaluator` rule, which also refuses a key binding an oracle to a behavior that does not declare it, an oracle or criterion under two keys, a rubric criterion no key binds under a `command` or `sealed-brief-agent` evaluator (nothing else would score it), a link or special file under `evaluator/`, a `command` executable that is not a regular executable file, a `sealed-brief-agent` on an adapter with no bridged run, with passthrough `agentArgs` that reopen what the bridged run closes, or with no `evaluator.modelSnapshot` in `policy/evaluator-conditions.json`, an `evaluator` block there beside the `deterministic` or `records` kind (a `command` evaluator that calls a model names it there), and a `records` directory reached through a link; `evaluator/mapping.json` binds a key to `{ oracleId, behaviorId }` or `{ rubricId, criterionId, levels }` and is required for `sealed-brief-agent` as for `command`, since both answer in judgment rows)
 
 **Given** the runtime-owned `judgment-rows` schema, the import contract of AD-21: per trial, rows of `key`, `outcome` (`pass`, `fail` or `score`), `score` for a scored row, `observationIds` (at least one), `quote` (verbatim text from a cited observation), `quoteChannel` (one of eval-quality's quotation channels: `response-body`, `response-headers`, `response-status`, `call-inputs`, `stdout`, `stderr`, `exit-code` or `artifact`), `artifactId` (required when `quoteChannel` is `artifact`, absent otherwise), `confidence` and `comment` (required on a `fail` row), plus an optional `recommendation`
 **When** a `command` evaluator runs
-**Then** (amended 2026-09-24 in Story 1.8: eval-quality's witness match counts only `evaluator-chosen` observations, so the trial observations a `command` evaluator judges are recorded `evaluator-chosen`, as the deterministic evaluator's are, and the recommendation the rows imply is taken over the whole trial set, which eval-quality holds equal across the set) `evaluation.json` declares `evaluator.timeoutMs` for it (`check` exits 10 when a `command` evaluator has none), and the runtime starts the adopter's evaluator executable named in `evaluation.json` once per trial after collecting the trial's baseline observations, writes `{ sealedBrief, observations }` to its stdin with each observation carrying its runtime-assigned `observationId`, and reads judgment rows from its stdout
-**And** it converts rows into `SealedRunRecord` fields through `evaluator/mapping.json` alone: a `fail` row bound to an oracle becomes a finding that validates against eval-quality's `Finding` schema: `findingType: defect`, a `findingId` the runtime mints (`F-NNN`, unique per record), the mapped `oracleId`, the probe under trial, the mapped behavior and its declared severity, the row's `comment` as `summary`, the row's `confidence`, the cited `observationIds`, `evidenceArtifacts: []`, and one `quotedEvidence` entry `{ quote, channel, artifactId }` built from `quote`, `quoteChannel` and `artifactId` (`null` off the `artifact` channel); and a `violated` disposition; a `pass` row becomes a `held` disposition; a `score` row bound to a rubric criterion becomes a `judgeResults` entry; an oracle with no row becomes `not-attempted`; the recommendation is the rows' own or, when absent, FAIL on any `fail` row and PASS otherwise
+**Then** (amended 2026-09-24 in Story 1.8: eval-quality's witness match counts only `evaluator-chosen` observations, so the trial observations a `command` evaluator judges are recorded `evaluator-chosen`, as the deterministic evaluator's are, and the recommendation the rows imply is taken over the whole trial set, which eval-quality holds equal across the set) `evaluation.json` declares `evaluator.timeoutMs` for it (`check` exits 10 when a `command` evaluator has none), and the runtime starts the adopter's evaluator executable named in `evaluation.json` once per trial after collecting the trial's baseline observations, writes `{ sealedBrief, observations }` to its stdin with each observation carrying its runtime-assigned `observationId`, and reads judgment rows from its stdout (amended 2026-09-25 in Story 1.17: `evaluator.command` names a regular executable file under `evaluator/`, so the tree digest covers it, run with `evaluator.args` under `cli/lib/agent-supervisor.js` in an empty temporary working directory with the agents' base environment and `evaluator.environmentKeys`; the stdout is one JSON object `{ rows, recommendation? }`)
+**And** it converts rows into `SealedRunRecord` fields through `evaluator/mapping.json` alone: a `fail` row bound to an oracle becomes a finding that validates against eval-quality's `Finding` schema: `findingType: defect`, a `findingId` the runtime mints (`F-NNN`, unique per record), the mapped `oracleId`, the probe under trial, the mapped behavior and its declared severity, the row's `comment` as `summary`, the row's `confidence`, the cited `observationIds`, `evidenceArtifacts: []`, and one `quotedEvidence` entry `{ quote, channel, artifactId }` built from `quote`, `quoteChannel` and `artifactId` (`null` off the `artifact` channel); and a `violated` disposition; a `pass` row becomes a `held` disposition; a `score` row bound to a rubric criterion becomes a `judgeResults` entry; an oracle with no row becomes `not-attempted`; the recommendation is the rows' own or, when absent, FAIL on any `fail` row and PASS otherwise (amended 2026-09-25 in Story 1.17: a `fail` row files its finding only in the records of a probe whose behaviors include the bound behavior, as the deterministic evaluator does, since a finding names the probe it arose during and eval-quality scores it against that probe's signature, and the disposition is `violated` in every record; a bound rubric criterion no row scores becomes `score: null` with a note; a probe's recommendation in a trial is the evaluator's own or, when it gives none, FAIL when the trial's rows filed a finding against that probe and PASS otherwise, so a `fail` row on another behavior leaves a clean control at PASS as the deterministic evaluator does, and a trial set records the most severe of its trials'; a `score` row on an oracle key, a `pass` or `fail` row on a rubric key, and a score off its binding's levels are answers outside the contract, exit 12 with no record)
 **And** the runtime re-checks nothing the engine checks: quotes, citations and signature matches reach `score` exactly as the evaluator stated them, and a stub evaluator whose `quote` is absent from the cited observation yields the Invalid result eval-quality's own unwitnessed-quotation condition produces, which proves the runtime holds no copy of that ingest rule (AD-1)
-**And** an evaluator that crashes, exits non-zero or prints output failing the `judgment-rows` schema yields no record, the invocation exits 12 as an evaluation-layer invocation failure (AD-10), and the evaluator's stdout and stderr are persisted under `runs/<invocationId>/evaluator/`; a `fail` row with no `quoteChannel`, and one with `quoteChannel: artifact` and no `artifactId`, are each a case that fails the row schema and exits 12
+**And** an evaluator that crashes, exits non-zero or prints output failing the `judgment-rows` schema yields no record, the invocation exits 12 as an evaluation-layer invocation failure (AD-10), and the evaluator's stdout and stderr are persisted under `runs/<invocationId>/evaluator/` (amended 2026-09-25 in Story 1.17: as `evaluator/<arm>/trial-<n>.stdout`, `.stderr` and `.json`, the last holding the fault, and for a sealed-brief agent its prompt and bridge calls, kept for an evaluator that answered as well); a `fail` row with no `quoteChannel`, and one with `quoteChannel: artifact` and no `artifactId`, are each a case that fails the row schema and exits 12
 **And** row cardinality is fixed: each row's `key` must be a key `mapping.json` declares and appears at most once per trial, so an unmapped key or two rows for one key fails the `judgment-rows` schema and exits 12; zero rows for a trial with at least one mapped oracle exits 12 as an evaluation-layer failure; each is a `test:evaluate-evaluators` case
 **And** an evaluator still running at `evaluator.timeoutMs` has its process group killed, its stdout and stderr up to that point persisted under `runs/<invocationId>/evaluator/`, no record written, and the invocation exits 12; a stub evaluator that hangs is the `test:evaluate-evaluators` case
 **And** every record the conversion produces validates against eval-quality's published `sealed-run-record` schema before `score`, which the test asserts per row shape
@@ -496,14 +498,14 @@ So that every evaluation layer reaches `eval-quality score` as sealed run record
 **Then** the evaluator agent runs through `cli/lib/agent-adapters.js` and receives the sealed brief from `seal`, the judgment-rows instructions and nothing else from the evaluation: no contract, oracle `check`, interaction plan, `testData`, probe, mutation or evaluator reference file
 **And** it acts on the target only through `cli/lib/evaluate/bridge.js`, a vendor-neutral stdio MCP server exposing one tool per interface the brief carries (the brief names interfaces as `{ logicalId, kind }` only and withholds the operation list), each with a kind-generic call shape: `cli` takes arguments and stdin, `api` takes method, path and body, `mcp` takes tool name and arguments
 **And** the bridge routes each call through the registry adapter for the arm's copy, whose authorization denies any executable, subcommand, address, method or tool it does not grant; the runtime maps an authorized call to the contract `operationId` it matches for the observation it records with `provenance: evaluator-chosen`, and a call that matches no declared operation is recorded as unmatched and never reaches a finding; interaction-plan steps the runtime drives are recorded `baseline`
-**And** a stub agent adapter that captures its whole prompt and tool configuration shows the sealed brief present and none of the contract's oracle `check` strings, `testData` literals, interaction-plan step IDs, operation IDs or path templates; adding the contract to the prompt fails the case
-**And** an MCP client driving the bridge in the test records one observation per authorized call with the routed `cwd` and `provenance: evaluator-chosen`, and a call the registry authorization does not grant (an unlisted executable for `cli`, an unlisted address for `api`, an unlisted tool for `mcp`) is denied with eval-quality's denial reason and recorded, with no target launch
-**And** `EvaluatorConfiguration`, whose published schema is strict, carries the evaluator identity in `evaluatorIdentity` and the model in `modelSnapshot`, and carries TeA's own conditions under caller-owned keys in `decodingParameters`, the one field the schema opens to caller keys: `tea.evaluatorKind`, and for a `command` evaluator `tea.evaluatorExecutableDigest` and `tea.evaluatorTreeDigest`; every generated configuration validates against the published schema
+**And** a stub agent adapter that captures its whole prompt and tool configuration shows the sealed brief present and none of the contract's oracle `check` strings, `testData` literals, interaction-plan step IDs, operation IDs or path templates; adding the contract to the prompt fails the case (amended 2026-09-25 in Story 1.17: a string the sealed brief itself carries, such as a behavior's observable success criterion that repeats an oracle literal, is the brief's to show and is left out of the scan; the judgment-rows instructions name each mapping key, and for a rubric key its criterion's text and anchored levels, which the agent needs to score it and the sealed brief does not carry; the agent answers inside one `<judge-answer nonce>` block with a fresh nonce, as Story 1.9's judge does; `policy/evaluator-conditions.json` names its model as `evaluator.modelSnapshot`; `claude` carries a bridged run verified live (no built-in tool, the bridge alone, no settings, no saved transcript) and `custom` one whose sealing is the runner's own contract, both in `cli/lib/agent-adapters.js`, and `check` refuses the rest; the bridge's configuration reaches the adapter as a private file and its admission token as its process's environment, and it admits one connection, so no process that arrives after the agent is answered, while a target running as the same user could read the token until Story 1.31 sandboxes it)
+**And** an MCP client driving the bridge in the test records one observation per authorized call with the routed `cwd` and `provenance: evaluator-chosen`, and a call the registry authorization does not grant (an unlisted executable for `cli`, an unlisted address for `api`, an unlisted tool for `mcp`) is denied with eval-quality's denial reason and recorded, with no target launch (amended 2026-09-25 in Story 1.17: this release's registry declares command targets only, so an `mcp` call goes through eval-quality's MCP adapter and an `api` call through its `evaluateTarget`, each over no authorization, and both are denied at the interface, `interface-not-authorized`; Story 1.10 adds the unlisted-tool case through the bridge and Story 1.11 the unlisted-address case; eval-quality's command and MCP adapters report a denial as the `forbidden-target` fault with the policy decision's detail and not its reason code, so the bridge records `{ code, detail }` for those and `{ code, reason, detail }` for `api`, and Story 1.33 records the reason code for every kind; the bridge refuses unsent the calls past the contract's `budgets.maxToolCalls` in a trial, and on a gameability arm answers a matched call from the degenerate response with nothing launched)
+**And** `EvaluatorConfiguration`, whose published schema is strict, carries the evaluator identity in `evaluatorIdentity` and the model in `modelSnapshot`, and carries TeA's own conditions under caller-owned keys in `decodingParameters`, the one field the schema opens to caller keys: `tea.evaluatorKind`, and for a `command` evaluator `tea.evaluatorExecutableDigest` and `tea.evaluatorTreeDigest`; every generated configuration validates against the published schema (amended 2026-09-25 in Story 1.17: both row-converting kinds also carry `tea.evaluatorWiring`, the `evaluation.json` block that runs the evaluator (arguments, environment keys, timeout, or adapter, command, arguments and model), so a changed argument or model changes the scoring version as a changed file does; a `command` evaluator that calls a model records its snapshot as `tea.evaluatorModelSnapshot`; a `sealed-brief-agent` configuration also carries `tea.evaluatorTreeDigest`, since its mapping lives under `evaluator/`, `tea.evaluatorAgent` and `tea.evaluatorModel`, its `modelSnapshot` is the agent's and its `systemPromptDigest` the digest of the runtime's evaluator template (instructions, answer line, heading, and the tools' descriptions and call shapes), `judgeConfiguration` names the agent when its mapping binds a rubric criterion, and a target model the conditions name is kept as `tea.targetModelSnapshot` and `tea.targetSystemPromptDigest`)
 **And** editing one byte under a fixture's `evaluator/` changes the `EvaluatorConfiguration` digest and so the records' `evaluatorConfigurationDigest` and the evidence's scoring version, which the test asserts
 
 **Given** a `records` evaluator (an adopter harness that runs the system and seals its own records)
 **When** `tea-evaluate score` runs
-**Then** it validates each supplied `SealedRunRecord` and isolation manifest against eval-quality's published schemas and passes them to `eval-quality score` unchanged, exit code passed through; a record failing the schema exits 10 before any engine call
+**Then** it validates each supplied `SealedRunRecord` and isolation manifest against eval-quality's published schemas and passes them to `eval-quality score` unchanged, exit code passed through; a record failing the schema exits 10 before any engine call (amended 2026-09-25 in Story 1.17: `run` qualifies and preflights as for any kind, then validates `<records>/evaluator-configuration.json` and each `<records>/<probeId>/` record and isolation manifest, holds the configuration's and every record's `sealedBriefDigest` to the brief the run sealed and every record of a set to one `runId` and the arm the run qualified the probe on, agreements eval-quality does not check, refuses a records directory reached through a link, and copies them byte for byte into the run directory, so a record off its schema exits 10 from `run` before any `score` call; `score` validates the copies again and leaves the records' run IDs, references and digest agreement to eval-quality)
 
 **Given** the rule that the runtime is framework-neutral
 **When** `test:evaluate-boundaries` scans `cli/`
@@ -527,8 +529,9 @@ So that the server's own behavior is measured over `mcp` (CAP-6).
 **Then** the registry builds an `McpTargetAuthorization` and preflight passes with no `interface-not-authorized` or `tool-not-authorized` denial
 **And** the clean arm resolves `passed-clean-control` and the mutated arm `caught`, asserted by `test/test-evaluate-mcp.js`, chained into `npm test`, which the `chain` matrix runs (amended 2026-09-25 in Story 1.9: CI runs the `npm test` chain in shards, so a chained script needs no step of its own)
 **And** removing the tool from the authorization makes the test observe `tool-not-authorized` and fail
+**And** (added 2026-09-25 in Story 1.17, whose bridge routes an `mcp` call through eval-quality's MCP adapter over no authorization until this story) a `sealed-brief-agent` evaluator's bridge routes an `mcp` call through the registry's `McpTargetAuthorization` for the arm's copy: an authorized call is recorded `evaluator-chosen` with the operation its tool name matches, and a tool the authorization does not list is denied by eval-quality's MCP adapter and recorded with no launch, a case in `test/test-evaluate-mcp.js`; leaving the bridge on an empty authorization list turns the authorized call into a denial, which the case catches
 
-**Dependencies:** 1.8.
+**Dependencies:** 1.8, 1.17.
 **Gate:** `npm test`.
 
 ### Story 1.11: Scaffold the HTTP probe port for `api` targets
@@ -551,9 +554,10 @@ So that my HTTP surface is evaluated as `api` with no copied network policy (CAP
 **When** its evaluation runs conformance, `check`, `preflight`, `run` and `score`
 **Then** conformance passes, preflight passes, the clean arm resolves `passed-clean-control` and the mutated arm `caught`
 **And** the contract declares kind `api`, and an unlisted address is denied with eval-quality's denial reason
+**And** (added 2026-09-25 in Story 1.17, whose bridge denies every `api` call at the interface until this story) a `sealed-brief-agent` evaluator's bridge routes an `api` call through the adopter's port for the arm: an authorized call is recorded `evaluator-chosen` with the operation its method and path match, and an unlisted address is denied with eval-quality's `address-not-authorized` before any request is sent, a case in `test/test-evaluate-api.js`; leaving the bridge on no HTTP authorization turns the authorized call into an `interface-not-authorized` denial, which the case catches
 **And** the test is chained into `npm test`, which the `chain` matrix runs (amended 2026-09-25 in Story 1.9: CI runs the `npm test` chain in shards, so a chained script needs no step of its own)
 
-**Dependencies:** 1.1, 1.8.
+**Dependencies:** 1.1, 1.8, 1.17.
 **Gate:** skill gates (no registration change, so no Validate Module), `npm test`, engine check.
 
 ### Story 1.18: Evaluate a workflow target through `after` and `captured` bindings
@@ -1017,6 +1021,45 @@ So that a defect a release fixed is measured where no worktree can launch the ta
 **And** `docs/reference/tea-evaluate-cli.md` states which historical probes run from worktrees and which against deployments, and AD-8's historical route names both; a `test:evaluate-arms` case reads the reference's historical section under its exact heading and asserts it names both kinds, and deleting the deployment passage fails the case
 
 **Dependencies:** 1.9, 1.11.
+**Gate:** `npm test`.
+
+### Story 1.33: Record eval-quality's denial reason for every denied call
+
+Added 2026-09-25 in Story 1.17 from a gap its build found: eval-quality's command and MCP adapters report a denied request as the `forbidden-target` fault carrying the policy decision's detail text and not its reason code (`dist/adapters/command-line-adapter.js` and `dist/adapters/mcp-adapter.js` throw `forbidden(decision.detail)`), and neither `evaluateCommandTarget` nor `evaluateMcpTarget` is exported, so the bridge, the preflight legs and the trials record `executable-not-authorized`, `subcommand-not-authorized` or `tool-not-authorized` only as prose, while an `api` denial through the exported `evaluateTarget` carries its reason.
+
+As an adopter reading why a call was denied,
+I want every denial recorded with eval-quality's own reason code,
+So that a CI policy or a test can tell an unlisted executable from an unlisted subcommand, tool or address without parsing prose (AD-1, AD-21).
+
+**Engine consumption.** eval-quality ships a release whose `forbidden-target` fault carries the denying policy's `reason` (or exports the command and MCP policy decisions), and TeA's devDependency and peer floor rise to it with the engine check at start and end; the coordinator makes that change in eval-quality, and no TeA file parses the detail text in its place.
+
+**Acceptance Criteria:**
+
+**Given** that release
+**When** a bridge call, a preflight leg or a trial step is denied, for `cli`, `mcp` and `api` alike
+**Then** the recorded denial carries `{ code, reason, detail }` with the `reason` eval-quality's policy decided, a `test:evaluate-evaluators` case per kind asserting `executable-not-authorized`, `tool-not-authorized` and `address-not-authorized`; recording the detail alone leaves `reason` absent, which each case catches
+**And** `docs/reference/tea-evaluate-cli.md` names the reason codes a denial carries, and a `test:evaluate-evaluators` case reads the section under its exact heading and fails when a code is removed
+
+**Dependencies:** 1.10, 1.11, 1.17.
+**Gate:** `npm test`, `npm run test:release-metadata`, engine check.
+
+### Story 1.34: Qualify a sealed-brief agent evaluator before its verdicts count
+
+Added 2026-09-25 in Story 1.17 from its live measurement: two live runs of one sealed-brief agent (`claude`, model `haiku`) over the verdict fixture chose different calls. In the first, every call sent the request on standard input and the mutated arm resolved `caught` in all three trials. In the second, the agent's calls sent no standard input, so the defect signature's selector (the `prompt` stdin key) matched none of the observations its findings cited, and eval-quality read the mutated set as Invalid (unwitnessed detection claim). The brief withholds the operation list by design, so nothing stops an agent from exercising the behavior without the input a signature selects on, and a run's verdict then depends on which calls the agent happened to make.
+
+As an adopter whose evaluator is an agent,
+I want the agent evaluator qualified against my own probes before a run's trials count,
+So that a sealed-brief evaluation that only sometimes exercises the seeded defect is reported as an evaluation weakness and never read as a verdict about my target (AD-21, AD-22).
+
+**Acceptance Criteria:**
+
+**Given** a `sealed-brief-agent` evaluator and `evaluation.json`'s `evaluatorQualification` (`attempts` and `minimumAgreement`, which the adopter sets and no template fills)
+**When** `tea-evaluate run` runs
+**Then** before the first trial it runs the agent `attempts` times on the clean arm and on each mutated arm, scores each attempt's record with `eval-quality score` against its probe, and writes `runs/<invocationId>/evaluator-qualification.json` with each attempt's outcome copied from its evidence artifact and the agreement per arm; an agreement below `minimumAgreement` exits 11 as an evaluation weakness with no trial record; a stub agent that omits standard input on one attempt of two drops the mutated arm's agreement to 0.5 and, with `minimumAgreement` 0.9, exits 11, a `test:evaluate-evaluators` case; dropping the qualification lets that run seal records eval-quality reads as Invalid, which the case catches
+**And** `tea-evaluate check` exits 10 under the `evaluator` rule when a `sealed-brief-agent` evaluator declares no `evaluatorQualification`, a `test:evaluate-check` case; dropping the rule lets the run reach its trials unqualified, which the case catches
+**And** every outcome in `evaluator-qualification.json` equals the evidence artifact's, compared byte for byte, so the runtime computes no outcome (AD-1), and writing an outcome the artifact does not hold fails the case
+
+**Dependencies:** 1.17, 1.21.
 **Gate:** `npm test`.
 
 ## Epic 2: Continuous proof in CI

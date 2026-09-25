@@ -381,7 +381,7 @@ function runPreflightCommand(folder, options = {}) {
  * @param {boolean} [options.fromWorkingTree]
  * @param {NodeJS.ProcessEnv} [options.env]
  * @param {(line: string) => void} [options.log]
- * @param {(context: object) => PreflightOutcome|null} [options.prepare]
+ * @param {(context: object) => PreflightOutcome|null|Promise<PreflightOutcome|null>} [options.prepare]
  * @param {(context: object) => Promise<PreflightOutcome>} [options.afterVerdict]
  * @returns {Promise<PreflightOutcome>}
  */
@@ -457,7 +457,7 @@ async function pipeline(
       message: `${unqualifiable.map(({ file, probe }) => `${file} (route ${probe.qualification?.route})`).join(', ')} seed a defect on a route this release does not qualify; it qualifies seeded probes on the ${QUALIFIED_ROUTES.join(' and ')} routes only, so a retry cannot pass`,
     });
   }
-  const refused = prepare({ folder, evaluation, seeded });
+  const refused = await prepare({ folder, evaluation, seeded });
   const gameability = gameabilityProbes(folder);
   if (refused !== null) return refused;
 
@@ -919,6 +919,7 @@ async function runInWorkspaces({
       stop,
       log,
       signal,
+      env,
     });
   } catch (error) {
     if (error instanceof RunStop) return error.outcome;

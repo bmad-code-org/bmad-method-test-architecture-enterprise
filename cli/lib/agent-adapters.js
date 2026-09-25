@@ -242,6 +242,67 @@ const AGENT_ADAPTERS = {
       ...modelArgv(AGENT_ADAPTERS.claude.modelFlags, model, extra),
       ...extra,
     ],
+    // A run whose only tools are one MCP server's (tea-evaluate's sealed-brief evaluator and its
+    // bridge, AD-21), the server named in the configuration file `bridge.configFile`. Verified live
+    // against claude 2.1.282 (2026-09-25): `--tools ""` leaves no built-in tool (asked to read a
+    // file, the model has none to call), `--allowedTools mcp__<name>` runs the server's tools without
+    // a prompt, `--mcp-config` with `--strict-mcp-config` loads that server and no other,
+    // `--setting-sources ""` keeps the user's and the project's settings and CLAUDE.md out of the
+    // run, and `--no-session-persistence` writes no transcript, so the prompt's answer nonce never
+    // sits on disk while the target runs. `--safe-mode` is left out because it drops the servers
+    // --mcp-config names, so the model then sees no tool at all.
+    buildBridgedArgv: (extra = [], model, bridge) => [
+      '-p',
+      '--output-format',
+      'text',
+      '--tools',
+      '',
+      '--allowedTools',
+      `mcp__${bridge.name}`,
+      '--mcp-config',
+      bridge.configFile,
+      '--strict-mcp-config',
+      '--setting-sources',
+      '',
+      '--no-session-persistence',
+      ...modelArgv(AGENT_ADAPTERS.claude.modelFlags, model, extra),
+      ...extra,
+    ],
+    // Passthrough flags that would reopen what the bridged argv closes (built-in tools, other MCP
+    // servers or tool sources, plugins, settings, directories, permissions, another agent, a saved
+    // or remote session), refused for a bridged run.
+    bridgeLockedFlags: [
+      '--tools',
+      '--allowedTools',
+      '--allowed-tools',
+      '--disallowedTools',
+      '--disallowed-tools',
+      '--mcp-config',
+      '--strict-mcp-config',
+      '--setting-sources',
+      '--settings',
+      '--add-dir',
+      '--permission-mode',
+      '--dangerously-skip-permissions',
+      '--allow-dangerously-skip-permissions',
+      '--plugin-dir',
+      '--agents',
+      '--safe-mode',
+      '--bare',
+      '--continue',
+      '-c',
+      '--resume',
+      '-r',
+      '--fork-session',
+      '--session-id',
+      '--from-pr',
+      '--teleport',
+      '--plugin-url',
+      '--chrome',
+      '--ide',
+      '--agent',
+      '--cloud',
+    ],
     envNames: ['ANTHROPIC_API_KEY', 'ANTHROPIC_BASE_URL', 'CLAUDE_CODE_OAUTH_TOKEN'],
   },
   codex: {
@@ -296,6 +357,13 @@ const AGENT_ADAPTERS = {
     // (agent-supervisor.js), so it finishes its writes first. Every argv value is supplied explicitly with --agent-arg, so a
     // declared capability adds nothing here; see RUNNER_CAPABILITIES.
     buildArgv: (extra = []) => [...extra],
+    // A bridged custom runner gets its argv and then `--mcp-config <file>`, the configuration file
+    // of the one MCP server it may act through, in the `{ mcpServers: { <name>: { type, command,
+    // args, env } } }` shape claude's flag reads, so a wrapper over any MCP-capable agent can hand it
+    // on. Keeping to that server is the runner's own contract, not something TeA verifies, as every
+    // other capability of this adapter is.
+    buildBridgedArgv: (extra = [], model, bridge) => [...extra, '--mcp-config', bridge.configFile],
+    bridgeLockedFlags: ['--mcp-config'],
     envNames: [],
   },
   agy: {
@@ -356,8 +424,23 @@ function resolveModel(agent, model, extra = []) {
   return passthroughModel || (hasExplicitModel ? validateModelValue(model, '--model') : adapter.defaultModel);
 }
 
+/**
+ * The passthrough arguments a bridged run refuses: each one that is, or sets with `=`, a flag the
+ * adapter's bridged argv locks, since a later flag would reopen tools, servers or settings the
+ * bridge's sealing closed.
+ *
+ * @param {string} agent - Adapter key.
+ * @param {string[]} [extra] - Passthrough argv.
+ * @returns {string[]} The offending arguments, empty when none.
+ */
+function bridgedArgsRefused(agent, extra = []) {
+  const locked = AGENT_ADAPTERS[agent]?.bridgeLockedFlags ?? [];
+  return extra.filter((arg) => locked.some((flag) => arg === flag || arg.startsWith(`${flag}=`)));
+}
+
 module.exports = {
   AGENT_ADAPTERS,
+  bridgedArgsRefused,
   DEFAULT_CAPABILITIES,
   RUNNER_CAPABILITIES,
   TOOLS,

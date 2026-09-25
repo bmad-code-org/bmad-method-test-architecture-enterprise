@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "keys": {
+    "verdict-accepted": { "oracleId": "O-001", "behaviorId": "B-001" }
+  }
+}
