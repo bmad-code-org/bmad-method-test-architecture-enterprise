@@ -116,9 +116,26 @@ function evidenceOf(engine, stepObservations, pointer) {
 /** How the material names the answer block for this call's nonce. */
 const ANSWER_LINE = 'Answer block for this call:';
 
-/** The tagged answer block's opening and closing tags, and the pattern that finds every block in a reply. */
-const ANSWER_CLOSE = '</judge-answer>';
-const ANSWER_BLOCK = /<judge-answer nonce="([^"]*)">([\s\S]*?)<\/judge-answer>/g;
+/**
+ * The pattern that finds every answer block carrying `nonce`, built per call
+ * so an opening tag with any other nonce (a dangling one a target printed and
+ * the judge quoted, say) never starts a match, and no block runs across
+ * another opening tag: either quote style, and whitespace inside the opening
+ * tag, are accepted.
+ */
+function answerBlocks(nonce) {
+  const escaped = String(nonce).replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
+  // A block's body holds no other opening tag, so an opener left unclosed (the prompt's answer line repeated,
+  // or one quoted from the evidence) never runs on into the next block.
+  return new RegExp(String.raw`<judge-answer\s+nonce=(["'])${escaped}\1\s*>((?:(?!<judge-answer[\s>])[\s\S])*?)</judge-answer>`, 'g');
+}
+
+/** A block body as JSON text: trimmed, with one surrounding markdown code fence (a language tag allowed) removed. */
+function unfenced(body) {
+  const trimmed = body.trim();
+  const fenced = /^```[\w-]*\s*\n?([\s\S]*?)\n?\s*```$/.exec(trimmed);
+  return fenced === null ? trimmed : fenced[1].trim();
+}
 
 /** A fresh nonce for one judge call: 128 random bits in hex, drawn after the target ran. */
 function answerNonce() {
@@ -138,7 +155,8 @@ async function judgePrompt({ contract, stepObservations, nonce }) {
   return [
     JUDGE_INSTRUCTIONS,
     '',
-    `${ANSWER_LINE} reply with exactly one block that opens with <judge-answer nonce="${nonce}"> and closes with ${ANSWER_CLOSE}, holding the scores object.`,
+    // The closing tag is named in words, so repeating this line cannot itself form an answer block.
+    `${ANSWER_LINE} reply with exactly one block that opens with <judge-answer nonce="${nonce}"> and ends with the matching closing tag (a slash before judge-answer, inside angle brackets), holding the scores object.`,
     '',
     MATERIAL_HEADING,
     `${JSON.stringify(material, null, 2)}\n`,
@@ -174,12 +192,12 @@ async function judgeMaterial({ contract, stepObservations }) {
  * @returns {{ scores: unknown[] } | { unread: string }}
  */
 function answerOf(reply, nonce) {
-  const blocks = [...String(reply).matchAll(ANSWER_BLOCK)].filter((match) => match[1] === nonce);
+  const blocks = [...String(reply).matchAll(answerBlocks(nonce))];
   if (blocks.length === 0) return { unread: "the judge's reply carries no answer block with this call's nonce" };
   if (blocks.length > 1) return { unread: `the judge's reply carries ${blocks.length} answer blocks with this call's nonce` };
   let parsed;
   try {
-    parsed = JSON.parse(blocks[0][2]);
+    parsed = JSON.parse(unfenced(blocks[0][2]));
   } catch {
     parsed = undefined;
   }
