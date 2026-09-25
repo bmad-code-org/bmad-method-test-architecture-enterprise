@@ -187,6 +187,14 @@ Each revert was applied in the checkout, `node test/test-evaluate-mcp.js` run, t
 | R2-A3 | low, fixed | a bridge call's fault replaced the agent's own failure in the exit message | the message names the call's fault, then "; the agent then failed: " and the agent's failure; the hung-call case asserts both, and the reference says so. Revert (the fault alone): "a bridge call to a hanging server: run exited 12; expected 12 naming the call's budget-exhausted fault", the output ending "... during tools/call and was torn down" |
 | R2-R1 | note, skipped | the hang case cannot tell eval-quality's process-group kill from the fixture exiting on stdin EOF | the kill is eval-quality's behavior, which TeA does not test (the vendor owns it); TeA's claim, the `budget-exhausted` ceiling path with exit 12, is asserted |
 
+### Final review round 3 (PR #242 at 8988720: bounded to round 2's fixes and material defects; opus, plus the coordinator)
+
+Round 2's scrub, number and failure-message fixes hold; performance measured at 99 forms and 6 ms for a 2,000-character secret, 178 ms for a record with a 1 MB string and 10,000 rows.
+
+| ID | Verdict | Finding | Resolution |
+| --- | --- | --- | --- |
+| R3-1 | medium, fixed (coordinator) | `numberHoldsSecret`'s equality branch let a secret of eight characters that reads as a short number (`00000000`, `1.000000`, `0x000001`) redact every 0 or 1 in a structured result, so a placeholder credential could fail a clean control | the equality applies only to a number whose text has at least `MIN_SCRUBBED_VALUE_LENGTH` characters; round 2's three cases still redact; the reference's number sentence says so. Test: three secrets each leave an ordinary number unchanged. Revert (the length guard removed): "a secret 00000000 redacted the ordinary number 0: {\"n\":\"[redacted]\",\"other\":42}" and the same for `1.000000` and `0x000001` |
+
 ## Verification
 
 **Commands:**

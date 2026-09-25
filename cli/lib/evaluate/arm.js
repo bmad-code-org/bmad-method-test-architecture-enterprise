@@ -123,10 +123,15 @@ function secretForms(secrets) {
   return [...forms].sort((a, b) => b.length - a.length);
 }
 
-/** Whether a finite number is a secret: its text holds one, or a secret read as a number equals it. */
+/**
+ * Whether a finite number is a secret: its text holds one, or, when its text is as long as a scrubbed value must be,
+ * a secret read as a number equals it. The length floor keeps a secret such as `00000000` from redacting every 0.
+ */
 function numberHoldsSecret(value, secrets) {
   const text = String(value);
-  return secrets.some((secret) => text.includes(secret) || (secret.trim() !== '' && Number(secret) === value));
+  return secrets.some(
+    (secret) => text.includes(secret) || (text.length >= MIN_SCRUBBED_VALUE_LENGTH && secret.trim() !== '' && Number(secret) === value),
+  );
 }
 
 /**

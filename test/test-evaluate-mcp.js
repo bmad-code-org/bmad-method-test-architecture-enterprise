@@ -431,6 +431,21 @@ async function checkUnits() {
       );
     }
 
+    // A secret that reads as a short number (a placeholder such as 00000000, or 1.000000) redacts no ordinary number:
+    // the equality applies only to a number whose text is as long as a scrubbed value must be.
+    for (const [secret, answered] of [
+      ['00000000', 0],
+      ['1.000000', 1],
+      ['0x000001', 1],
+    ]) {
+      process.env.GRADER_SECRET = secret;
+      const value = (await answeringWith({ n: answered, other: 42 }).probe(mcpRequest)).observation.result.value;
+      check(
+        JSON.stringify(value) === JSON.stringify({ n: answered, other: 42 }),
+        `a secret ${secret} redacted the ordinary number ${answered}: ${JSON.stringify(value)}`,
+      );
+    }
+
     // Each way JSON escaping writes a secret in practice is scrubbed from a fault's cause and an answer's string: one
     // level of JSON.stringify, \/ for / (PHP), \uXXXX for non-ASCII (Python's ensure_ascii) in lower- and upper-case
     // hex, \uXXXX for <, > and & (Go), and a second level of escaping over those.
