@@ -54,7 +54,19 @@
  *   `policy/evaluator-conditions.json` names no `judge.modelSnapshot`; the contract declares no rubric and
  *   either file carries a `judge` block, which nothing would use; or `judge` names an agent adapter TeA
  *   does not have, one that cannot run read-only, the `custom` adapter with no `agentCommand`, or a `model`
- *   its adapter refuses.
+ *   its adapter refuses. Story 1.17 narrows it to the `deterministic` evaluator: under any other kind the
+ *   evaluator scores the rubric, so neither file may carry a `judge` block.
+ * - `evaluator` (Story 1.17, AD-21): a `command` or `sealed-brief-agent` evaluator has no
+ *   `evaluator/mapping.json`, or one binding an oracle, behavior or rubric criterion the contract does not
+ *   declare, an oracle to a behavior that does not declare it, levels other than the criterion's anchored
+ *   scale levels, an oracle or criterion under two keys, or leaving a rubric criterion unbound; `evaluator/`
+ *   holds a link or special file; a `command` evaluator's executable is not a regular executable file; a
+ *   `sealed-brief-agent` names an adapter TeA lacks or one with no bridged run, the `custom` adapter
+ *   with no `agentCommand`, a `model` its adapter refuses, passthrough `agentArgs` that reopen what the
+ *   bridged run closes, or no `evaluator.modelSnapshot` in `policy/evaluator-conditions.json`, where an
+ *   `evaluator` block beside the `deterministic` or `records` kind is refused as unused; a `records`
+ *   evaluator's directory is absent or reached through a link. An unknown kind, and a `command` or
+ *   `sealed-brief-agent` evaluator with no `timeoutMs`, fail the `evaluation.json` schema (`schema`).
  *
  * Beside them, `contract.json` must exist (`missing-file`), as must
  * `policy/scoring-policy.json` when a probe takes the `controlled-mutation`,
@@ -83,8 +95,10 @@ const { engineSchemaPath, loadEngine, schemaVersionProblems } = require('./engin
 const { MANIFEST_NAME } = require('./folder');
 const { addFormats } = require('./formats');
 const { repeatedPairs } = require('./registry');
-const { AGENT_ADAPTERS, resolveModel } = require('../agent-adapters');
+const { AGENT_ADAPTERS, bridgedArgsRefused, resolveModel } = require('../agent-adapters');
+const { EVALUATOR_DIRECTORY, EvaluatorLayerError, evaluatorFiles, evaluatorOf, isKnownEvaluator } = require('./evaluators');
 const { degenerateResponsePath } = require('./gameability');
+const { MAPPING_PATH, mappingContractProblems, mappingSchemaProblems } = require('./judgment-rows');
 
 /** The skill runner's infrastructure exit codes (`cli/skill-runner.js`), which a registry entry for it must declare. */
 const SKILL_RUNNER_INFRASTRUCTURE_CODES = [3, 4, 5, 6];
@@ -969,14 +983,20 @@ function checkGameability(report, folder, relative, probe, context, behaviors, r
  * declares a rubric, and the judge's adapter, command and model ones TeA's
  * agent adapters can run.
  */
-function checkJudge(report, folder, evaluation, contract) {
+function checkJudge(report, evaluation, contract, conditions) {
   const rubrics = Array.isArray(contract?.rubrics) ? contract.rubrics : [];
   const judge = evaluation.judge;
-  let conditions;
-  try {
-    conditions = readJsonFile(path.join(folder, ...CONDITIONS_NAME.split('/')));
-  } catch {
-    conditions = undefined;
+  // TeA's judge serves the deterministic evaluator alone; any other kind scores the rubric itself (AD-21). An
+  // evaluator of no known kind is the schema's to refuse, so the judge rule reads it as the default.
+  const evaluator = evaluatorOf(evaluation);
+  const kind = isKnownEvaluator(evaluator) ? evaluator.kind : 'deterministic';
+  if (kind !== 'deterministic') {
+    const unused = `evaluation.json's evaluator is ${kind}, which scores the contract's rubrics itself, so TeA's judge never runs and this block is never used; remove it`;
+    if (judge !== undefined) report.add(MANIFEST_NAME, 'judge', `declares judge: ${unused}`);
+    if (conditions !== null && typeof conditions === 'object' && Object.hasOwn(conditions, 'judge')) {
+      report.add(CONDITIONS_NAME, 'judge', `declares judge: ${unused}`);
+    }
+    return;
   }
   // A judge block beside a contract with no rubric is never used, so it is refused rather than ignored.
   if (contract !== undefined && rubrics.length === 0) {
@@ -1025,6 +1045,168 @@ function checkJudge(report, folder, evaluation, contract) {
     resolveModel(judge.agent, judge.model, Array.isArray(judge.agentArgs) ? judge.agentArgs : []);
   } catch (error) {
     report.add(MANIFEST_NAME, 'judge', `judge's model cannot run: ${error.message}`);
+  }
+}
+
+/** The mode bits that let anyone execute a file. */
+const EXECUTE_BITS = 0o111;
+
+/**
+ * `evaluation.json`'s `evaluator` (AD-21) held to the folder and the
+ * contract: a `command` or `sealed-brief-agent` evaluator needs
+ * `evaluator/mapping.json`, meeting its schema and binding only oracles,
+ * behaviors and rubric criteria the contract declares as bound (and every
+ * rubric criterion), and an `evaluator/` holding only regular files; a
+ * `command` evaluator's executable must be a regular, executable file there;
+ * a `sealed-brief-agent` needs an adapter that can run with the bridge as its
+ * only tools, its command and model, and its model snapshot in
+ * `policy/evaluator-conditions.json`; a `records` evaluator's directory must
+ * exist. An evaluator block in the conditions beside any other kind is
+ * never used, so it is refused.
+ */
+function checkEvaluator(report, folder, evaluation, contract, conditions) {
+  const evaluator = evaluatorOf(evaluation);
+  if (!isKnownEvaluator(evaluator)) return;
+  const { kind } = evaluator;
+  if (
+    (kind === 'deterministic' || kind === 'records') &&
+    conditions !== null &&
+    typeof conditions === 'object' &&
+    Object.hasOwn(conditions, 'evaluator')
+  ) {
+    report.add(
+      CONDITIONS_NAME,
+      'evaluator',
+      `declares evaluator: evaluation.json's evaluator is ${kind}, and only a command or sealed-brief-agent evaluator runs a model this block names; remove it`,
+    );
+  }
+  if (kind === 'records') {
+    if (typeof evaluator.records !== 'string') return;
+    // Only a directory inside the folder, reached through no link, is the folder's own.
+    const spelled = path.join(fs.realpathSync(folder), ...evaluator.records.split('/'));
+    let real;
+    try {
+      real = fs.realpathSync(path.join(folder, ...evaluator.records.split('/')));
+    } catch {
+      real = null;
+    }
+    if (real !== spelled || !fs.statSync(real).isDirectory()) {
+      report.add(
+        MANIFEST_NAME,
+        'evaluator',
+        `evaluator.records names ${evaluator.records}, which is not a directory the evaluation folder holds, reached through no link; the records evaluator reads the harness's sealed records there`,
+      );
+    }
+    return;
+  }
+  if (kind !== 'command' && kind !== 'sealed-brief-agent') return;
+  // The files `run` reads and digests: in a git repository the ones git tracks under evaluator/ (`evaluatorFiles`).
+  let layer = null;
+  try {
+    layer = evaluatorFiles(folder);
+  } catch (error) {
+    if (!(error instanceof EvaluatorLayerError)) throw error;
+    report.add(EVALUATOR_DIRECTORY, 'evaluator', error.message);
+  }
+  const untracked = (relative) =>
+    layer !== null &&
+    layer.tracked &&
+    !layer.files.some((file) => file.path === relative) &&
+    fs.existsSync(path.join(folder, ...relative.split('/')));
+  if (untracked(MAPPING_PATH)) {
+    report.add(
+      MAPPING_PATH,
+      'evaluator',
+      `${MAPPING_PATH} is not tracked by git, and a run reads only the files git tracks under evaluator/; git add it`,
+    );
+  } else if (fs.existsSync(path.join(folder, ...MAPPING_PATH.split('/')))) {
+    const mapping = parseInto(report, folder, MAPPING_PATH);
+    if (mapping !== undefined) {
+      const shape = mappingSchemaProblems(mapping);
+      for (const problem of shape) report.add(MAPPING_PATH, 'schema', problem);
+      if (shape.length === 0 && contract !== undefined) {
+        for (const problem of mappingContractProblems(mapping, contract)) report.add(MAPPING_PATH, 'evaluator', problem);
+      }
+    }
+  } else {
+    report.add(
+      MAPPING_PATH,
+      'evaluator',
+      `evaluation.json's evaluator is ${kind}, whose judgment rows convert through ${MAPPING_PATH}, and the folder has none`,
+    );
+  }
+  if (kind === 'command') {
+    if (typeof evaluator.command !== 'string') return;
+    if (untracked(evaluator.command)) {
+      report.add(
+        MANIFEST_NAME,
+        'evaluator',
+        `evaluator.command names ${evaluator.command}, which git does not track, and a run reads only the files git tracks under evaluator/; git add it`,
+      );
+      return;
+    }
+    const executable = path.join(folder, ...evaluator.command.split('/'));
+    let stats;
+    try {
+      stats = fs.lstatSync(executable);
+    } catch {
+      stats = null;
+    }
+    if (stats === null || !stats.isFile()) {
+      report.add(
+        MANIFEST_NAME,
+        'evaluator',
+        `evaluator.command names ${evaluator.command}, which is not a regular file the evaluation folder holds`,
+      );
+    } else if (process.platform !== 'win32' && (stats.mode & EXECUTE_BITS) === 0) {
+      report.add(MANIFEST_NAME, 'evaluator', `evaluator.command names ${evaluator.command}, which is not executable; set its execute bit`);
+    }
+    return;
+  }
+  if (typeof evaluator.agent !== 'string') return;
+  const adapter = Object.hasOwn(AGENT_ADAPTERS, evaluator.agent) ? AGENT_ADAPTERS[evaluator.agent] : undefined;
+  if (adapter === undefined) {
+    report.add(
+      MANIFEST_NAME,
+      'evaluator',
+      `evaluator.agent ${JSON.stringify(evaluator.agent)} is not an agent adapter TeA has (${Object.keys(AGENT_ADAPTERS).join(', ')})`,
+    );
+  } else {
+    if (typeof adapter.buildBridgedArgv !== 'function') {
+      const bridged = Object.keys(AGENT_ADAPTERS).filter((key) => typeof AGENT_ADAPTERS[key].buildBridgedArgv === 'function');
+      report.add(
+        MANIFEST_NAME,
+        'evaluator',
+        `evaluator.agent ${evaluator.agent} has no bridged run, one whose only tools are the bridge's; choose one of ${bridged.join(', ')}`,
+      );
+    }
+    const locked = bridgedArgsRefused(evaluator.agent, Array.isArray(evaluator.agentArgs) ? evaluator.agentArgs : []);
+    if (locked.length > 0) {
+      report.add(
+        MANIFEST_NAME,
+        'evaluator',
+        `evaluator.agentArgs carries ${locked.join(', ')}, which would reopen what the bridged run closes (built-in tools, other MCP servers, settings or a saved session); remove it`,
+      );
+    }
+    if (adapter.command === null && typeof evaluator.agentCommand !== 'string') {
+      report.add(
+        MANIFEST_NAME,
+        'evaluator',
+        `evaluator.agent ${evaluator.agent} runs no command of its own, so evaluator.agentCommand must name one`,
+      );
+    }
+    try {
+      resolveModel(evaluator.agent, evaluator.model, Array.isArray(evaluator.agentArgs) ? evaluator.agentArgs : []);
+    } catch (error) {
+      report.add(MANIFEST_NAME, 'evaluator', `the evaluator's model cannot run: ${error.message}`);
+    }
+  }
+  if (typeof conditions?.evaluator?.modelSnapshot !== 'string' || conditions.evaluator.modelSnapshot.length === 0) {
+    report.add(
+      CONDITIONS_NAME,
+      'evaluator',
+      `evaluation.json's evaluator is a sealed-brief agent, and ${CONDITIONS_NAME} names no evaluator.modelSnapshot, the model every evaluator call runs and every run records as a fixed condition`,
+    );
   }
 }
 
@@ -1281,7 +1463,14 @@ async function checkEvaluation(folder) {
   const policy = checkScoringPolicy(report, folder, context, routes);
   checkArmsAndTrials(report, evaluation, routes, policy);
   checkEvaluatorConditions(report, folder, context, registry);
-  checkJudge(report, folder, evaluation, context.contract);
+  let conditions;
+  try {
+    conditions = readJsonFile(path.join(folder, ...CONDITIONS_NAME.split('/')));
+  } catch {
+    conditions = undefined;
+  }
+  checkJudge(report, evaluation, context.contract, conditions);
+  checkEvaluator(report, folder, evaluation, context.contract, conditions);
   checkQualificationEvidence(report, folder, context);
 
   try {

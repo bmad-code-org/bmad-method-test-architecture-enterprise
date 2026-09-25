@@ -21,7 +21,11 @@ const archiver = require('archiver');
 const PROJECT_ROOT = path.dirname(__dirname);
 const BUILD_DIR = path.join(PROJECT_ROOT, 'build');
 
-const SITE_URL = process.env.SITE_URL || 'https://test-architect.bmad-method.org';
+// The same resolution the Astro site uses, so llms.txt and llms-full.txt link
+// the site that was actually built. The fixed custom domain this once defaulted
+// to has no DNS record, which left every link in both files dead.
+const { getSiteUrl } = require('../website/src/lib/site-url.js');
+const SITE_URL = getSiteUrl().replace(/\/+$/, '');
 const REPO_URL = 'https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise';
 
 // DO NOT CHANGE THESE VALUES!
@@ -51,6 +55,14 @@ const LLM_EXCLUDE_PATTERNS = [
   // How TEA's own test suite and evals prove TEA's behavior: the same maintainer
   // audience as the three above, about 12k characters.
   'explanation/how-tea-is-tested',
+  // The command-line references: every flag, rule and exit code of one command,
+  // which an agent looks up one command at a time when it runs that command, so
+  // llms.txt links each one under "Command-line references". In the bundle
+  // they came to about 101k characters (tea-evaluate about 67k, tea-test-review
+  // about 35k): with them in it measured 598,755 of its 600,000, and without
+  // them 499,446.
+  'reference/tea-evaluate-cli',
+  'reference/tea-test-review-cli',
   // Note: Files/dirs starting with _ (like _STYLE_GUIDE.md, _archive/) are excluded in shouldExcludeFromLlm()
 ];
 
@@ -108,7 +120,7 @@ async function generateArtifacts(docsDir) {
   fs.mkdirSync(outputDir, { recursive: true });
 
   // Generate LLM files reading from docs/, output to artifacts/
-  generateLlmsTxt(outputDir);
+  generateLlmsTxt(docsDir, outputDir);
   generateLlmsFullTxt(docsDir, outputDir);
   await generateDownloadBundles(outputDir);
 
@@ -151,12 +163,15 @@ function buildAstroSite() {
 /**
  * Create a concise llms.txt summary file containing project metadata, core links, and quick navigation entries for LLM consumption.
  *
- * Writes the file to `${outputDir}/llms.txt`.
+ * Writes the file to `${outputDir}/llms.txt`. Every page it links must be a document under `docsDir`, served at its
+ * path without `.md` (the site serves no `/docs/` prefix, which every page link once carried); a link to no document
+ * fails the build.
  *
+ * @param {string} docsDir - Root directory containing the source Markdown files the links name.
  * @param {string} outputDir - Destination directory where `llms.txt` will be written.
  */
 
-function generateLlmsTxt(outputDir) {
+function generateLlmsTxt(docsDir, outputDir) {
   console.log('  → Generating llms.txt...');
 
   const content = [
@@ -170,22 +185,27 @@ function generateLlmsTxt(outputDir) {
     '',
     '## Quick Start',
     '',
-    `- **[TEA Lite Quickstart](${SITE_URL}/docs/tutorials/tea-lite-quickstart)** - Get started in 30 minutes`,
+    `- **[TEA Lite Quickstart](${SITE_URL}/tutorials/tea-lite-quickstart)** - Get started in 30 minutes`,
     `- **[Installation](${SITE_URL}/)** - Installation guide`,
     '',
     '## Core Workflows',
     '',
-    `- **[Test Design (TD)](${SITE_URL}/docs/how-to/workflows/run-test-design)** - Risk-based test planning`,
-    `- **[ATDD (AT)](${SITE_URL}/docs/how-to/workflows/run-atdd)** - Failing acceptance tests first`,
-    `- **[Automate (TA)](${SITE_URL}/docs/how-to/workflows/run-automate)** - Expand automation coverage`,
-    `- **[Trace (TR)](${SITE_URL}/docs/how-to/workflows/run-trace)** - Requirements traceability`,
+    `- **[Test Design (TD)](${SITE_URL}/how-to/workflows/run-test-design)** - Risk-based test planning`,
+    `- **[ATDD (AT)](${SITE_URL}/how-to/workflows/run-atdd)** - Failing acceptance tests first`,
+    `- **[Automate (TA)](${SITE_URL}/how-to/workflows/run-automate)** - Expand automation coverage`,
+    `- **[Trace (TR)](${SITE_URL}/how-to/workflows/run-trace)** - Requirements traceability`,
     '',
     '## Additional Workflows',
     '',
-    `- **[Framework (TF)](${SITE_URL}/docs/how-to/workflows/setup-test-framework)** - Scaffold test framework`,
-    `- **[CI (CI)](${SITE_URL}/docs/how-to/workflows/setup-ci)** - CI/CD quality pipeline`,
-    `- **[Test Review (RV)](${SITE_URL}/docs/how-to/workflows/run-test-review)** - Quality audit`,
-    `- **[NFR Assess (NR)](${SITE_URL}/docs/how-to/workflows/run-nfr-assess)** - Non-functional requirements`,
+    `- **[Framework (TF)](${SITE_URL}/how-to/workflows/setup-test-framework)** - Scaffold test framework`,
+    `- **[CI (CI)](${SITE_URL}/how-to/workflows/setup-ci)** - CI/CD quality pipeline`,
+    `- **[Test Review (RV)](${SITE_URL}/how-to/workflows/run-test-review)** - Quality audit`,
+    `- **[NFR Assess (NR)](${SITE_URL}/how-to/workflows/run-nfr-assess)** - Non-functional requirements`,
+    '',
+    '## Command-line references',
+    '',
+    `- **[tea-evaluate CLI](${SITE_URL}/reference/tea-evaluate-cli)** - Check, digest, preflight, run and score an evaluation folder: flags, rules and exit codes`,
+    `- **[tea-test-review CLI](${SITE_URL}/reference/tea-test-review-cli)** - Headless test review in CI: flags, exit codes and the JSON verdict`,
     '',
     '---',
     '',
@@ -196,6 +216,17 @@ function generateLlmsTxt(outputDir) {
     `- [Prompts Bundle](${SITE_URL}/downloads/tea-prompts.zip) - Agent prompts and workflows`,
     '',
   ].join('\n');
+
+  // A page link is `${SITE_URL}/<path>` for docs/<path>.md; the site root, llms-full.txt and the downloads are files the build writes.
+  const dead = [...content.matchAll(/\]\(([^)]+)\)/g)]
+    .map((match) => match[1])
+    .filter((url) => url.startsWith(`${SITE_URL}/`))
+    .map((url) => url.slice(SITE_URL.length + 1))
+    .filter((page) => page !== '' && !page.includes('.') && !fs.existsSync(path.join(docsDir, `${page}.md`)));
+  if (dead.length > 0) {
+    console.error(`    ERROR: llms.txt links pages no document under docs/ serves: ${dead.join(', ')}`);
+    process.exit(1);
+  }
 
   const outputPath = path.join(outputDir, 'llms.txt');
   fs.writeFileSync(outputPath, content, 'utf-8');
@@ -351,7 +382,7 @@ function validateLlmSize(content) {
   const charCount = content.length;
 
   if (charCount > LLM_MAX_CHARS) {
-    console.error(`    ERROR: Exceeds ${LLM_MAX_CHARS.toLocaleString()} char limit`);
+    console.error(`    ERROR: ${charCount.toLocaleString()} chars exceeds the ${LLM_MAX_CHARS.toLocaleString()} char limit`);
     process.exit(1);
   } else if (charCount > LLM_WARN_CHARS) {
     console.warn(`    \u001B[33mWARNING: Approaching ${LLM_WARN_CHARS.toLocaleString()} char limit\u001B[0m`);

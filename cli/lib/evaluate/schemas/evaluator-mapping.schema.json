@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:tea:evaluate:schema:evaluator-mapping",
+  "title": "evaluator/mapping.json",
+  "description": "The one mapping a command or sealed-brief-agent evaluator's judgment rows are converted through (AD-21): each key the evaluator prints binds to an oracle and the behavior it answers, or to a rubric criterion and its anchored scale levels. tea-evaluate check holds every binding to the contract. The tea-evaluate runtime owns this schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "keys"],
+  "properties": {
+    "schemaVersion": {
+      "description": "The mapping format version.",
+      "const": 1
+    },
+    "keys": {
+      "description": "Each judgment-row key the evaluator may print, with what it binds to. A row whose key is not here fails the judgment-rows schema.",
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": { "$ref": "#/$defs/Key" },
+      "additionalProperties": {
+        "oneOf": [{ "$ref": "#/$defs/OracleBinding" }, { "$ref": "#/$defs/RubricBinding" }]
+      }
+    }
+  },
+  "$defs": {
+    "Key": {
+      "description": "A key the evaluator prints: letters, digits, underscore, dot, colon or hyphen, starting with a letter or digit, at most 128 characters.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+    },
+    "OracleBinding": {
+      "description": "A key whose pass row holds the oracle and whose fail row violates it, filing a defect finding for the behavior at the behavior's declared severity.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["oracleId", "behaviorId"],
+      "properties": {
+        "oracleId": { "type": "string", "pattern": "^O-[0-9]{3,}$" },
+        "behaviorId": { "type": "string", "pattern": "^B-[0-9]{3,}$" }
+      }
+    },
+    "RubricBinding": {
+      "description": "A key whose score row becomes the criterion's judge result; levels restates the rubric's anchored scale levels, which check holds equal.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rubricId", "criterionId", "levels"],
+      "properties": {
+        "rubricId": { "type": "string", "pattern": "^R-[0-9]{3,}$" },
+        "criterionId": { "type": "string", "pattern": "^RC-[0-9]{3,}$" },
+        "levels": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "integer" }
+        }
+      }
+    }
+  }
+}

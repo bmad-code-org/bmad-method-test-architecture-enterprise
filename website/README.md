@@ -72,11 +72,9 @@ website/
 The site URL is configured via environment variable or defaults:
 
 ```bash
-# Set site URL for production
-export SITE_URL=https://test-architect.bmad-method.org
-
-# Build with custom URL
-SITE_URL=https://test-architect.bmad-method.org npm run build
+# Without SITE_URL, GitHub Actions builds for https://<owner>.github.io/<repo>
+# and a local build for http://localhost:3000. Override it for a custom domain:
+SITE_URL=https://example.com/docs npm run build
 ```
 
 ## Deployment
@@ -132,6 +130,6 @@ Sidebar configuration in `astro.config.mjs` controls navigation structure.
 
 ## Links
 
-- Documentation: <https://test-architect.bmad-method.org>
+- Documentation: <https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/>
 - Repository: <https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise>
 - BMAD Method: <https://bmad-method.org>

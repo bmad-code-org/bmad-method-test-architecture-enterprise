@@ -24,9 +24,16 @@
  *      pristine one (with the mutation applied and its digest held to the one
  *      the qualification measured) or the pre-fix one, or, on a gameability
  *      arm, answered from the degenerate response with nothing launched, and
- *      is judged by the deterministic evaluator (`judgeTrial`) and, when the
- *      contract declares a rubric, by one rubric judge call (`judge.js`)
- *      whose scores every record of the trial carries as `judgeResults`;
+ *      is judged by the evaluation layer `evaluation.json` declares
+ *      (`evaluators.js`, AD-21): by default the deterministic evaluator
+ *      (`judgeTrial`) and, when the contract declares a rubric, one rubric
+ *      judge call (`judge.js`) whose scores every record of the trial carries
+ *      as `judgeResults`; or the judgment rows a command evaluator
+ *      (`command-evaluator.js`) or a sealed-brief agent acting through the
+ *      bridge (`sealed-brief-agent.js`) answers, converted through
+ *      `evaluator/mapping.json` (`judgment-rows.js`); a `records` run takes
+ *      the adopter harness's sealed records in place of trials
+ *      (`records-evaluator.js`);
  *   3. the adopter's project read again after every trial (exit 12 on any
  *      change), and the run directory held to exactly what the runtime wrote
  *      (`run-directory.js`: exit 12 on an entry it did not write or a file
@@ -48,8 +55,8 @@
  * A trial step that exits one of its registry entry's
  * `infrastructureExitCodes`, or that a signal from outside stops, is a target
  * that could not run: the trial yields no record and the run stops with exit
- * 12, as does any trial that cannot run and any trial whose rubric judge
- * cannot answer. A stopped run holds no `trial-sets.json`, so there is nothing
+ * 12, as does any trial that cannot run and any trial whose rubric judge or
+ * evaluator cannot answer inside its contract. A stopped run holds no `trial-sets.json`, so there is nothing
  * to score. A historical probe the preflight refused runs on no arm and is
  * named in `run.json`'s `refused`.
  */
@@ -61,14 +68,28 @@ const path = require('node:path');
 
 const { admissionRefusal, armVerdict, referenceTo } = require('./admission');
 const { hostEnvironmentPort, persistableRequest, runArm } = require('./arm');
+const { runCommandEvaluator } = require('./command-evaluator');
 const { corpusDigestOf } = require('./corpus-index');
-const { expectedSchemaVersion } = require('./engine');
+const { expectedSchemaVersion, loadEngine } = require('./engine');
 const { evaluateOracles, judgeTrial, oraclesOfBehaviors } = require('./evaluator');
+const {
+  EvaluatorLayerError,
+  IDENTITIES,
+  configurationFields,
+  convertsRows,
+  evaluatorLayerChange,
+  readEvaluatorLayer,
+  recordedEvaluatorModel,
+} = require('./evaluators');
 const { degenerateArm } = require('./gameability');
-const { JudgeError, judgeConfigurationFor, judgeRubrics, recordedJudgeModel } = require('./judge');
+const { JudgeError, answerNonce, judgeConfigurationFor, judgeRubrics, recordedJudgeModel } = require('./judge');
+const { EvaluatorError, judgmentFromRows, setRecommendationOf, trialRecommendation } = require('./judgment-rows');
 const { QualificationError, applyReplaceExact } = require('./mutation');
 const { PreflightOutcome, readJson, runPipeline } = require('./preflight');
+const { importRecords } = require('./records-evaluator');
 const { evaluatorConfiguration, isolationManifest, sealedRunRecord } = require('./records');
+const { bridgeTools } = require('./bridge');
+const { bridgeRouter, runSealedBriefAgent } = require('./sealed-brief-agent');
 
 const POLICY_PATH = 'policy/scoring-policy.json';
 const CONDITIONS_PATH = 'policy/evaluator-conditions.json';
@@ -83,7 +104,7 @@ const TRIAL_SETS_NAME = 'trial-sets.json';
 const TRIAL_SETS_SCHEMA_VERSION = readJson(path.join(__dirname, 'schemas', 'trial-sets.schema.json')).properties.schemaVersion.const;
 
 /** The deterministic evaluator's identity, an opaque label with no person or account in it. */
-const EVALUATOR_IDENTITY = 'tea-evaluate deterministic evaluator';
+const EVALUATOR_IDENTITY = IDENTITIES.deterministic;
 
 /**
  * What the isolation manifest records for a quantity the runtime neither
@@ -167,16 +188,29 @@ function runRunCommand(folder, { fromWorkingTree = false, env = process.env, log
     fromWorkingTree,
     env,
     log,
-    prepare: (context) => {
+    prepare: async (context) => {
       const refused = refusal(context);
       if (refused !== null) return refused;
       const conditionsFile = path.join(folder, ...CONDITIONS_PATH.split('/'));
       const probes = committedProbes(folder);
+      let layer;
+      try {
+        layer = readEvaluatorLayer({
+          folder,
+          evaluation: context.evaluation,
+          contract: readJson(path.join(folder, 'contract.json')),
+          engine: await loadEngine(),
+        });
+      } catch (error) {
+        if (!(error instanceof EvaluatorLayerError)) throw error;
+        return new PreflightOutcome({ stage: 'check', exitCode: 10, message: `the evaluation layer cannot be used: ${error.message}` });
+      }
       snapshot = {
         policyBytes: fs.readFileSync(path.join(folder, ...POLICY_PATH.split('/'))),
         conditions: fs.existsSync(conditionsFile) ? readJson(conditionsFile) : null,
         index: readJson(path.join(folder, INDEX_PATH)),
         probeIds: probes.map(({ probe }) => probe.probeId),
+        layer,
       };
       return null;
     },
@@ -307,15 +341,19 @@ async function qualifyCleanControls({
  * One trial of one arm: on a mutated or historical arm, in a workspace of its
  * own reproducing the pristine or the pre-fix one (the mutated arm's mutation
  * applied and held to the digest the qualification measured), the plan run
- * once with `evaluator-chosen` observations; on a gameability arm, the plan
- * answered from the degenerate response with nothing launched. Every probe on
- * the arm is judged, and so is every rubric. Its evidence goes to
+ * once; on a gameability arm, the plan answered from the degenerate response
+ * with nothing launched. The plan's observations are `evaluator-chosen`,
+ * since the plan is the evaluation's own exercise of the target, except under
+ * a sealed-brief agent, whose own calls are the evaluation's and the plan a
+ * harness baseline it never sees (`baseline`). Every probe on the arm is
+ * judged, and so is every rubric. Its evidence goes to
  * `trials/<arm>/trial-<n>.json`.
  */
 async function runTrial(context) {
-  const { arm, trialIndex, contract, registry, pristine, make, discard, engine, writer, stop, signal } = context;
+  const { arm, trialIndex, contract, registry, pristine, make, discard, engine, writer, stop, signal, snapshot } = context;
   const label = `trial-${arm.slug}-${trialIndex}`;
   const evidenceFile = `trials/${arm.slug}/trial-${trialIndex}.json`;
+  const provenance = snapshot.layer.evaluator.kind === 'sealed-brief-agent' ? 'baseline' : 'evaluator-chosen';
   if (arm.degenerate !== undefined) {
     const began = Date.now();
     let executed;
@@ -325,7 +363,7 @@ async function runTrial(context) {
         registry,
         steps: arm.degenerate.steps,
         label: `trial-${trialIndex}`,
-        provenance: 'evaluator-chosen',
+        provenance,
         signal,
       });
     } catch (error) {
@@ -344,8 +382,9 @@ async function runTrial(context) {
       label,
       evidenceFile,
       executed,
-      elapsedMs: Date.now() - began,
+      began,
       evidence: { workspace: null, degenerateResponse: arm.degenerate.response },
+      port: null,
       mounts: [],
       toolCalls: [],
     });
@@ -372,18 +411,12 @@ async function runTrial(context) {
     const problems = registry.targetProblems(workspace.root);
     if (problems.length > 0)
       throw stop({ stage: 'trial', exitCode: 12, message: `${label}: the registry cannot launch: ${problems.join('; ')}` });
-    const { port } = await registry.createProbePort({ cwd: workspace.root, projectRoot: workspace.root });
+    const { port: adapter } = await registry.createProbePort({ cwd: workspace.root, projectRoot: workspace.root });
+    const port = hostEnvironmentPort({ port: adapter, registry });
     const began = Date.now();
     let executed;
     try {
-      executed = await runArm({
-        contract,
-        port: hostEnvironmentPort({ port, registry }),
-        registry,
-        label: `trial-${trialIndex}`,
-        provenance: 'evaluator-chosen',
-        signal,
-      });
+      executed = await runArm({ contract, port, registry, label: `trial-${trialIndex}`, provenance, signal });
     } catch (error) {
       writer.writeJson(evidenceFile, {
         conditionArm: arm.conditionArm,
@@ -403,13 +436,13 @@ async function runTrial(context) {
         message: `${label} ${denied ? 'was denied by the registry' : 'yields no record'}: ${error?.message ?? error}`,
       });
     }
-    const elapsedMs = Date.now() - began;
     return await concludeTrial(context, {
       label,
       evidenceFile,
       executed,
-      elapsedMs,
+      began,
       evidence: { workspace: label },
+      port,
       mounts: [
         `${workspace.kind} ${label}`,
         ...workspace.provisioned.map((entry) => `read-only ${label}/${path.relative(workspace.root, entry).split(path.sep).join('/')}`),
@@ -423,16 +456,21 @@ async function runTrial(context) {
 }
 
 /**
- * A trial's judgment once its plan ran: every probe on the arm judged by the
- * deterministic evaluator, the rubric judge called once when the contract
- * declares a rubric (`judgeRubrics` makes no call otherwise), and the trial's
- * evidence written. A judge that cannot answer stops the run with exit 12 and
- * no record.
+ * A trial's judgment once its plan ran, by the evaluator kind the run reads:
+ * the deterministic evaluator over every probe on the arm and, when the
+ * contract declares a rubric, one rubric judge call (`judgeRubrics` makes no
+ * call otherwise); or the judgment rows a command evaluator or a sealed-brief
+ * agent answers, converted per probe through the mapping. The trial's
+ * evidence is written either way. A judge or an evaluator that cannot answer
+ * inside its contract stops the run with exit 12 and no record, what it
+ * printed kept under `evaluator/` (or in the trial's evidence, for the
+ * judge).
  */
-async function concludeTrial(
-  { arm, trialIndex, contract, evaluation, policy, writer, stop },
-  { label, evidenceFile, executed, elapsedMs, evidence, mounts, toolCalls },
-) {
+async function concludeTrial(context, facts) {
+  if (convertsRows(context.snapshot.layer.evaluator.kind)) return concludeWithRows(context, facts);
+  const { arm, trialIndex, contract, evaluation, policy, writer, stop } = context;
+  const { label, evidenceFile, executed, began, evidence, mounts, toolCalls } = facts;
+  const elapsedMs = Date.now() - began;
   const judgments = {};
   for (const probe of arm.probes) {
     judgments[probe.probeId] = await judgeTrial({
@@ -454,7 +492,12 @@ async function concludeTrial(
   };
   let judged;
   try {
-    judged = await judgeRubrics({ contract, stepObservations: executed.stepObservations, judge: evaluation.judge });
+    judged = await judgeRubrics({
+      contract,
+      stepObservations: executed.stepObservations,
+      judge: evaluation.judge,
+      scratch: context.scratch,
+    });
   } catch (error) {
     if (!(error instanceof JudgeError)) throw error;
     writer.writeJson(evidenceFile, { ...written, judge: { fault: error.message, stdout: error.stdout, stderr: error.stderr } });
@@ -470,13 +513,144 @@ async function concludeTrial(
   return {
     trialIndex,
     evidenceFile,
-    stepObservations: executed.stepObservations,
+    observations: Object.values(executed.stepObservations).sort((a, b) => a.sequence - b.sequence),
     judgments,
     judgeResults: judged.results,
     judgeCalled: judged.called,
     elapsedMs,
     mounts,
     toolCalls,
+  };
+}
+
+/**
+ * A trial judged by a command evaluator or a sealed-brief agent: its answer
+ * read against the import contract and converted per probe
+ * (`judgmentFromRows`), what it printed written under
+ * `evaluator/<arm>/trial-<n>.{stdout,stderr,json}`, and, for a sealed-brief
+ * agent, the calls it made through the bridge kept in the trial's evidence.
+ */
+async function concludeWithRows(context, facts) {
+  const { arm, trialIndex, contract, folder, writer, stop, signal, snapshot, sealedBrief, scratch, env } = context;
+  const { label, evidenceFile, executed, began, evidence, port, mounts, toolCalls } = facts;
+  const { evaluator, mapping, validate } = snapshot.layer;
+  // The evaluator runs from the evaluation folder, so the run holds the layer's files to the bytes it digested
+  // before each launch and after each trial; the window between this read and the launch is Story 1.31's.
+  const holdLayer = (when) => {
+    const change = evaluatorLayerChange(folder, snapshot.layer.files);
+    if (change !== null) throw new EvaluatorError(`the evaluation layer changed ${when}: ${change}`);
+  };
+  const baseline = Object.values(executed.stepObservations).sort((a, b) => a.sequence - b.sequence);
+  const streams = `evaluator/${arm.slug}/trial-${trialIndex}`;
+  const written = { conditionArm: arm.conditionArm, trialIndex, ...evidence, steps: executed.steps };
+  let router = null;
+  let evaluated;
+  const judgments = {};
+  let judgeResults = [];
+  try {
+    holdLayer("before the evaluator's launch");
+    if (evaluator.kind === 'command') {
+      evaluated = await runCommandEvaluator({
+        folder,
+        evaluator,
+        sealedBrief,
+        observations: baseline,
+        mapping,
+        validate,
+        scratch,
+        env,
+      });
+    } else {
+      // Drawn after the plan ran and before the router exists, so neither a plan step's output nor any call can carry it.
+      const nonce = answerNonce();
+      router = bridgeRouter({
+        contract,
+        registry: context.registry,
+        port,
+        degenerate: arm.degenerate?.steps ?? null,
+        label: `trial-${trialIndex}`,
+        taken: new Set(baseline.map((observation) => observation.observationId)),
+        firstSequence: baseline.length + 1,
+        budget: contract.budgets?.maxToolCalls ?? 0,
+        nonce,
+        signal,
+      });
+      evaluated = await runSealedBriefAgent({ evaluator, sealedBrief, contract, mapping, validate, router, nonce, scratch, env });
+    }
+    holdLayer('while the evaluator ran');
+    // The conversion refuses a row on a key of the other kind and a score off its levels, as the schema refuses a bad shape.
+    for (const probe of arm.probes) {
+      const judgment = judgmentFromRows({
+        contract,
+        mapping,
+        answer: evaluated.answer,
+        probeId: probe.probeId,
+        behaviorIds: [probe.behaviorId, ...probe.defects.map((defect) => defect.behaviorId)],
+      });
+      judgments[probe.probeId] = judgment;
+      ({ judgeResults } = judgment);
+    }
+  } catch (error) {
+    if (!(error instanceof EvaluatorError)) throw error;
+    // An answer the conversion refused was read in full, so what the evaluator printed is the answer's own.
+    const printed = evaluated ?? error;
+    writer.write(`${streams}.stdout`, printed.stdoutBytes);
+    writer.write(`${streams}.stderr`, printed.stderrBytes);
+    writer.writeJson(`${streams}.json`, {
+      conditionArm: arm.conditionArm,
+      trialIndex,
+      kind: evaluator.kind,
+      fault: error.message,
+      outcome: error.outcome ?? evaluated?.outcome ?? null,
+      prompt: error.prompt ?? evaluated?.prompt ?? null,
+      nonce: error.nonce ?? evaluated?.nonce ?? null,
+      calls: router?.calls ?? null,
+    });
+    writer.writeJson(evidenceFile, {
+      ...written,
+      elapsedMs: Date.now() - began,
+      evaluator: { kind: evaluator.kind, fault: error.message, streams },
+    });
+    throw stop({ stage: 'trial', exitCode: 12, message: `${label} yields no record: ${error.message}` });
+  }
+  const elapsedMs = Date.now() - began;
+  // What the evaluator printed is kept as the bytes it wrote; its answer was read from their UTF-8 text.
+  writer.write(`${streams}.stdout`, evaluated.stdoutBytes);
+  writer.write(`${streams}.stderr`, evaluated.stderrBytes);
+  writer.writeJson(`${streams}.json`, {
+    conditionArm: arm.conditionArm,
+    trialIndex,
+    kind: evaluator.kind,
+    outcome: evaluated.outcome ?? null,
+    prompt: evaluated.prompt ?? null,
+    nonce: evaluated.nonce ?? null,
+    calls: router?.calls ?? null,
+  });
+  const observations = [...baseline, ...(router?.observations ?? [])];
+  writer.writeJson(evidenceFile, {
+    ...written,
+    elapsedMs,
+    evaluator: { kind: evaluator.kind, answer: evaluated.answer, streams, calls: router?.calls ?? null },
+  });
+  // The bridge's calls that launched a command are observed tool calls as the plan's are; a gameability arm launches none.
+  const bridged = (port === null ? [] : (router?.calls ?? []))
+    .filter((call) => call.observation !== undefined)
+    .map((call) => `${call.interfaceId}/${call.request.executable}`);
+  return {
+    trialIndex,
+    evidenceFile,
+    observations,
+    judgments,
+    judgeResults,
+    judgeCalled: false,
+    recommendations: Object.fromEntries(
+      Object.entries(judgments).map(([probeId, judgment]) => [probeId, trialRecommendation(evaluated.answer, judgment)]),
+    ),
+    // Every call the trial made: the plan's steps and each call of the agent's the budget admitted.
+    callCount: executed.steps.length + (router?.counted() ?? 0),
+    elapsedMs,
+    mounts,
+    toolCalls: [...toolCalls, ...bridged],
   };
 }
 
@@ -516,8 +690,7 @@ async function runTrialSets(given) {
     run,
     sealed,
   } = context;
-  const { writeRun, treeUnchanged, retractUnlessSealed, markSealed, outcome, stop, log, snapshot } = context;
-  const startedAt = context.started;
+  const { treeUnchanged, stop, log, snapshot } = context;
 
   const cleanControls = await qualifyCleanControls(context);
   // The gameability probes the shared pipeline qualified before the verdict.
@@ -567,6 +740,25 @@ async function runTrialSets(given) {
     });
   }
 
+  // The digests of the compiled contract and the sealed brief as the stages
+  // wrote them, taken before any target ran.
+  const noStages = () =>
+    stop({
+      stage: 'trial',
+      exitCode: 12,
+      message: 'the engine stages wrote no compiled contract or sealed brief, so no trial set can name them',
+    });
+  const { kind } = snapshot.layer.evaluator;
+  if (kind === 'records') {
+    if (sealed === null) throw noStages();
+    return concludeImportedRecords({ ...context, arms, refusedIds });
+  }
+  if (convertsRows(kind)) {
+    // A command evaluator and a sealed-brief agent read the brief the run sealed, as its bytes were written.
+    if (sealed === null) throw noStages();
+    context.sealedBrief = writer.readJson('sealed-evaluator-brief.json');
+  }
+
   const trialCount = evaluation.trials;
   for (const arm of arms) {
     arm.trials = [];
@@ -592,40 +784,38 @@ async function runTrialSets(given) {
   // wrote, and the run directory nothing else, before any trial set is written.
   writer.verify('after the trials');
 
-  const failures = (kind, problems) => {
+  const failures = (artifactKind, problems) => {
     if (problems.length > 0) {
       throw stop({
         stage: 'trial',
         exitCode: 12,
-        message: `the runtime built a ${kind} that does not meet eval-quality's published schema: ${problems.join('; ')}`,
+        message: `the runtime built a ${artifactKind} that does not meet eval-quality's published schema: ${problems.join('; ')}`,
       });
     }
   };
 
-  // The digests of the compiled contract and the sealed brief as the stages
-  // wrote them, taken before any target ran.
-  if (sealed === null) {
-    throw stop({
-      stage: 'trial',
-      exitCode: 12,
-      message: 'the engine stages wrote no compiled contract or sealed brief, so no trial set can name them',
-    });
-  }
+  if (sealed === null) throw noStages();
   const { contractDigest, sealedBriefDigest } = sealed;
-  const { conditions } = snapshot;
+  const { conditions, layer } = snapshot;
   const tools = registry.entries.map((entry) => `${entry.interfaceId}/${entry.executable}`).sort();
-  const judgeConfiguration = judgeConfigurationFor({ contract, conditions, digestBytes: engine.digestBytes });
+  // Only the deterministic kind calls TeA's rubric judge; every other kind scores the rubric itself.
+  const judgeConfiguration =
+    kind === 'deterministic' ? judgeConfigurationFor({ contract, conditions, digestBytes: engine.digestBytes }) : null;
+  const fields = configurationFields({ layer, conditions, judgeConfiguration, digestBytes: engine.digestBytes });
+  // The tools a sealed-brief agent had: one per interface the bridge exposed.
+  const bridged =
+    kind === 'sealed-brief-agent' ? bridgeTools(context.sealedBrief.permittedInterfaces ?? []).map((tool) => `bridge:${tool.name}`) : [];
   const configuration = evaluatorConfiguration({
-    evaluatorIdentity: EVALUATOR_IDENTITY,
-    modelSnapshot: conditions?.modelSnapshot ?? 'none',
+    evaluatorIdentity: fields.evaluatorIdentity,
+    modelSnapshot: fields.modelSnapshot,
     sealedBriefDigest,
-    systemPromptDigest: conditions?.systemPromptDigest ?? engine.digestBytes(new Uint8Array(0)),
-    toolInventory: tools,
+    systemPromptDigest: fields.systemPromptDigest,
+    toolInventory: [...tools, ...bridged],
     permissionInventory: [],
-    decodingParameters: {},
+    decodingParameters: fields.decodingParameters,
     budgets: contract.budgets,
     seed: null,
-    judgeConfiguration,
+    judgeConfiguration: fields.judgeConfiguration,
   });
   failures('EvaluatorConfiguration', await validate('evaluator-configuration', configuration));
   const configurationDigest = engine.digestArtifact(configuration, 'EvaluatorConfiguration');
@@ -638,7 +828,11 @@ async function runTrialSets(given) {
     const interfaceId = (contract.permittedInterfaces ?? []).find((iface) => (iface.operations ?? []).includes(operation))?.logicalId;
     return total + (registry.targetFor(interfaceId, operation?.invocation?.executable)?.maxElapsedMs ?? 0);
   }, 0);
-  const planSteps = (contract.interactionPlan ?? []).length;
+  // A sealed-brief agent's own calls count against the contract's budget in each trial, beside the plan's steps.
+  const callsPerTrial =
+    (contract.interactionPlan ?? []).length + (kind === 'sealed-brief-agent' ? (contract.budgets?.maxToolCalls ?? 0) : 0);
+  // The evaluator's wall clock counts toward a trial's ceiling beside the plan's.
+  const trialCeilingMs = stepCeilingMs + (convertsRows(kind) ? layer.evaluator.timeoutMs : 0);
   // The digest of the bytes the runtime wrote to a run-directory file, which `score` holds each file to.
   const bytesDigest = (file) => engine.digestBytes(writer.read(file));
 
@@ -647,7 +841,9 @@ async function runTrialSets(given) {
   const manifestDigests = {};
   for (const arm of arms) {
     for (const probe of arm.probes) {
-      const recommendation = setRecommendation(arm.trials.map((trial) => trial.judgments[probe.probeId]));
+      const recommendation = convertsRows(kind)
+        ? setRecommendationOf(arm.trials.map((trial) => trial.recommendations[probe.probeId]))
+        : setRecommendation(arm.trials.map((trial) => trial.judgments[probe.probeId]));
       const directory = `trial-sets/${probe.probeId}`;
       const runId = `${invocationId}-${probe.probeId}`;
       const manifest = isolationManifest({
@@ -665,14 +861,14 @@ async function runTrialSets(given) {
         toolAllowlist: tools,
         observedToolCalls: [...new Set(arm.trials.flatMap((trial) => trial.toolCalls))].sort(),
         resourceCeilings: {
-          maxToolCalls: Math.max(1, planSteps * trialCount),
+          maxToolCalls: Math.max(1, callsPerTrial * trialCount),
           maxInputTokens: UNBOUNDED,
           maxOutputTokens: UNBOUNDED,
-          maxWallClockMinutes: Math.max(stepCeilingMs * trialCount, 1) / 60_000,
+          maxWallClockMinutes: Math.max(trialCeilingMs * trialCount, 1) / 60_000,
           maxCostUsd: String(UNBOUNDED),
         },
         actualResourceUse: {
-          toolCalls: arm.trials.reduce((total, trial) => total + trial.toolCalls.length, 0),
+          toolCalls: arm.trials.reduce((total, trial) => total + (trial.callCount ?? trial.toolCalls.length), 0),
           inputTokens: 0,
           outputTokens: 0,
           wallClockSeconds: arm.trials.reduce((total, trial) => total + trial.elapsedMs, 0) / 1000,
@@ -697,12 +893,12 @@ async function runTrialSets(given) {
           evaluatorRecommendation: recommendation,
           oracleDispositions: judgment.oracleDispositions,
           findings: judgment.findings,
-          observations: Object.values(trial.stepObservations).sort((a, b) => a.sequence - b.sequence),
+          observations: trial.observations,
           judgeResults: trial.judgeResults,
           actionsArtifact: referenceTo(folder, writer, trial.evidenceFile, engine.digestBytes),
           isolationManifestArtifact: referenceTo(folder, writer, manifestFile, engine.digestBytes),
           resourceUse: {
-            toolCalls: trial.toolCalls.length,
+            toolCalls: trial.callCount ?? trial.toolCalls.length,
             inputTokens: 0,
             outputTokens: 0,
             wallClockSeconds: trial.elapsedMs / 1000,
@@ -715,26 +911,146 @@ async function runTrialSets(given) {
         recordDigests[recordFile] = bytesDigest(recordFile);
         records.push(recordFile);
       }
-      // A seeded probe's file is the preflight's own; a clean control's is written here.
-      const probeFile = `probes/${probe.probeId}.probe.json`;
-      const probeBytes = Buffer.from(`${JSON.stringify(probe, null, 2)}\n`);
-      if (!writer.has(probeFile)) writer.write(probeFile, probeBytes);
-      else if (!writer.read(probeFile).equals(probeBytes)) {
-        throw stop({ stage: 'trial', exitCode: 12, message: `${probeFile} is not the probe the run qualified` });
-      }
       trialSets.push({
         probeId: probe.probeId,
         runId,
         conditionArm: arm.conditionArm,
-        probe: probeFile,
+        probe: writeQualifiedProbe({ writer, stop }, probe),
         records,
         isolationManifest: manifestFile,
       });
     }
   }
 
+  return completeRun(context, {
+    arms,
+    trialSets,
+    recordDigests,
+    manifestDigests,
+    configurationDigest,
+    trialCount,
+    evaluatorRecord: {
+      kind,
+      identity: configuration.evaluatorIdentity,
+      ...(kind === 'command' ? { command: layer.evaluator.command } : {}),
+      ...(kind === 'sealed-brief-agent' ? { agent: layer.evaluator.agent, model: recordedEvaluatorModel(layer.evaluator) } : {}),
+    },
+    model: { modelSnapshot: configuration.modelSnapshot, systemPromptDigest: configuration.systemPromptDigest },
+    judge:
+      judgeConfiguration === null
+        ? null
+        : {
+            agent: evaluation.judge.agent,
+            // The model the adapter runs: the judge's own, or the adapter's pinned default.
+            model: recordedJudgeModel(evaluation.judge),
+            ...judgeConfiguration,
+            calls: arms.reduce((total, arm) => total + arm.trials.filter((trial) => trial.judgeCalled).length, 0),
+          },
+  });
+}
+
+/** A probe the run qualified, written as the trial set's probe file; a seeded probe's file is the preflight's own, which it must equal. */
+function writeQualifiedProbe({ writer, stop }, probe) {
+  const probeFile = `probes/${probe.probeId}.probe.json`;
+  const probeBytes = Buffer.from(`${JSON.stringify(probe, null, 2)}\n`);
+  if (!writer.has(probeFile)) writer.write(probeFile, probeBytes);
+  else if (!writer.read(probeFile).equals(probeBytes)) {
+    throw stop({ stage: 'trial', exitCode: 12, message: `${probeFile} is not the probe the run qualified` });
+  }
+  return probeFile;
+}
+
+/**
+ * A `records` run's trial sets: every probe the run qualified takes the
+ * records the adopter's harness sealed for it (`records-evaluator.js`),
+ * copied unchanged, beside the harness's own evaluator configuration.
+ */
+async function concludeImportedRecords(context) {
+  const { folder, arms, refusedIds, snapshot, sealed, validate, writer, engine, stop } = context;
+  const probes = arms.flatMap((arm) => arm.probes);
+  const unarmed = snapshot.probeIds.filter((probeId) => !probes.some((probe) => probe.probeId === probeId) && !refusedIds.has(probeId));
+  if (unarmed.length > 0) {
+    throw stop({
+      stage: 'trial',
+      exitCode: 12,
+      message: `no arm holds ${unarmed.join(', ')}, so the run cannot score every probe it holds`,
+    });
+  }
+  let imported;
+  try {
+    imported = await importRecords({
+      folder,
+      evaluator: snapshot.layer.evaluator,
+      probes: arms.flatMap((arm) => arm.probes.map((probe) => ({ probeId: probe.probeId, conditionArm: arm.conditionArm }))),
+      sealedBriefDigest: sealed.sealedBriefDigest,
+      validate,
+      writer,
+    });
+  } catch (error) {
+    if (!(error instanceof EvaluatorLayerError)) throw error;
+    throw stop({ stage: 'trial', exitCode: 10, message: `the records evaluator's records cannot be scored: ${error.message}` });
+  }
+  const bytesDigest = (file) => engine.digestBytes(writer.read(file));
+  const recordDigests = {};
+  const manifestDigests = {};
+  const trialSets = imported.sets.map((set) => {
+    for (const record of set.records) recordDigests[record] = bytesDigest(record);
+    if (set.manifest !== null) manifestDigests[set.probeId] = bytesDigest(set.manifest);
+    return {
+      probeId: set.probeId,
+      runId: set.runId,
+      conditionArm: set.conditionArm,
+      probe: writeQualifiedProbe(
+        context,
+        probes.find((probe) => probe.probeId === set.probeId),
+      ),
+      records: set.records,
+      // An absent manifest reaches eval-quality as absent, which it reads as Invalid.
+      isolationManifest: set.manifest ?? `trial-sets/${set.probeId}/isolation-manifest.json`,
+    };
+  });
+  writer.verify('after the records were imported');
+  return completeRun(context, {
+    arms,
+    trialSets,
+    recordDigests,
+    manifestDigests,
+    configurationDigest: engine.digestArtifact(imported.configuration, 'EvaluatorConfiguration'),
+    trialCount: null,
+    evaluatorRecord: { kind: 'records', identity: imported.configuration.evaluatorIdentity, records: snapshot.layer.evaluator.records },
+    model: { modelSnapshot: imported.configuration.modelSnapshot, systemPromptDigest: imported.configuration.systemPromptDigest },
+    judge: null,
+  });
+}
+
+/**
+ * The run's last writes, once its trial sets are in the run directory: the
+ * scoring policy, the index `score` reads, and `run.json` completed with the
+ * digests of every file `score` reads, after the project and the run
+ * directory are found as they were.
+ */
+async function completeRun(
+  context,
+  { arms, trialSets, recordDigests, manifestDigests, configurationDigest, trialCount, evaluatorRecord, model, judge },
+) {
+  const {
+    invocationId,
+    writer,
+    run,
+    sealed,
+    registry,
+    engine,
+    snapshot,
+    writeRun,
+    treeUnchanged,
+    retractUnlessSealed,
+    markSealed,
+    outcome,
+  } = context;
+  const startedAt = context.started;
   writer.write('scoring-policy.json', snapshot.policyBytes);
   const corpusDigest = await corpusDigestOf(snapshot.index);
+  const bytesDigest = (file) => engine.digestBytes(writer.read(file));
   // The bytes `score` reads, digested as the runtime wrote them, so it can
   // hold the run directory to what the run sealed.
   const artifacts = {
@@ -760,7 +1076,10 @@ async function runTrialSets(given) {
   const result = outcome({
     stage: 'trial',
     exitCode: 0,
-    message: `${trialSets.length} trial set(s) of ${trialCount} trial(s) sealed over ${arms.map((arm) => arm.conditionArm).join(', ')}; score them with tea-evaluate score --run ${invocationId}`,
+    message:
+      trialCount === null
+        ? `${trialSets.length} trial set(s) taken from the records evaluator's records over ${[...new Set(trialSets.map((set) => set.conditionArm))].join(', ')}; score them with tea-evaluate score --run ${invocationId}`
+        : `${trialSets.length} trial set(s) of ${trialCount} trial(s) sealed over ${arms.map((arm) => arm.conditionArm).join(', ')}; score them with tea-evaluate score --run ${invocationId}`,
   });
   // The project must be as it was, and the run directory exactly what the
   // runtime wrote, before run.json says completed; that write is the run's last.
@@ -768,25 +1087,19 @@ async function runTrialSets(given) {
   writer.verify('after the trial sets were sealed');
   Object.assign(run, {
     artifacts,
-    contractDigest,
+    contractDigest: sealed.contractDigest,
     corpusDigest,
     policyDigest: engine.digestBytes(snapshot.policyBytes),
-    sealedBriefDigest,
+    sealedBriefDigest: sealed.sealedBriefDigest,
     evaluatorConfigurationDigest: configurationDigest,
     runner: registry.entries.map((entry) => ({ interfaceId: entry.interfaceId, executable: entry.executable, target: entry.target })),
-    evaluator: { kind: 'deterministic', identity: EVALUATOR_IDENTITY },
-    model: { modelSnapshot: configuration.modelSnapshot, systemPromptDigest: configuration.systemPromptDigest },
-    judge:
-      judgeConfiguration === null
-        ? null
-        : {
-            agent: evaluation.judge.agent,
-            // The model the adapter runs: the judge's own, or the adapter's pinned default.
-            model: recordedJudgeModel(evaluation.judge),
-            ...judgeConfiguration,
-            calls: arms.reduce((total, arm) => total + arm.trials.filter((trial) => trial.judgeCalled).length, 0),
-          },
-    trials: { perArm: trialCount, arms: arms.map((arm) => arm.conditionArm) },
+    evaluator: evaluatorRecord,
+    model,
+    judge,
+    trials: {
+      perArm: trialCount,
+      arms: trialCount === null ? [...new Set(trialSets.map((set) => set.conditionArm))] : arms.map((arm) => arm.conditionArm),
+    },
     trialCount,
     startedAt: new Date(startedAt).toISOString(),
     durationMs: Date.now() - startedAt,

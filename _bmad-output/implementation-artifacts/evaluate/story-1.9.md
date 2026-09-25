@@ -2,7 +2,7 @@
 title: 'Story 1.9: Qualify gameability and historical probes, and judge rubrics'
 type: 'feature'
 created: '2026-09-25'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '87b3ea4f8fcc08536b35cae3558388ab039a112e'

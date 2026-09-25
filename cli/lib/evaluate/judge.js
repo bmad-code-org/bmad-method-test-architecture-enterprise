@@ -42,12 +42,11 @@
 
 const { randomBytes } = require('node:crypto');
 const fs = require('node:fs');
-const os = require('node:os');
-const path = require('node:path');
 
 const { resolveModel } = require('../agent-adapters');
 const { runAgent } = require('../run-agent');
 const { loadEngine } = require('./engine');
+const { releaseScratchDirectory, makeScratchDirectory } = require('./workspace');
 
 /** The instruction template every judge call carries; its digest is the judge's `systemPromptDigest`. */
 const JUDGE_INSTRUCTIONS = [
@@ -249,16 +248,17 @@ function judgeResultsFrom(contract, reply, nonce) {
  * @param {object} options.contract
  * @param {Record<string, object>} options.stepObservations the trial's record observations by plan step
  * @param {object} options.judge `evaluation.json`'s `judge`
+ * @param {string[]} [options.scratch] the run's private directories, which the judge's working directory joins while it runs
  * @returns {Promise<{ called: boolean, results: object[], nonce?: string, prompt: string|null, stdout: string, stderr: string }>}
  * @throws {JudgeError}
  */
-async function judgeRubrics({ contract, stepObservations, judge }) {
+async function judgeRubrics({ contract, stepObservations, judge, scratch = [] }) {
   if ((contract.rubrics ?? []).length === 0) return { called: false, results: [], prompt: null, stdout: '', stderr: '' };
   // The nonce is drawn here, after the target ran, so nothing the target printed can carry it.
   const nonce = answerNonce();
   const prompt = await judgePrompt({ contract, stepObservations, nonce });
-  // The judge runs in an empty directory of its own, which holds nothing of the evaluation.
-  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-evaluate-judge-'));
+  // The judge runs in an empty directory of its own, which holds nothing of the evaluation, in the run's scratch.
+  const cwd = makeScratchDirectory(scratch, 'tea-evaluate-judge-');
   let answered;
   let failure = null;
   let written = [];
@@ -276,7 +276,7 @@ async function judgeRubrics({ contract, stepObservations, judge }) {
   } catch (error) {
     failure = error;
   } finally {
-    fs.rmSync(cwd, { recursive: true, force: true });
+    releaseScratchDirectory(scratch, cwd);
   }
   // runAgent blocks the event loop, so a signal that arrived meanwhile is still pending. The loop reads
   // it in its poll phase, which the first immediate may run ahead of; the second runs after a full turn,
@@ -307,6 +307,9 @@ module.exports = {
   JudgeError,
   ANSWER_LINE,
   MATERIAL_HEADING,
+  answerBlocks,
+  answerNonce,
+  unfenced,
   judgeConfigurationFor,
   judgePrompt,
   judgeResultsFrom,

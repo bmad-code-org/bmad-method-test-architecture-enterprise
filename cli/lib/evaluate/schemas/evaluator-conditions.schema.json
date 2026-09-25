@@ -21,6 +21,19 @@
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
     },
+    "evaluator": {
+      "description": "The sealed-brief-agent evaluator's fixed condition, required when evaluation.json's evaluator is that kind: the model snapshot its agent runs, which each run records as its EvaluatorConfiguration's modelSnapshot beside the digest of the runtime's evaluator instruction template. The top-level modelSnapshot and systemPromptDigest (the target's model, when it runs one) are then recorded under decodingParameters tea.targetModelSnapshot and tea.targetSystemPromptDigest, so neither condition is lost.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["modelSnapshot"],
+      "properties": {
+        "modelSnapshot": {
+          "description": "The evaluator agent's model, as its vendor names the exact snapshot.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
     "judge": {
       "description": "The rubric judge's fixed condition, required when the contract declares a rubric: the model snapshot evaluation.json's judge runs, which each run records in its EvaluatorConfiguration's judgeConfiguration beside the digest of the runtime's judge instruction template.",
       "type": "object",

@@ -241,6 +241,46 @@ function unlockDirectories(directory) {
   }
 }
 
+/**
+ * A private temporary directory registered in `scratch`, the run's list of
+ * directories it removes however it ends (`preflight.js` `pipeline`), an
+ * interrupting signal included.
+ *
+ * @param {string[]} scratch
+ * @param {string} prefix the directory's name prefix
+ * @returns {string}
+ */
+function makeScratchDirectory(scratch, prefix) {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  scratch.push(directory);
+  return directory;
+}
+
+/**
+ * Removes a scratch directory, its write bits restored first
+ * (`unlockDirectories`), so a read-only directory a process left in it cannot
+ * keep it; throws when it still cannot be removed.
+ */
+function removeScratchDirectory(directory) {
+  unlockDirectories(directory);
+  fs.rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+}
+
+/**
+ * Removes `directory` and takes it off `scratch` once it is gone; one that
+ * cannot be removed stays listed, so the run's end tries it again and reports
+ * it, and the caller goes on.
+ */
+function releaseScratchDirectory(scratch, directory) {
+  try {
+    removeScratchDirectory(directory);
+  } catch {
+    return;
+  }
+  const at = scratch.indexOf(directory);
+  if (at !== -1) scratch.splice(at, 1);
+}
+
 /** A file's SHA-256 in hex, read in chunks so a file of any size fits. */
 function fileDigest(file) {
   const hash = createHash('sha256');
@@ -926,7 +966,10 @@ module.exports = {
   isInside,
   joinAsSpelled,
   makeReadOnly,
+  makeScratchDirectory,
   realPathLoosely,
+  releaseScratchDirectory,
+  removeScratchDirectory,
   removeWorkspace,
   repositoryOf,
   requestKey,

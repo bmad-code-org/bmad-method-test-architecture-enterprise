@@ -62,7 +62,6 @@
 
 const crypto = require('node:crypto');
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 
 const { admissionRefusal, armVerdict, referenceTo } = require('./admission');
@@ -84,7 +83,10 @@ const {
   cleanUpOnSignal,
   createWorkspace,
   joinAsSpelled,
+  makeScratchDirectory,
   realPathLoosely,
+  releaseScratchDirectory,
+  removeScratchDirectory,
   removeWorkspace,
   trackedTreeDigest,
   treeDigest,
@@ -368,7 +370,10 @@ function runPreflightCommand(folder, options = {}) {
  * `prepare` sees the checked evaluation before any workspace is made and may
  * stop the command with an outcome. `afterVerdict` runs once the CLI's
  * verdict exits 0, while every workspace is still live, and its outcome is
- * the command's; a verdict that does not pass ends the command there.
+ * the command's; a verdict that does not pass ends the command there. A
+ * private directory it makes for a process it starts goes into its `scratch`
+ * (`workspace.js` `makeScratchDirectory`), which the command removes however it
+ * ends, an interrupting signal included.
  *
  * `afterVerdict` also receives the run directory's `writer` and the digests
  * of the compiled contract and the sealed brief, taken when the stages wrote
@@ -381,7 +386,7 @@ function runPreflightCommand(folder, options = {}) {
  * @param {boolean} [options.fromWorkingTree]
  * @param {NodeJS.ProcessEnv} [options.env]
  * @param {(line: string) => void} [options.log]
- * @param {(context: object) => PreflightOutcome|null} [options.prepare]
+ * @param {(context: object) => PreflightOutcome|null|Promise<PreflightOutcome|null>} [options.prepare]
  * @param {(context: object) => Promise<PreflightOutcome>} [options.afterVerdict]
  * @returns {Promise<PreflightOutcome>}
  */
@@ -457,19 +462,28 @@ async function pipeline(
       message: `${unqualifiable.map(({ file, probe }) => `${file} (route ${probe.qualification?.route})`).join(', ')} seed a defect on a route this release does not qualify; it qualifies seeded probes on the ${QUALIFIED_ROUTES.join(' and ')} routes only, so a retry cannot pass`,
     });
   }
-  const refused = prepare({ folder, evaluation, seeded });
-  const gameability = gameabilityProbes(folder);
-  if (refused !== null) return refused;
-
-  const root = realPathLoosely(joinAsSpelled(folder, evaluation.launch.root));
   const workspaces = [];
   const controller = new AbortController();
   // Run-directory files an interrupting signal removes (the CLI's probe list
-  // until its verdict), and the private directories engine stages write into.
+  // until its verdict), and the private directories the command makes for
+  // the processes it starts (engine stages, an evaluator, a judge, the
+  // bridge), which are removed however it ends.
   const retractOnSignal = [];
   const scratch = [];
+  // Each directory is tried on its own, write bits restored first, and one that cannot be removed is reported,
+  // so no failure here keeps the workspaces from being removed after it.
+  const removeScratch = () => {
+    for (const directory of scratch.splice(0)) {
+      try {
+        removeScratchDirectory(directory);
+      } catch (error) {
+        scratch.push(directory);
+        log(`could not remove the private directory ${directory}: ${error.message}`);
+      }
+    }
+  };
   const onSignal = (name) => {
-    for (const directory of scratch) fs.rmSync(directory, { recursive: true, force: true });
+    removeScratch();
     if (state.writer === null || state.sealed) return;
     try {
       for (const file of [...retractOnSignal, ...state.retractUnlessSealed]) state.writer.remove(file);
@@ -482,6 +496,11 @@ async function pipeline(
   };
   const release = cleanUpOnSignal(workspaces, controller, { onSignal });
   try {
+    const refused = await prepare({ folder, evaluation, seeded });
+    const gameability = gameabilityProbes(folder);
+    if (refused !== null) return refused;
+
+    const root = realPathLoosely(joinAsSpelled(folder, evaluation.launch.root));
     const runsDirectory = ensureRunsDirectory(folder);
     const readTree = () => adopterTreeState(root, { exclude: [runsDirectory] });
     const before = readTree();
@@ -556,7 +575,7 @@ async function pipeline(
     throw error;
   } finally {
     release();
-    for (const directory of scratch) fs.rmSync(directory, { recursive: true, force: true });
+    removeScratch();
     for (const workspace of workspaces) {
       try {
         removeWorkspace(workspace);
@@ -638,16 +657,14 @@ async function runInWorkspaces({
   // call, which no target has seen, and the runtime copies it into the run
   // directory through its writer, which holds the digest of what it wrote.
   const engineStage = (stage, args, output) => {
-    const staging = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-evaluate-engine-'));
-    scratch.push(staging);
+    const staging = makeScratchDirectory(scratch, 'tea-evaluate-engine-');
     try {
       const produced = path.join(staging, output);
       const result = runEngineStage(stage, [...args, '--out', produced], { runDirectory, writer, env, log });
       if (fs.existsSync(produced)) writer.copyIn(output, produced);
       return result;
     } finally {
-      scratch.splice(scratch.indexOf(staging), 1);
-      fs.rmSync(staging, { recursive: true, force: true });
+      releaseScratchDirectory(scratch, staging);
     }
   };
 
@@ -919,6 +936,8 @@ async function runInWorkspaces({
       stop,
       log,
       signal,
+      scratch,
+      env,
     });
   } catch (error) {
     if (error instanceof RunStop) return error.outcome;
