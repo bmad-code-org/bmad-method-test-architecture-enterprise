@@ -321,6 +321,10 @@
       {
         "path": "src",
         "extensions": [".cjs"]
+      },
+      {
+        "path": "website/src/lib",
+        "extensions": [".js"]
       }
     ],
     "layers": [
@@ -366,7 +370,7 @@
         "match": "prefix",
         "path": "tools/",
         "label": "tools/",
-        "imports": ["tools", "cli", "test"]
+        "imports": ["tools", "cli", "test", "website-lib"]
       },
       {
         "name": "test",
@@ -385,6 +389,17 @@
           "policy": "allow",
           "modules": ["node:crypto", "node:fs", "node:path"],
           "rule": "the generated hook must run in a target project that has installed nothing (tea-enforce.cjs's own documented invariant), so it may reach only Node's own builtins and nothing an npm install would need to satisfy"
+        }
+      },
+      {
+        "name": "website-lib",
+        "match": "prefix",
+        "path": "website/src/lib/",
+        "label": "website/src/lib/",
+        "imports": ["website-lib"],
+        "externals": {
+          "policy": "deny",
+          "rule": "the site's own helpers, which tools/build-docs.js shares with the Astro config so both resolve one site URL; they reach no package, since the docs build loads them from the repository root, outside the website's own node_modules"
         }
       }
     ],

@@ -1,5 +1,5 @@
 # Test Architect (TEA) Documentation
-# https://test-architect.bmad-method.org
+# https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise
 #
 # This file controls web crawler access to the documentation site.
 
@@ -34,4 +34,4 @@ User-agent: cohere-ai
 Allow: /
 
 # Sitemap
-Sitemap: https://test-architect.bmad-method.org/sitemap.xml
+Sitemap: https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/sitemap.xml

@@ -21,7 +21,11 @@ const archiver = require('archiver');
 const PROJECT_ROOT = path.dirname(__dirname);
 const BUILD_DIR = path.join(PROJECT_ROOT, 'build');
 
-const SITE_URL = process.env.SITE_URL || 'https://test-architect.bmad-method.org';
+// The same resolution the Astro site uses, so llms.txt and llms-full.txt link
+// the site that was actually built. The fixed custom domain this once defaulted
+// to has no DNS record, which left every link in both files dead.
+const { getSiteUrl } = require('../website/src/lib/site-url.js');
+const SITE_URL = getSiteUrl().replace(/\/+$/, '');
 const REPO_URL = 'https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise';
 
 // DO NOT CHANGE THESE VALUES!

@@ -45,7 +45,7 @@ jobs:
         env:
           # Let astro.config.mjs compute the correct URL from GITHUB_REPOSITORY
           # This will automatically use: https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise
-          # To use custom domain, set SITE_URL repository variable to: https://test-architect.bmad-method.org
+          # To use a custom domain, set the SITE_URL repository variable to its URL once its DNS record exists
           SITE_URL: ${{ vars.SITE_URL }}
         run: npm run docs:build
 

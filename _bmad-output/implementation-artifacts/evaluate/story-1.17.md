@@ -233,6 +233,9 @@ Each fix carries a test, and each test was seen to fail once with its fix undone
 
 **Gaps closed on the way.** `llms.txt` linked every page under `/docs/`, a prefix the site does not serve (the built site holds `how-to/workflows/run-test-design/index.html` and no `docs/` directory), so all eleven page links were dead; they now use the served path, and `generateLlmsTxt` fails the build on a page link naming no document under `docs/` (revert, one link given `/docs/` again: "ERROR: llms.txt links pages no document under docs/ serves: docs/how-to/workflows/run-atdd"). The first draft of this round's surrogate unit put the surrogate in an observation ID, whose schema pattern refused it with the same pointer, so the unit passed with the fix undone; it now sits in a `comment`, which the schema admits.
 
+**Coordinator addition after round 1.** Checking the corrected `llms.txt` links against the live site showed the domain every link used, `https://test-architect.bmad-method.org`, has no DNS record, and the repository's Pages site has no custom domain (`gh api repos/.../pages` reports `cname: null`); `https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-trace/` answers 200 and the `/docs/` form 404.
+`tools/build-docs.js` now resolves `SITE_URL` through `website/src/lib/site-url.js`, the resolver the Astro site uses, and the issue template, `robots.txt`, `website/README.md` and the docs workflow comment stop naming the dead domain.
+
 ## Verification
 
 **Commands:**
