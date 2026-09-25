@@ -175,6 +175,18 @@ Each revert was applied in the checkout, `node test/test-evaluate-mcp.js` run, t
 
 **Added after review, and why.** `epic-1-context.md`'s stale floor (found by the S11 sweep) and the reference's bridge sentence naming a call's fault over the agent's exit (S13) were fixed in the same pass, since both were concrete defects in files this round touched.
 
+### Final review round 2 (PR #242 at ad73a3d: regressions and adversarial lenses)
+
+Every row was verified against the code at ad73a3d before its verdict; the regressions lens passed.
+Each revert was applied in the checkout, `node test/test-evaluate-mcp.js` run, the failure observed, and the file restored byte for byte from a copy (`cmp` clean).
+
+| ID | Verdict | Finding | Resolution |
+| --- | --- | --- | --- |
+| R2-A1 | medium, fixed | `secretForms` covered one level of `JSON.stringify` alone: a refusal whose `data` is a JSON string holding a JSON object, a raw line carrying another serializer's escapes (Python's `ensure_ascii`, PHP's `\/`, Go's `<`), and the same double-escaped text in an answer's string kept the secret | `escapingsOf` gives each way one level of JSON escaping writes a text: `JSON.stringify`'s body, with `/` as `\/` or not, and with non-ASCII units, `<`, `>` and `&`, or both as `\uXXXX` in lower- or upper-case hex, or none; `secretForms` adds each secret raw, each one-level form and each second level over those, deduplicated and longest first, and decodes nothing; a unit per form (one level, PHP, Python, upper-case hex, Go, a JSON string holding JSON, a second level over Python's) over a cause and an answer; the reference and CHANGELOG list exactly those forms and name what stays unscrubbed. Reverts: no second level, "a secret written as a JSON string holding a JSON object survived" and "... a second level over Python's survived"; no `\/`, "a secret written as PHP (\/ and non-ASCII escaped) survived"; no `\uXXXX`, 5 failures, among them "... Python's ensure_ascii survived"; lower-case hex only, "... upper-case hex survived"; no `<`, `>` and `&` pattern, "... Go's <, > and & escapes survived" |
+| R2-A2 | low, fixed | the number scrub compared exact text, so `123456789012345678` recorded as `123456789012345680`, `12345678` inside `912345678` and `1234567.50` recorded as `1234567.5` survived | `numberHoldsSecret` replaces a finite number whose text holds a secret or that a secret read as a number equals (a blank secret never matches); a unit per case; the reference's number sentence says so. Revert (exact text): "a secret 123456789012345678 the server answered as the number 123456789012345680 gave `{"n":123456789012345680,"other":42}`" and the other two |
+| R2-A3 | low, fixed | a bridge call's fault replaced the agent's own failure in the exit message | the message names the call's fault, then "; the agent then failed: " and the agent's failure; the hung-call case asserts both, and the reference says so. Revert (the fault alone): "a bridge call to a hanging server: run exited 12; expected 12 naming the call's budget-exhausted fault", the output ending "... during tools/call and was torn down" |
+| R2-R1 | note, skipped | the hang case cannot tell eval-quality's process-group kill from the fixture exiting on stdin EOF | the kill is eval-quality's behavior, which TeA does not test (the vendor owns it); TeA's claim, the `budget-exhausted` ceiling path with exit 12, is asserted |
+
 ## Verification
 
 **Commands:**
@@ -185,7 +197,7 @@ Each revert was applied in the checkout, `node test/test-evaluate-mcp.js` run, t
 **Results:**
 
 - the Build Rules engine check -- exit 0 at the start on eval-quality 4.1.4 and at the end on 4.2.0; `git diff -- package.json package-lock.json` names no `file:` or `.tgz` spec
-- `npm run test:evaluate-mcp` -- 115 checks over the real eval-quality 4.2.0, about 17 s (about 19 s under c8 locally, its shard weight); before 4.2.0 was published, the 12 reason assertions failed and every other check passed; after final review round 1, 141 checks, about 25 s (about 29 s under c8 locally, shard weight 36)
+- `npm run test:evaluate-mcp` -- 115 checks over the real eval-quality 4.2.0, about 17 s (about 19 s under c8 locally, its shard weight); before 4.2.0 was published, the 12 reason assertions failed and every other check passed; after final review round 1, 141 checks, about 25 s (about 29 s under c8 locally, shard weight 36); after final review round 2, 151 checks
 - `test:evaluate-check` 586, `-boundaries` 302, `-preflight` 232, `-mutation` 423, `-run` 389, `-arms` 272, `-evaluators` 510 checks -- exit 0 on 4.2.0
 - `npm run test:release-metadata`, `test:guard-publish`, `test:ci-coverage` (eighty-seven chained steps), `test:shards`, `test:doc-claims`, `test:doc-claim-sources`, `test:port-totality`, `test:probe-conformance`, `test:probe-targets`, `lint`, `lint:md`, `format:check`, `docs:validate-links` -- exit 0
 - `npm run docs:build` -- exit 0; `llms-full.txt` measures 499,446 characters against the 600,000 cap

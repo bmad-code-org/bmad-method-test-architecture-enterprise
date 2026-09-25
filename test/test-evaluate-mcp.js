@@ -80,6 +80,8 @@ const TRIALS = 3;
 const SECRET = 'grader-secret-value-0123';
 /** A secret JSON escapes (a quote and a backslash), so a message quoting the server's JSON-RPC frame holds it escaped. */
 const QUOTED_SECRET = String.raw`Qv"7\tk-Zp9#wY`;
+/** A secret every escaping a serializer applies rewrites: a quote, a backslash, a slash, a non-ASCII letter, <, > and &. */
+const FORMS_SECRET = String.raw`Qv"7\tk/Zä<&>p9#wY`;
 /** The registry entry's ceiling for the hanging-server cases, short so a hung call is torn down quickly. */
 const HANG_CEILING_MS = 3000;
 
@@ -414,6 +416,59 @@ async function checkUnits() {
       JSON.stringify(numeric.result.value) === JSON.stringify({ n: '[redacted]', s: 'x[redacted]x', other: 90_071_992 }),
       `a secret the server answered as a number gave ${JSON.stringify(numeric.result.value)}`,
     );
+    // A number is replaced when its text holds a secret or a secret read as a number equals it: past 2^53 the
+    // server's digits no longer print as they were sent, and a decimal loses its trailing zero.
+    for (const [secret, answered] of [
+      ['123456789012345678', Number('123456789012345678')],
+      ['12345678', 912_345_678],
+      ['1234567.50', 1_234_567.5],
+    ]) {
+      process.env.GRADER_SECRET = secret;
+      const value = (await answeringWith({ n: answered, other: 42 }).probe(mcpRequest)).observation.result.value;
+      check(
+        JSON.stringify(value) === JSON.stringify({ n: '[redacted]', other: 42 }),
+        `a secret ${secret} the server answered as the number ${answered} gave ${JSON.stringify(value)}`,
+      );
+    }
+
+    // Each way JSON escaping writes a secret in practice is scrubbed from a fault's cause and an answer's string: one
+    // level of JSON.stringify, \/ for / (PHP), \uXXXX for non-ASCII (Python's ensure_ascii) in lower- and upper-case
+    // hex, \uXXXX for <, > and & (Go), and a second level of escaping over those.
+    const body = (text) => JSON.stringify(text).slice(1, -1);
+    const unicode = (text, pattern, upper = false) =>
+      text.replace(pattern, (unit) => {
+        const hex = unit.codePointAt(0).toString(16).padStart(4, '0');
+        return `\\u${upper ? hex.toUpperCase() : hex}`;
+      });
+    const nonAscii = /[\u0080-\uFFFF]/g;
+    const html = /[<>&]/g;
+    for (const [what, secret, form] of [
+      ['one level of JSON.stringify', FORMS_SECRET, body(FORMS_SECRET)],
+      [String.raw`PHP (\/ and non-ASCII escaped)`, FORMS_SECRET, unicode(body(FORMS_SECRET).replaceAll('/', String.raw`\/`), nonAscii)],
+      ["Python's ensure_ascii", FORMS_SECRET, unicode(body(FORMS_SECRET), nonAscii)],
+      ['upper-case hex', FORMS_SECRET, unicode(body(FORMS_SECRET), nonAscii, true)],
+      ["Go's <, > and & escapes", FORMS_SECRET, unicode(body(FORMS_SECRET), html)],
+      ['a JSON string holding a JSON object', QUOTED_SECRET, body(JSON.stringify({ token: QUOTED_SECRET }))],
+      ["a second level over Python's", FORMS_SECRET, body(unicode(body(FORMS_SECRET), nonAscii))],
+    ]) {
+      process.env.GRADER_SECRET = secret;
+      const cause = String(await causeOf(new Error(`the server refused the initialize handshake: {"data":"${form}"}`)));
+      const answer = JSON.stringify((await answeringWith({ quoted: `said ${form}` }).probe(mcpRequest)).observation);
+      check(
+        !cause.includes(form) &&
+          cause.includes('[redacted]') &&
+          !answer.includes(form) &&
+          answer.includes('[redacted]') &&
+          leaksOf(
+            [
+              { where: 'the cause', text: cause },
+              { where: 'the answer', text: answer },
+            ],
+            secret,
+          ).length === 0,
+        `a secret written as ${what} survived: cause ${cause}; answer ${answer}`,
+      );
+    }
     process.env.GRADER_SECRET = SECRET;
 
     // One interface is one kind; two tool servers for one interface are eval-quality's to refuse, before any server starts.
@@ -1017,6 +1072,7 @@ async function checkSealedBriefAgent() {
   check(
     hung.status === 12 &&
       hung.output.includes("trial-clean-1 yields no record: the evaluator's call trial-1-call-2 could not run: budget-exhausted") &&
+      /could not run: budget-exhausted[^\n]*; the agent then failed: Agent [^\n]* exited with code 1/.test(hung.output) &&
       !hung.output.includes('could not answer'),
     `a bridge call to a hanging server: run exited ${hung.status}; expected 12 naming the call's budget-exhausted fault\n${hung.output}`,
   );

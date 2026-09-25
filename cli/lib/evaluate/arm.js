@@ -70,28 +70,73 @@ class ArmError extends Error {
 }
 
 /**
- * Each secret in every form text can carry it in, longest first: its own body
- * and, where JSON writes it differently (a `"`, a backslash or a control character
- * in it), its JSON-escaped body, which is how a message quoting a JSON frame or
- * a `JSON.stringify` of the server's answer holds it.
+ * `text` with each UTF-16 unit `pattern` matches (the pattern has no `u` flag,
+ * so a character outside the BMP is its two surrogates, as JSON writes it)
+ * written as JSON's `\uXXXX` escape, in lower- or upper-case hex.
+ */
+function unicodeEscaped(text, pattern, upper) {
+  return text.replace(pattern, (unit) => {
+    const hex = unit.codePointAt(0).toString(16).padStart(4, '0');
+    return `\\u${upper ? hex.toUpperCase() : hex}`;
+  });
+}
+
+/** The units a serializer writes as `\uXXXX`: every non-ASCII one (Python's `ensure_ascii`), `<`, `>` and `&` (Go), or both. */
+const UNICODE_ESCAPED = [/[\u0080-\uFFFF]/g, /[<>&]/g, /[\u0080-\uFFFF]|[<>&]/g];
+
+/**
+ * The ways one level of JSON escaping writes a text, as serializers do in
+ * practice: `JSON.stringify`'s string body, with `/` also written `\/` (PHP)
+ * or not, and with every non-ASCII character, every `<`, `>` and `&`, or
+ * both also written `\uXXXX` in lower- or upper-case hex (`UNICODE_ESCAPED`),
+ * or none of them.
+ */
+function escapingsOf(text) {
+  const body = JSON.stringify(text).slice(1, -1);
+  const forms = [];
+  for (const slashed of [body, body.replaceAll('/', String.raw`\/`)]) {
+    forms.push(slashed);
+    for (const pattern of UNICODE_ESCAPED) {
+      for (const upper of [false, true]) forms.push(unicodeEscaped(slashed, pattern, upper));
+    }
+  }
+  return forms;
+}
+
+/**
+ * Each secret in every form text can carry it in, longest first and each once:
+ * its own body, each way one level of JSON escaping writes it
+ * (`escapingsOf`), and each way a second level writes one of those, which is
+ * how a message quoting a JSON frame, a `JSON.stringify` of the server's
+ * answer, or a JSON string holding JSON holds it. The cause is never decoded:
+ * decoding would alter what a legitimate record says.
  */
 function secretForms(secrets) {
   const forms = new Set();
   for (const secret of secrets) {
     forms.add(secret);
-    forms.add(JSON.stringify(secret).slice(1, -1));
+    for (const once of escapingsOf(secret)) {
+      forms.add(once);
+      for (const twice of escapingsOf(once)) forms.add(twice);
+    }
   }
   return [...forms].sort((a, b) => b.length - a.length);
 }
 
+/** Whether a finite number is a secret: its text holds one, or a secret read as a number equals it. */
+function numberHoldsSecret(value, secrets) {
+  const text = String(value);
+  return secrets.some((secret) => text.includes(secret) || (secret.trim() !== '' && Number(secret) === value));
+}
+
 /**
  * `value` with every string in `secrets` replaced, in strings and object keys
- * alike, walking arrays and objects; a finite number whose text is a secret is
- * replaced as a whole.
+ * alike, walking arrays and objects; a finite number whose text holds a secret,
+ * or that a secret read as a number equals, is replaced as a whole.
  */
 function scrub(value, secrets) {
   if (typeof value === 'string') return secrets.reduce((text, secret) => text.split(secret).join(SCRUBBED), value);
-  if (typeof value === 'number' && Number.isFinite(value) && secrets.includes(String(value))) return SCRUBBED;
+  if (typeof value === 'number' && Number.isFinite(value) && numberHoldsSecret(value, secrets)) return SCRUBBED;
   if (Array.isArray(value)) return value.map((item) => scrub(item, secrets));
   if (value !== null && typeof value === 'object') {
     // A key is scrubbed as a value is: a tool's structured result is an object, and a secret can be one of its keys. A
