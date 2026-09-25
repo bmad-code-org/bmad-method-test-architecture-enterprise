@@ -487,7 +487,7 @@
   },
   "tea-routing-intents": {
     "contractId": "tea-routing-intents-behavioral",
-    "corpusDigest": "sha256:9b1f42f9289a9464859a9294a2cd64853a9bfa54f2ecbc8e623c8a896864abaa",
+    "corpusDigest": "sha256:07ab1bc59bbd72acf94d31757064be13e3a95189ec8f39b379dfc3829f8d207b",
     "probeCount": 2,
     "strength": {
       "defect": null,
@@ -1236,7 +1236,7 @@
   },
   "tea-routing-controls": {
     "contractId": "tea-routing-controls-behavioral",
-    "corpusDigest": "sha256:770af1621f2a2d4f18ef2b1db97feb320132eadb5b04d2e39998edaa4c6ae053",
+    "corpusDigest": "sha256:c17158695c774ea632d1e7abbcab3fad4f51c2ec09c23607c88c3fc58b0274c5",
     "probeCount": 2,
     "strength": {
       "defect": null,
