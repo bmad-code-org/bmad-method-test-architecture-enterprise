@@ -14,6 +14,10 @@
  * Markers in the request drive the other cases:
  *   STUB-EXIT <n>    print to stderr and exit n
  *   STUB-SLEEP <ms>  wait that long before answering (a timeout case)
+ *   STUB-OUTLIVE <signal>  go on running when that signal arrives, as an
+ *                    agent still writing its core file after a SIGQUIT does
+ *                    (a case that asserts the grace period's SIGKILL and the
+ *                    signal that asked for the stop are both reported)
  *   STUB-ENV <NAME>  also print the value of that environment variable
  *   STUB-WRITE       write stub-wrote.txt in the working directory
  *   STUB-ORPHAN <file>  start a child that sleeps for a minute and write its
@@ -22,6 +26,13 @@
  *   STUB-LEAVE <file>  the same, but answer and exit 0 without waiting for
  *                    the child (a case that asserts the child dies with the
  *                    agent's exit)
+ *   STUB-WITNESS <file>  start a child in the agent's process group that
+ *                    appends the name of each stopping signal it receives
+ *                    (SIGINT, SIGTERM, SIGHUP, SIGQUIT) to <file>.signals and
+ *                    then exits, and that writes its pid to <file> once its
+ *                    handlers are in place, before any sleep (a case that
+ *                    asserts a signal reached the agent's group, whatever
+ *                    ended the agent itself)
  *   STUB-ESCAPE <file>  start a child in a new session that holds the
  *                    agent's standard input, output and error for a minute,
  *                    and write its pid to that absolute path, before any
@@ -53,6 +64,9 @@ const skill = fs.readFileSync(path.join(skillRoot, 'SKILL.md'), 'utf8');
 const name = /^name:\s*(\S+)/m.exec(skill)?.[1] ?? '(unnamed)';
 const request = prompt.slice(prompt.indexOf(REQUEST_MARKER) + REQUEST_MARKER.length).trim();
 
+// Before any child starts, so a pid file written below means the handler is in place.
+const outlive = /STUB-OUTLIVE (SIG[A-Z]+)/.exec(request)?.[1];
+if (outlive !== undefined) process.on(outlive, () => {});
 for (const [marker, waits] of [
   ['STUB-ORPHAN', true],
   ['STUB-LEAVE', false],
@@ -62,6 +76,22 @@ for (const [marker, waits] of [
   const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'], { stdio: 'ignore' });
   if (!waits) child.unref();
   fs.writeFileSync(file, String(child.pid));
+}
+const witness = /STUB-WITNESS (\S+)/.exec(request)?.[1];
+if (witness !== undefined) {
+  // The pid file appears by a rename only once every handler is in place, so a signal sent after it is read is recorded.
+  const script = `const fs = require('node:fs');
+const [file] = process.argv.slice(1);
+for (const name of ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGQUIT']) {
+  process.on(name, () => {
+    fs.appendFileSync(file + '.signals', name + '\\n');
+    process.exit(0);
+  });
+}
+fs.writeFileSync(file + '.tmp', String(process.pid));
+fs.renameSync(file + '.tmp', file);
+setTimeout(() => {}, 60000);`;
+  spawn(process.execPath, ['-e', script, witness], { stdio: 'ignore' });
 }
 const escaping = /STUB-ESCAPE (\S+)/.exec(request)?.[1];
 if (escaping !== undefined) {

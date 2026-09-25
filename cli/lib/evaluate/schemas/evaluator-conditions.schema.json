@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:tea:evaluate:schema:evaluator-conditions",
+  "title": "policy/evaluator-conditions.json",
+  "description": "The committed fixed conditions of every run of an evaluation (AD-7): the model a run uses, which tea-evaluate run writes into each run's EvaluatorConfiguration beside the sealedBriefDigest it takes from seal. An evaluation whose target and evaluator use no model leaves this file out, and the run records modelSnapshot none and a systemPromptDigest over the empty byte string. The tea-evaluate runtime owns this schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "modelSnapshot", "systemPromptDigest"],
+  "properties": {
+    "schemaVersion": {
+      "description": "The evaluator-conditions format version.",
+      "const": 1
+    },
+    "modelSnapshot": {
+      "description": "The model the run uses, as its vendor names the exact snapshot, held as a fixed condition of every run (NFR8). The literal none says the run uses no model.",
+      "type": "string",
+      "minLength": 1
+    },
+    "systemPromptDigest": {
+      "description": "eval-quality's digestBytes over the system prompt that model runs under: sha256: and 64 lowercase hexadecimal characters.",
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

@@ -277,6 +277,43 @@ function treeDigest(root, { exclude = [] } = {}) {
   return digest(parts);
 }
 
+/**
+ * The digest AD-7 names as a worktree probe's `implementationDigest`: the
+ * tracked tree of `directory` at `commit`, which git itself lists. It is the
+ * SHA-256 of `git ls-tree -r -z <commit>:<directory>` (each entry's mode,
+ * type, object and path relative to `directory`, NUL-terminated), with every
+ * entry under an excluded directory left out, since the evaluation folder
+ * describes the implementation and is not part of it. Paths are relative to
+ * `directory`, so the same files digest alike wherever the project sits in
+ * its repository.
+ *
+ * @param {object} options
+ * @param {string} options.repository the repository top, by its real path
+ * @param {string} options.commit
+ * @param {string} options.directory the implementation root in the repository (the skill root or `launch.root`)
+ * @param {string[]} [options.exclude] absolute directories in the repository whose entries are left out
+ * @returns {string} `sha256:<hex>`
+ * @throws {WorkspaceRefusal} when git cannot list the tree
+ */
+function trackedTreeDigest({ repository, commit, directory, exclude = [] }) {
+  const scope = posix(path.relative(repository, directory));
+  const listed = runGit(['-C', repository, 'ls-tree', '-r', '-z', scope === '' ? `${commit}^{tree}` : `${commit}:${scope}`]);
+  if (!listed.ok) throw new WorkspaceRefusal(`could not list the tracked tree of ${scope || '.'} at commit ${commit}: ${listed.detail}`);
+  const prefixes = exclude
+    .filter((entry) => entry !== directory && isInside(directory, entry))
+    .map((entry) => `${posix(path.relative(directory, entry))}/`);
+  const kept = listed.stdout
+    .split('\u0000')
+    .filter((record) => record.length > 0)
+    .filter((record) => {
+      const relative = record.slice(record.indexOf('\t') + 1);
+      return !prefixes.some((prefix) => relative.startsWith(prefix));
+    });
+  return `sha256:${createHash('sha256')
+    .update(kept.map((record) => `${record}\u0000`).join(''), 'utf8')
+    .digest('hex')}`;
+}
+
 /** How long one git question may take; a checkout has its own, longer bound. */
 const GIT_QUESTION_TIMEOUT_MS = 60_000;
 /** A generous ceiling on what one git command may print: a status of a large, busy tree. */
@@ -648,17 +685,18 @@ function removeWorkspace(workspace) {
  * since a signal ends the process before any `finally` runs: aborts the
  * in-flight leg (the adapter kills its runner's process group, and the
  * runner's supervisor, dying with it, closes the lifeline that stops the
- * agent's process group), removes the workspaces, and raises the same signal
- * again with the default action, so the caller sees the process end by that
- * signal.
+ * agent's process group), lets the caller record the interruption and
+ * retract what it must (`onSignal`), removes the workspaces, and raises the
+ * same signal again with the default action, so the caller sees the process
+ * end by that signal.
  *
  * @param {object[]} workspaces a live list: a workspace pushed later is removed too
  * @param {AbortController} controller
  * @param {object} [options]
- * @param {string[]} [options.paths] a live list of files the run retracts when it is interrupted (the CLI's probe list)
+ * @param {(signal: string) => void} [options.onSignal] runs first, with the signal's name; it must not throw
  * @returns {() => void} removes the handlers
  */
-function cleanUpOnSignal(workspaces, controller, { paths = [] } = {}) {
+function cleanUpOnSignal(workspaces, controller, { onSignal = () => {} } = {}) {
   const signals = process.platform === 'win32' ? ['SIGINT', 'SIGTERM', 'SIGHUP'] : ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGQUIT'];
   const handlers = new Map();
   const release = () => {
@@ -668,7 +706,7 @@ function cleanUpOnSignal(workspaces, controller, { paths = [] } = {}) {
     const handler = () => {
       release();
       controller.abort();
-      for (const file of paths) fs.rmSync(file, { force: true });
+      onSignal(name);
       for (const workspace of workspaces) {
         try {
           removeWorkspace(workspace);
@@ -868,5 +906,6 @@ module.exports = {
   repositoryOf,
   requestKey,
   stageDirectories,
+  trackedTreeDigest,
   treeDigest,
 };

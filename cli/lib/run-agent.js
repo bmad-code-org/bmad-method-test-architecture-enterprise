@@ -67,7 +67,8 @@ function buildMinimalEnv(envPass = [], sourceEnv = process.env, adapterEnvNames 
 
 /**
  * How the supervised agent ended, from the report on file descriptor 3:
- * `{ status, signal }`, `{ timedOut }`, `{ spawnError }`, or `{ failure }`.
+ * `{ status, signal }` (with `stoppedBy` when a stopping signal asked the
+ * agent's group to stop), `{ timedOut }`, `{ spawnError }`, or `{ failure }`.
  * Output past `maxBuffer`, a supervisor that could not start, and one that
  * ended with no report behind it are failures of the supervisor.
  */
@@ -205,7 +206,15 @@ function runAgent(
     // ETIMEDOUT case already handled above) reports status as null; naming
     // the signal beats a bare "exited with code null".
     const ending = outcome.signal ? `was killed by signal ${outcome.signal}` : `exited with code ${outcome.status}`;
-    const error = new Error(`Agent "${command}" ${ending}.`);
+    // A stop the agent outlived ends in the grace period's SIGKILL; the report names the signal that asked for it.
+    let stopped = '';
+    if (typeof outcome.stoppedBy === 'string' && outcome.stoppedBy !== outcome.signal) {
+      stopped =
+        outcome.signal === 'SIGKILL'
+          ? ` once it outlived the grace period after a ${outcome.stoppedBy} to its process group`
+          : ` after a ${outcome.stoppedBy} to its process group`;
+    }
+    const error = new Error(`Agent "${command}" ${ending}${stopped}.`);
     error.code = 'AGENT_FAILED';
     throw error;
   }

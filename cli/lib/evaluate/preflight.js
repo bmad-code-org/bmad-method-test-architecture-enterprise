@@ -39,6 +39,10 @@
  *      the command's exit code, and last the qualified probes written to
  *      `runs/<invocationId>/probes/`.
  *
+ * `tea-evaluate run` shares this pipeline (`runPipeline`): it refuses what it
+ * cannot score before any workspace is made, and carries on past a verdict
+ * that passed while every workspace is still live (`run.js`).
+ *
  * `runPreflight` also returns a verdict. It is discarded: an enforced verdict
  * comes from the CLI over persisted files, so CI can reproduce it by hand, and
  * the run's `engine/preflight.json` records the call that produced it. Every
@@ -50,6 +54,7 @@
 
 const crypto = require('node:crypto');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 
 const { hostEnvironmentPort, persistableRequest, runArm } = require('./arm');
@@ -61,6 +66,7 @@ const { evaluateOracles, oraclesOfBehaviors } = require('./evaluator');
 const { QualificationError, applyReplaceExact, qualifiedProbe, runMutationCycle } = require('./mutation');
 const { createArtifactValidator } = require('./records');
 const { registryFromEvaluation } = require('./registry');
+const { RunDirectory, RunDirectoryError } = require('./run-directory');
 const {
   WorkspaceRefusal,
   adopterTreeState,
@@ -69,6 +75,7 @@ const {
   joinAsSpelled,
   realPathLoosely,
   removeWorkspace,
+  trackedTreeDigest,
   treeDigest,
 } = require('./workspace');
 
@@ -87,7 +94,7 @@ const PLANNING_FAULTS = new Set(['schema-parse-failure', 'schema-version-mismatc
 class PreflightOutcome {
   /**
    * @param {object} fields
-   * @param {'check'|'launch'|'engine'|'qualification'|'leg'|'verdict'} fields.stage where the run stopped
+   * @param {'check'|'launch'|'engine'|'qualification'|'leg'|'verdict'|'trial'|'run-directory'} fields.stage where the run stopped
    * @param {number} fields.exitCode
    * @param {string} fields.message
    * @param {Array<{file: string, rule: string, message: string}>} [fields.findings]
@@ -167,10 +174,10 @@ function legFileName(sequence, legId) {
  * @param {{label: string, cwd: string, port: object}} options.pristine
  * @param {Map<string, {label: string, cwd: string, port: object}>} [options.routes] by leg identifier
  * @param {object} options.registry
- * @param {string} options.runDirectory
+ * @param {RunDirectory} options.writer the run directory, which holds `observations/` and `faults/`
  * @returns {{ port: {probe: Function}, observations: object[], calls: () => number, fault: () => object|null }}
  */
-function recordingPort({ pristine, routes = new Map(), registry, runDirectory }) {
+function recordingPort({ pristine, routes = new Map(), registry, writer }) {
   const observations = [];
   const ports = new Map();
   const portFor = (route) => {
@@ -185,7 +192,7 @@ function recordingPort({ pristine, routes = new Map(), registry, runDirectory })
     const route = routes.get(request?.probeId) ?? pristine;
     try {
       const answered = await portFor(route).probe(request, signal);
-      writeJson(path.join(runDirectory, 'observations', legFileName(legSequence, request.probeId)), {
+      writer.writeJson(`observations/${legFileName(legSequence, request.probeId)}`, {
         legId: request.probeId,
         sequence: legSequence,
         workspace: route.label,
@@ -205,19 +212,66 @@ function recordingPort({ pristine, routes = new Map(), registry, runDirectory })
         message: String(error?.message ?? error),
         request: persistableRequest(error?.request ?? request),
       };
-      writeJson(path.join(runDirectory, 'faults', legFileName(legSequence, fault.legId)), fault);
+      writer.writeJson(`faults/${legFileName(legSequence, fault.legId)}`, fault);
       throw error;
     }
   };
   return { port: { probe }, observations, calls: () => sequence, fault: () => fault };
 }
 
-/** `runs/`, created with a `.gitignore` that ignores everything in it, so no run lands in the adopter's commits (AD-12). */
+/**
+ * Whether the adopter's git status (read before the workspaces were made)
+ * names any path under the evaluation folder: an edit, a deletion or an
+ * untracked file. Outside git there is no committed state to differ from.
+ */
+function uncommittedUnder(before, folder) {
+  if (before.repository === null) return false;
+  const relative = path.relative(before.repository, folder).split(path.sep).join('/');
+  if (relative.startsWith('..')) return false;
+  const prefix = relative === '' ? '' : `${relative}/`;
+  const records = before.status.split('\u0000').filter((record) => record.length > 0);
+  const paths = [];
+  for (let index = 0; index < records.length; index += 1) {
+    paths.push(records[index].slice(3));
+    // A rename or copy names its source in the record after it, with no status of its own.
+    if (/^[RC]/.test(records[index]) && index + 1 < records.length) {
+      index += 1;
+      paths.push(records[index]);
+    }
+  }
+  return paths.some((relativePath) => relativePath.startsWith(prefix));
+}
+
+/**
+ * `runs/`, created with a `.gitignore` that ignores everything in it, so no
+ * run lands in the adopter's commits (AD-12). `runs/` must be a directory of
+ * its own and its `.gitignore` a file, never a link a target left there,
+ * since every run is written below it.
+ */
 function ensureRunsDirectory(folder) {
   const runs = path.join(folder, 'runs');
-  fs.mkdirSync(runs, { recursive: true });
+  try {
+    fs.mkdirSync(runs);
+  } catch (error) {
+    if (error.code !== 'EEXIST') throw error;
+  }
+  if (!fs.lstatSync(runs).isDirectory()) throw new RunDirectoryError(`${runs} is not a directory, so no run can be written below it`);
   const ignore = path.join(runs, '.gitignore');
-  if (!fs.existsSync(ignore)) fs.writeFileSync(ignore, '*\n');
+  let descriptor = null;
+  try {
+    descriptor = fs.openSync(
+      ignore,
+      fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | (fs.constants.O_NOFOLLOW ?? 0),
+      0o644,
+    );
+    fs.writeSync(descriptor, '*\n');
+  } catch (error) {
+    if (error.code !== 'EEXIST' && error.code !== 'ELOOP') throw error;
+    if (!fs.lstatSync(ignore).isFile())
+      throw new RunDirectoryError(`${ignore} is not a file, so runs/ is not kept out of the adopter's commits`);
+  } finally {
+    if (descriptor !== null) fs.closeSync(descriptor);
+  }
   return runs;
 }
 
@@ -227,25 +281,34 @@ function armVerdict(oracles) {
   return oracles.some((oracle) => oracle.disposition === 'violated') ? 'violated' : 'inconclusive';
 }
 
-/** An artifact reference to a file the run wrote, by its path relative to the evaluation folder. */
-function referenceTo(folder, file, digestBytes) {
-  return { storage: 'public', path: posix(path.relative(folder, file)), privateRef: null, digest: digestBytes(fs.readFileSync(file)) };
+/**
+ * An artifact reference to a file the run wrote, by its path relative to the
+ * evaluation folder, digesting the bytes the runtime wrote (`RunDirectory.read`
+ * refuses any others).
+ */
+function referenceTo(folder, writer, file, digestBytes) {
+  return {
+    storage: 'public',
+    path: posix(path.relative(folder, writer.pathOf(file))),
+    privateRef: null,
+    digest: digestBytes(writer.read(file)),
+  };
 }
 
 /**
  * Writes one probe's qualification evidence as far as the cycle got: each arm
  * that ran and the rollback record. Returns the files written, by name.
  */
-function writeQualificationEvidence(directory, { probe, evidence, workspace, fault = null }) {
+function writeQualificationEvidence(writer, directory, { probe, evidence, workspace, fault = null }) {
   const files = {};
   if (fault !== null) {
-    files.fault = path.join(directory, 'fault.json');
-    writeJson(files.fault, { probeId: probe.probeId, mutationId: evidence.mutationId, ...fault });
+    files.fault = `${directory}/fault.json`;
+    writer.writeJson(files.fault, { probeId: probe.probeId, mutationId: evidence.mutationId, ...fault });
   }
   const arm = (name, result, digestField) => {
     if (result === null) return;
-    files[name] = path.join(directory, `${name}.json`);
-    writeJson(files[name], {
+    files[name] = `${directory}/${name}.json`;
+    writer.writeJson(files[name], {
       probeId: probe.probeId,
       mutationId: evidence.mutationId,
       phase: name,
@@ -259,8 +322,8 @@ function writeQualificationEvidence(directory, { probe, evidence, workspace, fau
   };
   arm('baseline-pass', evidence.baseline, 'preDigest');
   arm('mutated-fail', evidence.mutated, 'mutatedDigest');
-  files.rollback = path.join(directory, 'rollback.json');
-  writeJson(files.rollback, {
+  files.rollback = `${directory}/rollback.json`;
+  writer.writeJson(files.rollback, {
     probeId: probe.probeId,
     mutationId: evidence.mutationId,
     targetArtifact: evidence.targetArtifact,
@@ -289,7 +352,83 @@ function writeQualificationEvidence(directory, { probe, evidence, workspace, fau
  * @param {(line: string) => void} [options.log] progress lines for an operator
  * @returns {Promise<PreflightOutcome>}
  */
-async function runPreflightCommand(folder, { fromWorkingTree = false, env = process.env, log = () => {} } = {}) {
+function runPreflightCommand(folder, options = {}) {
+  return runPipeline(folder, { ...options, command: 'preflight' });
+}
+
+/**
+ * The preflight pipeline, which `tea-evaluate run` continues past the verdict.
+ *
+ * `prepare` sees the checked evaluation before any workspace is made and may
+ * stop the command with an outcome. `afterVerdict` runs once the CLI's
+ * verdict exits 0, while every workspace is still live, and its outcome is
+ * the command's; a verdict that does not pass ends the command there.
+ *
+ * `afterVerdict` also receives the run directory's `writer` and the digests
+ * of the compiled contract and the sealed brief, taken when the stages wrote
+ * them; it calls `markSealed()` once it has written and verified its last file, and
+ * lists in `retractUnlessSealed` the files a run that does not seal removes.
+ *
+ * @param {string} folder
+ * @param {object} options
+ * @param {'preflight'|'run'} options.command recorded in `run.json`
+ * @param {boolean} [options.fromWorkingTree]
+ * @param {NodeJS.ProcessEnv} [options.env]
+ * @param {(line: string) => void} [options.log]
+ * @param {(context: object) => PreflightOutcome|null} [options.prepare]
+ * @param {(context: object) => Promise<PreflightOutcome>} [options.afterVerdict]
+ * @returns {Promise<PreflightOutcome>}
+ */
+async function runPipeline(folder, options) {
+  // The invocation's run directory and run.json, held in memory, so its end is
+  // recorded from what the runtime knows, never from a file read back.
+  const state = { writer: null, run: null, sealed: false, retractUnlessSealed: [] };
+  try {
+    return await recordEnd(await pipeline(folder, options, state), state);
+  } finally {
+    // The directories the run made stay held open until here, so none of
+    // their inode numbers can pass to a directory the target makes.
+    state.writer?.close();
+  }
+}
+
+/** Records how the invocation ended in run.json, unless the run sealed its trial sets and recorded its own end. */
+function recordEnd(outcome, state) {
+  // run.json says how the invocation ended, so a reader of the run directory
+  // (and `tea-evaluate score`) can tell a run that stopped from one that is
+  // complete, and why. A run that sealed its trial sets recorded its own end.
+  if (state.run !== null && !state.sealed) {
+    state.run.outcome = { stage: outcome.stage, exitCode: outcome.exitCode, message: outcome.message };
+    if (state.run.command === 'run') state.run.completed = false;
+    // Each step is tried on its own, and one the runtime cannot take is named
+    // in the outcome, so nobody reads the run directory as this end recorded.
+    const failed = [];
+    for (const [what, step] of [
+      ...state.retractUnlessSealed.map((file) => [`remove ${file}`, () => state.writer.remove(file)]),
+      ['record this end in run.json', () => state.writer.replaceJson('run.json', state.run)],
+    ]) {
+      try {
+        step();
+      } catch (error) {
+        if (!(error instanceof RunDirectoryError)) throw error;
+        failed.push(`could not ${what}: ${error.message}`);
+      }
+    }
+    if (failed.length > 0) {
+      return new PreflightOutcome({
+        ...outcome,
+        message: `${outcome.message}\nthe run directory does not record this end, since the runtime ${failed.join('; and ')}`,
+      });
+    }
+  }
+  return outcome;
+}
+
+async function pipeline(
+  folder,
+  { command, fromWorkingTree = false, env = process.env, log = () => {}, prepare = () => null, afterVerdict = null },
+  state,
+) {
   const findings = await checkEvaluation(folder);
   if (findings.length > 0) {
     return new PreflightOutcome({ stage: 'check', exitCode: 10, message: `${findings.length} authoring defect(s)`, findings });
@@ -312,14 +451,31 @@ async function runPreflightCommand(folder, { fromWorkingTree = false, env = proc
       message: `${unqualifiable.map(({ file, probe }) => `${file} (route ${probe.qualification?.route})`).join(', ')} seed a defect on a route this release does not qualify; it qualifies seeded probes on the ${QUALIFIED_ROUTE} route only, so a retry cannot pass`,
     });
   }
+  const refused = prepare({ folder, evaluation, seeded });
+  if (refused !== null) return refused;
 
   const root = realPathLoosely(joinAsSpelled(folder, evaluation.launch.root));
-  const runsDirectory = ensureRunsDirectory(folder);
   const workspaces = [];
   const controller = new AbortController();
+  // Run-directory files an interrupting signal removes (the CLI's probe list
+  // until its verdict), and the private directories engine stages write into.
   const retractOnSignal = [];
-  const release = cleanUpOnSignal(workspaces, controller, { paths: retractOnSignal });
+  const scratch = [];
+  const onSignal = (name) => {
+    for (const directory of scratch) fs.rmSync(directory, { recursive: true, force: true });
+    if (state.writer === null || state.sealed) return;
+    try {
+      for (const file of [...retractOnSignal, ...state.retractUnlessSealed]) state.writer.remove(file);
+      state.run.outcome = { stage: 'signal', exitCode: null, signal: name, message: `stopped by ${name} before it finished` };
+      if (state.run.command === 'run') state.run.completed = false;
+      state.writer.replaceJson('run.json', state.run);
+    } catch {
+      // The signal still ends the process; run.json keeps its last state.
+    }
+  };
+  const release = cleanUpOnSignal(workspaces, controller, { onSignal });
   try {
+    const runsDirectory = ensureRunsDirectory(folder);
     const readTree = () => adopterTreeState(root, { exclude: [runsDirectory] });
     const before = readTree();
     // Every workspace after the first reproduces it, so the run evaluates one
@@ -345,11 +501,23 @@ async function runPreflightCommand(folder, { fromWorkingTree = false, env = proc
     log(
       `pristine workspace, ${pristine.kind === 'git-worktree' ? `a detached worktree at ${pristine.commit}` : `a temp copy${pristine.dirty ? ' of the working tree' : ''}`}: ${pristine.root}`,
     );
+    // The evaluation folder is read from the working tree (the workspaces
+    // leave it out), so uncommitted work in it reaches the run, which is then
+    // dirty: no committed state names what it measured.
+    const evaluationDirty = uncommittedUnder(before, folder);
     if (pristine.kind === 'git-worktree' && before.status.length > 0) {
-      log('the working tree has uncommitted changes, which this run does not evaluate; pass --from-working-tree to evaluate them');
+      log(
+        evaluationDirty
+          ? 'the evaluation folder has uncommitted changes, which this run reads, so it is recorded as dirty; the rest of the working tree is evaluated as committed'
+          : 'the working tree has uncommitted changes, which this run does not evaluate; pass --from-working-tree to evaluate them',
+      );
     }
     return await runInWorkspaces({
+      command,
+      evaluationDirty,
+      afterVerdict,
       folder,
+      root,
       evaluation,
       seeded,
       pristine,
@@ -359,6 +527,8 @@ async function runPreflightCommand(folder, { fromWorkingTree = false, env = proc
       readTree,
       runsDirectory,
       retractOnSignal,
+      scratch,
+      state,
       env,
       log,
       signal: controller.signal,
@@ -366,9 +536,18 @@ async function runPreflightCommand(folder, { fromWorkingTree = false, env = proc
   } catch (error) {
     if (error instanceof RunStop) return error.outcome;
     if (error instanceof WorkspaceRefusal) return new PreflightOutcome({ stage: 'launch', exitCode: 12, message: error.message });
+    if (error instanceof RunDirectoryError) {
+      return new PreflightOutcome({
+        stage: 'run-directory',
+        exitCode: 12,
+        message: error.message,
+        runDirectory: state.writer?.root ?? null,
+      });
+    }
     throw error;
   } finally {
     release();
+    for (const directory of scratch) fs.rmSync(directory, { recursive: true, force: true });
     for (const workspace of workspaces) {
       try {
         removeWorkspace(workspace);
@@ -380,7 +559,11 @@ async function runPreflightCommand(folder, { fromWorkingTree = false, env = proc
 }
 
 async function runInWorkspaces({
+  command,
+  evaluationDirty,
+  afterVerdict,
   folder,
+  root,
   evaluation,
   seeded,
   pristine,
@@ -390,6 +573,8 @@ async function runInWorkspaces({
   readTree,
   runsDirectory,
   retractOnSignal,
+  scratch,
+  state,
   env,
   log,
   signal,
@@ -401,18 +586,23 @@ async function runInWorkspaces({
   }
 
   const invocationId = newInvocationId();
-  const runDirectory = path.join(runsDirectory, invocationId);
-  fs.mkdirSync(runDirectory, { recursive: true });
+  // Every file below is written through the run directory's writer, which
+  // refuses an entry it did not make and holds the digest of every file it
+  // wrote (`run-directory.js`): a target can reach runs/ and plant a link there.
+  const writer = RunDirectory.create(runsDirectory, invocationId);
+  const runDirectory = writer.root;
+  state.writer = writer;
   log(`run ${invocationId}: ${runDirectory}`);
   const outcome = (fields) => new PreflightOutcome({ runDirectory, ...fields });
   const stop = (fields) => new RunStop(outcome(fields));
   const run = {
     invocationId,
-    command: 'preflight',
+    command,
     teaVersion: TEA_MANIFEST.version,
     evalQualityVersion: engineVersion(),
     commit: pristine.commit,
-    dirty: pristine.dirty,
+    dirty: pristine.dirty || evaluationDirty,
+    evaluationFolder: { dirty: evaluationDirty },
     workspace: {
       kind: pristine.kind,
       commit: pristine.commit,
@@ -423,20 +613,38 @@ async function runInWorkspaces({
     workspaces: { pristine: pristine.root },
     adopterTree: { repository: before.repository, unchanged: null },
   };
-  const runPath = path.join(runDirectory, 'run.json');
-  writeJson(runPath, run);
+  state.run = run;
+  const writeRun = () => writer.replaceJson('run.json', run);
+  writeRun();
 
   // The run keeps its own copy of the contract, so every stage below reads the
   // same bytes and the verdict can be reproduced from the run directory alone.
-  const contractPath = path.join(runDirectory, CONTRACT_NAME);
-  fs.copyFileSync(path.join(folder, CONTRACT_NAME), contractPath);
-  const contract = readJson(contractPath);
+  const contractBytes = fs.readFileSync(path.join(folder, CONTRACT_NAME));
+  const contractPath = writer.write(CONTRACT_NAME, contractBytes);
+  const contract = JSON.parse(contractBytes.toString('utf8'));
+
+  // An engine stage writes its output into a private directory made for the
+  // call, which no target has seen, and the runtime copies it into the run
+  // directory through its writer, which holds the digest of what it wrote.
+  const engineStage = (stage, args, output) => {
+    const staging = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-evaluate-engine-'));
+    scratch.push(staging);
+    try {
+      const produced = path.join(staging, output);
+      const result = runEngineStage(stage, [...args, '--out', produced], { runDirectory, writer, env, log });
+      if (fs.existsSync(produced)) writer.copyIn(output, produced);
+      return result;
+    } finally {
+      scratch.splice(scratch.indexOf(staging), 1);
+      fs.rmSync(staging, { recursive: true, force: true });
+    }
+  };
 
   for (const [stage, output] of [
     ['compile', 'eval-contract.json'],
     ['seal', 'sealed-evaluator-brief.json'],
   ]) {
-    const result = runEngineStage(stage, ['--in', contractPath, '--out', path.join(runDirectory, output)], { runDirectory, env, log });
+    const result = engineStage(stage, ['--in', contractPath], output);
     if (result.exitCode !== 0) {
       return outcome({
         stage: 'engine',
@@ -447,26 +655,40 @@ async function runInWorkspaces({
   }
 
   const engine = await loadEngine();
+  // The compiled contract and the sealed brief as the stages wrote them, read
+  // before any target runs, so their digests never come from bytes a target
+  // could have rewritten. A substituted engine CLI may write neither.
+  let sealed = null;
+  if (writer.has('eval-contract.json') && writer.has('sealed-evaluator-brief.json')) {
+    const compiledContract = writer.readJson('eval-contract.json');
+    const sealedBrief = writer.readJson('sealed-evaluator-brief.json');
+    sealed = {
+      contractDigest: engine.digestArtifact(compiledContract, 'EvalContract'),
+      sealedBriefDigest: engine.digestArtifact(sealedBrief, 'SealedEvaluatorBrief'),
+    };
+  }
   const { port: pristineAdapter } = await registry.createProbePort({ cwd: pristine.root, projectRoot: pristine.root });
   // The adopter's tree, read again after the qualification and after the
   // legs: a change stops the run with no qualified probe written (AD-8).
-  const treeUnchanged = (when) => {
+  const treeUnchanged = (when, { record = true } = {}) => {
     const unchanged = JSON.stringify(readTree()) === JSON.stringify(before);
     run.adopterTree.unchanged = unchanged;
-    writeJson(runPath, run);
+    if (record || !unchanged) writeRun();
     if (!unchanged) {
       throw stop({
-        stage: when === 'qualification' ? 'qualification' : 'leg',
+        stage: { qualification: 'qualification', legs: 'leg', trials: 'trial', sealing: 'trial' }[when],
         exitCode: 12,
-        message: `the adopter's ${before.repository === null ? 'project (launch.root)' : `tree at ${before.repository} (its git status, file contents or shared git state)`} changed during the ${when}, so no rollback is proved and no qualified probe is written; if you edited files meanwhile, run again`,
+        message: `the adopter's ${before.repository === null ? 'project (launch.root)' : `tree at ${before.repository} (its git status, file contents or shared git state)`} changed during the ${when === 'sealing' ? 'sealing of the trial sets' : when}, so ${when === 'trials' || when === 'sealing' ? 'no trial set is written' : 'no rollback is proved and no qualified probe is written'}; if you edited files meanwhile, run again`,
       });
     }
   };
 
   const qualified = [];
+  const policyPath = path.join(folder, POLICY_PATH);
+  const policy = fs.existsSync(policyPath) ? readJson(policyPath) : null;
+  const validate = createArtifactValidator();
+  const digests = seeded.length > 0 || afterVerdict !== null ? attestedDigests({ folder, root, evaluation, pristine, engine, stop }) : null;
   if (seeded.length > 0) {
-    const policy = readJson(path.join(folder, POLICY_PATH));
-    const validate = createArtifactValidator();
     for (const { file, probe } of seeded) {
       // Each probe is qualified in a workspace of its own, so nothing its
       // mutated arm leaves behind reaches another probe or the legs.
@@ -479,13 +701,13 @@ async function runInWorkspaces({
             contract,
             file,
             probe,
-            pristine,
             workspace,
             registry,
             policy,
             engine,
             validate,
-            runDirectory,
+            digests,
+            writer,
             stop,
             log,
             signal,
@@ -507,7 +729,7 @@ async function runInWorkspaces({
       route = await mutatedRoute({ entry, pristine, make, registry, engine, stop, log });
       mutatedByMutation.set(entry.mutation.mutationId, route);
       run.workspaces[route.label] = route.cwd;
-      writeJson(runPath, run);
+      writeRun();
     }
     for (const defect of entry.probe.defects) {
       if (defect.manifestationWitness !== null) routes.set(defect.manifestationWitness.legId, route);
@@ -519,17 +741,16 @@ async function runInWorkspaces({
   // (a leg fault, a tree change, an engine stage that could not run, an
   // interrupting signal) removes it, so no qualified probe outlives a run
   // that failed.
-  const probesPath = path.join(runDirectory, 'probes.json');
   const probes = qualified.map((entry) => entry.probe);
-  writeJson(probesPath, probes);
-  retractOnSignal.push(probesPath);
+  const probesPath = writer.writeJson('probes.json', probes);
+  retractOnSignal.push('probes.json');
   let settled = false;
   try {
     const recorder = recordingPort({
       pristine: { label: 'pristine', cwd: pristine.root, port: pristineAdapter },
       routes,
       registry,
-      runDirectory,
+      writer,
     });
     try {
       await engine.runPreflight({
@@ -545,6 +766,7 @@ async function runInWorkspaces({
         },
       });
     } catch (error) {
+      if (error instanceof RunDirectoryError) throw error;
       const fault = recorder.fault();
       if (fault !== null) {
         return outcome({
@@ -563,36 +785,98 @@ async function runInWorkspaces({
       // contract and probes, so it reports that refusal with its own exit below.
       log(`runPreflight refused the plan: ${error.message}`);
     }
-    const observationsPath = path.join(runDirectory, 'observations.json');
-    writeJson(observationsPath, recorder.observations);
+    const observationsPath = writer.writeJson('observations.json', recorder.observations);
     treeUnchanged('legs');
+    // The CLI reads the run directory next: it must hold what the runtime wrote, and nothing else.
+    writer.verify('after the legs');
 
-    verdict = runEngineStage(
+    verdict = engineStage(
       'preflight',
-      [
-        '--contract',
-        contractPath,
-        '--probes',
-        probesPath,
-        '--observations',
-        observationsPath,
-        '--run-id',
-        invocationId,
-        '--out',
-        path.join(runDirectory, 'preflight-verdict.json'),
-      ],
-      { runDirectory, env, log },
+      ['--contract', contractPath, '--probes', probesPath, '--observations', observationsPath, '--run-id', invocationId],
+      'preflight-verdict.json',
     );
     settled = true;
   } finally {
-    if (!settled) fs.rmSync(probesPath, { force: true });
+    if (!settled) writer.remove('probes.json');
   }
-  for (const entry of qualified) writeJson(path.join(runDirectory, 'probes', `${entry.probe.probeId}.probe.json`), entry.probe);
-  return outcome({
-    stage: 'verdict',
-    exitCode: verdict.exitCode,
-    message: `eval-quality preflight exited ${verdict.exitCode}; its verdict and diagnostics are in ${path.relative(folder, runDirectory)}`,
-  });
+  for (const entry of qualified) writer.writeJson(`probes/${entry.probe.probeId}.probe.json`, entry.probe);
+  if (afterVerdict === null || verdict.exitCode !== 0) {
+    return outcome({
+      stage: 'verdict',
+      exitCode: verdict.exitCode,
+      message: `eval-quality preflight exited ${verdict.exitCode}; its verdict and diagnostics are in ${path.relative(folder, runDirectory)}${afterVerdict === null ? '' : ', and no trial ran'}`,
+    });
+  }
+  try {
+    return await afterVerdict({
+      folder,
+      evaluation,
+      contract,
+      registry,
+      pristine,
+      make,
+      discard,
+      qualified,
+      routesByMutation: mutatedByMutation,
+      policy,
+      engine,
+      validate,
+      digests,
+      sealed,
+      invocationId,
+      runDirectory,
+      writer,
+      run,
+      writeRun,
+      treeUnchanged,
+      retractUnlessSealed: state.retractUnlessSealed,
+      markSealed: () => {
+        state.sealed = true;
+      },
+      outcome,
+      stop,
+      log,
+      signal,
+    });
+  } catch (error) {
+    if (error instanceof RunStop) return error.outcome;
+    throw error;
+  }
+}
+
+/**
+ * The digests AD-7 attests on every probe the run qualifies: `commitDigest`,
+ * the evaluated commit (`digestBytes` over its id) or, for a copy, the
+ * workspace's tree digest; and `implementationDigest`, the tracked tree of
+ * `launch.skillRoot` (or `launch.root`) at that commit, the evaluation folder
+ * left out (`trackedTreeDigest`), or for a copy the tree digest of the same
+ * directory in the workspace without its provisioned directories.
+ */
+function attestedDigests({ folder, root, evaluation, pristine, engine, stop }) {
+  const skillRoot = (evaluation.launch.skillRoot ?? '.').split('/');
+  const implementationRoot = path.join(pristine.root, ...skillRoot);
+  if (!fs.existsSync(implementationRoot) || !fs.statSync(implementationRoot).isDirectory()) {
+    throw stop({
+      stage: 'launch',
+      exitCode: 12,
+      message: `launch.skillRoot ${evaluation.launch.skillRoot} is not a directory in the workspace, so there is no implementation to evaluate`,
+    });
+  }
+  if (pristine.kind === 'git-worktree') {
+    return {
+      commitDigest: engine.digestBytes(Buffer.from(pristine.commit, 'utf8')),
+      implementationDigest: trackedTreeDigest({
+        repository: pristine.repository,
+        commit: pristine.commit,
+        directory: path.join(root, ...skillRoot),
+        exclude: [folder],
+      }),
+    };
+  }
+  return {
+    commitDigest: pristine.treeDigest,
+    implementationDigest: treeDigest(implementationRoot, { exclude: pristine.provisioned }),
+  };
 }
 
 /**
@@ -611,8 +895,11 @@ async function runInWorkspaces({
 async function admissionRefusal({ candidate, contract, engine, validate }) {
   const problems = await validate('probe', candidate);
   if (problems.length > 0) return `the qualified probe does not meet eval-quality's probe schema: ${problems.join('; ')}`;
+  // A clean control carries no signature, and a canary's is null: neither has a home operation.
   const home =
-    candidate.defectSignature === null ? null : engine.resolveHomeOperation(candidate.defectSignature, contract.permittedInterfaces);
+    candidate.expectedClean || candidate.defectSignature === null
+      ? null
+      : engine.resolveHomeOperation(candidate.defectSignature, contract.permittedInterfaces);
   const admission = engine.qualifyProbe(candidate, home);
   if (admission.qualified) return null;
   return `eval-quality's qualification gate refuses the qualified probe: ${admission.failures.map((failure) => `${failure.code} (${failure.detail})`).join('; ')}`;
@@ -668,13 +955,13 @@ async function qualifySeededProbe({
   contract,
   file,
   probe,
-  pristine,
   workspace,
   registry,
   policy,
   engine,
   validate,
-  runDirectory,
+  digests,
+  writer,
   stop,
   log,
   signal,
@@ -690,17 +977,7 @@ async function qualifySeededProbe({
       message: `${file}: the behaviors it discharges (${[...new Set(behaviorIds)].join(', ')}) declare no oracle, so no arm can pass or fail`,
     });
   }
-  const implementationRoot = path.join(pristine.root, ...(evaluation.launch.skillRoot ?? '.').split('/'));
-  if (!fs.existsSync(implementationRoot) || !fs.statSync(implementationRoot).isDirectory()) {
-    throw stop({
-      stage: 'launch',
-      exitCode: 12,
-      message: `launch.skillRoot ${evaluation.launch.skillRoot} is not a directory in the workspace, so there is no implementation to evaluate`,
-    });
-  }
-  const implementationDigest = treeDigest(implementationRoot, { exclude: [...pristine.provisioned, path.join(pristine.top, '.git')] });
-  const commitDigest = pristine.kind === 'git-worktree' ? engine.digestBytes(Buffer.from(pristine.commit, 'utf8')) : pristine.treeDigest;
-  const directory = path.join(runDirectory, 'qualification', probe.probeId);
+  const directory = `qualification/${probe.probeId}`;
   log(`${file}: qualifying through ${mutationId} in ${workspace.root}`);
   const { port: adapter } = await registry.createProbePort({ cwd: workspace.root, projectRoot: workspace.root });
   const armPort = hostEnvironmentPort({ port: adapter, registry });
@@ -735,20 +1012,25 @@ async function qualifySeededProbe({
   } catch (error) {
     if (error instanceof QualificationError) {
       if (error.evidence !== null) {
-        writeQualificationEvidence(directory, { probe, evidence: error.evidence, workspace: workspace.label, fault: error.fault ?? null });
+        writeQualificationEvidence(writer, directory, {
+          probe,
+          evidence: error.evidence,
+          workspace: workspace.label,
+          fault: error.fault ?? null,
+        });
       }
       throw stop({ stage: 'qualification', exitCode: error.exitCode, message: `${file}: ${error.message}` });
     }
     throw error;
   }
-  const files = writeQualificationEvidence(directory, { probe, evidence, workspace: workspace.label });
+  const files = writeQualificationEvidence(writer, directory, { probe, evidence, workspace: workspace.label });
   const candidate = qualifiedProbe({
     probe,
     mutation,
     systemId: evaluation.evaluationId,
-    digests: { implementationDigest, commitDigest, artifactDigest: evidence.preDigest },
-    baselinePassEvidence: referenceTo(folder, files['baseline-pass'], engine.digestBytes),
-    mutatedFailEvidence: referenceTo(folder, files['mutated-fail'], engine.digestBytes),
+    digests: { ...digests, artifactDigest: evidence.preDigest },
+    baselinePassEvidence: referenceTo(folder, writer, files['baseline-pass'], engine.digestBytes),
+    mutatedFailEvidence: referenceTo(folder, writer, files['mutated-fail'], engine.digestBytes),
     rollbackVerified: evidence.rollbackVerified,
   });
   const refusal = await admissionRefusal({ candidate, contract, engine, validate });
@@ -757,4 +1039,18 @@ async function qualifySeededProbe({
   return { probe: candidate, mutation, mutatedDigest: evidence.mutatedDigest };
 }
 
-module.exports = { PreflightOutcome, admissionRefusal, armVerdict, newInvocationId, recordingPort, runPreflightCommand };
+module.exports = {
+  PreflightOutcome,
+  RunStop,
+  admissionRefusal,
+  armVerdict,
+  ensureRunsDirectory,
+  newInvocationId,
+  readJson,
+  recordingPort,
+  referenceTo,
+  runPipeline,
+  runPreflightCommand,
+  uncommittedUnder,
+  writeJson,
+};

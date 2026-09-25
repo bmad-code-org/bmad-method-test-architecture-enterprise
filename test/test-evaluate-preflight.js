@@ -62,13 +62,13 @@
 'use strict';
 
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
 
 const { INFRASTRUCTURE_EXIT_CODES } = require('../cli/skill-runner');
 const { EXIT_CODES } = require('../cli/lib/runner-exit-codes');
 const { ENGINE_CLI_ENV, engineCliPath } = require('../cli/lib/evaluate/engine');
+const { scratchDirectories } = require('./lib/scratch-directories');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const EVALUATE = path.join(PROJECT_ROOT, 'cli', 'evaluate.js');
@@ -100,7 +100,7 @@ const colors = { reset: '\u001B[0m', red: '\u001B[31m', green: '\u001B[32m' };
 
 const failures = [];
 let checks = 0;
-const scratch = [];
+const scratch = scratchDirectories('tea-evaluate-preflight');
 
 function check(condition, message) {
   checks += 1;
@@ -108,9 +108,7 @@ function check(condition, message) {
 }
 
 function tempDir(label) {
-  const directory = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), `tea-evaluate-preflight-${label}-`));
-  scratch.push(directory);
-  return directory;
+  return scratch.make(label);
 }
 
 function readJson(file) {
@@ -412,8 +410,10 @@ function childrenOf(pid) {
  * the wall clock, the runner gone before the supervisor looked, a child the
  * agent leaves behind when it exits (under the runner, and under the group
  * leader alone), a process the agent leaves in a new session holding its
- * pipes, each forwarded signal, and a wall clock past the 2^31-1 ms one Node
- * timer holds.
+ * pipes, each forwarded signal (received by the agent's group, as a witness
+ * process in it records), an agent that outlives a forwarded signal
+ * (reported as the grace period's SIGKILL after that signal), and a wall
+ * clock past the 2^31-1 ms one Node timer holds.
  */
 async function checkSupervision() {
   if (process.platform === 'win32') return;
@@ -688,23 +688,67 @@ async function checkSupervision() {
     reap(aloneChild);
   }
 
-  // Each forwarded signal, sent to the supervisor alone, reaches the agent's group.
+  // Each forwarded signal, sent to the supervisor alone, reaches the agent's group. SIGQUIT's default
+  // action writes a core file, and where the kernel hands cores to a collector (a Linux CI runner) the
+  // dump can outlast the leader's grace period, whose SIGKILL the kernel then records as the agent's end;
+  // the report still names the SIGQUIT that stopped the group. The other three end the agent at once.
+  // A witness in the agent's group records each signal that reaches it: an agent the kernel reports
+  // killed by the forwarded signal received it, and one ended by the grace SIGKILL instead must have
+  // left the witness a SIGQUIT to record in the grace period it outlived, so a leader that never
+  // sends SIGQUIT to the group fails the case.
+  const receivedBy = (witnessFile) => {
+    const file = `${witnessFile}.signals`;
+    return fs.existsSync(file) ? fs.readFileSync(file, 'utf8').trim().split('\n') : [];
+  };
   for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGQUIT']) {
-    const pidFile = path.join(tempDir(`forward-${signal}`), 'pid');
-    const run = startRunner(long, `Say alpha. STUB-ORPHAN ${pidFile} STUB-SLEEP 30000`);
+    const directory = tempDir(`forward-${signal}`);
+    const pidFile = path.join(directory, 'pid');
+    const witnessFile = path.join(directory, 'witness');
+    const run = startRunner(long, `Say alpha. STUB-ORPHAN ${pidFile} STUB-WITNESS ${witnessFile} STUB-SLEEP 30000`);
     const forwardedChild = await pidFrom(pidFile);
+    const witness = await pidFrom(witnessFile);
     const [forwardingSupervisor] = childrenOf(run.child.pid);
     if (forwardingSupervisor !== undefined) process.kill(forwardingSupervisor, signal);
     const ending = await run.closed;
+    const killedBySignal = ending.stderr.includes(`killed by signal ${signal}.`);
+    const outlived =
+      signal === 'SIGQUIT' &&
+      ending.stderr.includes(`killed by signal SIGKILL once it outlived the grace period after a ${signal} to its process group.`) &&
+      receivedBy(witnessFile).includes(signal);
     check(
-      ending.code === EXIT_CODES['environment-transport'] && ending.stderr.includes(`killed by signal ${signal}`),
-      `a runner whose supervisor received ${signal} exited ${ending.code}; expected the agent killed by ${signal}\n${ending.stderr}`,
+      ending.code === EXIT_CODES['environment-transport'] && (killedBySignal || outlived),
+      `a runner whose supervisor received ${signal} exited ${ending.code}; expected the agent killed by ${signal}, or for SIGQUIT the grace SIGKILL with the SIGQUIT received by the agent's group (its witness recorded ${JSON.stringify(receivedBy(witnessFile))})\n${ending.stderr}`,
     );
-    if (forwardedChild !== null) {
-      check(await processEnds(forwardedChild), `a child the agent started (pid ${forwardedChild}) outlived a forwarded ${signal}`);
-      reap(forwardedChild);
+    for (const pid of [forwardedChild, witness]) {
+      if (pid === null) continue;
+      check(await processEnds(pid), `a child the agent started (pid ${pid}) outlived a forwarded ${signal}`);
+      reap(pid);
     }
   }
+  // An agent that goes on running after a forwarded SIGQUIT, as one still writing its core does, ends by
+  // the grace period's SIGKILL, and the report names the SIGQUIT that asked for the stop.
+  const outlivingDirectory = tempDir('outlive');
+  const outlivingPid = path.join(outlivingDirectory, 'pid');
+  const outlivingWitness = path.join(outlivingDirectory, 'witness');
+  const outliving = startRunner(
+    long,
+    `Say alpha. STUB-OUTLIVE SIGQUIT STUB-ORPHAN ${outlivingPid} STUB-WITNESS ${outlivingWitness} STUB-SLEEP 30000`,
+  );
+  const outlivingChild = await pidFrom(outlivingPid);
+  const outlivingWitnessPid = await pidFrom(outlivingWitness);
+  const [outlivingSupervisor] = childrenOf(outliving.child.pid);
+  if (outlivingSupervisor !== undefined) process.kill(outlivingSupervisor, 'SIGQUIT');
+  const outlived = await outliving.closed;
+  for (const pid of [outlivingChild, outlivingWitnessPid]) if (pid !== null) reap(pid);
+  check(
+    outlived.code === EXIT_CODES['environment-transport'] &&
+      outlived.stderr.includes('killed by signal SIGKILL once it outlived the grace period after a SIGQUIT to its process group.'),
+    `a runner whose agent outlived a forwarded SIGQUIT exited ${outlived.code}; expected the grace SIGKILL reported with the SIGQUIT\n${outlived.stderr}`,
+  );
+  check(
+    receivedBy(outlivingWitness).includes('SIGQUIT'),
+    `the agent's group never received the forwarded SIGQUIT (its witness recorded ${JSON.stringify(receivedBy(outlivingWitness))}), so the grace SIGKILL proves nothing about forwarding`,
+  );
 
   // A wall clock past the 2^31-1 ms one Node timer holds.
   const far = runRunner(['--skill-root', STUB_SKILL, ...STUB_OPTIONS, '--timeout-ms', String(2 ** 31)]);
@@ -1294,9 +1338,10 @@ function checkCopyRefusals() {
 }
 
 /**
- * An interrupted preflight removes its copy and leaves no process behind, and
- * ends by the signal it received: `SIGTERM` to the command alone, and
- * `SIGQUIT` to its whole process group, as a terminal's Ctrl-\\ sends it.
+ * An interrupted preflight removes its copy and its probe list, leaves no
+ * process behind, records the signal in run.json, and ends by the signal it
+ * received: `SIGTERM` to the command alone, and `SIGQUIT` to its whole
+ * process group, as a terminal's Ctrl-\\ sends it.
  */
 async function checkInterrupted() {
   const cases = [['SIGTERM', false]];
@@ -1322,6 +1367,13 @@ async function checkInterrupted() {
     check(
       fs.readdirSync(temp.directory).length === 0,
       `the preflight interrupted by ${signal} left its copy: ${fs.readdirSync(temp.directory)}`,
+    );
+    // run.json records the interruption, so a reader can tell a stopped invocation from one still running.
+    const interrupted = runDirectoryOf(folder);
+    const record = interrupted === null ? null : readJson(path.join(interrupted, 'run.json'));
+    check(
+      record?.outcome?.stage === 'signal' && record.outcome.signal === signal && !fs.existsSync(path.join(interrupted, 'probes.json')),
+      `the preflight interrupted by ${signal} recorded ${JSON.stringify(record?.outcome)} and kept its probe list ${interrupted !== null && fs.existsSync(path.join(interrupted, 'probes.json'))}`,
     );
     if (orphan !== null) {
       check(await processEnds(orphan), `a process the leg interrupted by ${signal} started (pid ${orphan}) outlived the preflight`);
@@ -1481,7 +1533,7 @@ async function main() {
     checkInterfaceDenialAndRefusals();
     checkRunnerRules();
   } finally {
-    for (const directory of scratch) fs.rmSync(directory, { recursive: true, force: true });
+    scratch.removeAll();
   }
   if (failures.length > 0) {
     console.error(`${colors.red}${failures.length} of ${checks} tea-evaluate preflight check(s) failed:${colors.reset}`);

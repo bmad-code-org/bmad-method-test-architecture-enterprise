@@ -29,6 +29,14 @@
  * - `skill-root`: a mutation's `targetArtifact` is not inside `launch.skillRoot`, a contract leg or plan
  *   step hands the skill runner a `skill-root` other than `launch.skillRoot`, or the skill root sits inside
  *   a provisioned directory, so a mutation would change a file the runner never reads (AD-4).
+ * - `trials`: `evaluation.json`'s `trials` is below the scoring policy's `minimumTrialCount`, so every trial
+ *   set a run seals would fall short of the minimum the scores read (AD-7).
+ * - `arms`: a probe needs an arm `evaluation.json`'s `arms` does not declare (a clean control the `clean`
+ *   arm, a seeded probe on the `controlled-mutation` route the `mutated` arm), or `arms` declares one no
+ *   probe runs on.
+ * - `mutation-route`: a probe on the `controlled-mutation` route seeds no defect.
+ * - `evaluator-conditions`: a registry entry runs `tea-skill-runner`, which always runs an agent, and the
+ *   folder has no `policy/evaluator-conditions.json`, or one that declares `modelSnapshot` `none` (NFR8).
  * - `skill-runner`: a registry entry for `tea-skill-runner` does not declare the runner's infrastructure
  *   exit codes, or a leg or plan step for it carries no literal `timeout-ms` below the entry's
  *   `maxElapsedMs`: under the ceiling the runner reports its own timeout as exit 5, while at the
@@ -38,7 +46,9 @@
  * `policy/scoring-policy.json` when a probe takes the `controlled-mutation`
  * route, since its `reExecutionCap` bounds the rollback proof and its
  * `regexMatchStepBudget` bounds the evaluator (a policy present is always
- * held to eval-quality's scoring-policy schema, `engine-schema`), every indexed
+ * held to eval-quality's scoring-policy schema, `engine-schema`), a
+ * `policy/evaluator-conditions.json` that is present must meet the runtime's
+ * evaluator-conditions schema (`schema`), every indexed
  * root and entry must be a real directory or regular file (`corpus-file`), as
  * must everything under `baseline/` (`baseline-file`), no ID may repeat within
  * its file (`duplicate-id`), no registry entry may repeat an interface and
@@ -71,6 +81,12 @@ const Ajv = AjvModule.default ?? AjvModule;
 const KNOWN_EVALUATION_SCHEMA_VERSIONS = [1];
 const CONTRACT_NAME = 'contract.json';
 const POLICY_NAME = 'policy/scoring-policy.json';
+const CONDITIONS_NAME = 'policy/evaluator-conditions.json';
+/** The arm each scored route runs on. */
+const ARM_OF_ROUTE = { 'clean-control': 'clean', 'controlled-mutation': 'mutated' };
+/** What makes each arm used: a clean control runs on `clean`, and any probe that seeds a defect on `mutated`, whatever its route. */
+const SEEDED = 'seeded';
+const USES_OF_ARM = { clean: 'clean-control', mutated: SEEDED };
 const QUALIFICATION_PREFIX = 'baseline/qualification/';
 const MUTATION_ID_PATTERN = '^M-[0-9]{3,}$';
 const PROBE_FILE = /^(.+)\.probe\.json$/;
@@ -163,6 +179,7 @@ async function buildContext() {
       evaluation: runtimeSchema('evaluation.schema.json'),
       probe: runtimeSchema('committed-probe.schema.json'),
       mutation: runtimeSchema('mutation.schema.json'),
+      evaluatorConditions: runtimeSchema('evaluator-conditions.schema.json'),
       contract: ajv.compile(contractSchema),
       scoringPolicy: ajv.compile(readJsonFile(engineSchemaPath('scoring-policy.schema.json'))),
       defectSignature: ajv.compile({ $ref: `${branchPointer}/defectSignature` }),
@@ -790,6 +807,14 @@ function checkProbe(report, relative, probe, context, behaviors, mutations, regi
     );
   }
 
+  if (route === 'controlled-mutation' && (defects.length === 0 || probe.expectedClean !== false)) {
+    report.add(
+      relative,
+      'mutation-route',
+      `a probe on the controlled-mutation route seeds the defect its mutation plants, so it carries expectedClean false and at least one defect; got expectedClean ${JSON.stringify(probe.expectedClean)} and ${defects.length} defect(s)`,
+    );
+  }
+
   if (behaviors !== undefined && (probe.probeClass === 'defect' || probe.probeClass === 'gameability')) {
     const discharged = [probe.behaviorId, ...defects.map((defect) => defect?.behaviorId)].filter((id) => typeof id === 'string');
     for (const behaviorId of new Set(discharged)) {
@@ -822,7 +847,10 @@ function checkProbe(report, relative, probe, context, behaviors, mutations, regi
   }
 }
 
-/** Checks every committed probe; returns the qualification routes they take. */
+/**
+ * Checks every committed probe; returns the qualification routes they take,
+ * and under the pseudo-route `seeded` whether any probe seeds a defect.
+ */
 function checkProbes(report, folder, context, behaviors, mutations, registry) {
   const routes = new Set();
   for (const entry of listDirectory(folder, 'probes') ?? []) {
@@ -842,6 +870,7 @@ function checkProbes(report, folder, context, behaviors, mutations, registry) {
       report.add(relative, 'file-name', `probe ID ${JSON.stringify(probe.probeId)} does not match its file name`);
     }
     if (typeof probe.qualification?.route === 'string') routes.add(probe.qualification.route);
+    if (Array.isArray(probe.defects) && probe.defects.length > 0) routes.add(SEEDED);
     checkProbe(report, relative, probe, context, behaviors, mutations, registry);
   }
   return routes;
@@ -867,8 +896,68 @@ function checkScoringPolicy(report, folder, context, routes) {
   }
   const policy = parseInto(report, folder, POLICY_NAME);
   if (policy === undefined) return;
-  for (const problem of schemaVersionProblems('scoring-policy', policy)) report.add(POLICY_NAME, 'engine-schema', problem);
-  validateInto(report, POLICY_NAME, 'engine-schema', context.validate.scoringPolicy, policy);
+  const versionProblems = schemaVersionProblems('scoring-policy', policy);
+  for (const problem of versionProblems) report.add(POLICY_NAME, 'engine-schema', problem);
+  const valid = validateInto(report, POLICY_NAME, 'engine-schema', context.validate.scoringPolicy, policy);
+  return valid && versionProblems.length === 0 ? policy : undefined;
+}
+
+/**
+ * `trials` against the policy's `minimumTrialCount`, and every scored route's
+ * arm declared in `arms`, so a run neither seals a trial set below the
+ * minimum nor skips a probe whose arm it was not told to run.
+ */
+function checkArmsAndTrials(report, evaluation, routes, policy) {
+  if (policy !== undefined && Number.isInteger(evaluation.trials) && evaluation.trials < policy.minimumTrialCount) {
+    report.add(
+      MANIFEST_NAME,
+      'trials',
+      `trials is ${evaluation.trials}, below the scoring policy's minimumTrialCount ${policy.minimumTrialCount}; every trial set run seals would fall short of the minimum`,
+    );
+  }
+  const arms = Array.isArray(evaluation.arms) ? evaluation.arms : [];
+  for (const [route, arm] of Object.entries(ARM_OF_ROUTE)) {
+    if (routes.has(route) && !arms.includes(arm)) {
+      report.add(MANIFEST_NAME, 'arms', `a probe takes the ${route} route, which runs on the ${arm} arm, and arms does not declare ${arm}`);
+    }
+    if (!routes.has(USES_OF_ARM[arm]) && arms.includes(arm)) {
+      report.add(
+        MANIFEST_NAME,
+        'arms',
+        `arms declares ${arm}, and no probe ${arm === 'clean' ? 'is a clean control' : 'seeds a defect'} to run on it, so a run would run no ${arm} arm`,
+      );
+    }
+  }
+}
+
+/**
+ * `policy/evaluator-conditions.json`, the committed fixed conditions of a run
+ * (AD-7), held to the runtime's schema when present, and required when a
+ * registry entry runs `tea-skill-runner`, which always runs an agent, so its
+ * model is never recorded as `none`.
+ */
+function checkEvaluatorConditions(report, folder, context, registry) {
+  const runner = (registry ?? []).find(isSkillRunnerEntry);
+  if (!fs.existsSync(path.join(folder, ...CONDITIONS_NAME.split('/')))) {
+    if (runner !== undefined) {
+      report.add(
+        CONDITIONS_NAME,
+        'evaluator-conditions',
+        `the registry runs ${SKILL_RUNNER_BIN} (${runner.interfaceId}), which always runs an agent, and the folder has no ${CONDITIONS_NAME} naming the model the run uses; a run would record the model as none`,
+      );
+    }
+    return;
+  }
+  const conditions = parseInto(report, folder, CONDITIONS_NAME);
+  if (conditions === undefined) return;
+  validateInto(report, CONDITIONS_NAME, 'schema', context.validate.evaluatorConditions, conditions);
+  if (runner !== undefined && conditions?.modelSnapshot === 'none') {
+    report.add(
+      CONDITIONS_NAME,
+      'evaluator-conditions',
+      `declares modelSnapshot none while the registry runs ${SKILL_RUNNER_BIN} (${runner.interfaceId}), which always runs an agent; name the model the run uses`,
+    );
+  }
 }
 
 /**
@@ -991,7 +1080,9 @@ async function checkEvaluation(folder) {
   const mutations = checkMutations(report, folder, context, provision, skillRoot);
   checkSkillRunner(report, evaluation, context.contract, provision);
   const routes = checkProbes(report, folder, context, behaviors, mutations, registry);
-  checkScoringPolicy(report, folder, context, routes);
+  const policy = checkScoringPolicy(report, folder, context, routes);
+  checkArmsAndTrials(report, evaluation, routes, policy);
+  checkEvaluatorConditions(report, folder, context, registry);
   checkQualificationEvidence(report, folder, context);
 
   try {

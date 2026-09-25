@@ -48,15 +48,49 @@
  *                           arm does
  *   infrastructure: exit 3  answer nothing and exit 3, an exit its registry
  *                           entry declares as infrastructure
+
  *   sleep: <ms>             write this process's pid to the file VERDICT_PID
  *                           names, then wait that long before answering (a
  *                           case that interrupts the run mid-arm)
+ *
+ * Two variables act in one workspace only, so one trial or qualification of a
+ * run can differ while every other run of the command behaves: VERDICT_WHEN
+ * names the workspace by its runtime label (for example trial-clean-2, the
+ * directory tea-evaluate-trial-clean-2-XXXXXX that holds this working
+ * directory), and VERDICT_DO says what the command does there:
+ *
+ *   infrastructure          answer nothing and exit 3
+ *   kill                    answer nothing and end by SIGKILL, as a target a
+ *                           signal stops would
+ *   accept                  answer accepted whatever the policy says
+ *   reject                  answer rejected whatever the policy says
+ *   touch                   answer as usual, then append a line to the file
+ *                           VERDICT_TOUCH names, outside the workspace
+ *   plant                   answer as usual, then find the newest run
+ *                           directory of the adopter's evaluation folder
+ *                           (through the git directory the worktree shares)
+ *                           and plant trial-sets/P-001/record-1.json there as
+ *                           a symbolic link to the file VERDICT_TOUCH names,
+ *                           where the runtime would write a record
+ *   forge                   answer as usual, then rewrite that run
+ *                           directory's compiled contract, B-001's severity
+ *                           lowered to low
+ *   link-trials             answer as usual, then replace that run
+ *                           directory's trials/clean with a symbolic link to
+ *                           the adopter's rules/ directory
+ *   recreate-trials         answer as usual, then replace that run
+ *                           directory's trials/clean with a new, empty
+ *                           directory of the same name
+ *   move-trials             answer as usual, then move that run directory's
+ *                           trials/ into the adopter's project as stolen/ and
+ *                           leave a symbolic link to it in its place
  */
 
 'use strict';
 
 const crypto = require('node:crypto');
 const fs = require('node:fs');
+const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const POLICY = 'rules/policy.txt';
@@ -64,7 +98,13 @@ const POLICY = 'rules/policy.txt';
 const request = fs.readFileSync(0, 'utf8').trim();
 const policy = fs.readFileSync(POLICY);
 const text = policy.toString('utf8');
-if (text.includes('infrastructure: exit 3')) {
+/** Whether this run is in the workspace VERDICT_WHEN names: its directory is the label's temp directory, whose suffix holds no hyphen. */
+const workspaceDirectory = path.basename(path.dirname(process.cwd()));
+const prefix = `tea-evaluate-${process.env.VERDICT_WHEN}-`;
+const here = Boolean(process.env.VERDICT_WHEN) && workspaceDirectory.startsWith(prefix) && !workspaceDirectory.slice(prefix.length).includes('-');
+const act = here ? process.env.VERDICT_DO : undefined;
+if (act === 'kill') process.kill(process.pid, 'SIGKILL');
+if (text.includes('infrastructure: exit 3') || act === 'infrastructure') {
   process.stderr.write('verdict: asked to report an infrastructure failure\n');
   process.exit(3);
 }
@@ -97,6 +137,8 @@ const residue = fs.existsSync('residue.txt') ? 'yes' : 'no';
 let verdict = 'unknown';
 if (text.includes('mode: strict')) verdict = 'accepted';
 else if (text.includes('mode: lenient')) verdict = 'rejected';
+if (act === 'accept') verdict = 'accepted';
+if (act === 'reject') verdict = 'rejected';
 
 process.stdout.write(
   [
@@ -116,6 +158,38 @@ process.stdout.write(
 if (verdict === 'rejected') fs.writeFileSync('residue.txt', 'left behind by a lenient run\n');
 if (text.includes('sabotage: adopter') && process.env.VERDICT_TOUCH) {
   fs.appendFileSync(process.env.VERDICT_TOUCH, 'written by the verdict stub outside its workspace\n');
+}
+if (act === 'touch' && process.env.VERDICT_TOUCH) fs.appendFileSync(process.env.VERDICT_TOUCH, `written by the verdict stub in ${workspaceDirectory}\n`);
+if (['plant', 'forge', 'link-trials', 'recreate-trials', 'move-trials'].includes(act)) {
+  const common = spawnSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { encoding: 'utf8' }).stdout.trim();
+  const runs = path.join(path.dirname(common), 'evals', 'verdict', 'runs');
+  const newest = fs
+    .readdirSync(runs)
+    .filter((name) => name !== '.gitignore')
+    .sort()
+    .at(-1);
+  const run = path.join(runs, newest);
+  if (act === 'plant' && process.env.VERDICT_TOUCH) {
+    fs.mkdirSync(path.join(run, 'trial-sets', 'P-001'), { recursive: true });
+    fs.symlinkSync(process.env.VERDICT_TOUCH, path.join(run, 'trial-sets', 'P-001', 'record-1.json'));
+  }
+  if (act === 'forge') {
+    const compiled = path.join(run, 'eval-contract.json');
+    const contract = JSON.parse(fs.readFileSync(compiled, 'utf8'));
+    contract.behaviors[0].severity = 'low';
+    fs.writeFileSync(compiled, JSON.stringify(contract));
+  }
+  const trials = path.join(run, 'trials');
+  if (act === 'link-trials' || act === 'recreate-trials') {
+    fs.rmSync(path.join(trials, 'clean'), { recursive: true, force: true });
+    if (act === 'link-trials') fs.symlinkSync(path.join(path.dirname(common), 'rules'), path.join(trials, 'clean'));
+    else fs.mkdirSync(path.join(trials, 'clean'));
+  }
+  if (act === 'move-trials') {
+    const stolen = path.join(path.dirname(common), 'stolen');
+    fs.renameSync(trials, stolen);
+    fs.symlinkSync(stolen, trials);
+  }
 }
 if (text.includes('sabotage: refs')) spawnSync('git', ['tag', '--force', 'verdict-sabotage'], { stdio: 'ignore' });
 if (text.includes('sabotage: leg-writes') && request === 'Judge alpha.' && process.env.VERDICT_TOUCH) {

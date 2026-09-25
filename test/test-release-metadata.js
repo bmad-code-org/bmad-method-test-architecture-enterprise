@@ -6,7 +6,7 @@
  * - the package is not marked private
  * - publishConfig.access remains public
  * - the active stable-release step transports large changelog notes outside argv
- * - the `tea-evaluate` bin and the optional `eval-quality` peer (floor 4.1.2)
+ * - the `tea-evaluate` bin and the optional `eval-quality` peer (floor 4.1.4)
  *   are declared, and package-lock.json's root entry carries the same
  *
  * Usage: node test/test-release-metadata.js
@@ -92,11 +92,11 @@ if (!marketplacePlugin) {
 }
 
 // Evaluate's runtime: the bin, and eval-quality as an optional peer no older
-// than 4.1.2. The lockfile's root entry mirrors package.json, so a manifest
+// than 4.1.4. The lockfile's root entry mirrors package.json, so a manifest
 // edit that skipped `npm install` is caught here too.
 const EVALUATE_BIN = 'tea-evaluate';
 const ENGINE_PACKAGE = 'eval-quality';
-const ENGINE_FLOOR = '4.1.2';
+const ENGINE_FLOOR = '4.1.4';
 const lockRoot = packageLock.packages?.[''] ?? {};
 
 const evaluateBin = packageJson.bin?.[EVALUATE_BIN];

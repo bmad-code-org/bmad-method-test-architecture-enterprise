@@ -38,7 +38,7 @@ inputDocuments:
 
 ## Executive Summary
 
-**Scope:** full epic-level test design for Stories 1.1 to 1.28 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; their scenarios, risks and gates are below, and sections appear in execution order. The stories are built overnight by `/bmad-build` workers in order, uncommitted, so every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
+**Scope:** full epic-level test design for Stories 1.1 to 1.31 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; their scenarios, risks and gates are below, and sections appear in execution order. The stories are built overnight by `/bmad-build` workers in order, uncommitted, so every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
 
 **Risk summary:**
 
@@ -224,7 +224,7 @@ Levels: unit, integration over real eval-quality, contract, static. Files create
 
 | AC | Test | Level | P | Revert check |
 | --- | --- | --- | --- | --- |
-| Bin, optional `peerDependencies >=4.1.2`, release metadata and guard-publish cover both | `test:release-metadata`, `test:guard-publish` gain assertions for `bin["tea-evaluate"]`, the `>=4.1.2` peer range and `peerDependenciesMeta` optional | Static | P1 | Removing the bin, lowering the floor below 4.1.2, or dropping the optional flag fails |
+| Bin, optional `peerDependencies >=4.1.4` (amended 2026-09-24 in Story 1.8 from `>=4.1.2`, to `>=4.1.3` and then `>=4.1.4`), release metadata and guard-publish cover both | `test:release-metadata`, `test:guard-publish` gain assertions for `bin["tea-evaluate"]`, the `>=4.1.4` peer range and `peerDependenciesMeta` optional | Static | P1 | Removing the bin, lowering the floor below 4.1.4, or dropping the optional flag fails |
 | Runtime installs and runs for an adopter | Packed-install case in `test:evaluate-check`: `npm pack`, install into a temp folder with `--omit=dev` beside the local engine, `tea-evaluate check --evaluation <fixture>` exits 0 | Integration | P0 | Moving `ajv` back to `devDependencies` fails with a module-not-found crash |
 | CommonJS runtime, one engine module, `cli` externals listed | `test:direction` with an `allow` list naming every external `cli/` uses; `test:evaluate-boundaries` asserts `cli/lib/evaluate/engine.js` is the only file naming `eval-quality` in `import(` or `require(`, subpaths and synchronous requires included | Static | P1 | A second engine import anywhere under `cli/` fails; removing a listed external while `cli/` imports it fails `test:direction` |
 | Engine boundary (AD-1, AD-6) | `test:evaluate-boundaries` scans bindings obtained from `engine.js` only (so `ajv.compile` is untouched) and fails on `runScore`, `preflightFromObservations`, `compile` or `seal` | Static | P0 | Adding `engine.runScore(` anywhere in `cli/` fails |
@@ -279,19 +279,22 @@ Levels: integration over real eval-quality, contract, unit. File: `test/test-eva
 | AC | Test | Level | P | Revert check |
 | --- | --- | --- | --- | --- |
 | `invocationId`, `runId` per trial set, `trialIndex` 1..N with N at least `minimumTrialCount`, `mode`, `conditionArm` | Read every sealed record in `runs/`; assert the AD-7 shape per record | Integration | P0 | A reused `runId` across arms fails the uniqueness check |
-| Requests only from `interactionPlan` bound from `testData` | Stub target logs its received input; assert it equals the bound plan literal | Integration | P1 | A hard-coded request differs from the logged input |
+| Requests only from `interactionPlan` bound from `testData` (amended 2026-09-24 in Story 1.8: `testData` lives on the contract, and this release sends literal bindings only, a step binding any other kind exiting 12; Story 1.30 adds `principal` and `matcher`) | Stub target logs its received input; assert it equals the bound plan literal | Integration | P1 | A hard-coded request differs from the logged input |
 | Deterministic evaluator over `resolveCheck` | Unit: a synthetic observation resolves to the expected finding set | Unit | P1 | Swapping the evaluator changes the finding |
 | `IsolationManifest` per trial set, `EvaluatorConfiguration` per run with `sealedBriefDigest`, `run.json` fields | Contract validation against eval-quality schemas; `sealedBriefDigest` equals the digest of the persisted sealed brief | Contract | P0 | A stale digest fails equality |
 | A no-model run's `EvaluatorConfiguration` validates: `modelSnapshot` is `none`, `systemPromptDigest` is `digestBytes` over the empty byte string | Schema validation of the generated configuration | Contract | P1 | Leaving either field empty fails validation |
 | Infrastructure exit yields no record, invocation exits 12 | Stub exiting 4 in one trial | Integration | P0 | Recording the trial yields a record and exit 0 or 2 |
 | `score` once per probe, every `--record`, exit passed through | A logging shim at `TEA_EVALUATE_ENGINE_CLI` records one `score` argv per probe with every trial's `--record`; with the real engine, a direct `eval-quality score` on the persisted inputs gives equal exit and byte-equal evidence on a passing and a FAIL fixture | Integration over real eval-quality | P0 | Computing the exit in the runtime makes the FAIL fixture's exits differ |
-| Artifacts validated before the CLI | Corrupt one field in memory through a test hook; assert the runtime refuses before spawning | Contract | P1 | Validation removed lets the CLI reject with exit 4 instead, which the test distinguishes |
+| Artifacts validated before the CLI | Corrupt one field of a persisted record (amended 2026-09-24 in Story 1.8: a file in the run directory, which `score` reads, stands in for a test hook in memory); assert exit 10 naming the file and no call in the shim's argv log | Contract | P1 | Validation removed lets the shim log a `score` call, which the test distinguishes |
 | `score` exit code, stdout and stderr persisted per probe | A shim at `TEA_EVALUATE_ENGINE_CLI` prints distinct known bytes to each stream and exits with a distinct code; assert byte equality per stream and the recorded code in `runs/<invocationId>/`, keyed by probe ID | Integration | P1 | An empty, swapped or dropped capture fails equality |
 | Probe digests per AD-7 | Assert `commitDigest`, `artifactDigest`, `implementationDigest` against values the test computes with `git rev-parse` and sha256 | Integration | P1 | A digest of the wrong tree differs |
-| `runs/` gitignored | `git check-ignore` on the template path, `test/evaluations/x/runs/y` and `test/fixtures/evaluate-x/runs/y` | Static | P2 | Removing the entry fails |
+| `runs/` gitignored | `git check-ignore` on `runs/` under a folder holding the template as its `.gitignore`, `test/evaluations/x/runs/y`, `test/fixtures/evaluate-x/runs/y` and a nested fixture's `runs/` | Static | P2 | Removing the entry fails |
 | End to end: `passed-clean-control` and `caught` at `minimumTrialCount` with a comparable strength vector | Read `reducedProbeOutcomes` and `strength` from the evidence artifacts | Integration over real eval-quality | P0 | Any break in the chain changes the outcome |
 | Missing isolation manifest is Invalid | Run with the manifest suppressed; assert exit 3 and Invalid, a non-empty persisted `score` stderr and no evidence artifact | Integration | P0 | A runtime that fills a default manifest passes, which the assertion catches |
 | Policy template has no threshold values; a filled copy validates | Contract test over `assets/scoring-policy.template.json` | Contract | P1 | Adding a default value fails |
+| The runtime guards its own writes to the run directory (added 2026-09-24 in Story 1.8's final review; round 2 added the directory cases, the sealing cases and the FIFO read; round 3 added the held directories and the retraction a directory blocks) | A stub target plants `trial-sets/P-001/record-1.json` as a link into the adopter's tree, another rewrites `eval-contract.json`, and others swap `trials/clean` for a link into `rules/`, replace it with a directory of their own, or move `trials/` into the project behind a link; a preloaded wrapper fails the last verification after the index was written, touches a tracked project file after the trials, or moves the run directory away before the last verification; another replaces `trial-sets.json` with a directory before the retraction; a writer unit moves a directory out during a write, another reads a file swapped for a FIFO, another asserts every directory it made is held open until `close` and nothing is written after it, and another removes a file a directory replaced | Integration and unit | P0 | Following links, reading the sealed files back from disk, dropping the verification, the device and inode check, the reported-path check, the check after a write, the tree read before `completed`, the order that writes `completed` last, the named retraction failure, the removal refused as a run-directory error, the held directory descriptors (on Linux, where a freed inode number passes to the next directory made) or the non-blocking read makes a case exit 0, crash, write through the link or into the moved directory, keep the index, say completed, or hang past its deadline |
+| `score` reads only regular files (added 2026-09-24 in Story 1.8's final review round 2) | A record swapped for a FIFO exits 10 naming it, with no engine call, inside a 30 s deadline | Integration | P1 | A blocking read hangs `score` past the deadline |
+| `score` holds every file to the run that sealed it (added 2026-09-24 in Story 1.8's final review) | A record rewritten to a pass, a manifest rewritten with its records' references, a reference out of the run directory, one run's trial set copied into another with its runId, a record copied under a name the run never sealed, and a manifest reference naming the other set's manifest, each exit 10 naming the reason | Contract | P0 | Dropping the record or manifest anchors, the unrecorded-digest finding, the runId derivation, the run-directory check or the set's-own-manifest check lets one case reach the engine or lose its reason |
 
 ### Story 1.9: Qualify gameability and historical probes, and judge rubrics
 
@@ -530,6 +533,37 @@ Levels: integration. Files: the supervision tests for `cli/lib/agent-supervisor.
 | Leader and supervisor killed together: the group stops and the runner returns in bounded time | Kill both, assert no process of the group remains and the runner returns a transport failure | Integration | P0 | Reverting the change makes the case time out |
 | A dead run's workspaces and worktree registration reclaimed | Kill a run during qualification, run `preflight` again, assert the temp directory and `git worktree list` are clean and the adopter's status and refs unchanged | Integration | P0 | Reverting the reclaim leaves the workspace and the registration |
 | A live run's workspace left alone | A marker naming a live process survives the next run | Integration | P1 | Reclaiming every marked workspace fails it |
+
+### Story 1.29: Record what a live run spends
+
+Levels: integration. File: `test/test-evaluate-run.js` (`test:evaluate-run`).
+
+| AC | Test | Level | P | Revert check |
+| --- | --- | --- | --- | --- |
+| Reported use recorded per trial and summed per set | A stub target reports a known token and cost use; assert each record's `resourceUse` and the manifest's `actualResourceUse` | Integration | P1 | Reverting the reading records zero, which the assertion catches |
+| Unreported use marked | A stub target that reports nothing; assert `run.json` marks the use unreported | Integration | P1 | Dropping the mark leaves a zero that reads as measured |
+
+### Story 1.30: Send `principal` and `matcher` bindings
+
+Levels: integration. File: `test/test-evaluate-run.js` (`test:evaluate-run`), `test/test-evaluate-check.js` for the principal mapping rule.
+
+| AC | Test | Level | P | Revert check |
+| --- | --- | --- | --- | --- |
+| A `principal` binding sends its mapped identity | A stub target prints the identity it received; two principals reach it in plan order, and the observation records the principal, never the credential | Integration | P0 | Reverting the binding exits 12 |
+| An unmapped principal is an authoring defect | `check` over a plan naming a principal the evaluation does not map | Unit | P1 | Removing the rule lets the run start and exit 12 |
+| A `matcher` binding sends a seeded, schema-derived value | The stub receives a schema-admitted value for `any` and a schema-refused one for `type-violating`; two runs with one seed send the same bytes | Integration | P1 | Reverting the choice exits 12 |
+| A binding the runtime cannot send stops the run | A step binding an unsupported kind exits 12 naming the step and the kind | Integration | P2 | Sending nothing for it exits 0, which the case catches |
+
+### Story 1.31: Sandbox the target's file system
+
+Levels: integration over real eval-quality. File: `test/test-evaluate-run.js` (`test:evaluate-run`).
+
+| AC | Test | Level | P | Revert check |
+| --- | --- | --- | --- | --- |
+| The target reaches its workspace and nothing else | A stub target tries to read the evaluation folder's `contract.json` and to write into `runs/`; both are refused and the run's artifacts are unchanged | Integration | P0 | Reverting the confinement lets the stub read the contract |
+| `observedMounts` comes from the confinement's report | A stub reads a path it was not granted; the path appears in `observedMounts` and eval-quality records the isolation violation | Integration over real eval-quality | P0 | Reverting the report leaves `observedMounts` empty |
+| A platform without confinement refuses unless the evaluation opts out | One case asserts the refusal exits 12, another the opt-out recorded in `run.json` | Integration | P1 | Dropping the refusal runs unconfined silently |
+| The confinement covers processes the target leaves running | A stub leaves a process running that, after `run` exits, rewrites a sealed record and the digest `run.json` recorded for it; `score` refuses the run | Integration over real eval-quality | P0 | Reverting the confinement for leftover processes lets `score` pass the rewritten record to the engine |
 
 ## The Dogfood Proof (AD-15)
 

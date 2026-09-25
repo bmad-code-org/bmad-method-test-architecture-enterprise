@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-22-2026 18:09
-last_updated: 09-24-2026 18:00
+last_updated: 09-24-2026 21:58
 project: "bmad-method-test-architecture-enterprise: Evaluate"
 project_key: NOKEY
 tracking_system: file-system
@@ -42,8 +42,8 @@ development_status:
   1-4-ship-tea-evaluate-with-check-and-digest: done
   1-5-move-the-registry-records-and-provenance-into-the-runtime: done
   1-6-probe-a-skill-through-the-generic-runner-and-tea-evaluate-pr: done
-  1-7-mutate-only-in-a-disposable-copy-and-prove-the-rollback: review
-  1-8-run-the-clean-and-mutated-arms-and-score-them: backlog
+  1-7-mutate-only-in-a-disposable-copy-and-prove-the-rollback: done
+  1-8-run-the-clean-and-mutated-arms-and-score-them: review
   1-9-qualify-gameability-and-historical-probes-and-judge-rubrics: backlog
   1-17-drive-any-evaluation-layer-through-one-import-contract: backlog
   1-10-evaluate-a-stdio-mcp-tool-server: backlog
@@ -64,6 +64,9 @@ development_status:
   1-26-learn-an-unfamiliar-evaluation-framework-on-the-go: backlog
   1-27-tell-a-documented-guard-from-an-invented-risk-in-the-test-d: backlog
   1-28-recover-from-a-killed-run: backlog
+  1-29-record-what-a-live-run-spends: backlog
+  1-30-send-principal-and-matcher-bindings: backlog
+  1-31-sandbox-the-targets-file-system: backlog
   epic-1-retrospective: optional
 
   epic-2: backlog

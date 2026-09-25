@@ -53,6 +53,9 @@ class QualificationError extends Error {
   }
 }
 
+/** A directory held open, never through a link, so its inode number stays its own while the cycle lasts. */
+const HOLD = fs.constants.O_RDONLY | (fs.constants.O_DIRECTORY ?? 0) | (fs.constants.O_NOFOLLOW ?? 0);
+
 /** How often `find` occurs in `bytes`, overlapping occurrences included, so `abab` occurs twice in `ababab`. */
 function countOccurrences(bytes, find) {
   if (find.length === 0) return 0;
@@ -70,13 +73,16 @@ function countOccurrences(bytes, find) {
  * so the cycle can refuse to write or read through a path an arm later
  * swapped for a link, `launch.root` itself or any directory above it
  * included. A link inside the workspace (one the workspace already contains)
- * is followed like any directory.
+ * is followed like any directory. The directory is held open until
+ * `releasePlan`, so its inode number cannot pass to a directory an arm makes
+ * after removing it (Linux's ext4 and overlayfs hand a freed number to the
+ * next directory made), and its recorded device and inode name it alone.
  *
  * @param {string} root the workspace's `launch.root`
  * @param {{mutationId: string, targetArtifact: string, operator: {find: string, replace: string}}} mutation
  * @param {object} [options]
  * @param {string} [options.within] the directory every write and read must stay inside; `root` by default
- * @returns {{ file: string, name: string, original: Buffer, mutated: Buffer, mode: number, realDirectory: string, identity: {dev: number, ino: number} }}
+ * @returns {{ file: string, name: string, original: Buffer, mutated: Buffer, mode: number, realDirectory: string, identity: {dev: number, ino: number}, descriptor: number }}
  * @throws {QualificationError} exit 10 for a target that is not a regular file or a `find` that does not occur exactly once, exit 12 for one outside `within`
  */
 function planReplaceExact(root, mutation, { within = root } = {}) {
@@ -104,7 +110,6 @@ function planReplaceExact(root, mutation, { within = root } = {}) {
   }
   const realWithin = fs.realpathSync.native(within);
   const realDirectory = fs.realpathSync.native(path.dirname(file));
-  const directoryStats = fs.statSync(realDirectory);
   if (!isInside(realWithin, realDirectory)) {
     throw new QualificationError(
       QUALIFICATION_EXITS.infrastructure,
@@ -126,6 +131,16 @@ function planReplaceExact(root, mutation, { within = root } = {}) {
     Buffer.from(mutation.operator.replace, 'utf8'),
     original.subarray(at + find.length),
   ]);
+  let descriptor;
+  try {
+    descriptor = fs.openSync(realDirectory, HOLD);
+  } catch (error) {
+    throw new QualificationError(
+      QUALIFICATION_EXITS.infrastructure,
+      `${mutation.mutationId}: the directory holding targetArtifact ${mutation.targetArtifact} cannot be held open: ${error.message}`,
+    );
+  }
+  const directoryStats = fs.fstatSync(descriptor);
   return {
     file,
     name: path.basename(file),
@@ -134,7 +149,17 @@ function planReplaceExact(root, mutation, { within = root } = {}) {
     mode: stats.mode & 0o7777,
     realDirectory,
     identity: { dev: directoryStats.dev, ino: directoryStats.ino },
+    descriptor,
   };
+}
+
+/** Releases the directory a plan holds open; the plan is not written or read through afterwards. */
+function releasePlan(planned) {
+  try {
+    fs.closeSync(planned.descriptor);
+  } catch {
+    // A descriptor already gone has nothing left to release.
+  }
 }
 
 /**
@@ -178,8 +203,11 @@ function assertContained(planned, mutation, evidence, when) {
 
 /**
  * Runs `work` with the process inside the target's real directory, confirmed
- * to be the very directory the plan recorded (its device and inode), and
- * restores the working directory afterwards. Every write and read of the
+ * to be the very directory the plan recorded (its device and inode, which the
+ * held descriptor keeps from being reused) at its recorded place (the path the
+ * system reports for the working directory, since a directory moved elsewhere
+ * keeps its inode and a link left in its place leads to it), and restores the
+ * working directory afterwards. Every write and read of the
  * target goes through here by its bare name, so a path swapped for a link
  * between a check and a write, by a process a target left running say, can
  * no longer carry the runtime out of the workspace: a directory held open
@@ -202,6 +230,26 @@ function inTargetDirectory(planned, what, evidence, work) {
       throw new QualificationError(
         QUALIFICATION_EXITS.infrastructure,
         `${what}: ${planned.realDirectory} is no longer the directory the plan recorded, so the runtime will not write or read the target through it`,
+        evidence,
+      );
+    }
+    // Node keeps the working directory's path from the last chdir; entering
+    // '.' again makes it ask the system where the directory lies now.
+    let reported;
+    try {
+      process.chdir('.');
+      reported = process.cwd();
+    } catch (error) {
+      throw new QualificationError(
+        QUALIFICATION_EXITS.infrastructure,
+        `${what}: the directory holding the target cannot be located any more: ${error.message}`,
+        evidence,
+      );
+    }
+    if (reported !== planned.realDirectory) {
+      throw new QualificationError(
+        QUALIFICATION_EXITS.infrastructure,
+        `${what}: ${planned.realDirectory} now lies at ${reported}, so the runtime will not write or read the target through it`,
         evidence,
       );
     }
@@ -238,7 +286,11 @@ function writeOrStop(planned, bytes, what, evidence) {
  */
 function applyReplaceExact(root, mutation, options) {
   const planned = planReplaceExact(root, mutation, options);
-  writeOrStop(planned, planned.mutated, `${mutation.mutationId}'s mutation of ${mutation.targetArtifact}`, null);
+  try {
+    writeOrStop(planned, planned.mutated, `${mutation.mutationId}'s mutation of ${mutation.targetArtifact}`, null);
+  } finally {
+    releasePlan(planned);
+  }
   return planned;
 }
 
@@ -282,6 +334,17 @@ function digestOfFile(planned, digestBytes, evidence) {
 async function runMutationCycle({ root, within = root, mutation, runArm, reExecutionCap, digestBytes, log = () => {} }) {
   const digestOf = digestBytes ?? (await loadEngine()).digestBytes;
   const planned = planReplaceExact(root, mutation, { within });
+  try {
+    return await cycle(planned, { mutation, runArm, reExecutionCap, digestOf, log });
+  } finally {
+    // The target's directory stays held open until the cycle ends, so no
+    // directory an arm makes can take its inode number.
+    releasePlan(planned);
+  }
+}
+
+/** AD-8's six steps over a planned target, whose directory `runMutationCycle` holds open throughout. */
+async function cycle(planned, { mutation, runArm, reExecutionCap, digestOf, log }) {
   const evidence = {
     mutationId: mutation.mutationId,
     targetArtifact: mutation.targetArtifact,
@@ -453,5 +516,6 @@ module.exports = {
   countOccurrences,
   planReplaceExact,
   qualifiedProbe,
+  releasePlan,
   runMutationCycle,
 };

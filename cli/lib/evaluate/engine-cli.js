@@ -66,12 +66,14 @@ const DOCUMENTED_EXITS = new Map([
  * @param {string[]} args
  * @param {object} options
  * @param {string} options.runDirectory `runs/<invocationId>/`; the record goes to `engine/<stage>.json` in it
+ * @param {string} [options.recordPath] where the record goes instead, for a stage called more than once in a run (`score`, once per probe)
+ * @param {{ write: (file: string, bytes: string) => string }} [options.writer] the run directory's writer, which writes the record as a new file and holds its digest (`run-directory.js`)
  * @param {NodeJS.ProcessEnv} [options.env]
  * @param {(line: string) => void} [options.log]
  * @returns {{ exitCode: number, stdout: string, stderr: string, recordPath: string }}
  * @throws {EngineStageError} when the stage cannot start, is killed by a signal, or exits with an undocumented code
  */
-function runEngineStage(stage, args, { runDirectory, env = process.env, log = () => {} }) {
+function runEngineStage(stage, args, { runDirectory, recordPath: recordAt = null, writer = null, env = process.env, log = () => {} }) {
   const cli = engineCliPath(env);
   const substituted = typeof env[ENGINE_CLI_ENV] === 'string' && env[ENGINE_CLI_ENV].length > 0;
   if (substituted) log(`${ENGINE_CLI_ENV} substitutes ${cli} for the eval-quality CLI`);
@@ -79,9 +81,7 @@ function runEngineStage(stage, args, { runDirectory, env = process.env, log = ()
   const [command, commandArgs] = NODE_SCRIPT.test(cli) ? [process.execPath, [cli, ...argv]] : [cli, argv];
   const result = spawnSync(command, commandArgs, { encoding: 'utf8', env, maxBuffer: MAX_STAGE_OUTPUT_BYTES });
   const exitCode = result.status;
-  const directory = path.join(runDirectory, 'engine');
-  fs.mkdirSync(directory, { recursive: true });
-  const recordPath = path.join(directory, `${stage}.json`);
+  const recordPath = recordAt ?? path.join(runDirectory, 'engine', `${stage}.json`);
   const record = {
     stage,
     cli,
@@ -93,7 +93,12 @@ function runEngineStage(stage, args, { runDirectory, env = process.env, log = ()
     stdout: result.stdout ?? '',
     stderr: result.stderr ?? '',
   };
-  fs.writeFileSync(recordPath, `${JSON.stringify(record, null, 2)}\n`);
+  if (writer === null) {
+    fs.mkdirSync(path.dirname(recordPath), { recursive: true });
+    fs.writeFileSync(recordPath, `${JSON.stringify(record, null, 2)}\n`);
+  } else {
+    writer.write(recordPath, `${JSON.stringify(record, null, 2)}\n`);
+  }
   if (result.error) {
     throw new EngineStageError(`could not run eval-quality ${stage} at ${cli}: ${result.error.message}`, { cause: result.error });
   }

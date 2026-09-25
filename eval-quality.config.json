@@ -538,6 +538,10 @@
           "reason": "an eval-quality package export, not a TEA declaration"
         },
         {
+          "token": "minimumTrialCount",
+          "reason": "an eval-quality scoring-policy field, not a TEA declaration"
+        },
+        {
           "token": "digestComposite",
           "reason": "an eval-quality package export, not a TEA declaration"
         },
@@ -1403,10 +1407,10 @@
         },
         {
           "file": "docs/explanation/eval-quality-roadmap.md",
-          "key": "The pin is 4.1.2 now",
+          "key": "The pin is 4.1.4 now",
           "settles": {
             "module": "test/lib/doc-claim-sources.js",
-            "export": "EVAL_QUALITY_PIN_IS_4_1_2"
+            "export": "EVAL_QUALITY_PIN_IS_4_1_4"
           },
           "reason": "package.json's eval-quality devDependency, compared for an exact match"
         },

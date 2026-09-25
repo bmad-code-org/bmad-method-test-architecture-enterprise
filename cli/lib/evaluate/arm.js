@@ -11,11 +11,16 @@
  * `ArmError` (exit 12): the run cannot send the request the contract means.
  *
  * What comes back is recorded twice: as the port answered it, for evidence, and
- * as a Sealed Run Record observation (`provenance: baseline`, the call inputs
- * the plan bound), keyed by step, which is what an oracle's
- * `/interactions/<stepId>/...` pointers resolve against. An answer whose exit
- * code the registry entry declares as an infrastructure exit code is a target
- * that could not run, so it also stops the arm (AD-7).
+ * as a Sealed Run Record observation (the call inputs the plan bound), keyed by
+ * step, which is what an oracle's `/interactions/<stepId>/...` pointers resolve
+ * against. A qualification arm records `provenance: baseline`; a scored trial
+ * records `evaluator-chosen`, since under the deterministic evaluator the plan
+ * is the evaluator's own exercise of the target, and eval-quality's witness
+ * match counts only evaluator-chosen observations (AD-7). An answer whose exit
+ * code the registry entry declares as an infrastructure exit code, or that a
+ * signal from outside stopped (`stoppedFromOutside`), is a target that could
+ * not run, so it also stops the arm (AD-7). A step that crashed by a signal of
+ * its own is an observation like any other.
  *
  * `hostEnvironmentPort` is the port every leg and arm goes through: it adds the
  * host's values for the keys a registry entry permits beneath the request's
@@ -29,6 +34,22 @@ const { recordObservation } = require('./records');
 /** An injected environment value shorter than this is not scrubbed from output: it would match ordinary text. */
 const MIN_SCRUBBED_VALUE_LENGTH = 8;
 const SCRUBBED = '[redacted]';
+
+/**
+ * The signals that stop a process from outside it (hang-up, interrupt, quit,
+ * kill, terminate), which the adapter reports as that signal's number made
+ * negative. A process a signal of its own making ended (an abort, a
+ * segmentation fault) crashed, and its observation is the target's behavior
+ * for the oracles to judge; eval-quality's record keeps the signed code for
+ * that reason.
+ */
+const EXTERNAL_STOPS = new Set([1, 2, 3, 9, 15]);
+
+/** Whether an observed exit code says the step was stopped from outside, or reports no code at all: a target that could not run. */
+function stoppedFromOutside(exitCode) {
+  if (!Number.isInteger(exitCode)) return true;
+  return exitCode < 0 && EXTERNAL_STOPS.has(-exitCode);
+}
 
 /** An arm the run cannot drive as the contract means it; `tea-evaluate` reports it as infrastructure (exit 12). */
 class ArmError extends Error {
@@ -148,13 +169,14 @@ function orderedSteps(plan) {
  * @param {object} options.contract the authored contract
  * @param {{probe: Function}} options.port a `hostEnvironmentPort` over the workspace's adapter
  * @param {object} options.registry the registry, for each target's infrastructure exit codes
- * @param {string} options.label names the arm's legs and observations (`baseline`, `mutated`, `re-pass-1`)
+ * @param {string} options.label names the arm's legs and observations (`baseline`, `mutated`, `re-pass-1`, `trial-2`)
+ * @param {'baseline'|'evaluator-chosen'} [options.provenance] what each record observation carries
  * @param {AbortSignal} [options.signal]
  * @returns {Promise<{ steps: object[], stepObservations: Record<string, object> }>}
  *   `steps` holds each step's persistable request and the port's observation, `stepObservations` the record observations by step
  * @throws {ArmError}
  */
-async function runArm({ contract, port, registry, label, signal }) {
+async function runArm({ contract, port, registry, label, provenance = 'baseline', signal }) {
   const operations = operationsById(contract);
   const steps = [];
   const stepObservations = {};
@@ -189,9 +211,13 @@ async function runArm({ contract, port, registry, label, signal }) {
     sequence += 1;
     steps.push({ stepId: step.stepId, request: persistableRequest(answered.request), observation });
     const entry = registry.targetFor(request.interfaceId, request.executable);
-    if (entry !== undefined && entry.infrastructureExitCodes.includes(observation.exitCode)) {
+    const { exitCode } = observation;
+    const signalled = stoppedFromOutside(exitCode);
+    if (signalled || (entry !== undefined && entry.infrastructureExitCodes.includes(exitCode))) {
       const error = new ArmError(
-        `the ${label} arm's step ${step.stepId} exited ${observation.exitCode}, which the ${request.executable} registry entry declares as an infrastructure exit code: the target could not run`,
+        signalled
+          ? `the ${label} arm's step ${step.stepId} was stopped by a signal from outside it (exit code ${JSON.stringify(exitCode)}): the target could not run`
+          : `the ${label} arm's step ${step.stepId} exited ${exitCode}, which the ${request.executable} registry entry declares as an infrastructure exit code: the target could not run`,
       );
       error.steps = steps;
       throw error;
@@ -205,10 +231,10 @@ async function runArm({ contract, port, registry, label, signal }) {
       stderr: observation.stderr,
       exitCode: observation.exitCode,
       artifacts: observation.artifacts ?? {},
-      provenance: 'baseline',
+      provenance,
     });
   }
   return { steps, stepObservations };
 }
 
-module.exports = { ArmError, hostEnvironmentPort, persistableRequest, runArm };
+module.exports = { ArmError, hostEnvironmentPort, persistableRequest, runArm, stoppedFromOutside };

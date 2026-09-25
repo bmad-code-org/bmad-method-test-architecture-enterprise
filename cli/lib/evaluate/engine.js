@@ -36,7 +36,7 @@ class EngineUnavailableError extends Error {
   constructor(cause) {
     super(
       `${ENGINE_PACKAGE} is not installed where tea-evaluate can reach it. ` +
-        `It is an optional peer dependency of TeA; install ${ENGINE_PACKAGE}@">=4.1.2" in the project that runs Evaluate. ` +
+        `It is an optional peer dependency of TeA; install ${ENGINE_PACKAGE}@">=4.1.4" in the project that runs Evaluate. ` +
         `(${cause?.message ?? 'no further detail'})`,
       { cause },
     );
