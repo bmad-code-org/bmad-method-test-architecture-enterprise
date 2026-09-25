@@ -18,9 +18,7 @@
  * the gate scans and asserts, line by line, that the entry's lookup returns
  * exactly the script the line spells out -- so a swap, a typo in either half,
  * or a comment that stops matching any known script fails here even when
- * `npm run <script>` itself would still exit 0. It also asserts that a script
- * deliberately left off the allowlist (`test:cli`, commented the same way as
- * the others on `test/README.md`) stays that way.
+ * `npm run <script>` itself would still exit 0.
  *
  * Usage: node test/test-doc-invocation-entry.js
  */
@@ -36,14 +34,6 @@ const { ALLOWLIST_BY_COMMENT, ALLOWLISTED_SCRIPTS } = require('./lib/doc-invocat
 
 /** The pages `eval-quality.config.json`'s `doc-invocations` section names under `pages`. */
 const PAGES = ['README.md', 'docs/explanation/eval-quality-adoption-guide.md', 'test/README.md'];
-
-/**
- * Documented with a trailing comment on `test/README.md`, and deliberately
- * left off the allowlist: `test:cli` is a separately sharded suite that takes
- * 12-15 minutes, the wrong fit for a bounded documentation gate. Named here so
- * the exclusion is asserted rather than silently unreached by the checks below.
- */
-const DELIBERATELY_UNDECLARED_SCRIPTS = new Set(['test:cli']);
 
 /** Every `npm run <script>  # <comment>` line in one page, script and comment paired exactly as the line spells them. */
 function documentedLines(relative) {
@@ -81,23 +71,11 @@ check('at least one documented "npm run <script>  # <comment>" line was found on
 
 check("every documented line's comment resolves, through the entry's lookup, to the script that same line literally spells out", () => {
   for (const entry of lines) {
-    if (DELIBERATELY_UNDECLARED_SCRIPTS.has(entry.script)) continue;
     const resolved = ALLOWLIST_BY_COMMENT.get(entry.comment);
     assert.strictEqual(
       resolved,
       entry.script,
       `${entry.file}:${entry.line} spells out "npm run ${entry.script}" beside the comment "${entry.comment}", but the entry's lookup resolves that comment to ${JSON.stringify(resolved)}`,
-    );
-  }
-});
-
-check('a deliberately undeclared script never resolves through the lookup, even though its own page comments it', () => {
-  for (const entry of lines) {
-    if (!DELIBERATELY_UNDECLARED_SCRIPTS.has(entry.script)) continue;
-    assert.strictEqual(
-      ALLOWLIST_BY_COMMENT.get(entry.comment),
-      undefined,
-      `${entry.file}:${entry.line} documents "npm run ${entry.script}", which is deliberately undeclared, but its comment "${entry.comment}" now resolves through the entry's lookup -- either un-declare it here too or add it to the allowlist for real`,
     );
   }
 });

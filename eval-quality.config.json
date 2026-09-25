@@ -65,7 +65,8 @@
         "npm run test:eval-ci-data",
         "npm run test:eval-test-design-data",
         "npm run test:eval-routing-data",
-        "npm run test:eval-automate-data"
+        "npm run test:eval-automate-data",
+        "npm run test:cli"
       ]
     },
     "sampleInput": "package.json",

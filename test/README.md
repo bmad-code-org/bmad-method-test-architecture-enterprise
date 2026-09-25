@@ -30,7 +30,7 @@ and `test:atdd-net-guard` execute generated Playwright tests under an OS sandbox
 with no unconfined fallback, and `selectBackend()` exits 2 naming the missing
 binary and the install command if it is absent. macOS needs nothing extra;
 `sandbox-exec` ships with the OS. See `.github/workflows/quality.yaml`'s
-`validate` job for the exact install step CI runs.
+`chain` job for the exact install step CI runs.
 
 ```bash
 # Full quality gate (all suites, lint, markdownlint, format)
@@ -42,7 +42,7 @@ npm run test:coverage
 # Individual suites
 npm run test:schemas           # test-agent-schema
 npm run test:install           # test-installation-components
-npm run test:cli               # test-test-review-cli.js
+npm run test:cli               # test-test-review-cli
 npm run test:knowledge         # test-knowledge-base
 npm run test:release-metadata  # test-release-metadata
 npm run test:eval-data         # eval-fragment-selection --validate-only

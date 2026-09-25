@@ -12,6 +12,11 @@
  * against the live repo, could not distinguish "nothing is wrong" from "the
  * check that would say so is broken."
  *
+ * `scriptsCoveredInCi` gets the same treatment: a chain run through
+ * tools/test-shards.js over a full 1..N matrix covers every chained script,
+ * an incomplete matrix covers none of them, and with no sharded run a chained
+ * script counts only when a workflow names it.
+ *
  * Usage: node test/test-ci-coverage.js
  */
 
@@ -20,7 +25,13 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { DELIBERATELY_LOCAL, scriptsRunInCi, staleDeliberatelyLocalEntries, uncoveredScripts } = require('../tools/validate-ci-coverage');
+const {
+  chainedScripts,
+  DELIBERATELY_LOCAL,
+  scriptsCoveredInCi,
+  staleDeliberatelyLocalEntries,
+  uncoveredScripts,
+} = require('../tools/validate-ci-coverage');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 
@@ -83,9 +94,35 @@ function checkStaleDeliberatelyLocalEntriesClearsAPresentScript() {
   );
 }
 
+const FULL_SHARD_RUN = { file: 'quality.yaml', job: 'chain', total: 2, shards: [1, 2] };
+
+function checkShardedChainCoversEveryChainedScript() {
+  const covered = scriptsCoveredInCi(['test:a', 'test:b'], new Set(), [FULL_SHARD_RUN]);
+  check(
+    covered.has('test:a') && covered.has('test:b'),
+    `a full shard matrix did not count the chain as run in CI: ${JSON.stringify([...covered])}`,
+  );
+}
+
+function checkChainedScriptNeitherShardedNorNamedIsMissing() {
+  const covered = scriptsCoveredInCi(['test:a', 'test:b'], new Set(['test:a']), []);
+  check(
+    covered.has('test:a') && !covered.has('test:b'),
+    `with no shard run, only the named script should count as run in CI: ${JSON.stringify([...covered])}`,
+  );
+}
+
+function checkIncompleteShardMatrixCoversNothing() {
+  const covered = scriptsCoveredInCi(['test:a'], new Set(), [{ ...FULL_SHARD_RUN, total: 3 }]);
+  check(!covered.has('test:a'), 'a shard matrix of [1, 2] for a 3-way split still counted the chain as run in CI');
+}
+
 function checkRealRepoIsClean() {
   const manifest = JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'package.json'), 'utf8'));
-  const inCi = scriptsRunInCi();
+  const chained = chainedScripts(manifest);
+  const inCi = scriptsCoveredInCi(chained);
+  const notRun = chained.filter((script) => !inCi.has(script));
+  check(notRun.length === 0, `chained script(s) the real workflows never run: ${JSON.stringify(notRun)}`);
   const uncovered = uncoveredScripts(manifest, inCi);
   check(
     uncovered.length === 0,
@@ -102,6 +139,9 @@ function main() {
   checkUncoveredScriptsExemptsTestByName();
   checkStaleDeliberatelyLocalEntriesFlagsARemovedScript();
   checkStaleDeliberatelyLocalEntriesClearsAPresentScript();
+  checkShardedChainCoversEveryChainedScript();
+  checkChainedScriptNeitherShardedNorNamedIsMissing();
+  checkIncompleteShardMatrixCoversNothing();
   checkRealRepoIsClean();
 
   if (failures.length > 0) {

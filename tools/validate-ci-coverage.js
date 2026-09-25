@@ -6,20 +6,25 @@
  * number beside the code computing it would be exactly the drift this file
  * exists to catch.
  *
- * The GitHub Actions workflow does not run that chain: it runs each check as
- * its own step so a failure names itself in the job list instead of hiding
- * behind whichever check happened to be first. That is worth keeping, and it
- * means the workflow is a transcription of the chain, and a transcription
- * drifts.
+ * The GitHub Actions workflow reaches the chain two ways. The `chain` job in
+ * `.github/workflows/quality.yaml` splits it across a matrix of runners with
+ * `node tools/test-shards.js --shard ${{ matrix.shard }}/N`, which partitions
+ * every chained script over the N shards, so a workflow job that runs that
+ * command over a matrix listing exactly 1 through N covers the whole chain.
+ * Any other workflow step covers a chained script by naming it as a literal
+ * `npm run <script>`, which is how the prettier, eslint, markdownlint,
+ * supply-chain and layering jobs name theirs.
  *
- * It already did. Four checks added in one change reached `npm test` and never
- * reached the workflow, so contract drift, a broken replay record and a
- * corrupted trace corpus would all have passed CI on a pull request while
- * failing on a laptop.
+ * Before the split, the workflow ran each check as its own step, and that
+ * transcription drifted. Four checks added in one change reached `npm test`
+ * and never reached the workflow, so contract drift, a broken replay record
+ * and a corrupted trace corpus would all have passed CI on a pull request
+ * while failing on a laptop.
  *
- * So this compares the two and fails on a chain entry no workflow step runs.
- * The reverse is allowed: a workflow may run more than the chain does, which is
- * how the packaged-install and CLI jobs work.
+ * So this compares the two and fails on a chain entry that neither a full
+ * shard matrix nor a named step runs, and on a shard matrix that skips a
+ * shard. The reverse is allowed: a workflow may run more than the chain does,
+ * which is how the docs job's link check and site build work.
  *
  * The reverse direction has its own gap: nothing held every OTHER script in
  * `package.json` to that same "covered or explained" bar, so a script outside
@@ -30,9 +35,8 @@
  * every script is either found running in CI, listed in `DELIBERATELY_LOCAL`
  * with the reason it stays out, or it fails. `test` itself is exempted by
  * name rather than added to the allowlist, because its sub-scripts are what
- * `chainedScripts`/`scriptsRunInCi` above already validate individually, and
- * this file's own workflow deliberately runs each as its own step rather than
- * the meta-script (see the header comment on why).
+ * `chainedScripts` and `scriptsCoveredInCi` below already validate
+ * individually, and the workflow shards those sub-scripts across runners.
  *
  * It also holds the chain against `scripts` itself: every name the chain calls
  * has to be defined. `npm run` reports a missing script only when the chain
@@ -47,6 +51,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const yaml = require('js-yaml');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const WORKFLOW_ROOT = path.join(PROJECT_ROOT, '.github', 'workflows');
@@ -85,6 +90,58 @@ function scriptsRunInCi() {
   return found;
 }
 
+/** The invocation that runs one shard of the chain, with the shard count it passes. */
+const SHARD_INVOCATION = /node tools\/test-shards\.js --shard \$\{\{ matrix\.shard \}\}\/(\d+)\b/g;
+
+/**
+ * Every workflow job that runs the chain through tools/test-shards.js: the
+ * workflow file, the job id, the shard count its command passes, and the
+ * `strategy.matrix.shard` list the job runs that command over.
+ *
+ * A YAML parse, unlike `scriptsRunInCi`, because the claim ties a step's
+ * command to its own job's matrix, and a text scan cannot say which job a
+ * matrix belongs to.
+ */
+function shardedChainRuns(workflowRoot = WORKFLOW_ROOT) {
+  const runs = [];
+  const files = fs.existsSync(workflowRoot) ? fs.readdirSync(workflowRoot).sort() : [];
+  for (const name of files) {
+    if (!name.endsWith('.yml') && !name.endsWith('.yaml')) continue;
+    const doc = yaml.load(fs.readFileSync(path.join(workflowRoot, name), 'utf8'));
+    for (const [job, definition] of Object.entries(doc?.jobs ?? {})) {
+      for (const step of definition?.steps ?? []) {
+        if (typeof step?.run !== 'string') continue;
+        for (const match of step.run.matchAll(SHARD_INVOCATION)) {
+          runs.push({ file: name, job, total: Number.parseInt(match[1], 10), shards: definition?.strategy?.matrix?.shard });
+        }
+      }
+    }
+  }
+  return runs;
+}
+
+/** Why one sharded run fails to cover the whole chain, or an empty list when it covers it. */
+function shardRunProblems(run) {
+  const where = `${run.file} job ${run.job}`;
+  if (!Number.isInteger(run.total) || run.total < 1) return [`${where} passes a shard count of ${run.total}; it has to be 1 or more`];
+  const expected = Array.from({ length: run.total }, (_, index) => index + 1);
+  const listed = Array.isArray(run.shards) ? run.shards : [];
+  if (JSON.stringify(listed) === JSON.stringify(expected)) return [];
+  return [
+    `${where} runs tools/test-shards.js as ${run.total} shards over matrix.shard ${JSON.stringify(run.shards ?? null)}; the matrix has to list exactly ${JSON.stringify(expected)}`,
+  ];
+}
+
+/**
+ * Every script CI runs: each literal `npm run <script>` in a workflow, plus the
+ * whole chain when some job runs tools/test-shards.js over a full shard matrix.
+ */
+function scriptsCoveredInCi(chained, inCi = scriptsRunInCi(), runs = shardedChainRuns()) {
+  const covered = new Set(inCi);
+  if (runs.some((run) => shardRunProblems(run).length === 0)) for (const script of chained) covered.add(script);
+  return covered;
+}
+
 /**
  * Every script `scriptsRunInCi()` will never find, paired with why running it
  * in CI would be wrong rather than merely unproven, not a convenience.
@@ -117,6 +174,8 @@ const DELIBERATELY_LOCAL = {
   'eval:test-review': 'a live agent eval; same reason as eval:all',
   'eval:trace': 'a live agent eval; same reason as eval:all',
   'eval:transcript': 'a live agent eval; same reason as eval:all',
+  'test:coverage':
+    "the single-process local form of the coverage gate; CI holds the same package.json thresholds by merging the chain shards' raw V8 output with `c8 report` in the coverage job, so running it there would repeat the whole chain serially on one runner, which is the 20-minute job the shards replaced",
   prepare:
     'an npm lifecycle hook every `npm ci`/`npm install` invokes automatically; it runs, just never via the literal `npm run prepare` text this scan looks for',
   prepublishOnly:
@@ -148,58 +207,6 @@ function staleDeliberatelyLocalEntries(manifest) {
   return Object.keys(DELIBERATELY_LOCAL).filter((name) => typeof manifest.scripts[name] !== 'string');
 }
 
-const CLI_SUITE_FILE = path.join(PROJECT_ROOT, 'test', 'test-test-review-cli.js');
-
-/**
- * The suite numbers test/test-test-review-cli.js defines, read off its own
- * `suiteEnabled(n)` call sites.
- *
- * A text scan rather than a require, for the reason `scriptsRunInCi` scans rather
- * than parses, and because requiring that file executes a 90-spawn suite.
- */
-function cliSuiteNumbers() {
-  if (!fs.existsSync(CLI_SUITE_FILE)) return new Set();
-  const text = fs.readFileSync(CLI_SUITE_FILE, 'utf8');
-  const found = new Set();
-  for (const match of text.matchAll(/\bif \(suiteEnabled\((\d+)\)\)/g)) found.add(Number.parseInt(match[1], 10));
-  return found;
-}
-
-/** Every suite number the CLI job's shard matrix names, across all its shards. */
-function shardedSuiteNumbers() {
-  const found = new Set();
-  const files = fs.existsSync(WORKFLOW_ROOT) ? fs.readdirSync(WORKFLOW_ROOT) : [];
-  for (const name of files) {
-    if (!name.endsWith('.yml') && !name.endsWith('.yaml')) continue;
-    const text = fs.readFileSync(path.join(WORKFLOW_ROOT, name), 'utf8');
-    for (const match of text.matchAll(/^\s*suites:\s*"([\d,\s]+)"\s*$/gm)) {
-      for (const raw of match[1].split(',')) {
-        const parsed = Number.parseInt(raw.trim(), 10);
-        if (Number.isInteger(parsed)) found.add(parsed);
-      }
-    }
-  }
-  return found;
-}
-
-/** The CLI shard partition against the suites the file defines, both directions. */
-function shardProblems() {
-  const defined = cliSuiteNumbers();
-  if (defined.size === 0) return [];
-  const sharded = shardedSuiteNumbers();
-  if (sharded.size === 0) return [];
-  const problems = [];
-  for (const suite of [...defined].sort((a, b) => a - b)) {
-    if (!sharded.has(suite))
-      problems.push(`Suite ${suite} is defined in test/test-test-review-cli.js and is in no shard, so it runs in no CI job`);
-  }
-  for (const suite of [...sharded].sort((a, b) => a - b)) {
-    if (!defined.has(suite))
-      problems.push(`Suite ${suite} is named by a shard and is defined by no suiteEnabled() block, so that shard asks for nothing`);
-  }
-  return problems;
-}
-
 function main() {
   const manifest = JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'package.json'), 'utf8'));
   const chained = chainedScripts(manifest);
@@ -227,24 +234,25 @@ function main() {
     return 1;
   }
 
-  const inCi = scriptsRunInCi();
+  const runs = shardedChainRuns();
+  const runProblems = runs.flatMap((run) => shardRunProblems(run));
+  if (runProblems.length > 0) {
+    console.error(`${colors.red}a workflow job shards the npm test chain over an incomplete matrix:${colors.reset}`);
+    for (const problem of runProblems) console.error(`  - ${problem}`);
+    console.error(
+      `\n${colors.dim}Make the job's strategy.matrix.shard list 1 through N, where N is the count its tools/test-shards.js command passes.${colors.reset}`,
+    );
+    return 1;
+  }
+
+  const inCi = scriptsCoveredInCi(chained, scriptsRunInCi(), runs);
   const missing = chained.filter((script) => !inCi.has(script));
 
   if (missing.length > 0) {
     console.error(`${colors.red}${missing.length} check(s) in the npm test chain never run in CI:${colors.reset}`);
     for (const script of missing) console.error(`  - npm run ${script}`);
     console.error(
-      `\n${colors.dim}Add a step to the validate job in .github/workflows/quality.yaml, or remove the check from the chain.${colors.reset}`,
-    );
-    return 1;
-  }
-
-  const shards = shardProblems();
-  if (shards.length > 0) {
-    console.error(`${colors.red}the CLI job's shard partition does not match the suites it splits:${colors.reset}`);
-    for (const problem of shards) console.error(`  - ${problem}`);
-    console.error(
-      `\n${colors.dim}Edit the shard matrix in .github/workflows/quality.yaml so its lists cover every suite exactly once.${colors.reset}`,
+      `\n${colors.dim}Run the chain in a workflow job through \`node tools/test-shards.js --shard \${{ matrix.shard }}/N\` over a matrix listing 1 through N (the chain job in .github/workflows/quality.yaml does), give the check its own \`npm run\` step, or remove it from the chain.${colors.reset}`,
     );
     return 1;
   }
@@ -272,9 +280,10 @@ function main() {
   }
 
   const totalScripts = Object.keys(manifest.scripts).length;
+  const sharded = runs.length > 0 ? ` (sharded by ${runs.map((run) => `${run.file} job ${run.job} over ${run.total}`).join(', ')})` : '';
   console.log(
-    `${colors.green}✅${colors.reset} all ${chained.length} npm test chain step(s) are defined and run in CI, every one of the ` +
-      `${cliSuiteNumbers().size} CLI suite(s) is in a shard, and every one of ${totalScripts} package.json script(s) is either CI-covered or deliberately local`,
+    `${colors.green}✅${colors.reset} all ${chained.length} npm test chain step(s) are defined and run in CI${sharded}, and every one of ` +
+      `${totalScripts} package.json script(s) is either CI-covered or deliberately local`,
   );
   return 0;
 }
@@ -283,11 +292,11 @@ if (require.main === module) process.exit(main());
 
 module.exports = {
   chainedScripts,
-  cliSuiteNumbers,
   DELIBERATELY_LOCAL,
+  scriptsCoveredInCi,
   scriptsRunInCi,
-  shardProblems,
-  shardedSuiteNumbers,
+  shardedChainRuns,
+  shardRunProblems,
   staleDeliberatelyLocalEntries,
   uncoveredScripts,
 };
