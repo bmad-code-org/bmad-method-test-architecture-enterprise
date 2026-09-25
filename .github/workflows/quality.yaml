@@ -4,47 +4,48 @@ name: Quality & Validation
 # - Prettier (formatting)
 # - ESLint (linting)
 # - markdownlint (markdown quality)
-# - Schema validation (YAML structure)
-# - Agent schema tests (fixture-based validation)
-# - Installation component tests (compilation)
+# - Documentation link validation and site build
+# - The whole `npm test` chain, split across the `chain` matrix
+# - Coverage over that chain, merged from every shard
 #
-# The `validate` job must stay a superset of `npm test`'s non-lint half. Three
-# suites used to run ONLY from .husky/pre-commit — test:knowledge, test:changelog,
-# and test:tea-workflow-descriptions — and `git commit --no-verify` skips that
-# hook, as does every edit made through the GitHub web UI. test:knowledge is the
-# one carrying the knowledge-copy parity check across the eight bmad-testarch workflows, so for as long as it was
-# absent here nothing in CI stopped the workflow copies of the knowledge base from
-# silently diverging from the agent's.
+# The `chain` job runs every script in `npm test`, split five ways by
+# tools/test-shards.js. The split is deterministic: tools/test-shard-weights.json
+# holds each script's measured seconds under coverage, and the tool packs them
+# heaviest first onto the lightest shard, so each shard carries about four
+# minutes of the chain. Run serially on one runner under c8, the same chain
+# took about 20 minutes. Each shard records raw V8 coverage for its scripts
+# and uploads it; the `coverage` job merges every shard's files with
+# `c8 report` and holds the package.json thresholds against the whole chain.
+# test:ci-coverage fails when a chained script is neither in that full shard
+# matrix nor named by an `npm run` step, and test:shards fails when the
+# partition drops a script or the matrix skips a shard.
 #
-# test:cli is the deliberate exception in the other direction: it runs here and
-# NOT in `npm test`, because a full unsharded run takes 12-15 minutes and
-# `npm test` runs on every commit through the pre-commit hook. The `cli` job
-# below shards that one file three ways (see its own comment) so CI's wall
-# time is the slowest shard, not the sum of all three.
+# Three suites used to run ONLY from .husky/pre-commit: test:knowledge,
+# test:changelog and test:tea-workflow-descriptions. `git commit --no-verify`
+# skips that hook, as does every edit made through the GitHub web UI.
+# test:knowledge carries the knowledge-copy parity check across the eight
+# bmad-testarch workflows, so for as long as it was absent here nothing in CI
+# stopped the workflow copies of the knowledge base from silently diverging
+# from the agent's. Running the chain itself in CI is what keeps any suite
+# from being missed that way again.
 #
 # test:lockfile-age, test:lockfile-age-cache, test:licences and
-# test:supply-chain are the same kind of exception: they run in `npm test` and
-# in their own `supply-chain` job below, not inside `validate`, so a registry
-# outage names itself here rather than reading as an unrelated check failing.
-# lockfile-age reads a committed publication cache (`.lockfile-age-cache.json`)
-# with no request for a cached name@version and fetches only what is missing,
-# which is what makes running it in `npm test` on every local commit
-# reasonable rather than a network dependency the pre-commit hook cannot
-# avoid. lockfile-age-cache makes exactly one such request, against a fixed,
-# already-published package, and skips rather than fails when it cannot reach
-# the registry at all.
-#
-# The `validate` job installs `bubblewrap` before it reaches the atdd isolation
-# proof, because that suite runs generated test code and refuses to run
-# unconfined: `bubblewrap` is its linux backend, not preinstalled on this
-# runner image, and a failed install here has to read as "the dependency did
-# not install" rather than surface three steps later as an opaque isolation
-# failure.
+# test:supply-chain run in the chain shards and again in their own
+# `supply-chain` job below, so a registry outage names itself in a job of its
+# own. lockfile-age reads a committed publication cache
+# (`.lockfile-age-cache.json`) with no request for a cached name@version and
+# fetches only what is missing, which is what makes running it in `npm test`
+# on every local commit reasonable. lockfile-age-cache makes exactly one such
+# request, against a fixed, already-published package, and skips when it
+# cannot reach the registry at all.
 #
 # test:direction, test:boundary, test:lineage, test:guard-publish and
-# test:layering-boundary-lineage are the same kind of exception as
-# test:licences and test:supply-chain: they run in `npm test` and in their own
-# `layering-boundary-lineage` job below, not inside `validate`.
+# test:layering-boundary-lineage run in the chain shards and again in their
+# own `layering-boundary-lineage` job below, and format:check, lint and lint:md
+# do the same with the prettier, eslint and markdownlint jobs. Those jobs
+# finish in under a minute and name the failing gate in the job list; the
+# shards still run every chained script, because the merged coverage has to
+# come from the whole chain.
 
 "on":
   pull_request:
@@ -127,11 +128,51 @@ jobs:
       - name: Build documentation
         run: npm run docs:build
 
-  validate:
+  # The whole `npm test` chain, split across five runners. tools/test-shards.js
+  # picks this shard's scripts from the chain and the committed weights, runs
+  # them one at a time in chain order (several bind fixed ports or write fixed
+  # temp paths), keeps going past a failure so one run names every failing
+  # script, and exits 1 when any failed. Each script's raw V8 coverage lands in
+  # $RUNNER_TEMP/v8 under a shard-and-script prefix for the coverage job.
+  #
+  # The shard count appears three times: in the matrix list, in the tool's
+  # `--shard ${{ matrix.shard }}/5` argument, and in the coverage job's
+  # `--shards 5`. test:shards and test:ci-coverage fail when the list is not
+  # exactly 1 through that count, and test:shards when the coverage job's count
+  # differs. They also refuse each setting that lets a green run skip a shard
+  # or hide its failure: a matrix with include, exclude or any key besides
+  # shard; `if`, `continue-on-error` or `needs` on this job; `if`,
+  # `continue-on-error`, `shell` or `working-directory` on its shard step;
+  # `defaults.run` on this job or the workflow; a run line holding anything
+  # besides the invocation and its --coverage-dir and --timings flags; and a
+  # pull_request trigger that is missing or filtered by types, paths or
+  # branches. To change the count, change all three and read the balance off
+  # `node tools/test-shards.js --list --shard <i>/<n>` for each shard.
+  #
+  # Those guards hold this job's configuration against drift: the edits
+  # someone makes to save time or to reorganize the workflow. They are not a
+  # defense against a hostile editor of this file, who could change the
+  # guards in the same pull request.
+  chain:
+    name: chain (${{ matrix.shard }}/5)
     runs-on: ubuntu-latest
+    # Each shard carries about four minutes of the chain by the weights, plus
+    # about a minute of setup. Three times that bounds a stalled registry
+    # request or a hung child without cutting off a slow but healthy run.
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5]
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          # This job runs npm ci (arbitrary install scripts), and its chain
+          # pipes a third-party actionlint binary's output into the ci eval
+          # suite; the token persist-credentials would otherwise leave in
+          # .git/config has no business surviving that.
+          persist-credentials: false
 
       - name: Setup Node
         uses: actions/setup-node@v6
@@ -148,6 +189,17 @@ jobs:
       # installer script itself is pinned by commit and checksummed before it
       # runs, because "main" is mutable and a script that ends in `sudo mv` is
       # not something to pipe from a branch nobody reviews on every run.
+      #
+      # Every shard installs actionlint and bubblewrap, whichever scripts the
+      # weights put on it. test:eval-ci-data, test:eval-replay,
+      # test:probe-targets, test:doc-invocations and test:cli need actionlint;
+      # the atdd isolation proofs, test:framework-scaffold-install-isolation,
+      # test:transcript-harness, test:probe-targets, test:eval-schemas,
+      # test:doc-invocations and test:cli need bubblewrap. test:cli needs both
+      # because its eval:all reconciliation cases preflight every manifest
+      # suite, ci and atdd included. A shard missing either fails
+      # those scripts on the missing dependency, and a new weight can move any
+      # of them to any shard.
       - name: Install actionlint
         run: |
           curl -sSfL -o download-actionlint.bash https://raw.githubusercontent.com/rhysd/actionlint/3795ba2f6cb243eeca54c9d22e5c531cb9dcfb4a/scripts/download-actionlint.bash
@@ -155,316 +207,60 @@ jobs:
           bash download-actionlint.bash
           sudo mv ./actionlint /usr/local/bin/
 
-      - name: Check for unresolved conflict markers
-        run: npm run test:conflict-markers
-
-      - name: Validate YAML schemas
-        run: npm run validate:schemas
-
-      - name: Run agent schema validation tests
-        run: npm run test:schemas
-
-      - name: Check that every npm test step runs in CI
-        run: npm run test:ci-coverage
-
-      - name: Prove the script-coverage gate's own filter logic against synthetic input
-        run: npm run test:ci-coverage-filters
-
-      - name: Prove _bmad-output/ is gated by lint, markdownlint and prettier while _bmad/ is not
-        run: npm run test:bmad-output-gated
-
-      - name: Validate release metadata
-        run: npm run test:release-metadata
-
-      - name: Test agent compilation components
-        run: npm run test:install
-
-      - name: Validate the Evaluate skill's stage guidance list
-        run: npm run test:evaluate-guidance
-
-      - name: Check and digest Evaluate folders with tea-evaluate, including a packed install
-        run: npm run test:evaluate-check
-
-      - name: Hold tea-evaluate's engine boundary over cli/
-        run: npm run test:evaluate-boundaries
-
-      - name: Drive tea-skill-runner and tea-evaluate preflight over a stub agent
-        run: npm run test:evaluate-preflight
-
-      - name: Qualify a controlled mutation in a disposable workspace and prove its rollback
-        run: npm run test:evaluate-mutation
-
-      - name: Run the clean and mutated arms as sealed trial sets and score them
-        run: npm run test:evaluate-run
-
-      - name: Test knowledge base (index sync, link resolution, workflow-copy parity)
-        run: npm run test:knowledge
-
-      - name: Validate criteria-registry to fragment traceability
-        run: npm run test:criteria-fragments
-
-      - name: Test the doc-counts gate's own source module
-        run: npm run test:doc-count-sources
-
-      - name: Hold published documentation counts against their source
-        run: npm run test:doc-counts
-
-      - name: Test the doc-claims gate's own source module
-        run: npm run test:doc-claim-sources
-
-      - name: Hold published prose claims against their artifact
-        run: npm run test:doc-claims
-
-      - name: Test write-time enforcement hook
-        run: npm run test:enforce-hook
-
-      - name: Score the bmad-testarch-framework scaffold's contents
-        run: npm run test:framework-scaffold
-
+      # bubblewrap is tea-atdd-red-check's linux isolation backend and is not
+      # preinstalled on this runner image. Installing it as its own step makes a
+      # failed install name itself before the shard starts.
       - name: Install bubblewrap (tea-atdd-red-check's linux isolation backend)
         run: sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap
 
       # Ubuntu 24.04+ ships kernel.apparmor_restrict_unprivileged_userns=1, which
       # blocks bwrap's --unshare-net from bringing up its own loopback interface
       # (RTM_NEWADDR) inside an unprivileged user namespace unless the bwrap
-      # binary carries an AppArmor profile explicitly granting `userns` — one
-      # this runner image's bubblewrap package does not ship. Disabling the
+      # binary carries an AppArmor profile explicitly granting `userns`, and
+      # this runner image's bubblewrap package ships none. Disabling the
       # restriction on this disposable, single-job runner is what every other
       # project hitting this exact failure on ubuntu-latest (Codex, Claude
       # Code's own sandboxed Bash tool, VS Code) does; it governs whether bwrap
       # can create the namespace at all, not what cli/lib/atdd-isolation.js does
-      # once the namespace exists, which is everything this suite actually
-      # tests.
+      # once the namespace exists, which is everything the isolation suites
+      # actually test.
       - name: Allow bubblewrap to create its own network namespace
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 
-      - name: Prove tea-atdd-red-check's isolation backend confines a hostile spec
-        run: npm run test:atdd-isolation
+      # Runs before the shard so a plan that drops a script or a matrix that
+      # skips a shard fails in seconds, in every shard, before any of them
+      # spends four minutes on a partition nobody can trust.
+      - name: Hold the shard plan to the npm test chain and this matrix
+        run: npm run test:shards
 
-      - name: Prove the in-process net guard refuses what the OS backend cannot
-        run: npm run test:atdd-net-guard
+      - name: Run this shard of the npm test chain under coverage
+        run: node tools/test-shards.js --shard ${{ matrix.shard }}/5 --coverage-dir "$RUNNER_TEMP/v8" --timings "$RUNNER_TEMP/timings/shard-${{ matrix.shard }}.json"
 
-      - name: Prove atdd scoring requires assertion provenance, not just message text
-        run: npm run test:atdd-scoring
-
-      - name: Hold ATDD generation to criterion-mapped intended failures
-        run: npm run test:atdd-workflow-guidance
-
-      # Needs the same isolation backend as the atdd proofs above. Reaches no
-      # external network: its positive control runs a second proxy instance
-      # substituting a loopback target for the real registry (see the test
-      # file's own header), which is what makes it safe in the local,
-      # offline-safe `npm test` chain the same way the atdd proofs above are.
-      - name: Prove framework-scaffold's install-time isolation (CONNECT-allowlisting proxy denies non-allowlisted hosts, allows its configured target, loopback still works)
-        run: npm run test:framework-scaffold-install-isolation
-
-      # Two of the eight documented commands this gate re-runs (test:eval-schemas,
-      # test:probe-targets) exercise the atdd preflight path, which needs the
-      # linux isolation backend installed above — running this any earlier fails
-      # on a fresh runner with no bubblewrap yet, for a reason that has nothing
-      # to do with whether the documented command itself is correct.
-      - name: Test the doc-invocations gate's own entry script
-        run: npm run test:doc-invocation-entry
-
-      - name: Run documented commands against the real repository
-        run: npm run test:doc-invocations
-
-      - name: Prove the multi-turn transcript engine drives a session and catches a contradiction
-        run: npm run test:transcript-harness
-
-      - name: Prove the deferred-declaration gate fails on an unaccounted skill and passes when the array is empty
-        run: npm run test:suite-manifest
-
-      - name: Prove the teach-me-testing scoring functions fail on a violation and pass on a consistent case
-        run: npm run test:teach-me-testing-scoring
-
-      - name: Validate fragment-selection eval data
-        run: npm run test:eval-data
-
-      - name: Validate ATDD eval corpus
-        run: npm run test:eval-atdd-data
-
-      - name: Validate NFR eval corpus
-        run: npm run test:eval-nfr-data
-
-      - name: Validate NFR corpus validation checks fire on a seeded defect
-        run: npm run test:nfr-validate-corpus
-
-      - name: Prove NFR claims stay bound to the supplied evidence ledger
-        run: npm run test:nfr-evidence-guidance
-
-      - name: Validate CI eval corpus
-        run: npm run test:eval-ci-data
-
-      - name: Validate framework-scaffold eval data (fixture present, isolation backend selectable, no install, no network)
-        run: npm run test:eval-framework-scaffold-data
-
-      - name: Validate test-design eval corpus
-        run: npm run test:eval-test-design-data
-
-      - name: Validate trace eval corpus
-        run: npm run test:eval-trace-data
-
-      - name: Validate the bmad-tea routing eval corpus
-        run: npm run test:eval-routing-data
-
-      - name: Prove routing ambiguity boundaries reject drift and over-clarification
-        run: npm run test:eval-routing-boundaries
-
-      - name: Validate the committed Story 1.3 routing evidence
-        run: npm run test:eval-routing-evidence
-
-      - name: Validate transcript eval corpus
-        run: npm run test:eval-transcript-data
-
-      - name: Validate teach-me-testing eval corpus
-        run: npm run test:eval-teach-me-testing-data
-
-      - name: Validate the eval suite manifest and result schema
-        run: npm run test:eval-schemas
-
-      - name: Prove case-level and repetition-level eval diagnostics
-        run: npm run test:eval-diagnostics
-
-      - name: Replay stored eval outputs against the scorers
-        run: npm run test:eval-replay
-
-      - name: Compile eval-quality's own published corpus against the pinned release
-        run: npm run test:eval-quality-corpus
-
-      - name: Hold every schemaVersion TEA writes to the constant the installed eval-quality exports
-        run: npm run test:schema-versions
-
-      - name: Check the eval contracts against the sources they are generated from
-        run: npm run test:contract-sources
-
-      - name: Compile the eval contracts
-        run: npm run test:contracts
-
-      - name: Evaluate every contract oracle against the stored outputs and the harness scorers
-        run: npm run test:contract-oracles
-
-      - name: Check the probe corpora against the sources they are generated from
-        run: npm run test:probe-sources
-
-      - name: Score every probe corpus through eval-quality against stored evidence
-        run: npm run test:probe-corpus
-
-      - name: Prove compareDominance reaches every relation it declares and refuses a comparabilityKey mismatch
-        run: npm run test:compare-dominance
-
-      - name: Prove two recorded eval:all runs compare correctly and refuse a version or config mismatch
-        run: npm run test:compare-eval-runs
-
-      - name: Prove TEA's gate scores a three-trial set through the eval-quality score CLI
-        run: npm run test:trial-set-scoring
-
-      - name: Prove the automate-eval fixture's seeded regression rolls back live
-        run: npm run test:automate-eval-fixture
-
-      - name: Prove bmad-testarch-automate's stand-in coverage catches the qualified regression
-        run: npm run test:eval-automate-data
-
-      - name: Prove the clock port is in the path that produces a duration
-        run: npm run test:clock-port
-
-      - name: Run the published port conformance suite against the command-line adapter
-        run: npm run test:probe-conformance
-
-      - name: Run the published corpus port conformance suite against the shipped adapter
-        run: npm run test:corpus-conformance
-
-      - name: Run the published port conformance suite against the file-system adapter
-        run: npm run test:file-system-conformance
-
-      - name: Prove the trace harness reads and writes through the file-system port
-        run: npm run test:file-system-port
-
-      - name: Probe every TEA command target through the eval-quality adapter
-        run: npm run test:probe-targets
-
-      - name: Check TEA's branches are total over the published port vocabularies
-        run: npm run test:port-totality
-
-      - name: Test changelog stamping
-        run: npm run test:changelog
-
-      - name: Validate TEA workflow descriptions
-        run: npm run test:tea-workflow-descriptions
-
-  # Split out of `validate` on its own: it takes ~12-15 minutes, and leaving it
-  # in line meant every fast check behind it reported that late.
-  #
-  # test/test-test-review-cli.js is itself further split across this matrix by
-  # its 13 numbered suites (TEA_CLI_TEST_SUITES), so the three shards run in
-  # parallel instead of one job serializing all thirteen. Suite 7 (CLI
-  # end-to-end) alone accounts for ~59 of the file's ~90 child-process spawns
-  # (measured on 2026-09-08), so it runs alone rather than beside the other
-  # spawn-heavy suites; "unit" bundles every suite that spawns no subprocess at
-  # all plus the two that spawn only a handful. TEA_CLI_TEST_SUITES unset (any
-  # local run, and the pre-commit hook) still runs all thirteen, unchanged.
-  cli:
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        shard:
-          - name: unit
-            suites: "1,2,3,4,5,6,10,11,12,13"
-          - name: e2e
-            suites: "7"
-          - name: git
-            suites: "8,9"
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
+      - name: Upload this shard's raw coverage
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          # This job only reads. actions/checkout persists the job token in
-          # .git/config by default, where any step or test process could read it.
-          persist-credentials: false
+          name: v8-${{ matrix.shard }}
+          path: ${{ runner.temp }}/v8
+          retention-days: 1
+          if-no-files-found: error
 
-      - name: Setup Node
-        uses: actions/setup-node@v6
+      # Merge every shard's file with `jq -S -s add shard-*.json` and commit the
+      # result as tools/test-shard-weights.json to rebalance the shards.
+      - name: Upload this shard's per-script timings
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          node-version-file: ".nvmrc"
-          cache: "npm"
-
-      - name: Install dependencies
-        run: npm ci
-
-      # test:cli's eval:all reconciliation tests run --preflight-only across every
-      # manifest suite, including ci, whose pre-flight is a hard actionlint
-      # dependency. See the validate job's own Install actionlint step for why
-      # this floats to latest rather than pinning a version, and why the
-      # installer script itself is pinned by commit and checksummed.
-      - name: Install actionlint
-        run: |
-          curl -sSfL -o download-actionlint.bash https://raw.githubusercontent.com/rhysd/actionlint/3795ba2f6cb243eeca54c9d22e5c531cb9dcfb4a/scripts/download-actionlint.bash
-          echo "a96d60132afb74536ff2b55cc784d5c55b0b57980d3d49f962f0b3871447d53a  download-actionlint.bash" | sha256sum -c -
-          bash download-actionlint.bash
-          sudo mv ./actionlint /usr/local/bin/
-
-      # test:cli spawns test/eval-all.js as a real child process, and eval-all
-      # preflights every suite the manifest declares, atdd included since it
-      # is no longer deferred: reaching the CLI test this job actually cares
-      # about requires a working isolation backend to exist first, the same
-      # way the validate job's own atdd isolation proof does.
-      - name: Install bubblewrap (tea-atdd-red-check's linux isolation backend)
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap
-
-      - name: Allow bubblewrap to create its own network namespace
-        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-
-      - name: Test TEA test-review CLI (${{ matrix.shard.name }})
-        run: npm run test:cli
-        env:
-          TEA_CLI_TEST_SUITES: ${{ matrix.shard.suites }}
+          name: timings-${{ matrix.shard }}
+          path: ${{ runner.temp }}/timings
+          retention-days: 7
+          if-no-files-found: warn
 
   # The supply-chain gates. lockfile-age asks the registry for every locked
   # entry's publication time, licences holds every locked licence expression to
   # the allowlist, and test:supply-chain seeds one violation per gate and watches
-  # each fail. Their own job, so a registry outage or a young pin names itself
-  # here rather than inside validate.
+  # each fail. They also run in the chain shards; this job exists so a registry
+  # outage or a young pin names itself in a job of its own.
   supply-chain:
     runs-on: ubuntu-latest
     # lockfile-age fetches publish metadata for every locked entry from the
@@ -541,24 +337,42 @@ jobs:
       - name: Verify each gate's script name and seed one violation per failing gate
         run: npm run test:layering-boundary-lineage
 
-  # c8-wrapping the whole npm test chain roughly doubles its wall-clock time,
-  # so this runs as its own job rather than joining the pre-commit-driven
-  # chain, the same tradeoff test:cli and the supply-chain gates make.
+  # Coverage over the whole npm test chain, merged from the chain shards. Each
+  # shard ran its scripts with NODE_V8_COVERAGE set and uploaded the raw V8
+  # files that fall under the package.json c8 include roots. `c8 report` over
+  # all of them applies the package.json thresholds exactly as `npm run
+  # test:coverage` does locally over one serial run. Raw coverage carries
+  # absolute file URLs, which match here because every job checks the
+  # repository out to the same path, and `c8 report` needs that checkout for
+  # `all: true` to count the files no script loaded.
+  #
+  # A failed shard fails this job before the report. A script that failed
+  # partway recorded only part of its coverage, and a shard that timed out
+  # recorded none for the scripts it never reached, so a threshold verdict
+  # over that merge would measure the failure. A shard whose artifact never
+  # arrived leaves no failure behind and the other shards' coverage can still
+  # clear the thresholds, so the report also waits on every shard's manifest.
   coverage:
+    needs: chain
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
-    # The full npm test chain includes test:lockfile-age and
-    # test:lockfile-age-cache, both of which hit the public npm registry;
-    # bound the worst case the same way the supply-chain job does rather than
-    # letting a stalled request hold the runner until GitHub's own maximum.
-    timeout-minutes: 20
+    timeout-minutes: 10
     steps:
+      - name: Fail when a chain shard failed
+        env:
+          CHAIN_RESULT: ${{ needs.chain.result }}
+        run: |
+          if [ "$CHAIN_RESULT" != "success" ]; then
+            echo "::error title=chain shards did not all pass::the chain job finished as $CHAIN_RESULT, so its coverage is incomplete"
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@v5
         with:
-          # This job runs npm ci (arbitrary install scripts) and the full npm
-          # test chain, which pipes a third-party actionlint binary's output
-          # into the ci eval suite; the token persist-credentials would
-          # otherwise leave in .git/config has no business surviving that.
+          # This job runs npm ci (arbitrary install scripts); the token
+          # persist-credentials would otherwise leave in .git/config has no
+          # business surviving that.
           persist-credentials: false
 
       - name: Setup Node
@@ -570,37 +384,24 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # The actionlint version this installs floats to latest rather than
-      # pinned, for the same reason the validate job's own Install actionlint
-      # step gives: test/eval-ci.js's own pre-flight enforces the minimum
-      # version its flags were written against, so a newer release only ever
-      # adds coverage. The installer script itself is pinned by commit and
-      # checksummed before it runs.
-      - name: Install actionlint
-        run: |
-          curl -sSfL -o download-actionlint.bash https://raw.githubusercontent.com/rhysd/actionlint/3795ba2f6cb243eeca54c9d22e5c531cb9dcfb4a/scripts/download-actionlint.bash
-          echo "a96d60132afb74536ff2b55cc784d5c55b0b57980d3d49f962f0b3871447d53a  download-actionlint.bash" | sha256sum -c -
-          bash download-actionlint.bash
-          sudo mv ./actionlint /usr/local/bin/
+      - name: Download every shard's raw coverage
+        uses: actions/download-artifact@v4
+        with:
+          pattern: v8-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/v8
 
-      # This job runs the whole npm test chain, which includes
-      # tea-atdd-red-check's isolation proof: the same reason the validate
-      # job installs bubblewrap. Skipping this here does not skip that test,
-      # it makes it fail on a missing backend instead of proving the
-      # confinement, taking the whole chain down before c8 has instrumented
-      # most of cli/lib and tools/ and reporting a near-zero, meaningless
-      # coverage number rather than a real one. Discovered exactly this way
-      # the first time this job ran in CI: a 4-second failure reading as
-      # "coverage is 9.9%" when the real story was "the chain crashed before
-      # c8 had anything to instrument." Any future job that runs the full
-      # chain inherits whatever system dependencies the chain has
-      # accumulated; keep this job's install steps in step with validate's
-      # and cli's rather than rediscovering this the same way.
-      - name: Install bubblewrap (tea-atdd-red-check's linux isolation backend)
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap
+      - name: Prove every shard's coverage arrived and together covers the chain
+        run: node tools/test-shards.js --check-manifests "$RUNNER_TEMP/v8" --shards 5
 
-      - name: Allow bubblewrap to create its own network namespace
-        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: Merge the shards' coverage and enforce the threshold
+        run: npx c8 report --temp-directory "$RUNNER_TEMP/v8"
 
-      - name: Run the npm test chain under coverage and enforce the threshold
-        run: npm run test:coverage
+      - name: Upload the coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage/
+          retention-days: 7
+          if-no-files-found: warn

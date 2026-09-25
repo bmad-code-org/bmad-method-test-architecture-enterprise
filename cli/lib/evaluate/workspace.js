@@ -7,7 +7,8 @@
  *
  * - a git target (`workspace.kind: git`, with `launch.root` inside a git
  *   repository that has a commit) is a detached worktree at the evaluated
- *   commit, `HEAD`, made with `git worktree add --detach` and hooks disabled;
+ *   commit, `HEAD`, made with `git worktree add --detach` and hooks disabled
+ *   (or, for a historical probe's revisions, at the commit the caller names);
  * - a `copy` workspace, or a target outside any git repository, is a temp copy
  *   of `launch.root`, identified by its tree digest;
  * - `--from-working-tree` makes a temp copy of the working tree whatever the
@@ -56,9 +57,16 @@ const GIT_CHECKOUT_TIMEOUT_MS = 10 * 60_000;
 
 /** A workspace the run cannot make faithfully and contained; `tea-evaluate` refuses it with exit 12. */
 class WorkspaceRefusal extends Error {
-  constructor(message) {
+  /**
+   * @param {string} message
+   * @param {object} [options]
+   * @param {boolean} [options.atRevision] the commit checked out cannot hold the target (no `launch.root`, or
+   *   submodules under it), a property of that revision rather than of the machine
+   */
+  constructor(message, { atRevision = false } = {}) {
     super(message);
     this.name = 'WorkspaceRefusal';
+    this.atRevision = atRevision;
   }
 }
 
@@ -324,14 +332,16 @@ const GIT_OUTPUT_BYTES = 256 * 1024 * 1024;
  * caller running inside a git hook (where `GIT_DIR` and `GIT_INDEX_FILE` name
  * the hook's own repository) cannot redirect a command meant for `-C <dir>`.
  *
- * @returns {{ok: true, stdout: string}|{ok: false, detail: string}}
+ * @returns {{ok: true, stdout: string}|{ok: false, status?: number, detail: string}}
  */
 function runGit(args, { timeoutMs = GIT_QUESTION_TIMEOUT_MS } = {}) {
   const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('GIT_')));
   const result = spawnSync('git', args, { encoding: 'utf8', env, timeout: timeoutMs, killSignal: 'SIGKILL', maxBuffer: GIT_OUTPUT_BYTES });
   if (result.error) return { ok: false, detail: `git ${args.join(' ')} could not run: ${result.error.code ?? result.error.message}` };
   if (result.signal !== null) return { ok: false, detail: `git ${args.join(' ')} was killed by ${result.signal}` };
-  if (result.status !== 0) return { ok: false, detail: `git ${args.join(' ')} exited ${result.status}: ${String(result.stderr).trim()}` };
+  if (result.status !== 0) {
+    return { ok: false, status: result.status, detail: `git ${args.join(' ')} exited ${result.status}: ${String(result.stderr).trim()}` };
+  }
   return { ok: true, stdout: result.stdout };
 }
 
@@ -469,10 +479,12 @@ function adopterTreeState(directory, { exclude = [] } = {}) {
  * @param {boolean} [options.fromWorkingTree] copy the working tree, uncommitted work included
  * @param {string} options.label a name for the temp directory (`pristine`, `mutated-M-001`)
  * @param {object} [options.basis] a workspace this one reproduces
+ * @param {string} [options.commit] the full id of a commit to check out in place of `HEAD` (a historical
+ *   probe's revisions); only on a worktree made with no basis
  * @returns {object} the workspace: `root` is where `launch.root` lies in it
  * @throws {WorkspaceRefusal}
  */
-function createWorkspace({ root, kind, provision = [], exclude = [], fromWorkingTree = false, label, basis = null }) {
+function createWorkspace({ root, kind, provision = [], exclude = [], fromWorkingTree = false, label, basis = null, commit = null }) {
   if (!isDirectory(root)) throw new WorkspaceRefusal(`launch.root ${root} is not a directory`);
   const repository = basis === null ? repositoryOf(root) : null;
   const worktree = basis === null ? kind === 'git' && !fromWorkingTree && repository !== null : basis.kind === 'git-worktree';
@@ -480,6 +492,16 @@ function createWorkspace({ root, kind, provision = [], exclude = [], fromWorking
     throw new WorkspaceRefusal(
       `the git repository at ${repository.top} has no commit, so there is no commit to evaluate; commit the project or pass --from-working-tree`,
     );
+  }
+  let revision = null;
+  if (commit !== null) {
+    if (basis !== null || !worktree) {
+      throw new WorkspaceRefusal(`the ${label} workspace names commit ${commit}, which only a worktree made with no basis can check out`);
+    }
+    const tree = runGit(['-C', repository.top, 'rev-parse', '--verify', '--quiet', '--end-of-options', `${commit}^{tree}`]);
+    if (!tree.ok)
+      throw new WorkspaceRefusal(`the ${label} workspace names commit ${commit}, which the repository at ${repository.top} does not hold`);
+    revision = { commit, tree: tree.stdout.trim() };
   }
   let temp;
   try {
@@ -517,8 +539,8 @@ function createWorkspace({ root, kind, provision = [], exclude = [], fromWorking
     repository: repositoryTop,
     gitDirectory: basis === null ? (repository?.gitDirectory ?? null) : basis.gitDirectory,
     metadata: null,
-    commit: worktree ? (basis?.commit ?? repository.commit) : null,
-    tree: worktree ? (basis?.tree ?? repository.tree) : null,
+    commit: worktree ? (revision?.commit ?? basis?.commit ?? repository.commit) : null,
+    tree: worktree ? (revision?.tree ?? basis?.tree ?? repository.tree) : null,
     treeDigest: null,
     dirty: basis?.dirty ?? fromWorkingTree,
     provisioned: [],
@@ -552,11 +574,13 @@ function createWorkspace({ root, kind, provision = [], exclude = [], fromWorking
       if (submodules.length > 0) {
         throw new WorkspaceRefusal(
           `launch.root holds git submodule(s) ${submodules.join(', ')} at commit ${workspace.commit}, which a worktree checks out empty, so the run would evaluate a project missing their files; evaluate the submodule's own repository, or pass --from-working-tree to copy the checked-out tree`,
+          { atRevision: true },
         );
       }
       if (!isDirectory(workspace.root)) {
         throw new WorkspaceRefusal(
           `launch.root ${posix(path.relative(workspace.repository, root)) || '.'} is not tracked at commit ${workspace.commit}, so the worktree does not hold it; commit it or pass --from-working-tree`,
+          { atRevision: true },
         );
       }
       for (const entry of excluded) fs.rmSync(path.join(workspace.root, path.relative(root, entry)), { recursive: true, force: true });
@@ -898,6 +922,7 @@ module.exports = {
   cleanUpOnSignal,
   containLinks,
   createWorkspace,
+  isDirectory,
   isInside,
   joinAsSpelled,
   makeReadOnly,
@@ -905,6 +930,7 @@ module.exports = {
   removeWorkspace,
   repositoryOf,
   requestKey,
+  runGit,
   stageDirectories,
   trackedTreeDigest,
   treeDigest,

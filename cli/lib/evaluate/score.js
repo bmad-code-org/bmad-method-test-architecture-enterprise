@@ -380,6 +380,17 @@ async function runScoreCommand(folder, { run: invocationId, env = process.env, l
     });
   }
 
+  // The probes the run refused (a historical probe with no revisions to address) have no trial set; say so, never silently.
+  const refused = (Array.isArray(located.record?.refused) ? located.record.refused : []).map(({ probeId, reason }) => ({
+    probeId,
+    reason,
+  }));
+  for (const { probeId, reason } of refused) log(`${probeId}: refused by the run, so not scored: ${reason}`);
+  const refusedNote =
+    refused.length === 0
+      ? ''
+      : `; ${refused.length} probe(s) the run refused are not scored: ${refused.map((entry) => entry.probeId).join(', ')}`;
+
   const scoreInvocationId = newInvocationId();
   const scoreDirectory = path.join(runDirectory, 'scores', scoreInvocationId);
   fs.mkdirSync(scoreDirectory, { recursive: true });
@@ -441,6 +452,7 @@ async function runScoreCommand(folder, { run: invocationId, env = process.env, l
       run: index.invocationId,
       exitCode: stageFailed ? INFRASTRUCTURE : combinedExit(scores.map((entry) => entry.exitCode)),
       scores,
+      refused,
     });
   }
   const exitCode = stageFailed ? INFRASTRUCTURE : combinedExit(scores.map((entry) => entry.exitCode));
@@ -450,7 +462,7 @@ async function runScoreCommand(folder, { run: invocationId, env = process.env, l
     scores,
     message: stageFailed
       ? `an eval-quality score call could not run or exited with a code the CLI does not document; every call's record is in ${path.relative(folder, scoreDirectory)}`
-      : `eval-quality score ran for ${scores.length} probe(s) of run ${index.invocationId}; each call's diagnostics and evidence are in ${path.relative(folder, scoreDirectory)}`,
+      : `eval-quality score ran for ${scores.length} probe(s) of run ${index.invocationId}; each call's diagnostics and evidence are in ${path.relative(folder, scoreDirectory)}${refusedNote}`,
   });
 }
 

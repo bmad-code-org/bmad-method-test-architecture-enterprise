@@ -51,13 +51,13 @@ inputDocuments:
 - P0: 81 scenarios over the runtime's integrity paths (rollback, verdict source, infrastructure classification, evaluator isolation, held-out redaction, calibration, the dogfood proof, the behavioral proofs of guidance)
 - P1: 67 scenarios over authoring checks, adapters, registration, the evaluation layer and craft headings
 - P2: 12 scenarios over guidance text, packaging and documentation counts
-- New `npm test` scripts: `test:trial-set-scoring`, `test:evaluate-boundaries`, `test:evaluate-check`, `test:evaluate-preflight`, `test:evaluate-mutation`, `test:evaluate-run`, `test:evaluate-arms`, `test:evaluate-evaluators`, `test:evaluate-mcp`, `test:evaluate-api`, `test:evaluate-workflow`, `test:evaluate-tool-use`, `test:evaluate-promptfoo`, `test:evaluate-partitions`, `test:evaluate-calibration`, `test:evaluate-interpret`, `test:evaluate-guidance`, `test:evaluate-authoring`, `test:evaluate-gap-loop`, `test:evaluate-learned-framework`, each with its own `quality.yaml` step in the `validate` job
+- New `npm test` scripts: `test:trial-set-scoring`, `test:evaluate-boundaries`, `test:evaluate-check`, `test:evaluate-preflight`, `test:evaluate-mutation`, `test:evaluate-run`, `test:evaluate-arms`, `test:evaluate-evaluators`, `test:evaluate-mcp`, `test:evaluate-api`, `test:evaluate-workflow`, `test:evaluate-tool-use`, `test:evaluate-promptfoo`, `test:evaluate-partitions`, `test:evaluate-calibration`, `test:evaluate-interpret`, `test:evaluate-guidance`, `test:evaluate-authoring`, `test:evaluate-gap-loop`, `test:evaluate-learned-framework`, each chained into `npm test` (amended 2026-09-25 in Story 1.9: CI runs the `npm test` chain in shards through the `chain` matrix, which `test:ci-coverage` and `test:shards` hold, so a chained script needs no step of its own)
 
 **Corrections made to `epics.md` in this step:** acceptance criteria in fourteen stories were untestable or wrong as written. Each is listed with its reason under "Acceptance Criteria Corrected In epics.md" and the corrected text is already in `epics.md`.
 
 ## Test Levels Used In This Epic
 
-TeA's suites are plain Node scripts using `node:assert`, a header comment stating what the file proves, a non-zero exit on the first failed assertion, and one `npm run test:<name>` script chained into `npm test`. Every new file here follows that house form. `tools/validate-ci-coverage.js` fails any chained script with no workflow step, so each new script lands with its `quality.yaml` step in the same story.
+TeA's suites are plain Node scripts using `node:assert`, a header comment stating what the file proves, a non-zero exit on the first failed assertion, and one `npm run test:<name>` script chained into `npm test`. Every new file here follows that house form. `tools/validate-ci-coverage.js` fails any chained script that neither the `chain` matrix runs nor a workflow step names, so each new script lands in the chain in the same story (amended 2026-09-25 in Story 1.9: CI runs the `npm test` chain in shards through the `chain` matrix, which `test:ci-coverage` and `test:shards` hold, so a chained script needs no step of its own).
 
 | Level | What it means here | Example |
 | --- | --- | --- |
@@ -208,7 +208,7 @@ Levels: static (install test, description validator), contract (routing contract
 | Lean files present, house files absent | `test/test-installation-components.js` lean set: requires `SKILL.md`, `customize.toml`, `references/`, `assets/`; forbids `workflow.yaml`, `steps-c/`, `steps-e/`, `steps-v/`, `instructions.md`, `checklist.md`, `scripts/` | Static | P0 | Adding `workflow.yaml` to the skill fails the lean set |
 | Lean discriminator | Same file: a skill is lean when it has neither `workflow.yaml` nor `steps-c/`; `bmad-teach-me-testing` stays on the house set; a synthetic temp skill with `steps-c/` and no `workflow.yaml` is classified house | Static | P0 | Changing the rule to "no `workflow.yaml`" moves `bmad-teach-me-testing` to the lean set and fails its forbidden-file assertions |
 | Activation contract | Lean set asserts the `resolve_customization.py` line, `{workflow.persistent_facts}` and `_bmad/tea/config.yaml` in `SKILL.md`, and `persistent_facts = []` and `on_complete` in `customize.toml` | Static | P1 | Deleting any line fails |
-| Stage list points at `references/` files | `test/test-evaluate-guidance.js` (created and chained here as `test:evaluate-guidance`, with its `quality.yaml` step) parses the stage list in `SKILL.md` and asserts twelve stages, the `evaluator` stage among them, each naming an existing `references/<stage>.md` | Guidance | P1 | Removing a stage entry or file fails |
+| Stage list points at `references/` files | `test/test-evaluate-guidance.js` (created and chained here as `test:evaluate-guidance`, which the `chain` matrix runs; amended 2026-09-25 in Story 1.9) parses the stage list in `SKILL.md` and asserts twelve stages, the `evaluator` stage among them, each naming an existing `references/<stage>.md` | Guidance | P1 | Removing a stage entry or file fails |
 | `module-help.csv` EV row, agent menu EV, marketplace path, `tea_evaluations_folder` default `evals`, `expectedMenu` | Install test assertions, one per item | Static | P0 | Each revert fails `test:install` |
 | Routing intent and regenerated contracts | `test:contract-sources`, `test:probe-sources` (`--check`), `test:eval-routing-data`; `probeStepBound` held by `test:contracts` | Contract | P1 | Reverting the regeneration fails `--check` |
 | Historical routing evidence re-anchored | `test/test-routing-evidence.js` holds each recorded case to a per-case snapshot under `test/results/live-eval-remediation/story-1-3/cases/`, extracted while the whole-file digest still equals the contract's `fixtureDigest`, with a new per-case sha256; added live cases pass, a changed recorded case fails | Static | P0 | Editing one recorded intent's text fails |
@@ -323,6 +323,7 @@ File: `test/test-evaluate-evaluators.js` (`test:evaluate-evaluators`), stub eval
 | Row cardinality: unmapped key or duplicate key fails the row schema, exit 12; zero rows for a trial with a mapped oracle exits 12 | Three stub evaluators, one per shape | Integration | P1 | Accepting a duplicate row produces two findings for one oracle, which the case catches |
 | `evaluator.timeoutMs` required for `command`; a hung evaluator's process group is killed at the timeout, its streams persisted, no record, exit 12 | `test:evaluate-check` case for a missing timeout; a stub that never exits | Integration | P0 | Removing the timeout leaves the test hanging until the harness timeout, which fails it |
 | No framework name under `cli/` | `test:evaluate-boundaries` scan over a name list held in the test | Static | P0 | Adding `require('agentevals')` under `cli/` fails |
+| The `judge` rule and TeA's judge call bind only the `deterministic` kind (added 2026-09-25 in Story 1.9, from its amendment to this story) | `check` over a rubric with a `command`, `sealed-brief-agent` and `records` evaluator and no `judge`, each exit 0, and one with a `judge` under a non-deterministic kind, exit 10 as unused; a `command` evaluator bound to rubric criteria runs with zero stub-judge calls | Contract and integration | P1 | Keeping the rule for every kind makes the `command` case exit 10; calling the judge under every kind makes the count non-zero |
 
 ### Story 1.10: Evaluate a stdio MCP tool server
 
@@ -533,6 +534,7 @@ Levels: integration. Files: the supervision tests for `cli/lib/agent-supervisor.
 | Leader and supervisor killed together: the group stops and the runner returns in bounded time | Kill both, assert no process of the group remains and the runner returns a transport failure | Integration | P0 | Reverting the change makes the case time out |
 | A dead run's workspaces and worktree registration reclaimed | Kill a run during qualification, run `preflight` again, assert the temp directory and `git worktree list` are clean and the adopter's status and refs unchanged | Integration | P0 | Reverting the reclaim leaves the workspace and the registration |
 | A live run's workspace left alone | A marker naming a live process survives the next run | Integration | P1 | Reclaiming every marked workspace fails it |
+| The reference states what a killed run leaves and when it is reclaimed (added 2026-09-25 in Story 1.9) | Read the reference section by its exact heading; assert it names the workspace marker and the reclaim | Static | P2 | Deleting the passage fails it |
 
 ### Story 1.29: Record what a live run spends
 
@@ -542,6 +544,7 @@ Levels: integration. File: `test/test-evaluate-run.js` (`test:evaluate-run`).
 | --- | --- | --- | --- | --- |
 | Reported use recorded per trial and summed per set | A stub target reports a known token and cost use; assert each record's `resourceUse` and the manifest's `actualResourceUse` | Integration | P1 | Reverting the reading records zero, which the assertion catches |
 | Unreported use marked | A stub target that reports nothing; assert `run.json` marks the use unreported | Integration | P1 | Dropping the mark leaves a zero that reads as measured |
+| The reference states where the use comes from and what an unreported use means (added 2026-09-25 in Story 1.9) | Read the reference section by its exact heading; assert it names both | Static | P2 | Deleting the passage fails it |
 
 ### Story 1.30: Send `principal` and `matcher` bindings
 
@@ -553,6 +556,7 @@ Levels: integration. File: `test/test-evaluate-run.js` (`test:evaluate-run`), `t
 | An unmapped principal is an authoring defect | `check` over a plan naming a principal the evaluation does not map | Unit | P1 | Removing the rule lets the run start and exit 12 |
 | A `matcher` binding sends a seeded, schema-derived value | The stub receives a schema-admitted value for `any` and a schema-refused one for `type-violating`; two runs with one seed send the same bytes | Integration | P1 | Reverting the choice exits 12 |
 | A binding the runtime cannot send stops the run | A step binding an unsupported kind exits 12 naming the step and the kind | Integration | P2 | Sending nothing for it exits 0, which the case catches |
+| The reference states each binding kind the runtime sends (added 2026-09-25 in Story 1.9) | Read the reference section by its exact heading; assert it names each binding kind, the credential source and the matcher choice | Static | P2 | Deleting a kind from the passage fails it |
 
 ### Story 1.31: Sandbox the target's file system
 
@@ -564,6 +568,19 @@ Levels: integration over real eval-quality. File: `test/test-evaluate-run.js` (`
 | `observedMounts` comes from the confinement's report | A stub reads a path it was not granted; the path appears in `observedMounts` and eval-quality records the isolation violation | Integration over real eval-quality | P0 | Reverting the report leaves `observedMounts` empty |
 | A platform without confinement refuses unless the evaluation opts out | One case asserts the refusal exits 12, another the opt-out recorded in `run.json` | Integration | P1 | Dropping the refusal runs unconfined silently |
 | The confinement covers processes the target leaves running | A stub leaves a process running that, after `run` exits, rewrites a sealed record and the digest `run.json` recorded for it; `score` refuses the run | Integration over real eval-quality | P0 | Reverting the confinement for leftover processes lets `score` pass the rewritten record to the engine |
+| Forbidden-input notes and the reference name the confinement (added 2026-09-25 in Story 1.9) | Assert each forbidden input's note names the confinement, and read the reference section by its exact heading for each platform's mechanism | Contract | P2 | Restoring Story 1.8's note or deleting a platform from the passage fails it |
+
+### Story 1.32: Qualify a historical probe against two addressable deployments
+
+Levels: integration over real eval-quality, contract. Files: `test/test-evaluate-arms.js` (`test:evaluate-arms`), `test/test-evaluate-check.js` (`test:evaluate-check`).
+
+| AC | Test | Level | P | Revert check |
+| --- | --- | --- | --- | --- |
+| Fail-before at the pre-fix deployment, pass-after at the post-fix one, witness leg and trials at the pre-fix one | Two loopback fixture servers log each request; assert each arm's and leg's routing from those logs | Integration over real eval-quality | P0 | Routing fail-before to the post-fix deployment makes it hold and exit 11 |
+| `fixCommitDigest` and `artifactDigest` from the two release identifiers | Assert each digest against the identifiers the servers report | Integration | P1 | One identifier recorded for both makes the digests equal |
+| An unauthorized deployment refuses the probe, the rest runs | A deployment outside the registry's api policy; assert the refusal in `run.json` and `refused/` and exit 0 | Integration | P1 | Dropping the refusal sends a denied request and exits 10 |
+| `check` holds the deployment pair | One deployment only, and both deployments with a `fixCommit`, each exit 10 under `historical` | Contract | P1 | Dropping the rule lets `run` stop at qualification with exit 12 |
+| The reference and AD-8 name both kinds of historical probe | Read the reference's historical section by its exact heading; assert it names worktree and deployment probes | Static | P2 | Deleting the deployment passage fails it |
 
 ## The Dogfood Proof (AD-15)
 
@@ -593,12 +610,12 @@ Staged, uncommitted overnight: `test/evaluations/bmad-testarch-evaluate/` (`eval
 
 - `test:eval-schemas`: the `evaluate-authored` entry's thresholds equal `evaluation.json` and the scoring policy.
 - `test:suite-manifest`: `bmad-testarch-evaluate` is accounted for by a suite, with no `deferred` entry.
-- From Story 2.5: `tea-evaluate check`, `eval-quality compile` and `seal` over the committed evaluation, each its own script and `quality.yaml` step, so a stale `corpus-index.json`, a hand edit that breaks the contract, or an ID off pattern blocks every pull request.
+- From Story 2.5: `tea-evaluate check`, `eval-quality compile` and `seal` over the committed evaluation, each its own script in the `npm test` chain, which the `chain` matrix runs (amended 2026-09-25 in Story 1.9), so a stale `corpus-index.json`, a hand edit that breaks the contract, or an ID off pattern blocks every pull request.
 - After Story H.1: the `pr` replay of the accepted baseline reproduces the committed evidence.
 
 ## Execution Strategy
 
-- **Pull request:** every `test:evaluate-*` script above runs in `npm test` and in its own `quality.yaml` step. All use stub targets or loopback fixtures, no secret, no model call.
+- **Pull request:** every `test:evaluate-*` script above runs in `npm test`, which the `chain` matrix of `quality.yaml` runs in shards (amended 2026-09-25 in Story 1.9). All use stub targets or loopback fixtures, no secret, no model call.
 - **Manual, recorded:** Story 1.3's routing run, Story 1.16's proof run, and the Story 1.24, 1.25 and 1.26 sessions, through the local Claude Code CLI; each of the last three is then held by a deterministic script.
 - **Nightly and weekly:** none in this epic; Epic 2 defines the `scheduled` tier.
 

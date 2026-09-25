@@ -105,7 +105,8 @@ function supervisedOutcome(result) {
  *   always run at, so a caller that declares nothing gets the same run as before.
  * @returns {{ stdout: string, stderr: string }} Captured output from a successful agent run.
  * @throws {Error} AGENT_NOT_FOUND when the executable is missing, AGENT_FAILED
- *   on spawn error, timeout, or non-zero exit, CAPABILITY_UNKNOWN when a declared
+ *   on spawn error, timeout, or non-zero exit (a timeout or non-zero exit carries
+ *   the agent's `stdout` and `stderr` on the error), CAPABILITY_UNKNOWN when a declared
  *   capability is not one the manifest vocabulary names.
  */
 function runAgent(
@@ -186,10 +187,12 @@ function runAgent(
     error.code = 'AGENT_FAILED';
     throw error;
   }
+  // What the agent printed before it failed, for a caller that keeps a failing agent's streams as evidence.
+  const withStreams = (error) => Object.assign(error, { stdout: result.stdout || '', stderr: result.stderr || '' });
   if (outcome.timedOut) {
     const error = new Error(`Agent "${command}" failed: timed out after ${timeout}ms (SIGTERM sent)`);
     error.code = 'AGENT_FAILED';
-    throw error;
+    throw withStreams(error);
   }
   if (outcome.failure) {
     const error = new Error(`Agent "${command}" failed: ${outcome.failure}`);
@@ -216,7 +219,7 @@ function runAgent(
     }
     const error = new Error(`Agent "${command}" ${ending}${stopped}.`);
     error.code = 'AGENT_FAILED';
-    throw error;
+    throw withStreams(error);
   }
 
   return { stdout: result.stdout || '', stderr: result.stderr || '' };

@@ -43,7 +43,7 @@ inputDocuments:
 - P0: 20 scenarios over replay integrity, the AD-10 table, baseline acceptance, the placement floor and the three added deterministic checks
 - P1: 20 scenarios over tier membership, placement reasons, rendering and TeA's own wiring
 - P2: 2 scenarios over documentation
-- New `npm test` scripts: `test:evaluate-compare`, `test:evaluate-ci`, `test:evaluate-ci-render`, and Story 2.5's per-evaluation `pr` scripts, each with its own `quality.yaml` step
+- New `npm test` scripts: `test:evaluate-compare`, `test:evaluate-ci`, `test:evaluate-ci-render`, and Story 2.5's per-evaluation `pr` scripts, each chained into `npm test` (amended 2026-09-25 in Story 1.9: CI runs the `npm test` chain in shards through the `chain` matrix, which `test:ci-coverage` and `test:shards` hold, so a chained script needs no step of its own)
 
 **Corrections made to `epics.md` and `ARCHITECTURE-SPINE.md` in this step:** acceptance criteria in all five stories and H.1 were untestable, incomplete or unbuildable as written, and AD-5, AD-7, AD-8, AD-10 and AD-12 gained the matching text; see "Acceptance Criteria Corrected In epics.md".
 
@@ -115,7 +115,7 @@ Owner for every mitigation is the `/bmad-build` worker of the story named, verif
 | 2.2 | AD-12 lists gate outputs in `runs/`, and no story captured them (found by the sprint-planning readiness check) | Plan checks gain kind `gate` for adopted `eval-quality-gates` (AD-11 amended); `tea-evaluate ci` persists each check's exit code, stdout and stderr under `runs/<invocationId>/` |
 | 2.2 | Overnight fixture runs were dirty, so `compare --accept` could never produce the fixture baselines | Fixture targets declare a copy workspace and record `dirty: false` (AD-8 amended) |
 | 2.3 | No deterministic renderer exists for the agent-rendered CI templates; `eval:ci` writes no replay cases; set roots must sit under `test/fixtures/ci-eval/`; a new set regenerates contracts and probes and changes the suite's `caseCount` | Deterministic step-and-template test, hand-captured replay case, regenerated contracts and probes, updated manifest entry |
-| 2.5 | The upload named no check; running the CI skill against TeA would render one agent-written step per command, where TeA's checks must be `npm test` scripts with `validate` steps | A `quality.yaml` test case; TeA wired directly; the fixture `runs/` ignore entry moved to Story 1.8 |
+| 2.5 | The upload named no check; running the CI skill against TeA would render one agent-written step per command, where TeA's checks must be `npm test` chain scripts, which the `chain` matrix runs (amended 2026-09-25 in Story 1.9) | A `quality.yaml` test case; TeA wired directly; the fixture `runs/` ignore entry moved to Story 1.8 |
 | H.1 | The red-until-release list was hand-written and missed members; `npm install` with the `latest` spec and an existing lockfile does not advance the engine | Superseded on 2026-09-23: eval-quality 4.0.0 shipped during Story 1.2, so the red-until-release list and the release and floor-raise steps were removed; H.1 keeps the `npm test`, clean run, baseline acceptance and replay steps |
 
 ## Coverage Plan By Story
@@ -189,17 +189,17 @@ Levels: static, integration, documentation gates.
 
 | AC | Test | Level | P | Revert check |
 | --- | --- | --- | --- | --- |
-| Each fixture's `pr` checks and the evaluate suite's `check`, `compile`, `seal` join `npm test` with their own `validate` steps, wired directly by the worker | `test:ci-coverage` | Static | P0 | A chained script with no step fails |
+| Each fixture's `pr` checks and the evaluate suite's `check`, `compile`, `seal` join the `npm test` chain, wired directly by the worker (amended 2026-09-25 in Story 1.9: the `chain` matrix runs them) | `test:ci-coverage`, `test:shards` | Static | P0 | A chained script the `chain` matrix does not run fails |
 | Upload of every `runs/` directory | `test:evaluate-ci` case over `quality.yaml` | Static | P1 | Removing the upload step fails |
 | Eight gates unchanged | `test:evaluate-ci` case asserts the eight `eval-quality-gates` scripts still run in their current jobs | Static | P1 | Moving a gate fails |
 | `ci --tier pr` exits 0 for both fixtures; `check`, `compile`, `seal` exit 0 for the evaluate suite | The new scripts themselves | Integration | P0 | Any break fails `npm test` |
-| Every fixture evaluation added by Stories 1.18 to 1.20 and 1.24 to 1.26 runs its `pr` tier, gameability, freshness and agreement included | One script and `validate` step each; `test:ci-coverage` | Integration, static | P0 | A chained script with no step fails; any break fails `npm test` |
+| Every fixture evaluation added by Stories 1.18 to 1.20 and 1.24 to 1.26 runs its `pr` tier, gameability, freshness and agreement included | One chained script each, run by the `chain` matrix (amended 2026-09-25 in Story 1.9); `test:ci-coverage` | Integration, static | P0 | A chained script the `chain` matrix does not run fails; any break fails `npm test` |
 | The how-to page explains the stack, evaluator kinds, the import contract, learn-on-the-go, held-out probes, calibration and CI placement | `docs:validate-links`, `docs:build`, `test:doc-claims` | Documentation gate | P2 | A broken link or claim fails |
 | How-to page, links, shipped wording, 0/1/2 as optional pattern | `docs:validate-links`, `docs:build`, `test:doc-counts`, `test:doc-claims` | Documentation gate | P2 | Broken link fails |
 
 ### Story H.1 (owner): Accept the dogfood baseline and turn its `pr` replay green
 
-Each step already names what it proves in `epics.md`. The test view: step 1 is the full `npm test` on the merged tree and the published engine (every Epic 1 and Epic 2 check green); step 2 repeats "The Dogfood Proof" of `test-design-epic-1.md` with `dirty: false`; step 3 adds the `bmad-testarch-evaluate` replay script and its `quality.yaml` step, which `test:ci-coverage` then holds; step 4 is the replay passing in the pull request's own `quality.yaml` run.
+Each step already names what it proves in `epics.md`. The test view: step 1 is the full `npm test` on the merged tree and the published engine (every Epic 1 and Epic 2 check green); step 2 repeats "The Dogfood Proof" of `test-design-epic-1.md` with `dirty: false`; step 3 adds the `bmad-testarch-evaluate` replay script to the `npm test` chain, which the `chain` matrix runs and `test:ci-coverage` and `test:shards` then hold (amended 2026-09-25 in Story 1.9); step 4 is the replay passing in the pull request's own `quality.yaml` run.
 
 ## The Dogfood Proof In CI
 
@@ -211,7 +211,7 @@ Each step already names what it proves in `epics.md`. The test view: step 1 is t
 
 ### What is committed
 
-Staged overnight: `cli/lib/evaluate/compare.js` and `ci.js`, fixture plans and baselines, the `bmad-testarch-ci` step and template block, CI suite corpus and replay records, `quality.yaml` steps, documentation, and `epic-2-proof.md` (`git add -f`). The evaluate suite's `baseline/` enters only through H.1 step 3.
+Staged overnight: `cli/lib/evaluate/compare.js` and `ci.js`, fixture plans and baselines, the `bmad-testarch-ci` step and template block, CI suite corpus and replay records, the `quality.yaml` upload step (amended 2026-09-25 in Story 1.9: checks join the `npm test` chain the `chain` matrix runs), documentation, and `epic-2-proof.md` (`git add -f`). The evaluate suite's `baseline/` enters only through H.1 step 3.
 
 ### What `npm test` enforces afterwards
 
@@ -239,7 +239,7 @@ Staged overnight: `cli/lib/evaluate/compare.js` and `ci.js`, fixture plans and b
 
 - P0 and P1 pass rate 100 percent
 - Every score-6 risk has its mitigation test merged in the story named
-- `npm run test:ci-coverage` green with every new script mapped to a `validate` step
+- `npm run test:ci-coverage` and `npm run test:shards` green with every new script in the chain the `chain` matrix runs (amended 2026-09-25 in Story 1.9)
 - `npm run docs:validate-links` and `npm run docs:build` green for Story 2.5
 
 ## Assumptions and Dependencies
@@ -252,7 +252,7 @@ Staged overnight: `cli/lib/evaluate/compare.js` and `ci.js`, fixture plans and b
 | Component | Impact | Regression scope |
 | --- | --- | --- |
 | `bmad-testarch-ci` | New detection step and template block | House tests, `test:contract-sources` for `ci.contract.json`, `test:eval-ci-data`, `test:eval-replay` |
-| `quality.yaml` | New `validate` steps and an upload step | `test:ci-coverage`, `test:ci-coverage-filters` |
+| `quality.yaml` | An upload step in the `chain` job; new checks join the `npm test` chain the `chain` matrix runs (amended 2026-09-25 in Story 1.9) | `test:ci-coverage`, `test:ci-coverage-filters`, `test:shards` |
 | Documentation | Evaluate described as shipped | `test:doc-counts`, `test:doc-claims`, `docs:build` |
 
 ## Appendix

@@ -303,6 +303,9 @@ const AGENT_ADAPTERS = {
     defaultModel: null,
     modelFlags: ['--model'],
     promptViaArgv: true,
+    // agy always runs with --dangerously-skip-permissions and has no flag that narrows its tools, so it
+    // cannot run read-only; a caller that needs read-only (tea-evaluate's rubric judge) refuses it.
+    runsReadOnly: false,
     // agy reads its prompt from the --print argument on argv.
     buildArgv: (extra = [], model) => [
       '--print',

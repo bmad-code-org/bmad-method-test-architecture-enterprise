@@ -1,31 +1,30 @@
 /**
  * The `binary.entry` for the `doc-invocations` gate's `npm run <script>`
  * dispatch. `eval-quality-gates doc-invocations` spawns this file once per
- * fenced line that matches one of the eight full-literal spellings
+ * fenced line that matches one of the full-literal spellings
  * `eval-quality.config.json`'s `doc-invocations` section declares, and hands
  * it only the argument tail left after stripping the matched spelling text.
  *
  * A full per-script spelling ("npm run test:eval-data", never a shared "npm
  * run" prefix) means that tail is the trailing `# ...` comment alone: the
  * script name itself was consumed by the match, so this process is never
- * told which of the eight scripts a given invocation names. The comment is
+ * told which of the declared scripts a given invocation names. The comment is
  * the only signal left, and it is a reliable one by construction: every line
- * this gate scans carries one of eight fixed, known comments, copied
- * verbatim from docs/explanation/eval-quality-adoption-guide.md's CI-usage
- * block and, for four of the eight, from README.md's too -- which is why the
- * gate scans twelve lines today, not eight. `test/test-doc-invocation-entry.js`
- * holds this file's lookup table against both pages' literal text, line by
- * line, so a swapped or drifted comment fails there even though it would
- * still resolve to some working script here. A tail whose comment is not one
- * of the eight below never reaches real `npm`.
+ * this gate scans carries one of the fixed, known comments in
+ * `ALLOWLIST_BY_COMMENT` below, copied verbatim from the pages the gate
+ * scans. `test/test-doc-invocation-entry.js` holds this file's lookup table
+ * against those pages' literal text, line by line, so a swapped or drifted
+ * comment fails there even though it would still resolve to some working
+ * script here. A tail whose comment is not in that table never reaches real
+ * `npm`.
  *
  * A tail carrying a token before any `#` never occurs under the current
  * configuration -- every declared spelling already consumes the script name
  * up to and including it -- but would if a spelling were ever broadened to a
  * shared "npm run" prefix. That leading token is checked against the same
- * eight names directly, so a future config change this file was not updated
- * for still fails closed rather than executing whatever the tail happens to
- * name -- `npm run eval:all` or `npm run release:next` included.
+ * allowlisted names directly, so a future config change this file was not
+ * updated for still fails closed rather than executing whatever the tail
+ * happens to name -- `npm run eval:all` or `npm run release:next` included.
  *
  * Exit codes: whatever `npm run <script>` itself exits with; 64 (sysexits.h
  * EX_USAGE, the doc-invocations gate's own `usageExit` default) when nothing
@@ -94,6 +93,7 @@ const ALLOWLIST_BY_COMMENT = new Map([
   ['eval-automate --validate-only', 'test:eval-automate-data'],
   ['eval-framework-scaffold --validate-only', 'test:eval-framework-scaffold-data'],
   ['test-framework-scaffold-install-isolation', 'test:framework-scaffold-install-isolation'],
+  ['test-test-review-cli', 'test:cli'],
 ]);
 
 const ALLOWLISTED_SCRIPTS = new Set(ALLOWLIST_BY_COMMENT.values());

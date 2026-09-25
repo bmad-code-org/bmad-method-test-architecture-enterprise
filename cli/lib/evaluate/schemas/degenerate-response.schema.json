@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:tea:evaluate:schema:degenerate-response",
+  "title": "corpus/gameability/P-NNN.json",
+  "description": "A gameability probe's degenerate response (AD-9, AD-19): the compliant-looking answer, one command response per interaction plan step, which tea-evaluate run answers the plan from with no target launched. eval-quality keeps the probe's degenerateResponse as prose, so the bytes live here, in the corpus. tea-evaluate check requires one entry for every plan step and no other, and refuses an exit code the step's registry entry declares as infrastructure. The tea-evaluate runtime owns this schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "steps"],
+  "properties": {
+    "schemaVersion": {
+      "description": "The degenerate-response format version.",
+      "const": 1
+    },
+    "steps": {
+      "description": "The response each plan step receives, by its stepId.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["stdout", "stderr", "exitCode"],
+        "properties": {
+          "stdout": {
+            "description": "What the step prints to standard output.",
+            "type": "string"
+          },
+          "stderr": {
+            "description": "What the step prints to standard error.",
+            "type": "string"
+          },
+          "exitCode": {
+            "description": "The step's exit code.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          }
+        }
+      }
+    }
+  }
+}

@@ -24,7 +24,7 @@ inputDocuments:
 
 ## Overview
 
-This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and thirty-six stories (Stories 1.27 to 1.31 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
+This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and thirty-seven stories (Stories 1.27 to 1.32 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
 
 Evaluate is fully stacked. The stack runs system under test, then the evaluation (the mechanism that runs the system, collects evidence and makes judgments), then the Behavioral Evaluation Contract (what behavior matters, what evidence counts, how success and failure resolve), then eval-quality (contract sanity, evidence support, and whether the evaluation catches defects). TeA owns every layer above eval-quality, including each concern eval-quality states it leaves to the caller, so an adopter can evaluate any target end to end. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3 onward, Epic 2 and H.1 to close the plan gap audit; the Traceability section maps each audit item to the story that closes it.
 
@@ -46,7 +46,7 @@ These apply to every story and are not repeated in each one.
 
 - **Skill gates (AD-16, AD-17, AD-18).** A story that authors or edits `src/workflows/testarch/bmad-testarch-evaluate/` does it through `/bmad-workflow-builder` Build or Edit, run headless on that explicit path. The builder never commits and never edits outside the skill directory. After implement and before review, in order: builder Analyze with zero critical and zero high findings (a finding that contradicts a repository test is skipped, with the reason recorded in the story's completion notes); `/bmad-module-builder` Validate Module on the AD-17 staged layout with zero new critical or high findings against the same staged run on main, when `src/module.yaml`, `src/module-help.csv`, `src/agents/bmad-tea/customize.toml` or `.claude-plugin/marketplace.json` changed; then `npm test`.
 - **`bmad-testarch-ci` edits (AD-11).** Authored directly, in the house shape. Gated by its house tests, `node tools/generate-contracts.js --check` for `ci.contract.json`, and its existing suite's replay. Builder Analyze does not apply.
-- **Gate commands (AGENTS.md).** Every TeA story ends with `npm test` green, which chains `lint`, `lint:md` and `format:check`. A story that changes `package.json`, a workflow or release behavior also runs `npm run test:release-metadata`. A story that changes `docs/` also runs `npm run docs:validate-links` and `npm run docs:build`. Every new npm script gets its own `.github/workflows/quality.yaml` step in the same story, which `npm run test:ci-coverage` enforces.
+- **Gate commands (AGENTS.md).** Every TeA story ends with `npm test` green, which chains `lint`, `lint:md` and `format:check`. A story that changes `package.json`, a workflow or release behavior also runs `npm run test:release-metadata`. A story that changes `docs/` also runs `npm run docs:validate-links` and `npm run docs:build`. Every new npm script joins the `npm test` chain in the same story; the `chain` matrix of `.github/workflows/quality.yaml` runs that chain in shards, and `npm run test:ci-coverage` and `npm run test:shards` hold every chained script to it (amended 2026-09-25 in Story 1.9, which replaced the one-step-per-script `validate` job with the sharded `chain` job).
 - **Changelog.** Every story adds its entry under `## [Unreleased]` in `CHANGELOG.md`.
 - **Live runs.** Live evaluation runs execute through the local Claude Code CLI on the owner's subscription. They need no API key and no spending approval.
 - **Reverting a story.** Each acceptance criterion names a check that fails when the story's work is reverted. A check that would still pass after a revert is not an acceptance check. The worker exercises each revert check once (undo the change locally, observe the named failure, restore) and records the observation in the story's completion notes.
@@ -151,7 +151,7 @@ None. Evaluate has no graphical interface.
 ### Epic 1: The Evaluate authoring loop
 
 An adopter describes a target, answers Evaluate's questions, chooses or builds the evaluation layer and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches the seeded defect, with the gaps named and closed. The epic closes by running Evaluate on `bmad-testarch-evaluate` itself, then proving the guidance on two more target kinds, on seeded weaknesses and on an evaluation framework its guides never name.
-Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.31.
+Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.32.
 
 **FRs covered:** FR1 to FR10, FR13, FR14.
 
@@ -179,31 +179,32 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 10 | 1.17 | 1.9 |
 | 11 | 1.10 | 1.8 |
 | 12 | 1.11 | 1.1, 1.8 |
-| 13 | 1.18 | 1.8 |
-| 14 | 1.19 | 1.17 |
-| 15 | 1.20 | 1.17 |
-| 16 | 1.21 | 1.17 |
-| 17 | 1.22 | 1.17 |
-| 18 | 1.12 | 1.4, 1.21 |
-| 19 | 1.13 | 1.10, 1.11, 1.12, 1.18, 1.19 |
-| 20 | 1.23 | 1.13, 1.19, 1.20, 1.21 |
-| 21 | 1.14 | 1.9, 1.13, 1.22, 1.23 |
-| 22 | 1.15 | 1.14 |
-| 23 | 1.16 | 1.15 |
-| 24 | 1.24 | 1.16 |
-| 25 | 1.25 | 1.24 |
-| 26 | 1.26 | 1.23, 1.25 |
-| 27 | 1.27 | 1.7 |
-| 28 | 1.28 | 1.7 |
-| 29 | 1.29 | 1.8 |
-| 30 | 1.30 | 1.8 |
-| 31 | 1.31 | 1.8 |
-| 32 | 2.1 | 1.16, 1.26 |
-| 33 | 2.2 | 2.1 |
-| 34 | 2.3 | 2.2 |
-| 35 | 2.4 | 2.3 |
-| 36 | 2.5 | 2.4 |
-| 37 | H.1 | 2.5 |
+| 13 | 1.32 | 1.9, 1.11 |
+| 14 | 1.18 | 1.8 |
+| 15 | 1.19 | 1.17 |
+| 16 | 1.20 | 1.17 |
+| 17 | 1.21 | 1.17 |
+| 18 | 1.22 | 1.17 |
+| 19 | 1.12 | 1.4, 1.21 |
+| 20 | 1.13 | 1.10, 1.11, 1.12, 1.18, 1.19 |
+| 21 | 1.23 | 1.13, 1.19, 1.20, 1.21 |
+| 22 | 1.14 | 1.9, 1.13, 1.22, 1.23 |
+| 23 | 1.15 | 1.14 |
+| 24 | 1.16 | 1.15 |
+| 25 | 1.24 | 1.16 |
+| 26 | 1.25 | 1.24 |
+| 27 | 1.26 | 1.23, 1.25 |
+| 28 | 1.27 | 1.7 |
+| 29 | 1.28 | 1.7 |
+| 30 | 1.29 | 1.8 |
+| 31 | 1.30 | 1.8 |
+| 32 | 1.31 | 1.8 |
+| 33 | 2.1 | 1.16, 1.26 |
+| 34 | 2.2 | 2.1 |
+| 35 | 2.3 | 2.2 |
+| 36 | 2.4 | 2.3 |
+| 37 | 2.5 | 2.4 |
+| 38 | H.1 | 2.5 |
 
 ## Epic 1: The Evaluate authoring loop
 
@@ -453,16 +454,16 @@ So that shortcut answers and remote targets are measured (CAP-5, CAP-7).
 
 **Given** a gameability probe
 **When** `run` evaluates its arm `gameability:<probeId>`
-**Then** no target launches; the degenerate response is resolved as a synthetic observation with `resolveCheck`, producing `naiveOracleSatisfiedEvidence` and `disciplinedOracleRejectedEvidence`
+**Then** no target launches; the degenerate response is resolved as a synthetic observation with `resolveCheck`, producing `naiveOracleSatisfiedEvidence` and `disciplinedOracleRejectedEvidence` (amended 2026-09-25 in Story 1.9: the response's bytes are committed at `corpus/gameability/<probeId>.json`, one `{ stdout, stderr, exitCode }` per plan step, held by `degenerate-response.schema.json`; the committed probe names its naive oracle, an oracle of another behavior, as `qualification.naiveOracle`, and the disciplined oracle is the one oracle of its own behavior; the naive oracle must hold and the disciplined one be violated, or `preflight` and `run` exit 11, the shared pipeline qualifying the probe before the verdict; `check` refuses a missing or off-plan response and a naive oracle of the probe's own behavior under the `gameability` rule)
 
 **Given** a target with two addressable revisions and no launchable mutation
 **When** `run` evaluates the arm `historical:<revision>`
-**Then** it captures fail-before and pass-after evidence and the preflight seeded-fault leg routes to the pre-fix revision; with fewer than two revisions the probe is recorded as refused with its reason
+**Then** it captures fail-before and pass-after evidence and the preflight seeded-fault leg routes to the pre-fix revision; with fewer than two revisions the probe is recorded as refused with its reason (amended 2026-09-25 in Story 1.9: the committed probe names `qualification.fixCommit`, the post-fix revision is that commit and the pre-fix revision its first parent, and the arm is `historical:<preFixSha>`, the parent's full id; the probe records `artifactDigest` as the tracked tree at the pre-fix revision and `fixCommitDigest` as the digest of the fix commit's full id; `fixCommit` is a hexadecimal commit id, and one that names no commit in a full-history repository exits 10 naming the probe; the probe is refused when the pristine workspace is not a git worktree, when a shallow clone lacks the fix commit or its parent, when the fix commit is not an ancestor of HEAD or has no parent, or when the target cannot run at a revision (`launch.root` or the skill root not a directory at either revision, a submodule under `launch.root` or a registry target that is not an executable at the pre-fix revision), and a refusal lands in `run.json`'s `refused` and `runs/<invocationId>/refused/<probeId>.json`, keeps the probe out of `probes.json` and the trial sets, is printed and recorded by `score`, and does not by itself fail the run; the route addresses revisions as git commits whose target launches from a worktree, so a target reachable only as a remote deployment is not measured by it in this story, which Story 1.32 owns; `check` refuses a historical probe whose defects are not all `natural` under the `historical` rule)
 
 **Given** a contract that declares a rubric
 **When** `run` judges it
-**Then** the judge runs through `cli/lib/agent-adapters.js` and `judgeConfiguration` records it as a fixed condition; with no rubric, no model judge runs
-**And** `test/test-evaluate-arms.js`, chained into `npm test` as `test:evaluate-arms` with its own `quality.yaml` step, asserts all three, and each qualifies through `qualifyProbe` (exported by Story 1.1) with no failure code
+**Then** the judge runs through `cli/lib/agent-adapters.js` and `judgeConfiguration` records it as a fixed condition; with no rubric, no model judge runs (amended 2026-09-25 in Story 1.9: `evaluation.json`'s `judge` wires it (`agent`, optional `agentCommand`, `agentArgs`, `model`, and `timeoutMs`), `policy/evaluator-conditions.json`'s `judge.modelSnapshot` names its model, and `check` exits 10 under the `judge` rule when a rubric is declared with either missing; `judgeConfiguration` is `{ modelSnapshot, systemPromptDigest }`, the digest over the runtime's judge instruction template; the judge runs once per trial, receives the template, each rubric's anchors, penalties and criterion text and the evidence each criterion points at, and never the contract, oracle checks or `testData`; every record of the trial carries its scores as `judgeResults`, an unreadable, missing or off-scale score becoming `score: null` with a note, and a judge that cannot answer yields no record and exit 12)
+**And** `test/test-evaluate-arms.js`, chained into `npm test` as `test:evaluate-arms`, which the `chain` matrix runs (amended 2026-09-25 in Story 1.9: CI runs the `npm test` chain in shards, so a chained script needs no step of its own), asserts all three, and each qualifies through `qualifyProbe` (exported by Story 1.1) with no failure code
 
 **Dependencies:** 1.8.
 **Gate:** `npm test`.
@@ -477,7 +478,7 @@ So that every evaluation layer reaches `eval-quality score` as sealed run record
 
 **Given** `evaluation.json`'s new `evaluator` field, whose `kind` is `deterministic` (Story 1.8's `resolveCheck` evaluator, the default), `sealed-brief-agent`, `command` or `records`
 **When** `tea-evaluate check` reads it
-**Then** it exits 10 for an unknown kind, a `command` evaluator with no `evaluator/mapping.json`, a mapping key bound to an oracle, behavior or rubric criterion the contract does not declare, a rubric binding whose `levels` differ from that criterion's anchored scale levels, and a `records` evaluator whose record directory is absent, each a case in `test:evaluate-check`
+**Then** it exits 10 for an unknown kind, a `command` evaluator with no `evaluator/mapping.json`, a mapping key bound to an oracle, behavior or rubric criterion the contract does not declare, a rubric binding whose `levels` differ from that criterion's anchored scale levels, and a `records` evaluator whose record directory is absent, each a case in `test:evaluate-check` (amended 2026-09-25 in Story 1.9: Story 1.9's `judge` rule and TeA's per-trial judge call bind every contract that declares a rubric, while Story 1.21 names a `sealed-brief-agent` or a `command` evaluator bound to rubric criteria as the rubric's scorer; so this story narrows both to the `deterministic` kind: under any other kind `check` does not require `evaluation.json`'s `judge` for a rubric and refuses one as unused, and `run` makes no TeA judge call, a `test:evaluate-check` case per kind and a `test:evaluate-evaluators` case counting zero stub-judge calls under a `command` evaluator; keeping the rule for every kind makes the `command` case exit 10, which the case catches)
 
 **Given** the runtime-owned `judgment-rows` schema, the import contract of AD-21: per trial, rows of `key`, `outcome` (`pass`, `fail` or `score`), `score` for a scored row, `observationIds` (at least one), `quote` (verbatim text from a cited observation), `quoteChannel` (one of eval-quality's quotation channels: `response-body`, `response-headers`, `response-status`, `call-inputs`, `stdout`, `stderr`, `exit-code` or `artifact`), `artifactId` (required when `quoteChannel` is `artifact`, absent otherwise), `confidence` and `comment` (required on a `fail` row), plus an optional `recommendation`
 **When** a `command` evaluator runs
@@ -508,7 +509,7 @@ So that every evaluation layer reaches `eval-quality score` as sealed run record
 **When** `test:evaluate-boundaries` scans `cli/`
 **Then** the binding rule is the `cli` layer's dependency-direction `allow` list from Story 1.4, which names no framework, so an import of any framework from `cli/` fails `test:direction`; a case adds a temporary import of an unlisted package under `cli/` and observes the failure
 **And** as a secondary check it fails on a framework or library name from a list held in the test (at least `agentevals`, `openevals`, `promptfoo`, `deepeval`, `inspect_ai` and `langsmith`), which catches a name in a string or a dynamic path
-**And** `test/test-evaluate-evaluators.js`, chained into `npm test` as `test:evaluate-evaluators` with its own `quality.yaml` step, holds every case above
+**And** `test/test-evaluate-evaluators.js`, chained into `npm test` as `test:evaluate-evaluators`, which the `chain` matrix runs (amended 2026-09-25 in Story 1.9: CI runs the `npm test` chain in shards, so a chained script needs no step of its own), holds every case above
 
 **Dependencies:** 1.9.
 **Gate:** `npm test`.
@@ -524,7 +525,7 @@ So that the server's own behavior is measured over `mcp` (CAP-6).
 **Given** a loopback stdio MCP server fixture at `test/fixtures/evaluate-mcp/`, whose `evaluation.json` declares a `copy` workspace (AD-8)
 **When** its evaluation folder runs `check`, `preflight`, `run` and `score`
 **Then** the registry builds an `McpTargetAuthorization` and preflight passes with no `interface-not-authorized` or `tool-not-authorized` denial
-**And** the clean arm resolves `passed-clean-control` and the mutated arm `caught`, asserted by `test/test-evaluate-mcp.js`, chained into `npm test` with its own `quality.yaml` step
+**And** the clean arm resolves `passed-clean-control` and the mutated arm `caught`, asserted by `test/test-evaluate-mcp.js`, chained into `npm test`, which the `chain` matrix runs (amended 2026-09-25 in Story 1.9: CI runs the `npm test` chain in shards, so a chained script needs no step of its own)
 **And** removing the tool from the authorization makes the test observe `tool-not-authorized` and fail
 
 **Dependencies:** 1.8.
@@ -550,7 +551,7 @@ So that my HTTP surface is evaluated as `api` with no copied network policy (CAP
 **When** its evaluation runs conformance, `check`, `preflight`, `run` and `score`
 **Then** conformance passes, preflight passes, the clean arm resolves `passed-clean-control` and the mutated arm `caught`
 **And** the contract declares kind `api`, and an unlisted address is denied with eval-quality's denial reason
-**And** the test is chained into `npm test` with its own `quality.yaml` step
+**And** the test is chained into `npm test`, which the `chain` matrix runs (amended 2026-09-25 in Story 1.9: CI runs the `npm test` chain in shards, so a chained script needs no step of its own)
 
 **Dependencies:** 1.1, 1.8.
 **Gate:** skill gates (no registration change, so no Validate Module), `npm test`, engine check.
@@ -570,7 +571,7 @@ So that a workflow is evaluated over its own interface kind, as AD-4's workflow 
 **And** preflight passes, the clean arm resolves `passed-clean-control`, and the mutated arm, whose mutation makes `create` persist the record under a different identifier than the one it returns, resolves `caught`
 **And** when the earlier observation lacks the captured value the dependent step is not issued, no observation exists for it, and the probe's outcome read from the evidence artifact is something other than `caught`, which the test asserts
 **And** a contract whose capture and `after` edges form a cycle is refused by `eval-quality compile` with `binding-cycle`, exit 4, passed through verbatim
-**And** `test/test-evaluate-workflow.js`, chained into `npm test` as `test:evaluate-workflow` with its own `quality.yaml` step, holds each case
+**And** `test/test-evaluate-workflow.js`, chained into `npm test` as `test:evaluate-workflow`, which the `chain` matrix runs (amended 2026-09-25 in Story 1.9: CI runs the `npm test` chain in shards, so a chained script needs no step of its own), holds each case
 
 **Dependencies:** 1.8.
 **Gate:** `npm test`.
@@ -592,7 +593,7 @@ So that tool selection, which eval-quality states it does not evaluate, is measu
 **And** a unit case maps a scored AgentEvals result (`{ key, score, comment }` with a numeric score) to a `judgeResults` entry when `mapping.json` binds the key to a rubric criterion whose anchored levels contain the score, and a score outside those levels exits 12 with no record
 **And** `agentevals` and `@langchain/core` join TeA's devDependencies at the `latest` spec (AD-13); `test:licences`, `test:lockfile-age` and `test:supply-chain` pass; `test:evaluate-boundaries` still finds no framework name under `cli/`
 **And** the completion notes record the installed AgentEvals version and re-verify every AgentEvals fact in `evaluation-framework-facts.md` against it, correcting the file where a fact drifted
-**And** `test/test-evaluate-tool-use.js`, chained into `npm test` as `test:evaluate-tool-use` with its own `quality.yaml` step, holds each case
+**And** `test/test-evaluate-tool-use.js`, chained into `npm test` as `test:evaluate-tool-use`, which the `chain` matrix runs (amended 2026-09-25 in Story 1.9: CI runs the `npm test` chain in shards, so a chained script needs no step of its own), holds each case
 
 **Dependencies:** 1.17.
 **Gate:** `npm test`, `npm run test:release-metadata`.
@@ -613,7 +614,7 @@ So that the import contract is proven framework-neutral with no runtime change (
 **And** `git diff --stat -- cli/` between the story's first and last commit is empty, recorded in the completion notes, which shows a framework joined with no runtime change; `test:evaluate-boundaries` holds the rule afterwards
 **And** `promptfoo` joins TeA's devDependencies at the `latest` spec; its `engines.node` floor is met by the Node major in `.nvmrc`, which the test asserts before spawning promptfoo and reports by name when unmet; `test:licences`, `test:lockfile-age` and `test:supply-chain` pass
 **And** the completion notes record the installed promptfoo version and the output shape it produced, and `evaluation-framework-facts.md` is corrected where the documented shape differed
-**And** `test/test-evaluate-promptfoo.js`, chained into `npm test` as `test:evaluate-promptfoo` with its own `quality.yaml` step, holds each case
+**And** `test/test-evaluate-promptfoo.js`, chained into `npm test` as `test:evaluate-promptfoo`, which the `chain` matrix runs (amended 2026-09-25 in Story 1.9: CI runs the `npm test` chain in shards, so a chained script needs no step of its own), holds each case
 
 **Dependencies:** 1.17.
 **Gate:** `npm test`, `npm run test:release-metadata`.
@@ -642,7 +643,7 @@ So that a strong result is not an evaluation tuned to its own probes, and a rubr
 **And** an agreement below `minimumAgreement` exits 11 as evaluation weakness (an uncalibrated judge) with no trial record
 **And** the digest of `policy/judge-calibration.json` is recorded as `decodingParameters["tea.judgeCalibrationDigest"]` in `EvaluatorConfiguration` (its `judgeConfiguration` is strict and holds only `modelSnapshot` and `systemPromptDigest`), and editing one calibration item changes the `EvaluatorConfiguration` digest and the scoring version, which the test asserts
 **And** a stub judge that captures its input shows no `expectedLevel` value reaching it, and a stub that disagrees on one of two items drops agreement to 0.5 and, with `minimumAgreement` 0.9, exits 11
-**And** `test/test-evaluate-partitions.js` and `test/test-evaluate-calibration.js`, chained into `npm test` as `test:evaluate-partitions` and `test:evaluate-calibration`, each with its own `quality.yaml` step, hold these cases
+**And** `test/test-evaluate-partitions.js` and `test/test-evaluate-calibration.js`, chained into `npm test` as `test:evaluate-partitions` and `test:evaluate-calibration`, each run by the `chain` matrix (amended 2026-09-25 in Story 1.9: CI runs the `npm test` chain in shards, so a chained script needs no step of its own), hold these cases
 
 **Dependencies:** 1.17.
 **Gate:** `npm test`.
@@ -662,7 +663,7 @@ So that I can see where the evaluated behavior first went wrong and whether the 
 **Then** it writes `runs/<invocationId>/interpretation.json` holding per trial: every finding with its cited observations (`observationId`, `sequence`, `operationId`, `provenance`, phase), its quotes, the oracle it answers and that oracle's evidence pointers read from the compiled contract; the findings partitioned into `process` and `outcome`; and the first material error, the cited observation with the lowest `sequence` among findings of severity `material` or `critical`, or `null` when none exists
 **And** the outcomes, verdict and strength vector in the file are copied from the evidence artifact and compared byte for byte by the test; the file adds no outcome, verdict, rate, claim-support judgment or checkpoint score (AD-23)
 **And** a fixture record with material findings citing observations at `sequence` 7, 3 and 12 names the observation at 3, and a `low` finding at `sequence` 1 leaves it unchanged
-**And** `test/test-evaluate-interpret.js`, chained into `npm test` as `test:evaluate-interpret` with its own `quality.yaml` step, holds each case
+**And** `test/test-evaluate-interpret.js`, chained into `npm test` as `test:evaluate-interpret`, which the `chain` matrix runs (amended 2026-09-25 in Story 1.9: CI runs the `npm test` chain in shards, so a chained script needs no step of its own), holds each case
 
 **Dependencies:** 1.17.
 **Gate:** `npm test`.
@@ -849,7 +850,7 @@ So that the guidance is proven to produce corpora and contracts that compile, pr
 **And** one of the two sessions also receives the request to evaluate whether the stub's underlying model is good at the task; its transcript shows the redirect to the adopter's use of the model with the model recorded as a fixed condition, and no committed mutation targets a model
 **And** a result short of strong is recorded as found and closed through the gap loop inside the story, each iteration in the transcript; the story ends only when both suites are strong
 **And** each evaluation commits the replay inputs of its strong run under `evaluation/replay/`: observations, the preflight verdict, sealed records, isolation manifests, the evaluator configuration, the scoring policy and the evidence artifacts, whichever evaluator kind the rubric chose (a sealed-brief agent or a model judge included)
-**And** `test/test-evaluate-authoring.js`, chained into `npm test` as `test:evaluate-authoring` with its own `quality.yaml` step, runs `tea-evaluate check`, `eval-quality compile` and `seal` on both committed evaluations, then replays the committed observations and records through `eval-quality preflight --observations` and `eval-quality score` called directly (Story 2.2's `tea-evaluate ci` replay does not exist yet), with no target launch and no model call; the produced evidence must equal the committed evidence byte for byte and show the strong state, and the test asserts the section coverage; editing the committed contract or one committed observation fails it
+**And** `test/test-evaluate-authoring.js`, chained into `npm test` as `test:evaluate-authoring`, which the `chain` matrix runs (amended 2026-09-25 in Story 1.9: CI runs the `npm test` chain in shards, so a chained script needs no step of its own), runs `tea-evaluate check`, `eval-quality compile` and `seal` on both committed evaluations, then replays the committed observations and records through `eval-quality preflight --observations` and `eval-quality score` called directly (Story 2.2's `tea-evaluate ci` replay does not exist yet), with no target launch and no model call; the produced evidence must equal the committed evidence byte for byte and show the strong state, and the test asserts the section coverage; editing the committed contract or one committed observation fails it
 
 **Dependencies:** 1.16.
 **Gate:** `npm test`.
@@ -867,7 +868,7 @@ So that "TeA names what is weak and builds the missing piece" is a tested fact (
 **Then** the before evidence shows both weaknesses: the gameability probe fails qualification or resolves an outcome other than `caught` (W1), and a `malformed-input` coverage gap is recorded (W2)
 **And** the session's gap report names the loose oracle and the `malformed-input` rule, authors the tightened oracle and a malformed-input probe with its oracle, reruns and rescores, and the resulting evaluation, committed at `test/fixtures/evaluate-gap-loop/after/`, scores strong as Story 1.24 defines it
 **And** the session never read `SEEDED.md` or a held-out probe file, which the transcript's file reads show and the completion notes cite
-**And** both evaluations commit their replay inputs under `replay/` as Story 1.24 defines them, and `test/test-evaluate-gap-loop.js`, chained into `npm test` as `test:evaluate-gap-loop` with its own `quality.yaml` step, replays each through `eval-quality preflight --observations` and `score` with no target launch and no model call, reproduces the committed evidence byte for byte, asserts both before weaknesses and the after strength, and asserts that every file differing between before and after is one the committed gap report names
+**And** both evaluations commit their replay inputs under `replay/` as Story 1.24 defines them, and `test/test-evaluate-gap-loop.js`, chained into `npm test` as `test:evaluate-gap-loop`, which the `chain` matrix runs (amended 2026-09-25 in Story 1.9: CI runs the `npm test` chain in shards, so a chained script needs no step of its own), replays each through `eval-quality preflight --observations` and `score` with no target launch and no model call, reproduces the committed evidence byte for byte, asserts both before weaknesses and the after strength, and asserts that every file differing between before and after is one the committed gap report names
 
 **Dependencies:** 1.24.
 **Gate:** `npm test`.
@@ -887,7 +888,7 @@ So that TeA's support for evaluation frameworks has no fixed list (CAP-13, AD-21
 **And** its evaluator prints judgment rows through `evaluator/mapping.json`, the clean arm resolves `passed-clean-control`, the mutated arm resolves `caught`, and `git diff --stat -- cli/` across the story is empty
 **And** the framework joins TeA's devDependencies at the `latest` spec, and `test:licences`, `test:lockfile-age` and `test:supply-chain` pass
 **And** the learned facts are added to `evaluation-framework-facts.md` as a further example, and the skill's guides stay free of the framework's name so the criterion can be repeated with another framework
-**And** `test/test-evaluate-learned-framework.js`, chained into `npm test` as `test:evaluate-learned-framework` with its own `quality.yaml` step, asserts the framework's name is absent from the skill directory and re-runs the committed evaluation to `passed-clean-control` and `caught`; the evaluator the framework provides runs with no model call (the story's selection condition), so the full run, the framework's evaluator included, stays deterministic in `npm test`
+**And** `test/test-evaluate-learned-framework.js`, chained into `npm test` as `test:evaluate-learned-framework`, which the `chain` matrix runs (amended 2026-09-25 in Story 1.9: CI runs the `npm test` chain in shards, so a chained script needs no step of its own), asserts the framework's name is absent from the skill directory and re-runs the committed evaluation to `passed-clean-control` and `caught`; the evaluator the framework provides runs with no model call (the story's selection condition), so the full run, the framework's evaluator included, stays deterministic in `npm test`
 
 **Dependencies:** 1.23, 1.25.
 **Gate:** `npm test`, `npm run test:release-metadata`.
@@ -931,8 +932,8 @@ So that a `SIGKILL` leaves no running agent, no temp copy and no worktree regist
 **When** the next `preflight` runs against the same project
 **Then** it removes every workspace a dead run left, identified by a marker the runtime writes into each workspace naming its run and process, and removes the detached worktree's registration from the adopter's repository, touching nothing it did not create, and reports what it reclaimed
 **And** a case in `test/test-evaluate-mutation.js` kills a run during qualification, asserts the temp directory holds its workspace and `git worktree list` shows its worktree, runs `preflight` again, and asserts both are gone and the adopter's `git status --porcelain` and refs are unchanged; reverting the reclaim fails it
-**And** a workspace whose marker names a live process is left alone, and a case asserts it
-**And** `docs/reference/tea-evaluate-cli.md` states what a killed run leaves and when it is reclaimed
+**And** a workspace whose marker names a live process is left alone, and a case asserts it; reclaiming every marked workspace fails the case (amended 2026-09-25 in Story 1.9: the revert check was named only in the test design)
+**And** `docs/reference/tea-evaluate-cli.md` states what a killed run leaves and when it is reclaimed, which a case in `test/test-evaluate-mutation.js` holds by reading that section under its exact heading and asserting it names the workspace marker and the reclaim; deleting the passage fails the case (amended 2026-09-25 in Story 1.9: the criterion named no revert check)
 
 **Dependencies:** 1.7.
 **Gate:** `npm test`.
@@ -950,8 +951,8 @@ So that a live run's records and isolation manifests state what the run spent (N
 **Given** Story 1.8's `tea-evaluate run`, which meters no model use and records `inputTokens: 0`, `outputTokens: 0` and `costUsd: "0"` in every Sealed Run Record's `resourceUse` and in each isolation manifest's `actualResourceUse`, and the largest safe integer as the token and cost ceilings
 **When** a registry target reports its use (for `tea-skill-runner`, the usage its agent adapter parses from the vendor CLI's own report, held in `cli/lib/agent-adapters.js` so the runtime stays vendor-neutral)
 **Then** `run` records each trial's reported tokens and cost in its record and sums them in the set's manifest, and a case in `test/test-evaluate-run.js` whose stub target reports a known use asserts those values; reverting the reading makes the case read zero
-**And** a trial whose target reports no use is recorded with its use marked unreported in `run.json`, so a reader can tell a measured zero from an unreported use, and a case asserts it
-**And** `docs/reference/tea-evaluate-cli.md` states where the use comes from and what an unreported use means
+**And** a trial whose target reports no use is recorded with its use marked unreported in `run.json`, so a reader can tell a measured zero from an unreported use, and a case asserts it; dropping the mark leaves a zero the case reads as measured, which fails it (amended 2026-09-25 in Story 1.9: the revert check was named only in the test design)
+**And** `docs/reference/tea-evaluate-cli.md` states where the use comes from and what an unreported use means, which a case in `test/test-evaluate-run.js` holds by reading that section under its exact heading and asserting it names both; deleting the passage fails the case (amended 2026-09-25 in Story 1.9: the criterion named no revert check)
 
 **Dependencies:** 1.8.
 **Gate:** `npm test`.
@@ -970,8 +971,8 @@ So that the cross-user behaviors and malformed-input checks Story 1.13 teaches r
 **When** a step binds `{ principal }`
 **Then** the runtime sends the credential or identity the registry entry maps to that principal for the step's channel, from a principal mapping the evaluation declares and `check` validates (an unmapped principal is an authoring defect, exit 10), and records the principal, never the credential, in the observation's call inputs; a case in `test/test-evaluate-run.js` whose stub target prints the identity it received asserts two principals reach it in the plan's order, and reverting the binding makes the case exit 12
 **And** when a step binds `{ matcher: "any" }` or `{ matcher: "type-violating" }`, the runtime chooses a value from the operation's declared input schema (a value the schema admits for `any`, one it refuses for `type-violating`) with a seed the run records in `run.json`, so a rerun sends the same value; a case asserts the stub received a schema-admitted value and a schema-refused value, and that two runs with one seed send the same bytes; reverting the choice makes the case exit 12
-**And** a binding kind the runtime still cannot send stops the run with exit 12 naming the step and the kind, and a case asserts it
-**And** `docs/reference/tea-evaluate-cli.md` states each binding kind the runtime sends, where a principal's credential comes from, and how a matcher value is chosen
+**And** a binding kind the runtime still cannot send stops the run with exit 12 naming the step and the kind, and a case asserts it; sending nothing for that kind lets the run go on, which the case catches (amended 2026-09-25 in Story 1.9: the revert check was named only in the test design)
+**And** `docs/reference/tea-evaluate-cli.md` states each binding kind the runtime sends, where a principal's credential comes from, and how a matcher value is chosen, which a case in `test/test-evaluate-run.js` holds by reading that section under its exact heading and asserting it names each binding kind the runtime sends; deleting a kind from the passage fails the case (amended 2026-09-25 in Story 1.9: the criterion named no revert check)
 
 **Dependencies:** 1.8.
 **Gate:** `npm test`.
@@ -992,9 +993,30 @@ So that a target cannot read what the evaluation withholds or write where the ru
 **And** the confinement covers every process the target starts, those still running after the target exits included, until they end or the run ends: eval-quality releases its watchdog once the target exits on its own, and a `setsid` child escapes any process-group kill, so Story 1.8's round 2 review had a leftover process rewrite P-002's records and `run.json`'s `artifacts.records` after `run` exited and `score` exited 2 with no integrity finding; a case whose stub leaves a process running that, after `run` exits, rewrites a sealed record and the digest `run.json` recorded for it finds `score` refusing the run (the confinement refused the writes, or `score` holds the record to an anchor the leftover process could not reach); reverting the confinement for leftover processes lets `score` pass the rewritten record through to the engine, which the case catches (added 2026-09-24 in Story 1.8's final review round 2)
 **And** a case in `test/test-evaluate-run.js` whose stub target tries to read the evaluation folder's `contract.json` and to write into `runs/` records both attempts refused and the run's artifacts unchanged; reverting the confinement makes the stub read the contract, which the case catches
 **And** the isolation manifest's `observedMounts` lists the paths the confinement saw the target open outside its workspace, from the confinement's own report, and a case whose stub reads a path it was not granted asserts that path appears there and eval-quality records the isolation violation; reverting the report leaves `observedMounts` empty, which the case catches
-**And** each forbidden input's note in the manifest states the confinement that withheld it, and `docs/reference/tea-evaluate-cli.md` states what is confined, on which platforms, and what an opted-out run records
+**And** each forbidden input's note in the manifest states the confinement that withheld it, and `docs/reference/tea-evaluate-cli.md` states what is confined, on which platforms, and what an opted-out run records; a case asserts each forbidden input's note names the confinement and the reference's section, read under its exact heading, names each platform's mechanism, and restoring Story 1.8's note or deleting a platform from the passage fails the case (amended 2026-09-25 in Story 1.9: the criterion named no revert check)
 
 **Dependencies:** 1.8.
+**Gate:** `npm test`.
+
+### Story 1.32: Qualify a historical probe against two addressable deployments
+
+Added 2026-09-25 in Story 1.9 from the gap its final review found: Story 1.9's historical route addresses revisions as git commits whose target launches from a worktree, so a target reachable only as a remote deployment, which AD-8 routes to the historical route, is probed against the same deployment at both revisions and is not measured.
+
+As an adopter whose target is reachable only as a remote deployment,
+I want a historical probe qualified against a pre-fix and a post-fix deployment I name,
+So that a defect a release fixed is measured where no worktree can launch the target (AD-6, AD-8).
+
+**Acceptance Criteria:**
+
+**Given** a historical probe whose qualification names a pre-fix and a post-fix deployment, each an address the registry's `api` target policy authorizes (Story 1.11), with the release identifier each deployment reports
+**When** `tea-evaluate run` qualifies it
+**Then** the fail-before arm runs against the pre-fix deployment and must be violated, the pass-after arm against the post-fix deployment and must hold, the defect's manifestation-witness leg routes to the pre-fix deployment, and the probe's trials run on the arm `historical:<pre-fix release identifier>`; a `test:evaluate-arms` case over two loopback fixture servers asserts each routing from the servers' own request logs, and routing the fail-before arm to the post-fix deployment makes it hold and exit 11, which the case catches
+**And** the qualified probe records `fixCommitDigest` as the digest of the post-fix release identifier and `artifactDigest` as the digest of the pre-fix one, each asserted by the case; recording one identifier for both makes the digests equal, which the case catches
+**And** a deployment the registry does not authorize refuses the probe with its reason in `run.json`'s `refused` and `refused/<probeId>.json`, the rest of the run going on, a `test:evaluate-arms` case; dropping the refusal sends a request the adapter denies and the run exits 10, which the case catches
+**And** `tea-evaluate check` exits 10 under the `historical` rule when a deployment-routed probe names one deployment but not the other, or names both and a `fixCommit`, each a `test:evaluate-check` case; dropping the rule lets `run` reach qualification and stop with exit 12, which the case catches
+**And** `docs/reference/tea-evaluate-cli.md` states which historical probes run from worktrees and which against deployments, and AD-8's historical route names both; a `test:evaluate-arms` case reads the reference's historical section under its exact heading and asserts it names both kinds, and deleting the deployment passage fails the case
+
+**Dependencies:** 1.9, 1.11.
 **Gate:** `npm test`.
 
 ## Epic 2: Continuous proof in CI
@@ -1017,7 +1039,7 @@ So that drift in strength or evidence is visible and a baseline changes only by 
 **And** `compare --accept` writes `baseline/` (contract snapshot, sealed brief, qualified probes, observations, preflight verdict, sealed records, per-trial-set isolation manifests, evaluator configuration, scoring policy, evidence) and `baseline/qualification/`, and refuses a run whose `run.json` says `dirty: true`; a replay through `score` needs every one of these, so omitting the isolation manifests makes Story 2.2's replay exit 3
 **And** since `compareDominance` already reports `incomparable` for differing `comparabilityKey`, the named revert check for TeA's own refusal is the case whose only difference is `evalQualityVersion` in `run.json`
 **And** `test/lib/compare-dominance.js` and `test/lib/compare-eval-runs.js` import the runtime module and keep only TeA data
-**And** `test/test-evaluate-compare.js`, chained into `npm test` as `test:evaluate-compare` with its own `quality.yaml` step, asserts each case, and it fails when the dirty refusal is removed
+**And** `test/test-evaluate-compare.js`, chained into `npm test` as `test:evaluate-compare`, which the `chain` matrix runs (amended 2026-09-25 in Story 1.9: CI runs the `npm test` chain in shards, so a chained script needs no step of its own), asserts each case, and it fails when the dirty refusal is removed
 
 **Given** the dirty run from Story 1.16
 **When** `compare --accept` is tried on it
@@ -1055,7 +1077,7 @@ So that the pipeline enforces eval-quality's verdicts without a second taxonomy 
 **And** it runs oracle-versus-scorer agreement over the committed baseline by reading the `corroboration` eval-quality recorded on each oracle outcome in the baseline evidence (`agrees`, `disagrees` or `not-evaluable`, the engine's own comparison of the evaluator's disposition with the evidence); any `disagrees`, or a required oracle whose corroboration is `not-evaluable` or whose outcome is `unreached`, exits 11 as evaluation weakness; TeA holds no table of its own; flipping one disposition in a fixture baseline record and re-scoring makes eval-quality report `disagrees`, and the case exits 11
 **And** the `scheduled` and `release` tiers run the held-out partition (Story 1.21) with the strength floor applied to it separately (warn on `scheduled`, block on `release`), and judge calibration whenever the contract declares a rubric, whose exit 11 blocks on both tiers
 
-**Given** `test/test-evaluate-ci.js`, chained into `npm test` as `test:evaluate-ci` with its own `quality.yaml` step
+**Given** `test/test-evaluate-ci.js`, chained into `npm test` as `test:evaluate-ci`, which the `chain` matrix runs (amended 2026-09-25 in Story 1.9: CI runs the `npm test` chain in shards, so a chained script needs no step of its own)
 **When** it runs over fixture plans and a fixture evaluation with a committed test baseline under `test/fixtures/evaluate/`
 **Then** it asserts the AD-10 enforcement table row by row, the outcome-state mapping, the tier membership and a replay that reproduces the fixture evidence
 **And** replay reads produced evidence only from a fresh `runs/<invocationId>/replay/` directory and baseline bytes only from `baseline/`; produced evidence that differs from the baseline exits 13, class evaluation evidence drift, action block (an AD-10 row)
@@ -1079,7 +1101,7 @@ So that one skill owns the pipeline files (AD-11).
 **When** a step is added, authored directly, that detects `ci/evaluation-ci-plan.json` files and renders them with the existing platform templates
 **Then** a standalone CI run and an edit-mode invocation both pick up existing plans
 **And** each `pr` check renders as its own pipeline step
-**And** the GitHub Actions template gains an evaluation block with a per-check step pattern and an upload of `runs/<invocationId>/` with `if: always()` (AD-12); a deterministic test, chained into `npm test` as `test:evaluate-ci-render` with its own `quality.yaml` step, asserts the detection step is reached from both the create and edit entry points and parses the template block as YAML asserting both patterns
+**And** the GitHub Actions template gains an evaluation block with a per-check step pattern and an upload of `runs/<invocationId>/` with `if: always()` (AD-12); a deterministic test, chained into `npm test` as `test:evaluate-ci-render`, which the `chain` matrix runs (amended 2026-09-25 in Story 1.9: CI runs the `npm test` chain in shards, so a chained script needs no step of its own), asserts the detection step is reached from both the create and edit entry points and parses the template block as YAML asserting both patterns
 **And** because the CI skill's templates are rendered by the agent, the rendering itself is proved behaviorally: `test/eval-ci.js` gains an `evaluation-plan` case over the fixture adopter from Story 1.10, whose ground truth lists each `pr` command as a standalone `run:` step and the `runs/` upload path; the case's fixture set lives under `test/fixtures/ci-eval/evaluation-plan/` (the harness requires set roots there) as a copy of that plan; a live `npm run eval:ci` through the local Claude Code CLI produces the workflow, which the worker captures by hand into `test/replay/ci/evaluation-plan-<case>/expected.json` with `storedOutput` marked a real capture; `node tools/generate-contracts.js` and `node tools/generate-probes.js` are re-run (the CI contract's `probeStepBound` grows with the set count) and the `ci` suite's `caseCount` and `fixtures` in `suite-manifest.json` are updated; `test:contract-sources`, `test:probe-sources`, `test:eval-schemas`, `test:eval-replay` and `test:eval-ci-data` then hold it
 **And** the house tests, `node tools/generate-contracts.js --check` for `ci.contract.json` and the CI suite's replay pass, and removing the new step fails the rendering test
 
@@ -1119,9 +1141,9 @@ So that Evaluate is continuously proven where it is built, and users can read ho
 **Acceptance Criteria:**
 
 **Given** the evaluations from Stories 1.10, 1.11, 1.16, 1.18, 1.19, 1.20, 1.24, 1.25 (its `after` evaluation) and 1.26
-**When** the worker wires TeA directly (AD-11: TeA's checks are `npm test` chain scripts with `validate` steps, and the CI-skill rendering is proved on the fixture adopters in Story 2.3)
-**Then** each fixture evaluation's `pr` checks, and the `check`, `compile` and `seal` checks of `bmad-testarch-evaluate`, join the `npm test` chain as scripts, each with its own step in the `validate` job of `.github/workflows/quality.yaml`, and `npm run test:ci-coverage` passes
-**And** the `validate` job uploads each `runs/<invocationId>/` as a build artifact with `if: always()`, and a `test:evaluate-ci` case parses `quality.yaml` and fails when that upload step or its path is missing
+**When** the worker wires TeA directly (AD-11: TeA's checks are `npm test` chain scripts, which the `chain` matrix runs, and the CI-skill rendering is proved on the fixture adopters in Story 2.3)
+**Then** each fixture evaluation's `pr` checks, and the `check`, `compile` and `seal` checks of `bmad-testarch-evaluate`, join the `npm test` chain as scripts, which the `chain` matrix of `.github/workflows/quality.yaml` runs, and `npm run test:ci-coverage` and `npm run test:shards` pass (amended 2026-09-25 in Story 1.9, which replaced the `validate` job with the sharded `chain` job)
+**And** the `chain` job uploads each `runs/<invocationId>/` as a build artifact with `if: always()` from the shard that ran its check, and a `test:evaluate-ci` case parses `quality.yaml` and fails when that upload step or its path is missing
 **And** the eight `eval-quality-gates` stay in their current `quality.yaml` jobs, unchanged, which the same test asserts
 
 **Given** no committed baseline exists overnight for `bmad-testarch-evaluate`
@@ -1155,7 +1177,7 @@ So that the `pr` replay of `bmad-testarch-evaluate` has an accepted baseline to 
 
 1. On `main` after Story 2.5 merges, `npm ci` then `npm test`. Proves every check is green on the merged tree and the published engine.
 2. `node cli/evaluate.js run --evaluation test/evaluations/bmad-testarch-evaluate/evaluation.json` and `score` on that committed tree, with live legs through the local Claude Code CLI. Proves a clean (`dirty: false`) run: preflight passed, `passed-clean-control`, `caught` at `minimumTrialCount`, rollback proved.
-3. `node cli/evaluate.js compare --accept --evaluation test/evaluations/bmad-testarch-evaluate/evaluation.json` in a branch, and open the pull request. Add the `bmad-testarch-evaluate` replay as an `npm test` script with its own `validate` step in `quality.yaml` in the same pull request. Proves the baseline enters `baseline/` only through a reviewed pull request (AD-12).
+3. `node cli/evaluate.js compare --accept --evaluation test/evaluations/bmad-testarch-evaluate/evaluation.json` in a branch, and open the pull request. Add the `bmad-testarch-evaluate` replay as an `npm test` chain script, which the `chain` matrix of `quality.yaml` runs (amended 2026-09-25 in Story 1.9), in the same pull request. Proves the baseline enters `baseline/` only through a reviewed pull request (AD-12).
 4. `node cli/evaluate.js ci --tier pr --evaluation test/evaluations/bmad-testarch-evaluate/evaluation.json`, locally and in the pull request's `quality.yaml` run. Proves the `pr` replay reproduces the committed evidence, closing AD-15's last condition.
 
 **Dependencies:** 2.5.
@@ -1174,7 +1196,7 @@ So that the `pr` replay of `bmad-testarch-evaluate` has an accepted baseline to 
 | CAP-8 | 1.8, 1.14 | template schema validation; guidance test (risk table) |
 | CAP-9 | 1.6, 1.8, 1.14, 1.16, 1.17 | `test:evaluate-run`; `test:evaluate-evaluators`; 1.16 live verdicts |
 | CAP-10 | 1.14, 1.16, 1.22, 1.25 | guidance test over exported vocabularies; `test:evaluate-interpret`; `test:evaluate-gap-loop` |
-| CAP-11 | 2.2, 2.3, 2.4, 2.5, H.1 | `test:evaluate-ci` (placement, gameability, freshness, agreement); rendering test; `quality.yaml` steps; H.1 step 4 |
+| CAP-11 | 2.2, 2.3, 2.4, 2.5, H.1 | `test:evaluate-ci` (placement, gameability, freshness, agreement); rendering test; the `quality.yaml` `chain` matrix; H.1 step 4 |
 | CAP-12 | 1.8, 2.1, 2.5, H.1 | `run.json`; `test:evaluate-compare`; H.1 step 3 |
 | CAP-13 | 1.17, 1.19, 1.20, 1.23, 1.26 | `test:evaluate-evaluators`, `-tool-use`, `-promptfoo`, `-learned-framework`; template rendering in the guidance test |
 | CAP-14 | 1.21, 2.2 | `test:evaluate-partitions`, `test:evaluate-calibration`; `scheduled` and `release` tier cases |

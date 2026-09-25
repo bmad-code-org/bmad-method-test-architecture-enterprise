@@ -7,28 +7,36 @@
  *
  *   1. `check` over the folder (exit 10 on any authoring defect);
  *   2. the evaluation is one this release can run: a `cli` interface, and
- *      every probe that seeds a defect on the `controlled-mutation` route
- *      (exit 12 otherwise, before anything runs);
+ *      every probe that seeds a defect on the `controlled-mutation` or
+ *      `historical` route (exit 12 otherwise, before anything runs);
  *   3. the pristine workspace (`workspace.js`: a detached worktree at the
  *      evaluated commit, or a temp copy), every registry target present and
  *      executable in it, and `runs/<invocationId>/run.json` recording what was
  *      evaluated (exit 12 when the workspace cannot be made);
  *   4. `eval-quality compile` and `eval-quality seal` over the run's copy of
  *      `contract.json` (a documented non-zero exit passes through);
- *   5. each seeded probe qualified through AD-8's six steps (`mutation.js`) in
- *      a workspace of its own (`qualify-<probeId>`, reproducing the pristine
- *      one and removed after its cycle), with the single-trial arm executor
- *      (`arm.js`) and the deterministic evaluator (`evaluator.js`); its
- *      evidence is written under `runs/<invocationId>/qualification/<probeId>/`
- *      as far as the cycle got, and a step that fails exits 10, 11 or 12 with
- *      no qualified probe written;
+ *   5. each seeded probe qualified: a controlled mutation through AD-8's six
+ *      steps (`mutation.js`) in a workspace of its own (`qualify-<probeId>`,
+ *      reproducing the pristine one and removed after its cycle), a
+ *      historical probe across its fix boundary (`historical.js`: failing in
+ *      a worktree at the fix commit's parent and passing in one at the fix
+ *      commit), each arm run by the single-trial arm executor (`arm.js`) and
+ *      judged by the deterministic evaluator (`evaluator.js`); the evidence
+ *      is written under `runs/<invocationId>/qualification/<probeId>/` as far
+ *      as the qualification got, and a step that fails exits 10, 11 or 12
+ *      with no qualified probe written. A historical probe with no revisions
+ *      to address is refused with its reason (`run.json`'s `refused` and
+ *      `refused/<probeId>.json`) and left out of everything after, which does
+ *      not fail the run;
  *   6. the adopter's project read again and compared with its reading before
  *      the workspaces were made (exit 12 on any change);
  *   7. one mutated workspace per mutation, reproducing the pristine one, its
- *      mutation applied and its digest held to the one the cycle measured;
+ *      mutation applied and its digest held to the one the cycle measured,
+ *      and one worktree per pre-fix revision a historical probe names;
  *   8. the legs, planned and driven by eval-quality's `runPreflight` through a
  *      recording port: a leg a defect's manifestation witness names runs in
- *      that defect's mutated workspace, every other leg in the pristine one,
+ *      that defect's mutated workspace (or, on the historical route, its
+ *      pre-fix worktree), every other leg in the pristine one,
  *      and each observation is written under `observations/` with the
  *      workspace and working directory it ran in; a leg the adapter refuses or
  *      cannot run is written under `faults/` and ends the run (exit 10 for a
@@ -57,12 +65,15 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
+const { admissionRefusal, armVerdict, referenceTo } = require('./admission');
 const { hostEnvironmentPort, persistableRequest, runArm } = require('./arm');
 const { TEA_MANIFEST, checkEvaluation } = require('./check');
 const { MANIFEST_NAME } = require('./folder');
 const { engineVersion, loadEngine } = require('./engine');
 const { runEngineStage } = require('./engine-cli');
 const { evaluateOracles, oraclesOfBehaviors } = require('./evaluator');
+const { degenerateResponsePath, qualifyGameabilityProbes } = require('./gameability');
+const { historicalRevisions, historicalRoute, qualifyHistoricalProbe } = require('./historical');
 const { QualificationError, applyReplaceExact, qualifiedProbe, runMutationCycle } = require('./mutation');
 const { createArtifactValidator } = require('./records');
 const { registryFromEvaluation } = require('./registry');
@@ -82,7 +93,8 @@ const {
 const CONTRACT_NAME = 'contract.json';
 const POLICY_PATH = 'policy/scoring-policy.json';
 const PROBE_FILE = /\.probe\.json$/;
-const QUALIFIED_ROUTE = 'controlled-mutation';
+/** The routes a seeded probe qualifies on; `run` also materializes clean controls and gameability probes. */
+const QUALIFIED_ROUTES = ['controlled-mutation', 'historical'];
 
 /** The eval-quality fault a command-line adapter throws when its policy refuses a request. */
 const DENIAL_FAULT = 'forbidden-target';
@@ -137,9 +149,23 @@ function writeJson(file, value) {
   fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
 }
 
-/** `relative` in POSIX form. */
-function posix(relative) {
-  return relative.split(path.sep).join('/');
+/**
+ * Every committed gameability probe, sorted by file name, parsed, each with
+ * its degenerate response's bytes and steps, read before anything runs.
+ */
+function gameabilityProbes(folder) {
+  const directory = path.join(folder, 'probes');
+  if (!fs.existsSync(directory)) return [];
+  return fs
+    .readdirSync(directory)
+    .filter((name) => PROBE_FILE.test(name))
+    .sort()
+    .map((name) => ({ file: `probes/${name}`, probe: readJson(path.join(directory, name)) }))
+    .filter(({ probe }) => probe.qualification?.route === 'gameability')
+    .map((entry) => {
+      const bytes = fs.readFileSync(path.join(folder, ...degenerateResponsePath(entry.probe.probeId).split('/')));
+      return { ...entry, bytes, steps: JSON.parse(bytes.toString('utf8')).steps };
+    });
 }
 
 /** Every committed probe that seeds a defect, sorted by file name, parsed. */
@@ -273,26 +299,6 @@ function ensureRunsDirectory(folder) {
     if (descriptor !== null) fs.closeSync(descriptor);
   }
   return runs;
-}
-
-/** What an arm's oracles say together: `held` when every one holds, `violated` when one fails, otherwise `inconclusive`. */
-function armVerdict(oracles) {
-  if (oracles.every((oracle) => oracle.disposition === 'held')) return 'held';
-  return oracles.some((oracle) => oracle.disposition === 'violated') ? 'violated' : 'inconclusive';
-}
-
-/**
- * An artifact reference to a file the run wrote, by its path relative to the
- * evaluation folder, digesting the bytes the runtime wrote (`RunDirectory.read`
- * refuses any others).
- */
-function referenceTo(folder, writer, file, digestBytes) {
-  return {
-    storage: 'public',
-    path: posix(path.relative(folder, writer.pathOf(file))),
-    privateRef: null,
-    digest: digestBytes(writer.read(file)),
-  };
 }
 
 /**
@@ -443,15 +449,16 @@ async function pipeline(
     });
   }
   const seeded = seededProbes(folder);
-  const unqualifiable = seeded.filter(({ probe }) => probe.qualification?.route !== QUALIFIED_ROUTE);
+  const unqualifiable = seeded.filter(({ probe }) => !QUALIFIED_ROUTES.includes(probe.qualification?.route));
   if (unqualifiable.length > 0) {
     return new PreflightOutcome({
       stage: 'launch',
       exitCode: 12,
-      message: `${unqualifiable.map(({ file, probe }) => `${file} (route ${probe.qualification?.route})`).join(', ')} seed a defect on a route this release does not qualify; it qualifies seeded probes on the ${QUALIFIED_ROUTE} route only, so a retry cannot pass`,
+      message: `${unqualifiable.map(({ file, probe }) => `${file} (route ${probe.qualification?.route})`).join(', ')} seed a defect on a route this release does not qualify; it qualifies seeded probes on the ${QUALIFIED_ROUTES.join(' and ')} routes only, so a retry cannot pass`,
     });
   }
   const refused = prepare({ folder, evaluation, seeded });
+  const gameability = gameabilityProbes(folder);
   if (refused !== null) return refused;
 
   const root = realPathLoosely(joinAsSpelled(folder, evaluation.launch.root));
@@ -480,7 +487,7 @@ async function pipeline(
     const before = readTree();
     // Every workspace after the first reproduces it, so the run evaluates one
     // set of bytes whatever changes in the project meanwhile.
-    const make = (label, basis = null) => {
+    const make = (label, basis = null, { commit = null } = {}) => {
       const workspace = createWorkspace({
         root,
         kind: evaluation.workspace.kind,
@@ -489,6 +496,7 @@ async function pipeline(
         fromWorkingTree,
         label,
         basis,
+        commit,
       });
       workspaces.push(workspace);
       return workspace;
@@ -520,6 +528,7 @@ async function pipeline(
       root,
       evaluation,
       seeded,
+      gameability,
       pristine,
       make,
       discard,
@@ -566,6 +575,7 @@ async function runInWorkspaces({
   root,
   evaluation,
   seeded,
+  gameability,
   pristine,
   make,
   discard,
@@ -612,6 +622,7 @@ async function runInWorkspaces({
     },
     workspaces: { pristine: pristine.root },
     adopterTree: { repository: before.repository, unchanged: null },
+    refused: [],
   };
   state.run = run;
   const writeRun = () => writer.replaceJson('run.json', run);
@@ -687,9 +698,54 @@ async function runInWorkspaces({
   const policyPath = path.join(folder, POLICY_PATH);
   const policy = fs.existsSync(policyPath) ? readJson(policyPath) : null;
   const validate = createArtifactValidator();
-  const digests = seeded.length > 0 || afterVerdict !== null ? attestedDigests({ folder, root, evaluation, pristine, engine, stop }) : null;
+  const digests =
+    seeded.length > 0 || gameability.length > 0 || afterVerdict !== null
+      ? attestedDigests({ folder, root, evaluation, pristine, engine, stop })
+      : null;
   if (seeded.length > 0) {
     for (const { file, probe } of seeded) {
+      if (probe.qualification.route === 'historical') {
+        const revisions = historicalRevisions({ pristine, fixCommit: probe.qualification.fixCommit });
+        if (revisions.defect !== undefined) {
+          return outcome({ stage: 'check', exitCode: 10, message: `${file}: ${revisions.defect}` });
+        }
+        // A refused probe runs nowhere; the rest of the run goes on without it (AD-8).
+        const refuse = (reason) => {
+          const refusal = { probeId: probe.probeId, file, route: 'historical', reason };
+          run.refused.push(refusal);
+          writer.writeJson(`refused/${probe.probeId}.json`, refusal);
+          writeRun();
+          log(`${file}: refused: ${reason}`);
+        };
+        if (revisions.refused !== undefined) {
+          refuse(revisions.refused);
+          continue;
+        }
+        const historical = await qualifyHistoricalProbe({
+          folder,
+          root,
+          evaluation,
+          contract,
+          file,
+          probe,
+          revisions,
+          pristine,
+          make,
+          discard,
+          registry,
+          policy,
+          engine,
+          validate,
+          digests,
+          writer,
+          stop,
+          log,
+          signal,
+        });
+        if (historical.refused === undefined) qualified.push(historical);
+        else refuse(historical.refused);
+        continue;
+      }
       // Each probe is qualified in a workspace of its own, so nothing its
       // mutated arm leaves behind reaches another probe or the legs.
       const workspace = make(`qualify-${probe.probeId}`, pristine);
@@ -719,15 +775,39 @@ async function runInWorkspaces({
     }
     treeUnchanged('qualification');
   }
+  // Each gameability probe qualified over its degenerate response, launching nothing, so
+  // preflight and run both refuse one that does not game its naive oracle (exit 11).
+  const gameabilityQualified = await qualifyGameabilityProbes({
+    folder,
+    evaluation,
+    contract,
+    registry,
+    gameability,
+    policy,
+    engine,
+    validate,
+    digests,
+    writer,
+    stop,
+    log,
+    signal,
+  });
 
-  // One mutated workspace per mutation, for the legs its witnesses name.
+  // One mutated workspace per mutation, and one pre-fix worktree per
+  // historical revision, for the legs their witnesses name.
   const routes = new Map();
   const mutatedByMutation = new Map();
+  const historicalByRevision = new Map();
   for (const entry of qualified) {
-    let route = mutatedByMutation.get(entry.mutation.mutationId);
+    const [byKey, key] =
+      entry.historical === undefined ? [mutatedByMutation, entry.mutation.mutationId] : [historicalByRevision, entry.historical.preFix];
+    let route = byKey.get(key);
     if (route === undefined) {
-      route = await mutatedRoute({ entry, pristine, make, registry, engine, stop, log });
-      mutatedByMutation.set(entry.mutation.mutationId, route);
+      route =
+        entry.historical === undefined
+          ? await mutatedRoute({ entry, pristine, make, registry, engine, stop, log })
+          : await historicalRoute({ preFix: key, make, registry, stop, log });
+      byKey.set(key, route);
       run.workspaces[route.label] = route.cwd;
       writeRun();
     }
@@ -799,7 +879,7 @@ async function runInWorkspaces({
   } finally {
     if (!settled) writer.remove('probes.json');
   }
-  for (const entry of qualified) writer.writeJson(`probes/${entry.probe.probeId}.probe.json`, entry.probe);
+  for (const entry of [...qualified, ...gameabilityQualified]) writer.writeJson(`probes/${entry.probe.probeId}.probe.json`, entry.probe);
   if (afterVerdict === null || verdict.exitCode !== 0) {
     return outcome({
       stage: 'verdict',
@@ -818,6 +898,8 @@ async function runInWorkspaces({
       discard,
       qualified,
       routesByMutation: mutatedByMutation,
+      routesByRevision: historicalByRevision,
+      gameability: gameabilityQualified,
       policy,
       engine,
       validate,
@@ -877,32 +959,6 @@ function attestedDigests({ folder, root, evaluation, pristine, engine, stop }) {
     commitDigest: pristine.treeDigest,
     implementationDigest: treeDigest(implementationRoot, { exclude: pristine.provisioned }),
   };
-}
-
-/**
- * Why a qualified probe may not reach the CLI, or null when it may: it must
- * meet eval-quality's published probe schema and pass eval-quality's own
- * qualification gate (`qualifyProbe`, against the operation its signature
- * names), so the runtime hands the CLI admitted probes only.
- *
- * @param {object} options
- * @param {object} options.candidate the qualified probe
- * @param {object} options.contract
- * @param {object} options.engine the loaded eval-quality library
- * @param {(kind: string, value: unknown) => Promise<string[]>} options.validate
- * @returns {Promise<string|null>}
- */
-async function admissionRefusal({ candidate, contract, engine, validate }) {
-  const problems = await validate('probe', candidate);
-  if (problems.length > 0) return `the qualified probe does not meet eval-quality's probe schema: ${problems.join('; ')}`;
-  // A clean control carries no signature, and a canary's is null: neither has a home operation.
-  const home =
-    candidate.expectedClean || candidate.defectSignature === null
-      ? null
-      : engine.resolveHomeOperation(candidate.defectSignature, contract.permittedInterfaces);
-  const admission = engine.qualifyProbe(candidate, home);
-  if (admission.qualified) return null;
-  return `eval-quality's qualification gate refuses the qualified probe: ${admission.failures.map((failure) => `${failure.code} (${failure.detail})`).join('; ')}`;
 }
 
 /**

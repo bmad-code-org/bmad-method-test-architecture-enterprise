@@ -2,7 +2,7 @@
 title: 'Story 1.7: Mutate only in a disposable copy and prove the rollback'
 type: 'feature'
 created: '2026-09-24'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 1
 baseline_commit: '4cfe42a13099d8869c919743f3a2519bb281356a'

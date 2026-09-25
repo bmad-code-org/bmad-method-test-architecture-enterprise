@@ -68,6 +68,16 @@ const { AGENT_ADAPTERS, resolveModel } = require('./lib/agent-adapters');
 const { withIsolation, selectBackend } = require('./lib/isolate');
 const { resolveTeaConfig, PACT_MCP_VALUES, EXECUTION_MODE_VALUES } = require('./lib/resolve-tea-config');
 const { TEA_CLI_VERSION, buildReviewProvenance } = require('./lib/review-provenance');
+const { validInterval } = require('./lib/heartbeat');
+
+const HEARTBEAT_SCRIPT = path.join(__dirname, 'lib', 'heartbeat.js');
+const DEFAULT_HEARTBEAT_SECONDS = 15;
+
+/** The heartbeat interval TEA_TEST_REVIEW_HEARTBEAT_SECONDS asks for, or the default when it is unset or out of range. */
+function heartbeatSecondsFrom(env) {
+  const requested = Number(env.TEA_TEST_REVIEW_HEARTBEAT_SECONDS);
+  return env.TEA_TEST_REVIEW_HEARTBEAT_SECONDS !== undefined && validInterval(requested) ? requested : DEFAULT_HEARTBEAT_SECONDS;
+}
 
 const EXIT = {
   PASS: 0,
@@ -900,21 +910,17 @@ function main() {
   let redirectDir = null;
   let gateFailures = [];
 
-  // runAgent() blocks synchronously with no streamed output, so a real review
-  // (minutes, on a large file) prints nothing at all until it's done and looks
-  // hung. This heartbeat is a separate OS process, not a JS timer, because
-  // nothing in this process can run while runAgent's spawnSync call blocks it.
-  const startHeartbeat = (intervalSeconds = 15) => {
-    // Printed from Node, not from inside the sh -c script, so the model name
-    // never has to survive shell quoting.
+  // cli/lib/heartbeat.js prints progress while runAgent's spawnSync blocks
+  // this process (see that file for why it is a process of its own, and how
+  // it ends when this one is gone). TEA_TEST_REVIEW_HEARTBEAT_SECONDS
+  // shortens the 15 s interval so the CLI's tests can watch it within a few
+  // seconds; a value outside the heartbeat's accepted range falls back to 15.
+  const heartbeatSeconds = heartbeatSecondsFrom(process.env);
+  const startHeartbeat = () => {
     console.error(`tea-test-review: agent running (${options.agent}, model ${resolvedModel})...`);
-    const script =
-      'i=0; while true; do sleep ' +
-      intervalSeconds +
-      '; i=$((i + ' +
-      intervalSeconds +
-      ')); echo "tea-test-review: agent still running (${i}s elapsed)..." 1>&2; done';
-    const heartbeat = spawn('sh', ['-c', script], { stdio: ['ignore', 'ignore', 'inherit'] });
+    const heartbeat = spawn(process.execPath, [HEARTBEAT_SCRIPT, String(process.pid), String(heartbeatSeconds)], {
+      stdio: ['ignore', 'ignore', 'inherit'],
+    });
     // Cosmetic (progress dots for a long blocking spawnSync call): a spawn
     // failure here must never surface as an uncaught 'error' event and take
     // the real review down with it.
@@ -1147,4 +1153,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { EXIT, VERDICT_KEYS, SKIP_KEYS, DEFAULT_AGENT, DEFAULT_TIMEOUT_MS, defaultTimeoutMs };
+module.exports = { EXIT, VERDICT_KEYS, SKIP_KEYS, DEFAULT_AGENT, DEFAULT_TIMEOUT_MS, defaultTimeoutMs, heartbeatSecondsFrom };

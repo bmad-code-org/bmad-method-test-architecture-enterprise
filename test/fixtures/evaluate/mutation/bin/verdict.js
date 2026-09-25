@@ -25,6 +25,13 @@
  *                               accepted under `mode: strict`, rejected under
  *                               `mode: lenient`
  *
+ * When VERDICT_MARKER names a file, every run first appends one JSON line to
+ * it, the launch marker (Story 1.9): `workspace`, the runtime label of the
+ * workspace it runs in (`trial-clean-2` for tea-evaluate-trial-clean-2-XXXXXX),
+ * `head`, the commit its checkout holds (null outside git), and `request`. A
+ * run that launches nothing leaves no line, and one routed to a revision
+ * names that revision.
+ *
  * Policy lines drive the other cases:
  *
  *   sabotage: restore       after answering, replace rules/policy.txt with a
@@ -103,6 +110,14 @@ const workspaceDirectory = path.basename(path.dirname(process.cwd()));
 const prefix = `tea-evaluate-${process.env.VERDICT_WHEN}-`;
 const here = Boolean(process.env.VERDICT_WHEN) && workspaceDirectory.startsWith(prefix) && !workspaceDirectory.slice(prefix.length).includes('-');
 const act = here ? process.env.VERDICT_DO : undefined;
+if (process.env.VERDICT_MARKER) {
+  const label = /^tea-evaluate-(.+)-[A-Za-z0-9]{6}$/.exec(workspaceDirectory)?.[1] ?? null;
+  const head = spawnSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' });
+  fs.appendFileSync(
+    process.env.VERDICT_MARKER,
+    `${JSON.stringify({ workspace: label, head: head.status === 0 ? head.stdout.trim() : null, request })}\n`,
+  );
+}
 if (act === 'kill') process.kill(process.pid, 'SIGKILL');
 if (text.includes('infrastructure: exit 3') || act === 'infrastructure') {
   process.stderr.write('verdict: asked to report an infrastructure failure\n');

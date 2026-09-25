@@ -43,7 +43,7 @@
 const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
-const { spawnSync } = require('node:child_process');
+const { spawn, spawnSync } = require('node:child_process');
 const vm = require('node:vm');
 const yaml = require('js-yaml');
 
@@ -60,7 +60,7 @@ const {
   extractFindings,
   FINDING_KEYS,
 } = require('../cli/lib/parse-report');
-const { VERDICT_KEYS, SKIP_KEYS, DEFAULT_TIMEOUT_MS, defaultTimeoutMs } = require('../cli/test-review');
+const { VERDICT_KEYS, SKIP_KEYS, DEFAULT_TIMEOUT_MS, defaultTimeoutMs, heartbeatSecondsFrom } = require('../cli/test-review');
 const {
   computeConventionBaseline,
   strideSelect,
@@ -135,12 +135,10 @@ function skip(testName, reason) {
   console.log(`${colors.yellow}○${colors.reset} ${testName} ${colors.dim}(skipped: ${reason})${colors.reset}`);
 }
 
-// CI splits this file's 13 numbered suites across parallel jobs (see
-// .github/workflows/quality.yaml) so Suite 7 (CLI end-to-end, the majority of
-// this file's ~90 child-process spawns and most of its wall time) is not
-// serialized behind everything else. TEA_CLI_TEST_SUITES restricts a run to a
-// comma-separated suite-number list; unset (every local and pre-commit run)
-// executes all thirteen, unchanged from before the split.
+// A local debugging aid: TEA_CLI_TEST_SUITES restricts a run to a
+// comma-separated list of this file's 13 suite numbers, so one failing suite
+// can be rerun alone. CI does not set it; `npm run test:cli` runs in the
+// `npm test` chain and executes all thirteen.
 const REQUESTED_SUITES = process.env.TEA_CLI_TEST_SUITES
   ? new Set(
       process.env.TEA_CLI_TEST_SUITES.split(',').map((raw) => {
@@ -246,6 +244,52 @@ function git(args, cwd) {
 }
 
 /**
+ * Starts the CLI on a stub agent that blocks, waits for the CLI's first
+ * heartbeat line, kills the CLI with SIGKILL, and reports whether the CLI's
+ * stderr then reached end of file within `closeWithinMs`. A heartbeat that
+ * outlived the CLI would hold that stderr open and keep writing into it.
+ */
+function killCliDuringAgent(args, env, { waitForBeatMs = 10_000, closeWithinMs = 2000 } = {}) {
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [cliPath, ...args], { env: { ...process.env, ...env }, stdio: ['ignore', 'ignore', 'pipe'] });
+    let stderr = '';
+    let killedAt = null;
+    let settled = false;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      resolve({ ...result, stderr, cliPid: child.pid });
+    };
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk;
+      if (killedAt === null && stderr.includes('agent still running')) {
+        killedAt = Date.now();
+        child.kill('SIGKILL');
+        setTimeout(() => finish({ beat: true, closed: false }), closeWithinMs);
+      }
+    });
+    child.stderr.on('close', () => {
+      finish(killedAt === null ? { beat: false, closed: true } : { beat: true, closed: true, closeMs: Date.now() - killedAt });
+    });
+    setTimeout(() => {
+      if (killedAt !== null) return;
+      child.kill('SIGKILL');
+      finish({ beat: false, closed: false });
+    }, waitForBeatMs);
+  });
+}
+
+/** Pids of heartbeat processes started for the CLI process `cliPid` that are still running (POSIX `ps`). */
+function survivingHeartbeats(cliPid) {
+  const listing = spawnSync('ps', ['-A', '-o', 'pid=,args='], { encoding: 'utf8' });
+  if (listing.status !== 0) return [];
+  return listing.stdout
+    .split('\n')
+    .filter((line) => line.includes(`heartbeat.js ${cliPid} `))
+    .map((line) => Number.parseInt(line.trim(), 10));
+}
+
+/**
  * Test Suite
  */
 async function runTests() {
@@ -255,8 +299,8 @@ async function runTests() {
 
   const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-test-review-'));
 
-  // Hoisted out of the suites that first needed them so CI can run any single
-  // suite via TEA_CLI_TEST_SUITES without a ReferenceError: Suite 7 reads
+  // Hoisted out of the suites that first needed them so any single suite runs
+  // alone via TEA_CLI_TEST_SUITES without a ReferenceError: Suite 7 reads
   // skillRoot (declared by Suite 5), Suite 8 reads futureWaiveDate (declared by
   // Suite 7), and Suite 13 reads registryRowSeverities and findingReport
   // (declared by Suite 12) — none of that is guaranteed once each suite's own
@@ -1436,7 +1480,7 @@ async function runTests() {
 
       console.log('');
     } else {
-      skip('Test Suite 1: parse-report strict schema', 'excluded from this CI shard (TEA_CLI_TEST_SUITES)');
+      skip('Test Suite 1: parse-report strict schema', 'excluded by TEA_CLI_TEST_SUITES');
     }
 
     // ============================================================
@@ -1526,7 +1570,7 @@ async function runTests() {
 
       console.log('');
     } else {
-      skip('Test Suite 2: verdictFor + scoreFails', 'excluded from this CI shard (TEA_CLI_TEST_SUITES)');
+      skip('Test Suite 2: verdictFor + scoreFails', 'excluded by TEA_CLI_TEST_SUITES');
     }
 
     // ============================================================
@@ -1885,7 +1929,7 @@ async function runTests() {
 
       console.log('');
     } else {
-      skip('Test Suite 3: changed-tests filtering', 'excluded from this CI shard (TEA_CLI_TEST_SUITES)');
+      skip('Test Suite 3: changed-tests filtering', 'excluded by TEA_CLI_TEST_SUITES');
     }
 
     // ============================================================
@@ -1928,7 +1972,7 @@ async function runTests() {
 
       console.log('');
     } else {
-      skip('Test Suite 4: resolve-skill', 'excluded from this CI shard (TEA_CLI_TEST_SUITES)');
+      skip('Test Suite 4: resolve-skill', 'excluded by TEA_CLI_TEST_SUITES');
     }
 
     // ============================================================
@@ -2293,7 +2337,7 @@ async function runTests() {
 
       console.log('');
     } else {
-      skip('Test Suite 5: build-prompt', 'excluded from this CI shard (TEA_CLI_TEST_SUITES)');
+      skip('Test Suite 5: build-prompt', 'excluded by TEA_CLI_TEST_SUITES');
     }
 
     // ============================================================
@@ -2917,7 +2961,7 @@ async function runTests() {
 
       console.log('');
     } else {
-      skip('Test Suite 6: isolate + run-agent units', 'excluded from this CI shard (TEA_CLI_TEST_SUITES)');
+      skip('Test Suite 6: isolate + run-agent units', 'excluded by TEA_CLI_TEST_SUITES');
     }
 
     // ============================================================
@@ -3232,6 +3276,7 @@ async function runTests() {
 
       const approveOut = path.join(tmpRoot, 'approve-run', 'test-review.md');
       const approveJsonPath = path.join(tmpRoot, 'approve-run', 'verdict.json');
+      const approveStarted = Date.now();
       const approveRun = runCli(
         [
           '--files',
@@ -3253,6 +3298,80 @@ async function runTests() {
         approveRun.status === 0,
         'stub approve exits 0 (stub verified the prompt arrived on stdin, not argv)',
         `status=${approveRun.status} stderr=${approveRun.stderr}`,
+      );
+      // The progress heartbeat is killed when the agent returns. Its stderr has
+      // to close with it: an orphaned heartbeat child once held the CLI's
+      // stderr open for 15 s after every run, so a caller reading that stderr
+      // through a pipe (runCli's spawnSync here, a CI step's log capture)
+      // waited 15 s on a stub run that takes well under one.
+      const approveSeconds = (Date.now() - approveStarted) / 1000;
+      assert(
+        approveSeconds < 10,
+        "a stub run's stderr reaches end of file when the CLI exits (no heartbeat child outlives it)",
+        `the run took ${approveSeconds.toFixed(1)}s`,
+      );
+
+      // A CLI killed by SIGKILL cannot kill its heartbeat, so the heartbeat has
+      // to notice on its own that the CLI is gone and exit, or it prints into
+      // the CLI's stderr for as long as anything reads it.
+      if (process.platform === 'win32') {
+        skip('a heartbeat outlives no SIGKILLed CLI', 'the ps-based survivor check is POSIX-only');
+      } else {
+        const killed = await killCliDuringAgent(
+          [
+            '--files',
+            './tests/checkout.spec.ts',
+            '--project-root',
+            fixtureProject,
+            '--output',
+            path.join(tmpRoot, 'killed-run', 'test-review.md'),
+            '--agent-cmd',
+            stubAgent,
+            '--no-isolate',
+            ...stubPass('STUB_DELAY_MS'),
+          ],
+          { STUB_DELAY_MS: '5000', TEA_TEST_REVIEW_HEARTBEAT_SECONDS: '0.2' },
+        );
+        assert(killed.beat, 'the heartbeat prints while a slow stub agent runs', killed.stderr);
+        const survivors = survivingHeartbeats(killed.cliPid);
+        for (const pid of survivors) {
+          try {
+            process.kill(pid, 'SIGKILL');
+          } catch {
+            // already gone
+          }
+        }
+        assert(
+          killed.closed && survivors.length === 0,
+          "a SIGKILLed CLI's heartbeat exits on its own, releasing the CLI's stderr within 2 s",
+          `closed=${killed.closed} closeMs=${killed.closeMs} surviving heartbeat pids=${JSON.stringify(survivors)}`,
+        );
+      }
+
+      // Node fires a timer past 2^31-1 ms, or one with a non-finite delay,
+      // after 1 ms, so an out-of-range interval would print about a line per
+      // millisecond. The CLI falls back to its default and the heartbeat
+      // refuses one outright.
+      const intervals = ['Infinity', '1e9', '2147484', '0.001', '0', '-1', 'abc', ''].map((value) =>
+        heartbeatSecondsFrom({ TEA_TEST_REVIEW_HEARTBEAT_SECONDS: value }),
+      );
+      assert(
+        intervals.every((seconds) => seconds === 15) &&
+          heartbeatSecondsFrom({}) === 15 &&
+          heartbeatSecondsFrom({ TEA_TEST_REVIEW_HEARTBEAT_SECONDS: '0.2' }) === 0.2 &&
+          heartbeatSecondsFrom({ TEA_TEST_REVIEW_HEARTBEAT_SECONDS: '3600' }) === 3600,
+        'an out-of-range TEA_TEST_REVIEW_HEARTBEAT_SECONDS falls back to the 15 s default; 0.2 and 3600 are honoured',
+        JSON.stringify(intervals),
+      );
+      const heartbeatScript = path.join(repoRoot, 'cli', 'lib', 'heartbeat.js');
+      const refusals = ['Infinity', '2147484', '0.001'].map(
+        (seconds) =>
+          spawnSync(process.execPath, [heartbeatScript, String(process.pid), seconds], { encoding: 'utf8', timeout: 5000 }).status,
+      );
+      assert(
+        refusals.every((status) => status === 64),
+        'the heartbeat exits 64 at once for an interval outside 0.05 to 3600 s',
+        JSON.stringify(refusals),
       );
       assert(
         approveRun.stdout.includes('"recommendation": "Approve with Comments"'),
@@ -4294,7 +4413,7 @@ async function runTests() {
 
       console.log('');
     } else {
-      skip('Test Suite 7: CLI end-to-end', 'excluded from this CI shard (TEA_CLI_TEST_SUITES)');
+      skip('Test Suite 7: CLI end-to-end', 'excluded by TEA_CLI_TEST_SUITES');
     }
 
     // ============================================================
@@ -4936,7 +5055,7 @@ async function runTests() {
 
       console.log('');
     } else {
-      skip('Test Suite 8: real git fixture', 'excluded from this CI shard (TEA_CLI_TEST_SUITES)');
+      skip('Test Suite 8: real git fixture', 'excluded by TEA_CLI_TEST_SUITES');
     }
 
     // ============================================================
@@ -5209,7 +5328,7 @@ async function runTests() {
 
       console.log('');
     } else {
-      skip('Test Suite 9: isolation integration', 'excluded from this CI shard (TEA_CLI_TEST_SUITES)');
+      skip('Test Suite 9: isolation integration', 'excluded by TEA_CLI_TEST_SUITES');
     }
 
     // ============================================================
@@ -5423,7 +5542,7 @@ async function runTests() {
 
       console.log('');
     } else {
-      skip('Test Suite 10: resolve-tea-config precedence', 'excluded from this CI shard (TEA_CLI_TEST_SUITES)');
+      skip('Test Suite 10: resolve-tea-config precedence', 'excluded by TEA_CLI_TEST_SUITES');
     }
 
     // ============================================================
@@ -5594,7 +5713,7 @@ async function runTests() {
 
       console.log('');
     } else {
-      skip('Test Suite 11: convention-baseline', 'excluded from this CI shard (TEA_CLI_TEST_SUITES)');
+      skip('Test Suite 11: convention-baseline', 'excluded by TEA_CLI_TEST_SUITES');
     }
 
     // ============================================================
@@ -5782,7 +5901,7 @@ async function runTests() {
 
       console.log('');
     } else {
-      skip('Test Suite 12: finding-severity-count grounding', 'excluded from this CI shard (TEA_CLI_TEST_SUITES)');
+      skip('Test Suite 12: finding-severity-count grounding', 'excluded by TEA_CLI_TEST_SUITES');
     }
 
     // ============================================================
@@ -6119,7 +6238,7 @@ async function runTests() {
 
       console.log('');
     } else {
-      skip("Test Suite 13: the verdict's findings array", 'excluded from this CI shard (TEA_CLI_TEST_SUITES)');
+      skip("Test Suite 13: the verdict's findings array", 'excluded by TEA_CLI_TEST_SUITES');
     }
   } finally {
     fs.rmSync(tmpRoot, { recursive: true, force: true });

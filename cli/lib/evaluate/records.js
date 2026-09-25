@@ -129,7 +129,9 @@ function createArtifactValidator({ readJson = readJsonFromDisk } = {}) {
  *
  * `evaluatorIdentity` names the harness that produced the record: an
  * opaque suite identifier, with no person or account in it. `modelSnapshot` is the resolved model where a model ran;
- * a run that uses none records the literal `none`.
+ * a run that uses none records the literal `none`. `judgeConfiguration` is
+ * `null` unless a rubric judge scored the run (`judge.js`), when it holds the
+ * judge's `modelSnapshot` and `systemPromptDigest`.
  */
 function evaluatorConfiguration({
   evaluatorIdentity,
@@ -141,6 +143,7 @@ function evaluatorConfiguration({
   decodingParameters = {},
   budgets,
   seed = null,
+  judgeConfiguration = null,
 }) {
   return {
     schemaVersion: expectedSchemaVersion('evaluator-configuration'),
@@ -155,7 +158,7 @@ function evaluatorConfiguration({
     permissionInventory,
     budgets,
     seed,
-    judgeConfiguration: null,
+    judgeConfiguration,
   };
 }
 
@@ -289,7 +292,8 @@ function probeObservation({ legId, interfaceId, operationId, exitCode, stdout, s
  * always `contract-scoring` (AD-7): the runtime measures the contract, and
  * `production` would promote the evaluator's own recommendation to a rung.
  * `evaluatorRecommendation` is held to eval-quality's vocabulary by the published
- * schema every record is validated against.
+ * schema every record is validated against. `judgeResults` is empty unless a
+ * rubric judge scored the trial.
  */
 function sealedRunRecord({
   runId,
@@ -302,6 +306,7 @@ function sealedRunRecord({
   oracleDispositions,
   findings,
   observations,
+  judgeResults = [],
   actionsArtifact,
   isolationManifestArtifact,
   resourceUse,
@@ -323,7 +328,7 @@ function sealedRunRecord({
     oracleDispositions,
     findings,
     observations,
-    judgeResults: [],
+    judgeResults,
     actionsArtifact,
     isolationManifestArtifact,
     resourceUse,

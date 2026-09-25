@@ -1,5 +1,5 @@
 /**
- * `tea-evaluate run`: the clean and mutated arms as sealed trial sets (AD-7).
+ * `tea-evaluate run`: every arm a probe needs, as sealed trial sets (AD-7).
  *
  * A run is the preflight pipeline (`preflight.js`: check, the pristine
  * workspace, `compile` and `seal`, each seeded probe qualified through its
@@ -9,14 +9,24 @@
  *   1. each clean control qualified: one clean arm in a workspace of its own,
  *      whose oracles for the control's behavior must hold (exit 11 otherwise),
  *      its evidence under `qualification/<probeId>/`, and the control
- *      materialized as eval-quality's `clean-control` probe;
+ *      materialized as eval-quality's `clean-control` probe; and each
+ *      gameability probe qualified with no target launched (`gameability.js`:
+ *      its committed degenerate response satisfies its naive oracle and
+ *      violates the disciplined one, exit 11 otherwise) and materialized as
+ *      eval-quality's `gameability` probe;
  *   2. every arm a probe needs, `evaluation.json`'s `trials` times: the clean
- *      arm (`conditionArm: clean`) for the clean controls, and one mutated arm
- *      per mutation (`mutated:<mutationId>`) for the probes it seeds; each
- *      trial runs the interaction plan once, in a workspace of its own that
- *      reproduces the pristine one (with the mutation applied and its digest
- *      held to the one the qualification measured), and is judged by the
- *      deterministic evaluator (`judgeTrial`);
+ *      arm (`conditionArm: clean`) for the clean controls, one mutated arm per
+ *      mutation (`mutated:<mutationId>`) for the probes it seeds, one
+ *      historical arm per pre-fix revision (`historical:<preFixSha>`) for the
+ *      historical probes the preflight qualified, and one gameability arm per
+ *      gameability probe (`gameability:<probeId>`); each trial runs the
+ *      interaction plan once, in a workspace of its own that reproduces the
+ *      pristine one (with the mutation applied and its digest held to the one
+ *      the qualification measured) or the pre-fix one, or, on a gameability
+ *      arm, answered from the degenerate response with nothing launched, and
+ *      is judged by the deterministic evaluator (`judgeTrial`) and, when the
+ *      contract declares a rubric, by one rubric judge call (`judge.js`)
+ *      whose scores every record of the trial carries as `judgeResults`;
  *   3. the adopter's project read again after every trial (exit 12 on any
  *      change), and the run directory held to exactly what the runtime wrote
  *      (`run-directory.js`: exit 12 on an entry it did not write or a file
@@ -38,8 +48,10 @@
  * A trial step that exits one of its registry entry's
  * `infrastructureExitCodes`, or that a signal from outside stops, is a target
  * that could not run: the trial yields no record and the run stops with exit
- * 12, as does any trial that cannot run. A stopped run holds no
- * `trial-sets.json`, so there is nothing to score.
+ * 12, as does any trial that cannot run and any trial whose rubric judge
+ * cannot answer. A stopped run holds no `trial-sets.json`, so there is nothing
+ * to score. A historical probe the preflight refused runs on no arm and is
+ * named in `run.json`'s `refused`.
  */
 
 'use strict';
@@ -47,19 +59,22 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
+const { admissionRefusal, armVerdict, referenceTo } = require('./admission');
 const { hostEnvironmentPort, persistableRequest, runArm } = require('./arm');
 const { corpusDigestOf } = require('./corpus-index');
 const { expectedSchemaVersion } = require('./engine');
 const { evaluateOracles, judgeTrial, oraclesOfBehaviors } = require('./evaluator');
+const { degenerateArm } = require('./gameability');
+const { JudgeError, judgeConfigurationFor, judgeRubrics, recordedJudgeModel } = require('./judge');
 const { QualificationError, applyReplaceExact } = require('./mutation');
-const { PreflightOutcome, admissionRefusal, armVerdict, readJson, referenceTo, runPipeline } = require('./preflight');
+const { PreflightOutcome, readJson, runPipeline } = require('./preflight');
 const { evaluatorConfiguration, isolationManifest, sealedRunRecord } = require('./records');
 
 const POLICY_PATH = 'policy/scoring-policy.json';
 const CONDITIONS_PATH = 'policy/evaluator-conditions.json';
 const INDEX_PATH = 'corpus-index.json';
 const PROBE_FILE = /\.probe\.json$/;
-const RUNNABLE_ROUTES = ['clean-control', 'controlled-mutation'];
+const RUNNABLE_ROUTES = ['clean-control', 'controlled-mutation', 'historical', 'gameability'];
 const DENIAL_FAULT = 'forbidden-target';
 
 /** The index `tea-evaluate score` reads; its absence says the run did not complete. */
@@ -156,11 +171,12 @@ function runRunCommand(folder, { fromWorkingTree = false, env = process.env, log
       const refused = refusal(context);
       if (refused !== null) return refused;
       const conditionsFile = path.join(folder, ...CONDITIONS_PATH.split('/'));
+      const probes = committedProbes(folder);
       snapshot = {
         policyBytes: fs.readFileSync(path.join(folder, ...POLICY_PATH.split('/'))),
         conditions: fs.existsSync(conditionsFile) ? readJson(conditionsFile) : null,
         index: readJson(path.join(folder, INDEX_PATH)),
-        probeIds: committedProbes(folder).map(({ probe }) => probe.probeId),
+        probeIds: probes.map(({ probe }) => probe.probeId),
       };
       return null;
     },
@@ -288,15 +304,53 @@ async function qualifyCleanControls({
 }
 
 /**
- * One trial of one arm in a workspace of its own: the mutated arm's mutation
- * applied and held to the digest the qualification measured, the plan run
- * once with `evaluator-chosen` observations, and every probe on the arm
- * judged. Its evidence goes to `trials/<arm>/trial-<n>.json`.
+ * One trial of one arm: on a mutated or historical arm, in a workspace of its
+ * own reproducing the pristine or the pre-fix one (the mutated arm's mutation
+ * applied and held to the digest the qualification measured), the plan run
+ * once with `evaluator-chosen` observations; on a gameability arm, the plan
+ * answered from the degenerate response with nothing launched. Every probe on
+ * the arm is judged, and so is every rubric. Its evidence goes to
+ * `trials/<arm>/trial-<n>.json`.
  */
-async function runTrial({ arm, trialIndex, contract, registry, pristine, make, discard, policy, engine, writer, stop, signal }) {
+async function runTrial(context) {
+  const { arm, trialIndex, contract, registry, pristine, make, discard, engine, writer, stop, signal } = context;
   const label = `trial-${arm.slug}-${trialIndex}`;
   const evidenceFile = `trials/${arm.slug}/trial-${trialIndex}.json`;
-  const workspace = make(label, pristine);
+  if (arm.degenerate !== undefined) {
+    const began = Date.now();
+    let executed;
+    try {
+      executed = await degenerateArm({
+        contract,
+        registry,
+        steps: arm.degenerate.steps,
+        label: `trial-${trialIndex}`,
+        provenance: 'evaluator-chosen',
+        signal,
+      });
+    } catch (error) {
+      writer.writeJson(evidenceFile, {
+        conditionArm: arm.conditionArm,
+        trialIndex,
+        workspace: null,
+        degenerateResponse: arm.degenerate.response,
+        fault: { message: String(error?.message ?? error) },
+        steps: error?.steps ?? [],
+      });
+      throw stop({ stage: 'trial', exitCode: 12, message: `${label} yields no record: ${error?.message ?? error}` });
+    }
+    // Nothing launched: no workspace was granted and no command ran.
+    return concludeTrial(context, {
+      label,
+      evidenceFile,
+      executed,
+      elapsedMs: Date.now() - began,
+      evidence: { workspace: null, degenerateResponse: arm.degenerate.response },
+      mounts: [],
+      toolCalls: [],
+    });
+  }
+  const workspace = make(label, arm.basis ?? pristine);
   try {
     if (arm.mutation !== null) {
       let applied;
@@ -350,35 +404,80 @@ async function runTrial({ arm, trialIndex, contract, registry, pristine, make, d
       });
     }
     const elapsedMs = Date.now() - began;
-    const judgments = {};
-    for (const probe of arm.probes) {
-      judgments[probe.probeId] = await judgeTrial({
-        contract,
-        stepObservations: executed.stepObservations,
-        probeId: probe.probeId,
-        behaviorIds: [probe.behaviorId, ...probe.defects.map((defect) => defect.behaviorId)],
-        regexMatchStepBudget: policy.regexMatchStepBudget,
-      });
-    }
-    const [anyJudgment] = Object.values(judgments);
-    writer.writeJson(evidenceFile, {
-      conditionArm: arm.conditionArm,
-      trialIndex,
-      workspace: label,
+    return await concludeTrial(context, {
+      label,
+      evidenceFile,
+      executed,
       elapsedMs,
-      oracles: anyJudgment.oracles,
-      steps: executed.steps,
+      evidence: { workspace: label },
+      mounts: [
+        `${workspace.kind} ${label}`,
+        ...workspace.provisioned.map((entry) => `read-only ${label}/${path.relative(workspace.root, entry).split(path.sep).join('/')}`),
+      ],
+      // The commands the runtime ran for the plan, each an observed call; what the target itself opened or reached is not observed.
+      toolCalls: executed.steps.map((step) => `${step.request.interfaceId}/${step.request.executable}`),
     });
-    const mounts = [
-      `${workspace.kind} ${label}`,
-      ...workspace.provisioned.map((entry) => `read-only ${label}/${path.relative(workspace.root, entry).split(path.sep).join('/')}`),
-    ];
-    // The commands the runtime ran for the plan, each an observed call; what the target itself opened or reached is not observed.
-    const toolCalls = executed.steps.map((step) => `${step.request.interfaceId}/${step.request.executable}`);
-    return { trialIndex, evidenceFile, stepObservations: executed.stepObservations, judgments, elapsedMs, mounts, toolCalls };
   } finally {
     discard(workspace);
   }
+}
+
+/**
+ * A trial's judgment once its plan ran: every probe on the arm judged by the
+ * deterministic evaluator, the rubric judge called once when the contract
+ * declares a rubric (`judgeRubrics` makes no call otherwise), and the trial's
+ * evidence written. A judge that cannot answer stops the run with exit 12 and
+ * no record.
+ */
+async function concludeTrial(
+  { arm, trialIndex, contract, evaluation, policy, writer, stop },
+  { label, evidenceFile, executed, elapsedMs, evidence, mounts, toolCalls },
+) {
+  const judgments = {};
+  for (const probe of arm.probes) {
+    judgments[probe.probeId] = await judgeTrial({
+      contract,
+      stepObservations: executed.stepObservations,
+      probeId: probe.probeId,
+      behaviorIds: [probe.behaviorId, ...probe.defects.map((defect) => defect.behaviorId)],
+      regexMatchStepBudget: policy.regexMatchStepBudget,
+    });
+  }
+  const [anyJudgment] = Object.values(judgments);
+  const written = {
+    conditionArm: arm.conditionArm,
+    trialIndex,
+    ...evidence,
+    elapsedMs,
+    oracles: anyJudgment.oracles,
+    steps: executed.steps,
+  };
+  let judged;
+  try {
+    judged = await judgeRubrics({ contract, stepObservations: executed.stepObservations, judge: evaluation.judge });
+  } catch (error) {
+    if (!(error instanceof JudgeError)) throw error;
+    writer.writeJson(evidenceFile, { ...written, judge: { fault: error.message, stdout: error.stdout, stderr: error.stderr } });
+    throw stop({ stage: 'trial', exitCode: 12, message: `${label} yields no record: ${error.message}` });
+  }
+  // A trial no judge scored keeps the evidence shape of a run with no rubric.
+  writer.writeJson(
+    evidenceFile,
+    judged.called
+      ? { ...written, judge: { nonce: judged.nonce, results: judged.results, stdout: judged.stdout, stderr: judged.stderr } }
+      : written,
+  );
+  return {
+    trialIndex,
+    evidenceFile,
+    stepObservations: executed.stepObservations,
+    judgments,
+    judgeResults: judged.results,
+    judgeCalled: judged.called,
+    elapsedMs,
+    mounts,
+    toolCalls,
+  };
 }
 
 /**
@@ -402,25 +501,69 @@ function setRecommendation(judgments) {
 async function runTrialSets(given) {
   // The trials judge with the scoring policy the run copies, read before anything ran.
   const context = { ...given, policy: JSON.parse(given.snapshot.policyBytes.toString('utf8')) };
-  const { folder, evaluation, contract, registry, qualified, routesByMutation, engine, validate, invocationId, writer, run, sealed } =
-    context;
+  const {
+    folder,
+    evaluation,
+    contract,
+    registry,
+    qualified,
+    routesByMutation,
+    routesByRevision,
+    engine,
+    validate,
+    invocationId,
+    writer,
+    run,
+    sealed,
+  } = context;
   const { writeRun, treeUnchanged, retractUnlessSealed, markSealed, outcome, stop, log, snapshot } = context;
   const startedAt = context.started;
 
   const cleanControls = await qualifyCleanControls(context);
+  // The gameability probes the shared pipeline qualified before the verdict.
+  const { gameability } = context;
   treeUnchanged('qualification');
 
   const arms = [];
   if (cleanControls.length > 0)
     arms.push({ conditionArm: 'clean', slug: 'clean', mutation: null, mutatedDigest: null, probes: cleanControls });
   for (const mutationId of [...routesByMutation.keys()].sort()) {
-    const seededOn = qualified.filter((entry) => entry.mutation.mutationId === mutationId);
+    const seededOn = qualified.filter((entry) => entry.mutation?.mutationId === mutationId);
     arms.push({
       conditionArm: `mutated:${mutationId}`,
       slug: `mutated-${mutationId}`,
       mutation: seededOn[0].mutation,
       mutatedDigest: seededOn[0].mutatedDigest,
       probes: seededOn.map((entry) => entry.probe),
+    });
+  }
+  // A historical arm per pre-fix revision: its trials reproduce the pre-fix worktree its witness legs ran in.
+  for (const preFix of [...routesByRevision.keys()].sort()) {
+    arms.push({
+      conditionArm: `historical:${preFix}`,
+      slug: `historical-${preFix}`,
+      mutation: null,
+      mutatedDigest: null,
+      basis: routesByRevision.get(preFix).workspace,
+      probes: qualified.filter((entry) => entry.historical?.preFix === preFix).map((entry) => entry.probe),
+    });
+  }
+  for (const { probe, steps, response } of gameability) {
+    arms.push({
+      conditionArm: `gameability:${probe.probeId}`,
+      slug: `gameability-${probe.probeId}`,
+      mutation: null,
+      mutatedDigest: null,
+      degenerate: { steps, response },
+      probes: [probe],
+    });
+  }
+  const refusedIds = new Set(run.refused.map((refusal) => refusal.probeId));
+  if (arms.length === 0) {
+    throw stop({
+      stage: 'trial',
+      exitCode: 12,
+      message: `every probe was refused (${run.refused.map((refusal) => `${refusal.file}: ${refusal.reason}`).join('; ')}), so the run has no arm to run and nothing to score`,
     });
   }
 
@@ -435,7 +578,8 @@ async function runTrialSets(given) {
     }
   }
   const armed = new Set(arms.flatMap((arm) => arm.probes.map((probe) => probe.probeId)));
-  const unarmed = snapshot.probeIds.filter((probeId) => !armed.has(probeId));
+  // A refused probe runs on no arm by design, and run.json names it with its reason.
+  const unarmed = snapshot.probeIds.filter((probeId) => !armed.has(probeId) && !refusedIds.has(probeId));
   if (unarmed.length > 0) {
     throw stop({
       stage: 'trial',
@@ -470,6 +614,7 @@ async function runTrialSets(given) {
   const { contractDigest, sealedBriefDigest } = sealed;
   const { conditions } = snapshot;
   const tools = registry.entries.map((entry) => `${entry.interfaceId}/${entry.executable}`).sort();
+  const judgeConfiguration = judgeConfigurationFor({ contract, conditions, digestBytes: engine.digestBytes });
   const configuration = evaluatorConfiguration({
     evaluatorIdentity: EVALUATOR_IDENTITY,
     modelSnapshot: conditions?.modelSnapshot ?? 'none',
@@ -480,6 +625,7 @@ async function runTrialSets(given) {
     decodingParameters: {},
     budgets: contract.budgets,
     seed: null,
+    judgeConfiguration,
   });
   failures('EvaluatorConfiguration', await validate('evaluator-configuration', configuration));
   const configurationDigest = engine.digestArtifact(configuration, 'EvaluatorConfiguration');
@@ -552,6 +698,7 @@ async function runTrialSets(given) {
           oracleDispositions: judgment.oracleDispositions,
           findings: judgment.findings,
           observations: Object.values(trial.stepObservations).sort((a, b) => a.sequence - b.sequence),
+          judgeResults: trial.judgeResults,
           actionsArtifact: referenceTo(folder, writer, trial.evidenceFile, engine.digestBytes),
           isolationManifestArtifact: referenceTo(folder, writer, manifestFile, engine.digestBytes),
           resourceUse: {
@@ -629,6 +776,16 @@ async function runTrialSets(given) {
     runner: registry.entries.map((entry) => ({ interfaceId: entry.interfaceId, executable: entry.executable, target: entry.target })),
     evaluator: { kind: 'deterministic', identity: EVALUATOR_IDENTITY },
     model: { modelSnapshot: configuration.modelSnapshot, systemPromptDigest: configuration.systemPromptDigest },
+    judge:
+      judgeConfiguration === null
+        ? null
+        : {
+            agent: evaluation.judge.agent,
+            // The model the adapter runs: the judge's own, or the adapter's pinned default.
+            model: recordedJudgeModel(evaluation.judge),
+            ...judgeConfiguration,
+            calls: arms.reduce((total, arm) => total + arm.trials.filter((trial) => trial.judgeCalled).length, 0),
+          },
     trials: { perArm: trialCount, arms: arms.map((arm) => arm.conditionArm) },
     trialCount,
     startedAt: new Date(startedAt).toISOString(),

@@ -75,8 +75,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # This job runs the full npm test chain plus test:cli, the same as
-      # quality.yaml's coverage and cli jobs, and inherits whatever system
+      # This job runs the full npm test chain, the same chain quality.yaml's
+      # chain shards split, test:cli included, and inherits whatever system
       # dependencies that chain has accumulated: this job must stay in step
       # with quality.yaml on system dependencies, or it fails at "Run tests"
       # on every push, the way it did from roughly 16:40 UTC today onward.
@@ -111,7 +111,7 @@ jobs:
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 
       - name: Run tests
-        run: npm test && npm run test:cli
+        run: npm test
 
       - name: Derive next prerelease version
         if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.channel == 'next')

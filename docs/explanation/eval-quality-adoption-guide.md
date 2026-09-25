@@ -308,7 +308,7 @@ npm run test:probe-targets      # drive every real command through the real adap
 
 `npm run test:probe-targets` is the one that proves the whole chain with no credential. Each suite ships a stub agent that answers `--version` and produces a plausible artifact, so the harness runs end to end through the real adapter, the real policy, and the real command. For `trace` it spawns the harness itself and reads its result record back: every threshold met on a correct run, a `quality` failure when the stub writes a test into the corpus, and `environment-missing-artifact` when the stub writes nothing.
 
-Two operational cautions. First, a check in the local chain has to run in CI as well, which is what `npm run test:ci-coverage` enforces; four checks added in one change reached `npm test` and never reached the workflow, so contract drift, a broken replay record and a corrupted trace corpus would each have passed CI while failing on a laptop. Second, the reverse is also possible: `test:cli` runs in its own sharded CI job and is not in the `npm test` chain, so a change that satisfied the local gate has already gone red in CI.
+Two operational cautions. First, a check in the local chain has to run in CI as well, which is what `npm run test:ci-coverage` enforces; four checks added in one change reached `npm test` and never reached the workflow, so contract drift, a broken replay record and a corrupted trace corpus would each have passed CI while failing on a laptop. Second, the reverse happened too: `test:cli` used to run only in its own CI job, outside the `npm test` chain, so a change that satisfied the local gate went red in CI. It joined the chain once its runtime fell from about 15 minutes to under a minute.
 
 ### Live, by hand
 
