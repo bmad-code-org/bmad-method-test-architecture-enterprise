@@ -239,7 +239,8 @@ The environment variable `ENGINE_CLI_ENV` names in `cli/lib/evaluate/engine.js` 
 
 A target can reach `runs/<invocationId>/`, so the runtime guards every write and read it makes there.
 `runs/` must be a directory and `runs/.gitignore` a file, never a link.
-The run directory is created afresh, and every directory in it is created by the runtime and recorded by device and inode.
+The run directory is created afresh, and every directory in it is created by the runtime, recorded by device and inode, and held open until the command ends.
+A held directory keeps its inode even after it is removed, so no directory made later can take its number, which some file systems (Linux's ext4 and overlayfs among them) otherwise hand to the next directory made.
 Each file is written from inside its recorded directory, as a new file created without following a link.
 Before and after each write the runtime confirms the directory is the one it made at the place it made it: the same device and inode, and the same path the system reports for it.
 So an entry a target planted where the runtime writes stops the command with exit 12, and so does a directory the target replaced, swapped for a link, or moved elsewhere (into your project, say) with a link left in its place; the write never goes through it.

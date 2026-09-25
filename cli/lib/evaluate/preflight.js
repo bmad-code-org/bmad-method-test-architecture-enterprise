@@ -383,7 +383,17 @@ async function runPipeline(folder, options) {
   // The invocation's run directory and run.json, held in memory, so its end is
   // recorded from what the runtime knows, never from a file read back.
   const state = { writer: null, run: null, sealed: false, retractUnlessSealed: [] };
-  const outcome = await pipeline(folder, options, state);
+  try {
+    return await recordEnd(await pipeline(folder, options, state), state);
+  } finally {
+    // The directories the run made stay held open until here, so none of
+    // their inode numbers can pass to a directory the target makes.
+    state.writer?.close();
+  }
+}
+
+/** Records how the invocation ended in run.json, unless the run sealed its trial sets and recorded its own end. */
+function recordEnd(outcome, state) {
   // run.json says how the invocation ended, so a reader of the run directory
   // (and `tea-evaluate score`) can tell a run that stopped from one that is
   // complete, and why. A run that sealed its trial sets recorded its own end.

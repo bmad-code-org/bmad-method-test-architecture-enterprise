@@ -88,7 +88,6 @@
 
 const crypto = require('node:crypto');
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
@@ -102,6 +101,7 @@ const { recordObservation, createArtifactValidator } = require('../cli/lib/evalu
 const { RunDirectory, RunDirectoryError } = require('../cli/lib/evaluate/run-directory');
 const { setRecommendation } = require('../cli/lib/evaluate/run');
 const { combinedExit } = require('../cli/lib/evaluate/score');
+const { scratchDirectories } = require('./lib/scratch-directories');
 
 const Ajv = AjvModule.default ?? AjvModule;
 
@@ -126,7 +126,9 @@ const colors = { reset: '\u001B[0m', red: '\u001B[31m', green: '\u001B[32m' };
 
 const failures = [];
 let checks = 0;
-const scratch = [];
+const scratch = scratchDirectories('tea-evaluate-run');
+/** Each project's private temp directory, which every run and score must leave empty. */
+const runtimeTemps = [];
 
 function check(condition, message) {
   checks += 1;
@@ -134,20 +136,7 @@ function check(condition, message) {
 }
 
 function tempDir(label) {
-  const directory = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), `tea-evaluate-run-${label}-`));
-  scratch.push(directory);
-  return directory;
-}
-
-function removeScratch(directory) {
-  const unlock = (current) => {
-    fs.chmodSync(current, 0o755);
-    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
-      if (entry.isDirectory()) unlock(path.join(current, entry.name));
-    }
-  };
-  if (fs.existsSync(directory)) unlock(directory);
-  fs.rmSync(directory, { recursive: true, force: true });
+  return scratch.make(label);
 }
 
 function readJson(file) {
@@ -223,6 +212,7 @@ function makeProject(label, { edit = () => {}, below = null } = {}) {
   git(repository, ['add', '--all']);
   git(repository, ['commit', '--quiet', '--message', 'the verdict project']);
   const directory = tempDir(`${label}-temp`);
+  runtimeTemps.push({ label, directory });
   return { repository, project, folder, env: { TMPDIR: directory, TMP: directory, TEMP: directory } };
 }
 
@@ -1094,6 +1084,29 @@ function checkStoppedRuns() {
     `score over a run whose directory was moved before its last verification exited ${movedScore.status}; expected 64\n${movedScore.output}`,
   );
 
+  // A process the target left running replaces trial-sets.json with a
+  // directory just before the last verification: the retraction cannot
+  // remove it, and the run still exits 12 naming the file it could not
+  // remove, with run.json recording an incomplete end.
+  const indexDirectory = makeProject('index-directory');
+  const indexDirectoryRun = evaluate(
+    ['run', '--evaluation', indexDirectory.folder],
+    { ...indexDirectory.env, TEA_EVALUATE_VERIFY_AT: 'after the trial sets were sealed', TEA_EVALUATE_VERIFY_DO: 'index-directory' },
+    ['--require', WRAP_RUN_DIRECTORY],
+  );
+  check(
+    indexDirectoryRun.status === 12 &&
+      /could not remove trial-sets\.json: trial-sets\.json cannot be removed from the run directory/.test(indexDirectoryRun.output),
+    `a run whose trial-sets.json became a directory before its retraction exited ${indexDirectoryRun.status}; expected 12 naming the file it could not remove\n${indexDirectoryRun.output}`,
+  );
+  const indexDirectoryRecord = runDirectoryOf(indexDirectory.folder);
+  const indexDirectoryRunJson =
+    indexDirectoryRecord === null ? {} : (written(path.join(indexDirectoryRecord, 'run.json'), "the index-directory run's run.json") ?? {});
+  check(
+    indexDirectoryRunJson.completed === false && indexDirectoryRunJson.outcome?.exitCode === 12,
+    `a run whose trial-sets.json became a directory records ${JSON.stringify({ completed: indexDirectoryRunJson.completed, outcome: indexDirectoryRunJson.outcome })}`,
+  );
+
   // A target that swaps trials/clean for a link into the project, replaces it
   // with a directory of its own, or moves trials/ into the project and leaves
   // a link: the next trial's evidence is refused (exit 12) and lands nowhere.
@@ -1694,6 +1707,67 @@ function checkRunDirectoryWriter() {
     !fs.existsSync(path.join(away, 'clean', 'trial-2.json')),
     'a file written while its directory was moved out of the run directory stayed where the directory went',
   );
+  writer.close();
+
+  // Every directory the writer made stays held open until close, so no
+  // directory made later can take its inode number (Linux hands a freed one
+  // to the next directory made); after close nothing is written.
+  const held = RunDirectory.create(runs, 'held');
+  held.writeJson('trials/clean/trial-1.json', { trialIndex: 1 });
+  const holds = [...held.directories].map(([relative, identity]) => {
+    const onDisk = fs.lstatSync(path.join(held.root, ...(relative === '' ? [] : relative.split('/'))));
+    let open = null;
+    try {
+      open = fs.fstatSync(identity.descriptor);
+    } catch {
+      // A descriptor already closed holds nothing.
+    }
+    return { relative, descriptor: identity.descriptor, holds: open?.ino === identity.ino && onDisk.ino === identity.ino };
+  });
+  check(
+    JSON.stringify(holds.map(({ relative }) => relative).sort()) === JSON.stringify(['', 'trials', 'trials/clean']) &&
+      holds.every(({ holds: holding }) => holding),
+    `the writer does not hold each directory it made open: ${JSON.stringify(holds)}`,
+  );
+  held.close();
+  const released = holds.filter(({ descriptor }) => {
+    try {
+      fs.fstatSync(descriptor);
+      return false;
+    } catch (error) {
+      return error.code === 'EBADF';
+    }
+  });
+  check(released.length === holds.length, `close left ${holds.length - released.length} directory descriptor(s) open`);
+  let closedWrite = null;
+  try {
+    held.writeJson('trials/clean/trial-2.json', { trialIndex: 2 });
+  } catch (error) {
+    closedWrite = error;
+  }
+  check(
+    closedWrite instanceof RunDirectoryError && /is closed/.test(closedWrite.message),
+    `a write after close ended ${closedWrite === null ? 'without a refusal' : `with ${closedWrite.message}`}`,
+  );
+
+  // A file the runtime retracts that a target replaced with a directory: the
+  // removal is a RunDirectoryError naming it (exit 12), never a crash.
+  const retracting = RunDirectory.create(runs, 'retracting');
+  retracting.writeJson('trial-sets.json', {});
+  fs.rmSync(path.join(retracting.root, 'trial-sets.json'));
+  fs.mkdirSync(path.join(retracting.root, 'trial-sets.json'));
+  let retraction = null;
+  try {
+    retracting.remove('trial-sets.json');
+  } catch (error) {
+    retraction = error;
+  } finally {
+    retracting.close();
+  }
+  check(
+    retraction instanceof RunDirectoryError && /trial-sets\.json cannot be removed from the run directory/.test(retraction.message),
+    `the removal of a file replaced with a directory ended ${retraction === null ? 'without a refusal' : `with ${retraction.name}: ${retraction.message}`}`,
+  );
 
   const script = `
 const fs = require('node:fs');
@@ -1737,8 +1811,12 @@ async function main() {
     await runCase('the conditions and the set recommendation', checkConditionsAndSetRecommendation);
     await runCase('the clean-only runs', checkCleanOnlyAndNewest);
     await runCase('the subdirectory digest', checkSubdirectoryDigest);
+    for (const { label, directory } of runtimeTemps) {
+      const left = fs.readdirSync(directory);
+      check(left.length === 0, `the ${label} project's runs left ${JSON.stringify(left)} in their temp directory`);
+    }
   } finally {
-    for (const directory of scratch) removeScratch(directory);
+    scratch.removeAll();
   }
   if (failures.length > 0) {
     console.error(`${colors.red}${failures.length} of ${checks} tea-evaluate run check(s) failed:${colors.reset}`);

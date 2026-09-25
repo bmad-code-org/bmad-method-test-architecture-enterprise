@@ -51,6 +51,7 @@ const { createRegistry, registryFromEvaluation } = require('../cli/lib/evaluate/
 const { digest, digestFiles, redactArgs, redactSecrets } = require('../cli/lib/evaluate/digest');
 const { isDateTime } = require('../cli/lib/evaluate/formats');
 const { createArtifactValidator } = require('../cli/lib/evaluate/records');
+const { scratchDirectories } = require('./lib/scratch-directories');
 
 const Ajv = AjvModule.default ?? AjvModule;
 
@@ -63,7 +64,7 @@ const colors = { reset: '\u001B[0m', red: '\u001B[31m', green: '\u001B[32m' };
 
 const failures = [];
 let checks = 0;
-const scratch = [];
+const scratch = scratchDirectories('tea-evaluate-check');
 
 function check(condition, message) {
   checks += 1;
@@ -71,9 +72,7 @@ function check(condition, message) {
 }
 
 function tempDir(label) {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), `tea-evaluate-${label}-`));
-  scratch.push(directory);
-  return directory;
+  return scratch.make(label);
 }
 
 function runCli(args, options = {}) {
@@ -1567,7 +1566,7 @@ async function main() {
     checkRegistryClassification();
     checkPackedInstall();
   } finally {
-    for (const directory of scratch) fs.rmSync(directory, { recursive: true, force: true });
+    scratch.removeAll();
   }
 
   if (failures.length > 0) {

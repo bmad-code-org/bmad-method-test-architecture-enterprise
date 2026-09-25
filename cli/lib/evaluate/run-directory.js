@@ -11,7 +11,11 @@
  * object made, the way Story 1.7 holds its mutation writes:
  *
  *   - the run directory is created exclusively, and each directory in it is
- *     created exclusively by the runtime and recorded by device and inode;
+ *     created exclusively by the runtime, recorded by device and inode, and
+ *     held open until the run ends: a file system may hand a freed inode
+ *     number to the next directory made (Linux's ext4 and overlayfs do), and
+ *     an open descriptor keeps a removed directory's inode alive, so no
+ *     directory the target makes can carry a recorded identity;
  *   - a write runs with the process inside the recorded directory, confirmed
  *     before and after the write to be that very directory at its recorded
  *     place (its device and inode, and the path the system reports for the
@@ -43,6 +47,8 @@ const NO_FOLLOW = fs.constants.O_NOFOLLOW ?? 0;
 const CREATE = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | NO_FOLLOW;
 /** Non-blocking, so opening a FIFO a target swapped in returns at once and `fstat` refuses it. */
 const READ = fs.constants.O_RDONLY | NO_FOLLOW | (fs.constants.O_NONBLOCK ?? 0);
+/** A directory held open, never through a link, so its inode number stays its own while the run lasts. */
+const HOLD = fs.constants.O_RDONLY | (fs.constants.O_DIRECTORY ?? 0) | NO_FOLLOW;
 
 /** Something in the run directory the runtime did not write or cannot trust; the commands exit 12. */
 class RunDirectoryError extends Error {
@@ -54,6 +60,29 @@ class RunDirectoryError extends Error {
 
 function sha256(bytes) {
   return crypto.createHash('sha256').update(bytes).digest('hex');
+}
+
+/**
+ * Opens the directory `name` and returns its identity with the descriptor
+ * that holds it: while the descriptor is open, its inode is not freed even
+ * when the directory is removed, so no directory made later shares its
+ * device and inode.
+ *
+ * @returns {{ dev: number, ino: number, descriptor: number }}
+ */
+function holdDirectory(name, what) {
+  let descriptor;
+  try {
+    descriptor = fs.openSync(name, HOLD);
+  } catch (error) {
+    throw new RunDirectoryError(`${what} cannot be held open in the run directory: ${error.message}`);
+  }
+  const stats = fs.fstatSync(descriptor);
+  if (!stats.isDirectory()) {
+    fs.closeSync(descriptor);
+    throw new RunDirectoryError(`${what} is no longer the directory the runtime made`);
+  }
+  return { dev: stats.dev, ino: stats.ino, descriptor };
 }
 
 /** `relative` in POSIX form. */
@@ -85,9 +114,12 @@ class RunDirectory {
   constructor(root) {
     this.root = root;
     this.realRoot = fs.realpathSync.native(root);
-    const stats = fs.lstatSync(root);
-    /** Each directory the runtime made, by its path relative to the root ('' for the root), with its identity. */
-    this.directories = new Map([['', { dev: stats.dev, ino: stats.ino }]]);
+    /**
+     * Each directory the runtime made, by its path relative to the root ('' for
+     * the root), with its identity and the descriptor holding it until `close`.
+     */
+    this.directories = new Map([['', holdDirectory(this.realRoot, 'the run directory')]]);
+    this.closed = false;
     /** Each file the runtime wrote, by its relative path, with the SHA-256 of the bytes written. */
     this.files = new Map();
   }
@@ -123,6 +155,7 @@ class RunDirectory {
    * @param {{ undo?: (() => void) | null }} [options]
    */
   inDirectory(directory, work, { undo = null } = {}) {
+    if (this.closed) throw new RunDirectoryError(`the run directory ${this.root} is closed, so the runtime will not write or read it`);
     const real = path.join(this.realRoot, ...(directory === '' ? [] : directory.split('/')));
     const previous = process.cwd();
     try {
@@ -155,7 +188,8 @@ class RunDirectory {
   /**
    * Throws unless the working directory is the recorded directory
    * `directory` at its recorded place `real`: the same device and inode (a
-   * directory replaced, or swapped for a link, has others) and the path the
+   * directory replaced, or swapped for a link, has others, since the held
+   * descriptor keeps the recorded inode from being reused) and the path the
    * system reports for it (a directory moved elsewhere keeps its inode, and a
    * link left in its place would lead the runtime to it).
    */
@@ -189,7 +223,8 @@ class RunDirectory {
     const parent = path.posix.dirname(directory) === '.' ? '' : path.posix.dirname(directory);
     this.ensureDirectory(parent);
     const name = path.posix.basename(directory);
-    const stats = this.inDirectory(
+    let held = null;
+    this.inDirectory(
       parent,
       () => {
         try {
@@ -201,11 +236,16 @@ class RunDirectory {
               : `${directory} cannot be created in the run directory: ${error.message}`,
           );
         }
-        return fs.lstatSync(name);
+        held = holdDirectory(name, directory);
       },
-      { undo: () => fs.rmdirSync(name) },
+      {
+        undo: () => {
+          fs.closeSync(held.descriptor);
+          fs.rmdirSync(name);
+        },
+      },
     );
-    this.directories.set(directory, { dev: stats.dev, ino: stats.ino });
+    this.directories.set(directory, held);
   }
 
   /**
@@ -337,12 +377,23 @@ class RunDirectory {
     return JSON.parse(this.read(file).toString('utf8'));
   }
 
-  /** Removes a file the runtime wrote, by its bare name inside its recorded directory, never through a link. */
+  /**
+   * Removes a file the runtime wrote, by its bare name inside its recorded
+   * directory, never through a link; an entry that cannot be removed (a
+   * directory the target made in its place, say) is a `RunDirectoryError`
+   * naming it.
+   */
   remove(file) {
     const relative = this.relative(file);
     if (!this.files.has(relative)) return;
     const directory = path.posix.dirname(relative) === '.' ? '' : path.posix.dirname(relative);
-    this.inDirectory(directory, () => fs.rmSync(path.posix.basename(relative), { force: true }));
+    this.inDirectory(directory, () => {
+      try {
+        fs.rmSync(path.posix.basename(relative), { force: true });
+      } catch (error) {
+        throw new RunDirectoryError(`${relative} cannot be removed from the run directory: ${error.message}`);
+      }
+    });
     this.files.delete(relative);
   }
 
@@ -406,6 +457,22 @@ class RunDirectory {
       if (relative !== '' && !seen.has(relative)) problems.push(`${relative}, which the runtime wrote, is gone`);
     }
     return problems;
+  }
+
+  /**
+   * Releases every directory the runtime holds open; the run directory is
+   * neither written nor read afterwards. Called once, when the run ends.
+   */
+  close() {
+    if (this.closed) return;
+    this.closed = true;
+    for (const { descriptor } of this.directories.values()) {
+      try {
+        fs.closeSync(descriptor);
+      } catch {
+        // A descriptor already gone has nothing left to release.
+      }
+    }
   }
 
   /** Throws a `RunDirectoryError` naming every problem `problems` finds. */

@@ -76,6 +76,7 @@ const { dispositionOf } = require('../cli/lib/evaluate/evaluator');
 const { QualificationError, countOccurrences, qualifiedProbe, runMutationCycle } = require('../cli/lib/evaluate/mutation');
 const { cacheOnlyPort, cachingPort, requestKey, treeDigest } = require('../cli/lib/evaluate/workspace');
 const { createArtifactValidator } = require('../cli/lib/evaluate/records');
+const { scratchDirectories } = require('./lib/scratch-directories');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const EVALUATE = path.join(PROJECT_ROOT, 'cli', 'evaluate.js');
@@ -99,7 +100,7 @@ const colors = { reset: '\u001B[0m', red: '\u001B[31m', green: '\u001B[32m' };
 
 const failures = [];
 let checks = 0;
-const scratch = [];
+const scratch = scratchDirectories('tea-evaluate-mutation');
 
 function check(condition, message) {
   checks += 1;
@@ -107,24 +108,7 @@ function check(condition, message) {
 }
 
 function tempDir(label) {
-  const directory = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), `tea-evaluate-mutation-${label}-`));
-  scratch.push(directory);
-  return directory;
-}
-
-/**
- * Removes a scratch directory, whatever a failing run left in it: a
- * workspace whose provisioned directories are read-only included.
- */
-function removeScratch(directory) {
-  const unlock = (current) => {
-    fs.chmodSync(current, 0o755);
-    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
-      if (entry.isDirectory()) unlock(path.join(current, entry.name));
-    }
-  };
-  if (fs.existsSync(directory)) unlock(directory);
-  fs.rmSync(directory, { recursive: true, force: true });
+  return scratch.make(label);
 }
 
 function readJson(file) {
@@ -891,6 +875,101 @@ async function checkUnits() {
     'the runtime removed or rewrote the file outside the workspace the swapped link led to',
   );
 
+  // A clean arm that removes the target's directory and makes a new one in
+  // its place, the target file included: the plan holds the recorded
+  // directory open, so the new one cannot take its inode number (Linux's
+  // ext4 and overlayfs would hand it over), and the mutation is refused.
+  const recreateRoot = path.join(root, 'recreate');
+  fs.mkdirSync(path.join(recreateRoot, 'rules'), { recursive: true });
+  fs.writeFileSync(path.join(recreateRoot, POLICY), 'mode: strict\n');
+  let recreateStop = null;
+  let recreatedBy = null;
+  try {
+    await runMutationCycle({
+      root: recreateRoot,
+      mutation: {
+        mutationId: 'M-005',
+        targetArtifact: 'rules/policy.txt',
+        operator: { kind: 'replace-exact', find: 'mode: strict', replace: 'mode: lenient', occurrences: 1 },
+      },
+      digestBytes: sha256,
+      reExecutionCap: 0,
+      runArm: async (phase) => {
+        if (phase === 'baseline') {
+          fs.rmSync(path.join(recreateRoot, 'rules'), { recursive: true });
+          fs.mkdirSync(path.join(recreateRoot, 'rules'));
+          fs.writeFileSync(path.join(recreateRoot, POLICY), 'mode: strict\n');
+          recreatedBy = fs.statSync(path.join(recreateRoot, 'rules')).ino;
+        }
+        return { verdict: phase === 'mutated' ? 'violated' : 'held' };
+      },
+    });
+  } catch (error) {
+    if (!(error instanceof QualificationError)) throw error;
+    recreateStop = error;
+  }
+  check(recreatedBy !== null, 'the recreating clean arm never ran, so the case proves nothing');
+  check(
+    recreateStop?.exitCode === 12 && recreateStop.message.includes('is no longer the directory the plan recorded'),
+    `a clean arm that replaced the target's directory stopped the cycle with ${recreateStop?.exitCode ?? 'no error'}: ${recreateStop?.message}; expected 12 naming the directory`,
+  );
+  check(
+    fs.readFileSync(path.join(recreateRoot, POLICY), 'utf8') === 'mode: strict\n',
+    'the mutation was written into a directory the clean arm made',
+  );
+
+  // A process a target left running moves the target's directory out of the
+  // workspace and leaves a link in its place between the runtime's check and
+  // its entering the directory (the wrapped chdir makes the race
+  // deterministic): the directory keeps its inode, so only the path the
+  // system reports for it tells the runtime it now lies elsewhere.
+  const moveRoot = path.join(root, 'move');
+  fs.mkdirSync(path.join(moveRoot, 'rules'), { recursive: true });
+  fs.writeFileSync(path.join(moveRoot, POLICY), 'mode: strict\n');
+  const movedAway = path.join(root, 'moved-away');
+  const realChdir = process.chdir;
+  let armed = false;
+  let moved = false;
+  process.chdir = function movingChdir(directory) {
+    if (armed && !moved && String(directory).endsWith(`${path.sep}rules`)) {
+      moved = true;
+      fs.renameSync(path.join(moveRoot, 'rules'), movedAway);
+      fs.symlinkSync(movedAway, path.join(moveRoot, 'rules'));
+    }
+    return realChdir.call(process, directory);
+  };
+  let moveStop = null;
+  try {
+    await runMutationCycle({
+      root: moveRoot,
+      mutation: {
+        mutationId: 'M-006',
+        targetArtifact: 'rules/policy.txt',
+        operator: { kind: 'replace-exact', find: 'mode: strict', replace: 'mode: lenient', occurrences: 1 },
+      },
+      digestBytes: sha256,
+      reExecutionCap: 0,
+      runArm: async (phase) => {
+        if (phase === 'baseline') armed = true;
+        return { verdict: phase === 'mutated' ? 'violated' : 'held' };
+      },
+    });
+  } catch (error) {
+    if (!(error instanceof QualificationError)) throw error;
+    moveStop = error;
+  } finally {
+    process.chdir = realChdir;
+  }
+  check(moved, 'the moving chdir never ran, so the case proves nothing');
+  check(
+    moveStop?.exitCode === 12 && moveStop.message.includes('now lies at'),
+    `a target directory moved out behind a link stopped the cycle with ${moveStop?.exitCode ?? 'no error'}: ${moveStop?.message}; expected 12 naming where it lies`,
+  );
+  check(
+    fs.readFileSync(path.join(movedAway, 'policy.txt'), 'utf8') === 'mode: strict\n',
+    'the mutation was written into the target directory after it was moved out of the workspace',
+  );
+
   check(
     dispositionOf('true', 'expects-hold') === 'held' && dispositionOf('false', 'expects-hold') === 'violated',
     'an expects-hold oracle reads its resolution the wrong way',
@@ -1461,7 +1540,7 @@ async function main() {
     checkRepositoryShape();
     await checkInterrupted();
   } finally {
-    for (const directory of scratch) removeScratch(directory);
+    scratch.removeAll();
   }
   if (failures.length > 0) {
     console.error(`${colors.red}${failures.length} of ${checks} tea-evaluate mutation check(s) failed:${colors.reset}`);

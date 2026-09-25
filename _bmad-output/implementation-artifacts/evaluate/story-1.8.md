@@ -303,6 +303,34 @@ Every one fails.
 - A2, `completed: true` written before the last tree read and verification: the moved run's `run.json` says completed and `score` exits 0; the failed retraction swallowed again: the exit message no longer names the end the runtime could not record.
 - A4, `O_NONBLOCK` dropped from `READ`: the FIFO read unit times out (ETIMEDOUT); `score` reading with a blocking open: `score` over the FIFO record never returns within its 30 s deadline.
 
+### Final review round 3 (CI on c1e7eeb, then the coordinator's two items)
+
+Each finding was verified against c1e7eeb before the fix.
+
+| ID | Severity | Finding | Resolution |
+| --- | --- | --- | --- |
+| L1 | high | CI failed on Linux only: the `recreate-trials` case exited 12 at the verification after the trials, and trial 2's evidence landed in the `trials/clean` the target made | fixed at the cause, below: every directory the runtime makes in the run directory is held open by a descriptor from creation until `runPipeline` ends (`RunDirectory.close`), so no directory made later can take a recorded inode number; a write or read after `close` is refused; guarding tests: the `recreate-trials` case, now passing on Linux, and a writer unit that asserts each directory the writer made is held by its descriptor until `close` and that nothing is written after it |
+| L2 | high | the same recyclable identity in `mutation.js`: `inTargetDirectory` confirmed the target's directory by device and inode only, so on Linux an arm that replaced the directory had its replacement written through, and a directory moved out of the workspace behind a link, between the containment check and the write, passed the check with its own inode | fixed: `planReplaceExact` holds the directory open until `releasePlan` (the whole cycle in `runMutationCycle`, the one write in `applyReplaceExact`), and `inTargetDirectory` also requires the path the system reports for the working directory to be the recorded one, as `run-directory.js` does since round 2; guarding tests: a clean arm that replaces `rules/` with a new directory (exit 12 naming the directory, the new one untouched) and a chdir wrapped to move `rules/` out behind a link just before the runtime enters it (exit 12 naming where it lies, the moved file unchanged) |
+| L3 | medium | the coordinator's item 1: `RunDirectory.remove` let `rmSync`'s `ERR_FS_EISDIR` escape when a target replaced a retracted file with a directory, so the run crashed with a raw stack (exit 12 through the CLI's unexpected-error path) and `run.json` never recorded the end | fixed: a failed removal is a `RunDirectoryError` naming the file, which the retraction reports and moves past, so `run.json` records `completed: false` and the exit message says the runtime could not remove the file; guarding tests: the `index-directory` act of `wrap-run-directory.cjs` replaces `trial-sets.json` with a directory before the last verification (exit 12 naming the file, `run.json` recording the incomplete end), and a writer unit removes a file a directory replaced |
+| L4 | low | the coordinator's item 2: 35 `tea-evaluate-run-*` directories from Sep 24 sat in the system temp directory | confirmed the cause: a passing or failing run removed every scratch directory, and a run stopped by a signal left every directory made so far (reproduced: SIGTERM 8 s into `test/test-evaluate-run.js` left five, matching the Sep 24 21:11 batch); `test/lib/scratch-directories.js` puts a suite's directories under one parent named for its process, removes it when the suite ends, and removes a parent whose process is gone when the suite next starts; a signal handler is left out on purpose, since the suites run their cases through `spawnSync` and a handler would run only after the last case, which made SIGTERM stop nothing when tried; `test:evaluate-check`, `test:evaluate-preflight`, `test:evaluate-mutation` and `test:evaluate-run` use it; `test:evaluate-run` asserts every project's private temp directory is empty at the end, so the runtime is held to the same; the stale directories were deleted, 77 of them (the Sep 24 run leftovers and older `tea-evaluate-preflight-*` and `tea-evaluate-copy-*` ones from Stories 1.6 and 1.7) |
+
+**L1 root cause, confirmed on Linux.** In a `node:24` container (overlayfs over the Docker VM's ext4), c1e7eeb's `test:evaluate-run` failed with exactly CI's two checks.
+A probe in the same container made a directory, removed it and made another at the same path 50 times: the new directory took the removed one's inode number 50 of 50 times, and 0 of 50 times while a descriptor held the removed one open; on the container's tmpfs and on macOS APFS the number was never reused, which is why the case passed locally.
+So the device and inode check compared the replacement with a number the file system had already handed on, and the reported path matched because the replacement sits at the same path.
+An open descriptor keeps a removed directory's inode allocated until it closes, on any POSIX file system, so the identity the runtime records cannot belong to another directory while the run lasts; the mechanism does not depend on how a file system allocates numbers.
+`score`'s checks were reviewed for the same reliance and hold none: `regularFileBytes` asks `fstat` about the descriptor it reads through, and the anchors compare digests of bytes.
+
+### Revert checks, final review round 3
+
+Each guard was undone in the Linux container's copy, the named suite run, and the copy restored.
+
+Every one fails.
+
+- L1, each directory's descriptor closed right after its identity was taken: "a run whose trials/clean was replaced exited 12; expected 12 at the next write", "a run wrote trial evidence into a trials/clean the target made", and the writer unit's "the writer does not hold each directory it made open".
+- L2, the plan's descriptor closed right after its identity was taken: "a clean arm that replaced the target's directory stopped the cycle with no error"; the reported-path check off: "the mutation was written into the target directory after it was moved out of the workspace", with the cycle stopping only after the mutated arm (this one fails on macOS too).
+- L3, the removal's error left unwrapped: "the removal of a file replaced with a directory ended with SystemError", the `index-directory` run no longer names the file it could not remove and records no end in `run.json`.
+- L4, `removeWorkspace` made a no-op: "the happy project's runs left [...] in their temp directory" and 17 more such checks; the scratch parent: SIGTERM 8 s into the old suite left five directories, and a SIGKILL 8 s into the new one left its parent, which the next start of the suite removed.
+
 ## Verification
 
 **Commands:**
@@ -325,3 +353,10 @@ Every one fails.
 - `npm test` -- exit 0 (`test:evaluate-run` 359 checks, `test:evaluate-preflight` 230, `test:evaluate-mutation` 417, `test:evaluate-check` 408, `test:evaluate-boundaries` 296)
 - `npm run lint`, `npm run format:check`, `npm run lint:md`, `npm run docs:validate-links`, `npm run docs:build` -- exit 0
 - eval-quality stays at 4.1.4, the pin and floor; package.json and the lockfile are unchanged
+
+**Final review round 3:**
+
+- `npm test` -- exit 0 twice in a row on macOS (`test:evaluate-run` 389 checks, `test:evaluate-preflight` 230, `test:evaluate-mutation` 423, `test:evaluate-check` 408, `test:evaluate-boundaries` 296)
+- Linux (`node:24` container, overlayfs, the repository mounted read-only and copied in, `npm ci`): `test:evaluate-run` 389, `test:evaluate-mutation` 410 (two root-only permission checks skip), `test:evaluate-check` 408 and `test:evaluate-boundaries` 296 pass; `test:evaluate-preflight` passes 230 in a container started with `--init` and fails 20 orphan-process checks without one, since no process reaps zombies there and a zombie still answers `kill(pid, 0)`, a property of that container only
+- `npm run lint`, `npm run format:check`, `npm run lint:md`, `npm run docs:validate-links`, `npm run docs:build` -- exit 0
+- eval-quality stays at 4.1.4; package.json and the lockfile are unchanged

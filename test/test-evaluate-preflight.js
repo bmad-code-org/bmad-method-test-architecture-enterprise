@@ -62,13 +62,13 @@
 'use strict';
 
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
 
 const { INFRASTRUCTURE_EXIT_CODES } = require('../cli/skill-runner');
 const { EXIT_CODES } = require('../cli/lib/runner-exit-codes');
 const { ENGINE_CLI_ENV, engineCliPath } = require('../cli/lib/evaluate/engine');
+const { scratchDirectories } = require('./lib/scratch-directories');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const EVALUATE = path.join(PROJECT_ROOT, 'cli', 'evaluate.js');
@@ -100,7 +100,7 @@ const colors = { reset: '\u001B[0m', red: '\u001B[31m', green: '\u001B[32m' };
 
 const failures = [];
 let checks = 0;
-const scratch = [];
+const scratch = scratchDirectories('tea-evaluate-preflight');
 
 function check(condition, message) {
   checks += 1;
@@ -108,9 +108,7 @@ function check(condition, message) {
 }
 
 function tempDir(label) {
-  const directory = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), `tea-evaluate-preflight-${label}-`));
-  scratch.push(directory);
-  return directory;
+  return scratch.make(label);
 }
 
 function readJson(file) {
@@ -1535,7 +1533,7 @@ async function main() {
     checkInterfaceDenialAndRefusals();
     checkRunnerRules();
   } finally {
-    for (const directory of scratch) fs.rmSync(directory, { recursive: true, force: true });
+    scratch.removeAll();
   }
   if (failures.length > 0) {
     console.error(`${colors.red}${failures.length} of ${checks} tea-evaluate preflight check(s) failed:${colors.reset}`);

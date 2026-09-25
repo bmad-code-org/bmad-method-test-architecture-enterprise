@@ -14,6 +14,11 @@
  *   move-root  move the run directory to the path `TEA_EVALUATE_VERIFY_FILE`
  *              names and leave a symbolic link to it in its place, as a
  *              process a target left running could, then verify as usual
+ *   index-directory
+ *              replace `trial-sets.json` with a directory of the same name,
+ *              as a process a target left running could, so the retraction
+ *              the failed verification starts meets a directory; then
+ *              verify as usual
  */
 
 'use strict';
@@ -34,6 +39,10 @@ RunDirectory.prototype.verify = function verifyAfterAct(when) {
     if (act === 'move-root') {
       fs.renameSync(this.root, target);
       fs.symlinkSync(target, this.root);
+    }
+    if (act === 'index-directory') {
+      fs.rmSync(path.join(this.root, 'trial-sets.json'));
+      fs.mkdirSync(path.join(this.root, 'trial-sets.json'));
     }
   }
   return verify.call(this, when);
