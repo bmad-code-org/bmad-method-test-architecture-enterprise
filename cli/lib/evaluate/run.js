@@ -1115,4 +1115,14 @@ async function completeRun(
   return result;
 }
 
-module.exports = { EVALUATOR_IDENTITY, FORBIDDEN_INPUT_NOTE, TRIAL_SETS_NAME, TRIAL_SETS_SCHEMA_VERSION, runRunCommand, setRecommendation };
+module.exports = {
+  EVALUATOR_IDENTITY,
+  FORBIDDEN_INPUT_NOTE,
+  TRIAL_SETS_NAME,
+  TRIAL_SETS_SCHEMA_VERSION,
+  runRunCommand,
+  // A trial's denial cannot be reached through the pipeline, whose qualification runs the same plan under the same
+  // policy first, so its unit drives one trial directly.
+  runTrial,
+  setRecommendation,
+};

@@ -8,7 +8,9 @@
       "kind": "mcp",
       "interfaceId": "grader",
       "target": "server/grader.js",
-      "targetArgs": [],
+      "targetArgs": [
+        "--policy=rules/policy.txt"
+      ],
       "tools": [
         "grade_answer",
         "describe_policy"

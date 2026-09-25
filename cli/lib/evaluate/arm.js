@@ -41,6 +41,8 @@ const { recordObservation } = require('./records');
 
 /** An injected environment value shorter than this is not scrubbed from output: it would match ordinary text. */
 const MIN_SCRUBBED_VALUE_LENGTH = 8;
+/** The shortest leading part of a secret redacted where a cut text ends in it; a shorter one would match ordinary text. */
+const MIN_CUT_PREFIX_LENGTH = 4;
 const SCRUBBED = '[redacted]';
 
 /**
@@ -67,9 +69,29 @@ class ArmError extends Error {
   }
 }
 
-/** `value` with every string in `secrets` replaced, in strings and object keys alike, walking arrays and objects. */
+/**
+ * Each secret in every form text can carry it in, longest first: its own body
+ * and, where JSON writes it differently (a `"`, a backslash or a control character
+ * in it), its JSON-escaped body, which is how a message quoting a JSON frame or
+ * a `JSON.stringify` of the server's answer holds it.
+ */
+function secretForms(secrets) {
+  const forms = new Set();
+  for (const secret of secrets) {
+    forms.add(secret);
+    forms.add(JSON.stringify(secret).slice(1, -1));
+  }
+  return [...forms].sort((a, b) => b.length - a.length);
+}
+
+/**
+ * `value` with every string in `secrets` replaced, in strings and object keys
+ * alike, walking arrays and objects; a finite number whose text is a secret is
+ * replaced as a whole.
+ */
 function scrub(value, secrets) {
   if (typeof value === 'string') return secrets.reduce((text, secret) => text.split(secret).join(SCRUBBED), value);
+  if (typeof value === 'number' && Number.isFinite(value) && secrets.includes(String(value))) return SCRUBBED;
   if (Array.isArray(value)) return value.map((item) => scrub(item, secrets));
   if (value !== null && typeof value === 'object') {
     // A key is scrubbed as a value is: a tool's structured result is an object, and a secret can be one of its keys. A
@@ -89,6 +111,26 @@ function scrub(value, secrets) {
     );
   }
   return value;
+}
+
+/**
+ * A text that may end in a cut (eval-quality quotes the first 200 characters of
+ * a line that is no JSON-RPC message) scrubbed: every whole secret, and then
+ * the leading part of one, at least `MIN_CUT_PREFIX_LENGTH` characters long,
+ * that the cut left at its end.
+ */
+function scrubCutText(text, secrets) {
+  const scrubbed = scrub(text, secrets);
+  let cut = 0;
+  for (const secret of secrets) {
+    for (let length = secret.length - 1; length > cut && length >= MIN_CUT_PREFIX_LENGTH; length -= 1) {
+      if (scrubbed.endsWith(secret.slice(0, length))) {
+        cut = length;
+        break;
+      }
+    }
+  }
+  return cut === 0 ? scrubbed : `${scrubbed.slice(0, -cut)}${SCRUBBED}`;
 }
 
 /**
@@ -167,17 +209,17 @@ function hostEnvironmentPort({ port, registry }) {
         request?.kind === 'mcp' && registry.serverFor(request.interfaceId) !== undefined
           ? registry.serverEnvironment(request.interfaceId)
           : {};
-      const secrets = [...Object.values(injected), ...Object.values(server)]
-        .filter((value) => value.length >= MIN_SCRUBBED_VALUE_LENGTH)
-        .sort((a, b) => b.length - a.length);
+      const secrets = secretForms(
+        [...Object.values(injected), ...Object.values(server)].filter((value) => value.length >= MIN_SCRUBBED_VALUE_LENGTH),
+      );
       try {
         return { request: augmented, observation: scrub(await port.probe(augmented, signal), secrets) };
       } catch (error) {
         error.request = augmented;
         // eval-quality reports a mechanism's own failure (a server that would not start, a refused handshake, a
-        // malformed frame, a spawn error) as the fault's cause, which can quote what the target printed, so it is kept
-        // scrubbed beside the fault.
-        if (error?.cause !== undefined) error.scrubbedCause = scrub(String(error.cause?.message ?? error.cause), secrets);
+        // malformed frame, a spawn error) as the fault's cause, which can quote what the target printed, JSON-escaped
+        // or cut short, so it is kept scrubbed beside the fault.
+        if (error?.cause !== undefined) error.scrubbedCause = scrubCutText(String(error.cause?.message ?? error.cause), secrets);
         throw error;
       }
     },
@@ -372,5 +414,8 @@ module.exports = {
   persistableRequest,
   reasonNote,
   runArm,
+  scrub,
+  scrubCutText,
+  secretForms,
   stoppedFromOutside,
 };

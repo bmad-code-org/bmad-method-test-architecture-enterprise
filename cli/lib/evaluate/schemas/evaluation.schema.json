@@ -423,7 +423,7 @@
           "pattern": "^(?![A-Za-z]:)(?!/)(?![\\s\\S]*(?:^|/)\\.{1,2}(?:/|$))(?![\\s\\S]*//)(?![\\s\\S]*/$)[^\\\\\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2066-\\u2069]+$"
         },
         "targetArgs": {
-          "description": "The argument vector the server starts with, passed as an array so no value is joined into a shell string; a relative path in it resolves against the workspace, the server's working directory, so every file the server runs is the workspace's copy. No argument is an absolute path, carries one after an = sign, names a file: URL, or has a \"..\" segment, since any of them would run or read the adopter's live tree in place of the workspace (AD-8). Empty starts target with no arguments.",
+          "description": "The argument vector the server starts with, passed as an array so no value is joined into a shell string. A relative path in it resolves against the workspace, the server's working directory. No argument may be an absolute path, carry one after an = sign, name a file: URL, or hold a \"..\" segment; each of these would run or read the adopter's live tree in place of the workspace (AD-8). Empty starts target with no arguments.",
           "type": "array",
           "items": {
             "type": "string",

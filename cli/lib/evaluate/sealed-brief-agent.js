@@ -680,8 +680,10 @@ async function runSealedBriefAgent({ evaluator, sealedBrief, contract, mapping, 
     stderrBytes: printed.stderrBytes ?? Buffer.from(printed.stderr ?? ''),
   };
   const fail = (message) => Object.assign(new EvaluatorError(message, streams), { prompt, nonce });
-  if (failure !== null) throw fail(`the sealed-brief evaluator could not answer: ${failure?.message ?? failure}`);
+  // A call the target could not run is named first: an agent told only that its call could not run often fails in
+  // turn, and its own exit would hide the cause.
   if (router.infrastructure() !== null) throw fail(router.infrastructure());
+  if (failure !== null) throw fail(`the sealed-brief evaluator could not answer: ${failure?.message ?? failure}`);
   let answer;
   try {
     answer = readAnswer({ text: answerText(answered.stdout, nonce), mapping, validate });

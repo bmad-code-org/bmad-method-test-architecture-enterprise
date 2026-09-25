@@ -52,7 +52,7 @@
   "test:evaluate-check": 170.7,
   "test:evaluate-evaluators": 146.5,
   "test:evaluate-guidance": 0.1,
-  "test:evaluate-mcp": 19,
+  "test:evaluate-mcp": 36,
   "test:evaluate-mutation": 169.8,
   "test:evaluate-preflight": 63,
   "test:evaluate-run": 111.2,

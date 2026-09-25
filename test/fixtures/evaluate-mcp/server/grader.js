@@ -7,13 +7,19 @@
  * It publishes three tools:
  *
  *   grade_answer     { answer: string } -> { ok, answer, verdict }: the verdict
- *                    is accepted under `mode: strict` in rules/policy.txt (read
- *                    from its working directory) and rejected under
+ *                    is accepted under `mode: strict` in the policy file and
+ *                    rejected under
  *                    `mode: lenient`, the mutation M-001 plants; an answer
  *                    that is not a string is refused with isError
  *   describe_policy  {} -> { ok, mode }
  *   reset_ledger     {} -> { ok }: a tool the fixture's registry does not
  *                    list, so eval-quality denies it before the server starts
+ *
+ * The policy file is the one its `--policy=<path>` argument names, relative
+ * to its working directory (the fixture's registry passes
+ * `--policy=rules/policy.txt`); started without the argument it exits 2
+ * before its handshake, so a registry that dropped its `targetArgs` cannot
+ * pass.
  *
  * The handshake is stateful: a `tools/call` before `initialize` is refused, so
  * a client that skipped it fails here instead of appearing to work.
@@ -35,8 +41,12 @@
  * Policy lines drive the failure cases:
  *
  *   handshake: refuse   answer `initialize` with a JSON-RPC error, a server
- *                       that could not open its session
+ *                       that could not open its session; the error's data
+ *                       carries GRADER_SECRET when it is set, for a test that
+ *                       the runtime scrubs it from the fault's cause
  *   verdict: accept     answer accepted whatever the mode says
+ *   hang: <tool>        log a call of that tool and never answer it, a
+ *                       server that hangs mid-call
  */
 
 'use strict';
@@ -56,7 +66,16 @@ const TOOLS = [
   { name: 'reset_ledger', description: 'Reset the grading ledger.', inputSchema: { type: 'object', properties: {} } },
 ];
 
-const policy = fs.existsSync(path.join('rules', 'policy.txt')) ? fs.readFileSync(path.join('rules', 'policy.txt'), 'utf8') : '';
+const policyFile = process.argv
+  .slice(2)
+  .find((argument) => argument.startsWith('--policy='))
+  ?.slice('--policy='.length);
+if (policyFile === undefined) {
+  process.stderr.write('grader: no --policy=<path> argument\n');
+  process.exit(2);
+}
+const policy = fs.existsSync(policyFile) ? fs.readFileSync(policyFile, 'utf8') : '';
+const hanging = new Set([...policy.matchAll(/^hang: (\S+)$/gm)].map((match) => match[1]));
 const mode = /mode: (\w+)/.exec(policy)?.[1] ?? 'unknown';
 /** The runtime label of the workspace a directory lies in (`trial-clean-2` for tea-evaluate-trial-clean-2-XXXXXX/target), or null. */
 const labelOf = (directory) => /^tea-evaluate-(.+)-[A-Za-z0-9]{6}$/.exec(path.basename(path.dirname(directory)))?.[1] ?? null;
@@ -110,7 +129,8 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
   if (method === 'initialize') {
     log({ event: 'initialize', protocolVersion: params?.protocolVersion ?? null });
     if (policy.includes('handshake: refuse')) {
-      send({ id, error: { code: -32_603, message: 'the grader refuses to open a session' } });
+      const data = process.env.GRADER_SECRET ? { data: { token: process.env.GRADER_SECRET } } : {};
+      send({ id, error: { code: -32_603, message: 'the grader refuses to open a session', ...data } });
       return;
     }
     initialized = true;
@@ -128,6 +148,7 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
   if (method === 'tools/call') {
     const args = params?.arguments ?? {};
     log({ event: 'call', tool: params?.name ?? null, arguments: args });
+    if (hanging.has(params?.name)) return;
     const answered = callTool(params?.name, args);
     if (answered === null) send({ id, error: { code: -32_602, message: `unknown tool ${params?.name}` } });
     else send({ id, result: answered });

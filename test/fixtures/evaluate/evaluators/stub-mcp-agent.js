@@ -3,16 +3,21 @@
  * A stub sealed-brief evaluator agent for the MCP fixture (Story 1.10), run
  * through the `custom` agent adapter. It reads its prompt on stdin, starts the
  * bridge the configuration file `--mcp-config <file>` names, and calls the
- * bridge's `grader` tool three times:
+ * bridge's `grader` tool four times:
  *
  *   grade_answer     { answer: "an answer of my own" }: listed in the registry
  *                    and declared by the contract's grade-answer operation, so
  *                    the runtime records it
  *   describe_policy  {}: listed in the registry and declared by no operation,
- *                    so it runs and stays out of the record
+ *                    so it runs and stays out of the record; the stub reads
+ *                    the mode from its result and exits 1 when the result is
+ *                    not the call's JSON (a call that could not run)
  *   reset_ledger     {}: published by the server and absent from the
  *                    registry's tools, so eval-quality denies it before the
  *                    server starts
+ *   grade_answer     { answer: 42 }: declared, and answered by the server with
+ *                    its error flag set, since the answer is not a string, so
+ *                    the runtime records it with response status 1
  *
  * It answers key `grade-accepted` in the one answer block the prompt names:
  * `pass` when the grade call's result says `accepted`, `fail` otherwise,
@@ -66,15 +71,17 @@ async function main() {
   const call = (input) => request('tools/call', { name: 'grader', arguments: input });
   const graded = await call({ tool: 'grade_answer', arguments: { answer: 'an answer of my own' } });
   const described = await call({ tool: 'describe_policy', arguments: {} });
+  const { mode } = JSON.parse(described.result.content[0].text).result ?? {};
   const reset = await call({ tool: 'reset_ledger' });
+  const refused = await call({ tool: 'grade_answer', arguments: { answer: 42 } });
   child.stdin.end();
   if (capture !== null) {
-    fs.appendFileSync(capture, `${JSON.stringify({ prompt, tools: listed.result?.tools, results: [graded, described, reset] })}\n`);
+    fs.appendFileSync(capture, `${JSON.stringify({ prompt, tools: listed.result?.tools, results: [graded, described, reset, refused] })}\n`);
   }
   const answer = JSON.parse(graded.result.content[0].text);
   const accepted = answer.result?.verdict === 'accepted';
   const row = accepted
-    ? { key: 'grade-accepted', outcome: 'pass', observationIds: [answer.observationId], comment: 'It accepted.' }
+    ? { key: 'grade-accepted', outcome: 'pass', observationIds: [answer.observationId], comment: `It accepted under ${mode}.` }
     : {
         key: 'grade-accepted',
         outcome: 'fail',
@@ -82,7 +89,7 @@ async function main() {
         quote: 'rejected',
         quoteChannel: 'response-body',
         confidence: 0.8,
-        comment: 'It rejected an answer it had to accept.',
+        comment: `It rejected an answer it had to accept under ${mode}.`,
       };
   process.stdout.write(`Judged.\n<judge-answer nonce="${nonce}">${JSON.stringify({ rows: [row] })}</judge-answer>\n`);
 }

@@ -16,19 +16,27 @@
  *   structured result, every session of the server logged the `2025-06-18`
  *   handshake, the records carry the call's arguments, its result as
  *   `response-body` and its error flag as `response-status`, a server's
- *   environment is scrubbed from them, and the clean arm resolves
- *   `passed-clean-control` and the mutated arm `caught`.
+ *   environment reaches no file of the project and no output, and the clean
+ *   arm resolves `passed-clean-control` and the mutated arm `caught`. The
+ *   server needs its `--policy=` argument, so the entry's `targetArgs` must
+ *   reach it.
  * - Denials: the plan's tool removed from the entry's `tools` stops
  *   `preflight` with exit 10 and the fault's `tool-not-authorized`, at the
  *   qualification and, with no seeded probe, at the legs; an entry for
  *   another interface leaves the contract's interface
  *   `interface-not-authorized`; no server starts for any of them.
- * - A server that refuses its handshake stops the run with exit 12.
+ * - A server that refuses its handshake stops the run with exit 12, the
+ *   secret its refusal quotes JSON-escaped scrubbed from every file and the
+ *   output; one that hangs mid-call is torn down at its ceiling
+ *   (`budget-exhausted`, exit 12) with every process it started ended.
  * - A sealed-brief agent through the bridge: a listed and declared tool is
  *   recorded `evaluator-chosen` with the operation its tool name matches, a
  *   listed tool no operation declares runs and stays unrecorded, and a tool
  *   the registry does not list is denied with `tool-not-authorized` and never
- *   starts the server; the arms score `passed-clean-control` and `caught`.
+ *   starts the server, a call the server answers with its error flag set is
+ *   recorded with response status 1, and the server's secret reaches no file,
+ *   capture or output; the arms score `passed-clean-control` and `caught`. A
+ *   bridge call to a hanging server is named over the agent's own exit.
  * - Gameability: a probe whose degenerate response answers the tool call
  *   qualifies and scores `caught` with no server started in its trials, and
  *   a gameability router denies an unlisted tool and answers a listed one from
@@ -37,8 +45,10 @@
  *   sharing one, an entry of the other kind than its interface, a tool name
  *   eval-quality refuses, an entry off its schema and a degenerate response of
  *   the wrong kind.
- * - Units: the registry's MCP policy, port, tool inventory and ceilings, and
- *   the fault record.
+ * - Units: the registry's MCP policy (an entry's `maxOutputBytes` included),
+ *   port, tool inventory and ceilings, the scrub (keys, JSON-escaped forms,
+ *   numbers, a cause cut through a secret), the fault record, and a trial whose
+ *   step is denied recording the reason.
  *
  * The denial assertions read eval-quality's `reason` on the `forbidden-target`
  * fault, which eval-quality 4.2.0 carries.
@@ -57,6 +67,7 @@ const { ENGINE_CLI_ENV, loadAdapters } = require('../cli/lib/evaluate/engine');
 const { ArmError, faultRecord, hostEnvironmentPort, runArm } = require('../cli/lib/evaluate/arm');
 const { syntheticPort } = require('../cli/lib/evaluate/gameability');
 const { MAX_OUTPUT_BYTES, createRegistry, registryProblems } = require('../cli/lib/evaluate/registry');
+const { runTrial } = require('../cli/lib/evaluate/run');
 const { bridgeRouter } = require('../cli/lib/evaluate/sealed-brief-agent');
 const { scratchDirectories } = require('./lib/scratch-directories');
 
@@ -67,6 +78,10 @@ const STUB_AGENT = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'eval
 const EVALUATION = path.join('evals', 'grader');
 const TRIALS = 3;
 const SECRET = 'grader-secret-value-0123';
+/** A secret JSON escapes (a quote and a backslash), so a message quoting the server's JSON-RPC frame holds it escaped. */
+const QUOTED_SECRET = String.raw`Qv"7\tk-Zp9#wY`;
+/** The registry entry's ceiling for the hanging-server cases, short so a hung call is torn down quickly. */
+const HANG_CEILING_MS = 3000;
 
 const BASE_ENV = Object.fromEntries(
   Object.entries(process.env).filter(([name]) => name !== ENGINE_CLI_ENV && !name.startsWith('GRADER_') && !name.startsWith('GIT_')),
@@ -93,6 +108,46 @@ function readJson(file) {
 /** A file a run may not have written, parsed, or null, so a case reports what is missing and goes on. */
 function readIfPresent(file) {
   return fs.existsSync(file) ? readJson(file) : null;
+}
+
+/** Every file under each path, recursively, with its text: a node walk, since the shell's grep honours .gitignore and skips runs/. */
+function filesUnder(...roots) {
+  const files = [];
+  const walk = (entry) => {
+    if (!fs.existsSync(entry)) return;
+    const stat = fs.lstatSync(entry);
+    if (stat.isDirectory()) for (const name of fs.readdirSync(entry)) walk(path.join(entry, name));
+    else if (stat.isFile()) files.push({ where: entry, text: fs.readFileSync(entry, 'latin1') });
+  };
+  for (const root of roots) walk(root);
+  return files;
+}
+
+/**
+ * Where any four-character fragment of `secret`, as written or JSON-escaped, appears among `texts` (`{ where, text }`):
+ * an empty list when none does.
+ */
+function leaksOf(texts, secret) {
+  const fragments = new Set();
+  for (const form of [secret, JSON.stringify(secret).slice(1, -1)]) {
+    for (let at = 0; at + 4 <= form.length; at += 1) fragments.add(form.slice(at, at + 4));
+  }
+  return texts.flatMap(({ where, text }) =>
+    [...fragments].filter((fragment) => text.includes(fragment)).map((fragment) => `${where}: ${JSON.stringify(fragment)}`),
+  );
+}
+
+/** Each process the server's sessions logged that is still running: an empty list once every session ended. */
+function livingSessions(project) {
+  const alive = [...new Set(sessions(project).map((line) => line.pid))].filter((pid) => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch (error) {
+      return error.code !== 'ESRCH';
+    }
+  });
+  return alive;
 }
 
 function writeJson(file, value) {
@@ -207,7 +262,7 @@ async function checkUnits() {
             {
               interfaceId: 'grader',
               target: path.join('/the/workspace', 'server', 'grader.js'),
-              targetArgs: [],
+              targetArgs: ['--policy=rules/policy.txt'],
               tools: ['grade_answer', 'describe_policy'],
               cwd: '/the/workspace',
               serverEnvironment: { GRADER_SECRET: SECRET },
@@ -254,6 +309,15 @@ async function checkUnits() {
       `the tool server's target is not held to an executable file: ${JSON.stringify(registry.targetProblems(path.join(FIXTURE, 'rules')))}`,
     );
 
+    // An entry's own maxOutputBytes reaches its authorization and eval-quality's parsed copy of it.
+    const capped = createRegistry([{ ...evaluation.registry[0], maxOutputBytes: 4096 }], { root: FIXTURE });
+    const cappedPort = await capped.createProbePort({ cwd: FIXTURE, projectRoot: FIXTURE });
+    check(
+      capped.mcpTargetPolicy({ cwd: FIXTURE }).authorizations[0].maxOutputBytes === 4096 &&
+        cappedPort.mcpPolicy.authorizations[0].maxOutputBytes === 4096,
+      `an entry's maxOutputBytes of 4096 reached the authorization as ${JSON.stringify(cappedPort.mcpPolicy.authorizations[0])}`,
+    );
+
     // A server's environment is scrubbed from what it answers, as a command's injected values are.
     const leaky = hostEnvironmentPort({
       port: {
@@ -289,6 +353,68 @@ async function checkUnits() {
       JSON.stringify(collided.result.value) === JSON.stringify({ '[redacted]-2': 'scrubbed', '[redacted]': 'untouched' }),
       `a scrubbed key colliding with an untouched one gave ${JSON.stringify(collided.result.value)}`,
     );
+
+    // A secret JSON escapes is scrubbed as written and as a quoted JSON frame holds it, in an answer and in a fault's
+    // cause; a cause eval-quality cut through a secret loses the leading part the cut left.
+    const mcpRequest = { probeId: 'x', interfaceId: 'grader', operationId: 'grade-answer', kind: 'mcp' };
+    const escaped = JSON.stringify(QUOTED_SECRET).slice(1, -1);
+    process.env.GRADER_SECRET = QUOTED_SECRET;
+    const answeringWith = (value) =>
+      hostEnvironmentPort({
+        port: { probe: async (request) => ({ ...request, isError: false, result: { kind: 'json', value } }) },
+        registry,
+      });
+    const quotedAnswer = (await answeringWith({ raw: QUOTED_SECRET, frame: `{"token":"${escaped}"}`, [escaped]: 1 }).probe(mcpRequest))
+      .observation;
+    check(
+      leaksOf([{ where: 'the observation', text: JSON.stringify(quotedAnswer) }], QUOTED_SECRET).length === 0 &&
+        quotedAnswer.result.value.frame === '{"token":"[redacted]"}',
+      `a secret JSON escapes reached the observation: ${JSON.stringify(quotedAnswer)}`,
+    );
+    const causeOf = async (cause) => {
+      const failing = hostEnvironmentPort({
+        port: {
+          probe: async () => {
+            throw Object.assign(new Error('port-failure in ProbeObservation: the underlying mechanism threw or rejected'), {
+              code: 'port-failure',
+              cause,
+            });
+          },
+        },
+        registry,
+      });
+      try {
+        await failing.probe(mcpRequest);
+      } catch (error) {
+        return error.scrubbedCause;
+      }
+      return null;
+    };
+    const refusedCause = await causeOf(
+      new Error(`the server refused the initialize handshake: ${JSON.stringify({ code: -32_603, data: { token: QUOTED_SECRET } })}`),
+    );
+    check(
+      String(refusedCause).includes('"token":"[redacted]"') &&
+        leaksOf([{ where: 'the cause', text: String(refusedCause) }], QUOTED_SECRET).length === 0,
+      `a handshake refusal quoting a secret JSON escapes kept the cause ${refusedCause}`,
+    );
+    // eval-quality quotes the first 200 characters of a line that is no JSON-RPC message, which can end inside a secret.
+    const line = `${'x'.repeat(190)}{"token":"${escaped}"}`;
+    const cutCause = await causeOf(new Error(`the server wrote bytes on stdout that are not a JSON-RPC message: ${line.slice(0, 206)}`));
+    check(
+      String(cutCause).endsWith('{"token":"[redacted]') &&
+        leaksOf([{ where: 'the cause', text: String(cutCause) }], QUOTED_SECRET).length === 0,
+      `a cause cut through a secret kept ${JSON.stringify(String(cutCause).slice(-40))}`,
+    );
+
+    // A number whose text is a secret is replaced whole; the same digits inside a string are scrubbed as text.
+    process.env.GRADER_SECRET = '9007199254740';
+    const numeric = (await answeringWith({ n: 9_007_199_254_740, s: 'x9007199254740x', other: 90_071_992 }).probe(mcpRequest)).observation;
+    check(
+      JSON.stringify(numeric.result.value) === JSON.stringify({ n: '[redacted]', s: 'x[redacted]x', other: 90_071_992 }),
+      `a secret the server answered as a number gave ${JSON.stringify(numeric.result.value)}`,
+    );
+    process.env.GRADER_SECRET = SECRET;
 
     // One interface is one kind; two tool servers for one interface are eval-quality's to refuse, before any server starts.
     const [server] = evaluation.registry;
@@ -430,6 +556,39 @@ async function checkUnits() {
     mismatch = error.message;
   }
   check(mismatch?.includes("with a command's response") === true, `a tool call answered by a command's response gave ${mismatch}`);
+
+  // A trial whose step the registry denies records eval-quality's reason in its fault and names it as it exits 10. The
+  // pipeline's qualification runs the same plan under the same policy first, so the trial is driven directly.
+  const written = {};
+  let trialStop = null;
+  try {
+    await runTrial({
+      arm: { conditionArm: 'clean', slug: 'clean', mutation: null, mutatedDigest: null, probes: [] },
+      trialIndex: 1,
+      contract,
+      registry: createRegistry([{ ...evaluation.registry[0], tools: ['describe_policy'] }], { root: FIXTURE }),
+      pristine: null,
+      // The fixture itself is the workspace: the denial comes before any server starts, so nothing runs in it.
+      make: () => ({ kind: 'copy', root: FIXTURE, directory: FIXTURE, provisioned: [] }),
+      discard: () => {},
+      engine: null,
+      writer: { writeJson: (file, value) => (written[file] = value) },
+      stop: (fields) => Object.assign(new Error(fields.message), fields),
+      signal: new AbortController().signal,
+      snapshot: { layer: { evaluator: { kind: 'deterministic' } } },
+    });
+  } catch (error) {
+    trialStop = error;
+  }
+  const trialFault = written['trials/clean/trial-1.json']?.fault;
+  check(
+    trialFault?.code === 'forbidden-target' &&
+      trialFault.reason === 'tool-not-authorized' &&
+      trialFault.request?.toolName === 'grade_answer' &&
+      trialStop?.exitCode === 10 &&
+      trialStop.message.startsWith('trial-clean-1 was denied by the registry (tool-not-authorized): '),
+    `a denied trial step recorded ${JSON.stringify(trialFault)} and stopped with ${trialStop?.exitCode}: ${trialStop?.message}`,
+  );
 }
 
 // ---------------------------------------------------------------- the pipeline
@@ -519,7 +678,13 @@ async function checkPipeline() {
     trialSessions.length > 0 && trialSessions.every((line) => line.workspace !== null && line.scriptWorkspace === line.workspace),
     `a session of the server ran outside its workspace: ${JSON.stringify(trialSessions.filter((line) => line.scriptWorkspace !== line.workspace))}`,
   );
-  check(!JSON.stringify(readJson(path.join(runDirectory, 'run.json'))).includes(SECRET), "the server's secret reached run.json");
+  // The secret reached no file of the project, the run directory included, and nothing the commands printed.
+  const leaked = [
+    ...filesUnder(project.root),
+    { where: 'the preflight output', text: preflight.output },
+    { where: 'the run output', text: ran.output },
+  ].filter(({ text }) => text.includes(SECRET));
+  check(leaked.length === 0, `the server's secret reached ${leaked.map(({ where }) => where).join(', ')}`);
   const manifest = readJson(path.join(runDirectory, 'trial-sets', 'P-002', 'isolation-manifest.json'));
   check(
     JSON.stringify(manifest.toolAllowlist) === JSON.stringify(['grader/describe_policy', 'grader/grade_answer']) &&
@@ -530,7 +695,13 @@ async function checkPipeline() {
   check(
     JSON.stringify(run.runner) ===
       JSON.stringify([
-        { interfaceId: 'grader', kind: 'mcp', target: 'server/grader.js', targetArgs: [], tools: ['grade_answer', 'describe_policy'] },
+        {
+          interfaceId: 'grader',
+          kind: 'mcp',
+          target: 'server/grader.js',
+          targetArgs: ['--policy=rules/policy.txt'],
+          tools: ['grade_answer', 'describe_policy'],
+        },
       ]),
     `run.json names the runner ${JSON.stringify(run.runner)}`,
   );
@@ -604,21 +775,31 @@ async function checkDenials() {
     check(sessions(project).length === 0, `${label}: a denied leg started the server`);
   }
 
-  // A server that refuses its handshake answered nothing: the run cannot measure it, exit 12.
+  // A server that refuses its handshake answered nothing: the run cannot measure it, exit 12. Its refusal quotes a secret
+  // JSON escapes, which eval-quality's cause holds escaped, and no fragment of it reaches a file or the output.
   const refusing = makeProject('handshake-refused', {
     edit: ({ root }) => fs.appendFileSync(path.join(root, 'rules', 'policy.txt'), 'handshake: refuse\n'),
   });
-  const refused = evaluate(['preflight', '--evaluation', refusing.folder], refusing.env);
-  check(refused.status === 12, `a server refusing its handshake: preflight exited ${refused.status}; expected 12\n${refused.output}`);
+  const refused = evaluate(['run', '--evaluation', refusing.folder], { ...refusing.env, GRADER_SECRET: QUOTED_SECRET });
+  check(refused.status === 12, `a server refusing its handshake: run exited ${refused.status}; expected 12\n${refused.output}`);
   const refusedRun = runDirectoryOf(refusing.folder);
   const refusedFault = refusedRun === null ? null : readIfPresent(path.join(refusedRun, 'qualification', 'P-002', 'fault.json'));
   check(
     refusedFault?.code === 'port-failure' &&
       !Object.hasOwn(refusedFault, 'reason') &&
       String(refusedFault.cause).includes('the server refused the initialize handshake') &&
-      refused.output.includes('the server refused the initialize handshake'),
+      String(refusedFault.cause).includes('"token":"[redacted]"') &&
+      refused.output.includes('the server refused the initialize handshake') &&
+      refused.output.includes('"token":"[redacted]"'),
     `a server refusing its handshake is recorded as ${JSON.stringify(refusedFault)}`,
   );
+  const refusedRecord = refusedRun === null ? null : readIfPresent(path.join(refusedRun, 'run.json'));
+  check(
+    JSON.stringify(refusedRecord ?? {}).includes(String.raw`"token\":\"[redacted]`),
+    `the stopped run's run.json does not name the scrubbed cause: ${JSON.stringify(refusedRecord?.outcome)}`,
+  );
+  const refusedLeaks = leaksOf([...filesUnder(refusing.root), { where: 'the run output', text: refused.output }], QUOTED_SECRET);
+  check(refusedLeaks.length === 0, `a secret the handshake refusal quoted reached ${refusedLeaks.join('; ')}`);
   // The server started and was refused at its handshake, so no tool was ever called: a server that never started logs nothing.
   const refusedSessions = sessions(refusing);
   check(
@@ -627,25 +808,70 @@ async function checkDenials() {
     `a server refusing its handshake logged ${JSON.stringify(refusedSessions)}`,
   );
 
-  // A sealed-brief agent's call to that server records the same cause in its bridge fault and the run's stop.
-  const refusingRegistry = createRegistry(readJson(path.join(refusing.folder, 'evaluation.json')).registry, { root: refusing.root });
-  const { port: refusingPort } = await refusingRegistry.createProbePort({ cwd: refusing.root, projectRoot: refusing.root });
-  const refusingRouter = bridgeRouter({
-    contract: readJson(path.join(refusing.folder, 'contract.json')),
-    registry: refusingRegistry,
-    port: hostEnvironmentPort({ port: refusingPort, registry: refusingRegistry }),
-    degenerate: null,
-    label: 'trial-1',
-    taken: new Set(),
-    firstSequence: 1,
-    budget: 1,
-    nonce: crypto.randomBytes(16).toString('hex'),
-  });
-  await refusingRouter.handle({ name: 'grader', kind: 'mcp' }, { tool: 'grade_answer', arguments: { answer: 'x' } });
+  // A sealed-brief agent's call to that server records the same cause, scrubbed, in its bridge fault and the run's stop.
+  const previousSecret = process.env.GRADER_SECRET;
+  process.env.GRADER_SECRET = QUOTED_SECRET;
+  let refusingRouter;
+  try {
+    const refusingRegistry = createRegistry(readJson(path.join(refusing.folder, 'evaluation.json')).registry, { root: refusing.root });
+    const { port: refusingPort } = await refusingRegistry.createProbePort({ cwd: refusing.root, projectRoot: refusing.root });
+    refusingRouter = bridgeRouter({
+      contract: readJson(path.join(refusing.folder, 'contract.json')),
+      registry: refusingRegistry,
+      port: hostEnvironmentPort({ port: refusingPort, registry: refusingRegistry }),
+      degenerate: null,
+      label: 'trial-1',
+      taken: new Set(),
+      firstSequence: 1,
+      budget: 1,
+      nonce: crypto.randomBytes(16).toString('hex'),
+    });
+    await refusingRouter.handle({ name: 'grader', kind: 'mcp' }, { tool: 'grade_answer', arguments: { answer: 'x' } });
+  } finally {
+    if (previousSecret === undefined) delete process.env.GRADER_SECRET;
+    else process.env.GRADER_SECRET = previousSecret;
+  }
+  const bridgeCause = String(refusingRouter.calls[0]?.fault?.cause);
   check(
-    String(refusingRouter.calls[0]?.fault?.cause).includes('the server refused the initialize handshake') &&
-      String(refusingRouter.infrastructure()).includes('the server refused the initialize handshake'),
+    bridgeCause.includes('the server refused the initialize handshake') &&
+      bridgeCause.includes('"token":"[redacted]"') &&
+      String(refusingRouter.infrastructure()).includes('the server refused the initialize handshake') &&
+      leaksOf(
+        [
+          { where: 'the bridge calls', text: JSON.stringify(refusingRouter.calls) },
+          { where: "the run's stop", text: String(refusingRouter.infrastructure()) },
+        ],
+        QUOTED_SECRET,
+      ).length === 0,
     `a bridge call to a server refusing its handshake recorded ${JSON.stringify(refusingRouter.calls)} and ${refusingRouter.infrastructure()}`,
+  );
+
+  // A server that hangs mid-call is torn down at its ceiling: exit 12, the fault's budget-exhausted code, every process
+  // it started ended and the run's temp directory empty.
+  const hanging = makeProject('hanging', {
+    edit: ({ root, folder }) => {
+      fs.appendFileSync(path.join(root, 'rules', 'policy.txt'), 'hang: grade_answer\n');
+      editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
+        evaluation.registry[0].maxElapsedMs = HANG_CEILING_MS;
+      });
+    },
+  });
+  const hung = evaluate(['preflight', '--evaluation', hanging.folder], hanging.env);
+  check(hung.status === 12, `a server hanging mid-call: preflight exited ${hung.status}; expected 12\n${hung.output}`);
+  const hungRun = runDirectoryOf(hanging.folder);
+  const hungFault = hungRun === null ? null : readIfPresent(path.join(hungRun, 'qualification', 'P-002', 'fault.json'));
+  check(
+    hungFault?.code === 'budget-exhausted' && hung.output.includes('budget-exhausted'),
+    `a server hanging mid-call is recorded as ${JSON.stringify(hungFault)}`,
+  );
+  const hungSessions = sessions(hanging);
+  check(
+    hungSessions.some((line) => line.event === 'call' && line.tool === 'grade_answer') && livingSessions(hanging).length === 0,
+    `a hung server's processes outlived the run: ${JSON.stringify(livingSessions(hanging))} of ${JSON.stringify(hungSessions)}`,
+  );
+  check(
+    fs.readdirSync(hanging.env.TMPDIR).length === 0,
+    `a hung server's run left ${fs.readdirSync(hanging.env.TMPDIR)} in its temp directory`,
   );
 
   // A server that accepts every answer, whatever its policy, lets the mutated arm hold, so the mutation proves nothing: exit 11.
@@ -661,35 +887,36 @@ async function checkDenials() {
 
 // ---------------------------------------------------------------- the bridge
 
+/** Makes `folder`'s evaluator the MCP stub agent, capturing each run to `capture`, with a budget for its four calls. */
+function useStubAgent(folder, capture) {
+  writeJson(path.join(folder, 'evaluator', 'mapping.json'), {
+    schemaVersion: 1,
+    keys: { 'grade-accepted': { oracleId: 'O-001', behaviorId: 'B-001' } },
+  });
+  editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
+    evaluation.evaluator = {
+      kind: 'sealed-brief-agent',
+      agent: 'custom',
+      agentCommand: process.execPath,
+      agentArgs: [STUB_AGENT, '--capture', capture],
+      timeoutMs: 60_000,
+    };
+  });
+  editJson(path.join(folder, 'contract.json'), (contract) => {
+    contract.budgets.maxToolCalls = 4;
+  });
+  writeJson(path.join(folder, 'policy', 'evaluator-conditions.json'), {
+    schemaVersion: 1,
+    modelSnapshot: 'none',
+    systemPromptDigest: sha256(Buffer.alloc(0)),
+    evaluator: { modelSnapshot: 'stub-mcp-agent-2026-09' },
+  });
+}
+
 async function checkSealedBriefAgent() {
   const capture = path.join(scratch.make('sealed-capture'), 'captures.jsonl');
-  const project = makeProject('sealed-brief', {
-    edit: ({ folder }) => {
-      writeJson(path.join(folder, 'evaluator', 'mapping.json'), {
-        schemaVersion: 1,
-        keys: { 'grade-accepted': { oracleId: 'O-001', behaviorId: 'B-001' } },
-      });
-      editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
-        evaluation.evaluator = {
-          kind: 'sealed-brief-agent',
-          agent: 'custom',
-          agentCommand: process.execPath,
-          agentArgs: [STUB_AGENT, '--capture', capture],
-          timeoutMs: 60_000,
-        };
-      });
-      editJson(path.join(folder, 'contract.json'), (contract) => {
-        contract.budgets.maxToolCalls = 3;
-      });
-      writeJson(path.join(folder, 'policy', 'evaluator-conditions.json'), {
-        schemaVersion: 1,
-        modelSnapshot: 'none',
-        systemPromptDigest: sha256(Buffer.alloc(0)),
-        evaluator: { modelSnapshot: 'stub-mcp-agent-2026-09' },
-      });
-    },
-  });
-  const ran = evaluate(['run', '--evaluation', project.folder], project.env);
+  const project = makeProject('sealed-brief', { edit: ({ folder }) => useStubAgent(folder, capture) });
+  const ran = evaluate(['run', '--evaluation', project.folder], { ...project.env, GRADER_SECRET: SECRET });
   check(ran.status === 0, `a sealed-brief run over the MCP fixture exited ${ran.status}; expected 0\n${ran.output}`);
   const runDirectory = runDirectoryOf(project.folder);
   if (runDirectory === null || !fs.existsSync(path.join(runDirectory, 'trial-sets.json'))) {
@@ -709,33 +936,52 @@ async function checkSealedBriefAgent() {
       };
       check(
         JSON.stringify(calls.map(outcome)) ===
-          JSON.stringify([`grade-answer:trial-${trial}-call-1`, 'unmatched:unrecorded', 'denied:forbidden-target:tool-not-authorized']),
+          JSON.stringify([
+            `grade-answer:trial-${trial}-call-1`,
+            'unmatched:unrecorded',
+            'denied:forbidden-target:tool-not-authorized',
+            `grade-answer:trial-${trial}-call-4`,
+          ]),
         `${arm} trial ${trial}: the bridge's calls are ${JSON.stringify(calls.map(outcome))}`,
       );
     }
     for (const record of recordsOf(runDirectory, probeId)) {
-      const chosen = record.observations.find((observation) => observation.provenance === 'evaluator-chosen');
+      const [chosen, refused] = record.observations.filter((observation) => observation.provenance === 'evaluator-chosen');
       check(
-        record.observations.length === 2 &&
+        record.observations.length === 3 &&
           record.observations[0].provenance === 'baseline' &&
           chosen?.observationId === `trial-${record.trialIndex}-call-1` &&
           chosen.operationId === 'grade-answer' &&
           JSON.stringify(chosen.callInputs.arguments) === JSON.stringify({ answer: 'an answer of my own' }) &&
           chosen.responseBody?.verdict === verdict &&
+          chosen.responseBody?.secret === '[redacted]' &&
           chosen.responseStatus === 0,
         `${probeId} trial ${record.trialIndex}'s observations are ${JSON.stringify(record.observations)}`,
       );
+      // The server answered the agent's number with its error flag set, which the record keeps as response status 1.
+      check(
+        refused?.observationId === `trial-${record.trialIndex}-call-4` &&
+          JSON.stringify(refused.callInputs.arguments) === JSON.stringify({ answer: 42 }) &&
+          refused.responseBody?.ok === false &&
+          refused.responseStatus === 1,
+        `${probeId} trial ${record.trialIndex} recorded the call the server refused as ${JSON.stringify(refused)}`,
+      );
     }
   }
-  // The denied tool never started the server: in each trial the plan's step and the agent's grade call started it for
-  // grade_answer, and the agent's undeclared call once for describe_policy.
+  // The denied tool never started the server: in each trial the plan's step and the agent's two grade calls started it
+  // for grade_answer, and the agent's undeclared call once for describe_policy.
   const trialCalls = sessions(project).filter((line) => line.event === 'call' && line.workspace?.startsWith('trial-'));
   const perTool = {};
   for (const line of trialCalls) perTool[line.tool] = (perTool[line.tool] ?? 0) + 1;
   check(
-    JSON.stringify(perTool) === JSON.stringify({ grade_answer: 2 * 2 * TRIALS, describe_policy: 2 * TRIALS }),
+    JSON.stringify(perTool) === JSON.stringify({ grade_answer: 3 * 2 * TRIALS, describe_policy: 2 * TRIALS }),
     `the trials started the server for ${JSON.stringify(perTool)}`,
   );
+  // The server's secret reached no file of the project, no capture of the agent and nothing the run printed.
+  const leaked = [...filesUnder(project.root, capture), { where: 'the run output', text: ran.output }].filter(({ text }) =>
+    text.includes(SECRET),
+  );
+  check(leaked.length === 0, `the server's secret reached ${leaked.map(({ where }) => where).join(', ')} in a sealed-brief run`);
   const [first] = fs.existsSync(capture)
     ? fs
         .readFileSync(capture, 'utf8')
@@ -755,6 +1001,26 @@ async function checkSealedBriefAgent() {
   const evidence = scoreRun(project, 'the sealed-brief MCP run');
   checkVotes('the sealed-brief MCP run', evidence, 'P-001', 'passed-clean-control');
   checkVotes('the sealed-brief MCP run', evidence, 'P-002', 'caught');
+
+  // A bridge call to a server that hangs is torn down at its ceiling; the agent, told only that its call could not run,
+  // exits 1, and the run names the call's budget-exhausted fault over the agent's exit.
+  const hanging = makeProject('sealed-brief-hang', {
+    edit: ({ root, folder }) => {
+      useStubAgent(folder, path.join(scratch.make('sealed-hang-capture'), 'captures.jsonl'));
+      fs.appendFileSync(path.join(root, 'rules', 'policy.txt'), 'hang: describe_policy\n');
+      editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
+        evaluation.registry[0].maxElapsedMs = HANG_CEILING_MS;
+      });
+    },
+  });
+  const hung = evaluate(['run', '--evaluation', hanging.folder], hanging.env);
+  check(
+    hung.status === 12 &&
+      hung.output.includes("trial-clean-1 yields no record: the evaluator's call trial-1-call-2 could not run: budget-exhausted") &&
+      !hung.output.includes('could not answer'),
+    `a bridge call to a hanging server: run exited ${hung.status}; expected 12 naming the call's budget-exhausted fault\n${hung.output}`,
+  );
+  check(livingSessions(hanging).length === 0, `a hung server's processes outlived the run: ${JSON.stringify(livingSessions(hanging))}`);
 }
 
 // ---------------------------------------------------------------- gameability
@@ -867,6 +1133,25 @@ async function checkGameability() {
     if (previousLog === undefined) delete process.env.GRADER_LOG;
     else process.env.GRADER_LOG = previousLog;
   }
+  // A degenerate response with its error flag set is recorded as a real call's is, response status 1.
+  const failingRouter = bridgeRouter({
+    contract,
+    registry,
+    port: null,
+    degenerate: { 'grade-run': { isError: true, structuredResult: { ok: false, error: 'degenerate' } } },
+    label: 'trial-1',
+    taken: new Set(['trial-1-grade-run']),
+    firstSequence: 2,
+    budget: 1,
+    nonce: crypto.randomBytes(16).toString('hex'),
+  });
+  const failingAnswer = await failingRouter.handle(tool, { tool: 'grade_answer', arguments: { answer: 'any' } });
+  check(
+    JSON.parse(failingAnswer.text).isError === true &&
+      failingRouter.observations[0]?.responseStatus === 1 &&
+      failingRouter.observations[0].responseBody?.error === 'degenerate',
+    `a degenerate response with its error flag set was answered ${failingAnswer.text} and recorded ${JSON.stringify(failingRouter.observations)}`,
+  );
   check(
     unlisted.isError === true &&
       router.calls[0]?.denied?.reason === 'tool-not-authorized' &&
@@ -954,6 +1239,15 @@ async function checkCheckRules() {
         editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
           evaluation.registry[0].target = 'node';
           evaluation.registry[0].targetArgs = [path.join(FIXTURE, 'server', 'grader.js')];
+        }),
+      'schema',
+      'targetArgs/0',
+    ],
+    [
+      'a tool server argument carrying an absolute path after =',
+      ({ folder }) =>
+        editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
+          evaluation.registry[0].targetArgs = ['--script=/abs/grader.js'];
         }),
       'schema',
       'targetArgs/0',
