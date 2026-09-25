@@ -48,15 +48,31 @@
  *                           arm does
  *   infrastructure: exit 3  answer nothing and exit 3, an exit its registry
  *                           entry declares as infrastructure
+
  *   sleep: <ms>             write this process's pid to the file VERDICT_PID
  *                           names, then wait that long before answering (a
  *                           case that interrupts the run mid-arm)
+ *
+ * Two variables act in one workspace only, so one trial or qualification of a
+ * run can differ while every other run of the command behaves: VERDICT_WHEN
+ * names the workspace by its runtime label (for example trial-clean-2, the
+ * directory tea-evaluate-trial-clean-2-XXXXXX that holds this working
+ * directory), and VERDICT_DO says what the command does there:
+ *
+ *   infrastructure          answer nothing and exit 3
+ *   kill                    answer nothing and end by SIGKILL, as a target a
+ *                           signal stops would
+ *   accept                  answer accepted whatever the policy says
+ *   reject                  answer rejected whatever the policy says
+ *   touch                   answer as usual, then append a line to the file
+ *                           VERDICT_TOUCH names, outside the workspace
  */
 
 'use strict';
 
 const crypto = require('node:crypto');
 const fs = require('node:fs');
+const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const POLICY = 'rules/policy.txt';
@@ -64,7 +80,13 @@ const POLICY = 'rules/policy.txt';
 const request = fs.readFileSync(0, 'utf8').trim();
 const policy = fs.readFileSync(POLICY);
 const text = policy.toString('utf8');
-if (text.includes('infrastructure: exit 3')) {
+/** Whether this run is in the workspace VERDICT_WHEN names: its directory is the label's temp directory, whose suffix holds no hyphen. */
+const workspaceDirectory = path.basename(path.dirname(process.cwd()));
+const prefix = `tea-evaluate-${process.env.VERDICT_WHEN}-`;
+const here = Boolean(process.env.VERDICT_WHEN) && workspaceDirectory.startsWith(prefix) && !workspaceDirectory.slice(prefix.length).includes('-');
+const act = here ? process.env.VERDICT_DO : undefined;
+if (act === 'kill') process.kill(process.pid, 'SIGKILL');
+if (text.includes('infrastructure: exit 3') || act === 'infrastructure') {
   process.stderr.write('verdict: asked to report an infrastructure failure\n');
   process.exit(3);
 }
@@ -97,6 +119,8 @@ const residue = fs.existsSync('residue.txt') ? 'yes' : 'no';
 let verdict = 'unknown';
 if (text.includes('mode: strict')) verdict = 'accepted';
 else if (text.includes('mode: lenient')) verdict = 'rejected';
+if (act === 'accept') verdict = 'accepted';
+if (act === 'reject') verdict = 'rejected';
 
 process.stdout.write(
   [
@@ -117,6 +141,7 @@ if (verdict === 'rejected') fs.writeFileSync('residue.txt', 'left behind by a le
 if (text.includes('sabotage: adopter') && process.env.VERDICT_TOUCH) {
   fs.appendFileSync(process.env.VERDICT_TOUCH, 'written by the verdict stub outside its workspace\n');
 }
+if (act === 'touch' && process.env.VERDICT_TOUCH) fs.appendFileSync(process.env.VERDICT_TOUCH, `written by the verdict stub in ${workspaceDirectory}\n`);
 if (text.includes('sabotage: refs')) spawnSync('git', ['tag', '--force', 'verdict-sabotage'], { stdio: 'ignore' });
 if (text.includes('sabotage: leg-writes') && request === 'Judge alpha.' && process.env.VERDICT_TOUCH) {
   fs.appendFileSync(process.env.VERDICT_TOUCH, 'written by a preflight leg outside its workspace\n');

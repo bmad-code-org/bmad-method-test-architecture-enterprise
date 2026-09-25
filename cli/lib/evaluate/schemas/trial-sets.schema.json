@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:tea:evaluate:schema:trial-sets",
+  "title": "runs/<invocationId>/trial-sets.json",
+  "description": "The index a completed tea-evaluate run writes last and tea-evaluate score reads: the run's shared inputs and one trial set per probe, every path relative to the run directory. The tea-evaluate runtime owns this schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "invocationId",
+    "corpusDigest",
+    "contract",
+    "policy",
+    "preflightVerdict",
+    "evaluatorConfiguration",
+    "trialSets"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "invocationId": { "type": "string", "minLength": 1 },
+    "corpusDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "contract": { "$ref": "#/$defs/RunPath" },
+    "policy": { "$ref": "#/$defs/RunPath" },
+    "preflightVerdict": { "$ref": "#/$defs/RunPath" },
+    "evaluatorConfiguration": { "$ref": "#/$defs/RunPath" },
+    "trialSets": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["probeId", "runId", "conditionArm", "probe", "records", "isolationManifest"],
+        "properties": {
+          "probeId": { "type": "string", "pattern": "^P-[0-9]{3,}$" },
+          "runId": { "type": "string", "minLength": 1 },
+          "conditionArm": { "type": "string", "minLength": 1 },
+          "probe": { "$ref": "#/$defs/RunPath" },
+          "records": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/RunPath" } },
+          "isolationManifest": { "$ref": "#/$defs/RunPath" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "RunPath": {
+      "description": "A POSIX path inside the run directory: relative, with no empty, \".\" or \"..\" segment.",
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?![\\s\\S]*(?:^|/)\\.{1,2}(?:/|$))(?![\\s\\S]*//)(?![\\s\\S]*/$)[^\\\\\\u0000-\\u001f]+$"
+    }
+  }
+}

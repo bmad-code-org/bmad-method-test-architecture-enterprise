@@ -1223,6 +1223,7 @@ function checkSharedRepository() {
     edit: ({ project, folder }) => {
       fs.writeFileSync(path.join(project, POLICY), 'mode: strict\nsabotage: adopter\n');
       fs.rmSync(path.join(folder, 'probes', 'P-002.probe.json'));
+      editJson(path.join(folder, 'evaluation.json'), (evaluation) => (evaluation.arms = ['clean']));
     },
   });
   const touched = path.join(legs.project, 'notes.txt');
@@ -1320,7 +1321,30 @@ function checkRepositoryShape() {
   const vendored = digestOf('vendored', ({ project: vendoredProject }) =>
     fs.writeFileSync(path.join(vendoredProject, 'vendor', 'library.txt'), 'provisioned, another version\n'),
   );
-  check(vendored === gitTargetImplementationDigest, `the implementation digest moved with vendor/, a provisioned directory: ${vendored}`);
+  check(
+    vendored === gitTargetImplementationDigest,
+    `the implementation digest moved with vendor/, which the tracked tree does not hold: ${vendored}`,
+  );
+  // A copy has no tracked tree, so its digest walks the files and must leave the provisioned directory out.
+  const asCopy =
+    (edit) =>
+    ({ project: copyProject, folder: copyFolder }) => {
+      const manifest = path.join(copyFolder, 'evaluation.json');
+      fs.writeFileSync(manifest, JSON.stringify({ ...readJson(manifest), workspace: { kind: 'copy', provision: ['vendor'] } }, null, 2));
+      edit(copyProject);
+    };
+  const copied = digestOf(
+    'copied',
+    asCopy(() => {}),
+  );
+  const copiedVendored = digestOf(
+    'copied-vendored',
+    asCopy((copyProject) => fs.writeFileSync(path.join(copyProject, 'vendor', 'library.txt'), 'provisioned, another version\n')),
+  );
+  check(
+    copied !== null && copiedVendored === copied,
+    `a copy's implementation digest moved with vendor/, a provisioned directory: ${copiedVendored}`,
+  );
 
   // Untracked (gitignored, as node_modules is) and tracked, so each of the
   // workspace's two refusals is reached.

@@ -194,6 +194,9 @@ jobs:
       - name: Qualify a controlled mutation in a disposable workspace and prove its rollback
         run: npm run test:evaluate-mutation
 
+      - name: Run the clean and mutated arms as sealed trial sets and score them
+        run: npm run test:evaluate-run
+
       - name: Test knowledge base (index sync, link resolution, workflow-copy parity)
         run: npm run test:knowledge
 

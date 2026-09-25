@@ -93,3 +93,10 @@ test/eval-artifacts/
 # the shipped skill.
 src/workflows/testarch/*/.memlog.md
 src/workflows/testarch/*/.analysis/
+
+# tea-evaluate run directories (AD-12): every run, preflight and score writes
+# runs/<invocationId>/ inside its evaluation folder. Evaluate-authored suites
+# live under test/evaluations/<evaluationId>/, and the runtime's own fixtures
+# under test/fixtures/evaluate*/, at any depth.
+test/evaluations/*/runs/
+test/fixtures/evaluate*/**/runs/

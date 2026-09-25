@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 2,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "policyId": null,
+  "severityFloor": null,
+  "confidenceThreshold": 0.5,
+  "catchThreshold": null,
+  "minimumTrialCount": null,
+  "reExecutionCap": 2,
+  "remediationCap": 3,
+  "regexMatchStepBudget": 1000000
+}

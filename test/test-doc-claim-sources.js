@@ -107,15 +107,16 @@ check('MOBILE_ROW_IDS and PLAYWRIGHT_UTILS_ROW_IDS match an independent read of 
 check(
   'EXIT_CODE_STRINGS is every exit code cli/test-review.js, cli/evaluate.js and the runner table declare, stringified, each once',
   () => {
-    // Written out: test-review's 0 to 3, the runner table's 0 and 2 to 6, and tea-evaluate's 0, 10, 12 and 64.
+    // Written out: test-review's 0 to 3, the runner table's 0 and 2 to 6, and tea-evaluate's 0, 10, 11, 12 and 64.
     assert.deepStrictEqual(
       [...source.EXIT_CODE_STRINGS].sort((a, b) => a - b),
-      ['0', '1', '2', '3', '4', '5', '6', '10', '12', '64'],
+      ['0', '1', '2', '3', '4', '5', '6', '10', '11', '12', '64'],
     );
     for (const code of [...Object.values(EXIT), ...Object.values(EVALUATE_EXIT_CODES), ...Object.values(RUNNER_EXIT_CODES)]) {
       assert.ok(source.EXIT_CODE_STRINGS.includes(String(code)), `declared exit ${code} is missing`);
     }
-    for (const code of ['10', '12', '64']) assert.ok(source.EXIT_CODE_STRINGS.includes(code), `tea-evaluate's exit ${code} is missing`);
+    for (const code of ['10', '11', '12', '64'])
+      assert.ok(source.EXIT_CODE_STRINGS.includes(code), `tea-evaluate's exit ${code} is missing`);
     for (const code of ['2', '3', '4', '5', '6'])
       assert.ok(source.EXIT_CODE_STRINGS.includes(code), `tea-skill-runner's exit ${code} is missing`);
   },
@@ -179,7 +180,7 @@ check('atLeast() compares a real version correctly and refuses a version it cann
   // file's declared dependency-direction root (test/), since package.json
   // sits outside it; reading it as data through fs keeps the check honest.
   const pin = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8')).devDependencies['eval-quality'];
-  assert.strictEqual(source.EVAL_QUALITY_PIN_IS_4_1_2, pin === '4.1.2');
+  assert.strictEqual(source.EVAL_QUALITY_PIN_IS_4_1_3, pin === '4.1.3');
 });
 
 check('keyIsUnread reports a genuinely referenced key as read, not just an injected probe as unread', () => {

@@ -277,6 +277,43 @@ function treeDigest(root, { exclude = [] } = {}) {
   return digest(parts);
 }
 
+/**
+ * The digest AD-7 names as a worktree probe's `implementationDigest`: the
+ * tracked tree of `directory` at `commit`, which git itself lists. It is the
+ * SHA-256 of `git ls-tree -r -z <commit>:<directory>` (each entry's mode,
+ * type, object and path relative to `directory`, NUL-terminated), with every
+ * entry under an excluded directory left out, since the evaluation folder
+ * describes the implementation and is not part of it. Paths are relative to
+ * `directory`, so the same files digest alike wherever the project sits in
+ * its repository.
+ *
+ * @param {object} options
+ * @param {string} options.repository the repository top, by its real path
+ * @param {string} options.commit
+ * @param {string} options.directory the implementation root in the repository (the skill root or `launch.root`)
+ * @param {string[]} [options.exclude] absolute directories in the repository whose entries are left out
+ * @returns {string} `sha256:<hex>`
+ * @throws {WorkspaceRefusal} when git cannot list the tree
+ */
+function trackedTreeDigest({ repository, commit, directory, exclude = [] }) {
+  const scope = posix(path.relative(repository, directory));
+  const listed = runGit(['-C', repository, 'ls-tree', '-r', '-z', scope === '' ? `${commit}^{tree}` : `${commit}:${scope}`]);
+  if (!listed.ok) throw new WorkspaceRefusal(`could not list the tracked tree of ${scope || '.'} at commit ${commit}: ${listed.detail}`);
+  const prefixes = exclude
+    .filter((entry) => entry !== directory && isInside(directory, entry))
+    .map((entry) => `${posix(path.relative(directory, entry))}/`);
+  const kept = listed.stdout
+    .split('\u0000')
+    .filter((record) => record.length > 0)
+    .filter((record) => {
+      const relative = record.slice(record.indexOf('\t') + 1);
+      return !prefixes.some((prefix) => relative.startsWith(prefix));
+    });
+  return `sha256:${createHash('sha256')
+    .update(kept.map((record) => `${record}\u0000`).join(''), 'utf8')
+    .digest('hex')}`;
+}
+
 /** How long one git question may take; a checkout has its own, longer bound. */
 const GIT_QUESTION_TIMEOUT_MS = 60_000;
 /** A generous ceiling on what one git command may print: a status of a large, busy tree. */
@@ -868,5 +905,6 @@ module.exports = {
   repositoryOf,
   requestKey,
   stageDirectories,
+  trackedTreeDigest,
   treeDigest,
 };

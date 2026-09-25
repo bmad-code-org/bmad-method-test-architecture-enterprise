@@ -837,6 +837,70 @@ const HARDENING_CASES = [
     expect: (output) => [[output.includes('"schemaVersion"'), 'the finding does not name the stamp']],
   },
   {
+    name: 'trials below the scoring policy minimumTrialCount',
+    file: 'evaluation.json',
+    rule: 'trials',
+    plant: (folder) => editJson(folder, 'evaluation.json', (value) => (value.trials = 2)),
+    expect: (output) => [[output.includes('minimumTrialCount 3'), 'the finding does not name the minimum']],
+  },
+  {
+    name: 'a controlled-mutation probe with no mutated arm declared',
+    file: 'evaluation.json',
+    rule: 'arms',
+    plant: (folder) => editJson(folder, 'evaluation.json', (value) => (value.arms = ['clean'])),
+    expect: (output) => [[output.includes('controlled-mutation'), 'the finding does not name the route']],
+  },
+  {
+    name: 'a clean control with no clean arm declared',
+    file: 'evaluation.json',
+    rule: 'arms',
+    plant: (folder) => editJson(folder, 'evaluation.json', (value) => (value.arms = ['mutated'])),
+    expect: (output) => [[output.includes('clean-control'), 'the finding does not name the route']],
+  },
+  {
+    name: 'an arm declared with no probe to run on it',
+    file: 'evaluation.json',
+    rule: 'arms',
+    plant: (folder) => fs.rmSync(path.join(folder, 'probes', 'P-002.probe.json')),
+    expect: (output) => [[output.includes('arms declares mutated'), 'the finding does not name the unused arm']],
+  },
+  {
+    name: 'a controlled-mutation probe that seeds no defect',
+    file: 'probes/P-002.probe.json',
+    rule: 'mutation-route',
+    plant: (folder) => editJson(folder, 'probes/P-002.probe.json', (value) => (value.defects = [])),
+  },
+  {
+    name: 'a tea-skill-runner registry entry with no evaluator conditions',
+    file: 'policy/evaluator-conditions.json',
+    rule: 'evaluator-conditions',
+    plant: (folder) => editJson(folder, 'evaluation.json', (value) => (value.registry[0].target = 'tea-skill-runner')),
+    expect: (output) => [[output.includes('which always runs an agent'), 'the finding does not say why the conditions are needed']],
+  },
+  {
+    name: 'a tea-skill-runner registry entry whose evaluator conditions say none',
+    file: 'policy/evaluator-conditions.json',
+    rule: 'evaluator-conditions',
+    plant: (folder) => {
+      editJson(folder, 'evaluation.json', (value) => (value.registry[0].target = 'tea-skill-runner'));
+      fs.writeFileSync(
+        path.join(folder, 'policy', 'evaluator-conditions.json'),
+        JSON.stringify({ schemaVersion: 1, modelSnapshot: 'none', systemPromptDigest: `sha256:${'0'.repeat(64)}` }),
+      );
+    },
+    expect: (output) => [[output.includes('declares modelSnapshot none'), 'the finding does not name the none model']],
+  },
+  {
+    name: 'evaluator conditions with no systemPromptDigest',
+    file: 'policy/evaluator-conditions.json',
+    rule: 'schema',
+    plant: (folder) =>
+      fs.writeFileSync(
+        path.join(folder, 'policy', 'evaluator-conditions.json'),
+        JSON.stringify({ schemaVersion: 1, modelSnapshot: 'a-model' }),
+      ),
+  },
+  {
     name: 'a maxElapsedMs past the 2147483647 ms one timer holds',
     file: 'evaluation.json',
     rule: 'schema',

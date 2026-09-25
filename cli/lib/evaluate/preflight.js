@@ -39,6 +39,10 @@
  *      the command's exit code, and last the qualified probes written to
  *      `runs/<invocationId>/probes/`.
  *
+ * `tea-evaluate run` shares this pipeline (`runPipeline`): it refuses what it
+ * cannot score before any workspace is made, and carries on past a verdict
+ * that passed while every workspace is still live (`run.js`).
+ *
  * `runPreflight` also returns a verdict. It is discarded: an enforced verdict
  * comes from the CLI over persisted files, so CI can reproduce it by hand, and
  * the run's `engine/preflight.json` records the call that produced it. Every
@@ -69,6 +73,7 @@ const {
   joinAsSpelled,
   realPathLoosely,
   removeWorkspace,
+  trackedTreeDigest,
   treeDigest,
 } = require('./workspace');
 
@@ -87,7 +92,7 @@ const PLANNING_FAULTS = new Set(['schema-parse-failure', 'schema-version-mismatc
 class PreflightOutcome {
   /**
    * @param {object} fields
-   * @param {'check'|'launch'|'engine'|'qualification'|'leg'|'verdict'} fields.stage where the run stopped
+   * @param {'check'|'launch'|'engine'|'qualification'|'leg'|'verdict'|'trial'} fields.stage where the run stopped
    * @param {number} fields.exitCode
    * @param {string} fields.message
    * @param {Array<{file: string, rule: string, message: string}>} [fields.findings]
@@ -212,6 +217,29 @@ function recordingPort({ pristine, routes = new Map(), registry, runDirectory })
   return { port: { probe }, observations, calls: () => sequence, fault: () => fault };
 }
 
+/**
+ * Whether the adopter's git status (read before the workspaces were made)
+ * names any path under the evaluation folder: an edit, a deletion or an
+ * untracked file. Outside git there is no committed state to differ from.
+ */
+function uncommittedUnder(before, folder) {
+  if (before.repository === null) return false;
+  const relative = path.relative(before.repository, folder).split(path.sep).join('/');
+  if (relative.startsWith('..')) return false;
+  const prefix = relative === '' ? '' : `${relative}/`;
+  const records = before.status.split('\u0000').filter((record) => record.length > 0);
+  const paths = [];
+  for (let index = 0; index < records.length; index += 1) {
+    paths.push(records[index].slice(3));
+    // A rename or copy names its source in the record after it, with no status of its own.
+    if (/^[RC]/.test(records[index]) && index + 1 < records.length) {
+      index += 1;
+      paths.push(records[index]);
+    }
+  }
+  return paths.some((relativePath) => relativePath.startsWith(prefix));
+}
+
 /** `runs/`, created with a `.gitignore` that ignores everything in it, so no run lands in the adopter's commits (AD-12). */
 function ensureRunsDirectory(folder) {
   const runs = path.join(folder, 'runs');
@@ -289,7 +317,47 @@ function writeQualificationEvidence(directory, { probe, evidence, workspace, fau
  * @param {(line: string) => void} [options.log] progress lines for an operator
  * @returns {Promise<PreflightOutcome>}
  */
-async function runPreflightCommand(folder, { fromWorkingTree = false, env = process.env, log = () => {} } = {}) {
+function runPreflightCommand(folder, options = {}) {
+  return runPipeline(folder, { ...options, command: 'preflight' });
+}
+
+/**
+ * The preflight pipeline, which `tea-evaluate run` continues past the verdict.
+ *
+ * `prepare` sees the checked evaluation before any workspace is made and may
+ * stop the command with an outcome. `afterVerdict` runs once the CLI's
+ * verdict exits 0, while every workspace is still live, and its outcome is
+ * the command's; a verdict that does not pass ends the command there.
+ *
+ * @param {string} folder
+ * @param {object} options
+ * @param {'preflight'|'run'} options.command recorded in `run.json`
+ * @param {boolean} [options.fromWorkingTree]
+ * @param {NodeJS.ProcessEnv} [options.env]
+ * @param {(line: string) => void} [options.log]
+ * @param {(context: object) => PreflightOutcome|null} [options.prepare]
+ * @param {(context: object) => Promise<PreflightOutcome>} [options.afterVerdict]
+ * @returns {Promise<PreflightOutcome>}
+ */
+async function runPipeline(folder, options) {
+  const outcome = await pipeline(folder, options);
+  // run.json says how the invocation ended, so a reader of the run directory
+  // (and `tea-evaluate score`) can tell a run that stopped from one that is
+  // complete, and why.
+  const runPath = outcome.runDirectory === null ? null : path.join(outcome.runDirectory, 'run.json');
+  if (runPath !== null && fs.existsSync(runPath)) {
+    const run = readJson(runPath);
+    run.outcome = { stage: outcome.stage, exitCode: outcome.exitCode, message: outcome.message };
+    if (run.command === 'run' && run.completed !== true) run.completed = false;
+    writeJson(runPath, run);
+  }
+  return outcome;
+}
+
+async function pipeline(
+  folder,
+  { command, fromWorkingTree = false, env = process.env, log = () => {}, prepare = () => null, afterVerdict = null },
+) {
   const findings = await checkEvaluation(folder);
   if (findings.length > 0) {
     return new PreflightOutcome({ stage: 'check', exitCode: 10, message: `${findings.length} authoring defect(s)`, findings });
@@ -312,6 +380,8 @@ async function runPreflightCommand(folder, { fromWorkingTree = false, env = proc
       message: `${unqualifiable.map(({ file, probe }) => `${file} (route ${probe.qualification?.route})`).join(', ')} seed a defect on a route this release does not qualify; it qualifies seeded probes on the ${QUALIFIED_ROUTE} route only, so a retry cannot pass`,
     });
   }
+  const refused = prepare({ folder, evaluation, seeded });
+  if (refused !== null) return refused;
 
   const root = realPathLoosely(joinAsSpelled(folder, evaluation.launch.root));
   const runsDirectory = ensureRunsDirectory(folder);
@@ -345,11 +415,23 @@ async function runPreflightCommand(folder, { fromWorkingTree = false, env = proc
     log(
       `pristine workspace, ${pristine.kind === 'git-worktree' ? `a detached worktree at ${pristine.commit}` : `a temp copy${pristine.dirty ? ' of the working tree' : ''}`}: ${pristine.root}`,
     );
+    // The evaluation folder is read from the working tree (the workspaces
+    // leave it out), so uncommitted work in it reaches the run, which is then
+    // dirty: no committed state names what it measured.
+    const evaluationDirty = uncommittedUnder(before, folder);
     if (pristine.kind === 'git-worktree' && before.status.length > 0) {
-      log('the working tree has uncommitted changes, which this run does not evaluate; pass --from-working-tree to evaluate them');
+      log(
+        evaluationDirty
+          ? 'the evaluation folder has uncommitted changes, which this run reads, so it is recorded as dirty; the rest of the working tree is evaluated as committed'
+          : 'the working tree has uncommitted changes, which this run does not evaluate; pass --from-working-tree to evaluate them',
+      );
     }
     return await runInWorkspaces({
+      command,
+      evaluationDirty,
+      afterVerdict,
       folder,
+      root,
       evaluation,
       seeded,
       pristine,
@@ -380,7 +462,11 @@ async function runPreflightCommand(folder, { fromWorkingTree = false, env = proc
 }
 
 async function runInWorkspaces({
+  command,
+  evaluationDirty,
+  afterVerdict,
   folder,
+  root,
   evaluation,
   seeded,
   pristine,
@@ -408,11 +494,12 @@ async function runInWorkspaces({
   const stop = (fields) => new RunStop(outcome(fields));
   const run = {
     invocationId,
-    command: 'preflight',
+    command,
     teaVersion: TEA_MANIFEST.version,
     evalQualityVersion: engineVersion(),
     commit: pristine.commit,
-    dirty: pristine.dirty,
+    dirty: pristine.dirty || evaluationDirty,
+    evaluationFolder: { dirty: evaluationDirty },
     workspace: {
       kind: pristine.kind,
       commit: pristine.commit,
@@ -456,17 +543,19 @@ async function runInWorkspaces({
     writeJson(runPath, run);
     if (!unchanged) {
       throw stop({
-        stage: when === 'qualification' ? 'qualification' : 'leg',
+        stage: { qualification: 'qualification', legs: 'leg', trials: 'trial' }[when],
         exitCode: 12,
-        message: `the adopter's ${before.repository === null ? 'project (launch.root)' : `tree at ${before.repository} (its git status, file contents or shared git state)`} changed during the ${when}, so no rollback is proved and no qualified probe is written; if you edited files meanwhile, run again`,
+        message: `the adopter's ${before.repository === null ? 'project (launch.root)' : `tree at ${before.repository} (its git status, file contents or shared git state)`} changed during the ${when}, so ${when === 'trials' ? 'no trial set is written' : 'no rollback is proved and no qualified probe is written'}; if you edited files meanwhile, run again`,
       });
     }
   };
 
   const qualified = [];
+  const policyPath = path.join(folder, POLICY_PATH);
+  const policy = fs.existsSync(policyPath) ? readJson(policyPath) : null;
+  const validate = createArtifactValidator();
+  const digests = seeded.length > 0 || afterVerdict !== null ? attestedDigests({ folder, root, evaluation, pristine, engine, stop }) : null;
   if (seeded.length > 0) {
-    const policy = readJson(path.join(folder, POLICY_PATH));
-    const validate = createArtifactValidator();
     for (const { file, probe } of seeded) {
       // Each probe is qualified in a workspace of its own, so nothing its
       // mutated arm leaves behind reaches another probe or the legs.
@@ -479,12 +568,12 @@ async function runInWorkspaces({
             contract,
             file,
             probe,
-            pristine,
             workspace,
             registry,
             policy,
             engine,
             validate,
+            digests,
             runDirectory,
             stop,
             log,
@@ -588,11 +677,77 @@ async function runInWorkspaces({
     if (!settled) fs.rmSync(probesPath, { force: true });
   }
   for (const entry of qualified) writeJson(path.join(runDirectory, 'probes', `${entry.probe.probeId}.probe.json`), entry.probe);
-  return outcome({
-    stage: 'verdict',
-    exitCode: verdict.exitCode,
-    message: `eval-quality preflight exited ${verdict.exitCode}; its verdict and diagnostics are in ${path.relative(folder, runDirectory)}`,
-  });
+  if (afterVerdict === null || verdict.exitCode !== 0) {
+    return outcome({
+      stage: 'verdict',
+      exitCode: verdict.exitCode,
+      message: `eval-quality preflight exited ${verdict.exitCode}; its verdict and diagnostics are in ${path.relative(folder, runDirectory)}${afterVerdict === null ? '' : ', and no trial ran'}`,
+    });
+  }
+  try {
+    return await afterVerdict({
+      folder,
+      evaluation,
+      contract,
+      registry,
+      pristine,
+      make,
+      discard,
+      qualified,
+      routesByMutation: mutatedByMutation,
+      policy,
+      engine,
+      validate,
+      digests,
+      invocationId,
+      runDirectory,
+      run,
+      writeRun: () => writeJson(runPath, run),
+      treeUnchanged,
+      outcome,
+      stop,
+      log,
+      signal,
+    });
+  } catch (error) {
+    if (error instanceof RunStop) return error.outcome;
+    throw error;
+  }
+}
+
+/**
+ * The digests AD-7 attests on every probe the run qualifies: `commitDigest`,
+ * the evaluated commit (`digestBytes` over its id) or, for a copy, the
+ * workspace's tree digest; and `implementationDigest`, the tracked tree of
+ * `launch.skillRoot` (or `launch.root`) at that commit, the evaluation folder
+ * left out (`trackedTreeDigest`), or for a copy the tree digest of the same
+ * directory in the workspace without its provisioned directories.
+ */
+function attestedDigests({ folder, root, evaluation, pristine, engine, stop }) {
+  const skillRoot = (evaluation.launch.skillRoot ?? '.').split('/');
+  const implementationRoot = path.join(pristine.root, ...skillRoot);
+  if (!fs.existsSync(implementationRoot) || !fs.statSync(implementationRoot).isDirectory()) {
+    throw stop({
+      stage: 'launch',
+      exitCode: 12,
+      message: `launch.skillRoot ${evaluation.launch.skillRoot} is not a directory in the workspace, so there is no implementation to evaluate`,
+    });
+  }
+  if (pristine.kind === 'git-worktree') {
+    return {
+      commitDigest: engine.digestBytes(Buffer.from(pristine.commit, 'utf8')),
+      implementationDigest: trackedTreeDigest({
+        repository: pristine.repository,
+        commit: pristine.commit,
+        directory: path.join(root, ...skillRoot),
+        exclude: [folder],
+      }),
+    };
+  }
+  return {
+    commitDigest: pristine.treeDigest,
+    implementationDigest: treeDigest(implementationRoot, { exclude: pristine.provisioned }),
+  };
 }
 
 /**
@@ -611,8 +766,11 @@ async function runInWorkspaces({
 async function admissionRefusal({ candidate, contract, engine, validate }) {
   const problems = await validate('probe', candidate);
   if (problems.length > 0) return `the qualified probe does not meet eval-quality's probe schema: ${problems.join('; ')}`;
+  // A clean control carries no signature, and a canary's is null: neither has a home operation.
   const home =
-    candidate.defectSignature === null ? null : engine.resolveHomeOperation(candidate.defectSignature, contract.permittedInterfaces);
+    candidate.expectedClean || candidate.defectSignature === null
+      ? null
+      : engine.resolveHomeOperation(candidate.defectSignature, contract.permittedInterfaces);
   const admission = engine.qualifyProbe(candidate, home);
   if (admission.qualified) return null;
   return `eval-quality's qualification gate refuses the qualified probe: ${admission.failures.map((failure) => `${failure.code} (${failure.detail})`).join('; ')}`;
@@ -668,12 +826,12 @@ async function qualifySeededProbe({
   contract,
   file,
   probe,
-  pristine,
   workspace,
   registry,
   policy,
   engine,
   validate,
+  digests,
   runDirectory,
   stop,
   log,
@@ -690,16 +848,6 @@ async function qualifySeededProbe({
       message: `${file}: the behaviors it discharges (${[...new Set(behaviorIds)].join(', ')}) declare no oracle, so no arm can pass or fail`,
     });
   }
-  const implementationRoot = path.join(pristine.root, ...(evaluation.launch.skillRoot ?? '.').split('/'));
-  if (!fs.existsSync(implementationRoot) || !fs.statSync(implementationRoot).isDirectory()) {
-    throw stop({
-      stage: 'launch',
-      exitCode: 12,
-      message: `launch.skillRoot ${evaluation.launch.skillRoot} is not a directory in the workspace, so there is no implementation to evaluate`,
-    });
-  }
-  const implementationDigest = treeDigest(implementationRoot, { exclude: [...pristine.provisioned, path.join(pristine.top, '.git')] });
-  const commitDigest = pristine.kind === 'git-worktree' ? engine.digestBytes(Buffer.from(pristine.commit, 'utf8')) : pristine.treeDigest;
   const directory = path.join(runDirectory, 'qualification', probe.probeId);
   log(`${file}: qualifying through ${mutationId} in ${workspace.root}`);
   const { port: adapter } = await registry.createProbePort({ cwd: workspace.root, projectRoot: workspace.root });
@@ -746,7 +894,7 @@ async function qualifySeededProbe({
     probe,
     mutation,
     systemId: evaluation.evaluationId,
-    digests: { implementationDigest, commitDigest, artifactDigest: evidence.preDigest },
+    digests: { ...digests, artifactDigest: evidence.preDigest },
     baselinePassEvidence: referenceTo(folder, files['baseline-pass'], engine.digestBytes),
     mutatedFailEvidence: referenceTo(folder, files['mutated-fail'], engine.digestBytes),
     rollbackVerified: evidence.rollbackVerified,
@@ -757,4 +905,18 @@ async function qualifySeededProbe({
   return { probe: candidate, mutation, mutatedDigest: evidence.mutatedDigest };
 }
 
-module.exports = { PreflightOutcome, admissionRefusal, armVerdict, newInvocationId, recordingPort, runPreflightCommand };
+module.exports = {
+  PreflightOutcome,
+  RunStop,
+  admissionRefusal,
+  armVerdict,
+  ensureRunsDirectory,
+  newInvocationId,
+  readJson,
+  recordingPort,
+  referenceTo,
+  runPipeline,
+  runPreflightCommand,
+  uncommittedUnder,
+  writeJson,
+};

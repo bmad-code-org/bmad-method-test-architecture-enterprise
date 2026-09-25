@@ -38,7 +38,7 @@ inputDocuments:
 
 ## Executive Summary
 
-**Scope:** full epic-level test design for Stories 1.1 to 1.28 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; their scenarios, risks and gates are below, and sections appear in execution order. The stories are built overnight by `/bmad-build` workers in order, uncommitted, so every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
+**Scope:** full epic-level test design for Stories 1.1 to 1.29 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; their scenarios, risks and gates are below, and sections appear in execution order. The stories are built overnight by `/bmad-build` workers in order, uncommitted, so every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
 
 **Risk summary:**
 
@@ -224,7 +224,7 @@ Levels: unit, integration over real eval-quality, contract, static. Files create
 
 | AC | Test | Level | P | Revert check |
 | --- | --- | --- | --- | --- |
-| Bin, optional `peerDependencies >=4.1.2`, release metadata and guard-publish cover both | `test:release-metadata`, `test:guard-publish` gain assertions for `bin["tea-evaluate"]`, the `>=4.1.2` peer range and `peerDependenciesMeta` optional | Static | P1 | Removing the bin, lowering the floor below 4.1.2, or dropping the optional flag fails |
+| Bin, optional `peerDependencies >=4.1.3` (amended 2026-09-24 in Story 1.8 from `>=4.1.2`), release metadata and guard-publish cover both | `test:release-metadata`, `test:guard-publish` gain assertions for `bin["tea-evaluate"]`, the `>=4.1.3` peer range and `peerDependenciesMeta` optional | Static | P1 | Removing the bin, lowering the floor below 4.1.3, or dropping the optional flag fails |
 | Runtime installs and runs for an adopter | Packed-install case in `test:evaluate-check`: `npm pack`, install into a temp folder with `--omit=dev` beside the local engine, `tea-evaluate check --evaluation <fixture>` exits 0 | Integration | P0 | Moving `ajv` back to `devDependencies` fails with a module-not-found crash |
 | CommonJS runtime, one engine module, `cli` externals listed | `test:direction` with an `allow` list naming every external `cli/` uses; `test:evaluate-boundaries` asserts `cli/lib/evaluate/engine.js` is the only file naming `eval-quality` in `import(` or `require(`, subpaths and synchronous requires included | Static | P1 | A second engine import anywhere under `cli/` fails; removing a listed external while `cli/` imports it fails `test:direction` |
 | Engine boundary (AD-1, AD-6) | `test:evaluate-boundaries` scans bindings obtained from `engine.js` only (so `ajv.compile` is untouched) and fails on `runScore`, `preflightFromObservations`, `compile` or `seal` | Static | P0 | Adding `engine.runScore(` anywhere in `cli/` fails |
@@ -285,10 +285,10 @@ Levels: integration over real eval-quality, contract, unit. File: `test/test-eva
 | A no-model run's `EvaluatorConfiguration` validates: `modelSnapshot` is `none`, `systemPromptDigest` is `digestBytes` over the empty byte string | Schema validation of the generated configuration | Contract | P1 | Leaving either field empty fails validation |
 | Infrastructure exit yields no record, invocation exits 12 | Stub exiting 4 in one trial | Integration | P0 | Recording the trial yields a record and exit 0 or 2 |
 | `score` once per probe, every `--record`, exit passed through | A logging shim at `TEA_EVALUATE_ENGINE_CLI` records one `score` argv per probe with every trial's `--record`; with the real engine, a direct `eval-quality score` on the persisted inputs gives equal exit and byte-equal evidence on a passing and a FAIL fixture | Integration over real eval-quality | P0 | Computing the exit in the runtime makes the FAIL fixture's exits differ |
-| Artifacts validated before the CLI | Corrupt one field in memory through a test hook; assert the runtime refuses before spawning | Contract | P1 | Validation removed lets the CLI reject with exit 4 instead, which the test distinguishes |
+| Artifacts validated before the CLI | Corrupt one field of a persisted record (amended 2026-09-24 in Story 1.8: a file in the run directory, which `score` reads, stands in for a test hook in memory); assert exit 10 naming the file and no call in the shim's argv log | Contract | P1 | Validation removed lets the shim log a `score` call, which the test distinguishes |
 | `score` exit code, stdout and stderr persisted per probe | A shim at `TEA_EVALUATE_ENGINE_CLI` prints distinct known bytes to each stream and exits with a distinct code; assert byte equality per stream and the recorded code in `runs/<invocationId>/`, keyed by probe ID | Integration | P1 | An empty, swapped or dropped capture fails equality |
 | Probe digests per AD-7 | Assert `commitDigest`, `artifactDigest`, `implementationDigest` against values the test computes with `git rev-parse` and sha256 | Integration | P1 | A digest of the wrong tree differs |
-| `runs/` gitignored | `git check-ignore` on the template path, `test/evaluations/x/runs/y` and `test/fixtures/evaluate-x/runs/y` | Static | P2 | Removing the entry fails |
+| `runs/` gitignored | `git check-ignore` on `runs/` under a folder holding the template as its `.gitignore`, `test/evaluations/x/runs/y`, `test/fixtures/evaluate-x/runs/y` and a nested fixture's `runs/` | Static | P2 | Removing the entry fails |
 | End to end: `passed-clean-control` and `caught` at `minimumTrialCount` with a comparable strength vector | Read `reducedProbeOutcomes` and `strength` from the evidence artifacts | Integration over real eval-quality | P0 | Any break in the chain changes the outcome |
 | Missing isolation manifest is Invalid | Run with the manifest suppressed; assert exit 3 and Invalid, a non-empty persisted `score` stderr and no evidence artifact | Integration | P0 | A runtime that fills a default manifest passes, which the assertion catches |
 | Policy template has no threshold values; a filled copy validates | Contract test over `assets/scoring-policy.template.json` | Contract | P1 | Adding a default value fails |
@@ -530,6 +530,15 @@ Levels: integration. Files: the supervision tests for `cli/lib/agent-supervisor.
 | Leader and supervisor killed together: the group stops and the runner returns in bounded time | Kill both, assert no process of the group remains and the runner returns a transport failure | Integration | P0 | Reverting the change makes the case time out |
 | A dead run's workspaces and worktree registration reclaimed | Kill a run during qualification, run `preflight` again, assert the temp directory and `git worktree list` are clean and the adopter's status and refs unchanged | Integration | P0 | Reverting the reclaim leaves the workspace and the registration |
 | A live run's workspace left alone | A marker naming a live process survives the next run | Integration | P1 | Reclaiming every marked workspace fails it |
+
+### Story 1.29: Record what a live run spends
+
+Levels: integration. File: `test/test-evaluate-run.js` (`test:evaluate-run`).
+
+| AC | Test | Level | P | Revert check |
+| --- | --- | --- | --- | --- |
+| Reported use recorded per trial and summed per set | A stub target reports a known token and cost use; assert each record's `resourceUse` and the manifest's `actualResourceUse` | Integration | P1 | Reverting the reading records zero, which the assertion catches |
+| Unreported use marked | A stub target that reports nothing; assert `run.json` marks the use unreported | Integration | P1 | Dropping the mark leaves a zero that reads as measured |
 
 ## The Dogfood Proof (AD-15)
 

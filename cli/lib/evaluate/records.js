@@ -163,8 +163,10 @@ function evaluatorConfiguration({
  * The isolation manifest for one measured run.
  *
  * An absent manifest makes a run Invalid, so one is always supplied. It declares
- * only what the probe port enforces: the run mounted the workspace it was given
- * and called the tools its authorization permits. Network access is not
+ * only what the probe port enforces: the run mounted the workspaces it was given
+ * (by default the one `workspaceIdentity` names; a trial set whose trials each
+ * ran in a workspace of their own lists them in `allowedMounts` and
+ * `observedMounts`) and called the tools its authorization permits. Network access is not
  * sandboxed, so `networkAllowlist` and `observedNetworkTargets` are both empty
  * and the manifest claims nothing it cannot observe. Each forbidden input is
  * accounted for as withheld, with the caller's note saying where the boundary
@@ -179,6 +181,8 @@ function isolationManifest({
   contractDigest,
   evaluatorConfigurationDigest,
   workspaceIdentity,
+  allowedMounts = [workspaceIdentity],
+  observedMounts = allowedMounts,
   toolAllowlist = [],
   observedToolCalls = [],
   resourceCeilings,
@@ -198,8 +202,8 @@ function isolationManifest({
     contractDigest,
     evaluatorConfigurationDigest,
     workspaceIdentity,
-    allowedMounts: [workspaceIdentity],
-    observedMounts: [workspaceIdentity],
+    allowedMounts,
+    observedMounts,
     networkAllowlist: [],
     observedNetworkTargets: [],
     toolAllowlist,

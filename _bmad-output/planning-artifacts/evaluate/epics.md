@@ -24,7 +24,7 @@ inputDocuments:
 
 ## Overview
 
-This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and thirty-one stories, bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
+This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and thirty-four stories (Stories 1.27 to 1.29 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
 
 Evaluate is fully stacked. The stack runs system under test, then the evaluation (the mechanism that runs the system, collects evidence and makes judgments), then the Behavioral Evaluation Contract (what behavior matters, what evidence counts, how success and failure resolve), then eval-quality (contract sanity, evidence support, and whether the evaluation catches defects). TeA owns every layer above eval-quality, including each concern eval-quality states it leaves to the caller, so an adopter can evaluate any target end to end. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3 onward, Epic 2 and H.1 to close the plan gap audit; the Traceability section maps each audit item to the story that closes it.
 
@@ -151,7 +151,7 @@ None. Evaluate has no graphical interface.
 ### Epic 1: The Evaluate authoring loop
 
 An adopter describes a target, answers Evaluate's questions, chooses or builds the evaluation layer and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches the seeded defect, with the gaps named and closed. The epic closes by running Evaluate on `bmad-testarch-evaluate` itself, then proving the guidance on two more target kinds, on seeded weaknesses and on an evaluation framework its guides never name.
-Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 and 1.28.
+Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27, 1.28 and 1.29.
 
 **FRs covered:** FR1 to FR10, FR13, FR14.
 
@@ -195,12 +195,13 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 26 | 1.26 | 1.23, 1.25 |
 | 27 | 1.27 | 1.7 |
 | 28 | 1.28 | 1.7 |
-| 29 | 2.1 | 1.16, 1.26 |
-| 30 | 2.2 | 2.1 |
-| 31 | 2.3 | 2.2 |
-| 32 | 2.4 | 2.3 |
-| 33 | 2.5 | 2.4 |
-| 34 | H.1 | 2.5 |
+| 29 | 1.29 | 1.8 |
+| 30 | 2.1 | 1.16, 1.26 |
+| 31 | 2.2 | 2.1 |
+| 32 | 2.3 | 2.2 |
+| 33 | 2.4 | 2.3 |
+| 34 | 2.5 | 2.4 |
+| 35 | H.1 | 2.5 |
 
 ## Epic 1: The Evaluate authoring loop
 
@@ -316,7 +317,7 @@ So that a stale index or a malformed artifact fails before anything runs.
 
 **Given** no runtime exists
 **When** `cli/evaluate.js` and `cli/lib/evaluate/` land
-**Then** `package.json` registers the `tea-evaluate` bin, declares `peerDependencies: {"eval-quality": ">=4.1.2"}` (4.0.0 is the first published release carrying trial-set scoring and the target-policy export Evaluate needs, 4.1.1 the first whose command-line adapter kills the target's process group at its ceiling, and 4.1.2 the first that also kills it when the host dies; amended by Story 1.6 from `>=4.0.0`), with `peerDependenciesMeta` marking it optional (npm 7 and later install required peers automatically, which would pull the engine into every project that installs TeA for other workflows), and `test:release-metadata` and `test:guard-publish` cover both
+**Then** `package.json` registers the `tea-evaluate` bin, declares `peerDependencies: {"eval-quality": ">=4.1.3"}` (4.0.0 is the first published release carrying trial-set scoring and the target-policy export Evaluate needs, 4.1.1 the first whose command-line adapter kills the target's process group at its ceiling, 4.1.2 the first that also kills it when the host dies, and 4.1.3 the first whose `score` writes an Invalid result's reasons to stderr; amended by Story 1.6 from `>=4.0.0`, and 2026-09-24 in Story 1.8 from `>=4.1.2`), with `peerDependenciesMeta` marking it optional (npm 7 and later install required peers automatically, which would pull the engine into every project that installs TeA for other workflows), and `test:release-metadata` and `test:guard-publish` cover both
 **And** `cli/lib/evaluate` is CommonJS and reaches eval-quality through one async loader generalized from `loadEvalQuality`, and the `dependency-direction` section of `eval-quality.config.json` gives the `cli` layer an `allow` externals list naming every external `cli/` uses (`eval-quality`, `commander`, `js-yaml`, `ajv/dist/2020` and each `node:` builtin; the gate matches specifiers exactly and the runtime loads Ajv through its draft 2020-12 entry point, since eval-quality's schemas are draft 2020-12), so removing one listed module while `cli/` imports it fails `test:direction` (AD-5)
 **And** every module the shipped runtime needs is reachable from TeA's published `dependencies`: `ajv` moves from `devDependencies` to `dependencies`, and a packed-install case in `test:evaluate-check` runs `npm pack`, installs the tarball into a temp folder with `--omit=dev` beside the local engine, and runs `tea-evaluate check --evaluation <fixture>` to exit 0; moving `ajv` back to `devDependencies` fails it
 **And** every subcommand takes `--evaluation <path>` and exits 64 when none resolves; the runtime reads no `_bmad/` config
@@ -418,7 +419,7 @@ So that the clean arm resolves `passed-clean-control` and the seeded probe resol
 **Given** an evaluation with a scoring policy whose thresholds the adopter set
 **When** `tea-evaluate run --evaluation <path>` runs
 **Then** it keys `runs/<invocationId>/`, derives one `runId` per trial set, numbers `trialIndex` 1..N with N at least `minimumTrialCount`, sets `mode: contract-scoring` and labels `conditionArm` `clean` or `mutated:<mutationId>` (AD-7)
-**And** trial requests come only from the contract's `interactionPlan` bound from the probe's `testData`, and findings and oracle dispositions come from a deterministic evaluator over `resolveCheck`
+**And** trial requests come only from the contract's `interactionPlan` bound from the probe's `testData`, and findings and oracle dispositions come from a deterministic evaluator over `resolveCheck` (amended 2026-09-24 in Story 1.8: a scored trial's observations carry `provenance: evaluator-chosen`, since eval-quality's witness match counts no other, and each record's `evaluatorRecommendation` is computed over its whole trial set, since eval-quality holds it equal across a set; AD-7 amended to match)
 **And** it writes one `IsolationManifest` per trial set from what it actually granted, one `EvaluatorConfiguration` per run carrying the seal's `sealedBriefDigest` (for a run that uses no model, `modelSnapshot` is the literal `none` and `systemPromptDigest` is `digestBytes` over the empty byte string, since the published schema requires both non-empty; a `test:evaluate-run` case validates that configuration against the schema and fails when either is left empty), and `run.json` with TeA and eval-quality versions, contract and corpus digests, runner and model identity, trial count, duration, commit and `dirty`
 **And** a trial observation carrying a registry `infrastructureExitCodes` value yields no record and the invocation exits 12
 
@@ -428,8 +429,8 @@ So that the clean arm resolves `passed-clean-control` and the seeded probe resol
 **And** with `TEA_EVALUATE_ENGINE_CLI` pointed at a logging shim, the argv log shows one `score` call per probe carrying every trial's `--record`; with the real engine, `eval-quality score` run directly on the persisted inputs gives the same exit code and byte-identical evidence, on a passing fixture and on a FAIL fixture
 **And** every artifact is validated against eval-quality's published schemas before it reaches the CLI
 **And** each `score` call's exit code, stdout and stderr are persisted under `runs/<invocationId>/`, keyed by probe ID whether or not an evidence artifact was emitted, since AD-10 classifies a `score` exit 3 from those diagnostics and AD-12 lists them in the bundle; with `TEA_EVALUATE_ENGINE_CLI` pointed at a shim that prints distinct known bytes to each stream and exits with a distinct code, the test asserts byte equality per stream and the recorded code, so an empty, swapped or dropped capture fails it
-**And** probe digests follow AD-7: `commitDigest` is the evaluated commit, `artifactDigest` the `targetArtifact` bytes, `implementationDigest` the tracked tree of the target root, each asserted by the test below
-**And** `runs/` is gitignored by the evaluation-folder `.gitignore` template and by TeA's root `.gitignore` for `test/evaluations/*/runs/` and `test/fixtures/evaluate*/runs/`
+**And** probe digests follow AD-7: `commitDigest` is the evaluated commit, `artifactDigest` the `targetArtifact` bytes, `implementationDigest` the tracked tree of the target root, each asserted by the test below (amended 2026-09-24 in Story 1.8: the tracked tree leaves out the evaluation folder's entries, and a clean control's `artifactDigest` is its `implementationDigest`; AD-7 amended to match)
+**And** `runs/` is gitignored by the evaluation-folder `.gitignore` template and by TeA's root `.gitignore` for `test/evaluations/*/runs/` and `test/fixtures/evaluate*/runs/` (amended 2026-09-24 in Story 1.8: the fixture rule is `test/fixtures/evaluate*/**/runs/`, since the runtime's own fixtures hold their evaluation folders below the fixture root, as `test/fixtures/evaluate/mutation/evals/verdict/` does)
 **And** `test/test-evaluate-run.js`, chained into `npm test` as `test:evaluate-run` with its own `quality.yaml` step, runs a stub target end to end and asserts `passed-clean-control` on the clean arm and `caught` on the mutated arm at `minimumTrialCount`, with a comparable strength vector
 **And** omitting the isolation manifest makes the test observe an Invalid result and fail, and in that case the probe's persisted `score` stderr is non-empty and no evidence artifact exists
 
@@ -478,7 +479,7 @@ So that every evaluation layer reaches `eval-quality score` as sealed run record
 
 **Given** the runtime-owned `judgment-rows` schema, the import contract of AD-21: per trial, rows of `key`, `outcome` (`pass`, `fail` or `score`), `score` for a scored row, `observationIds` (at least one), `quote` (verbatim text from a cited observation), `quoteChannel` (one of eval-quality's quotation channels: `response-body`, `response-headers`, `response-status`, `call-inputs`, `stdout`, `stderr`, `exit-code` or `artifact`), `artifactId` (required when `quoteChannel` is `artifact`, absent otherwise), `confidence` and `comment` (required on a `fail` row), plus an optional `recommendation`
 **When** a `command` evaluator runs
-**Then** `evaluation.json` declares `evaluator.timeoutMs` for it (`check` exits 10 when a `command` evaluator has none), and the runtime starts the adopter's evaluator executable named in `evaluation.json` once per trial after collecting the trial's baseline observations, writes `{ sealedBrief, observations }` to its stdin with each observation carrying its runtime-assigned `observationId`, and reads judgment rows from its stdout
+**Then** (amended 2026-09-24 in Story 1.8: eval-quality's witness match counts only `evaluator-chosen` observations, so the trial observations a `command` evaluator judges are recorded `evaluator-chosen`, as the deterministic evaluator's are, and the recommendation the rows imply is taken over the whole trial set, which eval-quality holds equal across the set) `evaluation.json` declares `evaluator.timeoutMs` for it (`check` exits 10 when a `command` evaluator has none), and the runtime starts the adopter's evaluator executable named in `evaluation.json` once per trial after collecting the trial's baseline observations, writes `{ sealedBrief, observations }` to its stdin with each observation carrying its runtime-assigned `observationId`, and reads judgment rows from its stdout
 **And** it converts rows into `SealedRunRecord` fields through `evaluator/mapping.json` alone: a `fail` row bound to an oracle becomes a finding that validates against eval-quality's `Finding` schema: `findingType: defect`, a `findingId` the runtime mints (`F-NNN`, unique per record), the mapped `oracleId`, the probe under trial, the mapped behavior and its declared severity, the row's `comment` as `summary`, the row's `confidence`, the cited `observationIds`, `evidenceArtifacts: []`, and one `quotedEvidence` entry `{ quote, channel, artifactId }` built from `quote`, `quoteChannel` and `artifactId` (`null` off the `artifact` channel); and a `violated` disposition; a `pass` row becomes a `held` disposition; a `score` row bound to a rubric criterion becomes a `judgeResults` entry; an oracle with no row becomes `not-attempted`; the recommendation is the rows' own or, when absent, FAIL on any `fail` row and PASS otherwise
 **And** the runtime re-checks nothing the engine checks: quotes, citations and signature matches reach `score` exactly as the evaluator stated them, and a stub evaluator whose `quote` is absent from the cited observation yields the Invalid result eval-quality's own unwitnessed-quotation condition produces, which proves the runtime holds no copy of that ingest rule (AD-1)
 **And** an evaluator that crashes, exits non-zero or prints output failing the `judgment-rows` schema yields no record, the invocation exits 12 as an evaluation-layer invocation failure (AD-10), and the evaluator's stdout and stderr are persisted under `runs/<invocationId>/evaluator/`; a `fail` row with no `quoteChannel`, and one with `quoteChannel: artifact` and no `artifactId`, are each a case that fails the row schema and exits 12
@@ -757,7 +758,7 @@ So that a CONCERNS, FAIL or Invalid result, or a weak strength vector, ends in a
 **When** `/bmad-workflow-builder` Edit writes `references/mutation.md`, `references/harness.md`, `references/run.md` and `references/gaps.md`
 **Then** mutation planning writes `mutations/M-NNN.mutation.json` files and plans signatures per AD-19
 **And** mutation planning teaches realistic mutation choice per behavior, each under its own heading with a worked mutation file that validates through the tagged-example rule: weaken or remove a prompt instruction, remove required context, drop a validation step, alter a tool's result, change the agent's configuration, break a state write or its read-back, and for a test-review mechanism remove one smell rule; each names the behavior it fits, the observable failure it should produce and the channel its signature addresses, restates the single-source rule (a behavior restated in several files can survive a one-file mutation) and refuses a model-weight or provider change under the vendor rule
-**And** harness asks the adopter for `severityFloor`, `minimumTrialCount` and `catchThreshold` and fills no default
+**And** harness asks the adopter for `severityFloor`, `minimumTrialCount` and `catchThreshold` and fills no default (amended 2026-09-24 in Story 1.8: harness writes `policy/scoring-policy.json` from `assets/scoring-policy.template.json`, and, when the target or the evaluator uses a model, `policy/evaluator-conditions.json` from `assets/evaluator-conditions.template.json` with `systemPromptDigest` computed as eval-quality's `digestBytes` over the system prompt's bytes, never typed by hand; run installs `assets/evaluation-folder.gitignore` as the evaluation folder's `.gitignore`; the guidance test asserts each of the three)
 **And** harness teaches choosing those values for a stated risk with a worked table covering a deterministic target and a sampled-model target at `low`, `material` and `critical` risk, the reason for each value, eval-quality's strict `caughtCount / validCount > catchThreshold` rule, and why fewer trials than `minimumTrialCount` leave the strength vector non-comparable
 **And** run invokes `tea-evaluate preflight`, `run` and `score` through `npm exec --prefix {tea_evaluations_folder}` after writing the AD-20 private `package.json` with `eval-quality` and TeA's package at the `latest` spec and running `npm install --prefix {tea_evaluations_folder}`; when `{project-root}` is TeA's own package it invokes `node cli/evaluate.js`
 **And** gaps reads the evidence artifact, or for a `score` exit 3 with no artifact the persisted `score` diagnostics, and maps every outcome state, every AD-10 exit and class, every preflight check and every coverage rule to the probe, control, oracle or evidence that closes it
@@ -934,6 +935,25 @@ So that a `SIGKILL` leaves no running agent, no temp copy and no worktree regist
 **Dependencies:** 1.7.
 **Gate:** `npm test`.
 
+### Story 1.29: Record what a live run spends
+
+Added 2026-09-24 in Story 1.8 from the gap it accepted.
+
+As an adopter evaluating a skill or agent that calls a model,
+I want each trial's token and cost use recorded from what the runner reports,
+So that a live run's records and isolation manifests state what the run spent (NFR8, AD-7).
+
+**Acceptance Criteria:**
+
+**Given** Story 1.8's `tea-evaluate run`, which meters no model use and records `inputTokens: 0`, `outputTokens: 0` and `costUsd: "0"` in every Sealed Run Record's `resourceUse` and in each isolation manifest's `actualResourceUse`, and the largest safe integer as the token and cost ceilings
+**When** a registry target reports its use (for `tea-skill-runner`, the usage its agent adapter parses from the vendor CLI's own report, held in `cli/lib/agent-adapters.js` so the runtime stays vendor-neutral)
+**Then** `run` records each trial's reported tokens and cost in its record and sums them in the set's manifest, and a case in `test/test-evaluate-run.js` whose stub target reports a known use asserts those values; reverting the reading makes the case read zero
+**And** a trial whose target reports no use is recorded with its use marked unreported in `run.json`, so a reader can tell a measured zero from an unreported use, and a case asserts it
+**And** `docs/reference/tea-evaluate-cli.md` states where the use comes from and what an unreported use means
+
+**Dependencies:** 1.8.
+**Gate:** `npm test`.
+
 ## Epic 2: Continuous proof in CI
 
 The evaluation Epic 1 produced is proven on every pull request, with the evidence to audit it.
@@ -1082,7 +1102,7 @@ So that Evaluate is continuously proven where it is built, and users can read ho
 
 Run by the coordinator of Story 2.5 once it merges. No `/bmad-build` worker runs this story.
 
-**Engine status (verified 2026-09-23):** eval-quality 4.0.0 is published and is npm `latest`, carrying the target-policy export (#158) and trial-set scoring with `EvidenceArtifact` version 4 (#143). Story 1.2 put TeA on it and Story 1.4 floors the peer range at `>=4.0.0`, which Story 1.6 raises to `>=4.1.2`, so every Epic 1 and Epic 2 check, the `test:evaluate-*` scripts the 2026-09-23 amendment adds included, runs on the published engine from the story that adds it. No engine release or floor raise remains for this story.
+**Engine status (verified 2026-09-23):** eval-quality 4.0.0 is published and is npm `latest`, carrying the target-policy export (#158) and trial-set scoring with `EvidenceArtifact` version 4 (#143). Story 1.2 put TeA on it and Story 1.4 floors the peer range at `>=4.0.0`, which Story 1.6 raises to `>=4.1.2` and Story 1.8 to `>=4.1.3`, so every Epic 1 and Epic 2 check, the `test:evaluate-*` scripts the 2026-09-23 amendment adds included, runs on the published engine from the story that adds it. No engine release or floor raise remains for this story.
 
 As the owner,
 I want the dirty proof run replaced by a clean one on the merged tree,

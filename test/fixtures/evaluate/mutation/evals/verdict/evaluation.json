@@ -10,7 +10,7 @@
       "target": "bin/verdict.js",
       "subcommandPaths": [[]],
       "artifacts": {},
-      "environmentKeys": ["VERDICT_LINK", "VERDICT_PID", "VERDICT_SECRET", "VERDICT_TOUCH"],
+      "environmentKeys": ["VERDICT_DO", "VERDICT_LINK", "VERDICT_PID", "VERDICT_SECRET", "VERDICT_TOUCH", "VERDICT_WHEN"],
       "maxElapsedMs": 30000,
       "infrastructureExitCodes": [3]
     }
@@ -23,7 +23,7 @@
     "provision": ["vendor"]
   },
   "arms": ["clean", "mutated"],
-  "trials": 1,
+  "trials": 3,
   "tiers": ["pr"],
   "strengthFloor": {
     "defect": 1,
