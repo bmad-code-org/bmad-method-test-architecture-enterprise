@@ -31,9 +31,15 @@
  *   digests under `decodingParameters`, and one byte edited under
  *   `evaluator/` changes its digest, every record's
  *   `evaluatorConfigurationDigest` and the evidence's scoring version. The
- *   tree digest covers the files git tracks there, and a command evaluator
- *   runs from the run's snapshot of them, so what it writes beside itself
- *   stays out of the evaluation folder.
+ *   tree digest covers the files git tracks there. A command evaluator runs
+ *   in place, so a package in the project's node_modules resolves for it and
+ *   a cache it writes there must be gitignored; the run holds the layer to
+ *   its digested bytes before each launch and after each trial, exit 12 on
+ *   any change; `check` names a submodule under evaluator/.
+ * - Every private directory a run makes is removed however it ends: after an
+ *   evaluator leaves a read-only directory in its working directory, and
+ *   after a signal mid-trial under a command evaluator and a sealed-brief
+ *   agent, the temp directory is left empty.
  * - An oracle two behaviors declare, judged through one key, catches the
  *   second behavior's probe under a command evaluator and a sealed-brief
  *   agent.
@@ -630,41 +636,47 @@ function checkSetRecommendation() {
 }
 
 /**
- * The command evaluator runs from the run's snapshot of the files git tracks
- * under evaluator/: what it writes beside itself stays out of the evaluation
- * folder, a file git does not track (ignored or not) moves no digest, and
- * `check` refuses an executable git does not track.
+ * The command evaluator runs in place, from the evaluation folder's
+ * evaluator/: a cache it writes there that git ignores leaves the run whole
+ * and one git does not ignore stops it at the adopter-tree check; the tree
+ * digest covers the files git tracks there, so a file git does not track
+ * (ignored or not) moves no digest; `check` refuses an executable git does
+ * not track and names a submodule there.
  */
-async function checkEvaluatorSnapshot() {
+async function checkEvaluatorInPlace() {
   const engine = await loadEngine();
-  const log = path.join(scratch.make('snapshot-log'), 'evaluator.jsonl');
-  const project = makeProject('command-snapshot', {
+  const log = path.join(scratch.make('in-place-log'), 'evaluator.jsonl');
+  const project = makeProject('command-in-place', {
     edit: ({ folder, repository }) => {
       useCommandEvaluator(folder, { mode: 'write-beside', args: ['--log', log] });
-      fs.appendFileSync(path.join(repository, '.gitignore'), '*.pyc\n');
+      fs.appendFileSync(path.join(repository, '.gitignore'), '*.pyc\n__pycache__/\n');
       fs.writeFileSync(path.join(folder, 'evaluator', 'stale.pyc'), 'an ignored file git does not track\n');
     },
   });
   const treeDigestOf = (runDirectory) =>
     readJson(path.join(runDirectory, 'evaluator-configuration.json')).decodingParameters['tea.evaluatorTreeDigest'];
   const ran = evaluate(['run', '--evaluation', project.folder], project.env);
-  check(ran.status === 0, `a command evaluator writing beside itself: run exited ${ran.status}; expected 0\n${ran.output}`);
+  check(
+    ran.status === 0,
+    `a command evaluator writing an ignored cache beside itself: run exited ${ran.status}; expected 0\n${ran.output}`,
+  );
   const runDirectory = runDirectoryOf(project.folder);
   if (ran.status !== 0 || runDirectory === null) return;
-  check(
-    !fs.existsSync(path.join(project.folder, 'evaluator', '__pycache__')),
-    'the command evaluator wrote into the evaluation folder, so it did not run from the snapshot',
-  );
+  const executable = path.join(project.folder, 'evaluator', 'rows.js');
   const selves = fs
     .readFileSync(log, 'utf8')
     .trim()
     .split('\n')
     .map((line) => JSON.parse(line).self);
   check(
-    selves.length === 2 * TRIALS && selves.every((self) => !self.startsWith(project.repository) && !fs.existsSync(self)),
-    `the command evaluator ran from ${JSON.stringify(selves)}; expected a snapshot outside the project, removed afterwards`,
+    selves.length === 2 * TRIALS && selves.every((self) => self === executable),
+    `the command evaluator ran from ${JSON.stringify(selves)}; expected ${executable} in each trial`,
   );
-  // The tree digest covers exactly the files git tracks under evaluator/, so the ignored stale.pyc is no part of it.
+  check(
+    fs.existsSync(path.join(project.folder, 'evaluator', '__pycache__', 'cache.bin')),
+    'the command evaluator did not run in place: its cache is not beside it in the evaluation folder',
+  );
+  // The tree digest covers exactly the files git tracks under evaluator/, so neither the ignored stale.pyc nor the cache is part of it.
   const tracked = git(project.folder, ['ls-files', '-z', '--', 'evaluator'])
     .split('\0')
     .filter((relative) => relative.length > 0)
@@ -691,6 +703,189 @@ async function checkEvaluatorSnapshot() {
     `check over an untracked command evaluator exited ${checked.status}; expected 10 naming it\n${checked.output}`,
   );
   git(project.folder, ['add', '--', 'evaluator/rows.js']);
+  // A submodule under evaluator/ holds another repository's files, and check names it as one.
+  const inner = path.join(project.folder, 'evaluator', 'vendored');
+  fs.mkdirSync(inner);
+  fs.writeFileSync(path.join(inner, 'helper.js'), "'use strict';\n");
+  git(inner, ['init', '--quiet', '--initial-branch', 'main']);
+  git(inner, ['add', '--all']);
+  git(inner, ['commit', '--quiet', '--message', 'a vendored helper']);
+  git(project.folder, ['add', '--', 'evaluator/vendored']);
+  const submodule = evaluate(['check', '--evaluation', project.folder], project.env);
+  check(
+    submodule.status === 10 && submodule.output.includes('evaluator/vendored is a git submodule'),
+    `check over a submodule under evaluator/ exited ${submodule.status}; expected 10 naming it a submodule\n${submodule.output}`,
+  );
+  git(project.folder, ['rm', '--cached', '--force', '--quiet', '--', 'evaluator/vendored']);
+  fs.rmSync(inner, { recursive: true, force: true });
+
+  // A cache git does not ignore changes the adopter's tree, which stops the run.
+  const unignored = makeProject('command-in-place-unignored', {
+    edit: ({ folder }) => useCommandEvaluator(folder, { mode: 'write-beside' }),
+  });
+  const stopped = evaluate(['run', '--evaluation', unignored.folder], unignored.env);
+  check(
+    stopped.status === 12 && stopped.output.includes('changed during the trials'),
+    `a command evaluator writing a cache git does not ignore: run exited ${stopped.status}; expected 12 at the adopter-tree check\n${stopped.output}`,
+  );
+  check(
+    recordFiles(runDirectoryOf(unignored.folder)).length === 0,
+    'a command evaluator writing a cache git does not ignore: the run wrote a record',
+  );
+}
+
+/**
+ * The run holds the evaluation layer to the bytes it digested: an evaluator
+ * that rewrites a tracked file of its own during trial 1, and a target that
+ * writes into evaluator/ during the trial's plan, each stop the run at that
+ * trial with exit 12 and no record; a module the evaluator loads from the
+ * project's own node_modules resolves, since it runs in place.
+ */
+function checkEvaluatorLayerHeld() {
+  const rewritten = makeProject('command-rewrite-self', { edit: ({ folder }) => useCommandEvaluator(folder, { mode: 'rewrite-self' }) });
+  const ran = evaluate(['run', '--evaluation', rewritten.folder], rewritten.env);
+  check(
+    ran.status === 12 &&
+      ran.output.includes(
+        'trial-clean-1 yields no record: the evaluation layer changed while the evaluator ran: evaluator/rows.js no longer holds the bytes the run read at its start',
+      ),
+    `an evaluator rewriting its own file: run exited ${ran.status}; expected 12 at trial-clean-1 naming evaluator/rows.js\n${ran.output}`,
+  );
+  check(recordFiles(runDirectoryOf(rewritten.folder)).length === 0, 'an evaluator rewriting its own file: the run wrote a record');
+
+  const touched = makeProject('command-target-touch', { edit: ({ folder }) => useCommandEvaluator(folder) });
+  const mapping = path.join(touched.folder, 'evaluator', 'mapping.json');
+  const beforeLaunch = evaluate(['run', '--evaluation', touched.folder], {
+    ...touched.env,
+    VERDICT_WHEN: 'trial-clean-1',
+    VERDICT_DO: 'touch',
+    VERDICT_TOUCH: mapping,
+  });
+  check(
+    beforeLaunch.status === 12 &&
+      beforeLaunch.output.includes(
+        "trial-clean-1 yields no record: the evaluation layer changed before the evaluator's launch: evaluator/mapping.json no longer holds",
+      ),
+    `a target writing into evaluator/ during a trial: run exited ${beforeLaunch.status}; expected 12 before the evaluator's launch\n${beforeLaunch.output}`,
+  );
+  check(
+    recordFiles(runDirectoryOf(touched.folder)).length === 0,
+    'a target writing into evaluator/ during a trial: the run wrote a record',
+  );
+
+  // A wrapper over a framework the project installs: the package resolves from evaluator/ upward, as outside a run.
+  const answer = 'probe-dep answered from the project root';
+  const wrapped = makeProject('command-require-package', {
+    edit: ({ folder, repository }) => {
+      useCommandEvaluator(folder, { mode: 'require-package' });
+      fs.appendFileSync(path.join(repository, '.gitignore'), 'node_modules/\n');
+      fs.mkdirSync(path.join(repository, 'node_modules', 'probe-dep'), { recursive: true });
+      fs.writeFileSync(path.join(repository, 'node_modules', 'probe-dep', 'index.js'), `module.exports = ${JSON.stringify(answer)};\n`);
+    },
+  });
+  const required = evaluate(['run', '--evaluation', wrapped.folder], wrapped.env);
+  check(
+    required.status === 0,
+    `an evaluator requiring a package from the project's node_modules: run exited ${required.status}; expected 0\n${required.output}`,
+  );
+  const printed = path.join(runDirectoryOf(wrapped.folder) ?? '', 'evaluator', 'clean', 'trial-1.stdout');
+  check(
+    fs.existsSync(printed) && fs.readFileSync(printed, 'utf8').includes(answer),
+    "an evaluator requiring a package from the project's node_modules: its answer does not carry the package's export",
+  );
+}
+
+/**
+ * A run removes every private directory it made, whatever a process left in
+ * it: an evaluator that leaves a read-only directory in its working directory
+ * still leaves the temp directory empty, and (on macOS) one that leaves a file
+ * no chmod can free is reported by name while every workspace is still
+ * removed.
+ */
+function checkScratchRemoval() {
+  if (process.platform === 'win32') return;
+  const locked = makeProject('command-lock-cwd', { edit: ({ folder }) => useCommandEvaluator(folder, { mode: 'lock-cwd' }) });
+  const temp = locked.env.TMPDIR;
+  const ran = evaluate(['run', '--evaluation', locked.folder], locked.env);
+  check(ran.status === 0, `an evaluator leaving a read-only directory: run exited ${ran.status}; expected 0\n${ran.output}`);
+  check(
+    fs.readdirSync(temp).length === 0,
+    `an evaluator leaving a read-only directory: the run left ${JSON.stringify(fs.readdirSync(temp))} in its temp directory`,
+  );
+  if (process.platform !== 'darwin') return;
+  const pinned = makeProject('command-immutable-cwd', { edit: ({ folder }) => useCommandEvaluator(folder, { mode: 'immutable-cwd' }) });
+  const pinnedTemp = pinned.env.TMPDIR;
+  // This project's temp directory keeps the pinned file by design, so the suite's closing check leaves it out.
+  runtimeTemps.splice(
+    runtimeTemps.findIndex((entry) => entry.directory === pinnedTemp),
+    1,
+  );
+  try {
+    const kept = evaluate(['run', '--evaluation', pinned.folder], pinned.env);
+    const left = fs.readdirSync(pinnedTemp);
+    check(
+      kept.status === 0 && /could not remove the private directory \S*tea-evaluate-command-/.test(kept.output),
+      `an evaluator leaving an immutable file: run exited ${kept.status}; expected 0 naming the directory it could not remove\n${kept.output}`,
+    );
+    check(
+      left.length === 2 * TRIALS && left.every((entry) => entry.startsWith('tea-evaluate-command-')),
+      `an evaluator leaving an immutable file: the run left ${JSON.stringify(left)} in its temp directory; expected each trial's working directory alone, every workspace removed`,
+    );
+  } finally {
+    spawnSync('chflags', ['-R', 'nouchg', pinnedTemp]);
+  }
+}
+
+/**
+ * A signal that ends a run mid-trial removes the evaluator's private
+ * directories: a command evaluator's working directory, and a sealed-brief
+ * agent's working directory, its bridge configuration (which holds the
+ * bridge's token) and its socket's directory.
+ */
+async function checkSignalMidTrial() {
+  if (process.platform === 'win32') return;
+  const interrupt = async (project, { ready, signal, expected }) => {
+    const child = spawn(process.execPath, [EVALUATE, 'run', '--evaluation', project.folder], {
+      cwd: PROJECT_ROOT,
+      env: { ...BASE_ENV, ...project.env },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let output = '';
+    child.stdout.on('data', (chunk) => (output += chunk));
+    child.stderr.on('data', (chunk) => (output += chunk));
+    const ended = new Promise((resolve) => child.on('exit', (code, name) => resolve({ code, name })));
+    const deadline = Date.now() + SPAWN_TIMEOUT_MS;
+    while (!fs.existsSync(ready) && Date.now() < deadline && child.exitCode === null)
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    const during = fs.readdirSync(project.env.TMPDIR);
+    child.kill(signal);
+    const { code, name } = await ended;
+    const after = fs.readdirSync(project.env.TMPDIR);
+    check(name === signal, `${expected.join(', ')} under ${signal}: the run ended with code ${code} and signal ${name}\n${output}`);
+    for (const prefix of expected) {
+      check(
+        during.some((entry) => entry.startsWith(prefix)),
+        `under ${signal}: no ${prefix}* directory was in the temp directory mid-trial (${JSON.stringify(during)}), so the case proves nothing`,
+      );
+    }
+    check(after.length === 0, `a run ended by ${signal} mid-trial left ${JSON.stringify(after)} in its temp directory`);
+    return ready;
+  };
+
+  const pids = path.join(scratch.make('signal-command-pids'), 'pids.json');
+  const command = makeProject('command-signal', {
+    edit: ({ folder }) => useCommandEvaluator(folder, { mode: 'hang', args: ['--pids', pids], timeoutMs: 120_000 }),
+  });
+  await interrupt(command, { ready: pids, signal: 'SIGTERM', expected: ['tea-evaluate-command-'] });
+
+  const capture = path.join(scratch.make('signal-agent-capture'), 'capture.jsonl');
+  const agent = makeProject('sealed-brief-signal', { edit: ({ folder }) => useSealedBriefAgent(folder, { capture, mode: 'hang' }) });
+  await interrupt(agent, { ready: capture, signal: 'SIGINT', expected: ['tea-evaluate-evaluator-', 'tea-evaluate-bridge-config-'] });
+  const socket = captures(capture)[0]?.config?.mcpServers?.[captures(capture)[0]?.server]?.args?.at(-1);
+  check(
+    typeof socket === 'string' && !fs.existsSync(path.dirname(socket)),
+    `a run ended by SIGINT mid-trial left the bridge's socket directory ${socket === undefined ? '(unknown)' : path.dirname(socket)}`,
+  );
 }
 
 /** Whether the process `pid` still runs. */
@@ -714,10 +909,14 @@ async function checkEvaluatorTimeout() {
     ran.status === 12 && ran.output.includes('still running at its 5000ms timeout'),
     `a hung evaluator: run exited ${ran.status}; expected 12 naming the timeout\n${ran.output}`,
   );
-  // The stub wrote its pids as it started, so the run ended within the 5 s timeout, the supervisor's 2 s grace and what
-  // remains of the run after it; a stop that waited far past the wall clock fails this bound.
-  if (fs.existsSync(pids)) {
-    const ranFor = ended - fs.statSync(pids).mtimeMs;
+  // The stub records when its process started, before it loaded anything, so the time from there to the run's end
+  // holds the whole 5 s timeout less only the spawn itself, however slowly a loaded machine starts it, and ends
+  // within the supervisor's 2 s grace and what remains of the run after it. A stop before the wall clock fails the
+  // lower bound, and one that waited far past it the upper.
+  const started = fs.existsSync(pids) ? readJson(pids).started : undefined;
+  check(Number.isFinite(started), 'a hung evaluator: the stub recorded no start time');
+  if (Number.isFinite(started)) {
+    const ranFor = ended - started;
     check(ranFor >= 4500 && ranFor < 5000 + 2000 + 15_000, `a hung evaluator ran ${ranFor} ms from its start to the run's end`);
   }
   const runDirectory = runDirectoryOf(project.folder);
@@ -1870,7 +2069,10 @@ async function main() {
     await runCase('evaluators outside the import contract', checkEvaluatorFailures);
     await runCase('a hung evaluator', checkEvaluatorTimeout);
     await runCase('the set recommendation', checkSetRecommendation);
-    await runCase('the evaluator snapshot', checkEvaluatorSnapshot);
+    await runCase('the evaluator run in place', checkEvaluatorInPlace);
+    await runCase('the evaluation layer held to its bytes', checkEvaluatorLayerHeld);
+    await runCase('the scratch removal', checkScratchRemoval);
+    await runCase('a signal mid-trial', checkSignalMidTrial);
     await runCase('an oracle two behaviors declare', checkSharedOracle);
     await runCase('the sealed-brief agent', checkSealedBriefAgent);
     await runCase('the sealed-brief agent edges', checkSealedBriefAgentEdges);

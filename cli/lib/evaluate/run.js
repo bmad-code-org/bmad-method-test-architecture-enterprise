@@ -77,6 +77,7 @@ const {
   IDENTITIES,
   configurationFields,
   convertsRows,
+  evaluatorLayerChange,
   readEvaluatorLayer,
   recordedEvaluatorModel,
 } = require('./evaluators');
@@ -199,7 +200,6 @@ function runRunCommand(folder, { fromWorkingTree = false, env = process.env, log
           evaluation: context.evaluation,
           contract: readJson(path.join(folder, 'contract.json')),
           engine: await loadEngine(),
-          scratch: context.scratch,
         });
       } catch (error) {
         if (!(error instanceof EvaluatorLayerError)) throw error;
@@ -492,7 +492,12 @@ async function concludeTrial(context, facts) {
   };
   let judged;
   try {
-    judged = await judgeRubrics({ contract, stepObservations: executed.stepObservations, judge: evaluation.judge });
+    judged = await judgeRubrics({
+      contract,
+      stepObservations: executed.stepObservations,
+      judge: evaluation.judge,
+      scratch: context.scratch,
+    });
   } catch (error) {
     if (!(error instanceof JudgeError)) throw error;
     writer.writeJson(evidenceFile, { ...written, judge: { fault: error.message, stdout: error.stdout, stderr: error.stderr } });
@@ -526,9 +531,15 @@ async function concludeTrial(context, facts) {
  * agent, the calls it made through the bridge kept in the trial's evidence.
  */
 async function concludeWithRows(context, facts) {
-  const { arm, trialIndex, contract, writer, stop, signal, snapshot, sealedBrief, env } = context;
+  const { arm, trialIndex, contract, folder, writer, stop, signal, snapshot, sealedBrief, scratch, env } = context;
   const { label, evidenceFile, executed, began, evidence, port, mounts, toolCalls } = facts;
   const { evaluator, mapping, validate } = snapshot.layer;
+  // The evaluator runs from the evaluation folder, so the run holds the layer's files to the bytes it digested
+  // before each launch and after each trial; the window between this read and the launch is Story 1.31's.
+  const holdLayer = (when) => {
+    const change = evaluatorLayerChange(folder, snapshot.layer.files);
+    if (change !== null) throw new EvaluatorError(`the evaluation layer changed ${when}: ${change}`);
+  };
   const baseline = Object.values(executed.stepObservations).sort((a, b) => a.sequence - b.sequence);
   const streams = `evaluator/${arm.slug}/trial-${trialIndex}`;
   const written = { conditionArm: arm.conditionArm, trialIndex, ...evidence, steps: executed.steps };
@@ -537,14 +548,16 @@ async function concludeWithRows(context, facts) {
   const judgments = {};
   let judgeResults = [];
   try {
+    holdLayer("before the evaluator's launch");
     if (evaluator.kind === 'command') {
       evaluated = await runCommandEvaluator({
-        root: snapshot.layer.root,
+        folder,
         evaluator,
         sealedBrief,
         observations: baseline,
         mapping,
         validate,
+        scratch,
         env,
       });
     } else {
@@ -562,8 +575,9 @@ async function concludeWithRows(context, facts) {
         nonce,
         signal,
       });
-      evaluated = await runSealedBriefAgent({ evaluator, sealedBrief, contract, mapping, validate, router, nonce, env });
+      evaluated = await runSealedBriefAgent({ evaluator, sealedBrief, contract, mapping, validate, router, nonce, scratch, env });
     }
+    holdLayer('while the evaluator ran');
     // The conversion refuses a row on a key of the other kind and a score off its levels, as the schema refuses a bad shape.
     for (const probe of arm.probes) {
       const judgment = judgmentFromRows({

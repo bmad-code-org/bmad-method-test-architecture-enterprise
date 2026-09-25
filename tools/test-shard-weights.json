@@ -50,7 +50,7 @@
   "test:evaluate-arms": 145.5,
   "test:evaluate-boundaries": 23.4,
   "test:evaluate-check": 170.7,
-  "test:evaluate-evaluators": 137.5,
+  "test:evaluate-evaluators": 146.5,
   "test:evaluate-guidance": 0.1,
   "test:evaluate-mutation": 169.8,
   "test:evaluate-preflight": 63,

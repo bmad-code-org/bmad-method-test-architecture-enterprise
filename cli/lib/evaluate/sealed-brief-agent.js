@@ -78,6 +78,7 @@ const { loadAdapters, loadEngine } = require('./engine');
 const { answerBlocks, unfenced } = require('./judge');
 const { EvaluatorError, isOracleBinding, readAnswer } = require('./judgment-rows');
 const { recordObservation } = require('./records');
+const { releaseScratchDirectory, makeScratchDirectory } = require('./workspace');
 
 /** The instruction template every sealed-brief evaluator call carries; its digest is the configuration's `systemPromptDigest`. */
 const EVALUATOR_INSTRUCTIONS = [
@@ -537,21 +538,24 @@ function bridgeRouter({
  * @param {(value: unknown) => string[]} options.validate the mapping's row validator
  * @param {object} options.router `bridgeRouter(...)`, built with `nonce`
  * @param {string} options.nonce the trial's answer nonce (`judge.js` `answerNonce`), drawn after the plan ran
+ * @param {string[]} options.scratch the run's private directories, which the agent's working directory, the bridge's
+ *   configuration directory and its socket's directory join while it runs
  * @param {NodeJS.ProcessEnv} [options.env] the environment the agent's base variables and `environmentKeys` are read from
  * @returns {Promise<{ answer: object, prompt: string, nonce: string, stdout: string, stderr: string, stdoutBytes: Buffer, stderrBytes: Buffer }>}
  * @throws {EvaluatorError} an agent that cannot answer, a call the target could not run, or an answer outside the import contract
  */
-async function runSealedBriefAgent({ evaluator, sealedBrief, contract, mapping, validate, router, nonce, env = process.env }) {
+async function runSealedBriefAgent({ evaluator, sealedBrief, contract, mapping, validate, router, nonce, scratch, env = process.env }) {
   const prompt = evaluatorPrompt({ sealedBrief, contract, mapping, nonce });
   // The agent runs in an empty directory of its own, which holds nothing of the evaluation; the bridge's
-  // configuration, which carries its admission token, is written to a private directory beside it.
-  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-evaluate-evaluator-'));
-  const configDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-evaluate-bridge-config-'));
+  // configuration, which carries its admission token, is written to a private directory beside it. Both are in
+  // the run's scratch, so a signal that ends the run mid-trial removes them too.
+  const cwd = makeScratchDirectory(scratch, 'tea-evaluate-evaluator-');
+  const configDirectory = makeScratchDirectory(scratch, 'tea-evaluate-bridge-config-');
   let bridge = null;
   let answered;
   let failure = null;
   try {
-    bridge = await openBridge({ tools: bridgeTools(sealedBrief.permittedInterfaces ?? []), handle: router.handle });
+    bridge = await openBridge({ tools: bridgeTools(sealedBrief.permittedInterfaces ?? []), handle: router.handle, scratch });
     const configFile = path.join(configDirectory, 'mcp-config.json');
     // The file's shape is the adapter's to know; `agentInvocation` refuses an adapter with no bridged run.
     const buildConfig = AGENT_ADAPTERS[evaluator.agent]?.buildBridgeConfig;
@@ -575,8 +579,8 @@ async function runSealedBriefAgent({ evaluator, sealedBrief, contract, mapping, 
     // No call the agent can no longer see runs after it ends.
     router.stop();
     if (bridge !== null) await bridge.close();
-    fs.rmSync(cwd, { recursive: true, force: true });
-    fs.rmSync(configDirectory, { recursive: true, force: true });
+    releaseScratchDirectory(scratch, cwd);
+    releaseScratchDirectory(scratch, configDirectory);
   }
   const printed = failure ?? answered ?? {};
   const streams = {

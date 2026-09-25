@@ -26,7 +26,6 @@
 'use strict';
 
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 
 const { resolveModel } = require('../agent-adapters');
@@ -75,13 +74,32 @@ const READ_REGULAR = fs.constants.O_RDONLY | (fs.constants.O_NONBLOCK ?? 0) | (f
 /** The execute bits of a file mode. */
 const EXECUTE_BITS = 0o111;
 
-/** The paths git tracks under `evaluator/`, relative to the folder, or null when the folder is in no git repository. */
+/** The index mode git gives a gitlink, the entry a submodule is recorded as. */
+const GITLINK_MODE = '160000';
+
+/**
+ * The paths git tracks under `evaluator/`, relative to the folder, or null
+ * when the folder is in no git repository. A submodule there is refused by
+ * name: its files are another repository's, which this one does not track.
+ */
 function trackedEvaluatorPaths(folder) {
   const inside = runGit(['-C', folder, 'rev-parse', '--is-inside-work-tree']);
   if (!inside.ok || inside.stdout.trim() !== 'true') return null;
-  const listed = runGit(['-C', folder, 'ls-files', '-z', '--', EVALUATOR_DIRECTORY]);
+  const listed = runGit(['-C', folder, 'ls-files', '--stage', '-z', '--', EVALUATOR_DIRECTORY]);
   if (!listed.ok) throw new EvaluatorLayerError(`the files git tracks under ${EVALUATOR_DIRECTORY}/ cannot be listed: ${listed.detail}`);
-  return [...new Set(listed.stdout.split('\0').filter((relative) => relative.length > 0))];
+  const paths = new Set();
+  // Each entry is `<mode> <object> <stage>\t<path>`; a conflicted path is listed once per stage.
+  for (const entry of listed.stdout.split('\0').filter((line) => line.length > 0)) {
+    const tab = entry.indexOf('\t');
+    const relative = entry.slice(tab + 1);
+    if (entry.slice(0, entry.indexOf(' ')) === GITLINK_MODE) {
+      throw new EvaluatorLayerError(
+        `${relative} is a git submodule; evaluator/ holds only files the evaluation folder's own repository tracks, so commit the evaluator's files there`,
+      );
+    }
+    paths.add(relative);
+  }
+  return [...paths];
 }
 
 /** Every path under `root`, relative to `folder`; a link or special file is refused. */
@@ -191,53 +209,32 @@ function notInLayer(relative, tracked) {
 }
 
 /**
- * The evaluation layer's files copied once into a private temporary
- * directory, `<snapshot>/evaluator/...`, each file's write bits cleared and
- * its execute bits kept; the directories stay writable, so an evaluator's
- * own caches land in the snapshot.
- */
-function writeSnapshot(files, scratch) {
-  const snapshot = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-evaluate-evaluator-snapshot-'));
-  scratch.push(snapshot);
-  for (const file of files) {
-    const target = path.join(snapshot, ...file.path.split('/'));
-    fs.mkdirSync(path.dirname(target), { recursive: true, mode: 0o700 });
-    fs.writeFileSync(target, file.bytes, { flag: 'wx', mode: 0o600 });
-    fs.chmodSync(target, file.mode & 0o555);
-  }
-  return snapshot;
-}
-
-/**
  * What a run reads of its evaluation layer before anything runs: the mapping
  * and its row validator, which the trials use as read here, the digests the
- * configuration records, and, for a command evaluator, the snapshot the
- * trials run from.
+ * configuration records, and the files those digests are taken over.
  *
  * The layer's files (`evaluatorFiles`) are read once: the digests are taken
- * over those bytes and the mapping is parsed from them. A command
- * evaluator's are copied into a private snapshot (`writeSnapshot`),
- * registered in `scratch` so the run removes it on every way it ends, and the
- * trials run the executable from there, so the bytes that run are the bytes
- * digested, an edit to the evaluation folder during the run reaches no
- * trial, and what the evaluator writes beside itself stays out of the
- * folder.
+ * over those bytes and the mapping is parsed from them. A command evaluator
+ * runs in place, from the evaluation folder's `evaluator/`, so its module
+ * resolution and its reads beside itself work as they do outside a run; the
+ * run holds it to the bytes read here by reading the files again before
+ * each launch and after each trial (`evaluatorLayerChange`).
  *
  * @param {object} options
  * @param {string} options.folder
  * @param {object} options.evaluation
  * @param {object} options.contract
  * @param {object} options.engine the loaded engine (`digestBytes`, `digestArtifact`)
- * @param {string[]} options.scratch directories the run removes when it ends, the snapshot's among them
- * @returns {{ evaluator: object, root: string|null, mapping: object|null, validate: Function|null, treeDigest: string|null, executableDigest: string|null }}
- *   `root` is a command evaluator's snapshot directory, which holds `evaluator/` as the folder does
+ * @returns {{ evaluator: object, files: Array<{ path: string, bytes: Buffer }>|null, mapping: object|null, validate: Function|null, treeDigest: string|null, executableDigest: string|null }}
+ *   `files` are the layer's files as read, null for a kind with no layer to read
  * @throws {EvaluatorLayerError}
  */
-function readEvaluatorLayer({ folder, evaluation, contract, engine, scratch }) {
+function readEvaluatorLayer({ folder, evaluation, contract, engine }) {
   const evaluator = evaluatorOf(evaluation);
-  const layer = { evaluator, root: null, mapping: null, validate: null, treeDigest: null, executableDigest: null };
+  const layer = { evaluator, files: null, mapping: null, validate: null, treeDigest: null, executableDigest: null };
   if (evaluator.kind === 'deterministic' || evaluator.kind === 'records') return layer;
   const { tracked, files } = evaluatorFiles(folder);
+  layer.files = files.map((file) => ({ path: file.path, bytes: file.bytes }));
   layer.treeDigest = engine.digestArtifact(
     files.map((file) => ({ path: file.path, sha256: engine.digestBytes(file.bytes).slice(DIGEST_PREFIX.length) })),
     'evaluator-tree',
@@ -263,9 +260,40 @@ function readEvaluatorLayer({ folder, evaluation, contract, engine, scratch }) {
       throw new EvaluatorLayerError(`${evaluator.command} is not executable`);
     }
     layer.executableDigest = engine.digestBytes(executable.bytes);
-    layer.root = writeSnapshot(files, scratch);
   }
   return layer;
+}
+
+/**
+ * How the evaluation layer's files differ from the bytes `readEvaluatorLayer`
+ * read, or null when every file holds them still: a file gone, one whose
+ * bytes changed, one that joined the layer, or a layer that can no longer be
+ * read. The run asks before each launch of the evaluator and after each
+ * trial, and a difference stops it with exit 12 and no record, since the
+ * configuration digests would then name bytes that did not run.
+ *
+ * @param {string} folder
+ * @param {Array<{ path: string, bytes: Buffer }>} files `readEvaluatorLayer(...).files`
+ * @returns {string|null}
+ */
+function evaluatorLayerChange(folder, files) {
+  let now;
+  try {
+    now = evaluatorFiles(folder).files;
+  } catch (error) {
+    if (!(error instanceof EvaluatorLayerError)) throw error;
+    return error.message;
+  }
+  const changes = [];
+  for (const file of files) {
+    const current = now.find((candidate) => candidate.path === file.path);
+    if (current === undefined) changes.push(`${file.path} is gone`);
+    else if (!current.bytes.equals(file.bytes)) changes.push(`${file.path} no longer holds the bytes the run read at its start`);
+  }
+  for (const current of now) {
+    if (!files.some((file) => file.path === current.path)) changes.push(`${current.path} joined the layer`);
+  }
+  return changes.length === 0 ? null : changes.join('; ');
 }
 
 /**
@@ -349,6 +377,7 @@ module.exports = {
   configurationFields,
   convertsRows,
   evaluatorFiles,
+  evaluatorLayerChange,
   evaluatorOf,
   isKnownEvaluator,
   evaluatorTree,

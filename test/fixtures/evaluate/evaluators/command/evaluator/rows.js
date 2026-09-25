@@ -27,8 +27,9 @@
  *   score-on-oracle    a score row on verdict-accepted, an oracle key
  *   pass-on-rubric     a pass row on verdict-quality, a rubric key
  *   hang               print the start of an answer, start a child (in the
- *                      evaluator's own process group), write both pids to the
- *                      file `--pids` names, and never exit
+ *                      evaluator's own process group), write both pids and
+ *                      the time this process started to the file `--pids`
+ *                      names, and never exit
  *   surrogate          a pass row whose comment holds a lone surrogate
  *   raw-bytes          write bytes that are not UTF-8 on stdout and stderr,
  *                      then exit 1
@@ -36,6 +37,18 @@
  *                      and PASS on the others
  *   write-beside       the rows, after writing __pycache__/cache.bin beside
  *                      this file, as an interpreter's cache would
+ *   rewrite-self       the rows, after appending a line to this file, which
+ *                      git tracks, as an evaluator that rewrites its own
+ *                      layer would
+ *   require-package    the rows, the row's comment the string the package
+ *                      probe-dep exports, resolved from this file's directory
+ *                      as any module it loads is (the test installs it in the
+ *                      project root's node_modules)
+ *   lock-cwd           the rows, after leaving locked/inner.txt in its working
+ *                      directory with locked/ read-only (0o500)
+ *   immutable-cwd      the rows, after leaving pinned.txt in its working
+ *                      directory with the user immutable flag set
+ *                      (`chflags uchg`, macOS), which no chmod lifts
  *
  * Every mode first writes `stub stderr <mode>` to stderr, so a test can hold
  * the persisted streams to known bytes; `--log <file>` appends one line per
@@ -47,7 +60,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { spawn } = require('node:child_process');
+const { spawn, spawnSync } = require('node:child_process');
 
 const argv = process.argv.slice(2);
 const flag = (name, fallback) => {
@@ -77,15 +90,27 @@ if (mode === 'write-beside') {
   fs.mkdirSync(path.join(__dirname, '__pycache__'), { recursive: true });
   fs.writeFileSync(path.join(__dirname, '__pycache__', 'cache.bin'), 'cached\n');
 }
+if (mode === 'rewrite-self') fs.appendFileSync(__filename, '// rewritten by the evaluator during its trial\n');
+if (mode === 'lock-cwd') {
+  fs.mkdirSync('locked');
+  fs.writeFileSync(path.join('locked', 'inner.txt'), 'left behind by the evaluator\n');
+  fs.chmodSync('locked', 0o500);
+}
+if (mode === 'immutable-cwd') {
+  fs.writeFileSync('pinned.txt', 'left behind by the evaluator, immutable\n');
+  const pinned = spawnSync('chflags', ['uchg', 'pinned.txt']);
+  if (pinned.status !== 0) throw new Error(`chflags uchg failed: ${pinned.stderr}`);
+}
 if (mode === 'hang') {
   const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
-  if (pids !== null) fs.writeFileSync(pids, JSON.stringify({ evaluator: process.pid, child: child.pid }));
+  // The time this process started, before it loaded anything, so a reader can bound how long it ran.
+  const started = Math.round(performance.timeOrigin);
+  if (pids !== null) fs.writeFileSync(pids, JSON.stringify({ evaluator: process.pid, child: child.pid, started }));
   process.stdout.write('{"rows":[');
   setInterval(() => {}, 1000);
 } else if (mode !== 'raw-bytes') answer();
 
 function answer() {
-
   const text = (body) => (body?.kind === 'text' ? body.value : body?.kind === 'json' ? JSON.stringify(body.value) : '');
   const judged = input.observations.find((observation) => text(observation.stdout).includes('verdict:')) ?? input.observations[0];
   const accepted = text(judged.stdout).includes('verdict: accepted');
@@ -105,6 +130,11 @@ function answer() {
   switch (mode) {
     case 'recommend': {
       recommendation = accepted ? 'PASS' : 'CONCERNS';
+      break;
+    }
+    case 'require-package': {
+      // A module it loads resolves from this file's directory upward, as any Node program's does.
+      rows = [{ ...rows[0], comment: require('probe-dep') }];
       break;
     }
     case 'recommend-last': {

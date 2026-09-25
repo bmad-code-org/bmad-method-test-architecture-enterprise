@@ -25,7 +25,9 @@
  *                      which answers in two blocks carrying the prompt's
  *                      nonce; leak-nonce, which first sends the nonce to the
  *                      target on stdin, where the fixture's budget of one
- *                      leaves room for no second counted call
+ *                      leaves room for no second counted call; hang, which
+ *                      lists the tools, appends its capture line and never
+ *                      answers, for a case that interrupts the run mid-trial
  */
 
 'use strict';
@@ -71,6 +73,11 @@ async function main() {
   const initialized = await request('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'stub', version: '1' } });
   child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`);
   const listed = await request('tools/list', {});
+  if (mode === 'hang') {
+    if (capture !== null) fs.appendFileSync(capture, `${JSON.stringify({ prompt, argv, config, server: name, initialized, tools: listed.result?.tools })}\n`);
+    setInterval(() => {}, 1000);
+    await new Promise(() => {});
+  }
   const results = [];
   const call = async (input) => {
     const answered = await request('tools/call', { name: 'verdict', arguments: input });

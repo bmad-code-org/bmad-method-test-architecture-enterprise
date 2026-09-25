@@ -427,10 +427,15 @@ Its answer is read from its stdout as UTF-8, a byte sequence that is not UTF-8 r
 
 **The layer's files.** In a git repository the evaluation layer is the files git tracks under `evaluator/`, with their working-tree bytes: a file git does not track (an interpreter's cache, an editor's backup, a note) is no part of it and moves no digest, so `git add` every file the evaluator needs, and `check` refuses a mapping or command git does not track.
 Outside a repository it is every regular file under `evaluator/`, so a stray file there changes the scoring version.
-Either way a link, a special file or a path through a linked directory is refused.
+Either way a link, a special file or a path through a linked directory is refused, and `check` names a submodule under `evaluator/` as one, since its files are another repository's.
+`run` reads the layer's files once, before anything runs, and takes the digests and the mapping from those bytes.
+It reads them again before each launch of the evaluator and after each trial, and a file gone, changed or added to the layer stops the run there with exit 12 and no record, since the digests would name bytes that did not run.
+A process that swaps a file and restores it between that read and the launch goes unseen until Story 1.31 sandboxes the evaluator.
 
-**A command evaluator** runs under TeA's agent supervisor (its own process group, `SIGTERM` at `timeoutMs`, `SIGKILL` 2 s later, its group killed when it ends), in an empty temporary directory, with the agents' base environment and your `environmentKeys`, and receives `{ "sealedBrief", "observations" }` on stdin, the observations the record will carry (`evaluator-chosen`).
-`run` copies the layer's files once, before anything runs, into a private temporary snapshot it removes however the run ends, and runs the executable from there: the bytes that run are the bytes digested, an edit to your folder during the run reaches no trial, and what the evaluator writes beside itself (a cache, say) lands in the snapshot.
+**A command evaluator** runs under TeA's agent supervisor (its own process group, `SIGTERM` at `timeoutMs`, `SIGKILL` 2 s later, its group killed when it ends), with the agents' base environment and your `environmentKeys`, and receives `{ "sealedBrief", "observations" }` on stdin, the observations the record will carry (`evaluator-chosen`).
+The executable runs from its folder, `evaluator/`, so module resolution works as usual: a package in your project's `node_modules` or a sibling file it reads resolves as it does outside a run.
+Its working directory is an empty private directory the run removes however it ends, an interrupting signal included.
+A cache it writes beside itself (`__pycache__`, say) must be gitignored, or the adopter-tree check after the trial sees your tree change and stops the run with exit 12; outside a git repository it must write nothing under the project.
 A model it calls is named as `policy/evaluator-conditions.json`'s `evaluator.modelSnapshot`.
 
 **A sealed-brief agent** gets the evaluator instructions, a nonce-tagged answer block (as the rubric judge does), the sealed brief and the mapping's keys (a rubric key with its criterion and levels); nothing else of the evaluation.

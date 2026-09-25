@@ -147,11 +147,23 @@ function responseLine(id, outcome) {
  * @param {Array<{ name: string, kind: string, description: string, inputSchema: object }>} options.tools `bridgeTools(...)`
  * @param {(tool: { name: string, kind: string }, input: object) => Promise<{ text: string, isError: boolean }>} options.handle
  *   what one call does, answered as the call's text result
+ * @param {string[]} [options.scratch] the run's private directories, which the socket's directory joins until the bridge closes
  * @returns {Promise<{ server: { name: string, command: string, args: string[] }, close: () => Promise<void> }>}
  *   `server` is the MCP server configuration the agent's adapter starts
  */
-async function openBridge({ tools, handle }) {
+async function openBridge({ tools, handle, scratch = [] }) {
   const { directory, socketPath } = socketPlace();
+  if (directory !== null) scratch.push(directory);
+  // The directory holds the socket alone; one that cannot be removed stays listed, for the run's end to try again.
+  const removeDirectory = () => {
+    if (directory === null) return;
+    try {
+      fs.rmSync(directory, { recursive: true, force: true });
+    } catch {
+      return;
+    }
+    if (scratch.includes(directory)) scratch.splice(scratch.indexOf(directory), 1);
+  };
   const token = crypto.randomBytes(24).toString('hex');
   const connections = new Set();
   // One call at a time, in arrival order.
@@ -251,7 +263,7 @@ async function openBridge({ tools, handle }) {
       server.listen(socketPath, resolve);
     });
   } catch (error) {
-    if (directory !== null) fs.rmSync(directory, { recursive: true, force: true });
+    removeDirectory();
     throw error;
   }
   return {
@@ -261,7 +273,7 @@ async function openBridge({ tools, handle }) {
       await new Promise((resolve) => server.close(() => resolve()));
       // Whatever call was in flight has settled before the caller reads what the bridge recorded.
       await queue;
-      if (directory !== null) fs.rmSync(directory, { recursive: true, force: true });
+      removeDirectory();
     },
   };
 }
