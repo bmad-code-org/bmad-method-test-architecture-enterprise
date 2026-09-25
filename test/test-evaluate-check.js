@@ -1023,10 +1023,69 @@ const HARDENING_CASES = [
     file: 'probes/P-002.probe.json',
     rule: 'historical',
     plant: (folder) => {
-      editJson(folder, 'probes/P-002.probe.json', (value) => (value.qualification = { route: 'historical', fixCommit: 'HEAD~1' }));
+      editJson(folder, 'probes/P-002.probe.json', (value) => (value.qualification = { route: 'historical', fixCommit: 'a1b2c3d' }));
       editJson(folder, 'evaluation.json', (value) => (value.arms = ['clean', 'historical']));
     },
     expect: (output) => [[output.includes('1 not natural'), 'the finding does not count the defect that is not natural']],
+  },
+  {
+    name: 'a historical probe that is expected clean',
+    file: 'probes/P-002.probe.json',
+    rule: 'historical',
+    plant: (folder) => {
+      editJson(folder, 'probes/P-002.probe.json', (value) => {
+        value.qualification = { route: 'historical', fixCommit: 'a1b2c3d' };
+        value.defects[0].source = 'natural';
+        value.expectedClean = true;
+      });
+      editJson(folder, 'evaluation.json', (value) => (value.arms = ['clean', 'historical']));
+    },
+    expect: (output) => [[output.includes('got expectedClean true'), 'the finding does not name expectedClean']],
+  },
+  {
+    name: 'a historical probe that seeds no defect',
+    file: 'probes/P-002.probe.json',
+    rule: 'historical',
+    plant: (folder) => {
+      editJson(folder, 'probes/P-002.probe.json', (value) => {
+        value.qualification = { route: 'historical', fixCommit: 'a1b2c3d' };
+        value.defects = [];
+      });
+      editJson(folder, 'evaluation.json', (value) => (value.arms = ['clean', 'historical']));
+    },
+    expect: (output) => [[output.includes('0 defect(s)'), 'the finding does not count the defects']],
+  },
+  {
+    name: 'a historical probe whose fix commit is a ref name',
+    file: 'probes/P-002.probe.json',
+    rule: 'schema',
+    plant: (folder) => {
+      editJson(folder, 'probes/P-002.probe.json', (value) => {
+        value.qualification = { route: 'historical', fixCommit: 'main' };
+        value.defects[0].source = 'natural';
+      });
+      editJson(folder, 'evaluation.json', (value) => (value.arms = ['clean', 'historical']));
+    },
+  },
+  {
+    name: 'a gameability probe that is expected clean',
+    file: 'probes/P-003.probe.json',
+    rule: 'gameability',
+    plant: (folder) => plantGameability(folder, { probe: (probe) => (probe.expectedClean = true) }),
+    expect: (output) => [[output.includes('expectedClean true'), 'the finding does not name expectedClean']],
+  },
+  {
+    name: 'a gameability probe with no scoring policy',
+    file: 'policy/scoring-policy.json',
+    rule: 'missing-file',
+    plant: (folder) => {
+      plantGameability(folder);
+      fs.rmSync(path.join(folder, 'probes', 'P-002.probe.json'));
+      fs.rmSync(path.join(folder, 'mutations'), { recursive: true });
+      editJson(folder, 'evaluation.json', (value) => (value.arms = ['clean', 'gameability']));
+      fs.rmSync(path.join(folder, 'policy', 'scoring-policy.json'));
+    },
+    expect: (output) => [[output.includes('gameability route'), 'the finding does not name the gameability route']],
   },
   {
     name: 'a historical probe with no scoring policy',
@@ -1034,7 +1093,7 @@ const HARDENING_CASES = [
     rule: 'missing-file',
     plant: (folder) => {
       editJson(folder, 'probes/P-002.probe.json', (value) => {
-        value.qualification = { route: 'historical', fixCommit: 'HEAD~1' };
+        value.qualification = { route: 'historical', fixCommit: 'a1b2c3d' };
         value.defects[0].source = 'natural';
       });
       editJson(folder, 'evaluation.json', (value) => (value.arms = ['clean', 'historical']));
@@ -1086,6 +1145,13 @@ const HARDENING_CASES = [
     file: 'evaluation.json',
     rule: 'judge',
     plant: (folder) => plantRubric(folder, ({ judge }) => (judge.agent = 'no-such-agent')),
+  },
+  {
+    name: 'a judge on an adapter that cannot run read-only',
+    file: 'evaluation.json',
+    rule: 'judge',
+    plant: (folder) => plantRubric(folder, ({ judge }) => (judge.agent = 'agy')),
+    expect: (output) => [[output.includes('runs read-only'), 'the finding does not say the judge runs read-only']],
   },
   {
     name: 'a judge on the custom adapter with no command',
@@ -1448,7 +1514,7 @@ const CLEAN_CASES = [
     name: 'a historical probe with a natural defect, its arm and a fix commit named by any revision',
     plant: (folder) => {
       editJson(folder, 'probes/P-002.probe.json', (value) => {
-        value.qualification = { route: 'historical', fixCommit: 'HEAD~1' };
+        value.qualification = { route: 'historical', fixCommit: 'a1b2c3d' };
         value.defects[0].source = 'natural';
       });
       editJson(folder, 'evaluation.json', (value) => (value.arms = ['clean', 'historical']));

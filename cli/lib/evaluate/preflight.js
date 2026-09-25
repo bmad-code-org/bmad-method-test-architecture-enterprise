@@ -709,7 +709,14 @@ async function runInWorkspaces({
           pristine,
           fixCommit: probe.qualification.fixCommit,
           roots: [root, path.join(root, ...(evaluation.launch.skillRoot ?? '.').split('/'))],
+          // A bare command resolves through PATH, not the tree, so only a path target is looked for at the pre-fix revision.
+          targets: registry.entries
+            .filter((entry) => entry.target.includes('/'))
+            .map((entry) => path.join(root, ...entry.target.split('/'))),
         });
+        if (revisions.defect !== undefined) {
+          return outcome({ stage: 'check', exitCode: 10, message: `${file}: ${revisions.defect}` });
+        }
         if (revisions.refused !== undefined) {
           // A refused probe runs nowhere; the rest of the run goes on without it (AD-8).
           const refusal = { probeId: probe.probeId, file, route: 'historical', reason: revisions.refused };

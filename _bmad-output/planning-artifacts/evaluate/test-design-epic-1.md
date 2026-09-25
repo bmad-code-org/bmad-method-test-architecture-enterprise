@@ -565,6 +565,17 @@ Levels: integration over real eval-quality. File: `test/test-evaluate-run.js` (`
 | A platform without confinement refuses unless the evaluation opts out | One case asserts the refusal exits 12, another the opt-out recorded in `run.json` | Integration | P1 | Dropping the refusal runs unconfined silently |
 | The confinement covers processes the target leaves running | A stub leaves a process running that, after `run` exits, rewrites a sealed record and the digest `run.json` recorded for it; `score` refuses the run | Integration over real eval-quality | P0 | Reverting the confinement for leftover processes lets `score` pass the rewritten record to the engine |
 
+### Story 1.32: Qualify a historical probe against two addressable deployments
+
+Levels: integration over real eval-quality, contract. Files: `test/test-evaluate-arms.js` (`test:evaluate-arms`), `test/test-evaluate-check.js` (`test:evaluate-check`).
+
+| AC | Test | Level | P | Revert check |
+| --- | --- | --- | --- | --- |
+| Fail-before at the pre-fix deployment, pass-after at the post-fix one, witness leg and trials at the pre-fix one | Two loopback fixture servers log each request; assert each arm's and leg's routing from those logs | Integration over real eval-quality | P0 | Routing fail-before to the post-fix deployment makes it hold and exit 11 |
+| `fixCommitDigest` and `artifactDigest` from the two release identifiers | Assert each digest against the identifiers the servers report | Integration | P1 | One identifier recorded for both makes the digests equal |
+| An unauthorized deployment refuses the probe, the rest runs | A deployment outside the registry's api policy; assert the refusal in `run.json` and `refused/` and exit 0 | Integration | P1 | Dropping the refusal sends a denied request and exits 10 |
+| `check` holds the deployment pair | One deployment only, and both deployments with a `fixCommit`, each exit 10 under `historical` | Contract | P1 | Dropping the rule lets `run` stop at qualification with exit 12 |
+
 ## The Dogfood Proof (AD-15)
 
 ### What the run must produce

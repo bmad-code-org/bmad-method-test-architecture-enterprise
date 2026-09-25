@@ -52,7 +52,8 @@
  * - `judge` (Story 1.9): the contract declares a rubric and `evaluation.json` has no `judge`, or
  *   `policy/evaluator-conditions.json` names no `judge.modelSnapshot`; the contract declares no rubric and
  *   either file carries a `judge` block, which nothing would use; or `judge` names an agent adapter TeA
- *   does not have, the `custom` adapter with no `agentCommand`, or a `model` its adapter refuses.
+ *   does not have, one that cannot run read-only, the `custom` adapter with no `agentCommand`, or a `model`
+ *   its adapter refuses.
  *
  * Beside them, `contract.json` must exist (`missing-file`), as must
  * `policy/scoring-policy.json` when a probe takes the `controlled-mutation`,
@@ -1008,6 +1009,13 @@ function checkJudge(report, folder, evaluation, contract) {
       `judge.agent ${JSON.stringify(judge.agent)} is not an agent adapter TeA has (${Object.keys(AGENT_ADAPTERS).join(', ')})`,
     );
     return;
+  }
+  if (AGENT_ADAPTERS[judge.agent].runsReadOnly === false) {
+    report.add(
+      MANIFEST_NAME,
+      'judge',
+      `judge.agent ${judge.agent} always runs with full permissions, and the rubric judge runs read-only; choose an adapter that can`,
+    );
   }
   if (AGENT_ADAPTERS[judge.agent].command === null && typeof judge.agentCommand !== 'string') {
     report.add(MANIFEST_NAME, 'judge', `judge.agent ${judge.agent} runs no command of its own, so judge.agentCommand must name one`);

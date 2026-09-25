@@ -3,14 +3,13 @@
  * real one a commit fixed, qualified across that fix boundary.
  *
  * A committed historical probe names its fix commit (`qualification.fixCommit`,
- * any revision git resolves to a commit). The post-fix revision is that commit
+ * a hexadecimal commit id). The post-fix revision is that commit
  * and the pre-fix revision its first parent, both by full id. The probe is
- * refused, with the reason, when the run has no revisions to address (the
- * pristine workspace is a copy, not a git worktree), when `fixCommit` does not
- * resolve, when it is not an ancestor of the evaluated commit (git's own error
- * when it cannot tell, a shallow clone say), when it has no parent, or when
- * the pre-fix revision holds no `launch.root` or skill root; a refused probe
- * runs nowhere and the rest of the run goes on.
+ * refused, with the reason, when the run has no revisions to address or the
+ * target cannot run at one of them (`historicalRevisions` names each case); a
+ * refused probe runs nowhere and the rest of the run goes on. A `fixCommit`
+ * that names no commit in a full-history repository is an authoring defect
+ * (exit 10).
  *
  * Qualification runs the interaction plan once in a worktree at each revision
  * (`qualify-<probeId>-fail-before` at the parent, `qualify-<probeId>-pass-after`
@@ -53,22 +52,44 @@ const PHASES = [
 /**
  * The two revisions a historical probe straddles, or why it has none.
  *
+ * A `fixCommit` that does not resolve in a repository with its full history
+ * is an authoring defect (`defect`, exit 10): the probe names a commit that
+ * is not there. In a shallow clone the same miss, and a fix commit whose
+ * parent the clone cut off, refuse the probe, naming the shallow history. So
+ * do a pristine workspace that is not a git worktree, a fix commit that is
+ * not an ancestor of the evaluated commit (git's own error when it cannot
+ * tell), one with no parent, and a revision where the target cannot run:
+ * `launch.root` or the skill root not a directory at either revision, a
+ * submodule under `launch.root` at the pre-fix revision (a worktree checks it
+ * out empty), or a registry target that is not an executable file there.
+ *
  * @param {object} options
  * @param {object} options.pristine the run's pristine workspace
  * @param {string} options.fixCommit the committed probe's `qualification.fixCommit`
- * @param {string[]} [options.roots] absolute directories the pre-fix revision must hold (`launch.root`, the skill root)
- * @returns {{ fix: string, preFix: string } | { refused: string }}
+ * @param {string[]} [options.roots] absolute directories both revisions must hold (`launch.root`, the skill root)
+ * @param {string[]} [options.targets] absolute paths of the registry targets the pre-fix revision must hold as executables
+ * @param {typeof runGit} [options.git] how git is asked, for a test to answer in its place
+ * @returns {{ fix: string, preFix: string } | { refused: string } | { defect: string }}
  */
-function historicalRevisions({ pristine, fixCommit, roots = [] }) {
+function historicalRevisions({ pristine, fixCommit, roots = [], targets = [], git = runGit }) {
   if (pristine.kind !== 'git-worktree') {
     return {
       refused: `the pristine workspace is a temp copy${pristine.dirty ? ' of the working tree' : ''}, not a git worktree, so the run has no revisions to address; evaluate a committed git target without --from-working-tree`,
     };
   }
-  const resolved = runGit(['-C', pristine.repository, 'rev-parse', '--verify', '--quiet', '--end-of-options', `${fixCommit}^{commit}`]);
-  if (!resolved.ok) return { refused: `fixCommit ${JSON.stringify(fixCommit)} does not resolve to a commit in ${pristine.repository}` };
+  const ask = (args) => git(['-C', pristine.repository, ...args]);
+  const shallow = ask(['rev-parse', '--is-shallow-repository']);
+  const isShallow = shallow.ok && shallow.stdout.trim() === 'true';
+  const resolved = ask(['rev-parse', '--verify', '--quiet', '--end-of-options', `${fixCommit}^{commit}`]);
+  if (!resolved.ok) {
+    return isShallow
+      ? {
+          refused: `fixCommit ${fixCommit} is not in the shallow history of ${pristine.repository}; fetch the full history (git fetch --unshallow) to qualify it`,
+        }
+      : { defect: `fixCommit ${fixCommit} names no commit in ${pristine.repository}` };
+  }
   const fix = resolved.stdout.trim();
-  const ancestor = runGit(['-C', pristine.repository, 'merge-base', '--is-ancestor', fix, pristine.commit]);
+  const ancestor = ask(['merge-base', '--is-ancestor', fix, pristine.commit]);
   if (!ancestor.ok) {
     return {
       refused:
@@ -77,15 +98,45 @@ function historicalRevisions({ pristine, fixCommit, roots = [] }) {
           : `git cannot tell whether fix commit ${fix} is an ancestor of the evaluated commit ${pristine.commit}: ${ancestor.detail}`,
     };
   }
-  const parent = runGit(['-C', pristine.repository, 'rev-parse', '--verify', '--quiet', `${fix}^1`]);
-  if (!parent.ok)
-    return { refused: `fix commit ${fix} has no parent, so there is no pre-fix revision for the defect to fail before the fix` };
+  const parent = ask(['rev-parse', '--verify', '--quiet', `${fix}^1`]);
+  if (!parent.ok) {
+    return {
+      refused: isShallow
+        ? `fix commit ${fix} has no parent in the shallow history of ${pristine.repository}; fetch the full history (git fetch --unshallow) to qualify it`
+        : `fix commit ${fix} has no parent, so there is no pre-fix revision for the defect to fail before the fix`,
+    };
+  }
   const preFix = parent.stdout.trim();
-  for (const root of roots) {
-    const relative = path.relative(pristine.repository, root).split(path.sep).join('/');
-    if (relative === '') continue;
-    if (!runGit(['-C', pristine.repository, 'rev-parse', '--verify', '--quiet', `${preFix}:${relative}`]).ok) {
-      return { refused: `the pre-fix revision ${preFix} holds no ${relative}, so the target cannot run there` };
+  const relative = (absolute) => path.relative(pristine.repository, absolute).split(path.sep).join('/');
+  for (const [name, revision] of [
+    ['pre-fix', preFix],
+    ['fix', fix],
+  ]) {
+    for (const root of roots) {
+      const at = relative(root);
+      if (at === '') continue;
+      const kind = ask(['cat-file', '-t', `${revision}:${at}`]);
+      if (!kind.ok || kind.stdout.trim() !== 'tree') {
+        return { refused: `the ${name} revision ${revision} holds no directory ${at}, so the target cannot run there` };
+      }
+    }
+  }
+  const [launchRoot] = roots;
+  if (launchRoot !== undefined) {
+    const listed = ask(['ls-tree', '-r', '-z', preFix, '--', relative(launchRoot) || '.']);
+    const submodules = listed.ok ? listed.stdout.split('\u0000').filter((record) => record.startsWith('160000 ')) : [];
+    if (submodules.length > 0) {
+      return {
+        refused: `the pre-fix revision ${preFix} holds git submodule(s) ${submodules.map((record) => record.slice(record.indexOf('\t') + 1)).join(', ')} under launch.root, which a worktree checks out empty`,
+      };
+    }
+  }
+  for (const target of targets) {
+    const at = relative(target);
+    const listed = ask(['ls-tree', '-z', preFix, '--', at]);
+    const record = listed.ok ? listed.stdout.split('\u0000').find((line) => line.endsWith(`\t${at}`)) : undefined;
+    if (record === undefined || !record.startsWith('100755 blob ')) {
+      return { refused: `the pre-fix revision ${preFix} holds no executable registry target ${at}, so the target cannot run there` };
     }
   }
   return { fix, preFix };

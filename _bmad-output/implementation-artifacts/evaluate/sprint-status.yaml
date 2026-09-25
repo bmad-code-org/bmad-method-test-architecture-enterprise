@@ -67,6 +67,7 @@ development_status:
   1-29-record-what-a-live-run-spends: backlog
   1-30-send-principal-and-matcher-bindings: backlog
   1-31-sandbox-the-targets-file-system: backlog
+  1-32-qualify-a-historical-probe-against-two-addressable-deployments: backlog
   epic-1-retrospective: optional
 
   epic-2: backlog

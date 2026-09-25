@@ -4,7 +4,7 @@
 
 ## Goal
 
-An adopter describes a target (agent, skill, workflow, tool-use system, AI feature or test-review mechanism), answers Evaluate's questions, chooses or builds the evaluation layer, and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm resolves `passed-clean-control` and whose mutated arm resolves `caught`, with every weaker result traced to a named gap and closed. TeA owns every layer above eval-quality's fixed measurement engine, including each concern the engine leaves to the caller: the evaluation layer, held-out probes, judge calibration, mutation and rollback, and interpretation. The epic closes when Evaluate has authored and run the suite for `bmad-testarch-evaluate` itself, authored strong suites for two more target kinds from their descriptions alone, closed seeded weaknesses through its gap loop, and succeeded with two named frameworks plus one its guides never mention. Stories 1.27 to 1.31 were appended from findings made while building Stories 1.6 to 1.8.
+An adopter describes a target (agent, skill, workflow, tool-use system, AI feature or test-review mechanism), answers Evaluate's questions, chooses or builds the evaluation layer, and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm resolves `passed-clean-control` and whose mutated arm resolves `caught`, with every weaker result traced to a named gap and closed. TeA owns every layer above eval-quality's fixed measurement engine, including each concern the engine leaves to the caller: the evaluation layer, held-out probes, judge calibration, mutation and rollback, and interpretation. The epic closes when Evaluate has authored and run the suite for `bmad-testarch-evaluate` itself, authored strong suites for two more target kinds from their descriptions alone, closed seeded weaknesses through its gap loop, and succeeded with two named frameworks plus one its guides never mention. Stories 1.27 to 1.32 were appended from findings made while building Stories 1.6 to 1.9.
 
 ## Stories
 
@@ -39,6 +39,7 @@ An adopter describes a target (agent, skill, workflow, tool-use system, AI featu
 - Story 1.29: Record what a live run spends
 - Story 1.30: Send `principal` and `matcher` bindings
 - Story 1.31: Sandbox the target's file system
+- Story 1.32: Qualify a historical probe against two addressable deployments
 
 ## Requirements & Constraints
 
@@ -67,4 +68,4 @@ An adopter describes a target (agent, skill, workflow, tool-use system, AI featu
 
 ## Cross-Story Dependencies
 
-Stories 1.1 through 1.9 run in sequence; 1.1 ships the target-policy export (released in eval-quality 4.0.0) and 1.2 moves TeA onto that release. From 1.8 the graph branches: 1.9 feeds 1.17 (the import contract), on which 1.19, 1.20, 1.21 and 1.22 each build; 1.10 and 1.18 need only 1.8; 1.11 needs 1.1 and 1.8. 1.12 needs 1.4 and 1.21; 1.13 needs 1.10, 1.11, 1.12, 1.18 and 1.19; 1.23 needs 1.13, 1.19, 1.20 and 1.21; 1.14 needs 1.9, 1.13, 1.22 and 1.23. Then 1.15, 1.16, 1.24 and 1.25 run in sequence, and 1.26 needs 1.23 and 1.25. The appended stories hang off earlier work: 1.27 and 1.28 off 1.7; 1.29, 1.30 and 1.31 off 1.8. Story 1.13 teaches the `captured`, `principal` and `matcher` bindings that 1.18 and 1.30 make the runtime send. Epic 2 depends on this epic's runtime and on the evaluation Story 1.16 authors, and its Story 2.1 waits for 1.16 and 1.26.
+Stories 1.1 through 1.9 run in sequence; 1.1 ships the target-policy export (released in eval-quality 4.0.0) and 1.2 moves TeA onto that release. From 1.8 the graph branches: 1.9 feeds 1.17 (the import contract), on which 1.19, 1.20, 1.21 and 1.22 each build; 1.10 and 1.18 need only 1.8; 1.11 needs 1.1 and 1.8. 1.12 needs 1.4 and 1.21; 1.13 needs 1.10, 1.11, 1.12, 1.18 and 1.19; 1.23 needs 1.13, 1.19, 1.20 and 1.21; 1.14 needs 1.9, 1.13, 1.22 and 1.23. Then 1.15, 1.16, 1.24 and 1.25 run in sequence, and 1.26 needs 1.23 and 1.25. The appended stories hang off earlier work: 1.27 and 1.28 off 1.7; 1.29, 1.30 and 1.31 off 1.8; 1.32 off 1.9 and 1.11. Story 1.13 teaches the `captured`, `principal` and `matcher` bindings that 1.18 and 1.30 make the runtime send. Epic 2 depends on this epic's runtime and on the evaluation Story 1.16 authors, and its Story 2.1 waits for 1.16 and 1.26.

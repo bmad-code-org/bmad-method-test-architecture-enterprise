@@ -2,7 +2,7 @@
 title: 'Story 1.5: Move the registry, records and provenance into the runtime'
 type: 'refactor'
 created: '2026-09-23'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 1
 baseline_commit: 'cdf6e112546fbf6e47a4a65bb39a1de65814cbb7'

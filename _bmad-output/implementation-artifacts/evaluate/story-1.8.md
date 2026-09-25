@@ -2,7 +2,7 @@
 title: 'Story 1.8: Run the clean and mutated arms and score them'
 type: 'feature'
 created: '2026-09-24'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 2
 baseline_commit: '1f53e9095061ab66f3c35abd9b98baf0f50cf8fe'

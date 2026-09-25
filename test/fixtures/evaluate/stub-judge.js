@@ -7,12 +7,20 @@
  * It reads the whole prompt from standard input, appends one line to the file
  * `--log` names for every call (so a test counts the calls), appends every
  * prompt it receives as one JSON string per line to the file `--capture`
- * names when given, and replies with every criterion the prompt lists scored
- * at its rubric's highest level. `--mode` changes the reply:
+ * names, appends `{ cwd, entries }` (its working directory and what that
+ * directory held when it started) to the file `--cwd-log` names, and replies
+ * with every criterion the prompt lists scored at its rubric's highest level.
+ * `--mode` changes what it does:
  *
  *   fail        print a line to each stream and exit 1, a judge that cannot answer
  *   off-scale   score every criterion one above its highest level
  *   garbage     reply with text that is not JSON
+ *   echo        print each criterion's evidence, as a judge quoting it would,
+ *               then its answer
+ *   write       write a file into its working directory, then answer
+ *   hang        wait a minute before answering, past any short timeoutMs
+ *   sleep       write its pid to the file `--pid` names, wait 5 s, then answer
+ *               (a case that signals the run while the judge runs)
  */
 
 'use strict';
@@ -26,10 +34,14 @@ const option = (name) => {
   const at = argv.indexOf(name);
   return at === -1 ? undefined : argv[at + 1];
 };
+const wait = (milliseconds) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
 
 const prompt = fs.readFileSync(0, 'utf8');
 if (option('--log') !== undefined) fs.appendFileSync(option('--log'), 'judged\n');
 if (option('--capture') !== undefined) fs.appendFileSync(option('--capture'), `${JSON.stringify(prompt)}\n`);
+if (option('--cwd-log') !== undefined) {
+  fs.appendFileSync(option('--cwd-log'), `${JSON.stringify({ cwd: process.cwd(), entries: fs.readdirSync('.') })}\n`);
+}
 const mode = option('--mode') ?? 'score';
 if (mode === 'fail') {
   process.stdout.write('stub judge: no scores this time\n');
@@ -40,7 +52,18 @@ if (mode === 'garbage') {
   process.stdout.write('I would rather not say.\n');
   process.exit(0);
 }
+if (mode === 'write') fs.writeFileSync('scratch.txt', 'a judge that writes\n');
+if (mode === 'hang') wait(60_000);
+if (mode === 'sleep') {
+  fs.writeFileSync(option('--pid'), String(process.pid));
+  wait(5000);
+}
 const material = JSON.parse(prompt.slice(prompt.indexOf(HEADING) + HEADING.length));
+if (mode === 'echo') {
+  for (const rubric of material.rubrics) {
+    for (const criterion of rubric.criteria) process.stdout.write(`The evidence reads:\n${criterion.evidence}\n`);
+  }
+}
 const scores = material.rubrics.flatMap((rubric) => {
   const top = Math.max(...rubric.scaleLevels.map((level) => level.level));
   return rubric.criteria.map((criterion) => ({

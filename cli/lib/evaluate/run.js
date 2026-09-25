@@ -59,14 +59,13 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { resolveModel } = require('../agent-adapters');
 const { admissionRefusal, armVerdict, referenceTo } = require('./admission');
 const { hostEnvironmentPort, persistableRequest, runArm } = require('./arm');
 const { corpusDigestOf } = require('./corpus-index');
 const { expectedSchemaVersion } = require('./engine');
 const { evaluateOracles, judgeTrial, oraclesOfBehaviors } = require('./evaluator');
 const { degenerateArm } = require('./gameability');
-const { JudgeError, judgeConfigurationFor, judgeRubrics } = require('./judge');
+const { JudgeError, judgeConfigurationFor, judgeRubrics, recordedJudgeModel } = require('./judge');
 const { QualificationError, applyReplaceExact } = require('./mutation');
 const { PreflightOutcome, readJson, runPipeline } = require('./preflight');
 const { evaluatorConfiguration, isolationManifest, sealedRunRecord } = require('./records');
@@ -431,7 +430,7 @@ async function runTrial(context) {
  * no record.
  */
 async function concludeTrial(
-  { arm, trialIndex, contract, evaluation, policy, writer, stop },
+  { arm, trialIndex, contract, evaluation, policy, writer, stop, signal },
   { label, evidenceFile, executed, elapsedMs, evidence, mounts, toolCalls },
 ) {
   const judgments = {};
@@ -455,11 +454,15 @@ async function concludeTrial(
   };
   let judged;
   try {
-    judged = await judgeRubrics({ contract, stepObservations: executed.stepObservations, judge: evaluation.judge });
+    judged = await judgeRubrics({ contract, stepObservations: executed.stepObservations, judge: evaluation.judge, signal });
   } catch (error) {
     if (!(error instanceof JudgeError)) throw error;
     writer.writeJson(evidenceFile, { ...written, judge: { fault: error.message, stdout: error.stdout, stderr: error.stderr } });
-    throw stop({ stage: 'trial', exitCode: 12, message: `${label} yields no record: ${error.message}` });
+    throw stop({
+      stage: error.stoppedFromOutside ? 'signal' : 'trial',
+      exitCode: 12,
+      message: `${label} yields no record: ${error.message}`,
+    });
   }
   // A trial no judge scored keeps the evidence shape of a run with no rubric.
   writer.writeJson(
@@ -781,7 +784,7 @@ async function runTrialSets(given) {
         : {
             agent: evaluation.judge.agent,
             // The model the adapter runs: the judge's own, or the adapter's pinned default.
-            model: resolveModel(evaluation.judge.agent, evaluation.judge.model, evaluation.judge.agentArgs ?? []),
+            model: recordedJudgeModel(evaluation.judge),
             ...judgeConfiguration,
             calls: arms.reduce((total, arm) => total + arm.trials.filter((trial) => trial.judgeCalled).length, 0),
           },

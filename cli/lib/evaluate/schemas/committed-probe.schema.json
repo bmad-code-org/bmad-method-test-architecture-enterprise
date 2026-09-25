@@ -51,9 +51,9 @@
             "properties": {
               "route": true,
               "fixCommit": {
-                "description": "The commit that fixed the defect, as any revision git resolves to a commit (a full or abbreviated id, or a ref); the run records its full id. The pre-fix revision is its first parent.",
+                "description": "The commit that fixed the defect, as a hexadecimal commit id (7 to 40 lowercase hex digits, abbreviated or full), never a ref, which moves as history advances; the run records its full id. The pre-fix revision is its first parent. An id that names no commit in a repository with its full history is an authoring defect.",
                 "type": "string",
-                "minLength": 1
+                "pattern": "^[0-9a-f]{7,40}$"
               }
             }
           }
