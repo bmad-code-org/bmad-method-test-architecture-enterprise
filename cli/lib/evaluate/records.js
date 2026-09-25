@@ -229,7 +229,10 @@ function isolationManifest({
  * it saw would fail to parse. A spawned command has no HTTP channels and makes
  * no tool call, so those are stated as null. `stdout`, `stderr` and each
  * artifact are the tagged bodies `createCommandLineAdapter` returns, so an
- * observation built here and one read off the port have one shape.
+ * observation built here and one read off the port have one shape. A tool
+ * call (Story 1.10) carries its `arguments`, its structured result as
+ * `responseBody` and its error flag as `responseStatus`, with no stream, exit
+ * code or artifact.
  *
  * `provenance` defaults to `evaluator-chosen`, because eval-quality's probe
  * witness matching only considers evaluator-chosen observations; a caller
@@ -245,6 +248,8 @@ function recordObservation({
   stderr = { kind: 'absent' },
   exitCode = null,
   artifacts = {},
+  responseBody = null,
+  responseStatus = null,
   provenance = 'evaluator-chosen',
   principal = null,
 }) {
@@ -265,9 +270,9 @@ function recordObservation({
       stdin: callInputs.stdin ?? null,
       arguments: callInputs.arguments ?? null,
     },
-    responseBody: null,
+    responseBody,
     responseHeaders: null,
-    responseStatus: null,
+    responseStatus,
     stdout,
     stderr,
     exitCode,

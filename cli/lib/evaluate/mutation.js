@@ -37,6 +37,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
+const { causeNote, faultRecord, reasonNote } = require('./arm');
 const { expectedSchemaVersion, loadEngine } = require('./engine');
 const { isInside } = require('./workspace');
 
@@ -367,10 +368,10 @@ async function cycle(planned, { mutation, runArm, reExecutionCap, digestOf, log 
       if (error instanceof QualificationError) throw error;
       const stop = new QualificationError(
         Number.isInteger(error?.exitCode) ? error.exitCode : QUALIFICATION_EXITS.infrastructure,
-        `${mutation.mutationId}: the ${phase} arm could not run: ${error?.message ?? error}`,
+        `${mutation.mutationId}: the ${phase} arm ${error?.code === 'forbidden-target' ? `was denied by the registry${reasonNote(error)}` : 'could not run'}: ${error?.message ?? error}${causeNote(error)}`,
         evidence,
       );
-      stop.fault = { phase, code: typeof error?.code === 'string' ? error.code : null, message: String(error?.message ?? error) };
+      stop.fault = { phase, ...faultRecord(error) };
       throw stop;
     }
   };

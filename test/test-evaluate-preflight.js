@@ -37,7 +37,8 @@
  *   stage exit eval-quality does not document for that stage, a seeded probe
  *   on a route no release qualifies (canary; Story 1.9 qualifies the
  *   historical route, which `test/test-evaluate-arms.js` covers),
- *   a missing registry target, an `mcp` interface, a leg over its output
+ *   a missing registry target, an `api` interface (Story 1.10 drives `mcp`,
+ *   which test/test-evaluate-mcp.js covers), a leg over its output
  *   budget and a missing engine exit 12; an authoring defect exits 10; and no
  *   `--evaluation` exits 64;
  * - a `runPreflight` that refuses its plan before any leg falls through to the
@@ -1448,11 +1449,29 @@ function checkInterfaceDenialAndRefusals() {
   editJson(renamed, 'evaluation.json', (value) => (value.registry[0].interfaceId = 'other-skill'));
   const denied = runPreflight(renamed);
   check(denied.status === 10, `preflight with the stub's interface unregistered exited ${denied.status}; expected 10\n${denied.output}`);
+  // The leg's fault carries eval-quality's own reason code beside its fault code (Story 1.10).
+  const deniedRun = runDirectoryOf(renamed);
+  const [deniedFault] = filesUnder(path.join(deniedRun ?? '', 'faults')).map((file) => JSON.parse(fs.readFileSync(file, 'utf8')));
+  check(
+    deniedFault?.code === 'forbidden-target' && deniedFault.reason === 'interface-not-authorized',
+    `the unregistered interface's leg fault is ${JSON.stringify(deniedFault)}`,
+  );
 
-  const mcp = copyFixture();
-  editJson(mcp, 'evaluation.json', (value) => (value.interface = 'mcp'));
-  const mcpResult = runPreflight(mcp);
-  check(mcpResult.status === 12, `preflight over an mcp evaluation exited ${mcpResult.status}; expected 12\n${mcpResult.output}`);
+  // An api evaluation over a contract that declares an api interface beside its cli one: `check` passes, and this release
+  // refuses to drive it until Story 1.11's HTTP port.
+  const api = copyFixture();
+  editJson(api, 'evaluation.json', (value) => (value.interface = 'api'));
+  editJson(api, 'contract.json', (value) => value.permittedInterfaces.push({ logicalId: 'stub-api', kind: 'api', operations: [] }));
+  const apiResult = runPreflight(api);
+  check(apiResult.status === 12, `preflight over an api evaluation exited ${apiResult.status}; expected 12\n${apiResult.output}`);
+  // An interface kind the contract does not declare is an authoring defect.
+  const undeclared = copyFixture();
+  editJson(undeclared, 'evaluation.json', (value) => (value.interface = 'mcp'));
+  const undeclaredResult = runPreflight(undeclared);
+  check(
+    undeclaredResult.status === 10 && undeclaredResult.output.includes('names a kind no interface of contract.json declares'),
+    `preflight over an mcp evaluation of a cli contract exited ${undeclaredResult.status}; expected 10\n${undeclaredResult.output}`,
+  );
 
   const crashed = copyFixture();
   const log = path.join(tempDir('shim-crash'), 'argv.log');

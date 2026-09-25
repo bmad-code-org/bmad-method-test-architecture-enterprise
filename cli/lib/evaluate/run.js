@@ -67,7 +67,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const { admissionRefusal, armVerdict, referenceTo } = require('./admission');
-const { hostEnvironmentPort, persistableRequest, runArm } = require('./arm');
+const { callLabel, causeNote, faultRecord, hostEnvironmentPort, persistableRequest, reasonNote, runArm } = require('./arm');
 const { runCommandEvaluator } = require('./command-evaluator');
 const { corpusDigestOf } = require('./corpus-index');
 const { expectedSchemaVersion, loadEngine } = require('./engine');
@@ -227,15 +227,14 @@ async function qualificationArm({ contract, registry, workspace, stop, writer, d
     writer.writeJson(`${directory}/fault.json`, {
       phase: 'baseline-pass',
       workspace: workspace.label,
-      code: typeof error?.code === 'string' ? error.code : null,
-      message: String(error?.message ?? error),
+      ...faultRecord(error),
       steps: error?.steps ?? [],
     });
     log(`the clean controls' baseline arm could not run: ${error?.message ?? error}`);
     throw stop({
       stage: 'qualification',
       exitCode: error?.code === DENIAL_FAULT ? 10 : 12,
-      message: `the clean controls' baseline arm ${error?.code === DENIAL_FAULT ? 'was denied by the registry' : 'could not run'}: ${error?.message ?? error}`,
+      message: `the clean controls' baseline arm ${error?.code === DENIAL_FAULT ? `was denied by the registry${reasonNote(error)}` : 'could not run'}: ${error?.message ?? error}${causeNote(error)}`,
     });
   }
 }
@@ -423,8 +422,7 @@ async function runTrial(context) {
         trialIndex,
         workspace: label,
         fault: {
-          code: typeof error?.code === 'string' ? error.code : null,
-          message: String(error?.message ?? error),
+          ...faultRecord(error),
           request: error?.request === undefined ? null : persistableRequest(error.request),
         },
         steps: error?.steps ?? [],
@@ -433,7 +431,7 @@ async function runTrial(context) {
       throw stop({
         stage: 'trial',
         exitCode: denied ? 10 : 12,
-        message: `${label} ${denied ? 'was denied by the registry' : 'yields no record'}: ${error?.message ?? error}`,
+        message: `${label} ${denied ? `was denied by the registry${reasonNote(error)}` : 'yields no record'}: ${error?.message ?? error}${causeNote(error)}`,
       });
     }
     return await concludeTrial(context, {
@@ -447,8 +445,9 @@ async function runTrial(context) {
         `${workspace.kind} ${label}`,
         ...workspace.provisioned.map((entry) => `read-only ${label}/${path.relative(workspace.root, entry).split(path.sep).join('/')}`),
       ],
-      // The commands the runtime ran for the plan, each an observed call; what the target itself opened or reached is not observed.
-      toolCalls: executed.steps.map((step) => `${step.request.interfaceId}/${step.request.executable}`),
+      // The commands and tool calls the runtime made for the plan, each an observed call; what the target itself opened or
+      // reached is not observed.
+      toolCalls: executed.steps.map((step) => callLabel(step.request)),
     });
   } finally {
     discard(workspace);
@@ -632,10 +631,11 @@ async function concludeWithRows(context, facts) {
     elapsedMs,
     evaluator: { kind: evaluator.kind, answer: evaluated.answer, streams, calls: router?.calls ?? null },
   });
-  // The bridge's calls that launched a command are observed tool calls as the plan's are; a gameability arm launches none.
+  // The bridge's calls that launched a command or a tool server are observed tool calls as the plan's are; a gameability arm
+  // launches none.
   const bridged = (port === null ? [] : (router?.calls ?? []))
     .filter((call) => call.observation !== undefined)
-    .map((call) => `${call.interfaceId}/${call.request.executable}`);
+    .map((call) => callLabel(call.request));
   return {
     trialIndex,
     evidenceFile,
@@ -797,7 +797,7 @@ async function runTrialSets(given) {
   if (sealed === null) throw noStages();
   const { contractDigest, sealedBriefDigest } = sealed;
   const { conditions, layer } = snapshot;
-  const tools = registry.entries.map((entry) => `${entry.interfaceId}/${entry.executable}`).sort();
+  const tools = registry.toolInventory();
   // Only the deterministic kind calls TeA's rubric judge; every other kind scores the rubric itself.
   const judgeConfiguration =
     kind === 'deterministic' ? judgeConfigurationFor({ contract, conditions, digestBytes: engine.digestBytes }) : null;
@@ -826,7 +826,7 @@ async function runTrialSets(given) {
       .flatMap((iface) => iface.operations ?? [])
       .find((candidate) => candidate.operationId === step.operationId);
     const interfaceId = (contract.permittedInterfaces ?? []).find((iface) => (iface.operations ?? []).includes(operation))?.logicalId;
-    return total + (registry.targetFor(interfaceId, operation?.invocation?.executable)?.maxElapsedMs ?? 0);
+    return total + registry.ceilingMs(interfaceId, operation);
   }, 0);
   // A sealed-brief agent's own calls count against the contract's budget in each trial, beside the plan's steps.
   const callsPerTrial =
@@ -1092,7 +1092,11 @@ async function completeRun(
     policyDigest: engine.digestBytes(snapshot.policyBytes),
     sealedBriefDigest: sealed.sealedBriefDigest,
     evaluatorConfigurationDigest: configurationDigest,
-    runner: registry.entries.map((entry) => ({ interfaceId: entry.interfaceId, executable: entry.executable, target: entry.target })),
+    runner: registry.entries.map((entry) =>
+      entry.kind === 'mcp'
+        ? { interfaceId: entry.interfaceId, kind: 'mcp', target: entry.target, targetArgs: entry.targetArgs, tools: entry.tools }
+        : { interfaceId: entry.interfaceId, executable: entry.executable, target: entry.target },
+    ),
     evaluator: evaluatorRecord,
     model,
     judge,
@@ -1111,4 +1115,14 @@ async function completeRun(
   return result;
 }
 
-module.exports = { EVALUATOR_IDENTITY, FORBIDDEN_INPUT_NOTE, TRIAL_SETS_NAME, TRIAL_SETS_SCHEMA_VERSION, runRunCommand, setRecommendation };
+module.exports = {
+  EVALUATOR_IDENTITY,
+  FORBIDDEN_INPUT_NOTE,
+  TRIAL_SETS_NAME,
+  TRIAL_SETS_SCHEMA_VERSION,
+  runRunCommand,
+  // A trial's denial cannot be reached through the pipeline, whose qualification runs the same plan under the same
+  // policy first, so its unit drives one trial directly.
+  runTrial,
+  setRecommendation,
+};

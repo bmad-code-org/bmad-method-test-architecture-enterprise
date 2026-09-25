@@ -21,25 +21,30 @@
  *   trial's registry port (`hostEnvironmentPort`), whose eval-quality
  *   adapter denies any executable or subcommand the registry does not grant,
  *   before anything launches;
- * - an `mcp` call goes through eval-quality's own MCP adapter over the
- *   registry's MCP authorizations, and an `api` call through eval-quality's
- *   `evaluateTarget` over its HTTP authorizations: this release's registry
- *   declares command targets only, so eval-quality denies both at the
- *   interface (Stories 1.10 and 1.11 add the authorizations);
+ * - an `mcp` call (Story 1.10) names a tool and its arguments; it goes through
+ *   the same port, whose eval-quality MCP adapter holds the registry's
+ *   `McpTargetAuthorization` for the arm's copy and denies an interface or a
+ *   tool it does not grant (`interface-not-authorized`, `tool-not-authorized`)
+ *   before any server starts; the operation it matches is the one declaring
+ *   its tool name;
+ * - an `api` call goes through eval-quality's `evaluateTarget` over the
+ *   registry's HTTP authorizations: this release's registry declares none, so
+ *   eval-quality denies it at the interface (Story 1.11 adds them);
  * - on a gameability arm nothing launches: a call goes through eval-quality's
- *   command-line adapter over the registry's authorizations, as on any arm,
- *   with a mechanism that runs nothing, so a call the registry does not grant
- *   is denied and recorded exactly as a real arm denies it, and every other
- *   call is answered from the degenerate response (a matched call's from the
- *   plan step that runs its operation, any other from the plan's first step),
- *   as a shortcut target would answer every request alike;
+ *   command-line or MCP adapter over the registry's authorizations, as on any
+ *   arm, with a mechanism that runs nothing, so a call the registry does not
+ *   grant is denied and recorded exactly as a real arm denies it, and every
+ *   other call is answered from the degenerate response (a matched call's
+ *   from the plan step that runs its operation, any other from the plan's
+ *   first step of its kind), as a shortcut target would answer every request
+ *   alike;
  * - an authorized call that matches a declared operation becomes a record
  *   observation with `provenance: evaluator-chosen`, numbered after the
  *   interaction plan's `baseline` observations; one that matches none is kept
  *   in the trial's evidence as unmatched, never reaches the record, and is
  *   answered with no observation ID, so no finding can cite it; a denied call
- *   is kept with eval-quality's fault code and detail, and the agent is told
- *   it was denied;
+ *   is kept with eval-quality's fault code, the `reason` its policy gave and
+ *   its detail, and the agent is told it was denied;
  * - every call the budget admits counts against the contract's
  *   `budgets.maxToolCalls` for the trial, and calls past it are refused unsent
  *   and not counted;
@@ -51,8 +56,9 @@
  * A call whose target exits one of its registry entry's
  * `infrastructureExitCodes`, is stopped by a signal from outside, or cannot
  * be sent (an adapter fault other than a denial or a request eval-quality
- * cannot parse) is a target that could not run: the trial yields no record
- * and the run exits 12 once the agent has ended.
+ * cannot parse, a tool server that cannot start or answer included) is a
+ * target that could not run: the trial yields no record and the run exits 12
+ * once the agent has ended.
  *
  * The agent answers inside `<judge-answer nonce="...">` with a fresh 128-bit
  * nonce (`judge.js`'s pattern), drawn after the plan ran and before the
@@ -72,7 +78,7 @@ const path = require('node:path');
 
 const { AGENT_ADAPTERS } = require('../agent-adapters');
 const { runAgentAsync } = require('../run-agent');
-const { hostEnvironmentPort, persistableRequest, stoppedFromOutside } = require('./arm');
+const { bodyValue, carriesPrototypeKey, causeNote, hostEnvironmentPort, persistableRequest, stoppedFromOutside } = require('./arm');
 const { CALL_SHAPES, bridgeTools, openBridge } = require('./bridge');
 const { loadAdapters, loadEngine } = require('./engine');
 const { answerBlocks, unfenced } = require('./judge');
@@ -289,8 +295,17 @@ function commandCall({ contract, registry, interfaceId, input }) {
 /** A tool result's text: what was sent, what came back, and the observation ID when the call was recorded. */
 function callResult({ observationId, request, observation }) {
   const channel = (body) => (body === undefined || body === null || body.kind === 'absent' ? null : body.value);
+  const recorded = observationId === null ? { recorded: false } : { observationId, recorded: true };
+  if (request.kind === 'mcp') {
+    return JSON.stringify({
+      ...recorded,
+      sent: { tool: request.toolName, arguments: request.channels.arguments },
+      isError: observation.isError,
+      result: channel(observation.result),
+    });
+  }
   return JSON.stringify({
-    ...(observationId === null ? { recorded: false } : { observationId, recorded: true }),
+    ...recorded,
     sent: {
       command: [request.executable, ...request.subcommandPath],
       options: request.channels.option,
@@ -305,28 +320,54 @@ function callResult({ observationId, request, observation }) {
 }
 
 /**
- * A gameability arm's port for one agent call: eval-quality's command-line
- * adapter over the registry's authorizations, so an executable or subcommand
- * path the registry does not grant is denied exactly as on a real arm, with a
- * mechanism that launches nothing. It answers with the degenerate response of
- * the first plan step that runs the call's operation, or of the plan's first
- * answered step for any other call, as a shortcut target answers every
- * request alike, and every written file the registry declares reads as
- * absent.
+ * The degenerate response one gameability call is answered from: the first
+ * plan step that runs the call's operation, or the plan's first step answered
+ * as a call of the same kind, as a shortcut target answers every request
+ * alike; `undefined` when the response answers no call of that kind.
  */
-async function degeneratePort({ contract, registry, degenerate, operationId }) {
+function degenerateAnswer({ contract, degenerate, operationId, kind }) {
   const plan = contract.interactionPlan ?? [];
-  const step =
-    plan.find((candidate) => candidate.operationId === operationId && Object.hasOwn(degenerate, candidate.stepId)) ??
-    plan.find((candidate) => Object.hasOwn(degenerate, candidate.stepId));
-  const answer = degenerate[step.stepId];
-  const { createCommandLineAdapter } = await loadAdapters();
-  const mechanism = {
-    run: async () => ({ exitCode: answer.exitCode, stdout: answer.stdout, stderr: answer.stderr }),
-    readArtifact: async () => ({ present: false, text: '', truncated: false }),
+  const ofKind = (candidate) =>
+    Object.hasOwn(degenerate, candidate.stepId) && (typeof degenerate[candidate.stepId].isError === 'boolean') === (kind === 'mcp');
+  const step = plan.find((candidate) => candidate.operationId === operationId && ofKind(candidate)) ?? plan.find(ofKind);
+  return step === undefined ? undefined : degenerate[step.stepId];
+}
+
+/** Thrown by a gameability arm's mechanism when the degenerate response answers no call of the call's kind. */
+class UnansweredCall extends Error {}
+
+/**
+ * A gameability arm's port for one agent call: eval-quality's command-line
+ * adapter or MCP adapter over the registry's authorizations, so an
+ * executable, subcommand path, interface or tool the registry does not grant
+ * is denied exactly as on a real arm, with a mechanism that launches nothing
+ * and answers with the degenerate response (`degenerateAnswer`), or throws
+ * `UnansweredCall` when it holds none for the kind; every written file the
+ * registry declares reads as absent.
+ */
+async function degeneratePort({ registry, answer, kind }) {
+  const { createCommandLineAdapter, createMcpAdapter, parseMcpTargetPolicy } = await loadAdapters();
+  const answered = () => {
+    if (answer === undefined) throw new UnansweredCall(`the system answers no ${kind === 'mcp' ? 'tool call' : 'command'}`);
+    return answer;
   };
   // The authorizations' working directory is never entered: nothing launches and no written file is read.
-  const adapter = createCommandLineAdapter(registry.commandTargetPolicy({ cwd: registry.root ?? os.tmpdir() }), mechanism);
+  const cwd = registry.root ?? os.tmpdir();
+  const adapter =
+    kind === 'mcp'
+      ? createMcpAdapter(parseMcpTargetPolicy(registry.mcpTargetPolicy({ cwd })), {
+          callTool: async () => {
+            const { isError, ...rest } = answered();
+            return Object.hasOwn(rest, 'structuredResult') ? { isError, structuredResult: rest.structuredResult } : { isError };
+          },
+        })
+      : createCommandLineAdapter(registry.commandTargetPolicy({ cwd }), {
+          run: async () => {
+            const { exitCode, stdout, stderr } = answered();
+            return { exitCode, stdout, stderr };
+          },
+          readArtifact: async () => ({ present: false, text: '', truncated: false }),
+        });
   return hostEnvironmentPort({ port: adapter, registry });
 }
 
@@ -337,7 +378,7 @@ async function degeneratePort({ contract, registry, degenerate, operationId }) {
  * @param {object} options.contract
  * @param {object} options.registry
  * @param {{ probe: Function }|null} options.port the trial workspace's `hostEnvironmentPort`; unused on a gameability arm
- * @param {Record<string, { stdout: string, stderr: string, exitCode: number }>|null} options.degenerate a gameability arm's response by plan step
+ * @param {Record<string, object>|null} options.degenerate a gameability arm's response by plan step
  * @param {string} options.label the trial's label, which prefixes each observation ID (`trial-2`)
  * @param {Set<string>} options.taken observation IDs the trial already holds
  * @param {number} options.firstSequence the sequence the first recorded call takes
@@ -384,6 +425,50 @@ function bridgeRouter({
     return { text: message, isError: true };
   };
 
+  /** The port one call goes through: the trial's, or on a gameability arm one answering from the degenerate response. */
+  async function armPortFor(kind, operationId) {
+    if (degenerate === null) return port;
+    return degeneratePort({ registry, answer: degenerateAnswer({ contract, degenerate, operationId, kind }), kind });
+  }
+
+  /**
+   * One call sent through `armPort`: its observation, or the tool result a
+   * denial, a stop, a call that cannot be sent or a target that could not run
+   * answers with (each kept in `calls`).
+   */
+  async function send(armPort, request, entry) {
+    try {
+      const { observation } = await armPort.probe(request, callSignal);
+      return { observation };
+    } catch (error) {
+      const code = typeof error?.code === 'string' ? error.code : null;
+      const detail = String(error?.message ?? error);
+      if (ending.signal.aborted) {
+        return { answer: refused({ ...entry, request: persistableRequest(request) }, 'the agent had ended, so the call was stopped') };
+      }
+      if (code === 'forbidden-target') {
+        const denied = { code, ...(typeof error?.reason === 'string' ? { reason: error.reason } : {}), detail };
+        calls.push({ ...entry, request: persistableRequest(error.request ?? request), denied });
+        return {
+          answer: {
+            text: `denied by the evaluation's target policy: ${denied.reason === undefined ? '' : `${denied.reason}: `}${detail}`,
+            isError: true,
+          },
+        };
+      }
+      if (error?.cause instanceof UnansweredCall) {
+        return { answer: refused({ ...entry, request: persistableRequest(request) }, error.cause.message) };
+      }
+      if (code === 'schema-parse-failure' || code === 'port-contract-violation') {
+        return { answer: refused({ ...entry, request: persistableRequest(request) }, `the call cannot be sent: ${detail}`) };
+      }
+      infrastructure ??= `the evaluator's call ${request.probeId} could not run: ${detail}${causeNote(error)}`;
+      const cause = typeof error?.scrubbedCause === 'string' ? { cause: error.scrubbedCause } : {};
+      calls.push({ ...entry, request: persistableRequest(error.request ?? request), fault: { code, detail, ...cause } });
+      return { answer: { text: 'the call could not run', isError: true } };
+    }
+  }
+
   async function handleCommand(tool, input, entry) {
     if (!Array.isArray(input.arguments) || input.arguments.length === 0 || input.arguments.some((word) => typeof word !== 'string')) {
       return refused(entry, 'a cli call needs arguments: a non-empty list of words, the command name first');
@@ -408,26 +493,9 @@ function bridgeRouter({
       channels: call.channels,
     };
     // A gameability arm's call goes through the same adapter and authorizations as a real arm's, so it is denied alike.
-    const armPort = degenerate === null ? port : await degeneratePort({ contract, registry, degenerate, operationId });
-    let observation;
-    try {
-      ({ observation } = await armPort.probe(request, callSignal));
-    } catch (error) {
-      const fault = { code: typeof error?.code === 'string' ? error.code : null, detail: String(error?.message ?? error) };
-      if (ending.signal.aborted) {
-        return refused({ ...entry, request: persistableRequest(request) }, 'the agent had ended, so the call was stopped');
-      }
-      if (fault.code === 'forbidden-target') {
-        calls.push({ ...entry, request: persistableRequest(error.request ?? request), denied: fault });
-        return { text: `denied by the evaluation's target policy: ${fault.detail}`, isError: true };
-      }
-      if (fault.code === 'schema-parse-failure' || fault.code === 'port-contract-violation') {
-        return refused({ ...entry, request: persistableRequest(request) }, `the call cannot be sent: ${fault.detail}`);
-      }
-      infrastructure ??= `the evaluator's call ${probeId} could not run: ${fault.detail}`;
-      calls.push({ ...entry, request: persistableRequest(error.request ?? request), fault });
-      return { text: 'the call could not run', isError: true };
-    }
+    const sent = await send(await armPortFor('cli', operationId), request, entry);
+    if (sent.answer !== undefined) return sent.answer;
+    const { observation } = sent;
     const registryEntry = registry.targetFor(tool.name, call.executable);
     const { exitCode } = observation;
     if (stoppedFromOutside(exitCode) || (registryEntry !== undefined && registryEntry.infrastructureExitCodes.includes(exitCode))) {
@@ -456,32 +524,54 @@ function bridgeRouter({
   }
 
   async function handleMcp(tool, input, entry) {
-    if (typeof input.tool !== 'string' || input.tool.length === 0)
+    if (typeof input.tool !== 'string' || input.tool.length === 0) {
       return refused(entry, 'an mcp call needs tool, the name of the tool to call');
+    }
+    if (
+      input.arguments !== undefined &&
+      (input.arguments === null || typeof input.arguments !== 'object' || Array.isArray(input.arguments))
+    ) {
+      return refused(entry, 'an mcp call takes arguments as an object');
+    }
+    // eval-quality's request parser drops an own `__proto__` key, so the server would receive other arguments than the
+    // record would show; such a call is refused unsent.
+    if (carriesPrototypeKey(input.arguments)) {
+      return refused(entry, 'an mcp call cannot carry a __proto__ key in its arguments, which the request would not send');
+    }
     const operation = operationsOf(contract, tool.name).find((candidate) => candidate.toolName === input.tool);
+    const operationId = operation?.operationId ?? null;
+    const probeId = mintId();
+    const toolArguments = input.arguments ?? {};
     const request = {
-      probeId: mintId(),
+      probeId,
       interfaceId: tool.name,
-      operationId: operation?.operationId ?? 'unmatched',
+      operationId: operationId ?? 'unmatched',
       kind: 'mcp',
       toolName: input.tool,
-      channels: { arguments: input.arguments !== null && typeof input.arguments === 'object' ? input.arguments : {} },
+      channels: { arguments: toolArguments },
     };
-    const { createMcpAdapter } = await loadAdapters();
-    // The registry declares command targets only in this release (Story 1.10 adds MCP targets), so eval-quality's MCP
-    // adapter holds no authorization and denies the interface before anything starts.
-    const adapter = createMcpAdapter({ authorizations: [] });
-    try {
-      await adapter.probe(request, callSignal);
-    } catch (error) {
-      const fault = { code: typeof error?.code === 'string' ? error.code : null, detail: String(error?.message ?? error) };
-      if (fault.code === 'forbidden-target') {
-        calls.push({ ...entry, request, denied: fault });
-        return { text: `denied by the evaluation's target policy: ${fault.detail}`, isError: true };
-      }
-      return refused({ ...entry, request }, `the call cannot be sent: ${fault.detail}`);
+    // The registry's MCP authorization for the arm's copy decides the call, through eval-quality's MCP adapter, before any server starts.
+    const sent = await send(await armPortFor('mcp', operationId), request, entry);
+    if (sent.answer !== undefined) return sent.answer;
+    const { observation } = sent;
+    if (operation === undefined) {
+      // A tool no operation declares stays out of the record, so the agent is given no observation ID to cite.
+      calls.push({ ...entry, request, observation, unmatched: 'no operation of the evaluation calls this tool' });
+      return { text: callResult({ observationId: null, request, observation }), isError: false };
     }
-    return refused({ ...entry, request }, 'the registry holds no MCP target in this release, so no call is recorded');
+    sequence += 1;
+    const recorded = recordObservation({
+      observationId: probeId,
+      sequence,
+      operationId,
+      callInputs: { arguments: toolArguments },
+      responseBody: bodyValue(observation.result),
+      responseStatus: observation.isError ? 1 : 0,
+      provenance: 'evaluator-chosen',
+    });
+    observations.push(recorded);
+    calls.push({ ...entry, request, observation, observationId: probeId, operationId });
+    return { text: callResult({ observationId: probeId, request, observation }), isError: false };
   }
 
   async function handleApi(tool, input, entry) {
@@ -489,7 +579,7 @@ function bridgeRouter({
       return refused(entry, 'an api call needs method and path');
     }
     const engine = await loadEngine();
-    // The registry declares command targets only in this release and no HTTP port (Story 1.11 adds them), so
+    // The registry declares no HTTP target and no HTTP port in this release (Story 1.11 adds them), so
     // eval-quality's policy decides over no HTTP authorization, denying the interface before any address is read.
     const decision = engine.evaluateTarget(
       { authorizations: [] },
@@ -590,8 +680,14 @@ async function runSealedBriefAgent({ evaluator, sealedBrief, contract, mapping, 
     stderrBytes: printed.stderrBytes ?? Buffer.from(printed.stderr ?? ''),
   };
   const fail = (message) => Object.assign(new EvaluatorError(message, streams), { prompt, nonce });
+  // A call the target could not run is named first: an agent told only that its call could not run often fails in
+  // turn, and its own exit would hide the cause. Both are named when both happened.
+  if (router.infrastructure() !== null) {
+    throw fail(
+      failure === null ? router.infrastructure() : `${router.infrastructure()}; the agent then failed: ${failure?.message ?? failure}`,
+    );
+  }
   if (failure !== null) throw fail(`the sealed-brief evaluator could not answer: ${failure?.message ?? failure}`);
-  if (router.infrastructure() !== null) throw fail(router.infrastructure());
   let answer;
   try {
     answer = readAnswer({ text: answerText(answered.stdout, nonce), mapping, validate });

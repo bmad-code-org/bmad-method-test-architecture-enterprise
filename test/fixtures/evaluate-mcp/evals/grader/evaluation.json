@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "evaluationId": "grader-tool-server",
+  "targetKind": "tool-use",
+  "interface": "mcp",
+  "registry": [
+    {
+      "kind": "mcp",
+      "interfaceId": "grader",
+      "target": "server/grader.js",
+      "targetArgs": [
+        "--policy=rules/policy.txt"
+      ],
+      "tools": [
+        "grade_answer",
+        "describe_policy"
+      ],
+      "environmentKeys": [
+        "GRADER_LOG",
+        "GRADER_SECRET"
+      ],
+      "maxElapsedMs": 30000
+    }
+  ],
+  "launch": {
+    "root": "../.."
+  },
+  "workspace": {
+    "kind": "copy",
+    "provision": []
+  },
+  "arms": [
+    "clean",
+    "mutated"
+  ],
+  "trials": 3,
+  "tiers": [
+    "pr"
+  ],
+  "strengthFloor": {
+    "defect": 1,
+    "zero-action": 1
+  }
+}

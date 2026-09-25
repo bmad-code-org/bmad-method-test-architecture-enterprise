@@ -506,6 +506,22 @@
           "reason": "an eval-quality package export, not a TEA declaration"
         },
         {
+          "token": "createMcpAdapter",
+          "reason": "an eval-quality package export, not a TEA declaration"
+        },
+        {
+          "token": "parseMcpTargetPolicy",
+          "reason": "an eval-quality package export, not a TEA declaration"
+        },
+        {
+          "token": "McpTargetAuthorization",
+          "reason": "an eval-quality published schema type, not a TEA declaration"
+        },
+        {
+          "token": "structuredContent",
+          "reason": "a field of the MCP protocol's tool result, not a TEA declaration"
+        },
+        {
           "token": "CommandTargetPolicy",
           "reason": "an eval-quality package export, not a TEA declaration"
         },
@@ -1423,10 +1439,10 @@
         },
         {
           "file": "docs/explanation/eval-quality-roadmap.md",
-          "key": "The pin is 4.1.4 now",
+          "key": "The pin is 4.2.0 now",
           "settles": {
             "module": "test/lib/doc-claim-sources.js",
-            "export": "EVAL_QUALITY_PIN_IS_4_1_4"
+            "export": "EVAL_QUALITY_PIN_IS_4_2_0"
           },
           "reason": "package.json's eval-quality devDependency, compared for an exact match"
         },

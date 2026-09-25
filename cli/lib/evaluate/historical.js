@@ -35,7 +35,7 @@
 const path = require('node:path');
 
 const { admissionRefusal, armVerdict, referenceTo } = require('./admission');
-const { hostEnvironmentPort, runArm } = require('./arm');
+const { causeNote, faultRecord, hostEnvironmentPort, reasonNote, runArm } = require('./arm');
 const { expectedSchemaVersion } = require('./engine');
 const { evaluateOracles, oraclesOfBehaviors } = require('./evaluator');
 const { WorkspaceRefusal, isDirectory, runGit, trackedTreeDigest } = require('./workspace');
@@ -137,15 +137,14 @@ async function revisionArm({ contract, workspace, registry, oracleIds, policy, w
       phase,
       workspace: workspace.label,
       commit: workspace.commit,
-      code: typeof error?.code === 'string' ? error.code : null,
-      message: String(error?.message ?? error),
+      ...faultRecord(error),
       steps: error?.steps ?? [],
     });
     const denied = error?.code === DENIAL_FAULT;
     throw stop({
       stage: 'qualification',
       exitCode: denied ? 10 : 12,
-      message: `${file}: the ${phase} arm ${denied ? 'was denied by the registry' : 'could not run'}: ${error?.message ?? error}`,
+      message: `${file}: the ${phase} arm ${denied ? `was denied by the registry${reasonNote(error)}` : 'could not run'}: ${error?.message ?? error}${causeNote(error)}`,
     });
   }
   const oracles = await evaluateOracles({

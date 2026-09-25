@@ -5,7 +5,8 @@
  *
  * The degenerate response's bytes are committed at
  * `corpus/gameability/<probeId>.json` (`degenerate-response.schema.json`: one
- * `{ stdout, stderr, exitCode }` per interaction plan step), since
+ * `{ stdout, stderr, exitCode }` per command step of the interaction plan, and
+ * one `{ isError, structuredResult? }` per tool-call step), since
  * eval-quality keeps the probe's `degenerateResponse` as prose. A synthetic
  * port answers every plan step from that file, so the arm executor
  * (`arm.js`) records the response as the observations a target would have
@@ -43,11 +44,12 @@ function degenerateResponsePath(probeId) {
 /**
  * A port that launches nothing: it answers each plan step of an arm labelled
  * `label` with the committed degenerate response for that step, in the shape
- * the command-line adapter returns.
+ * the command-line adapter or the MCP adapter returns for the request's kind.
  *
  * @param {object} options
  * @param {string} options.label the arm's label, which `runArm` prefixes each request's identifier with
- * @param {Record<string, {stdout: string, stderr: string, exitCode: number}>} options.steps the response by plan step
+ * @param {Record<string, object>} options.steps the response by plan step: `{ stdout, stderr, exitCode }` for a command
+ *   step, `{ isError, structuredResult? }` for a tool call
  * @returns {{ probe: (request: object) => Promise<{ request: object, observation: object }> }}
  */
 function syntheticPort({ label, steps }) {
@@ -60,12 +62,28 @@ function syntheticPort({ label, steps }) {
         throw new Error(`the degenerate response answers no plan step for request ${JSON.stringify(request?.probeId ?? null)}`);
       }
       const answer = steps[stepId];
+      const correlation = { probeId: request.probeId, interfaceId: request.interfaceId, operationId: request.operationId };
+      const answersToolCall = typeof answer.isError === 'boolean';
+      if ((request.kind === 'mcp') !== answersToolCall) {
+        throw new Error(
+          `the degenerate response answers plan step ${stepId}, a ${request.kind === 'mcp' ? 'tool call' : 'command'}, with a ${answersToolCall ? "tool call's" : "command's"} response`,
+        );
+      }
+      if (answersToolCall) {
+        return {
+          request,
+          observation: {
+            ...correlation,
+            kind: 'mcp',
+            isError: answer.isError,
+            result: Object.hasOwn(answer, 'structuredResult') ? { kind: 'json', value: answer.structuredResult } : { kind: 'absent' },
+          },
+        };
+      }
       return {
         request,
         observation: {
-          probeId: request.probeId,
-          interfaceId: request.interfaceId,
-          operationId: request.operationId,
+          ...correlation,
           kind: 'cli',
           exitCode: answer.exitCode,
           stdout: { kind: 'text', value: answer.stdout },

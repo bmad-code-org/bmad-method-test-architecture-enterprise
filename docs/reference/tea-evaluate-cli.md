@@ -14,7 +14,7 @@ TeA also ships `tea-skill-runner`, the command an evaluation registers to run a 
 ## Prerequisites
 
 - Node.js 22.20 or later, with TeA installed (`npm install --save-dev bmad-method-test-architecture-enterprise`), which provides the `tea-evaluate` bin.
-- `eval-quality` 4.1.4 or later, installed beside TeA in the project that runs Evaluate (`npm install --save-dev eval-quality`).
+- `eval-quality` 4.2.0 or later, installed beside TeA in the project that runs Evaluate (`npm install --save-dev eval-quality`).
   TeA declares it as an optional peer dependency, so a project that installs TeA only for its other workflows never receives it.
   Without it, `tea-evaluate` exits 12 and names the missing package.
 
@@ -34,7 +34,7 @@ Nothing defaults to the working directory.
   policy/evaluator-conditions.json # the model a run uses (and its rubric judge's or sealed-brief evaluator's), as a fixed condition; left out when no model runs
   evaluator/                    # a command or sealed-brief-agent evaluator: mapping.json, and a command evaluator's executable
   corpus/                       # the corpus the probes run against
-  corpus/gameability/P-NNN.json # a gameability probe's degenerate response, one command response per plan step
+  corpus/gameability/P-NNN.json # a gameability probe's degenerate response, one response per plan step
   corpus-index.json             # written by tea-evaluate digest
   baseline/                     # committed qualified probes and baseline/qualification/ evidence
   runs/<invocationId>/          # written by each tea-evaluate invocation; gitignored
@@ -76,20 +76,22 @@ The rules:
 | `arms`                     | a probe whose arm `arms` does not declare (a clean control needs `clean`, a probe on the `controlled-mutation` route `mutated`, one on the `historical` route `historical`, a gameability probe `gameability`), or an arm `arms` declares that no probe runs on                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `mutation-route`           | a probe on the `controlled-mutation` route that seeds no defect                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `evaluator-conditions`     | a registry entry that runs `tea-skill-runner`, which always runs an agent, with no `policy/evaluator-conditions.json` naming the model the run uses, or a `modelSnapshot` of `none` beside a `systemPromptDigest` other than `sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`, the digest of the empty byte string                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `gameability`              | a probe on the `gameability` route that is not a `gameability`-class probe with `expectedClean: false` and no defects, a `naiveOracle` of the probe's own behavior, or a degenerate response that is absent, answers a step the plan does not declare, leaves one unanswered, or exits an infrastructure code                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `gameability`              | a probe on the `gameability` route that is not a `gameability`-class probe with `expectedClean: false` and no defects, a `naiveOracle` of the probe's own behavior, or a degenerate response that is absent, answers a step the plan does not declare, leaves one unanswered, answers a step with a response of the other kind, or exits an infrastructure code                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `historical`               | a probe on the `historical` route without `expectedClean: false`, that seeds no defect, or one whose `source` is not `natural`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `judge`                    | a contract rubric under the deterministic evaluator with no `judge` in `evaluation.json` or no `judge.modelSnapshot` in `policy/evaluator-conditions.json`, a `judge` block in either file beside a contract with no rubric or beside any other evaluator kind, which scores the rubric itself, so nothing would use it, or a `judge` naming an adapter TeA lacks, the `custom` adapter with no `agentCommand`, or a `model` its adapter refuses                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `evaluator`                | a `command` or `sealed-brief-agent` evaluator with no `evaluator/mapping.json`, or one binding an oracle, behavior or rubric criterion the contract does not declare, an oracle to a behavior that does not declare it, levels other than the criterion's anchored scale levels, an oracle or criterion under two keys, or leaving a rubric criterion unbound; a link or special file under `evaluator/`; a `command` executable that is not a regular executable file; a `sealed-brief-agent` on an adapter TeA lacks or one with no bridged run, the `custom` adapter with no `agentCommand`, a `model` its adapter refuses, `agentArgs` that reopen what the bridged run closes, or no `evaluator.modelSnapshot` in `policy/evaluator-conditions.json`; an `evaluator` block there beside the `deterministic` or `records` kind; a `records` directory that is absent or reached through a link |
 
 An evaluator of an unknown kind, and a `command` or `sealed-brief-agent` evaluator with no `timeoutMs`, fail the `evaluation.json` schema (`schema`).
-Beside those twenty-three rules, `check` reports a file that does not parse (`json`), one that fails the runtime's schemas (`schema`) or eval-quality's (`engine-schema`), a file not named for its ID (`file-name`), a probe naming a behavior, mutation or naive oracle that does not exist (`reference`), a folder with no `contract.json`, or with no `policy/scoring-policy.json` once a probe takes the `controlled-mutation`, `historical` or `gameability` route (`missing-file`), a `policy/evaluator-conditions.json` off the runtime's schema (`schema`), an ID declared twice in one file (`duplicate-id`), a registry that declares one interface and executable pair twice (`registry`), a symbolic link or file where `corpus/`, `probes/` or `mutations/` or an entry inside them should be (`corpus-file`), which `digest` refuses with exit 10 as well, and a symbolic link or other non-regular entry under `baseline/` (`baseline-file`).
+Beside those twenty-three rules, `check` reports a file that does not parse (`json`), one that fails the runtime's schemas (`schema`) or eval-quality's (`engine-schema`), a file not named for its ID (`file-name`), a probe naming a behavior, mutation or naive oracle that does not exist, or an `interface` naming a kind the contract does not declare (`reference`), a folder with no `contract.json`, or with no `policy/scoring-policy.json` once a probe takes the `controlled-mutation`, `historical` or `gameability` route (`missing-file`), a `policy/evaluator-conditions.json` off the runtime's schema (`schema`), an ID declared twice in one file (`duplicate-id`), a registry that declares one interface and executable pair twice, names one interface as both a command and a tool server, serves an interface as a kind other than the one the contract declares, or holds tool servers eval-quality's `parseMcpTargetPolicy` refuses, a tool name it does not admit or two servers for one interface among them (`registry`), a symbolic link or file where `corpus/`, `probes/` or `mutations/` or an entry inside them should be (`corpus-file`), which `digest` refuses with exit 10 as well, and a symbolic link or other non-regular entry under `baseline/` (`baseline-file`).
 A `baseline/qualification/` reference must resolve to a regular file inside the folder.
 
 ## The registry
 
-`evaluation.json`'s `registry` is the execution-target registry: every command a run may spawn, one registry entry each, in the shape the runtime's `evaluation.json` schema defines once for every entry.
-The runtime builds eval-quality's default-deny command target policy from it, so a request naming an interface and executable the registry does not carry is denied before a process starts.
+`evaluation.json`'s `registry` is the execution-target registry: every command a run may spawn and every stdio MCP tool server it may start, one registry entry each, in the shapes the runtime's `evaluation.json` schema defines.
+The runtime builds eval-quality's default-deny command target policy and MCP target policy from it for the workspace each call runs in, so a request naming an interface, executable or tool the registry does not carry is denied before a process starts.
 TeA's own harness declares its commands in the same shape and goes through the same builder.
+
+A command entry:
 
 ```json
 {
@@ -113,6 +115,38 @@ TeA's own harness declares its commands in the same shape and goes through the s
 - `maxElapsedMs` (at most 2147483647), and optional `maxOutputBytes` (8 MiB by default): ceilings a run may lower.
 - `infrastructureExitCodes`: the exit codes by which the target reports that it could not run.
   TeA's own per-workflow runners declare 1 (an uncaught exception) and 3 to 6; `tea-test-review`, which exits 1 on a failing verdict, declares 2 and 3; `tea-skill-runner` never exits 1 and declares 3 to 6.
+
+A tool-server entry (`kind: "mcp"`) serves an `mcp` interface of the contract:
+
+```json
+{
+  "kind": "mcp",
+  "interfaceId": "grader",
+  "target": "server/grader.js",
+  "targetArgs": [],
+  "tools": ["grade_answer", "describe_policy"],
+  "environmentKeys": ["GRADER_TOKEN"],
+  "maxElapsedMs": 30000
+}
+```
+
+- `interfaceId`: the logical interface the contract declares with kind `mcp`; eval-quality's policy admits one entry per interface, since for a tool server the interface is the server.
+- `target`, `targetArgs`: what starts the server, under the same path rules as a command's `target`, and its argument vector; the server works in the workspace the call runs in, so a relative path in `targetArgs` resolves there, and no argument may be an absolute path, carry one after `=`, name a `file:` URL, or hold a `..` segment, which would run or read your live tree in place of the workspace.
+- `tools`: the tools a call may name, in the server's own spelling; a tool absent from the list is denied (`tool-not-authorized`) before the server starts, even when the server publishes it.
+- `environmentKeys`: the keys whose host values the server starts with, over the host's `PATH`; a tool call carries only its arguments, so a credential reaches the server here. Each value of eight characters or more is replaced by `[redacted]` wherever it appears in what the server answers, in a string, an object key or a number (one whose text holds the value, or one of eight characters or more that the value read as a number equals).
+  The forms replaced are the value as written and each form one or two levels of JSON escaping give it: `JSON.stringify`'s string body, with `/` written `\/` or not, and with every non-ASCII character, every `<`, `>` and `&`, or both written `\uXXXX` in lower- or upper-case hex, or none of them.
+  A shorter value, one the server splits across fields, and any other encoding of it (base64, URL encoding, a third level of escaping) are not replaced. `PATH` is refused.
+- `maxElapsedMs` and optional `maxOutputBytes`: the ceilings of one call, from the server's start through the handshake, the call and its teardown.
+
+Each tool-server entry becomes one of eval-quality's `McpTargetAuthorization`s, checked by its own `parseMcpTargetPolicy` (at `check`, and again before any server starts), and every call goes through eval-quality's `createMcpAdapter`: one session per call over stdio, protocol `2025-06-18`, the server's process group torn down after it.
+A leg or plan step of an `mcp` operation sends its literal `arguments`, and the run records the call's arguments as `callInputs.arguments`, the tool's structured result as `responseBody` and its error flag as `responseStatus` (1 or 0), so an oracle reads `/interactions/<step>/response-body/...`.
+A tool that answers with its error flag set is an observation.
+A server that cannot start, refuses its handshake, crosses a ceiling, or exits, crashes or writes a line that is no JSON-RPC message during a call is a target that could not run (exit 12), and its fault keeps the adapter's cause, scrubbed, a value the cause cuts short included.
+eval-quality's `mcp` observation has no field for a session that ended mid-call, so a mutation that crashes the server is never caught on an `mcp` interface: its arm stops with exit 12 (Story 1.35 records such a session as an observation).
+The record reads the tool's `structuredContent`: a tool that answers with text `content` alone is recorded with an absent body, so an oracle has nothing to read (eval-quality's `mcp` kind describes a structured result).
+`evaluation.json`'s `interface` must be a kind the contract declares (`check` rule `reference`).
+
+A denied call is recorded with eval-quality's `forbidden-target` fault and, from eval-quality 4.2.0, the `reason` its policy gave (`interface-not-authorized`, `tool-not-authorized`, `executable-not-authorized`, `subcommand-not-authorized`, `environment-key-not-authorized`), in a leg's `faults/` file, a qualification's or trial's fault and a sealed-brief agent's bridge calls alike; `preflight` and `run` exit 10 and name the reason.
 
 An infrastructure exit code says the target could not run, so it cannot be evidence of a behavior.
 `check` resolves each defect signature and each manifestation witness through eval-quality's own `resolveCheck` over an observation that carries one of those codes and no output, with the contract's reference sets in scope, and refuses the probe when the expression could hold (`true` or `insufficient-evidence`) or cannot be resolved at all.
@@ -169,7 +203,7 @@ Gitignored paths are not read.
 
 `runs/<invocationId>/run.json` records what was evaluated: the TeA and eval-quality versions, the commit (`null` for a copy), `dirty`, the workspace's kind, commit, tree and tree digest, the path of every workspace that ran legs, and whether your project was unchanged.
 It lists each probe the run refused, with its reason, under `refused` (see [Historical probes](#historical-probes)).
-A completed `run` adds the contract, corpus, sealed brief and evaluator configuration digests, the runner (each registry entry's interface, executable and target), the evaluator and the model, the rubric judge (`null` when the contract declares no rubric or the evaluator is not the deterministic one; otherwise its adapter, model, model snapshot, instruction digest and number of calls), the trial count, the start time and duration, and `completed: true`.
+A completed `run` adds the contract, corpus, sealed brief and evaluator configuration digests, the runner (each registry entry's interface, executable and target, or a tool server's interface, target, arguments and tools), the evaluator and the model, the rubric judge (`null` when the contract declares no rubric or the evaluator is not the deterministic one; otherwise its adapter, model, model snapshot, instruction digest and number of calls), the trial count, the start time and duration, and `completed: true`.
 
 ## Controlled mutations
 
@@ -240,15 +274,15 @@ Each invocation writes `runs/<invocationId>/` inside the evaluation folder, and 
 The steps run in order, each stopping the run with its own exit:
 
 1. `check` over the folder; any finding exits 10 and is printed as `check` prints it.
-2. The evaluation must be one this release runs: a `cli` interface, and every seeded probe on the `controlled-mutation` or `historical` route (exit 12 otherwise, and a retry cannot pass).
+2. The evaluation must be one this release runs: a `cli` or `mcp` interface, and every seeded probe on the `controlled-mutation` or `historical` route (exit 12 otherwise, and a retry cannot pass).
 3. The pristine workspace (see [The workspace](#the-workspace)), with every registry target present and executable in it (exit 12 otherwise), and `run.json`.
 4. `eval-quality compile` and `eval-quality seal` over the run's own copy of `contract.json`, writing `eval-contract.json` and `sealed-evaluator-brief.json`; a non-zero exit the CLI documents is passed through.
 5. Each seeded probe qualified through its controlled mutation (see [Controlled mutations](#controlled-mutations)) or across its fix commit (see [Historical probes](#historical-probes)), exiting 10, 11 or 12 when a step fails; a historical probe with no revisions to address is refused and left out.
    Each gameability probe qualified over its degenerate response with no target launched (see [Gameability probes](#gameability-probes)), exiting 11 when the naive oracle rejects it or the disciplined oracle accepts it; `run` reuses the result.
-6. The legs: eval-quality's `runPreflight` plans them from the contract and the qualified probes (every sensitivity-witness leg, the minted control legs, and each defect's manifestation-witness leg) and drives them through the command-line adapter the registry authorizes.
+6. The legs: eval-quality's `runPreflight` plans them from the contract and the qualified probes (every sensitivity-witness leg, the minted control legs, and each defect's manifestation-witness leg) and drives them through the adapter the registry authorizes, eval-quality's command-line adapter for a command and its MCP adapter for a tool call.
    A manifestation witness's leg runs in its mutation's mutated workspace, or on the historical route in a worktree at the pre-fix revision, and every other leg in the pristine workspace, each through an authorization whose working directory is that workspace.
-   Each request carries the host's values for the environment keys its registry entry permits.
-   Every observation is written to `observations/` as it arrives, with the request, the workspace and the working directory beside it; a request's environment is recorded as its keys only, and every injected value of eight characters or more is replaced by `[redacted]` in the observation.
+   Each command request carries the host's values for the environment keys its registry entry permits, and each tool server starts with the host's values for its entry's keys.
+   Every observation is written to `observations/` as it arrives, with the request, the workspace and the working directory beside it; a request's environment is recorded as its keys only, and every injected or server environment value of eight characters or more is replaced by `[redacted]` in the observation's strings, object keys and numbers, as written and in the JSON-escaped forms [the registry](#the-registry) lists.
    A leg the registry does not authorize is refused by the adapter before it starts: the fault is written to `faults/` and the command exits 10.
    A leg that cannot run at all (a budget exceeded, a process that fails to start) is written there too and exits 12, as does any other failure that stops the legs.
    A leg that exits one of its entry's `infrastructureExitCodes` is an observation like any other: the CLI's verdict reads it (a control leg that exits non-zero fails `clean-control`, exit 3), which AD-10 classifies as infrastructure from the persisted verdict.
@@ -295,7 +329,7 @@ The steps run in order in one invocation, each stopping the run with its own exi
    The evaluation layer judges the trial (see [The evaluation layer](#the-evaluation-layer)); under the default deterministic evaluator, when the contract declares a rubric, the rubric judge scores the trial once (see [The rubric judge](#the-rubric-judge)).
    Its requests, observations, oracle resolutions or judgment rows, and any judge reply go to `trials/<arm>/trial-<n>.json`.
    A trial step that exits one of its registry entry's `infrastructureExitCodes`, or that a signal from outside stops (hang-up, interrupt, quit, kill or terminate), is a target that could not run: the trial yields no record and the run exits 12 (a qualification arm step stops its cycle the same way).
-   A step that crashes by a signal of its own (an abort, a segmentation fault) is an observation its oracles judge, and its record keeps the negative exit code.
+   A command step that crashes by a signal of its own (an abort, a segmentation fault) is an observation its oracles judge, and its record keeps the negative exit code; a tool server that crashes during a call is a target that could not run (see [The registry](#the-registry)).
    Your project is read again after every trial (exit 12 on any change, with no trial set written).
 4. Every committed probe has its trial set, or the run exits 12, and the run directory holds exactly what the runtime wrote (see [The run directory](#the-run-directory)).
 5. One trial set per probe under `trial-sets/<probeId>/`: `record-<n>.json` per trial and `isolation-manifest.json`, with `evaluator-configuration.json` for the whole run, each checked against the schema eval-quality publishes before it is written, and each written as eval-quality's canonical serialization; the contract and sealed-brief digests they carry were taken when `compile` and `seal` wrote those files, before any target ran.
@@ -315,7 +349,7 @@ A violated oracle of another behavior files no finding against the probe, since 
 The trial's observations carry `provenance: evaluator-chosen`: under this evaluator the interaction plan is the evaluator's own exercise of the target, and eval-quality's witness match counts only evaluator-chosen observations.
 The records of one set share one `runId` (the invocation's identifier and the probe's), number `trialIndex` from 1 to `trials`, carry `mode: contract-scoring`, and carry one `evaluatorRecommendation` for the whole set, since eval-quality holds it equal across a set: FAIL when any trial filed a finding, CONCERNS when one left an oracle of the probe's behaviors unsettled, PASS otherwise. So a trial whose own oracles all held carries its set's FAIL; in contract scoring eval-quality reads the recommendation into no verdict.
 
-The isolation manifest records what the trials were granted and what the runtime observed: the workspace each trial ran in and its read-only provisioned directories as the allowed mounts, the registry's commands as the tool allowlist, the commands the runtime ran for the plan as the observed tool calls, the tool-call and wall-clock ceilings the runtime enforces, and the largest safe integer (9007199254740991, the most the schema admits for a token ceiling) for the token and cost ceilings, which the runtime neither meters nor bounds; the use it records for tokens and cost is zero (Story 1.29 reads a live target's spend).
+The isolation manifest records what the trials were granted and what the runtime observed: the workspace each trial ran in and its read-only provisioned directories as the allowed mounts, the registry's commands and tools as the tool allowlist (`<interface>/<executable>` or `<interface>/<tool>`), the commands and tool calls the runtime made for the plan as the observed tool calls, the tool-call and wall-clock ceilings the runtime enforces, and the largest safe integer (9007199254740991, the most the schema admits for a token ceiling) for the token and cost ceilings, which the runtime neither meters nor bounds; the use it records for tokens and cost is zero (Story 1.29 reads a live target's spend).
 The runtime observes no file-system or network access, so the observed mounts, the network allowlist and the observed network targets are empty, and each forbidden input's note says what the runtime withholds and that it does not sandbox the target's file system.
 The evaluator configuration carries the `sealedBriefDigest` of the run's sealed brief, and `decodingParameters["tea.evaluatorKind"]`, the evaluation layer's kind.
 Its `modelSnapshot` and `systemPromptDigest` come from `policy/evaluator-conditions.json`, which an evaluation whose target or evaluator uses a model commits (`check` requires it, naming a model other than `none`, once a registry entry runs `tea-skill-runner`, which always runs an agent); under a sealed-brief agent they are the agent's `evaluator.modelSnapshot` and the digest of the runtime's evaluator template (see [The evaluation layer](#the-evaluation-layer)):
@@ -334,12 +368,22 @@ Each probe is written to `probes/` with the digests AD-7 names: `commitDigest` i
 ### Gameability probes
 
 A gameability probe shows that a degenerate, compliant-looking response satisfies a naive oracle and is rejected by the disciplined one.
-eval-quality keeps its `degenerateResponse` as prose, so the response's bytes are committed at `corpus/gameability/<probeId>.json`, one command response for every interaction plan step, and the committed probe names its naive oracle, an oracle of another behavior; the disciplined oracle is the one oracle of the probe's own behavior:
+eval-quality keeps its `degenerateResponse` as prose, so the response's bytes are committed at `corpus/gameability/<probeId>.json`, one response for every interaction plan step, and the committed probe names its naive oracle, an oracle of another behavior; the disciplined oracle is the one oracle of the probe's own behavior.
+A command step's response is its streams and exit code:
 
 ```json
 {
   "schemaVersion": 1,
   "steps": { "judge-run": { "stdout": "verdict: pending\n", "stderr": "", "exitCode": 0 } }
+}
+```
+
+A tool-call step's response is the tool's error flag and, when it returns one, its structured result:
+
+```json
+{
+  "schemaVersion": 1,
+  "steps": { "grade-run": { "isError": false, "structuredResult": { "ok": true, "verdict": "pending" } } }
 }
 ```
 
@@ -442,12 +486,12 @@ A model it calls is named as `policy/evaluator-conditions.json`'s `evaluator.mod
 The runtime runs the plan first, recorded `baseline` and never shown to the agent; the agent then calls the bridge, a stdio MCP server with one tool per interface of the brief, shaped by kind (`cli`: `arguments`, the whole command line, and `stdin`; `api`: `method`, `path`, `body`; `mcp`: `tool`, `arguments`).
 In a `cli` call, `--name=value` is an option, `--name` takes the next word only when an operation declares it non-boolean, and other words, and all after `--`, are positional; a repeated option is refused, since eval-quality's request carries one value per option.
 `stdin` reaches the target as written, and the record's `callInputs.stdin` is the JSON object it parses to or, for other text, the text under the operation's one stdin key.
-The registry's adapter denies an unlisted executable or subcommand before anything launches (recorded with eval-quality's fault code and detail); this release's registry has command targets only, so eval-quality denies `api` and `mcp` calls at the interface.
+The registry's adapters deny an unlisted executable, subcommand, interface or tool before anything launches, recorded with eval-quality's fault code, its reason and its detail: an `mcp` call goes through the tool-server entry's `McpTargetAuthorization` for the arm's copy, and the operation it matches is the one declaring its tool name; this release's registry declares no HTTP target, so eval-quality denies an `api` call at the interface.
 A call matching exactly one operation (by its declared keys) is recorded `evaluator-chosen` and answered with its `observationId`; any other authorized call stays in the evidence as unmatched, with no ID to cite.
 Every call counts against `budgets.maxToolCalls` per trial, and none runs after the agent ends.
 A call carrying the trial's answer nonce is refused unsent and uncounted, so the agent cannot hand it to the target.
 On a gameability arm a call goes through the same adapter and authorizations with nothing launched, so an ungranted one is denied as on any arm, and every other is answered from the degenerate response.
-A call the target could not run exits 12.
+A call the target could not run exits 12, and the exit message names that call's fault, followed by the agent's own failure when the agent then failed.
 A plan step and an agent call with the same bindings both match the step, so declare cardinality `any` on a step an agent may repeat.
 The bridge admits one connection, presenting a token its process reads from its environment; its configuration reaches the adapter as a private file.
 Until Story 1.31 sandboxes the target, a target running as your user could read that token before the agent connects.
