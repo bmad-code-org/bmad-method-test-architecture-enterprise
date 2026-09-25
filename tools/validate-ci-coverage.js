@@ -113,10 +113,13 @@ const SHARD_INVOCATION = /node tools\/test-shards\.js --shard \$\{\{ matrix\.sha
  * its `--coverage-dir` and `--timings` flags with double-quoted values that
  * expand only environment variables and `${{ matrix.shard }}`. Anything else
  * on the line (`--list`, `|| true`, `; true`, `&&`, a pipe, a command
- * substitution) could drop the shard's scripts or hide their failures.
+ * substitution) could drop the shard's scripts or hide their failures. A
+ * value may not hold a backslash, `!` or a line break either: bash reads a
+ * backslash inside double quotes as an escape, so `"a\" || true #"` is one
+ * quoted string to a regex and a closed quote plus `|| true` to bash.
  */
 const SHARD_RUN_LINE =
-  /^node tools\/test-shards\.js --shard \$\{\{ matrix\.shard \}\}\/\d+(?: --(?:coverage-dir|timings) "(?:[^"`$]|\$[A-Z_]+|\$\{\{ matrix\.shard \}\})*")*$/;
+  /^node tools\/test-shards\.js --shard \$\{\{ matrix\.shard \}\}\/\d+(?: --(?:coverage-dir|timings) "(?:[^"`$\\!\n\r]|\$[A-Z_]+|\$\{\{ matrix\.shard \}\})*")*$/;
 
 /**
  * The workflow jobs in one workflow file's text that run the chain through
@@ -190,8 +193,21 @@ function shardRunProblems(run) {
       }
     }
   }
-  if (run.step && Object.hasOwn(run.step, 'shell')) {
-    problems.push(`${where}'s shard step sets \`shell\`, which can change how its run line runs or what its exit means`);
+  for (const key of ['shell', 'working-directory']) {
+    if (run.step && Object.hasOwn(run.step, key)) {
+      problems.push(`${where}'s shard step sets \`${key}\`, which can change how its run line runs or what its exit means`);
+    }
+  }
+  for (const [owner, holder] of [
+    ['job', run.definition],
+    ['workflow', run.workflow],
+  ]) {
+    const defaults = holder?.defaults?.run;
+    if (defaults && typeof defaults === 'object' && Object.keys(defaults).length > 0) {
+      problems.push(
+        `${where}'s ${owner} sets defaults.run (${Object.keys(defaults).join(', ')}), which can change how the shard step runs or what its exit means`,
+      );
+    }
   }
   if (typeof run.step?.run !== 'string' || !SHARD_RUN_LINE.test(run.step.run.trim())) {
     problems.push(

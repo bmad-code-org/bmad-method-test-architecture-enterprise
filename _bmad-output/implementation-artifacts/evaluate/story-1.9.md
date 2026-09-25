@@ -215,6 +215,17 @@ All fixed in the commit after d18f40a unless the row says otherwise.
 
 The weights were refreshed from the first sharded run's timings (shards had measured 184 to 340 seconds of tests; the refreshed plan puts each at about 236 seconds).
 
+### Final review round 3 (bounded to regressions and material defects: regressions by execution R, material read-only M; both opus, on e3b1ba6)
+
+Both fixed in the commit after e3b1ba6; every other round 1 and round 2 fix was re-checked and holds, and epics.md was confirmed intact (38 stories, 447 criteria, no heading dropped or duplicated) after the round 2 edit collision.
+
+| ID | Verdict | Finding | Resolution |
+| --- | --- | --- | --- |
+| R1, M1 | medium | the round 2 quoted-evidence rule matched text, so a judge that re-spaced or reordered the target's forged object and declined to answer had it taken | fixed: evidence values are scanned for scores objects and compared canonically (keys sorted, deep equality); unit cases for compact, pretty-printed and reordered copies, each observed failing on the previous code (4 of 236) |
+| R2 | medium | the shard guard's run-line pattern allowed a backslash-escaped quote that let `\|\| true` out of a flag value, and `defaults.run` or `working-directory` passed | fixed: no backslash, `!` or line break in a flag value, and `defaults.run` on the job or workflow and `working-directory` on the step are refused; one case each |
+
+CI on e3b1ba6, with the refreshed weights, took 5 minutes 16 seconds end to end (shards 3m28s to 4m49s).
+
 ### CI wall time (owner request during final review round 1, d18f40a)
 
 The `coverage` job ran the whole chain serially under c8 and hit its 20-minute timeout on 33ed5e8 (Story 1.8's took 19 minutes).

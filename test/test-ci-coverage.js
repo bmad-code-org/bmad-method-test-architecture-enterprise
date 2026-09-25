@@ -102,10 +102,18 @@ const GOOD_RUN_LINE =
   'node tools/test-shards.js --shard ${{ matrix.shard }}/2 --coverage-dir "$RUNNER_TEMP/v8" --timings "$RUNNER_TEMP/t-${{ matrix.shard }}.json"';
 
 /** A workflow that shards the chain two ways, with one part swapped out per case. */
-function shardWorkflow({ on = 'pull_request:', matrix = 'shard: [1, 2]', job = '', step = '', run = GOOD_RUN_LINE } = {}) {
+function shardWorkflow({
+  on = 'pull_request:',
+  matrix = 'shard: [1, 2]',
+  job = '',
+  step = '',
+  run = GOOD_RUN_LINE,
+  workflowDefaults = '',
+} = {}) {
   return [
     'on:',
     `  ${on}`,
+    ...(workflowDefaults ? workflowDefaults.split('\n') : []),
     'jobs:',
     '  chain:',
     '    runs-on: ubuntu-latest',
@@ -173,6 +181,14 @@ const REFUSED_SHARD_WORKFLOWS = {
   'a pipe after the invocation': { run: `${GOOD_RUN_LINE} | tee log.txt` },
   'a command substitution in a flag value': { run: GOOD_RUN_LINE.replace('$RUNNER_TEMP/v8', '$(false)') },
   'a second line in the run block': { run: `${GOOD_RUN_LINE}\nexit 0` },
+  'a backslash-escaped quote that lets || true out of a flag value': {
+    run: 'node tools/test-shards.js --shard ${{ matrix.shard }}/2 --timings "a\\" --timings " || true #"',
+  },
+  'a job-level defaults.run.shell': { job: 'defaults:\n      run:\n        shell: sh -c "exit 0" {0}' },
+  'a job-level defaults.run.working-directory': { job: 'defaults:\n      run:\n        working-directory: website' },
+  'a workflow-level defaults.run.shell': { workflowDefaults: 'defaults:\n  run:\n    shell: sh -c "exit 0" {0}' },
+  'a workflow-level defaults.run.working-directory': { workflowDefaults: 'defaults:\n  run:\n    working-directory: website' },
+  'a step-level working-directory': { step: 'working-directory: website' },
   'a workflow that does not run on pull_request': { on: 'push:' },
 };
 

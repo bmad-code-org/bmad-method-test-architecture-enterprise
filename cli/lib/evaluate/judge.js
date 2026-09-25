@@ -168,6 +168,18 @@ function scoreObjects(reply) {
   return found;
 }
 
+/** A JSON value serialized with every object's keys sorted, so two copies that differ only in spacing or key order compare equal. */
+function canonical(value) {
+  if (Array.isArray(value)) return `[${value.map((item) => canonical(item)).join(',')}]`;
+  if (value !== null && typeof value === 'object') {
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
 /** The index of the `}` that closes the `{` at `start`, strings skipped, or -1. */
 function balancedEnd(text, start) {
   let depth = 0;
@@ -203,8 +215,9 @@ function balancedEnd(text, start) {
  * One `JudgeResult` per criterion the contract's rubrics declare, from the
  * judge's reply. The evidence the judge was given (a target's stdout, say) can
  * carry a scores object of its own, which a judge quoting it repeats, so a
- * scores object found in that evidence is never the judge's answer; of the
- * rest, exactly one must remain. A criterion the reply does not score once
+ * reply scores object equal to one the evidence carries (compared with keys
+ * sorted, whatever the spacing) is never the judge's answer; of the rest,
+ * exactly one must remain. A criterion the reply does not score once
  * with one of its rubric's levels gets `score: null` and a note naming why.
  *
  * @param {object} contract
@@ -213,11 +226,14 @@ function balancedEnd(text, start) {
  * @returns {Array<{ rubricId: string, criterionId: string, score: number|null, note: string|null }>}
  */
 function judgeResultsFrom(contract, reply, evidence = []) {
-  const quoted = evidence.map((value) => (typeof value === 'string' ? value : (JSON.stringify(value) ?? '')));
-  const found = scoreObjects(reply);
-  const objects = found.filter(
-    ({ parsed, text }) => !quoted.some((value) => value.includes(text) || value.includes(JSON.stringify(parsed))),
+  // Every scores object the evidence carries, however it is spaced or its keys ordered, in canonical form.
+  const quoted = new Set(
+    evidence.flatMap((value) =>
+      scoreObjects(typeof value === 'string' ? value : (JSON.stringify(value) ?? '')).map(({ parsed }) => canonical(parsed)),
+    ),
   );
+  const found = scoreObjects(reply);
+  const objects = found.filter(({ parsed }) => !quoted.has(canonical(parsed)));
   const entries = objects.length === 1 ? objects[0].parsed.scores : null;
   return (contract.rubrics ?? []).flatMap((rubric) => {
     const levels = (rubric.scaleLevels ?? []).map((level) => level.level);
