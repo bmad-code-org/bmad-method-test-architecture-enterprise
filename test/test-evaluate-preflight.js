@@ -412,8 +412,9 @@ function childrenOf(pid) {
  * the wall clock, the runner gone before the supervisor looked, a child the
  * agent leaves behind when it exits (under the runner, and under the group
  * leader alone), a process the agent leaves in a new session holding its
- * pipes, each forwarded signal, and a wall clock past the 2^31-1 ms one Node
- * timer holds.
+ * pipes, each forwarded signal, an agent that outlives a forwarded signal
+ * (reported as the grace period's SIGKILL after that signal), and a wall
+ * clock past the 2^31-1 ms one Node timer holds.
  */
 async function checkSupervision() {
   if (process.platform === 'win32') return;
@@ -688,7 +689,10 @@ async function checkSupervision() {
     reap(aloneChild);
   }
 
-  // Each forwarded signal, sent to the supervisor alone, reaches the agent's group.
+  // Each forwarded signal, sent to the supervisor alone, reaches the agent's group. SIGQUIT's default
+  // action writes a core file, and where the kernel hands cores to a collector (a Linux CI runner) the
+  // dump can outlast the leader's grace period, whose SIGKILL the kernel then records as the agent's end;
+  // the report still names the SIGQUIT that stopped the group. The other three end the agent at once.
   for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGQUIT']) {
     const pidFile = path.join(tempDir(`forward-${signal}`), 'pid');
     const run = startRunner(long, `Say alpha. STUB-ORPHAN ${pidFile} STUB-SLEEP 30000`);
@@ -696,8 +700,11 @@ async function checkSupervision() {
     const [forwardingSupervisor] = childrenOf(run.child.pid);
     if (forwardingSupervisor !== undefined) process.kill(forwardingSupervisor, signal);
     const ending = await run.closed;
+    const endings = [`killed by signal ${signal}.`];
+    if (signal === 'SIGQUIT')
+      endings.push(`killed by signal SIGKILL once it outlived the grace period after a ${signal} to its process group.`);
     check(
-      ending.code === EXIT_CODES['environment-transport'] && ending.stderr.includes(`killed by signal ${signal}`),
+      ending.code === EXIT_CODES['environment-transport'] && endings.some((text) => ending.stderr.includes(text)),
       `a runner whose supervisor received ${signal} exited ${ending.code}; expected the agent killed by ${signal}\n${ending.stderr}`,
     );
     if (forwardedChild !== null) {
@@ -705,6 +712,20 @@ async function checkSupervision() {
       reap(forwardedChild);
     }
   }
+  // An agent that goes on running after a forwarded SIGQUIT, as one still writing its core does, ends by
+  // the grace period's SIGKILL, and the report names the SIGQUIT that asked for the stop.
+  const outlivingPid = path.join(tempDir('outlive'), 'pid');
+  const outliving = startRunner(long, `Say alpha. STUB-OUTLIVE SIGQUIT STUB-ORPHAN ${outlivingPid} STUB-SLEEP 30000`);
+  const outlivingChild = await pidFrom(outlivingPid);
+  const [outlivingSupervisor] = childrenOf(outliving.child.pid);
+  if (outlivingSupervisor !== undefined) process.kill(outlivingSupervisor, 'SIGQUIT');
+  const outlived = await outliving.closed;
+  if (outlivingChild !== null) reap(outlivingChild);
+  check(
+    outlived.code === EXIT_CODES['environment-transport'] &&
+      outlived.stderr.includes('killed by signal SIGKILL once it outlived the grace period after a SIGQUIT to its process group.'),
+    `a runner whose agent outlived a forwarded SIGQUIT exited ${outlived.code}; expected the grace SIGKILL reported with the SIGQUIT\n${outlived.stderr}`,
+  );
 
   // A wall clock past the 2^31-1 ms one Node timer holds.
   const far = runRunner(['--skill-root', STUB_SKILL, ...STUB_OPTIONS, '--timeout-ms', String(2 ** 31)]);
@@ -1294,9 +1315,10 @@ function checkCopyRefusals() {
 }
 
 /**
- * An interrupted preflight removes its copy and leaves no process behind, and
- * ends by the signal it received: `SIGTERM` to the command alone, and
- * `SIGQUIT` to its whole process group, as a terminal's Ctrl-\\ sends it.
+ * An interrupted preflight removes its copy and its probe list, leaves no
+ * process behind, records the signal in run.json, and ends by the signal it
+ * received: `SIGTERM` to the command alone, and `SIGQUIT` to its whole
+ * process group, as a terminal's Ctrl-\\ sends it.
  */
 async function checkInterrupted() {
   const cases = [['SIGTERM', false]];
@@ -1322,6 +1344,13 @@ async function checkInterrupted() {
     check(
       fs.readdirSync(temp.directory).length === 0,
       `the preflight interrupted by ${signal} left its copy: ${fs.readdirSync(temp.directory)}`,
+    );
+    // run.json records the interruption, so a reader can tell a stopped invocation from one still running.
+    const interrupted = runDirectoryOf(folder);
+    const record = interrupted === null ? null : readJson(path.join(interrupted, 'run.json'));
+    check(
+      record?.outcome?.stage === 'signal' && record.outcome.signal === signal && !fs.existsSync(path.join(interrupted, 'probes.json')),
+      `the preflight interrupted by ${signal} recorded ${JSON.stringify(record?.outcome)} and kept its probe list ${interrupted !== null && fs.existsSync(path.join(interrupted, 'probes.json'))}`,
     );
     if (orphan !== null) {
       check(await processEnds(orphan), `a process the leg interrupted by ${signal} started (pid ${orphan}) outlived the preflight`);

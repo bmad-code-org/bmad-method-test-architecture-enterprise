@@ -15,36 +15,51 @@
  *   `trialIndex` 1..3, `mode: contract-scoring`, `conditionArm` `clean` or
  *   `mutated:M-001`, `evaluator-chosen` observations whose request is the
  *   interaction plan's bound literal, as the target's own stdout shows), one
- *   isolation manifest, and one evaluator configuration for the run whose
- *   `sealedBriefDigest` is the digest of the persisted sealed brief, with
- *   `modelSnapshot: none` and the digest of the empty byte string; every one
- *   meets eval-quality's published schema, and emptying either model field
- *   fails it. `run.json` records the versions, digests, runner and model,
- *   trial count, duration, commit and `dirty`. Each probe's digests are the
- *   ones AD-7 names, computed here with git and SHA-256.
+ *   isolation manifest (each trial's workspace granted, no mount observed, the
+ *   one command the plan ran observed out of a two-command registry, one
+ *   call per plan step and trial), and one evaluator configuration for the
+ *   run whose `sealedBriefDigest` is the digest of the persisted sealed
+ *   brief, with `modelSnapshot: none` and the digest of the empty byte
+ *   string; every one meets eval-quality's published schema. `run.json`
+ *   records the versions, digests (of every file `score` reads), runner and
+ *   model, trial count, a duration no shorter than the trials, commit and
+ *   `dirty`. Each probe's digests are the ones AD-7 names, computed here with
+ *   git and SHA-256.
  * - A score with the real engine: P-001 `passed-clean-control` and P-002
  *   `caught` in every trial, reduced over three trials, with a comparable
- *   strength vector; `eval-quality score` run by hand on the persisted argv
+ *   strength vector and the run's corpus digest; `eval-quality score` run by hand on the persisted argv
  *   gives the same exit and byte-identical evidence, on that passing run and
  *   on a FAIL (trial 2 of P-002 rewritten as an evaluator that saw nothing).
  * - A score with the isolation manifest removed: exit 3, the probe's persisted
  *   `score` stderr non-empty, and no evidence artifact.
  * - A score through a logging shim at `TEA_EVALUATE_ENGINE_CLI`: one `score`
- *   call per probe carrying every trial's `--record`, the set's manifest and
- *   the run's configuration; each call's stdout, stderr and exit code
+ *   call per probe carrying every trial's `--record` and the set's manifest;
+ *   each call's stdout and stderr (several lines each) and exit code
  *   persisted byte for byte and keyed by probe; the command's exit the most
  *   severe call's own, whichever probe made it. Each persisted artifact kind
- *   that fails its schema, and a `trial-sets.json` path that leaves the run
- *   directory, exits 10 with no call.
+ *   that fails its schema, a `trial-sets.json` path that leaves the run
+ *   directory, a record or manifest rewritten after the run (its digest no
+ *   longer the one `run.json` recorded), a reference out of the run
+ *   directory, and a run.json that does not say completed each exit 10 (64
+ *   for the last) with no call.
  * - A trial that exits an infrastructure code: no record, exit 12, and
- *   `score` refuses the incomplete run with 12. A target that writes into the
- *   project during a trial exits 12; a clean control whose baseline does not
- *   pass exits 11; `run` refuses a folder with no policy or no probe (10) and
- *   a probe on a route it does not run (12); `score` refuses a folder with no
+ *   `score` refuses the incomplete run with 64. A target that writes into the
+ *   project during a trial exits 12, and so does one that plants a link in
+ *   the run directory where a record would go (the adopter's tree untouched)
+ *   or rewrites the compiled contract; a run whose last verification fails
+ *   after its index and run.json were written ends incomplete, with no index;
+ *   a clean control whose baseline does not pass exits 11; `run` refuses a
+ *   folder with no policy or no probe (10), a probe on a route it does not
+ *   run (12), and a `runs/` or `runs/.gitignore` a target left as a link
+ *   (12, nothing written through it); `score` refuses a folder with no
  *   run (64) and an index of another version (10).
  * - A run whose `policy/evaluator-conditions.json` names a model records it,
  *   and one whose second mutated trial accepts carries the set's FAIL
  *   recommendation in every record, which the engine accepts.
+ * - A run with clean controls only and `trials: 4`, from an evaluation folder
+ *   holding uncommitted work, and the newest of two runs scored by default;
+ *   one run's trial set copied into the other, its runId named in the index,
+ *   is refused.
  * - A project below its repository's top: the implementation digest is the
  *   tracked tree of that directory, moved by a commit inside it and not by
  *   one beside it.
@@ -84,6 +99,7 @@ const SHIM = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'engine-shi
 const FIXTURE = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'mutation');
 const ASSETS = path.join(PROJECT_ROOT, 'src', 'workflows', 'testarch', 'bmad-testarch-evaluate', 'assets');
 const CONDITIONS_SCHEMA = path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate', 'schemas', 'evaluator-conditions.schema.json');
+const WRAP_RUN_DIRECTORY = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'wrap-run-directory.cjs');
 const EVALUATION = path.join('evals', 'verdict');
 const TRIALS = 3;
 
@@ -161,8 +177,8 @@ function git(project, args) {
   return result.stdout;
 }
 
-function evaluate(args, env = {}) {
-  const result = spawnSync(process.execPath, [EVALUATE, ...args], {
+function evaluate(args, env = {}, node = []) {
+  const result = spawnSync(process.execPath, [...node, EVALUATE, ...args], {
     cwd: PROJECT_ROOT,
     encoding: 'utf8',
     env: { ...BASE_ENV, ...env },
@@ -273,9 +289,12 @@ async function checkRunShape({ engine, validate, repository, project, folder, ru
     run.corpusDigest === engine.digestArtifact(readJson(path.join(folder, 'corpus-index.json')), 'corpus-index.json'),
     'run.json records a corpus digest other than the digest of corpus-index.json',
   );
+  const trialElapsed = ['clean', 'mutated-M-001']
+    .flatMap((arm) => [1, 2, 3].map((trial) => path.join(runDirectory, 'trials', arm, `trial-${trial}.json`)))
+    .reduce((total, file) => total + (written(file, 'a trial evidence file')?.elapsedMs ?? 0), 0);
   check(
-    run.trialCount === TRIALS && Number.isFinite(run.durationMs) && run.durationMs > 0,
-    `run.json records ${run.trialCount} trials over ${run.durationMs} ms`,
+    run.trialCount === TRIALS && Number.isFinite(run.durationMs) && trialElapsed > 0 && run.durationMs >= trialElapsed,
+    `run.json records ${run.trialCount} trials over ${run.durationMs} ms, while the trials alone took ${trialElapsed} ms`,
   );
   check(
     Array.isArray(run.runner) && run.runner.some((entry) => entry.executable === 'verdict' && entry.target === 'bin/verdict.js'),
@@ -303,12 +322,6 @@ async function checkRunShape({ engine, validate, repository, project, folder, ru
     configuration.systemPromptDigest === sha256(Buffer.alloc(0)),
     `a run that uses no model records systemPromptDigest ${configuration.systemPromptDigest}`,
   );
-  for (const field of ['modelSnapshot', 'systemPromptDigest']) {
-    check(
-      (await validate('evaluator-configuration', { ...configuration, [field]: '' })).length > 0,
-      `an evaluator configuration with an empty ${field} passed the published schema`,
-    );
-  }
 
   // The trial sets (AD-7).
   const index = written(path.join(runDirectory, 'trial-sets.json'), 'trial-sets.json') ?? {};
@@ -370,15 +383,38 @@ async function checkRunShape({ engine, validate, repository, project, folder, ru
     );
     check(
       JSON.stringify((manifest.allowedMounts ?? []).filter((mount) => !mount.startsWith('read-only '))) ===
-        JSON.stringify([1, 2, 3].map((trial) => `git-worktree trial-${set.conditionArm.replace(':', '-')}-${trial}`)) &&
-        JSON.stringify(manifest.observedMounts) === JSON.stringify(manifest.allowedMounts),
+        JSON.stringify([1, 2, 3].map((trial) => `git-worktree trial-${set.conditionArm.replace(':', '-')}-${trial}`)),
       `${set.probeId}'s isolation manifest does not name the workspace of each trial: ${JSON.stringify(manifest.allowedMounts)}`,
     );
+    // The runtime observes no file-system access, so it claims no observed mount.
     check(
-      JSON.stringify(manifest.observedToolCalls) === JSON.stringify(['verdict/verdict']),
-      `${set.probeId}'s manifest observed tool calls ${JSON.stringify(manifest.observedToolCalls)}`,
+      JSON.stringify(manifest.observedMounts) === '[]',
+      `${set.probeId}'s isolation manifest claims observed mounts ${JSON.stringify(manifest.observedMounts)}`,
     );
+    // Two registry commands granted, the one the plan calls observed, once per plan step and trial.
+    check(
+      JSON.stringify(manifest.toolAllowlist) === JSON.stringify(['verdict/verdict', 'verdict/verdict-audit']) &&
+        JSON.stringify(manifest.observedToolCalls) === JSON.stringify(['verdict/verdict']),
+      `${set.probeId}'s manifest grants ${JSON.stringify(manifest.toolAllowlist)} and observed ${JSON.stringify(manifest.observedToolCalls)}`,
+    );
+    check(
+      manifest.actualResourceUse?.toolCalls === contract.interactionPlan.length * TRIALS,
+      `${set.probeId}'s manifest records ${manifest.actualResourceUse?.toolCalls} tool calls; the plan's ${contract.interactionPlan.length} step(s) ran ${TRIALS} times`,
+    );
+    // run.json anchors each record and the manifest by the digest of the bytes the run wrote.
+    for (const relative of [...set.records, set.isolationManifest]) {
+      const expected =
+        relative === set.isolationManifest ? run.artifacts?.isolationManifests?.[set.probeId] : run.artifacts?.records?.[relative];
+      check(
+        expected === sha256(fs.readFileSync(path.join(runDirectory, relative))),
+        `run.json anchors ${relative} to ${expected}, not the digest of its bytes`,
+      );
+    }
   }
+  check(
+    run.artifacts?.contract === sha256(fs.readFileSync(path.join(runDirectory, 'eval-contract.json'))),
+    `run.json anchors the compiled contract to ${run.artifacts?.contract}`,
+  );
 
   // The probe digests AD-7 names, computed here with git and SHA-256.
   const listing = git(repository, ['ls-tree', '-r', '-z', 'HEAD^{tree}'])
@@ -410,11 +446,11 @@ async function checkRunShape({ engine, validate, repository, project, folder, ru
         'the clean control names a revision other than the evaluated commit',
       );
   }
-  return { index, configuration };
+  return { index, configuration, run };
 }
 
 /** The real engine's score of the run: every vote, the reduction, a comparable strength vector, and the calls' inputs. */
-async function checkRealScore({ validate, folder, env, runDirectory, index, policy }) {
+async function checkRealScore({ validate, folder, env, runDirectory, index, policy, run }) {
   const scored = evaluate(['score', '--evaluation', folder], env);
   check(scored.status === 0, `score exited ${scored.status}; expected 0\n${scored.output}`);
   const scoreDirectory = latestScoreDirectory(runDirectory);
@@ -441,6 +477,10 @@ async function checkRealScore({ validate, folder, env, runDirectory, index, poli
       `${probeId} completed ${evidence.trials?.completed} trials`,
     );
     check(evidence.strength?.comparable === true, `${probeId}'s strength vector is not comparable: ${JSON.stringify(evidence.strength)}`);
+    check(
+      evidence.scoringVersionInputs?.corpusDigest === run.corpusDigest,
+      `${probeId} was scored against corpus ${evidence.scoringVersionInputs?.corpusDigest}, not the run's ${run.corpusDigest}`,
+    );
     check(
       probeId !== 'P-002' || (reduced?.caught === true && evidence.strength?.vector?.defect?.rate === 1),
       `P-002 did not reduce to a catch: ${JSON.stringify(reduced)}`,
@@ -497,8 +537,9 @@ function checkShimmedScore({ folder, env, runDirectory, index }) {
     if (call === null) continue;
     const probeFile = `${set.probeId}.probe.json`;
     const code = set.probeId === 'P-001' ? 4 : 2;
-    check(call.stdout === `known-bytes stdout ${probeFile}\n`, `${set.probeId}'s persisted stdout is ${JSON.stringify(call.stdout)}`);
-    check(call.stderr === `known-bytes stderr ${probeFile}\n`, `${set.probeId}'s persisted stderr is ${JSON.stringify(call.stderr)}`);
+    const stream = (name) => `known-bytes ${name} ${probeFile}\nknown-bytes ${name} 2 ${probeFile}\nknown-bytes ${name} 3 ${probeFile}`;
+    check(call.stdout === stream('stdout'), `${set.probeId}'s persisted stdout is ${JSON.stringify(call.stdout)}`);
+    check(call.stderr === stream('stderr'), `${set.probeId}'s persisted stderr is ${JSON.stringify(call.stderr)}`);
     check(
       call.exitCode === code && call.substituted === true,
       `${set.probeId}'s persisted call records exit ${call.exitCode}, substituted ${call.substituted}; expected ${code}`,
@@ -508,9 +549,9 @@ function checkShimmedScore({ folder, env, runDirectory, index }) {
 }
 
 /** Every persisted artifact kind that fails its schema, and a path out of the run directory, exit 10 before any engine call. */
-function checkRefusedArtifacts({ folder, runDirectory, shimEnv }) {
+function checkRefusedArtifacts({ engine, folder, runDirectory, shimEnv }) {
   const log = shimEnv.TEA_EVALUATE_SHIM_LOG;
-  const tamper = (label, relative, edit, expectedFile = relative) => {
+  const tamper = (label, relative, edit, expectedFile = relative, pattern = null) => {
     const file = path.join(runDirectory, relative);
     const original = fs.readFileSync(file);
     try {
@@ -521,6 +562,7 @@ function checkRefusedArtifacts({ folder, runDirectory, shimEnv }) {
       const refused = evaluate(['score', '--evaluation', folder], shimEnv);
       check(refused.status === 10, `score over ${label} exited ${refused.status}; expected 10\n${refused.output}`);
       check(refused.stdout.includes(`${expectedFile}: [`), `score did not name ${expectedFile} for ${label}:\n${refused.stdout}`);
+      if (pattern !== null) check(pattern.test(refused.stdout), `score did not say why it refused ${label}:\n${refused.stdout}`);
       check(loggedCalls(log).length === 0, `score called the engine over ${label}`);
     } finally {
       fs.writeFileSync(file, original);
@@ -584,6 +626,88 @@ function checkRefusedArtifacts({ folder, runDirectory, shimEnv }) {
     (value) => (value.actualResourceUse.wallClockSeconds += 1),
     'trial-sets/P-001/record-1.json',
   );
+  tamper(
+    "a record whose actions reference names a file outside this run's directory",
+    'trial-sets/P-001/record-2.json',
+    (value) => (value.actionsArtifact = { ...value.actionsArtifact, path: 'contract.json' }),
+    'trial-sets/P-001/record-2.json',
+    /its actions artifact contract\.json lies outside this run directory/,
+  );
+
+  // Rewrites that keep every file on its schema and every reference agreeing
+  // with its file: only the digests run.json recorded tell them from the run.
+  const rewrite = (label, edits, expectedFile) => {
+    const originals = new Map(edits.map(([relative]) => [relative, fs.readFileSync(path.join(runDirectory, relative))]));
+    try {
+      for (const [relative, kind, edit] of edits) {
+        const file = path.join(runDirectory, relative);
+        const value = readJson(file);
+        edit(value);
+        fs.writeFileSync(file, engine.serializeArtifact(value, kind));
+      }
+      fs.rmSync(log, { force: true });
+      const refused = evaluate(['score', '--evaluation', folder], shimEnv);
+      check(
+        refused.status === 10 && refused.stdout.includes(`${expectedFile}: [run-integrity]`),
+        `score over ${label} exited ${refused.status}; expected 10 naming ${expectedFile}\n${refused.output}`,
+      );
+      check(loggedCalls(log).length === 0, `score called the engine over ${label}`);
+    } finally {
+      for (const [relative, bytes] of originals) fs.writeFileSync(path.join(runDirectory, relative), bytes);
+    }
+  };
+  rewrite(
+    'a record rewritten to a pass',
+    [
+      [
+        'trial-sets/P-002/record-1.json',
+        'SealedRunRecord',
+        (value) => {
+          value.findings = [];
+          value.evaluatorRecommendation = 'PASS';
+          value.oracleDispositions = value.oracleDispositions.map((entry) => ({ ...entry, disposition: 'held' }));
+        },
+      ],
+    ],
+    'trial-sets/P-002/record-1.json',
+  );
+  rewrite(
+    'a compiled contract edited after the run',
+    [['eval-contract.json', 'EvalContract', (value) => (value.behaviors[0].severity = 'low')]],
+    'eval-contract.json',
+  );
+  const manifestFile = path.join(runDirectory, 'trial-sets', 'P-001', 'isolation-manifest.json');
+  const editedManifest = readJson(manifestFile);
+  editedManifest.observedToolCalls = [];
+  const editedDigest = engine.digestBytes(Buffer.from(engine.serializeArtifact(editedManifest, 'IsolationManifest')));
+  rewrite(
+    'an isolation manifest rewritten with its records',
+    [
+      ['trial-sets/P-001/isolation-manifest.json', 'IsolationManifest', (value) => (value.observedToolCalls = [])],
+      ...[1, 2, 3].map((trial) => [
+        `trial-sets/P-001/record-${trial}.json`,
+        'SealedRunRecord',
+        (value) => (value.isolationManifestArtifact = { ...value.isolationManifestArtifact, digest: editedDigest }),
+      ]),
+    ],
+    'trial-sets/P-001/isolation-manifest.json',
+  );
+
+  // A run.json that does not say the run completed has nothing to score, its index notwithstanding.
+  const runFile = path.join(runDirectory, 'run.json');
+  const runBytes = fs.readFileSync(runFile);
+  try {
+    const { completed, outcome, ...rest } = JSON.parse(runBytes.toString('utf8'));
+    check(completed === true && outcome?.exitCode === 0, `a completed run's run.json records ${JSON.stringify({ completed, outcome })}`);
+    fs.writeFileSync(runFile, JSON.stringify(rest));
+    const running = evaluate(['score', '--evaluation', folder], shimEnv);
+    check(
+      running.status === 64 && /still running or was stopped/.test(running.output),
+      `score over a run whose run.json records no end exited ${running.status}; expected 64\n${running.output}`,
+    );
+  } finally {
+    fs.writeFileSync(runFile, runBytes);
+  }
 
   const indexFile = path.join(runDirectory, 'trial-sets.json');
   const original = fs.readFileSync(indexFile);
@@ -621,7 +745,13 @@ function checkFailAndInvalid({ engine, folder, env, runDirectory }) {
   const missed = readJson(recordFile);
   missed.findings = [];
   missed.oracleDispositions = missed.oracleDispositions.map((disposition) => ({ ...disposition, disposition: 'held' }));
-  fs.writeFileSync(recordFile, engine.serializeArtifact(missed, 'SealedRunRecord'));
+  const missedBytes = Buffer.from(engine.serializeArtifact(missed, 'SealedRunRecord'));
+  fs.writeFileSync(recordFile, missedBytes);
+  // The FAIL fixture is a run whose evaluator saw nothing in trial 2, so run.json anchors the rewritten record.
+  const runFile = path.join(runDirectory, 'run.json');
+  const run = readJson(runFile);
+  run.artifacts.records['trial-sets/P-002/record-2.json'] = engine.digestBytes(missedBytes);
+  fs.writeFileSync(runFile, `${JSON.stringify(run, null, 2)}\n`);
   const failed = evaluate(['score', '--evaluation', folder], env);
   check(failed.status === 2, `score over a missed trial exited ${failed.status}; expected 2 (FAIL)\n${failed.output}`);
   const failDirectory = latestScoreDirectory(runDirectory);
@@ -660,18 +790,26 @@ function checkFailAndInvalid({ engine, folder, env, runDirectory }) {
 async function checkRunAndScore() {
   const engine = await loadEngine();
   const validate = createArtifactValidator();
-  const made = makeProject('happy');
+  // A second registry command the plan never calls, so the manifest's grants and observations differ.
+  const made = makeProject('happy', {
+    edit: ({ folder: evaluation }) => {
+      const manifest = path.join(evaluation, 'evaluation.json');
+      const value = readJson(manifest);
+      value.registry.push({ ...value.registry[0], executable: 'verdict-audit' });
+      fs.writeFileSync(manifest, `${JSON.stringify(value, null, 2)}\n`);
+    },
+  });
   const { folder, env } = made;
   const ran = evaluate(['run', '--evaluation', folder], env);
   check(ran.status === 0, `run exited ${ran.status}; expected 0\n${ran.output}`);
   const runDirectory = runDirectoryOf(folder);
   if (runDirectory === null) return;
   const policy = readJson(path.join(folder, 'policy', 'scoring-policy.json'));
-  const { index } = await checkRunShape({ engine, validate, ...made, runDirectory });
+  const { index, run } = await checkRunShape({ engine, validate, ...made, runDirectory });
   if (!Array.isArray(index.trialSets)) return;
-  await checkRealScore({ validate, folder, env, runDirectory, index, policy });
+  await checkRealScore({ validate, folder, env, runDirectory, index, policy, run });
   const shimEnv = checkShimmedScore({ folder, env, runDirectory, index });
-  checkRefusedArtifacts({ folder, runDirectory, shimEnv });
+  checkRefusedArtifacts({ engine, folder, runDirectory, shimEnv });
   checkFailAndInvalid({ engine, folder, env, runDirectory });
 }
 
@@ -752,6 +890,77 @@ function checkStoppedRuns() {
     'a run whose first trial wrote into the project ran another trial',
   );
 
+  // A target that plants a link in the run directory where a record would go:
+  // the run stops before any trial set is written, and the adopter's tree,
+  // where the link points, is never written.
+  const planted = makeProject('plant');
+  const policyFile = path.join(planted.project, 'rules', 'policy.txt');
+  const policyBytes = fs.readFileSync(policyFile);
+  const plantedRun = evaluate(['run', '--evaluation', planted.folder], {
+    ...planted.env,
+    VERDICT_WHEN: 'trial-clean-1',
+    VERDICT_DO: 'plant',
+    VERDICT_TOUCH: policyFile,
+  });
+  check(
+    plantedRun.status === 12 && /trial-sets is an entry the runtime did not write/.test(plantedRun.output),
+    `a run whose target planted a link in its run directory exited ${plantedRun.status}; expected 12 naming the entry\n${plantedRun.output}`,
+  );
+  check(fs.readFileSync(policyFile).equals(policyBytes), 'a run wrote through the link its target planted into the adopter tree');
+  check(
+    git(planted.repository, ['status', '--porcelain']).toString().trim() === '',
+    `the adopter's tree changed under a planted link: ${git(planted.repository, ['status', '--porcelain'])}`,
+  );
+  const plantedDirectory = runDirectoryOf(planted.folder);
+  if (plantedDirectory !== null) {
+    check(
+      !fs.existsSync(path.join(plantedDirectory, 'trial-sets.json')),
+      'a run whose directory held a planted link wrote trial-sets.json',
+    );
+    const plantedRecord = written(path.join(plantedDirectory, 'run.json'), "the planted run's run.json") ?? {};
+    check(
+      plantedRecord.completed === false && plantedRecord.outcome?.exitCode === 12,
+      `a run whose directory held a planted link records ${JSON.stringify({ completed: plantedRecord.completed, outcome: plantedRecord.outcome })}`,
+    );
+  }
+
+  // A target that rewrites the compiled contract in the run directory: the run stops before any trial set names it.
+  const forged = makeProject('forge');
+  const forgedRun = evaluate(['run', '--evaluation', forged.folder], { ...forged.env, VERDICT_WHEN: 'trial-clean-1', VERDICT_DO: 'forge' });
+  check(
+    forgedRun.status === 12 && /eval-contract\.json no longer holds the bytes the runtime wrote/.test(forgedRun.output),
+    `a run whose target rewrote the compiled contract exited ${forgedRun.status}; expected 12 naming it\n${forgedRun.output}`,
+  );
+  const forgedDirectory = runDirectoryOf(forged.folder);
+  check(
+    forgedDirectory === null || !fs.existsSync(path.join(forgedDirectory, 'trial-sets')),
+    'a run whose compiled contract was rewritten wrote trial sets',
+  );
+
+  // The last verification fails after the index and a completed run.json were
+  // written: the run ends incomplete, its index retracted, and score refuses it.
+  const unsealed = makeProject('unsealed');
+  const unsealedRun = evaluate(
+    ['run', '--evaluation', unsealed.folder],
+    { ...unsealed.env, TEA_EVALUATE_FAIL_VERIFY: 'after the trial sets were sealed' },
+    ['--require', WRAP_RUN_DIRECTORY],
+  );
+  check(unsealedRun.status === 12, `a run whose last verification failed exited ${unsealedRun.status}; expected 12\n${unsealedRun.output}`);
+  const unsealedDirectory = runDirectoryOf(unsealed.folder);
+  if (unsealedDirectory !== null) {
+    const unsealedRecord = written(path.join(unsealedDirectory, 'run.json'), "the unsealed run's run.json") ?? {};
+    check(
+      unsealedRecord.completed === false && unsealedRecord.outcome?.stage === 'run-directory' && unsealedRecord.outcome?.exitCode === 12,
+      `a run whose last verification failed records ${JSON.stringify({ completed: unsealedRecord.completed, outcome: unsealedRecord.outcome })}`,
+    );
+    check(!fs.existsSync(path.join(unsealedDirectory, 'trial-sets.json')), 'a run whose last verification failed kept trial-sets.json');
+  }
+  const unsealedScore = evaluate(['score', '--evaluation', unsealed.folder], unsealed.env);
+  check(
+    unsealedScore.status === 64,
+    `score over a run that did not seal exited ${unsealedScore.status}; expected 64\n${unsealedScore.output}`,
+  );
+
   const rejecting = makeProject('clean-fails');
   const refused = evaluate(['run', '--evaluation', rejecting.folder], {
     ...rejecting.env,
@@ -823,6 +1032,28 @@ function checkRefusals() {
   for (const project of [noPolicy, noProbe, gameability]) {
     check(fs.readdirSync(project.env.TMPDIR).length === 0, 'a refused run made a workspace');
   }
+
+  // runs/ as a link, and runs/.gitignore as a link, each left by a target: no run is written through either.
+  const linkedRuns = makeProject('linked-runs');
+  const elsewhere = tempDir('elsewhere');
+  fs.symlinkSync(elsewhere, path.join(linkedRuns.folder, 'runs'));
+  const linkedRunsRun = evaluate(['run', '--evaluation', linkedRuns.folder], linkedRuns.env);
+  check(
+    linkedRunsRun.status === 12 && /runs is not a directory/.test(linkedRunsRun.output) && fs.readdirSync(elsewhere).length === 0,
+    `a run whose runs/ is a link exited ${linkedRunsRun.status} and wrote ${JSON.stringify(fs.readdirSync(elsewhere))}\n${linkedRunsRun.output}`,
+  );
+  const linkedIgnore = makeProject('linked-ignore');
+  const outside = path.join(tempDir('outside'), 'kept.txt');
+  fs.writeFileSync(outside, 'kept\n');
+  fs.mkdirSync(path.join(linkedIgnore.folder, 'runs'));
+  fs.symlinkSync(outside, path.join(linkedIgnore.folder, 'runs', '.gitignore'));
+  const linkedIgnoreRun = evaluate(['run', '--evaluation', linkedIgnore.folder], linkedIgnore.env);
+  check(
+    linkedIgnoreRun.status === 12 &&
+      /\.gitignore is not a file/.test(linkedIgnoreRun.output) &&
+      fs.readFileSync(outside, 'utf8') === 'kept\n',
+    `a run whose runs/.gitignore is a link exited ${linkedIgnoreRun.status}\n${linkedIgnoreRun.output}`,
+  );
 }
 
 /** Evaluator conditions recorded, and a set whose trials differ carrying one recommendation the engine accepts. */
@@ -924,7 +1155,7 @@ function checkCleanOnlyAndNewest() {
       fs.rmSync(path.join(evaluation, 'probes', 'P-002.probe.json'));
       fs.rmSync(path.join(evaluation, 'mutations'), { recursive: true });
       const manifest = path.join(evaluation, 'evaluation.json');
-      fs.writeFileSync(manifest, `${JSON.stringify({ ...readJson(manifest), arms: ['clean'] }, null, 2)}\n`);
+      fs.writeFileSync(manifest, `${JSON.stringify({ ...readJson(manifest), arms: ['clean'], trials: 4 }, null, 2)}\n`);
     },
   });
   fs.writeFileSync(path.join(folder, 'notes.md'), 'an uncommitted note in the evaluation folder\n');
@@ -942,6 +1173,10 @@ function checkCleanOnlyAndNewest() {
     JSON.stringify((index.trialSets ?? []).map((set) => set.conditionArm)) === JSON.stringify(['clean']),
     `the clean-only run sealed ${JSON.stringify(index.trialSets)}`,
   );
+  check(
+    run.trialCount === 4 && index.trialSets?.[0]?.records?.length === 4,
+    `a run with trials 4 records trialCount ${run.trialCount} and ${index.trialSets?.[0]?.records?.length} record(s)`,
+  );
   const second = evaluate(['run', '--evaluation', folder], env);
   check(second.status === 0, `a second run exited ${second.status}\n${second.output}`);
   const secondRun = runDirectoryOf(folder, 2);
@@ -956,6 +1191,29 @@ function checkCleanOnlyAndNewest() {
     named.status === 0 && latestScoreDirectory(firstRun) !== null,
     `score --run naming the first run exited ${named.status}\n${named.output}`,
   );
+
+  // The first run's trial set copied into the second, and the second's index
+  // naming the first's runId: every record, its evidence and the manifest
+  // agree with each other, and only the run they belong to tells them apart.
+  if (secondRun === null) return;
+  const copied = path.join(secondRun, 'trial-sets', 'P-001');
+  fs.rmSync(copied, { recursive: true });
+  fs.cpSync(path.join(firstRun, 'trial-sets', 'P-001'), copied, { recursive: true });
+  const secondIndexFile = path.join(secondRun, 'trial-sets.json');
+  const secondIndex = readJson(secondIndexFile);
+  secondIndex.trialSets[0].runId = index.trialSets[0].runId;
+  fs.writeFileSync(secondIndexFile, `${JSON.stringify(secondIndex, null, 2)}\n`);
+  const crossed = evaluate(['score', '--evaluation', folder, '--run', path.basename(secondRun)], env);
+  for (const [why, pattern] of [
+    ['the runId the run derives', /names runId \S+ for P-001, not the \S+ this run derives/],
+    ['the digests run.json recorded', /record-1\.json: \[run-integrity\] digests to \S+, not the \S+ run\.json recorded/],
+    ['the run directory its evidence lies in', /its actions artifact \S+ lies outside this run directory/],
+  ]) {
+    check(
+      crossed.status === 10 && pattern.test(crossed.stdout),
+      `score over another run's trial set exited ${crossed.status} without naming ${why}\n${crossed.output}`,
+    );
+  }
 }
 
 /** A project below its repository's top: its tracked tree, moved by a commit inside it and not by one beside it. */
@@ -1160,6 +1418,8 @@ async function checkUnits() {
       combinedExit([4, 2]) === 4 &&
       combinedExit([0, 0]) === 0 &&
       combinedExit([3, 5]) === 5 &&
+      combinedExit([4, 5]) === 5 &&
+      combinedExit([3, 4]) === 4 &&
       combinedExit([64, 5]) === 64,
     'the combined exit is not the most severe',
   );

@@ -81,7 +81,11 @@ Add `tea-evaluate score`, which validates those files against eval-quality's pub
 - **Judgment.** `judgeTrial` disposes every contract oracle (eval-quality holds each one required) and files one `defect` finding per violated oracle for the probe under score, quoting the whole first stream, body or file channel the oracle reads on the cited observation (an exit code only when nothing else holds text), so eval-quality's witness match and quotation audit decide what it proves.
 - **Provenance.** eval-quality's witness match counts only `evaluator-chosen` observations (`dist/core/score/witness.js:162`) and its tutorial records mark scripted exercises that way, so a scored trial's observations are `evaluator-chosen`; qualification arms stay `baseline`. AD-7, Story 1.8 and Story 1.17 carry dated amendments.
 - **Set-level recommendation.** eval-quality holds `evaluatorRecommendation` equal across a trial set (`dist/core/score/score.js:180-212`), so the recommendation is computed over the set (FAIL on a violated oracle, CONCERNS on an unsettled one, PASS otherwise).
-- **Isolation manifest.** It lists each trial's workspace and read-only provisioned directories as the mounts granted and observed, the registry's commands and the ones the trials called, the tool-call and wall-clock ceilings the runtime enforces, and the schema's largest value for tokens and cost, which the runtime does not bound. Use is recorded as zero tokens and cost; a live target's spend is Story 1.29.
+- **Isolation manifest.** It lists each trial's workspace and read-only provisioned directories as the mounts granted, the registry's commands as the tool allowlist and the commands the runtime ran for the plan as the observed tool calls, the tool-call and wall-clock ceilings the runtime enforces, and the schema's largest value for tokens and cost, which the runtime does not bound. Use is recorded as zero tokens and cost; a live target's spend is Story 1.29.
+  After final review round 1, `observedMounts` is empty: the runtime observes no file-system access, and the published schema's only honest shape for "nothing observed" is an empty list (the network lists already took it), since the grants would claim an observation never made. Story 1.31 confines the target and fills it from the confinement's report.
+- **The run directory (final review round 1).** A target can reach `runs/` through the worktree's shared git directory, so every write into `runs/<invocationId>/` goes through `cli/lib/evaluate/run-directory.js`: the directory is created afresh, each subdirectory exclusively and recorded by device and inode, each file created by bare name inside its confirmed directory with `O_EXCL | O_NOFOLLOW`, `run.json` replaced by a rename, engine stage outputs written to a private temp directory and copied in, and every read held to the digest taken at write time.
+  `verify` walks the directory without following links before the preflight verdict, after the trials and after the last write, and any entry the runtime did not write, or any file whose bytes changed, exits 12. The contract and sealed-brief digests are taken right after `compile` and `seal`, before any target runs.
+  A run is `completed: true` only after the index, `run.json`, a last tree read and a last verification; any other end records `completed: false` and removes the index. `run.json` anchors the compiled contract, every record and every isolation manifest, and `score` holds each to its digest, each set's `runId` to the one the invocation derives, and every reference to this run directory.
 - **Evaluator conditions.** AD-7 names `policy/evaluator-conditions.json` as the committed fixed-condition input, and the Build Rules require a live target's model in `modelSnapshot`, so `run` reads it (runtime-owned schema, `check` holds it) and falls back to `none` and the empty-string digest when it is absent.
 - **AD-7 digests.** A worktree's `implementationDigest` is now the SHA-256 of `git ls-tree -r -z <commit>:<skill or target root>` without the evaluation folder's entries (`trackedTreeDigest`), which the test recomputes with git; Story 1.7's digest walked the checked-out files, which the test could not recompute from git, and it left the evaluation folder in when a copy of the tree held it. A copy keeps its tree digest.
 - **`score`.** It validates every persisted input against eval-quality's published schemas before any call (exit 10), passes an absent manifest on as absent, runs one call per probe with `--out`, keeps each call's argv, exit and streams in `scores/<scoreInvocationId>/<probeId>/score.json`, and exits with the most severe call's own exit (64, 5, 4, 3, 2, 0).
@@ -121,6 +125,11 @@ Each change was undone once in a scratch copy of the final tree (node_modules li
 - 2026-09-24: epics.md Story 1.17, the `command` evaluator criterion, amended: its judged observations are `evaluator-chosen` and its recommendation is taken over the whole set.
 - 2026-09-24: test-design-epic-1.md Story 1.8 rows amended: the pre-CLI validation case corrupts a persisted record and asserts no shim call; the ignore case names the nested fixture path.
 - 2026-09-24: Story 1.29 (record what a live run spends) appended to Epic 1, with its test-design section, dependency row and sprint-status row.
+- 2026-09-24, final review round 1: epics.md Story 1.8's request clause amended: `testData` lives on the contract, this release sends literal bindings, and any other binding stops the run with exit 12 (C1); test-design Story 1.8's request row corrected to match.
+- 2026-09-24, final review round 1: Story 1.30 (send `principal` and `matcher` bindings) and Story 1.31 (sandbox the target's file system) appended to Epic 1, each with acceptance criteria and revert checks, a test-design section, a dependency row and a `backlog` sprint-status row; the overview counts thirty-six stories.
+- 2026-09-24, final review round 1: ARCHITECTURE-SPINE.md AD-10's exit table gains `score`'s 64 and 12 and exit 12 for a run directory the runtime did not write alone (C3); AD-7's isolation-manifest bullet amended for the observed lists and the run directory, and its provenance amendment notes that eval-quality 4.1.4's schema states the role reading.
+- 2026-09-24, final review round 1: test-design Story 1.8 gains rows for the run directory and for `score`'s anchors.
+- 2026-09-24, final review round 1: the eval-quality pin and peer floor moved to 4.1.4 at the coordinator's direction (package.json, the lockfile, guard-publish and release-metadata floors, the roadmap claim, the CLI reference, the engine's install hint, eval-quality-facts.md, AD-7, epics.md and CHANGELOG).
 
 ## Review Triage Log
 
@@ -204,6 +213,59 @@ No high findings; each was checked against the code first.
 | R2-L3 | low | the index path pattern admitted a trailing slash | fixed |
 | R2-L4 | low | the Invalid reasons never reached the terminal | fixed: each `eval-quality: invalid:` line is printed with its probe; the omitted-manifest case asserts it |
 
+### Final review round 1 (four review lenses, CI, CodeRabbit; after the PR was pushed)
+
+Every finding was reproduced by a reviewer and verified again against c882bfa before the fix.
+F1 and F2 share one root cause: the target can reach `runs/<invocationId>/` through the worktree's shared git directory, and the runtime wrote and re-read run-directory files after the last tree check.
+
+| ID | Severity | Finding | Resolution |
+| --- | --- | --- | --- |
+| F1 | critical | a planted `trial-sets/P-001/record-1.json` link carried the sealed record into `rules/policy.txt`, and `run` and `score` exited 0 | fixed: `run-directory.js` writes every run-directory file exclusively without following links inside directories it made and confirmed by device and inode, replaces `run.json` by a rename, copies engine outputs in from a private temp directory, and verifies the exact entries before the verdict, after the trials and after the last write; `runs/` and `runs/.gitignore` must not be links; tests: the `plant` stub case (exit 12, `git status` empty, policy bytes unchanged), and the linked `runs/` and `.gitignore` cases |
+| F2 | high | the sealed brief, compiled contract, verdict and trial evidence were digested after the targets ran, so a rewritten contract was scored | fixed: contract and sealed-brief digests taken right after `compile` and `seal`, every read held to the digest taken at write time, and the run directory verified before any trial set is written; test: the `forge` stub case (exit 12 naming `eval-contract.json`, no trial set) |
+| F3 | medium | `FORBIDDEN_INPUT_NOTE` claimed the inputs were never in reach, and `observedMounts` copied the grants | fixed: the note states what the runtime withholds and that it does not sandbox the target's file system; `observedMounts` is empty, decided from the published schema: its observed lists feed `outsideAllowlist`, the runtime observes no file access, and an empty list is the one honest "nothing observed" (the network lists already take it), where the grants would claim an observation; `observedToolCalls` stays the commands the runtime ran, which it observes; Story 1.31 appended to own the sandbox; test: the manifest claims no observed mount |
+| F4 | low | `run.json` said `completed: true` before `trial-sets.json` existed | fixed: the index is written first, `completed: true` only after a last tree read and verification, and any unsealed end records `completed: false` and removes the index; test: the `wrap-run-directory.cjs` case fails the last verification and asserts exit 12, `completed: false`, no index and `score` 64 |
+| C1 | medium | the literal-only binding restriction had no amendment and no owner for `principal` and `matcher` | fixed in the plan: Story 1.8's clause amended (dated), test-design's request row corrected, Story 1.30 appended with criteria, revert checks, test-design section, dependency row and `backlog` row |
+| C2 | low | the CHANGELOG pin entry ended naming 4.1.2 | fixed: it names 4.1.4, the pin the coordinator moved this round to |
+| C3 | low | AD-10 lacked `score`'s 64 and 12 | fixed: AD-10 amended (dated), with exit 12 for a run directory the runtime did not write alone |
+| E1 | medium | a set copied from another run passed with its runId in the index | fixed: `score` requires `set.runId` to be `<invocationId>-<probeId>`, every reference inside this run directory, and the manifest reference to name the set's own manifest; tests: the cross-run copy in the clean-only case (each reason asserted) and an out-of-run actions reference |
+| E2 | medium | records and manifests were not anchored in `run.json` | fixed: `artifacts.records`, `artifacts.isolationManifests` and `artifacts.contract` recorded and checked, a file with no recorded digest a finding; tests: a record rewritten to a pass, a manifest rewritten with its records' references, a compiled contract edited after the run; checking record observations against the cited trial evidence is skipped, since the anchored record digest already refuses any change to them |
+| E3 | low | the CLI reference sentence read as if a crash yields no record; the test header said 12 | fixed: the sentence split as proposed, the header says 64 |
+| E4 | low | a signal left `run.json` with no outcome, and `score` said "stopped" for a live run | fixed: the signal handler records `outcome` (stage `signal`, the signal's name) and `completed: false` and retracts the index and probe list; `score` requires `completed: true` and says "still running or was stopped"; bare `score` choosing the newest completed run is skipped: A8 decided the default stays the most recent run and never falls back silently; tests: the interrupted preflight cases assert the recorded signal, and a run.json with no end exits 64 |
+| CI1 | flake | the forwarded-`SIGQUIT` case read `SIGKILL` on CI | fixed at the cause, below; tests: the forwarded case accepts both endings for `SIGQUIT` only, each naming `SIGQUIT`, and a stub agent that outlives a forwarded `SIGQUIT` (`STUB-OUTLIVE`) proves the report; loop proof below |
+| CR1 | review thread | anchor each record in `run.json` and check it in `score` | fixed with E2; the coordinator replies and resolves the thread |
+| T1 | medium | a zeroed `--corpus-digest` survived | fixed: each evidence artifact's `scoringVersionInputs.corpusDigest` equals the run's |
+| T2 | medium | allowlist-as-observation and zero tool calls survived | fixed: the happy project registers a second command the plan never calls; the manifest grants two and observed one, with `actualResourceUse.toolCalls` equal to plan steps times trials |
+| T3 | low | `durationMs: 1` and a constant trial count survived | fixed: `durationMs` at least the trials' summed `elapsedMs`, and the clean-only case runs `trials: 4` |
+| T4 | low | keeping one line per captured stream survived | fixed: the shim prints three lines per stream, the last without a newline, compared in full |
+| T5 | low | two `SEVERITY` reorderings survived | fixed: `combinedExit([4,5])` and `combinedExit([3,4])` asserted |
+| T6 | low | a test-built configuration validated against the vendor schema | fixed: the loop is deleted; the generated configuration's own validation keeps the criterion |
+| T7 | low | `observedMounts === allowedMounts` held by construction | fixed with F3: the manifest is asserted to claim no observed mount |
+| cosmetic | low | the test header said the shim case checks the configuration | fixed: the header names what the shim case asserts |
+
+**CI1 root cause.** The only `SIGKILL` source in that case is the group leader's grace timer, 2 s after it signals the group, so the agent was still alive 2 s after the forwarded `SIGQUIT`.
+`SIGQUIT`'s default action writes a core file; on a Linux CI runner the kernel hands cores to a collector through a pipe whatever the core size limit, the dump of a Node process can outlast 2 s under load, and a `SIGKILL` that lands mid-dump becomes the recorded exit signal.
+`SIGINT`, `SIGTERM` and `SIGHUP` end the agent at once, and macOS keeps no cores by default, which is why it passed locally.
+The leader's report now carries `stoppedBy`, the signal that asked the group to stop, and the runner reports "killed by signal SIGKILL once it outlived the grace period after a SIGQUIT to its process group".
+Proof: a copy of c882bfa's supervisor with a stub that outlives `SIGQUIT` (standing in for a slow dump) printed CI's exact line ("was killed by signal SIGKILL.") in 3 of 3 runs; the fixed code passed 30 of 30 real forwarded-`SIGQUIT` runs and 10 of 10 outliving runs with every core loaded by `yes`.
+
+**Added after review, and why.** eval-quality moved to 4.1.4 (pin and floor) at the coordinator's direction, since 4.1.4's schema states the provenance role reading AD-7 relies on; `test:guard-publish` gains a 4.1.3-floor refusal.
+
+### Revert checks, final review round 1
+
+Each guard was undone in a scratch copy (node_modules linked), the named suite run, and the copy restored; every one fails.
+
+- Writes following links (`'w'`, recursive mkdir, no identity check, verification off): "the adopter's tree changed under a planted link: M rules/policy.txt", the reviewer's F1 reproduction.
+- The verification after the trials removed: the planted run exits 12 without naming the entry, and the forged run writes trial sets.
+- The read-back digest check and verification removed: "a run whose target rewrote the compiled contract exited 0; expected 12".
+- The index retraction removed: "a run whose last verification failed kept trial-sets.json"; the last verification removed: that run exits 0, records `completed: true`, and `score` exits 0.
+- The runId derivation removed: the cross-run case no longer names the derived runId; the run-directory reference check removed: the out-of-run reference and cross-run cases lose their reason.
+- The record anchor removed: "score over a record rewritten to a pass exited 4" and the engine was called; the manifest anchor removed: the rewritten manifest is not named; the contract anchor removed: "score over a compiled contract edited after the run exited 4".
+- `completed` not required: "score over a run whose run.json records no end exited 4; expected 64".
+- `observedMounts` back to the grants, `observedToolCalls` to the allowlist, `toolCalls: 0`, a zeroed corpus digest, `durationMs: 1`, `trialCount: 3`, first-line capture, and each `SEVERITY` reordering: each named check fails.
+- `runs/` checked with `stat`: "a run whose runs/ is a link exited 12 and wrote [".gitignore"]".
+- The signal handler's `run.json` write removed: "the preflight interrupted by SIGTERM recorded undefined".
+- `stoppedBy` dropped from the report: "a runner whose agent outlived a forwarded SIGQUIT exited 4; expected the grace SIGKILL reported with the SIGQUIT".
+
 ## Verification
 
 **Commands:**
@@ -213,3 +275,10 @@ No high findings; each was checked against the code first.
 - `npm run test:release-metadata`, `npm run docs:validate-links`, `npm run docs:build` -- exit 0
 - `/bmad-workflow-builder` Analyze on the skill -- zero critical and zero high findings (Review Triage Log)
 - `npm run eval:preflight` -- run once live through the local Claude Code CLI: 35 legs run and 155 answered from the cache, 6038 s in the model, exit 2 with the six test-design moves Story 1.7 recorded and Story 1.27 owns (P-008 to P-010 now pass where the baseline records `seeded-fault-fired`; P-012 to P-014 fail `seeded-faults-scoped`); every other suite reduces to `test/probes/expected-strength.json`, the NFR and CI suites and `fragment-selection/bmad-testarch-ci` included
+
+**Final review round 1:**
+
+- the Build Rules engine check -- exit 0 on eval-quality 4.1.4; `git diff -- package.json package-lock.json` names no `file:` or `.tgz` spec outside the registry
+- `npm test` -- exit 0 (`test:evaluate-run` 331 checks, `test:evaluate-preflight` 225, `test:evaluate-mutation` 417, `test:evaluate-check` 408, `test:evaluate-boundaries` 296); the first full run stopped at `test:evaluate-boundaries` on identifiers named after the `seal` stage and at `test:direction` on a writer method named `import`, both renamed
+- `npm run test:release-metadata`, `npm run docs:validate-links`, `npm run docs:build`, `npm run lint`, `npm run lint:md`, `npm run format:check` -- exit 0
+- the forwarded-`SIGQUIT` case looped 30 times with every core loaded, 30 of 30 passing

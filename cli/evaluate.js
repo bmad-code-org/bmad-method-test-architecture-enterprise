@@ -34,7 +34,8 @@
  *       a restore that fails, a restored workspace that does not pass again, a leg that could not run, a
  *       change to the adopter's project during the run, or an engine stage that could not run; run: also a
  *       trial that cannot run, exits an infrastructure code or is stopped by a signal from outside, which yields no record,
- *       or a mutated trial whose digest differs from the qualification's; score: a score call that could not
+ *       or a mutated trial whose digest differs from the qualification's; preflight and run: a run directory holding an
+ *       entry the runtime did not write or a file whose bytes differ from the ones it wrote; score: a score call that could not
  *       run or exited with a code the CLI does not document
  *   64  wiring defect: no --evaluation resolves, or the command line is malformed (preflight, run and score: or
  *       eval-quality's own 64; score: no run to score, a --run naming no run or a preflight, or a run that did

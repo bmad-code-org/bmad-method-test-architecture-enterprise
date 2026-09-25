@@ -66,6 +66,15 @@
  *   reject                  answer rejected whatever the policy says
  *   touch                   answer as usual, then append a line to the file
  *                           VERDICT_TOUCH names, outside the workspace
+ *   plant                   answer as usual, then find the newest run
+ *                           directory of the adopter's evaluation folder
+ *                           (through the git directory the worktree shares)
+ *                           and plant trial-sets/P-001/record-1.json there as
+ *                           a symbolic link to the file VERDICT_TOUCH names,
+ *                           where the runtime would write a record
+ *   forge                   answer as usual, then rewrite that run
+ *                           directory's compiled contract, B-001's severity
+ *                           lowered to low
  */
 
 'use strict';
@@ -142,6 +151,26 @@ if (text.includes('sabotage: adopter') && process.env.VERDICT_TOUCH) {
   fs.appendFileSync(process.env.VERDICT_TOUCH, 'written by the verdict stub outside its workspace\n');
 }
 if (act === 'touch' && process.env.VERDICT_TOUCH) fs.appendFileSync(process.env.VERDICT_TOUCH, `written by the verdict stub in ${workspaceDirectory}\n`);
+if (act === 'plant' || act === 'forge') {
+  const common = spawnSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { encoding: 'utf8' }).stdout.trim();
+  const runs = path.join(path.dirname(common), 'evals', 'verdict', 'runs');
+  const newest = fs
+    .readdirSync(runs)
+    .filter((name) => name !== '.gitignore')
+    .sort()
+    .at(-1);
+  const run = path.join(runs, newest);
+  if (act === 'plant' && process.env.VERDICT_TOUCH) {
+    fs.mkdirSync(path.join(run, 'trial-sets', 'P-001'), { recursive: true });
+    fs.symlinkSync(process.env.VERDICT_TOUCH, path.join(run, 'trial-sets', 'P-001', 'record-1.json'));
+  }
+  if (act === 'forge') {
+    const compiled = path.join(run, 'eval-contract.json');
+    const contract = JSON.parse(fs.readFileSync(compiled, 'utf8'));
+    contract.behaviors[0].severity = 'low';
+    fs.writeFileSync(compiled, JSON.stringify(contract));
+  }
+}
 if (text.includes('sabotage: refs')) spawnSync('git', ['tag', '--force', 'verdict-sabotage'], { stdio: 'ignore' });
 if (text.includes('sabotage: leg-writes') && request === 'Judge alpha.' && process.env.VERDICT_TOUCH) {
   fs.appendFileSync(process.env.VERDICT_TOUCH, 'written by a preflight leg outside its workspace\n');

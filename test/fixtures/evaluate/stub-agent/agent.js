@@ -14,6 +14,10 @@
  * Markers in the request drive the other cases:
  *   STUB-EXIT <n>    print to stderr and exit n
  *   STUB-SLEEP <ms>  wait that long before answering (a timeout case)
+ *   STUB-OUTLIVE <signal>  go on running when that signal arrives, as an
+ *                    agent still writing its core file after a SIGQUIT does
+ *                    (a case that asserts the grace period's SIGKILL and the
+ *                    signal that asked for the stop are both reported)
  *   STUB-ENV <NAME>  also print the value of that environment variable
  *   STUB-WRITE       write stub-wrote.txt in the working directory
  *   STUB-ORPHAN <file>  start a child that sleeps for a minute and write its
@@ -53,6 +57,9 @@ const skill = fs.readFileSync(path.join(skillRoot, 'SKILL.md'), 'utf8');
 const name = /^name:\s*(\S+)/m.exec(skill)?.[1] ?? '(unnamed)';
 const request = prompt.slice(prompt.indexOf(REQUEST_MARKER) + REQUEST_MARKER.length).trim();
 
+// Before any child starts, so a pid file written below means the handler is in place.
+const outlive = /STUB-OUTLIVE (SIG[A-Z]+)/.exec(request)?.[1];
+if (outlive !== undefined) process.on(outlive, () => {});
 for (const [marker, waits] of [
   ['STUB-ORPHAN', true],
   ['STUB-LEAVE', false],

@@ -29,7 +29,11 @@
  * The leader stops the agent's group by sending it `SIGTERM` (or the forwarded
  * signal, or a stopping signal the leader itself receives) and sending the
  * agent `SIGKILL` if it is still running after a grace period. It does so on the wall clock,
- * on a signal and when the lifeline closes. When the agent exits, every
+ * on a signal and when the lifeline closes. An agent still running then ends
+ * by `SIGKILL`, and `stoppedBy` keeps the signal that asked it to stop: a
+ * `SIGQUIT`, whose default action writes a core file, can leave the agent
+ * dumping past the grace period wherever the kernel hands cores to a
+ * collector, and the kernel then records the `SIGKILL`. When the agent exits, every
  * process left in its group receives `SIGKILL` at once, since nothing the
  * agent started may outlive the turn. The leader then copies what the agent's
  * output pipes still hold and closes them once each reaches its end, stays
@@ -38,7 +42,9 @@
  *
  * The outcome reaches the runner as one JSON object on file descriptor 3,
  * which the agent does not inherit: `{ status, signal }` for an agent that
- * ended, `{ timedOut: true }` for one that outlived the wall clock,
+ * ended, with `stoppedBy` naming the stopping signal when one (forwarded or
+ * received) made the leader stop the group, `{ timedOut: true }` for one that
+ * outlived the wall clock,
  * `{ spawnError: { code, message } }` for one that could not start, and
  * `{ failure }` for a supervisor that ended before the agent, and for a leader
  * that ended without a report. The leader writes its report on the runner's
@@ -261,6 +267,8 @@ function lead([supervisorArgument, timeoutArgument, command, ...args]) {
   let supervisorGone = false;
   let settled = false;
   let killTimer = null;
+  /** The stopping signal that first made this process stop the group, reported beside how the agent ended. */
+  let stoppedBy = null;
 
   const signalGroup = (signal) => {
     try {
@@ -270,8 +278,9 @@ function lead([supervisorArgument, timeoutArgument, command, ...args]) {
       // The group is already gone.
     }
   };
-  const stop = (signal) => {
+  const stop = (signal, { requested = false } = {}) => {
     if (settled || agent.pid === undefined) return;
+    if (requested && stoppedBy === null) stoppedBy = signal;
     signalGroup(signal);
     if (killTimer === null) killTimer = setTimeout(() => agent.kill('SIGKILL'), GRACE_MS);
   };
@@ -300,14 +309,14 @@ function lead([supervisorArgument, timeoutArgument, command, ...args]) {
   };
 
   // A stopping signal sent to this process alone stops the agent's group, as a forwarded one does.
-  for (const name of STOPPING) process.on(name, () => stop(name));
+  for (const name of STOPPING) process.on(name, () => stop(name, { requested: true }));
 
   agent.once('error', (error) => finish({ spawnError: { code: error.code ?? null, message: error.message } }));
   agent.once('exit', (status, signal) => {
     if (timedOut) return finish({ timedOut: true });
     if (supervisorGone)
       return finish({ failure: 'the agent supervisor ended before the agent did, so its group leader stopped the agent' });
-    return finish({ status, signal });
+    return finish(stoppedBy === null ? { status, signal } : { status, signal, stoppedBy });
   });
 
   after(Number(timeoutArgument), () => {
@@ -321,7 +330,7 @@ function lead([supervisorArgument, timeoutArgument, command, ...args]) {
     pending += chunk.toString('utf8');
     const lines = pending.split('\n');
     pending = lines.pop();
-    for (const name of lines) if (STOPPING.includes(name)) stop(name);
+    for (const name of lines) if (STOPPING.includes(name)) stop(name, { requested: true });
   });
   // The supervisor is gone, however it ended. A group already stopping (the
   // supervisor forwarded a Ctrl-C, then exited with the runner) keeps the

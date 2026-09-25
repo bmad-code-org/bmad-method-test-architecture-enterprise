@@ -685,17 +685,18 @@ function removeWorkspace(workspace) {
  * since a signal ends the process before any `finally` runs: aborts the
  * in-flight leg (the adapter kills its runner's process group, and the
  * runner's supervisor, dying with it, closes the lifeline that stops the
- * agent's process group), removes the workspaces, and raises the same signal
- * again with the default action, so the caller sees the process end by that
- * signal.
+ * agent's process group), lets the caller record the interruption and
+ * retract what it must (`onSignal`), removes the workspaces, and raises the
+ * same signal again with the default action, so the caller sees the process
+ * end by that signal.
  *
  * @param {object[]} workspaces a live list: a workspace pushed later is removed too
  * @param {AbortController} controller
  * @param {object} [options]
- * @param {string[]} [options.paths] a live list of files the run retracts when it is interrupted (the CLI's probe list)
+ * @param {(signal: string) => void} [options.onSignal] runs first, with the signal's name; it must not throw
  * @returns {() => void} removes the handlers
  */
-function cleanUpOnSignal(workspaces, controller, { paths = [] } = {}) {
+function cleanUpOnSignal(workspaces, controller, { onSignal = () => {} } = {}) {
   const signals = process.platform === 'win32' ? ['SIGINT', 'SIGTERM', 'SIGHUP'] : ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGQUIT'];
   const handlers = new Map();
   const release = () => {
@@ -705,7 +706,7 @@ function cleanUpOnSignal(workspaces, controller, { paths = [] } = {}) {
     const handler = () => {
       release();
       controller.abort();
-      for (const file of paths) fs.rmSync(file, { force: true });
+      onSignal(name);
       for (const workspace of workspaces) {
         try {
           removeWorkspace(workspace);

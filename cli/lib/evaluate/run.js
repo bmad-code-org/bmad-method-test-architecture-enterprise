@@ -17,21 +17,28 @@
  *      reproduces the pristine one (with the mutation applied and its digest
  *      held to the one the qualification measured), and is judged by the
  *      deterministic evaluator (`judgeTrial`);
- *   3. the adopter's project read again (exit 12 on any change);
+ *   3. the adopter's project read again after every trial (exit 12 on any
+ *      change), and the run directory held to exactly what the runtime wrote
+ *      (`run-directory.js`: exit 12 on an entry it did not write or a file
+ *      whose bytes differ from the ones it wrote);
  *   4. one trial set per probe under `trial-sets/<probeId>/`: a Sealed Run
  *      Record per trial (`trialIndex` 1..N, one `runId` for the set, `mode:
  *      contract-scoring`), and one isolation manifest from the workspaces and
- *      tools the trials were granted; one evaluator configuration for the run,
- *      carrying the seal's `sealedBriefDigest`; each validated against the
- *      schema eval-quality publishes before it is written;
- *   5. `trial-sets.json`, the index `tea-evaluate score` reads, written last,
- *      and `run.json` completed with the digests, the runner and model
- *      identity, the trial count and the duration.
+ *      tools the trials were granted and the tool calls they made; one
+ *      evaluator configuration for the run, carrying the seal's
+ *      `sealedBriefDigest`; each validated against the schema eval-quality
+ *      publishes before it is written;
+ *   5. `trial-sets.json`, the index `tea-evaluate score` reads, then `run.json`
+ *      completed with the digests of every file `score` reads, the runner and
+ *      model identity, the trial count and the duration; then the adopter's
+ *      project read once more and the run directory verified again, so a run
+ *      is complete only once nothing it wrote was touched.
  *
  * A trial step that exits one of its registry entry's
- * `infrastructureExitCodes` is a target that could not run: the trial yields
- * no record and the run stops with exit 12, as does any trial that cannot run.
- * A stopped run writes no `trial-sets.json`, so there is nothing to score.
+ * `infrastructureExitCodes`, or that a signal from outside stops, is a target
+ * that could not run: the trial yields no record and the run stops with exit
+ * 12, as does any trial that cannot run. A stopped run holds no
+ * `trial-sets.json`, so there is nothing to score.
  */
 
 'use strict';
@@ -44,7 +51,7 @@ const { corpusDigestOf } = require('./corpus-index');
 const { expectedSchemaVersion } = require('./engine');
 const { evaluateOracles, judgeTrial, oraclesOfBehaviors } = require('./evaluator');
 const { QualificationError, applyReplaceExact } = require('./mutation');
-const { PreflightOutcome, admissionRefusal, armVerdict, readJson, referenceTo, runPipeline, writeJson } = require('./preflight');
+const { PreflightOutcome, admissionRefusal, armVerdict, readJson, referenceTo, runPipeline } = require('./preflight');
 const { evaluatorConfiguration, isolationManifest, sealedRunRecord } = require('./records');
 
 const POLICY_PATH = 'policy/scoring-policy.json';
@@ -70,8 +77,14 @@ const EVALUATOR_IDENTITY = 'tea-evaluate deterministic evaluator';
  */
 const UNBOUNDED = Number.MAX_SAFE_INTEGER;
 
+/**
+ * What the runtime does to withhold the forbidden inputs, and no more: it
+ * hands the target a workspace without the evaluation folder and requests
+ * that carry the plan's literals, and it does not sandbox the target's file
+ * system (Story 1.31).
+ */
 const FORBIDDEN_INPUT_NOTE =
-  'The target runs in a disposable workspace that leaves out the evaluation folder, so the contract, the probes, the mutations and the scoring policy are never in reach of it; the deterministic evaluator reads the contract and the trial observations only.';
+  "Withheld from what the runtime hands the target: each trial runs in a disposable workspace that leaves out the evaluation folder, and every request carries only the interaction plan's literal bindings. The runtime does not sandbox the target's file system, so a target that searches for the evaluation folder can reach it.";
 
 /** Every committed probe, sorted by file name, parsed. */
 function committedProbes(folder) {
@@ -84,15 +97,9 @@ function committedProbes(folder) {
     .map((name) => ({ file: `probes/${name}`, probe: readJson(path.join(directory, name)) }));
 }
 
-/** An artifact eval-quality reads, written as its canonical serialization (RFC 8785, one artifact per file). */
-function writeArtifact(engine, file, value, artifactPath) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, engine.serializeArtifact(value, artifactPath));
-}
-
-/** `relative` in POSIX form. */
-function posix(relative) {
-  return relative.split(path.sep).join('/');
+/** An artifact eval-quality reads, written through the run directory's writer as its canonical serialization (RFC 8785, one artifact per file). */
+function writeArtifact(engine, writer, file, value, artifactPath) {
+  writer.write(file, engine.serializeArtifact(value, artifactPath));
 }
 
 /**
@@ -161,12 +168,12 @@ function runRunCommand(folder, { fromWorkingTree = false, env = process.env, log
 }
 
 /** One arm of the clean controls' qualification: the evidence, or a stop with the exit its failure maps to. */
-async function qualificationArm({ contract, registry, workspace, stop, directory, log, signal }) {
+async function qualificationArm({ contract, registry, workspace, stop, writer, directory, log, signal }) {
   const { port } = await registry.createProbePort({ cwd: workspace.root, projectRoot: workspace.root });
   try {
     return await runArm({ contract, port: hostEnvironmentPort({ port, registry }), registry, label: 'baseline', signal });
   } catch (error) {
-    writeJson(path.join(directory, 'fault.json'), {
+    writer.writeJson(`${directory}/fault.json`, {
       phase: 'baseline-pass',
       workspace: workspace.label,
       code: typeof error?.code === 'string' ? error.code : null,
@@ -198,7 +205,7 @@ async function qualifyCleanControls({
   engine,
   validate,
   digests,
-  runDirectory,
+  writer,
   stop,
   log,
   signal,
@@ -213,7 +220,8 @@ async function qualifyCleanControls({
       registry,
       workspace,
       stop,
-      directory: path.join(runDirectory, 'qualification', 'clean'),
+      writer,
+      directory: 'qualification/clean',
       log,
       signal,
     });
@@ -229,8 +237,8 @@ async function qualifyCleanControls({
       regexMatchStepBudget: policy.regexMatchStepBudget,
     });
     const verdict = armVerdict(oracles);
-    const evidenceFile = path.join(runDirectory, 'qualification', probe.probeId, 'baseline-pass.json');
-    writeJson(evidenceFile, {
+    const evidenceFile = `qualification/${probe.probeId}/baseline-pass.json`;
+    writer.writeJson(evidenceFile, {
       probeId: probe.probeId,
       phase: 'baseline-pass',
       workspace: workspace.label,
@@ -245,7 +253,7 @@ async function qualifyCleanControls({
         message:
           oracles.length === 0
             ? `${file}: behavior ${probe.behaviorId} declares no oracle, so the clean control has nothing to pass`
-            : `${file}: the clean control's baseline does not pass (its oracles are ${verdict}), so it cannot qualify; the evidence is in ${path.relative(folder, evidenceFile)}`,
+            : `${file}: the clean control's baseline does not pass (its oracles are ${verdict}), so it cannot qualify; the evidence is in ${path.relative(folder, writer.pathOf(evidenceFile))}`,
       });
     }
     const candidate = {
@@ -263,7 +271,7 @@ async function qualifyCleanControls({
       rationale: probe.rationale,
       qualification: {
         route: 'clean-control',
-        baselinePassEvidence: referenceTo(folder, evidenceFile, engine.digestBytes),
+        baselinePassEvidence: referenceTo(folder, writer, evidenceFile, engine.digestBytes),
         revisionCommitDigest: digests.commitDigest,
         noKnownDefectStatement: probe.qualification.noKnownDefectStatement,
       },
@@ -284,9 +292,9 @@ async function qualifyCleanControls({
  * once with `evaluator-chosen` observations, and every probe on the arm
  * judged. Its evidence goes to `trials/<arm>/trial-<n>.json`.
  */
-async function runTrial({ arm, trialIndex, contract, registry, pristine, make, discard, policy, engine, runDirectory, stop, signal }) {
+async function runTrial({ arm, trialIndex, contract, registry, pristine, make, discard, policy, engine, writer, stop, signal }) {
   const label = `trial-${arm.slug}-${trialIndex}`;
-  const evidenceFile = path.join(runDirectory, 'trials', arm.slug, `trial-${trialIndex}.json`);
+  const evidenceFile = `trials/${arm.slug}/trial-${trialIndex}.json`;
   const workspace = make(label, pristine);
   try {
     if (arm.mutation !== null) {
@@ -322,7 +330,7 @@ async function runTrial({ arm, trialIndex, contract, registry, pristine, make, d
         signal,
       });
     } catch (error) {
-      writeJson(evidenceFile, {
+      writer.writeJson(evidenceFile, {
         conditionArm: arm.conditionArm,
         trialIndex,
         workspace: label,
@@ -352,7 +360,7 @@ async function runTrial({ arm, trialIndex, contract, registry, pristine, make, d
       });
     }
     const [anyJudgment] = Object.values(judgments);
-    writeJson(evidenceFile, {
+    writer.writeJson(evidenceFile, {
       conditionArm: arm.conditionArm,
       trialIndex,
       workspace: label,
@@ -362,8 +370,9 @@ async function runTrial({ arm, trialIndex, contract, registry, pristine, make, d
     });
     const mounts = [
       `${workspace.kind} ${label}`,
-      ...workspace.provisioned.map((entry) => `read-only ${label}/${posix(path.relative(workspace.root, entry))}`),
+      ...workspace.provisioned.map((entry) => `read-only ${label}/${path.relative(workspace.root, entry).split(path.sep).join('/')}`),
     ];
+    // The commands the runtime ran for the plan, each an observed call; what the target itself opened or reached is not observed.
     const toolCalls = executed.steps.map((step) => `${step.request.interfaceId}/${step.request.executable}`);
     return { trialIndex, evidenceFile, stepObservations: executed.stepObservations, judgments, elapsedMs, mounts, toolCalls };
   } finally {
@@ -392,9 +401,9 @@ function setRecommendation(judgments) {
 async function runTrialSets(given) {
   // The trials judge with the scoring policy the run copies, read before anything ran.
   const context = { ...given, policy: JSON.parse(given.snapshot.policyBytes.toString('utf8')) };
-  const { folder, evaluation, contract, registry, qualified, routesByMutation, engine, validate, invocationId, runDirectory, run } =
+  const { folder, evaluation, contract, registry, qualified, routesByMutation, engine, validate, invocationId, writer, run, sealed } =
     context;
-  const { writeRun, treeUnchanged, outcome, stop, log, snapshot } = context;
+  const { writeRun, treeUnchanged, retractUnlessSealed, markSealed, outcome, stop, log, snapshot } = context;
   const startedAt = context.started;
 
   const cleanControls = await qualifyCleanControls(context);
@@ -433,6 +442,10 @@ async function runTrialSets(given) {
       message: `no arm ran for ${unarmed.join(', ')}, so the run cannot score every probe it holds`,
     });
   }
+  // Every file the trial sets cite or copy (the contract, the sealed brief, the
+  // preflight verdict, each trial's evidence) must hold the bytes the runtime
+  // wrote, and the run directory nothing else, before any trial set is written.
+  writer.verify('after the trials');
 
   const failures = (kind, problems) => {
     if (problems.length > 0) {
@@ -444,10 +457,16 @@ async function runTrialSets(given) {
     }
   };
 
-  const sealedBrief = readJson(path.join(runDirectory, 'sealed-evaluator-brief.json'));
-  const sealedBriefDigest = engine.digestArtifact(sealedBrief, 'SealedEvaluatorBrief');
-  const compiledContract = readJson(path.join(runDirectory, 'eval-contract.json'));
-  const contractDigest = engine.digestArtifact(compiledContract, 'EvalContract');
+  // The digests of the compiled contract and the sealed brief as the stages
+  // wrote them, taken before any target ran.
+  if (sealed === null) {
+    throw stop({
+      stage: 'trial',
+      exitCode: 12,
+      message: 'the engine stages wrote no compiled contract or sealed brief, so no trial set can name them',
+    });
+  }
+  const { contractDigest, sealedBriefDigest } = sealed;
   const { conditions } = snapshot;
   const tools = registry.entries.map((entry) => `${entry.interfaceId}/${entry.executable}`).sort();
   const configuration = evaluatorConfiguration({
@@ -463,7 +482,7 @@ async function runTrialSets(given) {
   });
   failures('EvaluatorConfiguration', await validate('evaluator-configuration', configuration));
   const configurationDigest = engine.digestArtifact(configuration, 'EvaluatorConfiguration');
-  writeArtifact(engine, path.join(runDirectory, 'evaluator-configuration.json'), configuration, 'EvaluatorConfiguration');
+  writeArtifact(engine, writer, 'evaluator-configuration.json', configuration, 'EvaluatorConfiguration');
 
   const stepCeilingMs = (contract.interactionPlan ?? []).reduce((total, step) => {
     const operation = (contract.permittedInterfaces ?? [])
@@ -473,14 +492,17 @@ async function runTrialSets(given) {
     return total + (registry.targetFor(interfaceId, operation?.invocation?.executable)?.maxElapsedMs ?? 0);
   }, 0);
   const planSteps = (contract.interactionPlan ?? []).length;
+  // The digest of the bytes the runtime wrote to a run-directory file, which `score` holds each file to.
+  const bytesDigest = (file) => engine.digestBytes(writer.read(file));
 
   const trialSets = [];
+  const recordDigests = {};
+  const manifestDigests = {};
   for (const arm of arms) {
     for (const probe of arm.probes) {
       const recommendation = setRecommendation(arm.trials.map((trial) => trial.judgments[probe.probeId]));
-      const directory = path.join(runDirectory, 'trial-sets', probe.probeId);
+      const directory = `trial-sets/${probe.probeId}`;
       const runId = `${invocationId}-${probe.probeId}`;
-      const mounts = arm.trials.flatMap((trial) => trial.mounts);
       const manifest = isolationManifest({
         runId,
         contractId: contract.contractId,
@@ -490,8 +512,9 @@ async function runTrialSets(given) {
         contractDigest,
         evaluatorConfigurationDigest: configurationDigest,
         workspaceIdentity: `${evaluation.evaluationId} ${arm.conditionArm}`,
-        allowedMounts: mounts,
-        observedMounts: mounts,
+        allowedMounts: arm.trials.flatMap((trial) => trial.mounts),
+        // The runtime observes no file-system access, so it records no observed mount (records.js).
+        observedMounts: [],
         toolAllowlist: tools,
         observedToolCalls: [...new Set(arm.trials.flatMap((trial) => trial.toolCalls))].sort(),
         resourceCeilings: {
@@ -511,8 +534,9 @@ async function runTrialSets(given) {
         forbiddenInputNote: FORBIDDEN_INPUT_NOTE,
       });
       failures('IsolationManifest', await validate('isolation-manifest', manifest));
-      const manifestFile = path.join(directory, 'isolation-manifest.json');
-      writeArtifact(engine, manifestFile, manifest, 'IsolationManifest');
+      const manifestFile = `${directory}/isolation-manifest.json`;
+      writeArtifact(engine, writer, manifestFile, manifest, 'IsolationManifest');
+      manifestDigests[probe.probeId] = bytesDigest(manifestFile);
       const records = [];
       for (const trial of arm.trials) {
         const judgment = trial.judgments[probe.probeId];
@@ -527,8 +551,8 @@ async function runTrialSets(given) {
           oracleDispositions: judgment.oracleDispositions,
           findings: judgment.findings,
           observations: Object.values(trial.stepObservations).sort((a, b) => a.sequence - b.sequence),
-          actionsArtifact: referenceTo(folder, trial.evidenceFile, engine.digestBytes),
-          isolationManifestArtifact: referenceTo(folder, manifestFile, engine.digestBytes),
+          actionsArtifact: referenceTo(folder, writer, trial.evidenceFile, engine.digestBytes),
+          isolationManifestArtifact: referenceTo(folder, writer, manifestFile, engine.digestBytes),
           resourceUse: {
             toolCalls: trial.toolCalls.length,
             inputTokens: 0,
@@ -538,33 +562,58 @@ async function runTrialSets(given) {
           },
         });
         failures('SealedRunRecord', await validate('sealed-run-record', record));
-        const recordFile = path.join(directory, `record-${trial.trialIndex}.json`);
-        writeArtifact(engine, recordFile, record, 'SealedRunRecord');
-        records.push(posix(path.relative(runDirectory, recordFile)));
+        const recordFile = `${directory}/record-${trial.trialIndex}.json`;
+        writeArtifact(engine, writer, recordFile, record, 'SealedRunRecord');
+        recordDigests[recordFile] = bytesDigest(recordFile);
+        records.push(recordFile);
       }
-      const probeFile = path.join(runDirectory, 'probes', `${probe.probeId}.probe.json`);
-      writeJson(probeFile, probe);
+      // A seeded probe's file is the preflight's own; a clean control's is written here.
+      const probeFile = `probes/${probe.probeId}.probe.json`;
+      const probeBytes = Buffer.from(`${JSON.stringify(probe, null, 2)}\n`);
+      if (!writer.has(probeFile)) writer.write(probeFile, probeBytes);
+      else if (!writer.read(probeFile).equals(probeBytes)) {
+        throw stop({ stage: 'trial', exitCode: 12, message: `${probeFile} is not the probe the run qualified` });
+      }
       trialSets.push({
         probeId: probe.probeId,
         runId,
         conditionArm: arm.conditionArm,
-        probe: posix(path.relative(runDirectory, probeFile)),
+        probe: probeFile,
         records,
-        isolationManifest: posix(path.relative(runDirectory, manifestFile)),
+        isolationManifest: manifestFile,
       });
     }
   }
 
-  const policyFile = path.join(runDirectory, 'scoring-policy.json');
-  fs.writeFileSync(policyFile, snapshot.policyBytes);
+  writer.write('scoring-policy.json', snapshot.policyBytes);
   const corpusDigest = await corpusDigestOf(snapshot.index);
-  // The bytes `score` reads, digested as written, so it can hold the run directory to what the run sealed.
-  const bytesDigest = (file) => engine.digestBytes(fs.readFileSync(file));
+  // The bytes `score` reads, digested as the runtime wrote them, so it can
+  // hold the run directory to what the run sealed.
   const artifacts = {
-    evaluatorConfiguration: bytesDigest(path.join(runDirectory, 'evaluator-configuration.json')),
-    preflightVerdict: bytesDigest(path.join(runDirectory, 'preflight-verdict.json')),
-    probes: Object.fromEntries(trialSets.map((set) => [set.probeId, bytesDigest(path.join(runDirectory, ...set.probe.split('/')))])),
+    contract: bytesDigest('eval-contract.json'),
+    evaluatorConfiguration: bytesDigest('evaluator-configuration.json'),
+    preflightVerdict: bytesDigest('preflight-verdict.json'),
+    probes: Object.fromEntries(trialSets.map((set) => [set.probeId, bytesDigest(set.probe)])),
+    records: recordDigests,
+    isolationManifests: manifestDigests,
   };
+  // The index first, so no run.json ever says completed without one.
+  writer.writeJson(TRIAL_SETS_NAME, {
+    schemaVersion: TRIAL_SETS_SCHEMA_VERSION,
+    invocationId,
+    corpusDigest,
+    contract: 'eval-contract.json',
+    policy: 'scoring-policy.json',
+    preflightVerdict: 'preflight-verdict.json',
+    evaluatorConfiguration: 'evaluator-configuration.json',
+    trialSets,
+  });
+  retractUnlessSealed.push(TRIAL_SETS_NAME);
+  const result = outcome({
+    stage: 'trial',
+    exitCode: 0,
+    message: `${trialSets.length} trial set(s) of ${trialCount} trial(s) sealed over ${arms.map((arm) => arm.conditionArm).join(', ')}; score them with tea-evaluate score --run ${invocationId}`,
+  });
   Object.assign(run, {
     artifacts,
     contractDigest,
@@ -580,23 +629,15 @@ async function runTrialSets(given) {
     startedAt: new Date(startedAt).toISOString(),
     durationMs: Date.now() - startedAt,
     completed: true,
+    outcome: { stage: result.stage, exitCode: result.exitCode, message: result.message },
   });
   writeRun();
-  writeJson(path.join(runDirectory, TRIAL_SETS_NAME), {
-    schemaVersion: TRIAL_SETS_SCHEMA_VERSION,
-    invocationId,
-    corpusDigest,
-    contract: 'eval-contract.json',
-    policy: 'scoring-policy.json',
-    preflightVerdict: 'preflight-verdict.json',
-    evaluatorConfiguration: 'evaluator-configuration.json',
-    trialSets,
-  });
-  return outcome({
-    stage: 'trial',
-    exitCode: 0,
-    message: `${trialSets.length} trial set(s) of ${trialCount} trial(s) sealed over ${arms.map((arm) => arm.conditionArm).join(', ')}; score them with tea-evaluate score --run ${invocationId}`,
-  });
+  // The last write is done: the project must be as it was, and the run
+  // directory exactly what the runtime wrote, or the run is not complete.
+  treeUnchanged('sealing', { record: false });
+  writer.verify('after the trial sets were sealed');
+  markSealed();
+  return result;
 }
 
-module.exports = { EVALUATOR_IDENTITY, TRIAL_SETS_NAME, TRIAL_SETS_SCHEMA_VERSION, runRunCommand, setRecommendation };
+module.exports = { EVALUATOR_IDENTITY, FORBIDDEN_INPUT_NOTE, TRIAL_SETS_NAME, TRIAL_SETS_SCHEMA_VERSION, runRunCommand, setRecommendation };

@@ -4,9 +4,10 @@
  *
  * The run is `runs/<invocationId>/`, named by `--run` or, when none is named,
  * the most recent `run` invocation. A run that did not complete (its
- * `run.json` records how it stopped, and it holds no `trial-sets.json`) has
- * nothing to score, and neither has a `preflight` invocation: both exit 64,
- * since the command was pointed at nothing it can score.
+ * `run.json` records how it stopped, or no end at all while it is still
+ * running, and does not say `completed: true`) has nothing to score, and
+ * neither has a `preflight` invocation: both exit 64, since the command was
+ * pointed at nothing it can score.
  *
  * Before any engine call, every input is read from the run directory and
  * checked (exit 10 on any finding, naming the file):
@@ -17,13 +18,17 @@
  *     evaluator configuration, and each set's probe, records and isolation
  *     manifest against the schema eval-quality publishes for it;
  *   - each set against the run: the index names the probes the run sealed,
- *     each once, and each set's records once; each probe file names its
- *     probe; every record carries the set's `runId` and arm and the run's
+ *     each once, and each set's records once; each set's `runId` is the one
+ *     the run derived from its invocation and the probe; each probe file names
+ *     its probe; every record carries the set's `runId` and arm and the run's
  *     contract, sealed brief and evaluator configuration digests; each
- *     record's evidence references are public and digest the files they name;
- *     and the record count, the corpus digest, and the digests of the policy,
- *     the preflight verdict, the evaluator configuration and each probe file
- *     are the ones `run.json` recorded.
+ *     record's evidence references are public, name files inside this run
+ *     directory (its manifest reference the set's own manifest) and digest
+ *     the files they name; and the record count, the corpus digest, and the
+ *     digests of the compiled contract, the policy, the preflight verdict, the
+ *     evaluator configuration, each probe file, each record and each
+ *     isolation manifest are the ones `run.json` recorded, a file it recorded
+ *     no digest for included.
  *
  * An isolation manifest that is absent is passed on as absent, never filled
  * in: eval-quality reads a trial set with none as Invalid.
@@ -111,11 +116,12 @@ function runDirectoryFor(folder, invocationId) {
     }
   }
   const record = runRecordOf(directory);
-  if (!fs.existsSync(path.join(directory, TRIAL_SETS_NAME))) {
-    const how =
-      record?.outcome === undefined
-        ? 'it records no outcome, so it was stopped before it could'
-        : `it stopped at its ${record.outcome.stage} stage with exit ${record.outcome.exitCode}: ${String(record.outcome.message).split('\n')[0]}`;
+  if (record?.completed !== true || !fs.existsSync(path.join(directory, TRIAL_SETS_NAME))) {
+    let how;
+    if (record?.outcome === undefined) how = 'it records no end, so it is still running or was stopped before it could record one';
+    else if (record.outcome.stage === 'signal') how = `it was stopped by ${record.outcome.signal}`;
+    else
+      how = `it stopped at its ${record.outcome.stage} stage with exit ${record.outcome.exitCode}: ${String(record.outcome.message).split('\n')[0]}`;
     return {
       wiring: `the run ${path.basename(directory)} did not complete and sealed nothing to score (${how}); run tea-evaluate run again, or name a completed run with --run`,
       directory,
@@ -127,6 +133,11 @@ function runDirectoryFor(folder, invocationId) {
 /** A path `trial-sets.json` names, resolved in the run directory; the schema has already refused `..` and absolute paths. */
 function inRun(runDirectory, relative) {
   return path.join(runDirectory, ...relative.split('/'));
+}
+
+/** `file`'s path relative to the evaluation folder, in POSIX form, as an artifact reference spells it. */
+function referencePath(folder, file) {
+  return path.relative(folder, file).split(path.sep).join('/');
 }
 
 /** The most severe of the exits, by `SEVERITY`. */
@@ -153,10 +164,15 @@ async function inputFindings({ folder, runDirectory, index, record, engine }) {
     parsed.set(file, value);
     return value;
   };
-  const referenceProblem = (reference, what) => {
+  const runPrefix = `${referencePath(folder, runDirectory)}/`;
+  const referenceProblem = (reference, what, expectedPath = null) => {
     if (reference?.storage !== 'public' || typeof reference.path !== 'string') {
       return `its ${what} is not a public reference to a file the run wrote`;
     }
+    if (!reference.path.startsWith(runPrefix) || reference.path.split('/').includes('..')) {
+      return `its ${what} ${reference.path} lies outside this run directory, ${runPrefix}`;
+    }
+    if (expectedPath !== null && reference.path !== expectedPath) return `its ${what} ${reference.path} is not its set's ${expectedPath}`;
     const file = path.join(folder, ...reference.path.split('/'));
     if (!fs.existsSync(file)) return `its ${what} ${reference.path} is not there`;
     const actual = engine.digestBytes(fs.readFileSync(file));
@@ -167,12 +183,17 @@ async function inputFindings({ folder, runDirectory, index, record, engine }) {
   const anchored = (relative, expected, what) => {
     const file = inRun(runDirectory, relative);
     if (!fs.existsSync(file)) return;
+    if (expected === undefined) {
+      add(relative, 'run-integrity', `has no digest in run.json, so it is not a file the run sealed as ${what}`);
+      return;
+    }
     const actual = engine.digestBytes(fs.readFileSync(file));
     if (actual !== expected) add(relative, 'run-integrity', `digests to ${actual}, not the ${expected} run.json recorded for ${what}`);
   };
   const recorded = record.artifacts ?? {};
 
   await read(index.contract, 'eval-contract');
+  anchored(index.contract, recorded.contract, 'the compiled contract');
   await read(index.preflightVerdict, 'preflight-verdict');
   anchored(index.preflightVerdict, recorded.preflightVerdict, 'the preflight verdict');
   await read(index.evaluatorConfiguration, 'evaluator-configuration');
@@ -199,10 +220,15 @@ async function inputFindings({ folder, runDirectory, index, record, engine }) {
   for (const set of index.trialSets) {
     if (seen.has(set.probeId)) add(TRIAL_SETS_NAME, 'run-integrity', `names probe ${set.probeId} in more than one trial set`);
     seen.add(set.probeId);
+    // AD-7: a set's runId is derived from this invocation and its probe, so a set another run sealed cannot pass as this one's.
+    const derived = `${record.invocationId}-${set.probeId}`;
+    if (set.runId !== derived) {
+      add(TRIAL_SETS_NAME, 'run-integrity', `names runId ${set.runId} for ${set.probeId}, not the ${derived} this run derives`);
+    }
     const probe = await read(set.probe, 'probe');
     if (probe !== null && probe.probeId !== set.probeId)
       add(set.probe, 'run-integrity', `is probe ${probe.probeId}, not the ${set.probeId} its trial set scores`);
-    if (recorded.probes?.[set.probeId] !== undefined) anchored(set.probe, recorded.probes[set.probeId], `probe ${set.probeId}`);
+    anchored(set.probe, recorded.probes?.[set.probeId], `probe ${set.probeId}`);
     if (set.records.length !== record.trialCount) {
       add(
         TRIAL_SETS_NAME,
@@ -214,6 +240,7 @@ async function inputFindings({ folder, runDirectory, index, record, engine }) {
       if (seenRecords.has(relative)) add(TRIAL_SETS_NAME, 'run-integrity', `names the record ${relative} more than once`);
       seenRecords.add(relative);
       const sealed = await read(relative, 'sealed-run-record');
+      anchored(relative, recorded.records?.[relative], `a record of ${set.probeId}`);
       if (sealed === null) continue;
       if (sealed.runId !== set.runId || sealed.conditionArm !== set.conditionArm) {
         add(
@@ -234,11 +261,18 @@ async function inputFindings({ folder, runDirectory, index, record, engine }) {
       if (actions !== null) add(relative, 'run-integrity', actions);
       // An absent manifest reaches eval-quality as absent; one that is there must be the one the records name.
       if (fs.existsSync(inRun(runDirectory, set.isolationManifest))) {
-        const manifest = referenceProblem(sealed.isolationManifestArtifact, 'isolation manifest');
+        const manifest = referenceProblem(
+          sealed.isolationManifestArtifact,
+          'isolation manifest',
+          referencePath(folder, inRun(runDirectory, set.isolationManifest)),
+        );
         if (manifest !== null) add(relative, 'run-integrity', manifest);
       }
     }
-    if (fs.existsSync(inRun(runDirectory, set.isolationManifest))) await read(set.isolationManifest, 'isolation-manifest');
+    if (fs.existsSync(inRun(runDirectory, set.isolationManifest))) {
+      await read(set.isolationManifest, 'isolation-manifest');
+      anchored(set.isolationManifest, recorded.isolationManifests?.[set.probeId], `the isolation manifest of ${set.probeId}`);
+    }
   }
   return findings;
 }

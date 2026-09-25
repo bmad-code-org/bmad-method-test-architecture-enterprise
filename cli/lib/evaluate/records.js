@@ -162,15 +162,19 @@ function evaluatorConfiguration({
 /**
  * The isolation manifest for one measured run.
  *
- * An absent manifest makes a run Invalid, so one is always supplied. It declares
- * only what the probe port enforces: the run mounted the workspaces it was given
- * (by default the one `workspaceIdentity` names; a trial set whose trials each
- * ran in a workspace of their own lists them in `allowedMounts` and
- * `observedMounts`) and called the tools its authorization permits. Network access is not
- * sandboxed, so `networkAllowlist` and `observedNetworkTargets` are both empty
- * and the manifest claims nothing it cannot observe. Each forbidden input is
- * accounted for as withheld, with the caller's note saying where the boundary
- * is drawn.
+ * An absent manifest makes a run Invalid, so one is always supplied. It
+ * declares what the runtime granted and records as observed only what it
+ * observed. `allowedMounts` names the workspaces the target was given (by
+ * default the one `workspaceIdentity` names; a trial set whose trials each ran
+ * in a workspace of their own lists each, with its read-only provisioned
+ * directories). The runtime does not sandbox the target's file system or
+ * network and observes no access to either, so `observedMounts`,
+ * `networkAllowlist` and `observedNetworkTargets` are empty: the published
+ * schema's only honest shape for "nothing observed", since a list of the
+ * grants would claim an observation never made. `toolAllowlist` and
+ * `observedToolCalls` are the registry's commands and the ones the runtime
+ * ran for the plan, which it does observe. Each forbidden input is accounted
+ * for as withheld, with the caller's note saying where the boundary is drawn.
  */
 function isolationManifest({
   runId,
@@ -182,7 +186,7 @@ function isolationManifest({
   evaluatorConfigurationDigest,
   workspaceIdentity,
   allowedMounts = [workspaceIdentity],
-  observedMounts = allowedMounts,
+  observedMounts = [],
   toolAllowlist = [],
   observedToolCalls = [],
   resourceCeilings,
