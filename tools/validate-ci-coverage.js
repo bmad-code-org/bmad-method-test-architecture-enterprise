@@ -27,6 +27,13 @@
  * is allowed: a workflow may run more than the chain does,
  * which is how the docs job's link check and site build work.
  *
+ * The threat model is drift. These checks hold the chain's CI configuration
+ * against the edits someone makes to save time or to reorganize a workflow: a
+ * shard dropped from the matrix, a step made optional, a trigger narrowed. They
+ * are not a defense against a hostile editor of the workflow, who could plant
+ * an environment variable that neuters the run or change this file in the same
+ * pull request, so they refuse no environment variables.
+ *
  * The reverse direction has its own gap: nothing held every OTHER script in
  * `package.json` to that same "covered or explained" bar, so a script outside
  * the chain (a fix-mode variant, a live eval, a release trigger) could sit
@@ -152,12 +159,32 @@ function shardedChainRuns(workflowRoot = WORKFLOW_ROOT) {
     .flatMap((name) => shardedChainRunsIn(name, fs.readFileSync(path.join(workflowRoot, name), 'utf8')));
 }
 
-/** The events a workflow's `on` names, whichever of its three shapes it takes. */
-function triggers(workflow) {
+/** The filters under `pull_request` that would let a pull request through without running the shards. */
+const PULL_REQUEST_FILTERS = ['types', 'paths', 'paths-ignore', 'branches-ignore'];
+
+/**
+ * Why a workflow's `on` does not run it on every pull request, whichever of
+ * its three shapes `on` takes, or an empty list when it does.
+ */
+function pullRequestTriggerProblems(file, workflow) {
   const on = workflow?.on ?? workflow?.true;
-  if (typeof on === 'string') return [on];
-  if (Array.isArray(on)) return on;
-  return on && typeof on === 'object' ? Object.keys(on) : [];
+  const named = typeof on === 'string' ? [on] : Array.isArray(on) ? on : on && typeof on === 'object' ? Object.keys(on) : [];
+  if (!named.includes('pull_request')) return [`${file} does not run on pull_request, so its shards do not gate a pull request`];
+  const config = on && typeof on === 'object' && !Array.isArray(on) ? on.pull_request : null;
+  if (!config || typeof config !== 'object') return [];
+  const problems = PULL_REQUEST_FILTERS.filter((key) => Object.hasOwn(config, key)).map(
+    (key) => `${file} filters pull_request by \`${key}\`, so a pull request it filters out runs no shard`,
+  );
+  if (Object.hasOwn(config, 'branches')) {
+    const branches = Array.isArray(config.branches) ? config.branches : [config.branches];
+    const everyBranch = branches.includes('**') && branches.every((pattern) => typeof pattern === 'string' && !pattern.startsWith('!'));
+    if (!everyBranch) {
+      problems.push(
+        `${file} limits pull_request to branches ${JSON.stringify(config.branches)}; only a filter matching every branch ("**") is allowed`,
+      );
+    }
+  }
+  return problems;
 }
 
 /**
@@ -214,9 +241,10 @@ function shardRunProblems(run) {
       `${where}'s shard step runs ${JSON.stringify(run.step?.run ?? null)}; it may hold only \`node tools/test-shards.js --shard \${{ matrix.shard }}/N\` and its --coverage-dir and --timings flags`,
     );
   }
-  if (!triggers(run.workflow).includes('pull_request')) {
-    problems.push(`${run.file} does not run on pull_request, so its shards do not gate a pull request`);
+  if (run.definition && Object.hasOwn(run.definition, 'needs')) {
+    problems.push(`${where} sets \`needs\`, so a skipped or failed upstream job skips every shard and the workflow can still end green`);
   }
+  problems.push(...pullRequestTriggerProblems(run.file, run.workflow));
   return problems;
 }
 

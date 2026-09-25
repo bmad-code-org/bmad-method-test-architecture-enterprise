@@ -135,6 +135,14 @@ function runsOf(text) {
 
 const FULL_SHARD_RUN = runsOf(shardWorkflow())[0];
 
+function checkEveryBranchFilterIsAllowed() {
+  const [run] = runsOf(shardWorkflow({ on: 'pull_request:\n    branches: ["**"]' }));
+  check(
+    run && shardRunProblems(run).length === 0,
+    `a pull_request branches filter of "**" was refused: ${JSON.stringify(run && shardRunProblems(run))}`,
+  );
+}
+
 function checkShardedChainCoversEveryChainedScript() {
   check(
     FULL_SHARD_RUN && shardRunProblems(FULL_SHARD_RUN).length === 0,
@@ -190,6 +198,13 @@ const REFUSED_SHARD_WORKFLOWS = {
   'a workflow-level defaults.run.working-directory': { workflowDefaults: 'defaults:\n  run:\n    working-directory: website' },
   'a step-level working-directory': { step: 'working-directory: website' },
   'a workflow that does not run on pull_request': { on: 'push:' },
+  'a pull_request types filter': { on: 'pull_request:\n    types: [opened]' },
+  'a pull_request paths filter': { on: 'pull_request:\n    paths: ["src/**"]' },
+  'a pull_request paths-ignore filter': { on: 'pull_request:\n    paths-ignore: ["docs/**"]' },
+  'a pull_request branches-ignore filter': { on: 'pull_request:\n    branches-ignore: ["release/**"]' },
+  'a pull_request branches filter narrower than every branch': { on: 'pull_request:\n    branches: [main]' },
+  'a pull_request branches filter that negates a branch': { on: 'pull_request:\n    branches: ["**", "!release/**"]' },
+  'needs on the chain job': { job: 'needs: lint' },
 };
 
 function checkEveryBypassIsRefused() {
@@ -245,6 +260,7 @@ function main() {
   checkChainedScriptNeitherShardedNorNamedIsMissing();
   checkIncompleteShardMatrixCoversNothing();
   checkEveryBypassIsRefused();
+  checkEveryBranchFilterIsAllowed();
   checkChainOfNonNpmRunPartFails();
   checkRealRepoIsClean();
 

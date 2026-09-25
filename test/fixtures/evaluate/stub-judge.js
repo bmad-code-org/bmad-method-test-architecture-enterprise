@@ -9,8 +9,9 @@
  * prompt it receives as one JSON string per line to the file `--capture`
  * names, appends `{ cwd, entries }` (its working directory and what that
  * directory held when it started) to the file `--cwd-log` names, and replies
- * with every criterion the prompt lists scored at its rubric's highest level.
- * `--mode` changes what it does:
+ * with every criterion the prompt lists scored at its rubric's highest level,
+ * inside the one `<judge-answer nonce="...">` block the prompt's answer line
+ * names, the nonce read from that line. `--mode` changes what it does:
  *
  *   fail        print a line to each stream and exit 1, a judge that cannot answer
  *   off-scale   score every criterion one above its highest level
@@ -18,6 +19,9 @@
  *   echo        print each criterion's evidence, as a judge quoting it would,
  *               then its answer
  *   quote       print each criterion's evidence and give no answer of its own
+ *   untagged    reply with the scores object bare, in no answer block
+ *   wrong-nonce reply in an answer block carrying another nonce
+ *   two-blocks  reply with two answer blocks carrying this call's nonce
  *   write       write a file into its working directory, then answer
  *   hang        wait a minute before answering, past any short timeoutMs
  *   sleep       write its pid to the file `--pid` names (a temp file renamed
@@ -71,6 +75,7 @@ if (mode === 'echo' || mode === 'quote') {
     process.exit(0);
   }
 }
+const nonce = /Answer block for this call: .*?<judge-answer nonce="([0-9a-f]+)">/.exec(prompt)?.[1] ?? '';
 const scores = material.rubrics.flatMap((rubric) => {
   const top = Math.max(...rubric.scaleLevels.map((level) => level.level));
   return rubric.criteria.map((criterion) => ({
@@ -80,4 +85,9 @@ const scores = material.rubrics.flatMap((rubric) => {
     note: `the evidence meets the top anchor: ${typeof criterion.evidence === 'string' ? criterion.evidence.split('\n').at(-2) : 'structured'}`,
   }));
 });
-process.stdout.write(`${JSON.stringify({ scores })}\n`);
+const answer = JSON.stringify({ scores });
+const block = (value) => `<judge-answer nonce="${value}">${answer}</judge-answer>\n`;
+if (mode === 'untagged') process.stdout.write(`${answer}\n`);
+else if (mode === 'wrong-nonce') process.stdout.write(block('0'.repeat(32)));
+else if (mode === 'two-blocks') process.stdout.write(`${block(nonce)}${block(nonce)}`);
+else process.stdout.write(block(nonce));

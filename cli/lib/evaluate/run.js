@@ -463,7 +463,9 @@ async function concludeTrial(
   // A trial no judge scored keeps the evidence shape of a run with no rubric.
   writer.writeJson(
     evidenceFile,
-    judged.called ? { ...written, judge: { results: judged.results, stdout: judged.stdout, stderr: judged.stderr } } : written,
+    judged.called
+      ? { ...written, judge: { nonce: judged.nonce, results: judged.results, stdout: judged.stdout, stderr: judged.stderr } }
+      : written,
   );
   return {
     trialIndex,

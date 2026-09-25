@@ -139,13 +139,20 @@ jobs:
   # `--shard ${{ matrix.shard }}/5` argument, and in the coverage job's
   # `--shards 5`. test:shards and test:ci-coverage fail when the list is not
   # exactly 1 through that count, and test:shards when the coverage job's count
-  # differs. They also refuse a matrix with include, exclude or any key besides
-  # shard, an `if` or `continue-on-error` on this job or its shard step, a
-  # `shell` on that step, a run line holding anything besides the invocation
-  # and its --coverage-dir and --timings flags, and a workflow that does not
-  # run on pull_request: each is a way a green run could skip a shard or hide
-  # its failure. To change the count, change all three and read the balance off
+  # differs. They also refuse each setting that lets a green run skip a shard
+  # or hide its failure: a matrix with include, exclude or any key besides
+  # shard; `if`, `continue-on-error` or `needs` on this job; `if`,
+  # `continue-on-error`, `shell` or `working-directory` on its shard step;
+  # `defaults.run` on this job or the workflow; a run line holding anything
+  # besides the invocation and its --coverage-dir and --timings flags; and a
+  # pull_request trigger that is missing or filtered by types, paths or
+  # branches. To change the count, change all three and read the balance off
   # `node tools/test-shards.js --list --shard <i>/<n>` for each shard.
+  #
+  # Those guards hold this job's configuration against drift: the edits
+  # someone makes to save time or to reorganize the workflow. They are not a
+  # defense against a hostile editor of this file, who could change the
+  # guards in the same pull request.
   chain:
     name: chain (${{ matrix.shard }}/5)
     runs-on: ubuntu-latest
