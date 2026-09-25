@@ -210,6 +210,18 @@ function modelArgv(flags, model, extra) {
   return alreadySet ? [] : [flags[0], model];
 }
 
+/**
+ * The bytes of a bridged run's MCP configuration file for claude's `--mcp-config` flag: the one
+ * stdio server `server` describes (`{ name, command, args, env }`), under `mcpServers.<name>` as
+ * `{ type: 'stdio', command, args, env }`.
+ *
+ * @param {{ name: string, command: string, args: string[], env: Record<string, string> }} server
+ * @returns {string}
+ */
+function mcpServersConfig({ name, command, args, env }) {
+  return `${JSON.stringify({ mcpServers: { [name]: { type: 'stdio', command, args, env } } })}\n`;
+}
+
 const AGENT_ADAPTERS = {
   claude: {
     command: 'claude',
@@ -268,6 +280,8 @@ const AGENT_ADAPTERS = {
       ...modelArgv(AGENT_ADAPTERS.claude.modelFlags, model, extra),
       ...extra,
     ],
+    // The configuration file `--mcp-config` reads.
+    buildBridgeConfig: mcpServersConfig,
     // Passthrough flags that would reopen what the bridged argv closes (built-in tools, other MCP
     // servers or tool sources, plugins, settings, directories, permissions, another agent, a saved
     // or remote session), refused for a bridged run.
@@ -363,6 +377,7 @@ const AGENT_ADAPTERS = {
     // on. Keeping to that server is the runner's own contract, not something TeA verifies, as every
     // other capability of this adapter is.
     buildBridgedArgv: (extra = [], model, bridge) => [...extra, '--mcp-config', bridge.configFile],
+    buildBridgeConfig: mcpServersConfig,
     bridgeLockedFlags: ['--mcp-config'],
     envNames: [],
   },

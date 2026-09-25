@@ -366,7 +366,9 @@ function runPreflightCommand(folder, options = {}) {
  * The preflight pipeline, which `tea-evaluate run` continues past the verdict.
  *
  * `prepare` sees the checked evaluation before any workspace is made and may
- * stop the command with an outcome. `afterVerdict` runs once the CLI's
+ * stop the command with an outcome; a private directory it makes goes into
+ * its `scratch`, which the command removes however it ends, an interrupting
+ * signal included. `afterVerdict` runs once the CLI's
  * verdict exits 0, while every workspace is still live, and its outcome is
  * the command's; a verdict that does not pass ends the command there.
  *
@@ -457,15 +459,12 @@ async function pipeline(
       message: `${unqualifiable.map(({ file, probe }) => `${file} (route ${probe.qualification?.route})`).join(', ')} seed a defect on a route this release does not qualify; it qualifies seeded probes on the ${QUALIFIED_ROUTES.join(' and ')} routes only, so a retry cannot pass`,
     });
   }
-  const refused = await prepare({ folder, evaluation, seeded });
-  const gameability = gameabilityProbes(folder);
-  if (refused !== null) return refused;
-
-  const root = realPathLoosely(joinAsSpelled(folder, evaluation.launch.root));
   const workspaces = [];
   const controller = new AbortController();
   // Run-directory files an interrupting signal removes (the CLI's probe list
-  // until its verdict), and the private directories engine stages write into.
+  // until its verdict), and the private directories the command makes (the
+  // ones engine stages write into, a command evaluator's snapshot), which
+  // are removed however it ends.
   const retractOnSignal = [];
   const scratch = [];
   const onSignal = (name) => {
@@ -482,6 +481,11 @@ async function pipeline(
   };
   const release = cleanUpOnSignal(workspaces, controller, { onSignal });
   try {
+    const refused = await prepare({ folder, evaluation, seeded, scratch });
+    const gameability = gameabilityProbes(folder);
+    if (refused !== null) return refused;
+
+    const root = realPathLoosely(joinAsSpelled(folder, evaluation.launch.root));
     const runsDirectory = ensureRunsDirectory(folder);
     const readTree = () => adopterTreeState(root, { exclude: [runsDirectory] });
     const before = readTree();

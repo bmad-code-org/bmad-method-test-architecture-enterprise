@@ -81,7 +81,7 @@ const {
   recordedEvaluatorModel,
 } = require('./evaluators');
 const { degenerateArm } = require('./gameability');
-const { JudgeError, judgeConfigurationFor, judgeRubrics, recordedJudgeModel } = require('./judge');
+const { JudgeError, answerNonce, judgeConfigurationFor, judgeRubrics, recordedJudgeModel } = require('./judge');
 const { EvaluatorError, judgmentFromRows, setRecommendationOf, trialRecommendation } = require('./judgment-rows');
 const { QualificationError, applyReplaceExact } = require('./mutation');
 const { PreflightOutcome, readJson, runPipeline } = require('./preflight');
@@ -199,6 +199,7 @@ function runRunCommand(folder, { fromWorkingTree = false, env = process.env, log
           evaluation: context.evaluation,
           contract: readJson(path.join(folder, 'contract.json')),
           engine: await loadEngine(),
+          scratch: context.scratch,
         });
       } catch (error) {
         if (!(error instanceof EvaluatorLayerError)) throw error;
@@ -525,7 +526,7 @@ async function concludeTrial(context, facts) {
  * agent, the calls it made through the bridge kept in the trial's evidence.
  */
 async function concludeWithRows(context, facts) {
-  const { arm, trialIndex, contract, folder, writer, stop, signal, snapshot, sealedBrief, env } = context;
+  const { arm, trialIndex, contract, writer, stop, signal, snapshot, sealedBrief, env } = context;
   const { label, evidenceFile, executed, began, evidence, port, mounts, toolCalls } = facts;
   const { evaluator, mapping, validate } = snapshot.layer;
   const baseline = Object.values(executed.stepObservations).sort((a, b) => a.sequence - b.sequence);
@@ -537,8 +538,18 @@ async function concludeWithRows(context, facts) {
   let judgeResults = [];
   try {
     if (evaluator.kind === 'command') {
-      evaluated = await runCommandEvaluator({ folder, evaluator, sealedBrief, observations: baseline, mapping, validate, env });
+      evaluated = await runCommandEvaluator({
+        root: snapshot.layer.root,
+        evaluator,
+        sealedBrief,
+        observations: baseline,
+        mapping,
+        validate,
+        env,
+      });
     } else {
+      // Drawn after the plan ran and before the router exists, so neither a plan step's output nor any call can carry it.
+      const nonce = answerNonce();
       router = bridgeRouter({
         contract,
         registry: context.registry,
@@ -548,9 +559,10 @@ async function concludeWithRows(context, facts) {
         taken: new Set(baseline.map((observation) => observation.observationId)),
         firstSequence: baseline.length + 1,
         budget: contract.budgets?.maxToolCalls ?? 0,
+        nonce,
         signal,
       });
-      evaluated = await runSealedBriefAgent({ evaluator, sealedBrief, contract, mapping, validate, router, env });
+      evaluated = await runSealedBriefAgent({ evaluator, sealedBrief, contract, mapping, validate, router, nonce, env });
     }
     // The conversion refuses a row on a key of the other kind and a score off its levels, as the schema refuses a bad shape.
     for (const probe of arm.probes) {
@@ -567,9 +579,9 @@ async function concludeWithRows(context, facts) {
   } catch (error) {
     if (!(error instanceof EvaluatorError)) throw error;
     // An answer the conversion refused was read in full, so what the evaluator printed is the answer's own.
-    const printed = evaluated === undefined ? { stdout: error.stdout, stderr: error.stderr } : evaluated;
-    writer.write(`${streams}.stdout`, printed.stdout);
-    writer.write(`${streams}.stderr`, printed.stderr);
+    const printed = evaluated ?? error;
+    writer.write(`${streams}.stdout`, printed.stdoutBytes);
+    writer.write(`${streams}.stderr`, printed.stderrBytes);
     writer.writeJson(`${streams}.json`, {
       conditionArm: arm.conditionArm,
       trialIndex,
@@ -588,8 +600,9 @@ async function concludeWithRows(context, facts) {
     throw stop({ stage: 'trial', exitCode: 12, message: `${label} yields no record: ${error.message}` });
   }
   const elapsedMs = Date.now() - began;
-  writer.write(`${streams}.stdout`, evaluated.stdout);
-  writer.write(`${streams}.stderr`, evaluated.stderr);
+  // What the evaluator printed is kept as the bytes it wrote; its answer was read from their UTF-8 text.
+  writer.write(`${streams}.stdout`, evaluated.stdoutBytes);
+  writer.write(`${streams}.stderr`, evaluated.stderrBytes);
   writer.writeJson(`${streams}.json`, {
     conditionArm: arm.conditionArm,
     trialIndex,

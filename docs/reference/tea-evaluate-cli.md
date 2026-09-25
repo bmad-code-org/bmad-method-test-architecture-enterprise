@@ -169,7 +169,7 @@ Gitignored paths are not read.
 
 `runs/<invocationId>/run.json` records what was evaluated: the TeA and eval-quality versions, the commit (`null` for a copy), `dirty`, the workspace's kind, commit, tree and tree digest, the path of every workspace that ran legs, and whether your project was unchanged.
 It lists each probe the run refused, with its reason, under `refused` (see [Historical probes](#historical-probes)).
-A completed `run` adds the contract, corpus, sealed brief and evaluator configuration digests, the runner (each registry entry's interface, executable and target), the evaluator and the model, the rubric judge (`null` when the contract declares no rubric; otherwise its adapter, model, model snapshot, instruction digest and number of calls), the trial count, the start time and duration, and `completed: true`.
+A completed `run` adds the contract, corpus, sealed brief and evaluator configuration digests, the runner (each registry entry's interface, executable and target), the evaluator and the model, the rubric judge (`null` when the contract declares no rubric or the evaluator is not the deterministic one; otherwise its adapter, model, model snapshot, instruction digest and number of calls), the trial count, the start time and duration, and `completed: true`.
 
 ## Controlled mutations
 
@@ -318,7 +318,7 @@ The records of one set share one `runId` (the invocation's identifier and the pr
 The isolation manifest records what the trials were granted and what the runtime observed: the workspace each trial ran in and its read-only provisioned directories as the allowed mounts, the registry's commands as the tool allowlist, the commands the runtime ran for the plan as the observed tool calls, the tool-call and wall-clock ceilings the runtime enforces, and the largest safe integer (9007199254740991, the most the schema admits for a token ceiling) for the token and cost ceilings, which the runtime neither meters nor bounds; the use it records for tokens and cost is zero (Story 1.29 reads a live target's spend).
 The runtime observes no file-system or network access, so the observed mounts, the network allowlist and the observed network targets are empty, and each forbidden input's note says what the runtime withholds and that it does not sandbox the target's file system.
 The evaluator configuration carries the `sealedBriefDigest` of the run's sealed brief, and `decodingParameters["tea.evaluatorKind"]`, the evaluation layer's kind.
-Its `modelSnapshot` and `systemPromptDigest` come from `policy/evaluator-conditions.json`, which an evaluation whose target or evaluator uses a model commits (`check` requires it, naming a model other than `none`, once a registry entry runs `tea-skill-runner`, which always runs an agent):
+Its `modelSnapshot` and `systemPromptDigest` come from `policy/evaluator-conditions.json`, which an evaluation whose target or evaluator uses a model commits (`check` requires it, naming a model other than `none`, once a registry entry runs `tea-skill-runner`, which always runs an agent); under a sealed-brief agent they are the agent's `evaluator.modelSnapshot` and the digest of the runtime's evaluator template (see [The evaluation layer](#the-evaluation-layer)):
 
 ```json
 {
@@ -352,7 +352,8 @@ The probe is materialized with those two evidence references and admitted by eva
 
 ### The rubric judge
 
-When the contract declares a rubric, `run` calls a rubric judge once per trial, through TeA's agent adapters; a contract with no rubric makes no call, and its evaluator configuration keeps `judgeConfiguration: null`.
+When the contract declares a rubric and the evaluator is the deterministic one, `run` calls a rubric judge once per trial, through TeA's agent adapters; a contract with no rubric makes no call, and its evaluator configuration keeps `judgeConfiguration: null`.
+Under any other evaluator the rubric is that evaluator's to score, and no judge runs (see [The evaluation layer](#the-evaluation-layer)).
 `evaluation.json` wires it, and `policy/evaluator-conditions.json` names its model, a fixed condition of every run (`check` requires both once a rubric is declared):
 
 ```json
@@ -382,7 +383,8 @@ The evaluator configuration records `judgeConfiguration: { modelSnapshot, system
 
 ### The evaluation layer
 
-`evaluation.json`'s `evaluator` chooses what judges the trials (the deterministic evaluator above when none is declared). Every kind reaches `eval-quality score` as sealed run records, and the runtime checks no quote, citation or signature match: eval-quality's ingest does.
+`evaluation.json`'s `evaluator` chooses what judges the trials (the deterministic evaluator above when none is declared).
+Every kind reaches `eval-quality score` as sealed run records, and the runtime checks no quote, citation or signature match: eval-quality's ingest does.
 
 | `kind`               | What judges                                                            | Fields                                                                        |
 | -------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
@@ -415,23 +417,44 @@ The evaluator configuration records `judgeConfiguration: { modelSnapshot, system
 }
 ```
 
-`outcome` is `pass`, `fail` or `score` (with `score`, one of the levels); every row cites an observation; a `fail` row carries `quote`, `quoteChannel` (eval-quality's quotation channels), `confidence` and `comment`, and `artifactId` appears on the `artifact` channel only. A key the mapping lacks, or one given twice, fails the row schema.
-A `fail` row is its oracle's `violated` disposition and, in the records of a probe whose behaviors include the bound behavior, a `defect` finding (`F-001` onward, the behavior's severity, `comment` as `summary`, `evidenceArtifacts: []`, one quoted-evidence entry); a `pass` row is `held`; an oracle with no row is `not-attempted`; a `score` row is its criterion's judge result, and a bound criterion with no row is `score: null`, which eval-quality reads as Invalid.
-A probe's recommendation in a trial is the evaluator's own or FAIL when the rows filed a finding against it, and a set records its trials' most severe. TeA's rubric judge never runs under these kinds.
-An evaluator that cannot start, exits other than 0, outlives `timeoutMs`, answers off the row schema, puts a score row on an oracle key or a pass or fail row on a rubric key, scores off the levels, or answers no row while the mapping binds an oracle yields no record and exit 12. What it printed is kept in `runs/<invocationId>/evaluator/<arm>/trial-<n>.stdout`, `.stderr` and `.json` either way.
+`outcome` is `pass`, `fail` or `score` (with `score`, one of the levels); every row cites an observation; a `fail` row carries `quote`, `quoteChannel` (eval-quality's quotation channels), `confidence` and `comment`, and `artifactId` appears on the `artifact` channel only.
+A key the mapping lacks, or one given twice, fails the row schema.
+A `fail` row is its oracle's `violated` disposition and, in the records of a probe one of whose behaviors declares the oracle, a `defect` finding for the first such behavior, as the deterministic evaluator files it (`F-001` onward, that behavior's severity, `comment` as `summary`, `evidenceArtifacts: []`, one quoted-evidence entry); a key's `behaviorId` names a behavior that declares its oracle, and an oracle two behaviors declare takes one key; a `pass` row is `held`; an oracle with no row is `not-attempted`; a `score` row is its criterion's judge result, and a bound criterion with no row is `score: null`, which eval-quality reads as Invalid.
+A probe's recommendation in a trial is the evaluator's own or FAIL when the rows filed a finding against it, and a set records its trials' most severe.
+TeA's rubric judge never runs under these kinds.
+An evaluator that cannot start, exits other than 0, outlives `timeoutMs`, answers off the row schema, puts a score row on an oracle key or a pass or fail row on a rubric key, scores off the levels, answers a string that is not well-formed Unicode (a lone surrogate), or answers no row while the mapping binds an oracle yields no record and exit 12.
+Its answer is read from its stdout as UTF-8, a byte sequence that is not UTF-8 reading as U+FFFD; what it printed is kept byte for byte in `runs/<invocationId>/evaluator/<arm>/trial-<n>.stdout` and `.stderr`, with `.json` beside them holding the fault (and for an agent, its prompt, nonce and bridge calls), either way.
 
-**A command evaluator** runs under TeA's agent supervisor (its own process group, `SIGTERM` at `timeoutMs`, `SIGKILL` 2 s later, its group killed when it ends), in an empty temporary directory, with the agents' base environment and your `environmentKeys`, and receives `{ "sealedBrief", "observations" }` on stdin, the observations the record will carry (`evaluator-chosen`). It runs from your folder, so an edit to it during a run is caught by the read of your project after every trial. A model it calls is named as `policy/evaluator-conditions.json`'s `evaluator.modelSnapshot`.
+**The layer's files.** In a git repository the evaluation layer is the files git tracks under `evaluator/`, with their working-tree bytes: a file git does not track (an interpreter's cache, an editor's backup, a note) is no part of it and moves no digest, so `git add` every file the evaluator needs, and `check` refuses a mapping or command git does not track.
+Outside a repository it is every regular file under `evaluator/`, so a stray file there changes the scoring version.
+Either way a link, a special file or a path through a linked directory is refused.
 
-**A sealed-brief agent** gets the evaluator instructions, a nonce-tagged answer block (as the rubric judge does), the sealed brief and the mapping's keys (a rubric key with its criterion and levels); nothing else of the evaluation. The runtime runs the plan first, recorded `baseline` and never shown to the agent; the agent then calls the bridge, a stdio MCP server with one tool per interface of the brief, shaped by kind (`cli`: `arguments`, the whole command line, and `stdin`; `api`: `method`, `path`, `body`; `mcp`: `tool`, `arguments`).
-In a `cli` call, `--name=value` is an option, `--name` takes the next word only when an operation declares it non-boolean, and other words, and all after `--`, are positional; a repeated option is refused, since eval-quality's request carries one value per option. The registry's adapter denies an unlisted executable or subcommand before anything launches (recorded with eval-quality's fault code and detail); this release's registry has command targets only, so eval-quality denies `api` and `mcp` calls at the interface.
-A call matching exactly one operation (by its declared keys) is recorded `evaluator-chosen` and answered with its `observationId`; any other authorized call stays in the evidence as unmatched, with no ID to cite. Every call counts against `budgets.maxToolCalls` per trial, none runs after the agent ends, a gameability arm answers from the degenerate response, and a call the target could not run exits 12. A plan step and an agent call with the same bindings both match the step, so declare cardinality `any` on a step an agent may repeat.
-The bridge admits one connection, presenting a token its process reads from its environment; its configuration reaches the adapter as a private file. Until Story 1.31 sandboxes the target, a target running as your user could read that token before the agent connects.
+**A command evaluator** runs under TeA's agent supervisor (its own process group, `SIGTERM` at `timeoutMs`, `SIGKILL` 2 s later, its group killed when it ends), in an empty temporary directory, with the agents' base environment and your `environmentKeys`, and receives `{ "sealedBrief", "observations" }` on stdin, the observations the record will carry (`evaluator-chosen`).
+`run` copies the layer's files once, before anything runs, into a private temporary snapshot it removes however the run ends, and runs the executable from there: the bytes that run are the bytes digested, an edit to your folder during the run reaches no trial, and what the evaluator writes beside itself (a cache, say) lands in the snapshot.
+A model it calls is named as `policy/evaluator-conditions.json`'s `evaluator.modelSnapshot`.
+
+**A sealed-brief agent** gets the evaluator instructions, a nonce-tagged answer block (as the rubric judge does), the sealed brief and the mapping's keys (a rubric key with its criterion and levels); nothing else of the evaluation.
+The runtime runs the plan first, recorded `baseline` and never shown to the agent; the agent then calls the bridge, a stdio MCP server with one tool per interface of the brief, shaped by kind (`cli`: `arguments`, the whole command line, and `stdin`; `api`: `method`, `path`, `body`; `mcp`: `tool`, `arguments`).
+In a `cli` call, `--name=value` is an option, `--name` takes the next word only when an operation declares it non-boolean, and other words, and all after `--`, are positional; a repeated option is refused, since eval-quality's request carries one value per option.
+`stdin` reaches the target as written, and the record's `callInputs.stdin` is the JSON object it parses to or, for other text, the text under the operation's one stdin key.
+The registry's adapter denies an unlisted executable or subcommand before anything launches (recorded with eval-quality's fault code and detail); this release's registry has command targets only, so eval-quality denies `api` and `mcp` calls at the interface.
+A call matching exactly one operation (by its declared keys) is recorded `evaluator-chosen` and answered with its `observationId`; any other authorized call stays in the evidence as unmatched, with no ID to cite.
+Every call counts against `budgets.maxToolCalls` per trial, and none runs after the agent ends.
+A call carrying the trial's answer nonce is refused unsent and uncounted, so the agent cannot hand it to the target.
+On a gameability arm a call goes through the same adapter and authorizations with nothing launched, so an ungranted one is denied as on any arm, and every other is answered from the degenerate response.
+A call the target could not run exits 12.
+A plan step and an agent call with the same bindings both match the step, so declare cardinality `any` on a step an agent may repeat.
+The bridge admits one connection, presenting a token its process reads from its environment; its configuration reaches the adapter as a private file.
+Until Story 1.31 sandboxes the target, a target running as your user could read that token before the agent connects.
 `claude` runs with no built-in tool, the bridge alone, no user or project settings and no saved transcript (`--tools ""`, `--mcp-config <file>`, `--strict-mcp-config`, `--setting-sources ""`, `--no-session-persistence`), and `check` refuses `agentArgs` that reopen any of them; `custom` receives `--mcp-config <file>`, and keeping to the bridge is its own contract; other adapters are refused.
 `evaluator.modelSnapshot` names the agent's model, recorded as the configuration's `modelSnapshot` beside the digest of the evaluator template (instructions, answer line, heading, tool descriptions and call shapes), and as `judgeConfiguration` when a rubric key is bound; a target model named at the top level is kept as `tea.targetModelSnapshot`.
 
-**A records evaluator** reads, inside the folder and through no link, `<records>/evaluator-configuration.json` and, per probe the run qualifies, `<records>/<probeId>/*.json` records (name order) and an optional `isolation-manifest.json`. `run` qualifies and preflights as usual, checks each file's published schema, the configuration's and records' `sealedBriefDigest` against this run's brief, and one `runId` and the qualified arm per set (exit 10 with nothing copied otherwise), and copies the bytes into `trial-sets/` for `score`. Take the brief from `eval-quality seal`, which is deterministic; nothing ties the records to the target's state at this run.
+**A records evaluator** reads, inside the folder and through no link, `<records>/evaluator-configuration.json` and, per probe the run qualifies, `<records>/<probeId>/*.json` records (name order) and an optional `isolation-manifest.json`.
+`run` qualifies and preflights as usual, checks each file's published schema, the configuration's and records' `sealedBriefDigest` against this run's brief, and one `runId` and the qualified arm per set (exit 10 with nothing copied otherwise), and copies the bytes into `trial-sets/` for `score`.
+Take the brief from `eval-quality seal`, which is deterministic; nothing ties the records to the target's state at this run.
 
-**Fixed conditions.** `decodingParameters` carries `tea.evaluatorKind` for every kind (so deterministic digests differ once from the release before), and for the row-converting kinds `tea.evaluatorTreeDigest` over every file under `evaluator/`, `tea.evaluatorWiring` (the `evaluation.json` block), and `tea.evaluatorExecutableDigest` and `tea.evaluatorModelSnapshot` for a command or `tea.evaluatorAgent` and `tea.evaluatorModel` for an agent: a changed file, argument, model or timeout changes the scoring version. The isolation manifest adds the evaluator's timeout and an agent's call budget to its ceilings and the agent's calls to its use; tokens and cost stay zero (Story 1.29).
+**Fixed conditions.** `decodingParameters` carries `tea.evaluatorKind` for every kind (so deterministic digests differ once from the release before), and for the row-converting kinds `tea.evaluatorTreeDigest` over the layer's files, `tea.evaluatorWiring` (the `evaluation.json` block), and `tea.evaluatorExecutableDigest` and `tea.evaluatorModelSnapshot` for a command or `tea.evaluatorAgent` and `tea.evaluatorModel` for an agent: a changed file, argument, model or timeout changes the scoring version.
+The isolation manifest adds the evaluator's timeout and an agent's call budget to its ceilings and the agent's calls to its use; tokens and cost stay zero (Story 1.29).
 
 ## score
 

@@ -96,7 +96,7 @@ const { MANIFEST_NAME } = require('./folder');
 const { addFormats } = require('./formats');
 const { repeatedPairs } = require('./registry');
 const { AGENT_ADAPTERS, bridgedArgsRefused, resolveModel } = require('../agent-adapters');
-const { EVALUATOR_DIRECTORY, EvaluatorLayerError, evaluatorOf, evaluatorTree, isKnownEvaluator } = require('./evaluators');
+const { EVALUATOR_DIRECTORY, EvaluatorLayerError, evaluatorFiles, evaluatorOf, isKnownEvaluator } = require('./evaluators');
 const { degenerateResponsePath } = require('./gameability');
 const { MAPPING_PATH, mappingContractProblems, mappingSchemaProblems } = require('./judgment-rows');
 
@@ -1100,13 +1100,26 @@ function checkEvaluator(report, folder, evaluation, contract, conditions) {
     return;
   }
   if (kind !== 'command' && kind !== 'sealed-brief-agent') return;
+  // The files `run` reads and digests: in a git repository the ones git tracks under evaluator/ (`evaluatorFiles`).
+  let layer = null;
   try {
-    evaluatorTree(folder, (bytes) => `sha256:${bytes.length}`);
+    layer = evaluatorFiles(folder);
   } catch (error) {
     if (!(error instanceof EvaluatorLayerError)) throw error;
     report.add(EVALUATOR_DIRECTORY, 'evaluator', error.message);
   }
-  if (fs.existsSync(path.join(folder, ...MAPPING_PATH.split('/')))) {
+  const untracked = (relative) =>
+    layer !== null &&
+    layer.tracked &&
+    !layer.files.some((file) => file.path === relative) &&
+    fs.existsSync(path.join(folder, ...relative.split('/')));
+  if (untracked(MAPPING_PATH)) {
+    report.add(
+      MAPPING_PATH,
+      'evaluator',
+      `${MAPPING_PATH} is not tracked by git, and a run reads only the files git tracks under evaluator/; git add it`,
+    );
+  } else if (fs.existsSync(path.join(folder, ...MAPPING_PATH.split('/')))) {
     const mapping = parseInto(report, folder, MAPPING_PATH);
     if (mapping !== undefined) {
       const shape = mappingSchemaProblems(mapping);
@@ -1124,6 +1137,14 @@ function checkEvaluator(report, folder, evaluation, contract, conditions) {
   }
   if (kind === 'command') {
     if (typeof evaluator.command !== 'string') return;
+    if (untracked(evaluator.command)) {
+      report.add(
+        MANIFEST_NAME,
+        'evaluator',
+        `evaluator.command names ${evaluator.command}, which git does not track, and a run reads only the files git tracks under evaluator/; git add it`,
+      );
+      return;
+    }
     const executable = path.join(folder, ...evaluator.command.split('/'));
     let stats;
     try {

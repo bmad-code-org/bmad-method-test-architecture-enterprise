@@ -26,10 +26,13 @@
  *   `evaluateTarget` over its HTTP authorizations: this release's registry
  *   declares command targets only, so eval-quality denies both at the
  *   interface (Stories 1.10 and 1.11 add the authorizations);
- * - on a gameability arm nothing launches: every call is answered from the
- *   degenerate response (a matched call's from the plan step that runs its
- *   operation, any other from the plan's first step), as a shortcut target
- *   would answer every request alike;
+ * - on a gameability arm nothing launches: a call goes through eval-quality's
+ *   command-line adapter over the registry's authorizations, as on any arm,
+ *   with a mechanism that runs nothing, so a call the registry does not grant
+ *   is denied and recorded exactly as a real arm denies it, and every other
+ *   call is answered from the degenerate response (a matched call's from the
+ *   plan step that runs its operation, any other from the plan's first step),
+ *   as a shortcut target would answer every request alike;
  * - an authorized call that matches a declared operation becomes a record
  *   observation with `provenance: evaluator-chosen`, numbered after the
  *   interaction plan's `baseline` observations; one that matches none is kept
@@ -40,6 +43,8 @@
  * - every call the budget admits counts against the contract's
  *   `budgets.maxToolCalls` for the trial, and calls past it are refused unsent
  *   and not counted;
+ * - a call whose input carries the trial's answer nonce is refused unsent and
+ *   not counted, so the agent cannot hand the nonce to the target;
  * - once the agent has ended, a call still running is aborted and none
  *   starts, so no call the agent cannot see reaches the record.
  *
@@ -50,9 +55,13 @@
  * and the run exits 12 once the agent has ended.
  *
  * The agent answers inside `<judge-answer nonce="...">` with a fresh 128-bit
- * nonce drawn after the plan ran (`judge.js`'s pattern), so no answer a target
- * printed and the agent quoted is ever read as the evaluator's; the block
- * holds `{ rows, recommendation? }`, read by `judgment-rows.js`.
+ * nonce (`judge.js`'s pattern), drawn after the plan ran and before the
+ * router is built, so no plan step's output can carry it, and the router
+ * sends no call that carries it verbatim; an answer block a target printed
+ * and the agent quoted is then never read as the evaluator's. A target
+ * running as the same user could still read the nonce from the agent's
+ * process until Story 1.31 sandboxes it. The block holds `{ rows,
+ * recommendation? }`, read by `judgment-rows.js`.
  */
 
 'use strict';
@@ -61,11 +70,12 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
+const { AGENT_ADAPTERS } = require('../agent-adapters');
 const { runAgentAsync } = require('../run-agent');
-const { persistableRequest, stoppedFromOutside } = require('./arm');
+const { hostEnvironmentPort, persistableRequest, stoppedFromOutside } = require('./arm');
 const { CALL_SHAPES, bridgeTools, openBridge } = require('./bridge');
 const { loadAdapters, loadEngine } = require('./engine');
-const { answerBlocks, answerNonce, unfenced } = require('./judge');
+const { answerBlocks, unfenced } = require('./judge');
 const { EvaluatorError, isOracleBinding, readAnswer } = require('./judgment-rows');
 const { recordObservation } = require('./records');
 
@@ -182,6 +192,12 @@ function startsWith(words, prefix) {
  * Of the operations on that command, the one whose declared option and
  * argument keys admit the call is its match; when several do, none is, and
  * the call is kept as unmatched.
+ *
+ * Standard input is sent as the text the agent gave, byte for byte. The
+ * record's `callInputs.stdin` is that text as the operation's stdin keys read
+ * it: the JSON object it parses to (JSON's reading, the last of a repeated
+ * key), or, for text that is no JSON object, the text under the operation's
+ * one declared stdin key (null when it declares another number).
  */
 function commandCall({ contract, registry, interfaceId, input }) {
   const [executable, ...rest] = input.arguments;
@@ -241,6 +257,8 @@ function commandCall({ contract, registry, interfaceId, input }) {
   let stdin = { kind: 'absent' };
   let recordedStdin = null;
   if (typeof input.stdin === 'string') {
+    // Sent as written: re-serializing a parsed object would send the target other bytes than the agent gave.
+    stdin = { kind: 'text', value: input.stdin };
     let parsed;
     try {
       parsed = JSON.parse(input.stdin);
@@ -248,13 +266,8 @@ function commandCall({ contract, registry, interfaceId, input }) {
       parsed = undefined;
     }
     const stdinKeys = operation === undefined ? [] : declaredKeys(operation.requestShape?.stdin);
-    if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      stdin = { kind: 'json', value: parsed };
-      recordedStdin = parsed;
-    } else {
-      stdin = { kind: 'text', value: input.stdin };
-      recordedStdin = stdinKeys.length === 1 ? { [stdinKeys[0]]: input.stdin } : null;
-    }
+    if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) recordedStdin = parsed;
+    else recordedStdin = stdinKeys.length === 1 ? { [stdinKeys[0]]: input.stdin } : null;
   }
   return {
     executable,
@@ -291,17 +304,44 @@ function callResult({ observationId, request, observation }) {
 }
 
 /**
+ * A gameability arm's port for one agent call: eval-quality's command-line
+ * adapter over the registry's authorizations, so an executable or subcommand
+ * path the registry does not grant is denied exactly as on a real arm, with a
+ * mechanism that launches nothing. It answers with the degenerate response of
+ * the first plan step that runs the call's operation, or of the plan's first
+ * answered step for any other call, as a shortcut target answers every
+ * request alike, and every written file the registry declares reads as
+ * absent.
+ */
+async function degeneratePort({ contract, registry, degenerate, operationId }) {
+  const plan = contract.interactionPlan ?? [];
+  const step =
+    plan.find((candidate) => candidate.operationId === operationId && Object.hasOwn(degenerate, candidate.stepId)) ??
+    plan.find((candidate) => Object.hasOwn(degenerate, candidate.stepId));
+  const answer = degenerate[step.stepId];
+  const { createCommandLineAdapter } = await loadAdapters();
+  const mechanism = {
+    run: async () => ({ exitCode: answer.exitCode, stdout: answer.stdout, stderr: answer.stderr }),
+    readArtifact: async () => ({ present: false, text: '', truncated: false }),
+  };
+  // The authorizations' working directory is never entered: nothing launches and no written file is read.
+  const adapter = createCommandLineAdapter(registry.commandTargetPolicy({ cwd: registry.root ?? os.tmpdir() }), mechanism);
+  return hostEnvironmentPort({ port: adapter, registry });
+}
+
+/**
  * The router behind one trial's bridge.
  *
  * @param {object} options
  * @param {object} options.contract
  * @param {object} options.registry
- * @param {{ probe: Function }|null} options.port the trial workspace's `hostEnvironmentPort`, or null on a gameability arm
+ * @param {{ probe: Function }|null} options.port the trial workspace's `hostEnvironmentPort`; unused on a gameability arm
  * @param {Record<string, { stdout: string, stderr: string, exitCode: number }>|null} options.degenerate a gameability arm's response by plan step
  * @param {string} options.label the trial's label, which prefixes each observation ID (`trial-2`)
  * @param {Set<string>} options.taken observation IDs the trial already holds
  * @param {number} options.firstSequence the sequence the first recorded call takes
  * @param {number} options.budget calls the agent may make in the trial
+ * @param {string} options.nonce the trial's answer nonce, which no call may carry
  * @param {AbortSignal} [options.signal]
  * @returns {{ handle: Function, stop: Function, calls: object[], observations: object[], counted: () => number, infrastructure: () => string|null }}
  *   `stop` ends the router when the agent has ended: a call already running is aborted, and none starts after it
@@ -315,8 +355,10 @@ function bridgeRouter({
   taken,
   firstSequence,
   budget,
+  nonce,
   signal = new AbortController().signal,
 }) {
+  if (typeof nonce !== 'string' || nonce.length === 0) throw new TypeError("bridgeRouter needs the trial's answer nonce");
   const calls = [];
   const observations = [];
   // The calls the budget admitted; one refused past the budget or after the agent ended is never sent and not counted.
@@ -364,41 +406,26 @@ function bridgeRouter({
       subcommandPath: call.subcommandPath,
       channels: call.channels,
     };
+    // A gameability arm's call goes through the same adapter and authorizations as a real arm's, so it is denied alike.
+    const armPort = degenerate === null ? port : await degeneratePort({ contract, registry, degenerate, operationId });
     let observation;
-    if (degenerate === null) {
-      try {
-        ({ observation } = await port.probe(request, callSignal));
-      } catch (error) {
-        const fault = { code: typeof error?.code === 'string' ? error.code : null, detail: String(error?.message ?? error) };
-        if (ending.signal.aborted) {
-          return refused({ ...entry, request: persistableRequest(request) }, 'the agent had ended, so the call was stopped');
-        }
-        if (fault.code === 'forbidden-target') {
-          calls.push({ ...entry, request: persistableRequest(error.request ?? request), denied: fault });
-          return { text: `denied by the evaluation's target policy: ${fault.detail}`, isError: true };
-        }
-        if (fault.code === 'schema-parse-failure' || fault.code === 'port-contract-violation') {
-          return refused({ ...entry, request: persistableRequest(request) }, `the call cannot be sent: ${fault.detail}`);
-        }
-        infrastructure ??= `the evaluator's call ${probeId} could not run: ${fault.detail}`;
-        calls.push({ ...entry, request: persistableRequest(error.request ?? request), fault });
-        return { text: 'the call could not run', isError: true };
+    try {
+      ({ observation } = await armPort.probe(request, callSignal));
+    } catch (error) {
+      const fault = { code: typeof error?.code === 'string' ? error.code : null, detail: String(error?.message ?? error) };
+      if (ending.signal.aborted) {
+        return refused({ ...entry, request: persistableRequest(request) }, 'the agent had ended, so the call was stopped');
       }
-    } else {
-      // The shortcut target answers every call alike: the response of the first plan step that runs the matched
-      // operation, or of the plan's first answered step for any other call, so no call tells the agent it is on this arm.
-      const plan = contract.interactionPlan ?? [];
-      const step =
-        plan.find((candidate) => candidate.operationId === operationId && Object.hasOwn(degenerate, candidate.stepId)) ??
-        plan.find((candidate) => Object.hasOwn(degenerate, candidate.stepId));
-      const answer = degenerate[step.stepId];
-      observation = {
-        kind: 'cli',
-        exitCode: answer.exitCode,
-        stdout: { kind: 'text', value: answer.stdout },
-        stderr: { kind: 'text', value: answer.stderr },
-        artifacts: {},
-      };
+      if (fault.code === 'forbidden-target') {
+        calls.push({ ...entry, request: persistableRequest(error.request ?? request), denied: fault });
+        return { text: `denied by the evaluation's target policy: ${fault.detail}`, isError: true };
+      }
+      if (fault.code === 'schema-parse-failure' || fault.code === 'port-contract-violation') {
+        return refused({ ...entry, request: persistableRequest(request) }, `the call cannot be sent: ${fault.detail}`);
+      }
+      infrastructure ??= `the evaluator's call ${probeId} could not run: ${fault.detail}`;
+      calls.push({ ...entry, request: persistableRequest(error.request ?? request), fault });
+      return { text: 'the call could not run', isError: true };
     }
     const registryEntry = registry.targetFor(tool.name, call.executable);
     const { exitCode } = observation;
@@ -477,6 +504,13 @@ function bridgeRouter({
   async function handle(tool, input) {
     const entry = { interfaceId: tool.name, kind: tool.kind, input };
     if (ending.signal.aborted) return refused({ ...entry, unsent: true }, 'the agent had ended, so the call was not run');
+    // The nonce names the one block the agent's answer is read from, so no call may carry it where a target could print it back.
+    if (JSON.stringify(input ?? null).includes(nonce)) {
+      return refused(
+        { ...entry, unsent: true },
+        "the call carries this trial's answer nonce, which never reaches the system under evaluation",
+      );
+    }
     // Every call the budget admits counts against it, one the registry denies or the bridge cannot send included.
     if (counted >= budget) {
       return refused({ ...entry, unsent: true }, `the contract's budget allows ${budget} call(s) in a trial, and they are spent`);
@@ -501,13 +535,13 @@ function bridgeRouter({
  * @param {object} options.contract
  * @param {object} options.mapping
  * @param {(value: unknown) => string[]} options.validate the mapping's row validator
- * @param {object} options.router `bridgeRouter(...)`
+ * @param {object} options.router `bridgeRouter(...)`, built with `nonce`
+ * @param {string} options.nonce the trial's answer nonce (`judge.js` `answerNonce`), drawn after the plan ran
  * @param {NodeJS.ProcessEnv} [options.env] the environment the agent's base variables and `environmentKeys` are read from
- * @returns {Promise<{ answer: object, prompt: string, nonce: string, stdout: string, stderr: string }>}
+ * @returns {Promise<{ answer: object, prompt: string, nonce: string, stdout: string, stderr: string, stdoutBytes: Buffer, stderrBytes: Buffer }>}
  * @throws {EvaluatorError} an agent that cannot answer, a call the target could not run, or an answer outside the import contract
  */
-async function runSealedBriefAgent({ evaluator, sealedBrief, contract, mapping, validate, router, env = process.env }) {
-  const nonce = answerNonce();
+async function runSealedBriefAgent({ evaluator, sealedBrief, contract, mapping, validate, router, nonce, env = process.env }) {
   const prompt = evaluatorPrompt({ sealedBrief, contract, mapping, nonce });
   // The agent runs in an empty directory of its own, which holds nothing of the evaluation; the bridge's
   // configuration, which carries its admission token, is written to a private directory beside it.
@@ -519,10 +553,11 @@ async function runSealedBriefAgent({ evaluator, sealedBrief, contract, mapping, 
   try {
     bridge = await openBridge({ tools: bridgeTools(sealedBrief.permittedInterfaces ?? []), handle: router.handle });
     const configFile = path.join(configDirectory, 'mcp-config.json');
-    const { name, command, args, env: serverEnv } = bridge.server;
-    fs.writeFileSync(configFile, `${JSON.stringify({ mcpServers: { [name]: { type: 'stdio', command, args, env: serverEnv } } })}\n`, {
-      mode: 0o600,
-    });
+    // The file's shape is the adapter's to know; `agentInvocation` refuses an adapter with no bridged run.
+    const buildConfig = AGENT_ADAPTERS[evaluator.agent]?.buildBridgeConfig;
+    if (typeof buildConfig !== 'function') throw new Error(`the ${evaluator.agent} adapter has no bridged run`);
+    fs.writeFileSync(configFile, buildConfig(bridge.server), { mode: 0o600 });
+    const { name } = bridge.server;
     answered = await runAgentAsync(prompt, {
       agent: evaluator.agent,
       agentCommand: evaluator.agentCommand,
@@ -543,7 +578,13 @@ async function runSealedBriefAgent({ evaluator, sealedBrief, contract, mapping, 
     fs.rmSync(cwd, { recursive: true, force: true });
     fs.rmSync(configDirectory, { recursive: true, force: true });
   }
-  const streams = { stdout: failure?.stdout ?? answered?.stdout ?? '', stderr: failure?.stderr ?? answered?.stderr ?? '' };
+  const printed = failure ?? answered ?? {};
+  const streams = {
+    stdout: printed.stdout ?? '',
+    stderr: printed.stderr ?? '',
+    stdoutBytes: printed.stdoutBytes ?? Buffer.from(printed.stdout ?? ''),
+    stderrBytes: printed.stderrBytes ?? Buffer.from(printed.stderr ?? ''),
+  };
   const fail = (message) => Object.assign(new EvaluatorError(message, streams), { prompt, nonce });
   if (failure !== null) throw fail(`the sealed-brief evaluator could not answer: ${failure?.message ?? failure}`);
   if (router.infrastructure() !== null) throw fail(router.infrastructure());

@@ -35,7 +35,8 @@
  * deterministic evaluator: an unknown kind, a command evaluator with no
  * mapping or no timeout, a mapping key bound to what the contract does not
  * declare or to levels off a criterion's anchored scale, an unbound rubric
- * criterion, a non-executable command, a missing records directory, a
+ * criterion, a link or (on POSIX) a FIFO under `evaluator/`, a
+ * non-executable command, a missing records directory, a
  * sealed-brief agent with no model snapshot or on an adapter with no bridged
  * run, an unused evaluator block, and a judge beside a rubric the evaluator
  * scores each exit 10; a rubric under each non-deterministic kind with no
@@ -1733,6 +1734,24 @@ EVALUATOR_CASES.push(
     },
     expect: (output) => [[output.includes('evaluator/linked.json is not a regular file'), 'the finding does not name the link']],
   },
+  // A FIFO is a special file only POSIX systems make; reading one would block, so it is refused before any read.
+  ...(process.platform === 'win32'
+    ? []
+    : [
+        {
+          name: 'a FIFO under evaluator/',
+          file: 'evaluator',
+          rule: 'evaluator',
+          plant: (folder) => {
+            plantEvaluator(folder, COMMAND_EVALUATOR);
+            const made = spawnSync('mkfifo', [path.join(folder, 'evaluator', 'pipe')]);
+            if (made.status !== 0) throw new Error(`mkfifo failed: ${made.stderr}`);
+          },
+          expect: (output) => [
+            [output.includes('evaluator/pipe is not a regular file or directory'), 'the finding does not name the FIFO'],
+          ],
+        },
+      ]),
   {
     name: 'two mapping keys bound to one oracle',
     file: 'evaluator/mapping.json',

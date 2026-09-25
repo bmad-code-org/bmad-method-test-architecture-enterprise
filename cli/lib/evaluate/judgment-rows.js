@@ -15,16 +15,20 @@
  * fields:
  *
  * - a `fail` row bound to an oracle is that oracle's `violated` disposition
- *   and, for a probe whose behaviors include the bound behavior, one
+ *   and, for a probe one of whose behaviors declares the oracle, one
  *   `defect` finding: a `findingId` minted here (`F-NNN`, unique in the
- *   record), the oracle, the probe, the behavior and its declared severity,
+ *   record), the oracle, the probe, the first of the probe's behaviors that
+ *   declares the oracle and that behavior's severity (`judgeTrial`'s rule),
  *   the row's `comment` as `summary`, its `confidence`, its `observationIds`,
  *   `evidenceArtifacts: []`, and one `quotedEvidence` entry `{ quote,
  *   channel, artifactId }` (`artifactId` null off the `artifact` channel);
- *   a probe that does not discharge the behavior keeps the disposition and
- *   files no finding, as the deterministic evaluator does, since a finding
- *   names the probe it arose during and is scored against that probe's
- *   signature;
+ *   a probe none of whose behaviors declares the oracle keeps the
+ *   disposition and files no finding, as the deterministic evaluator does,
+ *   since a finding names the probe it arose during and is scored against
+ *   that probe's signature. The binding's `behaviorId` names the behavior the
+ *   key is described under (a behavior that declares the oracle); an oracle
+ *   two behaviors declare is answered by one key, and its finding follows
+ *   the probe under trial;
  * - a `pass` row bound to an oracle is its `held` disposition;
  * - an oracle no row answers is `not-attempted`, citing nothing;
  * - a `score` row bound to a rubric criterion is that criterion's judge
@@ -36,9 +40,9 @@
  * the trial (AD-1), so eval-quality's own ingest decides both. What the
  * runtime does refuse is an answer outside the contract (a row shape the
  * schema refuses, a `score` row on an oracle key or a `pass` or `fail` row
- * on a rubric key, a score off the binding's levels, and no row at all for a
- * trial with a mapped oracle): `EvaluatorError`, which yields no record and
- * exits 12 (AD-10).
+ * on a rubric key, a score off the binding's levels, a string that is not
+ * well-formed Unicode, and no row at all for a trial with a mapped oracle):
+ * `EvaluatorError`, which yields no record and exits 12 (AD-10).
  */
 
 'use strict';
@@ -58,13 +62,19 @@ const MAPPING_SCHEMA = JSON.parse(fs.readFileSync(path.join(SCHEMA_ROOT, 'evalua
 /** How severe each recommendation is, for the one a trial set records. */
 const RECOMMENDATION_ORDER = ['PASS', 'CONCERNS', 'FAIL'];
 
-/** An evaluator that answered outside the import contract, or could not answer; the trial yields no record (exit 12). */
+/**
+ * An evaluator that answered outside the import contract, or could not
+ * answer; the trial yields no record (exit 12). It carries what the evaluator
+ * printed, as text and as the bytes it wrote.
+ */
 class EvaluatorError extends Error {
-  constructor(message, { stdout = '', stderr = '' } = {}) {
+  constructor(message, { stdout = '', stderr = '', stdoutBytes = Buffer.from(stdout), stderrBytes = Buffer.from(stderr) } = {}) {
     super(message);
     this.name = 'EvaluatorError';
     this.stdout = stdout;
     this.stderr = stderr;
+    this.stdoutBytes = stdoutBytes;
+    this.stderrBytes = stderrBytes;
   }
 }
 
@@ -191,9 +201,28 @@ function rowsValidator(mapping) {
 }
 
 /**
+ * Where in a parsed answer a string (a value or a key) is not well-formed
+ * Unicode, as a JSON pointer, or null when every string is. JSON's `\ud800`
+ * escape parses to a lone surrogate, which no record can be serialized with.
+ */
+function illFormedString(value, pointer = '') {
+  if (typeof value === 'string') return value.isWellFormed() ? null : pointer || '/';
+  if (value === null || typeof value !== 'object') return null;
+  for (const [key, item] of Object.entries(value)) {
+    const at = `${pointer}/${key.replaceAll('~', '~0').replaceAll('/', '~1')}`;
+    if (!key.isWellFormed()) return at;
+    const found = illFormedString(item, at);
+    if (found !== null) return found;
+  }
+  return null;
+}
+
+/**
  * One trial's answer read against the import contract: the JSON object the
  * evaluator printed, held to the per-evaluation row schema and to the rule
- * that a trial with a mapped oracle is answered by at least one row.
+ * that a trial with a mapped oracle is answered by at least one row. A string
+ * holding a lone surrogate is refused as well, since the record it would
+ * reach cannot be serialized.
  *
  * @param {object} options
  * @param {string} options.text what the evaluator printed
@@ -209,6 +238,10 @@ function readAnswer({ text, mapping, validate }) {
   } catch (error) {
     throw new EvaluatorError(`the evaluator's answer is not JSON: ${error.message}`);
   }
+  const illFormed = illFormedString(value);
+  if (illFormed !== null) {
+    throw new EvaluatorError(`the evaluator's answer carries a string at ${illFormed} that is not well-formed Unicode (a lone surrogate)`);
+  }
   const problems = validate(value);
   if (problems.length > 0) {
     throw new EvaluatorError(`the evaluator's answer fails the judgment-rows schema: ${problems.slice(0, 10).join('; ')}`);
@@ -223,8 +256,8 @@ function readAnswer({ text, mapping, validate }) {
 /**
  * One probe's judgment in one trial, converted from that trial's rows: a
  * disposition for every contract oracle, a finding per `fail` row whose
- * behavior the probe discharges, and a judge result per bound rubric
- * criterion.
+ * oracle a behavior the probe discharges declares, and a judge result per
+ * bound rubric criterion.
  *
  * @param {object} options
  * @param {object} options.contract
@@ -258,7 +291,10 @@ function judgmentFromRows({ contract, mapping, answer, probeId, behaviorIds }) {
       .filter(([, binding]) => isOracleBinding(binding))
       .map(([key, binding]) => [binding.oracleId, key]),
   );
-  const discharged = new Set(behaviorIds);
+  // The probe's behaviors in the order `behaviorIds` gives them: its own first, then its defects'.
+  const discharged = behaviorIds
+    .map((behaviorId) => (contract.behaviors ?? []).find((candidate) => candidate.id === behaviorId))
+    .filter((behavior) => behavior !== undefined);
   const oracleDispositions = [];
   const findings = [];
   for (const oracle of contract.oracles ?? []) {
@@ -279,15 +315,16 @@ function judgmentFromRows({ contract, mapping, answer, probeId, behaviorIds }) {
       observationIds: row.observationIds,
       note: row.comment ?? null,
     });
-    const binding = mapping.keys[key];
-    if (row.outcome !== 'fail' || !discharged.has(binding.behaviorId)) continue;
-    const behavior = (contract.behaviors ?? []).find((candidate) => candidate.id === binding.behaviorId);
+    if (row.outcome !== 'fail') continue;
+    // The finding answers the first of the probe's behaviors that declares the oracle, as `judgeTrial`'s does.
+    const behavior = discharged.find((candidate) => (candidate.oracles ?? []).includes(oracle.id));
+    if (behavior === undefined) continue;
     findings.push({
       findingType: 'defect',
       findingId: `F-${String(findings.length + 1).padStart(3, '0')}`,
       oracleId: oracle.id,
       probeId,
-      behaviorId: binding.behaviorId,
+      behaviorId: behavior.id,
       severity: behavior.severity,
       summary: row.comment,
       confidence: row.confidence,
@@ -319,9 +356,9 @@ function judgmentFromRows({ contract, mapping, answer, probeId, behaviorIds }) {
 /**
  * One probe's recommendation in one trial: the evaluator's own, else FAIL
  * when the trial's rows filed a finding against the probe and PASS
- * otherwise. A fail row on a behavior the probe does not discharge files no
- * finding against it, so it does not make the probe's record recommend FAIL,
- * as the deterministic evaluator's recommendation does not.
+ * otherwise. A fail row on an oracle no behavior of the probe declares files
+ * no finding against it, so it does not make the probe's record recommend
+ * FAIL, as the deterministic evaluator's recommendation does not.
  *
  * @param {{ recommendation?: string }} answer
  * @param {{ findings: object[] }} judgment the probe's `judgmentFromRows` in that trial

@@ -9,7 +9,8 @@
  * strict schema opens to them: `tea.evaluatorKind` always; for a `command`
  * evaluator `tea.evaluatorExecutableDigest` (`digestBytes` over the
  * executable) and `tea.evaluatorTreeDigest` (`digestArtifact` over the sorted
- * `{ path, sha256 }` list of every file under `evaluator/`); for both
+ * `{ path, sha256 }` list of the layer's files, `evaluatorFiles`: in a git
+ * repository the ones git tracks under `evaluator/`); for both
  * row-converting kinds `tea.evaluatorWiring` (the `evaluation.json` block
  * that runs it: arguments, environment keys, timeout, or adapter, command,
  * arguments and model); a command's model snapshot when the conditions name
@@ -25,11 +26,13 @@
 'use strict';
 
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 
 const { resolveModel } = require('../agent-adapters');
 const { MAPPING_PATH, mappingContractProblems, mappingSchemaProblems, rowsValidator } = require('./judgment-rows');
 const { evaluatorTemplateDigest } = require('./sealed-brief-agent');
+const { runGit } = require('./workspace');
 
 const EVALUATOR_DIRECTORY = 'evaluator';
 const DIGEST_PREFIX = 'sha256:';
@@ -67,65 +70,184 @@ function convertsRows(kind) {
   return kind === 'command' || kind === 'sealed-brief-agent';
 }
 
-/**
- * Every regular file under the evaluation folder's `evaluator/`, as sorted
- * `{ path, sha256 }` entries; a symbolic link or other special file is
- * refused, since the digest covers only bytes the folder holds.
- *
- * @returns {Array<{ path: string, sha256: string }>}
- * @throws {EvaluatorLayerError}
- */
-function evaluatorTree(folder, digestBytes) {
-  const root = path.join(folder, EVALUATOR_DIRECTORY);
-  const entries = [];
+/** Opens a file for reading through no link and without blocking on a FIFO. */
+const READ_REGULAR = fs.constants.O_RDONLY | (fs.constants.O_NONBLOCK ?? 0) | (fs.constants.O_NOFOLLOW ?? 0);
+/** The execute bits of a file mode. */
+const EXECUTE_BITS = 0o111;
+
+/** The paths git tracks under `evaluator/`, relative to the folder, or null when the folder is in no git repository. */
+function trackedEvaluatorPaths(folder) {
+  const inside = runGit(['-C', folder, 'rev-parse', '--is-inside-work-tree']);
+  if (!inside.ok || inside.stdout.trim() !== 'true') return null;
+  const listed = runGit(['-C', folder, 'ls-files', '-z', '--', EVALUATOR_DIRECTORY]);
+  if (!listed.ok) throw new EvaluatorLayerError(`the files git tracks under ${EVALUATOR_DIRECTORY}/ cannot be listed: ${listed.detail}`);
+  return [...new Set(listed.stdout.split('\0').filter((relative) => relative.length > 0))];
+}
+
+/** Every path under `root`, relative to `folder`; a link or special file is refused. */
+function walkedEvaluatorPaths(folder, root) {
+  const found = [];
   const walk = (directory) => {
     for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
       const absolute = path.join(directory, entry.name);
       const relative = path.relative(folder, absolute).split(path.sep).join('/');
       if (entry.isDirectory()) walk(absolute);
-      else if (entry.isFile()) entries.push({ path: relative, sha256: digestBytes(fs.readFileSync(absolute)).slice(DIGEST_PREFIX.length) });
+      else if (entry.isFile()) found.push(relative);
       else
         throw new EvaluatorLayerError(
           `${relative} is not a regular file or directory; evaluator/ holds only bytes the evaluation folder owns`,
         );
     }
   };
+  walk(root);
+  return found;
+}
+
+/** A regular file's bytes and mode, read through no link and never blocking; null when it is gone. */
+function regularFile(folder, relative) {
+  const absolute = path.join(folder, ...relative.split('/'));
+  // Every directory on the way is the folder's own, so no linked directory carries the read elsewhere.
+  let directory;
+  try {
+    directory = fs.realpathSync(path.dirname(absolute));
+  } catch {
+    return null;
+  }
+  const spelled = path.join(fs.realpathSync(folder), ...relative.split('/').slice(0, -1));
+  if (directory !== spelled)
+    throw new EvaluatorLayerError(`${relative} is reached through a link; evaluator/ holds only bytes the evaluation folder owns`);
+  let descriptor;
+  try {
+    descriptor = fs.openSync(absolute, READ_REGULAR);
+  } catch (error) {
+    if (error.code === 'ENOENT') return null;
+    throw new EvaluatorLayerError(`${relative} is not a regular file or directory; evaluator/ holds only bytes the evaluation folder owns`);
+  }
+  try {
+    const stats = fs.fstatSync(descriptor);
+    if (!stats.isFile()) {
+      throw new EvaluatorLayerError(
+        `${relative} is not a regular file or directory; evaluator/ holds only bytes the evaluation folder owns`,
+      );
+    }
+    return { bytes: fs.readFileSync(descriptor), mode: stats.mode };
+  } finally {
+    fs.closeSync(descriptor);
+  }
+}
+
+/**
+ * The files the evaluation layer is made of, as sorted `{ path, bytes, mode }`
+ * entries (`path` relative to the evaluation folder, `evaluator/...`).
+ *
+ * In a git repository they are the paths git tracks under `evaluator/` (its
+ * index), with their working-tree bytes, so a file git does not track (an
+ * interpreter's cache, an editor's backup, a note left there) is no part of
+ * the layer and never moves its digest, and an edit to a tracked file is
+ * uncommitted work the run records as dirty. Outside a repository they are
+ * every regular file under `evaluator/`. Either way a link, a special file or
+ * a path through a linked directory is refused, since the digest covers only
+ * bytes the folder holds. `tracked` says which rule chose them.
+ *
+ * @param {string} folder
+ * @returns {{ tracked: boolean, files: Array<{ path: string, bytes: Buffer, mode: number }> }}
+ * @throws {EvaluatorLayerError}
+ */
+function evaluatorFiles(folder) {
+  const root = path.join(folder, EVALUATOR_DIRECTORY);
   let stats;
   try {
     stats = fs.lstatSync(root);
   } catch (error) {
-    if (error.code === 'ENOENT') return [];
+    if (error.code === 'ENOENT') return { tracked: trackedEvaluatorPaths(folder) !== null, files: [] };
     throw error;
   }
   if (!stats.isDirectory()) throw new EvaluatorLayerError(`${EVALUATOR_DIRECTORY} is not a directory the evaluation folder holds`);
-  walk(root);
-  return entries.sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0));
+  const tracked = trackedEvaluatorPaths(folder);
+  const files = [];
+  for (const relative of tracked ?? walkedEvaluatorPaths(folder, root)) {
+    // A tracked path deleted from the working tree is uncommitted work, and the layer is what the tree holds.
+    const read = regularFile(folder, relative);
+    if (read !== null) files.push({ path: relative, ...read });
+  }
+  files.sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0));
+  return { tracked: tracked !== null, files };
+}
+
+/**
+ * The evaluation layer's files as the sorted `{ path, sha256 }` list the tree
+ * digest is taken over (`evaluatorFiles`).
+ *
+ * @returns {Array<{ path: string, sha256: string }>}
+ * @throws {EvaluatorLayerError}
+ */
+function evaluatorTree(folder, digestBytes) {
+  return evaluatorFiles(folder).files.map((file) => ({ path: file.path, sha256: digestBytes(file.bytes).slice(DIGEST_PREFIX.length) }));
+}
+
+/** How a file the layer needs and does not hold is named: one git tracks, or one the folder holds. */
+function notInLayer(relative, tracked) {
+  return `${relative} is not a regular file ${tracked ? 'git tracks under evaluator/ (git add it)' : 'the evaluation folder holds'}`;
+}
+
+/**
+ * The evaluation layer's files copied once into a private temporary
+ * directory, `<snapshot>/evaluator/...`, each file's write bits cleared and
+ * its execute bits kept; the directories stay writable, so an evaluator's
+ * own caches land in the snapshot.
+ */
+function writeSnapshot(files, scratch) {
+  const snapshot = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-evaluate-evaluator-snapshot-'));
+  scratch.push(snapshot);
+  for (const file of files) {
+    const target = path.join(snapshot, ...file.path.split('/'));
+    fs.mkdirSync(path.dirname(target), { recursive: true, mode: 0o700 });
+    fs.writeFileSync(target, file.bytes, { flag: 'wx', mode: 0o600 });
+    fs.chmodSync(target, file.mode & 0o555);
+  }
+  return snapshot;
 }
 
 /**
  * What a run reads of its evaluation layer before anything runs: the mapping
- * and its row validator, which the trials use as read here, and the digests
- * the configuration records. A command evaluator runs from the evaluation
- * folder at each trial, so an edit to it during the run is caught by the
- * adopter-tree read after every trial (exit 12), not by this snapshot.
+ * and its row validator, which the trials use as read here, the digests the
+ * configuration records, and, for a command evaluator, the snapshot the
+ * trials run from.
+ *
+ * The layer's files (`evaluatorFiles`) are read once: the digests are taken
+ * over those bytes and the mapping is parsed from them. A command
+ * evaluator's are copied into a private snapshot (`writeSnapshot`),
+ * registered in `scratch` so the run removes it on every way it ends, and the
+ * trials run the executable from there, so the bytes that run are the bytes
+ * digested, an edit to the evaluation folder during the run reaches no
+ * trial, and what the evaluator writes beside itself stays out of the
+ * folder.
  *
  * @param {object} options
  * @param {string} options.folder
  * @param {object} options.evaluation
  * @param {object} options.contract
  * @param {object} options.engine the loaded engine (`digestBytes`, `digestArtifact`)
- * @returns {{ evaluator: object, mapping: object|null, validate: Function|null, treeDigest: string|null, executableDigest: string|null }}
+ * @param {string[]} options.scratch directories the run removes when it ends, the snapshot's among them
+ * @returns {{ evaluator: object, root: string|null, mapping: object|null, validate: Function|null, treeDigest: string|null, executableDigest: string|null }}
+ *   `root` is a command evaluator's snapshot directory, which holds `evaluator/` as the folder does
  * @throws {EvaluatorLayerError}
  */
-function readEvaluatorLayer({ folder, evaluation, contract, engine }) {
+function readEvaluatorLayer({ folder, evaluation, contract, engine, scratch }) {
   const evaluator = evaluatorOf(evaluation);
-  const layer = { evaluator, mapping: null, validate: null, treeDigest: null, executableDigest: null };
+  const layer = { evaluator, root: null, mapping: null, validate: null, treeDigest: null, executableDigest: null };
   if (evaluator.kind === 'deterministic' || evaluator.kind === 'records') return layer;
-  const tree = evaluatorTree(folder, engine.digestBytes);
-  layer.treeDigest = engine.digestArtifact(tree, 'evaluator-tree');
+  const { tracked, files } = evaluatorFiles(folder);
+  layer.treeDigest = engine.digestArtifact(
+    files.map((file) => ({ path: file.path, sha256: engine.digestBytes(file.bytes).slice(DIGEST_PREFIX.length) })),
+    'evaluator-tree',
+  );
+  const held = (relative) => files.find((file) => file.path === relative);
+  const mappingFile = held(MAPPING_PATH);
+  if (mappingFile === undefined) throw new EvaluatorLayerError(`${MAPPING_PATH} cannot be read: ${notInLayer(MAPPING_PATH, tracked)}`);
   let mapping;
   try {
-    mapping = JSON.parse(fs.readFileSync(path.join(folder, ...MAPPING_PATH.split('/')), 'utf8'));
+    mapping = JSON.parse(mappingFile.bytes.toString('utf8'));
   } catch (error) {
     throw new EvaluatorLayerError(`${MAPPING_PATH} cannot be read: ${error.message}`);
   }
@@ -135,17 +257,13 @@ function readEvaluatorLayer({ folder, evaluation, contract, engine }) {
   layer.mapping = mapping;
   layer.validate = rowsValidator(mapping);
   if (evaluator.kind === 'command') {
-    const executable = path.join(folder, ...evaluator.command.split('/'));
-    let stats;
-    try {
-      stats = fs.lstatSync(executable);
-    } catch {
-      stats = null;
+    const executable = held(evaluator.command);
+    if (executable === undefined) throw new EvaluatorLayerError(notInLayer(evaluator.command, tracked));
+    if (process.platform !== 'win32' && (executable.mode & EXECUTE_BITS) === 0) {
+      throw new EvaluatorLayerError(`${evaluator.command} is not executable`);
     }
-    if (stats === null || !stats.isFile())
-      throw new EvaluatorLayerError(`${evaluator.command} is not a regular file the evaluation folder holds`);
-    if (process.platform !== 'win32' && (stats.mode & 0o111) === 0) throw new EvaluatorLayerError(`${evaluator.command} is not executable`);
-    layer.executableDigest = engine.digestBytes(fs.readFileSync(executable));
+    layer.executableDigest = engine.digestBytes(executable.bytes);
+    layer.root = writeSnapshot(files, scratch);
   }
   return layer;
 }
@@ -230,6 +348,7 @@ module.exports = {
   IDENTITIES,
   configurationFields,
   convertsRows,
+  evaluatorFiles,
   evaluatorOf,
   isKnownEvaluator,
   evaluatorTree,

@@ -22,32 +22,44 @@
  * - An evaluator outside the import contract (a crash, a non-zero exit, rows
  *   that are not a list, a fail row with no quoteChannel, an artifact quote
  *   with no artifactId, an unmapped key, a repeated key, no row at all, a
- *   score off its levels) yields no record and exit 12, its streams
- *   persisted byte for byte under `runs/<invocationId>/evaluator/`; a hung
- *   one has its process group killed at `timeoutMs`.
+ *   score off its levels, a lone surrogate) yields no record and exit 12, its
+ *   streams persisted byte for byte under `runs/<invocationId>/evaluator/`,
+ *   bytes that are not UTF-8 included; a hung one has its process group
+ *   killed at `timeoutMs`.
+ * - A trial set records its most severe trial's recommendation.
  * - The evaluator configuration carries the kind and the executable and tree
  *   digests under `decodingParameters`, and one byte edited under
  *   `evaluator/` changes its digest, every record's
- *   `evaluatorConfigurationDigest` and the evidence's scoring version.
+ *   `evaluatorConfigurationDigest` and the evidence's scoring version. The
+ *   tree digest covers the files git tracks there, and a command evaluator
+ *   runs from the run's snapshot of them, so what it writes beside itself
+ *   stays out of the evaluation folder.
+ * - An oracle two behaviors declare, judged through one key, catches the
+ *   second behavior's probe under a command evaluator and a sealed-brief
+ *   agent.
  * - Sealed-brief agent: the stub agent through the `custom` adapter, whose
  *   whole prompt and tool configuration hold the sealed brief and none of the
  *   contract's checks, plan literals, step IDs or operation IDs, acts through
  *   the bridge; its call is recorded `evaluator-chosen` beside the plan's
  *   `baseline` observation, and the clean arm resolves `passed-clean-control`
  *   and the mutated arm `caught`. An unlisted executable is denied with
- *   eval-quality's reason and never launches; an agent that fails or answers
- *   with no block yields exit 12.
+ *   eval-quality's reason and never launches; an agent that fails, answers
+ *   with no block, with a forged nonce or with two blocks yields exit 12; a
+ *   call carrying the nonce is refused unsent and uncounted.
  * - The bridge, driven by an MCP client: one tool per interface with a
  *   kind-generic shape, an authorized call recorded with the routed working
  *   directory, an unlisted executable, an `mcp` and an `api` call denied by
  *   eval-quality with no launch, an authorized call matching no operation
- *   recorded as unmatched, and the budget held.
+ *   recorded as unmatched, and the budget held; a gameability router denying
+ *   an ungranted call as the real arm does.
  * - Records: a harness's sealed records are validated and copied unchanged,
  *   `score` hands eval-quality the adopter's bytes and passes its exit
  *   through, and a record off its schema exits 10 before any `score` call.
  * - Framework neutrality: an import of an unlisted package under `cli/`
  *   fails `eval-quality-gates dependency-direction` in a copy of the tree.
- * - Units: the row conversion and the command-line call reading.
+ * - Units: the row conversion, the command-line call reading, the bridged
+ *   run's configuration bytes, and an api operation's path template kept
+ *   from the agent.
  *
  * Usage: node test/test-evaluate-evaluators.js
  */
@@ -101,6 +113,8 @@ const BASE_ENV = Object.fromEntries(Object.entries(process.env).filter(([name]) 
 const GIT_IDENTITY = ['-c', 'user.name=TeA test', '-c', 'user.email=tea-test@example.test', '-c', 'core.hooksPath=/dev/null'];
 const GIT_ENV = { ...BASE_ENV, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
 const SPAWN_TIMEOUT_MS = 180_000;
+/** A trial's answer nonce for the router units. */
+const NONCE = crypto.randomBytes(16).toString('hex');
 
 const colors = { reset: '\u001B[0m', red: '\u001B[31m', green: '\u001B[32m' };
 
@@ -556,8 +570,16 @@ async function checkEvaluatorFailures() {
     { mode: 'off-scale', says: 'not one of', stdout: null, rubric: true },
     { mode: 'score-on-oracle', says: 'is a score row, and its key binds oracle O-001', stdout: null },
     { mode: 'pass-on-rubric', says: 'is a pass row, and its key binds criterion R-101/RC-101', stdout: null, rubric: true },
+    { mode: 'surrogate', says: 'is not well-formed Unicode', stdout: null },
+    // Bytes that are not UTF-8 are kept as the evaluator wrote them.
+    {
+      mode: 'raw-bytes',
+      says: 'exited 1, so',
+      stdout: null,
+      bytes: { stdout: Buffer.from([0x7b, 0xff, 0xfe, 0x0a]), stderr: Buffer.from('stub stderr raw-bytes\naÃ\n', 'latin1') },
+    },
   ];
-  for (const { mode, says, stdout, rubric } of cases) {
+  for (const { mode, says, stdout, rubric, bytes } of cases) {
     const project = makeProject(`command-${mode}`, {
       edit: ({ folder }) => {
         useCommandEvaluator(folder, { mode });
@@ -578,7 +600,97 @@ async function checkEvaluatorFailures() {
     if (stdout !== null)
       check(persisted('trial-1.stdout') === stdout, `${mode}: the persisted stdout is ${JSON.stringify(persisted('trial-1.stdout'))}`);
     check(persisted('trial-1.json')?.includes(says) === true, `${mode}: the persisted fault does not say "${says}"`);
+    if (bytes !== undefined) {
+      for (const [name, expected] of Object.entries(bytes)) {
+        const file = path.join(streams, `trial-1.${name}`);
+        const kept = fs.existsSync(file) ? fs.readFileSync(file) : null;
+        check(
+          kept?.equals(expected) === true,
+          `${mode}: the persisted ${name} is ${kept?.toString('hex')}; expected ${expected.toString('hex')}`,
+        );
+      }
+    }
   }
+}
+
+/** A trial set records the most severe of its trials' recommendations, so one trial's CONCERNS reaches every record. */
+function checkSetRecommendation() {
+  const project = makeProject('command-recommend-last', { edit: ({ folder }) => useCommandEvaluator(folder, { mode: 'recommend-last' }) });
+  const ran = evaluate(['run', '--evaluation', project.folder], project.env);
+  check(ran.status === 0, `a recommendation on the last trial only: run exited ${ran.status}; expected 0\n${ran.output}`);
+  const runDirectory = runDirectoryOf(project.folder);
+  if (ran.status !== 0 || runDirectory === null) return;
+  for (const probeId of ['P-001', 'P-002']) {
+    const recommended = recordsOf(runDirectory, probeId).map((record) => record.evaluatorRecommendation);
+    check(
+      recommended.length === TRIALS && recommended.every((value) => value === 'CONCERNS'),
+      `${probeId}'s records recommend ${JSON.stringify(recommended)}; expected CONCERNS in each, the third trial's`,
+    );
+  }
+}
+
+/**
+ * The command evaluator runs from the run's snapshot of the files git tracks
+ * under evaluator/: what it writes beside itself stays out of the evaluation
+ * folder, a file git does not track (ignored or not) moves no digest, and
+ * `check` refuses an executable git does not track.
+ */
+async function checkEvaluatorSnapshot() {
+  const engine = await loadEngine();
+  const log = path.join(scratch.make('snapshot-log'), 'evaluator.jsonl');
+  const project = makeProject('command-snapshot', {
+    edit: ({ folder, repository }) => {
+      useCommandEvaluator(folder, { mode: 'write-beside', args: ['--log', log] });
+      fs.appendFileSync(path.join(repository, '.gitignore'), '*.pyc\n');
+      fs.writeFileSync(path.join(folder, 'evaluator', 'stale.pyc'), 'an ignored file git does not track\n');
+    },
+  });
+  const treeDigestOf = (runDirectory) =>
+    readJson(path.join(runDirectory, 'evaluator-configuration.json')).decodingParameters['tea.evaluatorTreeDigest'];
+  const ran = evaluate(['run', '--evaluation', project.folder], project.env);
+  check(ran.status === 0, `a command evaluator writing beside itself: run exited ${ran.status}; expected 0\n${ran.output}`);
+  const runDirectory = runDirectoryOf(project.folder);
+  if (ran.status !== 0 || runDirectory === null) return;
+  check(
+    !fs.existsSync(path.join(project.folder, 'evaluator', '__pycache__')),
+    'the command evaluator wrote into the evaluation folder, so it did not run from the snapshot',
+  );
+  const selves = fs
+    .readFileSync(log, 'utf8')
+    .trim()
+    .split('\n')
+    .map((line) => JSON.parse(line).self);
+  check(
+    selves.length === 2 * TRIALS && selves.every((self) => !self.startsWith(project.repository) && !fs.existsSync(self)),
+    `the command evaluator ran from ${JSON.stringify(selves)}; expected a snapshot outside the project, removed afterwards`,
+  );
+  // The tree digest covers exactly the files git tracks under evaluator/, so the ignored stale.pyc is no part of it.
+  const tracked = git(project.folder, ['ls-files', '-z', '--', 'evaluator'])
+    .split('\0')
+    .filter((relative) => relative.length > 0)
+    .sort()
+    .map((relative) => ({ path: relative, sha256: sha256(fs.readFileSync(path.join(project.folder, relative))).slice(7) }));
+  check(
+    tracked.length === 2 && treeDigestOf(runDirectory) === engine.digestArtifact(tracked, 'evaluator-tree'),
+    `the tree digest is not taken over the ${tracked.length} file(s) git tracks under evaluator/`,
+  );
+  // A file git does not track, left there after the commit, changes no digest.
+  fs.writeFileSync(path.join(project.folder, 'evaluator', 'notes.txt'), 'a note, never added\n');
+  const again = evaluate(['run', '--evaluation', project.folder], project.env);
+  const secondRun = runDirectoryOf(project.folder);
+  check(
+    again.status === 0 && secondRun !== runDirectory && treeDigestOf(secondRun) === treeDigestOf(runDirectory),
+    `an untracked file under evaluator/ moved the tree digest or stopped the run (exit ${again.status})\n${again.output}`,
+  );
+  fs.rmSync(path.join(project.folder, 'evaluator', 'notes.txt'));
+  // An executable git does not track is no part of the layer, so check refuses it.
+  git(project.folder, ['rm', '--cached', '--quiet', '--', 'evaluator/rows.js']);
+  const checked = evaluate(['check', '--evaluation', project.folder], project.env);
+  check(
+    checked.status === 10 && checked.output.includes('evaluator/rows.js, which git does not track'),
+    `check over an untracked command evaluator exited ${checked.status}; expected 10 naming it\n${checked.output}`,
+  );
+  git(project.folder, ['add', '--', 'evaluator/rows.js']);
 }
 
 /** Whether the process `pid` still runs. */
@@ -596,13 +708,18 @@ async function checkEvaluatorTimeout() {
   const project = makeProject('command-hang', {
     edit: ({ folder }) => useCommandEvaluator(folder, { mode: 'hang', args: ['--pids', pids], timeoutMs: 5000 }),
   });
-  const started = Date.now();
   const ran = evaluate(['run', '--evaluation', project.folder], project.env);
+  const ended = Date.now();
   check(
     ran.status === 12 && ran.output.includes('still running at its 5000ms timeout'),
     `a hung evaluator: run exited ${ran.status}; expected 12 naming the timeout\n${ran.output}`,
   );
-  check(Date.now() - started < SPAWN_TIMEOUT_MS, 'a hung evaluator kept the run to the harness timeout');
+  // The stub wrote its pids as it started, so the run ended within the 5 s timeout, the supervisor's 2 s grace and what
+  // remains of the run after it; a stop that waited far past the wall clock fails this bound.
+  if (fs.existsSync(pids)) {
+    const ranFor = ended - fs.statSync(pids).mtimeMs;
+    check(ranFor >= 4500 && ranFor < 5000 + 2000 + 15_000, `a hung evaluator ran ${ranFor} ms from its start to the run's end`);
+  }
   const runDirectory = runDirectoryOf(project.folder);
   check(recordFiles(runDirectory).length === 0, 'a hung evaluator: the run wrote a record');
   const stdout = path.join(runDirectory ?? '', 'evaluator', 'clean', 'trial-1.stdout');
@@ -719,6 +836,12 @@ async function checkSealedBriefAgent() {
   const contract = readJson(path.join(project.folder, 'contract.json'));
   const calls = captures(capture);
   check(calls.length === 2 * TRIALS, `the stub agent ran ${calls.length} time(s); expected ${2 * TRIALS}`);
+  // Every trial's prompt names a fresh nonce of its own.
+  const nonces = calls.map((call) => /<judge-answer nonce="([0-9a-f]{32})">/.exec(call.prompt)?.[1]);
+  check(
+    nonces.every((nonce) => nonce !== undefined) && new Set(nonces).size === calls.length,
+    `the agent's prompts carry the nonces ${JSON.stringify(nonces)}; expected a distinct one per trial`,
+  );
   // A literal the brief itself carries (a behavior's own criterion, say) is the brief's to show.
   const withheld = withheldStrings(contract, project.folder).filter((text) => !JSON.stringify(brief).includes(text));
   for (const call of calls) {
@@ -856,8 +979,15 @@ async function checkSealedBriefAgentEdges() {
       `a run past its budget reports ${overManifest.actualResourceUse.toolCalls} tool calls used against a ceiling of ${overManifest.resourceCeilings.maxToolCalls}`,
     );
   }
-  // An agent that fails, and one whose reply holds no answer block, yield no record.
-  for (const mode of ['fail', 'silent']) {
+  // An agent that fails, one whose reply holds no answer block, one that answers in a block carrying another nonce
+  // (a forged answer), and one that answers in two blocks yield no record, the fault kept with the streams.
+  const faults = {
+    fail: 'the sealed-brief evaluator could not answer',
+    silent: "carries no answer block with this call's nonce",
+    forged: "carries no answer block with this call's nonce",
+    'two-blocks': "carries 2 answer blocks with this call's nonce",
+  };
+  for (const [mode, says] of Object.entries(faults)) {
     const failCapture = path.join(scratch.make(`sealed-${mode}-capture`), 'captures.jsonl');
     const project = makeProject(`sealed-${mode}`, { edit: ({ folder }) => useSealedBriefAgent(folder, { capture: failCapture, mode }) });
     const failed = evaluate(['run', '--evaluation', project.folder], project.env);
@@ -868,6 +998,89 @@ async function checkSealedBriefAgentEdges() {
       directory !== null && fs.existsSync(path.join(directory, 'evaluator', 'clean', 'trial-1.stdout')),
       `a sealed-brief agent in mode ${mode}: its streams are not persisted`,
     );
+    const fault = path.join(directory ?? '', 'evaluator', 'clean', 'trial-1.json');
+    check(
+      fs.existsSync(fault) && String(readJson(fault).fault).includes(says),
+      `a sealed-brief agent in mode ${mode}: the persisted fault does not say "${says}"`,
+    );
+  }
+  // A call carrying the trial's answer nonce is refused unsent and not counted: under a budget of one, the agent's
+  // next call still runs and the run completes.
+  const leakCapture = path.join(scratch.make('sealed-leak-capture'), 'captures.jsonl');
+  const leak = makeProject('sealed-leak', {
+    edit: ({ folder }) => useSealedBriefAgent(folder, { capture: leakCapture, mode: 'leak-nonce', budget: 1 }),
+  });
+  const leakRan = evaluate(['run', '--evaluation', leak.folder], leak.env);
+  check(leakRan.status === 0, `a sealed-brief agent that sends the nonce: run exited ${leakRan.status}; expected 0\n${leakRan.output}`);
+  const [leakFirst] = captures(leakCapture);
+  check(
+    leakFirst?.results?.[0]?.result?.isError === true && String(leakFirst.results[0].result.content?.[0]?.text).includes('nonce'),
+    `the call carrying the nonce was answered ${JSON.stringify(leakFirst?.results?.[0])}`,
+  );
+  const leakDirectory = runDirectoryOf(leak.folder);
+  if (leakDirectory !== null && leakRan.status === 0) {
+    const [leakedCall] = readJson(path.join(leakDirectory, 'evaluator', 'clean', 'trial-1.json')).calls ?? [];
+    check(
+      leakedCall?.unsent === true && leakedCall.observation === undefined,
+      `the call carrying the nonce is recorded as ${JSON.stringify(leakedCall)}`,
+    );
+    // Only the plan's step and the agent's second call launched; the call carrying the nonce launched nothing.
+    const trialLaunches = launches(leak).filter((line) => line.workspace?.startsWith('trial-'));
+    check(
+      trialLaunches.length === 2 * 2 * TRIALS && trialLaunches.every((line) => !String(line.request).includes('judge-answer')),
+      `a sealed-brief run whose agent sent the nonce launched ${JSON.stringify(trialLaunches.map((line) => line.request))}`,
+    );
+  }
+}
+
+/** B-002 declares O-001 beside B-001, and P-002 discharges B-002, so the one key bound to O-001 answers both behaviors. */
+function shareOracle(folder) {
+  editJson(path.join(folder, 'contract.json'), (contract) => {
+    const second = structuredClone(contract.behaviors[0]);
+    second.id = 'B-002';
+    second.description = `A second behavior the verdict oracle answers. ${second.description}`;
+    second.requirementLinks = [{ scheme: 'tea-evaluate-fixture', id: 'second-behavior' }];
+    contract.behaviors.push(second);
+  });
+  editJson(path.join(folder, 'probes', 'P-002.probe.json'), (probe) => {
+    probe.behaviorId = 'B-002';
+    for (const defect of probe.defects) defect.behaviorId = 'B-002';
+  });
+}
+
+/**
+ * An oracle two behaviors declare, judged through one key bound to the first:
+ * under a command evaluator and a sealed-brief agent alike, the probe of the
+ * second behavior files its finding for that behavior and is caught, as the
+ * deterministic evaluator's is.
+ */
+async function checkSharedOracle() {
+  const validate = createArtifactValidator();
+  for (const kind of ['command', 'sealed-brief-agent']) {
+    const what = `an oracle two behaviors declare, under ${kind}`;
+    const capture = path.join(scratch.make(`shared-${kind}-capture`), 'captures.jsonl');
+    const project = makeProject(`shared-${kind}`, {
+      edit: ({ folder }) => {
+        if (kind === 'command') useCommandEvaluator(folder);
+        else useSealedBriefAgent(folder, { capture });
+        shareOracle(folder);
+      },
+    });
+    const ran = evaluate(['run', '--evaluation', project.folder], project.env);
+    check(ran.status === 0, `${what}: run exited ${ran.status}; expected 0\n${ran.output}`);
+    const runDirectory = runDirectoryOf(project.folder);
+    if (ran.status !== 0 || runDirectory === null) continue;
+    for (const record of recordsOf(runDirectory, 'P-002')) {
+      for (const problem of await validate('sealed-run-record', record))
+        check(false, `${what}: a P-002 record fails its schema: ${problem}`);
+      check(
+        record.findings.length === 1 && record.findings[0].behaviorId === 'B-002' && record.findings[0].oracleId === 'O-001',
+        `${what}: a P-002 record files ${JSON.stringify(record.findings)}`,
+      );
+    }
+    const { evidence } = scoreRun(project, what);
+    checkVotes(what, evidence, 'P-001', 'passed-clean-control');
+    checkVotes(what, evidence, 'P-002', 'caught');
   }
 }
 
@@ -961,6 +1174,7 @@ async function checkBridge() {
     taken: new Set(['trial-1-judge-run']),
     firstSequence: 2,
     budget: 7,
+    nonce: NONCE,
     signal: new AbortController().signal,
   });
   const tools = bridgeTools(interfaces);
@@ -1091,7 +1305,8 @@ async function checkBridge() {
     label: 'trial-1',
     taken: new Set(),
     firstSequence: 2,
-    budget: 3,
+    budget: 4,
+    nonce: NONCE,
   });
   const answered = await degenerate.handle({ name: 'verdict', kind: 'cli' }, { arguments: ['verdict'], stdin: 'Judge the shortcut.' });
   const other = await degenerate.handle({ name: 'verdict', kind: 'cli' }, { arguments: ['verdict-admin'] });
@@ -1104,6 +1319,34 @@ async function checkBridge() {
       JSON.parse(other.text).stdout === 'verdict: pending\n' &&
       JSON.parse(other.text).recorded === false,
     `the gameability router answered ${JSON.stringify([answered, other])}`,
+  );
+  // A call the registry does not grant is denied and recorded on a gameability arm exactly as the real arm above denied
+  // it, so the answer tells the agent nothing of the arm, and nothing launches.
+  const realDenial = router.calls.find((entry) => entry.denied !== undefined && entry.input.arguments?.[0] === 'not-registered');
+  const ungranted = await degenerate.handle({ name: 'verdict', kind: 'cli' }, { arguments: ['not-registered'] });
+  const ungrantedEntry = degenerate.calls.at(-1);
+  const shell = await degenerate.handle({ name: 'verdict', kind: 'cli' }, { arguments: ['sh', '-c', 'id'] });
+  const shellEntry = degenerate.calls.at(-1);
+  check(
+    realDenial !== undefined &&
+      ungranted.isError === true &&
+      JSON.stringify(ungrantedEntry?.denied) === JSON.stringify(realDenial.denied) &&
+      ungrantedEntry.observation === undefined &&
+      shell.isError === true &&
+      shell.text.startsWith("denied by the evaluation's target policy:") &&
+      shellEntry?.denied?.code === 'forbidden-target' &&
+      shellEntry.observation === undefined,
+    `the gameability router answered ungranted calls with ${JSON.stringify([ungranted, shell])} and recorded ${JSON.stringify([ungrantedEntry, shellEntry, realDenial])}`,
+  );
+  // A call carrying the trial's answer nonce is refused unsent and not counted.
+  const usedBefore = degenerate.counted();
+  const leaked = await degenerate.handle({ name: 'verdict', kind: 'cli' }, { arguments: ['verdict'], stdin: `echo ${NONCE}` });
+  check(
+    leaked.isError === true &&
+      leaked.text.includes('nonce') &&
+      degenerate.counted() === usedBefore &&
+      degenerate.calls.at(-1)?.unsent === true,
+    `a call carrying the nonce was answered ${JSON.stringify(leaked)} with ${degenerate.counted()} call(s) counted`,
   );
   // Once the agent has ended, the router runs no call.
   degenerate.stop();
@@ -1124,6 +1367,7 @@ async function checkBridge() {
     taken: new Set(),
     firstSequence: 2,
     budget: 3,
+    nonce: NONCE,
   });
   await broken.handle({ name: 'verdict', kind: 'cli' }, { arguments: ['verdict'] });
   check(
@@ -1236,6 +1480,18 @@ async function checkRecordsEvaluator() {
       (value) => (value.conditionArm = 'clean'),
       'and the arm mutated:M-001 the run qualified P-002 on',
     ],
+    [
+      'an isolation manifest off its schema',
+      path.join(records, 'P-001', 'isolation-manifest.json'),
+      (value) => delete value.resourceCeilings,
+      "records/P-001/isolation-manifest.json does not meet eval-quality's isolation-manifest schema",
+    ],
+    [
+      'an evaluator configuration off its schema',
+      path.join(records, 'evaluator-configuration.json'),
+      (value) => delete value.evaluatorIdentity,
+      "records/evaluator-configuration.json does not meet eval-quality's evaluator-configuration schema",
+    ],
   ]) {
     const bytes = fs.readFileSync(file);
     editJson(file, edit);
@@ -1243,6 +1499,14 @@ async function checkRecordsEvaluator() {
     check(
       laundered.status === 10 && laundered.output.includes(says),
       `${what}: run exited ${laundered.status}; expected 10 saying "${says}"\n${laundered.output}`,
+    );
+    // Every file is checked before any is copied, so a refused directory leaves nothing in the run directory.
+    const launderedDirectory = runDirectoryOf(project.folder);
+    check(
+      launderedDirectory !== runDirectory &&
+        !fs.existsSync(path.join(launderedDirectory, 'trial-sets')) &&
+        !fs.existsSync(path.join(launderedDirectory, 'evaluator-configuration.json')),
+      `${what}: the refused run copied files into its run directory`,
     );
     fs.writeFileSync(file, bytes);
   }
@@ -1316,6 +1580,35 @@ async function checkUnits() {
       `the row schema admits ${what}`,
     );
   }
+  // An oracle two behaviors declare is answered by one key, and its finding follows the probe under trial: the first of
+  // the probe's behaviors that declares it, whichever behavior the key is described under (judgeTrial's rule).
+  const shared = structuredClone(contract);
+  shared.behaviors.push({ ...contract.behaviors[0], id: 'B-003', severity: 'minor', oracles: ['O-001'] });
+  const sharedFinding = (behaviorIds) =>
+    judgmentFromRows({ contract: shared, mapping, answer: { rows: [fail('accepted')] }, probeId: 'P-003', behaviorIds }).findings.map(
+      (finding) => [finding.behaviorId, finding.severity],
+    );
+  check(
+    JSON.stringify(sharedFinding(['B-003'])) === '[["B-003","minor"]]' &&
+      JSON.stringify(sharedFinding(['B-002', 'B-003', 'B-001'])) === '[["B-003","minor"]]' &&
+      JSON.stringify(sharedFinding(['B-002'])) === '[]',
+    `a fail row on an oracle two behaviors declare files ${JSON.stringify([sharedFinding(['B-003']), sharedFinding(['B-002', 'B-003', 'B-001']), sharedFinding(['B-002'])])}`,
+  );
+  // A string holding a lone surrogate cannot reach a record, so the answer is refused.
+  let surrogate = null;
+  try {
+    readAnswer({
+      text: String.raw`{"rows":[{"key":"accepted","outcome":"pass","observationIds":["o-1"],"comment":"a lone \ud800 surrogate"}]}`,
+      mapping,
+      validate,
+    });
+  } catch (error) {
+    surrogate = error;
+  }
+  check(
+    surrogate instanceof EvaluatorError && surrogate.message.includes('at /rows/0/comment that is not well-formed Unicode'),
+    `an answer with a lone surrogate was read as ${surrogate?.message ?? 'valid'}`,
+  );
   // An oracle no row answers is not attempted; a trial with a mapped oracle and no row is refused.
   const partial = judgmentFromRows({ contract, mapping, answer: { rows: [fail('accepted')] }, probeId: 'P-002', behaviorIds: ['B-001'] });
   check(partial.oracleDispositions[1].disposition === 'not-attempted', 'an oracle with no row is not not-attempted');
@@ -1375,6 +1668,14 @@ async function checkUnits() {
     read.operation?.operationId === 'judge-request' && JSON.stringify(read.callInputs.stdin) === '{"prompt":"Judge it."}',
     `a command line reads as ${JSON.stringify(read)}`,
   );
+  // Standard input goes to the target as the agent wrote it; the record reads a JSON object from it.
+  const spaced = '{ "prompt" :  "Judge it." }';
+  const json = commandCall({ contract, registry, interfaceId: 'verdict', input: { arguments: ['verdict'], stdin: spaced } });
+  check(
+    JSON.stringify(json.channels.stdin) === JSON.stringify({ kind: 'text', value: spaced }) &&
+      JSON.stringify(json.callInputs.stdin) === '{"prompt":"Judge it."}',
+    `a JSON standard input reads as ${JSON.stringify([json.channels.stdin, json.callInputs.stdin])}`,
+  );
   // A call its one operation's declared keys do not admit (an undeclared option, more positionals than keys) matches nothing.
   const outside = commandCall({ contract, registry, interfaceId: 'verdict', input: { arguments: ['verdict', '--help', 'a', 'b'] } });
   check(
@@ -1427,6 +1728,18 @@ async function checkUnits() {
       !bridgedArgv.includes('--safe-mode'),
     `claude's bridged argv is ${JSON.stringify(bridgedArgv)}`,
   );
+  // The configuration file's bytes are the adapter's: the one stdio server under mcpServers, as --mcp-config reads it.
+  const server = { name: 'tea-evaluate', command: '/bin/node', args: ['relay.js'], env: { TOKEN: 't' } };
+  const configured = JSON.parse(AGENT_ADAPTERS.claude.buildBridgeConfig(server));
+  check(
+    JSON.stringify(configured) ===
+      JSON.stringify({
+        mcpServers: { 'tea-evaluate': { type: 'stdio', command: '/bin/node', args: ['relay.js'], env: { TOKEN: 't' } } },
+      }) &&
+      AGENT_ADAPTERS.custom.buildBridgeConfig(server) === AGENT_ADAPTERS.claude.buildBridgeConfig(server) &&
+      AGENT_ADAPTERS.codex.buildBridgeConfig === undefined,
+    `the bridged run's configuration is ${JSON.stringify(configured)}`,
+  );
   check(
     JSON.stringify(bridgedArgsRefused('claude', ['--tools', 'default', '--add-dir=/', '--model', 'haiku'])) ===
       '["--tools","--add-dir=/"]' &&
@@ -1476,6 +1789,35 @@ async function checkUnits() {
   check(
     prompt.includes('<judge-answer nonce="abc">') && prompt.includes('"key": "accepted"'),
     'the evaluator prompt names no answer block or key',
+  );
+  // An api operation's path template and ID stay out of what the agent sees, the brief eval-quality seals carrying the
+  // interface alone (the verdict fixture declares no api operation, so this case seals one of its own).
+  const empty = { requiredKeys: [], permittedKeys: [], types: {} };
+  const withApi = structuredClone(readJson(path.join(FIXTURE, EVALUATION, 'contract.json')));
+  withApi.permittedInterfaces.push({
+    logicalId: 'verdict-api',
+    kind: 'api',
+    operations: [
+      {
+        operationId: 'fetch-latest-verdict',
+        method: 'GET',
+        pathTemplate: '/verdicts/latest-detail',
+        stateChangeMarker: false,
+        requestShape: { path: empty, query: empty, header: empty, body: empty },
+        responseDescriptor: withApi.permittedInterfaces[0].operations[0].responseDescriptor,
+        volatilePointers: [],
+        sensitivityWitness: null,
+      },
+    ],
+  });
+  const apiBrief = engine.seal(withApi);
+  const apiSeen = JSON.stringify({
+    prompt: evaluatorPrompt({ sealedBrief: apiBrief, contract: withApi, mapping, nonce: 'abc' }),
+    tools: bridgeTools(apiBrief.permittedInterfaces),
+  });
+  check(
+    apiSeen.includes('verdict-api') && !apiSeen.includes('/verdicts/latest-detail') && !apiSeen.includes('fetch-latest-verdict'),
+    `the agent's prompt or tools for a contract with an api operation carry its path template or ID: ${apiSeen}`,
   );
 }
 
@@ -1527,6 +1869,9 @@ async function main() {
     await runCase('an unwitnessed quote', checkUnwitnessedQuote);
     await runCase('evaluators outside the import contract', checkEvaluatorFailures);
     await runCase('a hung evaluator', checkEvaluatorTimeout);
+    await runCase('the set recommendation', checkSetRecommendation);
+    await runCase('the evaluator snapshot', checkEvaluatorSnapshot);
+    await runCase('an oracle two behaviors declare', checkSharedOracle);
     await runCase('the sealed-brief agent', checkSealedBriefAgent);
     await runCase('the sealed-brief agent edges', checkSealedBriefAgentEdges);
     await runCase('the records evaluator', checkRecordsEvaluator);

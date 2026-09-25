@@ -13,16 +13,20 @@
  * does: in a process group of its own, stopped with `SIGTERM` at
  * `evaluator.timeoutMs` and killed with `SIGKILL` after the supervisor's
  * grace period, every process left in its group killed when it ends, and all
- * of it stopped if the runtime dies. Its working directory is an empty
+ * of it stopped if the runtime dies. It runs from the run's snapshot of the
+ * evaluation layer (`evaluators.js` `readEvaluatorLayer`), so the executable
+ * is the one the configuration digests and anything it writes beside itself
+ * stays out of the evaluation folder. Its working directory is an empty
  * temporary directory removed afterwards, so it reads its own files relative
  * to itself; its environment is the base set agents get (PATH, HOME, USER,
  * LOGNAME, locale and proxy variables) and the `evaluator.environmentKeys` the
  * adopter names.
  *
- * One that cannot start, is still running at its wall clock, exits other
- * than 0, or prints an answer outside the import contract throws
- * `EvaluatorError` carrying what it printed; the trial yields no record and
- * the run exits 12 (AD-10).
+ * Its stdout is read as UTF-8 (a byte sequence that is not UTF-8 reads as
+ * U+FFFD), and what it printed is kept as the bytes it wrote. One that cannot
+ * start, is still running at its wall clock, exits other than 0, or prints
+ * an answer outside the import contract throws `EvaluatorError` carrying what
+ * it printed; the trial yields no record and the run exits 12 (AD-10).
  */
 
 'use strict';
@@ -38,18 +42,19 @@ const { EvaluatorError, readAnswer } = require('./judgment-rows');
  * Runs the evaluator over one trial.
  *
  * @param {object} options
- * @param {string} options.folder the evaluation folder
+ * @param {string} options.root the run's snapshot of the evaluation layer, which holds `evaluator/` as the evaluation folder does
  * @param {object} options.evaluator `evaluation.json`'s `evaluator`
  * @param {object} options.sealedBrief
  * @param {object[]} options.observations the trial's record observations, by sequence
  * @param {object} options.mapping
  * @param {(value: unknown) => string[]} options.validate the mapping's row validator
  * @param {NodeJS.ProcessEnv} [options.env] the environment the base variables and `environmentKeys` are read from
- * @returns {Promise<{ answer: object, stdout: string, stderr: string, outcome: object }>}
+ * @returns {Promise<{ answer: object, stdout: string, stderr: string, stdoutBytes: Buffer, stderrBytes: Buffer, outcome: object }>}
+ *   what it printed as text, which the answer is read from, and as the bytes it wrote
  * @throws {EvaluatorError}
  */
-async function runCommandEvaluator({ folder, evaluator, sealedBrief, observations, mapping, validate, env = process.env }) {
-  const executable = path.join(folder, ...evaluator.command.split('/'));
+async function runCommandEvaluator({ root, evaluator, sealedBrief, observations, mapping, validate, env = process.env }) {
+  const executable = path.join(root, ...evaluator.command.split('/'));
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-evaluate-command-'));
   let ended;
   try {
@@ -64,8 +69,9 @@ async function runCommandEvaluator({ folder, evaluator, sealedBrief, observation
   } finally {
     fs.rmSync(cwd, { recursive: true, force: true });
   }
-  const { outcome, stdout, stderr } = ended;
-  const fail = (message) => Object.assign(new EvaluatorError(message, { stdout, stderr }), { outcome });
+  const { outcome, stdout, stderr, stdoutBytes, stderrBytes } = ended;
+  const streams = { stdout, stderr, stdoutBytes, stderrBytes };
+  const fail = (message) => Object.assign(new EvaluatorError(message, streams), { outcome });
   if (outcome.spawnError) throw fail(`the evaluator ${evaluator.command} could not start: ${outcome.spawnError.message}`);
   if (outcome.timedOut) {
     throw fail(
@@ -79,7 +85,7 @@ async function runCommandEvaluator({ folder, evaluator, sealedBrief, observation
     );
   }
   try {
-    return { answer: readAnswer({ text: stdout, mapping, validate }), stdout, stderr, outcome };
+    return { answer: readAnswer({ text: stdout, mapping, validate }), ...streams, outcome };
   } catch (error) {
     if (!(error instanceof EvaluatorError)) throw error;
     throw fail(error.message);

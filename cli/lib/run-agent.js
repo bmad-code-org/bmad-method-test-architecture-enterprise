@@ -296,7 +296,8 @@ function runAgent(prompt, options = {}) {
  * @param {string} options.cwd
  * @param {object} options.env the whole child environment
  * @param {number} options.timeout wall clock in milliseconds
- * @returns {Promise<{ outcome: object, stdout: string, stderr: string }>}
+ * @returns {Promise<{ outcome: object, stdout: string, stderr: string, stdoutBytes: Buffer, stderrBytes: Buffer }>}
+ *   each stream as text and as the bytes the command wrote
  */
 function runSupervised({ command, args = [], input, cwd, env, timeout }) {
   return superviseAsync({
@@ -307,7 +308,11 @@ function runSupervised({ command, args = [], input, cwd, env, timeout }) {
   });
 }
 
-/** The supervisor spawned asynchronously, its streams and report collected. */
+/**
+ * The supervisor spawned asynchronously, its streams and report collected:
+ * each stream as UTF-8 text (a byte sequence that is not UTF-8 read as
+ * U+FFFD) and as the bytes the command wrote (`stdoutBytes`, `stderrBytes`).
+ */
 function superviseAsync({ supervisorArgs, input, cwd, env }) {
   return new Promise((resolve) => {
     let child;
@@ -315,7 +320,13 @@ function superviseAsync({ supervisorArgs, input, cwd, env }) {
       child = spawn(process.execPath, supervisorArgs, { cwd, env, stdio: ['pipe', 'pipe', 'pipe', 'pipe'] });
     } catch (error) {
       // A spawn the system refuses at once (no descriptors left, say) is a supervisor that could not start.
-      resolve({ outcome: { failure: `the agent supervisor could not start: ${error.message}` }, stdout: '', stderr: '' });
+      resolve({
+        outcome: { failure: `the agent supervisor could not start: ${error.message}` },
+        stdout: '',
+        stderr: '',
+        stdoutBytes: Buffer.alloc(0),
+        stderrBytes: Buffer.alloc(0),
+      });
       return;
     }
     const chunks = { stdout: [], stderr: [], report: [] };
@@ -344,12 +355,14 @@ function superviseAsync({ supervisorArgs, input, cwd, env }) {
     child.stdin.on('error', () => {});
     child.once('error', (error) => (spawnFailure = error));
     child.once('close', (status, signal) => {
-      const text = (name) => Buffer.concat(chunks[name]).toString('utf8');
+      const bytes = (name) => Buffer.concat(chunks[name]);
       const outcome =
         spawnFailure === null && overflow === null
-          ? supervisedOutcome({ output: [null, null, null, text('report')], status, signal })
+          ? supervisedOutcome({ output: [null, null, null, bytes('report').toString('utf8')], status, signal })
           : { failure: overflow ?? spawnFailure.message };
-      resolve({ outcome, stdout: text('stdout'), stderr: text('stderr') });
+      const stdoutBytes = bytes('stdout');
+      const stderrBytes = bytes('stderr');
+      resolve({ outcome, stdout: stdoutBytes.toString('utf8'), stderr: stderrBytes.toString('utf8'), stdoutBytes, stderrBytes });
     });
     child.stdin.end(input ?? '');
   });
@@ -358,13 +371,20 @@ function superviseAsync({ supervisorArgs, input, cwd, env }) {
 /**
  * `runAgent` without blocking the event loop, for a caller that serves the
  * agent while it runs (the bridge a sealed-brief evaluator acts through).
- * Same options, same answer, same errors.
+ * Same options, same answer, same errors, each also carrying the bytes the
+ * agent wrote (`stdoutBytes`, `stderrBytes`).
  *
- * @returns {Promise<{ stdout: string, stderr: string }>}
+ * @returns {Promise<{ stdout: string, stderr: string, stdoutBytes: Buffer, stderrBytes: Buffer }>}
  */
 async function runAgentAsync(prompt, options = {}) {
   const invocation = agentInvocation(prompt, options);
-  return agentAnswer(await superviseAsync(invocation), invocation);
+  const ended = await superviseAsync(invocation);
+  const bytes = { stdoutBytes: ended.stdoutBytes, stderrBytes: ended.stderrBytes };
+  try {
+    return { ...agentAnswer(ended, invocation), ...bytes };
+  } catch (error) {
+    throw Object.assign(error, bytes);
+  }
 }
 
 module.exports = { runAgent, runAgentAsync, runSupervised, buildMinimalEnv };

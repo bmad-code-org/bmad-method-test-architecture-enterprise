@@ -29,16 +29,24 @@
  *   hang               print the start of an answer, start a child (in the
  *                      evaluator's own process group), write both pids to the
  *                      file `--pids` names, and never exit
+ *   surrogate          a pass row whose comment holds a lone surrogate
+ *   raw-bytes          write bytes that are not UTF-8 on stdout and stderr,
+ *                      then exit 1
+ *   recommend-last     the rows, recommending CONCERNS on the third trial
+ *                      and PASS on the others
+ *   write-beside       the rows, after writing __pycache__/cache.bin beside
+ *                      this file, as an interpreter's cache would
  *
  * Every mode first writes `stub stderr <mode>` to stderr, so a test can hold
  * the persisted streams to known bytes; `--log <file>` appends one line per
  * run with its input, its working directory and the names of the
- * environment variables it received.
+ * environment variables it received, and the path it ran from.
  */
 
 'use strict';
 
 const fs = require('node:fs');
+const path = require('node:path');
 const { spawn } = require('node:child_process');
 
 const argv = process.argv.slice(2);
@@ -53,16 +61,28 @@ const pids = flag('--pids', null);
 process.stderr.write(`stub stderr ${mode}\n`);
 const input = JSON.parse(fs.readFileSync(0, 'utf8'));
 if (log !== null) {
-  fs.appendFileSync(log, `${JSON.stringify({ mode, cwd: process.cwd(), environment: Object.keys(process.env).sort(), input })}\n`);
+  fs.appendFileSync(
+    log,
+    `${JSON.stringify({ mode, self: __filename, cwd: process.cwd(), environment: Object.keys(process.env).sort(), input })}\n`,
+  );
 }
 
 if (mode === 'crash') throw new Error('the stub evaluator crashed');
+if (mode === 'raw-bytes') {
+  process.stdout.write(Buffer.from([0x7b, 0xff, 0xfe, 0x0a]));
+  process.stderr.write(Buffer.from([0x61, 0xc3, 0x0a]));
+  process.exitCode = 1;
+}
+if (mode === 'write-beside') {
+  fs.mkdirSync(path.join(__dirname, '__pycache__'), { recursive: true });
+  fs.writeFileSync(path.join(__dirname, '__pycache__', 'cache.bin'), 'cached\n');
+}
 if (mode === 'hang') {
   const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
   if (pids !== null) fs.writeFileSync(pids, JSON.stringify({ evaluator: process.pid, child: child.pid }));
   process.stdout.write('{"rows":[');
   setInterval(() => {}, 1000);
-} else answer();
+} else if (mode !== 'raw-bytes') answer();
 
 function answer() {
 
@@ -85,6 +105,14 @@ function answer() {
   switch (mode) {
     case 'recommend': {
       recommendation = accepted ? 'PASS' : 'CONCERNS';
+      break;
+    }
+    case 'recommend-last': {
+      recommendation = String(judged.observationId).startsWith('trial-3-') ? 'CONCERNS' : 'PASS';
+      break;
+    }
+    case 'surrogate': {
+      rows = [{ ...passRow, comment: 'a lone \uD800 surrogate' }];
       break;
     }
     case 'score': {
