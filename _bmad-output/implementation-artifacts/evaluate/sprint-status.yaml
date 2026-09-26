@@ -48,7 +48,7 @@ development_status:
   1-17-drive-any-evaluation-layer-through-one-import-contract: done
   1-10-evaluate-a-stdio-mcp-tool-server: done
   1-11-scaffold-the-http-probe-port-for-api-targets: done
-  1-18-evaluate-a-workflow-target-through-after-and-captured-bindi: review
+  1-18-evaluate-a-workflow-target-through-after-and-captured-bindi: done
   1-19-evaluate-a-tool-use-calling-agent-through-its-own-command-j: backlog
   1-20-import-a-second-framework-s-results-promptfoo: backlog
   1-21-hold-out-probes-and-calibrate-rubric-judges: backlog

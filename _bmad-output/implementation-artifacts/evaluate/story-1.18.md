@@ -2,7 +2,7 @@
 title: 'Story 1.18: Evaluate a workflow target through `after` and `captured` bindings'
 type: 'feature'
 created: '2026-09-26'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '05fba150ae3bbbaf283e5c3a1edd6c87598a9c45'
@@ -197,7 +197,11 @@ All three reviewers ran `npm test` in independent detached worktrees on commit `
 
 ### Final review round 2 (Codex, bounded to round 1 fixes)
 
-Both fresh reviewers reproduced one shared medium finding: `treeDigest` included modes of child directories but omitted the root directory's mode. A changed snapshot root or provisioned-directory root could therefore be copied into a later trial under the original digest. Fixed by including the root directory in every tree digest, with a regression for each root. The focused workflow suite now passes 108 checks; a bounded round 3 and the final full gate follow.
+Both fresh reviewers reproduced one shared medium finding: `treeDigest` included modes of child directories but omitted the root directory's mode. A changed snapshot root or provisioned-directory root could therefore be copied into a later trial under the original digest. Fixed by including the root directory in every tree digest, with a regression for each root. The focused workflow suite passes 108 checks.
+
+### Final review round 3 (Codex, bounded to regressions and material defects)
+
+Two fresh reviewers checked the provisioned-content, empty-directory and root-mode fixes in independent detached worktrees. Both passed with no material defect found. Each ran `npm run test:evaluate-workflow` and passed all 108 checks. The full local `npm test` gate passed on commit `abe62a7bab8529b0f484c9a68d94edbeeda3bbc5`, and all PR checks passed on the same commit, including the five test shards and coverage. CodeRabbit left no review threads.
 
 ## Verification
 
@@ -216,3 +220,4 @@ Both fresh reviewers reproduced one shared medium finding: `treeDigest` included
 - `npm run eval:preflight` -- exit 2, 0 legs run and 190 answered from the cache, with the six test-design moves Story 1.27 owns (P-008 to P-010 pass where the baseline records `seeded-fault-fired`; P-012 to P-014 fail `seeded-faults-scoped`), as Stories 1.10, 1.11, 1.17 and 1.32 recorded.
 - skill gates -- not applicable: no file under the Evaluate skill changed.
 - `test:evaluate-workflow` takes about 20 s under c8; its shard weight is 25.
+- Final Codex review: three rounds closed the snapshot and provisioned-copy integrity findings. `npm run test:evaluate-workflow` passed 108 checks after the fixes. `npm test` exited 0 on commit `abe62a7bab8529b0f484c9a68d94edbeeda3bbc5`; PR #245 CI passed on that commit.
