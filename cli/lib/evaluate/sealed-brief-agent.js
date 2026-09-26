@@ -27,13 +27,19 @@
  *   tool it does not grant (`interface-not-authorized`, `tool-not-authorized`)
  *   before any server starts; the operation it matches is the one declaring
  *   its tool name;
- * - an `api` call goes through eval-quality's `evaluateTarget` over the
- *   registry's HTTP authorizations: this release's registry declares none, so
- *   eval-quality denies it at the interface (Story 1.11 adds them);
+ * - an `api` call (Story 1.11) names a method, a path with any query string
+ *   and a JSON body; it goes through the same port, whose `api` member is the
+ *   evaluation's own HTTP port over the registry's `ProbeTargetPolicy` for the
+ *   arm (`http-target.js`), so eval-quality's `evaluateTarget` denies an
+ *   interface, address, method or scheme the registry does not grant before
+ *   any request is sent or any server starts; the operation it matches is the
+ *   one declaring its method and a path template its path fits, whose
+ *   parameters become the call's path values;
  * - on a gameability arm nothing launches: a call goes through eval-quality's
- *   command-line or MCP adapter over the registry's authorizations, as on any
- *   arm, with a mechanism that runs nothing, so a call the registry does not
- *   grant is denied and recorded exactly as a real arm denies it, and every
+ *   command-line or MCP adapter, or the evaluation's HTTP port, over the
+ *   registry's authorizations, as on any arm, with a mechanism or transport
+ *   that runs and sends nothing, so a call the registry does not grant is
+ *   denied and recorded exactly as a real arm denies it, and every
  *   other call is answered from the degenerate response (a matched call's
  *   from the plan step that runs its operation, any other from the plan's
  *   first step of its kind), as a shortcut target would answer every request
@@ -80,7 +86,8 @@ const { AGENT_ADAPTERS } = require('../agent-adapters');
 const { runAgentAsync } = require('../run-agent');
 const { bodyValue, carriesPrototypeKey, causeNote, hostEnvironmentPort, persistableRequest, stoppedFromOutside } = require('./arm');
 const { CALL_SHAPES, bridgeTools, openBridge } = require('./bridge');
-const { loadAdapters, loadEngine } = require('./engine');
+const { loadAdapters } = require('./engine');
+const { UnansweredRequest } = require('./http-target');
 const { answerBlocks, unfenced } = require('./judge');
 const { EvaluatorError, isOracleBinding, readAnswer } = require('./judgment-rows');
 const { recordObservation } = require('./records');
@@ -304,6 +311,21 @@ function callResult({ observationId, request, observation }) {
       result: channel(observation.result),
     });
   }
+  if (request.kind === 'api') {
+    return JSON.stringify({
+      ...recorded,
+      sent: {
+        method: request.method,
+        pathTemplate: request.pathTemplate,
+        path: request.channels.path,
+        query: request.channels.query,
+        body: channel(request.channels.body),
+      },
+      status: observation.status,
+      headers: observation.headers,
+      body: channel(observation.body),
+    });
+  }
   return JSON.stringify({
     ...recorded,
     sent: {
@@ -320,6 +342,48 @@ function callResult({ observationId, request, observation }) {
 }
 
 /**
+ * The operation an `api` call's method and path match, with the path's
+ * parameters and query as the request's channels: the first operation of the
+ * interface declaring the method and a path template the path fits, a `{name}`
+ * taking one segment, or none, when the path is sent as its own template.
+ */
+function apiCall({ contract, interfaceId, method, path: target }) {
+  const at = target.indexOf('?');
+  const pathname = at === -1 ? target : target.slice(0, at);
+  const query = {};
+  for (const [name, value] of new URLSearchParams(at === -1 ? '' : target.slice(at + 1))) {
+    if (name === '__proto__') return { refused: 'an api call cannot carry a __proto__ query key, which the request would not send' };
+    query[name] = Object.hasOwn(query, name) ? [query[name], value].flat() : value;
+  }
+  for (const operation of operationsOf(contract, interfaceId)) {
+    if (operation.method !== method || typeof operation.pathTemplate !== 'string') continue;
+    const names = [];
+    const pattern = operation.pathTemplate.replaceAll(/\{([A-Za-z0-9_-]+)\}|[^{]+/g, (piece, name) => {
+      if (name === undefined) return piece.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
+      names.push(name);
+      return '([^/]+)';
+    });
+    const match = new RegExp(`^${pattern}$`).exec(pathname);
+    if (match === null) continue;
+    const pathValues = {};
+    try {
+      for (const [index, name] of names.entries()) pathValues[name] = decodeURIComponent(match[index + 1]);
+    } catch {
+      continue;
+    }
+    return { operation, pathTemplate: operation.pathTemplate, pathValues, query };
+  }
+  return { operation: undefined, pathTemplate: pathname, pathValues: {}, query };
+}
+
+/** Which kind of call a degenerate step's answer answers: a tool call's error flag, an HTTP status, or a command's exit. */
+function answerKind(answer) {
+  if (typeof answer?.isError === 'boolean') return 'mcp';
+  if (Number.isInteger(answer?.status)) return 'api';
+  return 'cli';
+}
+
+/**
  * The degenerate response one gameability call is answered from: the first
  * plan step that runs the call's operation, or the plan's first step answered
  * as a call of the same kind, as a shortcut target answers every request
@@ -327,8 +391,7 @@ function callResult({ observationId, request, observation }) {
  */
 function degenerateAnswer({ contract, degenerate, operationId, kind }) {
   const plan = contract.interactionPlan ?? [];
-  const ofKind = (candidate) =>
-    Object.hasOwn(degenerate, candidate.stepId) && (typeof degenerate[candidate.stepId].isError === 'boolean') === (kind === 'mcp');
+  const ofKind = (candidate) => Object.hasOwn(degenerate, candidate.stepId) && answerKind(degenerate[candidate.stepId]) === kind;
   const step = plan.find((candidate) => candidate.operationId === operationId && ofKind(candidate)) ?? plan.find(ofKind);
   return step === undefined ? undefined : degenerate[step.stepId];
 }
@@ -338,14 +401,16 @@ class UnansweredCall extends Error {}
 
 /**
  * A gameability arm's port for one agent call: eval-quality's command-line
- * adapter or MCP adapter over the registry's authorizations, so an
- * executable, subcommand path, interface or tool the registry does not grant
- * is denied exactly as on a real arm, with a mechanism that launches nothing
- * and answers with the degenerate response (`degenerateAnswer`), or throws
- * `UnansweredCall` when it holds none for the kind; every written file the
- * registry declares reads as absent.
+ * adapter or MCP adapter, or the evaluation's HTTP port, over the registry's
+ * authorizations, so an executable, subcommand path, interface, tool,
+ * address or method the registry does not grant is denied exactly as on a
+ * real arm, with a mechanism or transport that launches and sends nothing and
+ * answers with the degenerate response (`degenerateAnswer`), or throws
+ * `UnansweredCall` (`UnansweredRequest` for HTTP) when it holds none for the
+ * kind; every written file the registry declares reads as absent.
  */
 async function degeneratePort({ registry, answer, kind }) {
+  if (kind === 'api') return hostEnvironmentPort({ port: registry.degenerateHttpPort(answer), registry });
   const { createCommandLineAdapter, createMcpAdapter, parseMcpTargetPolicy } = await loadAdapters();
   const answered = () => {
     if (answer === undefined) throw new UnansweredCall(`the system answers no ${kind === 'mcp' ? 'tool call' : 'command'}`);
@@ -456,11 +521,16 @@ function bridgeRouter({
           },
         };
       }
-      if (error?.cause instanceof UnansweredCall) {
+      if (error?.cause instanceof UnansweredCall || error?.cause instanceof UnansweredRequest) {
         return { answer: refused({ ...entry, request: persistableRequest(request) }, error.cause.message) };
       }
       if (code === 'schema-parse-failure' || code === 'port-contract-violation') {
-        return { answer: refused({ ...entry, request: persistableRequest(request) }, `the call cannot be sent: ${detail}`) };
+        return {
+          answer: refused(
+            { ...entry, request: persistableRequest(request) },
+            `${code === 'schema-parse-failure' ? 'the call cannot be sent' : "the call's answer cannot be recorded"}: ${detail}`,
+          ),
+        };
       }
       infrastructure ??= `the evaluator's call ${request.probeId} could not run: ${detail}${causeNote(error)}`;
       const cause = typeof error?.scrubbedCause === 'string' ? { cause: error.scrubbedCause } : {};
@@ -575,21 +645,66 @@ function bridgeRouter({
   }
 
   async function handleApi(tool, input, entry) {
-    if (typeof input.method !== 'string' || typeof input.path !== 'string') {
-      return refused(entry, 'an api call needs method and path');
+    if (typeof input.method !== 'string' || typeof input.path !== 'string' || !input.path.startsWith('/')) {
+      return refused(entry, 'an api call needs method and path, a path that starts with /');
     }
-    const engine = await loadEngine();
-    // The registry declares no HTTP target and no HTTP port in this release (Story 1.11 adds them), so
-    // eval-quality's policy decides over no HTTP authorization, denying the interface before any address is read.
-    const decision = engine.evaluateTarget(
-      { authorizations: [] },
-      { interfaceId: tool.name, scheme: '', host: '', port: 0, address: '', method: input.method },
-    );
-    if (!decision.allowed) {
-      calls.push({ ...entry, denied: { code: 'forbidden-target', reason: decision.reason, detail: decision.detail } });
-      return { text: `denied by the evaluation's target policy: ${decision.reason}: ${decision.detail}`, isError: true };
+    // A request's body is one JSON object, the only body a record can carry (`callInputs.body`), as a tool call's
+    // arguments are one object.
+    if (input.body !== undefined && (input.body === null || typeof input.body !== 'object' || Array.isArray(input.body))) {
+      return refused(entry, 'an api call takes body as an object');
     }
-    return refused(entry, 'the registry holds no HTTP port in this release, so no call is sent');
+    // eval-quality's request parser drops an own `__proto__` key, so the target would receive another body than the
+    // record would show; such a call is refused unsent.
+    if (carriesPrototypeKey(input.body)) {
+      return refused(entry, 'an api call cannot carry a __proto__ key in its body, which the request would not send');
+    }
+    const call = apiCall({ contract, interfaceId: tool.name, method: input.method, path: input.path });
+    if (call.refused !== undefined) return refused(entry, call.refused);
+    const operationId = call.operation?.operationId ?? null;
+    const probeId = mintId();
+    const request = {
+      probeId,
+      interfaceId: tool.name,
+      operationId: operationId ?? 'unmatched',
+      kind: 'api',
+      method: input.method,
+      pathTemplate: call.pathTemplate,
+      channels: {
+        path: call.pathValues,
+        query: call.query,
+        header: {},
+        body: input.body === undefined ? { kind: 'absent' } : { kind: 'json', value: input.body },
+      },
+    };
+    // The registry's HTTP policy for the arm's copy decides the call, through the evaluation's port and eval-quality's
+    // evaluateTarget, before any request is sent or any server starts.
+    const sent = await send(await armPortFor('api', operationId), request, entry);
+    if (sent.answer !== undefined) return sent.answer;
+    const { observation } = sent;
+    if (call.operation === undefined) {
+      // A method and path no operation declares stays out of the record, so the agent is given no observation ID to cite.
+      calls.push({ ...entry, request, observation, unmatched: 'no operation of the evaluation declares this method and path' });
+      return { text: callResult({ observationId: null, request, observation }), isError: false };
+    }
+    sequence += 1;
+    const recorded = recordObservation({
+      observationId: probeId,
+      sequence,
+      operationId,
+      callInputs: {
+        path: Object.keys(call.pathValues).length === 0 ? null : call.pathValues,
+        query: Object.keys(call.query).length === 0 ? null : call.query,
+        header: null,
+        body: input.body === undefined ? null : input.body,
+      },
+      responseBody: bodyValue(observation.body),
+      responseHeaders: observation.headers,
+      responseStatus: observation.status,
+      provenance: 'evaluator-chosen',
+    });
+    observations.push(recorded);
+    calls.push({ ...entry, request, observation, observationId: probeId, operationId });
+    return { text: callResult({ observationId: probeId, request, observation }), isError: false };
   }
 
   async function handle(tool, input) {

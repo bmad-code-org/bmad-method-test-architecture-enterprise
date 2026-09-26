@@ -200,7 +200,7 @@ FR19: TEA reads and writes files through `FileSystemPort`, using the shipped `cr
 
 FR20: TEA measures elapsed time through `ClockPort`, using the shipped `createSystemClockAdapter`, and certifies it with `runClockPortConformance`.
 
-FR21: ~~TEA runs `runEnvironmentProbePortConformance` against its adapter, the generic port arm beside the command-line specialization.~~ **Withdrawn.** The premise was wrong. `runEnvironmentProbePortConformance` is not a generic arm beside a command-line specialization; it is the `api` arm, and the package says so in `dist/testing/probe-conformance.d.ts`, which names the three as the `api`, `cli` and `mcp` arms of three sibling mechanisms. Its `ProbeSubject` requires denied loopback, private, link-local and metadata addresses, an unauthorized method, an unauthorized scheme, a redirect to a denied target, a chain past `maxRedirects`, an oversize response, a slow answer and a 500, over a `ProbeTargetPolicy` carrying `scheme`, `methods`, `safeMethods`, `maxRedirects`, `maxRequestBytes` and `maxResponseBytes`. None of that exists on a command authorization. `eval-quality/adapters` ships no HTTP adapter, so there is nothing to run the arm against, and TEA authorizes no HTTP target, so it has no subject either. Satisfying it would mean building a port TEA does not use, which is the opposite of what this epic was rewritten to be. The arm is out of scope, and `test/test-port-totality.js` records that as a fact about TEA rather than as a gap in it.
+FR21: ~~TEA runs `runEnvironmentProbePortConformance` against its adapter, the generic port arm beside the command-line specialization.~~ **Withdrawn.** The premise was wrong. `runEnvironmentProbePortConformance` is not a generic arm beside a command-line specialization; it is the `api` arm, and the package says so in `dist/testing/probe-conformance.d.ts`, which names the three as the `api`, `cli` and `mcp` arms of three sibling mechanisms. Its `ProbeSubject` requires denied loopback, private, link-local and metadata addresses, an unauthorized method, an unauthorized scheme, a redirect to a denied target, a chain past `maxRedirects`, an oversize response, a slow answer and a 500, over a `ProbeTargetPolicy` carrying `scheme`, `methods`, `safeMethods`, `maxRedirects`, `maxRequestBytes` and `maxResponseBytes`. None of that exists on a command authorization. `eval-quality/adapters` ships no HTTP adapter, so there is nothing to run the arm against, and TEA authorizes no HTTP target, so it has no subject either. Satisfying it would mean building a port TEA does not use, which is the opposite of what this epic was rewritten to be. The arm is out of scope, and `test/test-port-totality.js` records that as a fact about TEA rather than as a gap in it. (Amended 2026-09-25 in Story 1.11 of the Evaluate epics: TEA now authorizes HTTP targets through the Evaluate skill's HTTP port template, whose conformance file runs `runEnvironmentProbePortConformance` against a loopback stub, and `test/test-evaluate-api.js` runs that file, so the arm has a subject and `test/test-port-totality.js` names that check.)
 
 FR22: Every expected conformance count TEA asserts reads from `CONFORMANCE_OUTCOME_COUNTS`, each arm TEA adds does the same, and a missing entry fails with the arm named rather than reporting an undefined expected count.
 
@@ -317,7 +317,7 @@ NFR9: Any gate that executes content rather than reading it runs isolated. Three
 - Both TEA contracts already carry two sensitivity witnesses each, so that capability needs verification rather than first-time adoption.
 - TEA's contracts declare the `cli` interface kind only, over `artifact`, `text` and `absent` response descriptors.
 - `test/contracts/expected-status.json` records `{"status": "compiles"}` for all 10 contracts and no failure code, so there is no code in that file to check against a registry today.
-- The conformance arms this work adopts were already available on the installed 1.4.0 (`corpus` 6, `clock` 6, `file-system` 12), so nothing about them is gated on the pin move. `environment-probe` 19 was counted here too until FR21 was withdrawn; it is the api arm and TEA adopts no HTTP port, so it is not among them.
+- The conformance arms this work adopts were already available on the installed 1.4.0 (`corpus` 6, `clock` 6, `file-system` 12), so nothing about them is gated on the pin move. `environment-probe` 19 was counted here too until FR21 was withdrawn; it is the api arm and TEA adopts no HTTP port, so it is not among them. (Amended 2026-09-25 in Story 1.11 of the Evaluate epics: the Evaluate skill now ships an HTTP port template, and `test/test-evaluate-api.js` runs `environment-probe` 19 over it.)
 - `schemas/artifact-reference.schema.json` carries no `schemaVersion` by design. It is a reference shape embedded in other artifacts, the exemption is asserted by a test against the registry's `carriesLineage` flag, and no story may add a version to it.
 - Cross-repository authorization is granted: pull requests and releases against `~/opensource/bmad-eval-quality` are in scope.
 
@@ -353,7 +353,7 @@ NFR9: Any gate that executes content rather than reading it runs isolated. Three
 | FR18 | Epic 3 | `createLocalCorpusAdapter` adopted and certified                             |
 | FR19 | Epic 3 | `createNodeFileSystemAdapter` adopted and certified                          |
 | FR20 | Epic 3 | `createSystemClockAdapter` adopted and certified                             |
-| FR21 | Epic 3 | Withdrawn: the api arm has no adapter and no subject in TEA                  |
+| FR21 | Epic 3 | Withdrawn; met on 2026-09-25 by the Evaluate HTTP port (Story 1.11)          |
 | FR22 | Epic 3 | Each arm reads its count from the package, and a missing entry names the arm |
 | FR23 | Epic 4 | Published counts computed from source                                        |
 | FR24 | Epic 4 | Published prose claims held                                                  |
@@ -410,7 +410,7 @@ A consumer reads the schema stamp it must write, compares two results, and runs 
 
 The corpus digesting, file access and timing TEA performs by hand run through `eval-quality`'s reference adapters and are proven by its conformance suite.
 
-One arm is out of scope and the reason is recorded rather than left as a silence. `runEnvironmentProbePortConformance` is the `api` arm over HTTP, the package ships no HTTP adapter, and TEA authorizes no HTTP target, so the arm has no subject. FR21 is withdrawn above with the evidence. The arms this epic does adopt, `corpus`, `clock` and `file-system`, each have a shipped adapter behind them. Four arms run where one runs today: the command-line arm TEA already has, plus the corpus, clock and file-system arms.
+One arm is out of scope and the reason is recorded rather than left as a silence. `runEnvironmentProbePortConformance` is the `api` arm over HTTP, the package ships no HTTP adapter, and TEA authorizes no HTTP target, so the arm has no subject. (Amended 2026-09-25 in Story 1.11 of the Evaluate epics: the Evaluate skill's HTTP port template is now that subject, and `test/test-evaluate-api.js` runs the arm over it.) FR21 is withdrawn above with the evidence. The arms this epic does adopt, `corpus`, `clock` and `file-system`, each have a shipped adapter behind them. Four arms run where one runs today: the command-line arm TEA already has, plus the corpus, clock and file-system arms.
 
 **FRs covered:** FR18, FR19, FR20, FR21 (withdrawn), FR22
 
@@ -880,7 +880,7 @@ So that no eval harness reaches the file system directly.
 **Given** Epic 3 is otherwise complete
 **When** `npm test` and every `quality.yaml` job run
 **Then** all pass, four conformance arms are reported where one was reported before, and every new script has its own workflow step
-**And** four is the reachable number rather than five: the package publishes six arms, TEA runs `command-probe`, `clock`, `corpus` and `file-system`, and permanently declines `environment-probe` under withdrawn FR21 and `mcp-probe` for want of a subject
+**And** four is the reachable number rather than five: the package publishes six arms, TEA runs `command-probe`, `clock`, `corpus` and `file-system`, and permanently declines `environment-probe` under withdrawn FR21 and `mcp-probe` for want of a subject (amended 2026-09-25 in Story 1.11 of the Evaluate epics: `environment-probe` now runs, in `test/test-evaluate-api.js` over the Evaluate skill's HTTP port template, so five arms run; `mcp-probe` stays declined, since Story 1.10 for the reason `test/test-port-totality.js` records: its subject would be eval-quality's own `createMcpAdapter`, which the package certifies itself)
 
 ## Epic 4: TEA's claims, codes and supply chain are machine-held
 

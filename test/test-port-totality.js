@@ -76,7 +76,11 @@ const colors = {
  */
 const PROBE_KINDS = {
   cli: { handled: true, reason: 'every TEA contract declares the cli interface kind, and TEA reads this member' },
-  api: { handled: false, reason: 'TEA measures no system under test that speaks HTTP' },
+  api: {
+    handled: false,
+    reason:
+      "TEA's own contracts measure no HTTP service, so its harness reads commands alone; tea-evaluate reads this member for an adopter's HTTP target in cli/lib/evaluate/arm.js, which test/test-evaluate-api.js holds end to end",
+  },
   mcp: {
     handled: false,
     reason:
@@ -89,14 +93,16 @@ const PROBE_KINDS = {
  *
  * `file` is the check that runs it. `reason` is why no check does, and a reason
  * is one of two things, and as of this release every remaining reason is the
- * second. `environment-probe` and `mcp-probe` are the api and mcp arms. TEA
- * measures no HTTP service and the package ships no adapter for it, so the
- * first has no subject. TEA's own contracts measure no tool server either, and
- * `tea-evaluate` hands an adopter's server to the package's `createMcpAdapter`
- * with nothing wrapped around its execution, so the second's subject would be
- * the package's own adapter, which the package certifies itself. The adoption
- * reasons are gone: corpus, clock and file-system each name a check now. A
- * decline is not deferral and each one says which it is.
+ * second. `environment-probe` and `mcp-probe` are the api and mcp arms. The
+ * package ships no HTTP adapter, and the Evaluate skill ships the HTTP port
+ * template an adopter renders (Story 1.11), so the first names the check that
+ * runs the template's own conformance file against its loopback stub. TEA's
+ * own contracts measure no tool server, and `tea-evaluate` hands an adopter's
+ * server to the package's `createMcpAdapter` with nothing wrapped around its
+ * execution, so the second's subject would be the package's own adapter,
+ * which the package certifies itself. The adoption reasons are gone: corpus,
+ * clock and file-system each name a check now. A decline is not deferral and
+ * each one says which it is.
  *
  * This paragraph enumerates the entries below and nothing holds it to them, so a
  * reason moving to a file leaves it wrong. It has now been wrong twice in one
@@ -106,17 +112,11 @@ const PROBE_KINDS = {
  */
 const CONFORMANCE_ARMS = {
   'command-probe': { file: 'test/test-probe-conformance.js' },
-  // Not deferral. This is the `api` arm, over HTTP: the package names the three
-  // arms `api`, `cli` and `mcp` in dist/testing/probe-conformance.d.ts, its
-  // subject wants denied address classes, a method, a scheme and a redirect
-  // chain, and eval-quality ships no HTTP adapter to run it against. TEA
-  // authorizes no HTTP target, so the arm has no subject, the same way
-  // `mcp-probe` below has none. FR21 is withdrawn in the requirements inventory
-  // with the evidence.
-  'environment-probe': {
-    reason:
-      'eval-quality ships no HTTP adapter and TEA measures no HTTP service, so the api arm has neither an implementation to certify nor a subject',
-  },
+  // The `api` arm, over HTTP: eval-quality ships no HTTP adapter, so its subject
+  // is the Evaluate skill's HTTP port template (Story 1.11), whose conformance
+  // file runs this arm against a loopback stub it starts itself; the check runs
+  // that file over the fixture's rendered copy.
+  'environment-probe': { file: 'test/test-evaluate-api.js' },
   corpus: { file: 'test/test-corpus-conformance.js' },
   clock: { file: 'test/test-probe-conformance.js' },
   'file-system': { file: 'test/test-file-system-conformance.js' },

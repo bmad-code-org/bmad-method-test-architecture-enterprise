@@ -47,6 +47,7 @@
   "test:eval-test-design-data": 0.4,
   "test:eval-trace-data": 0.4,
   "test:eval-transcript-data": 0.5,
+  "test:evaluate-api": 82,
   "test:evaluate-arms": 145.5,
   "test:evaluate-boundaries": 23.4,
   "test:evaluate-check": 170.7,

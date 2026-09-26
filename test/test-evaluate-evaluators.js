@@ -1469,7 +1469,8 @@ async function checkBridge() {
     ) ===
       JSON.stringify([
         ['trial-1-call-1', 2, 'evaluator-chosen', 'judge-request'],
-        ['trial-1-call-5', 3, 'evaluator-chosen', 'judge-request'],
+        // The api call took the fourth ID: it is sent through the trial's port, as a command and a tool call are (Story 1.11).
+        ['trial-1-call-6', 3, 'evaluator-chosen', 'judge-request'],
       ]),
     `the bridge recorded ${JSON.stringify(router.observations.map((observation) => [observation.observationId, observation.sequence, observation.provenance, observation.operationId]))}`,
   );

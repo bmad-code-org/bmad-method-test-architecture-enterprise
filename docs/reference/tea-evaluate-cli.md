@@ -14,7 +14,7 @@ TeA also ships `tea-skill-runner`, the command an evaluation registers to run a 
 ## Prerequisites
 
 - Node.js 22.20 or later, with TeA installed (`npm install --save-dev bmad-method-test-architecture-enterprise`), which provides the `tea-evaluate` bin.
-- `eval-quality` 4.2.0 or later, installed beside TeA in the project that runs Evaluate (`npm install --save-dev eval-quality`).
+- `eval-quality` 4.3.0 or later, installed beside TeA in the project that runs Evaluate (`npm install --save-dev eval-quality`).
   TeA declares it as an optional peer dependency, so a project that installs TeA only for its other workflows never receives it.
   Without it, `tea-evaluate` exits 12 and names the missing package.
 
@@ -33,6 +33,7 @@ Nothing defaults to the working directory.
   policy/scoring-policy.json    # eval-quality's scoring policy; required once a probe takes the controlled-mutation, historical or gameability route, and by run
   policy/evaluator-conditions.json # the model a run uses (and its rubric judge's or sealed-brief evaluator's), as a fixed condition; left out when no model runs
   evaluator/                    # a command or sealed-brief-agent evaluator: mapping.json, and a command evaluator's executable
+  adapter/                      # an api evaluation's HTTP port and its conformance file, rendered from the skill's templates
   corpus/                       # the corpus the probes run against
   corpus/gameability/P-NNN.json # a gameability probe's degenerate response, one response per plan step
   corpus-index.json             # written by tea-evaluate digest
@@ -80,15 +81,16 @@ The rules:
 | `historical`               | a probe on the `historical` route without `expectedClean: false`, that seeds no defect, or one whose `source` is not `natural`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `judge`                    | a contract rubric under the deterministic evaluator with no `judge` in `evaluation.json` or no `judge.modelSnapshot` in `policy/evaluator-conditions.json`, a `judge` block in either file beside a contract with no rubric or beside any other evaluator kind, which scores the rubric itself, so nothing would use it, or a `judge` naming an adapter TeA lacks, the `custom` adapter with no `agentCommand`, or a `model` its adapter refuses                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `evaluator`                | a `command` or `sealed-brief-agent` evaluator with no `evaluator/mapping.json`, or one binding an oracle, behavior or rubric criterion the contract does not declare, an oracle to a behavior that does not declare it, levels other than the criterion's anchored scale levels, an oracle or criterion under two keys, or leaving a rubric criterion unbound; a link or special file under `evaluator/`; a `command` executable that is not a regular executable file; a `sealed-brief-agent` on an adapter TeA lacks or one with no bridged run, the `custom` adapter with no `agentCommand`, a `model` its adapter refuses, `agentArgs` that reopen what the bridged run closes, or no `evaluator.modelSnapshot` in `policy/evaluator-conditions.json`; an `evaluator` block there beside the `deterministic` or `records` kind; a `records` directory that is absent or reached through a link |
+| `adapter`                  | a registry that declares an HTTP target while the folder holds no regular `adapter/http-probe-port.mjs` in a real `adapter/` directory                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 
 An evaluator of an unknown kind, and a `command` or `sealed-brief-agent` evaluator with no `timeoutMs`, fail the `evaluation.json` schema (`schema`).
-Beside those twenty-three rules, `check` reports a file that does not parse (`json`), one that fails the runtime's schemas (`schema`) or eval-quality's (`engine-schema`), a file not named for its ID (`file-name`), a probe naming a behavior, mutation or naive oracle that does not exist, or an `interface` naming a kind the contract does not declare (`reference`), a folder with no `contract.json`, or with no `policy/scoring-policy.json` once a probe takes the `controlled-mutation`, `historical` or `gameability` route (`missing-file`), a `policy/evaluator-conditions.json` off the runtime's schema (`schema`), an ID declared twice in one file (`duplicate-id`), a registry that declares one interface and executable pair twice, names one interface as both a command and a tool server, serves an interface as a kind other than the one the contract declares, or holds tool servers eval-quality's `parseMcpTargetPolicy` refuses, a tool name it does not admit or two servers for one interface among them (`registry`), a symbolic link or file where `corpus/`, `probes/` or `mutations/` or an entry inside them should be (`corpus-file`), which `digest` refuses with exit 10 as well, and a symbolic link or other non-regular entry under `baseline/` (`baseline-file`).
+Beside those twenty-four rules, `check` reports a file that does not parse (`json`), one that fails the runtime's schemas (`schema`) or eval-quality's (`engine-schema`), a file not named for its ID (`file-name`), a probe naming a behavior, mutation or naive oracle that does not exist, or an `interface` naming a kind the contract does not declare (`reference`), a folder with no `contract.json`, or with no `policy/scoring-policy.json` once a probe takes the `controlled-mutation`, `historical` or `gameability` route (`missing-file`), a `policy/evaluator-conditions.json` off the runtime's schema (`schema`), an ID declared twice in one file (`duplicate-id`), a registry that declares one interface and executable pair twice, names one interface as entries of two kinds or as two HTTP targets, names an HTTP `host` otherwise than a URL spells it, letter case aside, sends an `auth` header over `http` to an address eval-quality's `staysOnHost` says leaves the host, serves an interface as a kind other than the one the contract declares, or holds tool servers eval-quality's `parseMcpTargetPolicy` refuses, a tool name it does not admit or two servers for one interface among them (`registry`), a symbolic link or file where `corpus/`, `probes/` or `mutations/` or an entry inside them should be (`corpus-file`), which `digest` refuses with exit 10 as well, and a symbolic link or other non-regular entry under `baseline/` (`baseline-file`).
 A `baseline/qualification/` reference must resolve to a regular file inside the folder.
 
 ## The registry
 
-`evaluation.json`'s `registry` is the execution-target registry: every command a run may spawn and every stdio MCP tool server it may start, one registry entry each, in the shapes the runtime's `evaluation.json` schema defines.
-The runtime builds eval-quality's default-deny command target policy and MCP target policy from it for the workspace each call runs in, so a request naming an interface, executable or tool the registry does not carry is denied before a process starts.
+`evaluation.json`'s `registry` is the execution-target registry: every command a run may spawn, every stdio MCP tool server it may start and every HTTP target it may reach, one registry entry each, in the shapes the runtime's `evaluation.json` schema defines.
+The runtime builds eval-quality's default-deny command target policy, MCP target policy and HTTP target policy from it for the workspace each call runs in, so a request naming an interface, executable, tool, address or method the registry does not carry is denied before a process starts or a request is sent.
 TeA's own harness declares its commands in the same shape and goes through the same builder.
 
 A command entry:
@@ -146,12 +148,99 @@ eval-quality's `mcp` observation has no field for a session that ended mid-call,
 The record reads the tool's `structuredContent`: a tool that answers with text `content` alone is recorded with an absent body, so an oracle has nothing to read (eval-quality's `mcp` kind describes a structured result).
 `evaluation.json`'s `interface` must be a kind the contract declares (`check` rule `reference`).
 
-A denied call is recorded with eval-quality's `forbidden-target` fault and, from eval-quality 4.2.0, the `reason` its policy gave (`interface-not-authorized`, `tool-not-authorized`, `executable-not-authorized`, `subcommand-not-authorized`, `environment-key-not-authorized`), in a leg's `faults/` file, a qualification's or trial's fault and a sealed-brief agent's bridge calls alike; `preflight` and `run` exit 10 and name the reason.
+An HTTP entry (`kind: "api"`) serves an `api` interface of the contract, through the evaluation's own HTTP port (see [The HTTP port](#the-http-port)):
+
+```json
+{
+  "kind": "api",
+  "interfaceId": "grader",
+  "scheme": "http",
+  "host": "127.0.0.1",
+  "addresses": ["127.0.0.1"],
+  "methods": ["GET"],
+  "safeMethods": ["GET"],
+  "maxRedirects": 0,
+  "maxElapsedMs": 30000,
+  "maxRequestBytes": 65536,
+  "maxResponseBytes": 1048576,
+  "server": {
+    "target": "server/grader.js",
+    "targetArgs": ["--policy=rules/policy.txt"],
+    "environmentKeys": ["GRADER_TOKEN"],
+    "portEnvironmentKey": "PORT",
+    "portFileEnvironmentKey": "PORT_FILE",
+    "readyTimeoutMs": 20000
+  },
+  "auth": { "header": "authorization", "environmentKey": "GRADER_TOKEN", "prefix": "Bearer " }
+}
+```
+
+- `scheme`, `host`, `addresses`, `methods`, `safeMethods`, `maxRedirects` and the three ceilings: the fields of one authorization of eval-quality's HTTP target policy, which its `evaluateTarget` reads for every request and every redirect.
+  `host` is written as a URL spells it, letter case aside (an IPv4 address in dotted decimal, an IPv6 address compressed and unbracketed, a name in punycode), since the port hands the policy the hostname of the URL it sends to, and the policy reads both hosts in lower case with one trailing dot dropped; `check` refuses another spelling (`registry`) and names the URL's.
+  `addresses` names the exact addresses the host may resolve to; a loopback, private, link-local or metadata address is allowed only when named, and any other is denied (`address-not-authorized`) before a request is sent.
+  One HTTP entry serves one interface.
+- `port`: a deployed target's port, reached as it is.
+- `server`, in place of `port`: a service the runtime starts from the workspace for each call, as it starts a command or a tool server, so the code that answers is the workspace's, a mutation included.
+  `target` and `targetArgs` follow a tool server's rules, `environmentKeys` names the keys whose host values it starts with, and `portEnvironmentKey` and the optional `portFileEnvironmentKey` the keys its port handoff uses (see [A started service's port](#a-started-services-port)).
+  It starts only once the port's policy has allowed the call and the runtime's own `evaluateTarget` call agrees, through eval-quality's command mechanism in a process group of its own, which ends with the call; the call is sent once the address eval-quality allowed accepts a connection on the service's port, within `readyTimeoutMs`, and `maxElapsedMs` counts from then.
+- `auth`: a header every request of the interface carries, holding `prefix` and the host's value for `environmentKey`; the port adds it, no request record carries it, and no redirect to another origin receives it.
+  `preflight` and `run` exit 10 when the host does not set that key, since a call with no credential would read its refusal as the target's behavior.
+  Over `scheme: "http"` every address must be one eval-quality's `staysOnHost` keeps on this host, since the header would otherwise cross the network in clear text; `check` refuses any other (`registry`), the NAT64 (`64:ff9b::7f00:1`) and IPv4-compatible (`::127.0.0.1`) spellings of a loopback address included, since a connection to either goes through a translator and leaves the host.
+  A credentialed target at any other address, a private one such as a docker-compose service included, is served over `https` with `scheme: "https"`; when a private certificate authority signed its certificate, set `NODE_EXTRA_CA_CERTS` in the host's environment to that authority's PEM file, which the port's process inherits.
+
+Each value a started service's keys and an auth header carry, of eight characters or more, is scrubbed from every answer and cause as a tool server's are, and from a fault's message and cause lowercased as well, since a URL lowercases the host a redirect names and a denial quotes it.
+A failure quotes the last 2000 characters of what the port's process or a started service printed, scrubbed whole before the cut, so the cut never leaves part of a secret.
+A request records its `path`, `query`, `header` and `body` inputs as `callInputs`, and the answer's status, headers and body as `responseStatus`, `responseHeaders` and `responseBody`, so an oracle reads `/interactions/<step>/response-body/...`; every answer is an observation, at any status.
+A service that exits before it accepts a connection, does not accept one within `readyTimeoutMs`, crosses a ceiling, or stops during a call is a target that could not run (exit 12), its cause kept scrubbed.
+A service not accepting within `readyTimeoutMs` is reported with the last connection attempt's error code: `ECONNREFUSED` while nothing listens on the port, and `EADDRNOTAVAIL` when the host has no local port left to connect from.
+A path value that reads as `.` or `..` is refused before anything is sent, since a URL would resolve it into another path than the one the call records.
+
+A denied call is recorded with eval-quality's `forbidden-target` fault and, from eval-quality 4.2.0, the `reason` its policy gave (`interface-not-authorized`, `tool-not-authorized`, `executable-not-authorized`, `subcommand-not-authorized`, `environment-key-not-authorized`, and for an HTTP request `scheme-not-authorized`, `host-not-authorized`, `port-not-authorized`, `address-not-authorized`, `address-unparseable` and `method-not-authorized`), in a leg's `faults/` file, a qualification's or trial's fault and a sealed-brief agent's bridge calls alike; `preflight` and `run` exit 10 and name the reason.
 
 An infrastructure exit code says the target could not run, so it cannot be evidence of a behavior.
 `check` resolves each defect signature and each manifestation witness through eval-quality's own `resolveCheck` over an observation that carries one of those codes and no output, with the contract's reference sets in scope, and refuses the probe when the expression could hold (`true` or `insufficient-evidence`) or cannot be resolved at all.
 `exit-code != 0` against a runner that exits 3 when its agent is missing would read every broken installation as a caught defect.
 Address an exit code, stream or body only the defect produces.
+
+## The HTTP port
+
+An `api` evaluation carries its own HTTP port: `adapter/http-probe-port.mjs`, rendered unchanged from the Evaluate skill's template, beside `adapter/http-probe-port.conformance.mjs`.
+TeA holds no HTTP client of its own.
+The port's default export builds eval-quality's environment-probe port from configuration alone (where each interface is, eval-quality's HTTP target policy, auth headers and a transport), and eval-quality's `evaluateTarget` decides every allow or deny, once per request and once per redirect hop, so the port classifies no address and a fix to the policy reaches it with eval-quality.
+It resolves a host once per hop, to its first address, and sends to the address eval-quality allowed with the host in the Host header.
+
+`tea-evaluate` never loads the port into its own process.
+For each call it starts the port file as a Node process of its own, whose last lines hand the port to TeA's host, which serves the call over file descriptor 3, a channel the runtime opens for its protocol alone; keep those lines when you edit the file.
+What the port prints on its standard output and error is its own: the runtime keeps both, up to 1 MiB together, and quotes their end when a call fails, so a `console.log` in the port breaks nothing, and printing past that ceiling ends the call.
+The port's process starts with the host's `PATH` and `NODE_EXTRA_CA_CERTS` alone (the latter lets it trust an https target a private authority signed), receives the call's configuration and the auth value of the call's own interface alone on that channel, and ends with the call.
+Each call holds the file to the bytes `preflight` or `run` asked for the protocol, and a changed file stops the run (exit 12).
+`preflight` and `run` start the port once before anything else and exit 10 when it does not answer as TeA's host, and 12 when its process cannot start or answer in time.
+A port that answered then and breaks the protocol during a call (a line on its channel that is no message, output past a ceiling, no answer within the call's ceiling, or an answer eval-quality's own `ProbeObservation` parser does not read or that answers another request) stops the run with exit 12 (`port-contract-violation` for the answer), as an evaluator emitting output outside its import contract does; such an answer is never judged as the target's behavior.
+The port file imports `eval-quality` and TeA's package as bare names, which Node resolves from the port file's own location: a `node_modules` in the evaluation folder or a folder above it must hold both, as the project's own install of TeA with its `eval-quality` peer does (see [Prerequisites](#prerequisites)).
+A `tea-evaluate` run from a global install or through `npx`, with neither installed above the evaluation folder, leaves the port unable to start (exit 10 at `preflight`).
+
+`node adapter/http-probe-port.conformance.mjs`, run from the evaluation folder, runs eval-quality's environment-probe conformance suite over the port against a loopback stub it starts and closes itself, so it needs no deployed target and no secret, and exits 0 only when every assertion passes.
+
+### A started service's port
+
+A registry `server` receives its port in one of two handoffs.
+
+With `portFileEnvironmentKey`, the service reports the port it bound.
+The runtime passes `0` in `portEnvironmentKey` and the path of a file in a private directory in `portFileEnvironmentKey`; the service binds a port the system chooses and writes that port's number to the file once it listens (in Node, `server.listen(0)`, then `server.address().port` written to the file).
+The runtime sends only once the file names a port, a whole number from 1 to 65535, that accepts a connection while the service runs, and the port probes the call again at that port, so eval-quality's policy decides there before anything is sent.
+No other process can answer on a port the service holds.
+A service that writes no port within `readyTimeoutMs`, or writes anything other than a port number, is a target that could not run (exit 12).
+The runtime reads the file without following a link and without waiting on it, so a link, a named pipe, a device or a file longer than 16 bytes in its place counts as anything other than a port number.
+The file's directory is on the run's list of private directories, so a signal that ends the run removes it.
+
+Without `portFileEnvironmentKey`, the runtime chooses the port, for a service that cannot report its own.
+It takes a free port, releases it just before the service starts, and passes its number in `portEnvironmentKey`.
+A port another process already listens on when the service is to start is refused, and an answer that arrives after the service ended other than with exit code 0 is refused, since no service of the run gave it; both stop the run with exit 12.
+This handoff leaves a window: another process can take the port between its release and the service binding it, and when that process answers before the service's failure to bind is reported, its answer is recorded as the service's.
+Name `portFileEnvironmentKey` whenever the service can report its port.
+
+In either handoff, an answer the port gives before the call's service is ready, as from a port that never asks the runtime to start the service, is refused (exit 12).
+`check` refuses (`registry`) a `portFileEnvironmentKey` equal to `portEnvironmentKey`, and either key named in `environmentKeys`, since the runtime sets both.
 
 ## The launch
 
@@ -274,15 +363,15 @@ Each invocation writes `runs/<invocationId>/` inside the evaluation folder, and 
 The steps run in order, each stopping the run with its own exit:
 
 1. `check` over the folder; any finding exits 10 and is printed as `check` prints it.
-2. The evaluation must be one this release runs: a `cli` or `mcp` interface, and every seeded probe on the `controlled-mutation` or `historical` route (exit 12 otherwise, and a retry cannot pass).
+2. The evaluation must be one this release runs: every seeded probe on the `controlled-mutation` or `historical` route (exit 12 otherwise, and a retry cannot pass); and when the registry declares an HTTP target, the evaluation's HTTP port, started once and asked which protocol it speaks, must answer as TeA's host (exit 10 otherwise, and 12 when its process cannot start or answer in time; see [The HTTP port](#the-http-port)).
 3. The pristine workspace (see [The workspace](#the-workspace)), with every registry target present and executable in it (exit 12 otherwise), and `run.json`.
 4. `eval-quality compile` and `eval-quality seal` over the run's own copy of `contract.json`, writing `eval-contract.json` and `sealed-evaluator-brief.json`; a non-zero exit the CLI documents is passed through.
 5. Each seeded probe qualified through its controlled mutation (see [Controlled mutations](#controlled-mutations)) or across its fix commit (see [Historical probes](#historical-probes)), exiting 10, 11 or 12 when a step fails; a historical probe with no revisions to address is refused and left out.
    Each gameability probe qualified over its degenerate response with no target launched (see [Gameability probes](#gameability-probes)), exiting 11 when the naive oracle rejects it or the disciplined oracle accepts it; `run` reuses the result.
-6. The legs: eval-quality's `runPreflight` plans them from the contract and the qualified probes (every sensitivity-witness leg, the minted control legs, and each defect's manifestation-witness leg) and drives them through the adapter the registry authorizes, eval-quality's command-line adapter for a command and its MCP adapter for a tool call.
+6. The legs: eval-quality's `runPreflight` plans them from the contract and the qualified probes (every sensitivity-witness leg, the minted control legs, and each defect's manifestation-witness leg) and drives them through the adapter the registry authorizes, eval-quality's command-line adapter for a command, its MCP adapter for a tool call, and the evaluation's own HTTP port for an HTTP request.
    A manifestation witness's leg runs in its mutation's mutated workspace, or on the historical route in a worktree at the pre-fix revision, and every other leg in the pristine workspace, each through an authorization whose working directory is that workspace.
-   Each command request carries the host's values for the environment keys its registry entry permits, and each tool server starts with the host's values for its entry's keys.
-   Every observation is written to `observations/` as it arrives, with the request, the workspace and the working directory beside it; a request's environment is recorded as its keys only, and every injected or server environment value of eight characters or more is replaced by `[redacted]` in the observation's strings, object keys and numbers, as written and in the JSON-escaped forms [the registry](#the-registry) lists.
+   Each command request carries the host's values for the environment keys its registry entry permits, each tool server and each started HTTP service starts with the host's values for its entry's keys, and each HTTP request carries its entry's auth header.
+   Every observation is written to `observations/` as it arrives, with the request, the workspace and the working directory beside it; a request's environment is recorded as its keys only, and every injected or server environment value and every auth value of eight characters or more is replaced by `[redacted]` in the observation's strings, object keys and numbers, as written and in the JSON-escaped forms [the registry](#the-registry) lists.
    A leg the registry does not authorize is refused by the adapter before it starts: the fault is written to `faults/` and the command exits 10.
    A leg that cannot run at all (a budget exceeded, a process that fails to start) is written there too and exits 12, as does any other failure that stops the legs.
    A leg that exits one of its entry's `infrastructureExitCodes` is an observation like any other: the CLI's verdict reads it (a control leg that exits non-zero fails `clean-control`, exit 3), which AD-10 classifies as infrastructure from the persisted verdict.
@@ -387,6 +476,22 @@ A tool-call step's response is the tool's error flag and, when it returns one, i
 }
 ```
 
+An HTTP step's response is its status and, when it has them, its headers and its body as text, which the evaluation's HTTP port reads as it reads a real answer, so a JSON content type makes the body JSON.
+Nothing is sent: every host a request names resolves to the first address of its interface's entry, so eval-quality's policy decides every host, spelling included, and every method, scheme and port as on a real arm:
+
+```json
+{
+  "schemaVersion": 1,
+  "steps": {
+    "grade-run": {
+      "status": 200,
+      "headers": { "content-type": "application/json" },
+      "body": "{\"ok\":true,\"verdict\":\"pending\"}"
+    }
+  }
+}
+```
+
 ```json
 { "route": "gameability", "degenerateResponse": "Prints a verdict line without judging the request.", "naiveOracle": "O-002" }
 ```
@@ -484,13 +589,14 @@ A model it calls is named as `policy/evaluator-conditions.json`'s `evaluator.mod
 
 **A sealed-brief agent** gets the evaluator instructions, a nonce-tagged answer block (as the rubric judge does), the sealed brief and the mapping's keys (a rubric key with its criterion and levels); nothing else of the evaluation.
 The runtime runs the plan first, recorded `baseline` and never shown to the agent; the agent then calls the bridge, a stdio MCP server with one tool per interface of the brief, shaped by kind (`cli`: `arguments`, the whole command line, and `stdin`; `api`: `method`, `path`, `body`; `mcp`: `tool`, `arguments`).
+An `api` call's `body`, when given, is a JSON object.
 In a `cli` call, `--name=value` is an option, `--name` takes the next word only when an operation declares it non-boolean, and other words, and all after `--`, are positional; a repeated option is refused, since eval-quality's request carries one value per option.
 `stdin` reaches the target as written, and the record's `callInputs.stdin` is the JSON object it parses to or, for other text, the text under the operation's one stdin key.
-The registry's adapters deny an unlisted executable, subcommand, interface or tool before anything launches, recorded with eval-quality's fault code, its reason and its detail: an `mcp` call goes through the tool-server entry's `McpTargetAuthorization` for the arm's copy, and the operation it matches is the one declaring its tool name; this release's registry declares no HTTP target, so eval-quality denies an `api` call at the interface.
+The registry's adapters deny an unlisted executable, subcommand, interface, tool, address or method before anything launches or is sent, recorded with eval-quality's fault code, its reason and its detail: an `mcp` call goes through the tool-server entry's `McpTargetAuthorization` for the arm's copy, and the operation it matches is the one declaring its tool name; an `api` call goes through the evaluation's HTTP port over the HTTP entry's policy for the arm's copy, and the operation it matches is the one declaring its method and a path template its path fits, whose parameters and query string become the call's `path` and `query` inputs.
 A call matching exactly one operation (by its declared keys) is recorded `evaluator-chosen` and answered with its `observationId`; any other authorized call stays in the evidence as unmatched, with no ID to cite.
 Every call counts against `budgets.maxToolCalls` per trial, and none runs after the agent ends.
 A call carrying the trial's answer nonce is refused unsent and uncounted, so the agent cannot hand it to the target.
-On a gameability arm a call goes through the same adapter and authorizations with nothing launched, so an ungranted one is denied as on any arm, and every other is answered from the degenerate response.
+On a gameability arm a call goes through the same adapter or port and authorizations with nothing launched or sent, so an ungranted one is denied as on any arm, and every other is answered from the degenerate response.
 A call the target could not run exits 12, and the exit message names that call's fault, followed by the agent's own failure when the agent then failed.
 A plan step and an agent call with the same bindings both match the step, so declare cardinality `any` on a step an agent may repeat.
 The bridge admits one connection, presenting a token its process reads from its environment; its configuration reaches the adapter as a private file.

@@ -1457,13 +1457,16 @@ function checkInterfaceDenialAndRefusals() {
     `the unregistered interface's leg fault is ${JSON.stringify(deniedFault)}`,
   );
 
-  // An api evaluation over a contract that declares an api interface beside its cli one: `check` passes, and this release
-  // refuses to drive it until Story 1.11's HTTP port.
+  // An api evaluation over a contract that declares an api interface beside its cli one, and a registry with no HTTP
+  // target: the plan's command steps run and pass, and no HTTP port is asked for (Story 1.11 drives api targets).
   const api = copyFixture();
   editJson(api, 'evaluation.json', (value) => (value.interface = 'api'));
   editJson(api, 'contract.json', (value) => value.permittedInterfaces.push({ logicalId: 'stub-api', kind: 'api', operations: [] }));
   const apiResult = runPreflight(api);
-  check(apiResult.status === 12, `preflight over an api evaluation exited ${apiResult.status}; expected 12\n${apiResult.output}`);
+  check(
+    apiResult.status === 0 && !apiResult.output.includes('http-probe-port'),
+    `preflight over an api evaluation with no HTTP target exited ${apiResult.status}; expected 0\n${apiResult.output}`,
+  );
   // An interface kind the contract does not declare is an authoring defect.
   const undeclared = copyFixture();
   editJson(undeclared, 'evaluation.json', (value) => (value.interface = 'mcp'));

@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "evaluationId": "grader-http-service",
+  "targetKind": "ai-feature",
+  "interface": "api",
+  "registry": [
+    {
+      "kind": "api",
+      "interfaceId": "grader",
+      "scheme": "http",
+      "host": "127.0.0.1",
+      "addresses": [
+        "127.0.0.1"
+      ],
+      "methods": [
+        "GET"
+      ],
+      "safeMethods": [
+        "GET"
+      ],
+      "maxRedirects": 0,
+      "maxElapsedMs": 30000,
+      "maxRequestBytes": 65536,
+      "maxResponseBytes": 1048576,
+      "server": {
+        "target": "server/grader.js",
+        "targetArgs": [
+          "--policy=rules/policy.txt"
+        ],
+        "environmentKeys": [
+          "GRADER_LOG",
+          "GRADER_SECRET",
+          "GRADER_TOKEN"
+        ],
+        "portEnvironmentKey": "PORT",
+        "portFileEnvironmentKey": "PORT_FILE",
+        "readyTimeoutMs": 20000
+      },
+      "auth": {
+        "header": "authorization",
+        "environmentKey": "GRADER_TOKEN",
+        "prefix": "Bearer "
+      }
+    }
+  ],
+  "launch": {
+    "root": "../.."
+  },
+  "workspace": {
+    "kind": "copy",
+    "provision": []
+  },
+  "arms": [
+    "clean",
+    "mutated"
+  ],
+  "trials": 3,
+  "tiers": [
+    "pr"
+  ],
+  "strengthFloor": {
+    "defect": 1,
+    "zero-action": 1
+  }
+}

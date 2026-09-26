@@ -5,10 +5,12 @@
  *
  * The degenerate response's bytes are committed at
  * `corpus/gameability/<probeId>.json` (`degenerate-response.schema.json`: one
- * `{ stdout, stderr, exitCode }` per command step of the interaction plan, and
- * one `{ isError, structuredResult? }` per tool-call step), since
- * eval-quality keeps the probe's `degenerateResponse` as prose. A synthetic
- * port answers every plan step from that file, so the arm executor
+ * `{ stdout, stderr, exitCode }` per command step of the interaction plan, one
+ * `{ isError, structuredResult? }` per tool-call step, and one
+ * `{ status, headers?, body? }` per HTTP step), since eval-quality keeps the
+ * probe's `degenerateResponse` as prose. A synthetic port answers every plan
+ * step from that file (an HTTP step through the evaluation's own HTTP port,
+ * with a transport that sends nothing), so the arm executor
  * (`arm.js`) records the response as the observations a target would have
  * produced, and the deterministic evaluator resolves oracles over them with
  * `resolveCheck`.
@@ -41,18 +43,31 @@ function degenerateResponsePath(probeId) {
   return `corpus/gameability/${probeId}.json`;
 }
 
+/** Which kind of request a degenerate step's answer answers: a tool call's error flag, an HTTP status, or a command's exit. */
+function answeredKind(answer) {
+  if (typeof answer?.isError === 'boolean') return 'mcp';
+  if (Number.isInteger(answer?.status)) return 'api';
+  return 'cli';
+}
+
+const KIND_NAMES = { cli: 'a command', mcp: 'a tool call', api: 'an HTTP request' };
+
 /**
  * A port that launches nothing: it answers each plan step of an arm labelled
  * `label` with the committed degenerate response for that step, in the shape
- * the command-line adapter or the MCP adapter returns for the request's kind.
+ * the command-line adapter or the MCP adapter returns for the request's kind,
+ * or, for an HTTP step, through the evaluation's own HTTP port with a
+ * transport that answers from the response and sends nothing
+ * (`registry.degenerateHttpPort`).
  *
  * @param {object} options
  * @param {string} options.label the arm's label, which `runArm` prefixes each request's identifier with
  * @param {Record<string, object>} options.steps the response by plan step: `{ stdout, stderr, exitCode }` for a command
- *   step, `{ isError, structuredResult? }` for a tool call
+ *   step, `{ isError, structuredResult? }` for a tool call, `{ status, headers?, body? }` for an HTTP request
+ * @param {object} [options.registry] the registry, whose HTTP port answers an HTTP step
  * @returns {{ probe: (request: object) => Promise<{ request: object, observation: object }> }}
  */
-function syntheticPort({ label, steps }) {
+function syntheticPort({ label, steps, registry }) {
   const prefix = `${label}-`;
   return {
     async probe(request) {
@@ -63,13 +78,18 @@ function syntheticPort({ label, steps }) {
       }
       const answer = steps[stepId];
       const correlation = { probeId: request.probeId, interfaceId: request.interfaceId, operationId: request.operationId };
-      const answersToolCall = typeof answer.isError === 'boolean';
-      if ((request.kind === 'mcp') !== answersToolCall) {
+      const kind = answeredKind(answer);
+      if (request.kind !== kind) {
         throw new Error(
-          `the degenerate response answers plan step ${stepId}, a ${request.kind === 'mcp' ? 'tool call' : 'command'}, with a ${answersToolCall ? "tool call's" : "command's"} response`,
+          `the degenerate response answers plan step ${stepId}, ${KIND_NAMES[request.kind] ?? request.kind}, with ${KIND_NAMES[kind]}'s response`,
         );
       }
-      if (answersToolCall) {
+      if (kind === 'api') {
+        if (registry === undefined)
+          throw new Error(`plan step ${stepId} is an HTTP request and no registry holds the evaluation's HTTP port`);
+        return { request, observation: await registry.degenerateHttpPort(answer).probe(request) };
+      }
+      if (kind === 'mcp') {
         return {
           request,
           observation: {
@@ -101,7 +121,7 @@ function syntheticPort({ label, steps }) {
  * a scored trial.
  */
 function degenerateArm({ contract, registry, steps, label, provenance, signal }) {
-  return runArm({ contract, port: syntheticPort({ label, steps }), registry, label, provenance, signal });
+  return runArm({ contract, port: syntheticPort({ label, steps, registry }), registry, label, provenance, signal });
 }
 
 /**
@@ -222,4 +242,4 @@ async function qualifyGameabilityProbes({
   return materialized;
 }
 
-module.exports = { degenerateArm, degenerateResponsePath, qualifyGameabilityProbes, syntheticPort };
+module.exports = { answeredKind, degenerateArm, degenerateResponsePath, qualifyGameabilityProbes, syntheticPort };

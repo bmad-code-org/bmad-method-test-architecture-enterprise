@@ -320,7 +320,7 @@
       },
       {
         "path": "src",
-        "extensions": [".cjs"]
+        "extensions": [".cjs", ".mjs"]
       },
       {
         "path": "website/src/lib",
@@ -336,8 +336,8 @@
         "imports": [],
         "externals": {
           "policy": "allow",
-          "modules": ["eval-quality", "eval-quality/adapters", "node:fs", "node:path"],
-          "rule": "engine.js is the tea-evaluate runtime's one door to the optional eval-quality peer (the library, its adapters subpath, and the synchronous schema-version reading); reaching any other external module here would be new, unreviewed surface on the one file the purity block holds to staying synchronous"
+          "modules": ["eval-quality", "eval-quality/adapters", "eval-quality/conformance", "node:fs", "node:path"],
+          "rule": "engine.js is the tea-evaluate runtime's one door to the optional eval-quality peer (the library, its adapters subpath, its conformance subpath for the probe parsers, and the synchronous schema-version reading); reaching any other external module here would be new, unreviewed surface on the one file the purity block holds to staying synchronous"
         }
       },
       {
@@ -360,7 +360,8 @@
             "node:http",
             "node:net",
             "node:os",
-            "node:path"
+            "node:path",
+            "node:string_decoder"
           ],
           "rule": "cli/ ships in the published package and runs in an adopter's project, so it reaches only what TeA's own dependencies provide (commander, js-yaml, ajv), and Node builtins; the optional eval-quality peer is reached only through cli/lib/evaluate/engine.js, its own layer above; an evaluation framework's code belongs in an adopter's evaluator/ folder and is refused here"
         }
@@ -377,7 +378,27 @@
         "match": "prefix",
         "path": "test/",
         "label": "test/",
-        "imports": ["test", "cli", "tools", "hooks-cjs", "evaluate-engine"]
+        "imports": ["test", "cli", "tools", "hooks-cjs", "evaluate-engine", "evaluate-templates"]
+      },
+      {
+        "name": "evaluate-templates",
+        "match": "prefix",
+        "path": "src/workflows/testarch/bmad-testarch-evaluate/assets/",
+        "label": "the Evaluate skill's HTTP port templates",
+        "imports": ["evaluate-templates"],
+        "externals": {
+          "policy": "allow",
+          "modules": [
+            "bmad-method-test-architecture-enterprise/cli/lib/evaluate/http-port-host.js",
+            "eval-quality",
+            "eval-quality/conformance",
+            "node:dns/promises",
+            "node:http",
+            "node:https",
+            "node:net"
+          ],
+          "rule": "the HTTP port templates are adopter code rendered into an evaluation folder's adapter/, which resolves eval-quality and TeA's host from that folder's own install (AD-20); they reach the engine, its conformance subpath, TeA's host by the package's name and Node's network builtins, and nothing else, so no template grows a dependency an adopter's install lacks"
+        }
       },
       {
         "name": "hooks-cjs",
@@ -502,6 +523,10 @@
     "symbols": {
       "foreign": [
         {
+          "token": "NODE_EXTRA_CA_CERTS",
+          "reason": "a Node.js environment variable naming extra certificate authorities, not a TEA declaration"
+        },
+        {
           "token": "createCommandLineAdapter",
           "reason": "an eval-quality package export, not a TEA declaration"
         },
@@ -532,6 +557,10 @@
         {
           "token": "EnvironmentProbePort",
           "reason": "an eval-quality package export, not a TEA declaration"
+        },
+        {
+          "token": "ProbeObservation",
+          "reason": "an eval-quality published schema type, not a TEA declaration"
         },
         {
           "token": "nodeCommandMechanism",
@@ -971,6 +1000,14 @@
         },
         {
           "token": "EACCES",
+          "reason": "a Node.js or POSIX platform name, not a TEA declaration"
+        },
+        {
+          "token": "ECONNREFUSED",
+          "reason": "a Node.js or POSIX platform name, not a TEA declaration"
+        },
+        {
+          "token": "EADDRNOTAVAIL",
           "reason": "a Node.js or POSIX platform name, not a TEA declaration"
         },
         {
@@ -1439,10 +1476,10 @@
         },
         {
           "file": "docs/explanation/eval-quality-roadmap.md",
-          "key": "The pin is 4.2.0 now",
+          "key": "The pin is 4.3.0 now",
           "settles": {
             "module": "test/lib/doc-claim-sources.js",
-            "export": "EVAL_QUALITY_PIN_IS_4_2_0"
+            "export": "EVAL_QUALITY_PIN_IS_4_3_0"
           },
           "reason": "package.json's eval-quality devDependency, compared for an exact match"
         },

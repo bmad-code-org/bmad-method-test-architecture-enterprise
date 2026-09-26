@@ -1404,7 +1404,7 @@ async function checkUnits() {
   );
 
   const port = syntheticPort({ label: 'trial-2', steps: { 'judge-run': { stdout: 'verdict: pending\n', stderr: '', exitCode: 0 } } });
-  const answered = await port.probe({ probeId: 'trial-2-judge-run', interfaceId: 'verdict', operationId: 'judge-request' });
+  const answered = await port.probe({ probeId: 'trial-2-judge-run', interfaceId: 'verdict', operationId: 'judge-request', kind: 'cli' });
   check(
     answered.observation.stdout.value === 'verdict: pending\n' &&
       answered.observation.exitCode === 0 &&

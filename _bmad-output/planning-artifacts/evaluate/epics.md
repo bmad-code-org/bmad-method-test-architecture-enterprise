@@ -1,6 +1,5 @@
 ---
-stepsCompleted:
-  ['step-01-validate-prerequisites', 'step-02-design-epics', 'step-03-create-stories', 'step-04-final-validation']
+stepsCompleted: ['step-01-validate-prerequisites', 'step-02-design-epics', 'step-03-create-stories', 'step-04-final-validation']
 inputDocuments:
   - '_bmad-output/planning-artifacts/evaluate/SPEC.md'
   - '_bmad-output/planning-artifacts/evaluate/ARCHITECTURE-SPINE.md'
@@ -24,7 +23,7 @@ inputDocuments:
 
 ## Overview
 
-This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and forty stories (Stories 1.27 to 1.35 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
+This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and forty-two stories (Stories 1.27 to 1.37 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
 
 Evaluate is fully stacked. The stack runs system under test, then the evaluation (the mechanism that runs the system, collects evidence and makes judgments), then the Behavioral Evaluation Contract (what behavior matters, what evidence counts, how success and failure resolve), then eval-quality (contract sanity, evidence support, and whether the evaluation catches defects). TeA owns every layer above eval-quality, including each concern eval-quality states it leaves to the caller, so an adopter can evaluate any target end to end. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3 onward, Epic 2 and H.1 to close the plan gap audit; the Traceability section maps each audit item to the story that closes it.
 
@@ -52,7 +51,7 @@ These apply to every story and are not repeated in each one.
 - **Reverting a story.** Each acceptance criterion names a check that fails when the story's work is reverted. A check that would still pass after a revert is not an acceptance check. The worker exercises each revert check once (undo the change locally, observe the named failure, restore) and records the observation in the story's completion notes.
 - **Test plan.** `test-design-epic-1.md` and `test-design-epic-2.md` in this folder give each story's test levels, test files and per-criterion revert checks. A story's tests follow them.
 - **Craft is a deliverable.** A story that writes a stage guide under `references/` teaches the craft of its stage with worked examples, and its guidance test asserts each named section by an exact heading and fails when one is removed. Worked examples that are contract, oracle, rubric, mutation or plan fragments are fenced JSON blocks tagged with an HTML comment (`<!-- example:<kind> -->`); the guidance test extracts every tagged block and validates or compiles it through the same engine or runtime schema a real artifact meets, so an example that drifts from the engine fails the gate. Term presence alone never closes a craft criterion; Stories 1.24 to 1.26 prove the guidance behaviorally.
-- **Framework neutrality.** `cli/` imports only the externals its layers' `allow` lists in the `dependency-direction` section of `eval-quality.config.json` name: `cli/lib/evaluate/engine.js` has its own exact `evaluate-engine` layer, the one list naming `eval-quality`, and every other `cli/` file is held to the `cli` layer's list (Stories 1.4 and 1.5), so an import of any evaluation framework fails `test:direction` whatever the framework is called (AD-21, NFR10). Framework-specific code lives only in an adopter's `evaluator/` folder, rendered from a skill template or written by the adopter. A secondary name scan in `test:evaluate-boundaries` also catches a framework named in a string or a dynamic path.
+- **Framework neutrality.** `cli/` imports only the externals its layers' `allow` lists in the `dependency-direction` section of `eval-quality.config.json` name: `cli/lib/evaluate/engine.js` has its own exact `evaluate-engine` layer, the one `cli/` list naming `eval-quality` (amended 2026-09-25 in Story 1.11: the `evaluate-templates` layer over the Evaluate skill's `assets/` also names it, since those templates are adopter code rendered into an evaluation folder, so the rule holds for `cli/` alone), and every other `cli/` file is held to the `cli` layer's list (Stories 1.4 and 1.5), so an import of any evaluation framework fails `test:direction` whatever the framework is called (AD-21, NFR10). Framework-specific code lives only in an adopter's `evaluator/` folder, rendered from a skill template or written by the adopter. A secondary name scan in `test:evaluate-boundaries` also catches a framework named in a string or a dynamic path.
 - **Vendor models.** The system under test is always the adopter's use of a vendor model or dependency. In a run that uses a model (a live target, a sealed-brief agent, a model judge or a model-graded framework evaluator), the model is a fixed condition recorded in `EvaluatorConfiguration.modelSnapshot` (NFR8). A run that uses no model (the deterministic evaluator, or a `command` evaluator that calls none) still fills the schema's required fields: `modelSnapshot` is the literal `none` and `systemPromptDigest` is `digestBytes` over the empty byte string (Stories 1.8 and 1.17).
 
 ## Requirements Inventory
@@ -129,29 +128,29 @@ None. Evaluate has no graphical interface.
 
 ### FR Coverage Map
 
-| Requirement | Stories |
-| --- | --- |
-| FR1 (CAP-1) | 1.3, 1.12, 1.13, 1.24 |
-| FR2 (CAP-2) | 1.12, 1.24 |
-| FR3 (CAP-3) | 1.4, 1.12, 1.16, 1.21, 1.24 |
-| FR4 (CAP-4) | 1.4, 1.13, 1.16, 1.24 |
-| FR5 (CAP-5) | 1.9, 1.13, 1.21, 1.24 |
-| FR6 (CAP-6) | 1.1, 1.5, 1.6, 1.10, 1.11, 1.13, 1.18, 1.19 |
-| FR7 (CAP-7) | 1.7, 1.9, 1.14, 1.16 |
-| FR8 (CAP-8) | 1.8, 1.14 |
-| FR9 (CAP-9) | 1.6, 1.8, 1.14, 1.16, 1.17 |
-| FR10 (CAP-10) | 1.14, 1.16, 1.22, 1.25 |
-| FR11 (CAP-11) | 2.2, 2.3, 2.4, 2.5, H.1 |
-| FR12 (CAP-12) | 1.8, 2.1, 2.5, H.1 |
-| FR13 (CAP-13) | 1.17, 1.19, 1.20, 1.23, 1.26 |
-| FR14 (CAP-14) | 1.21, 2.2 |
+| Requirement   | Stories                                     |
+| ------------- | ------------------------------------------- |
+| FR1 (CAP-1)   | 1.3, 1.12, 1.13, 1.24                       |
+| FR2 (CAP-2)   | 1.12, 1.24                                  |
+| FR3 (CAP-3)   | 1.4, 1.12, 1.16, 1.21, 1.24                 |
+| FR4 (CAP-4)   | 1.4, 1.13, 1.16, 1.24                       |
+| FR5 (CAP-5)   | 1.9, 1.13, 1.21, 1.24                       |
+| FR6 (CAP-6)   | 1.1, 1.5, 1.6, 1.10, 1.11, 1.13, 1.18, 1.19 |
+| FR7 (CAP-7)   | 1.7, 1.9, 1.14, 1.16                        |
+| FR8 (CAP-8)   | 1.8, 1.14                                   |
+| FR9 (CAP-9)   | 1.6, 1.8, 1.14, 1.16, 1.17                  |
+| FR10 (CAP-10) | 1.14, 1.16, 1.22, 1.25                      |
+| FR11 (CAP-11) | 2.2, 2.3, 2.4, 2.5, H.1                     |
+| FR12 (CAP-12) | 1.8, 2.1, 2.5, H.1                          |
+| FR13 (CAP-13) | 1.17, 1.19, 1.20, 1.23, 1.26                |
+| FR14 (CAP-14) | 1.21, 2.2                                   |
 
 ## Epic List
 
 ### Epic 1: The Evaluate authoring loop
 
 An adopter describes a target, answers Evaluate's questions, chooses or builds the evaluation layer and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches the seeded defect, with the gaps named and closed. The epic closes by running Evaluate on `bmad-testarch-evaluate` itself, then proving the guidance on two more target kinds, on seeded weaknesses and on an evaluation framework its guides never name.
-Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.35.
+Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.37.
 
 **FRs covered:** FR1 to FR10, FR13, FR14.
 
@@ -165,49 +164,51 @@ The evaluation Epic 1 produces runs in the adopter's CI on every pull request, w
 
 Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `eval-quality` devDependency to the published release carrying it, and every later TeA story runs on that release. Epic 1's stories run in the order this table lists them, which is the order they are written in. Epic 2 depends on Epic 1's runtime and on the evaluation Story 1.16 authors. Story H.1 is the owner's and runs after Story 2.5 merges; eval-quality 4.0.0, the release it once waited for, shipped during Story 1.2.
 
-| Order | Story | Depends on |
-| --- | --- | --- |
-| 1 | 1.1 | none |
-| 2 | 1.2 | 1.1 |
-| 3 | 1.3 | 1.2 |
-| 4 | 1.4 | 1.3 |
-| 5 | 1.5 | 1.4 |
-| 6 | 1.6 | 1.5 |
-| 7 | 1.7 | 1.6 |
-| 8 | 1.8 | 1.7 |
-| 9 | 1.9 | 1.8 |
-| 10 | 1.17 | 1.9 |
-| 11 | 1.10 | 1.8, 1.17 |
-| 12 | 1.11 | 1.1, 1.8, 1.17 |
-| 13 | 1.32 | 1.9, 1.11 |
-| 14 | 1.18 | 1.8 |
-| 15 | 1.19 | 1.17 |
-| 16 | 1.20 | 1.17 |
-| 17 | 1.21 | 1.17 |
-| 18 | 1.22 | 1.17 |
-| 19 | 1.12 | 1.4, 1.21 |
-| 20 | 1.13 | 1.10, 1.11, 1.12, 1.18, 1.19 |
-| 21 | 1.23 | 1.13, 1.19, 1.20, 1.21 |
-| 22 | 1.14 | 1.9, 1.13, 1.22, 1.23 |
-| 23 | 1.15 | 1.14 |
-| 24 | 1.16 | 1.15 |
-| 25 | 1.24 | 1.16 |
-| 26 | 1.25 | 1.24 |
-| 27 | 1.26 | 1.23, 1.25 |
-| 28 | 1.27 | 1.7 |
-| 29 | 1.28 | 1.7 |
-| 30 | 1.29 | 1.8 |
-| 31 | 1.30 | 1.8 |
-| 32 | 1.31 | 1.8, 1.17 |
-| 33 | 1.33 | 1.10, 1.11, 1.17 |
-| 34 | 1.34 | 1.17, 1.21 |
-| 35 | 1.35 | 1.10 |
-| 36 | 2.1 | 1.16, 1.26 |
-| 37 | 2.2 | 2.1 |
-| 38 | 2.3 | 2.2 |
-| 39 | 2.4 | 2.3 |
-| 40 | 2.5 | 2.4 |
-| 41 | H.1 | 2.5 |
+| Order | Story | Depends on                   |
+| ----- | ----- | ---------------------------- |
+| 1     | 1.1   | none                         |
+| 2     | 1.2   | 1.1                          |
+| 3     | 1.3   | 1.2                          |
+| 4     | 1.4   | 1.3                          |
+| 5     | 1.5   | 1.4                          |
+| 6     | 1.6   | 1.5                          |
+| 7     | 1.7   | 1.6                          |
+| 8     | 1.8   | 1.7                          |
+| 9     | 1.9   | 1.8                          |
+| 10    | 1.17  | 1.9                          |
+| 11    | 1.10  | 1.8, 1.17                    |
+| 12    | 1.11  | 1.1, 1.8, 1.17               |
+| 13    | 1.32  | 1.9, 1.11                    |
+| 14    | 1.18  | 1.8                          |
+| 15    | 1.19  | 1.17                         |
+| 16    | 1.20  | 1.17                         |
+| 17    | 1.21  | 1.17                         |
+| 18    | 1.22  | 1.17                         |
+| 19    | 1.12  | 1.4, 1.21                    |
+| 20    | 1.13  | 1.10, 1.11, 1.12, 1.18, 1.19 |
+| 21    | 1.23  | 1.13, 1.19, 1.20, 1.21       |
+| 22    | 1.14  | 1.9, 1.13, 1.22, 1.23        |
+| 23    | 1.15  | 1.14                         |
+| 24    | 1.16  | 1.15                         |
+| 25    | 1.24  | 1.16                         |
+| 26    | 1.25  | 1.24                         |
+| 27    | 1.26  | 1.23, 1.25                   |
+| 28    | 1.27  | 1.7                          |
+| 29    | 1.28  | 1.7                          |
+| 30    | 1.29  | 1.8                          |
+| 31    | 1.30  | 1.8                          |
+| 32    | 1.31  | 1.8, 1.17                    |
+| 33    | 1.33  | 1.10, 1.11, 1.17             |
+| 34    | 1.34  | 1.17, 1.21                   |
+| 35    | 1.35  | 1.10                         |
+| 36    | 1.36  | 1.11                         |
+| 37    | 1.37  | 1.11                         |
+| 38    | 2.1   | 1.16, 1.26                   |
+| 39    | 2.2   | 2.1                          |
+| 40    | 2.3   | 2.2                          |
+| 41    | 2.4   | 2.3                          |
+| 42    | 2.5   | 2.4                          |
+| 43    | H.1   | 2.5                          |
 
 ## Epic 1: The Evaluate authoring loop
 
@@ -323,7 +324,7 @@ So that a stale index or a malformed artifact fails before anything runs.
 
 **Given** no runtime exists
 **When** `cli/evaluate.js` and `cli/lib/evaluate/` land
-**Then** `package.json` registers the `tea-evaluate` bin, declares `peerDependencies: {"eval-quality": ">=4.2.0"}` (4.0.0 is the first published release carrying trial-set scoring and the target-policy export Evaluate needs, 4.1.1 the first whose command-line adapter kills the target's process group at its ceiling, 4.1.2 the first that also kills it when the host dies, 4.1.3 the first whose `score` writes an Invalid result's reasons to stderr, 4.1.4 the first whose record schema defines an observation's `provenance` by its role, and 4.2.0 the first whose command-line and MCP adapters carry the policy's `reason` on a denial; amended by Story 1.6 from `>=4.0.0`, 2026-09-24 in Story 1.8 from `>=4.1.2` to `>=4.1.3`, then `>=4.1.4`, and 2026-09-25 in Story 1.10 to `>=4.2.0`), with `peerDependenciesMeta` marking it optional (npm 7 and later install required peers automatically, which would pull the engine into every project that installs TeA for other workflows), and `test:release-metadata` and `test:guard-publish` cover both
+**Then** `package.json` registers the `tea-evaluate` bin, declares `peerDependencies: {"eval-quality": ">=4.3.0"}` (4.0.0 is the first published release carrying trial-set scoring and the target-policy export Evaluate needs, 4.1.1 the first whose command-line adapter kills the target's process group at its ceiling, 4.1.2 the first that also kills it when the host dies, 4.1.3 the first whose `score` writes an Invalid result's reasons to stderr, 4.1.4 the first whose record schema defines an observation's `provenance` by its role, 4.2.0 the first whose command-line and MCP adapters carry the policy's `reason` on a denial, and 4.3.0 the first exporting `staysOnHost`, the on-host predicate `check` holds a credential sent over `http` to; amended by Story 1.6 from `>=4.0.0`, 2026-09-24 in Story 1.8 from `>=4.1.2` to `>=4.1.3`, then `>=4.1.4`, 2026-09-25 in Story 1.10 to `>=4.2.0`, and 2026-09-25 in Story 1.11 to `>=4.3.0`), with `peerDependenciesMeta` marking it optional (npm 7 and later install required peers automatically, which would pull the engine into every project that installs TeA for other workflows), and `test:release-metadata` and `test:guard-publish` cover both
 **And** `cli/lib/evaluate` is CommonJS and reaches eval-quality through one async loader generalized from `loadEvalQuality`, and the `dependency-direction` section of `eval-quality.config.json` gives the `cli` layer an `allow` externals list naming every external `cli/` uses (`eval-quality`, `commander`, `js-yaml`, `ajv/dist/2020` and each `node:` builtin; the gate matches specifiers exactly and the runtime loads Ajv through its draft 2020-12 entry point, since eval-quality's schemas are draft 2020-12), so removing one listed module while `cli/` imports it fails `test:direction` (AD-5)
 **And** every module the shipped runtime needs is reachable from TeA's published `dependencies`: `ajv` moves from `devDependencies` to `dependencies`, and a packed-install case in `test:evaluate-check` runs `npm pack`, installs the tarball into a temp folder with `--omit=dev` beside the local engine, and runs `tea-evaluate check --evaluation <fixture>` to exit 0; moving `ajv` back to `devDependencies` fails it
 **And** every subcommand takes `--evaluation <path>` and exits 64 when none resolves; the runtime reads no `_bmad/` config
@@ -548,9 +549,9 @@ So that my HTTP surface is evaluated as `api` with no copied network policy (CAP
 
 **Given** the skill's `assets/`
 **When** `/bmad-workflow-builder` Edit adds `http-probe-port.mjs` and `http-probe-port.conformance.mjs` templates
-**Then** the port is a default-export factory that holds only address, auth and transport configuration and calls eval-quality's `evaluateTarget` for every allow or deny decision, once per request and once per redirect hop; the evaluator is an injected option defaulting to the imported `evaluateTarget`, so the test injects a counting wrapper, and the grep test holds that the default is the import
+**Then** the port is a default-export factory that holds only address, auth and transport configuration and calls eval-quality's `evaluateTarget` for every allow or deny decision, once per request and once per redirect hop; the evaluator is an injected option defaulting to the imported `evaluateTarget`, so the test injects a counting wrapper, and the grep test holds that the default is the import (amended 2026-09-25 in Story 1.11: the runtime never imports the adopter's port: for each call it starts `adapter/http-probe-port.mjs` as a Node process of its own, whose last lines hand the factory and the `nodeTransport` it exports to TeA's host, `cli/lib/evaluate/http-port-host.js`, which serves the call over newline-delimited JSON on standard input and output, since eval-quality's `dependency-direction` gate refuses a computed `import()` anywhere under `cli/` and a port in its own process keeps the adopter's code apart from the run's state and ends at its ceiling; `preflight` and `run` ask the port for its protocol before anything starts and exit 10 when it does not start TeA's host) (amended 2026-09-25 in Story 1.11's final review: the host serves the call on file descriptor 3, a channel the runtime opens for the protocol alone, so a `console.log` in the adopter's port no longer breaks every call; the port's standard output and error are captured together, capped and quoted in a failure; and the grep test reads the default from the parsed module, inside the factory's own parameter list, so a comment or a default elsewhere cannot satisfy it)
 **And** the conformance template calls `runEnvironmentProbePortConformance` against a loopback stub server it starts and closes itself (the suite's redirect, slow-response and oversize-response scenarios need endpoints no deployed target offers), so conformance runs in the `pr` tier with no deployed target and no secret
-**And** a grep test in `test/test-evaluate-api.js` fails when the template contains its own address classification (any private-range literal or CIDR arithmetic)
+**And** a grep test in `test/test-evaluate-api.js` fails when the template contains its own address classification (any private-range literal or CIDR arithmetic) (amended 2026-09-25 in Story 1.11: the port template carries no private-range literal and neither template carries CIDR arithmetic; the conformance file's four denied-class requests need one sample address of each class, which the test holds to exactly those four samples, each of the class eval-quality's own `classifyAddress` gives it) (amended 2026-09-25 in Story 1.11's final review: the grep also catches a bare or regex-escaped prefix such as `192.168`, `172.16` or `/^10\./`, an IPv6 prefix without its colon, an octet radix a division takes an address apart with, and a CIDR suffix read off a string, and the test holds the grep to a list of those spellings, each of which must be caught) (amended 2026-09-25 in Story 1.11's final review round 2: the grep holds a named list of classifier spellings, `RANGE_EVASIONS`, each of which must be caught, which adds an octet compared with 168 or 254 or bounded by 16 and 31, a power of two such as `2 ** 24`, a range base written in decimal such as `3232235520` or `167772160`, an IPv6 prefix as a character class (`f[cd]`, `fe[89ab]`) or a quoted prefix (`'fd'`, `'::ffff:'`), a table of base and prefix-length pairs, and a prefix assembled from quoted pieces; no grep can list every spelling of an address classifier, so the behavioral guard is the counting-wrapper case: a port that decides locally makes zero evaluator calls, and that case fails it)
 
 **Given** a loopback HTTP fixture target at `test/fixtures/evaluate-api/` with an adapter rendered from the template, whose `evaluation.json` declares a `copy` workspace (AD-8)
 **When** its evaluation runs conformance, `check`, `preflight`, `run` and `score`
@@ -558,6 +559,8 @@ So that my HTTP surface is evaluated as `api` with no copied network policy (CAP
 **And** the contract declares kind `api`, and an unlisted address is denied with eval-quality's denial reason
 **And** (added 2026-09-25 in Story 1.17, whose bridge denies every `api` call at the interface until this story) a `sealed-brief-agent` evaluator's bridge routes an `api` call through the adopter's port for the arm: an authorized call is recorded `evaluator-chosen` with the operation its method and path match, and an unlisted address is denied with eval-quality's `address-not-authorized` before any request is sent, a case in `test/test-evaluate-api.js`; leaving the bridge on no HTTP authorization turns the authorized call into an `interface-not-authorized` denial, which the case catches
 **And** the test is chained into `npm test`, which the `chain` matrix runs (amended 2026-09-25 in Story 1.9: CI runs the `npm test` chain in shards, so a chained script needs no step of its own)
+**And** (added 2026-09-25 in Story 1.11, so every arm a probe needs runs over an HTTP target as it runs over a command and a tool server) a registry entry with `kind: "api"` carries eval-quality's HTTP authorization fields and one of `port` (a deployed target) or `server` (`target`, `targetArgs`, `environmentKeys`, `portEnvironmentKey`, `readyTimeoutMs`), and an optional `auth` header holding the host's value for its key; for each call the runtime hands the port the `ProbeTargetPolicy`, the targets and the auth headers, and starts a `server` from the call's workspace through eval-quality's `nodeCommandMechanism`, on a free port, only once the port's policy has allowed the call, ending its process group after it; a record carries an HTTP call's `path`, `query`, `header` and `body` inputs and the answer's status, headers and body; a gameability probe's degenerate response answers an HTTP step with `{ status, headers?, body? }` through the port with nothing sent, and the bridge on a gameability arm denies an unlisted method as a real arm does; `check` refuses under `registry` a second HTTP entry for one interface and an HTTP entry for an interface of another kind, under `schema` an entry naming both or neither of `port` and `server`, under `adapter` a folder whose registry declares an HTTP target and holds no regular `adapter/http-probe-port.mjs`, and under `gameability` a degenerate response of another kind than its step; a service's environment values and the auth value are scrubbed from every answer and cause; a service that cannot start or hangs stops the run with exit 12 and every process it started ended; before it starts a server the runtime asks eval-quality's `evaluateTarget` itself about the target the port names, the request's elapsed cap starts once the server accepts a connection, and an answer that arrives after the server ended other than with exit code 0 is refused; `preflight` and `run` exit 10 when an auth header's key has no host value; a bridge call's body is a JSON object, and a `.` or `..` path value is refused unsent; each is a `test/test-evaluate-api.js` case, and dropping the rule, the scrub or the projection turns its case red
+**And** (added 2026-09-25 in Story 1.11's final review) the runtime reads each port answer through eval-quality's own `probeParsers.response`, loaded through `engine.js`, so an answer the parser does not read stops the run with `port-contract-violation` (exit 12) and is never judged as the target's behavior; the protocol channel is decoded as one UTF-8 stream, so a multi-byte character a chunk cuts is read whole; a fault's message is scrubbed of each secret as written and lowercased, since a URL lowercases the host a redirect names; on a gameability arm every host resolves to its interface's entry's first address, so eval-quality's own host check decides every spelling as on a real arm; `check` refuses under `registry` a `host` a URL spells otherwise, naming the URL's spelling, and an `auth` header over `http` to an address eval-quality's `staysOnHost` says leaves the host (amended 2026-09-25 in Story 1.11's final review round 2 from `classifyAddress` classing it other than `loopback`, since that class holds the NAT64 `64:ff9b::7f00:1` and IPv4-compatible `::127.0.0.1` spellings, which leave the host; eval-quality 4.3.0 exports `staysOnHost`); the conformance template closes a stub the suite left open; each is a `test/test-evaluate-api.js` case, and undoing the change turns its case red
 
 **Dependencies:** 1.1, 1.8, 1.17.
 **Gate:** skill gates (no registration change, so no Validate Module), `npm test`, engine check.
@@ -1040,7 +1043,7 @@ So that a CI policy or a test can tell an unlisted executable from an unlisted s
 
 **Given** that release
 **When** a bridge call, a preflight leg or a trial step is denied, for `cli`, `mcp` and `api` alike
-**Then** the recorded denial carries `{ code, reason, detail }` with the `reason` eval-quality's policy decided, a `test:evaluate-evaluators` case per kind asserting `executable-not-authorized`, `tool-not-authorized` and `address-not-authorized`; recording the detail alone leaves `reason` absent, which each case catches (amended 2026-09-25 in Story 1.10: Story 1.10 records eval-quality's `reason` beside the code wherever a denial is recorded, for every kind, in a bridge call (`{ code, reason, detail }`), a leg's `faults/` file, a qualification's fault and a trial's fault, and names it in the exit-10 message; `test:evaluate-evaluators` asserts a bridge call's `executable-not-authorized` for `cli` and `interface-not-authorized` for `mcp` and `api`, `test:evaluate-preflight` a leg's `interface-not-authorized` for `cli`, and `test:evaluate-mcp` `tool-not-authorized` in a qualification, a leg, a trial and a bridge call and `interface-not-authorized` in a leg; this story still owns the `api` kind through the adopter's HTTP port once Story 1.11 builds it, `address-not-authorized` asserted in a leg, a trial and a bridge call, and the reference section below)
+**Then** the recorded denial carries `{ code, reason, detail }` with the `reason` eval-quality's policy decided, a `test:evaluate-evaluators` case per kind asserting `executable-not-authorized`, `tool-not-authorized` and `address-not-authorized`; recording the detail alone leaves `reason` absent, which each case catches (amended 2026-09-25 in Story 1.10: Story 1.10 records eval-quality's `reason` beside the code wherever a denial is recorded, for every kind, in a bridge call (`{ code, reason, detail }`), a leg's `faults/` file, a qualification's fault and a trial's fault, and names it in the exit-10 message; `test:evaluate-evaluators` asserts a bridge call's `executable-not-authorized` for `cli` and `interface-not-authorized` for `mcp` and `api`, `test:evaluate-preflight` a leg's `interface-not-authorized` for `cli`, and `test:evaluate-mcp` `tool-not-authorized` in a qualification, a leg, a trial and a bridge call and `interface-not-authorized` in a leg; this story still owns the `api` kind through the adopter's HTTP port once Story 1.11 builds it, `address-not-authorized` asserted in a leg, a trial and a bridge call, and the reference section below) (amended 2026-09-25 in Story 1.11: Story 1.11 delivers the `api` kind: the HTTP port passes `evaluateTarget`'s reason as the `forbidden-target` fault's `reason`, and `test:evaluate-api` asserts `address-not-authorized` in a qualification, a leg, a trial and a bridge call and `method-not-authorized` in a bridge call; this story still owns the reference section below)
 **And** `docs/reference/tea-evaluate-cli.md` names the reason codes a denial carries, and a `test:evaluate-evaluators` case reads the section under its exact heading and fails when a code is removed
 
 **Dependencies:** 1.10, 1.11, 1.17.
@@ -1086,6 +1089,51 @@ So that a crash mutation on an `mcp` interface is caught as a command crash is (
 
 **Dependencies:** 1.10.
 **Gate:** `npm test`, `npm run test:release-metadata`, engine check.
+
+### Story 1.36: Hold an HTTP entry to eval-quality's own target-policy parser
+
+Added 2026-09-25 in Story 1.11 from a gap its build found: eval-quality 4.2.0 exports `parseCommandTargetPolicy` and `parseMcpTargetPolicy` from `eval-quality/adapters` and no parser for its HTTP `ProbeTargetPolicy` (`dist/core/schemas/probe-policy.js` declares the schema; `dist/adapters/index.d.ts` exports no parser for it), so `tea-evaluate`'s `ApiRegistryEntry` repeats the authorization's field rules (the schemes, the port range, the method list, the non-empty address list, the ceilings' minimums) in the runtime's own `evaluation.json` schema, and a rule eval-quality adds or changes reaches `check` only when someone copies it.
+
+As an adopter with an HTTP target,
+I want my registry's HTTP entries held to eval-quality's own reading of an HTTP authorization,
+So that `check` refuses exactly what the engine's policy refuses, with no copy of its rules to drift (AD-1).
+
+**Engine consumption.** eval-quality ships a release exporting a `ProbeTargetPolicy` parser, as it exports `parseMcpTargetPolicy`, and TeA's devDependency and peer floor rise to it with the engine check at start and end; the coordinator makes that change in eval-quality.
+
+**Acceptance Criteria:**
+
+**Given** that release
+**When** `tea-evaluate check` reads a registry with an HTTP entry
+**Then** the entries become the policy the runtime builds, a started server's entry at a placeholder port, and eval-quality's parser reads it; an entry the parser refuses is a `registry` finding naming the parser's reason, a `test:evaluate-api` case; skipping the parser lets the case exit 0, which the case catches
+**And** the runtime builds each call's policy through the same parser before any service starts, so a policy the parser refuses stops the call with the parser's fault, a `test:evaluate-api` unit; building the policy by hand lets the refused field reach the port, which the unit catches
+**And** `ApiRegistryEntry` keeps the authorization fields at their JSON types and leaves their rules to the parser, and a `test:evaluate-api` case reads the schema and fails when one of those fields carries a rule of its own; restoring a copied rule fails the case
+
+**Dependencies:** 1.11.
+**Gate:** `npm test`, `npm run test:release-metadata`, engine check.
+
+### Story 1.37: Know a started HTTP server by the port it bound itself
+
+Added 2026-09-25 in Story 1.11 from its review: for a registry entry with a `server`, the runtime takes a free port, releases it and hands its number to the server in `portEnvironmentKey`, then waits until that port accepts a connection. Another process can take the port in between: the server then fails to bind and ends, and when that process answers before the server's end is reported, the answer is recorded as the workspace's. Story 1.11 refuses an answer that arrives after the call's server ended other than with exit code 0, which closes the case once the end is reported, and leaves the window before it open.
+
+Amended 2026-09-26: delivered 2026-09-26 in Story 1.11's pull request, PR #243, because the chosen-port window made `test:evaluate-api` flaky under parallel load.
+The fixture's registry names `portFileEnvironmentKey`, so no suite case but the chosen-port units reaches a server through the chosen port.
+The delivery also has `check` refuse (`registry`) a `portFileEnvironmentKey` equal to `portEnvironmentKey` and either key named in `environmentKeys`, and refuses an answer the port gives before the call's server is ready (exit 12); TeA's host probes the call again at the reported port, so eval-quality's policy decides at the port the server bound.
+
+As an adopter whose HTTP target the runtime starts,
+I want the runtime to reach the server it started and nothing else on its port,
+So that no answer from another process is ever recorded as my target's (AD-7, AD-8).
+
+**Acceptance Criteria:**
+
+**Given** a registry entry whose `server` names a `portFileEnvironmentKey`
+**When** a call starts the server
+**Then** the runtime passes `0` in `portEnvironmentKey` and a private file path in `portFileEnvironmentKey`, the server binds a port the system chooses and writes its number to that file, and the runtime sends only once the file names a port that accepts a connection while the server runs; a `test:evaluate-api` case whose fixture server binds port 0 and reports it passes the pipeline, and a case in which another process listens on the port the runtime would have chosen reaches only the fixture server; restoring the chosen-port handoff lets the other process answer, which the case catches
+**And** a server that writes no port within `readyTimeoutMs`, or a port that is not a number, is a target that could not run (exit 12), a `test:evaluate-api` case each; reading a missing file as ready sends to no server, which the case catches
+**And** the private file's directory is on the run's scratch list, so a signal leaves the temp directory empty, a `test:evaluate-api` case; an unregistered directory survives the signal, which the case catches
+**And** `docs/reference/tea-evaluate-cli.md` states both handoffs and the window the chosen-port handoff leaves, and the case reading the passage fails when the window's sentence is removed
+
+**Dependencies:** 1.11.
+**Gate:** `npm test`.
 
 ## Epic 2: Continuous proof in CI
 
@@ -1235,7 +1283,7 @@ So that Evaluate is continuously proven where it is built, and users can read ho
 
 Run by the coordinator of Story 2.5 once it merges. No `/bmad-build` worker runs this story.
 
-**Engine status (verified 2026-09-23):** eval-quality 4.0.0 is published and is npm `latest`, carrying the target-policy export (#158) and trial-set scoring with `EvidenceArtifact` version 4 (#143). Story 1.2 put TeA on it and Story 1.4 floors the peer range at `>=4.0.0`, which Story 1.6 raises to `>=4.1.2`, Story 1.8 to `>=4.1.4` and Story 1.10 to `>=4.2.0`, so every Epic 1 and Epic 2 check, the `test:evaluate-*` scripts the 2026-09-23 amendment adds included, runs on the published engine from the story that adds it. No engine release or floor raise remains for this story.
+**Engine status (verified 2026-09-23):** eval-quality 4.0.0 is published and is npm `latest`, carrying the target-policy export (#158) and trial-set scoring with `EvidenceArtifact` version 4 (#143). Story 1.2 put TeA on it and Story 1.4 floors the peer range at `>=4.0.0`, which Story 1.6 raises to `>=4.1.2`, Story 1.8 to `>=4.1.4`, Story 1.10 to `>=4.2.0` and Story 1.11 to `>=4.3.0`, so every Epic 1 and Epic 2 check, the `test:evaluate-*` scripts the 2026-09-23 amendment adds included, runs on the published engine from the story that adds it. No engine release or floor raise remains for this story.
 
 As the owner,
 I want the dirty proof run replaced by a clean one on the merged tree,
@@ -1252,62 +1300,62 @@ So that the `pr` replay of `bmad-testarch-evaluate` has an accepted baseline to 
 
 ## Traceability
 
-| Capability | Stories | Proven by |
-| --- | --- | --- |
-| CAP-1 | 1.3, 1.12, 1.13, 1.24 | guidance test; 1.10, 1.11 and 1.16 contracts declare `mcp`, `api`, `cli`; 1.24 inspection records and vendor redirect |
-| CAP-2 | 1.12, 1.24 | guidance test (six families, confirmation halt); 1.16 and 1.24 requirements statements |
-| CAP-3 | 1.4, 1.12, 1.16, 1.21, 1.24 | `test:evaluate-check`; tagged corpus examples; `test:evaluate-authoring` section coverage |
-| CAP-4 | 1.4, 1.13, 1.16, 1.24 | skeleton compile and seal test; tagged contract examples; 1.16 and 1.24 compile and seal exit 0 |
-| CAP-5 | 1.9, 1.13, 1.21, 1.24 | `test:evaluate-arms`; `test:evaluate-calibration`; tagged oracle and rubric examples |
-| CAP-6 | 1.1, 1.5, 1.6, 1.10, 1.11, 1.13, 1.18, 1.19 | `test:evaluate-preflight`, `-mcp`, `-api`, `-workflow`, `-tool-use` |
-| CAP-7 | 1.7, 1.9, 1.14, 1.16 | `test:evaluate-mutation`; tagged mutation examples; 1.16 rollback evidence |
-| CAP-8 | 1.8, 1.14 | template schema validation; guidance test (risk table) |
-| CAP-9 | 1.6, 1.8, 1.14, 1.16, 1.17 | `test:evaluate-run`; `test:evaluate-evaluators`; 1.16 live verdicts |
-| CAP-10 | 1.14, 1.16, 1.22, 1.25 | guidance test over exported vocabularies; `test:evaluate-interpret`; `test:evaluate-gap-loop` |
-| CAP-11 | 2.2, 2.3, 2.4, 2.5, H.1 | `test:evaluate-ci` (placement, gameability, freshness, agreement); rendering test; the `quality.yaml` `chain` matrix; H.1 step 4 |
-| CAP-12 | 1.8, 2.1, 2.5, H.1 | `run.json`; `test:evaluate-compare`; H.1 step 3 |
-| CAP-13 | 1.17, 1.19, 1.20, 1.23, 1.26 | `test:evaluate-evaluators`, `-tool-use`, `-promptfoo`, `-learned-framework`; template rendering in the guidance test |
-| CAP-14 | 1.21, 2.2 | `test:evaluate-partitions`, `test:evaluate-calibration`; `scheduled` and `release` tier cases |
+| Capability | Stories                                     | Proven by                                                                                                                        |
+| ---------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| CAP-1      | 1.3, 1.12, 1.13, 1.24                       | guidance test; 1.10, 1.11 and 1.16 contracts declare `mcp`, `api`, `cli`; 1.24 inspection records and vendor redirect            |
+| CAP-2      | 1.12, 1.24                                  | guidance test (six families, confirmation halt); 1.16 and 1.24 requirements statements                                           |
+| CAP-3      | 1.4, 1.12, 1.16, 1.21, 1.24                 | `test:evaluate-check`; tagged corpus examples; `test:evaluate-authoring` section coverage                                        |
+| CAP-4      | 1.4, 1.13, 1.16, 1.24                       | skeleton compile and seal test; tagged contract examples; 1.16 and 1.24 compile and seal exit 0                                  |
+| CAP-5      | 1.9, 1.13, 1.21, 1.24                       | `test:evaluate-arms`; `test:evaluate-calibration`; tagged oracle and rubric examples                                             |
+| CAP-6      | 1.1, 1.5, 1.6, 1.10, 1.11, 1.13, 1.18, 1.19 | `test:evaluate-preflight`, `-mcp`, `-api`, `-workflow`, `-tool-use`                                                              |
+| CAP-7      | 1.7, 1.9, 1.14, 1.16                        | `test:evaluate-mutation`; tagged mutation examples; 1.16 rollback evidence                                                       |
+| CAP-8      | 1.8, 1.14                                   | template schema validation; guidance test (risk table)                                                                           |
+| CAP-9      | 1.6, 1.8, 1.14, 1.16, 1.17                  | `test:evaluate-run`; `test:evaluate-evaluators`; 1.16 live verdicts                                                              |
+| CAP-10     | 1.14, 1.16, 1.22, 1.25                      | guidance test over exported vocabularies; `test:evaluate-interpret`; `test:evaluate-gap-loop`                                    |
+| CAP-11     | 2.2, 2.3, 2.4, 2.5, H.1                     | `test:evaluate-ci` (placement, gameability, freshness, agreement); rendering test; the `quality.yaml` `chain` matrix; H.1 step 4 |
+| CAP-12     | 1.8, 2.1, 2.5, H.1                          | `run.json`; `test:evaluate-compare`; H.1 step 3                                                                                  |
+| CAP-13     | 1.17, 1.19, 1.20, 1.23, 1.26                | `test:evaluate-evaluators`, `-tool-use`, `-promptfoo`, `-learned-framework`; template rendering in the guidance test             |
+| CAP-14     | 1.21, 2.2                                   | `test:evaluate-partitions`, `test:evaluate-calibration`; `scheduled` and `release` tier cases                                    |
 
 ### Plan gap audit closure
 
 The 2026-09-23 audit of this plan found eleven partial and two missing items, seven eval-quality non-goals no story covered, and an addendum of further gaps. Each is closed here.
 
-| Audit item | Closed by |
-| --- | --- |
-| 1 Inspect target: entry points, behaviors, surfaces, existing tests, failure history | Story 1.12 (inspection headings, inspection record); proven in Story 1.24 |
-| 2 Test-review mechanism kind | AD-4 sixth row; Story 1.12 corpus section; Story 1.24 test-review suite |
-| 3 Intake questions | Story 1.12 (six question families, statement template) |
-| 4 Corpus design per kind, representative, negative and malformed inputs, held-out probes | Story 1.12 (per-kind corpus); Story 1.21 (held-out runtime); Story 1.24 (section coverage) |
-| 5 BEC authoring discipline, interaction plan, sensitivity witness, waivers, worked examples | Story 1.13 |
-| 8 Gameability design per kind | Story 1.12 (per-kind gameability); Story 1.13 (loose and tightened oracle) |
-| 9 Oracle relation choice, evidence pointers, anchored scales, judge calibration | Story 1.13 (guide); Story 1.21 (calibration runtime) |
-| 10 Workflow adapter, tool-use calling agent, agent's own command | Stories 1.18 and 1.19 (fixtures); Story 1.13 (adapter guide rows) |
-| 11 Realistic mutation choice per behavior | Story 1.14 (mutation guide) |
-| 18 Author, rerun, rescore loop | Story 1.14 (loop); Story 1.25 (seeded weaknesses closed) |
-| 19 CI placement from the adopter's repository, CI, release flow and risk profile | AD-10 amended; Story 2.4 (inspection, placement reasons, two fixture repositories); Story 2.2 (placement schema) |
-| 20 Gameability arm, contract-source freshness, oracle-versus-scorer agreement in tiers | Story 2.2 (`pr` tier); Story 2.4 (placement) |
-| 26 TeA decides what runs when | Story 2.4; AD-10 |
-| 27 Evaluation-layer knowledge, third-party frameworks, sealed-brief evaluator | AD-21; Stories 1.17 (evaluator kinds, import contract, sealed-brief agent, records), 1.19 (AgentEvals), 1.20 (promptfoo), 1.23 (guide, rubric, learn-on-the-go), 1.26 (unfamiliar framework) |
-| Non-goal: claim-to-evidence lineage | AD-23 boundary; Story 1.22 (citation and pointer trace); Story 1.17 (quotes reach the engine unaltered) |
-| Non-goal: process and outcome separation, first material error attribution | Story 1.22 (runtime); Story 1.14 (reading them) |
-| Non-goal: semantic checkpoint scoring | AD-23 boundary: a judgment checkpoint is a rubric criterion judged by a calibrated judge (Stories 1.13, 1.21) and scored by eval-quality |
-| Non-goal: held-out probe sets | AD-22; Story 1.21; Story 2.2 (tiers) |
-| Non-goal: judge calibration | AD-22; Story 1.21; Story 1.13 (design) |
-| Non-goal: tool-selection evaluation | Story 1.19 |
-| Know-how placement: guidance proven only by term presence | Build Rules (craft and tagged examples); Stories 1.24, 1.25, 1.26 |
-| Addendum A: `seal` in the skill's compile-and-validate stage | Story 1.13 (stage and guide); Story 1.16 (proof runs `seal`) |
-| Addendum B: vendor-model requests redirected | Story 1.12 (passage and test); Story 1.24 (recorded redirect); AD-4 |
-| Addendum: repetition count and thresholds for a risk | Story 1.14 (harness risk table) |
-| Addendum: low catch rate, strength-vector reading, loose oracle | Story 1.14 (gaps readings) |
-| Addendum: exact checks and semantic rubrics | Story 1.13 (tagged examples compile) |
-| Addendum: adopter-owned harness or custom evaluator into `score` | Story 1.17 (`command` and `records` kinds) |
+| Audit item                                                                                  | Closed by                                                                                                                                                                                    |
+| ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 Inspect target: entry points, behaviors, surfaces, existing tests, failure history        | Story 1.12 (inspection headings, inspection record); proven in Story 1.24                                                                                                                    |
+| 2 Test-review mechanism kind                                                                | AD-4 sixth row; Story 1.12 corpus section; Story 1.24 test-review suite                                                                                                                      |
+| 3 Intake questions                                                                          | Story 1.12 (six question families, statement template)                                                                                                                                       |
+| 4 Corpus design per kind, representative, negative and malformed inputs, held-out probes    | Story 1.12 (per-kind corpus); Story 1.21 (held-out runtime); Story 1.24 (section coverage)                                                                                                   |
+| 5 BEC authoring discipline, interaction plan, sensitivity witness, waivers, worked examples | Story 1.13                                                                                                                                                                                   |
+| 8 Gameability design per kind                                                               | Story 1.12 (per-kind gameability); Story 1.13 (loose and tightened oracle)                                                                                                                   |
+| 9 Oracle relation choice, evidence pointers, anchored scales, judge calibration             | Story 1.13 (guide); Story 1.21 (calibration runtime)                                                                                                                                         |
+| 10 Workflow adapter, tool-use calling agent, agent's own command                            | Stories 1.18 and 1.19 (fixtures); Story 1.13 (adapter guide rows)                                                                                                                            |
+| 11 Realistic mutation choice per behavior                                                   | Story 1.14 (mutation guide)                                                                                                                                                                  |
+| 18 Author, rerun, rescore loop                                                              | Story 1.14 (loop); Story 1.25 (seeded weaknesses closed)                                                                                                                                     |
+| 19 CI placement from the adopter's repository, CI, release flow and risk profile            | AD-10 amended; Story 2.4 (inspection, placement reasons, two fixture repositories); Story 2.2 (placement schema)                                                                             |
+| 20 Gameability arm, contract-source freshness, oracle-versus-scorer agreement in tiers      | Story 2.2 (`pr` tier); Story 2.4 (placement)                                                                                                                                                 |
+| 26 TeA decides what runs when                                                               | Story 2.4; AD-10                                                                                                                                                                             |
+| 27 Evaluation-layer knowledge, third-party frameworks, sealed-brief evaluator               | AD-21; Stories 1.17 (evaluator kinds, import contract, sealed-brief agent, records), 1.19 (AgentEvals), 1.20 (promptfoo), 1.23 (guide, rubric, learn-on-the-go), 1.26 (unfamiliar framework) |
+| Non-goal: claim-to-evidence lineage                                                         | AD-23 boundary; Story 1.22 (citation and pointer trace); Story 1.17 (quotes reach the engine unaltered)                                                                                      |
+| Non-goal: process and outcome separation, first material error attribution                  | Story 1.22 (runtime); Story 1.14 (reading them)                                                                                                                                              |
+| Non-goal: semantic checkpoint scoring                                                       | AD-23 boundary: a judgment checkpoint is a rubric criterion judged by a calibrated judge (Stories 1.13, 1.21) and scored by eval-quality                                                     |
+| Non-goal: held-out probe sets                                                               | AD-22; Story 1.21; Story 2.2 (tiers)                                                                                                                                                         |
+| Non-goal: judge calibration                                                                 | AD-22; Story 1.21; Story 1.13 (design)                                                                                                                                                       |
+| Non-goal: tool-selection evaluation                                                         | Story 1.19                                                                                                                                                                                   |
+| Know-how placement: guidance proven only by term presence                                   | Build Rules (craft and tagged examples); Stories 1.24, 1.25, 1.26                                                                                                                            |
+| Addendum A: `seal` in the skill's compile-and-validate stage                                | Story 1.13 (stage and guide); Story 1.16 (proof runs `seal`)                                                                                                                                 |
+| Addendum B: vendor-model requests redirected                                                | Story 1.12 (passage and test); Story 1.24 (recorded redirect); AD-4                                                                                                                          |
+| Addendum: repetition count and thresholds for a risk                                        | Story 1.14 (harness risk table)                                                                                                                                                              |
+| Addendum: low catch rate, strength-vector reading, loose oracle                             | Story 1.14 (gaps readings)                                                                                                                                                                   |
+| Addendum: exact checks and semantic rubrics                                                 | Story 1.13 (tagged examples compile)                                                                                                                                                         |
+| Addendum: adopter-owned harness or custom evaluator into `score`                            | Story 1.17 (`command` and `records` kinds)                                                                                                                                                   |
 
 ## Epic Sizing
 
-| Epic | Size | What drives it |
-| --- | --- | --- |
+| Epic   | Size        | What drives it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ------ | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Epic 1 | Extra large | One upstream export; a runtime generalized from existing harness code in six moves plus the evaluation layer (evaluator kinds, the MCP bridge, the import contract), held-out partitions, judge calibration and interpretation; eight fixture targets (MCP, API, workflow, tool-use agent, promptfoo summarizer, AI feature, test-review mechanism, learn-on-the-go target) and three framework devDependencies (AgentEvals, promptfoo, the framework Story 1.26 learns); four skill-content stories carrying craft and worked examples; and four live proofs (the dogfood suite, two more target kinds, the gap loop, an unfamiliar framework). |
-| Epic 2 | Large | Compare and CI subcommands with placement validation and three added deterministic checks, one step in `bmad-testarch-ci`, the skill's CI stage with repository inspection and two recorded fixture repositories, TeA's own wiring for every fixture evaluation, and documentation. |
+| Epic 2 | Large       | Compare and CI subcommands with placement validation and three added deterministic checks, one step in `bmad-testarch-ci`, the skill's CI stage with repository inspection and two recorded fixture repositories, TeA's own wiring for every fixture evaluation, and documentation.                                                                                                                                                                                                                                                                                                                                                              |
 
 The runtime is split by the AD-5 module table so each story moves or builds one concern and keeps `npm test` green at its end.

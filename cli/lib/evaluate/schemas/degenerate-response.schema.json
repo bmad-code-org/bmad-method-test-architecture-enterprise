@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:tea:evaluate:schema:degenerate-response",
   "title": "corpus/gameability/P-NNN.json",
-  "description": "A gameability probe's degenerate response (AD-9, AD-19): the compliant-looking answer, one response per interaction plan step (a command step's streams and exit code, or a tool-call step's error flag and structured result), which tea-evaluate run answers the plan from with no target launched. eval-quality keeps the probe's degenerateResponse as prose, so the bytes live here, in the corpus. tea-evaluate check requires one entry for every plan step and no other, each of its step's kind, and refuses an exit code the step's registry entry declares as infrastructure. The tea-evaluate runtime owns this schema.",
+  "description": "A gameability probe's degenerate response (AD-9, AD-19): the compliant-looking answer, one response per interaction plan step (a command step's streams and exit code, a tool-call step's error flag and structured result, or an HTTP step's status, headers and body), which tea-evaluate run answers the plan from with no target launched. eval-quality keeps the probe's degenerateResponse as prose, so the bytes live here, in the corpus. tea-evaluate check requires one entry for every plan step and no other, each of its step's kind, and refuses an exit code the step's registry entry declares as infrastructure. The tea-evaluate runtime owns this schema.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schemaVersion", "steps"],
@@ -35,6 +35,29 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 255
+              }
+            }
+          },
+          {
+            "description": "An HTTP step's answer (Story 1.11): the status, the headers and the body as text, which the evaluation's HTTP port reads as it reads a real answer (a JSON content-type makes the body JSON).",
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["status"],
+            "properties": {
+              "status": {
+                "description": "The answer's HTTP status.",
+                "type": "integer",
+                "minimum": 100,
+                "maximum": 599
+              },
+              "headers": {
+                "description": "The answer's headers, by name.",
+                "type": "object",
+                "additionalProperties": { "type": "string" }
+              },
+              "body": {
+                "description": "The answer's body, as text; absent or empty for an answer with no body.",
+                "type": "string"
               }
             }
           },

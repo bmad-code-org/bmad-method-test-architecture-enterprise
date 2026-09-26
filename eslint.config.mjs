@@ -123,6 +123,31 @@ export default [
     },
   },
 
+  // The Evaluate runtime's modules run in strict mode: the directive opens each
+  // file, so a formatter or an edit that moves it below the requires, where it
+  // is an inert expression and the module runs sloppy, fails lint (TEA Story
+  // 1.11).
+  {
+    files: ['cli/lib/evaluate/**/*.js'],
+    rules: {
+      strict: ['error', 'global'],
+    },
+  },
+
+  // The Evaluate skill's HTTP port templates are adopter code: rendered into an
+  // evaluation folder's adapter/, they resolve eval-quality and this package
+  // against that folder's own install (AD-20). The port's last lines import
+  // TeA's host by this package's name, which this repository cannot resolve by
+  // name, since a package is not installed inside itself; test:evaluate-api
+  // runs both templates from a folder whose install provides it. Every other
+  // import is still held to resolve.
+  {
+    files: ['src/workflows/testarch/bmad-testarch-evaluate/assets/*.mjs'],
+    rules: {
+      'n/no-missing-import': ['error', { allowModules: ['bmad-method-test-architecture-enterprise'] }],
+    },
+  },
+
   // ESLint config file should not be checked for publish-related Node rules
   {
     files: ['eslint.config.mjs'],

@@ -36,7 +36,7 @@ class EngineUnavailableError extends Error {
   constructor(cause) {
     super(
       `${ENGINE_PACKAGE} is not installed where tea-evaluate can reach it. ` +
-        `It is an optional peer dependency of TeA; install ${ENGINE_PACKAGE}@">=4.2.0" in the project that runs Evaluate. ` +
+        `It is an optional peer dependency of TeA; install ${ENGINE_PACKAGE}@">=4.3.0" in the project that runs Evaluate. ` +
         `(${cause?.message ?? 'no further detail'})`,
       { cause },
     );
@@ -74,6 +74,7 @@ function engineConstants() {
 
 let pending;
 let pendingAdapters;
+let pendingConformance;
 
 /**
  * The engine's library, imported once per process.
@@ -108,6 +109,24 @@ function loadAdapters() {
     });
   }
   return pendingAdapters;
+}
+
+/**
+ * The engine's `eval-quality/conformance` subpath, imported once per process on
+ * the same terms as `loadEngine`: the runtime reads an HTTP port's answer
+ * through its `probeParsers.response`, eval-quality's own `ProbeObservation`
+ * parser, so no copy of that schema lives in TeA.
+ *
+ * @returns {Promise<Record<string, unknown>>}
+ */
+function loadConformance() {
+  if (pendingConformance === undefined) {
+    pendingConformance = import('eval-quality/conformance').catch((error) => {
+      pendingConformance = undefined;
+      throw new EngineUnavailableError(error);
+    });
+  }
+  return pendingConformance;
 }
 
 /**
@@ -256,6 +275,7 @@ module.exports = {
   engineVersion,
   expectedSchemaVersion,
   loadAdapters,
+  loadConformance,
   loadEngine,
   schemaVersionProblems,
 };

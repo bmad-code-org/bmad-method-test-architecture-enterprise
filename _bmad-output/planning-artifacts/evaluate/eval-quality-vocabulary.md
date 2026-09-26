@@ -15,15 +15,15 @@ A separate binary, `eval-quality-gates`, enforces deterministic repository polic
 
 ## Exit codes (`compile`/`seal`/`preflight`/`score`, AD-21's six plus `64`)
 
-| Code | Meaning |
-| --- | --- |
-| `0` | Success: every verdict other than FAIL or a promoted CONCERNS |
-| `1` | CONCERNS promoted by `--strict` |
-| `2` | FAIL |
-| `3` | Invalid: a failed pre-flight, or any other AD-21 invalidating condition |
-| `4` | Structural failure |
-| `5` | Runtime fault |
-| `64` | Usage error |
+| Code | Meaning                                                                 |
+| ---- | ----------------------------------------------------------------------- |
+| `0`  | Success: every verdict other than FAIL or a promoted CONCERNS           |
+| `1`  | CONCERNS promoted by `--strict`                                         |
+| `2`  | FAIL                                                                    |
+| `3`  | Invalid: a failed pre-flight, or any other AD-21 invalidating condition |
+| `4`  | Structural failure                                                      |
+| `5`  | Runtime fault                                                           |
+| `64` | Usage error                                                             |
 
 `--strict` never promotes a CONCERNS whose firing conditions are all evidence conditions (a measurement that fell short of policy).
 
@@ -31,7 +31,7 @@ A separate binary, `eval-quality-gates`, enforces deterministic repository polic
 
 `probeClass` (`schemas/probe.schema.json`) enumerates exactly four values: **`defect`**, **`gameability`**, **`zero-action`**, **`canary`**. AD-7 excludes both clean controls and canary probes from the contract-strength vector by design: canary probes indict the corpus, and clean controls verify that unmutated runs go unpenalized.
 
-`expectedClean` splits `zero-action` into two probe types. A clean control is `expectedClean: true` paired with `probeClass: "zero-action"`: the only pairing `qualifyProbe`'s `admissibleRoutes` admits for a clean branch, routed through the `clean-control` qualification route. A zero-action *defect* probe is `expectedClean: false` with the same `probeClass`, seeding a system that silently no-ops on a mandatory requirement (`docs/explanation/contract-strength.md`), qualified the same way a `defect`-class probe is. CAP-3 authors both: the clean control that proves the pairing, and, wherever a behavior states a mandatory action, the zero-action defect probe that proves silent no-ops get caught.
+`expectedClean` splits `zero-action` into two probe types. A clean control is `expectedClean: true` paired with `probeClass: "zero-action"`: the only pairing `qualifyProbe`'s `admissibleRoutes` admits for a clean branch, routed through the `clean-control` qualification route. A zero-action _defect_ probe is `expectedClean: false` with the same `probeClass`, seeding a system that silently no-ops on a mandatory requirement (`docs/explanation/contract-strength.md`), qualified the same way a `defect`-class probe is. CAP-3 authors both: the clean control that proves the pairing, and, wherever a behavior states a mandatory action, the zero-action defect probe that proves silent no-ops get caught.
 
 For a `controlled-mutation` probe, `eval-quality` performs no mutation and executes nothing. The probe record only carries the declaration: `mutationOperator` (free text naming the edit, unread by any code), `targetArtifact` (what changed), and `rollbackVerified` (the caller's asserted boolean). CAP-7 owns making that assertion true.
 
