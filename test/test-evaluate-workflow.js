@@ -890,8 +890,8 @@ async function checkRefusedPlans() {
 
 /**
  * A copy workspace made from the pristine copy holds what the pristine copy held when it was made: a file a leg wrote
- * there afterwards stays out, an absolute link into the project is contained in both, and a snapshot changed
- * afterwards is refused.
+ * there afterwards stays out, an absolute link into the project is contained in both, and a snapshot or provisioned
+ * copy changed afterwards is refused.
  */
 function checkSnapshot() {
   const directory = scratch.make('snapshot');
@@ -942,9 +942,51 @@ function checkSnapshot() {
       refused instanceof WorkspaceRefusal && refused.message.includes('of the workspace it reproduces'),
       `a reproduction of a changed snapshot gave ${refused}`,
     );
+    fs.writeFileSync(path.join(pristine.snapshot, 'file.txt'), 'as made\n');
+    fs.mkdirSync(path.join(pristine.snapshot, 'empty-afterwards'));
+    let emptyDirectory = null;
+    try {
+      make('empty-directory', pristine);
+    } catch (error) {
+      emptyDirectory = error;
+    }
+    check(
+      emptyDirectory instanceof WorkspaceRefusal && emptyDirectory.message.includes('of the workspace it reproduces'),
+      `a reproduction of a snapshot with an added empty directory gave ${emptyDirectory}`,
+    );
+    fs.rmdirSync(path.join(pristine.snapshot, 'empty-afterwards'));
+    const snapshotFile = path.join(pristine.snapshot, 'file.txt');
+    const snapshotMode = fs.statSync(snapshotFile).mode & 0o7777;
+    fs.chmodSync(snapshotFile, snapshotMode ^ 0o100);
+    let changedMode = null;
+    try {
+      make('changed-mode', pristine);
+    } catch (error) {
+      changedMode = error;
+    }
+    check(
+      changedMode instanceof WorkspaceRefusal && changedMode.message.includes('of the workspace it reproduces'),
+      `a reproduction of a snapshot with a changed executable bit gave ${changedMode}`,
+    );
+    fs.chmodSync(snapshotFile, snapshotMode);
+    const library = path.join(pristine.root, 'vendor', 'library.txt');
+    const originalMode = fs.statSync(library).mode & 0o7777;
+    fs.chmodSync(library, originalMode | 0o200);
+    fs.writeFileSync(library, 'changed by a leg\n');
+    let changedProvision = null;
+    try {
+      make('changed-provision', pristine);
+    } catch (error) {
+      changedProvision = error;
+    }
+    check(
+      changedProvision instanceof WorkspaceRefusal && changedProvision.message.includes('the copy it reproduces changed after it was made'),
+      `a reproduction of a changed provisioned file gave ${changedProvision}`,
+    );
+    fs.writeFileSync(library, 'the library\n');
+    fs.chmodSync(library, originalMode);
     // A provisioned directory planted in the snapshot, or the pristine copy's read-only copy moved away, is refused
     // where the digest, which leaves provisioned directories out, cannot see it.
-    fs.writeFileSync(path.join(pristine.snapshot, 'file.txt'), 'as made\n');
     const refusalOf = (label) => {
       try {
         make(label, pristine);

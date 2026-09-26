@@ -297,10 +297,10 @@ function fileDigest(file) {
 }
 
 /**
- * A digest over every file and symbolic link under `root`, sorted by path:
- * each contributes its POSIX path, its kind and its content (a file, the
- * SHA-256 of its bytes; a link, its target as written). A path in `exclude`
- * (absolute) is left out with everything under it.
+ * A digest over every directory, file and symbolic link under `root`, sorted
+ * by path: each contributes its POSIX path and kind; directories and files
+ * also contribute their mode, a file its SHA-256 bytes and a link its target.
+ * A path in `exclude` (absolute) is left out with everything under it.
  *
  * @param {string} root
  * @param {object} [options]
@@ -317,8 +317,10 @@ function treeDigest(root, { exclude = [] } = {}) {
       if (excluded.has(full)) continue;
       const relative = posix(path.relative(root, full));
       if (entry.isSymbolicLink()) parts.push(relative, 'link', fs.readlinkSync(full));
-      else if (entry.isDirectory()) visit(full);
-      else if (entry.isFile()) parts.push(relative, 'file', fileDigest(full));
+      else if (entry.isDirectory()) {
+        parts.push(relative, 'directory', fs.lstatSync(full).mode & 0o7777);
+        visit(full);
+      } else if (entry.isFile()) parts.push(relative, 'file', fs.lstatSync(full).mode & 0o7777, fileDigest(full));
     }
   };
   visit(root);
@@ -586,6 +588,7 @@ function createWorkspace({ root, kind, provision = [], exclude = [], fromWorking
     snapshot: null,
     dirty: basis?.dirty ?? fromWorkingTree,
     provisioned: [],
+    provisionedDigests: {},
   };
   try {
     const excluded = exclude.filter((entry) => entry !== root && isInside(root, entry));
@@ -664,6 +667,14 @@ function createWorkspace({ root, kind, provision = [], exclude = [], fromWorking
           `the provisioned directory ${entry} is a symbolic link; provision the directory it leads to, since making a link read-only would lock its target`,
         );
       }
+      if (basis !== null && basis.provisioned.includes(inSource)) {
+        const expected = basis.provisionedDigests[path.relative(basis.root, inSource)];
+        if (expected === undefined || treeDigest(inSource) !== expected) {
+          throw new WorkspaceRefusal(
+            `the ${label} workspace cannot reproduce the provisioned directory ${entry}: the copy it reproduces changed after it was made`,
+          );
+        }
+      }
       if (!fs.existsSync(inWorkspace)) {
         if (!fs.existsSync(inSource)) continue;
         fs.mkdirSync(path.dirname(inWorkspace), { recursive: true });
@@ -685,6 +696,9 @@ function createWorkspace({ root, kind, provision = [], exclude = [], fromWorking
       copyTreeInto(workspace.top, workspace.snapshot, { skip: (source) => workspace.provisioned.includes(source) });
     }
     for (const provisioned of workspace.provisioned) makeReadOnly(provisioned);
+    for (const provisioned of workspace.provisioned) {
+      workspace.provisionedDigests[path.relative(workspace.root, provisioned)] = treeDigest(provisioned);
+    }
     if (!worktree) {
       workspace.treeDigest = treeDigest(workspace.root, { exclude: workspace.provisioned });
       if (basis !== null && workspace.treeDigest !== basis.treeDigest) {
