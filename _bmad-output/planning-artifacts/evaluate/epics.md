@@ -23,7 +23,7 @@ inputDocuments:
 
 ## Overview
 
-This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and forty-three stories (Stories 1.27 to 1.38 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
+This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and forty-four stories (Stories 1.27 to 1.39 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
 
 Evaluate is fully stacked. The stack runs system under test, then the evaluation (the mechanism that runs the system, collects evidence and makes judgments), then the Behavioral Evaluation Contract (what behavior matters, what evidence counts, how success and failure resolve), then eval-quality (contract sanity, evidence support, and whether the evaluation catches defects). TeA owns every layer above eval-quality, including each concern eval-quality states it leaves to the caller, so an adopter can evaluate any target end to end. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3 onward, Epic 2 and H.1 to close the plan gap audit; the Traceability section maps each audit item to the story that closes it.
 
@@ -150,7 +150,7 @@ None. Evaluate has no graphical interface.
 ### Epic 1: The Evaluate authoring loop
 
 An adopter describes a target, answers Evaluate's questions, chooses or builds the evaluation layer and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches the seeded defect, with the gaps named and closed. The epic closes by running Evaluate on `bmad-testarch-evaluate` itself, then proving the guidance on two more target kinds, on seeded weaknesses and on an evaluation framework its guides never name.
-Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.38.
+Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.39.
 
 **FRs covered:** FR1 to FR10, FR13, FR14.
 
@@ -204,12 +204,13 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 36    | 1.36  | 1.11                         |
 | 37    | 1.37  | 1.11                         |
 | 38    | 1.38  | 1.32                         |
-| 39    | 2.1   | 1.16, 1.26                   |
-| 40    | 2.2   | 2.1                          |
-| 41    | 2.3   | 2.2                          |
-| 42    | 2.4   | 2.3                          |
-| 43    | 2.5   | 2.4                          |
-| 44    | H.1   | 2.5                          |
+| 39    | 1.39  | 1.18                         |
+| 40    | 2.1   | 1.16, 1.26                   |
+| 41    | 2.2   | 2.1                          |
+| 42    | 2.3   | 2.2                          |
+| 43    | 2.4   | 2.3                          |
+| 44    | 2.5   | 2.4                          |
+| 45    | H.1   | 2.5                          |
 
 ## Epic 1: The Evaluate authoring loop
 
@@ -977,7 +978,7 @@ So that the cross-user behaviors and malformed-input checks Story 1.13 teaches r
 
 **Acceptance Criteria:**
 
-**Given** Story 1.8's arm executor, which sends `literal` bindings only and stops a trial with exit 12 on any other kind (`cli/lib/evaluate/arm.js`), and eval-quality's plan schema, which admits `principal` (a kebab-case principal identifier) and `matcher` (`any` or `type-violating`) bindings besides `literal` and `captured`
+**Given** Story 1.8's arm executor, which sends `literal` bindings only and stops a trial with exit 12 on any other kind (`cli/lib/evaluate/arm.js`; amended 2026-09-26 in Story 1.18: it sends `literal` and `captured` bindings, and the reference states the kinds it sends under `## The interaction plan`, `### Binding kinds`, which this story's case reads), and eval-quality's plan schema, which admits `principal` (a kebab-case principal identifier) and `matcher` (`any` or `type-violating`) bindings besides `literal` and `captured`
 **When** a step binds `{ principal }`
 **Then** the runtime sends the credential or identity the registry entry maps to that principal for the step's channel, from a principal mapping the evaluation declares and `check` validates (an unmapped principal is an authoring defect, exit 10), and records the principal, never the credential, in the observation's call inputs; a case in `test/test-evaluate-run.js` whose stub target prints the identity it received asserts two principals reach it in the plan's order, and reverting the binding makes the case exit 12
 **And** when a step binds `{ matcher: "any" }` or `{ matcher: "type-violating" }`, the runtime chooses a value from the operation's declared input schema (a value the schema admits for `any`, one it refuses for `type-violating`) with a seed the run records in `run.json`, so a rerun sends the same value; a case asserts the stub received a schema-admitted value and a schema-refused value, and that two runs with one seed send the same bytes; reverting the choice makes the case exit 12
@@ -1156,6 +1157,28 @@ So that the digests a qualified probe records name the releases the run measured
 
 **Dependencies:** 1.32.
 **Gate:** `npm test`.
+
+### Story 1.39: Tell a captured value too large to launch from a target that cannot run
+
+Added 2026-09-26 in Story 1.18 from a gap its build review accepted: a `captured` binding sends the value a target printed, and a command step the value makes too large for the system's argument and environment limit fails to launch; eval-quality's command-line adapter reports that as `port-failure` with the spawn's `E2BIG` as its cause, the same fault as a target that could not start, so the run stops with exit 12 and reads the target's own output as an unfit harness.
+Story 1.18 skips a step whose captured value the request cannot carry for every other reason it can decide before the launch (`captured-value-unsendable`); the size limit is the system's, and only the launch knows it.
+
+As an adopter whose workflow step passes on a value an earlier step printed,
+I want a value too large to launch recorded as a step not issued,
+So that a target printing an oversized value is judged on that behavior and the run goes on (AD-7, AD-10).
+
+**Engine consumption.** eval-quality ships a release whose command-line adapter reports a launch the system refused for its argument and environment size with a `RuntimeFault` reason of its own, as a policy denial carries `reason`, and TeA's devDependency and peer floor rise to it with the engine check at start and end; the coordinator makes that change in eval-quality.
+
+**Acceptance Criteria:**
+
+**Given** that release and Story 1.18's workflow fixture, whose `create` prints an identifier larger than the system's argument limit in the workspaces a test names
+**When** `tea-evaluate run` runs
+**Then** the dependent step is not issued and the trial's evidence lists it as `captured-value-unsendable` naming the binding and eval-quality's reason, the run exits 0, and the probe's outcome read from the evidence artifact is not `caught`, a `test:evaluate-workflow` case; stopping the run on the fault as before makes the case exit 12, which the case catches
+**And** a command step with only literal bindings that the system refuses for its size still stops the run with exit 12, since the contract itself cannot be sent, a `test:evaluate-workflow` unit; skipping it as well lets the unit pass a contract defect, which the unit catches
+**And** the reference's `### Steps not issued` names the size limit among the values the request cannot carry, and the case reading the section fails when that sentence is removed
+
+**Dependencies:** 1.18.
+**Gate:** `npm test`, `npm run test:release-metadata`, engine check.
 
 ## Epic 2: Continuous proof in CI
 

@@ -605,8 +605,16 @@ async function checkUnits() {
   const port = syntheticPort({
     label: 'g',
     steps: { one: { isError: true, structuredResult: { ok: false } }, two: { stdout: '', stderr: '', exitCode: 0 } },
+    registry: createRegistry(evaluation.registry, { root: FIXTURE }),
   });
-  const answered = await port.probe({ probeId: 'g-one', interfaceId: 'grader', operationId: 'grade-answer', kind: 'mcp' });
+  const answered = await port.probe({
+    probeId: 'g-one',
+    interfaceId: 'grader',
+    operationId: 'grade-answer',
+    kind: 'mcp',
+    toolName: 'grade_answer',
+    channels: { arguments: {} },
+  });
   check(
     JSON.stringify(answered.observation) ===
       JSON.stringify({
@@ -618,6 +626,24 @@ async function checkUnits() {
         result: { kind: 'json', value: { ok: false } },
       }),
     `the synthetic port answered ${JSON.stringify(answered.observation)}`,
+  );
+  // The registry's policy decides a degenerate tool call as it decides a real one.
+  let deniedTool = null;
+  try {
+    await port.probe({
+      probeId: 'g-one',
+      interfaceId: 'grader',
+      operationId: 'grade-answer',
+      kind: 'mcp',
+      toolName: 'not_listed',
+      channels: { arguments: {} },
+    });
+  } catch (error) {
+    deniedTool = error;
+  }
+  check(
+    deniedTool?.code === 'forbidden-target' && deniedTool.reason === 'tool-not-authorized',
+    `a degenerate tool call the registry does not list gave ${deniedTool}`,
   );
   let mismatch = null;
   try {

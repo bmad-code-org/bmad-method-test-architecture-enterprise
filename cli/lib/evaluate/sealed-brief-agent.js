@@ -79,14 +79,13 @@
 'use strict';
 
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 
 const { AGENT_ADAPTERS } = require('../agent-adapters');
 const { runAgentAsync } = require('../run-agent');
-const { bodyValue, carriesPrototypeKey, causeNote, hostEnvironmentPort, persistableRequest, stoppedFromOutside } = require('./arm');
+const { bodyValue, carriesPrototypeKey, causeNote, persistableRequest, stoppedFromOutside } = require('./arm');
 const { CALL_SHAPES, bridgeTools, openBridge } = require('./bridge');
-const { loadAdapters } = require('./engine');
+const { UnansweredCall, degeneratePort } = require('./gameability');
 const { UnansweredRequest } = require('./http-target');
 const { answerBlocks, unfenced } = require('./judge');
 const { EvaluatorError, isOracleBinding, readAnswer } = require('./judgment-rows');
@@ -394,46 +393,6 @@ function degenerateAnswer({ contract, degenerate, operationId, kind }) {
   const ofKind = (candidate) => Object.hasOwn(degenerate, candidate.stepId) && answerKind(degenerate[candidate.stepId]) === kind;
   const step = plan.find((candidate) => candidate.operationId === operationId && ofKind(candidate)) ?? plan.find(ofKind);
   return step === undefined ? undefined : degenerate[step.stepId];
-}
-
-/** Thrown by a gameability arm's mechanism when the degenerate response answers no call of the call's kind. */
-class UnansweredCall extends Error {}
-
-/**
- * A gameability arm's port for one agent call: eval-quality's command-line
- * adapter or MCP adapter, or the evaluation's HTTP port, over the registry's
- * authorizations, so an executable, subcommand path, interface, tool,
- * address or method the registry does not grant is denied exactly as on a
- * real arm, with a mechanism or transport that launches and sends nothing and
- * answers with the degenerate response (`degenerateAnswer`), or throws
- * `UnansweredCall` (`UnansweredRequest` for HTTP) when it holds none for the
- * kind; every written file the registry declares reads as absent.
- */
-async function degeneratePort({ registry, answer, kind }) {
-  if (kind === 'api') return hostEnvironmentPort({ port: registry.degenerateHttpPort(answer), registry });
-  const { createCommandLineAdapter, createMcpAdapter, parseMcpTargetPolicy } = await loadAdapters();
-  const answered = () => {
-    if (answer === undefined) throw new UnansweredCall(`the system answers no ${kind === 'mcp' ? 'tool call' : 'command'}`);
-    return answer;
-  };
-  // The authorizations' working directory is never entered: nothing launches and no written file is read.
-  const cwd = registry.root ?? os.tmpdir();
-  const adapter =
-    kind === 'mcp'
-      ? createMcpAdapter(parseMcpTargetPolicy(registry.mcpTargetPolicy({ cwd })), {
-          callTool: async () => {
-            const { isError, ...rest } = answered();
-            return Object.hasOwn(rest, 'structuredResult') ? { isError, structuredResult: rest.structuredResult } : { isError };
-          },
-        })
-      : createCommandLineAdapter(registry.commandTargetPolicy({ cwd }), {
-          run: async () => {
-            const { exitCode, stdout, stderr } = answered();
-            return { exitCode, stdout, stderr };
-          },
-          readArtifact: async () => ({ present: false, text: '', truncated: false }),
-        });
-  return hostEnvironmentPort({ port: adapter, registry });
 }
 
 /**

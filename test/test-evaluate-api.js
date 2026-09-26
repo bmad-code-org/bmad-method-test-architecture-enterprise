@@ -1029,7 +1029,7 @@ async function checkUnits() {
     crossed = error.message;
   }
   check(
-    String(unported).includes("no registry holds the evaluation's HTTP port") &&
+    String(unported).includes("has no registry to hold the evaluation's authorizations") &&
       String(crossed).includes("an HTTP request, with a command's response"),
     `the synthetic port answered an HTTP step with ${unported} and ${crossed}`,
   );

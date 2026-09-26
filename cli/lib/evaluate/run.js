@@ -119,11 +119,12 @@ const UNBOUNDED = Number.MAX_SAFE_INTEGER;
 /**
  * What the runtime does to withhold the forbidden inputs, and no more: it
  * hands the target a workspace without the evaluation folder and requests
- * that carry the plan's literals, and it does not sandbox the target's file
- * system (Story 1.31).
+ * that carry the plan's literals and the values the target itself printed
+ * earlier in the trial, and it does not sandbox the target's file system
+ * (Story 1.31).
  */
 const FORBIDDEN_INPUT_NOTE =
-  "Withheld from what the runtime hands the target: each trial runs in a disposable workspace that leaves out the evaluation folder, and every request carries only the interaction plan's literal bindings. The runtime does not sandbox the target's file system, so a target that searches for the evaluation folder can reach it.";
+  "Withheld from what the runtime hands the target: each trial runs in a disposable workspace that leaves out the evaluation folder, and every request carries only the interaction plan's literal bindings and the values its captured bindings read from the target's own earlier observations in the same trial. The runtime does not sandbox the target's file system, so a target that searches for the evaluation folder can reach it.";
 
 /**
  * What `run.json` says ran for one registry entry: a command's executable and
@@ -401,10 +402,15 @@ async function runTrial(context) {
         trialIndex,
         workspace: null,
         degenerateResponse: arm.degenerate.response,
-        fault: { message: String(error?.message ?? error) },
+        fault: faultRecord(error),
         steps: error?.steps ?? [],
       });
-      throw stop({ stage: 'trial', exitCode: 12, message: `${label} yields no record: ${error?.message ?? error}` });
+      const denied = error?.code === DENIAL_FAULT;
+      throw stop({
+        stage: 'trial',
+        exitCode: denied ? 10 : 12,
+        message: `${label} ${denied ? `was denied by the registry${reasonNote(error)}` : 'yields no record'}: ${error?.message ?? error}`,
+      });
     }
     // Nothing launched: no workspace was granted and no command ran.
     return concludeTrial(context, {
@@ -482,7 +488,7 @@ async function runTrial(context) {
       ],
       // The commands and tool calls the runtime made for the plan, each an observed call; what the target itself opened or
       // reached is not observed.
-      toolCalls: executed.steps.map((step) => callLabel(step.request)),
+      toolCalls: executed.steps.filter((step) => step.skipped === undefined).map((step) => callLabel(step.request)),
     });
   } finally {
     discard(workspace);
@@ -682,7 +688,7 @@ async function concludeWithRows(context, facts) {
       Object.entries(judgments).map(([probeId, judgment]) => [probeId, trialRecommendation(evaluated.answer, judgment)]),
     ),
     // Every call the trial made: the plan's steps and each call of the agent's the budget admitted.
-    callCount: executed.steps.length + (router?.counted() ?? 0),
+    callCount: executed.steps.filter((step) => step.skipped === undefined).length + (router?.counted() ?? 0),
     elapsedMs,
     mounts,
     toolCalls: [...toolCalls, ...bridged],

@@ -57,6 +57,7 @@
   "test:evaluate-mutation": 169.8,
   "test:evaluate-preflight": 63,
   "test:evaluate-run": 111.2,
+  "test:evaluate-workflow": 25,
   "test:file-system-conformance": 0.3,
   "test:file-system-port": 17.9,
   "test:framework-scaffold": 0.2,

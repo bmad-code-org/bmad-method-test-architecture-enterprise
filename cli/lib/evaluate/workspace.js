@@ -582,6 +582,8 @@ function createWorkspace({ root, kind, provision = [], exclude = [], fromWorking
     commit: worktree ? (revision?.commit ?? basis?.commit ?? repository.commit) : null,
     tree: worktree ? (revision?.tree ?? basis?.tree ?? repository.tree) : null,
     treeDigest: null,
+    // A copy made with no basis keeps what it held when it was made, which a reproduction copies.
+    snapshot: null,
     dirty: basis?.dirty ?? fromWorkingTree,
     provisioned: [],
   };
@@ -631,12 +633,24 @@ function createWorkspace({ root, kind, provision = [], exclude = [], fromWorking
       });
     } else {
       workspace.root = workspace.top;
-      copyTreeInto(basis.top, workspace.top);
+      copyTreeInto(basis.snapshot, workspace.top);
     }
     for (const entry of provision) {
       const relative = entry.replace(/\/+$/, '').split('/');
       const inWorkspace = path.join(workspace.root, ...relative);
       const inSource = basis === null ? path.join(root, ...relative) : path.join(basis.root, ...relative);
+      if (!worktree && basis !== null) {
+        // A copy reproduces only the directories its basis provisioned when it was made, from the basis's read-only
+        // copies; one a target made there afterwards is not provisioned. The snapshot holds no provisioned directory,
+        // so one already here was planted in it, and a basis copy that is gone was moved by a target: either way the
+        // reproduction would not hold what the basis held.
+        if (!basis.provisioned.includes(inSource)) continue;
+        if (fs.existsSync(inWorkspace) || !fs.existsSync(inSource)) {
+          throw new WorkspaceRefusal(
+            `the ${label} workspace cannot reproduce the provisioned directory ${entry}: ${fs.existsSync(inWorkspace) ? 'a copy of it was planted in the snapshot it copies' : 'the copy it reproduces no longer holds it'}`,
+          );
+        }
+      }
       const linkIn = (candidate) => {
         try {
           return fs.lstatSync(candidate).isSymbolicLink();
@@ -662,6 +676,14 @@ function createWorkspace({ root, kind, provision = [], exclude = [], fromWorking
       copyTop: workspace.top,
       scan: workspace.root,
     });
+    if (!worktree && basis === null) {
+      // What the copy holds as it is made, its links contained and its provisioned directories left out, kept beside
+      // it: a target run in the copy (a preflight leg whose operation writes a record, say) changes the copy, and a
+      // workspace reproducing it copies this instead. Everything the snapshot holds is under the tree digest, so a
+      // snapshot changed afterwards no longer digests to the copy's, which the reproduction refuses.
+      workspace.snapshot = path.join(directory, 'snapshot');
+      copyTreeInto(workspace.top, workspace.snapshot, { skip: (source) => workspace.provisioned.includes(source) });
+    }
     for (const provisioned of workspace.provisioned) makeReadOnly(provisioned);
     if (!worktree) {
       workspace.treeDigest = treeDigest(workspace.root, { exclude: workspace.provisioned });

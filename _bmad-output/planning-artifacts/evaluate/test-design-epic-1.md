@@ -357,6 +357,8 @@ File: `test/test-evaluate-api.js` (`test:evaluate-api`), fixture `test/fixtures/
 
 File: `test/test-evaluate-workflow.js` (`test:evaluate-workflow`), fixture `test/fixtures/evaluate-workflow/`.
 
+Amended 2026-09-26 in Story 1.18: the fixture's `create` omits the identifier only in the workspaces `RECORDS_OMIT_ID` names, the mutated arm's trials, since a `create` that omits it in every run fails the qualification that must pass before any trial runs (exit 11); every revert check below is exercised and recorded in `story-1.18.md`.
+
 | AC                                                                                             | Test                                                                                                         | Level                              | P   | Revert check                                                                    |
 | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ---------------------------------- | --- | ------------------------------------------------------------------------------- |
 | Steps issued in `after` order; `sequence` increases in issue order                             | Read observations of each trial                                                                              | Integration                        | P1  | Issuing in array order with the plan reversed breaks the ordering assertion     |
@@ -655,6 +657,16 @@ Added 2026-09-26 in Story 1.32. Levels: integration over real eval-quality, cont
 | The report request goes through the port and eval-quality's policy     | A report request the policy denies, and an answer with no string at the pointer; assert each refusal and its reason | Integration                        | P1  | Recording the declared release unasked exits 0 with no refusal |
 | `check` holds the report request                                       | An undeclared operation and a pointer that is not a JSON pointer, each exit 10 under `historical`                   | Contract                           | P1  | Dropping the rule lets `run` stop with exit 12                 |
 | The reference states the comparison                                    | Read `### Against deployments` under its heading                                                                    | Static                             | P2  | Removing the sentence fails the read                           |
+
+### Story 1.39: Tell a captured value too large to launch from a target that cannot run
+
+Added 2026-09-26 in Story 1.18. Levels: integration over real eval-quality, unit, static. File: `test/test-evaluate-workflow.js` (`test:evaluate-workflow`).
+
+| AC                                                                    | Test                                                                                                                                  | Level                              | P   | Revert check                         |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | --- | ------------------------------------ |
+| An oversized captured value skips the step with eval-quality's reason | The fixture's `create` prints an identifier past the argument limit in named workspaces; assert the skip, exit 0 and no `caught` vote | Integration over real eval-quality | P1  | Stopping on the fault exits 12       |
+| An oversized literal still stops the run                              | A unit whose literal binding the system refuses to launch                                                                             | Unit                               | P2  | Skipping it passes a contract defect |
+| The reference names the size limit                                    | Read `### Steps not issued` under its heading                                                                                         | Static                             | P3  | Removing the sentence fails the read |
 
 ## The Dogfood Proof (AD-15)
 

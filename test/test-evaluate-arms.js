@@ -2147,14 +2147,47 @@ async function checkUnits() {
     'judgeRubrics called the judge for a contract with no rubric',
   );
 
-  const port = syntheticPort({ label: 'trial-2', steps: { 'judge-run': { stdout: 'verdict: pending\n', stderr: '', exitCode: 0 } } });
-  const answered = await port.probe({ probeId: 'trial-2-judge-run', interfaceId: 'verdict', operationId: 'judge-request', kind: 'cli' });
+  const registry = registryFromEvaluation(readJson(path.join(FIXTURE, EVALUATION, 'evaluation.json')), { root: FIXTURE });
+  const port = syntheticPort({
+    label: 'trial-2',
+    steps: {
+      'judge-run': { stdout: 'verdict: pending\n', stderr: '', exitCode: 0 },
+      'json-run': { stdout: '{"verdict":"pending"}\n', stderr: '', exitCode: 0 },
+    },
+    registry,
+  });
+  const cliRequest = (stepId) => ({
+    probeId: `trial-2-${stepId}`,
+    interfaceId: 'verdict',
+    operationId: 'judge-request',
+    kind: 'cli',
+    executable: 'verdict',
+    subcommandPath: [],
+    channels: { argument: {}, option: {}, environment: {}, stdin: { kind: 'text', value: 'Judge the request.' } },
+  });
+  const answered = await port.probe(cliRequest('judge-run'));
   check(
-    answered.observation.stdout.value === 'verdict: pending\n' &&
+    answered.observation.stdout.kind === 'text' &&
+      answered.observation.stdout.value === 'verdict: pending\n' &&
       answered.observation.exitCode === 0 &&
       answered.observation.kind === 'cli',
     `the synthetic port answers ${JSON.stringify(answered.observation)}`,
   );
+  // A command's degenerate output is read through eval-quality's command-line adapter, as a real run's is: JSON-shaped
+  // output is JSON, which an oracle's or a captured binding's pointer walks into.
+  const json = await port.probe(cliRequest('json-run'));
+  check(
+    JSON.stringify(json.observation.stdout) === JSON.stringify({ kind: 'json', value: { verdict: 'pending' } }),
+    `the synthetic port reads a command's JSON output as ${JSON.stringify(json.observation.stdout)}`,
+  );
+  // The registry's policy decides a degenerate step as it decides a real one.
+  let deniedStep = null;
+  try {
+    await port.probe({ ...cliRequest('judge-run'), executable: 'other' });
+  } catch (error) {
+    deniedStep = error;
+  }
+  check(deniedStep?.code === 'forbidden-target', `a degenerate step for an executable the registry does not name gave ${deniedStep}`);
   let unknown = null;
   try {
     await port.probe({ probeId: 'trial-2-other-step' });
@@ -2297,7 +2330,7 @@ async function checkAdmissionGate(engine) {
       folder: gameability.folder,
       evaluation: readJson(path.join(gameability.folder, 'evaluation.json')),
       contract: readJson(path.join(gameability.folder, 'contract.json')),
-      registry: { targetFor: () => {} },
+      registry: registryFromEvaluation(readJson(path.join(gameability.folder, 'evaluation.json')), { root: gameability.repository }),
       gameability: [{ file: 'probes/P-003.probe.json', probe: gameabilityProbe, bytes, steps: JSON.parse(bytes.toString('utf8')).steps }],
       policy: readJson(path.join(gameability.folder, 'policy', 'scoring-policy.json')),
       engine: refusing,

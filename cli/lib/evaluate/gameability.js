@@ -9,11 +9,13 @@
  * `{ isError, structuredResult? }` per tool-call step, and one
  * `{ status, headers?, body? }` per HTTP step), since eval-quality keeps the
  * probe's `degenerateResponse` as prose. A synthetic port answers every plan
- * step from that file (an HTTP step through the evaluation's own HTTP port,
- * with a transport that sends nothing), so the arm executor
- * (`arm.js`) records the response as the observations a target would have
- * produced, and the deterministic evaluator resolves oracles over them with
- * `resolveCheck`.
+ * step from that file through the port of its kind over the registry's
+ * authorizations (eval-quality's command-line or MCP adapter with a mechanism
+ * that launches nothing, or the evaluation's own HTTP port with a transport
+ * that sends nothing), so the arm executor (`arm.js`) records the response as
+ * the observations a target would have produced, a command's JSON-shaped
+ * output read as JSON as a real run's is, and the deterministic evaluator
+ * resolves oracles over them with `resolveCheck`.
  *
  * Qualification resolves the probe's `naiveOracle` (an oracle of another
  * behavior, which TeA's committed probe names) and the disciplined oracle (the
@@ -31,11 +33,12 @@
 
 'use strict';
 
+const os = require('node:os');
 const path = require('node:path');
 
 const { admissionRefusal, armVerdict, referenceTo } = require('./admission');
-const { runArm } = require('./arm');
-const { expectedSchemaVersion } = require('./engine');
+const { faultRecord, hostEnvironmentPort, reasonNote, runArm } = require('./arm');
+const { expectedSchemaVersion, loadAdapters } = require('./engine');
 const { evaluateOracles, oraclesOfBehaviors } = require('./evaluator');
 
 /** Where a gameability probe's degenerate response is committed, relative to the evaluation folder. */
@@ -52,65 +55,89 @@ function answeredKind(answer) {
 
 const KIND_NAMES = { cli: 'a command', mcp: 'a tool call', api: 'an HTTP request' };
 
+/** Thrown by a gameability arm's mechanism when the degenerate response answers no call of the call's kind. */
+class UnansweredCall extends Error {}
+
+/**
+ * A gameability arm's adapter for one call, a plan step's or a sealed-brief
+ * agent's: eval-quality's command-line adapter or MCP adapter, or the
+ * evaluation's HTTP port, over the registry's authorizations, so an
+ * executable, subcommand path, interface, tool, address or method the
+ * registry does not grant is denied exactly as on a real arm, with a
+ * mechanism or transport that launches and sends nothing and answers with the
+ * degenerate response, or throws `UnansweredCall` (`UnansweredRequest` for
+ * HTTP) when it holds none for the kind; every written file the registry
+ * declares reads as absent. The adapter reads the answer as it reads a real
+ * one, so a command's JSON-shaped output is JSON, which a later step's
+ * captured binding reads. It answers the observation alone.
+ */
+async function degenerateAdapter({ registry, answer, kind }) {
+  if (kind === 'api') return registry.degenerateHttpPort(answer);
+  const { createCommandLineAdapter, createMcpAdapter, parseMcpTargetPolicy } = await loadAdapters();
+  const answered = () => {
+    if (answer === undefined) throw new UnansweredCall(`the system answers no ${kind === 'mcp' ? 'tool call' : 'command'}`);
+    return answer;
+  };
+  // The authorizations' working directory is never entered: nothing launches and no written file is read.
+  const cwd = registry.root ?? os.tmpdir();
+  return kind === 'mcp'
+    ? createMcpAdapter(parseMcpTargetPolicy(registry.mcpTargetPolicy({ cwd })), {
+        callTool: async () => {
+          const { isError, ...rest } = answered();
+          return Object.hasOwn(rest, 'structuredResult') ? { isError, structuredResult: rest.structuredResult } : { isError };
+        },
+      })
+    : createCommandLineAdapter(registry.commandTargetPolicy({ cwd }), {
+        run: async () => {
+          const { exitCode, stdout, stderr } = answered();
+          return { exitCode, stdout, stderr };
+        },
+        readArtifact: async () => ({ present: false, text: '', truncated: false }),
+      });
+}
+
+/**
+ * A sealed-brief agent's port for one gameability call: `degenerateAdapter`
+ * behind the host environment port, as every bridged call is.
+ */
+async function degeneratePort({ registry, answer, kind }) {
+  return hostEnvironmentPort({ port: await degenerateAdapter({ registry, answer, kind }), registry });
+}
+
 /**
  * A port that launches nothing: it answers each plan step of an arm labelled
- * `label` with the committed degenerate response for that step, in the shape
- * the command-line adapter or the MCP adapter returns for the request's kind,
- * or, for an HTTP step, through the evaluation's own HTTP port with a
- * transport that answers from the response and sends nothing
- * (`registry.degenerateHttpPort`).
+ * `label` with the committed degenerate response for that step, through
+ * `degenerateAdapter` for the request's kind, so the registry's policy decides
+ * the request and the answer is read as the adapter or the evaluation's HTTP
+ * port reads a real one, with no host value injected or scrubbed.
  *
  * @param {object} options
  * @param {string} options.label the arm's label, which `runArm` prefixes each request's identifier with
  * @param {Record<string, object>} options.steps the response by plan step: `{ stdout, stderr, exitCode }` for a command
  *   step, `{ isError, structuredResult? }` for a tool call, `{ status, headers?, body? }` for an HTTP request
- * @param {object} [options.registry] the registry, whose HTTP port answers an HTTP step
- * @returns {{ probe: (request: object) => Promise<{ request: object, observation: object }> }}
+ * @param {object} options.registry the registry, whose authorizations decide each request
+ * @returns {{ probe: (request: object, signal?: AbortSignal) => Promise<{ request: object, observation: object }> }}
  */
 function syntheticPort({ label, steps, registry }) {
   const prefix = `${label}-`;
   return {
-    async probe(request) {
+    async probe(request, signal) {
       const stepId =
         typeof request?.probeId === 'string' && request.probeId.startsWith(prefix) ? request.probeId.slice(prefix.length) : null;
       if (stepId === null || !Object.hasOwn(steps, stepId)) {
         throw new Error(`the degenerate response answers no plan step for request ${JSON.stringify(request?.probeId ?? null)}`);
       }
       const answer = steps[stepId];
-      const correlation = { probeId: request.probeId, interfaceId: request.interfaceId, operationId: request.operationId };
       const kind = answeredKind(answer);
       if (request.kind !== kind) {
         throw new Error(
           `the degenerate response answers plan step ${stepId}, ${KIND_NAMES[request.kind] ?? request.kind}, with ${KIND_NAMES[kind]}'s response`,
         );
       }
-      if (kind === 'api') {
-        if (registry === undefined)
-          throw new Error(`plan step ${stepId} is an HTTP request and no registry holds the evaluation's HTTP port`);
-        return { request, observation: await registry.degenerateHttpPort(answer).probe(request) };
-      }
-      if (kind === 'mcp') {
-        return {
-          request,
-          observation: {
-            ...correlation,
-            kind: 'mcp',
-            isError: answer.isError,
-            result: Object.hasOwn(answer, 'structuredResult') ? { kind: 'json', value: answer.structuredResult } : { kind: 'absent' },
-          },
-        };
-      }
-      return {
-        request,
-        observation: {
-          ...correlation,
-          kind: 'cli',
-          exitCode: answer.exitCode,
-          stdout: { kind: 'text', value: answer.stdout },
-          stderr: { kind: 'text', value: answer.stderr },
-          artifacts: {},
-        },
-      };
+      if (registry === undefined) throw new Error(`plan step ${stepId} has no registry to hold the evaluation's authorizations`);
+      // No host value is injected or scrubbed: nothing launches, and the committed response reads the same on every host.
+      const adapter = await degenerateAdapter({ registry, answer, kind });
+      return { request, observation: await adapter.probe(request, signal ?? new AbortController().signal) };
     },
   };
 }
@@ -159,13 +186,15 @@ async function qualifyGameabilityProbes({
       writer.writeJson(`${directory}/fault.json`, {
         probeId: probe.probeId,
         degenerateResponse: response,
-        message: String(error?.message ?? error),
+        ...faultRecord(error),
         steps: error?.steps ?? [],
       });
+      // A step the registry does not authorize is the evaluation's own defect, as on a real arm (exit 10).
+      const denied = error?.code === 'forbidden-target';
       throw stop({
         stage: 'qualification',
-        exitCode: 12,
-        message: `${file}: the degenerate response could not be answered through the plan: ${error?.message ?? error}`,
+        exitCode: denied ? 10 : 12,
+        message: `${file}: the degenerate response could not be answered through the plan: ${denied ? `the registry denied a step${reasonNote(error)}: ` : ''}${error?.message ?? error}`,
       });
     }
     const naiveOracleId = probe.qualification.naiveOracle;
@@ -242,4 +271,12 @@ async function qualifyGameabilityProbes({
   return materialized;
 }
 
-module.exports = { answeredKind, degenerateArm, degenerateResponsePath, qualifyGameabilityProbes, syntheticPort };
+module.exports = {
+  UnansweredCall,
+  answeredKind,
+  degenerateArm,
+  degeneratePort,
+  degenerateResponsePath,
+  qualifyGameabilityProbes,
+  syntheticPort,
+};

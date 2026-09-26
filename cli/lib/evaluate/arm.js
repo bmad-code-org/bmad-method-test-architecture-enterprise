@@ -3,17 +3,30 @@
  * interaction plan against one workspace, through the registry's port.
  *
  * Each step becomes one request of its interface's kind. A `cli` step sends
- * the operation's invocation with each channel's literal bindings as its
- * values: a `stdin` binding with one string literal is sent as that text, any
- * other as a JSON object of its bindings. An `mcp` step (Story 1.10) calls the
- * operation's tool with its literal `arguments`, and an `api` step (Story 1.11)
- * sends the operation's method and path template with its literal `path`,
- * `query` and `header` values and, when bound, its `body` values as one JSON
- * object. A step runs after the step
- * its `after` clause names, and otherwise in plan order. A binding this
- * release cannot resolve (`captured`, a `matcher`, a `principal`) and an
- * operation of another kind stop the arm with an `ArmError` (exit 12): the
- * run cannot send the request the contract means.
+ * the operation's invocation with each channel's bound values: a `stdin`
+ * binding with one string value is sent as that text, any other as a JSON
+ * object of its bindings. An `mcp` step (Story 1.10) calls the operation's
+ * tool with its bound `arguments`, and an `api` step (Story 1.11) sends the
+ * operation's method and path template with its bound `path`, `query` and
+ * `header` values and, when bound, its `body` values as one JSON object.
+ *
+ * A binding is a `literal`, sent as written, or a `captured` pointer (Story
+ * 1.18), sent as the value it resolves to on the named earlier step's
+ * observation in this arm, read by eval-quality's own `makeResolveOperand`,
+ * the reading its `score` gives the same pointer. A step runs after the step
+ * its `after` clause names and after every step its captured bindings read,
+ * and otherwise in plan order, so each observation's `sequence` follows the
+ * order the steps were issued in. A step whose `after` step was not issued,
+ * or one of whose captured bindings resolves to nothing (the earlier step was
+ * not issued, or its observation lacks the value), is not issued: it gets no
+ * observation, and `steps` records it as skipped with the reason, so
+ * eval-quality reads the missing observation as it reads any evidence that
+ * does not exist. A binding this release cannot send (a `matcher`, a
+ * `principal`) and an operation of another kind stop the arm with an
+ * `ArmError` (exit 12): the run cannot send the request the contract means.
+ * A cycle over the `after` and capture edges never reaches an arm, since
+ * `eval-quality compile` refuses it (`binding-cycle`, `nested-temporal-clause`);
+ * if one does, the arm stops with an `ArmError`.
  *
  * What comes back is recorded twice: as the port answered it, for evidence, and
  * as a Sealed Run Record observation (the call inputs the plan bound), keyed by
@@ -43,6 +56,7 @@
 
 'use strict';
 
+const { loadEngine } = require('./engine');
 const { recordObservation } = require('./records');
 
 /** An injected environment value shorter than this is not scrubbed from output: it would match ordinary text. */
@@ -326,23 +340,94 @@ function operationsById(contract) {
   return index;
 }
 
-/** The literal values one binding channel supplies, or null for an unbound channel. */
-function literalValues(channel, stepId, name) {
-  if (channel === null || channel === undefined) return null;
+/** Whether a binding is a `{ captured }` pointer. */
+function isCaptured(binding) {
+  return binding !== null && typeof binding === 'object' && typeof binding.captured === 'string';
+}
+
+/** The step a captured pointer reads (`/interactions/<stepId>/...`), or null when the pointer names none. */
+function capturedStepId(pointer) {
+  return /^\/interactions\/([^/]+)\//.exec(pointer)?.[1] ?? null;
+}
+
+/** The channels whose values are strings on the wire: an HTTP header and a command's environment variable. */
+const STRING_CHANNELS = new Set(['header', 'environment']);
+/** The channels a command's argument vector and environment carry, where no string can hold a NUL character. */
+const PROCESS_CHANNELS = new Set(['argument', 'option', 'environment']);
+/** A character no HTTP header value may hold: a control other than tab, DEL, or one past U+00FF, which Node refuses to send. */
+const HEADER_UNSENDABLE = /[^\t\u0020-\u007E\u0080-\u00FF]/;
+/** How much of an unsendable value a skip's reason quotes. */
+const QUOTED_VALUE = 200;
+
+/** Whether a value, or a string in an array of them, holds a NUL character. */
+function holdsNul(value) {
+  if (Array.isArray(value)) return value.some((item) => holdsNul(item));
+  return typeof value === 'string' && value.includes('\u0000');
+}
+
+/** A value as a skip's reason quotes it: its JSON, cut to `QUOTED_VALUE` characters. */
+function quotedValue(value) {
+  const text = JSON.stringify(value) ?? String(value);
+  return text.length > QUOTED_VALUE ? `${text.slice(0, QUOTED_VALUE)}...` : text;
+}
+
+/**
+ * The values one binding channel supplies, or null for an unbound channel: a
+ * literal as written, a captured pointer as `resolve` reads it. `absent`
+ * lists each captured binding that resolved to nothing, and `unsendable` each
+ * captured value the request cannot carry as the target printed it (a value
+ * holding a `__proto__` key, which eval-quality's request parser drops, a
+ * header or environment value that is no string, a header value holding a
+ * control character or one past U+00FF, a path value that is `.` or `..`,
+ * which the evaluation's HTTP port refuses, or a command argument, option or
+ * environment value holding a NUL character, which no process argument or
+ * variable can), each as
+ * `{ binding, pointer }` with the reason for an unsendable one. A literal the
+ * request cannot carry is the contract's own defect and stops the arm.
+ */
+function boundValues(channel, stepId, name, resolve) {
+  if (channel === null || channel === undefined) return { values: null, absent: [], unsendable: [] };
   const values = {};
+  const absent = [];
+  const unsendable = [];
   for (const [key, binding] of Object.entries(channel)) {
-    if (binding === null || typeof binding !== 'object' || !Object.hasOwn(binding, 'literal')) {
-      throw new ArmError(
-        `interaction plan step ${stepId} binds ${name}.${key} with ${JSON.stringify(binding)}; this release sends literal bindings only`,
-      );
-    }
     // eval-quality's request parser drops an own `__proto__` key, so the target would receive other inputs than the record shows.
-    if (key === '__proto__' || carriesPrototypeKey(binding.literal)) {
+    if (key === '__proto__') {
       throw new ArmError(`interaction plan step ${stepId} binds ${name}.${key} with a __proto__ key, which the request cannot send`);
     }
-    values[key] = binding.literal;
+    if (binding !== null && typeof binding === 'object' && Object.hasOwn(binding, 'literal')) {
+      if (carriesPrototypeKey(binding.literal)) {
+        throw new ArmError(`interaction plan step ${stepId} binds ${name}.${key} with a __proto__ key, which the request cannot send`);
+      }
+      values[key] = binding.literal;
+      continue;
+    }
+    if (!isCaptured(binding)) {
+      throw new ArmError(
+        `interaction plan step ${stepId} binds ${name}.${key} with ${JSON.stringify(binding)}; this release sends literal and captured bindings only`,
+      );
+    }
+    const site = { binding: `${name}.${key}`, pointer: binding.captured };
+    const resolved = resolve(binding.captured);
+    if (!resolved.present) absent.push(site);
+    else if (carriesPrototypeKey(resolved.value)) unsendable.push({ ...site, reason: 'the value holds a __proto__ key' });
+    else if (STRING_CHANNELS.has(name) && typeof resolved.value !== 'string') {
+      unsendable.push({ ...site, reason: `a ${name} value is a string, and the value is ${quotedValue(resolved.value)}` });
+    } else if (name === 'header' && HEADER_UNSENDABLE.test(resolved.value)) {
+      unsendable.push({
+        ...site,
+        reason: `a header value cannot hold a control character or one past U+00FF, and the value is ${quotedValue(resolved.value)}`,
+      });
+    } else if (name === 'path' && (resolved.value === '.' || resolved.value === '..')) {
+      unsendable.push({ ...site, reason: `a path segment cannot be . or .., and the value is ${quotedValue(resolved.value)}` });
+    } else if (PROCESS_CHANNELS.has(name) && holdsNul(resolved.value)) {
+      unsendable.push({
+        ...site,
+        reason: `a command's ${name} cannot carry a NUL character, and the value is ${quotedValue(resolved.value)}`,
+      });
+    } else values[key] = resolved.value;
   }
-  return values;
+  return { values, absent, unsendable };
 }
 
 /** Whether `value` holds an own `__proto__` key at any depth. */
@@ -371,16 +456,42 @@ function stdinOf(values) {
   return { kind: 'json', value: values };
 }
 
-/** The plan's steps in the order they run: each after the step its `after` clause names, otherwise in plan order. */
+/** Every captured pointer one step binds, in its binding's channel order and key order. */
+function capturedPointers(step) {
+  const pointers = [];
+  for (const channel of Object.values(step.inputBinding ?? {})) {
+    if (channel === null || typeof channel !== 'object') continue;
+    for (const binding of Object.values(channel)) if (isCaptured(binding)) pointers.push(binding.captured);
+  }
+  return pointers;
+}
+
+/**
+ * The steps one step waits for: the step its `after` clause names and each
+ * step its captured bindings read, among the steps the plan declares. A name
+ * the plan does not declare adds no edge: a dangling `after` is permissive and
+ * a dangling capture resolves to nothing, as eval-quality reads both.
+ */
+function dependenciesOf(step, declared) {
+  const names = [step.after, ...capturedPointers(step).map(capturedStepId)];
+  return [...new Set(names.filter((name) => typeof name === 'string' && declared.has(name)))];
+}
+
+/**
+ * The plan's steps in the order they run: each after every step it waits for
+ * (`dependenciesOf`), otherwise in plan order.
+ */
 function orderedSteps(plan) {
+  const declared = new Set(plan.map((step) => step.stepId));
   const remaining = [...plan];
   const done = new Set();
   const ordered = [];
   while (remaining.length > 0) {
-    const index = remaining.findIndex((step) => step.after === null || step.after === undefined || done.has(step.after));
+    const index = remaining.findIndex((step) => dependenciesOf(step, declared).every((name) => done.has(name)));
     if (index === -1) {
+      const [first] = remaining;
       throw new ArmError(
-        `interaction plan step ${remaining[0].stepId} runs after ${remaining[0].after}, which no runnable step is; the plan has no order to run in`,
+        `interaction plan step ${first.stepId} waits for ${dependenciesOf(first, declared).join(', ')}, which no runnable step is; the plan has no order to run in`,
       );
     }
     const [step] = remaining.splice(index, 1);
@@ -401,15 +512,27 @@ function orderedSteps(plan) {
  * @param {'baseline'|'evaluator-chosen'} [options.provenance] what each record observation carries
  * @param {AbortSignal} [options.signal]
  * @returns {Promise<{ steps: object[], stepObservations: Record<string, object> }>}
- *   `steps` holds each step's persistable request and the port's observation, `stepObservations` the record observations by step
+ *   `steps` holds, in the order the plan ran, each issued step's persistable request and the port's observation, and
+ *   each step the arm did not issue as `{ stepId, operationId, skipped }` with the reason; `stepObservations` the record
+ *   observations by step
  * @throws {ArmError}
  */
 async function runArm({ contract, port, registry, label, provenance = 'baseline', signal }) {
   const operations = operationsById(contract);
+  const plan = contract.interactionPlan ?? [];
+  const declared = new Set(plan.map((step) => step.stepId));
   const steps = [];
   const stepObservations = {};
+  const issued = new Set();
+  // A captured pointer is read as eval-quality's `score` reads it, over the observations this arm has recorded so far.
+  const engine = plan.some((step) => capturedPointers(step).length > 0) ? await loadEngine() : null;
+  const readPointer = engine === null ? null : engine.makeResolveOperand(stepObservations, {});
+  const resolve = (pointer) => {
+    const value = readPointer({ pointer }, engine.ABSENT, 'captured');
+    return value === engine.ABSENT ? { present: false } : { present: true, value };
+  };
   let sequence = 0;
-  for (const step of orderedSteps(contract.interactionPlan ?? [])) {
+  for (const step of orderedSteps(plan)) {
     const found = operations.get(step.operationId);
     if (found === undefined || found.ambiguous) {
       throw new ArmError(
@@ -418,13 +541,21 @@ async function runArm({ contract, port, registry, label, provenance = 'baseline'
     }
     const { iface, operation } = found;
     const binding = step.inputBinding ?? {};
+    const absent = [];
+    const unsendable = [];
+    const bound = (channel, name) => {
+      const read = boundValues(channel, step.stepId, name, resolve);
+      absent.push(...read.absent);
+      unsendable.push(...read.unsendable);
+      return read.values;
+    };
     let request;
     let callInputs;
     if (iface.kind === 'api' && typeof operation.pathTemplate === 'string') {
-      const pathValues = literalValues(binding.path, step.stepId, 'path');
-      const query = literalValues(binding.query, step.stepId, 'query');
-      const header = literalValues(binding.header, step.stepId, 'header');
-      const body = literalValues(binding.body, step.stepId, 'body');
+      const pathValues = bound(binding.path, 'path');
+      const query = bound(binding.query, 'query');
+      const header = bound(binding.header, 'header');
+      const body = bound(binding.body, 'body');
       request = {
         probeId: `${label}-${step.stepId}`,
         interfaceId: iface.logicalId,
@@ -441,7 +572,7 @@ async function runArm({ contract, port, registry, label, provenance = 'baseline'
       };
       callInputs = { path: pathValues, query, header, body };
     } else if (iface.kind === 'mcp' && typeof operation.toolName === 'string') {
-      const toolArguments = literalValues(binding.arguments, step.stepId, 'arguments');
+      const toolArguments = bound(binding.arguments, 'arguments');
       request = {
         probeId: `${label}-${step.stepId}`,
         interfaceId: iface.logicalId,
@@ -452,10 +583,10 @@ async function runArm({ contract, port, registry, label, provenance = 'baseline'
       };
       callInputs = { arguments: toolArguments ?? {} };
     } else if (iface.kind === 'cli' && operation.invocation !== undefined) {
-      const argument = literalValues(binding.argument, step.stepId, 'argument');
-      const option = literalValues(binding.option, step.stepId, 'option');
-      const environment = literalValues(binding.environment, step.stepId, 'environment');
-      const stdin = literalValues(binding.stdin, step.stepId, 'stdin');
+      const argument = bound(binding.argument, 'argument');
+      const option = bound(binding.option, 'option');
+      const environment = bound(binding.environment, 'environment');
+      const stdin = bound(binding.stdin, 'stdin');
       request = {
         probeId: `${label}-${step.stepId}`,
         interfaceId: iface.logicalId,
@@ -471,9 +602,26 @@ async function runArm({ contract, port, registry, label, provenance = 'baseline'
         `interaction plan step ${step.stepId} names a ${iface.kind} operation this release cannot send; it sends command, tool-call and HTTP operations only`,
       );
     }
+    // Decided once the request is built, so a binding or an operation the run cannot send stops the arm whatever the
+    // target printed: a step cannot run after a step that never ran, a captured value the earlier observation lacks
+    // leaves nothing to send, and one the request cannot carry as printed would send the target something else.
+    const skip = (skipped) => steps.push({ stepId: step.stepId, operationId: step.operationId, skipped });
+    if (typeof step.after === 'string' && declared.has(step.after) && !issued.has(step.after)) {
+      skip({ reason: 'after-step-not-issued', after: step.after });
+      continue;
+    }
+    if (absent.length > 0) {
+      skip({ reason: 'captured-value-absent', bindings: absent });
+      continue;
+    }
+    if (unsendable.length > 0) {
+      skip({ reason: 'captured-value-unsendable', bindings: unsendable });
+      continue;
+    }
     const answered = await port.probe(request, signal);
     const { observation } = answered;
     sequence += 1;
+    issued.add(step.stepId);
     steps.push({ stepId: step.stepId, request: persistableRequest(answered.request), observation });
     if (observation?.kind !== request.kind) {
       const error = new ArmError(

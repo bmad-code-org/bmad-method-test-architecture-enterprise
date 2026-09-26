@@ -1012,7 +1012,8 @@ async function checkUnits() {
     JSON.stringify(sent) === JSON.stringify(['order-first', 'order-second']),
     `the arm ran its steps as ${JSON.stringify(sent)}; a step runs after the one its after clause names`,
   );
-  for (const binding of [{ matcher: 'any' }, { captured: '/interactions/first/stdout' }, { principal: 'reviewer' }]) {
+  // A captured binding is sent (Story 1.18, test:evaluate-workflow); a matcher and a principal are not yet (Story 1.30).
+  for (const binding of [{ matcher: 'any' }, { matcher: 'type-violating' }, { principal: 'reviewer' }]) {
     const unbound = { ...contract, interactionPlan: [{ ...step, inputBinding: { ...step.inputBinding, stdin: { prompt: binding } } }] };
     let refused = null;
     try {
@@ -1022,7 +1023,7 @@ async function checkUnits() {
     }
     check(
       refused instanceof ArmError,
-      `an arm binding stdin with ${JSON.stringify(binding)} ran; this release sends literal bindings only`,
+      `an arm binding stdin with ${JSON.stringify(binding)} ran; this release sends literal and captured bindings only`,
     );
   }
 
