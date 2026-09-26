@@ -26,7 +26,12 @@
  *                      runtime to start the call's server (`send`, with the
  *                      target eval-quality allowed, where the runtime waits
  *                      for the server) and waits for `ready` or
- *                      `not-ready`; with `degenerate`, nothing is sent,
+ *                      `not-ready`. A `ready` carrying a `configuration`
+ *                      (the policy, targets and auth at the port a server
+ *                      reported it bound) ends that probe, built before the
+ *                      port was known, and the request is probed again over
+ *                      it, so eval-quality decides at that port before
+ *                      anything is sent; with `degenerate`, nothing is sent,
  *                      every host resolves to the first address of the
  *                      request's interface's entry (so eval-quality's own host
  *                      check decides every spelling of a host, as on a real
@@ -108,6 +113,7 @@ function serveHttpProbePort(port, { input, output, env = process.env } = {}) {
   async function call(message) {
     calling = true;
     let serverReady = null;
+    let rebound = null;
     // Called by the port once its policy has allowed the call's first hop, before its elapsed cap starts: the runtime
     // starts the call's server where the port is about to send, and answers `ready` or `not-ready`.
     const startServer = (target) => {
@@ -115,7 +121,14 @@ function serveHttpProbePort(port, { input, output, env = process.env } = {}) {
         waitingForServer = { resolve, reject };
         write({ type: 'send', target });
       });
-      return serverReady;
+      return serverReady.then((ready) => {
+        // The server reported the port it bound: this probe was built before that port was known, so it sends nothing,
+        // and the call is probed again at that port.
+        if (ready?.configuration !== undefined) {
+          rebound = ready.configuration;
+          throw new Error('the server reported the port it bound, so the call is probed again at that port');
+        }
+      });
     };
     const transport =
       message.degenerate === undefined
@@ -128,8 +141,21 @@ function serveHttpProbePort(port, { input, output, env = process.env } = {}) {
             resolve: async (host) => message.degenerateAddresses?.[message.request?.interfaceId] ?? host,
           };
     try {
-      const probePort = port.createHttpProbePort({ ...message.configuration, transport });
-      write({ type: 'answer', observation: await probePort.probe(message.request, controller.signal) });
+      let observation;
+      let failure = null;
+      try {
+        observation = await port.createHttpProbePort({ ...message.configuration, transport }).probe(message.request, controller.signal);
+      } catch (error) {
+        failure = error;
+      }
+      if (rebound !== null) {
+        // The server is running and ready at the port it reported, so nothing is left to prepare.
+        const reprobe = port.createHttpProbePort({ ...rebound, transport: { send: port.nodeTransport.send } });
+        observation = await reprobe.probe(message.request, controller.signal);
+      } else if (failure !== null) {
+        throw failure;
+      }
+      write({ type: 'answer', observation });
     } catch (error) {
       write({ type: 'fault', fault: faultOf(error) });
     }
@@ -144,7 +170,7 @@ function serveHttpProbePort(port, { input, output, env = process.env } = {}) {
     } else if (message?.type === 'abort') {
       controller.abort();
     } else if (message?.type === 'ready' && waitingForServer !== null) {
-      waitingForServer.resolve();
+      waitingForServer.resolve(message);
     } else if (message?.type === 'not-ready' && waitingForServer !== null) {
       waitingForServer.reject(new Error(String(message.message ?? 'the server did not start')));
     }

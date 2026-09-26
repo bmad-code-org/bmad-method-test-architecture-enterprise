@@ -291,10 +291,12 @@ function isBareCommand(target) {
  * @param {object} options
  * @param {string} options.root The directory each relative `target` resolves against; a relative one is resolved against the working directory once, here.
  * @param {object} [options.httpPort] the evaluation's HTTP port (`http-target.js` `probeHttpPort`), which an `api` call goes through
+ * @param {string[]} [options.scratch] the run's private directories, which the directory a started HTTP server reports its
+ *   port in joins while its call runs
  * @returns {object}
  * @throws {Error} Naming every problem `registryProblems` finds.
  */
-function createRegistry(entries, { root, httpPort } = {}) {
+function createRegistry(entries, { root, httpPort, scratch = [] } = {}) {
   if (typeof root !== 'string' || root.length === 0) {
     throw new Error('createRegistry requires a root: every relative target resolves against it');
   }
@@ -577,6 +579,7 @@ function createRegistry(entries, { root, httpPort } = {}) {
             readEnvironment: (names) => readEnvironment(names),
             mechanism: adapters.nodeCommandMechanism,
             maxOutputBytes: MAX_OUTPUT_BYTES,
+            scratch,
           });
     const port = {
       probe: (request, signal) => {
@@ -784,13 +787,37 @@ function canonicalHost(host) {
 }
 
 /**
+ * A started server's port keys that the runtime could not set as written:
+ * `portFileEnvironmentKey` equal to `portEnvironmentKey`, which would carry
+ * two values, and either key named in `environmentKeys` as well, whose host
+ * value the runtime would silently replace.
+ */
+function portKeyProblems(index, server) {
+  const problems = [];
+  if (server.portFileEnvironmentKey !== undefined && server.portFileEnvironmentKey === server.portEnvironmentKey) {
+    problems.push(
+      `registry[${index}] names ${JSON.stringify(server.portEnvironmentKey)} as both its server's portEnvironmentKey and its portFileEnvironmentKey; the runtime passes 0 in one and the port file's path in the other, so name two keys`,
+    );
+  }
+  for (const field of ['portEnvironmentKey', 'portFileEnvironmentKey']) {
+    if (server[field] !== undefined && server.environmentKeys.includes(server[field])) {
+      problems.push(
+        `registry[${index}] names ${JSON.stringify(server[field])} as its server's ${field} and in its environmentKeys; the runtime sets that key, so the host's value would never reach the server; leave it out of environmentKeys`,
+      );
+    }
+  }
+  return problems;
+}
+
+/**
  * Every HTTP entry that cannot reach its target as written, as one line each:
  * a `host` spelled otherwise than a URL spells it, letter case aside, which
  * eval-quality's policy denies on every request (`host-not-authorized`), since
  * the port hands it the URL's hostname; and an `auth` header sent over `http` to an address
  * where eval-quality's `staysOnHost` says a connection leaves the host, which would put the
  * credential on the network in clear text; such a target is served over
- * https, with `NODE_EXTRA_CA_CERTS` for a private authority. `staysOnHost` is
+ * https, with `NODE_EXTRA_CA_CERTS` for a private authority; and a started
+ * server's port keys the runtime could not set as written (`portKeyProblems`). `staysOnHost` is
  * narrower than `classifyAddress(address) === 'loopback'`: the NAT64
  * (`64:ff9b::7f00:1`) and IPv4-compatible (`::127.0.0.1`) spellings of a
  * loopback address class `loopback` and still leave the host.
@@ -814,6 +841,7 @@ async function apiRegistryProblems(entries) {
         `registry[${index}] names host ${JSON.stringify(entry.host)}, which a URL spells ${JSON.stringify(canonical)}; the port hands eval-quality's policy the URL's hostname, so write ${JSON.stringify(canonical)}`,
       );
     }
+    if (entry.server !== undefined) problems.push(...portKeyProblems(index, entry.server));
     if (entry.auth !== undefined && entry.scheme === 'http') {
       staysOnHost ??= (await loadEngine()).staysOnHost;
       const exposed = entry.addresses.filter((address) => !staysOnHost(address));
@@ -832,7 +860,7 @@ async function apiRegistryProblems(entries) {
  * the evaluation's HTTP port when one was loaded.
  *
  * @param {{registry?: unknown}} evaluation The parsed manifest.
- * @param {{root: string, httpPort?: object}} options
+ * @param {{root: string, httpPort?: object, scratch?: string[]}} options
  * @returns {object}
  */
 function registryFromEvaluation(evaluation, options) {

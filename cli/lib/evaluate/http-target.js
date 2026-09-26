@@ -23,21 +23,37 @@
  *
  * For an entry that names a `server`, one call is:
  *
- *   1. a free port, taken before anything runs;
- *   2. the policy and targets for that port, handed to the port with the call;
+ *   1. the port the server listens on: with `portFileEnvironmentKey`, none
+ *      yet, and a private directory on the run's scratch list for the file
+ *      the server reports its port in; otherwise a free port, taken and
+ *      released before anything runs;
+ *   2. the policy and targets for that port (the scheme's default port while
+ *      the server has reported none), handed to the port with the call;
  *   3. the port decides; once it has allowed the call's first hop, and before
  *      its elapsed cap starts, its `prepare` step asks the runtime to start
  *      the server (`send`, with the target the port allowed): the runtime asks
  *      eval-quality's `evaluateTarget` itself whether that target is allowed,
  *      starts the server from the workspace through eval-quality's
  *      `nodeCommandMechanism` (a process group of its own, killed if the
- *      runtime dies) with the chosen port in `portEnvironmentKey`, waits until
- *      the allowed address accepts a connection on that port, and answers
- *      `ready`, so the port sends;
- *   4. an answer that arrives after the server has ended other than with exit
- *      code 0 came from no server of the run's (another process that took the
- *      port), and is refused as a target that could not run;
- *   5. the server's group is ended once the call settles, however it settles.
+ *      runtime dies), and waits until the allowed address accepts a
+ *      connection on the server's port. With `portFileEnvironmentKey`, the
+ *      server gets `0` in `portEnvironmentKey` and the file's path in
+ *      `portFileEnvironmentKey`, binds a port the system chooses and writes
+ *      its number to the file; the runtime answers `ready` with the policy and
+ *      targets at that port, and TeA's host probes the call again over them,
+ *      so eval-quality decides at the port the server bound and the port sends
+ *      there. Otherwise the server gets the chosen port in
+ *      `portEnvironmentKey`, and `ready` alone lets the port send;
+ *   4. an answer that arrives before the server was ready, or after it ended
+ *      other than with exit code 0, came from no server of the run's, and is
+ *      refused as a target that could not run. With the chosen port, another
+ *      process can take the port between its release and the server's bind;
+ *      a port another process listens on before the server starts is
+ *      refused, and one taken after that answers unnoticed until the
+ *      server's end is reported. A server that reports the port it bound
+ *      leaves no such window;
+ *   5. the server's group is ended once the call settles, however it settles,
+ *      and the port file's directory is removed.
  *
  * A call therefore runs against the workspace's code as it stands, a mutation
  * included, as a command and a tool server do, and a denied call starts
@@ -56,6 +72,7 @@ const { spawn } = require('node:child_process');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const net = require('node:net');
+const os = require('node:os');
 const path = require('node:path');
 const { StringDecoder } = require('node:string_decoder');
 
@@ -410,18 +427,59 @@ function delay(ms, signal) {
   });
 }
 
+/** The name of the file a server reports its port in, inside the call's private directory. */
+const PORT_FILE_NAME = 'port';
+
+/**
+ * The port a server's port file names: a whole number from 1 to 65535, written
+ * in decimal with surrounding whitespace allowed; `null` while the file is
+ * absent or holds only whitespace (the server has not written it yet), and
+ * `NaN` for anything else. A number read while the server is still writing it
+ * is a prefix of the whole, so it is still a number; the runtime reads the
+ * file again once the port accepts a connection and goes on when it changed.
+ */
+function reportedPort(text) {
+  if (text === null || text.trim() === '') return null;
+  const trimmed = text.trim();
+  if (!/^[1-9][0-9]{0,4}$/.test(trimmed)) return Number.NaN;
+  const port = Number(trimmed);
+  return port <= 65_535 ? port : Number.NaN;
+}
+
+/** A file's text, or `null` when it does not exist yet. */
+function readIfWritten(file) {
+  try {
+    return fs.readFileSync(file, 'utf8');
+  } catch (error) {
+    if (error.code === 'ENOENT') return null;
+    throw error;
+  }
+}
+
 /**
  * One call's server: started on first use, through eval-quality's
  * `nodeCommandMechanism`, and ready once the address the port is about to
- * send to accepts a connection on the call's port.
+ * send to accepts a connection on the server's port. An entry naming
+ * `portFileEnvironmentKey` reports that port in `portFile`, a path in a
+ * private directory the caller made; any other listens on `port`, which the
+ * caller chose. `start` resolves with the port the server is ready on.
  */
-function callServer({ entry, port, cwd, target, environment, mechanism, maxOutputBytes }) {
+function callServer({ entry, port: chosenPort = null, portFile = null, cwd, target, environment, mechanism, maxOutputBytes }) {
+  const reports = entry.server.portFileEnvironmentKey !== undefined;
+  if (reports && typeof portFile !== 'string')
+    throw new Error(`the server ${entry.server.target} reports its port and no port file was given`);
   const controller = new AbortController();
   let running = null;
   let ended = null;
   let ready = false;
   let starting = null;
   let address = null;
+  let port = reports ? null : chosenPort;
+
+  /** Where the server was to listen, as a sentence names it. */
+  function where() {
+    return port === null ? `on ${address}, before it reported a port` : `on ${address} port ${port}`;
+  }
 
   /**
    * Why the server is gone, as a sentence naming whether it had accepted a
@@ -431,31 +489,46 @@ function callServer({ entry, port, cwd, target, environment, mechanism, maxOutpu
   function account() {
     const when = ready ? 'after it accepted a connection' : 'before it accepted a connection';
     if (ended.error !== undefined) {
-      return new Error(
-        `the server ${entry.server.target} stopped ${when} on ${address} port ${port}: ${ended.error?.message ?? ended.error}`,
-        {
-          cause: ended.error,
-        },
-      );
+      return new Error(`the server ${entry.server.target} stopped ${when} ${where()}: ${ended.error?.message ?? ended.error}`, {
+        cause: ended.error,
+      });
     }
     const { exitCode, stderr } = ended.result;
-    return Object.assign(new Error(`the server ${entry.server.target} exited ${exitCode} ${when} on ${address} port ${port}`), {
+    return Object.assign(new Error(`the server ${entry.server.target} exited ${exitCode} ${when} ${where()}`), {
       captured: String(stderr ?? ''),
     });
+  }
+
+  /**
+   * The port the server's file names now, `null` while it names none yet;
+   * throws when the file holds something other than a port number.
+   */
+  function readReport() {
+    const text = readIfWritten(portFile);
+    const reported = reportedPort(text);
+    if (Number.isNaN(reported)) {
+      throw new TypeError(
+        `the server ${entry.server.target} wrote something other than a port number (a whole number from 1 to 65535) to the file ${entry.server.portFileEnvironmentKey} names`,
+      );
+    }
+    return { text, reported };
   }
 
   function start(signal, sendingTo) {
     starting ??= (async () => {
       address = sendingTo;
       if (typeof address !== 'string' || address.length === 0) throw new Error('the port named no address it sends to');
-      // A port that already accepts a connection belongs to another process, which took it after the runtime released it.
-      if ((await accepts(address, port)) === true) {
+      // A chosen port that already accepts a connection belongs to another process, which took it after the runtime
+      // released it. A server that reports its port binds one the system gives it alone.
+      if (!reports && (await accepts(address, port)) === true) {
         throw new Error(`another process listens on ${address} port ${port}, which was chosen for the server ${entry.server.target}`);
       }
       const env = {
         ...(process.env.PATH === undefined ? {} : { PATH: process.env.PATH }),
         ...environment,
-        [entry.server.portEnvironmentKey]: String(port),
+        ...(reports
+          ? { [entry.server.portEnvironmentKey]: '0', [entry.server.portFileEnvironmentKey]: portFile }
+          : { [entry.server.portEnvironmentKey]: String(port) }),
       };
       running = mechanism.run(
         {
@@ -479,18 +552,31 @@ function callServer({ entry, port, cwd, target, environment, mechanism, maxOutpu
         },
       );
       const deadline = Date.now() + entry.server.readyTimeoutMs;
+      let accepted = null;
       for (;;) {
         if (ended !== null) throw account();
-        const accepted = await accepts(address, port);
-        if (accepted === true) {
-          if (ended !== null) throw account();
-          ready = true;
-          return;
+        const report = reports ? readReport() : null;
+        const candidate = reports ? report.reported : port;
+        if (candidate !== null) {
+          accepted = await accepts(address, candidate);
+          if (accepted === true) {
+            if (ended !== null) throw account();
+            // A number read while the server was writing it is a prefix of the port: once the file stops changing, the
+            // port it names is the one the server bound.
+            if (!reports || readIfWritten(portFile) === report.text) {
+              port = candidate;
+              ready = true;
+              return port;
+            }
+            continue;
+          }
         }
         if (signal?.aborted) throw new Error('the call was aborted while its server started');
         if (Date.now() >= deadline) {
           throw new Error(
-            `the server ${entry.server.target} did not accept a connection on ${address} port ${port} within readyTimeoutMs (${entry.server.readyTimeoutMs}ms); the last attempt failed with ${accepted}`,
+            candidate === null
+              ? `the server ${entry.server.target} wrote no port to the file ${entry.server.portFileEnvironmentKey} names within readyTimeoutMs (${entry.server.readyTimeoutMs}ms)`
+              : `the server ${entry.server.target} did not accept a connection on ${address} port ${candidate} within readyTimeoutMs (${entry.server.readyTimeoutMs}ms); the last attempt failed with ${accepted}`,
           );
         }
         await delay(READY_POLL_MS, signal);
@@ -516,7 +602,15 @@ function callServer({ entry, port, cwd, target, environment, mechanism, maxOutpu
     if (running !== null) await running.catch(() => {});
   }
 
-  return { start, stop, endedWithin, endedAbnormally, account: () => (ended === null ? null : account()) };
+  return {
+    reports,
+    start,
+    stop,
+    endedWithin,
+    endedAbnormally,
+    isReady: () => ready,
+    account: () => (ended === null ? null : account()),
+  };
 }
 
 /**
@@ -583,7 +677,7 @@ function observationFor(answer, request, parsers) {
  * `server` once eval-quality's own `evaluateTarget` allows the target it names;
  * the observation, or its fault thrown.
  */
-async function callPort({ httpPort, message, server, signal, timeoutMs, maxChannelBytes }) {
+async function callPort({ httpPort, message, server, configurationAt = null, signal, timeoutMs, maxChannelBytes }) {
   const engine = await loadEngine();
   const { probeParsers } = await loadConformance();
   if (fileDigest(httpPort.file) !== httpPort.digest) {
@@ -612,8 +706,10 @@ async function callPort({ httpPort, message, server, signal, timeoutMs, maxChann
             method: request.method,
           });
           if (!decision.allowed) throw new Error(`eval-quality's policy does not allow the target the port named: ${decision.detail}`);
-          await server.start(signal, decision.canonicalAddress);
-          reply({ type: 'ready' });
+          const bound = await server.start(signal, decision.canonicalAddress);
+          // A server that reported the port it bound is reached there: the port probes the call again over the policy
+          // and targets at that port, so eval-quality decides where the request goes.
+          reply(server.reports ? { type: 'ready', configuration: configurationAt(bound) } : { type: 'ready' });
         } catch (error) {
           reply({ type: 'not-ready', message: error.message });
         }
@@ -621,6 +717,12 @@ async function callPort({ httpPort, message, server, signal, timeoutMs, maxChann
       }
       if (answer?.type === 'answer') {
         const observation = observationFor(answer.observation, request, probeParsers);
+        if (server !== null && server !== undefined && !server.isReady()) {
+          throw portFailure(
+            new Error(`the port answered for ${request.interfaceId} before the call's server was ready, so no server of the run gave it`),
+            'the answer came before the call started its server',
+          );
+        }
         if (server?.endedAbnormally()) {
           throw portFailure(server.account(), "the answer came after the call's server had ended, so no server of the run gave it");
         }
@@ -663,37 +765,50 @@ function channelCeiling(entry) {
  * @param {(names: string[]) => Record<string, string>} options.readEnvironment the host's values for keys
  * @param {{ run: Function }} options.mechanism eval-quality's `nodeCommandMechanism`
  * @param {number} options.maxOutputBytes a server's default output ceiling
+ * @param {string[]} [options.scratch] the run's private directories, which a call's port-file directory joins while it runs
  * @returns {{ probe: (request: object, signal?: AbortSignal) => Promise<object> }}
  */
-function createApiPort({ entries, httpPort, cwd, targetOf, readEnvironment, mechanism, maxOutputBytes }) {
+function createApiPort({ entries, httpPort, cwd, targetOf, readEnvironment, mechanism, maxOutputBytes, scratch = [] }) {
   return {
     async probe(request, signal) {
       const entry = entries.find((candidate) => candidate.interfaceId === request?.interfaceId);
       const launched = entry?.server === undefined ? null : entry;
-      const launchedPort = launched === null ? null : await freePort();
-      const configuration = portConfiguration({
-        entries,
-        portOf: (candidate) => (candidate.server === undefined ? candidate.port : candidate === launched ? launchedPort : null),
-        readEnvironment,
-        interfaceId: request?.interfaceId,
-      });
-      const server =
-        launched === null
-          ? null
-          : callServer({
-              entry: launched,
-              port: launchedPort,
-              cwd,
-              target: targetOf(launched),
-              environment: readEnvironment(launched.server.environmentKeys),
-              mechanism,
-              maxOutputBytes,
-            });
+      const reports = launched?.server.portFileEnvironmentKey !== undefined;
+      // The file a server reports its port in lives in a private directory of the call's, on the run's scratch list, so
+      // a signal that ends the run removes it too.
+      const portDirectory = reports ? fs.mkdtempSync(path.join(os.tmpdir(), 'tea-evaluate-port-')) : null;
+      if (portDirectory !== null) scratch.push(portDirectory);
+      let server = null;
       try {
+        const launchedPort = launched === null || reports ? null : await freePort();
+        const configurationAt = (port) =>
+          portConfiguration({
+            entries,
+            portOf: (candidate) => (candidate.server === undefined ? candidate.port : candidate === launched ? port : null),
+            readEnvironment,
+            interfaceId: request?.interfaceId,
+          });
+        // Until the server reports the port it bound, the policy and targets name the scheme's default port; the call
+        // is probed again at the reported port before anything is sent.
+        const configuration = configurationAt(reports ? defaultPortOf(launched) : launchedPort);
+        server =
+          launched === null
+            ? null
+            : callServer({
+                entry: launched,
+                port: launchedPort,
+                portFile: portDirectory === null ? null : path.join(portDirectory, PORT_FILE_NAME),
+                cwd,
+                target: targetOf(launched),
+                environment: readEnvironment(launched.server.environmentKeys),
+                mechanism,
+                maxOutputBytes,
+              });
         const { observation } = await callPort({
           httpPort,
           message: { configuration, request, launched: launched !== null },
           server,
+          configurationAt,
           signal,
           timeoutMs: (entry?.maxElapsedMs ?? 0) + (launched?.server.readyTimeoutMs ?? 0) + PORT_START_ALLOWANCE_MS,
           maxChannelBytes: channelCeiling(entry),
@@ -703,9 +818,30 @@ function createApiPort({ entries, httpPort, cwd, targetOf, readEnvironment, mech
         throw asCallFault(error);
       } finally {
         await server?.stop();
+        if (portDirectory !== null) releasePortDirectory(scratch, portDirectory);
       }
     },
   };
+}
+
+/** The default port of an entry's scheme, which the policy names for a started server before it reports its own. */
+function defaultPortOf(entry) {
+  return entry.scheme === 'https' ? 443 : 80;
+}
+
+/**
+ * Removes a call's port-file directory and takes it off the run's scratch
+ * list once it is gone; one that cannot be removed stays listed, so the run's
+ * end tries it again and reports it.
+ */
+function releasePortDirectory(scratch, directory) {
+  try {
+    fs.rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  } catch {
+    return;
+  }
+  const at = scratch.indexOf(directory);
+  if (at !== -1) scratch.splice(at, 1);
 }
 
 /**
@@ -726,7 +862,7 @@ function degenerateApiPort({ entries, httpPort, answer, readEnvironment }) {
       const entry = entries.find((candidate) => candidate.interfaceId === request?.interfaceId);
       const configuration = portConfiguration({
         entries,
-        portOf: (candidate) => candidate.port ?? (candidate.scheme === 'https' ? 443 : 80),
+        portOf: (candidate) => candidate.port ?? defaultPortOf(candidate),
         readEnvironment,
         interfaceId: request?.interfaceId,
       });

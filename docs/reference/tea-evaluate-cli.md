@@ -168,6 +168,7 @@ An HTTP entry (`kind: "api"`) serves an `api` interface of the contract, through
     "targetArgs": ["--policy=rules/policy.txt"],
     "environmentKeys": ["GRADER_TOKEN"],
     "portEnvironmentKey": "PORT",
+    "portFileEnvironmentKey": "PORT_FILE",
     "readyTimeoutMs": 20000
   },
   "auth": { "header": "authorization", "environmentKey": "GRADER_TOKEN", "prefix": "Bearer " }
@@ -180,8 +181,8 @@ An HTTP entry (`kind: "api"`) serves an `api` interface of the contract, through
   One HTTP entry serves one interface.
 - `port`: a deployed target's port, reached as it is.
 - `server`, in place of `port`: a service the runtime starts from the workspace for each call, as it starts a command or a tool server, so the code that answers is the workspace's, a mutation included.
-  `target` and `targetArgs` follow a tool server's rules, `environmentKeys` names the keys whose host values it starts with, and `portEnvironmentKey` the key the port it must listen on reaches it in.
-  It starts only once the port's policy has allowed the call and the runtime's own `evaluateTarget` call agrees, through eval-quality's command mechanism in a process group of its own, which ends with the call; the call is sent once the address eval-quality allowed accepts a connection on that port, within `readyTimeoutMs`, and `maxElapsedMs` counts from then.
+  `target` and `targetArgs` follow a tool server's rules, `environmentKeys` names the keys whose host values it starts with, and `portEnvironmentKey` and the optional `portFileEnvironmentKey` the keys its port handoff uses (see [A started service's port](#a-started-services-port)).
+  It starts only once the port's policy has allowed the call and the runtime's own `evaluateTarget` call agrees, through eval-quality's command mechanism in a process group of its own, which ends with the call; the call is sent once the address eval-quality allowed accepts a connection on the service's port, within `readyTimeoutMs`, and `maxElapsedMs` counts from then.
 - `auth`: a header every request of the interface carries, holding `prefix` and the host's value for `environmentKey`; the port adds it, no request record carries it, and no redirect to another origin receives it.
   `preflight` and `run` exit 10 when the host does not set that key, since a call with no credential would read its refusal as the target's behavior.
   Over `scheme: "http"` every address must be one eval-quality's `staysOnHost` keeps on this host, since the header would otherwise cross the network in clear text; `check` refuses any other (`registry`), the NAT64 (`64:ff9b::7f00:1`) and IPv4-compatible (`::127.0.0.1`) spellings of a loopback address included, since a connection to either goes through a translator and leaves the host.
@@ -192,9 +193,6 @@ A failure quotes the last 2000 characters of what the port's process or a starte
 A request records its `path`, `query`, `header` and `body` inputs as `callInputs`, and the answer's status, headers and body as `responseStatus`, `responseHeaders` and `responseBody`, so an oracle reads `/interactions/<step>/response-body/...`; every answer is an observation, at any status.
 A service that exits before it accepts a connection, does not accept one within `readyTimeoutMs`, crosses a ceiling, or stops during a call is a target that could not run (exit 12), its cause kept scrubbed.
 A service not accepting within `readyTimeoutMs` is reported with the last connection attempt's error code: `ECONNREFUSED` while nothing listens on the port, and `EADDRNOTAVAIL` when the host has no local port left to connect from.
-The runtime takes a free port and releases it just before the service starts.
-A port another process already listens on when the service is to start is refused, and an answer that arrives after the service ended other than with exit code 0 is refused, since no service of the run gave it; both stop the run with exit 12.
-A process that takes the port after that check and answers before the service's failure to bind is reported is not caught (Story 1.37 closes that window).
 A path value that reads as `.` or `..` is refused before anything is sent, since a URL would resolve it into another path than the one the call records.
 
 A denied call is recorded with eval-quality's `forbidden-target` fault and, from eval-quality 4.2.0, the `reason` its policy gave (`interface-not-authorized`, `tool-not-authorized`, `executable-not-authorized`, `subcommand-not-authorized`, `environment-key-not-authorized`, and for an HTTP request `scheme-not-authorized`, `host-not-authorized`, `port-not-authorized`, `address-not-authorized`, `address-unparseable` and `method-not-authorized`), in a leg's `faults/` file, a qualification's or trial's fault and a sealed-brief agent's bridge calls alike; `preflight` and `run` exit 10 and name the reason.
@@ -222,6 +220,26 @@ The port file imports `eval-quality` and TeA's package as bare names, which Node
 A `tea-evaluate` run from a global install or through `npx`, with neither installed above the evaluation folder, leaves the port unable to start (exit 10 at `preflight`).
 
 `node adapter/http-probe-port.conformance.mjs`, run from the evaluation folder, runs eval-quality's environment-probe conformance suite over the port against a loopback stub it starts and closes itself, so it needs no deployed target and no secret, and exits 0 only when every assertion passes.
+
+### A started service's port
+
+A registry `server` receives its port in one of two handoffs.
+
+With `portFileEnvironmentKey`, the service reports the port it bound.
+The runtime passes `0` in `portEnvironmentKey` and the path of a file in a private directory in `portFileEnvironmentKey`; the service binds a port the system chooses and writes that port's number to the file once it listens (in Node, `server.listen(0)`, then `server.address().port` written to the file).
+The runtime sends only once the file names a port, a whole number from 1 to 65535, that accepts a connection while the service runs, and the port probes the call again at that port, so eval-quality's policy decides there before anything is sent.
+No other process can answer on a port the service holds.
+A service that writes no port within `readyTimeoutMs`, or writes anything other than a port number, is a target that could not run (exit 12).
+The file's directory is on the run's list of private directories, so a signal that ends the run removes it.
+
+Without `portFileEnvironmentKey`, the runtime chooses the port, for a service that cannot report its own.
+It takes a free port, releases it just before the service starts, and passes its number in `portEnvironmentKey`.
+A port another process already listens on when the service is to start is refused, and an answer that arrives after the service ended other than with exit code 0 is refused, since no service of the run gave it; both stop the run with exit 12.
+This handoff leaves a window: another process can take the port between its release and the service binding it, and when that process answers before the service's failure to bind is reported, its answer is recorded as the service's.
+Name `portFileEnvironmentKey` whenever the service can report its port.
+
+In either handoff, an answer the port gives before the call's service is ready, as from a port that never asks the runtime to start the service, is refused (exit 12).
+`check` refuses (`registry`) a `portFileEnvironmentKey` equal to `portEnvironmentKey`, and either key named in `environmentKeys`, since the runtime sets both.
 
 ## The launch
 

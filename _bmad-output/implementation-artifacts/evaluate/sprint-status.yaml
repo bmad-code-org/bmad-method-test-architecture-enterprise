@@ -72,7 +72,7 @@ development_status:
   1-34-qualify-a-sealed-brief-agent-evaluator-before-its-verdicts-count: backlog
   1-35-judge-a-tool-server-that-crashes-mid-call: backlog
   1-36-hold-an-http-entry-to-eval-qualitys-own-target-policy-parser: backlog
-  1-37-know-a-started-http-server-by-the-port-it-bound-itself: backlog
+  1-37-know-a-started-http-server-by-the-port-it-bound-itself: done
   epic-1-retrospective: optional
 
   epic-2: backlog

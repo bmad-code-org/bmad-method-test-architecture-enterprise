@@ -633,6 +633,9 @@ Added 2026-09-25 in Story 1.11. Levels: contract, integration over real eval-qua
 
 Added 2026-09-25 in Story 1.11. Levels: integration over real eval-quality, static. File: `test/test-evaluate-api.js` (`test:evaluate-api`).
 
+Amended 2026-09-26: delivered in Story 1.11's pull request, PR #243, with every revert check below exercised and recorded in `story-1.11.md` under "Final review round 3".
+The no-port and non-number rows run both as `preflight` cases and as `callServer` units, and the fixture's registry names `portFileEnvironmentKey`, so the chosen-port handoff is left to the units that name it.
+
 | AC                                                                                  | Test                                                                                                                                         | Level                              | P   | Revert check                                                    |
 | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | --- | --------------------------------------------------------------- |
 | The server binds port 0 and reports it; the runtime sends only to the reported port | A fixture server binding port 0 and writing its port; a second case with another process listening on the port the runtime would have chosen | Integration over real eval-quality | P0  | Restoring the chosen-port handoff lets the other process answer |

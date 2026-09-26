@@ -578,7 +578,7 @@
           "minimum": 1
         },
         "server": {
-          "description": "A target the runtime starts from the workspace for each call, as it starts a command or a tool server, so the code that answers is the workspace's, a mutation included: started through eval-quality's command mechanism in a process group of its own, with the host's PATH, the host's values for environmentKeys and the chosen port in portEnvironmentKey, reached once the address eval-quality allowed accepts a connection on that port, and ended with its group after the call. It starts only once eval-quality's policy has allowed the call.",
+          "description": "A target the runtime starts from the workspace for each call, as it starts a command or a tool server, so the code that answers is the workspace's, a mutation included: started through eval-quality's command mechanism in a process group of its own, with the host's PATH, the host's values for environmentKeys and its port handoff, reached once the address eval-quality allowed accepts a connection on its port, and ended with its group after the call. It starts only once eval-quality's policy has allowed the call. With portFileEnvironmentKey, the server receives 0 in portEnvironmentKey and a private file's path in portFileEnvironmentKey, binds a port the system chooses and writes its number to that file, and the call is sent to that port alone. Without it, the runtime chooses a free port, releases it and passes its number in portEnvironmentKey; another process can take the port between that release and the server's bind, and an answer it gives before the server's end is reported is not caught.",
           "type": "object",
           "additionalProperties": false,
           "required": ["target", "targetArgs", "environmentKeys", "portEnvironmentKey", "readyTimeoutMs"],
@@ -610,7 +610,15 @@
               }
             },
             "portEnvironmentKey": {
-              "description": "The environment key the chosen port reaches the server in, such as PORT.",
+              "description": "The environment key the server's port reaches it in, such as PORT: the chosen port, or 0 when portFileEnvironmentKey is named, so the server binds a port the system chooses. check refuses a key environmentKeys also names, since the runtime sets it.",
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "not": {
+                "pattern": "^[Pp][Aa][Tt][Hh]$"
+              }
+            },
+            "portFileEnvironmentKey": {
+              "description": "The environment key a private file's path reaches the server in, such as PORT_FILE, for a server that reports the port it bound: it writes the port's number (a whole number from 1 to 65535) to that file once it listens. A server that writes no port within readyTimeoutMs, or writes anything other than a port number, is a target that could not run (exit 12). check refuses the key when it is portEnvironmentKey or one environmentKeys names, since the runtime sets it. Omitted, the runtime chooses the port.",
               "type": "string",
               "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
               "not": {
@@ -618,7 +626,7 @@
               }
             },
             "readyTimeoutMs": {
-              "description": "How long the server may take to accept a connection on its port, in milliseconds; a server that has not by then, or that exits first, is a target that could not run (exit 12).",
+              "description": "How long the server may take to accept a connection on its port, in milliseconds, reporting that port first when it names portFileEnvironmentKey; a server that has not by then, or that exits first, is a target that could not run (exit 12).",
               "type": "integer",
               "minimum": 1,
               "maximum": 2147483647

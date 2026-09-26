@@ -1115,6 +1115,10 @@ So that `check` refuses exactly what the engine's policy refuses, with no copy o
 
 Added 2026-09-25 in Story 1.11 from its review: for a registry entry with a `server`, the runtime takes a free port, releases it and hands its number to the server in `portEnvironmentKey`, then waits until that port accepts a connection. Another process can take the port in between: the server then fails to bind and ends, and when that process answers before the server's end is reported, the answer is recorded as the workspace's. Story 1.11 refuses an answer that arrives after the call's server ended other than with exit code 0, which closes the case once the end is reported, and leaves the window before it open.
 
+Amended 2026-09-26: delivered 2026-09-26 in Story 1.11's pull request, PR #243, because the chosen-port window made `test:evaluate-api` flaky under parallel load.
+The fixture's registry names `portFileEnvironmentKey`, so no suite case but the chosen-port units reaches a server through the chosen port.
+The delivery also has `check` refuse (`registry`) a `portFileEnvironmentKey` equal to `portEnvironmentKey` and either key named in `environmentKeys`, and refuses an answer the port gives before the call's server is ready (exit 12); TeA's host probes the call again at the reported port, so eval-quality's policy decides at the port the server bound.
+
 As an adopter whose HTTP target the runtime starts,
 I want the runtime to reach the server it started and nothing else on its port,
 So that no answer from another process is ever recorded as my target's (AD-7, AD-8).

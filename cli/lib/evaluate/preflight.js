@@ -622,7 +622,7 @@ async function runInWorkspaces({
   log,
   signal,
 }) {
-  const registry = registryFromEvaluation(evaluation, { root: pristine.root, httpPort });
+  const registry = registryFromEvaluation(evaluation, { root: pristine.root, httpPort, scratch });
   const problems = registry.targetProblems(pristine.root);
   if (problems.length > 0) {
     return new PreflightOutcome({ stage: 'launch', exitCode: 12, message: `the registry cannot launch: ${problems.join('; ')}` });

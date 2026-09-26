@@ -73,7 +73,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { PassThrough } = require('node:stream');
 const { pathToFileURL } = require('node:url');
-const { spawnSync } = require('node:child_process');
+const { spawn, spawnSync } = require('node:child_process');
 
 const { ENGINE_CLI_ENV, loadAdapters, loadEngine } = require('../cli/lib/evaluate/engine');
 const { serveHttpProbePort } = require('../cli/lib/evaluate/http-port-host');
@@ -95,6 +95,7 @@ const { scratchDirectories } = require('./lib/scratch-directories');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const EVALUATE = path.join(PROJECT_ROOT, 'cli', 'evaluate.js');
+const REFERENCE = path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md');
 const FIXTURE = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate-api');
 const ASSETS = path.join(PROJECT_ROOT, 'src', 'workflows', 'testarch', 'bmad-testarch-evaluate', 'assets');
 const PORT_TEMPLATE = path.join(ASSETS, 'http-probe-port.mjs');
@@ -802,6 +803,9 @@ async function checkConformance() {
 async function checkUnits() {
   const evaluation = readJson(path.join(FIXTURE, EVALUATION, 'evaluation.json'));
   const [entry] = evaluation.registry;
+  // The fixture's server reports the port it bound (Story 1.37). The chosen-port handoff, kept for a server that cannot
+  // report its port, is exercised by the units below that name `chosenEntry`, which drop that key.
+  const chosenEntry = { ...entry, server: (({ portFileEnvironmentKey, ...server }) => server)(entry.server) };
   await withEnvironment({ GRADER_SECRET: SECRET, GRADER_TOKEN: TOKEN, GRADER_LOG: undefined }, async () => {
     const registry = createRegistry(evaluation.registry, { root: FIXTURE });
     const configuration = portConfiguration({
@@ -1122,8 +1126,8 @@ async function checkUnits() {
     `a port file changed during the run gave ${changed?.code}: ${changed?.cause?.message ?? changed?.message}`,
   );
 
-  // Another process that took the call's port answers after the call's own server ended with exit 1: the answer is
-  // refused, since no server of the run gave it.
+  // The chosen-port handoff and its window. Another process that took the call's port answers after the call's own
+  // server ended with exit 1: the answer is refused, since no server of the run gave it.
   let squatter = null;
   const squatting = {
     run: (request, signal) =>
@@ -1138,7 +1142,7 @@ async function checkUnits() {
       }),
   };
   const squatted = await createApiPort({
-    entries: [entry],
+    entries: [chosenEntry],
     httpPort,
     cwd: project.root,
     targetOf: () => path.join(project.root, 'server', 'grader.js'),
@@ -1164,7 +1168,7 @@ async function checkUnits() {
   await new Promise((resolve) => holder.listen(0, '127.0.0.1', resolve));
   let serverStarted = false;
   const taken = await callServer({
-    entry,
+    entry: chosenEntry,
     port: holder.address().port,
     cwd: project.root,
     target: path.join(project.root, 'server', 'grader.js'),
@@ -1193,7 +1197,7 @@ async function checkUnits() {
   const unheldPort = released.address().port;
   await new Promise((resolve) => released.close(resolve));
   const silent = await callServer({
-    entry: { ...entry, server: { ...entry.server, readyTimeoutMs: 300 } },
+    entry: { ...chosenEntry, server: { ...chosenEntry.server, readyTimeoutMs: 300 } },
     port: unheldPort,
     cwd: project.root,
     target: path.join(project.root, 'server', 'grader.js'),
@@ -1208,6 +1212,96 @@ async function checkUnits() {
       `did not accept a connection on 127.0.0.1 port ${unheldPort} within readyTimeoutMs (300ms); the last attempt failed with ECONNREFUSED`,
     ),
     `a server that never listens gave ${silent?.message ?? 'a ready server'}`,
+  );
+
+  // A server that reports the port it bound is reached there alone. Another process listens on the port the runtime
+  // hands the server, as one that takes a chosen port in the window before the server binds it does; with the port
+  // file, the runtime hands the server 0, which no process holds, and the other process answers nothing.
+  const intruded = [];
+  let intruder = null;
+  const intruding = {
+    run: (request, signal) => {
+      intruder = http.createServer((incoming, response) => {
+        intruded.push(incoming.url);
+        response.writeHead(200, { 'content-type': 'application/json' }).end('{"ok":true,"verdict":"intruder"}');
+      });
+      // A port the other process cannot take (the host out of ports) leaves it absent, which the check below names.
+      intruder.on('error', (error) => intruded.push(`the other process could not listen: ${error.code}`));
+      intruder.listen(Number(request.env.PORT), '127.0.0.1');
+      return nodeCommandMechanism.run(request, signal);
+    },
+  };
+  const reachedLog = path.join(scratch.make('port-file-reached'), 'grader.jsonl');
+  const graderLog = (names) => Object.fromEntries(names.filter((name) => name === 'GRADER_LOG').map((name) => [name, reachedLog]));
+  const reached = await createApiPort({
+    entries: [entry],
+    httpPort,
+    cwd: project.root,
+    targetOf: () => path.join(project.root, 'server', 'grader.js'),
+    readEnvironment: graderLog,
+    mechanism: intruding,
+    maxOutputBytes: 1024 * 1024,
+  })
+    .probe(armed.steps[0].request)
+    .catch((error) => error);
+  if (intruder?.listening) {
+    intruder.closeAllConnections();
+    await new Promise((resolve) => intruder.close(resolve));
+  }
+  const reachedLines = sessions({ log: reachedLog });
+  check(
+    reached?.status === 200 &&
+      reached.body?.value?.verdict === 'accepted' &&
+      intruded.length === 0 &&
+      reachedLines.some((line) => line.event === 'listen' && line.handoff === 'port-file') &&
+      reachedLines.filter((line) => line.event === 'request').length === 1,
+    `a server reporting its port, with another process on the port the runtime hands it: the call gave ${JSON.stringify(reached?.body ?? reached?.cause?.message ?? reached?.message)}, the other process answered ${JSON.stringify(intruded)}, the server logged ${JSON.stringify(reachedLines)}`,
+  );
+
+  // A port file that is never written, or that names no port, starts no call: the server is a target that could not
+  // run. A fake server that writes its report and never listens, so only the file decides the outcome.
+  const reporting = (write) => ({
+    run: (request, signal) =>
+      new Promise((resolve) => {
+        write(request.env.PORT_FILE, request.env.PORT);
+        signal.addEventListener('abort', () => resolve({ exitCode: 0, stdout: '', stderr: '' }), { once: true });
+      }),
+  });
+  const handed = [];
+  for (const [what, write, expected] of [
+    [
+      'a server that writes no port',
+      (file, port) => handed.push(port),
+      'wrote no port to the file PORT_FILE names within readyTimeoutMs (300ms)',
+    ],
+    [
+      'a server that writes a port that is not a number',
+      (file) => fs.writeFileSync(file, 'port 8080\n'),
+      'wrote something other than a port number (a whole number from 1 to 65535) to the file PORT_FILE names',
+    ],
+    ['a server that writes port 0', (file) => fs.writeFileSync(file, '0'), 'wrote something other than a port number'],
+    ['a server that writes a port past 65535', (file) => fs.writeFileSync(file, '65536'), 'wrote something other than a port number'],
+  ]) {
+    const directory = scratch.make('port-report');
+    const refusedReport = await callServer({
+      entry: { ...entry, server: { ...entry.server, readyTimeoutMs: 300 } },
+      portFile: path.join(directory, 'port'),
+      cwd: project.root,
+      target: path.join(project.root, 'server', 'grader.js'),
+      environment: {},
+      mechanism: reporting(write),
+      maxOutputBytes: 1024,
+    })
+      .start(new AbortController().signal, '127.0.0.1')
+      .catch((error) => error);
+    check(
+      String(refusedReport?.message).includes(expected),
+      `${what} gave ${refusedReport?.message ?? `a server ready on ${refusedReport}`}`,
+    );
+  }
+  check(
+    JSON.stringify(handed) === JSON.stringify(['0']),
+    `a server reporting its port was handed ${JSON.stringify(handed)} in PORT; expected "0"`,
   );
 
   // A port whose own decision allows everything, and that names another method than the request's when it prepares,
@@ -1436,6 +1530,9 @@ async function checkPortProcess() {
       (await import('node:fs')).writeSync(3, \`\${'x'.repeat(190)}\${value}\\n\`);
       return new Promise(() => {});
     }
+    if (input?.operationId === 'answer-unprepared') {
+      return { probeId: input.probeId, interfaceId: input.interfaceId, operationId: input.operationId, kind: 'api', status: 200, headers: {}, body: { kind: 'absent' } };
+    }
     if (input?.operationId === 'print-auth') {
       const value = Object.values(auth[input.interfaceId] ?? {})[0];
       process.stdout.write(\`\${'a'.repeat(100)}\${value}\${'b'.repeat(1994)}\`, () => process.exit(1));
@@ -1517,6 +1614,31 @@ async function checkPortProcess() {
   )
     .probe({ ...request('grader', 'grade-run'), pathTemplate: '/grade' })
     .catch((error) => error);
+  // An answer the port gives before it asks the runtime to start the call's server came from no server of the run, as
+  // a port that skips its prepare step and sends to the placeholder port would give, and is refused.
+  let unpreparedStarts = 0;
+  const unprepared = await createApiPort({
+    entries: [grader],
+    httpPort,
+    cwd: project.root,
+    targetOf: () => path.join(project.root, 'server', 'grader.js'),
+    readEnvironment: () => ({}),
+    mechanism: {
+      run: () => {
+        unpreparedStarts += 1;
+        return new Promise(() => {});
+      },
+    },
+    maxOutputBytes: 1024,
+  })
+    .probe({ ...request('grader', 'answer-unprepared'), pathTemplate: '/grade' })
+    .catch((error) => error);
+  check(
+    unprepared?.code === 'port-failure' &&
+      String(unprepared.message).includes('the answer came before the call started its server') &&
+      unpreparedStarts === 0,
+    `an answer before the call's server was ready gave ${JSON.stringify(unprepared?.status ?? unprepared?.message)} with ${unpreparedStarts} server start(s)`,
+  );
   // A line outside the protocol is quoted cut at its end, where the scrub finds the leading part of a secret the cut left.
   const strayLine = await scrubbing(live)
     .probe(request('unit-a', 'channel-auth'))
@@ -1656,6 +1778,11 @@ async function checkPipeline() {
     `the service ran outside its workspace, answered more than once per start, or saw no auth header: ${JSON.stringify(served)}`,
   );
   check(livingSessions(project).length === 0, `a service outlived its call: ${JSON.stringify(livingSessions(project))}`);
+  // The fixture's registry names portFileEnvironmentKey, so every service bound a port the system chose and reported it.
+  check(
+    starts.length > 0 && starts.every((line) => line.handoff === 'port-file'),
+    `a service of the pipeline was started with the chosen-port handoff: ${JSON.stringify(starts)}`,
+  );
   // The secret and the token reached no file of the project, the run directory included, and nothing the commands printed.
   const leaked = [
     ...filesUnder(project.root),
@@ -1690,6 +1817,93 @@ async function checkPipeline() {
   check(!scoredOutput.includes(SECRET) && !scoredOutput.includes(TOKEN), "the service's secret or token reached what score printed");
   checkVotes('the HTTP run', evidence, 'P-001', 'passed-clean-control');
   checkVotes('the HTTP run', evidence, 'P-002', 'caught');
+}
+
+// ---------------------------------------------------------------- a started service's port (Story 1.37)
+
+/**
+ * The port-file handoff end to end: a service that writes no port, or writes
+ * something other than a port number, stops the run with exit 12; the port
+ * file's directory is on the run's scratch list, so a signal mid-call leaves
+ * the temp directory empty; and the reference states both handoffs and the
+ * window the chosen port leaves.
+ */
+async function checkPortReport() {
+  for (const [label, line, expected] of [
+    ['port-none', 'port: none', 'wrote no port to the file PORT_FILE names within readyTimeoutMs (1000ms)'],
+    ['port-text', 'port: text', 'wrote something other than a port number (a whole number from 1 to 65535) to the file PORT_FILE names'],
+  ]) {
+    const project = makeProject(label, {
+      edit: ({ root, folder }) => {
+        fs.appendFileSync(path.join(root, 'rules', 'policy.txt'), `${line}\n`);
+        editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
+          evaluation.registry[0].server.readyTimeoutMs = 1000;
+        });
+      },
+    });
+    const ran = evaluate(['preflight', '--evaluation', project.folder], project.env);
+    const runDirectory = runDirectoryOf(project.folder);
+    const fault = runDirectory === null ? null : readIfPresent(path.join(runDirectory, 'qualification', 'P-002', 'fault.json'));
+    check(
+      ran.status === 12 &&
+        fault?.code === 'port-failure' &&
+        String(fault.cause).includes(expected) &&
+        ran.output.includes(expected) &&
+        sessions(project).some((entry) => entry.event === 'listen') &&
+        !sessions(project).some((entry) => entry.event === 'request'),
+      `${line}: preflight exited ${ran.status} with the fault ${JSON.stringify(fault)} and the service's log ${JSON.stringify(sessions(project))}; expected 12 naming ${JSON.stringify(expected)}\n${ran.output}`,
+    );
+    check(
+      await eventually(() => livingSessions(project).length === 0),
+      `${line}: a service outlived its run: ${JSON.stringify(livingSessions(project))}`,
+    );
+  }
+
+  // A signal that ends a run mid-call removes the call's port-file directory with the rest of the run's scratch.
+  if (process.platform !== 'win32') {
+    const project = makeProject('port-signal', {
+      edit: ({ root }) => fs.appendFileSync(path.join(root, 'rules', 'policy.txt'), 'hang: /grade\n'),
+    });
+    const child = spawn(process.execPath, [EVALUATE, 'preflight', '--evaluation', project.folder], {
+      cwd: PROJECT_ROOT,
+      env: { ...BASE_ENV, ...project.env },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let output = '';
+    child.stdout.on('data', (chunk) => (output += chunk));
+    child.stderr.on('data', (chunk) => (output += chunk));
+    const ended = new Promise((resolve) => child.on('exit', (code, name) => resolve({ code, name })));
+    const deadline = Date.now() + SPAWN_TIMEOUT_MS;
+    while (!sessions(project).some((entry) => entry.event === 'request') && Date.now() < deadline && child.exitCode === null) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    const during = fs.readdirSync(project.env.TMPDIR);
+    child.kill('SIGTERM');
+    const { code, name } = await ended;
+    const after = fs.readdirSync(project.env.TMPDIR);
+    check(
+      name === 'SIGTERM' && during.some((entry) => entry.startsWith('tea-evaluate-port-')),
+      `a run ended by SIGTERM mid-call ended with code ${code} and signal ${name}, and its temp directory held ${JSON.stringify(during)} mid-call; expected a tea-evaluate-port-* directory\n${output}`,
+    );
+    check(after.length === 0, `a run ended by SIGTERM mid-call left ${JSON.stringify(after)} in its temp directory`);
+    check(
+      await eventually(() => livingSessions(project).length === 0),
+      `a service outlived a run ended by SIGTERM: ${JSON.stringify(livingSessions(project))}`,
+    );
+  }
+
+  // The reference states both handoffs and the window the chosen port leaves, under its own heading.
+  const reference = fs.readFileSync(REFERENCE, 'utf8');
+  const heading = "### A started service's port";
+  const start = reference.indexOf(`\n${heading}\n`);
+  const passage = start === -1 ? '' : reference.slice(start + heading.length + 2).split(/\n#{2,3} /)[0];
+  for (const phrase of [
+    'With `portFileEnvironmentKey`, the service reports the port it bound',
+    'Without `portFileEnvironmentKey`, the runtime chooses the port',
+    'This handoff leaves a window: another process can take the port between its release and the service binding it',
+  ]) {
+    check(passage.includes(phrase), `the reference's passage under ${JSON.stringify(heading)} does not say ${JSON.stringify(phrase)}`);
+  }
 }
 
 // ---------------------------------------------------------------- denials and faults
@@ -2424,6 +2638,45 @@ async function checkCheckRules() {
       'targetArgs/0',
     ],
     [
+      'a port file key that is the port key',
+      ({ folder }) =>
+        editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
+          evaluation.registry[0].server = {
+            ...evaluation.registry[0].server,
+            portFileEnvironmentKey: 'PORT',
+          };
+        }),
+      'registry',
+      'names "PORT" as both its server\'s portEnvironmentKey and its portFileEnvironmentKey',
+    ],
+    [
+      'a port file key the server also reads from the host',
+      ({ folder }) =>
+        editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
+          evaluation.registry[0].server.environmentKeys.push('PORT_FILE');
+        }),
+      'registry',
+      'names "PORT_FILE" as its server\'s portFileEnvironmentKey and in its environmentKeys',
+    ],
+    [
+      'a port key the server also reads from the host',
+      ({ folder }) =>
+        editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
+          evaluation.registry[0].server.environmentKeys.push('PORT');
+        }),
+      'registry',
+      'names "PORT" as its server\'s portEnvironmentKey and in its environmentKeys',
+    ],
+    [
+      'a port file key naming PATH',
+      ({ folder }) =>
+        editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
+          evaluation.registry[0].server.portFileEnvironmentKey = 'Path';
+        }),
+      'schema',
+      'portFileEnvironmentKey',
+    ],
+    [
       'an HTTP entry whose IPv4 host a URL spells otherwise',
       ({ folder }) =>
         editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
@@ -2613,6 +2866,7 @@ async function main() {
     await runCase("the port's process", checkPortProcess);
     await runCase('the pipeline', checkPipeline);
     await runCase('the denials', checkDenials);
+    await runCase("a started service's port", checkPortReport);
     await runCase('the sealed-brief agent', checkSealedBriefAgent);
     await runCase('the gameability arm', checkGameability);
     await runCase('the check rules', checkCheckRules);

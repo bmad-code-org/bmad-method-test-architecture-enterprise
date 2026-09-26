@@ -2,7 +2,11 @@
 /**
  * A loopback HTTP service, the system under test of Story 1.11's fixture:
  * plain Node `http`, no framework, listening on 127.0.0.1 at the port its
- * `PORT` environment variable names.
+ * `PORT` environment variable names. With `PORT` 0 and `PORT_FILE` naming a
+ * file, it binds a port the system chooses and writes that port's number to
+ * the file once it listens (Story 1.37's handoff, which the fixture's
+ * registry names); with a port in `PORT`, it listens there (the chosen-port
+ * handoff).
  *
  * It answers:
  *
@@ -15,9 +19,10 @@
  *
  * The policy file is the one its `--policy=<path>` argument names, relative to
  * its working directory (the fixture's registry passes
- * `--policy=rules/policy.txt`); started without the argument, or with no
- * `PORT`, it exits 2 before it listens, so a registry that dropped its
- * `targetArgs` or its `portEnvironmentKey` cannot pass.
+ * `--policy=rules/policy.txt`); started without the argument, with no
+ * `PORT`, or with `PORT` 0 and no `PORT_FILE`, it exits 2 before it listens,
+ * so a registry that dropped its `targetArgs`, its `portEnvironmentKey` or
+ * its `portFileEnvironmentKey` cannot pass.
  *
  * When GRADER_TOKEN is set, every request must carry `authorization: Bearer
  * <token>`, and one that does not is answered 401, so a test sees the
@@ -26,7 +31,8 @@
  * a test that the runtime scrubs both from what it records.
  *
  * When GRADER_LOG names a file, the service appends one JSON line when it
- * listens (`event: listen`) and one per request (`event: request`, the method,
+ * listens (`event: listen`, with the port it bound and the handoff it was
+ * started with, `port-file` or `chosen`) and one per request (`event: request`, the method,
  * the path and query, whether the auth header matched), each with the
  * workspace label of its working directory (`workspace`) and of the directory
  * it was started from (`scriptWorkspace`), and its pid, so a test reads from
@@ -42,6 +48,8 @@
  *   hang: <path>      log a request for that path and never answer it
  *   crash: <path>     log a request for that path and exit 3 without answering
  *   verdict: accept   answer accepted whatever the mode says
+ *   port: none        listen and write no port to PORT_FILE
+ *   port: text        listen and write `not-a-port` to PORT_FILE
  */
 
 'use strict';
@@ -55,8 +63,9 @@ const policyFile = process.argv
   .find((argument) => argument.startsWith('--policy='))
   ?.slice('--policy='.length);
 const port = Number(process.env.PORT);
-if (policyFile === undefined || !Number.isInteger(port) || port <= 0) {
-  process.stderr.write('grader: no --policy=<path> argument or no PORT\n');
+const portFile = process.env.PORT_FILE;
+if (policyFile === undefined || !Number.isInteger(port) || port < 0 || (port === 0 && !portFile) || process.env.PORT === '') {
+  process.stderr.write('grader: no --policy=<path> argument, no PORT, or PORT 0 with no PORT_FILE\n');
   process.exit(2);
 }
 const policy = fs.existsSync(policyFile) ? fs.readFileSync(policyFile, 'utf8') : '';
@@ -64,6 +73,7 @@ const mode = /mode: (\w+)/.exec(policy)?.[1] ?? 'unknown';
 const hanging = new Set([...policy.matchAll(/^hang: (\S+)$/gm)].map((match) => match[1]));
 const crashing = new Set([...policy.matchAll(/^crash: (\S+)$/gm)].map((match) => match[1]));
 const startDelayMs = Number(/^start: delay (\d+)$/m.exec(policy)?.[1] ?? 0);
+const portReport = /^port: (none|text)$/m.exec(policy)?.[1] ?? null;
 
 /** The runtime label of the workspace a directory lies in (`trial-clean-2` for tea-evaluate-trial-clean-2-XXXXXX/target), or null. */
 const labelOf = (directory) => /^tea-evaluate-(.+)-[A-Za-z0-9]{6}$/.exec(path.basename(path.dirname(directory)))?.[1] ?? null;
@@ -120,4 +130,18 @@ const server = http.createServer((request, response) => {
   answer(response, 404, { ok: false, error: 'not found' });
 });
 
-setTimeout(() => server.listen(port, '127.0.0.1', () => log({ event: 'listen', port })), startDelayMs);
+/** Reports the port the service bound in PORT_FILE, as its policy says. */
+function reportPort(bound) {
+  if (!portFile || portReport === 'none') return;
+  fs.writeFileSync(portFile, portReport === 'text' ? 'not-a-port\n' : `${bound}\n`);
+}
+
+setTimeout(
+  () =>
+    server.listen(port, '127.0.0.1', () => {
+      const bound = server.address().port;
+      reportPort(bound);
+      log({ event: 'listen', port: bound, handoff: portFile ? 'port-file' : 'chosen' });
+    }),
+  startDelayMs,
+);

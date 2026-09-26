@@ -33,6 +33,7 @@
           "GRADER_TOKEN"
         ],
         "portEnvironmentKey": "PORT",
+        "portFileEnvironmentKey": "PORT_FILE",
         "readyTimeoutMs": 20000
       },
       "auth": {

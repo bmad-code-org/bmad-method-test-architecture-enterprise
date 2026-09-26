@@ -96,6 +96,50 @@ context:
 
 ## Review Triage Log
 
+### Final review round 3 (runtime reviewer, opus, on da25091)
+
+The runtime reviewer saw `npm run test:evaluate-api` fail 2 of 180 checks with "another process listens on 127.0.0.1 port 63796, which was chosen for the server server/grader.js" while another test suite ran on the machine.
+Verified against the code at da25091: `freePort` in `http-target.js` released the chosen port before the service bound it; the runtime classed the collision as exit 12, as it should, and the gate was flaky under parallel load, which an adopter running evaluations side by side meets as well.
+
+**Reproduced before the fix**, from a detached worktree at da25091, each suite's output captured to its own file:
+
+- twelve suites, four at a time, then four beside a process holding 300 loopback listeners on system-chosen ports (about 7000 new listens a second), then four beside 2000 such listeners: all 20 passed.
+  macOS gives a system-chosen port as the next free port after the last one it gave (ten `listen(0)` calls in a row returned 59419 to 59428), so a released port reaches another process only once that counter has passed every other free port.
+- the same listeners beside a process opening short loopback connections, whose local ports wait in TIME_WAIT and shrink the free range, so the counter comes back to a released port quickly:
+  at 400 connections a second, 6 of 8 suites failed "a service slower to start than the request's cap: preflight exited 3" (the chosen port sits free for the service's 1200 ms start delay, and a listener that took it answered); at 700 and 1000 a second the reviewer's message recurred (at 700 a second, eleven lines of the four suites' output name "another process listens on 127.0.0.1 port N, which was chosen for the server server/grader.js"), with "the sealed-brief HTTP run sealed no trial set" among the failures; at 1500 a second "the HTTP run sealed no trial set" came with `read ECONNRESET` from a listener that had taken the port.
+  From 700 a second the host also ran out of local ports (`EADDRNOTAVAIL`), round 2's machine condition.
+
+**Round 2's unproven "sealed no trial set" is confirmed as this cause.**
+The chosen-port window yields that exact failure (the 1000 and 1500 a second runs above), and round 2's stress, listeners and connections without the TIME_WAIT pressure that makes macOS hand the released port out again, could not provoke it.
+The lost round 2 output cannot be tied to its run, so the window is the cause shown to produce it, and `EADDRNOTAVAIL` exhaustion stays the other.
+
+**Resolution: Story 1.37 delivered in this pull request**, as its criteria in `epics.md` and its section in `test-design-epic-1.md` state.
+
+- `ApiRegistryEntry.server` gains the optional `portFileEnvironmentKey` (the schema holds it to an environment key that is not `PATH`).
+  With it, `callServer` passes `0` in `portEnvironmentKey` and `<private directory>/port` in `portFileEnvironmentKey`, reads the file until it names a port (a whole number from 1 to 65535, read again once that port accepts a connection, so a number caught mid-write is not taken), and resolves with the bound port; no port within `readyTimeoutMs` and anything other than a port number are exit 12.
+  `createApiPort` makes the directory with `tea-evaluate-port-` in the run's `scratch` list (`createRegistry` and `registryFromEvaluation` take `scratch`, which `preflight.js` passes) and removes it after the call.
+- The policy and targets name the scheme's default port until the service reports its own; the runtime answers `ready` with the configuration at the bound port, and TeA's host (`http-port-host.js`) ends the first probe and probes the call again over it, so eval-quality's policy decides at the port the service bound before anything is sent.
+- Found on the way: a port that never asks the runtime to start the call's service would send to the placeholder port (or, before this round, the free port), and its answer was recorded; an answer before the service is ready is now refused (`port-failure`, exit 12).
+- Found on the way: `check` refuses (`registry`) a `portFileEnvironmentKey` equal to `portEnvironmentKey`, and either key named in `environmentKeys`, whose host value the runtime would silently replace; the second half was a gap for `portEnvironmentKey` since this story began.
+- The chosen-port handoff stays for a service that cannot report its port; the reference's new "A started service's port" section states both handoffs and the window, and the schema's `server` description names the window.
+- The fixture's registry names `portFileEnvironmentKey: "PORT_FILE"`, and `server/grader.js` binds port 0 and writes its port when `PORT_FILE` is set (`port: none` and `port: text` policy lines write none or `not-a-port`, and its `listen` log line names the handoff).
+  No suite case reaches a service through the chosen port except the chosen-port units, which name `chosenEntry` (the squatter answering after an abnormal end, the held port, the never-listening service).
+- `test:evaluate-api` cases: the pipeline asserts every service started with the port-file handoff; a service reporting its port beside another process listening on the port the runtime hands it is reached alone; units for no port, a non-number, `0` and `65536`, and that the service was handed `0`; `preflight` exits 12 for `port: none` and `port: text`; `SIGTERM` mid-call leaves the temp directory empty after a `tea-evaluate-port-*` directory was there; the reference passage is read under its heading; three `check` cases for the port keys and one for a `PATH` port-file key; an answer before the service is ready is refused.
+- `ARCHITECTURE-SPINE.md` AD-4 and AD-10, `epics.md` Story 1.37 (a dated delivery note), `test-design-epic-1.md` Story 1.37, sprint-status (`done`), the reference and CHANGELOG.
+
+Reverts, each applied in its own worktree carrying this round's change and the whole suite run:
+
+- the chosen-port handoff restored (`reports = false` in `callServer` and `createApiPort`): 10 failures, among them "the call gave {\"ok\":true,\"verdict\":\"intruder\"}, the other process answered [\"/grade?answer=forty-two\"]" and "a service of the pipeline was started with the chosen-port handoff".
+- a missing port file read as ready: 25 failures, among them "port: none: preflight exited 10 ... no authorization names interface \"grader\" ... expected 12" and "a server that writes no port gave a server ready on null".
+- the port-file directory left off the scratch list: "a run ended by SIGTERM mid-call left [\"tea-evaluate-port-ZFcMTt\"] in its temp directory".
+- the window's sentence removed from the reference: "the reference's passage under \"### A started service's port\" does not say \"This handoff leaves a window: ...\"".
+- the port-key rule dropped from `apiRegistryProblems`: the three `check` cases, "check exited 0; expected 10 under registry".
+- the answer-before-ready refusal dropped: "an answer before the call's server was ready gave 200 with 0 server start(s)".
+- the host sending on its first probe, ignoring the reported port: 20 failures, among them "the call gave \"connect ECONNREFUSED 127.0.0.1:80\"" and "preflight over the HTTP fixture exited 12".
+
+**Proof of the flake fix**, from the checkout: `npm run test:evaluate-api` four copies at once, twice, 8 of 8 passed with 241 checks each.
+Under the reproduction's load (the listeners and 400 connections a second), 8 of 8 suites passed across two rounds, where da25091 failed 6 of 8 under the same load; at 700 a second the fix showed no "another process listens" line and no `ECONNRESET`, and failed only on `EADDRNOTAVAIL`, the host out of ports, which even `listen(0)` then met.
+
 ### Final review round 2 (adversarial and regressions reviewers, both opus, on e9f307d)
 
 Every finding was verified against the code at e9f307d before its verdict, and each fix's revert was exercised once as in round 1: the change undone in the checkout, the named case run through a copy of `test/test-evaluate-api.js` restricted to that case's section, the failure observed, the files restored from a copy.
@@ -121,6 +165,7 @@ Stress, each run's output captured to its own file: 50 runs of the sealed-brief 
 All 101 passed.
 The signature came back only once the host ran out of local ports: at 3000 loopback connections a second, 14 of 15 runs of the case sealed no trial set, each with exit 12 because the service "did not accept a connection on 127.0.0.1 port ... within readyTimeoutMs (20000ms)", while a plain connect on the same host failed with `EADDRNOTAVAIL`.
 The run handles that machine condition as it should (exit 12, a target that could not run), and nothing ties the lost failure to it, so the cause stays unproven.
+Round 3 found the cause: under loopback connection load macOS hands the released chosen port to another process, which this stress never applied, and the chosen-port window then stops a run the same way; Story 1.37, delivered in round 3, closes it (see Final review round 3).
 Two changes make the next occurrence carry its own evidence:
 
 - `checkSealed` in `test/test-evaluate-api.js` fails each of the three runs that must seal (the HTTP run, the sealed-brief run, the gameability run) with the run's exit code and signal, its whole stderr, and the run directory's listing with every fault, `run.json` and evaluator stderr quoted, prints that at once, and keeps the run directory and stderr in a `tea-evaluate-api-evidence-XXXXXX` directory of the system temp directory, which the suite's cleanup leaves, named on the failure's first line; `evaluate` returns stderr and the signal apart.
@@ -252,3 +297,4 @@ The test-design table's checks first, then those the added criterion and the bui
 - `assets/README.md` gained one line in place (the https path for a credentialed target), as round 1's lines were, by the coordinator's decision on R2-10; it changes no stage of the skill.
 - `assets/README.md`'s credential line names `staysOnHost` in place of `classifyAddress` after round 2 (R2-2), edited in place as round 2's line was; it changes no stage of the skill.
 - after round 2 (R2-2, the flake, the hook) -- the engine check exit 0 at the start on eval-quality 4.2.0 and at the end on 4.3.0, with no `file:` or `.tgz` spec; `npm run test:evaluate-api` 212 checks over eval-quality 4.3.0; `test:bmad-output-gated` 44 checks; `test:release-metadata`, `test:guard-publish`, `test:doc-claims`, `lint`, `lint:md`, `format:check`, `docs:validate-links` and `docs:build` exit 0; `npm test` runs in the commit's pre-commit hook.
+- final review round 3 (Story 1.37) -- the engine check exit 0 at the start and the end on eval-quality 4.3.0, with no `file:` or `.tgz` spec; `npm run test:evaluate-api` 241 checks, four copies at once twice, 8 of 8 passed; `docs:validate-links`, `docs:build`, `lint`, `lint:md` and `format:check` exit 0; `npm test` runs in the commit's pre-commit hook.
