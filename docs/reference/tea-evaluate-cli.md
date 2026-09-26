@@ -230,6 +230,7 @@ The runtime passes `0` in `portEnvironmentKey` and the path of a file in a priva
 The runtime sends only once the file names a port, a whole number from 1 to 65535, that accepts a connection while the service runs, and the port probes the call again at that port, so eval-quality's policy decides there before anything is sent.
 No other process can answer on a port the service holds.
 A service that writes no port within `readyTimeoutMs`, or writes anything other than a port number, is a target that could not run (exit 12).
+The runtime reads the file without following a link and without waiting on it, so a link, a named pipe, a device or a file longer than 16 bytes in its place counts as anything other than a port number.
 The file's directory is on the run's list of private directories, so a signal that ends the run removes it.
 
 Without `portFileEnvironmentKey`, the runtime chooses the port, for a service that cannot report its own.

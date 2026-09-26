@@ -96,6 +96,30 @@ context:
 
 ## Review Triage Log
 
+### Final review round 4 (on f8ea1a2)
+
+The finding: `readIfWritten` in `http-target.js` read Story 1.37's port file with `fs.readFileSync`, which follows a link and waits on a pipe.
+A service that makes the port-file path a named pipe it never opens, or a link to `/dev/zero`, blocks the event loop, so `readyTimeoutMs`, the call's timeout and the `SIGINT` and `SIGTERM` handlers never run, and the service and the run's temp directories outlive it.
+Verified against the code at f8ea1a2 and **reproduced before the fix** through `tea-evaluate preflight`, with the fixture's service given the new `port: fifo` and `port: zero` policy lines: each preflight ran until the suite's 60-second spawn timeout killed it and left `tea-evaluate-port-*`, `tea-evaluate-pristine-*` and `tea-evaluate-qualify-P-002-*` in its temp directory.
+
+**Fix.**
+`readIfWritten` opens the file with `O_RDONLY | O_NONBLOCK | O_NOFOLLOW` (the flags `score.js` and `evaluators.js` already use), holds it to `fstatSync(...).isFile()`, reads at most `PORT_FILE_MAX_BYTES` (16) plus one byte and closes the descriptor in `finally`.
+A missing file stays "not written yet"; a link (`ELOOP`, or `EMLINK` on FreeBSD), a file that is not regular and a file longer than 16 bytes read as `NOT_A_PORT_FILE`, which `reportedPort` gives as `NaN`, so the call stops with "wrote something other than a port number" (exit 12), the existing classification.
+
+**The same shape elsewhere.**
+Every other read in `cli/lib/evaluate/` was checked for a path a port or a server can change while the run goes on.
+One had it: `fileDigest`, which `callPort` runs on `adapter/http-probe-port.mjs` before each call, read it with `readFileSync`, and the port's process (the adopter's code) or a started service can replace that file mid-run.
+It now opens the file the same way and gives `null` for an absent file, a link or a file that is not regular, so `callPort` refuses the call as a port file "changed after the run started" (`port-failure`), and `httpPortFile` refuses one that is not regular at probe time.
+The other reads are of files the runtime hands no port or service (the package's schemas and the evaluation folder's policy, contract and committed evidence, which `lstat` holds to regular files), or already use these flags (`score.js`, `evaluators.js`, `run-directory.js`).
+
+**Tests** in `test/test-evaluate-api.js`: `preflight` over the fixture with `port: fifo` and `port: zero` exits 12 naming "wrote something other than a port number", leaves no service running and its temp directory empty, each run held to a 60-second spawn timeout so a block fails the case on its own; the `callServer` units add a named pipe, a link to `/dev/zero` and a 69-byte file, each refused within the unit's 300 ms `readyTimeoutMs`; two `createApiPort` units replace the port file with a named pipe and a link to `/dev/zero` and each gets `port-failure` naming the change.
+The pipe cases are skipped on Windows and the `/dev/zero` cases where `/dev/zero` does not exist.
+
+**Reverts**, each in the checkout, the named section run through a copy of the suite restricted to it, and the file restored from a copy (`cmp` clean):
+
+- `readIfWritten` back to `readFileSync`: the `port: fifo` and `port: zero` preflights each ran until the 60-second timeout killed them ("did not finish: spawnSync ... ETIMEDOUT"), each leaving three directories in its temp directory; the in-process units blocked with no output past 90 seconds, where the fixed run finishes the same sections in 9 seconds.
+- `fileDigest` back to `readFileSync`: the units blocked with no output past 60 seconds on the replaced port file.
+
 ### Final review round 3 (runtime reviewer, opus, on da25091)
 
 The runtime reviewer saw `npm run test:evaluate-api` fail 2 of 180 checks with "another process listens on 127.0.0.1 port 63796, which was chosen for the server server/grader.js" while another test suite ran on the machine.
@@ -298,3 +322,4 @@ The test-design table's checks first, then those the added criterion and the bui
 - `assets/README.md`'s credential line names `staysOnHost` in place of `classifyAddress` after round 2 (R2-2), edited in place as round 2's line was; it changes no stage of the skill.
 - after round 2 (R2-2, the flake, the hook) -- the engine check exit 0 at the start on eval-quality 4.2.0 and at the end on 4.3.0, with no `file:` or `.tgz` spec; `npm run test:evaluate-api` 212 checks over eval-quality 4.3.0; `test:bmad-output-gated` 44 checks; `test:release-metadata`, `test:guard-publish`, `test:doc-claims`, `lint`, `lint:md`, `format:check`, `docs:validate-links` and `docs:build` exit 0; `npm test` runs in the commit's pre-commit hook.
 - final review round 3 (Story 1.37) -- the engine check exit 0 at the start and the end on eval-quality 4.3.0, with no `file:` or `.tgz` spec; `npm run test:evaluate-api` 241 checks, four copies at once twice, 8 of 8 passed; `docs:validate-links`, `docs:build`, `lint`, `lint:md` and `format:check` exit 0; `npm test` runs in the commit's pre-commit hook.
+- final review round 4 (the port file read without blocking) -- `npm run test:evaluate-api` 258 checks; `lint`, `lint:md`, `format:check` and `docs:validate-links` exit 0; `npm test` runs in the commit's pre-commit hook.

@@ -50,10 +50,13 @@
  *   verdict: accept   answer accepted whatever the mode says
  *   port: none        listen and write no port to PORT_FILE
  *   port: text        listen and write `not-a-port` to PORT_FILE
+ *   port: fifo        listen and make PORT_FILE a named pipe it never opens
+ *   port: zero        listen and make PORT_FILE a link to /dev/zero
  */
 
 'use strict';
 
+const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
@@ -73,7 +76,7 @@ const mode = /mode: (\w+)/.exec(policy)?.[1] ?? 'unknown';
 const hanging = new Set([...policy.matchAll(/^hang: (\S+)$/gm)].map((match) => match[1]));
 const crashing = new Set([...policy.matchAll(/^crash: (\S+)$/gm)].map((match) => match[1]));
 const startDelayMs = Number(/^start: delay (\d+)$/m.exec(policy)?.[1] ?? 0);
-const portReport = /^port: (none|text)$/m.exec(policy)?.[1] ?? null;
+const portReport = /^port: (none|text|fifo|zero)$/m.exec(policy)?.[1] ?? null;
 
 /** The runtime label of the workspace a directory lies in (`trial-clean-2` for tea-evaluate-trial-clean-2-XXXXXX/target), or null. */
 const labelOf = (directory) => /^tea-evaluate-(.+)-[A-Za-z0-9]{6}$/.exec(path.basename(path.dirname(directory)))?.[1] ?? null;
@@ -133,6 +136,8 @@ const server = http.createServer((request, response) => {
 /** Reports the port the service bound in PORT_FILE, as its policy says. */
 function reportPort(bound) {
   if (!portFile || portReport === 'none') return;
+  if (portReport === 'fifo') return execFileSync('mkfifo', [portFile]);
+  if (portReport === 'zero') return fs.symlinkSync('/dev/zero', portFile);
   fs.writeFileSync(portFile, portReport === 'text' ? 'not-a-port\n' : `${bound}\n`);
 }
 

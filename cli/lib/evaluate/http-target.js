@@ -97,6 +97,12 @@ const PORT_OUTPUT_BYTES = 1024 * 1024;
 const PORT_CHANNEL_ALLOWANCE = 1024 * 1024;
 /** The host's variables the port's process inherits beside PATH: the extra certificate authorities Node reads. */
 const INHERITED_KEYS = ['NODE_EXTRA_CA_CERTS'];
+/**
+ * How the runtime opens a file a port or a server can replace while the run
+ * goes on: read only, never through a link, and without waiting on a pipe or
+ * device, so neither holds the runtime, its timers or its signal handlers.
+ */
+const READ_REGULAR = fs.constants.O_RDONLY | (fs.constants.O_NONBLOCK ?? 0) | (fs.constants.O_NOFOLLOW ?? 0);
 
 /** The evaluation's HTTP port cannot be used: exit 10 for an authoring defect, 12 for a port that could not run. */
 class HttpPortError extends Error {
@@ -139,9 +145,24 @@ function portEnvironment() {
   return { ...environment, [HOST_ENVIRONMENT_KEY]: '1' };
 }
 
-/** The digest of a file's bytes. */
+/**
+ * The digest of a file's bytes, or `null` when the file is absent, a link or
+ * not a regular file, read as `READ_REGULAR` opens it.
+ */
 function fileDigest(file) {
-  return `sha256:${crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')}`;
+  let descriptor;
+  try {
+    descriptor = fs.openSync(file, READ_REGULAR);
+  } catch (error) {
+    if (['ENOENT', 'ELOOP', 'EMLINK'].includes(error.code)) return null;
+    throw error;
+  }
+  try {
+    if (!fs.fstatSync(descriptor).isFile()) return null;
+    return `sha256:${crypto.createHash('sha256').update(fs.readFileSync(descriptor)).digest('hex')}`;
+  } finally {
+    fs.closeSync(descriptor);
+  }
 }
 
 /**
@@ -173,7 +194,10 @@ function httpPortFile(folder) {
       );
     }
   }
-  return { file, folder, digest: fileDigest(file) };
+  const digest = fileDigest(file);
+  if (digest === null)
+    throw new HttpPortError(`${HTTP_PORT_MODULE} is not a regular file, so the runtime does not start the port through it`);
+  return { file, folder, digest };
 }
 
 /**
@@ -429,16 +453,22 @@ function delay(ms, signal) {
 
 /** The name of the file a server reports its port in, inside the call's private directory. */
 const PORT_FILE_NAME = 'port';
+/** The most bytes a port file holds: a port number with a line ending and a little whitespace around it. */
+const PORT_FILE_MAX_BYTES = 16;
+/** What `readIfWritten` gives for a port file that names no port whatever it holds: a link, a file that is not regular, a long one. */
+const NOT_A_PORT_FILE = Symbol('not a port file');
 
 /**
  * The port a server's port file names: a whole number from 1 to 65535, written
  * in decimal with surrounding whitespace allowed; `null` while the file is
  * absent or holds only whitespace (the server has not written it yet), and
- * `NaN` for anything else. A number read while the server is still writing it
- * is a prefix of the whole, so it is still a number; the runtime reads the
- * file again once the port accepts a connection and goes on when it changed.
+ * `NaN` for anything else, `NOT_A_PORT_FILE` among them. A number read while
+ * the server is still writing it is a prefix of the whole, so it is still a
+ * number; the runtime reads the file again once the port accepts a connection
+ * and goes on when it changed.
  */
 function reportedPort(text) {
+  if (text === NOT_A_PORT_FILE) return Number.NaN;
   if (text === null || text.trim() === '') return null;
   const trimmed = text.trim();
   if (!/^[1-9][0-9]{0,4}$/.test(trimmed)) return Number.NaN;
@@ -446,13 +476,35 @@ function reportedPort(text) {
   return port <= 65_535 ? port : Number.NaN;
 }
 
-/** A file's text, or `null` when it does not exist yet. */
+/**
+ * A port file's text, `null` when it does not exist yet, and
+ * `NOT_A_PORT_FILE` when it is a link, is not a regular file, or holds more
+ * bytes than `PORT_FILE_MAX_BYTES`. It is opened as
+ * `READ_REGULAR` opens a file and read up to that bound, so a server that
+ * makes the path a pipe it never opens or a link to a device that never ends
+ * cannot hold the runtime.
+ */
 function readIfWritten(file) {
+  let descriptor;
   try {
-    return fs.readFileSync(file, 'utf8');
+    descriptor = fs.openSync(file, READ_REGULAR);
   } catch (error) {
     if (error.code === 'ENOENT') return null;
+    if (error.code === 'ELOOP' || error.code === 'EMLINK') return NOT_A_PORT_FILE;
     throw error;
+  }
+  try {
+    if (!fs.fstatSync(descriptor).isFile()) return NOT_A_PORT_FILE;
+    const buffer = Buffer.alloc(PORT_FILE_MAX_BYTES + 1);
+    let length = 0;
+    let read;
+    do {
+      read = fs.readSync(descriptor, buffer, length, buffer.length - length, null);
+      length += read;
+    } while (read > 0 && length < buffer.length);
+    return length > PORT_FILE_MAX_BYTES ? NOT_A_PORT_FILE : buffer.toString('utf8', 0, length);
+  } finally {
+    fs.closeSync(descriptor);
   }
 }
 

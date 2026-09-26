@@ -163,12 +163,12 @@ function sha256(bytes) {
   return `sha256:${crypto.createHash('sha256').update(bytes).digest('hex')}`;
 }
 
-function evaluate(args, env = {}) {
+function evaluate(args, env = {}, { timeoutMs = SPAWN_TIMEOUT_MS } = {}) {
   const result = spawnSync(process.execPath, [EVALUATE, ...args], {
     cwd: PROJECT_ROOT,
     encoding: 'utf8',
     env: { ...BASE_ENV, ...env },
-    timeout: SPAWN_TIMEOUT_MS,
+    timeout: timeoutMs,
     killSignal: 'SIGKILL',
   });
   if (result.error) throw new Error(`tea-evaluate ${args.join(' ')} did not finish: ${result.error.message}`);
@@ -1125,6 +1125,32 @@ async function checkUnits() {
     changed?.code === 'port-failure' && String(changed.cause?.message).includes('changed after the run started'),
     `a port file changed during the run gave ${changed?.code}: ${changed?.cause?.message ?? changed?.message}`,
   );
+  // A port file replaced during the run by a pipe no one opens, or by a link to /dev/zero, is a changed port file,
+  // refused at once: the runtime reads neither through a read that waits or follows a link.
+  for (const [what, replace] of [
+    ...(process.platform === 'win32' ? [] : [['a named pipe', (file) => spawnSync('mkfifo', [file])]]),
+    ...(fs.existsSync('/dev/zero') ? [['a link to /dev/zero', (file) => fs.symlinkSync('/dev/zero', file)]] : []),
+  ]) {
+    const replaced = path.join(scratch.make('port-module-replaced'), 'http-probe-port.mjs');
+    replace(replaced);
+    const started = Date.now();
+    const refused = await createApiPort({
+      entries: [entry],
+      httpPort: { ...httpPort, file: replaced },
+      cwd: project.root,
+      targetOf: () => path.join(project.root, 'server', 'grader.js'),
+      readEnvironment: noEnvironment,
+      mechanism: nodeCommandMechanism,
+      maxOutputBytes: 1024,
+    })
+      .probe(armed.steps[0].request)
+      .catch((error) => error);
+    const elapsed = Date.now() - started;
+    check(
+      refused?.code === 'port-failure' && String(refused.cause?.message).includes('changed after the run started') && elapsed < 5000,
+      `a port file replaced by ${what} during the run gave ${refused?.code}: ${refused?.cause?.message ?? refused?.message} after ${elapsed}ms`,
+    );
+  }
 
   // The chosen-port handoff and its window. Another process that took the call's port answers after the call's own
   // server ended with exit 1: the answer is refused, since no server of the run gave it.
@@ -1281,8 +1307,33 @@ async function checkUnits() {
     ],
     ['a server that writes port 0', (file) => fs.writeFileSync(file, '0'), 'wrote something other than a port number'],
     ['a server that writes a port past 65535', (file) => fs.writeFileSync(file, '65536'), 'wrote something other than a port number'],
+    [
+      'a server that writes more than a port number',
+      (file) => fs.writeFileSync(file, ' '.repeat(64) + '8080\n'),
+      'wrote something other than a port number',
+    ],
+    // A pipe no one opens and a link to an endless device would hold a read that waits or follows; neither holds the runtime.
+    ...(process.platform === 'win32'
+      ? []
+      : [
+          [
+            'a server that makes its port file a named pipe',
+            (file) => spawnSync('mkfifo', [file]),
+            'wrote something other than a port number',
+          ],
+        ]),
+    ...(fs.existsSync('/dev/zero')
+      ? [
+          [
+            'a server that makes its port file a link to /dev/zero',
+            (file) => fs.symlinkSync('/dev/zero', file),
+            'wrote something other than a port number',
+          ],
+        ]
+      : []),
   ]) {
     const directory = scratch.make('port-report');
+    const started = Date.now();
     const refusedReport = await callServer({
       entry: { ...entry, server: { ...entry.server, readyTimeoutMs: 300 } },
       portFile: path.join(directory, 'port'),
@@ -1294,10 +1345,13 @@ async function checkUnits() {
     })
       .start(new AbortController().signal, '127.0.0.1')
       .catch((error) => error);
+    const elapsed = Date.now() - started;
     check(
       String(refusedReport?.message).includes(expected),
       `${what} gave ${refusedReport?.message ?? `a server ready on ${refusedReport}`}`,
     );
+    // A file that names no port is refused as soon as it is read, before readyTimeoutMs runs out.
+    if (expected.startsWith('wrote something other')) check(elapsed < 300, `${what} was refused after ${elapsed}ms; expected within 300ms`);
   }
   check(
     JSON.stringify(handed) === JSON.stringify(['0']),
@@ -1829,9 +1883,14 @@ async function checkPipeline() {
  * window the chosen port leaves.
  */
 async function checkPortReport() {
+  const other = 'wrote something other than a port number (a whole number from 1 to 65535) to the file PORT_FILE names';
   for (const [label, line, expected] of [
     ['port-none', 'port: none', 'wrote no port to the file PORT_FILE names within readyTimeoutMs (1000ms)'],
-    ['port-text', 'port: text', 'wrote something other than a port number (a whole number from 1 to 65535) to the file PORT_FILE names'],
+    ['port-text', 'port: text', other],
+    // A port file that is a pipe the service never opens, or a link to /dev/zero, would block a read that waits or follows
+    // links, and with it the run's timers and signal handlers; the run reads neither and stops with exit 12.
+    ...(process.platform === 'win32' ? [] : [['port-fifo', 'port: fifo', other]]),
+    ...(fs.existsSync('/dev/zero') ? [['port-zero', 'port: zero', other]] : []),
   ]) {
     const project = makeProject(label, {
       edit: ({ root, folder }) => {
@@ -1841,7 +1900,8 @@ async function checkPortReport() {
         });
       },
     });
-    const ran = evaluate(['preflight', '--evaluation', project.folder], project.env);
+    // A run held by the file is ended well before the suite's own spawn timeout, so the case fails on its own.
+    const ran = evaluate(['preflight', '--evaluation', project.folder], project.env, { timeoutMs: 60_000 });
     const runDirectory = runDirectoryOf(project.folder);
     const fault = runDirectory === null ? null : readIfPresent(path.join(runDirectory, 'qualification', 'P-002', 'fault.json'));
     check(
