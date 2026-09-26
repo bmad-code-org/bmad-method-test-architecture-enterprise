@@ -762,10 +762,7 @@ async function runInWorkspaces({
         };
         // A probe naming no fixCommit takes the deployment route, where one naming neither boundary is unaddressable.
         if (probe.qualification.deployments !== undefined || probe.qualification.fixCommit === undefined) {
-          const deployments = deploymentPair(
-            probe.qualification,
-            (evaluation.registry ?? []).filter(isApiEntry).map((entry) => entry.interfaceId),
-          );
+          const deployments = deploymentPair(probe.qualification, evaluation.registry ?? []);
           if (deployments.unaddressable !== undefined) {
             return outcome({
               stage: 'qualification',

@@ -51,7 +51,7 @@ const path = require('node:path');
 
 const { admissionRefusal, armVerdict, referenceTo } = require('./admission');
 const { causeNote, faultRecord, hostEnvironmentPort, reasonNote, runArm } = require('./arm');
-const { DeploymentUnreachable, originTarget } = require('./http-target');
+const { DeploymentUnreachable, isApiEntry, originKey, originTarget, sharedOrigin } = require('./http-target');
 const { expectedSchemaVersion } = require('./engine');
 const { evaluateOracles, oraclesOfBehaviors } = require('./evaluator');
 const { WorkspaceRefusal, isDirectory, runGit, trackedTreeDigest } = require('./workspace');
@@ -387,18 +387,20 @@ async function qualifyHistoricalProbe({
 
 /**
  * The pre-fix and post-fix deployments a deployment-routed probe names, or
- * the reason the runtime cannot address them. `check` refuses under
- * `historical` a probe naming neither boundary, deployments beside a
- * `fixCommit`, one deployment without the other, or origins that are not an
- * http or https origin for each HTTP interface of the registry and no other;
- * reaching one here means `check` was skipped, and the qualification stops
- * with exit 12.
+ * the reason the runtime cannot address them: the refusals of `check`'s
+ * `historical` rule on the boundary, a probe naming neither boundary,
+ * deployments beside a `fixCommit`, one deployment without the other, one
+ * release for both, a registry entry that is not an HTTP entry, origins that
+ * are not an http or https origin for each HTTP interface of the registry and
+ * no other, or a pre-fix origin reaching a post-fix one. `check` refuses each
+ * first, so this guard is defence in depth: reaching one here stops the
+ * qualification with exit 12.
  *
  * @param {object} qualification the committed probe's `qualification`
- * @param {string[]} httpInterfaces the interface of each HTTP registry entry
+ * @param {object[]} registry the evaluation's registry entries
  * @returns {{ preFix: object, fix: object } | { unaddressable: string }}
  */
-function deploymentPair(qualification, httpInterfaces) {
+function deploymentPair(qualification, registry) {
   const { deployments, fixCommit } = qualification;
   if (deployments === undefined && fixCommit === undefined) {
     return { unaddressable: 'it names neither a fixCommit nor deployments, so there is no fix boundary to qualify across' };
@@ -412,7 +414,18 @@ function deploymentPair(qualification, httpInterfaces) {
   if (missing.length > 0) {
     return { unaddressable: `it names no ${missing.join(' and no ')} deployment, so there is no fix boundary to qualify across` };
   }
-  const wanted = [...httpInterfaces].sort();
+  if (deployments.preFix.release === deployments.fix.release) {
+    return {
+      unaddressable: `it names release ${JSON.stringify(deployments.preFix.release)} for both deployments, so there is no fix boundary to qualify across`,
+    };
+  }
+  const other = registry.filter((entry) => !isApiEntry(entry));
+  if (other.length > 0) {
+    return {
+      unaddressable: `the registry declares ${other.map((entry) => JSON.stringify(entry?.interfaceId)).join(', ')}, which a deployment does not answer over HTTP`,
+    };
+  }
+  const wanted = registry.map((entry) => entry.interfaceId).sort();
   for (const side of ['preFix', 'fix']) {
     const origins = deployments[side].origins ?? {};
     const named = Object.keys(origins).sort();
@@ -422,25 +435,28 @@ function deploymentPair(qualification, httpInterfaces) {
       };
     }
   }
+  const shared = sharedOrigin(deployments.preFix.origins, deployments.fix.origins);
+  if (shared !== null) {
+    return {
+      unaddressable: `its pre-fix origin for ${shared.preFix} and its post-fix origin for ${shared.fix} both reach ${shared.origin}, so the fail-before arm would reach the post-fix deployment`,
+    };
+  }
   return { preFix: deployments.preFix, fix: deployments.fix };
 }
 
 /**
  * What names the target a historical arm runs at, so two probes on one arm
  * label can be held to one target: a worktree, or the pre-fix deployment's
- * origins, each read as the port reads it (scheme, host, port), by interface in
- * sorted order, so the same origins spelled or ordered otherwise name the same
- * target.
+ * origins, each read as `originKey` reads it (scheme, host with one trailing
+ * dot dropped, port), by interface in sorted order, so the same origins
+ * spelled or ordered otherwise name the same target.
  */
 function routeIdentity(historical) {
   if (historical.deployments === undefined) return 'a worktree';
   const { origins } = historical.deployments.preFix;
   const read = Object.keys(origins)
     .sort()
-    .map((id) => {
-      const target = originTarget(origins[id]);
-      return `${id}=${target === null ? origins[id] : `${target.scheme}://${target.host}:${target.port}`}`;
-    });
+    .map((id) => `${id}=${originKey(origins[id]) ?? origins[id]}`);
   return `the origins ${read.join(', ')}`;
 }
 

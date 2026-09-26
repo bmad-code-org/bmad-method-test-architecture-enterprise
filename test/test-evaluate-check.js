@@ -1127,6 +1127,39 @@ const HARDENING_CASES = [
     expect: (output) => [[output.includes('for both deployments'), 'the finding does not name the shared release']],
   },
   {
+    name: 'a deployment-routed probe whose post-fix origin is its pre-fix origin spelled otherwise',
+    file: 'probes/P-002.probe.json',
+    rule: 'historical',
+    plant: (folder) =>
+      plantHistorical(folder, {
+        deployments: { preFix: DEPLOYMENTS.preFix, fix: { ...DEPLOYMENTS.fix, origins: { grader: 'HTTP://127.0.0.1:41001/' } } },
+      }),
+    expect: (output) => [
+      [
+        output.includes('deployments.preFix.origins.grader and deployments.fix.origins.grader both reach http://127.0.0.1:41001'),
+        'the finding does not name the shared origin',
+      ],
+    ],
+  },
+  {
+    name: 'a deployment-routed probe whose pre-fix origin of one interface is the post-fix origin of another',
+    file: 'probes/P-002.probe.json',
+    rule: 'historical',
+    plant: (folder) =>
+      plantHistorical(folder, {
+        deployments: {
+          preFix: { ...DEPLOYMENTS.preFix, origins: { grader: 'http://127.0.0.1:41001', admin: 'http://127.0.0.1:41003' } },
+          fix: { ...DEPLOYMENTS.fix, origins: { grader: 'http://127.0.0.1:41002', admin: 'http://127.0.0.1:41001' } },
+        },
+      }),
+    expect: (output) => [
+      [
+        output.includes('deployments.preFix.origins.grader and deployments.fix.origins.admin both reach http://127.0.0.1:41001'),
+        'the finding does not name the origin the two interfaces share',
+      ],
+    ],
+  },
+  {
     name: 'a deployment-routed probe beside a command registry entry',
     file: 'probes/P-002.probe.json',
     rule: 'historical',

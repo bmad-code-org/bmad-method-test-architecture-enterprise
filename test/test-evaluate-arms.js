@@ -47,18 +47,22 @@
  *   deployment, in that order, and the pass-after arm alone at the post-fix
  *   one, and no call to a deployment starts the workspace's service; the
  *   probe records the digests of the two release identifiers, `qualifyProbe`
- *   admits it and `score` reduces it to `caught`. A pre-fix origin at the
- *   post-fix deployment exits 11; a pre-fix or a post-fix deployment the
+ *   admits it and `score` reduces it to `caught`. A pre-fix deployment that
+ *   answers as the fix does exits 11; a pre-fix or a post-fix deployment the
  *   registry does not authorize is refused with eval-quality's
  *   `port-not-authorized` while the clean control runs, and nothing reaches
- *   either deployment; two probes on one arm label at two pre-fix origins
- *   exit 10; `check` refuses an origin with a path and origins naming another
- *   interface in place of the registry's. Units cover `originTarget`, the
- *   policy of a deployment arm (the one authorization eval-quality allowed,
- *   and no deployment outside it), `deploymentAccess` (each candidate's
- *   reason, an unresolvable or stalled host), `deploymentPair`'s exit 12
- *   reasons and `routeIdentity`, and a static case reads the reference's
- *   `### From worktrees` and `### Against deployments` sections.
+ *   either deployment; two probes on one arm label at two pre-fix origins, or
+ *   on two labels that differ only in letter case, exit 10; an authorized
+ *   pre-fix host that does not resolve exits 12 with no refusal; `check`
+ *   refuses an origin with a path and origins naming another interface in
+ *   place of the registry's. Units cover `originTarget` (each spelling a URL
+ *   parser would normalize), the policy of a deployment arm (the one
+ *   authorization eval-quality allowed, and no deployment outside it) and of
+ *   an interface named `constructor`, `deploymentAccess` (each candidate's
+ *   reason, an unresolvable or stalled host, the lookup's bound),
+ *   `deploymentPair`'s exit 12 reasons and `routeIdentity`, and a static
+ *   case reads the reference's `### From worktrees` and
+ *   `### Against deployments` sections.
  * - Rubric: a contract declaring R-101, judged by the stub judge through the
  *   `custom` agent adapter: one judge call per trial (six over two arms of
  *   three), a `judgeResults` entry per criterion in every record, the judge's
@@ -1174,8 +1178,10 @@ async function checkDeploymentRoute() {
     }
   }
 
-  // The fail-before arm routed to the post-fix deployment holds there, so the probe does not qualify.
-  const held = makeDeploymentProject('deployment-held-before', { preFix: post.origin, fix: post.origin, authorized: [post] });
+  // A pre-fix deployment that answers as the fix does holds the fail-before arm, so the probe does not qualify. It is a
+  // second strict deployment, since check refuses a pre-fix origin that is the post-fix one.
+  const fixed = await startDeployment('pre-fix-already-fixed', 'strict');
+  const held = makeDeploymentProject('deployment-held-before', { preFix: fixed.origin, fix: post.origin, authorized: [fixed, post] });
   const heldRun = evaluate(['preflight', '--evaluation', held.folder], held.env);
   check(
     heldRun.status === 11 && heldRun.output.includes(`the fail-before arm at the deployment of ${PRE_RELEASE} is held`),
@@ -1236,6 +1242,50 @@ async function checkDeploymentRoute() {
   check(
     sharedRun.status === 10 && sharedRun.output.includes(`P-005 runs on the arm historical:${PRE_RELEASE} at the origins`),
     `two probes on one historical arm at two pre-fix origins exited ${sharedRun.status}; expected 10 naming the arm\n${sharedRun.output}`,
+  );
+  // Two labels that differ only in letter case meet in one trial directory where the file system ignores case; the
+  // second probe runs at the same origins, so the target-identity stop does not reach it first.
+  const casedRelease = PRE_RELEASE.replace('grader', 'Grader');
+  const cased = makeDeploymentProject('deployment-cased-arm', {
+    preFix: pre.origin,
+    fix: post.origin,
+    authorized: [pre, post],
+    edit: ({ folder: edited, probe: first }) => {
+      const second = structuredClone(first);
+      second.probeId = 'P-005';
+      second.qualification.deployments.preFix.release = casedRelease;
+      writeJson(path.join(edited, 'probes', 'P-005.probe.json'), second);
+    },
+  });
+  const casedRun = evaluate(['preflight', '--evaluation', cased.folder], cased.env);
+  check(
+    casedRun.status === 10 &&
+      /runs on the arm historical:\S+, which differs from the arm historical:\S+ of another probe only in letter case/.test(
+        casedRun.output,
+      ) &&
+      casedRun.output.includes(`historical:${casedRelease}`),
+    `two probes on the arms historical:${PRE_RELEASE} and historical:${casedRelease} exited ${casedRun.status}; expected 10 naming the letter case\n${casedRun.output}`,
+  );
+
+  // A deployment some authorization admits whose host does not resolve is unreachable: exit 12, and no refusal.
+  const unreachable = makeDeploymentProject('deployment-unreachable', {
+    preFix: `http://nowhere.invalid:${pre.port}`,
+    fix: post.origin,
+    authorized: [post],
+    edit: ({ folder: edited }) =>
+      editJson(path.join(edited, 'evaluation.json'), (evaluation) =>
+        evaluation.registry[0].deployments.push({ scheme: 'http', host: 'nowhere.invalid', port: pre.port, addresses: ['127.0.0.1'] }),
+      ),
+  });
+  const unreachableRun = evaluate(['preflight', '--evaluation', unreachable.folder], unreachable.env);
+  const unreachableDirectory = runDirectoryOf(unreachable.folder);
+  const unreachableRecord = unreachableDirectory === null ? null : readIfWritten(path.join(unreachableDirectory, 'run.json'));
+  check(
+    unreachableRun.status === 12 &&
+      unreachableRun.output.includes(`the pre-fix deployment ${PRE_RELEASE} cannot be reached`) &&
+      Array.isArray(unreachableRecord?.refused) &&
+      unreachableRecord.refused.length === 0,
+    `a pre-fix deployment whose host does not resolve exited ${unreachableRun.status} with the refusals ${JSON.stringify(unreachableRecord?.refused)}; expected 12, "cannot be reached" and no refusal\n${unreachableRun.output}`,
   );
 
   // check holds each deployment's origins to the registry's HTTP interfaces: a path, an interface the registry does not
@@ -1308,6 +1358,12 @@ async function checkDeploymentUnits() {
     ['http://user:secret@127.0.0.1:8080', null],
     ['ftp://127.0.0.1', null],
     ['not a url', null],
+    // Spellings a URL parser normalizes to an origin, whose raw string a run would record.
+    [' http://127.0.0.1:8080 ', null],
+    ['http://127.0.0.1:80\n80', null],
+    ['http:127.0.0.1', null],
+    ['http:/127.0.0.1', null],
+    ['http://127.0.0.1/..', null],
   ];
   for (const [origin, expected] of cases) {
     check(
@@ -1349,6 +1405,17 @@ async function checkDeploymentUnits() {
   check(
     JSON.stringify(summary(plain.policy)) === '["https://grader.example.test:443"]',
     `the policy outside a deployment arm is ${JSON.stringify(summary(plain.policy))}; expected the entry's own alone`,
+  );
+  // An interface named after a property every object inherits keeps its own authorization and target.
+  const inherited = portConfiguration({
+    entries: [{ ...entry, interfaceId: 'constructor', deployments: [] }],
+    portOf: (candidate) => candidate.port,
+    readEnvironment: () => ({}),
+    interfaceId: 'constructor',
+  });
+  check(
+    JSON.stringify(summary(inherited.policy)) === '["https://grader.example.test:443"]' && inherited.targets.constructor?.port === 443,
+    `the policy of an interface named constructor is ${JSON.stringify(summary(inherited.policy))} and its target ${JSON.stringify(inherited.targets.constructor)}; expected the entry's own`,
   );
   const looked = [];
   const lookup = async (host) => {
@@ -1397,7 +1464,7 @@ async function checkDeploymentUnits() {
   ]) {
     let thrown = null;
     try {
-      await deploymentAccess({ entries: [entry], origins: { grader: `http://${host}` }, lookup });
+      await deploymentAccess({ entries: [entry], origins: { grader: `http://${host}` }, lookup, allowanceMs: 0 });
     } catch (error) {
       thrown = error;
     }
@@ -1406,6 +1473,18 @@ async function checkDeploymentUnits() {
       `a deployment whose host is ${host} gave ${thrown?.name}: ${thrown?.message}; expected DeploymentUnreachable`,
     );
   }
+
+  // The lookup gets the entry's maxElapsedMs and the allowance the port's call has beyond it.
+  let bounded = null;
+  try {
+    await deploymentAccess({ entries: [entry], origins: { grader: 'http://stalls.example.test' }, lookup, allowanceMs: 500 });
+  } catch (error) {
+    bounded = error;
+  }
+  check(
+    bounded instanceof DeploymentUnreachable && /did not resolve within 1500 ms/.test(bounded.message),
+    `a stalled host with a 500 ms allowance gave ${bounded?.name}: ${bounded?.message}; expected a bound of maxElapsedMs and the allowance`,
+  );
 
   const preFix = { release: 'r1', origins: { grader: 'http://127.0.0.1:1' } };
   const fix = { release: 'r2', origins: { grader: 'http://127.0.0.1:2' } };
@@ -1419,12 +1498,43 @@ async function checkDeploymentUnits() {
       { route: 'historical', deployments: { preFix: { ...preFix, origins: { grader: 'http://127.0.0.1:1/v1' } }, fix } },
       /preFix deployment names/,
     ],
+    [{ route: 'historical', deployments: { preFix, fix: { ...fix, release: preFix.release } } }, /release "r1" for both deployments/],
+    [
+      { route: 'historical', deployments: { preFix, fix: { ...fix, origins: { grader: 'HTTP://127.0.0.1:1/' } } } },
+      /both reach http:\/\/127\.0\.0\.1:1/,
+    ],
   ];
+  const graderEntry = { kind: 'api', interfaceId: 'grader' };
   for (const [qualification, expected] of pairs) {
-    const pair = deploymentPair(qualification, ['grader']);
+    const pair = deploymentPair(qualification, [graderEntry]);
     check(expected.test(pair.unaddressable ?? ''), `deploymentPair(${JSON.stringify(qualification)}) gave ${JSON.stringify(pair)}`);
   }
-  const whole = deploymentPair({ route: 'historical', deployments: { preFix, fix } }, ['grader']);
+  for (const other of [
+    { kind: 'cli', interfaceId: 'runner' },
+    { kind: 'mcp', interfaceId: 'tools' },
+  ]) {
+    const pair = deploymentPair({ route: 'historical', deployments: { preFix, fix } }, [graderEntry, other]);
+    check(
+      /which a deployment does not answer over HTTP/.test(pair.unaddressable ?? ''),
+      `deploymentPair beside a ${other.kind} registry entry gave ${JSON.stringify(pair)}`,
+    );
+  }
+  // A cross-interface swap shares an origin as much as one interface spelled twice.
+  const swapped = deploymentPair(
+    {
+      route: 'historical',
+      deployments: {
+        preFix: { release: 'r1', origins: { grader: 'http://127.0.0.1:1', admin: 'http://127.0.0.1:3' } },
+        fix: { release: 'r2', origins: { grader: 'http://127.0.0.1:2', admin: 'http://127.0.0.1:1' } },
+      },
+    },
+    [graderEntry, { kind: 'api', interfaceId: 'admin' }],
+  );
+  check(
+    /pre-fix origin for grader and its post-fix origin for admin both reach/.test(swapped.unaddressable ?? ''),
+    `deploymentPair over a pre-fix grader origin that is the post-fix admin origin gave ${JSON.stringify(swapped)}`,
+  );
+  const whole = deploymentPair({ route: 'historical', deployments: { preFix, fix } }, [graderEntry]);
   check(whole.preFix === preFix && whole.fix === fix, `deploymentPair over a whole pair gave ${JSON.stringify(whole)}`);
 
   const identity = (origins) => routeIdentity({ deployments: { preFix: { origins } } });
@@ -1433,6 +1543,10 @@ async function checkDeploymentUnits() {
     identity({ grader: 'http://127.0.0.1:80', admin: 'http://Admin.Example.Test' }) ===
       identity({ admin: 'http://admin.example.test/', grader: 'http://127.0.0.1' }),
     'one set of origins ordered and spelled otherwise names two targets',
+  );
+  check(
+    identity({ grader: 'http://svc.example.test' }) === identity({ grader: 'http://SVC.example.test.:80' }),
+    'one host spelled with and without the trailing dot names two targets',
   );
   check(
     identity({ grader: 'http://127.0.0.1:1' }) !== identity({ grader: 'http://127.0.0.1:2' }) &&

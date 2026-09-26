@@ -365,11 +365,12 @@ The qualification names a pre-fix and a post-fix deployment: the release identif
 - `release`: the identifier the deployment runs, as you name your releases (a version, a tag, a build id): a letter or digit, then letters, digits, `.`, `_`, `+` or `-`, at most 128 characters.
   The run takes it as written; it does not ask the deployment which release it runs, so name the release each deployment reports.
   `check` refuses one release for both deployments.
-- `origins`: `scheme://host[:port]` for every HTTP interface of the registry and no other, with no path, query, fragment or credentials.
-  Each origin must be one the registry authorizes for its interface: the entry's own origin, when the entry names a deployed `port`, or an origin its `deployments` list (see [The registry](#the-registry)).
+- `origins`: `scheme://host[:port]` for every HTTP interface of the registry and no other, spelled exactly so with at most a trailing `/`: no path, query, fragment, credentials or surrounding space.
+  Each origin must be one the registry authorizes for its interface: the entry's own origin, when the entry names a deployed `port`, or an origin its `deployments` list names (see [The registry](#the-registry)).
 
 `check` refuses a probe that names one deployment without the other, and one in an evaluation whose registry holds an entry that is not an HTTP entry, since a deployment is reached over HTTP alone.
-Before either arm runs, the runtime resolves each origin's host once, to its first address, as the port does, within the entry's `maxElapsedMs`, and asks eval-quality's `evaluateTarget` which of those authorizations allows the origin, at the first method the entry authorizes.
+It also refuses a pre-fix origin that reaches a post-fix one, for the same interface or another, read by scheme, host (lower-cased, one trailing dot dropped) and port, since the fail-before arm would then reach the post-fix deployment.
+Before either arm runs, the runtime resolves each origin's host once, to its first address, as the port does, within the entry's `maxElapsedMs` and the 15 seconds a port call gets beyond it, and asks eval-quality's `evaluateTarget` which of those authorizations allows the origin, at the first method the entry authorizes.
 A deployment none of them allows refuses the probe, the reason naming each authorization's denial in eval-quality's words (`port-not-authorized`, say).
 An origin whose scheme, host or port no authorization admits is refused before its host is resolved, as the port denies an unresolved host; a host some authorization admits that does not resolve in time leaves the deployment unreachable, which stops the run with exit 12.
 The authorization eval-quality allowed is the whole policy of the deployment's arm for its interface, so a redirect to any other origin, the other deployment's included, is denied.
@@ -380,7 +381,7 @@ No server starts for a call to a deployment, and the evidence of a leg or trial 
 The qualified probe records `artifactDigest` as `sha256:` and the SHA-256 of the pre-fix release identifier, and `fixCommitDigest` as the same over the post-fix one.
 Each defect's manifestation-witness leg reaches the pre-fix deployment, and `run` runs the probe's trials on the arm `historical:<release>`, named by the pre-fix release, each trial's HTTP calls reaching the pre-fix deployment; `run.json`'s `deployments` names the arm's origins.
 One arm runs one target, so two probes on one arm label at two targets (a worktree and a deployment, or two sets of pre-fix origins) exit 10.
-A probe whose boundary `check` refuses (neither boundary, deployments beside a `fixCommit`, one deployment, or origins off the registry's HTTP interfaces) exits 12 when it reaches the runtime, which only a skipped `check` lets through.
+`check` refuses every such boundary first (neither boundary, deployments beside a `fixCommit`, one deployment, one release for both, a registry entry that is not an HTTP entry, origins off the registry's HTTP interfaces, or a shared origin); the runtime refuses the same boundaries again with exit 12, as defence in depth.
 
 ### Either route
 
@@ -459,7 +460,7 @@ The steps run in order in one invocation, each stopping the run with its own exi
 
 1. The whole preflight, as `preflight` runs it, in the same `runs/<invocationId>/`; a verdict that does not pass ends the run with its exit, and no trial runs.
 2. Each clean control qualified: one clean arm in a workspace of its own, whose oracles for the control's behavior must hold (exit 11 otherwise), its evidence under `qualification/<probeId>/baseline-pass.json`.
-3. Each arm a probe needs, `trials` times: the clean arm (`conditionArm: clean`) for the clean controls, one mutated arm per mutation (`mutated:<mutationId>`) for the probes it seeds, one historical arm per pre-fix revision (`historical:<preFixSha>`), and one gameability arm per gameability probe (`gameability:<probeId>`).
+3. Each arm a probe needs, `trials` times: the clean arm (`conditionArm: clean`) for the clean controls, one mutated arm per mutation (`mutated:<mutationId>`) for the probes it seeds, one historical arm per pre-fix revision (`historical:<preFixSha>`) or pre-fix deployment (`historical:<release>`), and one gameability arm per gameability probe (`gameability:<probeId>`).
    Every trial runs the interaction plan once, with its literal bindings, in a workspace of its own that reproduces the pristine one (the mutation applied for a mutated arm and its digest held to the one the qualification measured) or, on a historical arm, the pre-fix worktree, a deployment arm's HTTP calls reaching the pre-fix deployment; a gameability trial answers the plan from the degenerate response and launches nothing.
    The evaluation layer judges the trial (see [The evaluation layer](#the-evaluation-layer)); under the default deterministic evaluator, when the contract declares a rubric, the rubric judge scores the trial once (see [The rubric judge](#the-rubric-judge)).
    Its requests, observations, oracle resolutions or judgment rows, and any judge reply go to `trials/<arm>/trial-<n>.json`.
@@ -498,7 +499,7 @@ Its `modelSnapshot` and `systemPromptDigest` come from `policy/evaluator-conditi
 ```
 
 A run that uses no model leaves the file out and records `modelSnapshot: "none"` and the digest of the empty byte string, since the published schema requires both.
-Each probe is written to `probes/` with the digests AD-7 names: `commitDigest` is the evaluated commit (`sha256:` and the SHA-256 of its identifier; a copy's tree digest), `artifactDigest` the `targetArtifact` bytes (a clean control's and a gameability probe's is its `implementationDigest`, a historical probe's the tracked tree at its pre-fix revision), and `implementationDigest` the tracked tree of `launch.skillRoot`, or `launch.root`, at that commit, the SHA-256 of `git ls-tree -r -z <commit>:<directory>` with the evaluation folder's entries left out (for a copy, the tree digest of that directory without its provisioned directories).
+Each probe is written to `probes/` with the digests AD-7 names: `commitDigest` is the evaluated commit (`sha256:` and the SHA-256 of its identifier; a copy's tree digest), `artifactDigest` the `targetArtifact` bytes (a clean control's and a gameability probe's is its `implementationDigest`, a historical probe's the tracked tree at its pre-fix revision, or, against deployments, `sha256:` and the SHA-256 of its pre-fix release identifier), and `implementationDigest` the tracked tree of `launch.skillRoot`, or `launch.root`, at that commit, the SHA-256 of `git ls-tree -r -z <commit>:<directory>` with the evaluation folder's entries left out (for a copy, the tree digest of that directory without its provisioned directories).
 
 ### Gameability probes
 

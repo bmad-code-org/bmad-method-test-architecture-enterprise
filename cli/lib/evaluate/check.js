@@ -109,7 +109,7 @@ const AjvModule = require('ajv/dist/2020');
 const { engineSchemaPath, loadEngine, schemaVersionProblems } = require('./engine');
 const { MANIFEST_NAME } = require('./folder');
 const { addFormats } = require('./formats');
-const { HTTP_PORT_MODULE, originTarget } = require('./http-target');
+const { HTTP_PORT_MODULE, originTarget, sharedOrigin } = require('./http-target');
 const { apiRegistryProblems, kindOf, mcpRegistryProblems, repeatedPairs, sharedInterfaces } = require('./registry');
 const { AGENT_ADAPTERS, bridgedArgsRefused, resolveModel } = require('../agent-adapters');
 const { EVALUATOR_DIRECTORY, EvaluatorLayerError, evaluatorFiles, evaluatorOf, isKnownEvaluator } = require('./evaluators');
@@ -806,8 +806,9 @@ function checkProbeAgainstRegistry(report, relative, probe, context, registry) {
  * What is wrong with the fix boundary a historical probe names (Story 1.32):
  * it names exactly one of `fixCommit` (the worktree route) and `deployments`
  * (the deployment route); deployments come as a pair, a pre-fix and a
- * post-fix one, of two releases; a deployment-routed probe reaches its target
- * over HTTP alone, so every registry entry is an HTTP entry; and each
+ * post-fix one, of two releases, with no pre-fix origin reaching a post-fix
+ * one (`sharedOrigin`); a deployment-routed probe reaches its target over
+ * HTTP alone, so every registry entry is an HTTP entry; and each
  * deployment names an http or https origin for every HTTP interface of the
  * registry and no other. Whether an origin is one the registry's policy
  * authorizes is eval-quality's to decide at run time.
@@ -843,6 +844,12 @@ function historicalBoundaryProblems(qualification, registry) {
   if (named.length === 2 && typeof releases[0] === 'string' && releases[0] === releases[1]) {
     problems.push(
       `names release ${JSON.stringify(releases[0])} for both deployments; the probe records the pre-fix release's digest as its artifactDigest and the post-fix release's as its fixCommitDigest, so two deployments of one release cross no fix boundary`,
+    );
+  }
+  const shared = named.length === 2 ? sharedOrigin(deployments.preFix?.origins, deployments.fix?.origins) : null;
+  if (shared !== null) {
+    problems.push(
+      `deployments.preFix.origins.${shared.preFix} and deployments.fix.origins.${shared.fix} both reach ${shared.origin}; the fail-before arm, the witness leg and the trials would reach the post-fix deployment and record a fix boundary the run never crossed, so give each deployment origins of its own`,
     );
   }
   if (!Array.isArray(registry)) return problems;

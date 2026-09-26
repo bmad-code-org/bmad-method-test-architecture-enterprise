@@ -407,32 +407,70 @@ function deploymentCandidates(entry) {
 }
 
 /**
+ * The exact spelling of an origin: `http` or `https`, `//`, an authority of a
+ * host (a bracketed IPv6 address, or a name or address with no `/`, `?`, `#`,
+ * `@`, `\`, `%`, `:`, whitespace or control character) and an optional
+ * `:port`, then at most one `/`. A URL parser normalizes many other strings to
+ * an origin (surrounding spaces, `http:x`, `http:/x`, `http://x/..`), and the
+ * raw string is what a run records, so only this form is read as one.
+ */
+const ORIGIN_FORM = /^https?:\/\/(?:\[[0-9A-Fa-f:.]+\]|[^\s\p{Cc}/?#@\\%:[\]]+)(?::\d+)?\/?$/iu;
+
+/**
  * The target an origin names (`scheme://host[:port]`), as the port hands it
  * to eval-quality: the scheme without its colon, the URL's hostname unbracketed
  * (the spelling the port reads a URL's host in), and the port, or the scheme's
- * default; null when `origin` is no http or https origin (a path, a query, a
- * fragment or credentials included), which `check` refuses under `historical`.
+ * default; null when `origin` is not spelled as an origin (`ORIGIN_FORM`: a
+ * path, a query, a fragment, credentials or surrounding space included), or is
+ * no http or https origin, which `check` refuses under `historical`.
  *
  * @param {string} origin
  * @returns {{ scheme: string, host: string, port: number } | null}
  */
 function originTarget(origin) {
-  if (typeof origin !== 'string' || !URL.canParse(origin)) return null;
+  if (typeof origin !== 'string' || !ORIGIN_FORM.test(origin) || !URL.canParse(origin)) return null;
   const url = new URL(origin);
   const scheme = url.protocol.slice(0, -1);
-  if (
-    !['http', 'https'].includes(scheme) ||
-    url.username !== '' ||
-    url.password !== '' ||
-    url.pathname !== '/' ||
-    url.search !== '' ||
-    url.hash !== '' ||
-    /[?#]/.test(origin)
-  ) {
-    return null;
-  }
+  if (!['http', 'https'].includes(scheme) || url.username !== '' || url.password !== '' || url.pathname !== '/') return null;
   const host = url.hostname.startsWith('[') ? url.hostname.slice(1, -1) : url.hostname;
   return { scheme, host, port: url.port === '' ? defaultPortOf({ scheme }) : Number(url.port) };
+}
+
+/**
+ * The one deployment an origin reaches, as a string (`scheme://host:port`):
+ * `originTarget`'s reading with one trailing dot of the host dropped, since a
+ * name and the same name ending in the root's dot resolve alike. Null when
+ * `origin` is no origin.
+ *
+ * @param {string} origin
+ * @returns {string | null}
+ */
+function originKey(origin) {
+  const target = originTarget(origin);
+  if (target === null) return null;
+  const host = target.host.endsWith('.') ? target.host.slice(0, -1) : target.host;
+  return `${target.scheme}://${host}:${target.port}`;
+}
+
+/**
+ * A pre-fix origin that reaches a post-fix one (`originKey`), over every
+ * interface on each side, or null. A pair sharing an origin sends the
+ * fail-before arm, the witness leg and the trials to the post-fix deployment,
+ * so the probe would record a fix boundary the run never crossed.
+ *
+ * @param {Record<string, string>} preFix interface ID to the pre-fix origin
+ * @param {Record<string, string>} fix interface ID to the post-fix origin
+ * @returns {{ preFix: string, fix: string, origin: string } | null}
+ */
+function sharedOrigin(preFix, fix) {
+  for (const [preFixId, preFixOrigin] of Object.entries(preFix ?? {})) {
+    const key = originKey(preFixOrigin);
+    if (key === null) continue;
+    for (const [fixId, fixOrigin] of Object.entries(fix ?? {})) {
+      if (originKey(fixOrigin) === key) return { preFix: preFixId, fix: fixId, origin: key };
+    }
+  }
+  return null;
 }
 
 /**
@@ -459,7 +497,7 @@ function portConfiguration({ entries, portOf, readEnvironment, interfaceId, depl
     if (value !== undefined) auth[entry.interfaceId] = { [entry.auth.header]: `${entry.auth.prefix ?? ''}${value}` };
   }
   const deployed = deployment?.authorizations ?? {};
-  const own = reached.filter(({ entry }) => deployed[entry.interfaceId] === undefined);
+  const own = reached.filter(({ entry }) => !Object.hasOwn(deployed, entry.interfaceId));
   const targets = Object.fromEntries(own.map(({ entry, port }) => [entry.interfaceId, { scheme: entry.scheme, host: entry.host, port }]));
   for (const id of Object.keys(deployed)) targets[id] = originTarget(deployment.origins[id]);
   return {
@@ -504,8 +542,10 @@ function resolveFirst(host, { lookup, timeoutMs, signal }) {
 /**
  * What a deployment arm may reach, or why the registry does not authorize
  * the deployment: for each HTTP interface `origins` names, the origin's host
- * resolved once, to its first address, as the port resolves it (within the
- * entry's `maxElapsedMs`), and eval-quality's `evaluateTarget` asked over the
+ * resolved once, to its first address, within the entry's `maxElapsedMs` and
+ * `PORT_START_ALLOWANCE_MS` (the port resolves a host before its own
+ * `maxElapsedMs` starts, inside a call the runtime bounds by that sum), and
+ * eval-quality's `evaluateTarget` asked over the
  * entry's deployment candidates (`deploymentCandidates`) at the first method
  * the entry authorizes, so the decision is about where the deployment is. The
  * authorization eval-quality allowed is the one the arm's policy holds; a
@@ -520,9 +560,16 @@ function resolveFirst(host, { lookup, timeoutMs, signal }) {
  * @param {Record<string, string>} options.origins interface ID to origin
  * @param {AbortSignal} [options.signal]
  * @param {(host: string) => Promise<{ address: string }>} [options.lookup] how a host resolves, for a test to answer
+ * @param {number} [options.allowanceMs] the time a lookup gets beyond the entry's `maxElapsedMs`, for a test to shorten
  * @returns {Promise<{ origins: Record<string, string>, authorizations: Record<string, object> } | { refused: string }>}
  */
-async function deploymentAccess({ entries, origins, signal, lookup = (host) => dns.promises.lookup(host) }) {
+async function deploymentAccess({
+  entries,
+  origins,
+  signal,
+  lookup = (host) => dns.promises.lookup(host),
+  allowanceMs = PORT_START_ALLOWANCE_MS,
+}) {
   const engine = await loadEngine();
   const authorizations = {};
   for (const [interfaceId, origin] of Object.entries(origins)) {
@@ -552,7 +599,7 @@ async function deploymentAccess({ entries, origins, signal, lookup = (host) => d
       }
       return refusal(unresolved);
     }
-    const address = await resolveFirst(target.host, { lookup, timeoutMs: entry.maxElapsedMs, signal });
+    const address = await resolveFirst(target.host, { lookup, timeoutMs: entry.maxElapsedMs + allowanceMs, signal });
     const asked = { ...unresolved, address };
     const decision = engine.evaluateTarget({ authorizations: candidates }, asked);
     if (!decision.allowed) return refusal(asked);
@@ -1110,7 +1157,9 @@ module.exports = {
   httpPortFile,
   isApiEntry,
   missingCredentials,
+  originKey,
   originTarget,
   portConfiguration,
+  sharedOrigin,
   probeHttpPort,
 };
