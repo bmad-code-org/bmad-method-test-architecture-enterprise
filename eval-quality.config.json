@@ -36,6 +36,13 @@
     ],
     "undeclared": [
       {
+        "lockfiles": ["package-lock.json"],
+        "prefix": "agentevals",
+        "readAs": "MIT",
+        "evidence": "The installed agentevals 0.0.7 package omits the license field in package.json but includes LICENSE with the MIT permission grant and copyright notice. The npm tarball carries that LICENSE file beside the published evaluator code.",
+        "reason": "TeA installs AgentEvals as a devDependency for the deterministic tool-use fixture; its declared package metadata omits the licence field."
+      },
+      {
         "lockfiles": ["package-lock.json", "website/package-lock.json"],
         "prefix": "zod-to-ts",
         "readAs": "MIT",

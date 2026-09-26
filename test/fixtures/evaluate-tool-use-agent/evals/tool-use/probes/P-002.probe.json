@@ -1,0 +1,83 @@
+{
+  "probeId": "P-002",
+  "probeClass": "defect",
+  "behaviorId": "B-001",
+  "expectedClean": false,
+  "rationale": "Seeded defect: the rule selects search_web instead of get_weather.",
+  "defects": [
+    {
+      "defectId": "D-001",
+      "behaviorId": "B-001",
+      "summary": "The calling agent selects search_web for a weather request.",
+      "severity": "critical",
+      "source": "controlled-mutation",
+      "manifestationWitness": {
+        "legId": "manifest-wrong-tool",
+        "interfaceId": "calling-agent",
+        "operationId": "call-weather-tool",
+        "inputs": {
+          "argument": {},
+          "option": {},
+          "environment": {},
+          "stdin": {
+            "kind": "text",
+            "value": "Weather in Austin"
+          }
+        },
+        "relation": {
+          "op": "containment",
+          "operands": [
+            {
+              "pointer": "/interactions/manifest-wrong-tool/stdout"
+            },
+            {
+              "literal": "\"name\":\"search_web\""
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "defectSignature": {
+    "interfaceKind": "cli",
+    "invocation": {
+      "executable": "calling-agent",
+      "subcommandPath": []
+    },
+    "observableChannel": "stdout",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": null,
+          "header": null,
+          "body": null,
+          "argument": null,
+          "option": null,
+          "environment": null,
+          "stdin": {
+            "prompt": {
+              "matcher": "any"
+            }
+          },
+          "arguments": null
+        }
+      },
+      "predicate": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/observed/stdout"
+          },
+          {
+            "literal": "\"name\":\"search_web\""
+          }
+        ]
+      }
+    }
+  },
+  "qualification": {
+    "route": "controlled-mutation",
+    "mutation": "M-001"
+  }
+}

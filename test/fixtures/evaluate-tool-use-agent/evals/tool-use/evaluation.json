@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "evaluationId": "calling-agent-tool-use",
+  "targetKind": "agent",
+  "interface": "cli",
+  "registry": [
+    {
+      "interfaceId": "calling-agent",
+      "executable": "calling-agent",
+      "target": "bin/calling-agent.js",
+      "subcommandPaths": [
+        []
+      ],
+      "artifacts": {},
+      "environmentKeys": [],
+      "maxElapsedMs": 30000,
+      "infrastructureExitCodes": [
+        3
+      ]
+    }
+  ],
+  "launch": {
+    "root": "../.."
+  },
+  "workspace": {
+    "kind": "copy",
+    "provision": []
+  },
+  "arms": [
+    "clean",
+    "mutated"
+  ],
+  "trials": 3,
+  "tiers": [
+    "pr"
+  ],
+  "strengthFloor": {
+    "defect": 1,
+    "zero-action": 1
+  },
+  "evaluator": {
+    "kind": "command",
+    "command": "evaluator/trajectory.mjs",
+    "timeoutMs": 30000
+  }
+}

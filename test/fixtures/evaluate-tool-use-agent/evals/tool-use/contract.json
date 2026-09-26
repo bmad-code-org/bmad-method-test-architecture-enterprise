@@ -1,0 +1,247 @@
+{
+  "schemaVersion": 5,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "contractId": "tea-evaluate-tool-use-agent-fixture",
+  "sourceSpecDigest": "sha256:1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a",
+  "behaviors": [
+    {
+      "id": "B-001",
+      "description": "The calling agent selects get_weather with city Austin for a weather request.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The agent trajectory on stdout names get_weather as its first tool call with city Austin.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-evaluate-fixture",
+          "id": "select-weather-tool"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-evaluate-fixture",
+          "id": "wrong-tool-selection"
+        }
+      ],
+      "oracles": [
+        "O-001"
+      ]
+    }
+  ],
+  "oracles": [
+    {
+      "id": "O-001",
+      "polarity": "expects-hold",
+      "commentary": "The calling agent trajectory on stdout names get_weather as its first tool call with city Austin.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The calling agent command stdout trajectory.",
+        "negativeDomain": "A trajectory whose first tool call is another tool or whose arguments name another city.",
+        "evidenceTargets": [
+          "/interactions/call-tool/stdout"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "containment",
+            "operands": [
+              {
+                "pointer": "/interactions/call-tool/stdout"
+              },
+              {
+                "literal": "\"name\":\"get_weather\""
+              }
+            ]
+          },
+          {
+            "op": "containment",
+            "operands": [
+              {
+                "pointer": "/interactions/call-tool/stdout"
+              },
+              {
+                "literal": "\\\"city\\\":\\\"Austin\\\""
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "rubrics": [],
+  "waivers": [],
+  "permittedInterfaces": [
+    {
+      "logicalId": "calling-agent",
+      "kind": "cli",
+      "operations": [
+        {
+          "operationId": "call-weather-tool",
+          "invocation": {
+            "executable": "calling-agent",
+            "subcommandPath": []
+          },
+          "stateChangeMarker": false,
+          "requestShape": {
+            "argument": {
+              "requiredKeys": [],
+              "permittedKeys": [],
+              "types": {}
+            },
+            "option": {
+              "requiredKeys": [],
+              "permittedKeys": [],
+              "types": {}
+            },
+            "environment": {
+              "requiredKeys": [],
+              "permittedKeys": [],
+              "types": {}
+            },
+            "stdin": {
+              "requiredKeys": [
+                "prompt"
+              ],
+              "permittedKeys": [
+                "prompt"
+              ],
+              "types": {
+                "prompt": "string"
+              }
+            }
+          },
+          "artifacts": [],
+          "descriptorChannel": {
+            "kind": "stream",
+            "channel": "stdout"
+          },
+          "responseDescriptor": {
+            "requiredKeys": [],
+            "permittedKeys": [],
+            "types": {},
+            "successIndicator": null,
+            "channelRoles": null,
+            "collectionLocations": null
+          },
+          "volatilePointers": [],
+          "sensitivityWitness": {
+            "witnessId": "agent-echoes-request",
+            "channel": "stdin",
+            "legs": [
+              {
+                "legId": "request-alpha",
+                "inputs": {
+                  "argument": {},
+                  "option": {},
+                  "environment": {},
+                  "stdin": {
+                    "kind": "text",
+                    "value": "Weather in Austin"
+                  }
+                }
+              },
+              {
+                "legId": "request-beta",
+                "inputs": {
+                  "argument": {},
+                  "option": {},
+                  "environment": {},
+                  "stdin": {
+                    "kind": "text",
+                    "value": "Weather in Dallas"
+                  }
+                }
+              }
+            ],
+            "relation": {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "containment",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/request-alpha/stdout"
+                    },
+                    {
+                      "literal": "Weather in Austin"
+                    }
+                  ]
+                },
+                {
+                  "op": "not",
+                  "operands": [
+                    {
+                      "op": "containment",
+                      "operands": [
+                        {
+                          "pointer": "/interactions/request-beta/stdout"
+                        },
+                        {
+                          "literal": "Weather in Austin"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "referenceSets": {},
+  "siblingGroups": {
+    "operations": [],
+    "parameters": []
+  },
+  "interactionPlan": [
+    {
+      "stepId": "call-tool",
+      "operationId": "call-weather-tool",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": null,
+        "environment": null,
+        "stdin": {
+          "prompt": {
+            "literal": "Weather in Austin"
+          }
+        }
+      }
+    }
+  ],
+  "scopedResources": null,
+  "forbiddenInputs": [
+    "original-spec",
+    "source-code",
+    "repository",
+    "builder-transcript",
+    "implementation-logs",
+    "comparator-results",
+    "human-labels"
+  ],
+  "testData": {
+    "setup": "The calling agent reads rules/tool.json from its disposable copy workspace.",
+    "cleanup": "The calling agent leaves no files behind.",
+    "principals": null,
+    "resources": null
+  },
+  "budgets": {
+    "maxToolCalls": 1,
+    "maxWallClockMinutes": 1,
+    "maxCostUsd": "0.00"
+  },
+  "safetyLimits": [
+    "The calling agent makes no network call and executes no selected tool."
+  ],
+  "requiredEvidence": [
+    "The calling agent stdout trajectory and exit code."
+  ],
+  "probeStepBound": 1,
+  "fixtureReset": null
+}

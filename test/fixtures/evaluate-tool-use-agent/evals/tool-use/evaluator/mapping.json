@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "keys": {
+    "trajectory_strict_match": {
+      "oracleId": "O-001",
+      "behaviorId": "B-001"
+    }
+  }
+}

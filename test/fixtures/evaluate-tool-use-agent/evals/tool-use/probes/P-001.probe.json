@@ -1,0 +1,12 @@
+{
+  "probeId": "P-001",
+  "probeClass": "zero-action",
+  "behaviorId": "B-001",
+  "expectedClean": true,
+  "rationale": "Clean control: the calling agent selects get_weather with the expected arguments.",
+  "defects": [],
+  "qualification": {
+    "route": "clean-control",
+    "noKnownDefectStatement": "The strict policy has no known defect."
+  }
+}

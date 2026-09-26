@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "mutationId": "M-001",
+  "mutationSource": "rules/tool.json: select search_web for the weather request",
+  "targetArtifact": "rules/tool.json",
+  "operator": {
+    "kind": "replace-exact",
+    "find": "\"name\": \"get_weather\"",
+    "replace": "\"name\": \"search_web\"",
+    "occurrences": 1
+  },
+  "expectedObservableFailure": "The trajectory stdout names search_web as the first tool call."
+}
