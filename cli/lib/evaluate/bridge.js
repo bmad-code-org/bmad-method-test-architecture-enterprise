@@ -77,7 +77,8 @@ const CALL_SHAPES = {
     },
   },
   api: {
-    description: 'One HTTP request: its method, its path (with any query string) and, when the method takes one, a JSON body.',
+    description:
+      'One HTTP request: its method, its path (with any query string) and, when the method takes one, a JSON object as its body.',
     inputSchema: {
       type: 'object',
       additionalProperties: false,
@@ -85,7 +86,7 @@ const CALL_SHAPES = {
       properties: {
         method: { type: 'string' },
         path: { type: 'string' },
-        body: {},
+        body: { type: 'object' },
       },
     },
   },

@@ -37,7 +37,7 @@
       "enum": ["cli", "api", "mcp"]
     },
     "registry": {
-      "description": "The execution-target registry: every command a run may spawn (a RegistryEntry) and every stdio MCP tool server it may start (an McpRegistryEntry, kind mcp). The runtime builds eval-quality's default-deny CommandTargetPolicy and McpTargetPolicy from these entries for the workspace each call runs in, so a target the registry does not name is denied before a process starts.",
+      "description": "The execution-target registry: every command a run may spawn (a RegistryEntry), every stdio MCP tool server it may start (an McpRegistryEntry, kind mcp) and every HTTP target it may reach (an ApiRegistryEntry, kind api). The runtime builds eval-quality's default-deny CommandTargetPolicy, McpTargetPolicy and ProbeTargetPolicy from these entries for the workspace each call runs in, so a target the registry does not name is denied before a process starts or a request is sent.",
       "type": "array",
       "minItems": 1,
       "items": {
@@ -47,7 +47,15 @@
           "properties": { "kind": { "const": "mcp" } }
         },
         "then": { "$ref": "#/$defs/McpRegistryEntry" },
-        "else": { "$ref": "#/$defs/RegistryEntry" }
+        "else": {
+          "if": {
+            "type": "object",
+            "required": ["kind"],
+            "properties": { "kind": { "const": "api" } }
+          },
+          "then": { "$ref": "#/$defs/ApiRegistryEntry" },
+          "else": { "$ref": "#/$defs/RegistryEntry" }
+        }
       }
     },
     "launch": {
@@ -462,6 +470,188 @@
           "description": "Ceiling on the bytes the server writes on stdout and, separately, on stderr in one call, in bytes. Defaults to 8 MiB.",
           "type": "integer",
           "minimum": 1
+        }
+      }
+    },
+    "ApiRegistryEntry": {
+      "description": "One HTTP target a run may reach (AD-4: an AI feature or any web application, whose interface is api). The runtime turns each into an authorization of eval-quality's default-deny ProbeTargetPolicy, in the shape eval-quality declares for it, and hands that policy, where each interface is and its auth headers to the evaluation's own HTTP port, adapter/http-probe-port.mjs, which asks eval-quality's evaluateTarget for every allow or deny decision. A deployed target names its port; a target the runtime starts names its server instead, which starts from the workspace for each call on a free port the runtime chooses. eval-quality's policy tries every authorization naming an interface in order, so one entry per interface keeps the denial it reports the one this entry describes.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "interfaceId",
+        "scheme",
+        "host",
+        "addresses",
+        "methods",
+        "safeMethods",
+        "maxRedirects",
+        "maxElapsedMs",
+        "maxRequestBytes",
+        "maxResponseBytes"
+      ],
+      "oneOf": [
+        {
+          "required": ["port"],
+          "not": {
+            "required": ["server"]
+          }
+        },
+        {
+          "required": ["server"],
+          "not": {
+            "required": ["port"]
+          }
+        }
+      ],
+      "properties": {
+        "kind": {
+          "description": "api: this entry is an HTTP target.",
+          "const": "api"
+        },
+        "interfaceId": {
+          "description": "The logical interface identifier the contract names for the target (a kebab-case slug).",
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "scheme": {
+          "description": "The scheme requests use, http or https.",
+          "enum": ["http", "https"]
+        },
+        "host": {
+          "description": "The host requests name, compared by eval-quality without case and with one trailing dot dropped; the port resolves it once per request, to its first address, and sends to that address with this host in the Host header.",
+          "type": "string",
+          "minLength": 1
+        },
+        "port": {
+          "description": "A deployed target's port. An entry names this or server, never both.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "addresses": {
+          "description": "The exact addresses eval-quality allows the host to resolve to, compared after parsing: a loopback, private, link-local or metadata address is allowed only when named here. An address the host resolves to that no entry names is denied (address-not-authorized) before any request is sent or any server starts.",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "methods": {
+          "description": "The HTTP methods a request may use; any other is denied (method-not-authorized).",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+          }
+        },
+        "safeMethods": {
+          "description": "The methods eval-quality's policy marks safe for a differential probe; empty means none.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+          }
+        },
+        "maxRedirects": {
+          "description": "How many redirects one request may follow, each decided by eval-quality again; one more is a cap (budget-exhausted).",
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxElapsedMs": {
+          "description": "Wall-clock ceiling for one request and its redirects, in milliseconds. At most 2147483647, the longest delay one timer holds.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "maxRequestBytes": {
+          "description": "Ceiling on a request body's bytes; a larger body is a cap and is never sent.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxResponseBytes": {
+          "description": "Ceiling on an answer body's bytes; a larger answer is a cap.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "server": {
+          "description": "A target the runtime starts from the workspace for each call, as it starts a command or a tool server, so the code that answers is the workspace's, a mutation included: started through eval-quality's command mechanism in a process group of its own, with the host's PATH, the host's values for environmentKeys and the chosen port in portEnvironmentKey, reached once the address eval-quality allowed accepts a connection on that port, and ended with its group after the call. It starts only once eval-quality's policy has allowed the call.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["target", "targetArgs", "environmentKeys", "portEnvironmentKey", "readyTimeoutMs"],
+          "properties": {
+            "target": {
+              "description": "What starts the server: a POSIX path relative to the root the runtime resolves the registry against (the evaluated project, so the path lands in the workspace), or a bare command name resolved through the host PATH. Never absolute, and never with a \".\" or \"..\" segment, an empty segment, a trailing slash, or a control character (C0, DEL or C1), a line or paragraph separator, or a bidirectional formatting character.",
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^(?![A-Za-z]:)(?!/)(?![\\s\\S]*(?:^|/)\\.{1,2}(?:/|$))(?![\\s\\S]*//)(?![\\s\\S]*/$)[^\\\\\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2066-\\u2069]+$"
+            },
+            "targetArgs": {
+              "description": "The argument vector the server starts with, passed as an array so no value is joined into a shell string. A relative path in it resolves against the workspace, the server's working directory. No argument may be an absolute path, carry one after an = sign, name a file: URL, or hold a \"..\" segment; each of these would run or read the adopter's live tree in place of the workspace (AD-8). Empty starts target with no arguments.",
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^(?![\\s\\S]*[Ff][Ii][Ll][Ee]:)(?![A-Za-z]:[\\\\/])(?![/\\\\])(?![\\s\\S]*=(?:[/\\\\]|[A-Za-z]:[\\\\/]))(?![\\s\\S]*(?:^|[/\\\\=])\\.\\.(?:[/\\\\]|$))[\\s\\S]*$"
+              }
+            },
+            "environmentKeys": {
+              "description": "Environment keys whose host values the server starts with, over the host PATH. Each value is scrubbed from what the server answers. PATH is never one: target may name a bare command, and a declared PATH would choose which binary runs.",
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+                "not": {
+                  "pattern": "^[Pp][Aa][Tt][Hh]$"
+                }
+              }
+            },
+            "portEnvironmentKey": {
+              "description": "The environment key the chosen port reaches the server in, such as PORT.",
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "not": {
+                "pattern": "^[Pp][Aa][Tt][Hh]$"
+              }
+            },
+            "readyTimeoutMs": {
+              "description": "How long the server may take to accept a connection on its port, in milliseconds; a server that has not by then, or that exits first, is a target that could not run (exit 12).",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2147483647
+            },
+            "maxOutputBytes": {
+              "description": "Ceiling on the bytes the server writes on stdout and, separately, on stderr during one call. Defaults to 8 MiB.",
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "auth": {
+          "description": "A credential every request of this interface carries: the header named, holding prefix followed by the host's value for environmentKey. It is added by the port, never recorded in a request, and scrubbed from every answer; it goes to no origin a redirect names.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["header", "environmentKey"],
+          "properties": {
+            "header": {
+              "description": "The header's name, such as authorization.",
+              "type": "string",
+              "pattern": "^[!#$%&'*+.^_`|~0-9A-Za-z-]+$"
+            },
+            "environmentKey": {
+              "description": "The environment key whose host value the header carries. PATH is never one.",
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "not": { "pattern": "^[Pp][Aa][Tt][Hh]$" }
+            },
+            "prefix": {
+              "description": "Text before the value, such as \"Bearer \". Empty by default.",
+              "type": "string"
+            }
+          }
         }
       }
     }

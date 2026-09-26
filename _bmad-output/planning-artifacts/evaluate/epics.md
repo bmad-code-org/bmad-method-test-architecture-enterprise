@@ -24,7 +24,7 @@ inputDocuments:
 
 ## Overview
 
-This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and forty stories (Stories 1.27 to 1.35 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
+This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and forty-two stories (Stories 1.27 to 1.37 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
 
 Evaluate is fully stacked. The stack runs system under test, then the evaluation (the mechanism that runs the system, collects evidence and makes judgments), then the Behavioral Evaluation Contract (what behavior matters, what evidence counts, how success and failure resolve), then eval-quality (contract sanity, evidence support, and whether the evaluation catches defects). TeA owns every layer above eval-quality, including each concern eval-quality states it leaves to the caller, so an adopter can evaluate any target end to end. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3 onward, Epic 2 and H.1 to close the plan gap audit; the Traceability section maps each audit item to the story that closes it.
 
@@ -151,7 +151,7 @@ None. Evaluate has no graphical interface.
 ### Epic 1: The Evaluate authoring loop
 
 An adopter describes a target, answers Evaluate's questions, chooses or builds the evaluation layer and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches the seeded defect, with the gaps named and closed. The epic closes by running Evaluate on `bmad-testarch-evaluate` itself, then proving the guidance on two more target kinds, on seeded weaknesses and on an evaluation framework its guides never name.
-Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.35.
+Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.37.
 
 **FRs covered:** FR1 to FR10, FR13, FR14.
 
@@ -202,12 +202,14 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 33 | 1.33 | 1.10, 1.11, 1.17 |
 | 34 | 1.34 | 1.17, 1.21 |
 | 35 | 1.35 | 1.10 |
-| 36 | 2.1 | 1.16, 1.26 |
-| 37 | 2.2 | 2.1 |
-| 38 | 2.3 | 2.2 |
-| 39 | 2.4 | 2.3 |
-| 40 | 2.5 | 2.4 |
-| 41 | H.1 | 2.5 |
+| 36 | 1.36 | 1.11 |
+| 37 | 1.37 | 1.11 |
+| 38 | 2.1 | 1.16, 1.26 |
+| 39 | 2.2 | 2.1 |
+| 40 | 2.3 | 2.2 |
+| 41 | 2.4 | 2.3 |
+| 42 | 2.5 | 2.4 |
+| 43 | H.1 | 2.5 |
 
 ## Epic 1: The Evaluate authoring loop
 
@@ -548,9 +550,9 @@ So that my HTTP surface is evaluated as `api` with no copied network policy (CAP
 
 **Given** the skill's `assets/`
 **When** `/bmad-workflow-builder` Edit adds `http-probe-port.mjs` and `http-probe-port.conformance.mjs` templates
-**Then** the port is a default-export factory that holds only address, auth and transport configuration and calls eval-quality's `evaluateTarget` for every allow or deny decision, once per request and once per redirect hop; the evaluator is an injected option defaulting to the imported `evaluateTarget`, so the test injects a counting wrapper, and the grep test holds that the default is the import
+**Then** the port is a default-export factory that holds only address, auth and transport configuration and calls eval-quality's `evaluateTarget` for every allow or deny decision, once per request and once per redirect hop; the evaluator is an injected option defaulting to the imported `evaluateTarget`, so the test injects a counting wrapper, and the grep test holds that the default is the import (amended 2026-09-25 in Story 1.11: the runtime never imports the adopter's port: for each call it starts `adapter/http-probe-port.mjs` as a Node process of its own, whose last lines hand the factory and the `nodeTransport` it exports to TeA's host, `cli/lib/evaluate/http-port-host.js`, which serves the call over newline-delimited JSON on standard input and output, since eval-quality's `dependency-direction` gate refuses a computed `import()` anywhere under `cli/` and a port in its own process keeps the adopter's code apart from the run's state and ends at its ceiling; `preflight` and `run` ask the port for its protocol before anything starts and exit 10 when it does not start TeA's host)
 **And** the conformance template calls `runEnvironmentProbePortConformance` against a loopback stub server it starts and closes itself (the suite's redirect, slow-response and oversize-response scenarios need endpoints no deployed target offers), so conformance runs in the `pr` tier with no deployed target and no secret
-**And** a grep test in `test/test-evaluate-api.js` fails when the template contains its own address classification (any private-range literal or CIDR arithmetic)
+**And** a grep test in `test/test-evaluate-api.js` fails when the template contains its own address classification (any private-range literal or CIDR arithmetic) (amended 2026-09-25 in Story 1.11: the port template carries no private-range literal and neither template carries CIDR arithmetic; the conformance file's four denied-class requests need one sample address of each class, which the test holds to exactly those four samples, each of the class eval-quality's own `classifyAddress` gives it)
 
 **Given** a loopback HTTP fixture target at `test/fixtures/evaluate-api/` with an adapter rendered from the template, whose `evaluation.json` declares a `copy` workspace (AD-8)
 **When** its evaluation runs conformance, `check`, `preflight`, `run` and `score`
@@ -558,6 +560,7 @@ So that my HTTP surface is evaluated as `api` with no copied network policy (CAP
 **And** the contract declares kind `api`, and an unlisted address is denied with eval-quality's denial reason
 **And** (added 2026-09-25 in Story 1.17, whose bridge denies every `api` call at the interface until this story) a `sealed-brief-agent` evaluator's bridge routes an `api` call through the adopter's port for the arm: an authorized call is recorded `evaluator-chosen` with the operation its method and path match, and an unlisted address is denied with eval-quality's `address-not-authorized` before any request is sent, a case in `test/test-evaluate-api.js`; leaving the bridge on no HTTP authorization turns the authorized call into an `interface-not-authorized` denial, which the case catches
 **And** the test is chained into `npm test`, which the `chain` matrix runs (amended 2026-09-25 in Story 1.9: CI runs the `npm test` chain in shards, so a chained script needs no step of its own)
+**And** (added 2026-09-25 in Story 1.11, so every arm a probe needs runs over an HTTP target as it runs over a command and a tool server) a registry entry with `kind: "api"` carries eval-quality's HTTP authorization fields and one of `port` (a deployed target) or `server` (`target`, `targetArgs`, `environmentKeys`, `portEnvironmentKey`, `readyTimeoutMs`), and an optional `auth` header holding the host's value for its key; for each call the runtime hands the port the `ProbeTargetPolicy`, the targets and the auth headers, and starts a `server` from the call's workspace through eval-quality's `nodeCommandMechanism`, on a free port, only once the port's policy has allowed the call, ending its process group after it; a record carries an HTTP call's `path`, `query`, `header` and `body` inputs and the answer's status, headers and body; a gameability probe's degenerate response answers an HTTP step with `{ status, headers?, body? }` through the port with nothing sent, and the bridge on a gameability arm denies an unlisted method as a real arm does; `check` refuses under `registry` a second HTTP entry for one interface and an HTTP entry for an interface of another kind, under `schema` an entry naming both or neither of `port` and `server`, under `adapter` a folder whose registry declares an HTTP target and holds no regular `adapter/http-probe-port.mjs`, and under `gameability` a degenerate response of another kind than its step; a service's environment values and the auth value are scrubbed from every answer and cause; a service that cannot start or hangs stops the run with exit 12 and every process it started ended; before it starts a server the runtime asks eval-quality's `evaluateTarget` itself about the target the port names, the request's elapsed cap starts once the server accepts a connection, and an answer that arrives after the server ended other than with exit code 0 is refused; `preflight` and `run` exit 10 when an auth header's key has no host value; a bridge call's body is a JSON object, and a `.` or `..` path value is refused unsent; each is a `test/test-evaluate-api.js` case, and dropping the rule, the scrub or the projection turns its case red
 
 **Dependencies:** 1.1, 1.8, 1.17.
 **Gate:** skill gates (no registration change, so no Validate Module), `npm test`, engine check.
@@ -1040,7 +1043,7 @@ So that a CI policy or a test can tell an unlisted executable from an unlisted s
 
 **Given** that release
 **When** a bridge call, a preflight leg or a trial step is denied, for `cli`, `mcp` and `api` alike
-**Then** the recorded denial carries `{ code, reason, detail }` with the `reason` eval-quality's policy decided, a `test:evaluate-evaluators` case per kind asserting `executable-not-authorized`, `tool-not-authorized` and `address-not-authorized`; recording the detail alone leaves `reason` absent, which each case catches (amended 2026-09-25 in Story 1.10: Story 1.10 records eval-quality's `reason` beside the code wherever a denial is recorded, for every kind, in a bridge call (`{ code, reason, detail }`), a leg's `faults/` file, a qualification's fault and a trial's fault, and names it in the exit-10 message; `test:evaluate-evaluators` asserts a bridge call's `executable-not-authorized` for `cli` and `interface-not-authorized` for `mcp` and `api`, `test:evaluate-preflight` a leg's `interface-not-authorized` for `cli`, and `test:evaluate-mcp` `tool-not-authorized` in a qualification, a leg, a trial and a bridge call and `interface-not-authorized` in a leg; this story still owns the `api` kind through the adopter's HTTP port once Story 1.11 builds it, `address-not-authorized` asserted in a leg, a trial and a bridge call, and the reference section below)
+**Then** the recorded denial carries `{ code, reason, detail }` with the `reason` eval-quality's policy decided, a `test:evaluate-evaluators` case per kind asserting `executable-not-authorized`, `tool-not-authorized` and `address-not-authorized`; recording the detail alone leaves `reason` absent, which each case catches (amended 2026-09-25 in Story 1.10: Story 1.10 records eval-quality's `reason` beside the code wherever a denial is recorded, for every kind, in a bridge call (`{ code, reason, detail }`), a leg's `faults/` file, a qualification's fault and a trial's fault, and names it in the exit-10 message; `test:evaluate-evaluators` asserts a bridge call's `executable-not-authorized` for `cli` and `interface-not-authorized` for `mcp` and `api`, `test:evaluate-preflight` a leg's `interface-not-authorized` for `cli`, and `test:evaluate-mcp` `tool-not-authorized` in a qualification, a leg, a trial and a bridge call and `interface-not-authorized` in a leg; this story still owns the `api` kind through the adopter's HTTP port once Story 1.11 builds it, `address-not-authorized` asserted in a leg, a trial and a bridge call, and the reference section below) (amended 2026-09-25 in Story 1.11: Story 1.11 delivers the `api` kind: the HTTP port passes `evaluateTarget`'s reason as the `forbidden-target` fault's `reason`, and `test:evaluate-api` asserts `address-not-authorized` in a qualification, a leg, a trial and a bridge call and `method-not-authorized` in a bridge call; this story still owns the reference section below)
 **And** `docs/reference/tea-evaluate-cli.md` names the reason codes a denial carries, and a `test:evaluate-evaluators` case reads the section under its exact heading and fails when a code is removed
 
 **Dependencies:** 1.10, 1.11, 1.17.
@@ -1086,6 +1089,47 @@ So that a crash mutation on an `mcp` interface is caught as a command crash is (
 
 **Dependencies:** 1.10.
 **Gate:** `npm test`, `npm run test:release-metadata`, engine check.
+
+### Story 1.36: Hold an HTTP entry to eval-quality's own target-policy parser
+
+Added 2026-09-25 in Story 1.11 from a gap its build found: eval-quality 4.2.0 exports `parseCommandTargetPolicy` and `parseMcpTargetPolicy` from `eval-quality/adapters` and no parser for its HTTP `ProbeTargetPolicy` (`dist/core/schemas/probe-policy.js` declares the schema; `dist/adapters/index.d.ts` exports no parser for it), so `tea-evaluate`'s `ApiRegistryEntry` repeats the authorization's field rules (the schemes, the port range, the method list, the non-empty address list, the ceilings' minimums) in the runtime's own `evaluation.json` schema, and a rule eval-quality adds or changes reaches `check` only when someone copies it.
+
+As an adopter with an HTTP target,
+I want my registry's HTTP entries held to eval-quality's own reading of an HTTP authorization,
+So that `check` refuses exactly what the engine's policy refuses, with no copy of its rules to drift (AD-1).
+
+**Engine consumption.** eval-quality ships a release exporting a `ProbeTargetPolicy` parser, as it exports `parseMcpTargetPolicy`, and TeA's devDependency and peer floor rise to it with the engine check at start and end; the coordinator makes that change in eval-quality.
+
+**Acceptance Criteria:**
+
+**Given** that release
+**When** `tea-evaluate check` reads a registry with an HTTP entry
+**Then** the entries become the policy the runtime builds, a started server's entry at a placeholder port, and eval-quality's parser reads it; an entry the parser refuses is a `registry` finding naming the parser's reason, a `test:evaluate-api` case; skipping the parser lets the case exit 0, which the case catches
+**And** the runtime builds each call's policy through the same parser before any service starts, so a policy the parser refuses stops the call with the parser's fault, a `test:evaluate-api` unit; building the policy by hand lets the refused field reach the port, which the unit catches
+**And** `ApiRegistryEntry` keeps the authorization fields at their JSON types and leaves their rules to the parser, and a `test:evaluate-api` case reads the schema and fails when one of those fields carries a rule of its own; restoring a copied rule fails the case
+
+**Dependencies:** 1.11.
+**Gate:** `npm test`, `npm run test:release-metadata`, engine check.
+
+### Story 1.37: Know a started HTTP server by the port it bound itself
+
+Added 2026-09-25 in Story 1.11 from its review: for a registry entry with a `server`, the runtime takes a free port, releases it and hands its number to the server in `portEnvironmentKey`, then waits until that port accepts a connection. Another process can take the port in between: the server then fails to bind and ends, and when that process answers before the server's end is reported, the answer is recorded as the workspace's. Story 1.11 refuses an answer that arrives after the call's server ended other than with exit code 0, which closes the case once the end is reported, and leaves the window before it open.
+
+As an adopter whose HTTP target the runtime starts,
+I want the runtime to reach the server it started and nothing else on its port,
+So that no answer from another process is ever recorded as my target's (AD-7, AD-8).
+
+**Acceptance Criteria:**
+
+**Given** a registry entry whose `server` names a `portFileEnvironmentKey`
+**When** a call starts the server
+**Then** the runtime passes `0` in `portEnvironmentKey` and a private file path in `portFileEnvironmentKey`, the server binds a port the system chooses and writes its number to that file, and the runtime sends only once the file names a port that accepts a connection while the server runs; a `test:evaluate-api` case whose fixture server binds port 0 and reports it passes the pipeline, and a case in which another process listens on the port the runtime would have chosen reaches only the fixture server; restoring the chosen-port handoff lets the other process answer, which the case catches
+**And** a server that writes no port within `readyTimeoutMs`, or a port that is not a number, is a target that could not run (exit 12), a `test:evaluate-api` case each
+**And** the private file's directory is on the run's scratch list, so a signal leaves the temp directory empty, a `test:evaluate-api` case
+**And** `docs/reference/tea-evaluate-cli.md` states both handoffs and the window the chosen-port handoff leaves, and the case reading the passage fails when the window's sentence is removed
+
+**Dependencies:** 1.11.
+**Gate:** `npm test`.
 
 ## Epic 2: Continuous proof in CI
 

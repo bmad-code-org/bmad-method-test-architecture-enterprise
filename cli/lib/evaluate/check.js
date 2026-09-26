@@ -47,8 +47,8 @@
  *   its `naiveOracle` is an oracle of its own behavior (the naive oracle belongs to another behavior),
  *   or its degenerate response, `corpus/gameability/<probeId>.json`, is absent, fails its schema
  *   (`schema`), answers a plan step the contract does not declare or leaves one unanswered, answers a
- *   command step with a tool call's response or a tool-call step with a command's, or exits a code the
- *   step's registry entry declares as infrastructure.
+ *   step with the response of another kind of call (a command's, a tool call's or an HTTP request's), or
+ *   exits a code the step's registry entry declares as infrastructure.
  * - `historical` (Story 1.9): a probe on the `historical` route does not carry `expectedClean: false`, seeds
  *   no defect, or seeds one whose `source` is not `natural`, the only source eval-quality admits there.
  * - `judge` (Story 1.9): the contract declares a rubric and `evaluation.json` has no `judge`, or
@@ -68,6 +68,9 @@
  *   `evaluator` block beside the `deterministic` or `records` kind is refused as unused; a `records`
  *   evaluator's directory is absent or reached through a link. An unknown kind, and a `command` or
  *   `sealed-brief-agent` evaluator with no `timeoutMs`, fail the `evaluation.json` schema (`schema`).
+ * - `adapter` (Story 1.11, AD-4): the registry declares an HTTP target and the evaluation folder's
+ *   `adapter/http-probe-port.mjs`, the port every `api` call goes through, is absent or is not a regular
+ *   file in a real `adapter/` directory.
  *
  * Beside them, `contract.json` must exist (`missing-file`), as must
  * `policy/scoring-policy.json` when a probe takes the `controlled-mutation`,
@@ -80,9 +83,10 @@
  * must everything under `baseline/` (`baseline-file`), no ID may repeat within
  * its file (`duplicate-id`), no registry entry may repeat an interface and
  * executable pair, name an interface another kind of entry names, serve an
- * interface as a kind other than the one the contract declares for it, or be
+ * interface as a kind other than the one the contract declares for it, be
  * a tool server eval-quality's `parseMcpTargetPolicy` refuses (two for one
- * interface among them) (`registry`, Story 1.10), `interface` must be a kind
+ * interface among them) (`registry`, Story 1.10), or be a second HTTP target
+ * for one interface (`registry`, Story 1.11), `interface` must be a kind
  * the contract declares (`reference`), and a file must
  * parse (`json`), match its schema (`schema` for the runtime's own schemas,
  * `engine-schema` for eval-quality's), be named for its ID (`file-name`), and
@@ -99,10 +103,14 @@ const AjvModule = require('ajv/dist/2020');
 const { engineSchemaPath, loadEngine, schemaVersionProblems } = require('./engine');
 const { MANIFEST_NAME } = require('./folder');
 const { addFormats } = require('./formats');
-const { isMcpEntry, mcpRegistryProblems, repeatedPairs, sharedInterfaces } = require('./registry');
+const { HTTP_PORT_MODULE } = require('./http-target');
+const { kindOf, mcpRegistryProblems, repeatedPairs, sharedInterfaces } = require('./registry');
 const { AGENT_ADAPTERS, bridgedArgsRefused, resolveModel } = require('../agent-adapters');
 const { EVALUATOR_DIRECTORY, EvaluatorLayerError, evaluatorFiles, evaluatorOf, isKnownEvaluator } = require('./evaluators');
-const { degenerateResponsePath } = require('./gameability');
+const { answeredKind, degenerateResponsePath } = require('./gameability');
+
+/** How a finding names a call of each interface kind. */
+const KIND_NAMES = { cli: 'a command', mcp: 'a tool call', api: 'an HTTP request' };
 const { MAPPING_PATH, mappingContractProblems, mappingSchemaProblems } = require('./judgment-rows');
 
 /** The skill runner's infrastructure exit codes (`cli/skill-runner.js`), which a registry entry for it must declare. */
@@ -969,17 +977,17 @@ function checkGameability(report, folder, relative, probe, context, behaviors, r
       .flatMap((iface) => (Array.isArray(iface?.operations) ? iface.operations.map((candidate) => ({ iface, operation: candidate })) : []))
       .find((candidate) => candidate.operation?.operationId === step?.operationId);
     const answer = response.steps[stepId];
-    const toolCallStep = operation?.iface?.kind === 'mcp';
-    const toolCallAnswer = typeof answer.isError === 'boolean';
-    if (operation !== undefined && toolCallStep !== toolCallAnswer) {
+    const stepKind = operation?.iface?.kind;
+    const answerKind = answeredKind(answer);
+    if (operation !== undefined && stepKind !== answerKind) {
       report.add(
         responseFile,
         'gameability',
-        `answers step ${stepId}, a ${toolCallStep ? 'tool call' : 'command'}, with a ${toolCallAnswer ? "tool call's" : "command's"} response, so the gameability arm cannot answer it`,
+        `answers step ${stepId}, ${KIND_NAMES[stepKind] ?? stepKind}, with ${KIND_NAMES[answerKind]}'s response, so the gameability arm cannot answer it`,
       );
       continue;
     }
-    if (toolCallAnswer) continue;
+    if (answerKind !== 'cli') continue;
     const entries = (registry ?? []).filter(
       (entry) => entry?.interfaceId === operation?.iface?.logicalId && entry?.executable === operation?.operation?.invocation?.executable,
     );
@@ -1437,8 +1445,8 @@ function checkQualificationEvidence(report, folder, context) {
 /**
  * `evaluation.json`'s `interface` is a kind the contract declares (`reference`),
  * and each registry entry serves its interface as the kind the contract declares
- * for it: a command entry a `cli` interface and a tool-server entry an `mcp`
- * one. An entry of the other kind would leave the interface's calls denied at
+ * for it: a command entry a `cli` interface, a tool-server entry an `mcp` one
+ * and an HTTP entry an `api` one. An entry of another kind would leave the interface's calls denied at
  * the interface by eval-quality, the first signal a run that measured nothing.
  * An interface the contract does not declare is left alone, as a command entry
  * for one always was.
@@ -1458,14 +1466,48 @@ function checkRegistryKinds(report, evaluation, registry, contract) {
   for (const [index, entry] of registry.entries()) {
     const declared = contract.permittedInterfaces.find((candidate) => candidate?.logicalId === entry?.interfaceId);
     if (declared === undefined) continue;
-    const kind = isMcpEntry(entry) ? 'mcp' : 'cli';
+    const kind = kindOf(entry);
     if (declared.kind !== kind) {
       report.add(
         MANIFEST_NAME,
         'registry',
-        `registry[${index}] serves interface ${JSON.stringify(entry.interfaceId)} as ${kind}, and ${CONTRACT_NAME} declares it ${JSON.stringify(declared.kind)}; a ${kind === 'mcp' ? 'tool-server' : 'command'} entry serves ${kind} calls only`,
+        `registry[${index}] serves interface ${JSON.stringify(entry.interfaceId)} as ${kind}, and ${CONTRACT_NAME} declares it ${JSON.stringify(declared.kind)}; ${{ mcp: 'a tool-server', api: 'an HTTP', cli: 'a command' }[kind]} entry serves ${kind} calls only`,
       );
     }
+  }
+}
+
+/**
+ * The evaluation's own HTTP port, which every `api` call goes through (AD-4):
+ * when the registry declares an HTTP target, `adapter/http-probe-port.mjs`
+ * must be a regular file in a real `adapter/` directory, so the runtime loads
+ * the file the evaluation holds and never one a link names. What the module
+ * exports is the runtime's to hold when it loads it (`preflight` and `run`
+ * exit 10), since reading it runs the adopter's code.
+ */
+function checkHttpPort(report, folder, registry) {
+  if (!Array.isArray(registry) || !registry.some((entry) => kindOf(entry) === 'api')) return;
+  const stat = (relative) => {
+    try {
+      return fs.lstatSync(path.join(folder, ...relative.split('/')));
+    } catch {
+      return null;
+    }
+  };
+  const directory = stat('adapter');
+  const file = stat(HTTP_PORT_MODULE);
+  if (directory === null || file === null) {
+    report.add(
+      HTTP_PORT_MODULE,
+      'adapter',
+      `the registry declares an HTTP target and ${HTTP_PORT_MODULE} is absent; render it from the Evaluate skill's template`,
+    );
+  } else if (!directory.isDirectory() || !file.isFile()) {
+    report.add(
+      HTTP_PORT_MODULE,
+      'adapter',
+      `${directory.isDirectory() ? HTTP_PORT_MODULE : 'adapter'} is not a regular ${directory.isDirectory() ? 'file' : 'directory'}, so the runtime does not load the port through it`,
+    );
   }
 }
 
@@ -1513,6 +1555,7 @@ async function checkEvaluation(folder) {
   const behaviors = checkContract(report, folder, context);
   context.contract = contractFor(folder);
   checkRegistryKinds(report, evaluation, registry, context.contract);
+  checkHttpPort(report, folder, registry);
   const mutations = checkMutations(report, folder, context, provision, skillRoot);
   checkSkillRunner(report, evaluation, context.contract, provision);
   const routes = checkProbes(report, folder, context, behaviors, mutations, registry);

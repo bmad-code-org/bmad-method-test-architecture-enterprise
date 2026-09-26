@@ -232,7 +232,8 @@ function isolationManifest({
  * observation built here and one read off the port have one shape. A tool
  * call (Story 1.10) carries its `arguments`, its structured result as
  * `responseBody` and its error flag as `responseStatus`, with no stream, exit
- * code or artifact.
+ * code or artifact; an HTTP call (Story 1.11) carries its `path`, `query`,
+ * `header` and `body` inputs and the answer's body, headers and status.
  *
  * `provenance` defaults to `evaluator-chosen`, because eval-quality's probe
  * witness matching only considers evaluator-chosen observations; a caller
@@ -249,6 +250,7 @@ function recordObservation({
   exitCode = null,
   artifacts = {},
   responseBody = null,
+  responseHeaders = null,
   responseStatus = null,
   provenance = 'evaluator-chosen',
   principal = null,
@@ -260,10 +262,10 @@ function recordObservation({
     provenance,
     principal,
     callInputs: {
-      path: null,
-      query: null,
-      header: null,
-      body: null,
+      path: callInputs.path ?? null,
+      query: callInputs.query ?? null,
+      header: callInputs.header ?? null,
+      body: callInputs.body ?? null,
       argument: callInputs.argument ?? null,
       option: callInputs.option ?? null,
       environment: callInputs.environment ?? null,
@@ -271,7 +273,7 @@ function recordObservation({
       arguments: callInputs.arguments ?? null,
     },
     responseBody,
-    responseHeaders: null,
+    responseHeaders,
     responseStatus,
     stdout,
     stderr,

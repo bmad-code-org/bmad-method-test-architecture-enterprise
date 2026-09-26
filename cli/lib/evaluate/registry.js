@@ -1,13 +1,17 @@
 /**
  * The execution-target registry, and the environment-probe port over it.
  *
- * Two kinds of entry share one list. A command entry (`RegistryEntry`, `kind`
+ * Three kinds of entry share one list. A command entry (`RegistryEntry`, `kind`
  * absent or `cli`) maps a logical executable to a file the command-line adapter
  * spawns; a tool-server entry (`McpRegistryEntry`, `kind: "mcp"`, Story 1.10)
  * maps a logical interface to a stdio MCP server eval-quality's
- * `createMcpAdapter` starts, one session per call. For both, eval-quality's
- * default-deny policy decides every call (AD-1): this file only builds the
- * mapping, for the workspace a call runs in.
+ * `createMcpAdapter` starts, one session per call; an HTTP entry
+ * (`ApiRegistryEntry`, `kind: "api"`, Story 1.11) maps a logical interface to
+ * an address the evaluation's own HTTP port reaches, and names the server the
+ * runtime starts for each call when the target is not deployed
+ * (`http-target.js`). For all three, eval-quality's default-deny policy decides
+ * every call (AD-1): this file only builds the mapping, for the workspace a
+ * call runs in.
  *
  * eval-quality's `createCommandLineAdapter` spawns a command with the decisions
  * stated: `shell: false` always, argv built options-then-positionals, the child
@@ -25,11 +29,12 @@
  * only place a run's working directory, artifact map and budgets are decided, so
  * a caller cannot quietly widen any of them.
  *
- * Every entry has one shape, `RegistryEntry`, read from the runtime's own
- * `evaluation.json` schema: an adopter's `evaluation.json` declares its registry
- * in that shape and TeA's own harness declares its commands in the same shape,
+ * Every entry has the shape its kind names in the runtime's own
+ * `evaluation.json` schema (`RegistryEntry`, `McpRegistryEntry`,
+ * `ApiRegistryEntry`): an adopter's `evaluation.json` declares its registry in
+ * those shapes and TeA's own harness declares its commands as `RegistryEntry`s,
  * so both run through this one builder. A logical name with no entry is denied
- * before a process starts.
+ * before a process starts or a request is sent.
  */
 
 'use strict';
@@ -40,12 +45,14 @@ const path = require('node:path');
 const AjvModule = require('ajv/dist/2020');
 
 const { loadAdapters } = require('./engine');
+const { createApiPort, degenerateApiPort, isApiEntry } = require('./http-target');
 
 const Ajv = AjvModule.default ?? AjvModule;
 
 const EVALUATION_SCHEMA_PATH = path.join(__dirname, 'schemas', 'evaluation.schema.json');
 const REGISTRY_ENTRY_DEFINITION = 'RegistryEntry';
 const MCP_REGISTRY_ENTRY_DEFINITION = 'McpRegistryEntry';
+const API_REGISTRY_ENTRY_DEFINITION = 'ApiRegistryEntry';
 
 /**
  * Eight megabytes of captured output per stream and per artifact, the ceiling an
@@ -67,9 +74,23 @@ function isMcpEntry(entry) {
   return entry !== null && typeof entry === 'object' && entry.kind === 'mcp';
 }
 
+/** The entry definition an entry is held to, by its `kind`. */
+function definitionOf(entry) {
+  if (isMcpEntry(entry)) return MCP_REGISTRY_ENTRY_DEFINITION;
+  if (isApiEntry(entry)) return API_REGISTRY_ENTRY_DEFINITION;
+  return REGISTRY_ENTRY_DEFINITION;
+}
+
+/** An entry's kind: `mcp`, `api`, or `cli` for a command. */
+function kindOf(entry) {
+  if (isMcpEntry(entry)) return 'mcp';
+  if (isApiEntry(entry)) return 'api';
+  return 'cli';
+}
+
 /**
- * The validator of one entry definition (`RegistryEntry` or
- * `McpRegistryEntry`), compiled on first use from the runtime's own
+ * The validator of one entry definition (`RegistryEntry`,
+ * `McpRegistryEntry` or `ApiRegistryEntry`), compiled on first use from the runtime's own
  * `evaluation.json` schema, so loading this module reads nothing.
  */
 function entryValidator(definition) {
@@ -100,7 +121,7 @@ function registryProblems(entries) {
   if (entries.length === 0) return ['the registry names no execution target, so every request would be denied'];
   const problems = [];
   for (const [index, entry] of entries.entries()) {
-    const validate = entryValidator(isMcpEntry(entry) ? MCP_REGISTRY_ENTRY_DEFINITION : REGISTRY_ENTRY_DEFINITION);
+    const validate = entryValidator(definitionOf(entry));
     if (validate(entry)) continue;
     for (const error of validate.errors ?? []) {
       const detail = error.params?.missingProperty ?? error.params?.additionalProperty;
@@ -137,10 +158,12 @@ function repeatedPairs(entries) {
 }
 
 /**
- * Every interface a command entry and a tool-server entry both name, as one
- * line each. An interface is one kind in a contract, so an entry of the other
- * kind would leave its calls denied at the interface. The schema cannot say
- * it, so `check` reports it beside its schema findings. Two tool servers for
+ * Every interface entries of two kinds name, and every interface two HTTP
+ * entries name, as one line each. An interface is one kind in a contract, so
+ * an entry of another kind would leave its calls denied at the interface; and
+ * the runtime reaches one HTTP target per interface (its server, its auth), so
+ * a second entry would be one no call reaches. The schema cannot say either,
+ * so `check` reports them beside its schema findings. Two tool servers for
  * one interface are eval-quality's to refuse: its `McpTargetPolicy` admits one
  * authorization per interface (`mcpRegistryProblems`).
  *
@@ -152,12 +175,16 @@ function sharedInterfaces(entries) {
   const kinds = new Map();
   for (const [index, entry] of entries.entries()) {
     if (typeof entry?.interfaceId !== 'string') continue;
-    const kind = isMcpEntry(entry) ? 'mcp' : 'cli';
+    const kind = kindOf(entry);
     const seen = kinds.get(entry.interfaceId);
     if (seen === undefined) kinds.set(entry.interfaceId, kind);
     else if (seen !== kind) {
       problems.push(
         `registry[${index}] names interface ${JSON.stringify(entry.interfaceId)} as ${kind}, which an earlier entry names as ${seen}`,
+      );
+    } else if (kind === 'api') {
+      problems.push(
+        `registry[${index}] repeats interface ${JSON.stringify(entry.interfaceId)} as an HTTP target; the runtime reaches one HTTP target per interface`,
       );
     }
   }
@@ -260,13 +287,14 @@ function isBareCommand(target) {
 /**
  * A registry over validated entries, resolved against one root.
  *
- * @param {unknown} entries RegistryEntry and McpRegistryEntry objects.
+ * @param {unknown} entries RegistryEntry, McpRegistryEntry and ApiRegistryEntry objects.
  * @param {object} options
  * @param {string} options.root The directory each relative `target` resolves against; a relative one is resolved against the working directory once, here.
+ * @param {object} [options.httpPort] the evaluation's HTTP port (`http-target.js` `probeHttpPort`), which an `api` call goes through
  * @returns {object}
  * @throws {Error} Naming every problem `registryProblems` finds.
  */
-function createRegistry(entries, { root } = {}) {
+function createRegistry(entries, { root, httpPort } = {}) {
   if (typeof root !== 'string' || root.length === 0) {
     throw new Error('createRegistry requires a root: every relative target resolves against it');
   }
@@ -277,8 +305,9 @@ function createRegistry(entries, { root } = {}) {
   const problems = registryProblems(entries);
   if (problems.length > 0) throw new Error(`the execution-target registry is not valid:\n  ${problems.join('\n  ')}`);
   const registered = deepFreeze(structuredClone(entries));
-  const commandEntries = registered.filter((entry) => !isMcpEntry(entry));
+  const commandEntries = registered.filter((entry) => kindOf(entry) === 'cli');
   const serverEntries = registered.filter(isMcpEntry);
+  const apiEntries = registered.filter(isApiEntry);
 
   /** An entry's own keys plus the caller's extra names, sorted, with PATH refused. */
   function keysWithExtras(interfaceId, own, extraNames = []) {
@@ -306,9 +335,16 @@ function createRegistry(entries, { root } = {}) {
     return serverEntries.find((entry) => entry.interfaceId === interfaceId);
   }
 
-  /** How one entry is named in a problem: its executable, or a tool server's interface. */
+  /** The HTTP entry for one interface. @returns {object|undefined} */
+  function apiFor(interfaceId) {
+    return apiEntries.find((entry) => entry.interfaceId === interfaceId);
+  }
+
+  /** How one entry is named in a problem: its executable, or a tool server's or HTTP server's interface. */
   function labelOf(entry) {
-    return isMcpEntry(entry) ? `${entry.interfaceId} (tool server)` : entry.executable;
+    if (isMcpEntry(entry)) return `${entry.interfaceId} (tool server)`;
+    if (isApiEntry(entry)) return `${entry.interfaceId} (HTTP server)`;
+    return entry.executable;
   }
 
   /**
@@ -393,6 +429,20 @@ function createRegistry(entries, { root } = {}) {
     const entry = serverFor(interfaceId);
     if (entry === undefined) throw new Error(`no tool server is registered for interface ${interfaceId}`);
     return readEnvironment(keysWithExtras(interfaceId, entry.environmentKeys));
+  }
+
+  /**
+   * The values an `api` call carries that its answer must not show: the host's
+   * values for its server's environment keys and for its auth header's key.
+   *
+   * @param {string} interfaceId
+   * @returns {string[]}
+   */
+  function apiSecrets(interfaceId) {
+    const entry = apiFor(interfaceId);
+    if (entry === undefined) return [];
+    const keys = [...(entry.server?.environmentKeys ?? []), ...(entry.auth === undefined ? [] : [entry.auth.environmentKey])];
+    return Object.values(readEnvironment(keysWithExtras(interfaceId, keys)));
   }
 
   /**
@@ -489,12 +539,23 @@ function createRegistry(entries, { root } = {}) {
     };
   }
 
+  /** The evaluation's HTTP port, which an `api` call needs; an error naming the gap when none was loaded. */
+  function loadedHttpPort() {
+    if (httpPort === undefined) {
+      throw new Error('the registry declares an api target and no HTTP port was probed for it (http-target.js probeHttpPort)');
+    }
+    return httpPort;
+  }
+
   /**
    * The workspace's one port: eval-quality's command-line adapter over
-   * `commandTargetPolicy(options)` for a `cli` request, and its MCP adapter
-   * over `mcpTargetPolicy(options)`, validated by its own
-   * `parseMcpTargetPolicy`, for an `mcp` one. Each adapter denies whatever
-   * its policy does not grant, a request of another kind included.
+   * `commandTargetPolicy(options)` for a `cli` request, its MCP adapter over
+   * `mcpTargetPolicy(options)`, validated by its own `parseMcpTargetPolicy`,
+   * for an `mcp` one, and, when the registry declares HTTP targets, the
+   * evaluation's own HTTP port for an `api` one (`http-target.js`), whose
+   * servers start in `cwd` from targets resolved against `projectRoot`. Each
+   * denies whatever its policy does not grant; with no HTTP target declared,
+   * an `api` request goes to the command-line adapter, which denies it.
    *
    * @returns {Promise<{port: {probe: Function}, policy: object, mcpPolicy: object}>}
    */
@@ -504,10 +565,52 @@ function createRegistry(entries, { root } = {}) {
     const mcpPolicy = adapters.parseMcpTargetPolicy(mcpTargetPolicy(options));
     const commandAdapter = adapters.createCommandLineAdapter(policy);
     const mcpAdapter = adapters.createMcpAdapter(mcpPolicy);
+    const apiPort =
+      apiEntries.length === 0
+        ? commandAdapter
+        : createApiPort({
+            entries: apiEntries,
+            httpPort: loadedHttpPort(),
+            cwd: options.cwd,
+            targetOf: (entry) =>
+              targetPath({ ...entry.server, interfaceId: entry.interfaceId, kind: 'api' }, options.projectRoot ?? registryRoot),
+            readEnvironment: (names) => readEnvironment(names),
+            mechanism: adapters.nodeCommandMechanism,
+            maxOutputBytes: MAX_OUTPUT_BYTES,
+          });
     const port = {
-      probe: (request, signal) => (request?.kind === 'mcp' ? mcpAdapter : commandAdapter).probe(request, signal),
+      probe: (request, signal) => {
+        if (request?.kind === 'mcp') return mcpAdapter.probe(request, signal);
+        if (request?.kind === 'api') return apiPort.probe(request, signal);
+        return commandAdapter.probe(request, signal);
+      },
     };
     return { port, policy, mcpPolicy };
+  }
+
+  /**
+   * The evaluation's HTTP port on a gameability arm: every allowed request
+   * answered from `answer` with nothing sent (`http-target.js`
+   * `degenerateApiPort`), so the registry's policy denies what it does not
+   * grant as on a real arm.
+   *
+   * @param {{ status: number, headers?: object, body?: string }|undefined} answer
+   * @returns {{ probe: Function }}
+   */
+  function degenerateHttpPort(answer) {
+    if (apiEntries.length === 0) {
+      // No HTTP target is declared: eval-quality's command-line adapter over no authorization denies the request, as a
+      // real arm's port does.
+      return {
+        probe: async (request, signal) => (await loadAdapters()).createCommandLineAdapter({ authorizations: [] }).probe(request, signal),
+      };
+    }
+    return degenerateApiPort({
+      entries: apiEntries,
+      httpPort: loadedHttpPort(),
+      answer,
+      readEnvironment: (names) => readEnvironment(names),
+    });
   }
 
   /**
@@ -520,6 +623,10 @@ function createRegistry(entries, { root } = {}) {
    * @returns {number}
    */
   function ceilingMs(interfaceId, operation) {
+    if (typeof operation?.pathTemplate === 'string') {
+      const entry = apiFor(interfaceId);
+      return entry === undefined ? 0 : entry.maxElapsedMs + (entry.server?.readyTimeoutMs ?? 0);
+    }
     const entry =
       typeof operation?.toolName === 'string' ? serverFor(interfaceId) : targetFor(interfaceId, operation?.invocation?.executable);
     return entry?.maxElapsedMs ?? 0;
@@ -528,7 +635,8 @@ function createRegistry(entries, { root } = {}) {
   /**
    * Every tool the registry grants, as the isolation manifest's allow list
    * names it: `<interfaceId>/<executable>` for a command and
-   * `<interfaceId>/<tool>` for each tool of a server, sorted.
+   * `<interfaceId>/<tool>` for each tool of a server and
+   * `<interfaceId>/<method>` for each method of an HTTP target, sorted.
    *
    * @returns {string[]}
    */
@@ -536,6 +644,7 @@ function createRegistry(entries, { root } = {}) {
     return [
       ...commandEntries.map((entry) => `${entry.interfaceId}/${entry.executable}`),
       ...serverEntries.flatMap((entry) => entry.tools.map((tool) => `${entry.interfaceId}/${tool}`)),
+      ...apiEntries.flatMap((entry) => entry.methods.map((method) => `${entry.interfaceId}/${method}`)),
     ].sort();
   }
 
@@ -557,7 +666,12 @@ function createRegistry(entries, { root } = {}) {
     for (const id of interfaceIds ?? []) {
       if (entryFor(id) === undefined) problems.push(`${id}: no execution target is registered for this interface`);
     }
-    for (const entry of selected) {
+    for (const selectedEntry of selected) {
+      // A deployed HTTP target starts nothing; a started one is held to its server's target.
+      if (isApiEntry(selectedEntry) && selectedEntry.server === undefined) continue;
+      const entry = isApiEntry(selectedEntry)
+        ? { ...selectedEntry.server, interfaceId: selectedEntry.interfaceId, kind: 'api' }
+        : selectedEntry;
       if (isBareCommand(entry.target)) continue;
       const absolute = targetPath(entry, projectRoot);
       if (!fs.existsSync(absolute)) {
@@ -580,7 +694,11 @@ function createRegistry(entries, { root } = {}) {
   const registry = Object.freeze({
     entries: registered,
     root: registryRoot,
+    httpPort,
+    apiFor,
+    apiSecrets,
     ceilingMs,
+    degenerateHttpPort,
     commandTargetPolicy,
     createProbePort,
     hostEnvironment,
@@ -643,10 +761,11 @@ async function mcpRegistryProblems(entries) {
 }
 
 /**
- * The registry an `evaluation.json` declares, resolved against `root`.
+ * The registry an `evaluation.json` declares, resolved against `root`, with
+ * the evaluation's HTTP port when one was loaded.
  *
  * @param {{registry?: unknown}} evaluation The parsed manifest.
- * @param {{root: string}} options
+ * @param {{root: string, httpPort?: object}} options
  * @returns {object}
  */
 function registryFromEvaluation(evaluation, options) {
@@ -654,13 +773,16 @@ function registryFromEvaluation(evaluation, options) {
 }
 
 module.exports = {
+  API_REGISTRY_ENTRY_DEFINITION,
   MAX_OUTPUT_BYTES,
   MCP_REGISTRY_ENTRY_DEFINITION,
   REGISTRY_ENTRY_DEFINITION,
   cliObservation,
   createRegistry,
+  isApiEntry,
   isMcpEntry,
   isRegistry,
+  kindOf,
   mcpRegistryProblems,
   observedText,
   probeRequest,

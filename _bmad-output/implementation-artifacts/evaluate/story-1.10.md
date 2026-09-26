@@ -2,7 +2,7 @@
 title: 'Story 1.10: Evaluate a stdio MCP tool server'
 type: 'feature'
 created: '2026-09-25'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'c8f7b9c7691b1702da0b669d818d6475d56825bb'

@@ -320,7 +320,7 @@
       },
       {
         "path": "src",
-        "extensions": [".cjs"]
+        "extensions": [".cjs", ".mjs"]
       },
       {
         "path": "website/src/lib",
@@ -377,7 +377,27 @@
         "match": "prefix",
         "path": "test/",
         "label": "test/",
-        "imports": ["test", "cli", "tools", "hooks-cjs", "evaluate-engine"]
+        "imports": ["test", "cli", "tools", "hooks-cjs", "evaluate-engine", "evaluate-templates"]
+      },
+      {
+        "name": "evaluate-templates",
+        "match": "prefix",
+        "path": "src/workflows/testarch/bmad-testarch-evaluate/assets/",
+        "label": "the Evaluate skill's HTTP port templates",
+        "imports": ["evaluate-templates"],
+        "externals": {
+          "policy": "allow",
+          "modules": [
+            "bmad-method-test-architecture-enterprise/cli/lib/evaluate/http-port-host.js",
+            "eval-quality",
+            "eval-quality/conformance",
+            "node:dns/promises",
+            "node:http",
+            "node:https",
+            "node:net"
+          ],
+          "rule": "the HTTP port templates are adopter code rendered into an evaluation folder's adapter/, which resolves eval-quality and TeA's host from that folder's own install (AD-20); they reach the engine, its conformance subpath, TeA's host by the package's name and Node's network builtins, and nothing else, so no template grows a dependency an adopter's install lacks"
+        }
       },
       {
         "name": "hooks-cjs",
@@ -501,6 +521,10 @@
     ],
     "symbols": {
       "foreign": [
+        {
+          "token": "NODE_EXTRA_CA_CERTS",
+          "reason": "a Node.js environment variable naming extra certificate authorities, not a TEA declaration"
+        },
         {
           "token": "createCommandLineAdapter",
           "reason": "an eval-quality package export, not a TEA declaration"

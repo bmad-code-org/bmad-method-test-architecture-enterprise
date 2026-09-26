@@ -1,0 +1,257 @@
+{
+  "schemaVersion": 5,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "contractId": "tea-evaluate-api-fixture",
+  "sourceSpecDigest": "sha256:5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d",
+  "behaviors": [
+    {
+      "id": "B-001",
+      "description": "Under the committed strict policy the grader accepts the answer it is asked to grade.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The grade answer reports ok and the verdict accepted.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-evaluate-fixture",
+          "id": "strict-policy-accepts"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-evaluate-fixture",
+          "id": "policy-relaxed"
+        }
+      ],
+      "oracles": [
+        "O-001"
+      ]
+    }
+  ],
+  "oracles": [
+    {
+      "id": "O-001",
+      "polarity": "expects-hold",
+      "commentary": "The grader read the strict policy, so its result reports ok and the verdict accepted.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The response body of the grade request.",
+        "negativeDomain": "A result that does not report ok, or whose verdict is not accepted.",
+        "evidenceTargets": [
+          "/interactions/grade-run/response-body/ok",
+          "/interactions/grade-run/response-body/verdict"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/grade-run/response-body/ok"
+              },
+              {
+                "literal": true
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/grade-run/response-body/verdict"
+              },
+              {
+                "literal": "accepted"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "rubrics": [],
+  "waivers": [],
+  "permittedInterfaces": [
+    {
+      "logicalId": "grader",
+      "kind": "api",
+      "operations": [
+        {
+          "operationId": "grade-answer",
+          "method": "GET",
+          "pathTemplate": "/grade",
+          "stateChangeMarker": false,
+          "requestShape": {
+            "path": {
+              "requiredKeys": [],
+              "permittedKeys": [],
+              "types": {}
+            },
+            "query": {
+              "requiredKeys": [
+                "answer"
+              ],
+              "permittedKeys": [],
+              "types": {
+                "answer": "string"
+              }
+            },
+            "header": {
+              "requiredKeys": [],
+              "permittedKeys": [],
+              "types": {}
+            },
+            "body": {
+              "requiredKeys": [],
+              "permittedKeys": [],
+              "types": {}
+            }
+          },
+          "responseDescriptor": {
+            "requiredKeys": [
+              "ok",
+              "answer",
+              "verdict"
+            ],
+            "permittedKeys": [
+              "secret"
+            ],
+            "types": {
+              "ok": "boolean",
+              "answer": "string",
+              "verdict": "string",
+              "secret": "string"
+            },
+            "successIndicator": "/ok",
+            "channelRoles": {
+              "/ok": "success-indicator",
+              "/answer": "payload",
+              "/verdict": "payload",
+              "/secret": "payload"
+            },
+            "collectionLocations": null
+          },
+          "volatilePointers": [],
+          "sensitivityWitness": {
+            "witnessId": "grade-follows-the-answer",
+            "channel": "query",
+            "legs": [
+              {
+                "legId": "witness-alpha",
+                "inputs": {
+                  "path": {},
+                  "query": {
+                    "answer": "alpha"
+                  },
+                  "header": {},
+                  "body": {
+                    "kind": "absent"
+                  }
+                }
+              },
+              {
+                "legId": "witness-beta",
+                "inputs": {
+                  "path": {},
+                  "query": {
+                    "answer": "beta"
+                  },
+                  "header": {},
+                  "body": {
+                    "kind": "absent"
+                  }
+                }
+              }
+            ],
+            "relation": {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/witness-alpha/response-body/answer"
+                    },
+                    {
+                      "literal": "alpha"
+                    }
+                  ]
+                },
+                {
+                  "op": "not",
+                  "operands": [
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "/interactions/witness-beta/response-body/answer"
+                        },
+                        {
+                          "literal": "alpha"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "referenceSets": {},
+  "siblingGroups": {
+    "operations": [],
+    "parameters": []
+  },
+  "interactionPlan": [
+    {
+      "stepId": "grade-run",
+      "operationId": "grade-answer",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "path": null,
+        "query": {
+          "answer": {
+            "literal": "forty-two"
+          }
+        },
+        "header": null,
+        "body": null
+      }
+    }
+  ],
+  "scopedResources": null,
+  "forbiddenInputs": [
+    "original-spec",
+    "source-code",
+    "repository",
+    "builder-transcript",
+    "implementation-logs",
+    "comparator-results",
+    "human-labels"
+  ],
+  "testData": {
+    "setup": "Nothing is staged by hand: tea-evaluate makes a copy workspace of launch.root, the grader project, and starts the HTTP service there for every call.",
+    "cleanup": "Nothing to remove: the grader writes nothing.",
+    "principals": null,
+    "resources": null
+  },
+  "budgets": {
+    "maxToolCalls": 1,
+    "maxWallClockMinutes": 1,
+    "maxCostUsd": "0.00"
+  },
+  "safetyLimits": [
+    "The grader listens on loopback only and makes no network call."
+  ],
+  "requiredEvidence": [
+    "The status, headers and body of every HTTP request."
+  ],
+  "probeStepBound": 1,
+  "fixtureReset": null
+}

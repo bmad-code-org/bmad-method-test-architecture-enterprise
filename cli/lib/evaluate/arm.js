@@ -6,7 +6,10 @@
  * the operation's invocation with each channel's literal bindings as its
  * values: a `stdin` binding with one string literal is sent as that text, any
  * other as a JSON object of its bindings. An `mcp` step (Story 1.10) calls the
- * operation's tool with its literal `arguments`. A step runs after the step
+ * operation's tool with its literal `arguments`, and an `api` step (Story 1.11)
+ * sends the operation's method and path template with its literal `path`,
+ * `query` and `header` values and, when bound, its `body` values as one JSON
+ * object. A step runs after the step
  * its `after` clause names, and otherwise in plan order. A binding this
  * release cannot resolve (`captured`, a `matcher`, a `principal`) and an
  * operation of another kind stop the arm with an `ArmError` (exit 12): the
@@ -18,7 +21,9 @@
  * against; a tool call's record carries its arguments as `callInputs.arguments`,
  * its structured result as `responseBody` and its error flag as
  * `responseStatus` 1 or 0, the projection eval-quality's `McpProbeObservation`
- * names. A qualification arm records `provenance: baseline`; a scored trial
+ * names; an HTTP call's record carries its `path`, `query`, `header` and `body`
+ * inputs and the answer's status, headers and body as `responseStatus`,
+ * `responseHeaders` and `responseBody`. A qualification arm records `provenance: baseline`; a scored trial
  * records `evaluator-chosen`, since under the deterministic evaluator the plan
  * is the evaluator's own exercise of the target, and eval-quality's witness
  * match counts only evaluator-chosen observations (AD-7). A command answer
@@ -26,13 +31,14 @@
  * or that a signal from outside stopped (`stoppedFromOutside`), is a target
  * that could not run, so it also stops the arm (AD-7). A step that crashed by
  * a signal of its own is an observation like any other, as is a tool call the
- * server answered with its error flag set; a server that could not start or
- * answer throws from the adapter.
+ * server answered with its error flag set and an HTTP answer at any status; a
+ * server that could not start or answer throws from the adapter or the port.
  *
  * `hostEnvironmentPort` is the port every leg and arm goes through: it adds the
  * host's values for the keys a command entry permits beneath the request's
- * own, and scrubs every such value, and every value a tool server's
- * environment carries, from what comes back.
+ * own, and scrubs every such value, every value a tool server's environment
+ * carries, and every value an HTTP call's server and auth header carry, from
+ * what comes back.
  */
 
 'use strict';
@@ -224,9 +230,14 @@ function causeNote(error) {
   return typeof cause === 'string' ? `: ${cause}` : '';
 }
 
-/** How the isolation manifest names one call: `<interfaceId>/<executable>` for a command, `<interfaceId>/<tool>` for a tool call. */
+/**
+ * How the isolation manifest names one call: `<interfaceId>/<executable>` for a command, `<interfaceId>/<tool>` for a
+ * tool call and `<interfaceId>/<method>` for an HTTP request.
+ */
 function callLabel(request) {
-  return `${request.interfaceId}/${request.kind === 'mcp' ? request.toolName : request.executable}`;
+  if (request.kind === 'mcp') return `${request.interfaceId}/${request.toolName}`;
+  if (request.kind === 'api') return `${request.interfaceId}/${request.method}`;
+  return `${request.interfaceId}/${request.executable}`;
 }
 
 /** One tagged observed body as a record's JSON value: a JSON or text body's value, and `null` for an absent one. */
@@ -259,8 +270,10 @@ function hostEnvironmentPort({ port, registry }) {
         request?.kind === 'mcp' && registry.serverFor(request.interfaceId) !== undefined
           ? registry.serverEnvironment(request.interfaceId)
           : {};
+      // An HTTP call's server starts with the host's values for its entry's keys, and its auth header carries one.
+      const carried = request?.kind === 'api' ? registry.apiSecrets(request.interfaceId) : [];
       const secrets = secretForms(
-        [...Object.values(injected), ...Object.values(server)].filter((value) => value.length >= MIN_SCRUBBED_VALUE_LENGTH),
+        [...Object.values(injected), ...Object.values(server), ...carried].filter((value) => value.length >= MIN_SCRUBBED_VALUE_LENGTH),
       );
       try {
         return { request: augmented, observation: scrub(await port.probe(augmented, signal), secrets) };
@@ -312,6 +325,17 @@ function carriesPrototypeKey(value) {
   if (Array.isArray(value)) return value.some((item) => carriesPrototypeKey(item));
   if (value === null || typeof value !== 'object') return false;
   return Object.hasOwn(value, '__proto__') || Object.values(value).some((item) => carriesPrototypeKey(item));
+}
+
+/** An HTTP request's header values, each a string on the wire; a bound value of another type cannot be sent. */
+function headerValues(values, stepId) {
+  if (values === null) return {};
+  for (const [name, value] of Object.entries(values)) {
+    if (typeof value !== 'string') {
+      throw new ArmError(`interaction plan step ${stepId} binds header.${name} with ${JSON.stringify(value)}; a header value is a string`);
+    }
+  }
+  return values;
 }
 
 /** A request's standard input from the bound `stdin` values. */
@@ -371,7 +395,27 @@ async function runArm({ contract, port, registry, label, provenance = 'baseline'
     const binding = step.inputBinding ?? {};
     let request;
     let callInputs;
-    if (iface.kind === 'mcp' && typeof operation.toolName === 'string') {
+    if (iface.kind === 'api' && typeof operation.pathTemplate === 'string') {
+      const pathValues = literalValues(binding.path, step.stepId, 'path');
+      const query = literalValues(binding.query, step.stepId, 'query');
+      const header = literalValues(binding.header, step.stepId, 'header');
+      const body = literalValues(binding.body, step.stepId, 'body');
+      request = {
+        probeId: `${label}-${step.stepId}`,
+        interfaceId: iface.logicalId,
+        operationId: operation.operationId,
+        kind: 'api',
+        method: operation.method,
+        pathTemplate: operation.pathTemplate,
+        channels: {
+          path: pathValues ?? {},
+          query: query ?? {},
+          header: headerValues(header, step.stepId),
+          body: body === null ? { kind: 'absent' } : { kind: 'json', value: body },
+        },
+      };
+      callInputs = { path: pathValues, query, header, body };
+    } else if (iface.kind === 'mcp' && typeof operation.toolName === 'string') {
       const toolArguments = literalValues(binding.arguments, step.stepId, 'arguments');
       request = {
         probeId: `${label}-${step.stepId}`,
@@ -399,7 +443,7 @@ async function runArm({ contract, port, registry, label, provenance = 'baseline'
       callInputs = { argument, option, environment, stdin };
     } else {
       throw new ArmError(
-        `interaction plan step ${step.stepId} names a ${iface.kind} operation; this release runs command and tool-call operations only`,
+        `interaction plan step ${step.stepId} names a ${iface.kind} operation this release cannot send; it sends command, tool-call and HTTP operations only`,
       );
     }
     const answered = await port.probe(request, signal);
@@ -412,6 +456,19 @@ async function runArm({ contract, port, registry, label, provenance = 'baseline'
       );
       error.steps = steps;
       throw error;
+    }
+    if (request.kind === 'api') {
+      stepObservations[step.stepId] = recordObservation({
+        observationId: request.probeId,
+        sequence,
+        operationId: operation.operationId,
+        callInputs,
+        responseBody: bodyValue(observation.body),
+        responseHeaders: observation.headers,
+        responseStatus: observation.status,
+        provenance,
+      });
+      continue;
     }
     if (request.kind === 'mcp') {
       stepObservations[step.stepId] = recordObservation({

@@ -123,6 +123,31 @@ const UNBOUNDED = Number.MAX_SAFE_INTEGER;
 const FORBIDDEN_INPUT_NOTE =
   "Withheld from what the runtime hands the target: each trial runs in a disposable workspace that leaves out the evaluation folder, and every request carries only the interaction plan's literal bindings. The runtime does not sandbox the target's file system, so a target that searches for the evaluation folder can reach it.";
 
+/**
+ * What `run.json` says ran for one registry entry: a command's executable and
+ * target, a tool server's target, arguments and tools, or an HTTP target's
+ * address, methods, server and the digest of the evaluation's HTTP port.
+ */
+function runnerOf(entry, registry) {
+  if (entry.kind === 'mcp') {
+    return { interfaceId: entry.interfaceId, kind: 'mcp', target: entry.target, targetArgs: entry.targetArgs, tools: entry.tools };
+  }
+  if (entry.kind === 'api') {
+    return {
+      interfaceId: entry.interfaceId,
+      kind: 'api',
+      scheme: entry.scheme,
+      host: entry.host,
+      ...(entry.port === undefined ? {} : { port: entry.port }),
+      addresses: entry.addresses,
+      methods: entry.methods,
+      ...(entry.server === undefined ? {} : { server: { target: entry.server.target, targetArgs: entry.server.targetArgs } }),
+      httpProbePortDigest: registry.httpPort?.digest ?? null,
+    };
+  }
+  return { interfaceId: entry.interfaceId, executable: entry.executable, target: entry.target };
+}
+
 /** Every committed probe, sorted by file name, parsed. */
 function committedProbes(folder) {
   const directory = path.join(folder, 'probes');
@@ -1092,11 +1117,7 @@ async function completeRun(
     policyDigest: engine.digestBytes(snapshot.policyBytes),
     sealedBriefDigest: sealed.sealedBriefDigest,
     evaluatorConfigurationDigest: configurationDigest,
-    runner: registry.entries.map((entry) =>
-      entry.kind === 'mcp'
-        ? { interfaceId: entry.interfaceId, kind: 'mcp', target: entry.target, targetArgs: entry.targetArgs, tools: entry.tools }
-        : { interfaceId: entry.interfaceId, executable: entry.executable, target: entry.target },
-    ),
+    runner: registry.entries.map((entry) => runnerOf(entry, registry)),
     evaluator: evaluatorRecord,
     model,
     judge,

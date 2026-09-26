@@ -42,6 +42,14 @@
  *   that resolves into the repository's `test/` tree, or a self-reference
  *   through this package's own name into `test/`, which the published package
  *   does not carry.
+ * - `asset-import` (Story 1.11, AD-4): no load under `cli/` resolves into the
+ *   Evaluate skill's `assets/`, relatively or through this package's own name.
+ *   The HTTP port templates there are adopter code: rendered into an
+ *   evaluation folder's `adapter/`, they import eval-quality from that
+ *   folder's own install (AD-20), and the runtime reaches a port only by
+ *   starting its file as a process of its own (`http-target.js`), so this scan
+ *   leaves `assets/` alone and this rule keeps the runtime from loading a
+ *   template, whose eval-quality import would then bypass `engine-import`.
  *
  * - `install-probe` (Story 1.6, AD-4): `cli/skill-runner.js` takes its skill
  *   from `--skill-root` alone, so it names no home directory (`homedir`, a
@@ -136,6 +144,8 @@ const UNKNOWN = Symbol('unknown binding');
 const AJV_IMPORT = Symbol('ajv import');
 const CREATE_REQUIRE_FUNCTION = Symbol('createRequire');
 const TEST_TREE = 'test';
+/** The Evaluate skill's templates, adopter code the runtime never loads (Story 1.11). */
+const ASSET_TREE = path.join('src', 'workflows', 'testarch', 'bmad-testarch-evaluate', 'assets');
 const SKILL_RUNNER = 'skill-runner.js';
 const INSTALL_IDENTIFIERS = new Set(['homedir', 'HOME', 'USERPROFILE', 'XDG_CONFIG_HOME']);
 const INSTALL_PATH = /(?:^|[/\\])\.(?:claude|agents|codex|cursor|gemini)(?:[/\\]|$)|_bmad/;
@@ -564,6 +574,15 @@ function fileViolations({ source, ast, isEngine, isSkillRunner, file, projectRoo
         if (selfReference || reached === TEST_TREE || reached.startsWith(`${TEST_TREE}${path.sep}`)) {
           report(node, 'test-import', `loads ${value}, which resolves into test/; the published package does not carry test/`);
         }
+        const assetTree = ASSET_TREE.split(path.sep).join('/');
+        const assetReference = normalized === `${PACKAGE_NAME}/${assetTree}` || normalized.startsWith(`${PACKAGE_NAME}/${assetTree}/`);
+        if (assetReference || reached === ASSET_TREE || reached.startsWith(`${ASSET_TREE}${path.sep}`)) {
+          report(
+            node,
+            'asset-import',
+            `loads ${value}, which resolves into the Evaluate skill's assets/; an adopter's HTTP port runs as a process of its own`,
+          );
+        }
       }
       if (value === undefined) {
         report(node, 'dynamic-specifier', `"${excerpt(node)}" takes a computed specifier; cli/ names every module it loads as a literal`);
@@ -801,6 +820,20 @@ const PLANTS = [
     rule: 'test-import',
     file: 'other-runner.js',
     source: "const helpers = require('../test');\nmodule.exports = { helpers };\n",
+  },
+  // asset-import
+  {
+    name: "a runtime module importing the skill's HTTP port template",
+    rule: 'asset-import',
+    file: 'lib/evaluate/other.js',
+    source:
+      "module.exports = { load: () => import('../../../src/workflows/testarch/bmad-testarch-evaluate/assets/http-probe-port.mjs') };\n",
+  },
+  {
+    name: 'a runner reaching the templates through the package name',
+    rule: 'asset-import',
+    file: 'other-runner.js',
+    source: `const port = require('${PACKAGE_NAME}/src/workflows/testarch/bmad-testarch-evaluate/assets/http-probe-port.mjs');\nmodule.exports = { port };\n`,
   },
   // engine-import
   {

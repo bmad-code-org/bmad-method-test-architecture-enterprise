@@ -6,9 +6,14 @@
  * The steps, each stopping the run with its own exit when it fails:
  *
  *   1. `check` over the folder (exit 10 on any authoring defect);
- *   2. the evaluation is one this release can run: a `cli` or `mcp` interface, and
- *      every probe that seeds a defect on the `controlled-mutation` or
- *      `historical` route (exit 12 otherwise, before anything runs);
+ *   2. the evaluation is one this release can run: every probe that seeds a
+ *      defect on the `controlled-mutation` or `historical` route (exit 12
+ *      otherwise, before anything runs), and, when the registry declares an
+ *      HTTP target, the evaluation's own HTTP port, started once from
+ *      `adapter/http-probe-port.mjs` and asked for the protocol it speaks
+ *      (`http-target.js`; exit 10 when it is absent or does not start TeA's
+ *      host, 12 when its process cannot start or answer in time), with every
+ *      auth header's value set on the host (exit 10 otherwise);
  *   3. the pristine workspace (`workspace.js`: a detached worktree at the
  *      evaluated commit, or a temp copy), every registry target present and
  *      executable in it, and `runs/<invocationId>/run.json` recording what was
@@ -75,6 +80,7 @@ const { degenerateResponsePath, qualifyGameabilityProbes } = require('./gameabil
 const { historicalRevisions, historicalRoute, qualifyHistoricalProbe } = require('./historical');
 const { QualificationError, applyReplaceExact, qualifiedProbe, runMutationCycle } = require('./mutation');
 const { createArtifactValidator } = require('./records');
+const { HttpPortError, isApiEntry, missingCredentials, probeHttpPort } = require('./http-target');
 const { registryFromEvaluation } = require('./registry');
 const { RunDirectory, RunDirectoryError } = require('./run-directory');
 const {
@@ -95,8 +101,6 @@ const {
 const CONTRACT_NAME = 'contract.json';
 const POLICY_PATH = 'policy/scoring-policy.json';
 const PROBE_FILE = /\.probe\.json$/;
-/** The interface kinds this release drives; an `api` target waits for Story 1.11's HTTP port. */
-const DRIVEN_INTERFACES = ['cli', 'mcp'];
 /** The routes a seeded probe qualifies on; `run` also materializes clean controls and gameability probes. */
 const QUALIFIED_ROUTES = ['controlled-mutation', 'historical'];
 
@@ -447,13 +451,6 @@ async function pipeline(
   }
 
   const evaluation = readJson(path.join(folder, MANIFEST_NAME));
-  if (!DRIVEN_INTERFACES.includes(evaluation.interface)) {
-    return new PreflightOutcome({
-      stage: 'launch',
-      exitCode: 12,
-      message: `preflight drives ${DRIVEN_INTERFACES.join(' and ')} targets; this evaluation declares interface ${JSON.stringify(evaluation.interface)}`,
-    });
-  }
   const seeded = seededProbes(folder);
   const unqualifiable = seeded.filter(({ probe }) => !QUALIFIED_ROUTES.includes(probe.qualification?.route));
   if (unqualifiable.length > 0) {
@@ -462,6 +459,20 @@ async function pipeline(
       exitCode: 12,
       message: `${unqualifiable.map(({ file, probe }) => `${file} (route ${probe.qualification?.route})`).join(', ')} seed a defect on a route this release does not qualify; it qualifies seeded probes on the ${QUALIFIED_ROUTES.join(' and ')} routes only, so a retry cannot pass`,
     });
+  }
+  // The evaluation's HTTP port, asked for its protocol once, before any workspace is made, so a port that does not serve
+  // stops the run as an authoring defect (a port that could not run at all, as infrastructure) with nothing started; and
+  // every auth header's value present, since a call with none would read its refusal as the target's behavior.
+  let httpPort;
+  if ((evaluation.registry ?? []).some(isApiEntry)) {
+    const missing = missingCredentials(evaluation.registry);
+    if (missing.length > 0) return new PreflightOutcome({ stage: 'check', exitCode: 10, message: missing.join('; ') });
+    try {
+      httpPort = await probeHttpPort(folder);
+    } catch (error) {
+      if (!(error instanceof HttpPortError)) throw error;
+      return new PreflightOutcome({ stage: error.exitCode === 12 ? 'launch' : 'check', exitCode: error.exitCode, message: error.message });
+    }
   }
   const workspaces = [];
   const controller = new AbortController();
@@ -542,6 +553,7 @@ async function pipeline(
     }
     return await runInWorkspaces({
       command,
+      httpPort,
       evaluationDirty,
       afterVerdict,
       folder,
@@ -589,6 +601,7 @@ async function pipeline(
 
 async function runInWorkspaces({
   command,
+  httpPort,
   evaluationDirty,
   afterVerdict,
   folder,
@@ -609,7 +622,7 @@ async function runInWorkspaces({
   log,
   signal,
 }) {
-  const registry = registryFromEvaluation(evaluation, { root: pristine.root });
+  const registry = registryFromEvaluation(evaluation, { root: pristine.root, httpPort });
   const problems = registry.targetProblems(pristine.root);
   if (problems.length > 0) {
     return new PreflightOutcome({ stage: 'launch', exitCode: 12, message: `the registry cannot launch: ${problems.join('; ')}` });

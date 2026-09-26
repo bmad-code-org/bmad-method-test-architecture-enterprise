@@ -123,6 +123,19 @@ export default [
     },
   },
 
+  // The Evaluate skill's HTTP port templates are adopter code: rendered into an
+  // evaluation folder's adapter/, they resolve eval-quality and this package
+  // against that folder's own install (AD-20). The port's last lines import
+  // TeA's host by this package's name, which this repository cannot resolve by
+  // name, since a package is not installed inside itself; test:evaluate-api
+  // runs both templates from a folder whose install provides it.
+  {
+    files: ['src/workflows/testarch/bmad-testarch-evaluate/assets/*.mjs'],
+    rules: {
+      'n/no-missing-import': 'off',
+    },
+  },
+
   // ESLint config file should not be checked for publish-related Node rules
   {
     files: ['eslint.config.mjs'],
