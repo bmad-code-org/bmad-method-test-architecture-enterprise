@@ -22,6 +22,11 @@ test/results/live-eval-remediation/**/*.json
 test/results/eval-all/*.json
 test/results/eval-all/history/*.json
 
+# The BMad memlog: an append-only process log written by
+# _bmad/scripts/memlog.py, never edited by hand, so its layout is the
+# script's to own (.markdownlint-cli2.yaml excludes it for the same reason).
+**/.memlog.md
+
 # Contributor Covenant (external standard)
 CODE_OF_CONDUCT.md
 

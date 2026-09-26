@@ -51,8 +51,8 @@ Sources: repository `github.com/promptfoo/promptfoo` at `main` `d59f045c4cda1193
 
 Verified from each repository's metadata on 2026-09-23. Nothing beyond identity is claimed here; Evaluate learns their APIs through the learn-on-the-go procedure when an adopter uses one.
 
-| Library | Repository | Description (as published) | Licence | Language |
-| --- | --- | --- | --- | --- |
-| openevals | `langchain-ai/openevals` | "Readymade evaluators for your LLM apps" (npm 0.2.2) | MIT | Python, with a TypeScript package |
-| DeepEval | `confident-ai/deepeval` | "The LLM Evaluation Framework" | Apache-2.0 | Python |
-| Inspect | `UKGovernmentBEIS/inspect_ai` | "Inspect: A framework for large language model evaluations" | MIT | Python |
+| Library   | Repository                    | Description (as published)                                  | Licence    | Language                          |
+| --------- | ----------------------------- | ----------------------------------------------------------- | ---------- | --------------------------------- |
+| openevals | `langchain-ai/openevals`      | "Readymade evaluators for your LLM apps" (npm 0.2.2)        | MIT        | Python, with a TypeScript package |
+| DeepEval  | `confident-ai/deepeval`       | "The LLM Evaluation Framework"                              | Apache-2.0 | Python                            |
+| Inspect   | `UKGovernmentBEIS/inspect_ai` | "Inspect: A framework for large language model evaluations" | MIT        | Python                            |

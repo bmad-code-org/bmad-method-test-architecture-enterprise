@@ -29,11 +29,11 @@ context:
 
 ## I/O & Edge-Case Matrix
 
-| Scenario | Input / State | Expected Output / Behavior | Error Handling |
-|----------|--------------|---------------------------|----------------|
-| Grounded risk plan | Epic supports the material risk and the coverage row names its exact risk ID at an admitted level | Risk is retained and coverage mapping passes | Missing support or mapping is a scored quality failure |
-| Speculative risk | Risk description has no support in the supplied epic and exceeds the set ceiling | The workflow omits it or stays within the declared ceiling | Scorer records ungrounded or ceiling excess |
-| Invalid coverage level | Material risk is linked only to a level the fixture does not admit | Mapping fails for that risk | Preserve the risk and report the invalid level |
+| Scenario               | Input / State                                                                                     | Expected Output / Behavior                                 | Error Handling                                         |
+| ---------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------ |
+| Grounded risk plan     | Epic supports the material risk and the coverage row names its exact risk ID at an admitted level | Risk is retained and coverage mapping passes               | Missing support or mapping is a scored quality failure |
+| Speculative risk       | Risk description has no support in the supplied epic and exceeds the set ceiling                  | The workflow omits it or stays within the declared ceiling | Scorer records ungrounded or ceiling excess            |
+| Invalid coverage level | Material risk is linked only to a level the fixture does not admit                                | Mapping fails for that risk                                | Preserve the risk and report the invalid level         |
 
 </frozen-after-approval>
 

@@ -769,7 +769,7 @@ async function mcpRegistryProblems(entries) {
  * dropped, so an entry whose `host` lowercases to this spelling is allowed as
  * written, and any other spelling (`127.1`, an expanded IPv6 address, an IDN)
  * is denied on every request. eval-quality exports no host normalization
- * (`normalizeHost` is module-private in 4.2.0, and `parseAddress` canonicalizes
+ * (`normalizeHost` is module-private in 4.3.0, and `parseAddress` canonicalizes
  * an address in a form no URL carries), so the URL's hostname is the spelling
  * `check` holds an entry to.
  *
@@ -788,8 +788,12 @@ function canonicalHost(host) {
  * a `host` spelled otherwise than a URL spells it, letter case aside, which
  * eval-quality's policy denies on every request (`host-not-authorized`), since
  * the port hands it the URL's hostname; and an `auth` header sent over `http` to an address
- * eval-quality's `classifyAddress` does not class `loopback`; such a target
- * is served over https, with `NODE_EXTRA_CA_CERTS` for a private authority.
+ * where eval-quality's `staysOnHost` says a connection leaves the host, which would put the
+ * credential on the network in clear text; such a target is served over
+ * https, with `NODE_EXTRA_CA_CERTS` for a private authority. `staysOnHost` is
+ * narrower than `classifyAddress(address) === 'loopback'`: the NAT64
+ * (`64:ff9b::7f00:1`) and IPv4-compatible (`::127.0.0.1`) spellings of a
+ * loopback address class `loopback` and still leave the host.
  * Each entry is first held to
  * its schema (`registryProblems`); an entry off it is left to that finding.
  *
@@ -799,7 +803,7 @@ function canonicalHost(host) {
 async function apiRegistryProblems(entries) {
   if (!Array.isArray(entries)) return [];
   const problems = [];
-  let classifyAddress;
+  let staysOnHost;
   for (const [index, entry] of entries.entries()) {
     if (!isApiEntry(entry) || !entryValidator(API_REGISTRY_ENTRY_DEFINITION)(entry)) continue;
     const canonical = canonicalHost(entry.host);
@@ -811,11 +815,11 @@ async function apiRegistryProblems(entries) {
       );
     }
     if (entry.auth !== undefined && entry.scheme === 'http') {
-      classifyAddress ??= (await loadEngine()).classifyAddress;
-      const exposed = entry.addresses.filter((address) => classifyAddress(address) !== 'loopback');
+      staysOnHost ??= (await loadEngine()).staysOnHost;
+      const exposed = entry.addresses.filter((address) => !staysOnHost(address));
       if (exposed.length > 0) {
         problems.push(
-          `registry[${index}] sends its ${entry.auth.header} header over plain http to ${exposed.map((address) => JSON.stringify(address)).join(', ')}, which eval-quality's classifyAddress does not class loopback; serve the target over https with scheme "https" (setting NODE_EXTRA_CA_CERTS to the PEM file of a private certificate authority that signed its certificate), or keep every address loopback`,
+          `registry[${index}] sends its ${entry.auth.header} header over plain http to ${exposed.map((address) => JSON.stringify(address)).join(', ')}, where eval-quality's staysOnHost says a connection leaves this host, so the credential would cross the network in clear text; serve the target over https with scheme "https" (setting NODE_EXTRA_CA_CERTS to the PEM file of a private certificate authority that signed its certificate), or keep every address on this host`,
         );
       }
     }

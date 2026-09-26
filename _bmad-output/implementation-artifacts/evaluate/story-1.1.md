@@ -27,11 +27,11 @@ context: []
 
 ## I/O & Edge-Case Matrix
 
-| Scenario | Input / State | Expected Output / Behavior | Error Handling |
-| ---------- | -------------- | --------------------------- | ---------------- |
-| Allowed | loopback authorization naming `127.0.0.1`, target `127.0.0.1` on the same interface, scheme, host, port, method | `allowed: true`, class `loopback` | N/A |
-| Unlisted address | same authorization, target `10.0.0.1` | `allowed: false`, reason `address-not-authorized` | N/A |
-| Unmapped interface | target names an interface no authorization names | `allowed: false`, reason `interface-not-authorized` | N/A |
+| Scenario           | Input / State                                                                                                   | Expected Output / Behavior                          | Error Handling |
+| ------------------ | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- | -------------- |
+| Allowed            | loopback authorization naming `127.0.0.1`, target `127.0.0.1` on the same interface, scheme, host, port, method | `allowed: true`, class `loopback`                   | N/A            |
+| Unlisted address   | same authorization, target `10.0.0.1`                                                                           | `allowed: false`, reason `address-not-authorized`   | N/A            |
+| Unmapped interface | target names an interface no authorization names                                                                | `allowed: false`, reason `interface-not-authorized` | N/A            |
 
 </frozen-after-approval>
 
@@ -98,24 +98,24 @@ Left undone: nothing.
 
 Layers: blind hunter, edge-case hunter, verification gap (subagents); one adversarial peer session (eval-s11-rev, delivered, closed).
 
-| # | Source | Finding | Verdict | Route |
-| --- | -------- | --------- | --------- | ------- |
-| 1 | peer | `qualifyProbe` exported without `resolveHomeOperation`, so a caller can only pass `null` and skip the declaration checks | medium: Story 1.9 qualifies probes through it | patch |
-| 2 | peer | CHANGELOG [3.4.0] says one `asOf` per subject; the final #142 removed that | medium: `check-doc-claims.ts:364` takes one object | patch |
-| 3 | peer | CHANGELOG [3.4.0] says the hash trims each line; it trims trailing space and reads indentation as depth | low | patch |
-| 4 | peer, blind | doc omits `canonicalAddress`, `detail`, first-denial rule, and that caps are the port's to enforce | low | patch |
-| 5 | edge | doc says `declarationChecksRan` reports a `null` home operation; a signature-less probe returns `true` | low: `qualification.ts:851` | patch |
-| 6 | peer, blind | doc-count-sources header over-wide and carries an antithesis | low | patch |
-| 7 | peer, blind, edge | `DENIAL_REASONS` held by two `toContain`; `OUTCOME_STATES`, `DISCIPLINE_RULES` by length only | low: a renamed member passes | patch |
-| 8 | blind, edge | `TARGET_POLICY_VALUES` mis-reads inline `type` or `as` specifiers; root guard matches a comment | low | patch |
-| 9 | blind | `classifyAddress`, `parseAddress`, `isSafeMethod` have no signature or behavior check | low | patch |
-| 10 | blind | `Exact<>` helper written four times | low | patch |
-| 11 | blind | `[3.4.0]` section rides a feature diff | false: the story's acceptance criteria require it | reject |
-| 12 | blind | no `OutcomeState` type exported | low | reject: no consumer needs it; TeA's readers are CommonJS and read the array |
-| 13 | blind | Qualification and Enumerations lines not held by doc-claims | low | reject: every new name is held by `package-exports.test.ts` against the built barrel; the Enumerations list predates this story unheld |
-| 14 | blind | no CommonJS `require` case for the new names | low | reject: case 157 already proves `require` interop of the same barrel module |
-| 15 | blind | new names absent from `EXPORTS_BEFORE_THIS_STORY`; new cases unnumbered | low | reject: the new cases fail on removal; the file already mixes numbered and unnumbered cases |
-| 16 | verification gap | no gaps | none | none |
+| #   | Source            | Finding                                                                                                                  | Verdict                                            | Route                                                                                                                                  |
+| --- | ----------------- | ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | peer              | `qualifyProbe` exported without `resolveHomeOperation`, so a caller can only pass `null` and skip the declaration checks | medium: Story 1.9 qualifies probes through it      | patch                                                                                                                                  |
+| 2   | peer              | CHANGELOG [3.4.0] says one `asOf` per subject; the final #142 removed that                                               | medium: `check-doc-claims.ts:364` takes one object | patch                                                                                                                                  |
+| 3   | peer              | CHANGELOG [3.4.0] says the hash trims each line; it trims trailing space and reads indentation as depth                  | low                                                | patch                                                                                                                                  |
+| 4   | peer, blind       | doc omits `canonicalAddress`, `detail`, first-denial rule, and that caps are the port's to enforce                       | low                                                | patch                                                                                                                                  |
+| 5   | edge              | doc says `declarationChecksRan` reports a `null` home operation; a signature-less probe returns `true`                   | low: `qualification.ts:851`                        | patch                                                                                                                                  |
+| 6   | peer, blind       | doc-count-sources header over-wide and carries an antithesis                                                             | low                                                | patch                                                                                                                                  |
+| 7   | peer, blind, edge | `DENIAL_REASONS` held by two `toContain`; `OUTCOME_STATES`, `DISCIPLINE_RULES` by length only                            | low: a renamed member passes                       | patch                                                                                                                                  |
+| 8   | blind, edge       | `TARGET_POLICY_VALUES` mis-reads inline `type` or `as` specifiers; root guard matches a comment                          | low                                                | patch                                                                                                                                  |
+| 9   | blind             | `classifyAddress`, `parseAddress`, `isSafeMethod` have no signature or behavior check                                    | low                                                | patch                                                                                                                                  |
+| 10  | blind             | `Exact<>` helper written four times                                                                                      | low                                                | patch                                                                                                                                  |
+| 11  | blind             | `[3.4.0]` section rides a feature diff                                                                                   | false: the story's acceptance criteria require it  | reject                                                                                                                                 |
+| 12  | blind             | no `OutcomeState` type exported                                                                                          | low                                                | reject: no consumer needs it; TeA's readers are CommonJS and read the array                                                            |
+| 13  | blind             | Qualification and Enumerations lines not held by doc-claims                                                              | low                                                | reject: every new name is held by `package-exports.test.ts` against the built barrel; the Enumerations list predates this story unheld |
+| 14  | blind             | no CommonJS `require` case for the new names                                                                             | low                                                | reject: case 157 already proves `require` interop of the same barrel module                                                            |
+| 15  | blind             | new names absent from `EXPORTS_BEFORE_THIS_STORY`; new cases unnumbered                                                  | low                                                | reject: the new cases fail on removal; the file already mixes numbered and unnumbered cases                                            |
+| 16  | verification gap  | no gaps                                                                                                                  | none                                               | none                                                                                                                                   |
 
 ## Verification
 

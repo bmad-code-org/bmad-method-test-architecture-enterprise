@@ -1003,6 +1003,14 @@
           "reason": "a Node.js or POSIX platform name, not a TEA declaration"
         },
         {
+          "token": "ECONNREFUSED",
+          "reason": "a Node.js or POSIX platform name, not a TEA declaration"
+        },
+        {
+          "token": "EADDRNOTAVAIL",
+          "reason": "a Node.js or POSIX platform name, not a TEA declaration"
+        },
+        {
           "token": "SIGTERM",
           "reason": "a Node.js or POSIX platform name, not a TEA declaration"
         },
@@ -1468,10 +1476,10 @@
         },
         {
           "file": "docs/explanation/eval-quality-roadmap.md",
-          "key": "The pin is 4.2.0 now",
+          "key": "The pin is 4.3.0 now",
           "settles": {
             "module": "test/lib/doc-claim-sources.js",
-            "export": "EVAL_QUALITY_PIN_IS_4_2_0"
+            "export": "EVAL_QUALITY_PIN_IS_4_3_0"
           },
           "reason": "package.json's eval-quality devDependency, compared for an exact match"
         },

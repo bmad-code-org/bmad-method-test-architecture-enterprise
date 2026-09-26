@@ -67,19 +67,29 @@ build/
 !test/fixtures/test-review-cli/project-claude/.claude
 !test/fixtures/framework-scaffold/clean/.claude
 
-# epics.md is the one file under the gitignored _bmad-output tracked on purpose: the sprint's own
-# checklist, ticked by the story that closes it. Without this, `git add` on it prints "ignored by
-# one of your .gitignore files" every time, and lint-staged's own internal re-add after formatting
-# fails the same way. `_bmad-output` above is `/*` rather than bare, and every level here is
-# negated then re-ignored by `/*` in turn, because `git add` still reports a path as ignored when
-# any ancestor directory entry (not just the file itself) matches a plain ignore rule, even though
-# `git check-ignore` on the file alone already reads it as not ignored. Every other file under the
-# directory (e.g. _bmad-output/implementation-artifacts/) stays hidden from `git status` as before.
+# The files under the gitignored _bmad-output this repository tracks on purpose: epics.md, the
+# sprint's own checklist ticked by the story that closes it, the Evaluate plan and its stories under
+# the two evaluate/ directories, and three earlier planning files. Without these lines, `git add` on
+# any of them prints "ignored by one of your .gitignore files" every time, lint-staged's own internal
+# re-add after formatting prints the same as FAILED, and Prettier, which reads .gitignore, neither
+# formats them in lint-staged nor checks them in `npm run format:check`. `_bmad-output` above is `/*`
+# rather than bare, and every level here is negated then re-ignored by `/*` in turn, because `git add`
+# still reports a path as ignored when any ancestor directory entry (not just the file itself)
+# matches a plain ignore rule, even though `git check-ignore` on the file alone already reads it as
+# not ignored. Every other file under the directory (e.g. the specs directly under
+# _bmad-output/implementation-artifacts/) stays hidden from `git status` as before.
 !_bmad-output/
 _bmad-output/*
 !_bmad-output/planning-artifacts/
 _bmad-output/planning-artifacts/*
 !_bmad-output/planning-artifacts/epics.md
+!_bmad-output/planning-artifacts/evaluate/
+!_bmad-output/planning-artifacts/live-eval-remediation-story.md
+!_bmad-output/implementation-artifacts/
+_bmad-output/implementation-artifacts/*
+!_bmad-output/implementation-artifacts/evaluate/
+!_bmad-output/implementation-artifacts/handover-4-1.md
+!_bmad-output/implementation-artifacts/spec-1-6-test-design-coverage-grounding.md
 
 # Live eval output: the pre-flight observation cache, whose entries are each a
 # full prompt and a full agent reply, and the artifacts npm run

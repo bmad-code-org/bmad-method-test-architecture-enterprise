@@ -376,7 +376,13 @@ function freePort() {
   });
 }
 
-/** Whether `address:port` accepts a connection now. */
+/**
+ * Whether `address:port` accepts a connection now: `true`, or why the attempt
+ * failed (the socket error's code, `ECONNREFUSED` while nothing listens, or
+ * `timeout`), so a server that never becomes ready is reported with the last
+ * reason, which tells a closed port from a host out of ports
+ * (`EADDRNOTAVAIL`).
+ */
 function accepts(address, port) {
   return new Promise((resolve) => {
     const socket = net.connect({ host: address, port });
@@ -384,9 +390,9 @@ function accepts(address, port) {
       socket.destroy();
       resolve(value);
     };
-    socket.setTimeout(READY_POLL_MS * 10, () => done(false));
+    socket.setTimeout(READY_POLL_MS * 10, () => done('timeout'));
     socket.once('connect', () => done(true));
-    socket.once('error', () => done(false));
+    socket.once('error', (error) => done(error.code ?? error.message));
   });
 }
 
@@ -443,7 +449,7 @@ function callServer({ entry, port, cwd, target, environment, mechanism, maxOutpu
       address = sendingTo;
       if (typeof address !== 'string' || address.length === 0) throw new Error('the port named no address it sends to');
       // A port that already accepts a connection belongs to another process, which took it after the runtime released it.
-      if (await accepts(address, port)) {
+      if ((await accepts(address, port)) === true) {
         throw new Error(`another process listens on ${address} port ${port}, which was chosen for the server ${entry.server.target}`);
       }
       const env = {
@@ -475,7 +481,8 @@ function callServer({ entry, port, cwd, target, environment, mechanism, maxOutpu
       const deadline = Date.now() + entry.server.readyTimeoutMs;
       for (;;) {
         if (ended !== null) throw account();
-        if (await accepts(address, port)) {
+        const accepted = await accepts(address, port);
+        if (accepted === true) {
           if (ended !== null) throw account();
           ready = true;
           return;
@@ -483,7 +490,7 @@ function callServer({ entry, port, cwd, target, environment, mechanism, maxOutpu
         if (signal?.aborted) throw new Error('the call was aborted while its server started');
         if (Date.now() >= deadline) {
           throw new Error(
-            `the server ${entry.server.target} did not accept a connection on ${address} port ${port} within readyTimeoutMs (${entry.server.readyTimeoutMs}ms)`,
+            `the server ${entry.server.target} did not accept a connection on ${address} port ${port} within readyTimeoutMs (${entry.server.readyTimeoutMs}ms); the last attempt failed with ${accepted}`,
           );
         }
         await delay(READY_POLL_MS, signal);

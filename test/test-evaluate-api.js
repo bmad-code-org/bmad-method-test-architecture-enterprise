@@ -69,6 +69,7 @@ const crypto = require('node:crypto');
 const acorn = require('acorn');
 const fs = require('node:fs');
 const http = require('node:http');
+const os = require('node:os');
 const path = require('node:path');
 const { PassThrough } = require('node:stream');
 const { pathToFileURL } = require('node:url');
@@ -170,7 +171,7 @@ function evaluate(args, env = {}) {
     killSignal: 'SIGKILL',
   });
   if (result.error) throw new Error(`tea-evaluate ${args.join(' ')} did not finish: ${result.error.message}`);
-  return { status: result.status, output: `${result.stdout}${result.stderr}` };
+  return { status: result.status, signal: result.signal, stderr: result.stderr, output: `${result.stdout}${result.stderr}` };
 }
 
 /**
@@ -232,6 +233,44 @@ function runDirectoryOf(folder) {
   const runs = path.join(folder, 'runs');
   const names = fs.existsSync(runs) ? fs.readdirSync(runs).filter((name) => name !== '.gitignore') : [];
   return names.length === 0 ? null : path.join(runs, names.sort().at(-1));
+}
+
+/**
+ * Fails a case whose run sealed no trial set, with the evidence the next
+ * occurrence needs: the run's exit code and signal, its whole stderr, and every
+ * file under its run directory, with each fault, `run.json` and evaluator
+ * stderr quoted. The run directory and the stderr are also kept outside the
+ * suite's scratch, which the suite removes as it ends, and the failure's first
+ * line names where, so a capture that keeps only part of the output still
+ * leads to the whole of it. By default the evidence also goes to stderr at
+ * once.
+ */
+function checkSealed(what, ran, runDirectory, report = checkAtOnce) {
+  if (runDirectory !== null && fs.existsSync(path.join(runDirectory, 'trial-sets.json'))) return true;
+  const kept = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'tea-evaluate-api-evidence-'));
+  fs.writeFileSync(path.join(kept, 'stderr.txt'), ran.stderr);
+  if (runDirectory !== null) fs.cpSync(runDirectory, path.join(kept, 'run'), { recursive: true });
+  const files = runDirectory === null ? [] : filesUnder(runDirectory);
+  const listing = files.map(({ where, text }) => {
+    const name = path.relative(runDirectory, where);
+    const quoted = /(?:^|\/)(?:fault|run)\.json$|^evaluator\/.+\.stderr$/.test(name) && text.length > 0 ? `\n${text}` : '';
+    return `  ${name} (${text.length} bytes)${quoted}`;
+  });
+  const evidence = [
+    `${what} sealed no trial set: exit code ${ran.status}, signal ${ran.signal ?? 'none'}; the run directory and stderr are kept in ${kept}`,
+    `run directory: ${runDirectory ?? 'none under runs/'}`,
+    ...(listing.length === 0 ? ['  (no files)'] : listing),
+    'stderr:',
+    ran.stderr.length === 0 ? '  (empty)' : ran.stderr,
+  ].join('\n');
+  report(false, evidence);
+  return false;
+}
+
+/** `check`, with a failure's message also printed at once. */
+function checkAtOnce(condition, message) {
+  if (!condition) console.error(message);
+  check(condition, message);
 }
 
 /** Scores the newest run and returns each probe's evidence artifact by probe, and what `score` printed. */
@@ -1147,6 +1186,30 @@ async function checkUnits() {
     `a port another process holds gave ${taken?.message ?? 'a started server'}`,
   );
 
+  // A server that runs and never listens is reported at readyTimeoutMs with the last attempt's reason, so a closed port
+  // (ECONNREFUSED) reads apart from a host that has run out of ports to connect from (EADDRNOTAVAIL).
+  const released = http.createServer();
+  await new Promise((resolve) => released.listen(0, '127.0.0.1', resolve));
+  const unheldPort = released.address().port;
+  await new Promise((resolve) => released.close(resolve));
+  const silent = await callServer({
+    entry: { ...entry, server: { ...entry.server, readyTimeoutMs: 300 } },
+    port: unheldPort,
+    cwd: project.root,
+    target: path.join(project.root, 'server', 'grader.js'),
+    environment: {},
+    mechanism: { run: () => new Promise(() => {}) },
+    maxOutputBytes: 1024,
+  })
+    .start(new AbortController().signal, '127.0.0.1')
+    .catch((error) => error);
+  check(
+    String(silent?.message).endsWith(
+      `did not accept a connection on 127.0.0.1 port ${unheldPort} within readyTimeoutMs (300ms); the last attempt failed with ECONNREFUSED`,
+    ),
+    `a server that never listens gave ${silent?.message ?? 'a ready server'}`,
+  );
+
   // A port whose own decision allows everything, and that names another method than the request's when it prepares,
   // starts no server for a call eval-quality's policy denies: the runtime asks eval-quality itself, at the request's method.
   const permissive = makeProject('port-allows-all', {
@@ -1549,10 +1612,7 @@ async function checkPipeline() {
   const ran = evaluate(['run', '--evaluation', project.folder], env);
   check(ran.status === 0, `run over the HTTP fixture exited ${ran.status}; expected 0\n${ran.output}`);
   const runDirectory = runDirectoryOf(project.folder);
-  if (runDirectory === null || !fs.existsSync(path.join(runDirectory, 'trial-sets.json'))) {
-    check(false, 'the HTTP run sealed no trial set');
-    return;
-  }
+  if (!checkSealed('the HTTP run', ran, runDirectory)) return;
   for (const [probeId, verdict] of [
     ['P-001', 'accepted'],
     ['P-002', 'rejected'],
@@ -1984,10 +2044,7 @@ async function checkSealedBriefAgent() {
   const ran = evaluate(['run', '--evaluation', project.folder], { ...project.env, GRADER_SECRET: SECRET, GRADER_TOKEN: TOKEN });
   check(ran.status === 0, `a sealed-brief run over the HTTP fixture exited ${ran.status}; expected 0\n${ran.output}`);
   const runDirectory = runDirectoryOf(project.folder);
-  if (runDirectory === null || !fs.existsSync(path.join(runDirectory, 'trial-sets.json'))) {
-    check(false, 'the sealed-brief HTTP run sealed no trial set');
-    return;
-  }
+  if (!checkSealed('the sealed-brief HTTP run', ran, runDirectory)) return;
   for (const [arm, probeId, verdict] of [
     ['clean', 'P-001', 'accepted'],
     ['mutated-M-001', 'P-002', 'rejected'],
@@ -2214,10 +2271,7 @@ async function checkGameability() {
     `the gameability arm started the service: ${JSON.stringify(sessions(project))}`,
   );
   const runDirectory = runDirectoryOf(project.folder);
-  if (runDirectory === null || !fs.existsSync(path.join(runDirectory, 'trial-sets.json'))) {
-    check(false, 'the gameability HTTP run sealed no trial set');
-    return;
-  }
+  if (!checkSealed('the gameability HTTP run', ran, runDirectory)) return;
   check(recordsOf(runDirectory, 'P-003').length === TRIALS, `P-003's trial set holds ${recordsOf(runDirectory, 'P-003').length} records`);
   for (const record of recordsOf(runDirectory, 'P-003')) {
     check(
@@ -2394,7 +2448,27 @@ async function checkCheckRules() {
           evaluation.registry[0].addresses = ['127.0.0.1', '192.0.2.10'];
         }),
       'registry',
-      'sends its authorization header over plain http to "192.0.2.10", which eval-quality\'s classifyAddress does not class loopback; serve the target over https with scheme "https" (setting NODE_EXTRA_CA_CERTS',
+      'sends its authorization header over plain http to "192.0.2.10", where eval-quality\'s staysOnHost says a connection leaves this host, so the credential would cross the network in clear text; serve the target over https with scheme "https" (setting NODE_EXTRA_CA_CERTS',
+    ],
+    // eval-quality's classifyAddress classes both spellings below loopback, reading the embedded IPv4 address; a
+    // connection to either goes through a translator and leaves the host, so the credential rule holds staysOnHost.
+    [
+      'an auth header over plain http to the NAT64 spelling of a loopback address',
+      ({ folder }) =>
+        editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
+          evaluation.registry[0].addresses = ['127.0.0.1', '64:ff9b::7f00:1'];
+        }),
+      'registry',
+      'sends its authorization header over plain http to "64:ff9b::7f00:1", where eval-quality\'s staysOnHost says a connection leaves this host',
+    ],
+    [
+      'an auth header over plain http to the IPv4-compatible spelling of a loopback address',
+      ({ folder }) =>
+        editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
+          evaluation.registry[0].addresses = ['127.0.0.1', '::127.0.0.1'];
+        }),
+      'registry',
+      'sends its authorization header over plain http to "::127.0.0.1", where eval-quality\'s staysOnHost says a connection leaves this host',
     ],
     [
       'a folder with no HTTP port',
@@ -2434,6 +2508,21 @@ async function checkCheckRules() {
     );
   }
 
+  // An auth header over plain http to every spelling that stays on the host passes: a 127.0.0.0/8 address, ::1 and
+  // the ::ffff: spelling of a 127.0.0.0/8 address.
+  const onHost = makeProject('check-on-host', {
+    edit: ({ folder }) =>
+      editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
+        evaluation.registry[0].addresses = ['127.0.0.1', '127.0.0.2', '::1', '::ffff:127.0.0.1'];
+      }),
+  });
+  const onHostChecked = evaluate(['check', '--evaluation', onHost.folder], onHost.env);
+  const [onHostEntry] = readJson(path.join(onHost.folder, 'evaluation.json')).registry;
+  check(
+    onHostChecked.status === 0 && onHostEntry.scheme === 'http' && onHostEntry.auth !== undefined,
+    `an auth header over plain http to addresses that stay on the host: check exited ${onHostChecked.status}; expected 0\n${onHostChecked.output}`,
+  );
+
   // A host a URL spells the same, letter case aside, passes: the port hands eval-quality's policy the URL's hostname,
   // which the policy reads in lower case, as it reads the entry's host.
   const mixedCase = makeProject('check-mixed-case', {
@@ -2462,6 +2551,49 @@ async function checkCheckRules() {
   );
 }
 
+/** A run that sealed no trial set fails its case with its own evidence, kept where the suite's cleanup leaves it. */
+function checkSealedEvidence() {
+  const runDirectory = scratch.make('unsealed-run');
+  writeJson(path.join(runDirectory, 'run.json'), { outcome: { exitCode: 12, message: 'a run-json message' } });
+  writeJson(path.join(runDirectory, 'trials', 'clean', 'fault.json'), { code: 'port-failure', message: 'a fault message' });
+  fs.mkdirSync(path.join(runDirectory, 'evaluator', 'clean'), { recursive: true });
+  fs.writeFileSync(path.join(runDirectory, 'evaluator', 'clean', 'trial-2.stderr'), 'an agent stderr line\n');
+  writeJson(path.join(runDirectory, 'probes.json'), { unquoted: 'a probes body' });
+  const reported = [];
+  const sealed = checkSealed('a unit run', { status: 12, signal: null, stderr: 'a run stderr line\n' }, runDirectory, (ok, message) =>
+    reported.push({ ok, message }),
+  );
+  const [{ ok, message } = {}] = reported;
+  const kept = /kept in (\S+)$/m.exec(message ?? '')?.[1];
+  check(
+    sealed === false &&
+      reported.length === 1 &&
+      ok === false &&
+      message.split('\n')[0].includes('a unit run sealed no trial set: exit code 12, signal none') &&
+      ['a run stderr line', 'a run-json message', 'a fault message', 'an agent stderr line', 'probes.json ('].every((text) =>
+        message.includes(text),
+      ) &&
+      !message.includes('a probes body'),
+    `an unsealed run's failure carries ${JSON.stringify(reported)}`,
+  );
+  check(
+    kept !== undefined &&
+      path.dirname(kept) === fs.realpathSync(os.tmpdir()) &&
+      fs.readFileSync(path.join(kept, 'stderr.txt'), 'utf8') === 'a run stderr line\n' &&
+      fs.existsSync(path.join(kept, 'run', 'trials', 'clean', 'fault.json')),
+    `an unsealed run's evidence was not kept whole: ${kept}`,
+  );
+  if (kept !== undefined) fs.rmSync(kept, { recursive: true, force: true });
+
+  writeJson(path.join(runDirectory, 'trial-sets.json'), {});
+  const reportedSealed = [];
+  check(
+    checkSealed('a sealed unit run', { status: 0, signal: null, stderr: '' }, runDirectory, (...args) => reportedSealed.push(args)) &&
+      reportedSealed.length === 0,
+    `a sealed run was reported: ${JSON.stringify(reportedSealed)}`,
+  );
+}
+
 /** Runs one case; an exception is a failed check, so the cases after it still run and every failure is reported. */
 async function runCase(name, body) {
   try {
@@ -2477,6 +2609,7 @@ async function main() {
     await runCase('the port, in process', checkPortUnits);
     await runCase('the conformance file', checkConformance);
     await runCase('the units', checkUnits);
+    await runCase("an unsealed run's evidence", checkSealedEvidence);
     await runCase("the port's process", checkPortProcess);
     await runCase('the pipeline', checkPipeline);
     await runCase('the denials', checkDenials);

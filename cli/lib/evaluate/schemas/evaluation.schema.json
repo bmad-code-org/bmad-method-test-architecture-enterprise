@@ -631,7 +631,7 @@
           }
         },
         "auth": {
-          "description": "A credential every request of this interface carries: the header named, holding prefix followed by the host's value for environmentKey. It is added by the port, never recorded in a request, and scrubbed from every answer; it goes to no origin a redirect names. Over scheme http, check requires every address to be one eval-quality's classifyAddress classes loopback; a target at another address is served over scheme https, with NODE_EXTRA_CA_CERTS naming the PEM file of a private certificate authority that signed its certificate.",
+          "description": "A credential every request of this interface carries: the header named, holding prefix followed by the host's value for environmentKey. It is added by the port, never recorded in a request, and scrubbed from every answer; it goes to no origin a redirect names. Over scheme http, check requires every address to be one eval-quality's staysOnHost keeps on this host, so the credential never crosses the network in clear text; a target at another address is served over scheme https, with NODE_EXTRA_CA_CERTS naming the PEM file of a private certificate authority that signed its certificate.",
           "type": "object",
           "additionalProperties": false,
           "required": ["header", "environmentKey"],

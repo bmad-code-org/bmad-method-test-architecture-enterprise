@@ -10,7 +10,14 @@ created: 2026-09-22
 updated: 2026-09-23
 binds: [CAP-1, CAP-2, CAP-3, CAP-4, CAP-5, CAP-6, CAP-7, CAP-8, CAP-9, CAP-10, CAP-11, CAP-12, CAP-13, CAP-14]
 sources: [SPEC.md, input-notes.md, .memlog.md]
-companions: [eval-quality-facts.md, eval-quality-vocabulary.md, target-kind-adapter-mapping.md, ci-enforcement-policy.md, evaluation-framework-facts.md]
+companions:
+  [
+    eval-quality-facts.md,
+    eval-quality-vocabulary.md,
+    target-kind-adapter-mapping.md,
+    ci-enforcement-policy.md,
+    evaluation-framework-facts.md,
+  ]
 ---
 
 # Architecture Spine: Evaluate
@@ -87,16 +94,16 @@ flowchart LR
 - **Prevents:** a contract declaring `web`, target kind leaking into a schema field, or two units choosing different adapters for one kind.
 - **Rule:** Target kind is recorded only in `evaluation.json`. Mapping and generated output:
 
-| Target kind | Interface | Adapter | Evaluate generates |
-| --- | --- | --- | --- |
-| Skill | `cli` | `createCommandLineAdapter` | A registry entry for TeA's shipped generic skill runner, which takes an explicit `--skill-root` inside the disposable copy and never probes install locations; `check` asserts every mutation's `targetArtifact` sits under that root. The runner is generalized from `cli/*-runner.js` and `cli/lib/run-agent.js`: prompt on stdin, vendor knowledge only in `cli/lib/agent-adapters.js`. |
-| Agent | `cli` | `createCommandLineAdapter` | A registry entry for the adopter's own non-interactive command. When the agent has no such command, the skill runner wraps it. |
-| Workflow | kind of the target | per kind | An interaction plan with `after` clauses and `captured` bindings, over the target's own kind. The runtime issues steps in `after` order and resolves each `captured` binding from the earlier observation of the same trial (Story 1.18). |
-| Tool use: calling agent | `cli` | `createCommandLineAdapter` | As for an agent, with the agent's tool-call trajectory on stdout so an oracle and the evaluator can read tool selection and arguments (Story 1.19). |
-| Tool use: tool server | `mcp` | `createMcpAdapter` | An `McpTargetAuthorization`. |
-| AI feature or any web application | `api` | adopter-owned `EnvironmentProbePort` | `adapter/http-probe-port.mjs` from the skill's template: a default-export factory holding only address, auth and transport configuration, which delegates every allow or deny decision to eval-quality's exported HTTP target-policy evaluation. Plus `adapter/http-probe-port.conformance.mjs`, which calls `runEnvironmentProbePortConformance`. |
-| Tool server reached over HTTP | `api` | as above | The server's HTTP surface declared as `api`; eval-quality ships stdio MCP only. |
-| Test-review mechanism (a skill, agent or tool that judges tests) | kind of how it runs, usually `cli` | per that kind | The adapter of the kind it runs as (skill runner or its own command). The kind exists for corpus design: seeded test smells, clean tests, and the degenerate response that flags every test. |
+| Target kind                                                      | Interface                          | Adapter                              | Evaluate generates                                                                                                                                                                                                                                                                                                                                                                         |
+| ---------------------------------------------------------------- | ---------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Skill                                                            | `cli`                              | `createCommandLineAdapter`           | A registry entry for TeA's shipped generic skill runner, which takes an explicit `--skill-root` inside the disposable copy and never probes install locations; `check` asserts every mutation's `targetArtifact` sits under that root. The runner is generalized from `cli/*-runner.js` and `cli/lib/run-agent.js`: prompt on stdin, vendor knowledge only in `cli/lib/agent-adapters.js`. |
+| Agent                                                            | `cli`                              | `createCommandLineAdapter`           | A registry entry for the adopter's own non-interactive command. When the agent has no such command, the skill runner wraps it.                                                                                                                                                                                                                                                             |
+| Workflow                                                         | kind of the target                 | per kind                             | An interaction plan with `after` clauses and `captured` bindings, over the target's own kind. The runtime issues steps in `after` order and resolves each `captured` binding from the earlier observation of the same trial (Story 1.18).                                                                                                                                                  |
+| Tool use: calling agent                                          | `cli`                              | `createCommandLineAdapter`           | As for an agent, with the agent's tool-call trajectory on stdout so an oracle and the evaluator can read tool selection and arguments (Story 1.19).                                                                                                                                                                                                                                        |
+| Tool use: tool server                                            | `mcp`                              | `createMcpAdapter`                   | An `McpTargetAuthorization`.                                                                                                                                                                                                                                                                                                                                                               |
+| AI feature or any web application                                | `api`                              | adopter-owned `EnvironmentProbePort` | `adapter/http-probe-port.mjs` from the skill's template: a default-export factory holding only address, auth and transport configuration, which delegates every allow or deny decision to eval-quality's exported HTTP target-policy evaluation. Plus `adapter/http-probe-port.conformance.mjs`, which calls `runEnvironmentProbePortConformance`.                                         |
+| Tool server reached over HTTP                                    | `api`                              | as above                             | The server's HTTP surface declared as `api`; eval-quality ships stdio MCP only.                                                                                                                                                                                                                                                                                                            |
+| Test-review mechanism (a skill, agent or tool that judges tests) | kind of how it runs, usually `cli` | per that kind                        | The adapter of the kind it runs as (skill runner or its own command). The kind exists for corpus design: seeded test smells, clean tests, and the degenerate response that flags every test.                                                                                                                                                                                               |
 
 - **Vendor models:** inspection redirects a request to evaluate a model or vendor dependency itself to the adopter's use of it, records the model as a fixed condition in `policy/evaluator-conditions.json`, and plans no mutation of model weights or provider choice, since a probe cannot declare either (NFR8).
 - **Amended 2026-09-23:** the test-review mechanism row was added because the owner's input notes name it as a corpus-design target and the audit found no guidance for it; the workflow and calling-agent rows now name the stories that prove them; the vendor-model bullet makes NFR8 an inspection behavior with a test.
@@ -113,18 +120,18 @@ flowchart LR
 - **Prevents:** a second sealer, digest or registry builder; adopters holding forked harness copies; the skill improvising a deterministic step.
 - **Rule:** TeA's npm package ships the `tea-evaluate` bin over `cli/lib/evaluate/`. It has seven subcommands: `check`, `digest`, `preflight`, `run`, `score`, `compare` and `ci`. The modules are generalized from existing TeA code:
 
-| Module | Generalized from |
-| --- | --- |
-| registry | `test/lib/probe-targets.js` (one `RegistryEntry` schema read from `evaluation.json`; TeA's `EXECUTION_TARGETS` becomes data in that schema) |
-| records | `test/lib/eval-quality-inputs.js` |
-| digest and provenance | `test/lib/eval-record.js` |
-| workspace | `test/eval-contract-strength.js` (`cachingPort`, `stagedWorkspaceFor`) |
-| mutation | `test/test-automate-eval-fixture.js` |
-| compare | `test/lib/compare-dominance.js`, `test/lib/compare-eval-runs.js` |
-| evaluator | new (AD-21): the evaluator kinds and the judgment-rows conversion |
-| bridge | new (AD-21): the stdio MCP server a sealed-brief agent evaluator acts through |
-| partition and calibration | new (AD-22) |
-| interpret | new (AD-23) |
+| Module                    | Generalized from                                                                                                                            |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| registry                  | `test/lib/probe-targets.js` (one `RegistryEntry` schema read from `evaluation.json`; TeA's `EXECUTION_TARGETS` becomes data in that schema) |
+| records                   | `test/lib/eval-quality-inputs.js`                                                                                                           |
+| digest and provenance     | `test/lib/eval-record.js`                                                                                                                   |
+| workspace                 | `test/eval-contract-strength.js` (`cachingPort`, `stagedWorkspaceFor`)                                                                      |
+| mutation                  | `test/test-automate-eval-fixture.js`                                                                                                        |
+| compare                   | `test/lib/compare-dominance.js`, `test/lib/compare-eval-runs.js`                                                                            |
+| evaluator                 | new (AD-21): the evaluator kinds and the judgment-rows conversion                                                                           |
+| bridge                    | new (AD-21): the stdio MCP server a sealed-brief agent evaluator acts through                                                               |
+| partition and calibration | new (AD-22)                                                                                                                                 |
+| interpret                 | new (AD-23)                                                                                                                                 |
 
 - **Harness:** TeA's `test/` harness imports these modules and keeps only TeA data. It maps runtime exits through the AD-10 table.
 - **Module format:** `cli/lib/evaluate` is CommonJS like the rest of TeA and reaches the ESM-only engine through one async loader generalized from `loadEvalQuality`.
@@ -133,7 +140,7 @@ flowchart LR
   The `cli` layer's `allow` list names every other external `cli/` uses and leaves `eval-quality` out, so `engine.js` is the one file that names `eval-quality` in an `import(` or `require(`, and `test:direction` refuses an engine import from any other `cli/` file.
   Every module the runtime needs ships in TeA's `dependencies` (`ajv` moves there).
   (Amended 2026-09-23 in Story 1.5: this decision first put `eval-quality` on the `cli` layer's list; the engine's own layer replaced that.)
-- **Packaging:** TeA's `package.json` declares `eval-quality` under `peerDependencies`, floored at `>=4.2.0`: 4.0.0 is the first published release carrying the target-policy export and trial-set scoring (#143) Evaluate needs, 4.1.1 the first whose command-line adapter kills the target's process group at its ceiling (#160), 4.1.2 the first that also kills it when the host dies, by `SIGKILL` included (#161), which `tea-evaluate preflight` relies on, 4.1.3 the first whose `score` writes an Invalid result's reasons to stderr (#162), which `tea-evaluate score` persists for AD-10 to classify, 4.1.4 the first whose record schema defines an observation's `provenance` by its role in the run, and 4.2.0 the first whose command-line and MCP adapters carry the denying policy's `reason` on the `forbidden-target` fault, which the runtime records beside the code, since an older engine admitted by the range could not run Evaluate as documented. (Amended 2026-09-23: the floor was `>=3.4.0` with a later raise in Story H.1, written before 4.0.0 shipped. Amended 2026-09-24, Story 1.6: raised from `>=4.0.0` to `>=4.1.1`, then to `>=4.1.2`. Amended 2026-09-24, Story 1.8: raised to `>=4.1.3`, then to `>=4.1.4`. Amended 2026-09-25, Story 1.10: raised to `>=4.2.0`.) `peerDependenciesMeta` marks it optional so projects that never run Evaluate do not receive it, and the bin is `tea-evaluate`; the release-metadata and guard-publish checks cover both. One engine version serves a run.
+- **Packaging:** TeA's `package.json` declares `eval-quality` under `peerDependencies`, floored at `>=4.3.0`: 4.0.0 is the first published release carrying the target-policy export and trial-set scoring (#143) Evaluate needs, 4.1.1 the first whose command-line adapter kills the target's process group at its ceiling (#160), 4.1.2 the first that also kills it when the host dies, by `SIGKILL` included (#161), which `tea-evaluate preflight` relies on, 4.1.3 the first whose `score` writes an Invalid result's reasons to stderr (#162), which `tea-evaluate score` persists for AD-10 to classify, 4.1.4 the first whose record schema defines an observation's `provenance` by its role in the run, 4.2.0 the first whose command-line and MCP adapters carry the denying policy's `reason` on the `forbidden-target` fault, which the runtime records beside the code, and 4.3.0 the first exporting `staysOnHost`, the on-host predicate `tea-evaluate check` holds a credential sent over `http` to, since an older engine admitted by the range could not run Evaluate as documented. (Amended 2026-09-23: the floor was `>=3.4.0` with a later raise in Story H.1, written before 4.0.0 shipped. Amended 2026-09-24, Story 1.6: raised from `>=4.0.0` to `>=4.1.1`, then to `>=4.1.2`. Amended 2026-09-24, Story 1.8: raised to `>=4.1.3`, then to `>=4.1.4`. Amended 2026-09-25, Story 1.10: raised to `>=4.2.0`. Amended 2026-09-25, Story 1.11: raised to `>=4.3.0`.) `peerDependenciesMeta` marks it optional so projects that never run Evaluate do not receive it, and the bin is `tea-evaluate`; the release-metadata and guard-publish checks cover both. One engine version serves a run.
 - **Inputs:** the runtime reads no `_bmad/` config. Every subcommand takes `--evaluation <path>` and exits 64 when none resolves.
 - **Schemas:** the runtime owns the JSON schemas of `evaluation.json` and `evaluation-ci-plan.json`. `npm test` validates the skill's templates and `bmad-testarch-ci`'s plan reader against them.
 - **Rejected:** generating harness source into each adopter repository, because fixes could never propagate. Skill-local scripts are also rejected: they install under `_bmad/`, so they are no stable CI entry point.
@@ -208,24 +215,24 @@ flowchart LR
 
 - **Enforcement:**
 
-| Exit | Source | Class | Action |
-| --- | --- | --- | --- |
-| 0 | eval-quality | pass. CONCERNS is read from the evidence artifact | pass, or warn on CONCERNS |
-| 2 | eval-quality | target behavior failure, or evidence or lineage integrity | block |
-| 3 | eval-quality | infrastructure or integrity, classified from the persisted `PreflightVerdict` checks for `preflight`, and from `score` diagnostics captured to `runs/` for `score`. Never counted as a quality score | block |
-| 4 | eval-quality | contract authoring defect | block |
-| 5 | eval-quality | runtime fault: infrastructure or invocation | block |
-| 10 | `tea-evaluate` | authoring defect: `check` failure, stale index, registry mismatch, bad mutation | block |
-| 11 | `tea-evaluate` | evaluation weakness: a mutation that does not manifest, a baseline that does not pass, a judge below its calibration agreement, or a baseline oracle outcome whose engine-recorded `corroboration` is `disagrees`, or `not-evaluable` for a required oracle | block |
-| 12 | `tea-evaluate` | infrastructure: workspace, launch, restore, an infrastructure exit from the target, or an evaluator that crashes or emits output outside the import contract; a run directory holding an entry the runtime did not write, a file whose bytes differ from the ones it wrote, or a directory the target replaced or moved; for `score`, an engine call that cannot run, is killed or exits with a code the CLI does not document | block |
-| 13 | `tea-evaluate` | evaluation evidence drift: the `pr` replay's produced evidence differs from the baseline | block |
-| 64 | `tea-evaluate` | wiring defect: no `--evaluation` resolves; for `score`, no run to score, a `--run` naming no run or a `preflight` invocation, or a run that did not complete | block |
-| 64 | eval-quality | wiring defect | block |
-| 1 | eval-quality-gates | repository policy violation | block |
-| 64 | eval-quality-gates | wiring defect | block |
+| Exit | Source             | Class                                                                                                                                                                                                                                                                                                                                                                                                                          | Action                    |
+| ---- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------- |
+| 0    | eval-quality       | pass. CONCERNS is read from the evidence artifact                                                                                                                                                                                                                                                                                                                                                                              | pass, or warn on CONCERNS |
+| 2    | eval-quality       | target behavior failure, or evidence or lineage integrity                                                                                                                                                                                                                                                                                                                                                                      | block                     |
+| 3    | eval-quality       | infrastructure or integrity, classified from the persisted `PreflightVerdict` checks for `preflight`, and from `score` diagnostics captured to `runs/` for `score`. Never counted as a quality score                                                                                                                                                                                                                           | block                     |
+| 4    | eval-quality       | contract authoring defect                                                                                                                                                                                                                                                                                                                                                                                                      | block                     |
+| 5    | eval-quality       | runtime fault: infrastructure or invocation                                                                                                                                                                                                                                                                                                                                                                                    | block                     |
+| 10   | `tea-evaluate`     | authoring defect: `check` failure, stale index, registry mismatch, bad mutation                                                                                                                                                                                                                                                                                                                                                | block                     |
+| 11   | `tea-evaluate`     | evaluation weakness: a mutation that does not manifest, a baseline that does not pass, a judge below its calibration agreement, or a baseline oracle outcome whose engine-recorded `corroboration` is `disagrees`, or `not-evaluable` for a required oracle                                                                                                                                                                    | block                     |
+| 12   | `tea-evaluate`     | infrastructure: workspace, launch, restore, an infrastructure exit from the target, or an evaluator that crashes or emits output outside the import contract; a run directory holding an entry the runtime did not write, a file whose bytes differ from the ones it wrote, or a directory the target replaced or moved; for `score`, an engine call that cannot run, is killed or exits with a code the CLI does not document | block                     |
+| 13   | `tea-evaluate`     | evaluation evidence drift: the `pr` replay's produced evidence differs from the baseline                                                                                                                                                                                                                                                                                                                                       | block                     |
+| 64   | `tea-evaluate`     | wiring defect: no `--evaluation` resolves; for `score`, no run to score, a `--run` naming no run or a `preflight` invocation, or a run that did not complete                                                                                                                                                                                                                                                                   | block                     |
+| 64   | eval-quality       | wiring defect                                                                                                                                                                                                                                                                                                                                                                                                                  | block                     |
+| 1    | eval-quality-gates | repository policy violation                                                                                                                                                                                                                                                                                                                                                                                                    | block                     |
+| 64   | eval-quality-gates | wiring defect                                                                                                                                                                                                                                                                                                                                                                                                                  | block                     |
 
 - **Amended 2026-09-24 in Story 1.8:** the table gained `score`'s own exits (64 when there is nothing to score, 12 when an engine call cannot run or exits undocumented) and exit 12 for a run directory the runtime did not write alone; `score` passes the most severe of its per-probe engine exits through, in the order 64, 5, 4, 3, 2, 0.
-- **Amended 2026-09-25 in Story 1.11:** an `api` evaluation adds causes under the existing classes and no new code. Exit 10, authoring defect: the evaluation's HTTP port is absent, a link, or does not answer as TeA's host when `preflight` or `run` first starts it (no factory, another protocol, a line outside the protocol, its channel past its ceiling, an end before it answers); an `auth` key the host does not set; a registry `host` a URL spells otherwise; an `auth` header over `http` to an address eval-quality's `classifyAddress` does not class `loopback`. Exit 12, infrastructure: the port's process cannot start or answer within its ceiling; a port that answered once breaks the protocol during a call (a line that is no message, output past a ceiling, an answer eval-quality's `ProbeObservation` parser does not read or that answers another request, recorded `port-contract-violation`), which is the evaluation layer emitting output outside its contract; the port file changes after the run started; a started server exits before it accepts a connection, does not accept one within `readyTimeoutMs`, finds its port already taken, or ends abnormally before an answer arrives (recorded `port-failure`).
+- **Amended 2026-09-25 in Story 1.11:** an `api` evaluation adds causes under the existing classes and no new code. Exit 10, authoring defect: the evaluation's HTTP port is absent, a link, or does not answer as TeA's host when `preflight` or `run` first starts it (no factory, another protocol, a line outside the protocol, its channel past its ceiling, an end before it answers); an `auth` key the host does not set; a registry `host` a URL spells otherwise; an `auth` header over `http` to an address eval-quality's `staysOnHost` says leaves the host (eval-quality 4.3.0). Exit 12, infrastructure: the port's process cannot start or answer within its ceiling; a port that answered once breaks the protocol during a call (a line that is no message, output past a ceiling, an answer eval-quality's `ProbeObservation` parser does not read or that answers another request, recorded `port-contract-violation`), which is the evaluation layer emitting output outside its contract; the port file changes after the run started; a started server exits before it accepts a connection, does not accept one within `readyTimeoutMs`, finds its port already taken, or ends abnormally before an answer arrives (recorded `port-failure`).
 - **Outcome states:** `missed`, `abstained`, `bypassed` and `false-positive` at or above `severityFloor` reach CI as FAIL (exit 2); below it, as CONCERNS. `oracle-error`, `judge-error` and `infrastructure-error` reach it as Invalid (exit 3), reported as infrastructure. `unreached` and below-minimum trials are CONCERNS evidence conditions: warn.
 - **Informs:** strength trend, duration, cost, and a `refused` baseline comparison, including one refused across `evalQualityVersion`, which is routed to `compare --accept`.
 - **Strength floor:** `evaluation.json` declares a minimum catch rate per probe class. Below it, the `scheduled` tier warns and the `release` tier blocks. The held-out partition is held to the floor on its own.
@@ -260,7 +267,7 @@ flowchart LR
 
 - **Binds:** all generated dependencies, TeA's `package.json`, `test/test-eval-quality-corpus.js`, `.npmrc`, `eval-quality.config.json`
 - **Prevents:** pins that age, or two eval-quality versions inside one run.
-- **Rule:** Evaluate adds `eval-quality` and TeA's package to adopters as devDependencies with the `latest` spec, in the evaluation folder's own `package.json` (AD-20). TeA declares `peerDependencies: {"eval-quality": ">=4.2.0"}` (amended 2026-09-25 in Story 1.10), and its exact devDependency pin and the exact-version assertion in `test/test-eval-quality-corpus.js` become float in the proof-target work. The `min-release-age` and `lockfile-age` exclusions stay, with their rationale rewritten, so engine releases arrive without the seven-day delay. Engine drift then surfaces through the `pr` baseline replay and the `evalQualityVersion` stamp that already exists.
+- **Rule:** Evaluate adds `eval-quality` and TeA's package to adopters as devDependencies with the `latest` spec, in the evaluation folder's own `package.json` (AD-20). TeA declares `peerDependencies: {"eval-quality": ">=4.3.0"}` (amended 2026-09-25 in Story 1.10 to `>=4.2.0`, and 2026-09-25 in Story 1.11 to `>=4.3.0`), and its exact devDependency pin and the exact-version assertion in `test/test-eval-quality-corpus.js` become float in the proof-target work. The `min-release-age` and `lockfile-age` exclusions stay, with their rationale rewritten, so engine releases arrive without the seven-day delay. Engine drift then surfaces through the `pr` baseline replay and the `evalQualityVersion` stamp that already exists.
 
 ### AD-14: TeA's generators coexist
 
@@ -373,22 +380,22 @@ flowchart LR
 
 ## Consistency Conventions
 
-| Concern | Convention |
-| --- | --- |
-| Identifiers | `evaluationId` is kebab-case; `B-NNN`, `O-NNN` and `P-NNN` follow eval-quality; mutations are `M-NNN` |
-| Artifact serialization | Canonical JSON (RFC 8785) through eval-quality's `serializeArtifact`; one artifact per file |
-| Vocabulary | eval-quality terms only (`eval-quality-vocabulary.md`); no parallel names for engine concepts |
-| Environment | Only declared keys reach a target; `PATH` is never declared; secrets come from CI secrets only |
-| Tier names | `pr` maps to the suite manifest's `deterministic`, `merge` to `smoke`, `scheduled` and `release` to `full-matrix` |
-| Vendor knowledge | Only in `cli/lib/agent-adapters.js`; runners and the runtime stay vendor-neutral |
-| Planning outputs | Requirements statements and gap reports go to `{test_artifacts}/evaluate/<evaluationId>/`; committed evaluation assets go to `{tea_evaluations_folder}` |
+| Concern                | Convention                                                                                                                                              |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Identifiers            | `evaluationId` is kebab-case; `B-NNN`, `O-NNN` and `P-NNN` follow eval-quality; mutations are `M-NNN`                                                   |
+| Artifact serialization | Canonical JSON (RFC 8785) through eval-quality's `serializeArtifact`; one artifact per file                                                             |
+| Vocabulary             | eval-quality terms only (`eval-quality-vocabulary.md`); no parallel names for engine concepts                                                           |
+| Environment            | Only declared keys reach a target; `PATH` is never declared; secrets come from CI secrets only                                                          |
+| Tier names             | `pr` maps to the suite manifest's `deterministic`, `merge` to `smoke`, `scheduled` and `release` to `full-matrix`                                       |
+| Vendor knowledge       | Only in `cli/lib/agent-adapters.js`; runners and the runtime stay vendor-neutral                                                                        |
+| Planning outputs       | Requirements statements and gap reports go to `{test_artifacts}/evaluate/<evaluationId>/`; committed evaluation assets go to `{tea_evaluations_folder}` |
 
 ## Stack
 
-| Name | Version |
-| --- | --- |
-| eval-quality | `latest` spec (3.4.0 verified 2026-09-22; 4.0.0 published 2026-09-23 with the target-policy export and trial-set scoring; 4.1.1 kills the target's process group at the ceiling; 4.1.2 also kills it when the host dies; 4.1.3 writes an Invalid score's reasons to stderr; 4.1.4 defines `provenance` by the observation's role; 4.2.0 carries a denial's `reason`); TeA peer range `>=4.2.0` |
-| Node.js | >=22.20.0 (TeA and eval-quality engines) |
+| Name         | Version                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| eval-quality | `latest` spec (3.4.0 verified 2026-09-22; 4.0.0 published 2026-09-23 with the target-policy export and trial-set scoring; 4.1.1 kills the target's process group at the ceiling; 4.1.2 also kills it when the host dies; 4.1.3 writes an Invalid score's reasons to stderr; 4.1.4 defines `provenance` by the observation's role; 4.2.0 carries a denial's `reason`; 4.3.0 exports `staysOnHost`); TeA peer range `>=4.3.0` |
+| Node.js      | >=22.20.0 (TeA and eval-quality engines)                                                                                                                                                                                                                                                                                                                                                                                    |
 
 ## Structural Seed
 
@@ -439,22 +446,22 @@ sequenceDiagram
 
 ## Capability → Architecture Map
 
-| Capability | Lives in | Governed by |
-| --- | --- | --- |
-| CAP-1 target inspection | skill `references/` | AD-4 |
-| CAP-2 requirements intake | skill | AD-2, conventions (planning outputs) |
-| CAP-3 corpus design | skill, `corpus/`, `probes/` | AD-9, AD-19 |
-| CAP-4 contract authoring | skill, `contract.json` | AD-1, AD-4, AD-6 |
-| CAP-5 oracles and rubrics | `contract.json` | AD-7, AD-19 |
-| CAP-6 adapter scaffolding | `evaluation.json`, `adapter/`, `cli/skill-runner.js` | AD-4, AD-5 |
-| CAP-7 mutation and rollback | `mutations/`, `cli/lib/evaluate/mutation` | AD-8 |
-| CAP-8 harness configuration | `policy/` | AD-7 |
-| CAP-9 run and seal | `tea-evaluate run`, `preflight` and `score` | AD-5, AD-6, AD-7, AD-21 |
-| CAP-10 gap interpretation | skill, reading `runs/`; `interpretation.json` | AD-10 classes, AD-23 |
-| CAP-11 CI wiring | `ci/evaluation-ci-plan.json`, `bmad-testarch-ci` | AD-10, AD-11 |
-| CAP-12 evidence | `runs/`, `baseline/` | AD-9, AD-12 |
-| CAP-13 evaluation layer | `evaluator/`, `cli/lib/evaluate/evaluator` and `bridge`, skill `references/evaluator.md` | AD-21 |
-| CAP-14 held-out probes and judge calibration | `evaluation.json`, `policy/judge-calibration.json`, `run`, `score` | AD-22 |
+| Capability                                   | Lives in                                                                                 | Governed by                          |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------ |
+| CAP-1 target inspection                      | skill `references/`                                                                      | AD-4                                 |
+| CAP-2 requirements intake                    | skill                                                                                    | AD-2, conventions (planning outputs) |
+| CAP-3 corpus design                          | skill, `corpus/`, `probes/`                                                              | AD-9, AD-19                          |
+| CAP-4 contract authoring                     | skill, `contract.json`                                                                   | AD-1, AD-4, AD-6                     |
+| CAP-5 oracles and rubrics                    | `contract.json`                                                                          | AD-7, AD-19                          |
+| CAP-6 adapter scaffolding                    | `evaluation.json`, `adapter/`, `cli/skill-runner.js`                                     | AD-4, AD-5                           |
+| CAP-7 mutation and rollback                  | `mutations/`, `cli/lib/evaluate/mutation`                                                | AD-8                                 |
+| CAP-8 harness configuration                  | `policy/`                                                                                | AD-7                                 |
+| CAP-9 run and seal                           | `tea-evaluate run`, `preflight` and `score`                                              | AD-5, AD-6, AD-7, AD-21              |
+| CAP-10 gap interpretation                    | skill, reading `runs/`; `interpretation.json`                                            | AD-10 classes, AD-23                 |
+| CAP-11 CI wiring                             | `ci/evaluation-ci-plan.json`, `bmad-testarch-ci`                                         | AD-10, AD-11                         |
+| CAP-12 evidence                              | `runs/`, `baseline/`                                                                     | AD-9, AD-12                          |
+| CAP-13 evaluation layer                      | `evaluator/`, `cli/lib/evaluate/evaluator` and `bridge`, skill `references/evaluator.md` | AD-21                                |
+| CAP-14 held-out probes and judge calibration | `evaluation.json`, `policy/judge-calibration.json`, `run`, `score`                       | AD-22                                |
 
 ## Deferred
 

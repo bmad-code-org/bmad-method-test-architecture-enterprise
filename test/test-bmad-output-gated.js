@@ -19,6 +19,17 @@
  * this is a faithful proxy for exactly the patterns in play, not a general
  * claim that the two syntaxes are equivalent.
  *
+ * The three configs are not the whole story for the files this repository
+ * tracks under `_bmad-output/`, because `.gitignore` ignores that directory
+ * and names each tracked file back in. A tracked file `.gitignore` still
+ * ignores is skipped by Prettier, which reads `.gitignore` beside
+ * `.prettierignore`, both in lint-staged and in `format:check`, and makes
+ * lint-staged's re-add after formatting print "[FAILED] The following paths
+ * are ignored" on every commit that touches it. So every tracked file under
+ * `_bmad-output/` must also read as not ignored to `git check-ignore`, and
+ * Prettier's own `getFileInfo` must skip exactly the ones `.prettierignore`
+ * names.
+ *
  * Usage: node test/test-bmad-output-gated.js
  */
 
@@ -26,7 +37,9 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 const ignore = require('ignore');
+const prettier = require('prettier');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 
@@ -105,8 +118,46 @@ function checkEachConfigGatesBmadOutputButNotBmad() {
   }
 }
 
-function main() {
+function git(args, input) {
+  const result = spawnSync('git', args, { cwd: PROJECT_ROOT, encoding: 'utf8', input });
+  if (result.error) throw result.error;
+  return result;
+}
+
+/** Every file git tracks under `_bmad-output/`, as a repository-relative path. */
+function trackedBmadOutput() {
+  const listed = git(['ls-files', '-z', '--', '_bmad-output']);
+  if (listed.status !== 0) throw new Error(`git ls-files failed: ${listed.stderr}`);
+  return listed.stdout.split('\0').filter((file) => file.length > 0);
+}
+
+async function checkTrackedBmadOutputIsNotGitignored() {
+  const tracked = trackedBmadOutput();
+  check(tracked.length > 0, 'git tracks no file under _bmad-output/; this check would hold nothing');
+  // `--no-index` asks what .gitignore says of the path itself, as `git add` and Prettier read it, whether or not it is tracked.
+  const ignored = git(['check-ignore', '--no-index', '--stdin', '-z'], `${tracked.join('\0')}\0`);
+  const gitignored = ignored.stdout.split('\0').filter((file) => file.length > 0);
+  check(
+    gitignored.length === 0,
+    `.gitignore ignores ${gitignored.length} tracked file(s) under _bmad-output/, which git add refuses and Prettier skips: ${gitignored.join(', ')}`,
+  );
+  const deliberate = prettierIgnores();
+  const ignorePath = [path.join(PROJECT_ROOT, '.gitignore'), path.join(PROJECT_ROOT, '.prettierignore')];
+  for (const file of tracked) {
+    const { ignored: skipped } = await prettier.getFileInfo(path.join(PROJECT_ROOT, file), { ignorePath });
+    const named = isIgnored(deliberate, file);
+    check(
+      skipped === named,
+      named
+        ? `Prettier formats ${file}, which .prettierignore names`
+        : `Prettier skips ${file}, which .prettierignore does not name, so neither lint-staged nor format:check formats it`,
+    );
+  }
+}
+
+async function main() {
   checkEachConfigGatesBmadOutputButNotBmad();
+  await checkTrackedBmadOutputIsNotGitignored();
 
   if (failures.length > 0) {
     console.error(`${colors.red}${failures.length} of ${checks} _bmad-output gating check(s) failed:${colors.reset}`);
@@ -117,4 +168,14 @@ function main() {
   return 0;
 }
 
-if (require.main === module) process.exitCode = main();
+if (require.main === module) {
+  main().then(
+    (code) => {
+      process.exitCode = code;
+    },
+    (error) => {
+      console.error(error);
+      process.exitCode = 1;
+    },
+  );
+}

@@ -1,6 +1,14 @@
 ---
 id: SPEC-evaluate
-companions: [target-kind-adapter-mapping.md, eval-quality-vocabulary.md, ci-enforcement-policy.md, eval-quality-facts.md, evaluation-framework-facts.md, ARCHITECTURE-SPINE.md]
+companions:
+  [
+    target-kind-adapter-mapping.md,
+    eval-quality-vocabulary.md,
+    ci-enforcement-policy.md,
+    eval-quality-facts.md,
+    evaluation-framework-facts.md,
+    ARCHITECTURE-SPINE.md,
+  ]
 sources: [input-notes.md]
 ---
 

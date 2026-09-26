@@ -245,7 +245,7 @@
     "eslint-plugin-n": "^17.21.3",
     "eslint-plugin-unicorn": "^60.0.0",
     "eslint-plugin-yml": "^1.18.0",
-    "eval-quality": "4.2.0",
+    "eval-quality": "4.3.0",
     "husky": "^9.1.7",
     "jest": "^30.0.4",
     "lint-staged": "^16.1.1",
@@ -260,7 +260,7 @@
     "zod-to-json-schema": "3.25.1"
   },
   "peerDependencies": {
-    "eval-quality": ">=4.2.0"
+    "eval-quality": ">=4.3.0"
   },
   "peerDependenciesMeta": {
     "eval-quality": {
