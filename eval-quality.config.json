@@ -32,6 +32,94 @@
           "file": "website/package.json",
           "contains": "\"private\": true"
         }
+      },
+      {
+        "reason": "The promptfoo devDependency reaches big-integer; its installed package declares Unlicense and carries a LICENSE file with that text. This exception applies only while promptfoo is the floating devDependency.",
+        "lockfiles": ["package-lock.json"],
+        "prefix": "big-integer",
+        "license": "Unlicense",
+        "optional": true,
+        "marker": {
+          "file": "package.json",
+          "contains": "\"promptfoo\": \"latest\""
+        }
+      },
+      {
+        "reason": "The promptfoo devDependency reaches binaryextensions; its installed package declares Artistic-2.0 and carries a LICENSE file with that text. This exception applies only while promptfoo is the floating devDependency.",
+        "lockfiles": ["package-lock.json"],
+        "prefix": "binaryextensions",
+        "license": "Artistic-2.0",
+        "optional": false,
+        "marker": {
+          "file": "package.json",
+          "contains": "\"promptfoo\": \"latest\""
+        }
+      },
+      {
+        "reason": "The promptfoo devDependency reaches editions; its installed package declares Artistic-2.0 and carries a LICENSE file with that text. This exception applies only while promptfoo is the floating devDependency.",
+        "lockfiles": ["package-lock.json"],
+        "prefix": "editions",
+        "license": "Artistic-2.0",
+        "optional": false,
+        "marker": {
+          "file": "package.json",
+          "contains": "\"promptfoo\": \"latest\""
+        }
+      },
+      {
+        "reason": "The promptfoo devDependency reaches fast-sha256; its installed package declares Unlicense and carries a LICENSE file with that text. This exception applies only while promptfoo is the floating devDependency.",
+        "lockfiles": ["package-lock.json"],
+        "prefix": "fast-sha256",
+        "license": "Unlicense",
+        "optional": false,
+        "marker": {
+          "file": "package.json",
+          "contains": "\"promptfoo\": \"latest\""
+        }
+      },
+      {
+        "reason": "The promptfoo devDependency reaches istextorbinary; its installed package declares Artistic-2.0 and carries a LICENSE file with that text. This exception applies only while promptfoo is the floating devDependency.",
+        "lockfiles": ["package-lock.json"],
+        "prefix": "istextorbinary",
+        "license": "Artistic-2.0",
+        "optional": false,
+        "marker": {
+          "file": "package.json",
+          "contains": "\"promptfoo\": \"latest\""
+        }
+      },
+      {
+        "reason": "The promptfoo devDependency reaches textextensions; its installed package declares Artistic-2.0 and carries a LICENSE file with that text. This exception applies only while promptfoo is the floating devDependency.",
+        "lockfiles": ["package-lock.json"],
+        "prefix": "textextensions",
+        "license": "Artistic-2.0",
+        "optional": false,
+        "marker": {
+          "file": "package.json",
+          "contains": "\"promptfoo\": \"latest\""
+        }
+      },
+      {
+        "reason": "The promptfoo devDependency reaches url-template; its installed package declares BSD and carries a LICENSE file with that text. This exception applies only while promptfoo is the floating devDependency.",
+        "lockfiles": ["package-lock.json"],
+        "prefix": "url-template",
+        "license": "BSD",
+        "optional": true,
+        "marker": {
+          "file": "package.json",
+          "contains": "\"promptfoo\": \"latest\""
+        }
+      },
+      {
+        "reason": "The promptfoo devDependency reaches version-range; its installed package declares Artistic-2.0 and carries a LICENSE file with that text. This exception applies only while promptfoo is the floating devDependency.",
+        "lockfiles": ["package-lock.json"],
+        "prefix": "version-range",
+        "license": "Artistic-2.0",
+        "optional": false,
+        "marker": {
+          "file": "package.json",
+          "contains": "\"promptfoo\": \"latest\""
+        }
       }
     ],
     "undeclared": [
@@ -48,6 +136,20 @@
         "readAs": "MIT",
         "evidence": "zod-to-ts 1.2.0's own published package.json carries no license field, which is why npm records none in the lockfile entry; that version's manifest is silent rather than differently licensed. The registry's current top-level license field reads MIT (inherited from the 2.x line, published years later), and the repository at github.com/sachinraja/zod-to-ts carries an MIT LICENSE file whose copyright range (2021-2025) covers 1.2.0's 2023 publish date, which is the evidence that ties the reading to the locked version itself rather than to a later release.",
         "reason": "A transitive dependency of astro 5 whose manifest declares no licence. The licence it is read as is held against the allowlist like every other entry."
+      },
+      {
+        "lockfiles": ["package-lock.json"],
+        "prefix": "sylvester",
+        "readAs": "MIT",
+        "evidence": "The installed sylvester 0.0.21 LICENSE.txt contains the MIT permission grant and copyright notice.",
+        "reason": "Promptfoo reaches sylvester through natural; its published package metadata omits a license field."
+      },
+      {
+        "lockfiles": ["package-lock.json"],
+        "prefix": "xmlhttprequest-ssl",
+        "readAs": "MIT",
+        "evidence": "The installed xmlhttprequest-ssl 2.1.2 LICENSE contains the MIT permission grant and copyright notice; its README also identifies MIT.",
+        "reason": "Promptfoo reaches xmlhttprequest-ssl through socket.io-client; its published package metadata omits a license field."
       }
     ]
   },
@@ -160,11 +262,17 @@
       },
       "totalSuiteCount": {
         "kind": "module",
-        "from": { "module": "test/lib/doc-count-sources.js", "export": "TOTAL_SUITE_COUNT" }
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "TOTAL_SUITE_COUNT"
+        }
       },
       "agentPreflightedSuiteCount": {
         "kind": "module",
-        "from": { "module": "test/lib/doc-count-sources.js", "export": "AGENT_PREFLIGHTED_SUITE_COUNT" }
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "AGENT_PREFLIGHTED_SUITE_COUNT"
+        }
       },
       "npmTestChainLength": {
         "kind": "module",
@@ -871,35 +979,35 @@
         },
         {
           "token": "waitForTimeout",
-          "reason": "Playwright\u2019s own built-in API, not a TEA declaration"
+          "reason": "Playwright’s own built-in API, not a TEA declaration"
         },
         {
           "token": "getByRole",
-          "reason": "Playwright\u2019s own built-in API, not a TEA declaration"
+          "reason": "Playwright’s own built-in API, not a TEA declaration"
         },
         {
           "token": "getByLabel",
-          "reason": "Playwright\u2019s own built-in API, not a TEA declaration"
+          "reason": "Playwright’s own built-in API, not a TEA declaration"
         },
         {
           "token": "getByTestId",
-          "reason": "Playwright\u2019s own built-in API, not a TEA declaration"
+          "reason": "Playwright’s own built-in API, not a TEA declaration"
         },
         {
           "token": "waitForSelector",
-          "reason": "Playwright\u2019s own built-in API, not a TEA declaration"
+          "reason": "Playwright’s own built-in API, not a TEA declaration"
         },
         {
           "token": "waitForResponse",
-          "reason": "Playwright\u2019s own built-in API, not a TEA declaration"
+          "reason": "Playwright’s own built-in API, not a TEA declaration"
         },
         {
           "token": "toBeTruthy",
-          "reason": "Playwright\u2019s own built-in API, not a TEA declaration"
+          "reason": "Playwright’s own built-in API, not a TEA declaration"
         },
         {
           "token": "toJSON",
-          "reason": "Playwright\u2019s own built-in API, not a TEA declaration"
+          "reason": "Playwright’s own built-in API, not a TEA declaration"
         },
         {
           "token": "PATH",
@@ -1191,27 +1299,27 @@
         },
         {
           "token": "isDiscriminatingCase",
-          "reason": "a ground-truth or scoring field name from eval-quality-adoption-guide.md\u2019s own worked prose, not a TEA source declaration"
+          "reason": "a ground-truth or scoring field name from eval-quality-adoption-guide.md’s own worked prose, not a TEA source declaration"
         },
         {
           "token": "nonDeterministicReportedValues",
-          "reason": "a ground-truth or scoring field name from eval-quality-adoption-guide.md\u2019s own worked prose, not a TEA source declaration"
+          "reason": "a ground-truth or scoring field name from eval-quality-adoption-guide.md’s own worked prose, not a TEA source declaration"
         },
         {
           "token": "expectedTestInventory",
-          "reason": "a ground-truth or scoring field name from eval-quality-adoption-guide.md\u2019s own worked prose, not a TEA source declaration"
+          "reason": "a ground-truth or scoring field name from eval-quality-adoption-guide.md’s own worked prose, not a TEA source declaration"
         },
         {
           "token": "negativeControls",
-          "reason": "a ground-truth or scoring field name from eval-quality-adoption-guide.md\u2019s own worked prose, not a TEA source declaration"
+          "reason": "a ground-truth or scoring field name from eval-quality-adoption-guide.md’s own worked prose, not a TEA source declaration"
         },
         {
           "token": "rejectedCases",
-          "reason": "a ground-truth or scoring field name from eval-quality-adoption-guide.md\u2019s own worked prose, not a TEA source declaration"
+          "reason": "a ground-truth or scoring field name from eval-quality-adoption-guide.md’s own worked prose, not a TEA source declaration"
         },
         {
           "token": "mechanicalSignal",
-          "reason": "cli/lib/convention-baseline.js\u2019s own field, declared inline in an object literal rather than as a standalone const or a property on its own source line, which the declaration scan does not reach"
+          "reason": "cli/lib/convention-baseline.js’s own field, declared inline in an object literal rather than as a standalone const or a property on its own source line, which the declaration scan does not reach"
         },
         {
           "token": "SEALED_RUN_RECORD_SCHEMA_VERSION",
@@ -1438,7 +1546,7 @@
         },
         {
           "file": "README.md",
-          "key": "`risk_threshold` \u2014 risk cutoff for mandatory testing",
+          "key": "`risk_threshold` — risk cutoff for mandatory testing",
           "settles": {
             "module": "test/lib/doc-claim-sources.js",
             "export": "RISK_THRESHOLD_UNREAD"

@@ -37,6 +37,11 @@ config:
   MD026:
     punctuation: ","
 
+  # Build story records use this control tag to freeze owner-approved scope.
+  MD033:
+    allowed_elements:
+      - frozen-after-approval
+
   # MD025 (single H1 per document) treats a YAML frontmatter `title:` field as
   # an implicit H1 by default. Every Astro Starlight doc under docs/ carries a
   # frontmatter title that the site renders as the page's real H1, and the

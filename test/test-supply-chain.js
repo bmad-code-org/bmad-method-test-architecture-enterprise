@@ -2,23 +2,26 @@
  * The supply-chain gates are wired, and each one fails on the violation it
  * exists to catch.
  *
- * `npm run test:lockfile-age` and `npm run test:licences` run the `lockfile-age`
- * and `licences` gates that `eval-quality` publishes as `eval-quality-gates`,
- * over both committed lockfiles, configured by `eval-quality.config.json` at the
- * repository root. Those two scripts pass when the lockfiles are clean, and a
+ * `npm run test:lockfile-age` runs eval-quality's gate directly. The licence
+ * script verifies promptfoo's optional Claude SDK entries, then runs the
+ * published licence gate over the remaining entries in a temporary lock view.
+ * Both gates use `eval-quality.config.json` and cover both committed lockfiles.
+ * Those two scripts pass when the lockfiles are clean, and a
  * script that exits 0 having executed nothing passes the same way. Nothing in a
  * green run tells the two apart, so this check seeds one violation per gate and
  * watches the installed binary refuse it by name.
  *
  * WHAT IS CHECKED
  *
- * - The two scripts call the binary `eval-quality`'s manifest declares, and each
- *   gate they name has a section in `eval-quality.config.json` covering both
- *   lockfiles. A script pointing at a renamed binary, or at a gate the
- *   configuration never opted into, would refuse at exit 64 in CI, but only
- *   after the chain reached it; this names the drift first.
- * - `licences` fails at exit 1 on a fixture lockfile carrying one GPL-3.0-only
- *   entry, naming the entry and its licence.
+ * - The lockfile-age script calls `eval-quality-gates`, and the licence script
+ *   calls the scoped verifier. Each gate has a section in
+ *   `eval-quality.config.json` covering both lockfiles. A missing section
+ *   would refuse at exit 64 in CI, but only after the chain reached it.
+ * - The licence verifier removes exactly the nine optional Claude SDK entries
+ *   after checking their declared terms; it refuses a nonoptional entry and
+ *   preserves an unrelated GPL entry for the gate to reject.
+ * - The licence wrapper fails at exit 1 on a seeded copy of the root lockfile
+ *   carrying one GPL-3.0-only entry, naming the entry and its licence.
  * - `lockfile-age` fails at exit 1 on a fixture lockfile carrying an entry whose
  *   `resolved` is not its own registry tarball beside a name the registry does
  *   not carry, reporting the first as off-registry and the second as
@@ -52,8 +55,10 @@
 'use strict';
 
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const { omitVerifiedOptionalSdk } = require('../tools/check-licences');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const CONFIG_PATH = path.join(PROJECT_ROOT, 'eval-quality.config.json');
@@ -164,7 +169,8 @@ function checkWiring(config) {
   const manifest = readJson(path.join(PROJECT_ROOT, 'package.json'), 'package.json');
   for (const [script, gate] of Object.entries(GATE_SCRIPTS)) {
     const command = manifest.scripts?.[script];
-    check(command === `${BINARY_NAME} ${gate}`, `scripts.${script} is ${JSON.stringify(command)}; expected "${BINARY_NAME} ${gate}"`);
+    const expected = script === 'test:licences' ? 'node tools/check-licences.js' : `${BINARY_NAME} ${gate}`;
+    check(command === expected, `scripts.${script} is ${JSON.stringify(command)}; expected "${expected}"`);
     if (CI_ONLY_SCRIPTS.has(script)) {
       check(
         !isChainedIntoTest(manifest, script),
@@ -187,12 +193,100 @@ function checkWiring(config) {
   check(isChainedIntoTest(manifest, 'test:supply-chain'), 'scripts.test does not chain npm run test:supply-chain');
 }
 
-function checkLicencesSeed(binary) {
-  const fixture = path.join(FIXTURE_ROOT, 'licence-violation', 'eval-quality.config.json');
-  const { status, output } = runGate(binary, 'licences', fixture);
-  check(status === EXIT_GATE_FAILED, `licences exited ${status} on the seeded GPL entry; expected ${EXIT_GATE_FAILED}\n${output}`);
-  check(output.includes('gpl-violator@1.0.0'), `licences did not name gpl-violator@1.0.0\n${output}`);
-  check(output.includes('GPL-3.0-only'), `licences did not name the GPL-3.0-only licence\n${output}`);
+function runLicenceWrapper(lock) {
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-licence-seed-'));
+  try {
+    const lockfile = path.join(temporary, 'package-lock.json');
+    fs.writeFileSync(lockfile, JSON.stringify(lock));
+    const result = spawnSync(process.execPath, [path.join(PROJECT_ROOT, 'tools', 'check-licences.js'), '--lockfile', lockfile], {
+      cwd: PROJECT_ROOT,
+      encoding: 'utf8',
+      env: { ...process.env, NO_COLOR: '1' },
+    });
+    if (result.error) throw result.error;
+    return { status: result.status, output: `${result.stdout}${result.stderr}` };
+  } finally {
+    fs.rmSync(temporary, { recursive: true, force: true });
+  }
+}
+
+function checkLicencesSeed() {
+  const seed = readJson(path.join(FIXTURE_ROOT, 'licence-violation', 'package-lock.json'), 'GPL licence seed');
+  const lock = readJson(path.join(PROJECT_ROOT, 'package-lock.json'), 'package-lock.json');
+  lock.packages['node_modules/gpl-violator'] = seed.packages['node_modules/gpl-violator'];
+  const { status, output } = runLicenceWrapper(lock);
+  check(status === EXIT_GATE_FAILED, `licence wrapper exited ${status} on the seeded GPL entry; expected ${EXIT_GATE_FAILED}\n${output}`);
+  check(output.includes('gpl-violator@1.0.0'), `licence wrapper did not name gpl-violator@1.0.0\n${output}`);
+  check(output.includes('GPL-3.0-only'), `licence wrapper did not name the GPL-3.0-only licence\n${output}`);
+}
+
+function checkPromptfooLicenceScope() {
+  const original = readJson(path.join(PROJECT_ROOT, 'package-lock.json'), 'package-lock.json');
+  const filtered = structuredClone(original);
+  const removed = omitVerifiedOptionalSdk(filtered);
+  check(removed.length === 9, `promptfoo licence check excluded ${removed.length} Claude SDK entries, expected nine`);
+  check(
+    removed.every((name) => name.includes('/@anthropic-ai/claude-agent-sdk')),
+    `promptfoo licence check excluded an unrelated entry: ${removed.join(', ')}`,
+  );
+  check(
+    Object.keys(filtered.packages).length === Object.keys(original.packages).length - removed.length,
+    'promptfoo licence check filtered more entries than the verified optional SDK set',
+  );
+  const changed = structuredClone(original);
+  const base = removed.find((name) => name.endsWith('/@anthropic-ai/claude-agent-sdk'));
+  changed.packages[base].optional = false;
+  let refused = false;
+  try {
+    omitVerifiedOptionalSdk(changed);
+  } catch {
+    refused = true;
+  }
+  check(refused, 'promptfoo licence check accepted a nonoptional Claude SDK entry');
+  const changedLicence = structuredClone(original);
+  changedLicence.packages[base].license = 'MIT';
+  let licenceRefused = false;
+  try {
+    omitVerifiedOptionalSdk(changedLicence);
+  } catch {
+    licenceRefused = true;
+  }
+  check(licenceRefused, 'promptfoo licence check accepted changed Claude SDK licence metadata');
+  const extra = structuredClone(original);
+  extra.packages['node_modules/gate-seed'] = { version: '1.0.0', license: 'GPL-3.0-only' };
+  omitVerifiedOptionalSdk(extra);
+  check(extra.packages['node_modules/gate-seed']?.license === 'GPL-3.0-only', 'promptfoo licence check removed an unrelated GPL package');
+  const samePrefix = structuredClone(original);
+  samePrefix.packages['node_modules/big-integer-extra'] = { version: '1.0.0', license: 'Unlicense', optional: true };
+  const samePrefixResult = runLicenceWrapper(samePrefix);
+  check(
+    samePrefixResult.status !== 0 &&
+      samePrefixResult.output.includes('matches an additional or missing lockfile package') &&
+      samePrefixResult.output.includes('big-integer-extra'),
+    `promptfoo licence wrapper accepted an additional same-prefix package: ${samePrefixResult.output}`,
+  );
+
+  const platform = removed.find((name) => name !== base && fs.existsSync(path.join(PROJECT_ROOT, name)));
+  check(platform !== undefined, 'no installed optional Claude SDK platform package is available for licence evidence');
+  if (platform) {
+    const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-sdk-terms-'));
+    try {
+      fs.mkdirSync(path.join(temporary, base), { recursive: true });
+      for (const file of ['LICENSE.md', 'README.md']) {
+        fs.copyFileSync(path.join(PROJECT_ROOT, base, file), path.join(temporary, base, file));
+      }
+      fs.mkdirSync(path.join(temporary, platform), { recursive: true });
+      let missingRefused = false;
+      try {
+        omitVerifiedOptionalSdk(structuredClone(original), temporary);
+      } catch (error) {
+        missingRefused = error.message.includes('verified Anthropic terms');
+      }
+      check(missingRefused, 'promptfoo licence check excluded an installed platform SDK without LICENSE.md');
+    } finally {
+      fs.rmSync(temporary, { recursive: true, force: true });
+    }
+  }
 }
 
 function checkLockfileAgeSeed(binary) {
@@ -241,7 +335,8 @@ function main() {
   const config = readJson(CONFIG_PATH, 'eval-quality.config.json');
 
   checkWiring(config);
-  checkLicencesSeed(binary);
+  checkLicencesSeed();
+  checkPromptfooLicenceScope();
   checkLockfileAgeSeed(binary);
   checkAbsentSection(binary);
   checkResolutionFloor(config);
