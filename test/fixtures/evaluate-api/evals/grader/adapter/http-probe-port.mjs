@@ -4,10 +4,14 @@
  * and evaluator call of an `api` interface this evaluation declares.
  *
  * This file is yours. It is rendered from the Evaluate skill's template into
- * your evaluation folder's `adapter/`, and it imports eval-quality from your
- * evaluation folder's own dependencies. `tea-evaluate` starts it as a Node
- * process of its own for each call, and its last lines hand the port to TeA's
- * host, which serves that call; keep them when you edit the port.
+ * your evaluation folder's `adapter/`, and it imports eval-quality and TeA the
+ * way Node resolves a bare import from this file: from a `node_modules` in
+ * your evaluation folder or a folder above it. `tea-evaluate` starts it as a
+ * Node process of its own for each call, and its last lines hand the port to
+ * TeA's host, which serves that call; keep them when you edit the port. The
+ * host speaks to `tea-evaluate` on file descriptor 3, which it reserves for
+ * that, so what the port prints on standard output and error stays yours and
+ * is quoted when a call fails.
  *
  * The factory holds only configuration: where each logical interface is
  * (`targets`), what may be reached (`policy`, eval-quality's
@@ -367,7 +371,7 @@ export default function createHttpProbePort({ policy, targets, auth = {}, transp
 }
 
 // When `tea-evaluate` starts this file to serve one call, it hands the port to TeA's host, which speaks the runtime's
-// protocol on standard input and output. The import happens only then, so the port needs TeA for nothing else.
+// protocol on file descriptor 3. The import happens only then, so the port needs TeA for nothing else.
 if (process.env.TEA_EVALUATE_HTTP_PORT_HOST === '1') {
   const { serveHttpProbePort } = await import('bmad-method-test-architecture-enterprise/cli/lib/evaluate/http-port-host.js');
   serveHttpProbePort({ createHttpProbePort, nodeTransport });

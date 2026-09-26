@@ -16,14 +16,16 @@
  * makes the service log each start and request.
  *
  * - The templates: the fixture's adapter is the templates byte for byte; the
- *   port's evaluator defaults to the `evaluateTarget` it imports from
- *   eval-quality, and a counting evaluator sees one call per request and one
- *   per redirect hop; the port holds no address classification (no
- *   private-range literal, no CIDR arithmetic), and the conformance file's
- *   only range literals are its four denied-class samples, each of the class
+ *   port's evaluator defaults, in the factory's parsed parameter list, to the
+ *   `evaluateTarget` it imports from eval-quality, and a counting evaluator
+ *   sees one call per request and one per redirect hop; the port holds no
+ *   address classification (no private-range literal, bare, prefixed or
+ *   regex-escaped, no CIDR arithmetic or octet radix), the grep catching each
+ *   spelling it was written against, and the conformance file's only range
+ *   literals are its four denied-class samples, each of the class
  *   eval-quality's own `classifyAddress` gives it; the conformance file passes
  *   every one of eval-quality's environment-probe outcomes against the stub it
- *   starts and ends on its own.
+ *   starts, and ends once its own `finally` closes a stub the suite left open.
  * - The pipeline: `check`, `preflight`, `run` and `score` over the fixture.
  *   Every leg and trial is an `api` observation, the registry's auth header
  *   reaches the service, the records carry the query and the answer's status,
@@ -36,7 +38,10 @@
  *   service started; a service that cannot start and one that hangs stop the
  *   run with exit 12, the cause scrubbed and every process ended; a service
  *   that accepts every answer exits 11; a folder with no port, or one whose
- *   port does not hand itself to TeA's host, exits 10.
+ *   port does not hand itself to TeA's host, exits 10; a port that logs on its
+ *   standard output still serves, since the protocol has file descriptor 3 to
+ *   itself; an answer eval-quality's `ProbeObservation` parser does not read
+ *   stops the qualification with `port-contract-violation` (exit 12).
  * - A sealed-brief agent through the bridge: a declared and allowed request is
  *   recorded `evaluator-chosen` with the operation its method and path match,
  *   an undeclared one runs unrecorded, an unlisted method is denied before any
@@ -46,10 +51,14 @@
  *   qualifies and scores `caught` with no service started, and a gameability
  *   router denies an unlisted method and answers an allowed request.
  * - `check`: a command entry for the api interface, two HTTP entries for one
- *   interface, an entry naming both a port and a server, a folder with no
- *   port, and a degenerate response of the wrong kind.
+ *   interface, an entry naming both a port and a server, a host a URL spells
+ *   otherwise, an auth header over plain http to an address that is not
+ *   loopback, a folder with no port, and a degenerate response of the wrong
+ *   kind.
  * - Units: the registry's HTTP policy, inventory, ceilings, secrets and
- *   targets; the arm's `api` record; the scrub of an HTTP answer.
+ *   targets; the arm's `api` record; the scrub of an HTTP answer and of a
+ *   denial naming a lowercased secret; a multi-byte answer past 64 KiB read
+ *   whole; a gameability redirect to another spelling of the entry's host.
  *
  * Usage: node test/test-evaluate-api.js
  */
@@ -57,15 +66,24 @@
 'use strict';
 
 const crypto = require('node:crypto');
+const acorn = require('acorn');
 const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 const { spawnSync } = require('node:child_process');
 
 const { ENGINE_CLI_ENV, loadAdapters, loadEngine } = require('../cli/lib/evaluate/engine');
 const { ArmError, hostEnvironmentPort, runArm } = require('../cli/lib/evaluate/arm');
 const { syntheticPort } = require('../cli/lib/evaluate/gameability');
-const { HTTP_PORT_MODULE, callServer, createApiPort, portConfiguration, probeHttpPort } = require('../cli/lib/evaluate/http-target');
+const {
+  HTTP_PORT_MODULE,
+  callServer,
+  createApiPort,
+  degenerateApiPort,
+  portConfiguration,
+  probeHttpPort,
+} = require('../cli/lib/evaluate/http-target');
 const { createRegistry, registryProblems } = require('../cli/lib/evaluate/registry');
 const { runTrial } = require('../cli/lib/evaluate/run');
 const { bridgeRouter } = require('../cli/lib/evaluate/sealed-brief-agent');
@@ -273,16 +291,76 @@ async function withEnvironment(values, body) {
 
 // ---------------------------------------------------------------- the templates
 
-/** An IPv4 or IPv6 literal of a range eval-quality classifies as private, link-local or metadata, as the test design lists them. */
+/**
+ * An IPv4 or IPv6 literal of a range eval-quality classifies as private, link-local or metadata, as the test design
+ * lists them: a whole address, a prefix with or without its trailing dot (`192.168`, `172.16.`, `10.`), each dot
+ * optionally escaped as a regular expression writes it (`/^10\./`), and an IPv6 prefix with or without its colon.
+ */
 const RANGE_LITERAL =
-  /(?<![\w.])(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|10\.(?!\d)|172\.(?:1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.)|\b(?:fc00|fd00|fe80):/gi;
-/** CIDR notation or the bit arithmetic a range comparison needs. */
+  /(?<![\w.\\])(?:10\\?\.(?:\d{1,3}\\?\.\d{1,3}\\?\.\d{1,3}|(?!\d))|172\\?\.(?:1[6-9]|2\d|3[01])|192\\?\.168|169\\?\.254|100\\?\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7]))(?!\d)|\b(?:fc00|fd00|fe80)\b/gi;
+/**
+ * CIDR notation, a prefix length read off one, or the arithmetic a range comparison needs: a mask, a shift, a hex
+ * constant, or an octet's radix (256, 65536, 16777216, 4294967296) that a division or a remainder takes an address
+ * apart with.
+ */
 const CIDR_ARITHMETIC = [
   /\b\d{1,3}(?:\.\d{1,3}){3}\/\d{1,2}\b/,
   /[0-9a-f:]+::?\/\d{1,3}\b/i,
+  /\\\/\(?\\d/,
+  /['"`]\/\d{1,3}['"`]/,
   /(?:&|\|)\s*0x[0-9a-f]+/i,
+  /\b0x[0-9a-f]{2,}\b/i,
   /(?:<<|>>>?)\s*\d/,
+  /\b(?:256|65_?536|16_?777_?216|4_?294_?967_?296)\b/,
 ];
+/** Ways a copied range check has been spelled that the grep must catch, each on its own. */
+const RANGE_EVASIONS = [
+  "address.startsWith('192.168')",
+  "address.startsWith('169.254')",
+  "address.startsWith('172.16')",
+  "address.startsWith('10.')",
+  'address.startsWith("100.64")',
+  "host.toLowerCase().startsWith('fe80')",
+  "host.startsWith('fc00')",
+  String.raw`/^10\./.test(address)`,
+  String.raw`/^192\.168\./.test(address)`,
+  'Math.floor(n / 16777216) === 10',
+  'Math.floor(n / 16_777_216) === 10',
+  '(n % 65536) >> 8',
+  'first === 10 && second / 256 === 0',
+  '(value & 0xffff) === 0xa9fe',
+  String.raw`const [base, bits] = cidr.split(/\/(\d+)$/);`,
+  "const cidr = base + '/8';",
+];
+
+/** Whether the grep catches `text`: a range literal or any of the arithmetic. */
+function grepCatches(text) {
+  return new RegExp(RANGE_LITERAL.source, 'i').test(text) || CIDR_ARITHMETIC.some((pattern) => pattern.test(text));
+}
+
+/**
+ * Whether the port template's factory takes `evaluateTarget` as an option whose default is the `evaluateTarget` it
+ * imports from eval-quality, read from the parsed module (so no comment or string can stand in): the local name the
+ * import binds, and the default in the destructured first parameter of the default-exported `createHttpProbePort`.
+ */
+function defaultsToImportedEvaluateTarget(source) {
+  const program = acorn.parse(source, { ecmaVersion: 'latest', sourceType: 'module' });
+  const imported = program.body
+    .filter((node) => node.type === 'ImportDeclaration' && node.source.value === 'eval-quality')
+    .flatMap((node) => node.specifiers)
+    .find((specifier) => specifier.type === 'ImportSpecifier' && specifier.imported.name === 'evaluateTarget')?.local.name;
+  const factory = program.body.find((node) => node.type === 'ExportDefaultDeclaration')?.declaration;
+  if (imported === undefined || factory?.type !== 'FunctionDeclaration' || factory.id?.name !== 'createHttpProbePort') return false;
+  const [options] = factory.params;
+  const property =
+    options?.type === 'ObjectPattern' ? options.properties.find((candidate) => candidate.key?.name === 'evaluateTarget') : undefined;
+  return (
+    property?.value?.type === 'AssignmentPattern' &&
+    property.value.left.name === 'evaluateTarget' &&
+    property.value.right.type === 'Identifier' &&
+    property.value.right.name === imported
+  );
+}
 
 async function checkTemplates() {
   for (const [template, name] of [
@@ -298,11 +376,25 @@ async function checkTemplates() {
 
   const port = fs.readFileSync(PORT_TEMPLATE, 'utf8');
   // The evaluator is an injected option whose default is eval-quality's own evaluateTarget, imported under a name.
-  const imported = /import\s*\{[^}]*\bevaluateTarget\s+as\s+(\w+)[^}]*\}\s*from\s*'eval-quality';/.exec(port)?.[1];
   check(
-    imported !== undefined && new RegExp(String.raw`\bevaluateTarget\s*=\s*${imported}\b`).test(port),
+    defaultsToImportedEvaluateTarget(port),
     "the port template's evaluator does not default to the evaluateTarget it imports from eval-quality",
   );
+  // The reading holds only the factory's own parameter list: a comment, or a default moved out of the list, fails it.
+  const commentedOnly = port
+    .replace(/, evaluateTarget = engineEvaluateTarget \}\)/, ' })')
+    .replace('export default function', '// evaluateTarget = engineEvaluateTarget\nexport default function');
+  const movedOut = port.replace(/, evaluateTarget = engineEvaluateTarget \}\)/, ' }, evaluateTarget = engineEvaluateTarget)');
+  check(
+    commentedOnly !== port &&
+      movedOut !== port &&
+      !defaultsToImportedEvaluateTarget(commentedOnly) &&
+      !defaultsToImportedEvaluateTarget(movedOut),
+    'the check that the evaluator defaults to the import reads a comment, or a default outside the options, as the default',
+  );
+  // The grep's own reach: every spelling of a copied range check it was written against is caught.
+  const escaped = RANGE_EVASIONS.filter((text) => !grepCatches(text));
+  check(escaped.length === 0, `the template grep misses a copied range check spelled ${JSON.stringify(escaped)}`);
   const portRanges = port.match(RANGE_LITERAL) ?? [];
   check(portRanges.length === 0, `the port template holds range literals of its own: ${JSON.stringify(portRanges)}`);
   for (const [template, text] of [
@@ -334,7 +426,14 @@ async function checkTemplates() {
 
 // ---------------------------------------------------------------- the port, in process
 
-/** A loopback service for the port's own units: `/echo` answers what it was sent, `/hop/<n>` redirects to `/hop/<n + 1>` until 2. */
+/** A text body past 64 KiB of two-, three- and four-byte characters, so the port's answer crosses a pipe's chunk inside one. */
+const MULTIBYTE = 'aé€😀'.repeat(8000);
+
+/**
+ * A loopback service for the port's own units: `/echo` answers what it was sent, `/hop/<n>` redirects to `/hop/<n + 1>`
+ * until 2, `/multibyte?pad=<n>` answers `MULTIBYTE` after `n` ASCII characters as text, and `/to-host?host=<name>`
+ * redirects to `<name>` on its own port.
+ */
 async function unitService() {
   const received = [];
   const server = http.createServer((request, response) => {
@@ -361,7 +460,12 @@ async function unitService() {
         '/to-unresolvable': [302, `http://unresolvable.test:${port}/echo`],
         '/bad-location': [302, 'http://[::1'],
       };
-      if (hop !== null) {
+      if (url.pathname === '/multibyte') {
+        const pad = 'a'.repeat(Number(url.searchParams.get('pad') ?? 0));
+        response.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' }).end(`${pad}${MULTIBYTE}`);
+      } else if (url.pathname === '/to-host') {
+        response.writeHead(302, { location: `http://${url.searchParams.get('host')}:${port}/echo` }).end();
+      } else if (hop !== null) {
         const next = Number(hop[1]) + 1;
         response.writeHead(302, { location: next > 2 ? '/echo' : `/hop/${next}` }).end();
       } else if (Object.hasOwn(redirects, url.pathname)) {
@@ -583,6 +687,45 @@ async function checkConformance() {
       lines[0] === `PASS environment-probe conformance for "http-probe-port": ${expected}/${expected} assertions passed` &&
       lines.filter((line) => line.startsWith('pass probe/')).length === expected,
     `the conformance file ran ${ran.error?.message ?? `to exit ${ran.status}`}; expected ${expected} passing outcomes\n${ran.stdout}${ran.stderr}`,
+  );
+
+  // The conformance file closes every stub it started, whether or not the suite disposed of it: over an eval-quality
+  // whose suite builds one scenario and reports without disposing of it, the file still ends, since its own `finally`
+  // closes the stub. Everything else the file and the port import is the real package.
+  const undisposed = makeProject('conformance-undisposed');
+  const real = path.join(PROJECT_ROOT, 'node_modules', 'eval-quality');
+  const stub = path.join(undisposed.folder, 'node_modules', 'eval-quality');
+  fs.rmSync(stub);
+  fs.mkdirSync(stub);
+  writeJson(path.join(stub, 'package.json'), {
+    name: 'eval-quality',
+    type: 'module',
+    exports: { '.': './index.js', './conformance': './conformance.js' },
+  });
+  const realUrl = (relative) => JSON.stringify(pathToFileURL(path.join(real, relative)).href);
+  fs.writeFileSync(path.join(stub, 'index.js'), `export * from ${realUrl('dist/index.js')};\n`);
+  fs.writeFileSync(
+    path.join(stub, 'conformance.js'),
+    [
+      `export * from ${realUrl('dist/testing/index.js')};`,
+      'export async function runEnvironmentProbePortConformance(subject) {',
+      "  await subject.build('resolves');",
+      '  return { passed: true };',
+      '}',
+      "export function formatConformanceReport() { return 'a suite that disposed of nothing'; }",
+      '',
+    ].join('\n'),
+  );
+  const ended = spawnSync(process.execPath, [path.join('adapter', 'http-probe-port.conformance.mjs')], {
+    cwd: undisposed.folder,
+    encoding: 'utf8',
+    env: BASE_ENV,
+    timeout: 15_000,
+    killSignal: 'SIGKILL',
+  });
+  check(
+    ended.error === undefined && ended.status === 0 && ended.stdout.includes('a suite that disposed of nothing'),
+    `the conformance file over a suite that disposed of no stub ${ended.error === undefined ? `exited ${ended.status}` : `did not end: ${ended.error.message}`}\n${ended.stdout}${ended.stderr}`,
   );
 }
 
@@ -1025,10 +1168,10 @@ async function checkUnits() {
       addresses: ['127.0.0.1'],
       methods: ['GET'],
       safeMethods: ['GET'],
-      maxRedirects: 0,
+      maxRedirects: 1,
       maxElapsedMs: 5000,
       maxRequestBytes: 1024,
-      maxResponseBytes: 65_536,
+      maxResponseBytes: 262_144,
       auth: {
         header: 'x-api-key',
         environmentKey: 'UNIT_API_KEY',
@@ -1056,9 +1199,117 @@ async function checkUnits() {
         sessions(project).length === 0,
       `a call to a deployed entry gave ${JSON.stringify(answered?.status ?? answered?.message)} and reached ${JSON.stringify(service.received)}`,
     );
+
+    // An answer past 64 KiB of multi-byte characters crosses the port's channel in several chunks and is read whole.
+    // Four answers, each shifted by one more ASCII character, so a chunk's end falls inside a character in some of them
+    // wherever the channel cuts.
+    const multibytes = await withEnvironment({ UNIT_API_KEY: 'unit-key-value' }, async () => {
+      const { port } = await deployedRegistry.createProbePort({ cwd: project.root, projectRoot: project.root });
+      const answers = [];
+      for (const pad of [0, 1, 2, 3]) {
+        answers.push(
+          await port
+            .probe({
+              probeId: `deployed-multibyte-${pad}`,
+              interfaceId: 'unit-deployed',
+              operationId: 'multibyte',
+              kind: 'api',
+              method: 'GET',
+              pathTemplate: '/multibyte',
+              channels: { path: {}, query: { pad: String(pad) }, header: {}, body: { kind: 'absent' } },
+            })
+            .catch((error) => error),
+        );
+      }
+      return answers;
+    });
+    const unread = multibytes
+      .map((answer, pad) => ({ pad, value: String(answer?.body?.value ?? answer?.message) }))
+      .filter(({ pad, value }) => value !== `${'a'.repeat(pad)}${MULTIBYTE}`)
+      .map(({ pad, value }) => ({ pad, length: value.length, replaced: [...value].filter((character) => character === '\uFFFD').length }));
+    check(unread.length === 0, `a ${Buffer.byteLength(MULTIBYTE)}-byte multi-byte answer came back altered: ${JSON.stringify(unread)}`);
+
+    // A denial's message names the host a redirect gave, which a URL lowercases: a secret the target put there is
+    // scrubbed from the message in every case, as from the answer.
+    const { default: createHttpProbePort } = await import('../src/workflows/testarch/bmad-testarch-evaluate/assets/http-probe-port.mjs');
+    const mixedCaseKey = 'Unit-Key-Value-MixedCase';
+    const templatePort = createHttpProbePort({
+      ...portConfiguration({
+        entries: [deployedEntry],
+        portOf: (candidate) => candidate.port,
+        readEnvironment: () => ({ UNIT_API_KEY: mixedCaseKey }),
+      }),
+      transport: {
+        // A name no resolver knows, as DNS answers for the host the redirect named.
+        resolve: async (host) => {
+          if (host !== '127.0.0.1') throw new Error(`no address for ${host}`);
+          return host;
+        },
+      },
+    });
+    const redirected = await withEnvironment({ UNIT_API_KEY: mixedCaseKey }, async () =>
+      hostEnvironmentPort({ port: templatePort, registry: createRegistry([deployedEntry], { root: project.root, httpPort }) })
+        .probe({
+          probeId: 'deployed-3',
+          interfaceId: 'unit-deployed',
+          operationId: 'to-host',
+          kind: 'api',
+          method: 'GET',
+          pathTemplate: '/to-host',
+          channels: { path: {}, query: { host: `${mixedCaseKey}.example.test` }, header: {}, body: { kind: 'absent' } },
+        })
+        .catch((error) => error),
+    );
+    check(
+      redirected?.code === 'forbidden-target' &&
+        redirected.reason === 'host-not-authorized' &&
+        !redirected.message.toLowerCase().includes(mixedCaseKey.toLowerCase()) &&
+        redirected.message.includes('[redacted]'),
+      `a redirect to a host carrying the auth value was denied with ${redirected?.code}/${redirected?.reason}: ${redirected?.message}`,
+    );
   } finally {
     await service.close();
   }
+
+  // On a gameability arm, every spelling of a host the policy reads as the entry's resolves as on a real arm, so a
+  // redirect to it is followed (and caps), and a host the policy does not name is still denied by the policy.
+  const gameEntry = {
+    kind: 'api',
+    interfaceId: 'unit-game',
+    scheme: 'http',
+    host: 'localhost',
+    port: 8080,
+    addresses: ['127.0.0.1'],
+    methods: ['GET'],
+    safeMethods: ['GET'],
+    maxRedirects: 1,
+    maxElapsedMs: 5000,
+    maxRequestBytes: 1024,
+    maxResponseBytes: 4096,
+  };
+  const degenerateRedirect = async (location) =>
+    degenerateApiPort({
+      entries: [gameEntry],
+      httpPort,
+      answer: { status: 302, headers: { location } },
+      readEnvironment: noEnvironment,
+    })
+      .probe({
+        probeId: 'game-1',
+        interfaceId: 'unit-game',
+        operationId: 'redirect',
+        kind: 'api',
+        method: 'GET',
+        pathTemplate: '/start',
+        channels: { path: {}, query: {}, header: {}, body: { kind: 'absent' } },
+      })
+      .catch((error) => error);
+  const respelled = await degenerateRedirect('http://LOCALHOST.:8080/next');
+  const elsewhere = await degenerateRedirect('http://elsewhere.test:8080/next');
+  check(
+    respelled?.code === 'budget-exhausted' && elsewhere?.code === 'forbidden-target' && elsewhere.reason === 'host-not-authorized',
+    `a gameability redirect to LOCALHOST. gave ${respelled?.code}/${respelled?.reason}, and to an unlisted host ${elsewhere?.code}/${elsewhere?.reason}`,
+  );
 }
 
 // ---------------------------------------------------------------- the pipeline
@@ -1301,7 +1552,8 @@ async function checkDenials() {
     `a port with no host: preflight exited ${refused.status}; expected 10\n${refused.output}`,
   );
 
-  // A port file that hands the host no factory, writes outside the protocol, or floods its output does not serve: exit 10.
+  // A port file that hands the host no factory, writes a line outside the protocol on the protocol's channel, or floods
+  // that channel does not serve: exit 10.
   const portEdit =
     (edit) =>
     ({ folder }) => {
@@ -1314,8 +1566,16 @@ async function checkDenials() {
       (text) => text.replace('serveHttpProbePort({ createHttpProbePort, nodeTransport });', 'serveHttpProbePort({ nodeTransport });'),
       "hands TeA's host no createHttpProbePort factory",
     ],
-    ['port-stray-line', (text) => `process.stdout.write('ready\\n');\n${text}`, "wrote a line that is not the runtime's protocol"],
-    ['port-flood', (text) => `process.stdout.write('x'.repeat(2 * 1024 * 1024));\n${text}`, 'wrote past its standard output ceiling'],
+    [
+      'port-stray-line',
+      (text) => `import { writeSync as protocolWrite } from 'node:fs';\nprotocolWrite(3, 'ready\\n');\n${text}`,
+      "wrote a line that is not the runtime's protocol",
+    ],
+    [
+      'port-flood',
+      (text) => `import { writeSync as protocolWrite } from 'node:fs';\nprotocolWrite(3, 'x'.repeat(2 * 1024 * 1024));\n${text}`,
+      'wrote past its protocol channel ceiling',
+    ],
   ]) {
     const project = makeProject(label, { edit: portEdit(edit) });
     const answered = evaluate(['preflight', '--evaluation', project.folder], project.env);
@@ -1440,6 +1700,63 @@ async function checkDenials() {
     stuckRan.status === 12 && String(stuckFault?.cause).includes('did not answer within') && livingPorts(stuck).length === 0,
     `a port whose call never settles: preflight exited ${stuckRan.status} with the fault ${JSON.stringify(stuckFault)}, leaving ${JSON.stringify(livingPorts(stuck))}\n${stuckRan.output}`,
   );
+
+  // A port that logs on its standard output, as it loads and on every call, still serves: the protocol has a channel of
+  // its own.
+  const logging = makeProject('port-logs', {
+    edit: (project) => {
+      cleanOnly(project);
+      portEdit((text) =>
+        `console.log('the port is loading');\n${text}`.replace(
+          '  async function probe(input, signal) {',
+          "  async function probe(input, signal) {\n    console.log('probing', input?.probeId);",
+        ),
+      )(project);
+    },
+  });
+  const logged = evaluate(['preflight', '--evaluation', logging.folder], logging.env);
+  check(logged.status === 0, `a port that logs on its standard output: preflight exited ${logged.status}; expected 0\n${logged.output}`);
+
+  // A port that prints past its output ceiling during a call is ended, and the call stops the run: exit 12.
+  const printing = makeProject('port-prints', {
+    edit: (project) => {
+      cleanOnly(project);
+      portEdit((text) =>
+        text.replace(
+          '  return { probe };',
+          "  return {\n    probe: () => {\n      process.stdout.write('x'.repeat(2 * 1024 * 1024));\n      return new Promise(() => {});\n    },\n  };",
+        ),
+      )(project);
+    },
+  });
+  const printed = evaluate(['preflight', '--evaluation', printing.folder], printing.env);
+  const printedFault = legFaultOf(printing);
+  check(
+    printed.status === 12 && String(printedFault?.cause).includes('printed past its output ceiling') && livingPorts(printing).length === 0,
+    `a port printing past its output ceiling: preflight exited ${printed.status} with the fault ${JSON.stringify(printedFault)}\n${printed.output.slice(0, 4000)}`,
+  );
+
+  // A port that answers with something eval-quality's own ProbeObservation parser does not read breaks its contract:
+  // the run stops (exit 12) at the qualification, whose arms the runtime records itself, and the answer is never judged
+  // as the target's behavior.
+  for (const [label, malformed] of [
+    ['port-status-999', '{ ...valid.data, status: 999 }'],
+    ['port-header-number', '{ ...valid.data, headers: { x: 5 } }'],
+    ['port-body-object', "{ ...valid.data, body: { verdict: 'accept' } }"],
+  ]) {
+    const project = makeProject(label, {
+      edit: portEdit((text) => text.replace('  return valid.data;\n}', `  return ${malformed};\n}`)),
+    });
+    const ran = evaluate(['preflight', '--evaluation', project.folder], project.env);
+    const runDirectory = runDirectoryOf(project.folder);
+    const fault = runDirectory === null ? null : readIfPresent(path.join(runDirectory, 'qualification', 'P-002', 'fault.json'));
+    check(
+      ran.status === 12 &&
+        fault?.code === 'port-contract-violation' &&
+        String(fault.message).includes('no ProbeObservation eval-quality reads'),
+      `${label}: preflight exited ${ran.status} with the qualification fault ${JSON.stringify(fault)}; expected 12 and port-contract-violation\n${ran.output}`,
+    );
+  }
 }
 
 // ---------------------------------------------------------------- the bridge
@@ -1860,6 +2177,33 @@ async function checkCheckRules() {
         }),
       'schema',
       'targetArgs/0',
+    ],
+    [
+      'an HTTP entry whose IPv4 host a URL spells otherwise',
+      ({ folder }) =>
+        editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
+          evaluation.registry[0].host = '127.1';
+        }),
+      'registry',
+      'names host "127.1", which a URL spells "127.0.0.1"',
+    ],
+    [
+      'an HTTP entry whose IPv6 host a URL spells otherwise',
+      ({ folder }) =>
+        editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
+          evaluation.registry[0].host = '0:0:0:0:0:0:0:1';
+        }),
+      'registry',
+      'which a URL spells "::1"',
+    ],
+    [
+      'an auth header over plain http to an address that is not loopback',
+      ({ folder }) =>
+        editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
+          evaluation.registry[0].addresses = ['127.0.0.1', '192.0.2.10'];
+        }),
+      'registry',
+      'sends its authorization header over plain http to "192.0.2.10"',
     ],
     [
       'a folder with no HTTP port',

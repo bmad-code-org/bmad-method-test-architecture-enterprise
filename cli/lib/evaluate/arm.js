@@ -272,17 +272,21 @@ function hostEnvironmentPort({ port, registry }) {
           : {};
       // An HTTP call's server starts with the host's values for its entry's keys, and its auth header carries one.
       const carried = request?.kind === 'api' ? registry.apiSecrets(request.interfaceId) : [];
-      const secrets = secretForms(
-        [...Object.values(injected), ...Object.values(server), ...carried].filter((value) => value.length >= MIN_SCRUBBED_VALUE_LENGTH),
+      const values = [...Object.values(injected), ...Object.values(server), ...carried].filter(
+        (value) => value.length >= MIN_SCRUBBED_VALUE_LENGTH,
       );
+      const secrets = secretForms(values);
       try {
         return { request: augmented, observation: scrub(await port.probe(augmented, signal), secrets) };
       } catch (error) {
         error.request = augmented;
-        // eval-quality reports a mechanism's own failure (a server that would not start, a refused handshake, a
-        // malformed frame, a spawn error) as the fault's cause, which can quote what the target printed, JSON-escaped
-        // or cut short, so it is kept scrubbed beside the fault.
-        if (error?.cause !== undefined) error.scrubbedCause = scrubCutText(String(error.cause?.message ?? error.cause), secrets);
+        // A fault's message and cause can quote what the target sent: a denial names the host a redirect gave, which a
+        // URL lowercases, and eval-quality reports a mechanism's own failure (a server that would not start, a refused
+        // handshake, a malformed frame, a spawn error) as the cause, which can quote what the target printed,
+        // JSON-escaped or cut short. Both are kept scrubbed of every secret, in its own case and lowercased.
+        const anyCase = secretForms([...values, ...values.map((value) => value.toLowerCase())]);
+        if (typeof error?.message === 'string') error.message = scrubCutText(error.message, anyCase);
+        if (error?.cause !== undefined) error.scrubbedCause = scrubCutText(String(error.cause?.message ?? error.cause), anyCase);
         throw error;
       }
     },

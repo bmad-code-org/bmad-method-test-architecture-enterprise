@@ -44,7 +44,7 @@ const path = require('node:path');
 
 const AjvModule = require('ajv/dist/2020');
 
-const { loadAdapters } = require('./engine');
+const { loadAdapters, loadEngine } = require('./engine');
 const { createApiPort, degenerateApiPort, isApiEntry } = require('./http-target');
 
 const Ajv = AjvModule.default ?? AjvModule;
@@ -761,6 +761,65 @@ async function mcpRegistryProblems(entries) {
 }
 
 /**
+ * The spelling of `host` the evaluation's HTTP port hands eval-quality's
+ * policy: a URL's hostname for it, unbracketed (lower case, an IPv4 address
+ * in dotted decimal, an IPv6 address compressed, a name in punycode), as the
+ * template's `originOf` and `hostOfUrl` read it; null when no URL can name
+ * it. eval-quality compares a target's host with the authorization's as text
+ * and exports no host normalization (its `parseAddress` canonicalizes an
+ * address for the address check, in a form no URL carries), so the URL's
+ * spelling is the one both sides hold.
+ *
+ * @param {string} host
+ * @returns {string|null}
+ */
+function canonicalHost(host) {
+  const literal = host.includes(':') && !host.startsWith('[') ? `[${host}]` : host;
+  if (!URL.canParse(`http://${literal}/`)) return null;
+  const { hostname } = new URL(`http://${literal}/`);
+  return hostname.startsWith('[') ? hostname.slice(1, -1) : hostname;
+}
+
+/**
+ * Every HTTP entry that cannot reach its target as written, as one line each:
+ * a `host` spelled otherwise than a URL spells it, which eval-quality's policy
+ * denies on every request (`host-not-authorized`), since the port hands it the
+ * URL's spelling; and an `auth` header sent over `http` to an address
+ * eval-quality's `classifyAddress` does not class `loopback`, which would put
+ * the credential on the network in clear text. Each entry is first held to
+ * its schema (`registryProblems`); an entry off it is left to that finding.
+ *
+ * @param {unknown} entries
+ * @returns {Promise<string[]>}
+ */
+async function apiRegistryProblems(entries) {
+  if (!Array.isArray(entries)) return [];
+  const problems = [];
+  let classifyAddress;
+  for (const [index, entry] of entries.entries()) {
+    if (!isApiEntry(entry) || !entryValidator(API_REGISTRY_ENTRY_DEFINITION)(entry)) continue;
+    const canonical = canonicalHost(entry.host);
+    if (canonical === null) {
+      problems.push(`registry[${index}] names host ${JSON.stringify(entry.host)}, which no URL can name`);
+    } else if (canonical !== entry.host) {
+      problems.push(
+        `registry[${index}] names host ${JSON.stringify(entry.host)}, which a URL spells ${JSON.stringify(canonical)}; eval-quality's policy compares the host a request carries, so write ${JSON.stringify(canonical)}`,
+      );
+    }
+    if (entry.auth !== undefined && entry.scheme === 'http') {
+      classifyAddress ??= (await loadEngine()).classifyAddress;
+      const exposed = entry.addresses.filter((address) => classifyAddress(address) !== 'loopback');
+      if (exposed.length > 0) {
+        problems.push(
+          `registry[${index}] sends its ${entry.auth.header} header over plain http to ${exposed.map((address) => JSON.stringify(address)).join(', ')}, which eval-quality's classifyAddress does not class loopback; use scheme "https", or keep every address loopback`,
+        );
+      }
+    }
+  }
+  return problems;
+}
+
+/**
  * The registry an `evaluation.json` declares, resolved against `root`, with
  * the evaluation's HTTP port when one was loaded.
  *
@@ -783,6 +842,7 @@ module.exports = {
   isMcpEntry,
   isRegistry,
   kindOf,
+  apiRegistryProblems,
   mcpRegistryProblems,
   observedText,
   probeRequest,

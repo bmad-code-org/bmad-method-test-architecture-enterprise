@@ -519,7 +519,7 @@
           "enum": ["http", "https"]
         },
         "host": {
-          "description": "The host requests name, compared by eval-quality without case and with one trailing dot dropped; the port resolves it once per request, to its first address, and sends to that address with this host in the Host header.",
+          "description": "The host requests name, written as a URL spells it (lower case, an IPv4 address in dotted decimal, an IPv6 address compressed and unbracketed, a name in punycode), which check holds it to, since the port hands eval-quality's policy the host of the URL it sends to and the policy compares the two as text; the port resolves it once per request, to its first address, and sends to that address with this host in the Host header.",
           "type": "string",
           "minLength": 1
         },
@@ -631,7 +631,7 @@
           }
         },
         "auth": {
-          "description": "A credential every request of this interface carries: the header named, holding prefix followed by the host's value for environmentKey. It is added by the port, never recorded in a request, and scrubbed from every answer; it goes to no origin a redirect names.",
+          "description": "A credential every request of this interface carries: the header named, holding prefix followed by the host's value for environmentKey. It is added by the port, never recorded in a request, and scrubbed from every answer; it goes to no origin a redirect names. Over scheme http, check requires every address to be one eval-quality's classifyAddress classes loopback, so the credential never crosses the network in clear text.",
           "type": "object",
           "additionalProperties": false,
           "required": ["header", "environmentKey"],

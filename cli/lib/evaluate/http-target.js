@@ -12,7 +12,9 @@
  * The runtime never loads that file into its own process. Each call starts it
  * as a Node process of its own (`TEA_EVALUATE_HTTP_PORT_HOST=1`), whose last
  * lines hand the port to TeA's host (`http-port-host.js`), and speaks one
- * message with it over standard input and output. The adopter's code then runs
+ * message with it over file descriptor 3, a channel opened for the protocol
+ * alone; what the port prints on its standard output and error is captured
+ * and quoted when the call fails. The adopter's code then runs
  * apart from the run's state, a port that hangs is ended at its ceiling, and
  * every module the runtime itself loads stays one `test:direction` can name.
  * `probeHttpPort` asks the port, once before a run starts anything, for the
@@ -42,7 +44,10 @@
  * nothing. A deployed target (an entry naming its `port`) is reached as it is.
  * On a gameability arm the port answers from the degenerate response with a
  * transport that sends nothing (`degenerateApiPort`), so a call the policy does
- * not allow is denied as on a real arm.
+ * not allow is denied as on a real arm. An answer is held to eval-quality's own
+ * `ProbeObservation` parser (`probeParsers.response`) before the run records
+ * it, so a port that answers with no observation breaks the port's contract
+ * (exit 12) and is never judged as the target's behavior.
  */
 
 'use strict';
@@ -52,9 +57,10 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const net = require('node:net');
 const path = require('node:path');
+const { StringDecoder } = require('node:string_decoder');
 
-const { loadEngine } = require('./engine');
-const { HOST_ENVIRONMENT_KEY, HTTP_PORT_PROTOCOL, UnansweredRequest } = require('./http-port-host');
+const { loadConformance, loadEngine } = require('./engine');
+const { HOST_ENVIRONMENT_KEY, HTTP_PORT_PROTOCOL, PROTOCOL_FD, UnansweredRequest } = require('./http-port-host');
 
 /** Where the evaluation's HTTP port lives, relative to the evaluation folder. */
 const HTTP_PORT_MODULE = 'adapter/http-probe-port.mjs';
@@ -67,12 +73,12 @@ const PORT_START_ALLOWANCE_MS = 15_000;
 const READY_POLL_MS = 25;
 /** How long a call that failed waits for its server's end to be reported, so the cause names it. */
 const SERVER_SETTLE_MS = 250;
-/** How much of a process's standard error a failure quotes, from its end. */
+/** How much of what a process printed a failure quotes, from its end. */
 const STDERR_TAIL = 2000;
-/** The most the port's own process may write on standard error before it is ended. */
-const PORT_STDERR_BYTES = 1024 * 1024;
-/** The standard output the port's process may write beyond six bytes per answer byte (an answer's JSON escaping). */
-const PORT_STDOUT_ALLOWANCE = 1024 * 1024;
+/** The most the port's own process may print on its standard output and error together before it is ended. */
+const PORT_OUTPUT_BYTES = 1024 * 1024;
+/** What the port's process may write on the protocol channel beyond six bytes per answer byte (an answer's JSON escaping). */
+const PORT_CHANNEL_ALLOWANCE = 1024 * 1024;
 /** The host's variables the port's process inherits beside PATH: the extra certificate authorities Node reads. */
 const INHERITED_KEYS = ['NODE_EXTRA_CA_CERTS'];
 
@@ -85,7 +91,7 @@ class HttpPortError extends Error {
   }
 }
 
-/** A failure of the port's own process (it could not start, ended early, broke the protocol or outlived its ceiling). */
+/** A failure of the port's own process (it could not start, ended early, broke the protocol or outlived a ceiling). */
 class PortProcessError extends Error {
   constructor(message, { exitCode = 10 } = {}) {
     super(message);
@@ -156,39 +162,46 @@ function httpPortFile(folder) {
 }
 
 /**
- * One exchange with the port's own process: `message` sent, and every line it
- * answers handed to `onMessage` until it returns a value other than
- * `undefined`, which the exchange resolves with. The process is ended however
- * the exchange ends. One that cannot start or outlives `timeoutMs` rejects
- * with a `PortProcessError` whose exit code is 12, a target that could not
- * run; one that exits first, writes a line outside the protocol or past its
- * ceilings rejects with exit code 10, a port that does not serve.
+ * One exchange with the port's own process: `message` sent on the protocol
+ * channel (file descriptor 3), and every line it answers there handed to
+ * `onMessage` until it returns a value other than `undefined`, which the
+ * exchange resolves with. What the process prints on its standard output and
+ * error is the adopter's, captured and quoted in a failure. The process is
+ * ended however the exchange ends. One that cannot start or outlives
+ * `timeoutMs` rejects with a `PortProcessError` whose exit code is 12, a
+ * target that could not run; one that exits first, writes a line outside the
+ * protocol or passes a ceiling rejects with exit code 10, a port that does
+ * not serve.
  */
-function exchangeWithPort({ httpPort, message, onMessage, timeoutMs, maxStdoutBytes = PORT_STDOUT_ALLOWANCE, signal }) {
+function exchangeWithPort({ httpPort, message, onMessage, timeoutMs, maxChannelBytes = PORT_CHANNEL_ALLOWANCE, signal }) {
   return new Promise((resolve, reject) => {
+    const stdio = ['ignore', 'pipe', 'pipe'];
+    stdio[PROTOCOL_FD] = 'pipe';
     const child = spawn(process.execPath, [httpPort.file], {
       cwd: httpPort.folder,
       env: portEnvironment(),
-      stdio: ['pipe', 'pipe', 'pipe'],
+      stdio,
     });
+    const channel = child.stdio[PROTOCOL_FD];
+    const decoder = new StringDecoder('utf8');
     let settled = false;
-    let stderr = '';
+    let printed = '';
     let pending = '';
-    let stdoutBytes = 0;
+    let channelBytes = 0;
     const finish = (action) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
       signal?.removeEventListener('abort', onAbort);
-      child.stdin.end();
-      // The process ends on its own once its input closes; one that does not is killed.
+      channel.end();
+      // The process ends on its own once its channel closes; one that does not is killed.
       const killer = setTimeout(() => child.kill('SIGKILL'), 2000);
       killer.unref();
       child.once('exit', () => clearTimeout(killer));
       action();
     };
     const failed = (detail, exitCode = 10) => {
-      const quoted = tail(stderr);
+      const quoted = tail(printed);
       return new PortProcessError(`the evaluation's HTTP port ${HTTP_PORT_MODULE} ${detail}${quoted === '' ? '' : `: ${quoted}`}`, {
         exitCode,
       });
@@ -199,14 +212,18 @@ function exchangeWithPort({ httpPort, message, onMessage, timeoutMs, maxStdoutBy
     };
     const timer = setTimeout(() => stop(`did not answer within ${timeoutMs}ms and was ended`, 12), timeoutMs);
     const onAbort = () => {
-      if (!settled) child.stdin.write(`${JSON.stringify({ type: 'abort' })}\n`);
+      if (!settled) channel.write(`${JSON.stringify({ type: 'abort' })}\n`);
     };
     signal?.addEventListener('abort', onAbort, { once: true });
-    child.stderr.setEncoding('utf8');
-    child.stderr.on('data', (chunk) => {
-      stderr += chunk;
-      if (stderr.length > PORT_STDERR_BYTES) stop('wrote past its standard error ceiling and was ended');
-    });
+    // A port's own logging (a console.log, a warning) goes to its standard output or error, which never reach the
+    // protocol: both are kept, in the order they arrive, for the failure to quote.
+    for (const stream of [child.stdout, child.stderr]) {
+      stream.setEncoding('utf8');
+      stream.on('data', (chunk) => {
+        printed += chunk;
+        if (printed.length > PORT_OUTPUT_BYTES) stop(`printed past its output ceiling (${PORT_OUTPUT_BYTES} characters) and was ended`);
+      });
+    }
     // Each line is handled after the one before it, since answering `send` waits for a server to start.
     let handled = Promise.resolve();
     const handle = async (line) => {
@@ -220,20 +237,21 @@ function exchangeWithPort({ httpPort, message, onMessage, timeoutMs, maxStdoutBy
       }
       try {
         const outcome = await onMessage(answer, (reply) => {
-          if (!settled) child.stdin.write(`${JSON.stringify(reply)}\n`);
+          if (!settled) channel.write(`${JSON.stringify(reply)}\n`);
         });
         if (outcome !== undefined) finish(() => resolve(outcome));
       } catch (error) {
         finish(() => reject(error));
       }
     };
-    child.stdout.on('data', (chunk) => {
-      stdoutBytes += chunk.byteLength;
-      if (stdoutBytes > maxStdoutBytes) {
-        stop(`wrote past its standard output ceiling (${maxStdoutBytes} bytes) and was ended`);
+    channel.on('data', (chunk) => {
+      channelBytes += chunk.byteLength;
+      if (channelBytes > maxChannelBytes) {
+        stop(`wrote past its protocol channel ceiling (${maxChannelBytes} bytes) and was ended`);
         return;
       }
-      pending += chunk.toString('utf8');
+      // One decoder over the whole stream: a character whose bytes arrive in two chunks is read whole.
+      pending += decoder.write(chunk);
       let newline;
       while ((newline = pending.indexOf('\n')) !== -1) {
         const line = pending.slice(0, newline);
@@ -241,14 +259,14 @@ function exchangeWithPort({ httpPort, message, onMessage, timeoutMs, maxStdoutBy
         handled = handled.then(() => handle(line));
       }
     });
-    child.stdin.on('error', () => {});
+    channel.on('error', () => {});
     child.once('error', (error) => finish(() => reject(failed(`could not start: ${error.message}`, 12))));
     child.once('close', (code, signalName) => {
       // A line already read is handled before the process's end is.
       handled = handled.then(() => finish(() => reject(failed(`ended (${signalName ?? `exit ${code}`}) before it answered`))));
     });
     if (signal?.aborted) onAbort();
-    child.stdin.write(`${JSON.stringify(message)}\n`);
+    channel.write(`${JSON.stringify(message)}\n`);
   });
 }
 
@@ -521,17 +539,32 @@ function portFailure(cause, message = "the evaluation's HTTP port could not serv
   return Object.assign(new Error(`port-failure: ${message}`), { code: 'port-failure', cause });
 }
 
-/** Whether an answer is an `api` observation of `request`, correlated by its identifiers. */
-function answersRequest(observation, request) {
-  return (
-    observation !== null &&
-    typeof observation === 'object' &&
-    observation.kind === 'api' &&
-    observation.probeId === request.probeId &&
-    observation.interfaceId === request.interfaceId &&
-    observation.operationId === request.operationId &&
-    Number.isInteger(observation.status)
-  );
+/** A port's answer that breaks the port's contract: eval-quality's `port-contract-violation`, which stops the run (exit 12). */
+function contractViolation(detail) {
+  return Object.assign(new Error(`port-contract-violation: ${detail}`), { code: 'port-contract-violation' });
+}
+
+/**
+ * The port's answer as the observation the run records: read by eval-quality's
+ * own `ProbeObservation` parser (`probeParsers.response`), and correlated with
+ * `request` by its identifiers and kind. Anything else breaks the port's
+ * contract and is never judged as the target's behavior.
+ */
+function observationFor(answer, request, parsers) {
+  const parsed = parsers.response.safeParse(answer);
+  if (!parsed.success) {
+    throw contractViolation(`the port answered with no ProbeObservation eval-quality reads: ${parsed.error.message}`);
+  }
+  const observation = parsed.data;
+  if (
+    observation.kind !== 'api' ||
+    observation.probeId !== request.probeId ||
+    observation.interfaceId !== request.interfaceId ||
+    observation.operationId !== request.operationId
+  ) {
+    throw contractViolation('the port answered with no api observation of this request');
+  }
+  return observation;
 }
 
 /**
@@ -539,8 +572,9 @@ function answersRequest(observation, request) {
  * `server` once eval-quality's own `evaluateTarget` allows the target it names;
  * the observation, or its fault thrown.
  */
-async function callPort({ httpPort, message, server, signal, timeoutMs, maxStdoutBytes }) {
+async function callPort({ httpPort, message, server, signal, timeoutMs, maxChannelBytes }) {
   const engine = await loadEngine();
+  const { probeParsers } = await loadConformance();
   if (fileDigest(httpPort.file) !== httpPort.digest) {
     throw portFailure(new Error(`${HTTP_PORT_MODULE} changed after the run started, so the port that answered it is gone`));
   }
@@ -549,7 +583,7 @@ async function callPort({ httpPort, message, server, signal, timeoutMs, maxStdou
     httpPort,
     message: { type: 'call', ...message },
     timeoutMs,
-    maxStdoutBytes,
+    maxChannelBytes,
     signal,
     onMessage: async (answer, reply) => {
       if (answer?.type === 'send') {
@@ -575,15 +609,11 @@ async function callPort({ httpPort, message, server, signal, timeoutMs, maxStdou
         return;
       }
       if (answer?.type === 'answer') {
-        if (!answersRequest(answer.observation, request)) {
-          throw Object.assign(new Error('port-contract-violation: the port answered with no api observation of this request'), {
-            code: 'port-contract-violation',
-          });
-        }
+        const observation = observationFor(answer.observation, request, probeParsers);
         if (server?.endedAbnormally()) {
           throw portFailure(server.account(), "the answer came after the call's server had ended, so no server of the run gave it");
         }
-        return { observation: answer.observation };
+        return { observation };
       }
       if (answer?.type === 'fault') {
         const error = faultError(answer.fault, engine.RUNTIME_FAULT_CODES);
@@ -601,9 +631,9 @@ function asCallFault(error) {
   return error instanceof PortProcessError ? portFailure(error) : error;
 }
 
-/** The standard output one call's port process may write: six bytes per answer byte (JSON's worst escaping), and an allowance. */
-function stdoutCeiling(entry) {
-  return (entry?.maxResponseBytes ?? 0) * 6 + PORT_STDOUT_ALLOWANCE;
+/** What one call's port process may write on the protocol channel: six bytes per answer byte (JSON's worst escaping), and an allowance. */
+function channelCeiling(entry) {
+  return (entry?.maxResponseBytes ?? 0) * 6 + PORT_CHANNEL_ALLOWANCE;
 }
 
 /**
@@ -652,7 +682,7 @@ function createApiPort({ entries, httpPort, cwd, targetOf, readEnvironment, mech
           server,
           signal,
           timeoutMs: (entry?.maxElapsedMs ?? 0) + (launched?.server.readyTimeoutMs ?? 0) + PORT_START_ALLOWANCE_MS,
-          maxStdoutBytes: stdoutCeiling(entry),
+          maxChannelBytes: channelCeiling(entry),
         });
         return observation;
       } catch (error) {
@@ -667,7 +697,10 @@ function createApiPort({ entries, httpPort, cwd, targetOf, readEnvironment, mech
 /**
  * The evaluation's port on a gameability arm: the same policy and targets
  * (a started server's at its scheme's default port, since nothing starts),
- * every host resolving to its entry's first address and every allowed request
+ * every host of a request resolving to the first address of its interface's
+ * entry, so eval-quality's own host check decides each spelling of a host as
+ * on a real arm (eval-quality exports no host normalization for TeA to key a
+ * table by), and every allowed request
  * answered from `answer` (`{ status, headers?, body? }`) with nothing sent, or
  * failing with `UnansweredRequest` as its cause when the degenerate response
  * answers none.
@@ -678,7 +711,7 @@ function degenerateApiPort({ entries, httpPort, answer, readEnvironment }) {
     portOf: (entry) => entry.port ?? (entry.scheme === 'https' ? 443 : 80),
     readEnvironment,
   });
-  const degenerateAddresses = Object.fromEntries(entries.map((entry) => [entry.host.toLowerCase(), entry.addresses[0]]));
+  const degenerateAddresses = Object.fromEntries(entries.map((entry) => [entry.interfaceId, entry.addresses[0]]));
   return {
     async probe(request, signal) {
       const entry = entries.find((candidate) => candidate.interfaceId === request?.interfaceId);
@@ -689,7 +722,7 @@ function degenerateApiPort({ entries, httpPort, answer, readEnvironment }) {
           server: null,
           signal,
           timeoutMs: (entry?.maxElapsedMs ?? 0) + PORT_START_ALLOWANCE_MS,
-          maxStdoutBytes: stdoutCeiling(entry),
+          maxChannelBytes: channelCeiling(entry),
         });
         return observation;
       } catch (error) {

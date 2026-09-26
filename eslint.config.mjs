@@ -128,11 +128,12 @@ export default [
   // against that folder's own install (AD-20). The port's last lines import
   // TeA's host by this package's name, which this repository cannot resolve by
   // name, since a package is not installed inside itself; test:evaluate-api
-  // runs both templates from a folder whose install provides it.
+  // runs both templates from a folder whose install provides it. Every other
+  // import is still held to resolve.
   {
     files: ['src/workflows/testarch/bmad-testarch-evaluate/assets/*.mjs'],
     rules: {
-      'n/no-missing-import': 'off',
+      'n/no-missing-import': ['error', { allowModules: ['bmad-method-test-architecture-enterprise'] }],
     },
   },
 

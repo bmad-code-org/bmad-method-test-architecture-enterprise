@@ -14,6 +14,7 @@ The one exception is the scoring-policy template's `parentDigest: null`, which i
 - `http-probe-port.mjs` becomes the evaluation folder's `adapter/http-probe-port.mjs`, the HTTP port every call of an `api` interface goes through.
   It is rendered unchanged: its default export builds the port from configuration alone (where each interface is, eval-quality's target policy, auth headers, transport), eval-quality's `evaluateTarget` decides every allow or deny, and `tea-evaluate` fills the configuration from the registry's `api` entry for each call.
   Its last lines hand the port to TeA's host when `tea-evaluate` starts the file as its own process; keep them.
-  It imports `eval-quality` and TeA's package, which resolve from the install that provides `tea-evaluate` in the project holding the evaluation folder or in a folder above it; without them the port and its conformance file cannot start.
+  The host speaks to `tea-evaluate` on file descriptor 3, which it reserves for that, so what the port prints on standard output and error stays its own and is quoted when a call fails.
+  It imports `eval-quality` and TeA's package as bare names, which Node resolves from the port file's own location: a `node_modules` in the evaluation folder or a folder above it must hold both, as the project's own install of TeA with its `eval-quality` peer does; without them the port and its conformance file cannot start.
 - `http-probe-port.conformance.mjs` becomes `adapter/http-probe-port.conformance.mjs`.
   `node adapter/http-probe-port.conformance.mjs` runs eval-quality's environment-probe conformance suite over the port against a loopback stub it starts and closes itself, so it needs no deployed target and no secret, and it exits 0 only when every assertion passes.

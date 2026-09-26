@@ -85,8 +85,10 @@
  * executable pair, name an interface another kind of entry names, serve an
  * interface as a kind other than the one the contract declares for it, be
  * a tool server eval-quality's `parseMcpTargetPolicy` refuses (two for one
- * interface among them) (`registry`, Story 1.10), or be a second HTTP target
- * for one interface (`registry`, Story 1.11), `interface` must be a kind
+ * interface among them) (`registry`, Story 1.10), be a second HTTP target
+ * for one interface, name a `host` otherwise than a URL spells it, or send
+ * an `auth` header over `http` to an address eval-quality's `classifyAddress`
+ * does not class `loopback` (`registry`, Story 1.11), `interface` must be a kind
  * the contract declares (`reference`), and a file must
  * parse (`json`), match its schema (`schema` for the runtime's own schemas,
  * `engine-schema` for eval-quality's), be named for its ID (`file-name`), and
@@ -104,7 +106,7 @@ const { engineSchemaPath, loadEngine, schemaVersionProblems } = require('./engin
 const { MANIFEST_NAME } = require('./folder');
 const { addFormats } = require('./formats');
 const { HTTP_PORT_MODULE } = require('./http-target');
-const { kindOf, mcpRegistryProblems, repeatedPairs, sharedInterfaces } = require('./registry');
+const { apiRegistryProblems, kindOf, mcpRegistryProblems, repeatedPairs, sharedInterfaces } = require('./registry');
 const { AGENT_ADAPTERS, bridgedArgsRefused, resolveModel } = require('../agent-adapters');
 const { EVALUATOR_DIRECTORY, EvaluatorLayerError, evaluatorFiles, evaluatorOf, isKnownEvaluator } = require('./evaluators');
 const { answeredKind, degenerateResponsePath } = require('./gameability');
@@ -1480,10 +1482,10 @@ function checkRegistryKinds(report, evaluation, registry, contract) {
 /**
  * The evaluation's own HTTP port, which every `api` call goes through (AD-4):
  * when the registry declares an HTTP target, `adapter/http-probe-port.mjs`
- * must be a regular file in a real `adapter/` directory, so the runtime loads
- * the file the evaluation holds and never one a link names. What the module
- * exports is the runtime's to hold when it loads it (`preflight` and `run`
- * exit 10), since reading it runs the adopter's code.
+ * must be a regular file in a real `adapter/` directory, so the runtime starts
+ * the file the evaluation holds and never one a link names. Whether the file
+ * hands the port to TeA's host is the runtime's to hold when it starts it
+ * (`preflight` and `run` exit 10), since starting it runs the adopter's code.
  */
 function checkHttpPort(report, folder, registry) {
   if (!Array.isArray(registry) || !registry.some((entry) => kindOf(entry) === 'api')) return;
@@ -1506,7 +1508,7 @@ function checkHttpPort(report, folder, registry) {
     report.add(
       HTTP_PORT_MODULE,
       'adapter',
-      `${directory.isDirectory() ? HTTP_PORT_MODULE : 'adapter'} is not a regular ${directory.isDirectory() ? 'file' : 'directory'}, so the runtime does not load the port through it`,
+      `${directory.isDirectory() ? HTTP_PORT_MODULE : 'adapter'} is not a regular ${directory.isDirectory() ? 'file' : 'directory'}, so the runtime does not start the port through it`,
     );
   }
 }
@@ -1545,6 +1547,7 @@ async function checkEvaluation(folder) {
     report.add(MANIFEST_NAME, 'registry', problem);
   }
   for (const problem of await mcpRegistryProblems(registry)) report.add(MANIFEST_NAME, 'registry', problem);
+  for (const problem of await apiRegistryProblems(registry)) report.add(MANIFEST_NAME, 'registry', problem);
   const provision = Array.isArray(evaluation.workspace?.provision)
     ? evaluation.workspace.provision.filter((entry) => typeof entry === 'string' && entry.length > 0)
     : [];
