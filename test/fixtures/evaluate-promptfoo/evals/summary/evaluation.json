@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "evaluationId": "promptfoo-summary",
+  "targetKind": "ai-feature",
+  "interface": "cli",
+  "registry": [
+    {
+      "interfaceId": "summarizer",
+      "executable": "summarizer",
+      "target": "bin/summarizer.js",
+      "subcommandPaths": [
+        []
+      ],
+      "artifacts": {},
+      "environmentKeys": [],
+      "maxElapsedMs": 30000,
+      "infrastructureExitCodes": [
+        3
+      ]
+    }
+  ],
+  "launch": {
+    "root": "../.."
+  },
+  "workspace": {
+    "kind": "copy",
+    "provision": []
+  },
+  "arms": [
+    "clean",
+    "mutated"
+  ],
+  "trials": 3,
+  "tiers": [
+    "pr"
+  ],
+  "strengthFloor": {
+    "defect": 1,
+    "zero-action": 1
+  },
+  "evaluator": {
+    "kind": "command",
+    "command": "evaluator/promptfoo.mjs",
+    "timeoutMs": 60000
+  }
+}

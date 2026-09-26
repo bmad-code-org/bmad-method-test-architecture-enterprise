@@ -1,0 +1,12 @@
+{
+  "probeId": "P-001",
+  "probeClass": "zero-action",
+  "behaviorId": "B-002",
+  "expectedClean": true,
+  "rationale": "Clean control: the summary names apples and pears and excludes shellfish.",
+  "defects": [],
+  "qualification": {
+    "route": "clean-control",
+    "noKnownDefectStatement": "The clean item rules have no known defect."
+  }
+}

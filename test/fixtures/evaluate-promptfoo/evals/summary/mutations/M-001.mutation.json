@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "mutationId": "M-001",
+  "mutationSource": "rules/items.json: omit required item pears",
+  "targetArtifact": "rules/items.json",
+  "operator": {
+    "kind": "replace-exact",
+    "find": "\"required\": [\"apples\", \"pears\"]",
+    "replace": "\"required\": [\"apples\"]",
+    "occurrences": 1
+  },
+  "expectedObservableFailure": "The summary stdout omits pears."
+}

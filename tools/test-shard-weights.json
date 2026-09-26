@@ -56,6 +56,7 @@
   "test:evaluate-mcp": 36,
   "test:evaluate-mutation": 169.8,
   "test:evaluate-preflight": 63,
+  "test:evaluate-promptfoo": 18.5,
   "test:evaluate-run": 111.2,
   "test:evaluate-tool-use": 40,
   "test:evaluate-workflow": 25,

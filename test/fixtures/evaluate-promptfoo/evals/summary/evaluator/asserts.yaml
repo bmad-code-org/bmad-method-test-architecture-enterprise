@@ -1,0 +1,6 @@
+- type: contains
+  value: apples
+- type: contains
+  value: pears
+- type: not-contains
+  value: shellfish

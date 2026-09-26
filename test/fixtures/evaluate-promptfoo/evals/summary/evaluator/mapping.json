@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "keys": {
+    "required-apples": {
+      "oracleId": "O-001",
+      "behaviorId": "B-001"
+    },
+    "required-pears": {
+      "oracleId": "O-002",
+      "behaviorId": "B-002"
+    },
+    "forbidden-shellfish": {
+      "oracleId": "O-003",
+      "behaviorId": "B-003"
+    }
+  }
+}
