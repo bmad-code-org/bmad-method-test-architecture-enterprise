@@ -25,23 +25,29 @@
  *      reproducing the pristine one and removed after its cycle), a
  *      historical probe across its fix boundary (`historical.js`: failing in
  *      a worktree at the fix commit's parent and passing in one at the fix
- *      commit), each arm run by the single-trial arm executor (`arm.js`) and
+ *      commit, or, on the deployment route, failing against the pre-fix
+ *      deployment and passing against the post-fix one), each arm run by the
+ *      single-trial arm executor (`arm.js`) and
  *      judged by the deterministic evaluator (`evaluator.js`); the evidence
  *      is written under `runs/<invocationId>/qualification/<probeId>/` as far
  *      as the qualification got, and a step that fails exits 10, 11 or 12
  *      with no qualified probe written. A historical probe with no revisions
- *      to address is refused with its reason (`run.json`'s `refused` and
+ *      to address, or naming a deployment the registry's HTTP policy does not
+ *      authorize, is refused with its reason (`run.json`'s `refused` and
  *      `refused/<probeId>.json`) and left out of everything after, which does
  *      not fail the run;
  *   6. the adopter's project read again and compared with its reading before
  *      the workspaces were made (exit 12 on any change);
  *   7. one mutated workspace per mutation, reproducing the pristine one, its
  *      mutation applied and its digest held to the one the cycle measured,
- *      and one worktree per pre-fix revision a historical probe names;
+ *      one worktree per pre-fix revision a historical probe names, and one
+ *      port per pre-fix deployment (two probes naming one historical arm
+ *      label at two targets exit 10);
  *   8. the legs, planned and driven by eval-quality's `runPreflight` through a
  *      recording port: a leg a defect's manifestation witness names runs in
  *      that defect's mutated workspace (or, on the historical route, its
- *      pre-fix worktree), every other leg in the pristine one,
+ *      pre-fix worktree or its pre-fix deployment), every other leg in the
+ *      pristine one,
  *      and each observation is written under `observations/` with the
  *      workspace and working directory it ran in; a leg the adapter refuses or
  *      cannot run is written under `faults/` and ends the run (exit 10 for a
@@ -77,7 +83,15 @@ const { engineVersion, loadEngine } = require('./engine');
 const { runEngineStage } = require('./engine-cli');
 const { evaluateOracles, oraclesOfBehaviors } = require('./evaluator');
 const { degenerateResponsePath, qualifyGameabilityProbes } = require('./gameability');
-const { historicalRevisions, historicalRoute, qualifyHistoricalProbe } = require('./historical');
+const {
+  deploymentPair,
+  deploymentRoute,
+  historicalRevisions,
+  historicalRoute,
+  qualifyDeploymentProbe,
+  qualifyHistoricalProbe,
+  routeIdentity,
+} = require('./historical');
 const { QualificationError, applyReplaceExact, qualifiedProbe, runMutationCycle } = require('./mutation');
 const { createArtifactValidator } = require('./records');
 const { HttpPortError, isApiEntry, missingCredentials, probeHttpPort } = require('./http-target');
@@ -231,6 +245,7 @@ function recordingPort({ pristine, routes = new Map(), registry, writer }) {
         sequence: legSequence,
         workspace: route.label,
         cwd: route.cwd,
+        ...(route.deployment ? { origins: route.deployment.origins } : {}),
         request: persistableRequest(answered.request),
         observation: answered.observation,
       });
@@ -242,6 +257,7 @@ function recordingPort({ pristine, routes = new Map(), registry, writer }) {
         sequence: legSequence,
         workspace: route.label,
         cwd: route.cwd,
+        ...(route.deployment ? { origins: route.deployment.origins } : {}),
         ...faultRecord(error),
         request: persistableRequest(error?.request ?? request),
       };
@@ -736,10 +752,6 @@ async function runInWorkspaces({
   if (seeded.length > 0) {
     for (const { file, probe } of seeded) {
       if (probe.qualification.route === 'historical') {
-        const revisions = historicalRevisions({ pristine, fixCommit: probe.qualification.fixCommit });
-        if (revisions.defect !== undefined) {
-          return outcome({ stage: 'check', exitCode: 10, message: `${file}: ${revisions.defect}` });
-        }
         // A refused probe runs nowhere; the rest of the run goes on without it (AD-8).
         const refuse = (reason) => {
           const refusal = { probeId: probe.probeId, file, route: 'historical', reason };
@@ -748,6 +760,42 @@ async function runInWorkspaces({
           writeRun();
           log(`${file}: refused: ${reason}`);
         };
+        // A probe naming no fixCommit takes the deployment route, where one naming neither boundary is unaddressable.
+        if (probe.qualification.deployments !== undefined || probe.qualification.fixCommit === undefined) {
+          const deployments = deploymentPair(probe.qualification, evaluation.registry ?? []);
+          if (deployments.unaddressable !== undefined) {
+            return outcome({
+              stage: 'qualification',
+              exitCode: 12,
+              message: `${file}: the runtime cannot address its deployments: ${deployments.unaddressable}`,
+            });
+          }
+          const historical = await qualifyDeploymentProbe({
+            folder,
+            evaluation,
+            contract,
+            file,
+            probe,
+            deployments,
+            pristine,
+            registry,
+            policy,
+            engine,
+            validate,
+            digests,
+            writer,
+            stop,
+            log,
+            signal,
+          });
+          if (historical.refused === undefined) qualified.push(historical);
+          else refuse(historical.refused);
+          continue;
+        }
+        const revisions = historicalRevisions({ pristine, fixCommit: probe.qualification.fixCommit });
+        if (revisions.defect !== undefined) {
+          return outcome({ stage: 'check', exitCode: 10, message: `${file}: ${revisions.defect}` });
+        }
         if (revisions.refused !== undefined) {
           refuse(revisions.refused);
           continue;
@@ -824,8 +872,11 @@ async function runInWorkspaces({
     signal,
   });
 
-  // One mutated workspace per mutation, and one pre-fix worktree per
-  // historical revision, for the legs their witnesses name.
+  // One mutated workspace per mutation, one pre-fix worktree per historical
+  // revision, and one pre-fix deployment per release, for the legs their
+  // witnesses name. A historical arm is keyed by its label, so two probes on
+  // one label must name one route: a worktree and a deployment, or two sets
+  // of pre-fix origins, under one label would run one arm at two targets.
   const routes = new Map();
   const mutatedByMutation = new Map();
   const historicalByRevision = new Map();
@@ -833,13 +884,36 @@ async function runInWorkspaces({
     const [byKey, key] =
       entry.historical === undefined ? [mutatedByMutation, entry.mutation.mutationId] : [historicalByRevision, entry.historical.preFix];
     let route = byKey.get(key);
+    // Labels that differ only in letter case name one trial directory on a case-insensitive file system.
+    const sameLabel =
+      entry.historical === undefined
+        ? undefined
+        : [...byKey.keys()].find((other) => other.toLowerCase() === key.toLowerCase() && other !== key);
+    if (sameLabel !== undefined) {
+      throw stop({
+        stage: 'qualification',
+        exitCode: 10,
+        message: `${entry.probe.probeId} runs on the arm historical:${key}, which differs from the arm historical:${sameLabel} of another probe only in letter case, so their trials would share one directory where the file system ignores case; give one release another identifier`,
+      });
+    }
+    if (route !== undefined && entry.historical !== undefined && route.identity !== routeIdentity(entry.historical)) {
+      throw stop({
+        stage: 'qualification',
+        exitCode: 10,
+        message: `${entry.probe.probeId} runs on the arm historical:${key} at ${routeIdentity(entry.historical)}, where another probe runs it at ${route.identity}; one arm runs one target, so give the deployment's release an identifier no other probe's pre-fix revision or deployment uses`,
+      });
+    }
     if (route === undefined) {
-      route =
-        entry.historical === undefined
-          ? await mutatedRoute({ entry, pristine, make, registry, engine, stop, log })
-          : await historicalRoute({ preFix: key, make, registry, stop, log });
+      if (entry.historical === undefined) route = await mutatedRoute({ entry, pristine, make, registry, engine, stop, log });
+      else if (entry.historical.deployments === undefined) route = await historicalRoute({ preFix: key, make, registry, stop, log });
+      else route = await deploymentRoute({ deployment: entry.historical.deployments.preFix, pristine, registry, log });
+      if (entry.historical !== undefined) route.identity = routeIdentity(entry.historical);
       byKey.set(key, route);
-      run.workspaces[route.label] = route.cwd;
+      if (route.deployment === null || route.deployment === undefined) run.workspaces[route.label] = route.cwd;
+      else {
+        run.deployments ??= {};
+        run.deployments[route.label] = { release: key, origins: route.deployment.origins };
+      }
       writeRun();
     }
     for (const defect of entry.probe.defects) {

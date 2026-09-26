@@ -52,9 +52,10 @@
  *   router denies an unlisted method and answers an allowed request.
  * - `check`: a command entry for the api interface, two HTTP entries for one
  *   interface, an entry naming both a port and a server, a host a URL spells
- *   otherwise, an auth header over plain http to an address that is not
- *   loopback, a folder with no port, and a degenerate response of the wrong
- *   kind.
+ *   otherwise (the entry's own or a deployment origin's), an auth header over
+ *   plain http to an address that is not loopback (the entry's or a
+ *   deployment's), a folder with no port, and a degenerate response of the
+ *   wrong kind.
  * - Units: the registry's HTTP policy, inventory, ceilings, secrets and
  *   targets; the arm's `api` record; the scrub of an HTTP answer and of a
  *   denial naming a lowercased secret; a multi-byte answer past 64 KiB read
@@ -2782,6 +2783,24 @@ async function checkCheckRules() {
         }),
       'registry',
       'sends its authorization header over plain http to "::127.0.0.1", where eval-quality\'s staysOnHost says a connection leaves this host',
+    ],
+    [
+      'a deployment origin whose host a URL spells otherwise',
+      ({ folder }) =>
+        editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
+          evaluation.registry[0].deployments = [{ scheme: 'http', host: '127.1', port: 41_001, addresses: ['127.0.0.1'] }];
+        }),
+      'registry',
+      'registry[0].deployments[0] names host "127.1", which a URL spells "127.0.0.1"',
+    ],
+    [
+      'an auth header over plain http to a deployment that leaves the host',
+      ({ folder }) =>
+        editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
+          evaluation.registry[0].deployments = [{ scheme: 'http', host: 'grader.example.test', port: 80, addresses: ['192.0.2.10'] }];
+        }),
+      'registry',
+      'registry[0].deployments[0] sends its authorization header over plain http to "192.0.2.10"',
     ],
     [
       'a folder with no HTTP port',

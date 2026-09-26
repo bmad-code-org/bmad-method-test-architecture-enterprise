@@ -50,7 +50,10 @@
  *   step with the response of another kind of call (a command's, a tool call's or an HTTP request's), or
  *   exits a code the step's registry entry declares as infrastructure.
  * - `historical` (Story 1.9): a probe on the `historical` route does not carry `expectedClean: false`, seeds
- *   no defect, or seeds one whose `source` is not `natural`, the only source eval-quality admits there.
+ *   no defect, or seeds one whose `source` is not `natural`, the only source eval-quality admits there;
+ *   Story 1.32: it names neither or both of `fixCommit` and `deployments`, one deployment without the
+ *   other, one release for both, a deployment beside a registry entry that is not an HTTP entry, or origins
+ *   that are not an http or https origin for each HTTP interface of the registry and no other.
  * - `judge` (Story 1.9): the contract declares a rubric and `evaluation.json` has no `judge`, or
  *   `policy/evaluator-conditions.json` names no `judge.modelSnapshot`; the contract declares no rubric and
  *   either file carries a `judge` block, which nothing would use; or `judge` names an agent adapter TeA
@@ -87,7 +90,7 @@
  * a tool server eval-quality's `parseMcpTargetPolicy` refuses (two for one
  * interface among them) (`registry`, Story 1.10), be a second HTTP target
  * for one interface, name a `host` otherwise than a URL spells it (letter
- * case aside), or send
+ * case aside, for its own origin or a deployment origin it lists), or send
  * an `auth` header over `http` to an address eval-quality's `staysOnHost`
  * says leaves the host (`registry`, Story 1.11), `interface` must be a kind
  * the contract declares (`reference`), and a file must
@@ -106,7 +109,7 @@ const AjvModule = require('ajv/dist/2020');
 const { engineSchemaPath, loadEngine, schemaVersionProblems } = require('./engine');
 const { MANIFEST_NAME } = require('./folder');
 const { addFormats } = require('./formats');
-const { HTTP_PORT_MODULE } = require('./http-target');
+const { HTTP_PORT_MODULE, originTarget, sharedOrigin } = require('./http-target');
 const { apiRegistryProblems, kindOf, mcpRegistryProblems, repeatedPairs, sharedInterfaces } = require('./registry');
 const { AGENT_ADAPTERS, bridgedArgsRefused, resolveModel } = require('../agent-adapters');
 const { EVALUATOR_DIRECTORY, EvaluatorLayerError, evaluatorFiles, evaluatorOf, isKnownEvaluator } = require('./evaluators');
@@ -799,6 +802,85 @@ function checkProbeAgainstRegistry(report, relative, probe, context, registry) {
   }
 }
 
+/**
+ * What is wrong with the fix boundary a historical probe names (Story 1.32):
+ * it names exactly one of `fixCommit` (the worktree route) and `deployments`
+ * (the deployment route); deployments come as a pair, a pre-fix and a
+ * post-fix one, of two releases, with no pre-fix origin reaching a post-fix
+ * one (`sharedOrigin`); a deployment-routed probe reaches its target over
+ * HTTP alone, so every registry entry is an HTTP entry; and each
+ * deployment names an http or https origin for every HTTP interface of the
+ * registry and no other. Whether an origin is one the registry's policy
+ * authorizes is eval-quality's to decide at run time.
+ */
+function historicalBoundaryProblems(qualification, registry) {
+  const { fixCommit, deployments } = qualification ?? {};
+  if (fixCommit === undefined && deployments === undefined) {
+    return [
+      'a probe on the historical route names its fix boundary: a fixCommit (the worktree route) or deployments (the deployment route)',
+    ];
+  }
+  if (deployments === undefined || deployments === null || typeof deployments !== 'object') return [];
+  const problems = [];
+  if (fixCommit !== undefined) {
+    problems.push(
+      'names both a fixCommit and deployments; a historical probe crosses one fix boundary, a commit and its parent or a pre-fix and a post-fix deployment, so name one',
+    );
+  }
+  const named = ['preFix', 'fix'].filter((side) => deployments[side] !== undefined);
+  if (named.length === 0) {
+    problems.push(
+      'names deployments and neither a preFix nor a fix deployment; the fail-before arm runs against the pre-fix deployment and the pass-after arm against the post-fix one, so name both',
+    );
+  }
+  if (named.length === 1) {
+    const [present] = named;
+    const absent = present === 'preFix' ? 'fix' : 'preFix';
+    problems.push(
+      `names the ${present} deployment and no ${absent} deployment; the fail-before arm runs against the pre-fix deployment and the pass-after arm against the post-fix one, so name both`,
+    );
+  }
+  const releases = named.map((side) => deployments[side]?.release);
+  if (named.length === 2 && typeof releases[0] === 'string' && releases[0] === releases[1]) {
+    problems.push(
+      `names release ${JSON.stringify(releases[0])} for both deployments; the probe records the pre-fix release's digest as its artifactDigest and the post-fix release's as its fixCommitDigest, so two deployments of one release cross no fix boundary`,
+    );
+  }
+  const shared = named.length === 2 ? sharedOrigin(deployments.preFix?.origins, deployments.fix?.origins) : null;
+  if (shared !== null) {
+    problems.push(
+      `deployments.preFix.origins.${shared.preFix} and deployments.fix.origins.${shared.fix} both reach ${shared.origin}; the fail-before arm, the witness leg and the trials would reach the post-fix deployment and record a fix boundary the run never crossed, so give each deployment origins of its own`,
+    );
+  }
+  if (!Array.isArray(registry)) return problems;
+  const other = registry.filter((entry) => kindOf(entry) !== 'api');
+  if (other.length > 0) {
+    problems.push(
+      `names deployments, which a run reaches over HTTP alone, and the registry declares ${other.length} entr${other.length === 1 ? 'y' : 'ies'} of another kind (${other.map((entry) => JSON.stringify(entry?.interfaceId)).join(', ')}); a deployment-routed probe belongs to an evaluation whose every interface is api`,
+    );
+  }
+  const interfaces = registry.filter((entry) => kindOf(entry) === 'api').map((entry) => entry.interfaceId);
+  for (const side of named) {
+    const origins = deployments[side]?.origins;
+    if (origins === null || typeof origins !== 'object' || Array.isArray(origins)) continue;
+    const missing = interfaces.filter((id) => !Object.hasOwn(origins, id));
+    const extra = Object.keys(origins).filter((id) => !interfaces.includes(id));
+    if (missing.length > 0 || extra.length > 0) {
+      problems.push(
+        `deployments.${side}.origins names ${JSON.stringify(Object.keys(origins))}, where the registry's HTTP interfaces are ${JSON.stringify(interfaces)}; a deployment answers every HTTP interface of the registry, so name each once and no other`,
+      );
+    }
+    for (const [id, origin] of Object.entries(origins)) {
+      if (originTarget(origin) === null) {
+        problems.push(
+          `deployments.${side}.origins.${id} is ${JSON.stringify(origin)}, which is no http or https origin (scheme://host[:port], its authority written as a URL keeps it, letter case aside, with no path, query, fragment or credentials)`,
+        );
+      }
+    }
+  }
+  return problems;
+}
+
 function checkProbe(report, relative, probe, context, behaviors, mutations, registry) {
   const stripped = checkRuntimeOwned(report, relative, probe);
   const shaped = validateInto(report, relative, 'schema', context.validate.probe, stripped);
@@ -878,6 +960,7 @@ function checkProbe(report, relative, probe, context, behaviors, mutations, regi
         `a probe on the historical route seeds the natural defect its fix commit removed, so it carries expectedClean false and at least one defect, each with source "natural"; got expectedClean ${JSON.stringify(probe.expectedClean)}, ${defects.length} defect(s), ${unnatural.length} not natural`,
       );
     }
+    for (const message of historicalBoundaryProblems(probe.qualification, registry)) report.add(relative, 'historical', message);
   }
 
   if (route === 'controlled-mutation' && (defects.length === 0 || probe.expectedClean !== false)) {

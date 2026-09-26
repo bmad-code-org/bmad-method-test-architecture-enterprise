@@ -45,7 +45,7 @@ const path = require('node:path');
 const AjvModule = require('ajv/dist/2020');
 
 const { loadAdapters, loadEngine } = require('./engine');
-const { createApiPort, degenerateApiPort, isApiEntry } = require('./http-target');
+const { createApiPort, degenerateApiPort, deploymentAccess, isApiEntry } = require('./http-target');
 
 const Ajv = AjvModule.default ?? AjvModule;
 
@@ -557,7 +557,11 @@ function createRegistry(entries, { root, httpPort, scratch = [] } = {}) {
    * evaluation's own HTTP port for an `api` one (`http-target.js`), whose
    * servers start in `cwd` from targets resolved against `projectRoot`. Each
    * denies whatever its policy does not grant; with no HTTP target declared,
-   * an `api` request goes to the command-line adapter, which denies it.
+   * an `api` request goes to the command-line adapter, which denies it. On a
+   * historical probe's deployment arm, `options.deployment` (`deploymentAccess`'s
+   * answer) names the origin each HTTP interface answers at, where every `api`
+   * call goes with no server started, decided over the authorization
+   * eval-quality allowed there.
    *
    * @returns {Promise<{port: {probe: Function}, policy: object, mcpPolicy: object}>}
    */
@@ -580,6 +584,7 @@ function createRegistry(entries, { root, httpPort, scratch = [] } = {}) {
             mechanism: adapters.nodeCommandMechanism,
             maxOutputBytes: MAX_OUTPUT_BYTES,
             scratch,
+            deployment: options.deployment ?? null,
           });
     const port = {
       probe: (request, signal) => {
@@ -589,6 +594,20 @@ function createRegistry(entries, { root, httpPort, scratch = [] } = {}) {
       },
     };
     return { port, policy, mcpPolicy };
+  }
+
+  /**
+   * What a historical probe's deployment arm may reach (the origins and the
+   * authorization eval-quality's `evaluateTarget` allowed for each), or why the
+   * registry's HTTP policy does not authorize the deployment
+   * (`http-target.js` `deploymentAccess`).
+   *
+   * @param {Record<string, string>} origins interface ID to origin
+   * @param {{ signal?: AbortSignal }} [options]
+   * @returns {Promise<{ origins: object, authorizations: object } | { refused: string }>}
+   */
+  function deploymentAccessOf(origins, { signal } = {}) {
+    return deploymentAccess({ entries: apiEntries, origins, signal });
   }
 
   /**
@@ -704,6 +723,7 @@ function createRegistry(entries, { root, httpPort, scratch = [] } = {}) {
     degenerateHttpPort,
     commandTargetPolicy,
     createProbePort,
+    deploymentAccess: deploymentAccessOf,
     hostEnvironment,
     mcpTargetPolicy,
     permittedEnvironmentKeys,
@@ -833,24 +853,31 @@ async function apiRegistryProblems(entries) {
   let staysOnHost;
   for (const [index, entry] of entries.entries()) {
     if (!isApiEntry(entry) || !entryValidator(API_REGISTRY_ENTRY_DEFINITION)(entry)) continue;
-    const canonical = canonicalHost(entry.host);
-    if (canonical === null) {
-      problems.push(`registry[${index}] names host ${JSON.stringify(entry.host)}, which no URL can name`);
-    } else if (canonical !== entry.host.toLowerCase()) {
-      problems.push(
-        `registry[${index}] names host ${JSON.stringify(entry.host)}, which a URL spells ${JSON.stringify(canonical)}; the port hands eval-quality's policy the URL's hostname, so write ${JSON.stringify(canonical)}`,
-      );
-    }
-    if (entry.server !== undefined) problems.push(...portKeyProblems(index, entry.server));
-    if (entry.auth !== undefined && entry.scheme === 'http') {
-      staysOnHost ??= (await loadEngine()).staysOnHost;
-      const exposed = entry.addresses.filter((address) => !staysOnHost(address));
-      if (exposed.length > 0) {
+    // The entry's own origin and each deployment origin it authorizes meet the same two rules.
+    const origins = [
+      { where: `registry[${index}]`, scheme: entry.scheme, host: entry.host, addresses: entry.addresses },
+      ...(entry.deployments ?? []).map((deployment, at) => ({ where: `registry[${index}].deployments[${at}]`, ...deployment })),
+    ];
+    for (const { where, scheme, host, addresses } of origins) {
+      const canonical = canonicalHost(host);
+      if (canonical === null) {
+        problems.push(`${where} names host ${JSON.stringify(host)}, which no URL can name`);
+      } else if (canonical !== host.toLowerCase()) {
         problems.push(
-          `registry[${index}] sends its ${entry.auth.header} header over plain http to ${exposed.map((address) => JSON.stringify(address)).join(', ')}, where eval-quality's staysOnHost says a connection leaves this host, so the credential would cross the network in clear text; serve the target over https with scheme "https" (setting NODE_EXTRA_CA_CERTS to the PEM file of a private certificate authority that signed its certificate), or keep every address on this host`,
+          `${where} names host ${JSON.stringify(host)}, which a URL spells ${JSON.stringify(canonical)}; the port hands eval-quality's policy the URL's hostname, so write ${JSON.stringify(canonical)}`,
         );
       }
+      if (entry.auth !== undefined && scheme === 'http') {
+        staysOnHost ??= (await loadEngine()).staysOnHost;
+        const exposed = addresses.filter((address) => !staysOnHost(address));
+        if (exposed.length > 0) {
+          problems.push(
+            `${where} sends its ${entry.auth.header} header over plain http to ${exposed.map((address) => JSON.stringify(address)).join(', ')}, where eval-quality's staysOnHost says a connection leaves this host, so the credential would cross the network in clear text; serve the target over https with scheme "https" (setting NODE_EXTRA_CA_CERTS to the PEM file of a private certificate authority that signed its certificate), or keep every address on this host`,
+          );
+        }
+      }
     }
+    if (entry.server !== undefined) problems.push(...portKeyProblems(index, entry.server));
   }
   return problems;
 }

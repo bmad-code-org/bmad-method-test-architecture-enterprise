@@ -15,9 +15,10 @@
  * installation problem (exit 12).
  *
  * This file also holds the runtime's one synchronous reading of the engine:
- * the schema-version constants a record builder stamps, and the engine's
- * `VERSION`. Record builders are called from synchronous code, so they cannot
- * wait for the dynamic import. `eval-quality.config.json` declares this file as
+ * the schema-version constants a record builder stamps, the engine's
+ * `VERSION`, and its `parseAddress`, which keys an IP literal the way the
+ * engine's policy reads it. Record builders and `check` call these from
+ * synchronous code, so they cannot wait for the dynamic import. `eval-quality.config.json` declares this file as
  * its own `dependency-direction` layer with a `purity` block, so an `await`, an
  * async function or `new Date` here fails `npm run test:direction`; the loaders
  * below return their promise without awaiting it.
@@ -141,6 +142,25 @@ function engineVersion() {
     throw new EngineUnavailableError(new Error(`the installed ${ENGINE_PACKAGE} exports no VERSION string`));
   }
   return constants.VERSION;
+}
+
+/**
+ * eval-quality's canonical spelling of an IP address literal, read through
+ * its own `parseAddress`, so every spelling its policy reads as one address
+ * (`::ffff:7f00:1` and `127.0.0.1`) gives one string; null when `host` is no
+ * address the engine parses, such as a name.
+ *
+ * @param {string} host an address, unbracketed
+ * @returns {string | null}
+ */
+function canonicalAddress(host) {
+  const constants = engineConstants();
+  if (constants === null) throw new EngineUnavailableError(packageVersionsError);
+  if (typeof constants.parseAddress !== 'function') {
+    throw new EngineUnavailableError(new Error(`the installed ${ENGINE_PACKAGE} exports no parseAddress`));
+  }
+  const parsed = constants.parseAddress(host);
+  return parsed?.ok === true ? parsed.canonical : null;
 }
 
 /**
@@ -270,6 +290,7 @@ module.exports = {
   EngineUnavailableError,
   SCHEMA_VERSIONS,
   UNSTAMPED_KINDS,
+  canonicalAddress,
   engineCliPath,
   engineSchemaPath,
   engineVersion,

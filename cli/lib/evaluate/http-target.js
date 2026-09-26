@@ -58,6 +58,12 @@
  * A call therefore runs against the workspace's code as it stands, a mutation
  * included, as a command and a tool server do, and a denied call starts
  * nothing. A deployed target (an entry naming its `port`) is reached as it is.
+ * An entry's `deployments` name other origins of its interface (Story 1.32):
+ * on a historical probe's deployment arm, once `deploymentAccess` has asked
+ * eval-quality's `evaluateTarget` which of the entry's candidates allows the
+ * origin the probe names, every call of the interface goes to that origin,
+ * starts no server, and is decided over that one authorization, a redirect
+ * included; no other call's policy holds a deployment.
  * On a gameability arm the port answers from the degenerate response with a
  * transport that sends nothing (`degenerateApiPort`), so a call the policy does
  * not allow is denied as on a real arm. An answer is held to eval-quality's own
@@ -70,6 +76,7 @@
 
 const { spawn } = require('node:child_process');
 const crypto = require('node:crypto');
+const dns = require('node:dns');
 const fs = require('node:fs');
 const net = require('node:net');
 const os = require('node:os');
@@ -77,7 +84,7 @@ const path = require('node:path');
 const { StringDecoder } = require('node:string_decoder');
 
 const { quotedCapture } = require('./arm');
-const { loadConformance, loadEngine } = require('./engine');
+const { canonicalAddress, loadConformance, loadEngine } = require('./engine');
 const { HOST_ENVIRONMENT_KEY, HTTP_PORT_PROTOCOL, PROTOCOL_FD, UnansweredRequest } = require('./http-port-host');
 
 /** Where the evaluation's HTTP port lives, relative to the evaluation folder. */
@@ -97,6 +104,18 @@ const PORT_OUTPUT_BYTES = 1024 * 1024;
 const PORT_CHANNEL_ALLOWANCE = 1024 * 1024;
 /** The host's variables the port's process inherits beside PATH: the extra certificate authorities Node reads. */
 const INHERITED_KEYS = ['NODE_EXTRA_CA_CERTS'];
+/** The longest delay one timer holds; `setTimeout` turns a longer one into 1 ms. */
+const MAX_TIMER_MS = 2 ** 31 - 1;
+
+/**
+ * A delay within what one timer holds. The schema lets `maxElapsedMs` and
+ * `readyTimeoutMs` reach `MAX_TIMER_MS` each, so a bound summed from them
+ * can pass it, and a timer given that sum would fire at once.
+ */
+function timerDelay(ms) {
+  return Math.min(ms, MAX_TIMER_MS);
+}
+
 /**
  * How the runtime opens a file a port or a server can replace while the run
  * goes on: read only, never through a link, and without waiting on a pipe or
@@ -246,7 +265,8 @@ function exchangeWithPort({ httpPort, message, onMessage, timeoutMs, maxChannelB
       child.kill('SIGKILL');
       finish(() => reject(failed(detail, exitCode)));
     };
-    const timer = setTimeout(() => stop(`did not answer within ${timeoutMs}ms and was ended`, 12), timeoutMs);
+    const waitMs = timerDelay(timeoutMs);
+    const timer = setTimeout(() => stop(`did not answer within ${waitMs}ms and was ended`, 12), waitMs);
     const onAbort = () => {
       if (!settled) channel.write(`${JSON.stringify({ type: 'abort' })}\n`);
     };
@@ -382,14 +402,121 @@ function authorizationOf(entry, port) {
 }
 
 /**
+ * The authorizations of eval-quality's `ProbeTargetPolicy` that may admit a
+ * deployment of one entry's interface: the entry's own, when it names a
+ * deployed `port`, then one per origin its `deployments` list, each with the
+ * entry's methods, redirects and ceilings.
+ */
+function deploymentCandidates(entry) {
+  return [
+    ...(entry.server === undefined ? [authorizationOf(entry, entry.port)] : []),
+    ...(entry.deployments ?? []).map((deployment) => ({
+      ...authorizationOf(entry, deployment.port),
+      scheme: deployment.scheme,
+      host: deployment.host,
+      addresses: [...deployment.addresses],
+    })),
+  ];
+}
+
+/**
+ * The exact spelling of an origin: `http` or `https`, `//`, an authority of a
+ * host (a bracketed IPv6 address, or a name or address with no `/`, `?`, `#`,
+ * `@`, `\`, `%`, `:`, whitespace or control character) and an optional
+ * `:port`, then at most one `/`. A URL parser normalizes many other strings to
+ * an origin (surrounding spaces, `http:x`, `http:/x`, `http://x/..`), and the
+ * raw string is what a run records, so only this form is read as one.
+ * The parser still removes or maps some characters this form admits (a soft
+ * hyphen, a zero-width space, a fullwidth letter, the ideographic full stop),
+ * so `originTarget` also holds the parsed authority to the written one.
+ */
+const ORIGIN_FORM = /^https?:\/\/(?:\[[0-9A-Fa-f:.]+\]|[^\s\p{Cc}/?#@\\%:[\]]+)(?::\d+)?\/?$/iu;
+
+/**
+ * The target an origin names (`scheme://host[:port]`), as the port hands it
+ * to eval-quality: the scheme without its colon, the URL's hostname unbracketed
+ * (the spelling the port reads a URL's host in), and the port, or the scheme's
+ * default; null when `origin` is not spelled as an origin (`ORIGIN_FORM`: a
+ * path, a query, a fragment, credentials or surrounding space included), or is
+ * no http or https origin, which `check` refuses under `historical`.
+ *
+ * @param {string} origin
+ * @returns {{ scheme: string, host: string, port: number } | null}
+ */
+function originTarget(origin) {
+  if (typeof origin !== 'string' || !ORIGIN_FORM.test(origin) || !URL.canParse(origin)) return null;
+  const url = new URL(origin);
+  const scheme = url.protocol.slice(0, -1);
+  if (!['http', 'https'].includes(scheme) || url.username !== '' || url.password !== '' || url.pathname !== '/') return null;
+  const port = url.port === '' ? defaultPortOf({ scheme }) : Number(url.port);
+  // The authority as written, letter case aside, is the one the parser read: the parser drops a default port, so an
+  // authority naming it is compared with the port restored.
+  const authority = origin
+    .slice(origin.indexOf('//') + 2)
+    .replace(/\/$/, '')
+    .toLowerCase();
+  if (authority !== url.host && authority !== `${url.hostname}:${port}`) return null;
+  const host = url.hostname.startsWith('[') ? url.hostname.slice(1, -1) : url.hostname;
+  return { scheme, host, port };
+}
+
+/**
+ * The one deployment an origin reaches, as a string (`scheme://host:port`):
+ * `originTarget`'s reading with one trailing dot of the host dropped, since a
+ * name and the same name ending in the root's dot resolve alike, and an IP
+ * literal written as eval-quality's `parseAddress` reads it (`engine.js`'s
+ * `canonicalAddress`), since its policy takes `::ffff:7f00:1` and `127.0.0.1`
+ * as one address. Null when `origin` is no origin.
+ *
+ * @param {string} origin
+ * @returns {string | null}
+ */
+function originKey(origin) {
+  const target = originTarget(origin);
+  if (target === null) return null;
+  const named = target.host.endsWith('.') ? target.host.slice(0, -1) : target.host;
+  const address = net.isIP(target.host) === 0 ? null : canonicalAddress(target.host);
+  const host = address === null ? named : address.includes(':') ? `[${address}]` : address;
+  return `${target.scheme}://${host}:${target.port}`;
+}
+
+/**
+ * A pre-fix origin that reaches a post-fix one (`originKey`), over every
+ * interface on each side, or null. A pair sharing an origin sends the
+ * fail-before arm, the witness leg and the trials to the post-fix deployment,
+ * so the probe would record a fix boundary the run never crossed.
+ *
+ * @param {Record<string, string>} preFix interface ID to the pre-fix origin
+ * @param {Record<string, string>} fix interface ID to the post-fix origin
+ * @returns {{ preFix: string, fix: string, origin: string } | null}
+ */
+function sharedOrigin(preFix, fix) {
+  for (const [preFixId, preFixOrigin] of Object.entries(preFix ?? {})) {
+    const key = originKey(preFixOrigin);
+    if (key === null) continue;
+    for (const [fixId, fixOrigin] of Object.entries(fix ?? {})) {
+      if (originKey(fixOrigin) === key) return { preFix: preFixId, fix: fixId, origin: key };
+    }
+  }
+  return null;
+}
+
+/**
  * What the port takes for one call: the policy and the targets over every
  * entry at the port `portOf` gives it (a deployed entry's own; a started one
  * only for the call that starts it), and the auth header of the call's own
  * interface, `interfaceId`, from the host's value for its key. Another
  * interface's credential never reaches the call's port, since the run scrubs
  * a call's answer and faults of its own interface's secrets alone.
+ *
+ * On a historical probe's deployment arm, `deployment` (`deploymentAccess`'s
+ * answer) names where each HTTP interface answers and the one authorization
+ * eval-quality allowed there: the targets name those origins, and that
+ * authorization stands in the policy in place of the entry's own, so every
+ * hop of every request, a redirect included, is decided over the arm's origin
+ * alone. An entry's `deployments` join no other call's policy.
  */
-function portConfiguration({ entries, portOf, readEnvironment, interfaceId }) {
+function portConfiguration({ entries, portOf, readEnvironment, interfaceId, deployment = null }) {
   const reached = entries.map((entry) => ({ entry, port: portOf(entry) })).filter(({ port }) => port !== null);
   const auth = {};
   for (const entry of entries) {
@@ -397,11 +524,117 @@ function portConfiguration({ entries, portOf, readEnvironment, interfaceId }) {
     const value = readEnvironment([entry.auth.environmentKey])[entry.auth.environmentKey];
     if (value !== undefined) auth[entry.interfaceId] = { [entry.auth.header]: `${entry.auth.prefix ?? ''}${value}` };
   }
+  const deployed = deployment?.authorizations ?? {};
+  const own = reached.filter(({ entry }) => !Object.hasOwn(deployed, entry.interfaceId));
+  const targets = Object.fromEntries(own.map(({ entry, port }) => [entry.interfaceId, { scheme: entry.scheme, host: entry.host, port }]));
+  for (const id of Object.keys(deployed)) targets[id] = originTarget(deployment.origins[id]);
   return {
-    policy: { authorizations: reached.map(({ entry, port }) => authorizationOf(entry, port)) },
-    targets: Object.fromEntries(reached.map(({ entry, port }) => [entry.interfaceId, { scheme: entry.scheme, host: entry.host, port }])),
+    policy: { authorizations: [...own.map(({ entry, port }) => authorizationOf(entry, port)), ...Object.values(deployed)] },
+    targets,
     auth,
   };
+}
+
+/** A deployment's host cannot be resolved in time: the deployment is unreachable, which is infrastructure (exit 12). */
+class DeploymentUnreachable extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'DeploymentUnreachable';
+  }
+}
+
+/** The first address `host` resolves to, as the port's own transport resolves it, within `timeoutMs` (at most `MAX_TIMER_MS`) and `signal`. */
+function resolveFirst(host, { lookup, timeoutMs, signal }) {
+  if (net.isIP(host) !== 0) return Promise.resolve(host);
+  return new Promise((resolve, reject) => {
+    const fail = (reason) => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+      reject(new DeploymentUnreachable(reason));
+    };
+    const onAbort = () => fail(`resolving ${host} was aborted`);
+    const waitMs = timerDelay(timeoutMs);
+    const timer = setTimeout(() => fail(`${host} did not resolve within ${waitMs} ms`), waitMs);
+    if (signal?.aborted) return onAbort();
+    signal?.addEventListener('abort', onAbort, { once: true });
+    lookup(host).then(
+      ({ address }) => {
+        clearTimeout(timer);
+        signal?.removeEventListener('abort', onAbort);
+        resolve(address);
+      },
+      (error) => fail(`${host} does not resolve (${error?.code ?? error?.message ?? error})`),
+    );
+  });
+}
+
+/**
+ * What a deployment arm may reach, or why the registry does not authorize
+ * the deployment: for each HTTP interface `origins` names, the origin's host
+ * resolved once, to its first address, within the entry's `maxElapsedMs` and
+ * `PORT_START_ALLOWANCE_MS` (the port resolves a host before its own
+ * `maxElapsedMs` starts, inside a call the runtime bounds by that sum), and
+ * eval-quality's `evaluateTarget` asked over the
+ * entry's deployment candidates (`deploymentCandidates`) at the first method
+ * the entry authorizes, so the decision is about where the deployment is. The
+ * authorization eval-quality allowed is the one the arm's policy holds; a
+ * denial names each candidate's reason, in eval-quality's words. An origin no
+ * candidate admits at any address (its scheme, host or port denied) is refused
+ * before its host is resolved, as the port denies an unresolved host; a host
+ * some candidate would admit and that does not resolve throws
+ * `DeploymentUnreachable`. The port asks again for every request it sends.
+ *
+ * @param {object} options
+ * @param {object[]} options.entries the registry's `api` entries
+ * @param {Record<string, string>} options.origins interface ID to origin
+ * @param {AbortSignal} [options.signal]
+ * @param {(host: string) => Promise<{ address: string }>} [options.lookup] how a host resolves, for a test to answer
+ * @param {number} [options.allowanceMs] the time a lookup gets beyond the entry's `maxElapsedMs`, for a test to shorten
+ * @returns {Promise<{ origins: Record<string, string>, authorizations: Record<string, object> } | { refused: string }>}
+ */
+async function deploymentAccess({
+  entries,
+  origins,
+  signal,
+  lookup = (host) => dns.promises.lookup(host),
+  allowanceMs = PORT_START_ALLOWANCE_MS,
+}) {
+  const engine = await loadEngine();
+  const authorizations = {};
+  for (const [interfaceId, origin] of Object.entries(origins)) {
+    const entry = entries.find((candidate) => candidate.interfaceId === interfaceId);
+    const target = originTarget(origin);
+    if (entry === undefined || target === null) {
+      return { refused: `${JSON.stringify(origin)} is no origin of an HTTP interface the registry declares (${interfaceId})` };
+    }
+    const candidates = deploymentCandidates(entry);
+    const method = entry.methods[0];
+    const refusal = (asked) => {
+      const reasons = candidates.map((candidate) => {
+        const denial = engine.evaluateTarget({ authorizations: [candidate] }, asked);
+        return `${candidate.scheme}://${candidate.host}:${candidate.port} ${denial.reason}: ${denial.detail}`;
+      });
+      return { refused: `eval-quality's policy does not authorize ${origin} for ${interfaceId} (${reasons.join('; ')})` };
+    };
+    // Asked first with no address, as the port asks for a host that does not resolve: a candidate that denies only the
+    // unparseable address admits the origin's scheme, host and port, and only such an origin is worth resolving. Any
+    // other origin is refused whether or not its host resolves.
+    const unresolved = { interfaceId, ...target, address: '', method };
+    const denials = candidates.map((candidate) => engine.evaluateTarget({ authorizations: [candidate] }, unresolved));
+    if (!denials.some((denial) => denial.reason === 'address-unparseable')) {
+      if (candidates.length === 0) {
+        const denial = engine.evaluateTarget({ authorizations: [] }, unresolved);
+        return { refused: `eval-quality's policy does not authorize ${origin} for ${interfaceId} (${denial.reason}: ${denial.detail})` };
+      }
+      return refusal(unresolved);
+    }
+    const address = await resolveFirst(target.host, { lookup, timeoutMs: entry.maxElapsedMs + allowanceMs, signal });
+    const asked = { ...unresolved, address };
+    const decision = engine.evaluateTarget({ authorizations: candidates }, asked);
+    if (!decision.allowed) return refusal(asked);
+    authorizations[interfaceId] = decision.authorization;
+  }
+  return { origins, authorizations };
 }
 
 /** A port the system gives out now, free on every address, released for the server to take. */
@@ -590,7 +823,7 @@ function callServer({ entry, port: chosenPort = null, portFile = null, cwd, targ
           env,
           stdin: { kind: 'absent' },
           cwd,
-          maxElapsedMs: entry.server.readyTimeoutMs + entry.maxElapsedMs + SERVER_GRACE_MS,
+          maxElapsedMs: timerDelay(entry.server.readyTimeoutMs + entry.maxElapsedMs + SERVER_GRACE_MS),
           maxOutputBytes: entry.server.maxOutputBytes ?? maxOutputBytes,
         },
         controller.signal,
@@ -818,13 +1051,17 @@ function channelCeiling(entry) {
  * @param {{ run: Function }} options.mechanism eval-quality's `nodeCommandMechanism`
  * @param {number} options.maxOutputBytes a server's default output ceiling
  * @param {string[]} [options.scratch] the run's private directories, which a call's port-file directory joins while it runs
+ * @param {{ origins: object, authorizations: object }|null} [options.deployment] on a historical probe's deployment arm,
+ *   `deploymentAccess`'s answer: the origin each HTTP interface answers at, where every call goes and no server starts,
+ *   and the one authorization eval-quality allowed there
  * @returns {{ probe: (request: object, signal?: AbortSignal) => Promise<object> }}
  */
-function createApiPort({ entries, httpPort, cwd, targetOf, readEnvironment, mechanism, maxOutputBytes, scratch = [] }) {
+function createApiPort({ entries, httpPort, cwd, targetOf, readEnvironment, mechanism, maxOutputBytes, scratch = [], deployment = null }) {
   return {
     async probe(request, signal) {
       const entry = entries.find((candidate) => candidate.interfaceId === request?.interfaceId);
-      const launched = entry?.server === undefined ? null : entry;
+      // On a deployment arm every HTTP interface answers at the deployment's origin, so no call starts a server.
+      const launched = entry?.server === undefined || deployment !== null ? null : entry;
       const reports = launched?.server.portFileEnvironmentKey !== undefined;
       // The file a server reports its port in lives in a private directory of the call's, on the run's scratch list, so
       // a signal that ends the run removes it too.
@@ -839,6 +1076,7 @@ function createApiPort({ entries, httpPort, cwd, targetOf, readEnvironment, mech
             portOf: (candidate) => (candidate.server === undefined ? candidate.port : candidate === launched ? port : null),
             readEnvironment,
             interfaceId: request?.interfaceId,
+            deployment,
           });
         // Until the server reports the port it bound, the policy and targets name the scheme's default port; the call
         // is probed again at the reported port before anything is sent.
@@ -943,9 +1181,14 @@ module.exports = {
   callServer,
   createApiPort,
   degenerateApiPort,
+  DeploymentUnreachable,
+  deploymentAccess,
   httpPortFile,
   isApiEntry,
   missingCredentials,
+  originKey,
+  originTarget,
   portConfiguration,
+  sharedOrigin,
   probeHttpPort,
 };

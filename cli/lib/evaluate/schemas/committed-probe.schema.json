@@ -6,6 +6,28 @@
   "type": "object",
   "additionalProperties": false,
   "required": ["probeId", "probeClass", "behaviorId", "expectedClean", "rationale", "defects", "qualification"],
+  "$defs": {
+    "Deployment": {
+      "description": "One deployment of the target: the release it runs and where each HTTP interface of the registry answers.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["release", "origins"],
+      "properties": {
+        "release": {
+          "description": "The identifier of the release this deployment runs, as its adopter names it (a version, a tag, a build id). The qualified probe records its digest: the pre-fix one as artifactDigest, the post-fix one as fixCommitDigest; the pre-fix one names the arm historical:<release>. One path segment: a letter or digit, then letters, digits, '.', '_', '+' or '-'.",
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$"
+        },
+        "origins": {
+          "description": "The origin (scheme://host[:port], with no path, query, fragment or credentials) each HTTP interface of the registry answers at in this deployment, keyed by interface ID. check requires every HTTP interface of the registry and no other (rule historical); each origin must be one the registry's api policy authorizes, which eval-quality's evaluateTarget decides at run time.",
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  },
   "properties": {
     "probeId": { "type": "string" },
     "probeClass": { "enum": ["defect", "gameability", "zero-action", "canary"] },
@@ -47,13 +69,22 @@
           "if": { "required": ["route"], "properties": { "route": { "const": "historical" } } },
           "then": {
             "additionalProperties": false,
-            "required": ["route", "fixCommit"],
+            "required": ["route"],
             "properties": {
               "route": true,
               "fixCommit": {
-                "description": "The commit that fixed the defect, as a hexadecimal commit id (7 to 40 lowercase hex digits, abbreviated or full), never a ref, which moves as history advances; the run records its full id. The pre-fix revision is its first parent. An id that names no commit in a repository with its full history is an authoring defect.",
+                "description": "The worktree route: the commit that fixed the defect, as a hexadecimal commit id (7 to 40 lowercase hex digits, abbreviated or full), never a ref, which moves as history advances; the run records its full id. The pre-fix revision is its first parent. An id that names no commit in a repository with its full history is an authoring defect. A probe names exactly one of this and deployments (check rule historical).",
                 "type": "string",
                 "pattern": "^[0-9a-f]{7,40}$"
+              },
+              "deployments": {
+                "description": "The deployment route, for a target reachable only as a remote deployment: the pre-fix and the post-fix deployment, both of which check requires (rule historical). The fail-before arm, the defect's manifestation-witness leg and the trials of the arm historical:<preFix.release> reach the pre-fix deployment, and the pass-after arm the post-fix one.",
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "preFix": { "$ref": "#/$defs/Deployment" },
+                  "fix": { "$ref": "#/$defs/Deployment" }
+                }
               }
             }
           }

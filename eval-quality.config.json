@@ -337,7 +337,7 @@
         "externals": {
           "policy": "allow",
           "modules": ["eval-quality", "eval-quality/adapters", "eval-quality/conformance", "node:fs", "node:path"],
-          "rule": "engine.js is the tea-evaluate runtime's one door to the optional eval-quality peer (the library, its adapters subpath, its conformance subpath for the probe parsers, and the synchronous schema-version reading); reaching any other external module here would be new, unreviewed surface on the one file the purity block holds to staying synchronous"
+          "rule": "engine.js is the tea-evaluate runtime's one door to the optional eval-quality peer (the library, its adapters subpath, its conformance subpath for the probe parsers, and the synchronous reading of the schema-version constants and `parseAddress`); reaching any other external module here would be new, unreviewed surface on the one file the purity block holds to staying synchronous"
         }
       },
       {
@@ -536,6 +536,10 @@
         },
         {
           "token": "parseMcpTargetPolicy",
+          "reason": "an eval-quality package export, not a TEA declaration"
+        },
+        {
+          "token": "parseAddress",
           "reason": "an eval-quality package export, not a TEA declaration"
         },
         {

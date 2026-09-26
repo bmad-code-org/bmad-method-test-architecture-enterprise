@@ -1,7 +1,7 @@
 /**
  * `tea-evaluate run`'s gameability and historical arms and its rubric judge,
- * end to end over the real installed eval-quality (Story 1.9, AD-6, AD-7,
- * AD-8, AD-9, AD-22).
+ * end to end over the real installed eval-quality (Stories 1.9 and 1.32,
+ * AD-6, AD-7, AD-8, AD-9, AD-22).
  *
  * Every case builds a temp git project from `test/fixtures/evaluate/mutation/`
  * (the verdict command, `bin/verdict.js`, which judges its request by
@@ -39,6 +39,32 @@
  *   with its reason in `run.json` and `refused/`, left out of `probes.json`
  *   and the trial sets, and the rest of the run seals and scores; a run whose
  *   every probe was refused exits 12 with nothing sealed.
+ * - Deployments (Story 1.32): a copy of the HTTP fixture outside git whose
+ *   P-004 names two deployments of the grader the test starts itself, the
+ *   pre-fix one lenient and the post-fix one strict, each logging its own
+ *   requests. The deployments' logs show the fail-before arm, the witness leg
+ *   and every trial of `historical:<pre-fix release>` at the pre-fix
+ *   deployment, in that order, and the pass-after arm alone at the post-fix
+ *   one, and no call to a deployment starts the workspace's service; the
+ *   probe records the digests of the two release identifiers, `qualifyProbe`
+ *   admits it and `score` reduces it to `caught`. A pre-fix deployment that
+ *   answers as the fix does exits 11; a pre-fix or a post-fix deployment the
+ *   registry does not authorize is refused with eval-quality's
+ *   `port-not-authorized` while the clean control runs, and nothing reaches
+ *   either deployment; two probes on one arm label at two pre-fix origins, or
+ *   on two labels that differ only in letter case, exit 10; an authorized
+ *   pre-fix host that does not resolve exits 12 with no refusal; `check`
+ *   refuses an origin with a path and origins naming another interface in
+ *   place of the registry's. Units cover `originTarget` (each spelling a URL
+ *   parser would normalize or map), the policy of a deployment arm (the one
+ *   authorization eval-quality allowed, and no deployment outside it) and of
+ *   an interface named `constructor`, `deploymentAccess` (each candidate's
+ *   reason, an unresolvable or stalled host, the lookup's bound), the lookup
+ *   and the port exchange under `maxElapsedMs` 2147483647 with no
+ *   `TimeoutOverflowWarning`, `originKey` over an IPv4-mapped address,
+ *   `deploymentPair`'s exit 12 reasons and `routeIdentity`, and a static
+ *   case reads the reference's `### From worktrees` and
+ *   `### Against deployments` sections.
  * - Rubric: a contract declaring R-101, judged by the stub judge through the
  *   `custom` agent adapter: one judge call per trial (six over two arms of
  *   three), a `judgeResults` entry per criterion in every record, the judge's
@@ -69,7 +95,16 @@ const { spawn, spawnSync } = require('node:child_process');
 const { ENGINE_CLI_ENV, loadEngine } = require('../cli/lib/evaluate/engine');
 const { AGENT_ADAPTERS } = require('../cli/lib/agent-adapters');
 const { qualifyGameabilityProbes, syntheticPort } = require('../cli/lib/evaluate/gameability');
-const { historicalRevisions, qualifyHistoricalProbe } = require('../cli/lib/evaluate/historical');
+const { deploymentPair, historicalRevisions, qualifyHistoricalProbe, routeIdentity } = require('../cli/lib/evaluate/historical');
+const {
+  DeploymentUnreachable,
+  degenerateApiPort,
+  deploymentAccess,
+  httpPortFile,
+  originKey,
+  originTarget,
+  portConfiguration,
+} = require('../cli/lib/evaluate/http-target');
 const { registryFromEvaluation } = require('../cli/lib/evaluate/registry');
 const { RunDirectory } = require('../cli/lib/evaluate/run-directory');
 const {
@@ -894,6 +929,715 @@ async function checkOneCommit() {
   );
 }
 
+// ---------------------------------------------------------------- deployments
+
+const API_FIXTURE = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate-api');
+const GRADER = path.join(API_FIXTURE, 'server', 'grader.js');
+const API_EVALUATION = path.join('evals', 'grader');
+const REFERENCE = path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md');
+const GRADER_TOKEN = 'deployment-token-value-8901';
+const PRE_RELEASE = 'grader-1.4.2';
+const FIX_RELEASE = 'grader-1.4.3';
+/** How long a deployment the test starts may take to report the port it bound. */
+const DEPLOYMENT_READY_MS = 20_000;
+/**
+ * Starts the grader with a lifeline: it ends when its standard input closes,
+ * which the operating system does when this suite ends however it ends, so no
+ * deployment outlives a killed suite.
+ */
+const LIFELINE = "process.stdin.on('end', () => process.exit(0)).resume(); require(process.argv[1]);";
+
+/** Every deployment server the test started, each stopped when its case ends and again as the suite ends. */
+const deploymentServers = [];
+
+/**
+ * A deployment of the grader the test starts itself, standing in for a
+ * remote deployment no worktree can launch: the fixture's own loopback
+ * service under `mode` (`lenient`, the defect; `strict`, the fix), binding a
+ * port the system chooses and reporting it, with its own request log.
+ */
+async function startDeployment(label, mode) {
+  const directory = scratch.make(`deployment-${label}`);
+  fs.mkdirSync(path.join(directory, 'rules'));
+  fs.writeFileSync(path.join(directory, 'rules', 'policy.txt'), `mode: ${mode}\n`);
+  const portFile = path.join(directory, 'port');
+  const log = path.join(directory, 'requests.jsonl');
+  const child = spawn(process.execPath, ['-e', LIFELINE, GRADER, '--policy=rules/policy.txt'], {
+    cwd: directory,
+    env: { PATH: process.env.PATH, PORT: '0', PORT_FILE: portFile, GRADER_LOG: log, GRADER_TOKEN },
+    stdio: ['pipe', 'ignore', 'ignore'],
+  });
+  deploymentServers.push(child);
+  const deadline = Date.now() + DEPLOYMENT_READY_MS;
+  while (!(fs.existsSync(portFile) && /^\d+\n$/.test(fs.readFileSync(portFile, 'utf8')))) {
+    if (Date.now() > deadline || child.exitCode !== null) throw new Error(`the ${label} deployment reported no port`);
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  const port = Number(fs.readFileSync(portFile, 'utf8'));
+  return { port, log, origin: `http://127.0.0.1:${port}` };
+}
+
+/** Stops every deployment server still running. */
+function stopDeployments() {
+  for (const child of deploymentServers.splice(0)) child.kill('SIGKILL');
+}
+
+/** The lines a grader's log holds, parsed; none when it wrote no log. */
+function logLines(file) {
+  return (fs.existsSync(file) ? fs.readFileSync(file, 'utf8').split('\n') : [])
+    .filter((line) => line.length > 0)
+    .map((line) => JSON.parse(line));
+}
+
+/** The request paths a deployment's own log recorded, in order, each with whether the auth header matched. */
+function requestsTo(deployment) {
+  return logLines(deployment.log)
+    .filter((line) => line.event === 'request')
+    .map((line) => ({ path: line.path, authorized: line.authorized }));
+}
+
+/** A registry `deployments` item authorizing a loopback deployment's origin. */
+function authorizing(deployment) {
+  return { scheme: 'http', host: '127.0.0.1', port: deployment.port, addresses: ['127.0.0.1'] };
+}
+
+/** Every file a run wrote under `relative`, parsed; none when the directory is absent, which a check names. */
+function writtenUnder(runDirectory, relative, what) {
+  const directory = path.join(runDirectory, relative);
+  if (!fs.existsSync(directory)) {
+    check(false, `${what}: ${relative}/ was not written`);
+    return [];
+  }
+  return fs.readdirSync(directory).map((name) => readJson(path.join(directory, name)));
+}
+
+/** The probes of a run's `trial-sets.json`, or null when the run sealed none. */
+function sealedProbes(runDirectory) {
+  const file = runDirectory === null ? null : path.join(runDirectory, 'trial-sets.json');
+  return file === null || !fs.existsSync(file) ? null : readJson(file).trialSets.map((set) => set.probeId);
+}
+
+/**
+ * A copy of the HTTP fixture outside git whose clean control runs against
+ * the service the runtime starts, and whose P-004 is a historical probe on the
+ * deployment route: its natural defect (the grader rejects an answer it must
+ * accept) is present in the pre-fix deployment and fixed in the post-fix
+ * one. `preFix` and `fix` give each deployment's origin, `authorized` the
+ * registry's `deployments`.
+ */
+function makeDeploymentProject(label, { preFix, fix, authorized, edit = () => {} }) {
+  const directory = scratch.make(label);
+  const root = path.join(directory, 'project');
+  fs.cpSync(API_FIXTURE, root, { recursive: true, filter: (from) => !['runs', 'node_modules'].includes(path.basename(from)) });
+  const folder = path.join(root, API_EVALUATION);
+  fs.mkdirSync(path.join(folder, 'node_modules'));
+  fs.symlinkSync(path.join(PROJECT_ROOT, 'node_modules', 'eval-quality'), path.join(folder, 'node_modules', 'eval-quality'));
+  fs.symlinkSync(PROJECT_ROOT, path.join(folder, 'node_modules', 'bmad-method-test-architecture-enterprise'));
+  const seeded = readJson(path.join(folder, 'probes', 'P-002.probe.json'));
+  fs.rmSync(path.join(folder, 'probes', 'P-002.probe.json'));
+  fs.rmSync(path.join(folder, 'mutations'), { recursive: true });
+  editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
+    evaluation.arms = ['clean', 'historical'];
+    evaluation.registry[0].deployments = authorized.map(authorizing);
+  });
+  const witness = structuredClone(seeded.defects[0].manifestationWitness);
+  witness.legId = 'manifest-pre-fix';
+  witness.inputs.query.answer = 'witness-answer';
+  witness.relation.operands[0].pointer = '/interactions/manifest-pre-fix/response-body/verdict';
+  const probe = {
+    probeId: 'P-004',
+    probeClass: 'defect',
+    behaviorId: 'B-001',
+    expectedClean: false,
+    rationale: 'Historical: release 1.4.2 of the grader rejected an answer it must accept, and release 1.4.3 fixed it.',
+    defects: [
+      {
+        ...seeded.defects[0],
+        summary: 'Release 1.4.2 rejects an answer it must accept.',
+        source: 'natural',
+        manifestationWitness: witness,
+      },
+    ],
+    defectSignature: seeded.defectSignature,
+    qualification: {
+      route: 'historical',
+      deployments: {
+        preFix: { release: PRE_RELEASE, origins: { grader: preFix } },
+        fix: { release: FIX_RELEASE, origins: { grader: fix } },
+      },
+    },
+  };
+  edit({ folder, probe });
+  writeJson(path.join(folder, 'probes', 'P-004.probe.json'), probe);
+  const log = path.join(directory, 'started.jsonl');
+  const temp = scratch.make(`${label}-temp`);
+  runtimeTemps.push({ label, directory: temp });
+  const project = { root, folder, log, env: { TMPDIR: temp, TMP: temp, TEMP: temp, GRADER_LOG: log, GRADER_TOKEN } };
+  const digested = evaluate(['digest', '--evaluation', folder], project.env);
+  if (digested.status !== 0) throw new Error(`digest failed: ${digested.output}`);
+  return project;
+}
+
+async function checkDeployments() {
+  try {
+    await checkDeploymentRoute();
+  } finally {
+    stopDeployments();
+  }
+}
+
+async function checkDeploymentRoute() {
+  const engine = await loadEngine();
+  const validate = createArtifactValidator();
+  const pre = await startDeployment('pre-fix', 'lenient');
+  const post = await startDeployment('post-fix', 'strict');
+  const project = makeDeploymentProject('deployments', { preFix: pre.origin, fix: post.origin, authorized: [pre, post] });
+  const { folder } = project;
+  const ran = evaluate(['run', '--evaluation', folder], project.env);
+  check(ran.status === 0, `a deployment-routed historical run exited ${ran.status}; expected 0\n${ran.output}`);
+  const runDirectory = runDirectoryOf(folder);
+  const arm = `historical:${PRE_RELEASE}`;
+  if (runDirectory === null) check(false, 'the deployment-routed run wrote no run directory');
+  else {
+    // Each routing, read from the deployments' own request logs: the fail-before arm, the witness leg and every trial
+    // reached the pre-fix deployment, in that order, and the pass-after arm alone reached the post-fix one.
+    const planned = '/grade?answer=forty-two';
+    const expectedPre = [planned, '/grade?answer=witness-answer', ...Array.from({ length: TRIALS }, () => planned)];
+    check(
+      JSON.stringify(requestsTo(pre).map((request) => request.path)) === JSON.stringify(expectedPre),
+      `the pre-fix deployment received ${JSON.stringify(requestsTo(pre))}; expected the fail-before arm, the witness leg and ${TRIALS} trials, ${JSON.stringify(expectedPre)}`,
+    );
+    check(
+      JSON.stringify(requestsTo(post).map((request) => request.path)) === JSON.stringify([planned]),
+      `the post-fix deployment received ${JSON.stringify(requestsTo(post))}; expected the pass-after arm alone`,
+    );
+    check(
+      [...requestsTo(pre), ...requestsTo(post)].every((request) => request.authorized === true),
+      'a request reached a deployment without the registry auth header',
+    );
+    // The service the runtime starts from the workspace answered the other calls, and no call to a deployment started it:
+    // each start served exactly one request, none of them the witness leg.
+    const started = logLines(project.log);
+    const listens = started.filter((line) => line.event === 'listen');
+    const served = started.filter((line) => line.event === 'request');
+    check(
+      served.length > 0 && listens.length === served.length && !served.some((line) => line.path.includes('witness-answer')),
+      `the started service logged ${listens.length} start(s) and ${JSON.stringify(served.map((line) => line.path))}; expected one start per request and no witness leg`,
+    );
+
+    const failBefore = written(path.join(runDirectory, 'qualification', 'P-004', 'fail-before.json'), 'the fail-before evidence');
+    const passAfter = written(path.join(runDirectory, 'qualification', 'P-004', 'pass-after.json'), 'the pass-after evidence');
+    check(
+      failBefore?.release === PRE_RELEASE && failBefore?.origins?.grader === pre.origin && failBefore?.verdict === 'violated',
+      `the fail-before evidence reads ${JSON.stringify({ release: failBefore?.release, origins: failBefore?.origins, verdict: failBefore?.verdict })}`,
+    );
+    check(
+      passAfter?.release === FIX_RELEASE && passAfter?.origins?.grader === post.origin && passAfter?.verdict === 'held',
+      `the pass-after evidence reads ${JSON.stringify({ release: passAfter?.release, origins: passAfter?.origins, verdict: passAfter?.verdict })}`,
+    );
+    const leg = writtenUnder(runDirectory, 'observations', 'the deployment-routed run').find(
+      (observation) => observation.legId === 'manifest-pre-fix',
+    );
+    check(
+      leg?.workspace === arm && leg?.origins?.grader === pre.origin,
+      `the witness leg is recorded on ${leg?.workspace} at ${JSON.stringify(leg?.origins)}; expected ${arm} at ${pre.origin}`,
+    );
+    const recordedRun = readJson(path.join(runDirectory, 'run.json'));
+    check(
+      recordedRun.deployments?.[arm]?.origins?.grader === pre.origin && recordedRun.workspaces?.[arm] === undefined,
+      `run.json records the pre-fix route as ${JSON.stringify({ deployments: recordedRun.deployments, workspaces: recordedRun.workspaces })}`,
+    );
+    const runner = (recordedRun.runner ?? []).find((entry) => entry.interfaceId === 'grader');
+    check(
+      JSON.stringify(runner?.deployments) === JSON.stringify([authorizing(pre), authorizing(post)]),
+      `run.json's runner names the deployments ${JSON.stringify(runner?.deployments)}; expected both authorized origins`,
+    );
+
+    // The digests of the two release identifiers, each where the case names it; one identifier for both makes them equal.
+    const probe = written(path.join(runDirectory, 'probes', 'P-004.probe.json'), 'the qualified deployment-routed probe');
+    if (probe !== null) {
+      for (const problem of await validate('probe', probe)) check(false, `P-004 fails its published schema: ${problem}`);
+      check(
+        probe.qualification.fixCommitDigest === sha256(Buffer.from(FIX_RELEASE, 'utf8')),
+        `P-004's fixCommitDigest ${probe.qualification.fixCommitDigest} is not the digest of the post-fix release ${FIX_RELEASE}`,
+      );
+      check(
+        probe.artifactDigest === sha256(Buffer.from(PRE_RELEASE, 'utf8')),
+        `P-004's artifactDigest ${probe.artifactDigest} is not the digest of the pre-fix release ${PRE_RELEASE}`,
+      );
+      check(probe.artifactDigest !== probe.qualification.fixCommitDigest, "P-004's two release digests are equal");
+      checkReference('the fail-before reference', folder, probe.qualification.failBeforeEvidence);
+      checkReference('the pass-after reference', folder, probe.qualification.passAfterEvidence);
+      checkQualifies(engine, 'the deployment-routed probe', probe, readJson(path.join(folder, 'contract.json')));
+    }
+    if (sealedProbes(runDirectory) === null) check(false, 'the deployment-routed run sealed no trial set');
+    else {
+      const records = recordsOf(runDirectory, 'P-004');
+      check(
+        records.length === TRIALS && records.every((record) => record.conditionArm === arm),
+        `P-004's records carry arms ${JSON.stringify(records.map((record) => record.conditionArm))}; expected ${arm}`,
+      );
+      const trialEvidence = writtenUnder(runDirectory, `trials/historical-${PRE_RELEASE}`, 'the deployment-routed trials');
+      check(
+        trialEvidence.length === TRIALS && trialEvidence.every((trial) => trial.origins?.grader === pre.origin),
+        `the deployment arm's trial evidence names the origins ${JSON.stringify(trialEvidence.map((trial) => trial.origins))}`,
+      );
+      const evidence = scoreRun(project, 'the deployment-routed run');
+      checkVotes('the deployment-routed run', evidence, 'P-004', 'caught');
+      checkVotes('the deployment-routed run', evidence, 'P-001', 'passed-clean-control');
+    }
+  }
+
+  // A pre-fix deployment that answers as the fix does holds the fail-before arm, so the probe does not qualify. It is a
+  // second strict deployment, since check refuses a pre-fix origin that is the post-fix one.
+  const fixed = await startDeployment('pre-fix-already-fixed', 'strict');
+  const held = makeDeploymentProject('deployment-held-before', { preFix: fixed.origin, fix: post.origin, authorized: [fixed, post] });
+  const heldRun = evaluate(['preflight', '--evaluation', held.folder], held.env);
+  check(
+    heldRun.status === 11 && heldRun.output.includes(`the fail-before arm at the deployment of ${PRE_RELEASE} is held`),
+    `a pre-fix deployment that answers as the fix does exited ${heldRun.status}; expected 11 naming the fail-before arm\n${heldRun.output}`,
+  );
+
+  // A deployment the registry does not authorize, pre-fix or post-fix, refuses the probe with eval-quality's reason
+  // before either arm runs; the rest of the run goes on and nothing reaches either deployment.
+  for (const { side, release, authorized } of [
+    { side: 'pre-fix', release: PRE_RELEASE, authorized: [post] },
+    { side: 'post-fix', release: FIX_RELEASE, authorized: [pre] },
+  ]) {
+    const what = `a run whose ${side} deployment is unauthorized`;
+    const before = [requestsTo(pre).length, requestsTo(post).length];
+    const refused = makeDeploymentProject(`deployment-unauthorized-${side}`, { preFix: pre.origin, fix: post.origin, authorized });
+    const refusedRun = evaluate(['run', '--evaluation', refused.folder], refused.env);
+    check(refusedRun.status === 0, `${what} exited ${refusedRun.status}; expected 0\n${refusedRun.output}`);
+    const refusedDirectory = runDirectoryOf(refused.folder);
+    const refusedRecord = refusedDirectory === null ? null : readJson(path.join(refusedDirectory, 'run.json'));
+    const refusal = refusedRecord?.refused?.[0];
+    check(
+      refusedRecord?.refused?.length === 1 &&
+        refusal.probeId === 'P-004' &&
+        refusal.reason.includes(`${side} deployment ${release}`) &&
+        refusal.reason.includes('port-not-authorized'),
+      `${what}: run.json records the refusals ${JSON.stringify(refusedRecord?.refused)}; expected P-004 refused with eval-quality's port-not-authorized`,
+    );
+    const refusedFile = refusedDirectory === null ? null : readIfWritten(path.join(refusedDirectory, 'refused', 'P-004.json'));
+    check(JSON.stringify(refusedFile) === JSON.stringify(refusal), `${what}: refused/P-004.json reads ${JSON.stringify(refusedFile)}`);
+    check(
+      JSON.stringify(sealedProbes(refusedDirectory)) === '["P-001"]',
+      `${what} sealed ${JSON.stringify(sealedProbes(refusedDirectory))}; expected the clean control alone`,
+    );
+    check(
+      refusedDirectory !== null && !fs.existsSync(path.join(refusedDirectory, 'qualification', 'P-004')),
+      `${what} wrote qualification evidence for the refused probe`,
+    );
+    check(
+      JSON.stringify([requestsTo(pre).length, requestsTo(post).length]) === JSON.stringify(before),
+      `${what}: a request reached a deployment`,
+    );
+  }
+
+  // One arm runs one target: a second probe naming the same pre-fix release at another origin stops the run.
+  const otherPre = await startDeployment('other-pre-fix', 'lenient');
+  const shared = makeDeploymentProject('deployment-shared-arm', {
+    preFix: pre.origin,
+    fix: post.origin,
+    authorized: [pre, otherPre, post],
+    edit: ({ folder: edited, probe: first }) => {
+      const second = structuredClone(first);
+      second.probeId = 'P-005';
+      second.qualification.deployments.preFix.origins.grader = otherPre.origin;
+      writeJson(path.join(edited, 'probes', 'P-005.probe.json'), second);
+    },
+  });
+  const sharedRun = evaluate(['preflight', '--evaluation', shared.folder], shared.env);
+  check(
+    sharedRun.status === 10 && sharedRun.output.includes(`P-005 runs on the arm historical:${PRE_RELEASE} at the origins`),
+    `two probes on one historical arm at two pre-fix origins exited ${sharedRun.status}; expected 10 naming the arm\n${sharedRun.output}`,
+  );
+  // Two labels that differ only in letter case meet in one trial directory where the file system ignores case; the
+  // second probe runs at the same origins, so the target-identity stop does not reach it first.
+  const casedRelease = PRE_RELEASE.replace('grader', 'Grader');
+  const cased = makeDeploymentProject('deployment-cased-arm', {
+    preFix: pre.origin,
+    fix: post.origin,
+    authorized: [pre, post],
+    edit: ({ folder: edited, probe: first }) => {
+      const second = structuredClone(first);
+      second.probeId = 'P-005';
+      second.qualification.deployments.preFix.release = casedRelease;
+      writeJson(path.join(edited, 'probes', 'P-005.probe.json'), second);
+    },
+  });
+  const casedRun = evaluate(['preflight', '--evaluation', cased.folder], cased.env);
+  check(
+    casedRun.status === 10 &&
+      /runs on the arm historical:\S+, which differs from the arm historical:\S+ of another probe only in letter case/.test(
+        casedRun.output,
+      ) &&
+      casedRun.output.includes(`historical:${casedRelease}`),
+    `two probes on the arms historical:${PRE_RELEASE} and historical:${casedRelease} exited ${casedRun.status}; expected 10 naming the letter case\n${casedRun.output}`,
+  );
+
+  // A deployment some authorization admits whose host does not resolve is unreachable: exit 12, and no refusal.
+  const unreachable = makeDeploymentProject('deployment-unreachable', {
+    preFix: `http://nowhere.invalid:${pre.port}`,
+    fix: post.origin,
+    authorized: [post],
+    edit: ({ folder: edited }) =>
+      editJson(path.join(edited, 'evaluation.json'), (evaluation) =>
+        evaluation.registry[0].deployments.push({ scheme: 'http', host: 'nowhere.invalid', port: pre.port, addresses: ['127.0.0.1'] }),
+      ),
+  });
+  const unreachableRun = evaluate(['preflight', '--evaluation', unreachable.folder], unreachable.env);
+  const unreachableDirectory = runDirectoryOf(unreachable.folder);
+  const unreachableRecord = unreachableDirectory === null ? null : readIfWritten(path.join(unreachableDirectory, 'run.json'));
+  check(
+    unreachableRun.status === 12 &&
+      unreachableRun.output.includes(`the pre-fix deployment ${PRE_RELEASE} cannot be reached`) &&
+      Array.isArray(unreachableRecord?.refused) &&
+      unreachableRecord.refused.length === 0,
+    `a pre-fix deployment whose host does not resolve exited ${unreachableRun.status} with the refusals ${JSON.stringify(unreachableRecord?.refused)}; expected 12, "cannot be reached" and no refusal\n${unreachableRun.output}`,
+  );
+
+  // check holds each deployment's origins to the registry's HTTP interfaces: a path, an interface the registry does not
+  // declare, and one it declares left out.
+  const misnamed = makeDeploymentProject('deployment-misnamed', {
+    preFix: `${pre.origin}/v1`,
+    fix: post.origin,
+    authorized: [pre, post],
+    edit: ({ probe: edited }) => (edited.qualification.deployments.fix.origins = { other: post.origin }),
+  });
+  const misnamedCheck = evaluate(['check', '--evaluation', misnamed.folder], misnamed.env);
+  check(
+    misnamedCheck.status === 10 &&
+      misnamedCheck.output.includes('probes/P-004.probe.json: [historical] deployments.preFix.origins.grader is') &&
+      misnamedCheck.output.includes(
+        `probes/P-004.probe.json: [historical] deployments.fix.origins names ["other"], where the registry's HTTP interfaces are ["grader"]`,
+      ),
+    `a probe whose origins carry a path, or name another interface in place of the registry's: check exited ${misnamedCheck.status}; expected 10 with both historical findings\n${misnamedCheck.output}`,
+  );
+}
+
+/** A file a run may not have written, parsed, or null. */
+function readIfWritten(file) {
+  return fs.existsSync(file) ? readJson(file) : null;
+}
+
+/** The text of one `###` section of the reference's `## Historical probes`, by its exact heading; empty when it is gone. */
+function historicalSubsection(text, heading) {
+  const start = text.indexOf('\n## Historical probes\n');
+  if (start === -1) return '';
+  const end = text.indexOf('\n## ', start + 1);
+  const section = text.slice(start, end === -1 ? undefined : end);
+  const at = section.indexOf(`\n### ${heading}\n`);
+  if (at === -1) return '';
+  const next = section.indexOf('\n### ', at + 1);
+  return section.slice(at, next === -1 ? undefined : next);
+}
+
+/** The reference's historical section names both kinds of historical probe, each under its exact heading. */
+function checkHistoricalReference() {
+  const text = fs.readFileSync(REFERENCE, 'utf8');
+  const worktrees = historicalSubsection(text, 'From worktrees');
+  check(
+    worktrees.includes('`fixCommit`') &&
+      worktrees.includes('`historical:<preFixSha>`') &&
+      /worktree at the pre-fix revision/.test(worktrees),
+    'the reference has no "### From worktrees" section naming fixCommit, the pre-fix worktree and the arm historical:<preFixSha>',
+  );
+  const deployments = historicalSubsection(text, 'Against deployments');
+  check(
+    deployments.includes('`deployments`') &&
+      deployments.includes('`historical:<release>`') &&
+      /against the pre-fix deployment/.test(deployments) &&
+      /against the post-fix one/.test(deployments) &&
+      deployments.includes('`evaluateTarget`'),
+    'the reference has no "### Against deployments" section naming deployments, the pre-fix and post-fix arms, evaluateTarget and the arm historical:<release>',
+  );
+}
+
+/** `originTarget`, the policy of a deployment arm, `deploymentAccess`, `deploymentPair` and `routeIdentity`, as units. */
+async function checkDeploymentUnits() {
+  const cases = [
+    ['http://127.0.0.1:8080', { scheme: 'http', host: '127.0.0.1', port: 8080 }],
+    ['https://grader.example.test/', { scheme: 'https', host: 'grader.example.test', port: 443 }],
+    ['http://[::1]:9000', { scheme: 'http', host: '::1', port: 9000 }],
+    ['http://Grader.Example.Test', { scheme: 'http', host: 'grader.example.test', port: 80 }],
+    ['http://127.0.0.1:8080/v1', null],
+    ['http://127.0.0.1:8080/?', null],
+    ['http://127.0.0.1:8080#top', null],
+    ['http://user:secret@127.0.0.1:8080', null],
+    ['ftp://127.0.0.1', null],
+    ['not a url', null],
+    // Spellings a URL parser normalizes to an origin, whose raw string a run would record.
+    [' http://127.0.0.1:8080 ', null],
+    ['http://127.0.0.1:80\n80', null],
+    ['http:127.0.0.1', null],
+    ['http:/127.0.0.1', null],
+    ['http://127.0.0.1/..', null],
+    // Characters the form admits and the parser removes or maps, so the host reached is not the one written.
+    ['http://grader\u00ADexample.test', null],
+    ['http://grader\u200Bexample.test', null],
+    ['http://\uFF47rader.example.test', null],
+    ['http://grader\u3002example.test', null],
+    ['http://[::ffff:127.0.0.1]:4343', null],
+  ];
+  for (const [origin, expected] of cases) {
+    check(
+      JSON.stringify(originTarget(origin)) === JSON.stringify(expected),
+      `originTarget(${JSON.stringify(origin)}) is ${JSON.stringify(originTarget(origin))}; expected ${JSON.stringify(expected)}`,
+    );
+  }
+  const entry = {
+    kind: 'api',
+    interfaceId: 'grader',
+    scheme: 'https',
+    host: 'grader.example.test',
+    port: 443,
+    addresses: ['203.0.113.5'],
+    methods: ['GET'],
+    safeMethods: ['GET'],
+    maxRedirects: 1,
+    maxElapsedMs: 1000,
+    maxRequestBytes: 10,
+    maxResponseBytes: 10,
+    deployments: [
+      { scheme: 'http', host: '127.0.0.1', port: 4242, addresses: ['127.0.0.1'] },
+      { scheme: 'http', host: '127.0.0.1', port: 4343, addresses: ['127.0.0.1'] },
+      { scheme: 'http', host: 'nowhere.example.test', port: 80, addresses: ['198.51.100.7'] },
+      { scheme: 'http', host: 'stalls.example.test', port: 80, addresses: ['198.51.100.8'] },
+    ],
+  };
+  const summary = (policy) =>
+    policy.authorizations
+      .filter(({ host }) => !host.endsWith('where.example.test') && !host.startsWith('stalls'))
+      .map(({ scheme, host, port }) => `${scheme}://${host}:${port}`);
+  // Outside a deployment arm the policy holds the entry's own authorization alone, so no hop reaches a deployment.
+  const plain = portConfiguration({
+    entries: [entry],
+    portOf: (candidate) => candidate.port,
+    readEnvironment: () => ({}),
+    interfaceId: 'grader',
+  });
+  check(
+    JSON.stringify(summary(plain.policy)) === '["https://grader.example.test:443"]',
+    `the policy outside a deployment arm is ${JSON.stringify(summary(plain.policy))}; expected the entry's own alone`,
+  );
+  // An interface named after a property every object inherits keeps its own authorization and target.
+  const inherited = portConfiguration({
+    entries: [{ ...entry, interfaceId: 'constructor', deployments: [] }],
+    portOf: (candidate) => candidate.port,
+    readEnvironment: () => ({}),
+    interfaceId: 'constructor',
+  });
+  check(
+    JSON.stringify(summary(inherited.policy)) === '["https://grader.example.test:443"]' && inherited.targets.constructor?.port === 443,
+    `the policy of an interface named constructor is ${JSON.stringify(summary(inherited.policy))} and its target ${JSON.stringify(inherited.targets.constructor)}; expected the entry's own`,
+  );
+  const looked = [];
+  const lookup = async (host) => {
+    looked.push(host);
+    if (host === 'nowhere.example.test') throw Object.assign(new Error('getaddrinfo ENOTFOUND'), { code: 'ENOTFOUND' });
+    if (host === 'stalls.example.test') return new Promise(() => {});
+    return { address: host === 'grader.example.test' ? '203.0.113.5' : host };
+  };
+  const access = await deploymentAccess({ entries: [entry], origins: { grader: 'http://127.0.0.1:4343' }, lookup });
+  check(access.refused === undefined, `an authorized deployment origin was refused: ${access.refused}`);
+  // On a deployment arm the policy holds the one authorization eval-quality allowed for the arm's origin.
+  const armed = portConfiguration({
+    entries: [entry],
+    portOf: (candidate) => candidate.port,
+    readEnvironment: () => ({}),
+    interfaceId: 'grader',
+    deployment: access,
+  });
+  check(
+    JSON.stringify(summary(armed.policy)) === '["http://127.0.0.1:4343"]' &&
+      JSON.stringify(armed.targets.grader) === JSON.stringify({ scheme: 'http', host: '127.0.0.1', port: 4343 }),
+    `a deployment arm's policy is ${JSON.stringify(summary(armed.policy))} and its target ${JSON.stringify(armed.targets.grader)}; expected the arm's origin alone`,
+  );
+  const own = await deploymentAccess({ entries: [entry], origins: { grader: 'https://grader.example.test' }, lookup });
+  check(own.authorizations?.grader?.port === 443, `a deployed entry's own origin was not allowed as a deployment: ${JSON.stringify(own)}`);
+  const port = await deploymentAccess({ entries: [entry], origins: { grader: 'http://127.0.0.1:4444' }, lookup });
+  check(
+    /http:\/\/127\.0\.0\.1:4242 port-not-authorized/.test(port.refused ?? '') &&
+      /https:\/\/grader\.example\.test:443 scheme-not-authorized/.test(port.refused ?? ''),
+    `an origin at another port was refused with ${port.refused}; expected each candidate's reason`,
+  );
+  // An origin no candidate admits at any address is refused before its host is resolved, as the port denies it.
+  const unlisted = await deploymentAccess({ entries: [entry], origins: { grader: 'http://unlisted.example.test:9000' }, lookup });
+  check(
+    /host-not-authorized/.test(unlisted.refused ?? '') && !looked.includes('unlisted.example.test'),
+    `an origin at an unlisted host gave ${JSON.stringify(unlisted)} after resolving ${JSON.stringify(looked)}; expected a refusal before any lookup`,
+  );
+  const wrongPort = await deploymentAccess({ entries: [entry], origins: { grader: 'http://nowhere.example.test:81' }, lookup });
+  check(
+    /port-not-authorized/.test(wrongPort.refused ?? '') && !looked.includes('nowhere.example.test'),
+    `an unresolvable host at an unauthorized port gave ${JSON.stringify(wrongPort)}; expected a refusal before any lookup`,
+  );
+  for (const [host, expected] of [
+    ['nowhere.example.test', /does not resolve \(ENOTFOUND\)/],
+    ['stalls.example.test', /did not resolve within 1000 ms/],
+  ]) {
+    let thrown = null;
+    try {
+      await deploymentAccess({ entries: [entry], origins: { grader: `http://${host}` }, lookup, allowanceMs: 0 });
+    } catch (error) {
+      thrown = error;
+    }
+    check(
+      thrown instanceof DeploymentUnreachable && expected.test(thrown.message),
+      `a deployment whose host is ${host} gave ${thrown?.name}: ${thrown?.message}; expected DeploymentUnreachable`,
+    );
+  }
+
+  // The lookup gets the entry's maxElapsedMs and the allowance the port's call has beyond it.
+  let bounded = null;
+  try {
+    await deploymentAccess({ entries: [entry], origins: { grader: 'http://stalls.example.test' }, lookup, allowanceMs: 500 });
+  } catch (error) {
+    bounded = error;
+  }
+  check(
+    bounded instanceof DeploymentUnreachable && /did not resolve within 1500 ms/.test(bounded.message),
+    `a stalled host with a 500 ms allowance gave ${bounded?.name}: ${bounded?.message}; expected a bound of maxElapsedMs and the allowance`,
+  );
+
+  // A ceiling at the schema's bound sums past what one timer holds; the timers wait as long as one can, where an
+  // unclamped sum fires at once with a TimeoutOverflowWarning.
+  const overflows = [];
+  const onWarning = (warning) => {
+    if (warning.name === 'TimeoutOverflowWarning') overflows.push(warning.message);
+  };
+  process.on('warning', onWarning);
+  try {
+    const longest = { ...entry, maxElapsedMs: 2_147_483_647 };
+    const slow = async (host) => {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      return lookup(host);
+    };
+    let answered;
+    try {
+      answered = await deploymentAccess({ entries: [longest], origins: { grader: 'https://grader.example.test' }, lookup: slow });
+    } catch (error) {
+      answered = { thrown: `${error.name}: ${error.message}` };
+    }
+    check(
+      answered.authorizations?.grader?.port === 443,
+      `a lookup answering after 100 ms under maxElapsedMs 2147483647 gave ${JSON.stringify(answered)}; expected the entry's own authorization`,
+    );
+    const folder = scratch.make('slow-port');
+    fs.mkdirSync(path.join(folder, 'adapter'));
+    fs.writeFileSync(path.join(folder, 'adapter', 'http-probe-port.mjs'), 'setTimeout(() => process.exit(0), 300);\n');
+    const port = degenerateApiPort({ entries: [longest], httpPort: httpPortFile(folder), answer: null, readEnvironment: () => ({}) });
+    let ended = null;
+    try {
+      await port.probe({ interfaceId: 'grader' });
+    } catch (error) {
+      ended = error;
+    }
+    const endedWith = `${ended?.message} (${ended?.cause?.message})`;
+    check(
+      /ended \(exit 0\) before it answered/.test(endedWith) && !/did not answer within/.test(endedWith),
+      `a port ending after 300 ms under maxElapsedMs 2147483647 gave ${endedWith}; expected the port's own end`,
+    );
+    await new Promise((resolve) => setImmediate(resolve));
+    check(overflows.length === 0, `the timers under maxElapsedMs 2147483647 warned ${JSON.stringify(overflows)}`);
+  } finally {
+    process.off('warning', onWarning);
+  }
+
+  const preFix = { release: 'r1', origins: { grader: 'http://127.0.0.1:1' } };
+  const fix = { release: 'r2', origins: { grader: 'http://127.0.0.1:2' } };
+  const pairs = [
+    [{ route: 'historical' }, /names neither a fixCommit nor deployments/],
+    [{ route: 'historical', deployments: {} }, /names no preFix and no fix deployment/],
+    [{ route: 'historical', deployments: { preFix } }, /names no fix deployment/],
+    [{ route: 'historical', fixCommit: 'a1b2c3d', deployments: { preFix, fix } }, /beside a fixCommit/],
+    [{ route: 'historical', deployments: { preFix, fix: { ...fix, origins: { other: 'http://127.0.0.1:2' } } } }, /fix deployment names/],
+    [
+      { route: 'historical', deployments: { preFix: { ...preFix, origins: { grader: 'http://127.0.0.1:1/v1' } }, fix } },
+      /preFix deployment names/,
+    ],
+    [{ route: 'historical', deployments: { preFix, fix: { ...fix, release: preFix.release } } }, /release "r1" for both deployments/],
+    [
+      { route: 'historical', deployments: { preFix, fix: { ...fix, origins: { grader: 'HTTP://127.0.0.1:1/' } } } },
+      /both reach http:\/\/127\.0\.0\.1:1/,
+    ],
+  ];
+  const graderEntry = { kind: 'api', interfaceId: 'grader' };
+  for (const [qualification, expected] of pairs) {
+    const pair = deploymentPair(qualification, [graderEntry]);
+    check(expected.test(pair.unaddressable ?? ''), `deploymentPair(${JSON.stringify(qualification)}) gave ${JSON.stringify(pair)}`);
+  }
+  for (const other of [
+    { kind: 'cli', interfaceId: 'runner' },
+    { kind: 'mcp', interfaceId: 'tools' },
+  ]) {
+    const pair = deploymentPair({ route: 'historical', deployments: { preFix, fix } }, [graderEntry, other]);
+    check(
+      /which a deployment does not answer over HTTP/.test(pair.unaddressable ?? ''),
+      `deploymentPair beside a ${other.kind} registry entry gave ${JSON.stringify(pair)}`,
+    );
+  }
+  // A cross-interface swap shares an origin as much as one interface spelled twice.
+  const swapped = deploymentPair(
+    {
+      route: 'historical',
+      deployments: {
+        preFix: { release: 'r1', origins: { grader: 'http://127.0.0.1:1', admin: 'http://127.0.0.1:3' } },
+        fix: { release: 'r2', origins: { grader: 'http://127.0.0.1:2', admin: 'http://127.0.0.1:1' } },
+      },
+    },
+    [graderEntry, { kind: 'api', interfaceId: 'admin' }],
+  );
+  check(
+    /pre-fix origin for grader and its post-fix origin for admin both reach/.test(swapped.unaddressable ?? ''),
+    `deploymentPair over a pre-fix grader origin that is the post-fix admin origin gave ${JSON.stringify(swapped)}`,
+  );
+  // eval-quality reads an IPv4-mapped IPv6 address as the IPv4 address it maps, so the two spellings reach one deployment.
+  check(
+    originKey('http://[::ffff:7f00:1]:4343') === 'http://127.0.0.1:4343',
+    `originKey reads [::ffff:7f00:1] as ${originKey('http://[::ffff:7f00:1]:4343')}; expected eval-quality's canonical address`,
+  );
+  const mapped = deploymentPair(
+    {
+      route: 'historical',
+      deployments: {
+        preFix: { ...preFix, origins: { grader: 'http://127.0.0.1:4343' } },
+        fix: { ...fix, origins: { grader: 'http://[::ffff:7f00:1]:4343' } },
+      },
+    },
+    [graderEntry],
+  );
+  check(
+    /both reach http:\/\/127\.0\.0\.1:4343/.test(mapped.unaddressable ?? ''),
+    `deploymentPair over 127.0.0.1 and [::ffff:7f00:1] at one port gave ${JSON.stringify(mapped)}`,
+  );
+  const whole = deploymentPair({ route: 'historical', deployments: { preFix, fix } }, [graderEntry]);
+  check(whole.preFix === preFix && whole.fix === fix, `deploymentPair over a whole pair gave ${JSON.stringify(whole)}`);
+
+  const identity = (origins) => routeIdentity({ deployments: { preFix: { origins } } });
+  check(routeIdentity({ preFix: 'a'.repeat(40) }) === 'a worktree', 'a worktree route is not named a worktree');
+  check(
+    identity({ grader: 'http://127.0.0.1:80', admin: 'http://Admin.Example.Test' }) ===
+      identity({ admin: 'http://admin.example.test/', grader: 'http://127.0.0.1' }),
+    'one set of origins ordered and spelled otherwise names two targets',
+  );
+  check(
+    identity({ grader: 'http://svc.example.test' }) === identity({ grader: 'http://SVC.example.test.:80' }),
+    'one host spelled with and without the trailing dot names two targets',
+  );
+  check(
+    identity({ grader: 'http://127.0.0.1:4343' }) === identity({ grader: 'http://[::ffff:7f00:1]:4343' }),
+    'one address spelled as IPv4 and as IPv4-mapped IPv6 names two targets',
+  );
+  check(
+    identity({ grader: 'http://127.0.0.1:1' }) !== identity({ grader: 'http://127.0.0.1:2' }) &&
+      identity({ grader: 'http://127.0.0.1:1' }) !== 'a worktree',
+    'two pre-fix origins, or a worktree and a deployment, name one target',
+  );
+}
+
 // ---------------------------------------------------------------------- judge
 
 /** R-101: one criterion over the judge run's stdout, on a two-level anchored scale. */
@@ -1640,6 +2384,9 @@ async function main() {
     await runCase('the one-commit refusal', checkOneCommit);
     await runCase('a mutation beside a historical probe', checkMutationBesideHistorical);
     await runCase('the historical refusals', checkHistoricalRefusals);
+    await runCase('the deployment route', checkDeployments);
+    await runCase('the deployment units', checkDeploymentUnits);
+    await runCase('the historical reference', checkHistoricalReference);
     await runCase('the rubric judge', checkRubric);
     await runCase('no rubric, no judge', checkNoRubric);
     await runCase('a judge call interrupted by a signal', checkJudgeInterrupted);
@@ -1648,6 +2395,7 @@ async function main() {
       check(left.length === 0, `the ${label} project's runs left ${JSON.stringify(left)} in their temp directory`);
     }
   } finally {
+    stopDeployments();
     scratch.removeAll();
   }
   if (failures.length > 0) {
