@@ -108,12 +108,14 @@ Final review round 3 passed architecture and test quality. Its bounded adversari
 
 Final review round 4 passed the regression lens. The evidence lens found that a prepended extra message could be misidentified as the unchanged assistant message. The evaluator now locates the extra message by removing each observed message and comparing the remainder to the reference. Direct prepend, middle, and append cases hold the quote. The finding was fixed in this story.
 
+Final review round 5 passed both bounded lenses. The evidence lens confirmed the inserted-message citation, including ambiguous duplicate messages. The regression lens confirmed the required clean, mutated, and evaluator-failure outcomes. No findings were deferred.
+
 ## Verification
 
 **Commands:**
 
-- `npm run test:evaluate-tool-use`: 99 checks passed after round 4 fixes.
-- `npm test`: passed on the round 1 review-fix tree, including all 90 chained checks. Two earlier full runs also passed before those fixes. Final-tree run pending.
+- `npm run test:evaluate-tool-use`: 99 checks passed on the final reviewed tree.
+- `npm test`: passed on the final reviewed tree, including all 90 chained checks.
 - `npm run test:release-metadata`: passed.
 - `npm run test:licences`, `npm run test:lockfile-age`, `npm run test:supply-chain`, `npm run test:evaluate-boundaries`: passed.
 - `npm run format:check`, `npm run lint`, `npm run lint:md`, `npm run docs:validate-links`, `npm run docs:build`: passed.
