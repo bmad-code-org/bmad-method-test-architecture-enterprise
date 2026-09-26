@@ -50,6 +50,8 @@ const MIN_SCRUBBED_VALUE_LENGTH = 8;
 /** The shortest leading part of a secret redacted where a cut text ends in it; a shorter one would match ordinary text. */
 const MIN_CUT_PREFIX_LENGTH = 4;
 const SCRUBBED = '[redacted]';
+/** How much of what a process printed a message quotes, from its end. */
+const QUOTED_TAIL = 2000;
 
 /**
  * The signals that stop a process from outside it (hang-up, interrupt, quit,
@@ -190,6 +192,19 @@ function scrubCutText(text, secrets) {
 }
 
 /**
+ * What a process printed (an error's `captured` text), as a message appends
+ * it: scrubbed whole first, a secret's leading part an end cut left included,
+ * and only then cut to its last `QUOTED_TAIL` characters, so the cut never
+ * splits a secret the scrub has not replaced; nothing for no output.
+ */
+function quotedCapture(captured, secrets = []) {
+  if (typeof captured !== 'string') return '';
+  const value = scrubCutText(captured, secrets).trim();
+  if (value === '') return '';
+  return `: ${value.length > QUOTED_TAIL ? `...${value.slice(-QUOTED_TAIL)}` : value}`;
+}
+
+/**
  * The request as it may be written to disk: a command's environment values
  * are replaced by their keys, since a request carries the host's credentials.
  * A tool call carries no environment channel; its server's environment is the
@@ -283,10 +298,16 @@ function hostEnvironmentPort({ port, registry }) {
         // A fault's message and cause can quote what the target sent: a denial names the host a redirect gave, which a
         // URL lowercases, and eval-quality reports a mechanism's own failure (a server that would not start, a refused
         // handshake, a malformed frame, a spawn error) as the cause, which can quote what the target printed,
-        // JSON-escaped or cut short. Both are kept scrubbed of every secret, in its own case and lowercased.
+        // JSON-escaped or cut short. Both are kept scrubbed of every secret, in its own case and lowercased. What a
+        // process printed comes whole as the `captured` text, and is quoted from its end only once it is scrubbed, so
+        // the cut cannot leave a secret's end the scrub would not recognize.
         const anyCase = secretForms([...values, ...values.map((value) => value.toLowerCase())]);
-        if (typeof error?.message === 'string') error.message = scrubCutText(error.message, anyCase);
-        if (error?.cause !== undefined) error.scrubbedCause = scrubCutText(String(error.cause?.message ?? error.cause), anyCase);
+        if (typeof error?.message === 'string') {
+          error.message = `${scrubCutText(error.message, anyCase)}${quotedCapture(error.captured, anyCase)}`;
+        }
+        if (error?.cause !== undefined) {
+          error.scrubbedCause = `${scrubCutText(String(error.cause?.message ?? error.cause), anyCase)}${quotedCapture(error.cause?.captured, anyCase)}`;
+        }
         throw error;
       }
     },
@@ -523,6 +544,7 @@ module.exports = {
   faultRecord,
   hostEnvironmentPort,
   persistableRequest,
+  quotedCapture,
   reasonNote,
   runArm,
   scrub,

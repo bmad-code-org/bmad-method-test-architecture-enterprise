@@ -59,6 +59,7 @@ const net = require('node:net');
 const path = require('node:path');
 const { StringDecoder } = require('node:string_decoder');
 
+const { quotedCapture } = require('./arm');
 const { loadConformance, loadEngine } = require('./engine');
 const { HOST_ENVIRONMENT_KEY, HTTP_PORT_PROTOCOL, PROTOCOL_FD, UnansweredRequest } = require('./http-port-host');
 
@@ -73,8 +74,6 @@ const PORT_START_ALLOWANCE_MS = 15_000;
 const READY_POLL_MS = 25;
 /** How long a call that failed waits for its server's end to be reported, so the cause names it. */
 const SERVER_SETTLE_MS = 250;
-/** How much of what a process printed a failure quotes, from its end. */
-const STDERR_TAIL = 2000;
 /** The most the port's own process may print on its standard output and error together before it is ended. */
 const PORT_OUTPUT_BYTES = 1024 * 1024;
 /** What the port's process may write on the protocol channel beyond six bytes per answer byte (an answer's JSON escaping). */
@@ -91,24 +90,23 @@ class HttpPortError extends Error {
   }
 }
 
-/** A failure of the port's own process (it could not start, ended early, broke the protocol or outlived a ceiling). */
+/**
+ * A failure of the port's own process (it could not start, ended early, broke
+ * the protocol or outlived a ceiling), carrying what the process printed whole
+ * as `captured`, which the run scrubs before it quotes the end of it.
+ */
 class PortProcessError extends Error {
-  constructor(message, { exitCode = 10 } = {}) {
+  constructor(message, { exitCode = 10, captured = '' } = {}) {
     super(message);
     this.name = 'PortProcessError';
     this.exitCode = exitCode;
+    this.captured = captured;
   }
 }
 
 /** Whether a registry entry is an HTTP target, which its `kind` alone says. */
 function isApiEntry(entry) {
   return entry !== null && typeof entry === 'object' && entry.kind === 'api';
-}
-
-/** The end of a text a failure quotes. */
-function tail(text) {
-  const value = String(text ?? '').trim();
-  return value.length > STDERR_TAIL ? `...${value.slice(-STDERR_TAIL)}` : value;
 }
 
 /**
@@ -200,12 +198,9 @@ function exchangeWithPort({ httpPort, message, onMessage, timeoutMs, maxChannelB
       child.once('exit', () => clearTimeout(killer));
       action();
     };
-    const failed = (detail, exitCode = 10) => {
-      const quoted = tail(printed);
-      return new PortProcessError(`the evaluation's HTTP port ${HTTP_PORT_MODULE} ${detail}${quoted === '' ? '' : `: ${quoted}`}`, {
-        exitCode,
-      });
-    };
+    // What the process printed goes on the error whole: the run scrubs it before it cuts the end a failure quotes.
+    const failed = (detail, exitCode = 10) =>
+      new PortProcessError(`the evaluation's HTTP port ${HTTP_PORT_MODULE} ${detail}`, { exitCode, captured: printed });
     const stop = (detail, exitCode) => {
       child.kill('SIGKILL');
       finish(() => reject(failed(detail, exitCode)));
@@ -232,7 +227,8 @@ function exchangeWithPort({ httpPort, message, onMessage, timeoutMs, maxChannelB
       try {
         answer = JSON.parse(line);
       } catch {
-        stop(`wrote a line that is not the runtime's protocol: ${JSON.stringify(line.slice(0, 200))}`);
+        // The line is quoted cut at its end, JSON-escaped first, so the run's scrub finds a secret's leading part there.
+        stop(`wrote a line that is not the runtime's protocol: ${JSON.stringify(line).slice(0, 200)}`);
         return;
       }
       try {
@@ -290,10 +286,12 @@ async function probeHttpPort(folder) {
       timeoutMs: PORT_START_ALLOWANCE_MS,
     });
   } catch (error) {
+    // Asked for its protocol, the port holds no configuration and no auth value, so what it printed carries no secret.
+    const quoted = quotedCapture(error.captured);
     throw new HttpPortError(
       error.exitCode === 12
-        ? error.message
-        : `${error.message}; its last lines hand the port to TeA's host, as the Evaluate skill's template does`,
+        ? `${error.message}${quoted}`
+        : `${error.message}${quoted}; its last lines hand the port to TeA's host, as the Evaluate skill's template does`,
       error.exitCode ?? 10,
     );
   }
@@ -345,14 +343,16 @@ function authorizationOf(entry, port) {
 /**
  * What the port takes for one call: the policy and the targets over every
  * entry at the port `portOf` gives it (a deployed entry's own; a started one
- * only for the call that starts it), and each interface's auth header, from
- * the host's value for its key.
+ * only for the call that starts it), and the auth header of the call's own
+ * interface, `interfaceId`, from the host's value for its key. Another
+ * interface's credential never reaches the call's port, since the run scrubs
+ * a call's answer and faults of its own interface's secrets alone.
  */
-function portConfiguration({ entries, portOf, readEnvironment }) {
+function portConfiguration({ entries, portOf, readEnvironment, interfaceId }) {
   const reached = entries.map((entry) => ({ entry, port: portOf(entry) })).filter(({ port }) => port !== null);
   const auth = {};
   for (const entry of entries) {
-    if (entry.auth === undefined) continue;
+    if (entry.auth === undefined || entry.interfaceId !== interfaceId) continue;
     const value = readEnvironment([entry.auth.environmentKey])[entry.auth.environmentKey];
     if (value !== undefined) auth[entry.interfaceId] = { [entry.auth.header]: `${entry.auth.prefix ?? ''}${value}` };
   }
@@ -417,7 +417,11 @@ function callServer({ entry, port, cwd, target, environment, mechanism, maxOutpu
   let starting = null;
   let address = null;
 
-  /** Why the server is gone, as a sentence naming whether it had accepted a connection. */
+  /**
+   * Why the server is gone, as a sentence naming whether it had accepted a
+   * connection, with what it printed on standard error whole as `captured`,
+   * which the run scrubs before it quotes the end of it.
+   */
   function account() {
     const when = ready ? 'after it accepted a connection' : 'before it accepted a connection';
     if (ended.error !== undefined) {
@@ -429,10 +433,9 @@ function callServer({ entry, port, cwd, target, environment, mechanism, maxOutpu
       );
     }
     const { exitCode, stderr } = ended.result;
-    const quoted = tail(stderr);
-    return new Error(
-      `the server ${entry.server.target} exited ${exitCode} ${when} on ${address} port ${port}${quoted === '' ? '' : `: ${quoted}`}`,
-    );
+    return Object.assign(new Error(`the server ${entry.server.target} exited ${exitCode} ${when} on ${address} port ${port}`), {
+      captured: String(stderr ?? ''),
+    });
   }
 
   function start(signal, sendingTo) {
@@ -532,8 +535,9 @@ function faultError(fault, faultCodes) {
 
 /**
  * The fault a call records when the port's own process failed: eval-quality's
- * `port-failure` code, and the process's account, which can quote what it
- * printed, kept as the cause, which the run scrubs.
+ * `port-failure` code, and the process's account, which carries what it
+ * printed whole, kept as the cause, which the run scrubs and then quotes the
+ * end of.
  */
 function portFailure(cause, message = "the evaluation's HTTP port could not serve the call") {
   return Object.assign(new Error(`port-failure: ${message}`), { code: 'port-failure', cause });
@@ -619,7 +623,9 @@ async function callPort({ httpPort, message, server, signal, timeoutMs, maxChann
         const error = faultError(answer.fault, engine.RUNTIME_FAULT_CODES);
         // A server that stopped during the call explains a call that reached no answer better than the socket's error does.
         const stopped = error.code === 'port-failure' ? await server?.endedWithin(SERVER_SETTLE_MS) : null;
-        if (stopped !== null && stopped !== undefined) error.cause = new Error(`the server stopped during the call: ${stopped.message}`);
+        if (stopped !== null && stopped !== undefined) {
+          error.cause = Object.assign(new Error(`the server stopped during the call: ${stopped.message}`), { captured: stopped.captured });
+        }
         throw error;
       }
     },
@@ -662,6 +668,7 @@ function createApiPort({ entries, httpPort, cwd, targetOf, readEnvironment, mech
         entries,
         portOf: (candidate) => (candidate.server === undefined ? candidate.port : candidate === launched ? launchedPort : null),
         readEnvironment,
+        interfaceId: request?.interfaceId,
       });
       const server =
         launched === null
@@ -706,15 +713,16 @@ function createApiPort({ entries, httpPort, cwd, targetOf, readEnvironment, mech
  * answers none.
  */
 function degenerateApiPort({ entries, httpPort, answer, readEnvironment }) {
-  const configuration = portConfiguration({
-    entries,
-    portOf: (entry) => entry.port ?? (entry.scheme === 'https' ? 443 : 80),
-    readEnvironment,
-  });
   const degenerateAddresses = Object.fromEntries(entries.map((entry) => [entry.interfaceId, entry.addresses[0]]));
   return {
     async probe(request, signal) {
       const entry = entries.find((candidate) => candidate.interfaceId === request?.interfaceId);
+      const configuration = portConfiguration({
+        entries,
+        portOf: (candidate) => candidate.port ?? (candidate.scheme === 'https' ? 443 : 80),
+        readEnvironment,
+        interfaceId: request?.interfaceId,
+      });
       try {
         const { observation } = await callPort({
           httpPort,

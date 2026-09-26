@@ -40,10 +40,10 @@
  * The process ends when the runtime closes the channel.
  */
 
+'use strict';
+
 const net = require('node:net');
 const { StringDecoder } = require('node:string_decoder');
-
-('use strict');
 
 /** The protocol version both sides speak; `http-target.js` refuses a port answering another. */
 const HTTP_PORT_PROTOCOL = 1;

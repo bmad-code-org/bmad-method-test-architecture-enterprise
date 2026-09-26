@@ -70,10 +70,12 @@ const acorn = require('acorn');
 const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
+const { PassThrough } = require('node:stream');
 const { pathToFileURL } = require('node:url');
 const { spawnSync } = require('node:child_process');
 
 const { ENGINE_CLI_ENV, loadAdapters, loadEngine } = require('../cli/lib/evaluate/engine');
+const { serveHttpProbePort } = require('../cli/lib/evaluate/http-port-host');
 const { ArmError, hostEnvironmentPort, runArm } = require('../cli/lib/evaluate/arm');
 const { syntheticPort } = require('../cli/lib/evaluate/gameability');
 const {
@@ -301,7 +303,9 @@ const RANGE_LITERAL =
 /**
  * CIDR notation, a prefix length read off one, or the arithmetic a range comparison needs: a mask, a shift, a hex
  * constant, or an octet's radix (256, 65536, 16777216, 4294967296) that a division or a remainder takes an address
- * apart with.
+ * apart with; and the other spellings a copied classifier takes: an octet compared with 168 or 254 or bounded by 16
+ * and 31, a power of two, a range base written in decimal, an IPv6 prefix as a character class or a quoted prefix, the
+ * IPv4-mapped prefix, a table of base and prefix-length pairs, and an address prefix assembled from quoted pieces.
  */
 const CIDR_ARITHMETIC = [
   /\b\d{1,3}(?:\.\d{1,3}){3}\/\d{1,2}\b/,
@@ -312,6 +316,15 @@ const CIDR_ARITHMETIC = [
   /\b0x[0-9a-f]{2,}\b/i,
   /(?:<<|>>>?)\s*\d/,
   /\b(?:256|65_?536|16_?777_?216|4_?294_?967_?296)\b/,
+  /(?:[=!]==?|[<>]=?)\s*(?:168|254)\b|\b(?:168|254)\s*(?:[=!]==?|[<>]=?)/,
+  /[<>]=?\s*(?:1[56]|3[12])\b|\b(?:1[56]|3[12])\s*[<>]=?/,
+  /\*\*\s*\d/,
+  /\b\d(?:_?\d){8,}\b/,
+  /\bfe?\[[\da-f-]+\]/i,
+  /['"`](?:f[cd]|fe[89ab])[\da-f]{0,2}:?['"`]/i,
+  /::ffff:/i,
+  /\[\s*['"`]?\d{1,3}(?:\.\d{1,3}){0,3}['"`]?\s*,\s*\d{1,3}\s*\]/,
+  /['"`]\.?\d{1,3}\.?['"`]\s*\+|\+\s*['"`]\.?\d{1,3}\.?['"`]/,
 ];
 /** Ways a copied range check has been spelled that the grep must catch, each on its own. */
 const RANGE_EVASIONS = [
@@ -331,6 +344,22 @@ const RANGE_EVASIONS = [
   '(value & 0xffff) === 0xa9fe',
   String.raw`const [base, bits] = cidr.split(/\/(\d+)$/);`,
   "const cidr = base + '/8';",
+  'a === 10 || (a === 192 && b === 168)',
+  'first === 169 && second === 254',
+  'a === 172 && b >= 16 && b <= 31',
+  'a === 172 && b > 15 && b < 32',
+  'Math.floor(n / 2 ** 24) === 10',
+  'n >= 3232235520 && n <= 3232301055',
+  'n >= 167_772_160 && n < 184_549_376',
+  '/^f[cd]/i.test(host)',
+  '/^fe[89ab]/i.test(host)',
+  "host.toLowerCase().startsWith('fd')",
+  "host.startsWith('fe9')",
+  "address.startsWith('::ffff:')",
+  'const PRIVATE = [[10, 8], [172, 12], [192, 16]];',
+  "const PRIVATE = [['10.0.0.0', 8]];",
+  "address.startsWith('192' + '.168')",
+  "address.startsWith(first + '.168')",
 ];
 
 /** Whether the grep catches `text`: a range literal or any of the arithmetic. */
@@ -741,6 +770,7 @@ async function checkUnits() {
       portOf: () => 4242,
       readEnvironment: (names) =>
         Object.fromEntries(names.filter((name) => process.env[name] !== undefined).map((name) => [name, process.env[name]])),
+      interfaceId: 'grader',
     });
     check(
       JSON.stringify(configuration) ===
@@ -833,6 +863,7 @@ async function checkUnits() {
   const started = {
     ...entry,
     interfaceId: 'grader-two',
+    auth: { header: 'x-other-key', environmentKey: 'GRADER_TWO_KEY' },
     server: {
       target: 'server/grader.js',
       targetArgs: [],
@@ -845,13 +876,14 @@ async function checkUnits() {
     entries: [deployed, started],
     portOf: (candidate) => (candidate.server === undefined ? candidate.port : null),
     readEnvironment: (names) => Object.fromEntries(names.map((name) => [name, `${name}-value`])),
+    interfaceId: 'catalog',
   });
   check(
     registryProblems([deployed, started]).length === 0 &&
       JSON.stringify(mixed.policy.authorizations.map((authorization) => [authorization.interfaceId, authorization.port])) ===
         JSON.stringify([['catalog', 8443]]) &&
       JSON.stringify(mixed.targets) === JSON.stringify({ catalog: { scheme: 'https', host: 'catalog.example.test', port: 8443 } }) &&
-      mixed.auth.catalog?.['x-api-key'] === 'CATALOG_KEY-value',
+      JSON.stringify(mixed.auth) === JSON.stringify({ catalog: { 'x-api-key': 'CATALOG_KEY-value' } }),
     `a deployed and a started entry gave ${JSON.stringify(mixed)} and ${JSON.stringify(registryProblems([deployed, started]))}`,
   );
 
@@ -1238,6 +1270,7 @@ async function checkUnits() {
         entries: [deployedEntry],
         portOf: (candidate) => candidate.port,
         readEnvironment: () => ({ UNIT_API_KEY: mixedCaseKey }),
+        interfaceId: 'unit-deployed',
       }),
       transport: {
         // A name no resolver knows, as DNS answers for the host the redirect named.
@@ -1310,6 +1343,164 @@ async function checkUnits() {
     respelled?.code === 'budget-exhausted' && elsewhere?.code === 'forbidden-target' && elsewhere.reason === 'host-not-authorized',
     `a gameability redirect to LOCALHOST. gave ${respelled?.code}/${respelled?.reason}, and to an unlisted host ${elsewhere?.code}/${elsewhere?.reason}`,
   );
+}
+
+// ---------------------------------------------------------------- the port's process
+
+/**
+ * A call through the port's own process holds only its own interface's credential, a secret the quoted end of what a
+ * process printed would cut is scrubbed before the cut, and the host reads a call whose bytes arrive split inside a
+ * character whole.
+ */
+async function checkPortProcess() {
+  const [grader] = readJson(path.join(FIXTURE, EVALUATION, 'evaluation.json')).registry;
+  // A port that reports which interfaces' auth it was handed, and one that prints its auth value and ends unanswered.
+  const project = makeProject('port-process', {
+    edit: ({ folder }) => {
+      const file = path.join(folder, HTTP_PORT_MODULE);
+      const probeStart = '  async function probe(input, signal) {\n';
+      const source = fs.readFileSync(file, 'utf8');
+      if (!source.includes(probeStart)) throw new Error("the port template's probe no longer opens as the test edits it");
+      fs.writeFileSync(
+        file,
+        source.replace(
+          probeStart,
+          `${probeStart}    if (input?.operationId === 'report-auth') {
+      throw new RuntimeFault('port-failure', 'ProbeRequest', \`auth \${JSON.stringify(Object.keys(auth).sort())}\`);
+    }
+    if (input?.operationId === 'channel-auth') {
+      const value = Object.values(auth[input.interfaceId] ?? {})[0];
+      (await import('node:fs')).writeSync(3, \`\${'x'.repeat(190)}\${value}\\n\`);
+      return new Promise(() => {});
+    }
+    if (input?.operationId === 'print-auth') {
+      const value = Object.values(auth[input.interfaceId] ?? {})[0];
+      process.stdout.write(\`\${'a'.repeat(100)}\${value}\${'b'.repeat(1994)}\`, () => process.exit(1));
+      return new Promise(() => {});
+    }
+`,
+        ),
+      );
+    },
+  });
+  const httpPort = await probeHttpPort(project.folder);
+  const straddled = 'straddle-value-QZXJWK';
+  const deployedEntry = (interfaceId, environmentKey) => ({
+    kind: 'api',
+    interfaceId,
+    scheme: 'http',
+    host: '127.0.0.1',
+    port: 9,
+    addresses: ['127.0.0.1'],
+    methods: ['GET'],
+    safeMethods: ['GET'],
+    maxRedirects: 0,
+    maxElapsedMs: 5000,
+    maxRequestBytes: 1024,
+    maxResponseBytes: 4096,
+    auth: { header: 'x-api-key', environmentKey },
+  });
+  const entries = [deployedEntry('unit-a', 'UNIT_A_KEY'), deployedEntry('unit-b', 'UNIT_B_KEY')];
+  const readEnvironment = (names) => Object.fromEntries(names.map((name) => [name, name === 'UNIT_A_KEY' ? straddled : `${name}-value`]));
+  const request = (interfaceId, operationId) => ({
+    probeId: `${operationId}-1`,
+    interfaceId,
+    operationId,
+    kind: 'api',
+    method: 'GET',
+    pathTemplate: '/',
+    channels: { path: {}, query: {}, header: {}, body: { kind: 'absent' } },
+  });
+  const { nodeCommandMechanism } = await loadAdapters();
+  const live = createApiPort({
+    entries,
+    httpPort,
+    cwd: project.root,
+    targetOf: () => path.join(project.root, 'server', 'grader.js'),
+    readEnvironment,
+    mechanism: nodeCommandMechanism,
+    maxOutputBytes: 1024,
+  });
+  const degenerate = degenerateApiPort({ entries, httpPort, answer: { status: 200 }, readEnvironment });
+
+  // Each call's port holds its own interface's auth alone, on a real arm and a gameability arm alike.
+  for (const [arm, port] of [
+    ['a real arm', live],
+    ['a gameability arm', degenerate],
+  ]) {
+    const reported = await port.probe(request('unit-a', 'report-auth')).catch((error) => error);
+    check(
+      reported?.code === 'port-failure' && String(reported.message).endsWith('auth ["unit-a"]'),
+      `a call to unit-a on ${arm} handed its port the auth of ${reported?.message}`,
+    );
+  }
+
+  // A secret straddling the start of the end a failure quotes is scrubbed whole before the cut, from what the port
+  // process printed and from what a started service printed on its standard error.
+  const scrubbing = (port) => hostEnvironmentPort({ port, registry: { apiSecrets: () => [straddled] } });
+  const printed = await scrubbing(live)
+    .probe(request('unit-a', 'print-auth'))
+    .catch((error) => error);
+  const serverPrinted = await scrubbing(
+    createApiPort({
+      entries: [grader],
+      httpPort,
+      cwd: project.root,
+      targetOf: () => path.join(project.root, 'server', 'grader.js'),
+      readEnvironment: () => ({}),
+      mechanism: { run: async () => ({ exitCode: 1, stdout: '', stderr: `${'a'.repeat(100)}${straddled}${'b'.repeat(1994)}` }) },
+      maxOutputBytes: 1024,
+    }),
+  )
+    .probe({ ...request('grader', 'grade-run'), pathTemplate: '/grade' })
+    .catch((error) => error);
+  // A line outside the protocol is quoted cut at its end, where the scrub finds the leading part of a secret the cut left.
+  const strayLine = await scrubbing(live)
+    .probe(request('unit-a', 'channel-auth'))
+    .catch((error) => error);
+  check(
+    strayLine?.code === 'port-failure' &&
+      String(strayLine.scrubbedCause).includes("wrote a line that is not the runtime's protocol") &&
+      !String(strayLine.scrubbedCause).includes('straddle-'),
+    `a secret the quoted stray line cut left ${JSON.stringify(String(strayLine?.scrubbedCause).slice(-80))}`,
+  );
+  for (const [what, fault, account] of [
+    ["the port's process", printed, 'ended (exit 1) before it answered'],
+    ['a started service', serverPrinted, 'exited 1 before it accepted a connection'],
+  ]) {
+    const cause = String(fault?.scrubbedCause);
+    check(
+      fault?.code === 'port-failure' && cause.includes(account) && cause.includes('b'.repeat(1994)) && !cause.includes('QZXJWK'),
+      `a secret straddling the quoted end of what ${what} printed left ${JSON.stringify(cause.slice(0, 400))}`,
+    );
+  }
+
+  // The host decodes the channel as one stream: a call whose bytes are cut inside a character is read whole.
+  const input = new PassThrough();
+  const output = new PassThrough();
+  let written = '';
+  output.setEncoding('utf8');
+  output.on('data', (chunk) => {
+    written += chunk;
+  });
+  serveHttpProbePort(
+    {
+      createHttpProbePort: () => ({ probe: async (probed) => ({ echoed: probed.channels.query.text }) }),
+      nodeTransport: { send: async () => {} },
+    },
+    { input, output, env: { TEA_EVALUATE_HTTP_PORT_HOST: '1' } },
+  );
+  const text = 'é€😀';
+  const bytes = Buffer.from(
+    `${JSON.stringify({ type: 'call', configuration: {}, launched: false, request: { channels: { query: { text } } } })}\n`,
+  );
+  const cut = bytes.indexOf(Buffer.from('😀')) + 2;
+  input.write(bytes.subarray(0, cut));
+  await new Promise((resolve) => setImmediate(resolve));
+  input.write(bytes.subarray(cut));
+  await eventually(() => written.includes('\n'));
+  const echoed = written.includes('\n') ? JSON.parse(written.split('\n')[0])?.observation?.echoed : undefined;
+  check(echoed === text, `a call cut inside a character was read as ${JSON.stringify(echoed)}; expected ${JSON.stringify(text)}`);
 }
 
 // ---------------------------------------------------------------- the pipeline
@@ -2203,7 +2394,7 @@ async function checkCheckRules() {
           evaluation.registry[0].addresses = ['127.0.0.1', '192.0.2.10'];
         }),
       'registry',
-      'sends its authorization header over plain http to "192.0.2.10"',
+      'sends its authorization header over plain http to "192.0.2.10", which eval-quality\'s classifyAddress does not class loopback; serve the target over https with scheme "https" (setting NODE_EXTRA_CA_CERTS',
     ],
     [
       'a folder with no HTTP port',
@@ -2242,6 +2433,33 @@ async function checkCheckRules() {
       `${what}: check exited ${checked.status}; expected 10 under ${rule} naming ${JSON.stringify(expected)}\n${checked.output}`,
     );
   }
+
+  // A host a URL spells the same, letter case aside, passes: the port hands eval-quality's policy the URL's hostname,
+  // which the policy reads in lower case, as it reads the entry's host.
+  const mixedCase = makeProject('check-mixed-case', {
+    edit: ({ folder }) =>
+      editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
+        evaluation.registry[0].host = 'LocalHost';
+      }),
+  });
+  const accepted = evaluate(['check', '--evaluation', mixedCase.folder], mixedCase.env);
+  const [mixedEntry] = readJson(path.join(mixedCase.folder, 'evaluation.json')).registry;
+  const { evaluateTarget } = await loadEngine();
+  const decision = evaluateTarget(
+    portConfiguration({ entries: [mixedEntry], portOf: () => 4242, readEnvironment: () => ({}), interfaceId: 'grader' }).policy,
+    {
+      interfaceId: 'grader',
+      scheme: 'http',
+      host: new URL(`http://${mixedEntry.host}:4242/`).hostname,
+      port: 4242,
+      address: '127.0.0.1',
+      method: 'GET',
+    },
+  );
+  check(
+    accepted.status === 0 && decision.allowed === true,
+    `a host spelled LocalHost: check exited ${accepted.status} and the policy decided ${JSON.stringify(decision)}\n${accepted.output}`,
+  );
 }
 
 /** Runs one case; an exception is a failed check, so the cases after it still run and every failure is reported. */
@@ -2259,6 +2477,7 @@ async function main() {
     await runCase('the port, in process', checkPortUnits);
     await runCase('the conformance file', checkConformance);
     await runCase('the units', checkUnits);
+    await runCase("the port's process", checkPortProcess);
     await runCase('the pipeline', checkPipeline);
     await runCase('the denials', checkDenials);
     await runCase('the sealed-brief agent', checkSealedBriefAgent);

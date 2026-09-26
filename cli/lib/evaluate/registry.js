@@ -762,13 +762,16 @@ async function mcpRegistryProblems(entries) {
 
 /**
  * The spelling of `host` the evaluation's HTTP port hands eval-quality's
- * policy: a URL's hostname for it, unbracketed (lower case, an IPv4 address
- * in dotted decimal, an IPv6 address compressed, a name in punycode), as the
- * template's `originOf` and `hostOfUrl` read it; null when no URL can name
- * it. eval-quality compares a target's host with the authorization's as text
- * and exports no host normalization (its `parseAddress` canonicalizes an
- * address for the address check, in a form no URL carries), so the URL's
- * spelling is the one both sides hold.
+ * policy: the hostname of a URL naming it, unbracketed (lower case, an IPv4
+ * address in dotted decimal, an IPv6 address compressed, a name in punycode),
+ * as the template's `originOf` and `hostOfUrl` read it; null when no URL can
+ * name it. The policy reads both hosts in lower case with one trailing dot
+ * dropped, so an entry whose `host` lowercases to this spelling is allowed as
+ * written, and any other spelling (`127.1`, an expanded IPv6 address, an IDN)
+ * is denied on every request. eval-quality exports no host normalization
+ * (`normalizeHost` is module-private in 4.2.0, and `parseAddress` canonicalizes
+ * an address in a form no URL carries), so the URL's hostname is the spelling
+ * `check` holds an entry to.
  *
  * @param {string} host
  * @returns {string|null}
@@ -782,11 +785,12 @@ function canonicalHost(host) {
 
 /**
  * Every HTTP entry that cannot reach its target as written, as one line each:
- * a `host` spelled otherwise than a URL spells it, which eval-quality's policy
- * denies on every request (`host-not-authorized`), since the port hands it the
- * URL's spelling; and an `auth` header sent over `http` to an address
- * eval-quality's `classifyAddress` does not class `loopback`, which would put
- * the credential on the network in clear text. Each entry is first held to
+ * a `host` spelled otherwise than a URL spells it, letter case aside, which
+ * eval-quality's policy denies on every request (`host-not-authorized`), since
+ * the port hands it the URL's hostname; and an `auth` header sent over `http` to an address
+ * eval-quality's `classifyAddress` does not class `loopback`; such a target
+ * is served over https, with `NODE_EXTRA_CA_CERTS` for a private authority.
+ * Each entry is first held to
  * its schema (`registryProblems`); an entry off it is left to that finding.
  *
  * @param {unknown} entries
@@ -801,9 +805,9 @@ async function apiRegistryProblems(entries) {
     const canonical = canonicalHost(entry.host);
     if (canonical === null) {
       problems.push(`registry[${index}] names host ${JSON.stringify(entry.host)}, which no URL can name`);
-    } else if (canonical !== entry.host) {
+    } else if (canonical !== entry.host.toLowerCase()) {
       problems.push(
-        `registry[${index}] names host ${JSON.stringify(entry.host)}, which a URL spells ${JSON.stringify(canonical)}; eval-quality's policy compares the host a request carries, so write ${JSON.stringify(canonical)}`,
+        `registry[${index}] names host ${JSON.stringify(entry.host)}, which a URL spells ${JSON.stringify(canonical)}; the port hands eval-quality's policy the URL's hostname, so write ${JSON.stringify(canonical)}`,
       );
     }
     if (entry.auth !== undefined && entry.scheme === 'http') {
@@ -811,7 +815,7 @@ async function apiRegistryProblems(entries) {
       const exposed = entry.addresses.filter((address) => classifyAddress(address) !== 'loopback');
       if (exposed.length > 0) {
         problems.push(
-          `registry[${index}] sends its ${entry.auth.header} header over plain http to ${exposed.map((address) => JSON.stringify(address)).join(', ')}, which eval-quality's classifyAddress does not class loopback; use scheme "https", or keep every address loopback`,
+          `registry[${index}] sends its ${entry.auth.header} header over plain http to ${exposed.map((address) => JSON.stringify(address)).join(', ')}, which eval-quality's classifyAddress does not class loopback; serve the target over https with scheme "https" (setting NODE_EXTRA_CA_CERTS to the PEM file of a private certificate authority that signed its certificate), or keep every address loopback`,
         );
       }
     }

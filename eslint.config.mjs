@@ -123,6 +123,17 @@ export default [
     },
   },
 
+  // The Evaluate runtime's modules run in strict mode: the directive opens each
+  // file, so a formatter or an edit that moves it below the requires, where it
+  // is an inert expression and the module runs sloppy, fails lint (TEA Story
+  // 1.11).
+  {
+    files: ['cli/lib/evaluate/**/*.js'],
+    rules: {
+      strict: ['error', 'global'],
+    },
+  },
+
   // The Evaluate skill's HTTP port templates are adopter code: rendered into an
   // evaluation folder's adapter/, they resolve eval-quality and this package
   // against that folder's own install (AD-20). The port's last lines import

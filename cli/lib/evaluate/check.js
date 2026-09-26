@@ -86,7 +86,8 @@
  * interface as a kind other than the one the contract declares for it, be
  * a tool server eval-quality's `parseMcpTargetPolicy` refuses (two for one
  * interface among them) (`registry`, Story 1.10), be a second HTTP target
- * for one interface, name a `host` otherwise than a URL spells it, or send
+ * for one interface, name a `host` otherwise than a URL spells it (letter
+ * case aside), or send
  * an `auth` header over `http` to an address eval-quality's `classifyAddress`
  * does not class `loopback` (`registry`, Story 1.11), `interface` must be a kind
  * the contract declares (`reference`), and a file must
