@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `tea-evaluate` runs a calling agent's own command in a disposable copy and judges its stdout tool-call trajectory with AgentEvals' deterministic strict matcher (Story 1.19). The adopter-owned evaluator imports its pass or fail judgment through the existing mapping contract; the clean control passes, a wrong-tool rules mutation is caught, and an always-pass evaluator leaves the defect uncaught. `npm run test:evaluate-tool-use` joins the default test chain and verifies the installed AgentEvals `LICENSE` text that supports the licence gate's MIT exception.
 - `tea-evaluate` evaluates a multi-step workflow over its own interface kind, binding a later step to a value an earlier step produced (Story 1.18, AD-4).
   An interaction plan step's `{ "captured": "/interactions/<stepId>/<channel>/<key>" }` binding is sent as the value that pointer resolves to on the observation the named step recorded in the same arm, read by eval-quality's own `makeResolveOperand`, so the record's `callInputs` carry the identifier the earlier step minted in that trial; `matcher` and `principal` bindings still stop the arm with exit 12.
   A step runs after the step its `after` clause names and after every step its captured bindings read, otherwise in plan order, and each observation's `sequence` follows the order the steps were issued in.
