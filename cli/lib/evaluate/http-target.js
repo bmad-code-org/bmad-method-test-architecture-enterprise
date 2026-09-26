@@ -84,7 +84,7 @@ const path = require('node:path');
 const { StringDecoder } = require('node:string_decoder');
 
 const { quotedCapture } = require('./arm');
-const { loadConformance, loadEngine } = require('./engine');
+const { canonicalAddress, loadConformance, loadEngine } = require('./engine');
 const { HOST_ENVIRONMENT_KEY, HTTP_PORT_PROTOCOL, PROTOCOL_FD, UnansweredRequest } = require('./http-port-host');
 
 /** Where the evaluation's HTTP port lives, relative to the evaluation folder. */
@@ -104,6 +104,18 @@ const PORT_OUTPUT_BYTES = 1024 * 1024;
 const PORT_CHANNEL_ALLOWANCE = 1024 * 1024;
 /** The host's variables the port's process inherits beside PATH: the extra certificate authorities Node reads. */
 const INHERITED_KEYS = ['NODE_EXTRA_CA_CERTS'];
+/** The longest delay one timer holds; `setTimeout` turns a longer one into 1 ms. */
+const MAX_TIMER_MS = 2 ** 31 - 1;
+
+/**
+ * A delay within what one timer holds. The schema lets `maxElapsedMs` and
+ * `readyTimeoutMs` reach `MAX_TIMER_MS` each, so a bound summed from them
+ * can pass it, and a timer given that sum would fire at once.
+ */
+function timerDelay(ms) {
+  return Math.min(ms, MAX_TIMER_MS);
+}
+
 /**
  * How the runtime opens a file a port or a server can replace while the run
  * goes on: read only, never through a link, and without waiting on a pipe or
@@ -253,7 +265,8 @@ function exchangeWithPort({ httpPort, message, onMessage, timeoutMs, maxChannelB
       child.kill('SIGKILL');
       finish(() => reject(failed(detail, exitCode)));
     };
-    const timer = setTimeout(() => stop(`did not answer within ${timeoutMs}ms and was ended`, 12), timeoutMs);
+    const waitMs = timerDelay(timeoutMs);
+    const timer = setTimeout(() => stop(`did not answer within ${waitMs}ms and was ended`, 12), waitMs);
     const onAbort = () => {
       if (!settled) channel.write(`${JSON.stringify({ type: 'abort' })}\n`);
     };
@@ -413,6 +426,9 @@ function deploymentCandidates(entry) {
  * `:port`, then at most one `/`. A URL parser normalizes many other strings to
  * an origin (surrounding spaces, `http:x`, `http:/x`, `http://x/..`), and the
  * raw string is what a run records, so only this form is read as one.
+ * The parser still removes or maps some characters this form admits (a soft
+ * hyphen, a zero-width space, a fullwidth letter, the ideographic full stop),
+ * so `originTarget` also holds the parsed authority to the written one.
  */
 const ORIGIN_FORM = /^https?:\/\/(?:\[[0-9A-Fa-f:.]+\]|[^\s\p{Cc}/?#@\\%:[\]]+)(?::\d+)?\/?$/iu;
 
@@ -432,15 +448,25 @@ function originTarget(origin) {
   const url = new URL(origin);
   const scheme = url.protocol.slice(0, -1);
   if (!['http', 'https'].includes(scheme) || url.username !== '' || url.password !== '' || url.pathname !== '/') return null;
+  const port = url.port === '' ? defaultPortOf({ scheme }) : Number(url.port);
+  // The authority as written, letter case aside, is the one the parser read: the parser drops a default port, so an
+  // authority naming it is compared with the port restored.
+  const authority = origin
+    .slice(origin.indexOf('//') + 2)
+    .replace(/\/$/, '')
+    .toLowerCase();
+  if (authority !== url.host && authority !== `${url.hostname}:${port}`) return null;
   const host = url.hostname.startsWith('[') ? url.hostname.slice(1, -1) : url.hostname;
-  return { scheme, host, port: url.port === '' ? defaultPortOf({ scheme }) : Number(url.port) };
+  return { scheme, host, port };
 }
 
 /**
  * The one deployment an origin reaches, as a string (`scheme://host:port`):
  * `originTarget`'s reading with one trailing dot of the host dropped, since a
- * name and the same name ending in the root's dot resolve alike. Null when
- * `origin` is no origin.
+ * name and the same name ending in the root's dot resolve alike, and an IP
+ * literal written as eval-quality's `parseAddress` reads it (`engine.js`'s
+ * `canonicalAddress`), since its policy takes `::ffff:7f00:1` and `127.0.0.1`
+ * as one address. Null when `origin` is no origin.
  *
  * @param {string} origin
  * @returns {string | null}
@@ -448,7 +474,9 @@ function originTarget(origin) {
 function originKey(origin) {
   const target = originTarget(origin);
   if (target === null) return null;
-  const host = target.host.endsWith('.') ? target.host.slice(0, -1) : target.host;
+  const named = target.host.endsWith('.') ? target.host.slice(0, -1) : target.host;
+  const address = net.isIP(target.host) === 0 ? null : canonicalAddress(target.host);
+  const host = address === null ? named : address.includes(':') ? `[${address}]` : address;
   return `${target.scheme}://${host}:${target.port}`;
 }
 
@@ -515,7 +543,7 @@ class DeploymentUnreachable extends Error {
   }
 }
 
-/** The first address `host` resolves to, as the port's own transport resolves it, within `timeoutMs` and `signal`. */
+/** The first address `host` resolves to, as the port's own transport resolves it, within `timeoutMs` (at most `MAX_TIMER_MS`) and `signal`. */
 function resolveFirst(host, { lookup, timeoutMs, signal }) {
   if (net.isIP(host) !== 0) return Promise.resolve(host);
   return new Promise((resolve, reject) => {
@@ -525,7 +553,8 @@ function resolveFirst(host, { lookup, timeoutMs, signal }) {
       reject(new DeploymentUnreachable(reason));
     };
     const onAbort = () => fail(`resolving ${host} was aborted`);
-    const timer = setTimeout(() => fail(`${host} did not resolve within ${timeoutMs} ms`), timeoutMs);
+    const waitMs = timerDelay(timeoutMs);
+    const timer = setTimeout(() => fail(`${host} did not resolve within ${waitMs} ms`), waitMs);
     if (signal?.aborted) return onAbort();
     signal?.addEventListener('abort', onAbort, { once: true });
     lookup(host).then(
@@ -794,7 +823,7 @@ function callServer({ entry, port: chosenPort = null, portFile = null, cwd, targ
           env,
           stdin: { kind: 'absent' },
           cwd,
-          maxElapsedMs: entry.server.readyTimeoutMs + entry.maxElapsedMs + SERVER_GRACE_MS,
+          maxElapsedMs: timerDelay(entry.server.readyTimeoutMs + entry.maxElapsedMs + SERVER_GRACE_MS),
           maxOutputBytes: entry.server.maxOutputBytes ?? maxOutputBytes,
         },
         controller.signal,

@@ -873,7 +873,7 @@ function historicalBoundaryProblems(qualification, registry) {
     for (const [id, origin] of Object.entries(origins)) {
       if (originTarget(origin) === null) {
         problems.push(
-          `deployments.${side}.origins.${id} is ${JSON.stringify(origin)}, which is no http or https origin (scheme://host[:port], with no path, query, fragment or credentials)`,
+          `deployments.${side}.origins.${id} is ${JSON.stringify(origin)}, which is no http or https origin (scheme://host[:port], its authority written as a URL keeps it, letter case aside, with no path, query, fragment or credentials)`,
         );
       }
     }

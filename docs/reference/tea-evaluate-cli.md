@@ -366,10 +366,11 @@ The qualification names a pre-fix and a post-fix deployment: the release identif
   The run takes it as written; it does not ask the deployment which release it runs, so name the release each deployment reports.
   `check` refuses one release for both deployments.
 - `origins`: `scheme://host[:port]` for every HTTP interface of the registry and no other, spelled exactly so with at most a trailing `/`: no path, query, fragment, credentials or surrounding space.
+  The authority is the one a URL keeps, letter case aside (an IPv4 address in dotted decimal, an IPv6 address as the URL writes it, a name in punycode), so the origin a run records is the one it reaches.
   Each origin must be one the registry authorizes for its interface: the entry's own origin, when the entry names a deployed `port`, or an origin its `deployments` list names (see [The registry](#the-registry)).
 
 `check` refuses a probe that names one deployment without the other, and one in an evaluation whose registry holds an entry that is not an HTTP entry, since a deployment is reached over HTTP alone.
-It also refuses a pre-fix origin that reaches a post-fix one, for the same interface or another, read by scheme, host (lower-cased, one trailing dot dropped) and port, since the fail-before arm would then reach the post-fix deployment.
+It also refuses a pre-fix origin that reaches a post-fix one, for the same interface or another, read by scheme, host (lower-cased, one trailing dot dropped, an IP address as eval-quality's `parseAddress` reads it, so `[::ffff:7f00:1]` is `127.0.0.1`) and port, since the fail-before arm would then reach the post-fix deployment.
 Before either arm runs, the runtime resolves each origin's host once, to its first address, as the port does, within the entry's `maxElapsedMs` and the 15 seconds a port call gets beyond it, and asks eval-quality's `evaluateTarget` which of those authorizations allows the origin, at the first method the entry authorizes.
 A deployment none of them allows refuses the probe, the reason naming each authorization's denial in eval-quality's words (`port-not-authorized`, say).
 An origin whose scheme, host or port no authorization admits is refused before its host is resolved, as the port denies an unresolved host; a host some authorization admits that does not resolve in time leaves the deployment unreachable, which stops the run with exit 12.
@@ -380,7 +381,7 @@ No worktree is made, so the route needs no git history: it runs from a `copy` wo
 No server starts for a call to a deployment, and the evidence of a leg or trial that reached one names its origins.
 The qualified probe records `artifactDigest` as `sha256:` and the SHA-256 of the pre-fix release identifier, and `fixCommitDigest` as the same over the post-fix one.
 Each defect's manifestation-witness leg reaches the pre-fix deployment, and `run` runs the probe's trials on the arm `historical:<release>`, named by the pre-fix release, each trial's HTTP calls reaching the pre-fix deployment; `run.json`'s `deployments` names the arm's origins.
-One arm runs one target, so two probes on one arm label at two targets (a worktree and a deployment, or two sets of pre-fix origins) exit 10.
+One arm runs one target, so two probes on one arm label at two targets (a worktree and a deployment, or two sets of pre-fix origins) exit 10, as do two labels that differ only in letter case, whose trial directories would meet on a case-insensitive file system.
 `check` refuses every such boundary first (neither boundary, deployments beside a `fixCommit`, one deployment, one release for both, a registry entry that is not an HTTP entry, origins off the registry's HTTP interfaces, or a shared origin); the runtime refuses the same boundaries again with exit 12, as defence in depth.
 
 ### Either route

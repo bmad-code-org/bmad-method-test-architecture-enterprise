@@ -56,10 +56,12 @@
  *   pre-fix host that does not resolve exits 12 with no refusal; `check`
  *   refuses an origin with a path and origins naming another interface in
  *   place of the registry's. Units cover `originTarget` (each spelling a URL
- *   parser would normalize), the policy of a deployment arm (the one
+ *   parser would normalize or map), the policy of a deployment arm (the one
  *   authorization eval-quality allowed, and no deployment outside it) and of
  *   an interface named `constructor`, `deploymentAccess` (each candidate's
- *   reason, an unresolvable or stalled host, the lookup's bound),
+ *   reason, an unresolvable or stalled host, the lookup's bound), the lookup
+ *   and the port exchange under `maxElapsedMs` 2147483647 with no
+ *   `TimeoutOverflowWarning`, `originKey` over an IPv4-mapped address,
  *   `deploymentPair`'s exit 12 reasons and `routeIdentity`, and a static
  *   case reads the reference's `### From worktrees` and
  *   `### Against deployments` sections.
@@ -94,7 +96,15 @@ const { ENGINE_CLI_ENV, loadEngine } = require('../cli/lib/evaluate/engine');
 const { AGENT_ADAPTERS } = require('../cli/lib/agent-adapters');
 const { qualifyGameabilityProbes, syntheticPort } = require('../cli/lib/evaluate/gameability');
 const { deploymentPair, historicalRevisions, qualifyHistoricalProbe, routeIdentity } = require('../cli/lib/evaluate/historical');
-const { DeploymentUnreachable, deploymentAccess, originTarget, portConfiguration } = require('../cli/lib/evaluate/http-target');
+const {
+  DeploymentUnreachable,
+  degenerateApiPort,
+  deploymentAccess,
+  httpPortFile,
+  originKey,
+  originTarget,
+  portConfiguration,
+} = require('../cli/lib/evaluate/http-target');
 const { registryFromEvaluation } = require('../cli/lib/evaluate/registry');
 const { RunDirectory } = require('../cli/lib/evaluate/run-directory');
 const {
@@ -1364,6 +1374,12 @@ async function checkDeploymentUnits() {
     ['http:127.0.0.1', null],
     ['http:/127.0.0.1', null],
     ['http://127.0.0.1/..', null],
+    // Characters the form admits and the parser removes or maps, so the host reached is not the one written.
+    ['http://grader\u00ADexample.test', null],
+    ['http://grader\u200Bexample.test', null],
+    ['http://\uFF47rader.example.test', null],
+    ['http://grader\u3002example.test', null],
+    ['http://[::ffff:127.0.0.1]:4343', null],
   ];
   for (const [origin, expected] of cases) {
     check(
@@ -1486,6 +1502,50 @@ async function checkDeploymentUnits() {
     `a stalled host with a 500 ms allowance gave ${bounded?.name}: ${bounded?.message}; expected a bound of maxElapsedMs and the allowance`,
   );
 
+  // A ceiling at the schema's bound sums past what one timer holds; the timers wait as long as one can, where an
+  // unclamped sum fires at once with a TimeoutOverflowWarning.
+  const overflows = [];
+  const onWarning = (warning) => {
+    if (warning.name === 'TimeoutOverflowWarning') overflows.push(warning.message);
+  };
+  process.on('warning', onWarning);
+  try {
+    const longest = { ...entry, maxElapsedMs: 2_147_483_647 };
+    const slow = async (host) => {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      return lookup(host);
+    };
+    let answered;
+    try {
+      answered = await deploymentAccess({ entries: [longest], origins: { grader: 'https://grader.example.test' }, lookup: slow });
+    } catch (error) {
+      answered = { thrown: `${error.name}: ${error.message}` };
+    }
+    check(
+      answered.authorizations?.grader?.port === 443,
+      `a lookup answering after 100 ms under maxElapsedMs 2147483647 gave ${JSON.stringify(answered)}; expected the entry's own authorization`,
+    );
+    const folder = scratch.make('slow-port');
+    fs.mkdirSync(path.join(folder, 'adapter'));
+    fs.writeFileSync(path.join(folder, 'adapter', 'http-probe-port.mjs'), 'setTimeout(() => process.exit(0), 300);\n');
+    const port = degenerateApiPort({ entries: [longest], httpPort: httpPortFile(folder), answer: null, readEnvironment: () => ({}) });
+    let ended = null;
+    try {
+      await port.probe({ interfaceId: 'grader' });
+    } catch (error) {
+      ended = error;
+    }
+    const endedWith = `${ended?.message} (${ended?.cause?.message})`;
+    check(
+      /ended \(exit 0\) before it answered/.test(endedWith) && !/did not answer within/.test(endedWith),
+      `a port ending after 300 ms under maxElapsedMs 2147483647 gave ${endedWith}; expected the port's own end`,
+    );
+    await new Promise((resolve) => setImmediate(resolve));
+    check(overflows.length === 0, `the timers under maxElapsedMs 2147483647 warned ${JSON.stringify(overflows)}`);
+  } finally {
+    process.off('warning', onWarning);
+  }
+
   const preFix = { release: 'r1', origins: { grader: 'http://127.0.0.1:1' } };
   const fix = { release: 'r2', origins: { grader: 'http://127.0.0.1:2' } };
   const pairs = [
@@ -1534,6 +1594,25 @@ async function checkDeploymentUnits() {
     /pre-fix origin for grader and its post-fix origin for admin both reach/.test(swapped.unaddressable ?? ''),
     `deploymentPair over a pre-fix grader origin that is the post-fix admin origin gave ${JSON.stringify(swapped)}`,
   );
+  // eval-quality reads an IPv4-mapped IPv6 address as the IPv4 address it maps, so the two spellings reach one deployment.
+  check(
+    originKey('http://[::ffff:7f00:1]:4343') === 'http://127.0.0.1:4343',
+    `originKey reads [::ffff:7f00:1] as ${originKey('http://[::ffff:7f00:1]:4343')}; expected eval-quality's canonical address`,
+  );
+  const mapped = deploymentPair(
+    {
+      route: 'historical',
+      deployments: {
+        preFix: { ...preFix, origins: { grader: 'http://127.0.0.1:4343' } },
+        fix: { ...fix, origins: { grader: 'http://[::ffff:7f00:1]:4343' } },
+      },
+    },
+    [graderEntry],
+  );
+  check(
+    /both reach http:\/\/127\.0\.0\.1:4343/.test(mapped.unaddressable ?? ''),
+    `deploymentPair over 127.0.0.1 and [::ffff:7f00:1] at one port gave ${JSON.stringify(mapped)}`,
+  );
   const whole = deploymentPair({ route: 'historical', deployments: { preFix, fix } }, [graderEntry]);
   check(whole.preFix === preFix && whole.fix === fix, `deploymentPair over a whole pair gave ${JSON.stringify(whole)}`);
 
@@ -1547,6 +1626,10 @@ async function checkDeploymentUnits() {
   check(
     identity({ grader: 'http://svc.example.test' }) === identity({ grader: 'http://SVC.example.test.:80' }),
     'one host spelled with and without the trailing dot names two targets',
+  );
+  check(
+    identity({ grader: 'http://127.0.0.1:4343' }) === identity({ grader: 'http://[::ffff:7f00:1]:4343' }),
+    'one address spelled as IPv4 and as IPv4-mapped IPv6 names two targets',
   );
   check(
     identity({ grader: 'http://127.0.0.1:1' }) !== identity({ grader: 'http://127.0.0.1:2' }) &&
