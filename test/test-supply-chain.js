@@ -58,7 +58,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { omitVerifiedOptionalSdk } = require('../tools/check-licences');
+const { omitVerifiedOptionalSdk, verifyPromptfooToleranceScope, verifyPromptfooUndeclaredScope } = require('../tools/check-licences');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const CONFIG_PATH = path.join(PROJECT_ROOT, 'eval-quality.config.json');
@@ -220,8 +220,162 @@ function checkLicencesSeed() {
   check(output.includes('GPL-3.0-only'), `licence wrapper did not name the GPL-3.0-only licence\n${output}`);
 }
 
-function checkPromptfooLicenceScope() {
+function checkPromptfooLicenceScope(config) {
   const original = readJson(path.join(PROJECT_ROOT, 'package-lock.json'), 'package-lock.json');
+  verifyPromptfooToleranceScope(original, config);
+  verifyPromptfooUndeclaredScope(original, config);
+  for (const prefix of ['sylvester', 'xmlhttprequest-ssl']) {
+    for (const [label, change] of [
+      [
+        'prefix',
+        (entry) => {
+          entry.prefix += '-other';
+        },
+      ],
+      [
+        'lockfile',
+        (entry) => {
+          entry.lockfiles = ['website/package-lock.json'];
+        },
+      ],
+      [
+        'readAs',
+        (entry) => {
+          entry.readAs = 'Apache-2.0';
+        },
+      ],
+      [
+        'evidence',
+        (entry) => {
+          entry.evidence = 'unverified';
+        },
+      ],
+      [
+        'reason',
+        (entry) => {
+          entry.reason = 'unverified';
+        },
+      ],
+    ]) {
+      const changedConfig = structuredClone(config);
+      change(changedConfig.licences.undeclared.find((entry) => entry.prefix === prefix));
+      let rejected = false;
+      try {
+        verifyPromptfooUndeclaredScope(original, changedConfig);
+      } catch (error) {
+        rejected = error.message.includes('promptfoo undeclared licence');
+      }
+      check(rejected, `promptfoo undeclared licence guard accepted changed ${prefix} ${label}`);
+    }
+  }
+  const extraUndeclared = structuredClone(config);
+  const sidecarReading = structuredClone(extraUndeclared.licences.undeclared.find((entry) => entry.prefix === 'sylvester'));
+  sidecarReading.prefix = 'sylvester-sidecar';
+  sidecarReading.reason = 'unrelated';
+  extraUndeclared.licences.undeclared.push(sidecarReading);
+  let extraReadingRejected = false;
+  try {
+    verifyPromptfooUndeclaredScope(original, extraUndeclared);
+  } catch (error) {
+    extraReadingRejected = error.message.includes('approved promptfoo undeclared licence set changed');
+  }
+  check(extraReadingRejected, 'promptfoo licence guard accepted an extra same-prefix undeclared reading');
+  const licenceFiles = { sylvester: 'LICENSE.txt', 'xmlhttprequest-ssl': 'LICENSE' };
+  for (const prefix of Object.keys(licenceFiles)) {
+    const changedLock = structuredClone(original);
+    const entry = changedLock.packages[`node_modules/${prefix}`];
+    entry.version = '99.0.0';
+    entry.resolved = `https://registry.npmjs.org/${prefix}/-/${prefix}-99.0.0.tgz`;
+    const changedResult = runLicenceWrapper(changedLock);
+    check(
+      changedResult.status !== 0 && changedResult.output.includes(`${prefix} changed its approved locked version or registry tarball`),
+      `promptfoo licence wrapper accepted ${prefix} version and tarball drift: ${changedResult.output}`,
+    );
+    const changedUrl = structuredClone(original);
+    changedUrl.packages[`node_modules/${prefix}`].resolved = `https://registry.npmjs.org/${prefix}/-/${prefix}-99.0.0.tgz`;
+    let urlRejected = false;
+    try {
+      verifyPromptfooUndeclaredScope(changedUrl, config);
+    } catch (error) {
+      urlRejected = error.message.includes(`${prefix} changed its approved locked version or registry tarball`);
+    }
+    check(urlRejected, `promptfoo licence guard accepted ${prefix} tarball drift with its version unchanged`);
+  }
+  const licenceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-undeclared-terms-'));
+  try {
+    for (const [prefix, file] of Object.entries(licenceFiles)) {
+      const packageRoot = path.join(licenceRoot, 'node_modules', prefix);
+      fs.mkdirSync(packageRoot, { recursive: true });
+      fs.copyFileSync(path.join(PROJECT_ROOT, 'node_modules', prefix, file), path.join(packageRoot, file));
+    }
+    for (const [prefix, file] of Object.entries(licenceFiles)) {
+      const installed = path.join(licenceRoot, 'node_modules', prefix, file);
+      fs.appendFileSync(installed, '\nchanged terms\n');
+      let termsRejected = false;
+      try {
+        verifyPromptfooUndeclaredScope(original, config, licenceRoot);
+      } catch (error) {
+        termsRejected = error.message.includes(`${prefix} licence file no longer matches the approved evidence`);
+      }
+      check(termsRejected, `promptfoo licence guard accepted changed ${prefix} licence text`);
+      fs.copyFileSync(path.join(PROJECT_ROOT, 'node_modules', prefix, file), installed);
+    }
+  } finally {
+    fs.rmSync(licenceRoot, { recursive: true, force: true });
+  }
+  for (const [label, change] of [
+    [
+      'licence',
+      (entry) => {
+        entry.license = 'MIT';
+      },
+    ],
+    [
+      'optional flag',
+      (entry) => {
+        entry.optional = false;
+      },
+    ],
+    [
+      'lockfile',
+      (entry) => {
+        entry.lockfiles = ['website/package-lock.json'];
+      },
+    ],
+    [
+      'marker file',
+      (entry) => {
+        entry.marker.file = 'website/package.json';
+      },
+    ],
+    [
+      'marker text',
+      (entry) => {
+        entry.marker.contains = '"promptfoo": "0.123.1"';
+      },
+    ],
+  ]) {
+    const changedConfig = structuredClone(config);
+    change(changedConfig.licences.tolerances.find((entry) => entry.prefix === 'big-integer'));
+    let rejected = false;
+    try {
+      verifyPromptfooToleranceScope(original, changedConfig);
+    } catch (error) {
+      rejected = error.message.includes('big-integer');
+    }
+    check(rejected, `promptfoo licence guard accepted a changed ${label} tolerance tuple`);
+  }
+  const extraTolerance = structuredClone(config);
+  const added = structuredClone(extraTolerance.licences.tolerances.find((entry) => entry.prefix === 'big-integer'));
+  added.prefix = 'big-integer-extra';
+  extraTolerance.licences.tolerances.push(added);
+  let extraRejected = false;
+  try {
+    verifyPromptfooToleranceScope(original, extraTolerance);
+  } catch (error) {
+    extraRejected = error.message.includes('tolerance set changed');
+  }
+  check(extraRejected, 'promptfoo licence guard accepted an extra scoped tolerance');
   const filtered = structuredClone(original);
   const removed = omitVerifiedOptionalSdk(filtered);
   check(removed.length === 9, `promptfoo licence check excluded ${removed.length} Claude SDK entries, expected nine`);
@@ -265,6 +419,15 @@ function checkPromptfooLicenceScope() {
       samePrefixResult.output.includes('big-integer-extra'),
     `promptfoo licence wrapper accepted an additional same-prefix package: ${samePrefixResult.output}`,
   );
+  const undeclaredSidecar = structuredClone(original);
+  undeclaredSidecar.packages['node_modules/sylvester-sidecar'] = { version: '1.0.0' };
+  const sidecarResult = runLicenceWrapper(undeclaredSidecar);
+  check(
+    sidecarResult.status !== 0 &&
+      sidecarResult.output.includes('promptfoo undeclared licence sylvester matches an additional') &&
+      sidecarResult.output.includes('sylvester-sidecar'),
+    `promptfoo licence wrapper borrowed sylvester evidence for a sidecar: ${sidecarResult.output}`,
+  );
 
   const platform = removed.find((name) => name !== base && fs.existsSync(path.join(PROJECT_ROOT, name)));
   check(platform !== undefined, 'no installed optional Claude SDK platform package is available for licence evidence');
@@ -272,17 +435,31 @@ function checkPromptfooLicenceScope() {
     const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-sdk-terms-'));
     try {
       fs.mkdirSync(path.join(temporary, base), { recursive: true });
-      for (const file of ['LICENSE.md', 'README.md']) {
-        fs.copyFileSync(path.join(PROJECT_ROOT, base, file), path.join(temporary, base, file));
-      }
+      const baseLicence = path.join(temporary, base, 'LICENSE.md');
+      const baseReadme = path.join(temporary, base, 'README.md');
+      fs.copyFileSync(path.join(PROJECT_ROOT, base, 'README.md'), baseReadme);
+      const rejectsTerms = (message) => {
+        try {
+          omitVerifiedOptionalSdk(structuredClone(original), temporary);
+          return false;
+        } catch (error) {
+          return error.message.includes(message);
+        }
+      };
+      check(rejectsTerms('missing LICENSE.md'), 'promptfoo licence check accepted a missing base SDK LICENSE.md');
+      fs.copyFileSync(path.join(PROJECT_ROOT, base, 'LICENSE.md'), baseLicence);
+      fs.rmSync(baseReadme);
+      check(rejectsTerms('missing README.md'), 'promptfoo licence check accepted a missing base SDK README.md');
+      fs.copyFileSync(path.join(PROJECT_ROOT, base, 'README.md'), baseReadme);
+      fs.appendFileSync(baseReadme, '\nchanged terms\n');
+      check(rejectsTerms('README.md no longer matches'), 'promptfoo licence check accepted changed SDK README terms');
+      fs.copyFileSync(path.join(PROJECT_ROOT, base, 'README.md'), baseReadme);
       fs.mkdirSync(path.join(temporary, platform), { recursive: true });
-      let missingRefused = false;
-      try {
-        omitVerifiedOptionalSdk(structuredClone(original), temporary);
-      } catch (error) {
-        missingRefused = error.message.includes('verified Anthropic terms');
-      }
-      check(missingRefused, 'promptfoo licence check excluded an installed platform SDK without LICENSE.md');
+      check(rejectsTerms('missing LICENSE.md'), 'promptfoo licence check excluded an installed platform SDK without LICENSE.md');
+      const platformLicence = path.join(temporary, platform, 'LICENSE.md');
+      fs.copyFileSync(path.join(PROJECT_ROOT, platform, 'LICENSE.md'), platformLicence);
+      fs.appendFileSync(platformLicence, '\nchanged terms\n');
+      check(rejectsTerms('no longer matches the verified Anthropic terms'), 'promptfoo licence check accepted changed SDK terms');
     } finally {
       fs.rmSync(temporary, { recursive: true, force: true });
     }
@@ -336,7 +513,7 @@ function main() {
 
   checkWiring(config);
   checkLicencesSeed();
-  checkPromptfooLicenceScope();
+  checkPromptfooLicenceScope(config);
   checkLockfileAgeSeed(binary);
   checkAbsentSection(binary);
   checkResolutionFloor(config);

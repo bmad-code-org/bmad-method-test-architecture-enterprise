@@ -179,6 +179,78 @@ function directEvaluator() {
   );
 }
 
+function childInvocation() {
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-promptfoo-spawn-'));
+  try {
+    const preload = path.join(temporary, 'capture.cjs');
+    const captureFile = path.join(temporary, 'spawn.json');
+    fs.writeFileSync(
+      preload,
+      `const child = require('node:child_process');
+const fs = require('node:fs');
+const { syncBuiltinESMExports } = require('node:module');
+const original = child.spawnSync;
+child.spawnSync = (...arguments_) => {
+  fs.writeFileSync(process.env.TEA_PROMPTFOO_CAPTURE, JSON.stringify({ executable: arguments_[0], args: arguments_[1], options: arguments_[2] }));
+  return original(...arguments_);
+};
+syncBuiltinESMExports();
+`,
+    );
+    const stdout = 'Summary for List pantry: apples, pears\n';
+    const result = command(path.join(EVALUATOR, 'promptfoo.mjs'), [], {
+      input: JSON.stringify({ sealedBrief: {}, observations: [observed(stdout)] }),
+      env: {
+        ...env,
+        NODE_OPTIONS: `--require=${preload}`,
+        TEA_PROMPTFOO_CAPTURE: captureFile,
+        OPENAI_API_KEY: 'must-not-reach-promptfoo',
+        ANTHROPIC_API_KEY: 'must-not-reach-promptfoo',
+      },
+    });
+    check(result.status === 0, `captured evaluator exited ${result.status}: ${result.output}`);
+    check(fs.existsSync(captureFile), 'evaluator did not spawn a captured promptfoo child');
+    if (!fs.existsSync(captureFile)) return;
+    const capture = read(captureFile);
+    check(capture.executable === process.execPath, `promptfoo child used ${capture.executable}`);
+    const installed = read(path.join(ROOT, 'node_modules', 'promptfoo', 'package.json'));
+    check(
+      capture.args?.[0] === path.join(ROOT, 'node_modules', 'promptfoo', installed.bin.promptfoo),
+      `promptfoo child used ${capture.args?.[0]}`,
+    );
+    check(
+      JSON.stringify(capture.args.slice(1)) ===
+        JSON.stringify([
+          'eval',
+          '--assertions',
+          'asserts.yaml',
+          '--model-outputs',
+          'outputs.json',
+          '--output',
+          'results.jsonl',
+          '--no-cache',
+          '--no-write',
+          '--no-table',
+        ]),
+      `promptfoo child arguments changed: ${capture.args.join(' ')}`,
+    );
+    check(capture.options?.cwd.startsWith(os.tmpdir()), `promptfoo child wrote under ${capture.options?.cwd}`);
+    check(capture.options?.env.PROMPTFOO_DISABLE_TELEMETRY === '1', 'promptfoo child enabled telemetry');
+    check(capture.options?.env.PROMPTFOO_DISABLE_UPDATE === '1', 'promptfoo child enabled update checks');
+    check(
+      JSON.stringify(Object.keys(capture.options.env).sort()) ===
+        JSON.stringify(['HOME', 'LANG', 'PATH', 'PROMPTFOO_DISABLE_TELEMETRY', 'PROMPTFOO_DISABLE_UPDATE', 'TMPDIR'].sort()),
+      `promptfoo child environment changed: ${Object.keys(capture.options.env).join(', ')}`,
+    );
+    check(
+      ['NODE_OPTIONS', 'TEA_PROMPTFOO_CAPTURE', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY'].every((key) => !(key in capture.options.env)),
+      'promptfoo child inherited evaluator credentials or the capture hook',
+    );
+  } finally {
+    fs.rmSync(temporary, { recursive: true, force: true });
+  }
+}
+
 function promptfooResult(assertionFile, stdout, expectedStatus = 0) {
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-promptfoo-shape-'));
   try {
@@ -250,12 +322,34 @@ function resultShapes() {
     const repeated = structuredClone(multi);
     repeated.gradingResult.componentResults[1] = repeated.gradingResult.componentResults[0];
     refuseResults([repeated], observation, 'unique expected assertion');
+    const missingPass = structuredClone(multi);
+    delete missingPass.gradingResult.componentResults[1].pass;
+    refuseResults([missingPass], observation, 'without a boolean pass');
+    const conflictingMetric = structuredClone(multi);
+    conflictingMetric.testCase.assert[0].metric = 'required-pears';
+    refuseResults([conflictingMetric], observation, 'metric conflicts with its type and value');
+    const ungradedMulti = structuredClone(multi);
+    delete ungradedMulti.gradingResult;
+    refuseResults([ungradedMulti], observation, 'neither a grade nor a concrete error');
+    ungradedMulti.error = 'deliberate multi-assertion evaluation error';
+    const ungradedRows = mapResults([ungradedMulti], observation);
+    check(
+      ungradedRows.length === 3 &&
+        ungradedRows.map((row) => row.key).join(',') === 'required-apples,required-pears,forbidden-shellfish' &&
+        ungradedRows.every((row) => row.outcome === 'fail' && row.quote === stdout && row.quoteChannel === 'stdout'),
+      `ungraded multi-assertion result lost cited failures: ${JSON.stringify(ungradedRows)}`,
+    );
+    ungradedMulti.response.output = 'different stdout';
+    refuseResults([ungradedMulti], observation, 'output differs from the cited stdout');
+    ungradedMulti.error = '  ';
+    ungradedMulti.response.output = stdout;
+    refuseResults([ungradedMulti], observation, 'neither a grade nor a concrete error');
     const noOutput = structuredClone(multi);
     delete noOutput.response.output;
     refuseResults([noOutput], observation, 'graded output other than the cited stdout');
     const wrongOutput = structuredClone(multi);
     wrongOutput.response.output = 'Summary for another request';
-    refuseResults([wrongOutput], observation, 'graded output other than the cited stdout');
+    refuseResults([wrongOutput], observation, 'output differs from the cited stdout');
     refuseResults([multi], observation, 'before completing evaluation', 2);
   }
   const failed = promptfooResult('asserts.yaml', 'Summary for List pantry: apples\n', 100);
@@ -273,6 +367,12 @@ function resultShapes() {
       rows.length === 1 && rows[0].key === 'required-pears' && rows[0].outcome === 'pass',
       'top-level grade fallback lost the single assertion',
     );
+    const emptyComponents = structuredClone(single);
+    emptyComponents.gradingResult.componentResults = [];
+    refuseResults([emptyComponents], observation, 'empty or invalid componentResults');
+    const missingTopLevelPass = structuredClone(withoutComponents);
+    delete missingTopLevelPass.gradingResult.pass;
+    refuseResults([missingTopLevelPass], observation, 'without a boolean pass');
   }
   const errored = promptfooResult('asserts-error.yaml', stdout, 100);
   check(typeof errored?.error === 'string', 'installed promptfoo did not emit the deterministic assertion error');
@@ -298,6 +398,9 @@ function resultShapes() {
     const unidentified = structuredClone(withoutGrade);
     delete unidentified.testCase.assert[0].metric;
     refuseResults([unidentified], observation, 'unknown, or repeated assertion metadata');
+    const unknownType = structuredClone(withoutGrade);
+    unknownType.testCase.assert[0].type = 'equals';
+    refuseResults([unknownType], observation, 'metric conflicts with its type and value');
   }
 }
 
@@ -389,6 +492,7 @@ function degenerate() {
   try {
     const installed = engine();
     directEvaluator();
+    childInvocation();
     resultShapes();
     pipeline();
     degenerate();

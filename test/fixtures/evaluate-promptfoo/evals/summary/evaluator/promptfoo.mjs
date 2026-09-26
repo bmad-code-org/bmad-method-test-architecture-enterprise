@@ -16,7 +16,15 @@ const keys = new Map([
 const knownKeys = new Set(keys.values());
 
 function assertionKey(assertion) {
-  return keys.get(`${assertion?.type}:${assertion?.value}`) ?? (knownKeys.has(assertion?.metric) ? assertion.metric : undefined);
+  const byTypeAndValue = keys.get(`${assertion?.type}:${assertion?.value}`);
+  const metric = assertion?.metric;
+  if (
+    (metric !== undefined && (!knownKeys.has(metric) || (byTypeAndValue !== undefined && metric !== byTypeAndValue))) ||
+    (metric !== undefined && assertion?.type !== 'javascript' && byTypeAndValue === undefined)
+  ) {
+    throw new Error('promptfoo assertion metric conflicts with its type and value');
+  }
+  return byTypeAndValue ?? metric;
 }
 
 function completedStatus(status, stderr = '') {
@@ -41,8 +49,11 @@ export function rowsFromResults(results, observation) {
   const stdout = observation.stdout.value;
   const rows = [];
   for (const result of results) {
-    const graded = result.gradingResult !== undefined;
-    if (graded && (typeof result.response?.output !== 'string' || result.response.output.trimEnd() !== stdout.trimEnd())) {
+    const graded = result.gradingResult !== undefined && result.gradingResult !== null;
+    if (result.response?.output !== undefined && (typeof result.response.output !== 'string' || result.response.output.trimEnd() !== stdout.trimEnd())) {
+      throw new Error('promptfoo output differs from the cited stdout observation');
+    }
+    if (graded && typeof result.response?.output !== 'string') {
       throw new Error('promptfoo graded output other than the cited stdout observation');
     }
     const expected = result.testCase?.assert?.map(assertionKey);
@@ -50,6 +61,26 @@ export function rowsFromResults(results, observation) {
       throw new Error('promptfoo returned missing, unknown, or repeated assertion metadata');
     }
     const components = result.gradingResult?.componentResults;
+    if (components !== undefined && (!Array.isArray(components) || components.length === 0)) {
+      throw new Error('promptfoo returned an empty or invalid componentResults list');
+    }
+    if (!graded) {
+      if (typeof result.error !== 'string' || result.error.trim().length === 0) {
+        throw new Error('promptfoo returned neither a grade nor a concrete error');
+      }
+      for (const key of expected) {
+        rows.push({
+          key,
+          outcome: 'fail',
+          observationIds: [observation.observationId],
+          quote: stdout,
+          quoteChannel: 'stdout',
+          confidence: 1,
+          comment: `promptfoo returned an ungraded error for observed stdout: ${result.error ?? 'no gradingResult'}`,
+        });
+      }
+      continue;
+    }
     if (expected.length > 1 && (!Array.isArray(components) || components.length !== expected.length)) {
       throw new Error('promptfoo returned an incomplete multi-assertion grade');
     }
@@ -59,6 +90,7 @@ export function rowsFromResults(results, observation) {
     const grades = Array.isArray(components) && components.length > 0 ? components : [result.gradingResult];
     const observedKeys = new Set();
     for (const [index, grade] of grades.entries()) {
+      if (typeof grade?.pass !== 'boolean') throw new Error('promptfoo returned a grade without a boolean pass');
       const key = assertionKey(grade?.assertion ?? (expected.length === 1 ? result.testCase.assert[index] : undefined));
       if (key === undefined || !expected.includes(key) || observedKeys.has(key)) {
         throw new Error('promptfoo returned a grade without a unique expected assertion');

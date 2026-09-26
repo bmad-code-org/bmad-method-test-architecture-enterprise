@@ -75,6 +75,8 @@ The new dependency graph initially failed `test:licences` on 19 promptfoo transi
 
 Review fixes require promptfoo exit 0 or 100 before reading JSONL, a complete unique component set for multi-assertion grades, and matching observed stdout for graded rows. The single-assertion error fixture carries `required-pears` as promptfoo assertion metadata; an unidentifiable error now fails closed. Node preflight compares the full `.nvmrc` and running Node versions with the declared engine floor. The licence wrapper checks installed platform licence files and rejects any extra lockfile package matched by a promptfoo tolerance prefix. A seeded GPL package now passes through the wrapper in the supply-chain test.
 
+Final review fixes also preserve every expected judgment when a multi-assertion result is ungraded, require a concrete error for ungraded rows and a boolean `pass` for graded assertions, verify any stdout present on an ungraded row, reject conflicting assertion identity and explicit empty component lists, and capture the evaluator's actual promptfoo child arguments and environment. The licence wrapper checks each approved tolerance and undeclared licence tuple, rejects same-prefix sidecars, binds the two undeclared readings to `sylvester@0.0.21` and `xmlhttprequest-ssl@2.1.2` with their exact registry tarballs, and verifies SHA-256 digests for their installed MIT licence files and the installed SDK terms. Missing or changed terms have named refusal tests.
+
 Revert checks exercised: changing the importer to read only `componentResults` failed `test:evaluate-promptfoo` with the single-assertion and ungraded-error rows missing; restoring the fallback returned the suite to green. Temporarily pinning `devDependencies.promptfoo` to `0.123.1` failed the same suite with `promptfoo must use the latest spec`; restoring `latest` returned it to green. The suite's always-pass evaluator caused the seeded mutation to remain uncaught and `score` to exit 2. Its temporary low-major `.nvmrc` case named `promptfoo requires Node >=22.22.0` and confirmed the spawn callback was never called. `git diff origin/main --stat -- cli/` produced empty output, and `test:evaluate-boundaries` passed.
 
 ## Spec Change Log
@@ -102,14 +104,14 @@ Revert checks exercised: changing the importer to read only `componentResults` f
 | Edge 4, installed platform missing licence    | medium, patch     | The verifier used `existsSync` as a reason to skip evidence for an installed SDK with a missing `LICENSE.md`.                                                                                                                                 |
 | Edge 5, Node requirement within one major     | low, patch        | This is Blind 6's version-comparison defect. Compare full selected and runtime versions.                                                                                                                                                      |
 
-The first independent review round's accepted findings were fixed in the evaluator, focused suite, and licence wrapper. No finding was deferred. A final review round follows the PR opening under the relay protocol.
+The first independent review round's accepted findings were fixed in the evaluator, focused suite, and licence wrapper. The final review ran four rounds. Round 1 found incomplete ungraded multi-assertion handling, conflicting assertion identities, empty component lists, missing stdout checks, licence tolerance scope drift, missing SDK file diagnostics, and a child-invocation verification gap. Round 2 found incomplete rows counted as failures and undeclared licence prefixes borrowing evidence from same-prefix packages. Round 3 found undeclared licence readings surviving a locked-version change. All accepted findings were fixed with focused refusal cases. Round 4 passed the importer, licence, and story compliance lenses; no finding was deferred.
 
 ## Verification
 
 **Commands:**
 
-- `npm run test:evaluate-promptfoo`: All 75 result-shape and pipeline checks pass after review fixes.
-- `npm test`: The post-review full chain exited 0, including 75 promptfoo checks, the licence and supply-chain gates, lint, markdownlint and Prettier.
+- `npm run test:evaluate-promptfoo`: All 95 result-shape and pipeline checks pass after final review fixes.
+- `npm test`: The final full chain exited 0 with 95 promptfoo checks, 60 supply-chain checks, the licence gate, lint, markdownlint and Prettier.
 - `npm run test:release-metadata`: Dependency and release metadata remain valid.
-- `npm run test:licences`, `npm run test:lockfile-age`, `npm run test:supply-chain`, `npm run test:evaluate-boundaries`: Dependency and framework boundaries pass.
+- `npm run test:licences`, `npm run test:lockfile-age`, `npm run test:supply-chain`, `npm run test:evaluate-boundaries`: Dependency and framework boundaries pass; the final focused supply-chain suite passes 60 checks.
 - `git diff origin/main --stat -- cli/`: Empty output.
