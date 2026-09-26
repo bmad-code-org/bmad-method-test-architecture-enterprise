@@ -102,6 +102,10 @@ function directEvaluator() {
     { role: 'user', content: 'Weather in Austin' },
     { role: 'assistant', content: '', tool_calls: [] },
   ])}\n`;
+  const extraMessage = `trajectory: ${JSON.stringify([
+    ...read(path.join(FIXTURE, EVALUATION, 'evaluator', 'reference', 'weather.json')),
+    { role: 'user', content: 'Unexpected follow-up' },
+  ])}\n`;
   for (const { label, stdout, expected, citedText } of [
     { label: 'correct tool and arguments', stdout: agentTrajectory(rule), expected: 'pass' },
     { label: 'wrong tool', stdout: agentTrajectory({ ...rule, name: 'search_web' }), expected: 'fail', citedText: 'search_web' },
@@ -113,6 +117,7 @@ function directEvaluator() {
       citedText: 'Dallas',
     },
     { label: 'no call', stdout: noCall, expected: 'fail', citedText: 'tool_calls' },
+    { label: 'extra message', stdout: extraMessage, expected: 'fail', citedText: 'Unexpected follow-up' },
   ]) {
     const answer = command(path.join(FIXTURE, EVALUATION, 'evaluator', 'trajectory.mjs'), [], {
       input: JSON.stringify({
@@ -286,7 +291,9 @@ try {
   const licence = fs.existsSync(licenceFile) ? fs.readFileSync(licenceFile, 'utf8') : '';
   check(
     (agentPackage.license === undefined || agentPackage.license === 'MIT') &&
+      licence.includes('Copyright (c)') &&
       licence.includes('Permission is hereby granted, free of charge') &&
+      licence.includes('The above copyright notice and this permission notice shall be included') &&
       licence.includes('THE SOFTWARE IS PROVIDED "AS IS"'),
     'the installed AgentEvals package lacks the MIT licence evidence used by the licence gate',
   );

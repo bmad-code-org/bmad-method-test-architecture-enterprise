@@ -2,6 +2,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { createTrajectoryMatchEvaluator } from 'agentevals';
 
@@ -23,12 +24,28 @@ const firstCall = outputs.find((message) => message.role === 'assistant')?.tool_
 const referenceCall = referenceOutputs.find((message) => message.role === 'assistant')?.tool_calls?.[0];
 const name = firstCall?.function?.name;
 const quoted = (candidate) => (stdout.includes(candidate) ? candidate : 'trajectory: ');
-const quote = firstCall === undefined
-  ? quoted('"tool_calls":[]')
-  : name !== referenceCall?.function?.name
-    ? quoted(`"name":${JSON.stringify(name)}`)
-    : quoted(`"arguments":${JSON.stringify(firstCall.function?.arguments)}`);
-const mismatch = firstCall === undefined ? 'no tool call' : name !== referenceCall?.function?.name ? `tool ${name}` : 'different tool arguments';
+const argumentsOf = (call) => {
+  try {
+    return JSON.parse(call?.function?.arguments);
+  } catch {
+    return call?.function?.arguments;
+  }
+};
+let quote = 'trajectory: ';
+let mismatch = 'trajectory differs from the reference';
+if (firstCall === undefined) {
+  quote = quoted('"tool_calls":[]');
+  mismatch = 'no tool call';
+} else if (name !== referenceCall?.function?.name && name !== undefined) {
+  quote = quoted(`"name":${JSON.stringify(name)}`);
+  mismatch = `tool ${name}`;
+} else if (!isDeepStrictEqual(argumentsOf(firstCall), argumentsOf(referenceCall))) {
+  quote = quoted(`"arguments":${JSON.stringify(firstCall.function?.arguments)}`);
+  mismatch = 'different tool arguments';
+} else if (outputs.length > referenceOutputs.length) {
+  quote = quoted(JSON.stringify(outputs[referenceOutputs.length]));
+  mismatch = 'an additional trajectory message';
+}
 const row = result.score
   ? { key: result.key, outcome: 'pass', observationIds: [observation.observationId], comment: result.comment ?? 'The trajectory strictly matches the reference.' }
   : {
