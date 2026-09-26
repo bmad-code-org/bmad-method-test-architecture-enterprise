@@ -107,11 +107,15 @@ function directEvaluator() {
     { role: 'user', content: 'Weather in Austin' },
     { role: 'assistant', content: '' },
   ])}\n`;
-  const extraMessage = `trajectory: ${JSON.stringify([
-    ...read(path.join(FIXTURE, EVALUATION, 'evaluator', 'reference', 'weather.json')),
-    { role: 'user', content: 'Unexpected follow-up' },
+  const referenceMessages = read(path.join(FIXTURE, EVALUATION, 'evaluator', 'reference', 'weather.json'));
+  const extraMessage = `trajectory: ${JSON.stringify([...referenceMessages, { role: 'user', content: 'Unexpected follow-up' }])}\n`;
+  const prependedMessage = `trajectory: ${JSON.stringify([{ role: 'user', content: 'Unexpected early request' }, ...referenceMessages])}\n`;
+  const middleMessage = `trajectory: ${JSON.stringify([
+    referenceMessages[0],
+    { role: 'user', content: 'Unexpected middle request' },
+    referenceMessages[1],
   ])}\n`;
-  const extraCallTrajectory = read(path.join(FIXTURE, EVALUATION, 'evaluator', 'reference', 'weather.json'));
+  const extraCallTrajectory = structuredClone(referenceMessages);
   extraCallTrajectory[1].tool_calls.push({
     id: 'call-2',
     type: 'function',
@@ -132,6 +136,8 @@ function directEvaluator() {
     { label: 'missing assistant', stdout: missingAssistant, expected: 'fail', citedText: '"role":"user"' },
     { label: 'absent tool_calls', stdout: noToolCalls, expected: 'fail', citedText: '"role":"assistant"' },
     { label: 'extra message', stdout: extraMessage, expected: 'fail', citedText: 'Unexpected follow-up' },
+    { label: 'prepended message', stdout: prependedMessage, expected: 'fail', citedText: 'Unexpected early request' },
+    { label: 'middle message', stdout: middleMessage, expected: 'fail', citedText: 'Unexpected middle request' },
     { label: 'extra tool call', stdout: extraCall, expected: 'fail', citedText: 'search_web' },
   ]) {
     const answer = command(path.join(FIXTURE, EVALUATION, 'evaluator', 'trajectory.mjs'), [], {

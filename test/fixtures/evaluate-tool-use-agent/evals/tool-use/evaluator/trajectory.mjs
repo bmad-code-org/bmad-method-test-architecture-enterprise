@@ -51,7 +51,13 @@ if (assistant === undefined) {
   quote = quoted(JSON.stringify(assistant.tool_calls[referenceAssistant?.tool_calls?.length ?? 0]));
   mismatch = 'an additional tool call';
 } else if (outputs.length > referenceOutputs.length) {
-  quote = quoted(JSON.stringify(outputs[referenceOutputs.length]));
+  const extraIndex = outputs.findIndex((_, index) =>
+    isDeepStrictEqual(
+      outputs.filter((__, candidateIndex) => candidateIndex !== index),
+      referenceOutputs,
+    ),
+  );
+  quote = quoted(JSON.stringify(extraIndex === -1 ? outputs : outputs[extraIndex]));
   mismatch = 'an additional trajectory message';
 }
 const row = result.score
