@@ -20,8 +20,10 @@ const result = await createTrajectoryMatchEvaluator({ trajectoryMatchMode: 'stri
   outputs,
   referenceOutputs,
 });
-const firstCall = outputs.find((message) => message.role === 'assistant')?.tool_calls?.[0];
-const referenceCall = referenceOutputs.find((message) => message.role === 'assistant')?.tool_calls?.[0];
+const assistant = outputs.find((message) => message.role === 'assistant');
+const referenceAssistant = referenceOutputs.find((message) => message.role === 'assistant');
+const firstCall = assistant?.tool_calls?.[0];
+const referenceCall = referenceAssistant?.tool_calls?.[0];
 const name = firstCall?.function?.name;
 const quoted = (candidate) => (stdout.includes(candidate) ? candidate : 'trajectory: ');
 const argumentsOf = (call) => {
@@ -33,8 +35,11 @@ const argumentsOf = (call) => {
 };
 let quote = 'trajectory: ';
 let mismatch = 'trajectory differs from the reference';
-if (firstCall === undefined) {
-  quote = quoted('"tool_calls":[]');
+if (assistant === undefined) {
+  quote = quoted(JSON.stringify(outputs));
+  mismatch = 'missing assistant message';
+} else if (firstCall === undefined) {
+  quote = quoted(JSON.stringify(assistant));
   mismatch = 'no tool call';
 } else if (name !== referenceCall?.function?.name && name !== undefined) {
   quote = quoted(`"name":${JSON.stringify(name)}`);
@@ -42,6 +47,9 @@ if (firstCall === undefined) {
 } else if (!isDeepStrictEqual(argumentsOf(firstCall), argumentsOf(referenceCall))) {
   quote = quoted(`"arguments":${JSON.stringify(firstCall.function?.arguments)}`);
   mismatch = 'different tool arguments';
+} else if (assistant.tool_calls.length > (referenceAssistant?.tool_calls?.length ?? 0)) {
+  quote = quoted(JSON.stringify(assistant.tool_calls[referenceAssistant?.tool_calls?.length ?? 0]));
+  mismatch = 'an additional tool call';
 } else if (outputs.length > referenceOutputs.length) {
   quote = quoted(JSON.stringify(outputs[referenceOutputs.length]));
   mismatch = 'an additional trajectory message';

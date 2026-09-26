@@ -102,10 +102,22 @@ function directEvaluator() {
     { role: 'user', content: 'Weather in Austin' },
     { role: 'assistant', content: '', tool_calls: [] },
   ])}\n`;
+  const missingAssistant = `trajectory: ${JSON.stringify([{ role: 'user', content: 'Weather in Austin' }])}\n`;
+  const noToolCalls = `trajectory: ${JSON.stringify([
+    { role: 'user', content: 'Weather in Austin' },
+    { role: 'assistant', content: '' },
+  ])}\n`;
   const extraMessage = `trajectory: ${JSON.stringify([
     ...read(path.join(FIXTURE, EVALUATION, 'evaluator', 'reference', 'weather.json')),
     { role: 'user', content: 'Unexpected follow-up' },
   ])}\n`;
+  const extraCallTrajectory = read(path.join(FIXTURE, EVALUATION, 'evaluator', 'reference', 'weather.json'));
+  extraCallTrajectory[1].tool_calls.push({
+    id: 'call-2',
+    type: 'function',
+    function: { name: 'search_web', arguments: '{}' },
+  });
+  const extraCall = `trajectory: ${JSON.stringify(extraCallTrajectory)}\n`;
   for (const { label, stdout, expected, citedText } of [
     { label: 'correct tool and arguments', stdout: agentTrajectory(rule), expected: 'pass' },
     { label: 'wrong tool', stdout: agentTrajectory({ ...rule, name: 'search_web' }), expected: 'fail', citedText: 'search_web' },
@@ -117,7 +129,10 @@ function directEvaluator() {
       citedText: 'Dallas',
     },
     { label: 'no call', stdout: noCall, expected: 'fail', citedText: 'tool_calls' },
+    { label: 'missing assistant', stdout: missingAssistant, expected: 'fail', citedText: '"role":"user"' },
+    { label: 'absent tool_calls', stdout: noToolCalls, expected: 'fail', citedText: '"role":"assistant"' },
     { label: 'extra message', stdout: extraMessage, expected: 'fail', citedText: 'Unexpected follow-up' },
+    { label: 'extra tool call', stdout: extraCall, expected: 'fail', citedText: 'search_web' },
   ]) {
     const answer = command(path.join(FIXTURE, EVALUATION, 'evaluator', 'trajectory.mjs'), [], {
       input: JSON.stringify({

@@ -104,11 +104,13 @@ Final review round 1 used three independent Codex lenses. Architecture and story
 
 Final review round 2 passed architecture and test quality. Its adversarial lens found two real gaps. A strict failure from an additional trajectory message was described as different tool arguments and cited matching arguments; the evaluator now cites the additional message and a direct test holds that behavior. The licence assertion omitted the copyright notice and preservation clause named in the gate evidence; the assertion now checks both. Neither finding was deferred.
 
+Final review round 3 passed architecture and test quality. Its bounded adversarial lens found that missing assistant messages, absent `tool_calls`, and extra calls within one assistant message could still cite only the trajectory prefix. The evaluator now quotes the observable message or extra call for each shape, and direct negative cases hold those citations. No finding was deferred.
+
 ## Verification
 
 **Commands:**
 
-- `npm run test:evaluate-tool-use`: 74 checks passed after round 2 fixes.
+- `npm run test:evaluate-tool-use`: 89 checks passed after round 3 fixes.
 - `npm test`: passed on the round 1 review-fix tree, including all 90 chained checks. Two earlier full runs also passed before those fixes. Final-tree run pending.
 - `npm run test:release-metadata`: passed.
 - `npm run test:licences`, `npm run test:lockfile-age`, `npm run test:supply-chain`, `npm run test:evaluate-boundaries`: passed.
