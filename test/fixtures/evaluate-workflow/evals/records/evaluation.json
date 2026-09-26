@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "evaluationId": "records-workflow",
+  "targetKind": "workflow",
+  "interface": "cli",
+  "registry": [
+    {
+      "interfaceId": "records",
+      "executable": "records",
+      "target": "bin/records.js",
+      "subcommandPaths": [["create"], ["read"]],
+      "artifacts": {},
+      "environmentKeys": ["RECORDS_LOG", "RECORDS_OMIT_ID"],
+      "maxElapsedMs": 30000,
+      "infrastructureExitCodes": [3]
+    }
+  ],
+  "launch": {
+    "root": "../.."
+  },
+  "workspace": {
+    "kind": "copy",
+    "provision": []
+  },
+  "arms": ["clean", "mutated"],
+  "trials": 3,
+  "tiers": ["pr"],
+  "strengthFloor": {
+    "defect": 1,
+    "zero-action": 1
+  }
+}

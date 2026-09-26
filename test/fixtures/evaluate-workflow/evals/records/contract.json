@@ -1,0 +1,418 @@
+{
+  "schemaVersion": 5,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "contractId": "tea-evaluate-workflow-fixture",
+  "sourceSpecDigest": "sha256:3b7e1d9a5c2f4e6a8b0c1d3e5f7a9b1c3d5e7f9a1b3c5d7e9f1a3b5c7d9e1f3a",
+  "behaviors": [
+    {
+      "id": "B-001",
+      "description": "A record the create operation stores reads back, whole, under the identifier create returned.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The read of the identifier create printed finds the record, with that identifier and the title create was given.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-evaluate-fixture",
+          "id": "created-record-reads-back"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-evaluate-fixture",
+          "id": "record-stored-under-another-identifier"
+        }
+      ],
+      "oracles": [
+        "O-001"
+      ]
+    }
+  ],
+  "oracles": [
+    {
+      "id": "O-001",
+      "polarity": "expects-hold",
+      "commentary": "The read-back step, bound to the identifier the create step returned, finds a record whose identifier is that one and whose title is the one create was given.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The stdout of the read-back step and the identifier the create step printed.",
+        "negativeDomain": "A read-back that finds nothing, or a record under another identifier or with another title.",
+        "evidenceTargets": [
+          "/interactions/read-back/stdout/found",
+          "/interactions/read-back/stdout/id",
+          "/interactions/read-back/stdout/title",
+          "/interactions/create/stdout/id"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/read-back/stdout/found"
+              },
+              {
+                "literal": true
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/read-back/stdout/id"
+              },
+              {
+                "pointer": "/interactions/create/stdout/id"
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/read-back/stdout/title"
+              },
+              {
+                "literal": "Ship the workflow"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "rubrics": [],
+  "waivers": [],
+  "permittedInterfaces": [
+    {
+      "logicalId": "records",
+      "kind": "cli",
+      "operations": [
+        {
+          "operationId": "create",
+          "invocation": {
+            "executable": "records",
+            "subcommandPath": [
+              "create"
+            ]
+          },
+          "stateChangeMarker": true,
+          "requestShape": {
+            "argument": {
+              "requiredKeys": [],
+              "permittedKeys": [],
+              "types": {}
+            },
+            "option": {
+              "requiredKeys": [],
+              "permittedKeys": [],
+              "types": {}
+            },
+            "environment": {
+              "requiredKeys": [],
+              "permittedKeys": [],
+              "types": {}
+            },
+            "stdin": {
+              "requiredKeys": [
+                "title"
+              ],
+              "permittedKeys": [
+                "title"
+              ],
+              "types": {
+                "title": "string"
+              }
+            }
+          },
+          "artifacts": [],
+          "descriptorChannel": {
+            "kind": "stream",
+            "channel": "stdout"
+          },
+          "responseDescriptor": {
+            "requiredKeys": [
+              "id",
+              "title",
+              "path"
+            ],
+            "permittedKeys": [
+              "id",
+              "title",
+              "path"
+            ],
+            "types": {
+              "id": "string",
+              "title": "string",
+              "path": "string"
+            },
+            "successIndicator": null,
+            "channelRoles": null,
+            "collectionLocations": null
+          },
+          "volatilePointers": [],
+          "sensitivityWitness": {
+            "witnessId": "create-keeps-the-title",
+            "channel": "stdin",
+            "legs": [
+              {
+                "legId": "create-alpha",
+                "inputs": {
+                  "argument": {},
+                  "option": {},
+                  "environment": {},
+                  "stdin": {
+                    "kind": "text",
+                    "value": "Alpha"
+                  }
+                }
+              },
+              {
+                "legId": "create-beta",
+                "inputs": {
+                  "argument": {},
+                  "option": {},
+                  "environment": {},
+                  "stdin": {
+                    "kind": "text",
+                    "value": "Beta"
+                  }
+                }
+              }
+            ],
+            "relation": {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/create-alpha/stdout/title"
+                    },
+                    {
+                      "literal": "Alpha"
+                    }
+                  ]
+                },
+                {
+                  "op": "not",
+                  "operands": [
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "/interactions/create-beta/stdout/title"
+                        },
+                        {
+                          "literal": "Alpha"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "operationId": "read-back",
+          "invocation": {
+            "executable": "records",
+            "subcommandPath": [
+              "read"
+            ]
+          },
+          "stateChangeMarker": false,
+          "requestShape": {
+            "argument": {
+              "requiredKeys": [],
+              "permittedKeys": [],
+              "types": {}
+            },
+            "option": {
+              "requiredKeys": [
+                "id"
+              ],
+              "permittedKeys": [
+                "id"
+              ],
+              "types": {
+                "id": "string"
+              }
+            },
+            "environment": {
+              "requiredKeys": [],
+              "permittedKeys": [],
+              "types": {}
+            },
+            "stdin": {
+              "requiredKeys": [],
+              "permittedKeys": [],
+              "types": {}
+            }
+          },
+          "artifacts": [],
+          "descriptorChannel": {
+            "kind": "stream",
+            "channel": "stdout"
+          },
+          "responseDescriptor": {
+            "requiredKeys": [
+              "found",
+              "id"
+            ],
+            "permittedKeys": [
+              "found",
+              "id",
+              "title"
+            ],
+            "types": {
+              "found": "boolean",
+              "id": "string",
+              "title": "string"
+            },
+            "successIndicator": null,
+            "channelRoles": null,
+            "collectionLocations": null
+          },
+          "volatilePointers": [],
+          "sensitivityWitness": {
+            "witnessId": "read-follows-the-identifier",
+            "channel": "option",
+            "legs": [
+              {
+                "legId": "read-alpha",
+                "inputs": {
+                  "argument": {},
+                  "option": {
+                    "id": "r-alpha"
+                  },
+                  "environment": {},
+                  "stdin": {
+                    "kind": "absent"
+                  }
+                }
+              },
+              {
+                "legId": "read-beta",
+                "inputs": {
+                  "argument": {},
+                  "option": {
+                    "id": "r-beta"
+                  },
+                  "environment": {},
+                  "stdin": {
+                    "kind": "absent"
+                  }
+                }
+              }
+            ],
+            "relation": {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/read-alpha/stdout/title"
+                    },
+                    {
+                      "literal": "Alpha"
+                    }
+                  ]
+                },
+                {
+                  "op": "not",
+                  "operands": [
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "/interactions/read-beta/stdout/title"
+                        },
+                        {
+                          "literal": "Alpha"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "referenceSets": {},
+  "siblingGroups": {
+    "operations": [],
+    "parameters": []
+  },
+  "interactionPlan": [
+    {
+      "stepId": "read-back",
+      "operationId": "read-back",
+      "after": "create",
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": {
+          "id": {
+            "captured": "/interactions/create/stdout/id"
+          }
+        },
+        "environment": null,
+        "stdin": null
+      }
+    },
+    {
+      "stepId": "create",
+      "operationId": "create",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": null,
+        "environment": null,
+        "stdin": {
+          "title": {
+            "literal": "Ship the workflow"
+          }
+        }
+      }
+    }
+  ],
+  "scopedResources": null,
+  "forbiddenInputs": [
+    "original-spec",
+    "source-code",
+    "repository",
+    "builder-transcript",
+    "implementation-logs",
+    "comparator-results",
+    "human-labels"
+  ],
+  "testData": {
+    "setup": "Nothing is staged by hand: every run works in a copy of the records project, whose store holds the two seed records the read witness reads.",
+    "cleanup": "Nothing to remove: each record create writes stays in the run's disposable copy.",
+    "principals": null,
+    "resources": null
+  },
+  "budgets": {
+    "maxToolCalls": 2,
+    "maxWallClockMinutes": 1,
+    "maxCostUsd": "0.00"
+  },
+  "safetyLimits": [
+    "The records command makes no network call and writes only under store/ in its working directory."
+  ],
+  "requiredEvidence": [
+    "The stdout and exit code of every run."
+  ],
+  "probeStepBound": 2,
+  "fixtureReset": null
+}

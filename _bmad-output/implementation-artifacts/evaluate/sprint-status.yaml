@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-22-2026 18:09
-last_updated: 09-26-2026 05:45
+last_updated: 09-26-2026 07:05
 project: "bmad-method-test-architecture-enterprise: Evaluate"
 project_key: NOKEY
 tracking_system: file-system
@@ -48,7 +48,7 @@ development_status:
   1-17-drive-any-evaluation-layer-through-one-import-contract: done
   1-10-evaluate-a-stdio-mcp-tool-server: done
   1-11-scaffold-the-http-probe-port-for-api-targets: done
-  1-18-evaluate-a-workflow-target-through-after-and-captured-bindi: backlog
+  1-18-evaluate-a-workflow-target-through-after-and-captured-bindi: done
   1-19-evaluate-a-tool-use-calling-agent-through-its-own-command-j: backlog
   1-20-import-a-second-framework-s-results-promptfoo: backlog
   1-21-hold-out-probes-and-calibrate-rubric-judges: backlog
@@ -74,6 +74,7 @@ development_status:
   1-36-hold-an-http-entry-to-eval-qualitys-own-target-policy-parser: backlog
   1-37-know-a-started-http-server-by-the-port-it-bound-itself: done
   1-38-hold-a-deployment-to-the-release-it-reports: backlog
+  1-39-tell-a-captured-value-too-large-to-launch-from-a-target-tha: backlog
   epic-1-retrospective: optional
 
   epic-2: backlog

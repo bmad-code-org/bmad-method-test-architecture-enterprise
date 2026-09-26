@@ -297,10 +297,10 @@ function fileDigest(file) {
 }
 
 /**
- * A digest over every file and symbolic link under `root`, sorted by path:
- * each contributes its POSIX path, its kind and its content (a file, the
- * SHA-256 of its bytes; a link, its target as written). A path in `exclude`
- * (absolute) is left out with everything under it.
+ * A digest over every directory, file and symbolic link under `root`, sorted
+ * by path: each contributes its POSIX path and kind; directories and files
+ * also contribute their mode, a file its SHA-256 bytes and a link its target.
+ * A path in `exclude` (absolute) is left out with everything under it.
  *
  * @param {string} root
  * @param {object} [options]
@@ -309,7 +309,7 @@ function fileDigest(file) {
  */
 function treeDigest(root, { exclude = [] } = {}) {
   const excluded = new Set(exclude);
-  const parts = [];
+  const parts = ['.', 'directory', fs.lstatSync(root).mode & 0o7777];
   const visit = (directory) => {
     const entries = fs.readdirSync(directory, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
     for (const entry of entries) {
@@ -317,8 +317,10 @@ function treeDigest(root, { exclude = [] } = {}) {
       if (excluded.has(full)) continue;
       const relative = posix(path.relative(root, full));
       if (entry.isSymbolicLink()) parts.push(relative, 'link', fs.readlinkSync(full));
-      else if (entry.isDirectory()) visit(full);
-      else if (entry.isFile()) parts.push(relative, 'file', fileDigest(full));
+      else if (entry.isDirectory()) {
+        parts.push(relative, 'directory', fs.lstatSync(full).mode & 0o7777);
+        visit(full);
+      } else if (entry.isFile()) parts.push(relative, 'file', fs.lstatSync(full).mode & 0o7777, fileDigest(full));
     }
   };
   visit(root);
@@ -582,8 +584,11 @@ function createWorkspace({ root, kind, provision = [], exclude = [], fromWorking
     commit: worktree ? (revision?.commit ?? basis?.commit ?? repository.commit) : null,
     tree: worktree ? (revision?.tree ?? basis?.tree ?? repository.tree) : null,
     treeDigest: null,
+    // A copy made with no basis keeps what it held when it was made, which a reproduction copies.
+    snapshot: null,
     dirty: basis?.dirty ?? fromWorkingTree,
     provisioned: [],
+    provisionedDigests: {},
   };
   try {
     const excluded = exclude.filter((entry) => entry !== root && isInside(root, entry));
@@ -631,12 +636,24 @@ function createWorkspace({ root, kind, provision = [], exclude = [], fromWorking
       });
     } else {
       workspace.root = workspace.top;
-      copyTreeInto(basis.top, workspace.top);
+      copyTreeInto(basis.snapshot, workspace.top);
     }
     for (const entry of provision) {
       const relative = entry.replace(/\/+$/, '').split('/');
       const inWorkspace = path.join(workspace.root, ...relative);
       const inSource = basis === null ? path.join(root, ...relative) : path.join(basis.root, ...relative);
+      if (!worktree && basis !== null) {
+        // A copy reproduces only the directories its basis provisioned when it was made, from the basis's read-only
+        // copies; one a target made there afterwards is not provisioned. The snapshot holds no provisioned directory,
+        // so one already here was planted in it, and a basis copy that is gone was moved by a target: either way the
+        // reproduction would not hold what the basis held.
+        if (!basis.provisioned.includes(inSource)) continue;
+        if (fs.existsSync(inWorkspace) || !fs.existsSync(inSource)) {
+          throw new WorkspaceRefusal(
+            `the ${label} workspace cannot reproduce the provisioned directory ${entry}: ${fs.existsSync(inWorkspace) ? 'a copy of it was planted in the snapshot it copies' : 'the copy it reproduces no longer holds it'}`,
+          );
+        }
+      }
       const linkIn = (candidate) => {
         try {
           return fs.lstatSync(candidate).isSymbolicLink();
@@ -650,6 +667,14 @@ function createWorkspace({ root, kind, provision = [], exclude = [], fromWorking
           `the provisioned directory ${entry} is a symbolic link; provision the directory it leads to, since making a link read-only would lock its target`,
         );
       }
+      if (basis !== null && basis.provisioned.includes(inSource)) {
+        const expected = basis.provisionedDigests[path.relative(basis.root, inSource)];
+        if (expected === undefined || treeDigest(inSource) !== expected) {
+          throw new WorkspaceRefusal(
+            `the ${label} workspace cannot reproduce the provisioned directory ${entry}: the copy it reproduces changed after it was made`,
+          );
+        }
+      }
       if (!fs.existsSync(inWorkspace)) {
         if (!fs.existsSync(inSource)) continue;
         fs.mkdirSync(path.dirname(inWorkspace), { recursive: true });
@@ -662,7 +687,18 @@ function createWorkspace({ root, kind, provision = [], exclude = [], fromWorking
       copyTop: workspace.top,
       scan: workspace.root,
     });
+    if (!worktree && basis === null) {
+      // What the copy holds as it is made, its links contained and its provisioned directories left out, kept beside
+      // it: a target run in the copy (a preflight leg whose operation writes a record, say) changes the copy, and a
+      // workspace reproducing it copies this instead. Everything the snapshot holds is under the tree digest, so a
+      // snapshot changed afterwards no longer digests to the copy's, which the reproduction refuses.
+      workspace.snapshot = path.join(directory, 'snapshot');
+      copyTreeInto(workspace.top, workspace.snapshot, { skip: (source) => workspace.provisioned.includes(source) });
+    }
     for (const provisioned of workspace.provisioned) makeReadOnly(provisioned);
+    for (const provisioned of workspace.provisioned) {
+      workspace.provisionedDigests[path.relative(workspace.root, provisioned)] = treeDigest(provisioned);
+    }
     if (!worktree) {
       workspace.treeDigest = treeDigest(workspace.root, { exclude: workspace.provisioned });
       if (basis !== null && workspace.treeDigest !== basis.treeDigest) {

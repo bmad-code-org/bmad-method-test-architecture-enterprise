@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "mutationId": "M-001",
+  "mutationSource": "bin/records.js: create stores the record under a second fresh identifier",
+  "targetArtifact": "bin/records.js",
+  "operator": {
+    "kind": "replace-exact",
+    "find": "const storedId = id;",
+    "replace": "const storedId = `rec-${crypto.randomUUID()}`;",
+    "occurrences": 1
+  },
+  "expectedObservableFailure": "The read-back of the identifier create printed finds no record, so its stdout says found: false."
+}

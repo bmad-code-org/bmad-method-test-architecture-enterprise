@@ -1,0 +1,103 @@
+{
+  "probeId": "P-002",
+  "probeClass": "defect",
+  "behaviorId": "B-001",
+  "expectedClean": false,
+  "rationale": "Seeded defect: M-001 makes create store the record under another identifier than the one it prints, so the read-back of the printed identifier finds nothing.",
+  "defects": [
+    {
+      "defectId": "D-001",
+      "behaviorId": "B-001",
+      "summary": "create stores the record under another identifier than the one it returns, so the record cannot be read back.",
+      "severity": "critical",
+      "source": "controlled-mutation",
+      "manifestationWitness": {
+        "legId": "manifest-shadow",
+        "interfaceId": "records",
+        "operationId": "create",
+        "inputs": {
+          "argument": {},
+          "option": {},
+          "environment": {},
+          "stdin": {
+            "kind": "text",
+            "value": "Ship the workflow"
+          }
+        },
+        "relation": {
+          "op": "all",
+          "operands": [
+            {
+              "op": "existence",
+              "operands": [
+                {
+                  "pointer": "/interactions/manifest-shadow/stdout/id"
+                }
+              ]
+            },
+            {
+              "op": "not",
+              "operands": [
+                {
+                  "op": "containment",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/manifest-shadow/stdout/path"
+                    },
+                    {
+                      "pointer": "/interactions/manifest-shadow/stdout/id"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "defectSignature": {
+    "interfaceKind": "cli",
+    "invocation": {
+      "executable": "records",
+      "subcommandPath": [
+        "read"
+      ]
+    },
+    "observableChannel": "stdout",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": null,
+          "header": null,
+          "body": null,
+          "argument": null,
+          "option": {
+            "id": {
+              "matcher": "any"
+            }
+          },
+          "environment": null,
+          "stdin": null,
+          "arguments": null
+        }
+      },
+      "predicate": {
+        "op": "equality",
+        "operands": [
+          {
+            "pointer": "/interactions/observed/stdout/found"
+          },
+          {
+            "literal": false
+          }
+        ]
+      }
+    }
+  },
+  "qualification": {
+    "route": "controlled-mutation",
+    "mutation": "M-001"
+  }
+}

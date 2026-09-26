@@ -141,7 +141,7 @@ A tool-server entry (`kind: "mcp"`) serves an `mcp` interface of the contract:
 - `maxElapsedMs` and optional `maxOutputBytes`: the ceilings of one call, from the server's start through the handshake, the call and its teardown.
 
 Each tool-server entry becomes one of eval-quality's `McpTargetAuthorization`s, checked by its own `parseMcpTargetPolicy` (at `check`, and again before any server starts), and every call goes through eval-quality's `createMcpAdapter`: one session per call over stdio, protocol `2025-06-18`, the server's process group torn down after it.
-A leg or plan step of an `mcp` operation sends its literal `arguments`, and the run records the call's arguments as `callInputs.arguments`, the tool's structured result as `responseBody` and its error flag as `responseStatus` (1 or 0), so an oracle reads `/interactions/<step>/response-body/...`.
+A leg of an `mcp` operation sends its literal `arguments`, and a plan step its bound ones (see [The interaction plan](#the-interaction-plan)), and the run records the call's arguments as `callInputs.arguments`, the tool's structured result as `responseBody` and its error flag as `responseStatus` (1 or 0), so an oracle reads `/interactions/<step>/response-body/...`.
 A tool that answers with its error flag set is an observation.
 A server that cannot start, refuses its handshake, crosses a ceiling, or exits, crashes or writes a line that is no JSON-RPC message during a call is a target that could not run (exit 12), and its fault keeps the adapter's cause, scrubbed, a value the cause cuts short included.
 eval-quality's `mcp` observation has no field for a session that ended mid-call, so a mutation that crashes the server is never caught on an `mcp` interface: its arm stops with exit 12 (Story 1.35 records such a session as an observation).
@@ -277,7 +277,9 @@ A target that writes outside its workspace anyway (through an absolute path, or 
   It is the one workspace recorded as `dirty: true`, and a dirty run cannot become a baseline.
   A run is recorded dirty as well when the evaluation folder, which it reads from your working tree, holds uncommitted work.
 
-Every other workspace of the run (one per seeded probe's qualification, one per mutation, and for `run` one for the clean controls' qualification and one per trial) reproduces the pristine one: a worktree of the same commit, or a copy of the pristine copy, whose tree digest must match.
+Every other workspace of the run (one per seeded probe's qualification, one per mutation, and for `run` one for the clean controls' qualification and one per trial) reproduces the pristine one: a worktree of the same commit, or a copy of what the pristine copy held when it was made, whose tree digest must match.
+The pristine copy keeps that snapshot beside itself, without its provisioned directories, since the legs run in it and a target that writes (a workflow step that stores a record, say) changes it; a snapshot changed after it was made no longer matches, and the reproduction exits 12.
+A reproduction copies the provisioned directories the pristine copy held when it was made from its read-only copies, and no other; one planted in the snapshot, or a read-only copy moved out of the pristine copy, exits 12.
 The evaluation folder is left out of every workspace, so nothing the runtime hands a target holds the contract, the probes or which defect a mutation plants.
 The runtime does not sandbox the target's file system, though: a target that searches for the evaluation folder (a worktree names your repository's git directory, beside it) can reach it, which is why the run directory below is written and read as it is.
 Each `workspace.provision` directory (for example `node_modules`, which a worktree lacks) is copied into the workspace, as a copy-on-write clone where the file system offers one, and its write bits are removed, so a write under it fails unless the writer restores the bits first (root ignores them).
@@ -297,12 +299,42 @@ Gitignored paths are not read.
 It lists each probe the run refused, with its reason, under `refused` (see [Historical probes](#historical-probes)).
 A completed `run` adds the contract, corpus, sealed brief and evaluator configuration digests, the runner (each registry entry's interface, executable and target, or a tool server's interface, target, arguments and tools), the evaluator and the model, the rubric judge (`null` when the contract declares no rubric or the evaluator is not the deterministic one; otherwise its adapter, model, model snapshot, instruction digest and number of calls), the trial count, the start time and duration, and `completed: true`.
 
+## The interaction plan
+
+Every arm runs the contract's `interactionPlan` once, one request for each step it issues: a qualification arm, a trial, and a gameability trial, which answers each step from its degenerate response.
+
+### Binding kinds
+
+Each key of a step's `inputBinding` channels is sent as its binding says:
+
+- `literal`: the value as written.
+- `captured`: the value its pointer (`/interactions/<stepId>/<channel>/<key>`) resolves to on the observation the named earlier step recorded in the same arm, read by eval-quality's own `makeResolveOperand`, the reading `eval-quality score` gives the pointer; a workflow binds a later step to an identifier an earlier step minted this way.
+- `matcher` and `principal`: not sent yet; a step binding either stops the arm with exit 12, since the run cannot send the request the contract means, whether or not the steps before it were issued.
+
+A step's observation records the values it was sent as its `callInputs`, so a captured value is the one the earlier observation carried, a JSON `null` and a number included.
+`eval-quality compile` holds a captured pointer to one key of the channel the named step's operation describes, whose declared type is a scalar equal to the bound parameter's, and refuses a pointer naming a step the plan does not declare (`unreachable-check-evidence`).
+
+### Step order
+
+A step runs after the step its `after` clause names and after every step its captured bindings read, and otherwise in plan order, so a step may come before the step it reads in the plan.
+Each observation's `sequence` counts the steps in the order they were issued, which is the order `eval-quality score` holds a captured value and an `after` clause to.
+`eval-quality compile` refuses a plan whose capture and `after` edges form a cycle (`binding-cycle`) and an `after` clause naming a step with one of its own (`nested-temporal-clause`), and `preflight` and `run` pass its exit 4 and its message through before any arm runs.
+
+### Steps not issued
+
+A step is not issued when its `after` step was not issued, or when one of its captured bindings resolves to nothing: the step it reads was not issued, or that step's observation lacks the value (a field its output does not hold, or output that is not JSON).
+A step is not issued either when a captured value is one the request cannot carry as the target printed it: a value holding a `__proto__` key, which eval-quality's request parser drops, a header or environment value that is no string, a header value holding a control character or one past U+00FF, or a path value that is `.` or `..`, which the evaluation's HTTP port refuses, or a command argument, option or environment value holding a NUL character, which no process argument or variable can.
+Such a step sends no request and records no observation, and the arm's evidence lists it in `steps` in its place as `{ "stepId", "operationId", "skipped" }`, whose `reason` is `after-step-not-issued` (naming the `after` step), `captured-value-absent` (naming each binding and its pointer) or `captured-value-unsendable` (naming each binding, its pointer and why).
+The runtime computes no outcome from it: eval-quality reads the missing observation as it reads any evidence that does not exist, so an oracle over the step resolves over absent evidence, and a seeded probe whose defect signature names the step's operation is `not-applicable` in a trial that never issued it, which never counts toward `caught`.
+A qualification arm is judged over the same absent evidence, so a clean arm whose step was not issued does not pass when an oracle needs that step, and the run exits 11 as for any clean arm that does not pass.
+A trial's records and isolation manifest count only the calls it made.
+
 ## Controlled mutations
 
 A mutation is `mutations/M-NNN.mutation.json`: a `targetArtifact` relative to `launch.root` (not to the repository, when `launch.root` is a subdirectory of it) and a `replace-exact` operator whose `find` text must occur in that file exactly once, overlapping occurrences counted.
 A probe that seeds a defect on the `controlled-mutation` route names its mutation, and `preflight` qualifies it through six steps in a workspace of its own, before any preflight leg runs, so nothing its arms leave behind reaches another probe or a leg:
 
-1. The clean arm: every interaction plan step once, with its literal bindings, through the registry.
+1. The clean arm: every interaction plan step once, with its bindings (see [The interaction plan](#the-interaction-plan)), through the registry.
    Each oracle of the behaviors the probe discharges is resolved by eval-quality's `resolveCheck` over the arm's observations, and every one must hold.
 2. The mutation, applied in the workspace.
 3. The mutated arm, in which at least one of those oracles must be violated.
@@ -324,7 +356,6 @@ A step that fails writes no qualified probe:
 A restored workspace that no longer passes is an unfit harness (exit 12): the target is byte for byte what it was, and eval-quality reads a re-execution cap exceeded as a harness that does not reproduce its result, never as a weak contract.
 Each mutation then gets a mutated workspace of its own, whose `targetArtifact` digest must equal the one the cycle measured.
 A seeded probe on a route other than `controlled-mutation` or `historical` exits 12 before any workspace is made.
-An interaction plan step binding a `captured`, `matcher` or `principal` value stops the arm with exit 12, since the run cannot send the request the contract means; this release sends literal bindings only.
 
 ## Historical probes
 
@@ -462,7 +493,7 @@ The steps run in order in one invocation, each stopping the run with its own exi
 1. The whole preflight, as `preflight` runs it, in the same `runs/<invocationId>/`; a verdict that does not pass ends the run with its exit, and no trial runs.
 2. Each clean control qualified: one clean arm in a workspace of its own, whose oracles for the control's behavior must hold (exit 11 otherwise), its evidence under `qualification/<probeId>/baseline-pass.json`.
 3. Each arm a probe needs, `trials` times: the clean arm (`conditionArm: clean`) for the clean controls, one mutated arm per mutation (`mutated:<mutationId>`) for the probes it seeds, one historical arm per pre-fix revision (`historical:<preFixSha>`) or pre-fix deployment (`historical:<release>`), and one gameability arm per gameability probe (`gameability:<probeId>`).
-   Every trial runs the interaction plan once, with its literal bindings, in a workspace of its own that reproduces the pristine one (the mutation applied for a mutated arm and its digest held to the one the qualification measured) or, on a historical arm, the pre-fix worktree, a deployment arm's HTTP calls reaching the pre-fix deployment; a gameability trial answers the plan from the degenerate response and launches nothing.
+   Every trial runs the interaction plan once, with its bindings (see [The interaction plan](#the-interaction-plan)), in a workspace of its own that reproduces the pristine one (the mutation applied for a mutated arm and its digest held to the one the qualification measured) or, on a historical arm, the pre-fix worktree, a deployment arm's HTTP calls reaching the pre-fix deployment; a gameability trial answers the plan from the degenerate response and launches nothing.
    The evaluation layer judges the trial (see [The evaluation layer](#the-evaluation-layer)); under the default deterministic evaluator, when the contract declares a rubric, the rubric judge scores the trial once (see [The rubric judge](#the-rubric-judge)).
    Its requests, observations, oracle resolutions or judgment rows, and any judge reply go to `trials/<arm>/trial-<n>.json`.
    A trial step that exits one of its registry entry's `infrastructureExitCodes`, or that a signal from outside stops (hang-up, interrupt, quit, kill or terminate), is a target that could not run: the trial yields no record and the run exits 12 (a qualification arm step stops its cycle the same way).
@@ -506,7 +537,7 @@ Each probe is written to `probes/` with the digests AD-7 names: `commitDigest` i
 
 A gameability probe shows that a degenerate, compliant-looking response satisfies a naive oracle and is rejected by the disciplined one.
 eval-quality keeps its `degenerateResponse` as prose, so the response's bytes are committed at `corpus/gameability/<probeId>.json`, one response for every interaction plan step, and the committed probe names its naive oracle, an oracle of another behavior; the disciplined oracle is the one oracle of the probe's own behavior.
-A command step's response is its streams and exit code:
+A command step's response is its streams and exit code, which eval-quality's command-line adapter reads as it reads a real run's, so JSON-shaped output is JSON a later step's captured binding or an oracle can point into:
 
 ```json
 {
@@ -544,7 +575,7 @@ Nothing is sent: every host a request names resolves to the first address of its
 { "route": "gameability", "degenerateResponse": "Prints a verdict line without judging the request.", "naiveOracle": "O-002" }
 ```
 
-`preflight` and `run` answer the plan from that file with no target launched, as a synthetic observation, and resolves both oracles over it with eval-quality's `resolveCheck`: the naive oracle must hold (`naive-oracle-satisfied.json`) and the disciplined one must be violated (`disciplined-oracle-rejected.json`), or the command exits 11.
+`preflight` and `run` answer the plan from that file with no target launched, as a synthetic observation, each step through the registry's authorizations as on a real arm, so a step the registry does not grant is denied (exit 10, the qualification's fault in `qualification/<probeId>/fault.json`), and resolve both oracles over it with eval-quality's `resolveCheck`: the naive oracle must hold (`naive-oracle-satisfied.json`) and the disciplined one must be violated (`disciplined-oracle-rejected.json`), or the command exits 11.
 The probe is materialized with those two evidence references and admitted by eval-quality's qualification gate, and its trials on the arm `gameability:<probeId>` answer from the same file, so its isolation manifest grants no workspace and observes no tool call.
 
 ### The rubric judge
