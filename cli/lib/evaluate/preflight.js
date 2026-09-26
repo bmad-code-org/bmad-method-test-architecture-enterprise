@@ -458,7 +458,15 @@ function recordEnd(outcome, state) {
 
 async function pipeline(
   folder,
-  { command, fromWorkingTree = false, env = process.env, log = () => {}, prepare = () => null, afterVerdict = null },
+  {
+    command,
+    fromWorkingTree = false,
+    env = process.env,
+    log = () => {},
+    prepare = () => null,
+    afterVerdict = null,
+    selectedProbeIds = null,
+  },
   state,
 ) {
   const findings = await checkEvaluation(folder);
@@ -467,7 +475,7 @@ async function pipeline(
   }
 
   const evaluation = readJson(path.join(folder, MANIFEST_NAME));
-  const seeded = seededProbes(folder);
+  const seeded = seededProbes(folder).filter(({ probe }) => selectedProbeIds === null || selectedProbeIds.has(probe.probeId));
   const unqualifiable = seeded.filter(({ probe }) => !QUALIFIED_ROUTES.includes(probe.qualification?.route));
   if (unqualifiable.length > 0) {
     return new PreflightOutcome({
@@ -525,7 +533,7 @@ async function pipeline(
   const release = cleanUpOnSignal(workspaces, controller, { onSignal });
   try {
     const refused = await prepare({ folder, evaluation, seeded });
-    const gameability = gameabilityProbes(folder);
+    const gameability = gameabilityProbes(folder).filter(({ probe }) => selectedProbeIds === null || selectedProbeIds.has(probe.probeId));
     if (refused !== null) return refused;
 
     const root = realPathLoosely(joinAsSpelled(folder, evaluation.launch.root));

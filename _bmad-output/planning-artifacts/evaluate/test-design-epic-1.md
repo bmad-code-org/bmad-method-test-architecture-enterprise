@@ -668,6 +668,17 @@ Added 2026-09-26 in Story 1.18. Levels: integration over real eval-quality, unit
 | An oversized literal still stops the run                              | A unit whose literal binding the system refuses to launch                                                                             | Unit                               | P2  | Skipping it passes a contract defect |
 | The reference names the size limit                                    | Read `### Steps not issued` under its heading                                                                                         | Static                             | P3  | Removing the sentence fails the read |
 
+### Story 1.40: Calibrate rubric scores imported from harness records
+
+Added 2026-09-26 in Story 1.21. Levels: integration over real eval-quality, contract. Files: `test/test-evaluate-evaluators.js` (`test:evaluate-evaluators`), `test/test-evaluate-check.js` (`test:evaluate-check`).
+
+| AC                                                     | Test                                                                                                                         | Level                              | P   | Revert check                                                    |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | --- | --------------------------------------------------------------- |
+| Imported rubric scores carry verifiable calibration    | A harness supplies label-free judgments and provenance for the same scorer configuration used in trial records               | Integration over real eval-quality | P0  | A mismatched scorer or leaked label fails provenance validation |
+| Low agreement stops before records are imported        | Two labelled items yield agreement 0.5 under a 0.9 minimum; inspect the report, exit 11, and absence of copied trial records | Integration                        | P0  | Removing the gate writes a trial record                         |
+| Calibration inputs change the imported scoring version | Change one item and then the minimum agreement; assert both change `EvaluatorConfiguration` and its scoring version          | Contract                           | P1  | Omitting either binding leaves the version unchanged            |
+| Uncalibrated rubric records are refused                | `check` exits 10 for absent or unverifiable provenance; a non-rubric `records` evaluation still passes its import path       | Contract                           | P1  | Bypassing the refusal accepts an uncalibrated rubric            |
+
 ## The Dogfood Proof (AD-15)
 
 ### What the run must produce

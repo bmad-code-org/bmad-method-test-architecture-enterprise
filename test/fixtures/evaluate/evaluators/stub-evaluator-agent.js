@@ -73,6 +73,17 @@ async function main() {
   const initialized = await request('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'stub', version: '1' } });
   child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`);
   const listed = await request('tools/list', {});
+  const calibration = /"response": "calibration example at level ([123])"/.exec(prompt);
+  if (calibration !== null) {
+    child.stdin.end();
+    if (capture !== null) fs.appendFileSync(capture, `${JSON.stringify({ prompt, argv, config, server: name, initialized, tools: listed.result?.tools, results: [] })}\n`);
+    const rows = [
+      { key: 'verdict-accepted', outcome: 'pass', observationIds: ['calibration'] },
+      { key: 'verdict-quality', outcome: 'score', score: Number(calibration[1]), observationIds: ['calibration'] },
+    ];
+    process.stdout.write(`<judge-answer nonce="${nonce}">${JSON.stringify({ rows })}</judge-answer>\n`);
+    return;
+  }
   if (mode === 'hang') {
     if (capture !== null) fs.appendFileSync(capture, `${JSON.stringify({ prompt, argv, config, server: name, initialized, tools: listed.result?.tools })}\n`);
     setInterval(() => {}, 1000);

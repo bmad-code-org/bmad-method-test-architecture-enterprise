@@ -69,6 +69,7 @@ const { EngineStageError, runEngineStage } = require('./engine-cli');
 const { newInvocationId, readJson, writeJson } = require('./preflight');
 const { createArtifactValidator } = require('./records');
 const { TRIAL_SETS_NAME } = require('./run');
+const { writePartitionViews } = require('./partition');
 
 const Ajv = AjvModule.default ?? AjvModule;
 
@@ -479,6 +480,14 @@ async function runScoreCommand(folder, { run: invocationId, env = process.env, l
     });
   }
   const exitCode = stageFailed ? INFRASTRUCTURE : combinedExit(scores.map((entry) => entry.exitCode));
+  writePartitionViews({
+    folder,
+    runDirectory,
+    scoreInvocationId,
+    trialSets: index.trialSets,
+    scores,
+    heldOutProbes: located.record.heldOutProbes,
+  });
   return new ScoreOutcome({
     exitCode,
     runDirectory,

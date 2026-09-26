@@ -195,6 +195,28 @@ function plantRubric(folder, edit = () => {}) {
     else value.judge = planted.judge;
   });
   fs.writeFileSync(path.join(folder, 'policy', 'evaluator-conditions.json'), `${JSON.stringify(planted.conditions, null, 2)}\n`);
+  if (planted.rubric !== null) plantCalibration(folder, planted.rubric);
+}
+
+function plantCalibration(folder, rubric) {
+  editJson(folder, 'evaluation.json', (value) => (value.judgeCalibration = { minimumAgreement: 0.5 }));
+  fs.writeFileSync(
+    path.join(folder, 'policy', 'judge-calibration.json'),
+    `${JSON.stringify(
+      {
+        items: rubric.criteria.flatMap((criterion) =>
+          rubric.scaleLevels.map((level) => ({
+            rubricId: rubric.id,
+            criterionId: criterion.id,
+            response: `example at level ${level.level}`,
+            expectedLevel: level.level,
+          })),
+        ),
+      },
+      null,
+      2,
+    )}\n`,
+  );
 }
 
 /**
@@ -1722,7 +1744,10 @@ function plantEvaluator(folder, evaluator, { mapping, conditions = null, rubric 
   if (rubric) keys.skipped = { rubricId: 'R-001', criterionId: 'RC-001', levels: [0, 1] };
   const planted = mapping === undefined ? { schemaVersion: 1, keys } : mapping;
   editJson(folder, 'evaluation.json', (value) => (value.evaluator = evaluator));
-  if (rubric) editJson(folder, 'contract.json', (value) => (value.rubrics = [EVALUATOR_RUBRIC]));
+  if (rubric) {
+    editJson(folder, 'contract.json', (value) => (value.rubrics = [EVALUATOR_RUBRIC]));
+    plantCalibration(folder, EVALUATOR_RUBRIC);
+  }
   if (planted !== null) {
     fs.mkdirSync(path.join(folder, 'evaluator'), { recursive: true });
     fs.writeFileSync(path.join(folder, 'evaluator', 'mapping.json'), `${JSON.stringify(planted, null, 2)}\n`);
@@ -1824,6 +1849,7 @@ const EVALUATOR_CASES = [
     plant: (folder) => {
       plantEvaluator(folder, COMMAND_EVALUATOR);
       editJson(folder, 'contract.json', (value) => (value.rubrics = [EVALUATOR_RUBRIC]));
+      plantCalibration(folder, EVALUATOR_RUBRIC);
     },
     expect: (output) => [
       [output.includes('no key binds rubric criterion R-001/RC-001'), 'the finding does not name the unbound criterion'],
@@ -1854,6 +1880,18 @@ const EVALUATOR_CASES = [
     rule: 'evaluator',
     plant: (folder) => plantEvaluator(folder, { kind: 'records', records: 'harness-records' }, { mapping: null }),
     expect: (output) => [[output.includes('harness-records, which is not a directory'), 'the finding does not name the directory']],
+  },
+  {
+    name: 'a records evaluator with a rubric but no verifiable calibration path',
+    file: 'evaluation.json',
+    rule: 'evaluator',
+    plant: (folder) => {
+      plantEvaluator(folder, { kind: 'records', records: 'harness-records' }, { mapping: null });
+      editJson(folder, 'contract.json', (value) => (value.rubrics = [EVALUATOR_RUBRIC]));
+      plantCalibration(folder, EVALUATOR_RUBRIC);
+      fs.mkdirSync(path.join(folder, 'harness-records'));
+    },
+    expect: (output) => [[output.includes('cannot score rubrics'), 'the finding does not explain the records scorer refusal']],
   },
   {
     name: 'a sealed-brief agent with no evaluator model in the evaluator conditions',
@@ -2068,14 +2106,6 @@ const EVALUATOR_CLEAN_CASES = [
     plant: (folder) => plantEvaluator(folder, AGENT_EVALUATOR, { rubric: true, conditions: AGENT_CONDITIONS }),
   },
   {
-    name: 'a rubric a records evaluator scores, with no judge',
-    plant: (folder) => {
-      plantEvaluator(folder, { kind: 'records', records: 'harness-records' }, { mapping: null });
-      editJson(folder, 'contract.json', (value) => (value.rubrics = [EVALUATOR_RUBRIC]));
-      fs.mkdirSync(path.join(folder, 'harness-records'));
-    },
-  },
-  {
     name: 'an explicit deterministic evaluator',
     plant: (folder) => editJson(folder, 'evaluation.json', (value) => (value.evaluator = { kind: 'deterministic' })),
   },
@@ -2217,6 +2247,86 @@ async function checkDefectCases() {
   for (const rule of STORY_RULES) check(covered.has(rule), `no defect case covers the story's ${rule} rule`);
   await runCases(HARDENING_CASES);
   await runCases(EVALUATOR_CASES);
+  await runCases([
+    {
+      name: 'held-out unknown ID',
+      file: 'evaluation.json',
+      rule: 'held-out',
+      plant: (folder) => editJson(folder, 'evaluation.json', (value) => (value.heldOutProbes = ['P-999'])),
+    },
+    {
+      name: 'held-out clean control',
+      file: 'evaluation.json',
+      rule: 'held-out',
+      plant: (folder) => editJson(folder, 'evaluation.json', (value) => (value.heldOutProbes = ['P-001'])),
+    },
+    {
+      name: 'held-out sole probe for a behavior',
+      file: 'evaluation.json',
+      rule: 'held-out',
+      plant: (folder) => {
+        editJson(folder, 'evaluation.json', (value) => (value.heldOutProbes = ['P-002']));
+        editJson(folder, 'probes/P-002.probe.json', (value) => {
+          value.behaviorId = 'B-002';
+          value.defects[0].behaviorId = 'B-002';
+        });
+      },
+    },
+    {
+      name: 'rubric with no calibration criterion item',
+      file: 'policy/judge-calibration.json',
+      rule: 'judge-calibration',
+      plant: (folder) => {
+        plantRubric(folder);
+        fs.writeFileSync(path.join(folder, 'policy/judge-calibration.json'), '{"items":[]}\n');
+      },
+    },
+    {
+      name: 'rubric with an anchored level missing',
+      file: 'policy/judge-calibration.json',
+      rule: 'judge-calibration',
+      plant: (folder) => {
+        plantRubric(folder);
+        editJson(folder, 'policy/judge-calibration.json', (value) => value.items.pop());
+      },
+    },
+    {
+      name: 'rubric with no minimum agreement',
+      file: 'policy/judge-calibration.json',
+      rule: 'judge-calibration',
+      plant: (folder) => {
+        plantRubric(folder);
+        editJson(folder, 'evaluation.json', (value) => delete value.judgeCalibration.minimumAgreement);
+      },
+    },
+    {
+      name: 'rubric calibration file reached through a link',
+      file: 'policy/judge-calibration.json',
+      rule: 'judge-calibration',
+      redigest: false,
+      plant: (folder) => {
+        plantRubric(folder);
+        const file = path.join(folder, 'policy/judge-calibration.json');
+        fs.renameSync(file, `${file}.real`);
+        fs.symlinkSync(path.basename(`${file}.real`), file);
+      },
+      expect: (output) => [[output.includes('regular in-folder file'), 'the finding does not refuse the link']],
+    },
+    {
+      name: 'rubric calibration file replaced by a FIFO',
+      file: 'policy/judge-calibration.json',
+      rule: 'judge-calibration',
+      redigest: false,
+      plant: (folder) => {
+        plantRubric(folder);
+        const file = path.join(folder, 'policy/judge-calibration.json');
+        fs.unlinkSync(file);
+        const made = spawnSync('mkfifo', [file]);
+        if (made.status !== 0) throw new Error(`mkfifo failed: ${made.stderr}`);
+      },
+      expect: (output) => [[output.includes('regular in-folder file'), 'the finding does not refuse the FIFO']],
+    },
+  ]);
   await runCleanCases();
 
   // Two defects in one copy: both are listed, not only the first.

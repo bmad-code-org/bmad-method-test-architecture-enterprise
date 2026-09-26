@@ -72,6 +72,7 @@ const { admissionRefusal, armVerdict, referenceTo } = require('./admission');
 const { callLabel, causeNote, faultRecord, hostEnvironmentPort, persistableRequest, reasonNote, runArm } = require('./arm');
 const { runCommandEvaluator } = require('./command-evaluator');
 const { corpusDigestOf } = require('./corpus-index');
+const { readCalibration, runCalibration } = require('./calibration');
 const { expectedSchemaVersion, loadEngine } = require('./engine');
 const { evaluateOracles, judgeTrial, oraclesOfBehaviors } = require('./evaluator');
 const {
@@ -176,8 +177,10 @@ function writeArtifact(engine, writer, file, value, artifactPath) {
  * read (exit 10). A folder with no probe never gets here: `check` refuses an
  * arm no probe runs on, and `arms` declares at least one.
  */
-function refusal({ folder }) {
-  const probes = committedProbes(folder).filter(({ probe }) => probe !== null && typeof probe === 'object');
+function refusal({ folder, selectedProbeIds = null }) {
+  const probes = committedProbes(folder).filter(
+    ({ probe }) => probe !== null && typeof probe === 'object' && (selectedProbeIds === null || selectedProbeIds.has(probe.probeId)),
+  );
   const unrunnable = probes.filter(({ probe }) => !RUNNABLE_ROUTES.includes(probe.qualification?.route));
   if (unrunnable.length > 0) {
     return new PreflightOutcome({
@@ -208,18 +211,42 @@ function refusal({ folder }) {
  * @param {(line: string) => void} [options.log]
  * @returns {Promise<PreflightOutcome>}
  */
-function runRunCommand(folder, { fromWorkingTree = false, env = process.env, log = () => {} } = {}) {
+function runRunCommand(folder, { fromWorkingTree = false, partition, env = process.env, log = () => {} } = {}) {
+  if (partition !== undefined && !['development', 'held-out'].includes(partition))
+    return Promise.resolve(
+      new PreflightOutcome({
+        stage: 'check',
+        exitCode: 64,
+        message: `unknown partition ${JSON.stringify(partition)}; choose development or held-out`,
+      }),
+    );
+  let heldOut;
+  let probes;
+  try {
+    heldOut = new Set(readJson(path.join(folder, 'evaluation.json')).heldOutProbes ?? []);
+    probes = committedProbes(folder);
+  } catch {
+    // The pipeline's check reports malformed source files with authoring findings.
+    return runPipeline(folder, { command: 'run', fromWorkingTree, env, log });
+  }
+  const selectedProbeIds =
+    partition === undefined
+      ? null
+      : new Set(probes.filter(({ probe }) => (partition === 'held-out') === heldOut.has(probe.probeId)).map(({ probe }) => probe.probeId));
+  if (partition === 'held-out' && selectedProbeIds.size === 0)
+    return Promise.resolve(new PreflightOutcome({ stage: 'check', exitCode: 10, message: 'held-out partition has no selected probes' }));
   const started = Date.now();
   // What the scores read is taken once, before anything runs, so an edit to
   // the evaluation folder during the run cannot reach the trial sets.
   let snapshot = null;
   return runPipeline(folder, {
     command: 'run',
+    selectedProbeIds,
     fromWorkingTree,
     env,
     log,
     prepare: async (context) => {
-      const refused = refusal(context);
+      const refused = refusal({ ...context, selectedProbeIds });
       if (refused !== null) return refused;
       const conditionsFile = path.join(folder, ...CONDITIONS_PATH.split('/'));
       const probes = committedProbes(folder);
@@ -239,7 +266,13 @@ function runRunCommand(folder, { fromWorkingTree = false, env = process.env, log
         policyBytes: fs.readFileSync(path.join(folder, ...POLICY_PATH.split('/'))),
         conditions: fs.existsSync(conditionsFile) ? readJson(conditionsFile) : null,
         index: readJson(path.join(folder, INDEX_PATH)),
-        probeIds: probes.map(({ probe }) => probe.probeId),
+        probeIds: probes
+          .filter(({ probe }) => selectedProbeIds === null || selectedProbeIds.has(probe.probeId))
+          .map(({ probe }) => probe.probeId),
+        selectedProbeIds,
+        heldOutProbes: [...heldOut],
+        partition: partition ?? 'both',
+        calibration: readCalibration(folder),
         layer,
       };
       return null;
@@ -289,8 +322,12 @@ async function qualifyCleanControls({
   stop,
   log,
   signal,
+  snapshot,
 }) {
-  const controls = committedProbes(folder).filter(({ probe }) => probe.qualification.route === 'clean-control');
+  const controls = committedProbes(folder).filter(
+    ({ probe }) =>
+      probe.qualification.route === 'clean-control' && (snapshot.selectedProbeIds === null || snapshot.selectedProbeIds.has(probe.probeId)),
+  );
   if (controls.length === 0) return [];
   const workspace = make('qualify-clean', pristine);
   let arm;
@@ -803,6 +840,95 @@ async function runTrialSets(given) {
     context.sealedBrief = writer.readJson('sealed-evaluator-brief.json');
   }
 
+  let calibrationDigest = null;
+  if ((contract.rubrics ?? []).length > 0) {
+    const { layer } = snapshot;
+    const judgeItem = async ({ rubric, criterion, response }) => {
+      const stepId = /^\/interactions\/([^/]+)/.exec(criterion.evidence)?.[1];
+      const operationId = contract.interactionPlan?.find((step) => step.stepId === stepId)?.operationId ?? 'calibration';
+      const observation = {
+        observationId: 'calibration',
+        sequence: 1,
+        operationId,
+        provenance: 'evaluator-chosen',
+        response,
+        stdout: { kind: 'text', value: response },
+        stderr: { kind: 'text', value: '' },
+        exitCode: 0,
+        responseBody: { kind: 'text', value: response },
+      };
+      if (kind === 'deterministic') {
+        const result = await judgeRubrics({
+          contract,
+          stepObservations: {},
+          judge: evaluation.judge,
+          scratch: context.scratch,
+          calibrationResponse: { rubricId: rubric.id, criterionId: criterion.id, response },
+        });
+        return result.results.find((entry) => entry.rubricId === rubric.id && entry.criterionId === criterion.id)?.score ?? null;
+      }
+      const key = Object.entries(layer.mapping.keys).find(
+        ([, binding]) => binding.rubricId === rubric.id && binding.criterionId === criterion.id,
+      )?.[0];
+      let answer;
+      const changedBefore = evaluatorLayerChange(folder, layer.files);
+      if (changedBefore !== null) throw new EvaluatorError(`the evaluation layer changed before calibration: ${changedBefore}`);
+      if (kind === 'command') {
+        const result = await runCommandEvaluator({
+          folder,
+          evaluator: layer.evaluator,
+          sealedBrief: context.sealedBrief,
+          observations: [observation],
+          mapping: layer.mapping,
+          validate: layer.validate,
+          scratch: context.scratch,
+          env: context.env,
+        });
+        answer = result.answer;
+      } else if (kind === 'sealed-brief-agent') {
+        const nonce = answerNonce();
+        const router = bridgeRouter({
+          contract,
+          registry,
+          port: null,
+          degenerate: null,
+          label: 'calibration',
+          taken: new Set(),
+          firstSequence: 1,
+          budget: 0,
+          nonce,
+          signal: context.signal,
+        });
+        const result = await runSealedBriefAgent({
+          evaluator: layer.evaluator,
+          sealedBrief: context.sealedBrief,
+          contract,
+          mapping: layer.mapping,
+          validate: layer.validate,
+          router,
+          nonce,
+          scratch: context.scratch,
+          env: context.env,
+          calibrationObservation: { observationId: observation.observationId, response },
+        });
+        answer = result.answer;
+      } else throw new Error(`the ${kind} evaluator cannot calibrate a rubric`);
+      const changedAfter = evaluatorLayerChange(folder, layer.files);
+      if (changedAfter !== null) throw new EvaluatorError(`the evaluation layer changed during calibration: ${changedAfter}`);
+      return answer.rows.find((row) => row.key === key && row.outcome === 'score')?.score ?? null;
+    };
+    try {
+      const result = await runCalibration({ calibration: snapshot.calibration, evaluation, contract, engine, writer, stop, judgeItem });
+      calibrationDigest = result.digest;
+    } catch (error) {
+      if (error instanceof JudgeError || error instanceof EvaluatorError) {
+        writer.writeJson('judge-calibration.json', { fault: error.message, stdout: error.stdout, stderr: error.stderr });
+        throw stop({ stage: 'trial', exitCode: 12, message: `judge calibration could not run: ${error.message}` });
+      }
+      throw error;
+    }
+  }
+
   const trialCount = evaluation.trials;
   for (const arm of arms) {
     arm.trials = [];
@@ -845,7 +971,14 @@ async function runTrialSets(given) {
   // Only the deterministic kind calls TeA's rubric judge; every other kind scores the rubric itself.
   const judgeConfiguration =
     kind === 'deterministic' ? judgeConfigurationFor({ contract, conditions, digestBytes: engine.digestBytes }) : null;
-  const fields = configurationFields({ layer, conditions, judgeConfiguration, digestBytes: engine.digestBytes });
+  const fields = configurationFields({
+    layer,
+    conditions,
+    judgeConfiguration,
+    digestBytes: engine.digestBytes,
+    calibrationDigest,
+    calibrationMinimumAgreement: evaluation.judgeCalibration?.minimumAgreement ?? null,
+  });
   // The tools a sealed-brief agent had: one per interface the bridge exposed.
   const bridged =
     kind === 'sealed-brief-agent' ? bridgeTools(context.sealedBrief.permittedInterfaces ?? []).map((tool) => `bridge:${tool.name}`) : [];
@@ -1136,6 +1269,8 @@ async function completeRun(
     policyDigest: engine.digestBytes(snapshot.policyBytes),
     sealedBriefDigest: sealed.sealedBriefDigest,
     evaluatorConfigurationDigest: configurationDigest,
+    partition: snapshot.partition,
+    heldOutProbes: snapshot.heldOutProbes,
     runner: registry.entries.map((entry) => runnerOf(entry, registry)),
     evaluator: evaluatorRecord,
     model,

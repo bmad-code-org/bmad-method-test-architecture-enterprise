@@ -111,6 +111,15 @@ if (mode === 'hang') {
 } else if (mode !== 'raw-bytes') answer();
 
 function answer() {
+  const calibration = input.observations.find((observation) => observation.observationId === 'calibration');
+  if (calibration !== undefined) {
+    const level = Number(/calibration example at level ([123])/.exec(calibration.response)?.[1]);
+    process.stdout.write(`${JSON.stringify({ rows: [
+      { key: 'verdict-accepted', outcome: 'pass', observationIds: ['calibration'] },
+      { key: 'verdict-quality', outcome: 'score', score: level, observationIds: ['calibration'] },
+    ] })}\n`);
+    return;
+  }
   const text = (body) => (body?.kind === 'text' ? body.value : body?.kind === 'json' ? JSON.stringify(body.value) : '');
   const judged = input.observations.find((observation) => text(observation.stdout).includes('verdict:')) ?? input.observations[0];
   const accepted = text(judged.stdout).includes('verdict: accepted');

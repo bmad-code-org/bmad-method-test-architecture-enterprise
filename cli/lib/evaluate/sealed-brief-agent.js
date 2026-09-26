@@ -151,14 +151,17 @@ function keysMaterial(contract, mapping) {
  *
  * @returns {string}
  */
-function evaluatorPrompt({ sealedBrief, contract, mapping, nonce }) {
+function evaluatorPrompt({ sealedBrief, contract, mapping, nonce, calibrationObservation = null }) {
   return [
     EVALUATOR_INSTRUCTIONS,
+    ...(calibrationObservation === null
+      ? []
+      : ['This call supplies a calibration observation. Judge its response without calling the target.']),
     '',
     answerLine(nonce),
     '',
     MATERIAL_HEADING,
-    `${JSON.stringify({ sealedBrief, keys: keysMaterial(contract, mapping) }, null, 2)}\n`,
+    `${JSON.stringify({ sealedBrief, keys: keysMaterial(contract, mapping), ...(calibrationObservation === null ? {} : { observation: calibrationObservation }) }, null, 2)}\n`,
   ].join('\n');
 }
 
@@ -708,8 +711,19 @@ function bridgeRouter({
  * @returns {Promise<{ answer: object, prompt: string, nonce: string, stdout: string, stderr: string, stdoutBytes: Buffer, stderrBytes: Buffer }>}
  * @throws {EvaluatorError} an agent that cannot answer, a call the target could not run, or an answer outside the import contract
  */
-async function runSealedBriefAgent({ evaluator, sealedBrief, contract, mapping, validate, router, nonce, scratch, env = process.env }) {
-  const prompt = evaluatorPrompt({ sealedBrief, contract, mapping, nonce });
+async function runSealedBriefAgent({
+  evaluator,
+  sealedBrief,
+  contract,
+  mapping,
+  validate,
+  router,
+  nonce,
+  scratch,
+  env = process.env,
+  calibrationObservation = null,
+}) {
+  const prompt = evaluatorPrompt({ sealedBrief, contract, mapping, nonce, calibrationObservation });
   // The agent runs in an empty directory of its own, which holds nothing of the evaluation; the bridge's
   // configuration, which carries its admission token, is written to a private directory beside it. Both are in
   // the run's scratch, so a signal that ends the run mid-trial removes them too.

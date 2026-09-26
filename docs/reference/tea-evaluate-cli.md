@@ -32,6 +32,7 @@ Nothing defaults to the working directory.
   mutations/M-NNN.mutation.json # one controlled mutation per file
   policy/scoring-policy.json    # eval-quality's scoring policy; required once a probe takes the controlled-mutation, historical or gameability route, and by run
   policy/evaluator-conditions.json # the model a run uses (and its rubric judge's or sealed-brief evaluator's), as a fixed condition; left out when no model runs
+  policy/judge-calibration.json # labelled examples for every rubric criterion and anchored level; required when the contract has rubrics
   evaluator/                    # a command or sealed-brief-agent evaluator: mapping.json, and a command evaluator's executable
   adapter/                      # an api evaluation's HTTP port and its conformance file, rendered from the skill's templates
   corpus/                       # the corpus the probes run against
@@ -44,6 +45,21 @@ Nothing defaults to the working directory.
 
 The runtime owns the schemas of `evaluation.json`, the committed probe, the mutation file, the degenerate response, `policy/evaluator-conditions.json`, `evaluator/mapping.json` and the judgment rows an evaluator answers; they ship under `cli/lib/evaluate/schemas/` in the TeA package.
 `contract.json` and `policy/scoring-policy.json` meet the schemas eval-quality publishes.
+
+For a held-out set, put committed probe IDs in `evaluation.json` as `"heldOutProbes": ["P-002"]`. Each ID must name a committed probe, cannot name a clean control, and must leave a development probe for every affected behavior. Omit the field when every probe belongs to development.
+
+When the contract declares rubrics, set `"judgeCalibration": { "minimumAgreement": 0.9 }` in `evaluation.json` and create `policy/judge-calibration.json`:
+
+```json
+{
+  "items": [
+    { "rubricId": "R-101", "criterionId": "RC-101", "response": "Response at level 0", "expectedLevel": 0 },
+    { "rubricId": "R-101", "criterionId": "RC-101", "response": "Response at level 1", "expectedLevel": 1 }
+  ]
+}
+```
+
+Provide at least one item at every anchored level of every criterion. The file must be a regular file inside `policy/`; a link or named pipe is refused. `check` exits 10 for missing coverage or threshold. A `records` evaluator with rubrics is refused because the imported records have no verifiable calibration path.
 
 ## check
 
@@ -483,10 +499,11 @@ Before the preflight verdict, and for `run` again after the trials and before `r
 ## run
 
 ```bash
-npx tea-evaluate run --evaluation evals/my-evaluation [--from-working-tree]
+npx tea-evaluate run --evaluation evals/my-evaluation [--from-working-tree] [--partition development|held-out]
 ```
 
 `run` measures the evaluation: it runs every arm a probe needs `trials` times and seals every trial as a record `eval-quality score` reads.
+Omitting `--partition` runs both development and held-out probes. `--partition development` or `--partition held-out` selects that set before preflight, qualification and trials. An unknown partition exits 64; selecting an empty held-out set exits 10.
 It needs `policy/scoring-policy.json` (exit 10 without it), and every probe on the `clean-control`, `controlled-mutation`, `historical` or `gameability` route (a canary exits 12, since a retry cannot pass).
 The steps run in order in one invocation, each stopping the run with its own exit:
 
@@ -499,7 +516,7 @@ The steps run in order in one invocation, each stopping the run with its own exi
    A trial step that exits one of its registry entry's `infrastructureExitCodes`, or that a signal from outside stops (hang-up, interrupt, quit, kill or terminate), is a target that could not run: the trial yields no record and the run exits 12 (a qualification arm step stops its cycle the same way).
    A command step that crashes by a signal of its own (an abort, a segmentation fault) is an observation its oracles judge, and its record keeps the negative exit code; a tool server that crashes during a call is a target that could not run (see [The registry](#the-registry)).
    Your project is read again after every trial (exit 12 on any change, with no trial set written).
-4. Every committed probe has its trial set, or the run exits 12, and the run directory holds exactly what the runtime wrote (see [The run directory](#the-run-directory)).
+4. Every selected probe has its trial set, or the run exits 12, and the run directory holds exactly what the runtime wrote (see [The run directory](#the-run-directory)).
 5. One trial set per probe under `trial-sets/<probeId>/`: `record-<n>.json` per trial and `isolation-manifest.json`, with `evaluator-configuration.json` for the whole run, each checked against the schema eval-quality publishes before it is written, and each written as eval-quality's canonical serialization; the contract and sealed-brief digests they carry were taken when `compile` and `seal` wrote those files, before any target ran.
 6. `trial-sets.json`, the index `score` reads.
    Your project is then read once more and the run directory verified again; a change to either exits 12, and the run is recorded as not completed, with its `trial-sets.json` removed.
@@ -581,7 +598,7 @@ The probe is materialized with those two evidence references and admitted by eva
 ### The rubric judge
 
 When the contract declares a rubric and the evaluator is the deterministic one, `run` calls a rubric judge once per trial, through TeA's agent adapters; a contract with no rubric makes no call, and its evaluator configuration keeps `judgeConfiguration: null`.
-Under any other evaluator the rubric is that evaluator's to score, and no judge runs (see [The evaluation layer](#the-evaluation-layer)).
+Command and sealed-brief-agent evaluators score the rubric through their own paths; the records kind with a rubric is refused at `check` (see [The evaluation layer](#the-evaluation-layer)).
 `evaluation.json` wires it, and `policy/evaluator-conditions.json` names its model, a fixed condition of every run (`check` requires both once a rubric is declared):
 
 ```json
@@ -608,6 +625,8 @@ Every record of the trial carries the scores as `judgeResults`; a reply with no 
 A judge that cannot start, times out, exits non-zero or writes into its directory yields no record, and the run exits 12, with the judge's stdout and stderr kept in the trial's evidence.
 An interrupting signal that arrives while the judge runs is taken by the run's own handler once the call returns, which records the stage `signal` in `run.json` and ends the process by that signal.
 The evaluator configuration records `judgeConfiguration: { modelSnapshot, systemPromptDigest }`, the digest taken over the instruction template, so a changed template or judge model changes the scoring version.
+
+Before trial records, `run` sends each calibration response through the configured rubric scorer. A deterministic judge sees one criterion per call; command and sealed-brief evaluators use their normal scorer paths. The scorer never receives `expectedLevel`. `judge-calibration.json` in the run directory reports agreement and largest level distance per criterion. Agreement below the declared minimum exits 11 before any trial record. The calibration file's byte digest and the minimum agreement appear in `EvaluatorConfiguration.decodingParameters`, so changing either changes the scoring version.
 
 ### The evaluation layer
 
@@ -684,6 +703,7 @@ Until Story 1.31 sandboxes the target, a target running as your user could read 
 `evaluator.modelSnapshot` names the agent's model, recorded as the configuration's `modelSnapshot` beside the digest of the evaluator template (instructions, answer line, heading, tool descriptions and call shapes), and as `judgeConfiguration` when a rubric key is bound; a target model named at the top level is kept as `tea.targetModelSnapshot`.
 
 **A records evaluator** reads, inside the folder and through no link, `<records>/evaluator-configuration.json` and, per probe the run qualifies, `<records>/<probeId>/*.json` records (name order) and an optional `isolation-manifest.json`.
+It cannot be used with a rubric until the harness can provide a verifiable calibration path.
 `run` qualifies and preflights as usual, checks each file's published schema, the configuration's and records' `sealedBriefDigest` against this run's brief, and one `runId` and the qualified arm per set (exit 10 with nothing copied otherwise), and copies the bytes into `trial-sets/` for `score`.
 Take the brief from `eval-quality seal`, which is deterministic; nothing ties the records to the target's state at this run.
 
@@ -712,6 +732,7 @@ An isolation manifest that is absent is passed on as absent and never filled in,
 A probe the run refused has no trial set; `score` prints each one with its reason and records them under `refused` in its aggregate `score.json`, and its exit does not change.
 Then `eval-quality score` runs once per probe, with every trial's `--record`, the set's `--isolation-manifest`, the run's `--evaluator-configuration` and the run's corpus digest, and writes the evidence artifact with `--out`.
 Each call goes to `runs/<invocationId>/scores/<scoreInvocationId>/<probeId>/`: `score.json` (its executable, argv, exit code, stdout and stderr, kept whether or not an evidence artifact was emitted) and `evidence-artifact.json` when there is one, with `score.json` beside the probes summarizing each call's exit.
+The same run directory receives `partitions.json` and `gap-view.json`. Both group scored probes under `development` and `held-out`; each outcome is copied from the probe's evidence artifact. The development gap view includes the authored probe. Each held-out gap entry contains only `probeId`, `probeClass`, and `outcome`, so its rationale, defect summary, test-data binding, and mutation text stay hidden.
 Every call's exit is eval-quality's own: 0 (PASS, WAIVED or CONCERNS), 2 FAIL, 3 Invalid, 4 a structural failure, 5 a runtime fault, 64 usage.
 `score` exits with the most severe of them, in the order 64, 5, 4, 3, 2, 0, and the call that produced it is on record; rerunning `eval-quality score` by hand on a persisted argv gives the same exit and byte-identical evidence.
 A call that cannot run, is killed or exits with a code the CLI does not document is recorded, the other calls still run, and `score` exits 12.

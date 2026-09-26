@@ -150,7 +150,7 @@ None. Evaluate has no graphical interface.
 ### Epic 1: The Evaluate authoring loop
 
 An adopter describes a target, answers Evaluate's questions, chooses or builds the evaluation layer and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches the seeded defect, with the gaps named and closed. The epic closes by running Evaluate on `bmad-testarch-evaluate` itself, then proving the guidance on two more target kinds, on seeded weaknesses and on an evaluation framework its guides never name.
-Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.39.
+Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.40.
 
 **FRs covered:** FR1 to FR10, FR13, FR14.
 
@@ -205,12 +205,13 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 37    | 1.37  | 1.11                         |
 | 38    | 1.38  | 1.32                         |
 | 39    | 1.39  | 1.18                         |
-| 40    | 2.1   | 1.16, 1.26                   |
-| 41    | 2.2   | 2.1                          |
-| 42    | 2.3   | 2.2                          |
-| 43    | 2.4   | 2.3                          |
-| 44    | 2.5   | 2.4                          |
-| 45    | H.1   | 2.5                          |
+| 40    | 1.40  | 1.17, 1.21                   |
+| 41    | 2.1   | 1.16, 1.26                   |
+| 42    | 2.2   | 2.1                          |
+| 43    | 2.3   | 2.2                          |
+| 44    | 2.4   | 2.3                          |
+| 45    | 2.5   | 2.4                          |
+| 46    | H.1   | 2.5                          |
 
 ## Epic 1: The Evaluate authoring loop
 
@@ -1178,6 +1179,26 @@ So that a target printing an oversized value is judged on that behavior and the 
 **And** the reference's `### Steps not issued` names the size limit among the values the request cannot carry, and the case reading the section fails when that sentence is removed
 
 **Dependencies:** 1.18.
+**Gate:** `npm test`, `npm run test:release-metadata`, engine check.
+
+### Story 1.40: Calibrate rubric scores imported from harness records
+
+Added 2026-09-26 in Story 1.21 from its review: a `records` evaluator imports sealed records and its evaluator configuration from an adopter harness. Story 1.21 gates rubric judgments made by TeA's own scorer, but an imported rubric score has no verifiable calibration path. Story 1.21 makes `check` refuse a rubric with a `records` evaluator until the harness can prove that its scorer passed the same calibration gate.
+
+As an adopter bringing rubric scores from my harness,
+I want the imported scorer calibrated against my labelled anchors,
+So that its sealed records count only after its rubric judgments meet the agreement threshold (AD-21, AD-22).
+
+**Acceptance Criteria:**
+
+**Given** a `records` evaluator, a rubric, and labelled calibration items covering every criterion and anchored level
+**When** `tea-evaluate run` prepares to import trial records
+**Then** the harness supplies verifiable calibration judgments produced by the same scorer configuration and path that produced its trial scores, without sending `expectedLevel` to that scorer; the runtime validates the provenance and reports exact agreement and largest level distance per criterion in `runs/<invocationId>/judge-calibration.json`, a `test:evaluate-evaluators` integration case; accepting a report with a different scorer configuration or with labels in scorer input fails the case
+**And** agreement below `judgeCalibration.minimumAgreement` exits 11 before any imported trial record is copied or scored, a `test:evaluate-evaluators` case; removing the gate lets the case write a record
+**And** the calibration file digest and minimum agreement are bound to the imported `EvaluatorConfiguration` and scoring version, a `test:evaluate-evaluators` case; omitting either binding leaves the scoring version unchanged and fails the case
+**And** a `records` evaluator without a rubric still imports and scores through its existing path, while `check` refuses rubric records whose calibration provenance is absent or unverifiable, a `test:evaluate-check` case; bypassing the refusal accepts an uncalibrated rubric
+
+**Dependencies:** 1.17, 1.21.
 **Gate:** `npm test`, `npm run test:release-metadata`, engine check.
 
 ## Epic 2: Continuous proof in CI

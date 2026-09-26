@@ -107,6 +107,7 @@ const path = require('node:path');
 const AjvModule = require('ajv/dist/2020');
 
 const { engineSchemaPath, loadEngine, schemaVersionProblems } = require('./engine');
+const { CALIBRATION_PATH, calibrationProblems, readCalibration } = require('./calibration');
 const { MANIFEST_NAME } = require('./folder');
 const { addFormats } = require('./formats');
 const { HTTP_PORT_MODULE, originTarget, sharedOrigin } = require('./http-target');
@@ -1192,6 +1193,12 @@ function checkEvaluator(report, folder, evaluation, contract, conditions) {
     );
   }
   if (kind === 'records') {
+    if ((contract?.rubrics ?? []).length > 0)
+      report.add(
+        MANIFEST_NAME,
+        'evaluator',
+        'a records evaluator cannot score rubrics until its harness supplies a verifiable calibration path',
+      );
     if (typeof evaluator.records !== 'string') return;
     // Only a directory inside the folder, reached through no link, is the folder's own.
     const spelled = path.join(fs.realpathSync(folder), ...evaluator.records.split('/'));
@@ -1345,6 +1352,48 @@ function checkProbes(report, folder, context, behaviors, mutations, registry) {
     if (probe.qualification?.route === 'gameability') checkGameability(report, folder, relative, probe, context, behaviors, registry);
   }
   return routes;
+}
+
+function checkHeldOut(report, folder, evaluation) {
+  const selected = evaluation.heldOutProbes ?? [];
+  if (!Array.isArray(selected)) return;
+  const probes = new Map();
+  for (const entry of listDirectory(folder, 'probes') ?? []) {
+    if (!entry.isFile || !PROBE_FILE.test(entry.name)) continue;
+    const probe = parseInto(report, folder, `probes/${entry.name}`);
+    if (typeof probe?.probeId === 'string') probes.set(probe.probeId, probe);
+  }
+  for (const id of selected) {
+    const probe = probes.get(id);
+    if (probe === undefined) {
+      report.add(MANIFEST_NAME, 'held-out', `heldOutProbes names ${id}, which is not a committed probe`);
+      continue;
+    }
+    if (probe.qualification?.route === 'clean-control' || probe.expectedClean === true)
+      report.add(MANIFEST_NAME, 'held-out', `heldOutProbes names clean control ${id}`);
+    const affected = new Set([probe.behaviorId, ...(probe.defects ?? []).map((defect) => defect.behaviorId)]);
+    for (const behaviorId of affected) {
+      if (typeof behaviorId !== 'string') continue;
+      const development = [...probes.values()].some(
+        (candidate) =>
+          !selected.includes(candidate.probeId) &&
+          (candidate.behaviorId === behaviorId || (candidate.defects ?? []).some((defect) => defect.behaviorId === behaviorId)),
+      );
+      if (!development) report.add(MANIFEST_NAME, 'held-out', `${id} leaves behavior ${behaviorId} without a development probe`);
+    }
+  }
+}
+
+function checkCalibration(report, folder, evaluation, contract) {
+  let calibration;
+  try {
+    calibration = readCalibration(folder);
+  } catch (error) {
+    report.add(CALIBRATION_PATH, 'judge-calibration', error.message);
+    return;
+  }
+  for (const problem of calibrationProblems(evaluation, contract, calibration?.value))
+    report.add(CALIBRATION_PATH, 'judge-calibration', problem);
 }
 
 /**
@@ -1646,6 +1695,8 @@ async function checkEvaluation(folder) {
   const mutations = checkMutations(report, folder, context, provision, skillRoot);
   checkSkillRunner(report, evaluation, context.contract, provision);
   const routes = checkProbes(report, folder, context, behaviors, mutations, registry);
+  checkHeldOut(report, folder, evaluation);
+  checkCalibration(report, folder, evaluation, context.contract);
   const policy = checkScoringPolicy(report, folder, context, routes);
   checkArmsAndTrials(report, evaluation, routes, policy);
   checkEvaluatorConditions(report, folder, context, registry);

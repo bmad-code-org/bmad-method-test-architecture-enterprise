@@ -306,6 +306,75 @@ function addRubric(folder) {
   editJson(path.join(folder, 'evaluator', 'mapping.json'), (mapping) => {
     mapping.keys['verdict-quality'] = { rubricId: 'R-101', criterionId: 'RC-101', levels: [1, 2, 3] };
   });
+  editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
+    evaluation.judgeCalibration = { minimumAgreement: 1 };
+  });
+  fs.writeFileSync(
+    path.join(folder, 'policy/judge-calibration.json'),
+    `${JSON.stringify(
+      {
+        items: [1, 2, 3].map((level) => ({
+          rubricId: 'R-101',
+          criterionId: 'RC-101',
+          response: `calibration example at level ${level}`,
+          expectedLevel: level,
+        })),
+      },
+      null,
+      2,
+    )}\n`,
+  );
+}
+
+/** Two labelled anchors, with one response judged at the wrong anchor. */
+function setHalfAgreement(folder) {
+  editJson(path.join(folder, 'contract.json'), (contract) => {
+    contract.rubrics[0].scaleLevels = contract.rubrics[0].scaleLevels.filter((level) => level.level !== 3);
+  });
+  editJson(path.join(folder, 'evaluator/mapping.json'), (mapping) => {
+    mapping.keys['verdict-quality'].levels = [1, 2];
+  });
+  editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
+    evaluation.judgeCalibration.minimumAgreement = 0.9;
+  });
+  writeJson(path.join(folder, 'policy/judge-calibration.json'), {
+    items: [1, 2].map((expectedLevel) => ({
+      rubricId: 'R-101',
+      criterionId: 'RC-101',
+      response: 'calibration example at level 2',
+      expectedLevel,
+    })),
+  });
+}
+
+async function checkCalibrationDisagreementAcrossEvaluators() {
+  for (const kind of ['command', 'sealed-brief-agent']) {
+    const capture = path.join(scratch.make(`${kind}-calibration-capture`), 'calls.jsonl');
+    const project = makeProject(`${kind}-calibration-disagreement`, {
+      edit: ({ folder }) => {
+        if (kind === 'command') {
+          useCommandEvaluator(folder, { mode: 'score', args: ['--log', capture] });
+          addRubric(folder);
+        } else useSealedBriefAgent(folder, { capture, rubric: true });
+        setHalfAgreement(folder);
+      },
+    });
+    const ran = evaluate(['run', '--evaluation', project.folder], project.env);
+    check(ran.status === 11, `${kind} calibration disagreement exited ${ran.status}; expected 11\n${ran.output}`);
+    const directory = runDirectoryOf(project.folder);
+    if (directory === null) continue;
+    const report = readJson(path.join(directory, 'judge-calibration.json'));
+    check(report.criteria[0].agreement === 0.5, `${kind} calibration agreement is ${report.criteria[0].agreement}; expected 0.5`);
+    check(!fs.existsSync(path.join(directory, 'trial-sets.json')), `${kind} wrote trial sets after calibration failed`);
+    check(recordFiles(directory).length === 0, `${kind} wrote trial records after calibration failed`);
+    const calls = captures(capture);
+    check(calls.length === 2, `${kind} scorer received ${calls.length} calibration calls; expected 2`);
+    for (const call of calls) {
+      const input = kind === 'command' ? JSON.stringify(call.input) : call.prompt;
+      check(!input.includes('expectedLevel'), `${kind} scorer input carried a calibration label`);
+      check(input.includes('calibration example at level 2'), `${kind} scorer input omitted the response`);
+    }
+  }
 }
 
 /** The verdict command's `residue.txt`, which a lenient run leaves behind, declared as the written file `residue`. */
@@ -1035,7 +1104,7 @@ async function checkSealedBriefAgent() {
   const brief = readJson(path.join(runDirectory, 'sealed-evaluator-brief.json'));
   const contract = readJson(path.join(project.folder, 'contract.json'));
   const calls = captures(capture);
-  check(calls.length === 2 * TRIALS, `the stub agent ran ${calls.length} time(s); expected ${2 * TRIALS}`);
+  check(calls.length === 2 * TRIALS + 3, `the stub agent ran ${calls.length} time(s); expected calibration and trials`);
   // Every trial's prompt names a fresh nonce of its own.
   const nonces = calls.map((call) => /<judge-answer nonce="([0-9a-f]{32})">/.exec(call.prompt)?.[1]);
   check(
@@ -2071,6 +2140,7 @@ async function main() {
     await runCase('the direction gate', checkDirectionGate);
     await runCase('the bridge', checkBridge);
     await runCase('the command evaluator row shapes', checkCommandRowShapes);
+    await runCase('command and agent calibration disagreement', checkCalibrationDisagreementAcrossEvaluators);
     await runCase('an unwitnessed quote', checkUnwitnessedQuote);
     await runCase('evaluators outside the import contract', checkEvaluatorFailures);
     await runCase('a hung evaluator', checkEvaluatorTimeout);
