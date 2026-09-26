@@ -193,7 +193,11 @@ The reviewer found every other round 1 fix closed against the code, and the nine
 | Test 1             | high    | A target could chmod and rewrite a provisioned file in the pristine copy; a later trial copied those changed bytes from the pristine copy while the tree digest excluded the provisioned directory. Reproduced with `vendor/library.txt`. Fixed by recording each provisioned directory's digest when the workspace is made and refusing a reproduction if its copy changed. The regression checks the refusal. |
 | Adversarial review | pass    | The captured-header and registry credential concern was checked against the actual HTTP port and Node's case-insensitive header handling: the configured credential wins on the original origin, and a redirect omits it. The runtime's one-authorization policy denies another destination before a request is sent.                                                                                           |
 
-All three reviewers ran `npm test` in independent detached worktrees on commit `057b2760457fbdf95c2b496295853f6f4fdb3d89` and passed. After the fixes, the focused workflow suite passes 106 checks and `npm test` exits 0, including release metadata, lint, Markdown lint and formatting. A bounded re-review follows.
+All three reviewers ran `npm test` in independent detached worktrees on commit `057b2760457fbdf95c2b496295853f6f4fdb3d89` and passed. After the fixes, the focused workflow suite passed 106 checks and `npm test` exited 0, including release metadata, lint, Markdown lint and formatting.
+
+### Final review round 2 (Codex, bounded to round 1 fixes)
+
+Both fresh reviewers reproduced one shared medium finding: `treeDigest` included modes of child directories but omitted the root directory's mode. A changed snapshot root or provisioned-directory root could therefore be copied into a later trial under the original digest. Fixed by including the root directory in every tree digest, with a regression for each root. The focused workflow suite now passes 108 checks; a bounded round 3 and the final full gate follow.
 
 ## Verification
 

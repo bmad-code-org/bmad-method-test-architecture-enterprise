@@ -969,6 +969,19 @@ function checkSnapshot() {
       `a reproduction of a snapshot with a changed executable bit gave ${changedMode}`,
     );
     fs.chmodSync(snapshotFile, snapshotMode);
+    const snapshotRootMode = fs.statSync(pristine.snapshot).mode & 0o7777;
+    fs.chmodSync(pristine.snapshot, snapshotRootMode ^ 0o001);
+    let changedSnapshotRoot = null;
+    try {
+      make('changed-snapshot-root', pristine);
+    } catch (error) {
+      changedSnapshotRoot = error;
+    }
+    check(
+      changedSnapshotRoot instanceof WorkspaceRefusal && changedSnapshotRoot.message.includes('of the workspace it reproduces'),
+      `a reproduction of a snapshot with changed root permissions gave ${changedSnapshotRoot}`,
+    );
+    fs.chmodSync(pristine.snapshot, snapshotRootMode);
     const library = path.join(pristine.root, 'vendor', 'library.txt');
     const originalMode = fs.statSync(library).mode & 0o7777;
     fs.chmodSync(library, originalMode | 0o200);
@@ -985,6 +998,21 @@ function checkSnapshot() {
     );
     fs.writeFileSync(library, 'the library\n');
     fs.chmodSync(library, originalMode);
+    const vendor = path.join(pristine.root, 'vendor');
+    const vendorMode = fs.statSync(vendor).mode & 0o7777;
+    fs.chmodSync(vendor, vendorMode ^ 0o001);
+    let changedProvisionRoot = null;
+    try {
+      make('changed-provision-root', pristine);
+    } catch (error) {
+      changedProvisionRoot = error;
+    }
+    check(
+      changedProvisionRoot instanceof WorkspaceRefusal &&
+        changedProvisionRoot.message.includes('the copy it reproduces changed after it was made'),
+      `a reproduction of a provisioned directory with changed root permissions gave ${changedProvisionRoot}`,
+    );
+    fs.chmodSync(vendor, vendorMode);
     // A provisioned directory planted in the snapshot, or the pristine copy's read-only copy moved away, is refused
     // where the digest, which leaves provisioned directories out, cannot see it.
     const refusalOf = (label) => {

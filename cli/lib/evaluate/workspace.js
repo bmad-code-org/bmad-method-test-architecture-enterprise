@@ -309,7 +309,7 @@ function fileDigest(file) {
  */
 function treeDigest(root, { exclude = [] } = {}) {
   const excluded = new Set(exclude);
-  const parts = [];
+  const parts = ['.', 'directory', fs.lstatSync(root).mode & 0o7777];
   const visit = (directory) => {
     const entries = fs.readdirSync(directory, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
     for (const entry of entries) {
