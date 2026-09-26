@@ -203,8 +203,10 @@ function degenerate() {
   if (ran.status !== 0) return;
   const scored = evaluate(folder, 'score');
   check(scored.status === 2, `degenerate score exited ${scored.status}, expected the engine's uncaught-defect exit 2: ${scored.output}`);
+  const states = votes(latestRun(folder), 'P-002');
+  check(states.length === 3, `expected three degenerate-arm votes, got ${states.length}`);
   check(
-    votes(latestRun(folder), 'P-002').every((state) => state !== 'caught'),
+    states.every((state) => state !== 'caught'),
     'the always-pass evaluator caught the mutation',
   );
 }
@@ -278,6 +280,16 @@ try {
   const dependencies = read(path.join(ROOT, 'package.json')).devDependencies;
   check(dependencies.agentevals === 'latest', 'agentevals must use the latest spec');
   check(dependencies['@langchain/core'] === 'latest', '@langchain/core must use the latest spec');
+  const agentPackageFile = require.resolve('agentevals/package.json');
+  const agentPackage = read(agentPackageFile);
+  const licenceFile = path.join(path.dirname(agentPackageFile), 'LICENSE');
+  const licence = fs.existsSync(licenceFile) ? fs.readFileSync(licenceFile, 'utf8') : '';
+  check(
+    (agentPackage.license === undefined || agentPackage.license === 'MIT') &&
+      licence.includes('Permission is hereby granted, free of charge') &&
+      licence.includes('THE SOFTWARE IS PROVIDED "AS IS"'),
+    'the installed AgentEvals package lacks the MIT licence evidence used by the licence gate',
+  );
   directEvaluator();
   pipeline();
   degenerate();

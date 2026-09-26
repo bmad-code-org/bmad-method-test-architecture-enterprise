@@ -100,12 +100,14 @@ Revert checks were exercised against the focused suite, with each edit restored 
 | Edge 2, empty evidence lists pass                       | medium, patch     | The reviewer identified the same vacuous assertions as Blind 10.                                                                                                                                                                                                               |
 | Edge 3, numeric mapping claim                           | false, reject     | The numeric unit tests the declared `EvaluatorResult` shape and anchored mapping. The strict matcher itself supplies a boolean; the record says so.                                                                                                                            |
 
+Final review round 1 used three independent Codex lenses. Architecture and story compliance passed. The adversarial lens found that the changelog overstated the licence gate. The gate uses a documented MIT exception; the suite now checks the installed package's `LICENSE` text and the changelog names that check accurately. The test-quality lens found a vacuous `every` assertion in the always-pass evaluator case; that case now requires three votes. No findings were deferred. CodeRabbit reported no inline findings. Its generic docstring coverage warning was answered on the PR because these focused test helpers have clear names and the repository has no function-docstring requirement.
+
 ## Verification
 
 **Commands:**
 
-- `npm run test:evaluate-tool-use`: 67 checks passed.
-- `npm test`: passed on the reviewed tree, including all 90 chained checks.
+- `npm run test:evaluate-tool-use`: 69 checks passed after final review fixes.
+- `npm test`: passed on the final review-fix tree, including all 90 chained checks. Two earlier full runs also passed before those fixes.
 - `npm run test:release-metadata`: passed.
 - `npm run test:licences`, `npm run test:lockfile-age`, `npm run test:supply-chain`, `npm run test:evaluate-boundaries`: passed.
 - `npm run format:check`, `npm run lint`, `npm run lint:md`, `npm run docs:validate-links`, `npm run docs:build`: passed.
