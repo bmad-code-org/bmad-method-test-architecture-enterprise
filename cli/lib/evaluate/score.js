@@ -402,7 +402,8 @@ async function runScoreCommand(folder, { run: invocationId, env = process.env, l
     });
   }
 
-  // The probes the run refused (a historical probe with no revisions to address) have no trial set; say so, never silently.
+  // The probes the run refused (a historical probe with no revisions to address, or a deployment the registry does not
+  // authorize) have no trial set; say so, never silently.
   const refused = (Array.isArray(located.record?.refused) ? located.record.refused : []).map(({ probeId, reason }) => ({
     probeId,
     reason,

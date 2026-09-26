@@ -23,7 +23,7 @@ inputDocuments:
 
 ## Overview
 
-This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and forty-two stories (Stories 1.27 to 1.37 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
+This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and forty-three stories (Stories 1.27 to 1.38 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
 
 Evaluate is fully stacked. The stack runs system under test, then the evaluation (the mechanism that runs the system, collects evidence and makes judgments), then the Behavioral Evaluation Contract (what behavior matters, what evidence counts, how success and failure resolve), then eval-quality (contract sanity, evidence support, and whether the evaluation catches defects). TeA owns every layer above eval-quality, including each concern eval-quality states it leaves to the caller, so an adopter can evaluate any target end to end. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3 onward, Epic 2 and H.1 to close the plan gap audit; the Traceability section maps each audit item to the story that closes it.
 
@@ -150,7 +150,7 @@ None. Evaluate has no graphical interface.
 ### Epic 1: The Evaluate authoring loop
 
 An adopter describes a target, answers Evaluate's questions, chooses or builds the evaluation layer and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches the seeded defect, with the gaps named and closed. The epic closes by running Evaluate on `bmad-testarch-evaluate` itself, then proving the guidance on two more target kinds, on seeded weaknesses and on an evaluation framework its guides never name.
-Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.37.
+Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.38.
 
 **FRs covered:** FR1 to FR10, FR13, FR14.
 
@@ -203,12 +203,13 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 35    | 1.35  | 1.10                         |
 | 36    | 1.36  | 1.11                         |
 | 37    | 1.37  | 1.11                         |
-| 38    | 2.1   | 1.16, 1.26                   |
-| 39    | 2.2   | 2.1                          |
-| 40    | 2.3   | 2.2                          |
-| 41    | 2.4   | 2.3                          |
-| 42    | 2.5   | 2.4                          |
-| 43    | H.1   | 2.5                          |
+| 38    | 1.38  | 1.32                         |
+| 39    | 2.1   | 1.16, 1.26                   |
+| 40    | 2.2   | 2.1                          |
+| 41    | 2.3   | 2.2                          |
+| 42    | 2.4   | 2.3                          |
+| 43    | 2.5   | 2.4                          |
+| 44    | H.1   | 2.5                          |
 
 ## Epic 1: The Evaluate authoring loop
 
@@ -1020,10 +1021,10 @@ So that a defect a release fixed is measured where no worktree can launch the ta
 
 **Given** a historical probe whose qualification names a pre-fix and a post-fix deployment, each an address the registry's `api` target policy authorizes (Story 1.11), with the release identifier each deployment reports
 **When** `tea-evaluate run` qualifies it
-**Then** the fail-before arm runs against the pre-fix deployment and must be violated, the pass-after arm against the post-fix deployment and must hold, the defect's manifestation-witness leg routes to the pre-fix deployment, and the probe's trials run on the arm `historical:<pre-fix release identifier>`; a `test:evaluate-arms` case over two loopback fixture servers asserts each routing from the servers' own request logs, and routing the fail-before arm to the post-fix deployment makes it hold and exit 11, which the case catches
+**Then** the fail-before arm runs against the pre-fix deployment and must be violated, the pass-after arm against the post-fix deployment and must hold, the defect's manifestation-witness leg routes to the pre-fix deployment, and the probe's trials run on the arm `historical:<pre-fix release identifier>`; a `test:evaluate-arms` case over two loopback fixture servers asserts each routing from the servers' own request logs, and routing the fail-before arm to the post-fix deployment makes it hold and exit 11, which the case catches (amended 2026-09-26 in Story 1.32: the probe names `qualification.deployments`, a `preFix` and a `fix` deployment, each the `release` identifier it runs and the `origins` (`scheme://host[:port]`) each HTTP interface of the registry answers at, in place of `fixCommit`; a registry entry authorizes a deployment's origin in its `deployments` list, and the one authorization eval-quality allows for a deployment's origin is the whole policy of that deployment's arm; the release identifier is declared by the probe, since no convention tells the runtime how an arbitrary deployment reports its release, and Story 1.38 holds a deployment to the release it reports; the two loopback fixture servers are the grader of `test/fixtures/evaluate-api/` started by the case itself, each logging its own requests, so the case asserts the fail-before arm, the witness leg and every trial at the pre-fix server in that order and the pass-after arm alone at the post-fix one; two probes naming one arm label at two targets exit 10)
 **And** the qualified probe records `fixCommitDigest` as the digest of the post-fix release identifier and `artifactDigest` as the digest of the pre-fix one, each asserted by the case; recording one identifier for both makes the digests equal, which the case catches
-**And** a deployment the registry does not authorize refuses the probe with its reason in `run.json`'s `refused` and `refused/<probeId>.json`, the rest of the run going on, a `test:evaluate-arms` case; dropping the refusal sends a request the adapter denies and the run exits 10, which the case catches
-**And** `tea-evaluate check` exits 10 under the `historical` rule when a deployment-routed probe names one deployment but not the other, or names both and a `fixCommit`, each a `test:evaluate-check` case; dropping the rule lets `run` reach qualification and stop with exit 12, which the case catches
+**And** a deployment the registry does not authorize refuses the probe with its reason in `run.json`'s `refused` and `refused/<probeId>.json`, the rest of the run going on, a `test:evaluate-arms` case; dropping the refusal sends a request the adapter denies and the run exits 10, which the case catches (amended 2026-09-26 in Story 1.32: the runtime resolves each origin's host once, to its first address, as the port does, and asks eval-quality's `evaluateTarget` over the policy the port receives on that deployment's arm, so the reason is eval-quality's, `port-not-authorized` in the case, for a pre-fix and for a post-fix deployment; a host that does not resolve within the entry's `maxElapsedMs` leaves the deployment unreachable, exit 12)
+**And** `tea-evaluate check` exits 10 under the `historical` rule when a deployment-routed probe names one deployment but not the other, or names both and a `fixCommit`, each a `test:evaluate-check` case; dropping the rule lets `run` reach qualification and stop with exit 12, which the case catches (amended 2026-09-26 in Story 1.32: the rule also refuses a historical probe naming neither boundary, one release for both deployments, a deployment beside a registry entry that is not an HTTP entry, and origins that are not an http or https origin for each HTTP interface of the registry and no other, each a `test:evaluate-check` or `test:evaluate-arms` case; `registry` holds each deployment origin's `host` and, under `auth` over `http`, its addresses to the entry's own rules, a `test:evaluate-api` case each)
 **And** `docs/reference/tea-evaluate-cli.md` states which historical probes run from worktrees and which against deployments, and AD-8's historical route names both; a `test:evaluate-arms` case reads the reference's historical section under its exact heading and asserts it names both kinds, and deleting the deployment passage fails the case
 
 **Dependencies:** 1.9, 1.11.
@@ -1133,6 +1134,27 @@ So that no answer from another process is ever recorded as my target's (AD-7, AD
 **And** `docs/reference/tea-evaluate-cli.md` states both handoffs and the window the chosen-port handoff leaves, and the case reading the passage fails when the window's sentence is removed
 
 **Dependencies:** 1.11.
+**Gate:** `npm test`.
+
+### Story 1.38: Hold a deployment to the release it reports
+
+Added 2026-09-26 in Story 1.32 from a gap its build accepted: a deployment-routed historical probe declares the release identifier each deployment runs, and the run records the digests of those identifiers without asking either deployment which release it runs.
+A deployment redeployed after the probe was authored is measured under the identifier the probe declares: the qualification arms catch a pre-fix deployment that no longer shows the defect (exit 11), and nothing catches one that still shows it under another release.
+
+As an adopter whose historical probe runs against two deployments,
+I want each deployment's reported release held to the one my probe names,
+So that the digests a qualified probe records name the releases the run measured (AD-7, AD-8).
+
+**Acceptance Criteria:**
+
+**Given** a deployment-routed historical probe whose deployments each name how the deployment reports its release (an operation of the contract's `api` interface and a JSON pointer into its answer's body)
+**When** `tea-evaluate run` qualifies it
+**Then** before either arm the runtime sends that request to each deployment through the evaluation's HTTP port, and a reported identifier other than the declared `release` refuses the probe with both identifiers named in `run.json`'s `refused` and `refused/<probeId>.json`, a `test:evaluate-arms` case over two loopback fixture servers that report their release; skipping the comparison lets a deployment reporting another release qualify, which the case catches
+**And** eval-quality's policy decides the report request as it decides every call, and a denial, or an answer with no string at the pointer, refuses the probe with its reason, a `test:evaluate-arms` case; recording the declared release unasked lets the case exit 0 with no refusal, which the case catches
+**And** `check` refuses under `historical` a report request naming an operation the contract does not declare, or a pointer that is not a JSON pointer, a `test:evaluate-check` case each; dropping the rule lets `run` stop with exit 12, which the case catches
+**And** the reference's `### Against deployments` states the comparison, and the case reading the section fails when its sentence is removed
+
+**Dependencies:** 1.32.
 **Gate:** `npm test`.
 
 ## Epic 2: Continuous proof in CI

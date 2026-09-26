@@ -1,0 +1,189 @@
+---
+title: 'Story 1.32: Qualify a historical probe against two addressable deployments'
+type: 'feature'
+created: '2026-09-26'
+status: 'review'
+route: 'dispatch'
+review_loop_iteration: 0
+baseline_commit: '8c9a69a9671777a379f85673f96bff33eb82b96d'
+context:
+  - '{project-root}/_bmad-output/planning-artifacts/evaluate/epics.md (Build Rules For Every Story; Stories 1.9, 1.11, 1.32, 1.36, 1.37)'
+  - '{project-root}/_bmad-output/planning-artifacts/evaluate/test-design-epic-1.md (the Story 1.32 section, and the Story 1.9 and 1.11 sections for the fixtures it extends)'
+  - '{project-root}/_bmad-output/planning-artifacts/evaluate/ARCHITECTURE-SPINE.md (AD-1, AD-4, AD-6, AD-7, AD-8, AD-10)'
+  - '{project-root}/_bmad-output/implementation-artifacts/evaluate/story-1.9.md (the worktree historical route)'
+  - '{project-root}/_bmad-output/implementation-artifacts/evaluate/story-1.11.md (the api route and the adopter port)'
+  - '{project-root}/AGENTS.md'
+---
+
+<!-- markdownlint-disable MD033 -->
+
+<frozen-after-approval reason="human-owned intent; do not modify unless human renegotiates">
+
+## Intent
+
+**Problem:** Story 1.9's historical route addresses revisions as git commits whose target launches from a worktree, so a target reachable only as a remote deployment is probed against one deployment at both revisions and is not measured, though AD-8 routes such a target to the historical route.
+
+**Approach:** a historical probe names, in place of `fixCommit`, a pre-fix and a post-fix deployment: the release identifier each runs and the origin each HTTP interface of the evaluation is reached at.
+Each deployment must be an origin the registry's `api` policy authorizes, decided by eval-quality's own `evaluateTarget`; the fail-before arm, the defect's witness leg and the `historical:<pre-fix release>` trials go to the pre-fix deployment, the pass-after arm to the post-fix one, and the qualified probe records the digests of the two release identifiers.
+
+## Boundaries & Constraints
+
+**Always:** eval-quality decides whether a deployment is authorized (AD-1): the runtime asks `evaluateTarget` over the policy it hands the port for that deployment's calls, and the port asks it again for every request; `engine.js` stays the one runtime file that loads eval-quality; every run-directory write goes through `run-directory.js`; the worktree route of Story 1.9 keeps its behavior and its arm label.
+
+**Never:** an HTTP client in `cli/` (the adopter's port sends every request); a deployment-routed probe for a command or tool-server interface (a remote deployment is reached over HTTP); a new dependency; an edit to eval-quality.
+
+**Decisions (build agent, owner-delegated):**
+
+- The probe names its deployments in `qualification.deployments`: `preFix` and `fix`, each `{ release, origins }`, where `release` is the identifier that deployment runs (`^[A-Za-z0-9][A-Za-z0-9._+-]*$`, at most 128 characters, so the arm label and the trial directories stay one path segment) and `origins` maps each HTTP interface of the registry to the origin (`scheme://host[:port]`) that deployment answers it at.
+  A historical probe names exactly one of `fixCommit` (worktree route) and `deployments` (deployment route).
+- The release identifier is declared in the probe.
+  No convention tells TeA how an arbitrary deployment reports its release, and the qualification arms already measure the behavior at each origin: a pre-fix origin that no longer shows the defect fails qualification (exit 11).
+  That the run never confirms the identifier a deployment reports is recorded as a gap and becomes Story 1.38.
+- The registry authorizes a deployment through an optional `deployments` list on an `ApiRegistryEntry`: `{ scheme, host, port, addresses }` per origin, each an authorization of the entry's interface with the entry's methods, redirects, ceilings and auth.
+  One entry per interface stays the rule.
+  Before a deployment arm runs, eval-quality's `evaluateTarget` decides which of the entry's candidates (its `deployments`, and its own authorization when it names a deployed `port`) allows the probe's origin, and that one authorization is the arm's whole policy for the interface; no other arm's policy holds a deployment, so no redirect of another arm reaches one and no redirect of a deployment arm reaches the other deployment.
+- A deployment no candidate allows refuses the probe, the reason naming each candidate's denial in eval-quality's words, recorded as every historical refusal is (`run.json`'s `refused`, `refused/<probeId>.json`); the runtime resolves the origin's host once, to its first address, as the port does, and asks `evaluateTarget` at the first method the entry authorizes, so the decision is about where the deployment is.
+  An origin whose scheme, host or port no candidate admits is refused before its host is resolved, as the port denies an unresolved host; a host some candidate admits that does not resolve within the entry's `maxElapsedMs`, or whose resolution a signal aborts, leaves the deployment unreachable, which is infrastructure (exit 12).
+- The arm label is `historical:<pre-fix release>` beside the worktree route's `historical:<pre-fix sha>`; one arm runs one route, so two probes naming one arm label with a worktree and a deployment, or with two different sets of pre-fix origins (read as the port reads them, in interface order), stop the run with exit 10, as do two labels that differ only in letter case, whose trial directories would meet on a case-insensitive file system.
+- A historical probe whose boundary the runtime cannot address (neither boundary, one deployment, deployments beside a `fixCommit`, or origins off the registry's HTTP interfaces), reachable only when `check` is skipped, stops the qualification with exit 12.
+
+## I/O & Edge-Case Matrix
+
+| Scenario             | Input / State                                                                  | Expected Output / Behavior                                                                                                               | Error Handling                                         |
+| -------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| Two deployments      | pre-fix origin in `mode: lenient`, post-fix in `mode: strict`, both authorized | fail-before and witness leg and trials at pre-fix, pass-after at post-fix, arm `historical:<pre release>`, `caught`, digests of releases | N/A                                                    |
+| Unauthorized origin  | the pre-fix origin at a port no authorization names                            | probe refused with `port-not-authorized`, the clean control runs, exit 0                                                                 | nothing sent to any deployment                         |
+| Pre-fix already good | the pre-fix origin answers as the fix does                                     | preflight exits 11 naming the fail-before arm                                                                                            | N/A                                                    |
+| Half a pair          | `deployments` with `preFix` only, or with `fixCommit` beside it                | `check` exits 10 under `historical`                                                                                                      | the runtime stops with exit 12 when `check` is skipped |
+
+</frozen-after-approval>
+
+## Code Map
+
+- `cli/lib/evaluate/schemas/committed-probe.schema.json` -- the historical `then` branch: `fixCommit` no longer required, `deployments` beside it.
+- `cli/lib/evaluate/schemas/evaluation.schema.json` -- `ApiRegistryEntry.deployments`.
+- `cli/lib/evaluate/check.js` -- `checkProbe`'s `historical` block (the route's field rules), header docs; `registry.js` `apiRegistryProblems` holds each deployment origin to the entry rules (host spelling, `staysOnHost` for an auth header over http).
+- `cli/lib/evaluate/http-target.js` -- `authorizationOf` gains the deployment authorizations (`authorizationsOf`), `portConfiguration` takes `origins`, `createApiPort` takes `origins` (no server starts on a deployment call), new `originTarget` and `deploymentRefusal`.
+- `cli/lib/evaluate/registry.js` -- `createProbePort({ origins })`, `deploymentRefusal(origins)`.
+- `cli/lib/evaluate/historical.js` -- `qualifyDeploymentProbe`, `deploymentRoute`, the shared candidate builder and a revision arm over a port.
+- `cli/lib/evaluate/preflight.js` -- the seeded loop's deployment branch and its exit 12 guard; the route map keyed by arm label with the collision stop; `run.json`'s `deployments`.
+- `cli/lib/evaluate/run.js` -- the historical arm carries its route's `origins`; `runTrial` builds its port over them.
+- `node_modules/eval-quality/dist/core/probe/target-policy.js` (`evaluateTarget` tries every authorization of an interface in order, the first allowing wins, the first denial is reported), `dist/core/schemas/probe-qualification.js:47-57` (the historical shape: `fixCommitDigest` is any AD-27 digest; nothing constrains what it hashes), `dist/core/score/qualification.js` (historical needs natural defects and `oracleStableAcrossRevisions`).
+- Reuse, do not change: Story 1.9's `historicalRevisions` and worktree qualification; Story 1.11's port process, host protocol and scrub.
+
+## Tasks & Acceptance
+
+**Execution:**
+
+- [x] schemas, `check.js`, `registry.js`, `http-target.js`, `historical.js`, `preflight.js`, `run.js`, `score.js` comment.
+- [x] `test/test-evaluate-arms.js` -- the two-deployment case over two loopback grader servers the test starts, the unauthorized case, the pre-fix-already-good case, the reference section case; `test/test-evaluate-check.js` -- the half-pair cases and a clean case; unit cases for `originTarget` and the policy.
+- [x] `docs/reference/tea-evaluate-cli.md` (registry `deployments`, the `historical` rule row, `## Historical probes`), CHANGELOG, AD-6, AD-7, AD-8, AD-10, epics.md and test-design amendments, Story 1.38 appended, sprint-status (1.32 `review`).
+
+**Acceptance Criteria:** epics.md Story 1.32; each revert check in test-design-epic-1.md's Story 1.32 table is exercised once and recorded below.
+
+## Implementation Notes
+
+- **Implemented directly**, as Stories 1.8 to 1.11 were: this build runs as a subagent of the coordinator with the planning context loaded first, and a second implementation agent would have to load it all again.
+  No skill file changed: the Evaluate skill says nothing of historical probes yet (Stories 1.12 and 1.13 author that guidance), so the skill gates do not apply.
+- **Engine facts checked in the published package.** `node_modules/eval-quality/dist/core/schemas/probe-qualification.js:47-57` holds `fixCommitDigest` to the AD-27 `Digest` form alone and `probe.js:46` holds `artifactDigest` the same way, so the digest of a release identifier meets both; `dist/core/score/qualification.js` asks a historical probe only for natural defects and `oracleStableAcrossRevisions: true`.
+  `dist/core/probe/target-policy.js` `evaluateTarget` tries every authorization of an interface in declaration order, allows on the first that allows, and reports the first denial when none does; that is what lets one registry entry authorize its deployment origins beside its own with no second entry per interface.
+  The `api` ProbeRequest, the observation and `evaluateTarget`'s target shape (`interfaceId`, `scheme`, `host`, `port`, `address`, `method`) are the ones Story 1.11 already drives; eval-quality 4.3.0 blocked no criterion.
+- **Schemas.** `committed-probe.schema.json`: the historical branch requires only `route`, beside `fixCommit` and the new `deployments` (`preFix`, `fix`, each a `Deployment`: `release`, `origins`); the exactly-one and pair rules live in `check`'s `historical` rule, as the criterion asks.
+  `evaluation.schema.json`: `ApiRegistryEntry.deployments`, each `{ scheme, host, port, addresses }`.
+- **`http-target.js`.** `deploymentCandidates` lists the authorizations that may admit a deployment of an entry's interface (its `deployments`, and its own when it names a deployed `port`); `deploymentAccess` resolves each origin's host as the port's transport does (an address as written, otherwise the first address `dns.promises.lookup` gives, within the entry's `maxElapsedMs` and the run's signal, `DeploymentUnreachable` otherwise), asks `evaluateTarget` over the candidates at the entry's first method, and answers the one authorization eval-quality allowed, or a refusal naming each candidate's denial; `portConfiguration` takes that answer as `deployment`, names the origins as the targets and holds the allowed authorization alone in the policy, while every other call's policy holds the entries' own authorizations alone; `createApiPort` takes `deployment`, and on a deployment arm no call starts a server; `originTarget` reads an origin as the port does (scheme, the URL's hostname unbracketed, the port or the scheme's default) and refuses a path, query, fragment or credentials.
+- **`historical.js`.** The worktree route is unchanged in behavior; its arm runner, oracle lookup, evidence writing and probe builder are shared with the new `qualifyDeploymentProbe` (`revisionArm` over a port, `qualifyingArms`, `historicalCandidate`), and `deploymentPair` is the runtime's exit 12 guard (neither boundary, one deployment, deployments beside a `fixCommit`, origins off the registry's HTTP interfaces), and `routeIdentity` names the target an arm runs at.
+  Evidence files on the deployment route carry `release` and `origins` in place of `commit`, `fixCommit` and `workspace`.
+- **`preflight.js`, `run.js`.** The historical arm's routes are keyed by label; a route carries an `identity` (a worktree, or its pre-fix origins as the port reads them, by interface in sorted order), and a second probe on the label at another identity, or on a label that differs only in letter case, stops the run with exit 10.
+  A leg's observation or fault and a trial's evidence name the deployment's `origins` when they reached one.
+  A deployment route records `run.json`'s `deployments[<label>]` in place of `workspaces`; its trials still run in a fresh workspace reproducing the pristine one (a sealed-brief agent needs one), with every HTTP call sent to the pre-fix origins.
+  `run.json`'s runner lists an entry's `deployments`.
+- **`check`.** `historicalBoundaryProblems` (rule `historical`) and `apiRegistryProblems` (rule `registry`, each deployment origin held to the entry's host-spelling and `staysOnHost` rules).
+- **Tests.** `test:evaluate-arms` gains the deployment route end to end over two grader servers the case starts (fixture `test/fixtures/evaluate-api/`, each server tied to the suite by a standard-input lifeline and stopped when the case ends), with one start of the workspace's service per request it served; the pre-fix-already-good case (exit 11); an unauthorized pre-fix and an unauthorized post-fix deployment (refused, clean control sealed, no qualification evidence, nothing sent); two probes on one arm (exit 10); a `check` case on origins (a path, another interface in place of the registry's); units for `originTarget`, the policy inside and outside a deployment arm, `deploymentAccess` (each candidate's reason, an unresolvable host, a stalled one), `deploymentPair` and `routeIdentity`; and the reference case, which reads `### From worktrees` and `### Against deployments` under their headings.
+  `test:evaluate-check` gains six `historical` cases; `test:evaluate-api` gains two `registry` cases.
+- **Shard weight.** `test:evaluate-arms` grew by about 10 seconds (the deployment cases run in about 9); under c8 locally it took 116 seconds, so its weight in `tools/test-shard-weights.json` rose from 145.5 to 160, about 1.25 times it as Story 1.11 set its own; `test:evaluate-check` grew by six fast cases and keeps its weight.
+
+### Revert checks exercised
+
+Each in the checkout, the named suite (or a scratch copy of `test-evaluate-arms.js` restricted to the three deployment cases) run, and the file restored from a copy (`cmp` clean):
+
+- Fail-before routed to the post-fix deployment (`qualifyDeploymentProbe` building every phase's port over `deployments.fix.origins`): "a deployment-routed historical run exited 11; expected 0", the fail-before evidence reading verdict `held`; 7 failures.
+- One identifier recorded for both (`artifactDigest` over the post-fix release): "P-004's artifactDigest ... is not the digest of the pre-fix release grader-1.4.2" and "P-004's two release digests are equal".
+- The refusal dropped (`deploymentRefusal` answering null): "a run whose pre-fix deployment is unauthorized exited 10; expected 0" and "run.json records the refusals []".
+- The `historical` rule dropped: 16 `test:evaluate-check` failures, among them "a deployment-routed probe naming one deployment but not the other: check exited 0; expected 10"; over an HTTP project, `check` exited 0 and `run` exited 12 with "the runtime cannot address its deployments: it names no fix deployment" and, beside a `fixCommit`, "it names deployments beside a fixCommit".
+- The deployment passage deleted from the reference: "the historical section does not state that a probe naming deployments runs against deployments on the arm historical:<release>".
+- The arm-label stop dropped: "two probes on one historical arm at two pre-fix origins exited 4; expected 10 naming the arm" (eval-quality's `preflight` then refuses the two probes' shared witness leg).
+- The `registry` rules skipping deployment origins: "a deployment origin whose host a URL spells otherwise: check exited 0" and the auth-over-http case the same.
+
+After build review round 1, over the reworked code, the same way:
+
+- Every entry's deployments added to every call's policy: "the policy outside a deployment arm is [...,"http://127.0.0.1:4242","http://127.0.0.1:4343"]; expected the entry's own alone" and the deployment arm's policy holding four authorizations.
+- A deployment call starting the workspace's service (`|| deployment !== null` dropped): "the started service logged 14 start(s) and [...8 requests]; expected one start per request".
+- The access check over the pre-fix deployment alone: "a deployment-routed historical run exited 12; expected 0", the post-fix arm left with no authorization.
+- The fail-before arm given the post-fix deployment's access: "a deployment-routed historical run exited 11; expected 0".
+- Build review round 2's fix, the check before resolution, dropped: "an origin at an unlisted host gave ... after resolving [...]" and "the deployment units could not finish: DeploymentUnreachable: nowhere.example.test does not resolve (ENOTFOUND)".
+
+## Spec Change Log
+
+- 2026-09-26, build review round 1: the frozen decisions on the registry's deployments, the refusal and the exit 12 guard were rewritten by the build agent, which holds those decisions: a deployment joined every call's policy (findings A1, E2), so a redirect of a clean, mutated or fail-before arm could reach a deployment and a DNS failure on a deployment arm read as a denial (A2, E3); a deployment whose host did not resolve was refused where the same unreachability at connect time exits 12 (A3); `check` let `deployments: {}` through (A6, E1, V4); the arm identity read origins by their JSON spelling (A4, B4, E4); two releases differing only in case met in one trial directory (A5, E5).
+  Amended: a deployment arm's policy is the one authorization eval-quality allowed for its origin, and no other arm's policy holds a deployment; an unresolvable host is exit 12; `check` refuses an empty pair; the identity reads each origin as the port does; a case-only label difference exits 10; the exit 12 guard covers every boundary `check` refuses.
+  The known-bad state avoided: an arm answered by a target its label does not name.
+  KEEP: eval-quality's `evaluateTarget` decides every admission, the probe's `deployments` shape, the digests, the arm label, and the route needing no git history.
+- 2026-09-26: epics.md Story 1.32's four criteria gain dated amendments (the probe's and the registry's fields, the grader servers, the refusal's reason for either deployment, the unreachable host, the further `historical` and `registry` refusals); test-design-epic-1.md's Story 1.32 section gains an amendment note and its digest row names the declared identifiers; ARCHITECTURE-SPINE.md AD-4, AD-6, AD-7, AD-8 and AD-10 gain Story 1.32 amendments.
+- 2026-09-26: Story 1.38 (hold a deployment to the release it reports) appended to Epic 1 from the gap this build accepted, with a test-design section, an Epic Dependencies row, the overview's and the Epic List's counts, and a `backlog` row in sprint-status.yaml.
+
+## Review Triage Log
+
+### Build review round 1 (blind hunter B, edge-case hunter E, verification gap V, test quality T, adversarial A; all opus, on the uncommitted tree)
+
+| Finding     | Verdict | Evidence and disposition                                                                                                                                                                                                                                                                                                        |
+| ----------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A1, E2      | high    | `portConfiguration` added every deployment to every call's policy; the reviewer fed the working tree's policies to eval-quality's `evaluateTarget`, and a clean arm's redirect to a deployment was allowed; fixed: a deployment arm's policy is the one authorization eval-quality allowed, and no other arm's policy holds one |
+| A2, E3      | medium  | the template's unresolved-host path reports the first denial, which named another authorization (`host-not-authorized`, exit 10) on a deployment arm; fixed by A1's one authorization per interface, which restores the template's premise                                                                                      |
+| A3          | medium  | an unresolvable host was refused (exit 0) where an unreachable one exits 12; fixed: `DeploymentUnreachable`, exit 12, docs and AD-10 name it                                                                                                                                                                                    |
+| A4, B4, E4  | medium  | `routeIdentity` compared `JSON.stringify` of origins, so key order or `:80` spelling gave a false exit 10; fixed: each origin read by `originTarget`, interfaces sorted, a unit                                                                                                                                                 |
+| A5, E5      | low     | the release pattern admits case, and `trials/historical-V1` and `-v1` meet on a case-insensitive file system (exit 12 as tampering); fixed: a case-only label difference exits 10                                                                                                                                               |
+| A6, E1, V4  | low     | `deployments: {}` passed `check` and exited 12 at run; fixed: `check` refuses it, a `test:evaluate-check` case                                                                                                                                                                                                                  |
+| A6b, B5, B6 | medium  | the runtime guard covered neither boundary and origins off the registry's HTTP interfaces only through `check`; fixed: `deploymentPair` covers every boundary `check` refuses, units for each                                                                                                                                   |
+| B7, E6      | medium  | the DNS lookup had no ceiling and ignored the signal; fixed: `resolveFirst` bounds it by the entry's `maxElapsedMs` and the run's signal, a stalled-host unit                                                                                                                                                                   |
+| A7          | low     | a deployment leg's and trial's evidence named no origin; fixed: observations, faults and trial evidence carry `origins`                                                                                                                                                                                                         |
+| A8, B8      | low     | the reference said any entry's own origin could admit a deployment and missed two passages; fixed: "a deployed entry's own origin", the `preflight` step and the trials paragraph                                                                                                                                               |
+| A9, B2, E7  | low     | sprint-status said `in-progress` and the tasks were unchecked; fixed at the end of the build (`review`, checked)                                                                                                                                                                                                                |
+| A10         | low     | "never both" in the probe schema and the frozen decision is the rejected-half form; rewritten "exactly one of"; the spine's multi-sentence amendment bullets keep the spine's existing bullet style, skipped for consistency with every earlier amendment                                                                       |
+| B1          | low     | the story file failed Prettier; fixed with `npx prettier --write`                                                                                                                                                                                                                                                               |
+| B3, T8      | low     | the deployments block split the R-101 comment from `RUBRIC`; moved above the judge banner                                                                                                                                                                                                                                       |
+| B9, V-other | medium  | no automated case for the exit 12 guard; fixed: `deploymentPair` units (the runtime path needs `check` skipped, which no CLI flag allows)                                                                                                                                                                                       |
+| B10         | low     | the worktree-versus-deployment collision was untested; fixed: `routeIdentity` units name a worktree and a deployment apart; an end-to-end case needs a git project with an HTTP target, which no fixture offers, so the unit carries it                                                                                         |
+| B11         | false   | per-deployment credentials: one credential per interface is the registry's model since Story 1.11, no criterion or plan item names a need for another, and an absent unneeded capability is left out                                                                                                                            |
+| B12         | low     | duplicate `deployments` items; fixed: `uniqueItems` on the list                                                                                                                                                                                                                                                                 |
+| V1, T2      | medium  | nothing caught a deployment call starting the workspace's service; fixed: the case holds starts to requests one for one, and the revert fails it                                                                                                                                                                                |
+| V2, T4      | medium  | an unauthorized post-fix deployment was untested; fixed: the case runs both sides                                                                                                                                                                                                                                               |
+| V3          | low     | `run.json`'s runner `deployments` was unasserted; fixed                                                                                                                                                                                                                                                                         |
+| T1          | medium  | the deployment servers outlived a suite killed by a signal; fixed: a standard-input lifeline, and the case stops its servers in `finally`                                                                                                                                                                                       |
+| T3          | low     | the "every HTTP interface" half of the origins rule was untested; fixed: the misnamed case names another interface in place of the registry's                                                                                                                                                                                   |
+| T6          | low     | the reference case passed with `### From worktrees` deleted; fixed: each subsection read under its exact heading                                                                                                                                                                                                                |
+| T7          | low     | a missing `observations/` or `trial-sets.json` threw and hid the later scenarios; fixed: guarded reads                                                                                                                                                                                                                          |
+| T9          | false   | the check cases' extra findings: each case's substring names its own rule's message, which the reverts showed to be the catching assertion; no change                                                                                                                                                                           |
+
+### Build review round 2 (bounded to the round 1 fixes, regressions and material defects; opus, on the uncommitted tree)
+
+| Finding | Verdict | Evidence and disposition                                                                                                                                                                                                                                                                                                                                                                  |
+| ------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R2-1    | medium  | `deploymentAccess` resolved the host before asking the policy, so an unlisted host or a wrong port on a name that does not resolve exited 12 as unreachable where the port template refuses it; reproduced in the reviewer's scratch copy; fixed: each candidate is asked with no address first, and an origin none admits apart from the address is refused before any lookup, two units |
+
+The reviewer found every round 1 fix closed against the code, and the three suites green (343, 605 and 262 checks).
+
+## Verification
+
+**Commands:**
+
+- `npm run test:evaluate-arms`, `npm run test:evaluate-check`, `npm run test:evaluate-api` -- expected: every case passes over real eval-quality 4.3.0.
+- `npm test` -- expected: green.
+
+**Results:**
+
+- the Build Rules engine check -- exit 0 at the start and at the end on eval-quality 4.3.0; `git diff -- package.json package-lock.json` names no `file:` or `.tgz` spec (neither file changed).
+- `npm run test:evaluate-arms` 345 checks, `test:evaluate-check` 605, `test:evaluate-api` 262, `test:evaluate-preflight` 232, `test:evaluate-run` 389, `test:evaluate-boundaries` 306 -- exit 0; arms and api each passed three times while other suites ran at the same time (with check, preflight, run and the full `npm test` chain).
+- `npm run lint`, `lint:md`, `format:check`, `docs:validate-links`, `docs:build`, `test:doc-claims`, `test:doc-counts`, `test:direction`, `test:ci-coverage` (eighty-eight chained steps), `test:shards`, `test:bmad-output-gated`, `test:changelog` -- exit 0; no `package.json` or workflow changed, so `test:release-metadata` runs only inside the chain.
+- `npm test` -- exit 0 over the finished tree; the pre-commit hook runs it again.
+- `npm run eval:preflight` -- exit 2, 0 legs run and 190 answered from the cache, with the six test-design moves Story 1.27 owns (P-008 to P-010 pass where the baseline records `seeded-fault-fired`; P-012 to P-014 fail `seeded-faults-scoped`), as Stories 1.10, 1.11 and 1.17 recorded.
+- skill gates -- not applicable: no file under the Evaluate skill changed.

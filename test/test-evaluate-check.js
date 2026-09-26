@@ -204,6 +204,22 @@ const UNPRINTABLE_PATH_CHARACTERS = [
   ['an Arabic letter mark (U+061C)', '\u061C'],
 ];
 
+/** Two deployments of the target, each an origin for the interface `grader`. */
+const DEPLOYMENTS = {
+  preFix: { release: 'grader-1.4.2', origins: { grader: 'http://127.0.0.1:41001' } },
+  fix: { release: 'grader-1.4.3', origins: { grader: 'http://127.0.0.1:41002' } },
+};
+
+/** P-002 as a historical probe with a natural defect whose qualification carries `boundary`, on the historical arm. */
+function plantHistorical(folder, boundary) {
+  editJson(folder, 'probes/P-002.probe.json', (value) => {
+    value.qualification = { route: 'historical', ...boundary };
+    value.defects[0].source = 'natural';
+  });
+  editJson(folder, 'evaluation.json', (value) => (value.arms = ['clean', 'historical']));
+  fs.rmSync(path.join(folder, 'mutations'), { recursive: true });
+}
+
 function sha256Hex(bytes) {
   return crypto.createHash('sha256').update(bytes).digest('hex');
 }
@@ -1067,6 +1083,58 @@ const HARDENING_CASES = [
       editJson(folder, 'evaluation.json', (value) => (value.arms = ['clean', 'historical']));
     },
     expect: (output) => [[output.includes('0 defect(s)'), 'the finding does not count the defects']],
+  },
+  {
+    name: 'a historical probe naming neither a fix commit nor deployments',
+    file: 'probes/P-002.probe.json',
+    rule: 'historical',
+    plant: (folder) => plantHistorical(folder, {}),
+    expect: (output) => [[output.includes('names its fix boundary'), 'the finding does not ask for a fix boundary']],
+  },
+  {
+    name: 'a deployment-routed probe naming neither deployment',
+    file: 'probes/P-002.probe.json',
+    rule: 'historical',
+    plant: (folder) => plantHistorical(folder, { deployments: {} }),
+    expect: (output) => [
+      [output.includes('names deployments and neither a preFix nor a fix deployment'), 'the finding does not name the empty pair'],
+    ],
+  },
+  {
+    name: 'a deployment-routed probe naming one deployment but not the other',
+    file: 'probes/P-002.probe.json',
+    rule: 'historical',
+    plant: (folder) => plantHistorical(folder, { deployments: { preFix: DEPLOYMENTS.preFix } }),
+    expect: (output) => [
+      [output.includes('names the preFix deployment and no fix deployment'), 'the finding does not name the missing deployment'],
+    ],
+  },
+  {
+    name: 'a deployment-routed probe naming both deployments and a fix commit',
+    file: 'probes/P-002.probe.json',
+    rule: 'historical',
+    plant: (folder) => plantHistorical(folder, { fixCommit: 'a1b2c3d', deployments: DEPLOYMENTS }),
+    expect: (output) => [[output.includes('names both a fixCommit and deployments'), 'the finding does not name both boundaries']],
+  },
+  {
+    name: 'a deployment-routed probe naming one release for both deployments',
+    file: 'probes/P-002.probe.json',
+    rule: 'historical',
+    plant: (folder) =>
+      plantHistorical(folder, {
+        deployments: { preFix: DEPLOYMENTS.preFix, fix: { ...DEPLOYMENTS.fix, release: DEPLOYMENTS.preFix.release } },
+      }),
+    expect: (output) => [[output.includes('for both deployments'), 'the finding does not name the shared release']],
+  },
+  {
+    name: 'a deployment-routed probe beside a command registry entry',
+    file: 'probes/P-002.probe.json',
+    rule: 'historical',
+    plant: (folder) => plantHistorical(folder, { deployments: DEPLOYMENTS }),
+    expect: (output) => [
+      [output.includes('reaches over HTTP alone'), 'the finding does not name the command entry'],
+      [output.includes('deployments.preFix.origins names'), 'the finding does not hold the origins to the HTTP interfaces'],
+    ],
   },
   {
     name: 'a historical probe whose fix commit is a ref name',

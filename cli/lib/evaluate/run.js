@@ -17,12 +17,14 @@
  *   2. every arm a probe needs, `evaluation.json`'s `trials` times: the clean
  *      arm (`conditionArm: clean`) for the clean controls, one mutated arm per
  *      mutation (`mutated:<mutationId>`) for the probes it seeds, one
- *      historical arm per pre-fix revision (`historical:<preFixSha>`) for the
+ *      historical arm per pre-fix revision or pre-fix deployment
+ *      (`historical:<preFixSha>`, `historical:<pre-fix release>`) for the
  *      historical probes the preflight qualified, and one gameability arm per
  *      gameability probe (`gameability:<probeId>`); each trial runs the
  *      interaction plan once, in a workspace of its own that reproduces the
  *      pristine one (with the mutation applied and its digest held to the one
- *      the qualification measured) or the pre-fix one, or, on a gameability
+ *      the qualification measured) or the pre-fix one (a deployment arm's
+ *      HTTP calls reaching the pre-fix deployment), or, on a gameability
  *      arm, answered from the degenerate response with nothing launched, and
  *      is judged by the evaluation layer `evaluation.json` declares
  *      (`evaluators.js`, AD-21): by default the deterministic evaluator
@@ -126,7 +128,8 @@ const FORBIDDEN_INPUT_NOTE =
 /**
  * What `run.json` says ran for one registry entry: a command's executable and
  * target, a tool server's target, arguments and tools, or an HTTP target's
- * address, methods, server and the digest of the evaluation's HTTP port.
+ * address, the deployment origins it authorizes, methods, server and the
+ * digest of the evaluation's HTTP port.
  */
 function runnerOf(entry, registry) {
   if (entry.kind === 'mcp') {
@@ -140,6 +143,7 @@ function runnerOf(entry, registry) {
       host: entry.host,
       ...(entry.port === undefined ? {} : { port: entry.port }),
       addresses: entry.addresses,
+      ...(entry.deployments === undefined ? {} : { deployments: entry.deployments }),
       methods: entry.methods,
       ...(entry.server === undefined ? {} : { server: { target: entry.server.target, targetArgs: entry.server.targetArgs } }),
       httpProbePortDigest: registry.httpPort?.digest ?? null,
@@ -364,7 +368,8 @@ async function qualifyCleanControls({
 /**
  * One trial of one arm: on a mutated or historical arm, in a workspace of its
  * own reproducing the pristine or the pre-fix one (the mutated arm's mutation
- * applied and held to the digest the qualification measured), the plan run
+ * applied and held to the digest the qualification measured; a deployment
+ * arm's HTTP calls sent to the pre-fix deployment's origins), the plan run
  * once; on a gameability arm, the plan answered from the degenerate response
  * with nothing launched. The plan's observations are `evaluator-chosen`,
  * since the plan is the evaluation's own exercise of the target, except under
@@ -435,7 +440,11 @@ async function runTrial(context) {
     const problems = registry.targetProblems(workspace.root);
     if (problems.length > 0)
       throw stop({ stage: 'trial', exitCode: 12, message: `${label}: the registry cannot launch: ${problems.join('; ')}` });
-    const { port: adapter } = await registry.createProbePort({ cwd: workspace.root, projectRoot: workspace.root });
+    const { port: adapter } = await registry.createProbePort({
+      cwd: workspace.root,
+      projectRoot: workspace.root,
+      deployment: arm.deployment ?? null,
+    });
     const port = hostEnvironmentPort({ port: adapter, registry });
     const began = Date.now();
     let executed;
@@ -446,6 +455,7 @@ async function runTrial(context) {
         conditionArm: arm.conditionArm,
         trialIndex,
         workspace: label,
+        ...(arm.deployment ? { origins: arm.deployment.origins } : {}),
         fault: {
           ...faultRecord(error),
           request: error?.request === undefined ? null : persistableRequest(error.request),
@@ -464,7 +474,7 @@ async function runTrial(context) {
       evidenceFile,
       executed,
       began,
-      evidence: { workspace: label },
+      evidence: { workspace: label, ...(arm.deployment ? { origins: arm.deployment.origins } : {}) },
       port,
       mounts: [
         `${workspace.kind} ${label}`,
@@ -735,14 +745,17 @@ async function runTrialSets(given) {
       probes: seededOn.map((entry) => entry.probe),
     });
   }
-  // A historical arm per pre-fix revision: its trials reproduce the pre-fix worktree its witness legs ran in.
+  // A historical arm per pre-fix revision or release: its trials reproduce the pre-fix worktree its witness legs ran
+  // in, or reach the pre-fix deployment they reached.
   for (const preFix of [...routesByRevision.keys()].sort()) {
+    const route = routesByRevision.get(preFix);
     arms.push({
       conditionArm: `historical:${preFix}`,
       slug: `historical-${preFix}`,
       mutation: null,
       mutatedDigest: null,
-      basis: routesByRevision.get(preFix).workspace,
+      basis: route.workspace,
+      deployment: route.deployment,
       probes: qualified.filter((entry) => entry.historical?.preFix === preFix).map((entry) => entry.probe),
     });
   }

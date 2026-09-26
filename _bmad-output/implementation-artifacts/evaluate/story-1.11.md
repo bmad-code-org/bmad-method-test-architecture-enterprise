@@ -2,7 +2,7 @@
 title: 'Story 1.11: Scaffold the HTTP probe port for `api` targets'
 type: 'feature'
 created: '2026-09-25'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '2d8ffc9c01084eeb9505bd54a7160d6dccbcd17b'

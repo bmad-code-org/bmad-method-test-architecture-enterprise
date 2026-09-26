@@ -529,6 +529,32 @@
           "minimum": 1,
           "maximum": 65535
         },
+        "deployments": {
+          "description": "Other origins this interface is deployed at, which a historical probe on the deployment route reaches (its pre-fix or its post-fix deployment). Each is an authorization of this interface with the entry's methods, safeMethods, maxRedirects, ceilings and auth. Before a deployment arm runs, eval-quality's evaluateTarget decides which of these (and, for an entry naming its port, the entry's own) allows the origin the probe names, and that one authorization is the arm's whole policy for the interface, so a redirect to any other origin is denied; no other arm's policy holds a deployment.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["scheme", "host", "port", "addresses"],
+            "properties": {
+              "scheme": { "description": "The deployment's scheme, http or https.", "enum": ["http", "https"] },
+              "host": {
+                "description": "The deployment's host, written as a URL spells it, as the entry's own host is (check holds it to that).",
+                "type": "string",
+                "minLength": 1
+              },
+              "port": { "description": "The deployment's port.", "type": "integer", "minimum": 1, "maximum": 65535 },
+              "addresses": {
+                "description": "The exact addresses eval-quality allows the deployment's host to resolve to, as for the entry's own addresses.",
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": { "type": "string", "minLength": 1 }
+              }
+            }
+          }
+        },
         "addresses": {
           "description": "The exact addresses eval-quality allows the host to resolve to, compared after parsing: a loopback, private, link-local or metadata address is allowed only when named here. An address the host resolves to that no entry names is denied (address-not-authorized) before any request is sent or any server starts.",
           "type": "array",
