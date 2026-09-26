@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-22-2026 18:09
-last_updated: 09-26-2026 02:43
+last_updated: 09-26-2026 05:45
 project: "bmad-method-test-architecture-enterprise: Evaluate"
 project_key: NOKEY
 tracking_system: file-system
@@ -67,7 +67,7 @@ development_status:
   1-29-record-what-a-live-run-spends: backlog
   1-30-send-principal-and-matcher-bindings: backlog
   1-31-sandbox-the-targets-file-system: backlog
-  1-32-qualify-a-historical-probe-against-two-addressable-deployments: review
+  1-32-qualify-a-historical-probe-against-two-addressable-deployments: done
   1-33-record-eval-qualitys-denial-reason-for-every-denied-call: backlog
   1-34-qualify-a-sealed-brief-agent-evaluator-before-its-verdicts-count: backlog
   1-35-judge-a-tool-server-that-crashes-mid-call: backlog

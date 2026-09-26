@@ -2,7 +2,7 @@
 title: 'Story 1.32: Qualify a historical probe against two addressable deployments'
 type: 'feature'
 created: '2026-09-26'
-status: 'review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '8c9a69a9671777a379f85673f96bff33eb82b96d'
@@ -220,6 +220,14 @@ Reverts exercised over the fixed tree, each in the checkout with the suite (or a
 - G2, `originKey` keying by spelling again: the `originKey`, `deploymentPair` and `routeIdentity` units fail, and the `check` case exits 0 with no finding.
 - G3, the authority comparison dropped: the five new `originTarget` units fail, each spelling read as an origin (`graderexample.test`, `grader.example.test`).
 - G5, the cases back on the command fixture: all three fail "is not the only finding".
+
+### Final review round 3 (bounded, on PR #244 at 2d77dcea)
+
+Pass: no regression from the round-2 fixes and no critical or high defect; `npm test` and the three evaluate suites run concurrently exited 0.
+Two items below the bound, each settled by the coordinator:
+
+- A Kelvin sign (U+212A) in a host passes the case-insensitive authority comparison, and `originKey` lower-cases it to `k`, so the shared-origin refusal still catches a pair spelled that way; no change.
+- A host name beside an address that resolves to it (`localhost` and `127.0.0.1`) reads as two deployments. Origin identity is the contract by design: two deployments behind one address are routine under name-based virtual hosting, so refusing a pair whose names resolve to one address would refuse real deployment pairs. A pair that does reach one stateless server fails qualification with exit 11; no change and no new story.
 
 ## Verification
 
