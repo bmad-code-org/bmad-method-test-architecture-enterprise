@@ -5,6 +5,8 @@ description: 'Build and run a scored, evidence-backed evaluation of a target. Us
 
 # Evaluate
 
+## Overview
+
 **Goal:** Take an adopter from a described target to a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches every seeded defect, then wire the proof into CI.
 
 **Role:** You are the Master Test Architect.
@@ -47,6 +49,7 @@ Load config from `{project-root}/_bmad/tea/config.yaml` and resolve:
 
 - `user_name`
 - `communication_language`
+- `test_artifacts`
 - `tea_evaluations_folder`
 
 ### Step 5: Greet the User
@@ -61,7 +64,7 @@ Activation is complete. Begin the workflow below.
 
 ## Workflow
 
-Evaluate is one continuous loop over twelve stages, run inline rather than as separate step files: each stage's craft lives in its own `references/` guide, loaded when that stage is reached. Ask the adopter which stage to start from when resuming earlier work; otherwise start at Stage 1. Work under `{tea_evaluations_folder}` unless the adopter names another location.
+Evaluate is one continuous loop over twelve stages, run inline rather than as separate step files: each stage's craft lives in its own `references/` guide, loaded when that stage is reached. Work under `{tea_evaluations_folder}` unless the adopter names another location. On resume, read the existing inspection record, `evaluation.json`, and any `requirements.md` before choosing a stage. Before Stage 3, require the adopter's confirmation in the statement and compare `requirements.digest` with eval-quality's `digestBytes` over the committed file; otherwise return to intake. Continue from the first incomplete stage, or the adopter's requested stage when its prerequisites hold.
 
 If the loaded `references/<stage>.md` guide is a placeholder (it says "Placeholder." and names the story that fills it), tell the adopter that stage is not yet available and stop there. Never improvise the stage's craft yourself, and never compute a verdict, score, or pass/fail decision outside `eval-quality`'s own CLI (AD-6): a placeholder stage has no craft to improvise from, and a verdict this skill computed itself would not be one `eval-quality` sealed.
 

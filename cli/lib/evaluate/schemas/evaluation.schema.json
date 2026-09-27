@@ -28,6 +28,23 @@
       "type": "string",
       "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
     },
+    "requirements": {
+      "description": "The confirmed requirements statement committed in this evaluation folder. Its digest is eval-quality's digestBytes over the exact requirements.md bytes. Story 2.2 checks the contract's sourceSpecDigest against this statement.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "digest"],
+      "properties": {
+        "path": {
+          "description": "The committed requirements statement in this evaluation folder, with no path traversal or external file reference.",
+          "const": "requirements.md"
+        },
+        "digest": {
+          "description": "eval-quality's digestBytes over the exact committed Markdown file bytes.",
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
     "targetKind": {
       "description": "What is evaluated (AD-4). Recorded only here, never in a contract.",
       "enum": ["agent", "skill", "workflow", "tool-use", "ai-feature", "test-review-mechanism"]

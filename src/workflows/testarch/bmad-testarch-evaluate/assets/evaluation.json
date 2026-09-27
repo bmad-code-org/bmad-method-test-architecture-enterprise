@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "evaluationId": "reservation-review",
+  "targetKind": "skill",
+  "interface": "cli",
+  "registry": [
+    {
+      "interfaceId": "reservation-review-runner",
+      "executable": "tea-skill-runner",
+      "target": "cli/skill-runner.js",
+      "subcommandPaths": [[]],
+      "artifacts": {},
+      "environmentKeys": [],
+      "maxElapsedMs": 30000,
+      "infrastructureExitCodes": [3, 4, 5, 6]
+    }
+  ],
+  "launch": {
+    "root": ".",
+    "skillRoot": "skills/reservation-review"
+  },
+  "workspace": {
+    "kind": "copy",
+    "provision": []
+  },
+  "arms": ["clean", "mutated"],
+  "trials": 3,
+  "tiers": ["pr", "scheduled"],
+  "strengthFloor": {
+    "defect": 1,
+    "zero-action": 1
+  },
+  "requirements": {
+    "path": "requirements.md",
+    "digest": "sha256:85cc708cb437d75b9840d525762189c48ecd089b8ad335e1027e15962f339c67"
+  }
+}
