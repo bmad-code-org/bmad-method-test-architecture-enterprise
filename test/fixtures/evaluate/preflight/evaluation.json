@@ -39,5 +39,8 @@
   ],
   "strengthFloor": {
     "zero-action": 1
+  },
+  "operationPhases": {
+    "answer-request": "outcome"
   }
 }

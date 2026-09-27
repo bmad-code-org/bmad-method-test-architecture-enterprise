@@ -271,6 +271,7 @@ function runRunCommand(folder, { fromWorkingTree = false, partition, env = proce
           .map(({ probe }) => probe.probeId),
         selectedProbeIds,
         heldOutProbes: [...heldOut],
+        operationPhases: structuredClone(context.evaluation.operationPhases ?? {}),
         partition: partition ?? 'both',
         calibration: readCalibration(folder),
         layer,
@@ -1231,12 +1232,14 @@ async function completeRun(
   } = context;
   const startedAt = context.started;
   writer.write('scoring-policy.json', snapshot.policyBytes);
+  writer.writeJson('operation-phases.json', snapshot.operationPhases);
   const corpusDigest = await corpusDigestOf(snapshot.index);
   const bytesDigest = (file) => engine.digestBytes(writer.read(file));
   // The bytes `score` reads, digested as the runtime wrote them, so it can
   // hold the run directory to what the run sealed.
   const artifacts = {
     contract: bytesDigest('eval-contract.json'),
+    operationPhases: bytesDigest('operation-phases.json'),
     evaluatorConfiguration: bytesDigest('evaluator-configuration.json'),
     preflightVerdict: bytesDigest('preflight-verdict.json'),
     probes: Object.fromEntries(trialSets.map((set) => [set.probeId, bytesDigest(set.probe)])),
@@ -1254,7 +1257,7 @@ async function completeRun(
     evaluatorConfiguration: 'evaluator-configuration.json',
     trialSets,
   });
-  retractUnlessSealed.push(TRIAL_SETS_NAME);
+  retractUnlessSealed.push(TRIAL_SETS_NAME, 'operation-phases.json');
   const result = outcome({
     stage: 'trial',
     exitCode: 0,
@@ -1276,6 +1279,7 @@ async function completeRun(
     evaluatorConfigurationDigest: configurationDigest,
     partition: snapshot.partition,
     heldOutProbes: snapshot.heldOutProbes,
+    operationPhases: snapshot.operationPhases,
     runner: registry.entries.map((entry) => runnerOf(entry, registry)),
     evaluator: evaluatorRecord,
     model,

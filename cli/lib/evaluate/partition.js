@@ -45,4 +45,4 @@ function writePartitionViews({ folder, runDirectory, scoreInvocationId, trialSet
     replaceView(runDirectory, name, value);
 }
 
-module.exports = { writePartitionViews };
+module.exports = { replaceView, writePartitionViews };

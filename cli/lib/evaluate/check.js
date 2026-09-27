@@ -1656,6 +1656,37 @@ function schemaVersionMessage(version) {
   );
 }
 
+/** A sealed observation has operationId but no interfaceId, so IDs must identify one operation. */
+function checkOperationPhases(report, evaluation, contract) {
+  if (!contract || !Array.isArray(contract.permittedInterfaces)) return;
+  const phases = evaluation.operationPhases === undefined ? {} : evaluation.operationPhases;
+  if (!phases || typeof phases !== 'object' || Array.isArray(phases)) return;
+  const operations = new Map();
+  for (const iface of contract.permittedInterfaces) {
+    if (!iface || !Array.isArray(iface.operations)) continue;
+    for (const operation of iface.operations) {
+      const id = operation?.operationId;
+      if (typeof id !== 'string') continue;
+      const previous = operations.get(id);
+      if (previous === undefined) operations.set(id, iface.logicalId);
+      else if (previous !== iface.logicalId) {
+        report.add(
+          MANIFEST_NAME,
+          'operation-phases',
+          `operation ${id} occurs in interfaces ${previous} and ${iface.logicalId}; sealed observations cannot distinguish them`,
+        );
+      }
+      if (!Object.hasOwn(phases, id)) report.add(MANIFEST_NAME, 'operation-phases', `contract operation ${id} has no phase`);
+    }
+  }
+  for (const id of Object.keys(phases)) {
+    if (!operations.has(id))
+      report.add(MANIFEST_NAME, 'operation-phases', `phase names operation ${id}, which the contract does not declare`);
+    if (phases[id] !== 'process' && phases[id] !== 'outcome')
+      report.add(MANIFEST_NAME, 'operation-phases', `operation ${id} has unknown phase ${JSON.stringify(phases[id])}`);
+  }
+}
+
 /**
  * Every finding in the evaluation folder.
  *
@@ -1692,6 +1723,7 @@ async function checkEvaluation(folder) {
 
   const behaviors = checkContract(report, folder, context);
   context.contract = contractFor(folder);
+  checkOperationPhases(report, evaluation, context.contract);
   checkRegistryKinds(report, evaluation, registry, context.contract);
   checkHttpPort(report, folder, registry);
   const mutations = checkMutations(report, folder, context, provision, skillRoot);

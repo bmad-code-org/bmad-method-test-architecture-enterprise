@@ -70,11 +70,13 @@ const { newInvocationId, readJson, writeJson } = require('./preflight');
 const { createArtifactValidator } = require('./records');
 const { TRIAL_SETS_NAME } = require('./run');
 const { writePartitionViews } = require('./partition');
+const { writeInterpretation } = require('./interpret');
 
 const Ajv = AjvModule.default ?? AjvModule;
 
 /** The exits a `score` call can pass through, most severe first. */
 const SEVERITY = [64, 5, 4, 3, 2, 0];
+const OPERATION_PHASES_NAME = 'operation-phases.json';
 const INFRASTRUCTURE = 12;
 const WIRING = 64;
 const AUTHORING = 10;
@@ -186,6 +188,35 @@ function combinedExit(codes) {
   return SEVERITY.find((code) => codes.includes(code)) ?? 0;
 }
 
+function phaseEntries(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? JSON.stringify(Object.entries(value).sort(([left], [right]) => left.localeCompare(right)))
+    : null;
+}
+
+/** A run snapshots the checked phase map before taking records. Refuse old or edited snapshots. */
+function phaseSnapshotProblems(run, contract) {
+  const phases = run.operationPhases;
+  if (phases === null || typeof phases !== 'object' || Array.isArray(phases)) return ['run.json carries no operationPhases snapshot'];
+  const problems = [];
+  const interfaces = new Map();
+  for (const iface of contract.permittedInterfaces) {
+    for (const operation of iface.operations) {
+      const id = operation.operationId;
+      const previous = interfaces.get(id);
+      if (previous !== undefined && previous !== iface.logicalId)
+        problems.push(`operation ${id} occurs on interfaces ${previous} and ${iface.logicalId}`);
+      interfaces.set(id, iface.logicalId);
+      if (!Object.hasOwn(phases, id)) problems.push(`operation ${id} has no phase in run.json`);
+    }
+  }
+  for (const [id, phase] of Object.entries(phases)) {
+    if (!interfaces.has(id)) problems.push(`run.json classifies undeclared operation ${id}`);
+    if (phase !== 'process' && phase !== 'outcome') problems.push(`run.json gives operation ${id} unknown phase ${JSON.stringify(phase)}`);
+  }
+  return problems;
+}
+
 /** Every finding in the run directory's inputs, before any engine call. */
 async function inputFindings({ folder, runDirectory, index, record, engine }) {
   const validate = createArtifactValidator();
@@ -251,6 +282,22 @@ async function inputFindings({ folder, runDirectory, index, record, engine }) {
 
   await read(index.contract, 'eval-contract');
   anchored(index.contract, recorded.contract, 'the compiled contract');
+  let phaseSnapshot;
+  try {
+    const bytes = regularFileBytes(inRun(runDirectory, OPERATION_PHASES_NAME));
+    phaseSnapshot = JSON.parse(bytes.toString('utf8'));
+    const actual = engine.digestBytes(bytes);
+    if (actual !== recorded.operationPhases)
+      add(
+        OPERATION_PHASES_NAME,
+        'run-integrity',
+        `digests to ${actual}, not the ${recorded.operationPhases ?? 'missing digest'} run.json recorded`,
+      );
+  } catch (error) {
+    add(OPERATION_PHASES_NAME, 'run-integrity', `cannot be read as a regular JSON file: ${error.message}`);
+  }
+  if (phaseSnapshot !== undefined && phaseEntries(phaseSnapshot) !== phaseEntries(record.operationPhases))
+    add('run.json', 'operation-phases', `operationPhases differs from the sealed ${OPERATION_PHASES_NAME}`);
   await read(index.preflightVerdict, 'preflight-verdict');
   anchored(index.preflightVerdict, recorded.preflightVerdict, 'the preflight verdict');
   await read(index.evaluatorConfiguration, 'evaluator-configuration');
@@ -310,6 +357,29 @@ async function inputFindings({ folder, runDirectory, index, record, engine }) {
       seenRecords.add(relative);
       const sealed = await read(relative, 'sealed-run-record');
       anchored(relative, recorded.records?.[relative], `a record of ${set.probeId}`);
+      if (sealed !== null && Array.isArray(sealed.observations) && Array.isArray(sealed.findings)) {
+        const observedIds = new Set(sealed.observations.map((observation) => observation.observationId));
+        if (record.operationPhases && typeof record.operationPhases === 'object') {
+          for (const observation of sealed.observations) {
+            if (!Object.hasOwn(record.operationPhases, observation.operationId))
+              add(
+                relative,
+                'operation-phases',
+                `observation ${observation.observationId} names unclassified operation ${observation.operationId}`,
+              );
+          }
+        }
+        for (const finding of sealed.findings) {
+          if (!Array.isArray(finding.observationIds) || finding.observationIds.length === 0)
+            add(relative, 'citation', `finding ${finding.findingId} cites no observation`);
+          if (!Array.isArray(finding.quotedEvidence) || finding.quotedEvidence.length === 0)
+            add(relative, 'citation', `finding ${finding.findingId} quotes no evidence`);
+          for (const id of finding.observationIds ?? []) {
+            if (!observedIds.has(id))
+              add(relative, 'citation', `finding ${finding.findingId} cites observation ${id}, which this record does not contain`);
+          }
+        }
+      }
       if (sealed === null || imported) continue;
       if (sealed.runId !== set.runId || sealed.conditionArm !== set.conditionArm) {
         add(
@@ -394,6 +464,11 @@ async function runScoreCommand(folder, { run: invocationId, env = process.env, l
 
   const engine = await loadEngine();
   const findings = await inputFindings({ folder, runDirectory, index, record: located.record, engine });
+  if (findings.length === 0) {
+    const contract = regularJson(inRun(runDirectory, index.contract));
+    for (const message of phaseSnapshotProblems(located.record, contract))
+      findings.push({ file: 'run.json', rule: 'operation-phases', message });
+  }
   if (findings.length > 0) {
     return new ScoreOutcome({
       exitCode: AUTHORING,
@@ -502,6 +577,15 @@ async function runScoreCommand(folder, { run: invocationId, env = process.env, l
     trialSets: index.trialSets,
     scores,
     heldOutProbes: located.record.heldOutProbes,
+  });
+  writeInterpretation({
+    folder,
+    runDirectory,
+    scoreInvocationId,
+    trialSets: index.trialSets,
+    scores,
+    contractPath: index.contract,
+    operationPhases: located.record.operationPhases,
   });
   return new ScoreOutcome({
     exitCode,

@@ -42,5 +42,8 @@
     "kind": "command",
     "command": "evaluator/promptfoo.mjs",
     "timeoutMs": 60000
+  },
+  "operationPhases": {
+    "summarize": "outcome"
   }
 }

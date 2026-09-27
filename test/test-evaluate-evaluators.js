@@ -1825,6 +1825,44 @@ async function checkRecordsEvaluator() {
   checkVotes('a records run', evidence, 'P-001', 'passed-clean-control');
   checkVotes('a records run', evidence, 'P-002', 'caught');
 
+  // An imported observation finding is schema-valid without citations or quotes, but interpretation requires both.
+  const uncitedRelative = index.trialSets.find((set) => set.probeId === 'P-002').records[0];
+  const uncitedFile = path.join(runDirectory, uncitedRelative);
+  const uncitedOriginal = fs.readFileSync(uncitedFile);
+  const runFile = path.join(runDirectory, 'run.json');
+  const runOriginal = fs.readFileSync(runFile);
+  editJson(uncitedFile, (record) => {
+    record.findings.push({
+      findingType: 'observation',
+      findingId: 'F-999',
+      oracleId: null,
+      probeId: 'P-002',
+      behaviorId: null,
+      severity: 'low',
+      summary: 'Imported note with no cited evidence.',
+      confidence: 1,
+      observationIds: [],
+      evidenceArtifacts: [],
+    });
+  });
+  editJson(runFile, (value) => (value.artifacts.records[uncitedRelative] = sha256(fs.readFileSync(uncitedFile))));
+  const noCitationLog = path.join(scratch.make('records-no-citation'), 'argv.jsonl');
+  const noCitation = evaluate(['score', '--evaluation', project.folder, '--run', path.basename(runDirectory)], {
+    ...project.env,
+    [ENGINE_CLI_ENV]: ENGINE_SHIM,
+    TEA_EVALUATE_SHIM_LOG: noCitationLog,
+  });
+  check(
+    noCitation.status === 10 &&
+      noCitation.output.includes('F-999') &&
+      noCitation.output.includes('cites no observation') &&
+      noCitation.output.includes('quotes no evidence'),
+    `score accepted an imported finding without citations or quotes: ${noCitation.output}`,
+  );
+  check(!fs.existsSync(noCitationLog), 'score called eval-quality for an imported finding without citations or quotes');
+  fs.writeFileSync(uncitedFile, uncitedOriginal);
+  fs.writeFileSync(runFile, runOriginal);
+
   // score hands eval-quality the adopter's own bytes: the logging shim's --record files equal the harness's.
   const log = path.join(scratch.make('records-shim'), 'argv.jsonl');
   scoreRun(project, 'a records run under the shim', 0, { [ENGINE_CLI_ENV]: ENGINE_SHIM, TEA_EVALUATE_SHIM_LOG: log });
