@@ -8,11 +8,23 @@
       "interfaceId": "records",
       "executable": "records",
       "target": "bin/records.js",
-      "subcommandPaths": [["create"], ["read"]],
+      "subcommandPaths": [
+        [
+          "create"
+        ],
+        [
+          "read"
+        ]
+      ],
       "artifacts": {},
-      "environmentKeys": ["RECORDS_LOG", "RECORDS_OMIT_ID"],
+      "environmentKeys": [
+        "RECORDS_LOG",
+        "RECORDS_OMIT_ID"
+      ],
       "maxElapsedMs": 30000,
-      "infrastructureExitCodes": [3]
+      "infrastructureExitCodes": [
+        3
+      ]
     }
   ],
   "launch": {
@@ -22,11 +34,20 @@
     "kind": "copy",
     "provision": []
   },
-  "arms": ["clean", "mutated"],
+  "arms": [
+    "clean",
+    "mutated"
+  ],
   "trials": 3,
-  "tiers": ["pr"],
+  "tiers": [
+    "pr"
+  ],
   "strengthFloor": {
     "defect": 1,
     "zero-action": 1
+  },
+  "operationPhases": {
+    "create": "process",
+    "read-back": "outcome"
   }
 }

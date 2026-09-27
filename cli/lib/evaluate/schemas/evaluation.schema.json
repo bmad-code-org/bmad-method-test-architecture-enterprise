@@ -36,6 +36,12 @@
       "description": "The interface kind the contract declares. A web application maps to api; web is never emitted.",
       "enum": ["cli", "api", "mcp"]
     },
+    "operationPhases": {
+      "description": "Phase of every permitted contract operation. Operation IDs must be unique across interfaces because sealed observations name only operationId.",
+      "type": "object",
+      "propertyNames": { "minLength": 1 },
+      "additionalProperties": { "enum": ["process", "outcome"] }
+    },
     "registry": {
       "description": "The execution-target registry: every command a run may spawn (a RegistryEntry), every stdio MCP tool server it may start (an McpRegistryEntry, kind mcp) and every HTTP target it may reach (an ApiRegistryEntry, kind api). The runtime builds eval-quality's default-deny CommandTargetPolicy, McpTargetPolicy and ProbeTargetPolicy from these entries for the workspace each call runs in, so a target the registry does not name is denied before a process starts or a request is sent.",
       "type": "array",

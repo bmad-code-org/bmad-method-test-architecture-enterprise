@@ -23,7 +23,7 @@ inputDocuments:
 
 ## Overview
 
-This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and forty-six stories (Stories 1.27 to 1.41 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
+This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and forty-eight stories, including H.1 (Stories 1.27 to 1.42 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
 
 Evaluate is fully stacked. The stack runs system under test, then the evaluation (the mechanism that runs the system, collects evidence and makes judgments), then the Behavioral Evaluation Contract (what behavior matters, what evidence counts, how success and failure resolve), then eval-quality (contract sanity, evidence support, and whether the evaluation catches defects). TeA owns every layer above eval-quality, including each concern eval-quality states it leaves to the caller, so an adopter can evaluate any target end to end. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3 onward, Epic 2 and H.1 to close the plan gap audit; the Traceability section maps each audit item to the story that closes it.
 
@@ -139,7 +139,7 @@ None. Evaluate has no graphical interface.
 | FR7 (CAP-7)   | 1.7, 1.9, 1.14, 1.16                        |
 | FR8 (CAP-8)   | 1.8, 1.14                                   |
 | FR9 (CAP-9)   | 1.6, 1.8, 1.14, 1.16, 1.17                  |
-| FR10 (CAP-10) | 1.14, 1.16, 1.22, 1.25                      |
+| FR10 (CAP-10) | 1.14, 1.16, 1.22, 1.25, 1.42                |
 | FR11 (CAP-11) | 2.2, 2.3, 2.4, 2.5, H.1                     |
 | FR12 (CAP-12) | 1.8, 2.1, 2.5, H.1                          |
 | FR13 (CAP-13) | 1.17, 1.19, 1.20, 1.23, 1.26                |
@@ -150,7 +150,7 @@ None. Evaluate has no graphical interface.
 ### Epic 1: The Evaluate authoring loop
 
 An adopter describes a target, answers Evaluate's questions, chooses or builds the evaluation layer and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches the seeded defect, with the gaps named and closed. The epic closes by running Evaluate on `bmad-testarch-evaluate` itself, then proving the guidance on two more target kinds, on seeded weaknesses and on an evaluation framework its guides never name.
-Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.41.
+Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.42.
 
 **FRs covered:** FR1 to FR10, FR13, FR14.
 
@@ -207,12 +207,13 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 39    | 1.39  | 1.18                         |
 | 40    | 1.40  | 1.17, 1.21                   |
 | 41    | 1.41  | 1.8, 1.21                    |
-| 42    | 2.1   | 1.16, 1.26                   |
-| 43    | 2.2   | 2.1                          |
-| 44    | 2.3   | 2.2                          |
-| 45    | 2.4   | 2.3                          |
-| 46    | 2.5   | 2.4                          |
-| 47    | H.1   | 2.5                          |
+| 42    | 1.42  | 1.22                         |
+| 43    | 2.1   | 1.16, 1.26                   |
+| 44    | 2.2   | 2.1                          |
+| 45    | 2.3   | 2.2                          |
+| 46    | 2.4   | 2.3                          |
+| 47    | 2.5   | 2.4                          |
+| 48    | H.1   | 2.5                          |
 
 ## Epic 1: The Evaluate authoring loop
 
@@ -1221,6 +1222,27 @@ So that a target process cannot redirect a score write into my working tree (AD-
 
 **Dependencies:** 1.8, 1.21.
 **Gate:** `npm test`, `npm run docs:validate-links`, `npm run docs:build`, engine check.
+
+### Story 1.42: Attribute reused operation IDs to their interfaces
+
+Added 2026-09-26 in Story 1.22. Eval-quality permits the same `operationId` on two interfaces, while a sealed observation records only `operationId`. Story 1.22 refuses that contract during `check` so a scored finding cannot be assigned the wrong phase. Supporting this valid contract shape requires interface identity in the sealed observation and an interface-qualified phase map.
+
+As an adopter whose contract reuses an operation ID on two interfaces,
+I want interpretation to identify which interface produced each cited observation,
+So that process and outcome findings keep their correct phase (AD-23).
+
+**Acceptance Criteria:**
+
+**Given** two permitted interfaces declaring the same operation ID with distinct phases
+**When** the published eval-quality sealed-record schema and TeA's runtime record an observation on either interface
+**Then** each observation carries its `interfaceId` beside `operationId`, and the schema rejects an observation missing that identity; a real two-interface fixture fails if either adapter omits the field
+**And** `evaluation.json` classifies interface-operation pairs, `check` accepts exact coverage of both and exits 10 for a missing or undeclared pair; reverting the pair check admits one of those bad cases
+**When** `tea-evaluate score` writes `interpretation.json`
+**Then** every citation includes `interfaceId` and the phase of that exact pair; process and outcome references stay separate even when operation IDs match, and removing interface identity makes an integration assertion fail
+**And** a record from the prior schema version is refused with a named compatibility finding, while the runtime's engine floor and lockfile name the published eval-quality version that carries interface identity; accepting a prior record or lowering the floor fails the integration and release-metadata checks
+
+**Dependencies:** 1.22 and a published eval-quality release carrying interface identity in sealed observations.
+**Gate:** `npm test`, `npm run test:release-metadata`, engine check.
 
 ## Epic 2: Continuous proof in CI
 

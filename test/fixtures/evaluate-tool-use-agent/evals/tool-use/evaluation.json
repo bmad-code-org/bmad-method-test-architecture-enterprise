@@ -42,5 +42,8 @@
     "kind": "command",
     "command": "evaluator/trajectory.mjs",
     "timeoutMs": 30000
+  },
+  "operationPhases": {
+    "call-weather-tool": "process"
   }
 }

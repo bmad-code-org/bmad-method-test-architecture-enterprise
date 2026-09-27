@@ -52,7 +52,7 @@ development_status:
   1-19-evaluate-a-tool-use-calling-agent-through-its-own-command-j: done
   1-20-import-a-second-framework-s-results-promptfoo: done
   1-21-hold-out-probes-and-calibrate-rubric-judges: done
-  1-22-attribute-findings-for-interpretation: backlog
+  1-22-attribute-findings-for-interpretation: review
   1-12-inspect-the-target-capture-requirements-and-design-the-corpu: backlog
   1-13-author-the-contract-oracles-rubrics-and-adapter-wiring: backlog
   1-23-teach-choosing-and-building-the-evaluation-layer: backlog
@@ -77,6 +77,7 @@ development_status:
   1-39-tell-a-captured-value-too-large-to-launch-from-a-target-tha: backlog
   1-40-calibrate-rubric-scores-imported-from-harness-records: backlog
   1-41-confine-score-output-during-concurrent-run-directory-changes: backlog
+  1-42-attribute-reused-operation-ids-to-their-interfaces: backlog
   epic-1-retrospective: optional
 
   epic-2: backlog

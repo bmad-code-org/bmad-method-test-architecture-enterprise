@@ -116,6 +116,45 @@ function editJson(folder, relative, edit) {
   fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
 }
 
+function checkOperationPhaseCoverage() {
+  for (const [label, mutate, named] of [
+    ['absent', (folder) => editJson(folder, 'evaluation.json', (value) => delete value.operationPhases), 'generate-red-phase-tests'],
+    ['missing', (folder) => editJson(folder, 'evaluation.json', (value) => (value.operationPhases = {})), 'generate-red-phase-tests'],
+    ['unknown', (folder) => editJson(folder, 'evaluation.json', (value) => (value.operationPhases.undeclared = 'process')), 'undeclared'],
+    [
+      'invalid',
+      (folder) => editJson(folder, 'evaluation.json', (value) => (value.operationPhases['generate-red-phase-tests'] = 'setup')),
+      'generate-red-phase-tests',
+    ],
+    [
+      'ambiguous',
+      (folder) =>
+        editJson(folder, 'contract.json', (value) => {
+          const other = structuredClone(value.permittedInterfaces[0]);
+          other.logicalId = 'second-interface';
+          value.permittedInterfaces.push(other);
+        }),
+      'generate-red-phase-tests',
+    ],
+  ]) {
+    const folder = copyValid();
+    mutate(folder);
+    const result = runCli(['check', '--evaluation', folder]);
+    check(result.status === 10, `${label} operation phase exited ${result.status}, expected 10\n${result.output}`);
+    check(result.output.includes(named), `${label} operation phase did not name ${named}\n${result.output}`);
+    check(result.output.includes('operation-phases'), `${label} operation phase did not name its rule\n${result.output}`);
+  }
+  const repeated = copyValid();
+  editJson(repeated, 'contract.json', (value) =>
+    value.permittedInterfaces[0].operations.push(structuredClone(value.permittedInterfaces[0].operations[0])),
+  );
+  const result = runCli(['check', '--evaluation', repeated]);
+  check(
+    !result.output.includes('[operation-phases]'),
+    `an operation repeated on the same interface was reported as cross-interface ambiguity\n${result.output}`,
+  );
+}
+
 /** Sets the fixture's one registry entry's infrastructure exit codes. */
 function setInfrastructureCodes(folder, codes) {
   editJson(folder, 'evaluation.json', (value) => (value.registry[0].infrastructureExitCodes = codes));
@@ -2190,6 +2229,7 @@ const CLEAN_CASES = [
       const api = structuredClone(example.permittedInterfaces.find((candidate) => candidate.logicalId === 'thing-api'));
       api.operations = [api.operations[0]];
       editJson(folder, 'contract.json', (value) => value.permittedInterfaces.push(api));
+      editJson(folder, 'evaluation.json', (value) => (value.operationPhases[api.operations[0].operationId] = 'outcome'));
       editJson(folder, 'probes/P-002.probe.json', (value) => {
         value.defects[0].manifestationWitness = {
           legId: 'manifest-api',
@@ -2598,6 +2638,7 @@ async function main() {
     checkEngineAbsent();
     checkUsage();
     await checkDefectCases();
+    checkOperationPhaseCoverage();
     checkSymlinkRefused();
     checkForgedFindingLine();
     await checkRuntimeUnits();

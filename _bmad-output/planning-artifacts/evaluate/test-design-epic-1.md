@@ -690,6 +690,17 @@ Added 2026-09-26 in Story 1.21. Levels: end-to-end over real eval-quality, integ
 | Stage provenance and evidence remain replayable     | Compare recorded argv and stream bytes with the actual stage call; direct eval-quality re-score reproduces the persisted evidence digest                                    | Integration                       | P0  | A false argv or unverified copy fails provenance or digest equality |
 | The reference explains integrity refusal            | Read the score-output section and check the named exit and safe location                                                                                                    | Static                            | P2  | Removing the section fails the read                                 |
 
+### Story 1.42: Attribute reused operation IDs to their interfaces
+
+Added 2026-09-26 in Story 1.22. Levels: contract, integration over real eval-quality. Files: `test/test-evaluate-check.js` (`test:evaluate-check`) and `test/test-evaluate-interpret.js` (`test:evaluate-interpret`).
+
+| AC                                            | Test                                                                                                                           | Level                              | P   | Revert check                                                    |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------- | --- | --------------------------------------------------------------- |
+| Sealed observations name their interface      | A two-interface fixture exercises both routes and validates each sealed record against the published schema                    | Integration over real eval-quality | P0  | Removing either adapter's `interfaceId` fails record validation |
+| Pair phases cover exactly the contract        | Missing and extra interface-operation keys each make `check` exit 10; both declared pairs pass                                 | Contract                           | P1  | Removing the coverage rule admits an invalid pair               |
+| Reused operation IDs retain distinct phases   | Score both interfaces, compare each citation's interface and phase with its record and manifest, and inspect the phase lists   | Integration over real eval-quality | P0  | Dropping interface identity misclassifies one finding           |
+| Prior records and engine versions are refused | A prior-version record fails with a named compatibility finding; inspect the published engine floor and lockfile after release | Contract                           | P1  | Accepting an old record or floor fails the fixture              |
+
 ## The Dogfood Proof (AD-15)
 
 ### What the run must produce

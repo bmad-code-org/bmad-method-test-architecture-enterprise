@@ -47,5 +47,8 @@
   "strengthFloor": {
     "defect": 1,
     "zero-action": 1
+  },
+  "operationPhases": {
+    "generate-red-phase-tests": "outcome"
   }
 }
