@@ -76,6 +76,7 @@ const Ajv = AjvModule.default ?? AjvModule;
 
 /** The exits a `score` call can pass through, most severe first. */
 const SEVERITY = [64, 5, 4, 3, 2, 0];
+const OPERATION_PHASES_NAME = 'operation-phases.json';
 const INFRASTRUCTURE = 12;
 const WIRING = 64;
 const AUTHORING = 10;
@@ -187,6 +188,12 @@ function combinedExit(codes) {
   return SEVERITY.find((code) => codes.includes(code)) ?? 0;
 }
 
+function phaseEntries(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? JSON.stringify(Object.entries(value).sort(([left], [right]) => left.localeCompare(right)))
+    : null;
+}
+
 /** A run snapshots the checked phase map before taking records. Refuse old or edited snapshots. */
 function phaseSnapshotProblems(run, contract) {
   const phases = run.operationPhases;
@@ -275,6 +282,22 @@ async function inputFindings({ folder, runDirectory, index, record, engine }) {
 
   await read(index.contract, 'eval-contract');
   anchored(index.contract, recorded.contract, 'the compiled contract');
+  let phaseSnapshot;
+  try {
+    const bytes = regularFileBytes(inRun(runDirectory, OPERATION_PHASES_NAME));
+    phaseSnapshot = JSON.parse(bytes.toString('utf8'));
+    const actual = engine.digestBytes(bytes);
+    if (actual !== recorded.operationPhases)
+      add(
+        OPERATION_PHASES_NAME,
+        'run-integrity',
+        `digests to ${actual}, not the ${recorded.operationPhases ?? 'missing digest'} run.json recorded`,
+      );
+  } catch (error) {
+    add(OPERATION_PHASES_NAME, 'run-integrity', `cannot be read as a regular JSON file: ${error.message}`);
+  }
+  if (phaseSnapshot !== undefined && phaseEntries(phaseSnapshot) !== phaseEntries(record.operationPhases))
+    add('run.json', 'operation-phases', `operationPhases differs from the sealed ${OPERATION_PHASES_NAME}`);
   await read(index.preflightVerdict, 'preflight-verdict');
   anchored(index.preflightVerdict, recorded.preflightVerdict, 'the preflight verdict');
   await read(index.evaluatorConfiguration, 'evaluator-configuration');
@@ -347,6 +370,10 @@ async function inputFindings({ folder, runDirectory, index, record, engine }) {
           }
         }
         for (const finding of sealed.findings) {
+          if (!Array.isArray(finding.observationIds) || finding.observationIds.length === 0)
+            add(relative, 'citation', `finding ${finding.findingId} cites no observation`);
+          if (!Array.isArray(finding.quotedEvidence) || finding.quotedEvidence.length === 0)
+            add(relative, 'citation', `finding ${finding.findingId} quotes no evidence`);
           for (const id of finding.observationIds ?? []) {
             if (!observedIds.has(id))
               add(relative, 'citation', `finding ${finding.findingId} cites observation ${id}, which this record does not contain`);

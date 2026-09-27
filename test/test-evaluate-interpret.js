@@ -10,6 +10,21 @@ const { suite } = require('./lib/evaluate-story-121');
 
 const read = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
 const test = suite('tea-evaluate-interpret');
+const findingKeys = new Set([
+  'findingType',
+  'findingId',
+  'oracleId',
+  'probeId',
+  'behaviorId',
+  'severity',
+  'summary',
+  'confidence',
+  'observationIds',
+  'evidenceArtifacts',
+  'quotedEvidence',
+  'citations',
+  'oracleEvidencePointers',
+]);
 
 try {
   const observations = [
@@ -34,7 +49,7 @@ try {
         finding('F-001', 'material', ['late', 'first']),
         finding('F-002', 'critical', ['last']),
         finding('F-003', 'low', ['low']),
-        finding('F-004', 'low', [], null),
+        finding('F-004', 'low', ['late'], null),
       ],
     },
     { step: 'process', result: 'outcome' },
@@ -42,7 +57,7 @@ try {
   );
   assert.equal(projected.firstMaterialError.sequence, 3);
   assert.equal(projected.firstMaterialError.observationId, 'first');
-  assert.deepEqual(projected.process, ['F-001', 'F-003']);
+  assert.deepEqual(projected.process, ['F-001', 'F-003', 'F-004']);
   assert.deepEqual(projected.outcome, ['F-001', 'F-002']);
   assert.deepEqual(projected.findings[0].oracleEvidencePointers, ['/interactions/result/stdout']);
   assert.deepEqual(projected.findings[0].quotedEvidence[0].quote, 'verbatim evidence');
@@ -54,8 +69,19 @@ try {
     ],
   );
   assert.equal(projected.findings[3].oracleEvidencePointers, null);
-  assert.deepEqual(projected.findings[3].citations, []);
+  assert.equal(projected.findings[3].citations[0].observationId, 'late');
   assert.equal(projected.findings.length, 4);
+  assert.deepEqual(
+    projectTrial(
+      { trialIndex: 6, observations, findings: [finding('F-009', 'material', ['late', 'low'])] },
+      { step: 'process' },
+      new Map(),
+    ).findings[0].citations.map(({ observationId, phase }) => [observationId, phase]),
+    [
+      ['late', 'process'],
+      ['low', 'process'],
+    ],
+  );
   assert.throws(
     () =>
       projectTrial({ trialIndex: 4, observations, findings: [finding('F-006', 'material', ['absent'])] }, { step: 'process' }, new Map()),
@@ -94,6 +120,11 @@ try {
   const index = read(path.join(run, 'trial-sets.json'));
   const contract = read(path.join(run, index.contract));
   const scores = read(path.join(run, 'scores', interpretation.scoreInvocationId, 'score.json')).scores;
+  const runSnapshot = read(path.join(run, 'run.json'));
+  const phaseBytes = fs.readFileSync(path.join(run, 'operation-phases.json'));
+  assert.equal(runSnapshot.artifacts.operationPhases, `sha256:${crypto.createHash('sha256').update(phaseBytes).digest('hex')}`);
+  assert.deepEqual(JSON.parse(phaseBytes.toString('utf8')), runSnapshot.operationPhases);
+  assert.deepEqual(Object.keys(interpretation).sort(), ['probes', 'scoreInvocationId']);
   let sawFirstMaterialError = false;
   assert.equal(read(path.join(run, 'run.json')).operationPhases['judge-request'], 'outcome');
   assert.deepEqual(
@@ -101,6 +132,15 @@ try {
     index.trialSets.map(({ probeId }) => probeId),
   );
   for (const [position, probe] of interpretation.probes.entries()) {
+    assert.deepEqual(Object.keys(probe).sort(), [
+      'engine',
+      'evidence',
+      'probeId',
+      'scoreExitCode',
+      'scoreFailure',
+      'scoreRecord',
+      'trials',
+    ]);
     const set = index.trialSets[position];
     const score = scores.find(({ probeId }) => probeId === probe.probeId);
     const evidence = read(path.join(project.folder, score.evidence));
@@ -108,12 +148,11 @@ try {
     assert.equal(probe.scoreExitCode, score.exitCode);
     assert.equal(probe.scoreRecord, score.record);
     assert.equal(probe.scoreFailure, score.failure);
-    assert.equal(JSON.stringify(probe.engine.outcomes), JSON.stringify(evidence.outcomes));
-    assert.equal(JSON.stringify(probe.engine.reducedProbeOutcomes), JSON.stringify(evidence.reducedProbeOutcomes));
-    assert.equal(JSON.stringify(probe.engine.strength), JSON.stringify(evidence.strength));
-    assert.equal(JSON.stringify(probe.engine.contractVerdict), JSON.stringify(evidence.contractVerdict));
+    for (const field of ['outcomes', 'reducedProbeOutcomes', 'strength', 'contractVerdict'])
+      assert(Buffer.from(JSON.stringify(probe.engine[field]), 'utf8').equals(Buffer.from(JSON.stringify(evidence[field]), 'utf8')));
     assert.deepEqual(Object.keys(probe.engine).sort(), ['contractVerdict', 'outcomes', 'reducedProbeOutcomes', 'strength']);
     for (const [trialPosition, trial] of probe.trials.entries()) {
+      assert.deepEqual(Object.keys(trial).sort(), ['findings', 'firstMaterialError', 'outcome', 'process', 'record', 'trialIndex']);
       const record = read(path.join(run, set.records[trialPosition]));
       assert.equal(trial.record, set.records[trialPosition]);
       assert.equal(trial.findings.length, record.findings.length);
@@ -132,22 +171,28 @@ try {
       if (trial.firstMaterialError !== null) sawFirstMaterialError = true;
       for (const [findingPosition, traced] of trial.findings.entries()) {
         const original = record.findings[findingPosition];
+        assert.deepEqual(Object.keys(traced).sort(), [...Object.keys(original), 'citations', 'oracleEvidencePointers'].sort());
+        assert(Object.keys(traced).every((key) => findingKeys.has(key)));
+        assert.equal(traced.oracleId, original.oracleId);
         assert.deepEqual(traced.quotedEvidence, original.quotedEvidence);
         assert.deepEqual(traced.evidenceArtifacts, original.evidenceArtifacts);
         assert.deepEqual(
           traced.oracleEvidencePointers,
           original.oracleId === null ? null : contract.oracles.find(({ id }) => id === original.oracleId).direction.evidenceTargets,
         );
-        for (const citation of traced.citations) {
-          const observed = record.observations.find(({ observationId }) => observationId === citation.observationId);
-          assert.deepEqual(citation, {
-            observationId: observed.observationId,
-            sequence: observed.sequence,
-            operationId: observed.operationId,
-            provenance: observed.provenance,
-            phase: read(path.join(run, 'run.json')).operationPhases[observed.operationId],
-          });
-        }
+        assert.deepEqual(
+          traced.citations,
+          original.observationIds.map((observationId) => {
+            const observed = record.observations.find((candidate) => candidate.observationId === observationId);
+            return {
+              observationId,
+              sequence: observed.sequence,
+              operationId: observed.operationId,
+              provenance: observed.provenance,
+              phase: runSnapshot.operationPhases[observed.operationId],
+            };
+          }),
+        );
       }
     }
   }
@@ -161,6 +206,28 @@ try {
     contractPath: index.contract,
     operationPhases: read(path.join(run, 'run.json')).operationPhases,
   };
+  const multiRecord = path.join(run, 'multi-citation-record.json');
+  fs.writeFileSync(
+    multiRecord,
+    `${JSON.stringify({ trialIndex: 1, observations, findings: [finding('F-010', 'material', ['late', 'low'])] })}\n`,
+  );
+  writeInterpretation({
+    ...interpretationArgs,
+    trialSets: [{ ...index.trialSets[0], records: [path.basename(multiRecord)] }],
+    scores: [scores[0]],
+    operationPhases: { step: 'process', result: 'outcome' },
+  });
+  const multiView = read(path.join(run, 'interpretation.json'));
+  assert.deepEqual(
+    multiView.probes[0].trials[0].findings[0].citations.map(({ observationId, phase }) => [observationId, phase]),
+    [
+      ['late', 'process'],
+      ['low', 'process'],
+    ],
+  );
+  assert.deepEqual(multiView.probes[0].trials[0].process, ['F-010']);
+  assert.equal(multiView.probes[0].trials[0].firstMaterialError.sequence, 1);
+  fs.unlinkSync(multiRecord);
   for (const kind of ['contract', 'record', 'evidence']) {
     const linked = path.join(run, `${kind}-input-link.json`);
     const options = structuredClone(interpretationArgs);
@@ -185,6 +252,17 @@ try {
   assert.equal(rescored.status, 0, rescored.output);
   assert.equal(fs.readFileSync(sentinel, 'utf8'), 'outside\n');
   assert.equal(fs.lstatSync(view).isFile(), true);
+  const tamperRunFile = path.join(run, 'run.json');
+  const untampered = fs.readFileSync(tamperRunFile);
+  const tampered = JSON.parse(untampered.toString('utf8'));
+  tampered.operationPhases['judge-request'] = 'process';
+  fs.writeFileSync(tamperRunFile, `${JSON.stringify(tampered, null, 2)}\n`);
+  const scoreDirectories = fs.readdirSync(path.join(run, 'scores')).length;
+  const tamperScore = test.cli(project.folder, 'score', ['--run', path.basename(run)], project.env);
+  assert.equal(tamperScore.status, 10, tamperScore.output);
+  assert.match(tamperScore.output, /operation-phases\.json/);
+  assert.equal(fs.readdirSync(path.join(run, 'scores')).length, scoreDirectories, 'scorer ran after run.json phase tampering');
+  fs.writeFileSync(tamperRunFile, untampered);
   writeInterpretation({
     folder: project.folder,
     runDirectory: run,
