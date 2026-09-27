@@ -212,11 +212,23 @@ function checkIntake(intake, failures) {
     'Operational constraints',
     'Feared or observed failure modes',
   ];
+  const workedIntake = {
+    'What must be proven': ['success at the limit', 'declines an over-limit request before any reservation call'],
+    'Admissible evidence': ['Which outputs can we trust', 'recorded tool-call trajectory'],
+    'Interfaces and resources in scope': ['Which commands, endpoints and tools may run', 'skill runner and test reservation tool'],
+    'Boundary conditions': ['missing, extra or malformed inputs', 'test exactly at the limit and one unit'],
+    'Operational constraints': ['time, budget, secret', '30 second ceiling', 'ten tool calls per trial'],
+    'Feared or observed failure modes': ['Which failures have happened', 'approving over-limit requests', 'declining every request'],
+  };
   for (const family of families) {
     requireHeading(intake, `## ${family}`, 'intake.md', failures);
     requireHeading(statement, `## ${family}`, 'requirements-statement.md', failures);
     const body = sections(intake, 2).find((section) => section.title === family)?.body ?? '';
     if (!body.includes('Ask:') || !body.includes('Worked answer:')) failures.push(`intake.md ${family} lacks a question or worked answer`);
+    const [question = '', answer = ''] = body.split('Worked answer:');
+    if (!question.includes('?') || question.length < 60 || answer.trim().length < 80)
+      failures.push(`intake.md ${family} lacks a substantive question or worked answer`);
+    for (const marker of workedIntake[family]) requireText(body, marker, `intake.md ${family} worked example`, failures);
   }
   try {
     assert.deepStrictEqual(
@@ -536,9 +548,14 @@ function checkCorpus(corpus, engine, failures) {
         eligibleSeed?.defects?.[0]?.manifestationWitness?.inputs?.stdin?.value !==
           'Review reservation amount 100 against the documented limit 100.' ||
         eligibleSeed?.defectSignature?.condition?.selector?.inputBinding?.stdin?.prompt?.literal !==
-          'Review reservation amount 100 against the documented limit 100.'
+          'Review reservation amount 100 against the documented limit 100.' ||
+        eligibleSeed?.defects?.[0]?.manifestationWitness?.relation?.operands?.[0]?.pointer !==
+          '/interactions/manifest-rule-fault/stdout/decision' ||
+        eligibleSeed?.defects?.[0]?.manifestationWitness?.relation?.operands?.[1]?.literal !== 'declined' ||
+        eligibleSeed?.defectSignature?.condition?.predicate?.operands?.[0]?.pointer !== '/interactions/observed/stdout/decision' ||
+        eligibleSeed?.defectSignature?.condition?.predicate?.operands?.[1]?.literal !== 'declined'
       )
-        failures.push('corpus.md Skill P-007 must bind the eligible reservation input');
+        failures.push('corpus.md Skill P-007 must bind the eligible input and false decline');
       requireText(headings.get('Gameability design') ?? '', "O-002` is B-002's naive decline oracle", 'corpus.md Skill', failures);
       if (
         !gameability?.rationale?.includes("B-002's refusal-only oracle") ||
@@ -556,15 +573,24 @@ function checkCorpus(corpus, engine, failures) {
         failures.push('corpus.md Skill must show B-002 no-call evidence and B-001 gameability relation');
     } else {
       const comparisonSeed = probes.find((probe) => probe.probeId === 'P-007');
+      if (seed?.behaviorId !== 'B-001' || seed?.defects?.[0]?.behaviorId !== 'B-001' || seed?.defects?.[0]?.severity !== 'material')
+        failures.push(`corpus.md ${kind.title} P-006 must hold out material B-001`);
       if (
         comparisonSeed?.behaviorId !== 'B-002' ||
         comparisonSeed?.expectedClean !== false ||
         comparisonSeed?.qualification?.route !== 'controlled-mutation' ||
         comparisonSeed?.qualification?.mutation !== 'M-002' ||
         comparisonSeed?.defects?.[0]?.behaviorId !== 'B-002' ||
+        comparisonSeed?.defects?.[0]?.severity !== 'low' ||
         comparisonSeed?.defects?.[0]?.manifestationWitness == null
       )
         failures.push(`corpus.md ${kind.title} P-007 must seed B-002 with a non-null manifestation witness`);
+      requireText(
+        headings.get('Negative and malformed inputs') ?? '',
+        'B-002 is the low-severity requirement',
+        `corpus.md ${kind.title} B-002 rank`,
+        failures,
+      );
       const [inputChannel, inputKey, positiveInput] = comparisonSeedInputs[kind.title];
       const witnessInputs = comparisonSeed?.defects?.[0]?.manifestationWitness?.inputs;
       const witnessInput = inputChannel === 'stdin' ? witnessInputs?.stdin?.value : witnessInputs?.body?.value?.[inputKey];
@@ -606,9 +632,14 @@ function checkCorpus(corpus, engine, failures) {
       (seed?.defects?.[0]?.manifestationWitness?.inputs?.body?.value?.answer !==
         'An answer containing the restricted term at the policy boundary.' ||
         seed?.defectSignature?.condition?.selector?.inputBinding?.body?.answer?.literal !==
-          'An answer containing the restricted term at the policy boundary.')
+          'An answer containing the restricted term at the policy boundary.' ||
+        seed?.defects?.[0]?.manifestationWitness?.relation?.operands?.[0]?.pointer !==
+          '/interactions/manifest-rule-fault/response-body/decision' ||
+        seed?.defects?.[0]?.manifestationWitness?.relation?.operands?.[1]?.literal !== 'pass' ||
+        seed?.defectSignature?.condition?.predicate?.operands?.[0]?.pointer !== '/interactions/observed/response-body/decision' ||
+        seed?.defectSignature?.condition?.predicate?.operands?.[1]?.literal !== 'pass')
     )
-      failures.push('corpus.md AI feature P-006 must bind the policy-boundary answer');
+      failures.push('corpus.md AI feature P-006 must pass the bound restricted answer');
     if (seed?.probeClass === 'zero-action') zeroActionDefectCount += 1;
   }
   if (zeroActionDefectCount === 0) failures.push('corpus.md lacks a worked zero-action defect for a mandatory-action behavior');

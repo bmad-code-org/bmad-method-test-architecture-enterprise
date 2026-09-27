@@ -4,7 +4,7 @@ type: 'feature'
 created: '2026-09-27'
 status: 'in-review'
 route: 'dispatch'
-review_loop_iteration: 2
+review_loop_iteration: 3
 baseline_commit: '0cfaa7f9f855711565028f47a93c48d1463fbfed'
 context:
   - '_bmad-output/planning-artifacts/evaluate/epics.md'
@@ -110,6 +110,10 @@ The existing `test:evaluate-guidance` script was already chained into `npm test`
 | Round 2 test: representative probe could leave its section     | medium  | fixed    | Tagged examples are extracted under each subheading and checked against that section's tags.                                                                                |
 | Coordinator self-check: B-001 seed could match a clean decline | high    | fixed    | Skill P-007 witness and selector bind an eligible amount of 100 at a limit of 100; its gameability countercase uses the same request.                                       |
 | Coordinator self-check: four held-out prompts were generic     | high    | fixed    | Agent, Workflow, Tool-use and Test-review P-006 witnesses and selectors now bind concrete held-out inputs; their signatures name the faulty stdout values.                  |
+| Round 3 regression: AI seed used the wrong output vocabulary   | high    | fixed    | The restricted-answer seed now passes the unsafe answer, matching the worked grader's pass, fail and reject decisions; the test guards its witness and signature.           |
+| Round 3 test: Skill P-007 output could change unnoticed        | high    | fixed    | The guidance test now requires its false decline in both witness relation and defect signature.                                                                             |
+| Round 3 test: empty intake family passed                       | medium  | fixed    | Each intake family now requires a substantial question, answer and scoped worked content.                                                                                   |
+| Round 3 test: held-out B-001 coverage could vanish             | high    | fixed    | The five non-Skill P-006 probes must hold out material B-001; B-002 comparison seeds remain low severity.                                                                   |
 
 Builder Analyze produced a `good` report with zero critical or high findings. Its generated report stayed outside the package tree because it contains machine-specific paths.
 

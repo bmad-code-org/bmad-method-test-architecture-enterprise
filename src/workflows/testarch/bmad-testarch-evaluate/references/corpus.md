@@ -1595,12 +1595,12 @@ Select an unseen policy-boundary answer early. List `P-006` in `heldOutProbes`.
   "probeClass": "defect",
   "behaviorId": "B-001",
   "expectedClean": false,
-  "rationale": "[held-out] M-001 exposes the seeded failure on an unseen policy-boundary answer; this case stays outside the gap loop.",
+  "rationale": "[held-out] M-001 passes an unseen restricted answer at the policy boundary; this case stays outside the gap loop.",
   "defects": [
     {
       "defectId": "D-001",
       "behaviorId": "B-001",
-      "summary": "The changed rule yields an incorrect decision for the negative case.",
+      "summary": "The changed grading rule passes an answer the policy must reject.",
       "severity": "material",
       "source": "controlled-mutation",
       "manifestationWitness": {
@@ -1625,7 +1625,7 @@ Select an unseen policy-boundary answer early. List `P-006` in `heldOutProbes`.
               "pointer": "/interactions/manifest-rule-fault/response-body/decision"
             },
             {
-              "literal": "incorrect"
+              "literal": "pass"
             }
           ]
         }
@@ -1660,7 +1660,7 @@ Select an unseen policy-boundary answer early. List `P-006` in `heldOutProbes`.
             "pointer": "/interactions/observed/response-body/decision"
           },
           {
-            "literal": "incorrect"
+            "literal": "pass"
           }
         ]
       }
