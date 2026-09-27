@@ -2,9 +2,11 @@
 
 Read the contract's behaviors and committed probes together. Give each behavior discharged by a defect or gameability probe exactly one oracle. Add a rubric only where judgment needs an anchored scale. Keep checks and calibration labels away from the sealed evaluator brief.
 
+The linked fixtures below are source-repository examples. Copy the relevant contract and plan into the evaluation you are authoring, then adapt their identifiers and evidence paths to your target.
+
 ## One oracle per discharged behavior
 
-`test/fixtures/evaluate-workflow/evals/records/contract.json` binds `B-001` to `O-001`. Its read-back observation proves that the created record can be retrieved. Bind each other discharged behavior through its own `oracles` array to exactly one oracle ID, as AD-19 requires. A rubric can supplement that oracle when a criterion needs judgment.
+[The workflow contract fixture](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/evaluate-workflow/evals/records/contract.json) binds `B-001` to `O-001`. Its read-back observation proves that the created record can be retrieved. Bind each other discharged behavior through its own `oracles` array to exactly one oracle ID, as AD-19 requires. A rubric can supplement that oracle when a criterion needs judgment.
 
 ## Oracle relation choice
 
@@ -69,7 +71,7 @@ Name the channel and pointer every check reads. Command evidence can live at `/i
 
 ## Semantic rubrics
 
-Use a rubric for a question an exact predicate cannot settle. Give every scale level a concrete anchor. Each criterion asks one question and names a reachable evidence pointer. Name failure-mode penalties and bound the evidence length with `maxLength`. Judge observable output, since hidden reasoning provides no admissible evidence. This rubric reads the scaffold artifact declared by `test/fixtures/evaluate/valid/contract.json`.
+Use a rubric for a question an exact predicate cannot settle. Give every scale level a concrete anchor. Each criterion asks one question and names a reachable evidence pointer. Name failure-mode penalties and bound the evidence length with `maxLength`. Judge observable output, since hidden reasoning provides no admissible evidence. This rubric reads the scaffold artifact declared by [the valid contract fixture](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/evaluate/valid/contract.json).
 
 <!-- example:rubric -->
 
@@ -77,9 +79,18 @@ Use a rubric for a question an exact predicate cannot settle. Give every scale l
 {
   "id": "R-001",
   "scaleLevels": [
-    { "level": 0, "anchor": "For the criterion being scored, no named item meets the stated question." },
-    { "level": 1, "anchor": "For the criterion being scored, some but not all named items meet the stated question." },
-    { "level": 2, "anchor": "For the criterion being scored, every named item meets the stated question with observable evidence." }
+    {
+      "level": 0,
+      "anchor": "For the criterion being scored: RC-001 has no named story criterion matched by a test; RC-002 has no test with a specific expected result."
+    },
+    {
+      "level": 1,
+      "anchor": "For the criterion being scored: RC-001 has some but not all named story criteria matched by tests; RC-002 has some but not all tests with specific expected results."
+    },
+    {
+      "level": 2,
+      "anchor": "For the criterion being scored: RC-001 has every named story criterion matched by a test; RC-002 has every test with a specific expected result."
+    }
   ],
   "failureModePenalties": [
     { "name": "missing-criterion", "description": "Lower the score when a named criterion has no test case." },
@@ -103,9 +114,9 @@ Use a rubric for a question an exact predicate cannot settle. Give every scale l
 
 ## Judge calibration design
 
-For each criterion, prepare a labelled item at every anchored level. For `RC-001`, use excerpts with zero, some and all named criteria covered. Repeat for `RC-002` with absent, partial and specific assertions. Withhold the labels from the judge. Ask the adopter for `evaluation.json.judgeCalibration.minimumAgreement`, the exact agreement threshold, and record labelled items in `policy/judge-calibration.json`. Calibrate before accepting scores, with the judge model snapshot and prompt digest in the conditions. AD-22 governs calibration and held-out probes. A zero-rubric contract makes no judge call.
+For each criterion, prepare a labelled item at every anchored level. For `RC-001`, use excerpts with zero, some and all named criteria covered. Repeat for `RC-002` with absent, partial and specific assertions. Include the named criteria and the relevant scaffold excerpt in each item so the judge can inspect coverage and assertions directly. Withhold the labels from the judge. Ask the adopter for `evaluation.json.judgeCalibration.minimumAgreement`, the exact agreement threshold, and record labelled items in `policy/judge-calibration.json`. Calibrate before accepting scores, with the judge model snapshot and prompt digest in the conditions. AD-22 governs calibration and held-out probes. A zero-rubric contract makes no judge call.
 
-The labelled set below covers each level of both questions. The judge receives only each `response`; the runtime compares its returned level with `expectedLevel` after judging.
+The labelled set below covers each level of both questions. Each `response` contains criteria and test code, with no claimed score. The judge receives only each `response`; the runtime compares its returned level with `expectedLevel` after judging.
 
 <!-- example:calibration -->
 
@@ -115,37 +126,37 @@ The labelled set below covers each level of both questions. The judge receives o
     {
       "rubricId": "R-001",
       "criterionId": "RC-001",
-      "response": "No story criterion has a test case.",
+      "response": "Story criteria: AC-1 create account returns 201; AC-2 duplicate account returns 409.\nScaffold:\ntest.skip('smoke', () => { expect(true).toBe(true); });",
       "expectedLevel": 0
     },
     {
       "rubricId": "R-001",
       "criterionId": "RC-001",
-      "response": "One of two story criteria has a test case.",
+      "response": "Story criteria: AC-1 create account returns 201; AC-2 duplicate account returns 409.\nScaffold:\ntest.skip('AC-1 create account', () => { expect(createAccount('a@example.test').status).toBe(201); });",
       "expectedLevel": 1
     },
     {
       "rubricId": "R-001",
       "criterionId": "RC-001",
-      "response": "Every story criterion has a test case.",
+      "response": "Story criteria: AC-1 create account returns 201; AC-2 duplicate account returns 409.\nScaffold:\ntest.skip('AC-1 create account', () => { expect(createAccount('a@example.test').status).toBe(201); });\ntest.skip('AC-2 duplicate account', () => { createAccount('a@example.test'); expect(createAccount('a@example.test').status).toBe(409); });",
       "expectedLevel": 2
     },
     {
       "rubricId": "R-001",
       "criterionId": "RC-002",
-      "response": "No test has a specific expected result.",
+      "response": "Story criteria: AC-1 create account returns 201; AC-2 duplicate account returns 409.\nScaffold:\ntest.skip('AC-1 create account', () => { createAccount('a@example.test'); /* TODO: assert result */ });\ntest.skip('AC-2 duplicate account', () => { createAccount('a@example.test'); /* TODO: assert result */ });",
       "expectedLevel": 0
     },
     {
       "rubricId": "R-001",
       "criterionId": "RC-002",
-      "response": "One of two tests has a specific expected result.",
+      "response": "Story criteria: AC-1 create account returns 201; AC-2 duplicate account returns 409.\nScaffold:\ntest.skip('AC-1 create account', () => { expect(createAccount('a@example.test').status).toBe(201); });\ntest.skip('AC-2 duplicate account', () => { createAccount('a@example.test'); /* TODO: assert result */ });",
       "expectedLevel": 1
     },
     {
       "rubricId": "R-001",
       "criterionId": "RC-002",
-      "response": "Every test has a specific expected result.",
+      "response": "Story criteria: AC-1 create account returns 201; AC-2 duplicate account returns 409.\nScaffold:\ntest.skip('AC-1 create account', () => { expect(createAccount('a@example.test').status).toBe(201); });\ntest.skip('AC-2 duplicate account', () => { createAccount('a@example.test'); expect(createAccount('a@example.test').status).toBe(409); });",
       "expectedLevel": 2
     }
   ]
@@ -188,7 +199,7 @@ A loose oracle that checks only a clean exit accepts this degenerate response. I
 }
 ```
 
-Tighten it to read the artifact and its required `test.skip(` call. The tightened oracle below rejects the degenerate response because the artifact pointer cannot resolve. The `test.skip(` rule comes from `test/fixtures/evaluate/valid/contract.json`; use the adopter's own observable rule for another target.
+Tighten it to read the artifact and its required `test.skip(` call. The tightened oracle below rejects the degenerate response because the artifact pointer cannot resolve. The `test.skip(` rule comes from [the valid contract fixture](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/evaluate/valid/contract.json); use the adopter's own observable rule for another target.
 
 <!-- example:oracle -->
 

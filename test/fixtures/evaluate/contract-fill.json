@@ -292,7 +292,7 @@
     "human-labels"
   ],
   "testData": {
-    "setup": "Nothing is staged by hand: tea-evaluate preflight copies launch.root, the stub project under test/fixtures/evaluate/stub-agent/, into a temp directory and runs every leg there.",
+    "setup": "Nothing is staged by hand: tea-evaluate preflight copies launch.root, the source repository's stub-agent project, into a temp directory and runs every leg there.",
     "cleanup": "Nothing to remove: the stub agent writes no file.",
     "principals": null,
     "resources": null

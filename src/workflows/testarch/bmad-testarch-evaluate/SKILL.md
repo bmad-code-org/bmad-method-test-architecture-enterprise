@@ -94,7 +94,7 @@ Design oracles and rubrics. Load `references/oracles.md`.
 
 Scaffold the execution-target registry and adapters. Load `references/adapters.md`.
 
-When the contract, oracles and registry are filled, run `npm exec --prefix {tea_evaluations_folder} -- tea-evaluate check --evaluation <evaluation-folder>`, then `npm exec --prefix {tea_evaluations_folder} -- eval-quality compile --in <evaluation-folder>/contract.json --out <evaluation-folder>/compiled-contract.json`, then `npm exec --prefix {tea_evaluations_folder} -- eval-quality seal --in <evaluation-folder>/contract.json --out <evaluation-folder>/sealed-brief.json`. Stop at the first nonzero exit. Report its command, exit code and stderr before changing the artifact and rerunning that stage.
+When the contract, oracles and registry are filled, ensure `policy/scoring-policy.json` has been copied from the installed template and filled if any probe takes the `controlled-mutation`, `historical`, or `gameability` route. Run `npm exec --prefix {tea_evaluations_folder} -- tea-evaluate check --evaluation <evaluation-folder>`, then `npm exec --prefix {tea_evaluations_folder} -- eval-quality compile --in <evaluation-folder>/contract.json --out <evaluation-folder>/compiled-contract.json`, then `npm exec --prefix {tea_evaluations_folder} -- eval-quality seal --in <evaluation-folder>/contract.json --out <evaluation-folder>/sealed-brief.json`. Stop at the first nonzero exit. Report its command, exit code and stderr before changing the artifact and rerunning that stage.
 
 ### Stage 7: Evaluator
 

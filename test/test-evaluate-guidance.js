@@ -279,6 +279,9 @@ function checkCorpus(corpus, engine, failures) {
     'add `gameability` to `evaluation.json.arms`',
     '`strengthFloor.gameability`',
     'rejects a gameability probe without that arm',
+    'policy/scoring-policy.json',
+    'assets/scoring-policy.template.json',
+    'minimumTrialCount',
   ])
     requireText(corpus, marker, 'corpus.md', failures);
 
@@ -654,6 +657,25 @@ function taggedExamples(content, tag) {
   return [...content.matchAll(expression)].map((match) => JSON.parse(match[1]));
 }
 
+function sourceFixturePaths(content, label, failures) {
+  const source = 'https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/';
+  const links = [
+    ...content.matchAll(
+      /\]\(https:\/\/github\.com\/bmad-code-org\/bmad-method-test-architecture-enterprise\/(?:blob|tree)\/main\/(test\/fixtures\/[^)]+)\)/g,
+    ),
+  ];
+  for (const match of links) {
+    const fixture = decodeURIComponent(match[1]);
+    if (!fs.existsSync(path.join(__dirname, '..', fixture))) failures.push(label + ' links a missing source fixture: ' + fixture);
+  }
+  const withoutLinks = content.replaceAll(
+    /https:\/\/github\.com\/bmad-code-org\/bmad-method-test-architecture-enterprise\/(?:blob|tree)\/main\/test\/fixtures\/[^)]+/g,
+    '',
+  );
+  if (withoutLinks.includes('test/fixtures/')) failures.push(label + ' cites a fixture without a direct ' + source + ' source link');
+  return links.map((match) => match[1]);
+}
+
 function headingBody(content, heading) {
   const start = content.indexOf('\n' + heading + '\n');
   if (start === -1) return '';
@@ -699,6 +721,13 @@ function assertEngineSuccess(command, contract, tempRoot, label, failures) {
 function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapterGuide, engine, failures) {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-contract-guidance-'));
   try {
+    for (const [guide, name] of [
+      [contractGuide, 'contract.md'],
+      [oracleGuide, 'oracles.md'],
+      [adapterGuide, 'adapters.md'],
+    ]) {
+      if (sourceFixturePaths(guide, name, failures).length === 0) failures.push(name + ' lacks direct source-repository fixture links');
+    }
     const fill = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'evaluate', 'contract-fill.json'), 'utf8'));
     const requirements = fs.readFileSync(path.join(__dirname, 'fixtures', 'evaluate', 'requirements.md'));
     const skeleton = fs.readFileSync(ASSET('contract.skeleton.json'), 'utf8');
@@ -740,12 +769,44 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
       const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
       manifest.requirements = { path: 'requirements.md', digest: contract.sourceSpecDigest };
       fs.writeFileSync(manifestPath, JSON.stringify(manifest));
+      const shimDirectory = path.join(tempRoot, 'bin');
+      fs.mkdirSync(shimDirectory);
+      const runnerShim = path.join(shimDirectory, 'tea-skill-runner');
+      fs.writeFileSync(
+        runnerShim,
+        '#!/usr/bin/env node\nprocess.exitCode = require(' +
+          JSON.stringify(path.join(__dirname, '..', 'cli', 'skill-runner.js')) +
+          ').main(process.argv);\n',
+      );
+      fs.chmodSync(runnerShim, 0o755);
+      const preflightOptions = {
+        encoding: 'utf8',
+        timeout: 30_000,
+        env: { ...process.env, PATH: shimDirectory + path.delimiter + process.env.PATH },
+      };
       const check = spawnSync(
         process.execPath,
         [path.join(__dirname, '..', 'cli', 'evaluate.js'), 'check', '--evaluation', evaluationRoot],
         { encoding: 'utf8' },
       );
       if (check.status !== 0) failures.push('filled skeleton: tea-evaluate check exited ' + check.status + ': ' + check.stderr.trim());
+      const preflight = spawnSync(
+        process.execPath,
+        [path.join(__dirname, '..', 'cli', 'evaluate.js'), 'preflight', '--evaluation', evaluationRoot],
+        preflightOptions,
+      );
+      if (preflight.status !== 0)
+        failures.push('skill runner preflight exited ' + preflight.status + ': ' + preflight.stdout.trim() + ' ' + preflight.stderr.trim());
+      const brokenManifest = { ...manifest, registry: [{ ...manifest.registry[0], target: 'bin/does-not-exist.js' }] };
+      fs.writeFileSync(manifestPath, JSON.stringify(brokenManifest));
+      const missingTarget = spawnSync(
+        process.execPath,
+        [path.join(__dirname, '..', 'cli', 'evaluate.js'), 'preflight', '--evaluation', evaluationRoot],
+        preflightOptions,
+      );
+      if (missingTarget.status !== 12 || !(missingTarget.stdout + missingTarget.stderr).includes('does not exist'))
+        failures.push('a nonexistent skill runner target did not fail preflight at exit 12');
+      fs.writeFileSync(manifestPath, JSON.stringify(manifest));
       fs.appendFileSync(path.join(evaluationRoot, 'requirements.md'), 'changed byte\n');
       const stale = spawnSync(
         process.execPath,
@@ -755,13 +816,64 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
       if (stale.status !== 10 || !(stale.stdout + stale.stderr).includes('requirements'))
         failures.push('changed requirements bytes did not fail tea-evaluate check with exit 10');
     }
+    {
+      const policyRoot = path.join(tempRoot, 'policy-case');
+      fs.cpSync(path.join(__dirname, 'fixtures', 'evaluate', 'valid'), policyRoot, { recursive: true });
+      const policyPath = path.join(policyRoot, 'policy', 'scoring-policy.json');
+      fs.rmSync(policyPath);
+      const withoutPolicy = spawnSync(
+        process.execPath,
+        [path.join(__dirname, '..', 'cli', 'evaluate.js'), 'check', '--evaluation', policyRoot],
+        { encoding: 'utf8' },
+      );
+      if (withoutPolicy.status !== 10 || !(withoutPolicy.stdout + withoutPolicy.stderr).includes('policy/scoring-policy.json'))
+        failures.push('a mutation route without a scoring policy did not fail check at exit 10');
+      const policy = JSON.parse(fs.readFileSync(ASSET('scoring-policy.template.json'), 'utf8'));
+      Object.assign(policy, { policyId: 'guidance-policy', severityFloor: 'material', catchThreshold: 0.5, minimumTrialCount: 3 });
+      fs.writeFileSync(policyPath, JSON.stringify(policy));
+      const withPolicy = spawnSync(
+        process.execPath,
+        [path.join(__dirname, '..', 'cli', 'evaluate.js'), 'check', '--evaluation', policyRoot],
+        { encoding: 'utf8' },
+      );
+      if (withPolicy.status !== 0) failures.push('filled scoring policy did not pass check: ' + withPolicy.stderr.trim());
+    }
+    {
+      const mcpRoot = path.join(tempRoot, 'evaluate-mcp');
+      fs.cpSync(path.join(__dirname, 'fixtures', 'evaluate-mcp'), mcpRoot, { recursive: true });
+      const mcpEvaluation = path.join(mcpRoot, 'evals', 'grader');
+      for (const command of ['check', 'preflight']) {
+        const run = spawnSync(
+          process.execPath,
+          [path.join(__dirname, '..', 'cli', 'evaluate.js'), command, '--evaluation', mcpEvaluation],
+          { encoding: 'utf8', timeout: 30_000 },
+        );
+        if (run.status !== 0) failures.push('MCP ' + command + ' exited ' + run.status + ': ' + run.stderr.trim());
+      }
+    }
+    {
+      const workflowRoot = path.join(tempRoot, 'evaluate-workflow');
+      fs.cpSync(path.join(__dirname, 'fixtures', 'evaluate-workflow'), workflowRoot, { recursive: true });
+      const workflowEvaluation = path.join(workflowRoot, 'evals', 'records');
+      const manifestPath = path.join(workflowEvaluation, 'evaluation.json');
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+      manifest.registry[0].target = 'bin/does-not-exist.js';
+      fs.writeFileSync(manifestPath, JSON.stringify(manifest));
+      const failed = spawnSync(
+        process.execPath,
+        [path.join(__dirname, '..', 'cli', 'evaluate.js'), 'preflight', '--evaluation', workflowEvaluation],
+        { encoding: 'utf8', timeout: 30_000 },
+      );
+      if (failed.status !== 12 || !(failed.stdout + failed.stderr).includes('does not exist'))
+        failures.push('a nonexistent workflow target did not fail preflight at exit 12');
+    }
     const missing = { ...fill };
     delete missing.schemaVersion;
     assert.throws(() => fillContractSkeleton(skeleton, missing), /missing fill value: schemaVersion/);
     const noForbidden = structuredClone(contract);
     delete noForbidden.forbiddenInputs;
     const forbiddenFailure = engineCommand('compile', noForbidden, tempRoot);
-    assert.notStrictEqual(forbiddenFailure.status, 0);
+    assert.strictEqual(forbiddenFailure.status, 5, 'missing forbiddenInputs must get engine exit 5: ' + forbiddenFailure.stderr);
     assert.match(forbiddenFailure.stderr, /forbiddenInputs/);
 
     for (const heading of [
@@ -797,12 +909,67 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
     const workflowContract = JSON.parse(
       fs.readFileSync(path.join(__dirname, 'fixtures', 'evaluate-workflow', 'evals', 'records', 'contract.json')),
     );
+    const numericContract = structuredClone(contract);
+    numericContract.contractId = 'numeric-amount-example';
+    numericContract.sourceSpecDigest = engine.digestBytes(
+      fs.readFileSync(path.join(__dirname, 'fixtures', 'evaluate', 'numeric-requirements.md')),
+    );
+    numericContract.behaviors[0].description = 'The numeric-amount command refuses an amount whose JSON type is not number.';
+    numericContract.behaviors[0].observableSuccessCriterion = 'A string amount is refused on stdout with a clean exit.';
+    numericContract.behaviors[0].requirementLinks[0].id = 'numeric-amount-type';
+    numericContract.behaviors[0].riskLinks[0].id = 'silent-amount-coercion';
+    const numericOperation = numericContract.permittedInterfaces[0].operations[0];
+    numericContract.permittedInterfaces[0].logicalId = 'numeric-amount';
+    numericOperation.invocation = { executable: 'numeric-amount', subcommandPath: [] };
+    numericOperation.requestShape.option = { requiredKeys: [], permittedKeys: [], types: {} };
+    numericContract.interactionPlan[0].inputBinding.option = null;
+    numericContract.interactionPlan[0].inputBinding.stdin.prompt.literal = '{"amount":7}';
+    const numericWitness = numericOperation.sensitivityWitness;
+    for (const leg of numericWitness.legs) leg.inputs.option = {};
+    numericWitness.legs[0].inputs.stdin.value = '{"amount":7}';
+    numericWitness.legs[1].inputs.stdin.value = '{"amount":8}';
+    const expectedWitnessLiterals = ['accepted amount: 7', 'accepted amount: 8', 'accepted amount: 8', 'accepted amount: 7'];
+    for (const [index, operand] of numericWitness.relation.operands.entries()) {
+      const check = operand.op === 'not' ? operand.operands[0] : operand;
+      check.operands[1].literal = expectedWitnessLiterals[index];
+    }
+    numericContract.testData.setup = 'The numeric-amount fixture is copied into the disposable workspace.';
     for (const [index, patch] of taggedExamples(contractGuide, 'contract-patch').entries()) {
-      const edited = structuredClone(patch.base === 'workflow' ? workflowContract : contract);
+      const edited = structuredClone(patch.base === 'workflow' ? workflowContract : patch.base === 'numeric' ? numericContract : contract);
       for (const edit of patch.patches ?? [patch]) setJsonPointer(edited, edit.path, edit.value);
+      if (index === 1) {
+        const response = spawnSync(
+          process.execPath,
+          [
+            path.join(__dirname, '..', 'cli', 'skill-runner.js'),
+            '--agent',
+            'custom',
+            '--agent-cmd',
+            './agent.js',
+            '--skill-root',
+            'skill',
+            '--timeout-ms',
+            '30000',
+          ],
+          { cwd: path.join(__dirname, 'fixtures', 'evaluate', 'stub-agent'), input: 'Say alpha.', encoding: 'utf8' },
+        );
+        assert.strictEqual(response.status, 0, response.stderr);
+        assert.strictEqual(edited.oracles[0].check.operands[1].operands[1].literal, response.stdout);
+      }
       if (index === 2) {
-        assert.match(edited.interactionPlan[0].inputBinding.stdin.prompt.literal, /NaN/);
+        assert.strictEqual(edited.permittedInterfaces[0].operations[0].invocation.executable, 'numeric-amount');
+        assert.strictEqual(typeof JSON.parse(edited.interactionPlan[0].inputBinding.stdin.prompt.literal).amount, 'string');
         assert.match(JSON.stringify(edited.oracles[0].check), /invalid amount/);
+        const numericTarget = path.join(__dirname, 'fixtures', 'evaluate', 'numeric-amount.js');
+        const refused = spawnSync(process.execPath, [numericTarget], {
+          input: edited.interactionPlan[0].inputBinding.stdin.prompt.literal,
+          encoding: 'utf8',
+        });
+        const accepted = spawnSync(process.execPath, [numericTarget], { input: '{"amount":7}', encoding: 'utf8' });
+        assert.strictEqual(refused.status, 0, refused.stderr);
+        assert.strictEqual(refused.stdout, 'error: invalid amount\n');
+        assert.strictEqual(accepted.status, 0, accepted.stderr);
+        assert.strictEqual(accepted.stdout, 'accepted amount: 7\n');
       }
       if (index === 3) {
         assert.deepStrictEqual(edited.permittedInterfaces[0].operations[0].responseDescriptor.types, { records: 'array' });
@@ -852,6 +1019,37 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
         assert.ok(edited.testData.principals.operator);
         assert.ok(edited.probeStepBound >= edited.interactionPlan.length);
       }
+      if (index === 8) {
+        const editedWitness = edited.permittedInterfaces[0].operations[0].sensitivityWitness;
+        assert.strictEqual(editedWitness.legs[1].inputs.stdin.value, 'Say beta twice.');
+        assert.strictEqual(editedWitness.relation.operands[1].operands[0].operands[1].literal, 'beta twice');
+        assert.strictEqual(editedWitness.relation.operands[2].operands[1].literal, 'beta twice');
+        const observed = {};
+        for (const leg of editedWitness.legs) {
+          const response = spawnSync(
+            process.execPath,
+            [
+              path.join(__dirname, '..', 'cli', 'skill-runner.js'),
+              '--agent',
+              'custom',
+              '--agent-cmd',
+              './agent.js',
+              '--skill-root',
+              'skill',
+              '--timeout-ms',
+              '30000',
+            ],
+            { cwd: path.join(__dirname, 'fixtures', 'evaluate', 'stub-agent'), input: leg.inputs.stdin.value, encoding: 'utf8' },
+          );
+          assert.strictEqual(response.status, 0, response.stderr);
+          observed[leg.legId] = { stdout: { kind: 'text', value: response.stdout } };
+        }
+        assert.strictEqual(
+          engine.resolveCheck(editedWitness.relation, engine.makeResolveOperand(observed, {}), () => false, {}, 1000, 'sensitivity witness')
+            .resolution,
+          'true',
+        );
+      }
       if (index === 9) {
         const waiver = edited.waivers[0];
         for (const field of ['rule', 'rationale', 'condition', 'approval']) assert.ok(waiver[field]);
@@ -887,6 +1085,14 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
       requireHeading(oracleGuide, heading, 'oracles.md', failures);
     for (const marker of ['expects-hold', 'expects-violation', 'unreachable-check-evidence', 'minimumAgreement', 'labels'])
       requireText(oracleGuide, marker, 'oracles.md', failures);
+    for (const lesson of [
+      'A resampled identifier needs a relational comparison',
+      'An impossible pointer fails compilation',
+      'Give every scale level a concrete anchor',
+      'Withhold the labels from the judge',
+      'A loose oracle that checks only a clean exit accepts this degenerate response',
+    ])
+      requireText(oracleGuide, lesson, 'oracles.md lesson', failures);
     const validContract = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'evaluate', 'valid', 'contract.json')));
     for (const [index, oracle] of taggedExamples(oracleGuide, 'oracle').entries()) {
       const base = oracle.direction?.evidenceTargets?.some((pointer) => pointer.includes('/create/')) ? workflowContract : validContract;
@@ -937,6 +1143,23 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
       const calibration = taggedExamples(oracleGuide, 'calibration');
       assert.strictEqual(calibration.length, 1);
       assert.deepStrictEqual(calibrationProblems({ judgeCalibration: { minimumAgreement: 0.8 } }, edited, calibration[0], engine), []);
+      for (const criterion of ['RC-001', 'RC-002']) {
+        const items = calibration[0].items.filter((item) => item.criterionId === criterion);
+        assert.deepStrictEqual(
+          items.map((item) => item.expectedLevel),
+          [0, 1, 2],
+        );
+        for (const item of items) {
+          assert.match(item.response, /Story criteria: AC-1/);
+          assert.match(item.response, /Scaffold:\n/);
+          assert.match(item.response, /test\.skip\(/);
+        }
+        const expectedCounts =
+          criterion === 'RC-001'
+            ? items.map((item) => [...item.response.matchAll(/test\.skip\('AC-/g)].length)
+            : items.map((item) => [...item.response.matchAll(/\.toBe\(/g)].length);
+        assert.deepStrictEqual(expectedCounts, [0, 1, 2]);
+      }
       const unanchored = structuredClone(edited);
       unanchored.rubrics[0].scaleLevels = [];
       const rejected = engineCommand('compile', unanchored, tempRoot);
@@ -971,9 +1194,8 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
       expectedKinds,
     );
     for (const row of rows) {
-      const fixture = row[3]?.match(/test\/fixtures\/[^| ]+/)?.[0]?.replaceAll(String.fromCodePoint(96), '');
-      if (!fixture || !fs.existsSync(path.join(__dirname, '..', fixture)))
-        failures.push('adapters.md ' + row[0] + ' cites no working fixture');
+      if (sourceFixturePaths(row[3] ?? '', 'adapters.md ' + row[0], failures).length === 0)
+        failures.push('adapters.md ' + row[0] + ' cites no working source fixture');
     }
     const registryEntries = taggedExamples(adapterGuide, 'registry');
     if (registryEntries.length !== expectedKinds.length) failures.push('adapters.md needs a tagged registry for every AD-4 row');
@@ -982,10 +1204,23 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
     );
     const validateEvaluation = new Ajv({ strict: false, allErrors: true }).compile(evaluationSchema);
     const starter = JSON.parse(fs.readFileSync(ASSET('evaluation.json'), 'utf8'));
+    assert.strictEqual(starter.registry[0].target, 'tea-skill-runner');
+    const registryFixtures = [
+      'evaluate/preflight/evaluation.json',
+      'evaluate-tool-use-agent/evals/tool-use/evaluation.json',
+      'evaluate-tool-use-agent/evals/tool-use/evaluation.json',
+      'evaluate-mcp/evals/grader/evaluation.json',
+      'evaluate-api/evals/grader/evaluation.json',
+      'evaluate-workflow/evals/records/evaluation.json',
+      'evaluate-api/evals/grader/evaluation.json',
+      'evaluate/preflight/evaluation.json',
+    ];
     for (const [index, entry] of registryEntries.entries()) {
       const candidate = { ...starter, registry: [entry] };
       if (!validateEvaluation(candidate))
         failures.push('adapters.md registry ' + (index + 1) + ' fails runtime schema: ' + JSON.stringify(validateEvaluation.errors));
+      const fixture = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', registryFixtures[index]), 'utf8'));
+      assert.deepStrictEqual(entry, fixture.registry[0], 'adapters.md registry ' + (index + 1) + ' differs from its working fixture');
     }
   } finally {
     fs.rmSync(tempRoot, { recursive: true, force: true });

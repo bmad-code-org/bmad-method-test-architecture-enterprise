@@ -624,8 +624,8 @@
       },
       {
         "name": "tea-dev-test-file",
-        "match": "(?<!/)\\btest/(?!fixtures/evaluate(?:/|-[\\w-]+/))[\\w./-]+\\.(?:js|json)\\b",
-        "reason": "a file under this repository's own dev tree, not part of the published tarball; Evaluate guide fixture references are checked against existing files by test:evaluate-guidance"
+        "match": "(?<!/)\\btest/[\\w./-]+\\.(?:js|json)\\b",
+        "reason": "a file under this repository's own dev tree, not part of the published tarball"
       },
       {
         "name": "docs-path",

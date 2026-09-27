@@ -50,7 +50,7 @@ Compare the full answer when the body is the result, or parse its declared field
       { "op": "equality", "operands": [{ "pointer": "/interactions/answer-run/exit-code" }, { "literal": 0 }] },
       {
         "op": "equality",
-        "operands": [{ "pointer": "/interactions/answer-run/stdout" }, { "literal": "skill: stub-skill\nanswer: alpha\n" }]
+        "operands": [{ "pointer": "/interactions/answer-run/stdout" }, { "literal": "skill: stub-skill\nrequest: Say alpha.\n" }]
       }
     ]
   }
@@ -59,28 +59,29 @@ Compare the full answer when the body is the result, or parse its declared field
 
 ### malformed-input
 
-Bind a type-violating input and require a refusal on the nominated channel. The worked pair changes both the input and the oracle. Without this rule, silent coercion of malformed requests goes unseen.
+Bind a type-violating input and require a refusal on the nominated channel. This pair applies to a numeric-amount command whose stdin JSON requires `amount` to be a number and whose stdout says `error: invalid amount` for other types. The source repository's [numeric-amount fixture](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/evaluate/numeric-amount.js) runs the [confirmed example requirement](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/evaluate/numeric-requirements.md). Its contract variant invokes `numeric-amount` and uses numeric requests for the sensitivity witness. Without this rule, silent coercion of malformed requests goes unseen.
 
 <!-- example:contract-patch -->
 
 ```json
 {
+  "base": "numeric",
   "patches": [
     {
       "path": "/interactionPlan/0/inputBinding/stdin/prompt/literal",
-      "value": "Review amount: NaN"
+      "value": "{\"amount\":\"NaN\"}"
     },
     {
       "path": "/oracles/0",
       "value": {
         "id": "O-001",
         "polarity": "expects-hold",
-        "commentary": "A malformed amount is refused on stdout and the command exits cleanly.",
+        "commentary": "A JSON amount with string type is refused on stdout and the numeric-amount command exits cleanly.",
         "direction": {
           "polarity": "expects-hold",
           "relation": "all",
           "scope": "The exit code and refusal on stdout.",
-          "negativeDomain": "The malformed amount is silently accepted or the command fails before answering.",
+          "negativeDomain": "The numeric-amount command silently coerces the string or fails before answering.",
           "evidenceTargets": ["/interactions/answer-run/exit-code", "/interactions/answer-run/stdout"]
         },
         "check": {
@@ -462,12 +463,21 @@ Set `cardinality` per step, identify `testData.principals` when authorization ma
 
 ## Sensitivity-witness design
 
-Use two legs that differ in one input and a relation that must change on the descriptor-nominated output. The starter changes only the stdin prompt from alpha to beta and requires alpha only in the first stdout and beta only in the second stdout. When an operation takes no input that can vary, set `sensitivityWitness` to `null` and record why.
+Use two legs that differ in one input and a relation that must change on the descriptor-nominated output. The starter asks for alpha and beta; this edit changes the second request to beta twice and changes both affected relation literals. The first stdout must contain alpha and exclude beta twice. The second must contain beta twice and exclude alpha. When an operation takes no input that can vary, set `sensitivityWitness` to `null` and record why.
 
 <!-- example:contract-patch -->
 
 ```json
-{ "path": "/permittedInterfaces/0/operations/0/sensitivityWitness/legs/1/inputs/stdin/value", "value": "Say beta." }
+{
+  "patches": [
+    { "path": "/permittedInterfaces/0/operations/0/sensitivityWitness/legs/1/inputs/stdin/value", "value": "Say beta twice." },
+    {
+      "path": "/permittedInterfaces/0/operations/0/sensitivityWitness/relation/operands/1/operands/0/operands/1/literal",
+      "value": "beta twice"
+    },
+    { "path": "/permittedInterfaces/0/operations/0/sensitivityWitness/relation/operands/2/operands/1/literal", "value": "beta twice" }
+  ]
+}
 ```
 
 ## Waiver discipline
@@ -506,7 +516,7 @@ npm exec --prefix {tea_evaluations_folder} -- eval-quality seal --in <evaluation
 
 ## Worked end-to-end contract
 
-The starter skeleton and `test/fixtures/evaluate/contract-fill.json` produce this complete example. Its source digest comes from the exact bytes of `test/fixtures/evaluate/requirements.md`. The guidance gate compiles and seals the tagged contract.
+The starter skeleton and the source repository's [contract fill](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/evaluate/contract-fill.json) produce this complete example. Its source digest comes from the exact bytes of the source repository's [requirements statement](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/evaluate/requirements.md). The preflight target is the source repository's [stub agent](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/tree/main/test/fixtures/evaluate/stub-agent). These fixture files are source examples; adopters fill their own evaluation folder. The guidance gate compiles and seals the tagged contract.
 
 <!-- example:contract -->
 
@@ -786,7 +796,7 @@ The starter skeleton and `test/fixtures/evaluate/contract-fill.json` produce thi
     "human-labels"
   ],
   "testData": {
-    "setup": "Nothing is staged by hand: tea-evaluate preflight copies launch.root, the stub project under test/fixtures/evaluate/stub-agent/, into a temp directory and runs every leg there.",
+    "setup": "Nothing is staged by hand: tea-evaluate preflight copies launch.root, the source repository's stub-agent project, into a temp directory and runs every leg there.",
     "cleanup": "Nothing to remove: the stub agent writes no file.",
     "principals": null,
     "resources": null

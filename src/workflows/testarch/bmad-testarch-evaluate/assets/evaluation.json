@@ -7,7 +7,7 @@
     {
       "interfaceId": "reservation-review-runner",
       "executable": "tea-skill-runner",
-      "target": "cli/skill-runner.js",
+      "target": "tea-skill-runner",
       "subcommandPaths": [[]],
       "artifacts": {},
       "environmentKeys": [],

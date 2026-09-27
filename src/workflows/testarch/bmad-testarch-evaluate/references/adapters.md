@@ -4,41 +4,41 @@ Put each execution target in `evaluation.json.registry`, with one entry per inte
 
 ## Target kind to adapter mapping
 
-| Target kind                       | Interface kind                          | Adapter                                                                  | Working fixture                                                        |
-| --------------------------------- | --------------------------------------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
-| Skill                             | `cli`                                   | `createCommandLineAdapter` through the skill runner                      | `test/fixtures/evaluate/preflight/evaluation.json`                     |
-| Agent                             | `cli`                                   | `createCommandLineAdapter` through the adopter's non-interactive command | `test/fixtures/evaluate-tool-use-agent/evals/tool-use/evaluation.json` |
-| Workflow                          | target's own `cli`, `api` or `mcp` kind | adapter for that kind, with ordered plan steps                           | `test/fixtures/evaluate-workflow/evals/records/contract.json`          |
-| Tool-use system: calling agent    | `cli`                                   | `createCommandLineAdapter`; emit tool-call trajectory on stdout          | `test/fixtures/evaluate-tool-use-agent/bin/calling-agent.js`           |
-| Tool-use system: tool server      | `mcp`                                   | `createMcpAdapter` for a stdio MCP server                                | `test/fixtures/evaluate-mcp/evals/grader/evaluation.json`              |
-| AI feature or any web application | `api`                                   | adopter-owned `EnvironmentProbePort` over HTTP                           | `test/fixtures/evaluate-api/evals/grader/adapter/http-probe-port.mjs`  |
-| Tool server reached over HTTP     | `api`                                   | the same HTTP port and target policy                                     | `test/fixtures/evaluate-api/evals/grader/evaluation.json`              |
-| Test-review mechanism             | kind of how it runs, usually `cli`      | skill runner or its own command                                          | `test/fixtures/evaluate/preflight/evaluation.json`                     |
+| Target kind                       | Interface kind                          | Adapter                                                                  | Source repository example                                                                                                                                                                                                                                                                                                                                                    |
+| --------------------------------- | --------------------------------------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Skill                             | `cli`                                   | `createCommandLineAdapter` through the skill runner                      | [source fixture: evaluation.json](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/evaluate/preflight/evaluation.json)                                                                                                                                                                                                      |
+| Agent                             | `cli`                                   | `createCommandLineAdapter` through the adopter's non-interactive command | [source fixture: evaluation.json](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/evaluate-tool-use-agent/evals/tool-use/evaluation.json)                                                                                                                                                                                  |
+| Workflow                          | target's own `cli`, `api` or `mcp` kind | adapter for that kind, with ordered plan steps                           | [source fixture: contract.json](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/evaluate-workflow/evals/records/contract.json)                                                                                                                                                                                             |
+| Tool-use system: calling agent    | `cli`                                   | `createCommandLineAdapter`; emit tool-call trajectory on stdout          | [source fixture: calling-agent.js](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/evaluate-tool-use-agent/bin/calling-agent.js)                                                                                                                                                                                           |
+| Tool-use system: tool server      | `mcp`                                   | `createMcpAdapter` for a stdio MCP server                                | [source fixture: evaluation.json](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/evaluate-mcp/evals/grader/evaluation.json)                                                                                                                                                                                               |
+| AI feature or any web application | `api`                                   | adopter-owned `EnvironmentProbePort` over HTTP                           | [source fixture: http-probe-port.mjs](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/evaluate-api/evals/grader/adapter/http-probe-port.mjs)                                                                                                                                                                               |
+| Tool server reached over HTTP     | `api`                                   | the same HTTP port and target policy                                     | [source fixture: evaluation.json](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/evaluate-api/evals/grader/evaluation.json) (HTTP transport)                                                                                                                                                                              |
+| Test-review mechanism             | kind of how it runs, usually `cli`      | skill runner or its own command                                          | [source fixture: evaluation.json](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/evaluate/preflight/evaluation.json) (runner transport); [source fixture: test-review-eval](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/tree/main/test/fixtures/test-review-eval) (seeded and clean corpus) |
 
-Record `targetKind` in `evaluation.json` only. Contract interfaces use `cli`, `api` or `mcp`; a web application is reached through its HTTP `api` surface. For a tool server reached over HTTP, use `api`, since the MCP adapter is for stdio. For test review, choose the runner that actually evaluates the seeded test source and capture its verdict from that runner's observation.
+These examples live in this repository's source tree. Copy or adapt them into the evaluated project's own workspace before preflight. Record `targetKind` in `evaluation.json` only. Contract interfaces use `cli`, `api` or `mcp`; a web application is reached through its HTTP `api` surface. For a tool server reached over HTTP, use `api`, since the MCP adapter is for stdio. For test review, choose the runner that actually evaluates the seeded test source and capture its verdict from that runner's observation.
 
 ## Skill runner
 
-Set `targetKind: "skill"`, `interface: "cli"`, and `launch.skillRoot` to the skill inside the evaluated project. The runner receives `--skill-root` pointing into the disposable copy and the probe prompt on stdin. The installed starter `assets/evaluation.json` uses this entry and `test/fixtures/evaluate/preflight/evaluation.json` exercises a skill runner with the stub agent at `test/fixtures/evaluate/stub-agent/agent.js`.
+Set `targetKind: "skill"`, `interface: "cli"`, and `launch.skillRoot` to the skill inside the evaluated project. The runner receives `--skill-root` pointing into the disposable copy and the probe prompt on stdin. The installed starter `assets/evaluation.json` uses the sample name `reservation-review-runner` and the executable target `tea-skill-runner`; replace the sample launch paths with the evaluated project's paths before running it. The working [source fixture: evaluation.json](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/evaluate/preflight/evaluation.json) uses the executable `tea-skill-runner` and the logical interface `stub-skill`, with the stub agent at [source fixture: agent.js](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/evaluate/stub-agent/agent.js). Its `launch.root` is `../stub-agent` and its `launch.skillRoot` is `skill`.
 
 <!-- example:registry -->
 
 ```json
 {
-  "interfaceId": "reservation-review-runner",
+  "interfaceId": "stub-skill",
   "executable": "tea-skill-runner",
-  "target": "cli/skill-runner.js",
+  "target": "tea-skill-runner",
   "subcommandPaths": [[]],
   "artifacts": {},
   "environmentKeys": [],
-  "maxElapsedMs": 30000,
+  "maxElapsedMs": 60000,
   "infrastructureExitCodes": [3, 4, 5, 6]
 }
 ```
 
 ## Agent's own non-interactive command
 
-If the adopter already has a command that accepts a prompt without an interactive session, register that exact executable and target. The command must print a machine-readable observation and distinguish infrastructure exits from behavior failures. The fixture command at `test/fixtures/evaluate-tool-use-agent/bin/calling-agent.js` is launched by this entry.
+If the adopter already has a command that accepts a prompt without an interactive session, register that exact executable and target. The command must print a machine-readable observation and distinguish infrastructure exits from behavior failures. The fixture command at [source fixture: calling-agent.js](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/evaluate-tool-use-agent/bin/calling-agent.js) is launched by this entry.
 
 <!-- example:registry -->
 
@@ -57,7 +57,7 @@ If the adopter already has a command that accepts a prompt without an interactiv
 
 ## Tool-use calling agent
 
-Evaluate the agent's decision through `cli`. Have its stdout carry the tool-call trajectory, including chosen tool, arguments and result handling, so an oracle can read it. `test/fixtures/evaluate-tool-use-agent/evals/tool-use/contract.json` declares that observation. The fixture uses the same command registry entry as the preceding agent example; keep this separate classification in `evaluation.json.targetKind: "tool-use"` when the question is tool selection.
+Evaluate the agent's decision through `cli`. Have its stdout carry the tool-call trajectory, including chosen tool, arguments and result handling, so an oracle can read it. [source fixture: contract.json](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/evaluate-tool-use-agent/evals/tool-use/contract.json) declares that observation. The fixture uses the same command registry entry as the preceding agent example; keep this separate classification in `evaluation.json.targetKind: "tool-use"` when the question is tool selection.
 
 <!-- example:registry -->
 
@@ -76,7 +76,7 @@ Evaluate the agent's decision through `cli`. Have its stdout carry the tool-call
 
 ## Tool server over MCP
 
-Use `kind: "mcp"` and list only the stdio server's permitted tool names. The runtime builds `McpTargetAuthorization`, then sends calls through `createMcpAdapter`. A denied tool name must remain a visible preflight fault. The live fixture is `test/fixtures/evaluate-mcp/evals/grader/evaluation.json`, backed by `test/fixtures/evaluate-mcp/server/grader.js`.
+Use `kind: "mcp"` and list only the stdio server's permitted tool names. The runtime builds `McpTargetAuthorization`, then sends calls through `createMcpAdapter`. A denied tool name must remain a visible preflight fault. The live fixture is [source fixture: evaluation.json](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/evaluate-mcp/evals/grader/evaluation.json), backed by [source fixture: grader.js](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/evaluate-mcp/server/grader.js).
 
 <!-- example:registry -->
 
@@ -94,7 +94,7 @@ Use `kind: "mcp"` and list only the stdio server's permitted tool names. The run
 
 ## AI feature over HTTP
 
-Use `kind: "api"` for an HTTP surface. Copy `assets/http-probe-port.mjs` and `assets/http-probe-port.conformance.mjs` into the evaluation's `adapter/` directory, then run `adapter/http-probe-port.conformance.mjs` there. The adopter owns the transport; eval-quality's `evaluateTarget` makes allow and deny decisions for address, method, scheme, redirects and ceilings. The fixture at `test/fixtures/evaluate-api/evals/grader/adapter/http-probe-port.mjs` runs this port against `test/fixtures/evaluate-api/server/grader.js`. The server reports its bound port through `PORT_FILE`, avoiding a guessed port.
+Use `kind: "api"` for an HTTP surface. Copy `assets/http-probe-port.mjs` and `assets/http-probe-port.conformance.mjs` into the evaluation's `adapter/` directory, then run `adapter/http-probe-port.conformance.mjs` there. The adopter owns the transport; eval-quality's `evaluateTarget` makes allow and deny decisions for address, method, scheme, redirects and ceilings. The fixture at [source fixture: http-probe-port.mjs](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/evaluate-api/evals/grader/adapter/http-probe-port.mjs) runs this port against [source fixture: grader.js](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/evaluate-api/server/grader.js). The server reports its bound port through `PORT_FILE`, avoiding a guessed port.
 
 <!-- example:registry -->
 
@@ -125,7 +125,7 @@ Use `kind: "api"` for an HTTP surface. Copy `assets/http-probe-port.mjs` and `as
 
 ## Workflow over its target kind
 
-Choose the adapter for the workflow's actual interface. The working CLI fixture `test/fixtures/evaluate-workflow/evals/records/evaluation.json` registers create and read commands. Its contract's `interactionPlan` has `read-back` after `create`; `read-back.inputBinding.option.id` uses `{ "captured": "/interactions/create/stdout/id" }`. The first step mints a fresh ID, so a fixed literal would fail. The scorer uses the earlier observation from the same arm for the captured value. A skipped create or absent ID leaves no read-back observation and a visible skip reason.
+Choose the adapter for the workflow's actual interface. The working CLI fixture [source fixture: evaluation.json](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/evaluate-workflow/evals/records/evaluation.json) registers create and read commands. Its contract's `interactionPlan` has `read-back` after `create`; `read-back.inputBinding.option.id` uses `{ "captured": "/interactions/create/stdout/id" }`. The first step mints a fresh ID, so a fixed literal would fail. The scorer uses the earlier observation from the same arm for the captured value. A skipped create or absent ID leaves no read-back observation and a visible skip reason.
 
 <!-- example:registry -->
 
@@ -144,7 +144,7 @@ Choose the adapter for the workflow's actual interface. The working CLI fixture 
 
 ## Tool server over HTTP
 
-When the tool server exposes HTTP, use the `api` registry shape and HTTP port in the AI feature example. Authorize its real methods and address, then cite the fixture `test/fixtures/evaluate-api/evals/grader/evaluation.json` as the working HTTP transport shape. The oracle reads the HTTP response body or status. Do not put an HTTP target in an `mcp` entry. This compact entry shows the same authorization with a deployed port; substitute the target's actual port and policy values.
+When a tool server exposes HTTP, use the `api` registry shape and the adopter-owned `EnvironmentProbePort` in the AI feature example. Authorize its real methods and address. [source fixture: evaluation.json](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/evaluate-api/evals/grader/evaluation.json) proves the HTTP transport and dynamic port setup; it is a grader service fixture, not a tool server behavior fixture. The oracle for a tool server must judge the returned tool result and any protocol behavior the contract promises. Set `server.target` to the adopter's server inside `launch.root`, then set `server.portEnvironmentKey` and `server.portFileEnvironmentKey` to the keys that server uses. A bound port reported in the file is supplied to the port at run time.
 
 <!-- example:registry -->
 
@@ -154,32 +154,40 @@ When the tool server exposes HTTP, use the `api` registry shape and HTTP port in
   "interfaceId": "grader",
   "scheme": "http",
   "host": "127.0.0.1",
-  "port": 4317,
   "addresses": ["127.0.0.1"],
   "methods": ["GET"],
   "safeMethods": ["GET"],
   "maxRedirects": 0,
   "maxElapsedMs": 30000,
   "maxRequestBytes": 65536,
-  "maxResponseBytes": 1048576
+  "maxResponseBytes": 1048576,
+  "server": {
+    "target": "server/grader.js",
+    "targetArgs": ["--policy=rules/policy.txt"],
+    "environmentKeys": ["GRADER_LOG", "GRADER_SECRET", "GRADER_TOKEN"],
+    "portEnvironmentKey": "PORT",
+    "portFileEnvironmentKey": "PORT_FILE",
+    "readyTimeoutMs": 20000
+  },
+  "auth": { "header": "authorization", "environmentKey": "GRADER_TOKEN", "prefix": "Bearer " }
 }
 ```
 
 ## Test-review mechanism
 
-Classify its corpus by seeded test smells and clean tests. For a test-review skill, use the skill runner registry shape above and set `targetKind: "test-review-mechanism"`; for an own command, use the agent command shape. `test/fixtures/evaluate/preflight/evaluation.json` proves the skill runner transport, while the adopter's review corpus and contract supply the behavior to judge.
+Classify its corpus by seeded test smells and clean tests. The source repository has seeded examples at [source fixture: checkout.spec.ts](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/test-review-eval/seeded/checkout.spec.ts) and [source fixture: orders.service.spec.ts](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/test-review-eval/seeded/orders.service.spec.ts), a clean control at [source fixture: profile.spec.ts](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/test-review-eval/clean/profile.spec.ts), and labels in [source fixture: ground-truth.json](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/test-review-eval/ground-truth.json). For a test-review skill, use the skill runner registry shape above and set `targetKind: "test-review-mechanism"`; for an own command, use the agent command shape. [source fixture: evaluation.json](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/evaluate/preflight/evaluation.json) proves only the skill runner transport. The adopter's review contract must define the seeded defects, clean control, and verdict observation. The example below is the working stub runner transport; set `interfaceId`, `launch.root`, and `launch.skillRoot` to the review target's values when adapting it.
 
 <!-- example:registry -->
 
 ```json
 {
-  "interfaceId": "reservation-review-runner",
+  "interfaceId": "stub-skill",
   "executable": "tea-skill-runner",
-  "target": "cli/skill-runner.js",
+  "target": "tea-skill-runner",
   "subcommandPaths": [[]],
   "artifacts": {},
   "environmentKeys": [],
-  "maxElapsedMs": 30000,
+  "maxElapsedMs": 60000,
   "infrastructureExitCodes": [3, 4, 5, 6]
 }
 ```
