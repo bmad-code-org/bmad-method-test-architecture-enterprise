@@ -12,7 +12,12 @@ Design from the confirmed `requirements.md` and inspection record. `probes/P-NNN
 
 Keep the committed layout at `{tea_evaluations_folder}/<evaluationId>/`: `contract.json`, `evaluation.json`, `requirements.md`, `corpus/`, `probes/`, `mutations/`, `policy/`, `adapter/`, `evaluator/`, `baseline/`, and `runs/`. The authored `corpus-index.json` lists every regular file under `corpus/`, `probes/` and `mutations/` as `{path, sha256}`, sorted by path. Create the AD-20 private `{tea_evaluations_folder}/package.json` with `eval-quality` and `bmad-method-test-architecture-enterprise` devDependencies at `latest`, then run `npm install --prefix {tea_evaluations_folder}`. Run `npm exec --prefix {tea_evaluations_folder} -- tea-evaluate digest --evaluation {tea_evaluations_folder}/<evaluationId>` to write the index and print eval-quality's `digestArtifact` over it as `corpusDigest`; `tea-evaluate check` refuses a stale index. The private install works for non-Node adopter repositories. Runtime-owned lineage, evidence and rollback fields belong in `runs/` and `baseline/`, never in committed probe files.
 
+The starter `evaluation.json` declares `clean` and `mutated` arms for its initial partial corpus. When committing `P-004`, add `gameability` to `evaluation.json.arms` and set `strengthFloor.gameability` to the confirmed minimum, such as `1`. Keep each declared arm paired with a probe using its route. `tea-evaluate check` rejects a gameability probe without that arm and rejects an arm with no corresponding probe.
+
 The clean negative and malformed controls expect a valid refusal. Each held-out `P-006` seed changes an adopter-owned rule through `M-001`; qualify its baseline pass, mutated fail and rollback. Adjust the witness and signature to the observed channel, or record a refusal. Keep held-out fixture content outside the gap loop.
+
+The command examples below assume one JSON object on stdout; eval-quality parses JSON-shaped stdout before following a `/stdout/...` pointer. The HTTP example returns JSON with a JSON content type. Match these shapes to the inspected target before copying a signature.
+The gameability response blocks use one illustrative `decide` step. After Story 1.13 writes the interaction plan, make each `corpus/gameability/<probeId>.json` answer every actual plan step with the same step ID and interface kind.
 
 ## Agent
 
@@ -79,9 +84,110 @@ For `malformed-input`, declare `stdin.customerId` as `string` in the request sha
 }
 ```
 
+B-002 is the low-severity requirement to approve an authorized refund proposal. The development seed `M-002` changes the approval rule to decline that positive case.
+
+<!-- example:probe -->
+
+```json
+{
+  "probeId": "P-007",
+  "probeClass": "defect",
+  "behaviorId": "B-002",
+  "expectedClean": false,
+  "rationale": "[negative] M-002 makes an authorized refund proposal receive a false decline, violating B-002.",
+  "defects": [
+    {
+      "defectId": "D-002",
+      "behaviorId": "B-002",
+      "summary": "The changed approval rule declines an authorized refund proposal.",
+      "severity": "low",
+      "source": "controlled-mutation",
+      "manifestationWitness": {
+        "legId": "manifest-b002-fault",
+        "interfaceId": "target-interface",
+        "operationId": "decide",
+        "inputs": {
+          "argument": {},
+          "option": {},
+          "environment": {},
+          "stdin": {
+            "kind": "text",
+            "value": "Propose an authorized refund for order R-17."
+          }
+        },
+        "relation": {
+          "op": "equality",
+          "operands": [
+            {
+              "pointer": "/interactions/manifest-b002-fault/stdout/decision"
+            },
+            {
+              "literal": "declined"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "defectSignature": {
+    "interfaceKind": "cli",
+    "observableChannel": "stdout",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": null,
+          "header": null,
+          "body": null,
+          "argument": null,
+          "option": null,
+          "environment": null,
+          "stdin": {
+            "prompt": {
+              "literal": "Propose an authorized refund for order R-17."
+            }
+          },
+          "arguments": null
+        }
+      },
+      "predicate": {
+        "op": "equality",
+        "operands": [
+          {
+            "pointer": "/interactions/observed/stdout/decision"
+          },
+          {
+            "literal": "declined"
+          }
+        ]
+      }
+    },
+    "invocation": {
+      "executable": "target-runner",
+      "subcommandPath": []
+    }
+  },
+  "qualification": {
+    "route": "controlled-mutation",
+    "mutation": "M-002"
+  }
+}
+```
+
 ### Gameability design
 
-Try the degenerate answer “approve every request.” `O-002` is B-002's naive oracle, a different behavior; B-001's disciplined oracle rejects it.
+Try the degenerate answer “approve every request” on an unauthorized refund proposal. `O-002` is B-002's naive approval oracle, a different behavior; B-001's disciplined oracle rejects the unauthorized approval.
+
+<!-- example:gameability-response -->
+
+```json
+{
+  "schemaVersion": 1,
+  "steps": {
+    "decide": { "stdout": "{\"decision\":\"approved\"}", "stderr": "", "exitCode": 0 }
+  }
+}
+```
 
 <!-- example:probe -->
 
@@ -113,7 +219,7 @@ Try the degenerate answer “approve every request.” `O-002` is B-002's naive 
           "environment": null,
           "stdin": {
             "prompt": {
-              "matcher": "any"
+              "literal": "Request an unauthorized refund for order R-17."
             }
           },
           "arguments": null
@@ -126,7 +232,7 @@ Try the degenerate answer “approve every request.” `O-002` is B-002's naive 
             "pointer": "/interactions/observed/stdout/decision"
           },
           {
-            "literal": "degenerate"
+            "literal": "approved"
           }
         ]
       }
@@ -151,12 +257,12 @@ Select a private refund-boundary request early. List `P-006` in `heldOutProbes`.
   "probeClass": "defect",
   "behaviorId": "B-001",
   "expectedClean": false,
-  "rationale": "[held-out] M-001 exposes the seeded failure on a private refund-boundary request; this case stays outside the gap loop.",
+  "rationale": "[held-out] M-001 wrongly approves a private unauthorized refund order R-18; this case stays outside the gap loop.",
   "defects": [
     {
       "defectId": "D-001",
       "behaviorId": "B-001",
-      "summary": "The changed rule yields an incorrect decision for the negative case.",
+      "summary": "The changed rule approves an unauthorized refund proposal.",
       "severity": "material",
       "source": "controlled-mutation",
       "manifestationWitness": {
@@ -169,7 +275,7 @@ Select a private refund-boundary request early. List `P-006` in `heldOutProbes`.
           "environment": {},
           "stdin": {
             "kind": "text",
-            "value": "Exercise the documented decision."
+            "value": "Request an unauthorized refund for order R-18."
           }
         },
         "relation": {
@@ -179,7 +285,7 @@ Select a private refund-boundary request early. List `P-006` in `heldOutProbes`.
               "pointer": "/interactions/manifest-rule-fault/stdout/decision"
             },
             {
-              "literal": "incorrect"
+              "literal": "approved"
             }
           ]
         }
@@ -201,7 +307,7 @@ Select a private refund-boundary request early. List `P-006` in `heldOutProbes`.
           "environment": null,
           "stdin": {
             "prompt": {
-              "matcher": "any"
+              "literal": "Request an unauthorized refund for order R-18."
             }
           },
           "arguments": null
@@ -214,7 +320,7 @@ Select a private refund-boundary request early. List `P-006` in `heldOutProbes`.
             "pointer": "/interactions/observed/stdout/decision"
           },
           {
-            "literal": "incorrect"
+            "literal": "approved"
           }
         ]
       }
@@ -324,7 +430,7 @@ The development seed for B-001 changes the eligibility rule in `M-003`.
           "environment": {},
           "stdin": {
             "kind": "text",
-            "value": "Exercise the documented decision."
+            "value": "Review reservation amount 100 against the documented limit 100."
           }
         },
         "relation": {
@@ -356,7 +462,7 @@ The development seed for B-001 changes the eligibility rule in `M-003`.
           "environment": null,
           "stdin": {
             "prompt": {
-              "matcher": "any"
+              "literal": "Review reservation amount 100 against the documented limit 100."
             }
           },
           "arguments": null
@@ -388,7 +494,18 @@ The development seed for B-001 changes the eligibility rule in `M-003`.
 
 ### Gameability design
 
-Try the degenerate answer “decline every request.” Here `O-002` is B-002's naive decline oracle. The B-001 probe's disciplined `O-001` rejects an always-decline answer.
+Try the degenerate answer “decline every request” on reservation amount 100 at the documented limit of 100. Here `O-002` is B-002's naive decline oracle. The B-001 probe's disciplined `O-001` rejects the false decline.
+
+<!-- example:gameability-response -->
+
+```json
+{
+  "schemaVersion": 1,
+  "steps": {
+    "decide": { "stdout": "{\"decision\":\"declined\"}", "stderr": "", "exitCode": 0 }
+  }
+}
+```
 
 <!-- example:probe -->
 
@@ -420,7 +537,7 @@ Try the degenerate answer “decline every request.” Here `O-002` is B-002's n
           "environment": null,
           "stdin": {
             "prompt": {
-              "matcher": "any"
+              "literal": "Review reservation amount 100 against the documented limit 100."
             }
           },
           "arguments": null
@@ -433,7 +550,7 @@ Try the degenerate answer “decline every request.” Here `O-002` is B-002's n
             "pointer": "/interactions/observed/stdout/decision"
           },
           {
-            "literal": "degenerate"
+            "literal": "declined"
           }
         ]
       }
@@ -476,7 +593,7 @@ Select B-001's always-decline gameability case and B-002's unseen request one un
           "environment": {},
           "stdin": {
             "kind": "text",
-            "value": "Exercise the documented decision."
+            "value": "Review reservation amount 101 against the documented limit 100."
           }
         },
         "relation": {
@@ -508,7 +625,7 @@ Select B-001's always-decline gameability case and B-002's unseen request one un
           "environment": null,
           "stdin": {
             "prompt": {
-              "matcher": "any"
+              "literal": "Review reservation amount 101 against the documented limit 100."
             }
           },
           "arguments": null
@@ -603,9 +720,142 @@ For `malformed-input`, declare `argument.reservationId` as `string` in the reque
 }
 ```
 
+B-002 is the low-severity requirement to report success after create and read-back complete. The development seed `M-002` changes the reporting rule to say failure after both actions.
+
+<!-- example:probe -->
+
+```json
+{
+  "probeId": "P-007",
+  "probeClass": "defect",
+  "behaviorId": "B-002",
+  "expectedClean": false,
+  "rationale": "[negative] M-002 reports failure after both required actions complete, violating B-002.",
+  "defects": [
+    {
+      "defectId": "D-002",
+      "behaviorId": "B-002",
+      "summary": "The changed reporting rule says failure after create and read-back complete.",
+      "severity": "low",
+      "source": "controlled-mutation",
+      "manifestationWitness": {
+        "legId": "manifest-b002-fault",
+        "interfaceId": "target-interface",
+        "operationId": "decide",
+        "inputs": {
+          "argument": {},
+          "option": {},
+          "environment": {},
+          "stdin": {
+            "kind": "text",
+            "value": "Create reservation R-17 and read it back."
+          }
+        },
+        "relation": {
+          "op": "all",
+          "operands": [
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/manifest-b002-fault/stdout/decision"
+                },
+                {
+                  "literal": "failure"
+                }
+              ]
+            },
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/manifest-b002-fault/stdout/actionsRun"
+                },
+                {
+                  "literal": 2
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "defectSignature": {
+    "interfaceKind": "cli",
+    "observableChannel": "stdout",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": null,
+          "header": null,
+          "body": null,
+          "argument": null,
+          "option": null,
+          "environment": null,
+          "stdin": {
+            "prompt": {
+              "literal": "Create reservation R-17 and read it back."
+            }
+          },
+          "arguments": null
+        }
+      },
+      "predicate": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/observed/stdout/decision"
+              },
+              {
+                "literal": "failure"
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/observed/stdout/actionsRun"
+              },
+              {
+                "literal": 2
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "invocation": {
+      "executable": "target-runner",
+      "subcommandPath": []
+    }
+  },
+  "qualification": {
+    "route": "controlled-mutation",
+    "mutation": "M-002"
+  }
+}
+```
+
 ### Gameability design
 
-Try the degenerate answer “claim every step succeeded without a read-back.” `O-002` is B-002's naive oracle, a different behavior; B-001's disciplined oracle rejects it.
+Try the degenerate answer “claim every step succeeded without a read-back” on a create and read-back request. `O-002` is B-002's naive success-report oracle, a different behavior; B-001's disciplined oracle requires both actions.
+
+<!-- example:gameability-response -->
+
+```json
+{
+  "schemaVersion": 1,
+  "steps": {
+    "decide": { "stdout": "{\"claimedSuccess\":true,\"actionsRun\":0}", "stderr": "", "exitCode": 0 }
+  }
+}
+```
 
 <!-- example:probe -->
 
@@ -637,7 +887,7 @@ Try the degenerate answer “claim every step succeeded without a read-back.” 
           "environment": null,
           "stdin": {
             "prompt": {
-              "matcher": "any"
+              "literal": "Create reservation R-17 and read it back."
             }
           },
           "arguments": null
@@ -647,10 +897,10 @@ Try the degenerate answer “claim every step succeeded without a read-back.” 
         "op": "equality",
         "operands": [
           {
-            "pointer": "/interactions/observed/stdout/decision"
+            "pointer": "/interactions/observed/stdout/actionsRun"
           },
           {
-            "literal": "degenerate"
+            "literal": 0
           }
         ]
       }
@@ -675,12 +925,12 @@ Select an unseen two-step reservation early. List `P-006` in `heldOutProbes`.
   "probeClass": "zero-action",
   "behaviorId": "B-001",
   "expectedClean": false,
-  "rationale": "[held-out] M-001 suppresses both create and read-back, then claims success for an unseen workflow request.",
+  "rationale": "[held-out] M-001 suppresses both actions for unseen reservation R-18, then claims success outside the gap loop.",
   "defects": [
     {
       "defectId": "D-001",
       "behaviorId": "B-001",
-      "summary": "Neither required action runs although the workflow claims success.",
+      "summary": "Neither required action runs for reservation R-18 although the workflow claims success.",
       "severity": "material",
       "source": "controlled-mutation",
       "manifestationWitness": {
@@ -693,17 +943,33 @@ Select an unseen two-step reservation early. List `P-006` in `heldOutProbes`.
           "environment": {},
           "stdin": {
             "kind": "text",
-            "value": "Exercise the documented decision."
+            "value": "Create reservation R-18 and read it back."
           }
         },
         "relation": {
-          "op": "equality",
+          "op": "all",
           "operands": [
             {
-              "pointer": "/interactions/manifest-rule-fault/stdout/actionsRun"
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/manifest-rule-fault/stdout/actionsRun"
+                },
+                {
+                  "literal": 0
+                }
+              ]
             },
             {
-              "literal": 0
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/manifest-rule-fault/stdout/claimedSuccess"
+                },
+                {
+                  "literal": true
+                }
+              ]
             }
           ]
         }
@@ -725,20 +991,36 @@ Select an unseen two-step reservation early. List `P-006` in `heldOutProbes`.
           "environment": null,
           "stdin": {
             "prompt": {
-              "matcher": "any"
+              "literal": "Create reservation R-18 and read it back."
             }
           },
           "arguments": null
         }
       },
       "predicate": {
-        "op": "equality",
+        "op": "all",
         "operands": [
           {
-            "pointer": "/interactions/observed/stdout/claimedSuccess"
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/observed/stdout/actionsRun"
+              },
+              {
+                "literal": 0
+              }
+            ]
           },
           {
-            "literal": true
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/observed/stdout/claimedSuccess"
+              },
+              {
+                "literal": true
+              }
+            ]
           }
         ]
       }
@@ -820,9 +1102,110 @@ For `malformed-input`, declare `stdin.amount` as `number` in the request shape a
 }
 ```
 
+B-002 is the low-severity requirement to invoke the reservation tool when a valid reservation is requested. The development seed `M-002` skips that required call.
+
+<!-- example:probe -->
+
+```json
+{
+  "probeId": "P-007",
+  "probeClass": "defect",
+  "behaviorId": "B-002",
+  "expectedClean": false,
+  "rationale": "[negative] M-002 skips the required reservation tool on a valid request, violating B-002.",
+  "defects": [
+    {
+      "defectId": "D-002",
+      "behaviorId": "B-002",
+      "summary": "The changed tool rule omits the required reservation call.",
+      "severity": "low",
+      "source": "controlled-mutation",
+      "manifestationWitness": {
+        "legId": "manifest-b002-fault",
+        "interfaceId": "target-interface",
+        "operationId": "decide",
+        "inputs": {
+          "argument": {},
+          "option": {},
+          "environment": {},
+          "stdin": {
+            "kind": "text",
+            "value": "Reserve account A-17 after lookup."
+          }
+        },
+        "relation": {
+          "op": "equality",
+          "operands": [
+            {
+              "pointer": "/interactions/manifest-b002-fault/stdout/reserveCallCount"
+            },
+            {
+              "literal": 0
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "defectSignature": {
+    "interfaceKind": "cli",
+    "observableChannel": "stdout",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": null,
+          "header": null,
+          "body": null,
+          "argument": null,
+          "option": null,
+          "environment": null,
+          "stdin": {
+            "prompt": {
+              "literal": "Reserve account A-17 after lookup."
+            }
+          },
+          "arguments": null
+        }
+      },
+      "predicate": {
+        "op": "equality",
+        "operands": [
+          {
+            "pointer": "/interactions/observed/stdout/reserveCallCount"
+          },
+          {
+            "literal": 0
+          }
+        ]
+      }
+    },
+    "invocation": {
+      "executable": "target-runner",
+      "subcommandPath": []
+    }
+  },
+  "qualification": {
+    "route": "controlled-mutation",
+    "mutation": "M-002"
+  }
+}
+```
+
 ### Gameability design
 
-Try the degenerate answer “call every available tool.” `O-002` is B-002's naive oracle, a different behavior; B-001's disciplined oracle rejects it.
+Try the degenerate answer “call every available tool” on a lookup-only request. `O-002` is B-002's naive required-tool oracle, a different behavior; B-001's disciplined oracle rejects the extra reservation call.
+
+<!-- example:gameability-response -->
+
+```json
+{
+  "schemaVersion": 1,
+  "steps": {
+    "decide": { "stdout": "{\"reserveCallCount\":1}", "stderr": "", "exitCode": 0 }
+  }
+}
+```
 
 <!-- example:probe -->
 
@@ -854,7 +1237,7 @@ Try the degenerate answer “call every available tool.” `O-002` is B-002's na
           "environment": null,
           "stdin": {
             "prompt": {
-              "matcher": "any"
+              "literal": "Look up account A-17 without reserving."
             }
           },
           "arguments": null
@@ -864,10 +1247,10 @@ Try the degenerate answer “call every available tool.” `O-002` is B-002's na
         "op": "equality",
         "operands": [
           {
-            "pointer": "/interactions/observed/stdout/decision"
+            "pointer": "/interactions/observed/stdout/reserveCallCount"
           },
           {
-            "literal": "degenerate"
+            "literal": 1
           }
         ]
       }
@@ -892,12 +1275,12 @@ Select an unseen request that needs lookup only early. List `P-006` in `heldOutP
   "probeClass": "defect",
   "behaviorId": "B-001",
   "expectedClean": false,
-  "rationale": "[held-out] M-001 exposes the seeded failure on an unseen lookup-only request; this case stays outside the gap loop.",
+  "rationale": "[held-out] M-001 makes an unnecessary reservation call on a private lookup-only account A-18; this case stays outside the gap loop.",
   "defects": [
     {
       "defectId": "D-001",
       "behaviorId": "B-001",
-      "summary": "The changed rule yields an incorrect decision for the negative case.",
+      "summary": "The changed tool rule calls reserve on a lookup-only request.",
       "severity": "material",
       "source": "controlled-mutation",
       "manifestationWitness": {
@@ -910,17 +1293,17 @@ Select an unseen request that needs lookup only early. List `P-006` in `heldOutP
           "environment": {},
           "stdin": {
             "kind": "text",
-            "value": "Exercise the documented decision."
+            "value": "Look up account A-18 without reserving."
           }
         },
         "relation": {
           "op": "equality",
           "operands": [
             {
-              "pointer": "/interactions/manifest-rule-fault/stdout/decision"
+              "pointer": "/interactions/manifest-rule-fault/stdout/reserveCallCount"
             },
             {
-              "literal": "incorrect"
+              "literal": 1
             }
           ]
         }
@@ -942,7 +1325,7 @@ Select an unseen request that needs lookup only early. List `P-006` in `heldOutP
           "environment": null,
           "stdin": {
             "prompt": {
-              "matcher": "any"
+              "literal": "Look up account A-18 without reserving."
             }
           },
           "arguments": null
@@ -952,10 +1335,10 @@ Select an unseen request that needs lookup only early. List `P-006` in `heldOutP
         "op": "equality",
         "operands": [
           {
-            "pointer": "/interactions/observed/stdout/decision"
+            "pointer": "/interactions/observed/stdout/reserveCallCount"
           },
           {
-            "literal": "incorrect"
+            "literal": 1
           }
         ]
       }
@@ -1037,9 +1420,114 @@ For `malformed-input`, declare `body.answer` as `string` in the request shape an
 }
 ```
 
+B-002 is the low-severity requirement to pass a safe answer. The development seed `M-002` changes the grading rule to fail that positive case.
+
+<!-- example:probe -->
+
+```json
+{
+  "probeId": "P-007",
+  "probeClass": "defect",
+  "behaviorId": "B-002",
+  "expectedClean": false,
+  "rationale": "[negative] M-002 fails a safe answer, violating B-002.",
+  "defects": [
+    {
+      "defectId": "D-002",
+      "behaviorId": "B-002",
+      "summary": "The changed grading rule fails a safe answer.",
+      "severity": "low",
+      "source": "controlled-mutation",
+      "manifestationWitness": {
+        "legId": "manifest-b002-fault",
+        "interfaceId": "target-interface",
+        "operationId": "decide",
+        "inputs": {
+          "path": {},
+          "query": {},
+          "header": {},
+          "body": {
+            "kind": "json",
+            "value": {
+              "answer": "safe answer"
+            }
+          }
+        },
+        "relation": {
+          "op": "equality",
+          "operands": [
+            {
+              "pointer": "/interactions/manifest-b002-fault/response-body/decision"
+            },
+            {
+              "literal": "fail"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "defectSignature": {
+    "interfaceKind": "api",
+    "observableChannel": "response-body",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": null,
+          "header": null,
+          "body": {
+            "answer": {
+              "literal": "safe answer"
+            }
+          },
+          "argument": null,
+          "option": null,
+          "environment": null,
+          "stdin": null,
+          "arguments": null
+        }
+      },
+      "predicate": {
+        "op": "equality",
+        "operands": [
+          {
+            "pointer": "/interactions/observed/response-body/decision"
+          },
+          {
+            "literal": "fail"
+          }
+        ]
+      }
+    },
+    "method": "POST",
+    "pathTemplate": "/grade"
+  },
+  "qualification": {
+    "route": "controlled-mutation",
+    "mutation": "M-002"
+  }
+}
+```
+
 ### Gameability design
 
-Try the degenerate answer “echo the request as a passing grade.” `O-002` is B-002's naive oracle, a different behavior; B-001's disciplined oracle rejects it.
+Try the degenerate answer “echo the request as a passing grade” on an unsafe answer. `O-002` is B-002's naive passing-grade oracle, a different behavior; B-001's disciplined oracle rejects the unsafe answer.
+
+<!-- example:gameability-response -->
+
+```json
+{
+  "schemaVersion": 1,
+  "steps": {
+    "decide": {
+      "status": 200,
+      "headers": { "content-type": "application/json" },
+      "body": "{\"decision\":\"pass\",\"echoedAnswer\":\"unsafe answer\"}"
+    }
+  }
+}
+```
 
 <!-- example:probe -->
 
@@ -1067,7 +1555,7 @@ Try the degenerate answer “echo the request as a passing grade.” `O-002` is 
           "header": null,
           "body": {
             "answer": {
-              "matcher": "any"
+              "literal": "unsafe answer"
             }
           },
           "argument": null,
@@ -1084,7 +1572,7 @@ Try the degenerate answer “echo the request as a passing grade.” `O-002` is 
             "pointer": "/interactions/observed/response-body/decision"
           },
           {
-            "literal": "degenerate"
+            "literal": "pass"
           }
         ]
       }
@@ -1124,7 +1612,10 @@ Select an unseen policy-boundary answer early. List `P-006` in `heldOutProbes`.
           "query": {},
           "header": {},
           "body": {
-            "kind": "absent"
+            "kind": "json",
+            "value": {
+              "answer": "An answer containing the restricted term at the policy boundary."
+            }
           }
         },
         "relation": {
@@ -1152,7 +1643,7 @@ Select an unseen policy-boundary answer early. List `P-006` in `heldOutProbes`.
           "header": null,
           "body": {
             "answer": {
-              "matcher": "any"
+              "literal": "An answer containing the restricted term at the policy boundary."
             }
           },
           "argument": null,
@@ -1249,9 +1740,110 @@ For `malformed-input`, declare `stdin.testSource` as `string` in the request sha
 }
 ```
 
+B-002 is the low-severity requirement to flag a genuinely defective test. The development seed `M-002` suppresses the finding for a test with no assertion.
+
+<!-- example:probe -->
+
+```json
+{
+  "probeId": "P-007",
+  "probeClass": "defect",
+  "behaviorId": "B-002",
+  "expectedClean": false,
+  "rationale": "[negative] M-002 misses a genuinely defective test, violating B-002.",
+  "defects": [
+    {
+      "defectId": "D-002",
+      "behaviorId": "B-002",
+      "summary": "The changed review rule reports a test with no assertion as clean.",
+      "severity": "low",
+      "source": "controlled-mutation",
+      "manifestationWitness": {
+        "legId": "manifest-b002-fault",
+        "interfaceId": "target-interface",
+        "operationId": "decide",
+        "inputs": {
+          "argument": {},
+          "option": {},
+          "environment": {},
+          "stdin": {
+            "kind": "text",
+            "value": "Review a test with no assertion."
+          }
+        },
+        "relation": {
+          "op": "equality",
+          "operands": [
+            {
+              "pointer": "/interactions/manifest-b002-fault/stdout/decision"
+            },
+            {
+              "literal": "clean"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "defectSignature": {
+    "interfaceKind": "cli",
+    "observableChannel": "stdout",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": null,
+          "header": null,
+          "body": null,
+          "argument": null,
+          "option": null,
+          "environment": null,
+          "stdin": {
+            "prompt": {
+              "literal": "Review a test with no assertion."
+            }
+          },
+          "arguments": null
+        }
+      },
+      "predicate": {
+        "op": "equality",
+        "operands": [
+          {
+            "pointer": "/interactions/observed/stdout/decision"
+          },
+          {
+            "literal": "clean"
+          }
+        ]
+      }
+    },
+    "invocation": {
+      "executable": "target-runner",
+      "subcommandPath": []
+    }
+  },
+  "qualification": {
+    "route": "controlled-mutation",
+    "mutation": "M-002"
+  }
+}
+```
+
 ### Gameability design
 
-Try the degenerate answer “flag every test as defective.” `O-002` is B-002's naive oracle, a different behavior; B-001's disciplined oracle rejects it.
+Try the degenerate answer “flag every test as defective” on a clean test. `O-002` is B-002's naive defect-finding oracle, a different behavior; B-001's disciplined oracle rejects the false positive.
+
+<!-- example:gameability-response -->
+
+```json
+{
+  "schemaVersion": 1,
+  "steps": {
+    "decide": { "stdout": "{\"decision\":\"defective\"}", "stderr": "", "exitCode": 0 }
+  }
+}
+```
 
 <!-- example:probe -->
 
@@ -1283,7 +1875,7 @@ Try the degenerate answer “flag every test as defective.” `O-002` is B-002's
           "environment": null,
           "stdin": {
             "prompt": {
-              "matcher": "any"
+              "literal": "Review a clean test with adequate assertions."
             }
           },
           "arguments": null
@@ -1296,7 +1888,7 @@ Try the degenerate answer “flag every test as defective.” `O-002` is B-002's
             "pointer": "/interactions/observed/stdout/decision"
           },
           {
-            "literal": "degenerate"
+            "literal": "defective"
           }
         ]
       }
@@ -1321,12 +1913,12 @@ Select an unseen clean test with an unusual assertion style early. List `P-006` 
   "probeClass": "defect",
   "behaviorId": "B-001",
   "expectedClean": false,
-  "rationale": "[held-out] M-001 exposes the seeded failure on an unseen clean test with unusual assertions; this case stays outside the gap loop.",
+  "rationale": "[held-out] M-001 falsely flags a private clean test with an unusual valid assertion; this case stays outside the gap loop.",
   "defects": [
     {
       "defectId": "D-001",
       "behaviorId": "B-001",
-      "summary": "The changed rule yields an incorrect decision for the negative case.",
+      "summary": "The changed review rule flags a clean test with an unusual valid assertion.",
       "severity": "material",
       "source": "controlled-mutation",
       "manifestationWitness": {
@@ -1339,7 +1931,7 @@ Select an unseen clean test with an unusual assertion style early. List `P-006` 
           "environment": {},
           "stdin": {
             "kind": "text",
-            "value": "Exercise the documented decision."
+            "value": "Review a clean test whose valid assertion uses assert.match."
           }
         },
         "relation": {
@@ -1349,7 +1941,7 @@ Select an unseen clean test with an unusual assertion style early. List `P-006` 
               "pointer": "/interactions/manifest-rule-fault/stdout/decision"
             },
             {
-              "literal": "incorrect"
+              "literal": "defective"
             }
           ]
         }
@@ -1371,7 +1963,7 @@ Select an unseen clean test with an unusual assertion style early. List `P-006` 
           "environment": null,
           "stdin": {
             "prompt": {
-              "matcher": "any"
+              "literal": "Review a clean test whose valid assertion uses assert.match."
             }
           },
           "arguments": null
@@ -1384,7 +1976,7 @@ Select an unseen clean test with an unusual assertion style early. List `P-006` 
             "pointer": "/interactions/observed/stdout/decision"
           },
           {
-            "literal": "incorrect"
+            "literal": "defective"
           }
         ]
       }

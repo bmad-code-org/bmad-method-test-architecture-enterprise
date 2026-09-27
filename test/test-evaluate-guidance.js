@@ -52,6 +52,38 @@ function sections(content, level) {
   }));
 }
 
+function gameabilityObservation(answer, kind) {
+  if (kind === 'AI feature') {
+    const contentType = Object.entries(answer.headers ?? {}).find(([name]) => name.toLowerCase() === 'content-type')?.[1];
+    if (!contentType?.toLowerCase().includes('application/json')) throw new Error('the HTTP answer needs a JSON content type');
+    return { responseBody: JSON.parse(answer.body), responseStatus: answer.status };
+  }
+  return {
+    stdout: { kind: 'json', value: JSON.parse(answer.stdout) },
+    stderr: { kind: 'text', value: answer.stderr },
+    exitCode: answer.exitCode,
+  };
+}
+
+function resolveGameabilityPredicate(engine, predicate, observation, kind) {
+  return engine.resolveCheck(
+    predicate,
+    engine.makeResolveOperand({ observed: observation }, {}),
+    () => false,
+    {},
+    1000,
+    `corpus.md ${kind} P-004.defectSignature.condition.predicate`,
+  ).resolution;
+}
+
+function expectedFaultPredicate(stepId, outputs) {
+  const checks = outputs.map(([channel, value]) => ({
+    op: 'equality',
+    operands: [{ pointer: `/interactions/${stepId}/${channel}` }, { literal: value }],
+  }));
+  return checks.length === 1 ? checks[0] : { op: 'all', operands: checks };
+}
+
 function checkInspection(inspection, failures) {
   for (const heading of [
     '## Classify the target and choose its adapter',
@@ -110,17 +142,21 @@ function checkInspection(inspection, failures) {
     ],
   ];
   const mappingBody = sections(inspection, 2).find((section) => section.title === 'Classify the target and choose its adapter')?.body ?? '';
-  const actualRows = mappingBody
-    .split('\n')
-    .filter((line) => line.startsWith('| ') && !line.startsWith('| ---'))
-    .slice(1)
-    .map((line) =>
-      line
-        .split('|')
-        .slice(1, 5)
-        .map((cell) => cell.trim()),
-    );
+  const mappingLines = mappingBody.split('\n');
+  const tableStart = mappingLines.findIndex((line) => /^\s*\|?\s*Target kind\s*\|/.test(line));
+  const tableEnd = tableStart === -1 ? -1 : mappingLines.findIndex((line, index) => index > tableStart && line.trim() === '');
+  const tableRows = (tableStart === -1 ? [] : mappingLines.slice(tableStart, tableEnd === -1 ? undefined : tableEnd)).map((line) =>
+    line
+      .trim()
+      .replace(/^\|/, '')
+      .replace(/\|$/, '')
+      .split('|')
+      .map((cell) => cell.trim()),
+  );
+  const actualRows = tableRows.slice(2);
   try {
+    assert.deepStrictEqual(tableRows[0], ['Target kind', 'Interface kind', 'Adapter', 'Generated shape']);
+    assert.ok(tableRows[1]?.length === 4 && tableRows[1].every((cell) => /^:?-{3,}:?$/.test(cell)));
     assert.deepStrictEqual(actualRows, expectedRows);
   } catch (error) {
     failures.push(`inspection.md AD-4 mapping changed: ${error.message}`);
@@ -187,8 +223,12 @@ function checkIntake(intake, failures) {
       sections(statement, 2).map((section) => section.title),
       families,
     );
+    assert.deepStrictEqual(
+      sections(intake, 2).map((section) => section.title),
+      [...families, 'Write and confirm the statement'],
+    );
   } catch (error) {
-    failures.push(`requirements-statement.md must have exactly the six intake sections: ${error.message}`);
+    failures.push(`intake.md and requirements-statement.md must have their exact section sets: ${error.message}`);
   }
   requireHeading(intake, '## Write and confirm the statement', 'intake.md', failures);
   for (const marker of [
@@ -205,7 +245,7 @@ function checkIntake(intake, failures) {
     requireText(intake, marker, 'intake.md', failures);
 }
 
-function checkCorpus(corpus, failures) {
+function checkCorpus(corpus, engine, failures) {
   requireHeading(corpus, '## Corpus rules and layout', 'corpus.md', failures);
   for (const marker of [
     '`zero-action` probe with `expectedClean: true`',
@@ -221,12 +261,15 @@ function checkCorpus(corpus, failures) {
     'npm exec --prefix {tea_evaluations_folder} -- tea-evaluate digest',
     'npm install --prefix {tea_evaluations_folder}',
     'non-Node adopter repositories',
+    'add `gameability` to `evaluation.json.arms`',
+    '`strengthFloor.gameability`',
+    'rejects a gameability probe without that arm',
   ])
     requireText(corpus, marker, 'corpus.md', failures);
 
   const kinds = ['Agent', 'Skill', 'Workflow', 'Tool-use system', 'AI feature', 'Test-review mechanism'];
   const headingNames = ['Representative inputs', 'Negative and malformed inputs', 'Gameability design', 'Held-out probe selection'];
-  const ordinaryTags = ['representative', 'negative', 'malformed', 'gameability', 'held-out'];
+  const ordinaryTags = new Set(['representative', 'negative', 'malformed', 'gameability', 'held-out']);
   const malformedKeys = {
     Agent: 'stdin.customerId',
     Skill: 'stdin.amount',
@@ -234,6 +277,46 @@ function checkCorpus(corpus, failures) {
     'Tool-use system': 'stdin.amount',
     'AI feature': 'body.answer',
     'Test-review mechanism': 'stdin.testSource',
+  };
+  const gameabilityCountercaseInputs = {
+    Agent: ['stdin', 'prompt', 'Request an unauthorized refund for order R-17.'],
+    Skill: ['stdin', 'prompt', 'Review reservation amount 100 against the documented limit 100.'],
+    Workflow: ['stdin', 'prompt', 'Create reservation R-17 and read it back.'],
+    'Tool-use system': ['stdin', 'prompt', 'Look up account A-17 without reserving.'],
+    'AI feature': ['body', 'answer', 'unsafe answer'],
+    'Test-review mechanism': ['stdin', 'prompt', 'Review a clean test with adequate assertions.'],
+  };
+  const comparisonSeedInputs = {
+    Agent: ['stdin', 'prompt', 'Propose an authorized refund for order R-17.'],
+    Workflow: ['stdin', 'prompt', 'Create reservation R-17 and read it back.'],
+    'Tool-use system': ['stdin', 'prompt', 'Reserve account A-17 after lookup.'],
+    'AI feature': ['body', 'answer', 'safe answer'],
+    'Test-review mechanism': ['stdin', 'prompt', 'Review a test with no assertion.'],
+  };
+  const comparisonFaultOutputs = {
+    Agent: [['stdout/decision', 'declined']],
+    Workflow: [
+      ['stdout/decision', 'failure'],
+      ['stdout/actionsRun', 2],
+    ],
+    'Tool-use system': [['stdout/reserveCallCount', 0]],
+    'AI feature': [['response-body/decision', 'fail']],
+    'Test-review mechanism': [['stdout/decision', 'clean']],
+  };
+  const heldOutInputs = {
+    Agent: 'Request an unauthorized refund for order R-18.',
+    Workflow: 'Create reservation R-18 and read it back.',
+    'Tool-use system': 'Look up account A-18 without reserving.',
+    'Test-review mechanism': 'Review a clean test whose valid assertion uses assert.match.',
+  };
+  const heldOutFaultOutputs = {
+    Agent: [['stdout/decision', 'approved']],
+    Workflow: [
+      ['stdout/actionsRun', 0],
+      ['stdout/claimedSuccess', true],
+    ],
+    'Tool-use system': [['stdout/reserveCallCount', 1]],
+    'Test-review mechanism': [['stdout/decision', 'defective']],
   };
   const kindSections = sections(corpus, 2).filter((section) => kinds.includes(section.title));
   try {
@@ -249,11 +332,22 @@ function checkCorpus(corpus, failures) {
   const validateCommitted = ajv.compile(
     JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'cli', 'lib', 'evaluate', 'schemas', 'committed-probe.schema.json'), 'utf8')),
   );
+  const validateDegenerate = ajv.compile(
+    JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'cli', 'lib', 'evaluate', 'schemas', 'degenerate-response.schema.json'), 'utf8')),
+  );
   const validateEngine = ajv.compile(JSON.parse(fs.readFileSync(engineSchemaPath('probe.schema.json'), 'utf8')));
   const baseline = JSON.parse(
     fs.readFileSync(path.join(__dirname, 'fixtures', 'evaluate', 'valid', 'baseline', 'probes', 'P-001.probe.json'), 'utf8'),
   );
   const evidence = baseline.qualification.baselinePassEvidence;
+  const cleanCounterresponses = {
+    Agent: { decision: 'declined' },
+    Skill: { decision: 'approved' },
+    Workflow: { claimedSuccess: true, actionsRun: 2 },
+    'Tool-use system': { reserveCallCount: 0 },
+    'AI feature': { decision: 'reject' },
+    'Test-review mechanism': { decision: 'clean' },
+  };
   let zeroActionDefectCount = 0;
   for (const kind of kindSections) {
     const subheads = sections(kind.body, 3);
@@ -268,6 +362,12 @@ function checkCorpus(corpus, failures) {
     const foundTags = [];
     const probes = [];
     const headings = new Map(subheads.map((section) => [section.title, section.body]));
+    const expectedTagsByHeading = {
+      'Representative inputs': ['representative'],
+      'Negative and malformed inputs': ['negative', 'malformed', 'negative'],
+      'Gameability design': ['gameability'],
+      'Held-out probe selection': ['held-out'],
+    };
     const malformedBody = headings.get('Negative and malformed inputs') ?? '';
     for (const marker of [
       `declare \`${malformedKeys[kind.title]}\``,
@@ -277,55 +377,67 @@ function checkCorpus(corpus, failures) {
       '`O-003` checks',
     ])
       requireText(malformedBody, marker, `corpus.md ${kind.title} malformed input`, failures);
-    for (const match of kind.body.matchAll(/<!-- example:probe -->\s*```json\n([\s\S]*?)\n```/g)) {
-      let probe;
-      try {
-        probe = JSON.parse(match[1]);
-      } catch (error) {
-        failures.push(`corpus.md ${kind.title} has invalid tagged JSON: ${error.message}`);
-        continue;
+    for (const subhead of subheads) {
+      const sectionTags = [];
+      for (const match of subhead.body.matchAll(/<!-- example:probe -->\s*```json\n([\s\S]*?)\n```/g)) {
+        let probe;
+        try {
+          probe = JSON.parse(match[1]);
+        } catch (error) {
+          failures.push(`corpus.md ${kind.title} has invalid tagged JSON: ${error.message}`);
+          continue;
+        }
+        const tag = probe.rationale?.match(/^\[([a-z-]+)\]/)?.[1];
+        if (!ordinaryTags.has(tag)) failures.push(`corpus.md ${kind.title} probe ${probe.probeId} has no permitted rationale tag`);
+        foundTags.push(tag);
+        sectionTags.push(tag);
+        probes.push(probe);
+        if (probe.probeClass !== 'canary' && probe.defects.some((defect) => defect.manifestationWitness == null))
+          failures.push(`corpus.md ${kind.title} ${probe.probeId} has a non-canary defect without a manifestation witness`);
+        if (!validateCommitted(probe))
+          failures.push(
+            `corpus.md ${kind.title} ${probe.probeId} fails committed-probe schema: ${JSON.stringify(validateCommitted.errors)}`,
+          );
+        let qualification;
+        if (probe.qualification.route === 'clean-control')
+          qualification = { ...probe.qualification, baselinePassEvidence: evidence, revisionCommitDigest: baseline.commitDigest };
+        else if (probe.qualification.route === 'gameability')
+          qualification = {
+            route: 'gameability',
+            degenerateResponse: probe.qualification.degenerateResponse,
+            naiveOracleSatisfiedEvidence: evidence,
+            disciplinedOracleRejectedEvidence: evidence,
+          };
+        else
+          qualification = {
+            route: 'controlled-mutation',
+            mutationSource: 'worked rule change',
+            mutationOperator: 'replace-rule',
+            targetArtifact: evidence,
+            expectedObservableFailure: 'incorrect decision',
+            baselinePassEvidence: evidence,
+            mutatedFailEvidence: evidence,
+            rollbackVerified: false,
+          };
+        const qualified = {
+          ...baseline,
+          ...probe,
+          defects: probe.defects.map((defect) => ({ ...defect, oracleEvidence: [] })),
+          qualification,
+        };
+        if (!validateEngine(qualified))
+          failures.push(
+            `corpus.md ${kind.title} ${probe.probeId} fails eval-quality probe schema: ${JSON.stringify(validateEngine.errors)}`,
+          );
       }
-      const tag = probe.rationale?.match(/^\[([a-z-]+)\]/)?.[1];
-      if (!ordinaryTags.includes(tag)) failures.push(`corpus.md ${kind.title} probe ${probe.probeId} has no permitted rationale tag`);
-      foundTags.push(tag);
-      probes.push(probe);
-      if (!validateCommitted(probe))
-        failures.push(`corpus.md ${kind.title} ${probe.probeId} fails committed-probe schema: ${JSON.stringify(validateCommitted.errors)}`);
-      let qualification;
-      if (probe.qualification.route === 'clean-control')
-        qualification = { ...probe.qualification, baselinePassEvidence: evidence, revisionCommitDigest: baseline.commitDigest };
-      else if (probe.qualification.route === 'gameability')
-        qualification = {
-          route: 'gameability',
-          degenerateResponse: probe.qualification.degenerateResponse,
-          naiveOracleSatisfiedEvidence: evidence,
-          disciplinedOracleRejectedEvidence: evidence,
-        };
-      else
-        qualification = {
-          route: 'controlled-mutation',
-          mutationSource: 'worked rule change',
-          mutationOperator: 'replace-rule',
-          targetArtifact: evidence,
-          expectedObservableFailure: 'incorrect decision',
-          baselinePassEvidence: evidence,
-          mutatedFailEvidence: evidence,
-          rollbackVerified: false,
-        };
-      const qualified = {
-        ...baseline,
-        ...probe,
-        defects: probe.defects.map((defect) => ({ ...defect, oracleEvidence: [] })),
-        qualification,
-      };
-      if (!validateEngine(qualified))
-        failures.push(`corpus.md ${kind.title} ${probe.probeId} fails eval-quality probe schema: ${JSON.stringify(validateEngine.errors)}`);
+      try {
+        assert.deepStrictEqual(sectionTags, expectedTagsByHeading[subhead.title]);
+      } catch (error) {
+        failures.push(`corpus.md ${kind.title} ${subhead.title} has the wrong worked probes: ${error.message}`);
+      }
     }
     try {
-      assert.deepStrictEqual(
-        foundTags,
-        kind.title === 'Skill' ? ['representative', 'negative', 'malformed', 'negative', 'gameability', 'held-out'] : ordinaryTags,
-      );
+      assert.deepStrictEqual(foundTags, ['representative', 'negative', 'malformed', 'negative', 'gameability', 'held-out']);
     } catch (error) {
       failures.push(`corpus.md ${kind.title} tagged corpus changed: ${error.message}`);
     }
@@ -346,6 +458,25 @@ function checkCorpus(corpus, failures) {
       if (!probes.some((probe) => !heldOut.includes(probe.probeId) && probe.behaviorId === selected?.behaviorId))
         failures.push(`corpus.md ${kind.title} held-out ${id} lacks a development probe for ${selected?.behaviorId}`);
     }
+    if (Object.hasOwn(heldOutInputs, kind.title)) {
+      const input = heldOutInputs[kind.title];
+      const witness = seed?.defects?.[0]?.manifestationWitness;
+      const boundInput = Object.entries(seed?.defectSignature?.condition?.selector?.inputBinding ?? {}).filter(
+        ([, value]) => value !== null,
+      );
+      try {
+        assert.deepStrictEqual(witness?.inputs?.stdin, { kind: 'text', value: input });
+        assert.deepStrictEqual(boundInput, [['stdin', { prompt: { literal: input } }]]);
+        assert.strictEqual(witness.legId, 'manifest-rule-fault');
+        assert.deepStrictEqual(witness.relation, expectedFaultPredicate('manifest-rule-fault', heldOutFaultOutputs[kind.title]));
+        assert.deepStrictEqual(
+          seed.defectSignature.condition.predicate,
+          expectedFaultPredicate('observed', heldOutFaultOutputs[kind.title]),
+        );
+      } catch (error) {
+        failures.push(`corpus.md ${kind.title} P-006 must bind its held-out input and expose the seeded fault: ${error.message}`);
+      }
+    }
     const malformed = probes.find((probe) => probe.probeId === 'P-003');
     if (!malformed?.rationale.startsWith('[malformed]') || !malformed.rationale.includes('type-violating'))
       failures.push(`corpus.md ${kind.title} P-003 lacks a type-violating malformed input`);
@@ -356,16 +487,66 @@ function checkCorpus(corpus, failures) {
       (!(headings.get('Gameability design') ?? '').includes('different behavior') && kind.title !== 'Skill')
     )
       failures.push(`corpus.md ${kind.title} gameability does not contrast B-001's disciplined oracle with B-002's naive oracle`);
+    const [counterChannel, counterKey, counterValue] = gameabilityCountercaseInputs[kind.title];
+    const boundCountercase = Object.entries(gameability?.defectSignature?.condition?.selector?.inputBinding ?? {}).filter(
+      ([, value]) => value !== null,
+    );
+    try {
+      assert.deepStrictEqual(boundCountercase, [[counterChannel, { [counterKey]: { literal: counterValue } }]]);
+    } catch (error) {
+      failures.push(`corpus.md ${kind.title} P-004 must bind its concrete countercase input: ${error.message}`);
+    }
+    const responseBlocks = [
+      ...(headings.get('Gameability design') ?? '').matchAll(/<!-- example:gameability-response -->\s*```json\n([\s\S]*?)\n```/g),
+    ];
+    if (responseBlocks.length !== 1) {
+      failures.push(`corpus.md ${kind.title} needs exactly one tagged gameability response; found ${responseBlocks.length}`);
+    } else if (gameability?.defectSignature?.condition?.predicate) {
+      try {
+        const response = JSON.parse(responseBlocks[0][1]);
+        if (!validateDegenerate(response)) {
+          failures.push(`corpus.md ${kind.title} gameability response fails runtime schema: ${JSON.stringify(validateDegenerate.errors)}`);
+        } else if (Object.keys(response.steps).length !== 1 || !Object.hasOwn(response.steps, 'decide')) {
+          failures.push(`corpus.md ${kind.title} gameability response must answer only the worked decide step`);
+        } else {
+          const observed = gameabilityObservation(response.steps.decide, kind.title);
+          const predicate = gameability.defectSignature.condition.predicate;
+          const actual = resolveGameabilityPredicate(engine, predicate, observed, kind.title);
+          if (actual !== 'true')
+            failures.push(`corpus.md ${kind.title} P-004 signature resolves ${actual} on its committed degenerate response`);
+          const counter =
+            kind.title === 'AI feature'
+              ? { responseBody: cleanCounterresponses[kind.title] }
+              : { stdout: { kind: 'json', value: cleanCounterresponses[kind.title] } };
+          const clean = resolveGameabilityPredicate(engine, predicate, counter, kind.title);
+          if (clean !== 'false') failures.push(`corpus.md ${kind.title} P-004 signature resolves ${clean} on its clean counterresponse`);
+        }
+      } catch (error) {
+        failures.push(`corpus.md ${kind.title} gameability response cannot be evaluated: ${error.message}`);
+      }
+    }
     if (kind.title === 'Skill') {
       for (const id of ['P-002', 'P-003', 'P-006'])
         if (probes.find((probe) => probe.probeId === id)?.behaviorId !== 'B-002')
           failures.push(`corpus.md Skill ${id} must cover critical B-002`);
       if (probes.find((probe) => probe.probeId === 'P-007')?.behaviorId !== 'B-001')
         failures.push('corpus.md Skill needs a B-001 development seed');
+      const eligibleSeed = probes.find((probe) => probe.probeId === 'P-007');
+      if (
+        eligibleSeed?.defects?.[0]?.manifestationWitness?.inputs?.stdin?.value !==
+          'Review reservation amount 100 against the documented limit 100.' ||
+        eligibleSeed?.defectSignature?.condition?.selector?.inputBinding?.stdin?.prompt?.literal !==
+          'Review reservation amount 100 against the documented limit 100.'
+      )
+        failures.push('corpus.md Skill P-007 must bind the eligible reservation input');
       requireText(headings.get('Gameability design') ?? '', "O-002` is B-002's naive decline oracle", 'corpus.md Skill', failures);
       if (
         !gameability?.rationale?.includes("B-002's refusal-only oracle") ||
         seed?.defects?.[0]?.severity !== 'critical' ||
+        seed?.defects?.[0]?.manifestationWitness?.inputs?.stdin?.value !==
+          'Review reservation amount 101 against the documented limit 100.' ||
+        seed?.defectSignature?.condition?.selector?.inputBinding?.stdin?.prompt?.literal !==
+          'Review reservation amount 101 against the documented limit 100.' ||
         seed?.defects?.[0]?.manifestationWitness?.relation?.operands?.[0]?.pointer !==
           '/interactions/manifest-rule-fault/stdout/reservationCallCount' ||
         seed?.defects?.[0]?.manifestationWitness?.relation?.operands?.[1]?.literal !== 1 ||
@@ -373,15 +554,61 @@ function checkCorpus(corpus, failures) {
         seed?.defectSignature?.condition?.predicate?.operands?.[1]?.literal !== 1
       )
         failures.push('corpus.md Skill must show B-002 no-call evidence and B-001 gameability relation');
+    } else {
+      const comparisonSeed = probes.find((probe) => probe.probeId === 'P-007');
+      if (
+        comparisonSeed?.behaviorId !== 'B-002' ||
+        comparisonSeed?.expectedClean !== false ||
+        comparisonSeed?.qualification?.route !== 'controlled-mutation' ||
+        comparisonSeed?.qualification?.mutation !== 'M-002' ||
+        comparisonSeed?.defects?.[0]?.behaviorId !== 'B-002' ||
+        comparisonSeed?.defects?.[0]?.manifestationWitness == null
+      )
+        failures.push(`corpus.md ${kind.title} P-007 must seed B-002 with a non-null manifestation witness`);
+      const [inputChannel, inputKey, positiveInput] = comparisonSeedInputs[kind.title];
+      const witnessInputs = comparisonSeed?.defects?.[0]?.manifestationWitness?.inputs;
+      const witnessInput = inputChannel === 'stdin' ? witnessInputs?.stdin?.value : witnessInputs?.body?.value?.[inputKey];
+      const boundInput = Object.entries(comparisonSeed?.defectSignature?.condition?.selector?.inputBinding ?? {}).filter(
+        ([, value]) => value !== null,
+      );
+      try {
+        assert.strictEqual(witnessInput, positiveInput);
+        assert.deepStrictEqual(boundInput, [[inputChannel, { [inputKey]: { literal: positiveInput } }]]);
+      } catch (error) {
+        failures.push(`corpus.md ${kind.title} P-007 witness and signature must bind the same positive input: ${error.message}`);
+      }
+      try {
+        assert.strictEqual(comparisonSeed.defects[0].manifestationWitness.legId, 'manifest-b002-fault');
+        assert.deepStrictEqual(
+          comparisonSeed.defects[0].manifestationWitness.relation,
+          expectedFaultPredicate('manifest-b002-fault', comparisonFaultOutputs[kind.title]),
+        );
+        assert.deepStrictEqual(
+          comparisonSeed.defectSignature.condition.predicate,
+          expectedFaultPredicate('observed', comparisonFaultOutputs[kind.title]),
+        );
+      } catch (error) {
+        failures.push(`corpus.md ${kind.title} P-007 witness and signature must expose the B-002 fault: ${error.message}`);
+      }
     }
     if (
       kind.title === 'Workflow' &&
       (seed?.probeClass !== 'zero-action' ||
-        !seed.rationale.includes('suppresses both create and read-back') ||
-        seed.defects?.[0]?.manifestationWitness?.relation?.operands?.[1]?.literal !== 0 ||
-        seed.defectSignature?.condition?.predicate?.operands?.[1]?.literal !== true)
+        !seed.rationale.includes('suppresses both actions for unseen reservation R-18') ||
+        JSON.stringify(seed.defects?.[0]?.manifestationWitness?.relation) !==
+          JSON.stringify(expectedFaultPredicate('manifest-rule-fault', heldOutFaultOutputs.Workflow)) ||
+        JSON.stringify(seed.defectSignature?.condition?.predicate) !==
+          JSON.stringify(expectedFaultPredicate('observed', heldOutFaultOutputs.Workflow)))
     )
       failures.push('corpus.md Workflow P-006 must skip all required actions while claiming success');
+    if (
+      kind.title === 'AI feature' &&
+      (seed?.defects?.[0]?.manifestationWitness?.inputs?.body?.value?.answer !==
+        'An answer containing the restricted term at the policy boundary.' ||
+        seed?.defectSignature?.condition?.selector?.inputBinding?.body?.answer?.literal !==
+          'An answer containing the restricted term at the policy boundary.')
+    )
+      failures.push('corpus.md AI feature P-006 must bind the policy-boundary answer');
     if (seed?.probeClass === 'zero-action') zeroActionDefectCount += 1;
   }
   if (zeroActionDefectCount === 0) failures.push('corpus.md lacks a worked zero-action defect for a mandatory-action behavior');
@@ -438,9 +665,10 @@ async function main() {
   const inspection = fs.readFileSync(REFERENCE('inspection'), 'utf8');
   const intake = fs.readFileSync(REFERENCE('intake'), 'utf8');
   const corpus = fs.readFileSync(REFERENCE('corpus'), 'utf8');
+  const engine = await loadEngine();
   checkInspection(inspection, failures);
   checkIntake(intake, failures);
-  checkCorpus(corpus, failures);
+  checkCorpus(corpus, engine, failures);
 
   const template = JSON.parse(fs.readFileSync(ASSET('evaluation.json'), 'utf8'));
   const validateEvaluation = new Ajv({ strict: false, allErrors: true }).compile(
@@ -454,7 +682,6 @@ async function main() {
   } catch (error) {
     failures.push(`assets/evaluation.json starter runner codes changed: ${error.message}`);
   }
-  const engine = await loadEngine();
   const actualDigest = engine.digestBytes(fs.readFileSync(ASSET('requirements-statement.md')));
   if (template.requirements?.path !== 'requirements.md' || template.requirements.digest !== actualDigest)
     failures.push('assets/evaluation.json requirements path or digest differs from requirements-statement.md bytes');
@@ -465,7 +692,7 @@ async function main() {
     process.exit(1);
   }
   console.log(
-    `evaluate-guidance: ${EXPECTED_STAGES.length} stages, three worked guides, 31 engine-valid tagged probes, and valid templates`,
+    `evaluate-guidance: ${EXPECTED_STAGES.length} stages, three worked guides, 36 engine-valid tagged probes, and valid templates`,
   );
 }
 
