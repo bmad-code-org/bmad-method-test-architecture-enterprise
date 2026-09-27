@@ -167,7 +167,20 @@ try {
           observationIds.map((id) => ({ findingId, observation: record.observations.find(({ observationId }) => observationId === id) })),
         )
         .sort((left, right) => left.observation.sequence - right.observation.sequence);
-      assert.equal(trial.firstMaterialError?.observationId ?? null, materialCitations[0]?.observation.observationId ?? null);
+      const first = materialCitations[0];
+      assert.deepEqual(
+        trial.firstMaterialError,
+        first
+          ? {
+              findingId: first.findingId,
+              observationId: first.observation.observationId,
+              sequence: first.observation.sequence,
+              operationId: first.observation.operationId,
+              provenance: first.observation.provenance,
+              phase: runSnapshot.operationPhases[first.observation.operationId],
+            }
+          : null,
+      );
       if (trial.firstMaterialError !== null) sawFirstMaterialError = true;
       for (const [findingPosition, traced] of trial.findings.entries()) {
         const original = record.findings[findingPosition];

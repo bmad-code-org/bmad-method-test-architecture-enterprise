@@ -100,6 +100,7 @@ Five targeted revert checks failed their named suites and restored the source by
 | F3: oracle and full citation assertions      | medium  | patch  | Persisted trace tests compare individual citations but do not assert the full citation list or retained oracle ID.                                                          |
 | F4: uncited imported finding                 | high    | patch  | A schema-valid imported `records` finding can have no citations or quotes, contrary to AD-23.                                                                               |
 | F5: edited phase E2E                         | medium  | patch  | The final runtime reviewer changed a saved phase value and observed score exit 0 with wrong attribution, confirming B2 and E2.                                              |
+| R2-1: first material error shape             | medium  | patch  | The persisted test checked its observation ID alone, so an added judgment field inside `firstMaterialError` would pass. Full object equality now closes that gap.           |
 
 ## Verification
 
