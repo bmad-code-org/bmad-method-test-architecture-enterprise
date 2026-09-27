@@ -223,6 +223,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `tea-evaluate score` refuses a planted `scores` symlink before running the scorer, so a pre-existing link cannot redirect score artifacts into the adopter's repository. The remaining concurrent directory-swap case is tracked by Story 1.41.
 - A `copy` workspace reproduced for a trial or a qualification now holds what the pristine copy held when it was made (Story 1.18).
   The reproduction copied the pristine copy as it stood after the preflight legs ran in it, so a target whose operation writes (a workflow step that stores a record) left the pristine copy changed, and every later workspace was refused with exit 12 as not reproducing it; the pristine copy now keeps a snapshot beside itself, its links contained and its provisioned directories left out, and a snapshot changed after it was made still exits 12.
   A reproduction provisions only the directories the pristine copy provisioned when it was made, so a provisioned directory a target makes there during the legs reaches no later workspace, and one planted in the snapshot or moved out of the pristine copy exits 12.

@@ -105,6 +105,22 @@ function calibrationProblems(evaluation, contract, calibration, engine) {
     problems.push(`${CALIBRATION_PATH} must contain an items array`);
     return problems;
   }
+  if (
+    rubrics.some(
+      (rubric) =>
+        rubric === null ||
+        typeof rubric !== 'object' ||
+        !Array.isArray(rubric.criteria) ||
+        !Array.isArray(rubric.scaleLevels) ||
+        rubric.criteria.some(
+          (criterion) => criterion === null || typeof criterion !== 'object' || typeof criterion.evidence !== 'string',
+        ) ||
+        rubric.scaleLevels.some((level) => level === null || typeof level !== 'object'),
+    )
+  ) {
+    problems.push('contract rubrics must be valid before judge calibration');
+    return problems;
+  }
   const expected = new Map();
   const criteria = new Map();
   for (const rubric of rubrics)

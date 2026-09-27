@@ -679,6 +679,17 @@ Added 2026-09-26 in Story 1.21. Levels: integration over real eval-quality, cont
 | Calibration inputs change the imported scoring version | Change one item and then the minimum agreement; assert both change `EvaluatorConfiguration` and its scoring version          | Contract                           | P1  | Omitting either binding leaves the version unchanged            |
 | Uncalibrated rubric records are refused                | `check` exits 10 for absent or unverifiable provenance; a non-rubric `records` evaluation still passes its import path       | Contract                           | P1  | Bypassing the refusal accepts an uncalibrated rubric            |
 
+### Story 1.41: Confine score output during concurrent run-directory changes
+
+Added 2026-09-26 in Story 1.21. Levels: end-to-end over real eval-quality, integration, static. Files: `test/test-evaluate-partitions.js` (`test:evaluate-partitions`) and `test/test-evaluate-run.js` (`test:evaluate-run`).
+
+| AC                                                  | Test                                                                                                                                                                        | Level                             | P   | Revert check                                                        |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- | --- | ------------------------------------------------------------------- |
+| A swapped score directory cannot redirect an output | Race a link swap at the scores parent, invocation and probe directories while `score` runs; assert exit 12 or in-run output and unchanged external sentinels and git status | End-to-end over real eval-quality | P0  | Removing held-directory checks changes an external sentinel         |
+| Repeated scoring retains separate outputs           | Score the same sealed run twice and validate both invocation directories and their evidence                                                                                 | Integration                       | P1  | Reusing an invocation directory overwrites the first result         |
+| Stage provenance and evidence remain replayable     | Compare recorded argv and stream bytes with the actual stage call; direct eval-quality re-score reproduces the persisted evidence digest                                    | Integration                       | P0  | A false argv or unverified copy fails provenance or digest equality |
+| The reference explains integrity refusal            | Read the score-output section and check the named exit and safe location                                                                                                    | Static                            | P2  | Removing the section fails the read                                 |
+
 ## The Dogfood Proof (AD-15)
 
 ### What the run must produce

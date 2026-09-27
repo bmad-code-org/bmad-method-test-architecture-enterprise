@@ -76,6 +76,7 @@ development_status:
   1-38-hold-a-deployment-to-the-release-it-reports: backlog
   1-39-tell-a-captured-value-too-large-to-launch-from-a-target-tha: backlog
   1-40-calibrate-rubric-scores-imported-from-harness-records: backlog
+  1-41-confine-score-output-during-concurrent-run-directory-changes: backlog
   epic-1-retrospective: optional
 
   epic-2: backlog

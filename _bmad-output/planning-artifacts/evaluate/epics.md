@@ -23,7 +23,7 @@ inputDocuments:
 
 ## Overview
 
-This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and forty-five stories (Stories 1.27 to 1.40 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
+This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and forty-six stories (Stories 1.27 to 1.41 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
 
 Evaluate is fully stacked. The stack runs system under test, then the evaluation (the mechanism that runs the system, collects evidence and makes judgments), then the Behavioral Evaluation Contract (what behavior matters, what evidence counts, how success and failure resolve), then eval-quality (contract sanity, evidence support, and whether the evaluation catches defects). TeA owns every layer above eval-quality, including each concern eval-quality states it leaves to the caller, so an adopter can evaluate any target end to end. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3 onward, Epic 2 and H.1 to close the plan gap audit; the Traceability section maps each audit item to the story that closes it.
 
@@ -150,7 +150,7 @@ None. Evaluate has no graphical interface.
 ### Epic 1: The Evaluate authoring loop
 
 An adopter describes a target, answers Evaluate's questions, chooses or builds the evaluation layer and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches the seeded defect, with the gaps named and closed. The epic closes by running Evaluate on `bmad-testarch-evaluate` itself, then proving the guidance on two more target kinds, on seeded weaknesses and on an evaluation framework its guides never name.
-Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.40.
+Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.41.
 
 **FRs covered:** FR1 to FR10, FR13, FR14.
 
@@ -206,12 +206,13 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 38    | 1.38  | 1.32                         |
 | 39    | 1.39  | 1.18                         |
 | 40    | 1.40  | 1.17, 1.21                   |
-| 41    | 2.1   | 1.16, 1.26                   |
-| 42    | 2.2   | 2.1                          |
-| 43    | 2.3   | 2.2                          |
-| 44    | 2.4   | 2.3                          |
-| 45    | 2.5   | 2.4                          |
-| 46    | H.1   | 2.5                          |
+| 41    | 1.41  | 1.8, 1.21                    |
+| 42    | 2.1   | 1.16, 1.26                   |
+| 43    | 2.2   | 2.1                          |
+| 44    | 2.3   | 2.2                          |
+| 45    | 2.4   | 2.3                          |
+| 46    | 2.5   | 2.4                          |
+| 47    | H.1   | 2.5                          |
 
 ## Epic 1: The Evaluate authoring loop
 
@@ -1200,6 +1201,26 @@ So that its sealed records count only after its rubric judgments meet the agreem
 
 **Dependencies:** 1.17, 1.21.
 **Gate:** `npm test`, `npm run test:release-metadata`, engine check.
+
+### Story 1.41: Confine score output during concurrent run-directory changes
+
+Added 2026-09-26 in Story 1.21 from final review. A planted `scores` link made `tea-evaluate score` write into the adopter repository. Story 1.21 refuses that link before scoring. A process changing a score directory while the engine runs can still redirect an output, because the score path does not use the held directory protections of `run`.
+
+As an adopter scoring a run,
+I want every score artifact and diagnostic held inside that run's output directory,
+So that a target process cannot redirect a score write into my working tree (AD-7, AD-12).
+
+**Acceptance Criteria:**
+
+**Given** a valid sealed run whose `scores` parent is a real directory
+**When** a second `score` invocation runs, or a target process replaces a score invocation or probe directory with a link immediately before an output write
+**Then** scoring either writes all evidence and diagnostics under the original held run directory or exits 12 before an external write; an end-to-end fixture races the replacements and compares the adopter's git status and external sentinels before and after; removing the held-directory check makes that fixture change at least one sentinel
+**And** a normal repeated score invocation succeeds and preserves both score invocations, while a planted link at `scores`, the invocation directory, or a probe directory is refused without an engine call; a regression fails if any planted link is followed
+**And** the stage record preserves the actual eval-quality argv, stdout, stderr and exit code, and a direct CLI re-score reproduces the persisted evidence byte for byte; rewriting the argv to hide a private staging path or copying an unverified artifact fails the provenance and digest checks
+**And** the CLI reference describes the score-output integrity refusal, with a static test that fails if that section is removed
+
+**Dependencies:** 1.8, 1.21.
+**Gate:** `npm test`, `npm run docs:validate-links`, `npm run docs:build`, engine check.
 
 ## Epic 2: Continuous proof in CI
 

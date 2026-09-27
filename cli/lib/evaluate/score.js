@@ -416,8 +416,23 @@ async function runScoreCommand(folder, { run: invocationId, env = process.env, l
       : `; ${refused.length} probe(s) the run refused are not scored: ${refused.map((entry) => entry.probeId).join(', ')}`;
 
   const scoreInvocationId = newInvocationId();
-  const scoreDirectory = path.join(runDirectory, 'scores', scoreInvocationId);
-  fs.mkdirSync(scoreDirectory, { recursive: true });
+  const scoresRoot = path.join(runDirectory, 'scores');
+  try {
+    try {
+      fs.mkdirSync(scoresRoot);
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+    }
+    if (!fs.lstatSync(scoresRoot).isDirectory()) throw new Error('scores is a link or a non-directory entry');
+  } catch (error) {
+    return new ScoreOutcome({
+      exitCode: INFRASTRUCTURE,
+      runDirectory,
+      message: `score output cannot be created inside the run directory: ${error.message}`,
+    });
+  }
+  const scoreDirectory = path.join(scoresRoot, scoreInvocationId);
+  fs.mkdirSync(scoreDirectory);
   const scores = [];
   let stageFailed = false;
   try {

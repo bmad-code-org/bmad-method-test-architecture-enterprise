@@ -96,9 +96,9 @@ The first independent review round used blind, edge-case, and verification-gap l
 | Partition tests could miss a late filter                  | Fixed                                                                              | The tests assert launch and qualification evidence for the selected probes                                                                     |
 | Public CLI reference omits the new behavior               | Fixed                                                                              | The reference now describes partition selection, evidence views, and rubric calibration                                                        |
 
-The accepted imported-records gap has its own acceptance criteria and revert checks in Story 1.40. The macOS npm startup abort is recorded under Implementation Notes; its stack is outside TeA code and a direct contract-source run plus 20 repeated npm launches passed.
+The imported-records calibration gap has its own acceptance criteria and revert checks in Story 1.40. Story 1.41 tracks score-output confinement during concurrent directory changes. The macOS npm startup abort is recorded under Implementation Notes; its stack is outside TeA code and a direct contract-source run plus 20 repeated npm launches passed.
 
-The final review round found and closed additional defects:
+The final review rounds found these additional defects and dispositions:
 
 | Finding                                                                                                        | Disposition | Evidence                                                                                                                                                      |
 | -------------------------------------------------------------------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -110,7 +110,10 @@ The final review round found and closed additional defects:
 | Calibration response could parse but miss the criterion evidence pointer                                       | Fixed       | `check` resolves every projected example through eval-quality's published resolver and refuses unreachable evidence.                                          |
 | A calibration file changed after `check` could leave missing items or undefined agreement                      | Fixed       | The calibration entry point validates its captured snapshot before scorer calls; a regression refuses missing and empty snapshots.                            |
 | Review tests compared configuration inputs but missed the resulting scoring version and call order             | Fixed       | Tests compare `scoringVersion` after threshold and item edits and check every calibration launch precedes the first trial launch.                             |
-| Epic story count and CLI rule table were stale                                                                 | Fixed       | The plan names 45 Epic 1 stories; the reference names 26 rules and describes the new calibration and held-out checks.                                         |
+| Malformed rubric and held-out probe inputs crashed `check` after schema findings                               | Fixed       | End-to-end cases put a null criterion and an object-shaped `defects` field beside valid calibration and held-out declarations; both now exit 10.              |
+| A planted `scores` symlink redirected score artifacts into the adopter repository                              | Fixed       | `score` refuses the link before an engine call; an end-to-end case checks exit 12 and unchanged adopter git status.                                           |
+| Concurrent score-directory replacement could still redirect an engine output                                   | Story 1.41  | The new story requires held score-output identities, a concurrent-swap fixture, truthful stage argv and direct re-score proof.                                |
+| Epic story count and CLI rule table were stale                                                                 | Fixed       | The plan names 46 stories and the reference names 26 rules with the new calibration and held-out checks.                                                      |
 
 ## Verification
 

@@ -3,6 +3,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 const { writePartitionViews } = require('../cli/lib/evaluate/partition');
 const { suite } = require('./lib/evaluate-story-121');
 
@@ -101,6 +102,17 @@ try {
     assert.equal(fs.readFileSync(sentinel, 'utf8'), `outside ${name}\n`);
     assert.equal(fs.lstatSync(view).isFile(), true);
   }
+  const unsafe = test.project('scores-link');
+  const unsafeRunResult = test.cli(unsafe.folder, 'run', [], unsafe.env);
+  assert.equal(unsafeRunResult.status, 0, unsafeRunResult.output);
+  const unsafeRun = test.latest(unsafe.folder);
+  fs.symlinkSync(unsafe.repository, path.join(unsafeRun, 'scores'), 'dir');
+  const status = () => spawnSync('git', ['-C', unsafe.repository, 'status', '--porcelain'], { encoding: 'utf8' }).stdout;
+  const beforeScore = status();
+  const refusedScore = test.cli(unsafe.folder, 'score', ['--run', path.basename(unsafeRun)], unsafe.env);
+  assert.equal(refusedScore.status, 12, refusedScore.output);
+  assert.match(refusedScore.output, /scores is a link or a non-directory entry/);
+  assert.equal(status(), beforeScore, 'a planted scores link redirected score output into the adopter repository');
   const invalid = test.cli(project.folder, 'run', ['--partition', 'unknown'], project.env);
   assert.equal(invalid.status, 64);
   process.stdout.write('Evaluate partition selection and evidence projections passed.\n');

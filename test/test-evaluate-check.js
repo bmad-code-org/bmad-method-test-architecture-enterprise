@@ -2273,6 +2273,15 @@ async function checkDefectCases() {
       },
     },
     {
+      name: 'held-out malformed probe defects',
+      file: 'probes/P-002.probe.json',
+      rule: 'schema',
+      plant: (folder) => {
+        editJson(folder, 'evaluation.json', (value) => (value.heldOutProbes = ['P-002']));
+        editJson(folder, 'probes/P-002.probe.json', (probe) => (probe.defects = {}));
+      },
+    },
+    {
       name: 'rubric with no calibration criterion item',
       file: 'policy/judge-calibration.json',
       rule: 'judge-calibration',
@@ -2280,6 +2289,18 @@ async function checkDefectCases() {
         plantRubric(folder);
         fs.writeFileSync(path.join(folder, 'policy/judge-calibration.json'), '{"items":[]}\n');
       },
+    },
+    {
+      name: 'malformed rubric criterion beside calibration',
+      file: 'contract.json',
+      rule: 'engine-schema',
+      plant: (folder) => {
+        plantRubric(folder);
+        editJson(folder, 'contract.json', (contract) => (contract.rubrics[0].criteria[0] = null));
+      },
+      expect: (output) => [
+        [output.includes('contract rubrics must be valid before judge calibration'), 'calibration did not refuse the malformed rubric'],
+      ],
     },
     {
       name: 'rubric with an anchored level missing',

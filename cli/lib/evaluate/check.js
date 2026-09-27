@@ -1357,6 +1357,8 @@ function checkProbes(report, folder, context, behaviors, mutations, registry) {
 function checkHeldOut(report, folder, evaluation) {
   const selected = evaluation.heldOutProbes ?? [];
   if (!Array.isArray(selected)) return;
+  const defectsOf = (probe) =>
+    Array.isArray(probe?.defects) ? probe.defects.filter((defect) => defect !== null && typeof defect === 'object') : [];
   const probes = new Map();
   for (const entry of listDirectory(folder, 'probes') ?? []) {
     if (!entry.isFile || !PROBE_FILE.test(entry.name)) continue;
@@ -1371,13 +1373,13 @@ function checkHeldOut(report, folder, evaluation) {
     }
     if (probe.qualification?.route === 'clean-control' || probe.expectedClean === true)
       report.add(MANIFEST_NAME, 'held-out', `heldOutProbes names clean control ${id}`);
-    const affected = new Set([probe.behaviorId, ...(probe.defects ?? []).map((defect) => defect.behaviorId)]);
+    const affected = new Set([probe.behaviorId, ...defectsOf(probe).map((defect) => defect.behaviorId)]);
     for (const behaviorId of affected) {
       if (typeof behaviorId !== 'string') continue;
       const development = [...probes.values()].some(
         (candidate) =>
           !selected.includes(candidate.probeId) &&
-          (candidate.behaviorId === behaviorId || (candidate.defects ?? []).some((defect) => defect.behaviorId === behaviorId)),
+          (candidate.behaviorId === behaviorId || defectsOf(candidate).some((defect) => defect.behaviorId === behaviorId)),
       );
       if (!development) report.add(MANIFEST_NAME, 'held-out', `${id} leaves behavior ${behaviorId} without a development probe`);
     }
