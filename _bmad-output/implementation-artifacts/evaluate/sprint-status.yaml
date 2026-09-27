@@ -51,7 +51,7 @@ development_status:
   1-18-evaluate-a-workflow-target-through-after-and-captured-bindi: done
   1-19-evaluate-a-tool-use-calling-agent-through-its-own-command-j: done
   1-20-import-a-second-framework-s-results-promptfoo: done
-  1-21-hold-out-probes-and-calibrate-rubric-judges: backlog
+  1-21-hold-out-probes-and-calibrate-rubric-judges: done
   1-22-attribute-findings-for-interpretation: backlog
   1-12-inspect-the-target-capture-requirements-and-design-the-corpu: backlog
   1-13-author-the-contract-oracles-rubrics-and-adapter-wiring: backlog
@@ -75,6 +75,8 @@ development_status:
   1-37-know-a-started-http-server-by-the-port-it-bound-itself: done
   1-38-hold-a-deployment-to-the-release-it-reports: backlog
   1-39-tell-a-captured-value-too-large-to-launch-from-a-target-tha: backlog
+  1-40-calibrate-rubric-scores-imported-from-harness-records: backlog
+  1-41-confine-score-output-during-concurrent-run-directory-changes: backlog
   epic-1-retrospective: optional
 
   epic-2: backlog

@@ -45,6 +45,8 @@ const wait = (milliseconds) => Atomics.wait(new Int32Array(new SharedArrayBuffer
 const prompt = fs.readFileSync(0, 'utf8');
 if (option('--log') !== undefined) fs.appendFileSync(option('--log'), 'judged\n');
 if (option('--capture') !== undefined) fs.appendFileSync(option('--capture'), `${JSON.stringify(prompt)}\n`);
+if (option('--event-log') !== undefined)
+  fs.appendFileSync(option('--event-log'), `${JSON.stringify({ judge: true, calibration: prompt.includes('calibration response') })}\n`);
 if (option('--cwd-log') !== undefined) {
   fs.appendFileSync(option('--cwd-log'), `${JSON.stringify({ cwd: process.cwd(), entries: fs.readdirSync('.') })}\n`);
 }

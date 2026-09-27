@@ -309,11 +309,22 @@ function evaluatorLayerChange(folder, files) {
  * @param {(bytes: Uint8Array) => string} options.digestBytes
  * @returns {{ evaluatorIdentity: string, modelSnapshot: string, systemPromptDigest: string, decodingParameters: object, judgeConfiguration: object|null }}
  */
-function configurationFields({ layer, conditions, judgeConfiguration, digestBytes }) {
+function configurationFields({
+  layer,
+  conditions,
+  judgeConfiguration,
+  digestBytes,
+  calibrationDigest = null,
+  calibrationMinimumAgreement = null,
+}) {
   const { evaluator } = layer;
   const noPrompt = digestBytes(new Uint8Array(0));
   const target = { modelSnapshot: conditions?.modelSnapshot ?? 'none', systemPromptDigest: conditions?.systemPromptDigest ?? noPrompt };
   const decodingParameters = { 'tea.evaluatorKind': evaluator.kind };
+  if (calibrationDigest !== null) {
+    decodingParameters['tea.judgeCalibrationDigest'] = calibrationDigest;
+    decodingParameters['tea.judgeCalibrationMinimumAgreement'] = calibrationMinimumAgreement;
+  }
   if (evaluator.kind === 'deterministic') {
     return { evaluatorIdentity: IDENTITIES.deterministic, ...target, decodingParameters, judgeConfiguration };
   }

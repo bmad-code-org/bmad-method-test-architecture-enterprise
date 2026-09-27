@@ -109,6 +109,21 @@
         "enum": ["clean", "mutated", "historical", "gameability"]
       }
     },
+    "heldOutProbes": {
+      "description": "Committed probe IDs reserved from the development authoring loop. A behavior represented here must also have a development probe.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^P-[0-9]{3,}$" }
+    },
+    "judgeCalibration": {
+      "description": "The adopter's minimum exact agreement against labelled rubric examples.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minimumAgreement"],
+      "properties": {
+        "minimumAgreement": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
     "judge": {
       "description": "The rubric judge tea-evaluate run calls once per trial when the contract declares a rubric and the evaluator is the deterministic one, through TeA's agent adapters; tea-evaluate check requires it then, and requires policy/evaluator-conditions.json to name the judge's model snapshot. Under any other evaluator kind the evaluator scores the rubric, so no judge is called and check refuses this block as unused; a contract with no rubric makes no judge call whatever this says.",
       "type": "object",

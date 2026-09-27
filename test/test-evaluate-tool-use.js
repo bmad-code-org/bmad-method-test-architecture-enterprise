@@ -259,7 +259,17 @@ function numeric() {
       write(path.join(folder, 'evaluator', 'mapping.json'), mapping);
       const evaluation = read(path.join(folder, 'evaluation.json'));
       evaluation.evaluator.args = [mode];
+      evaluation.judgeCalibration = { minimumAgreement: 1 };
       write(path.join(folder, 'evaluation.json'), evaluation);
+      const reference = read(path.join(folder, 'evaluator/reference/weather.json'));
+      const wrong = structuredClone(reference);
+      wrong.find((message) => message.role === 'assistant').tool_calls[0].function.name = 'search_web';
+      write(path.join(folder, 'policy/judge-calibration.json'), {
+        items: [
+          { rubricId: 'R-101', criterionId: 'RC-101', response: `trajectory: ${JSON.stringify(wrong)}\n`, expectedLevel: 1 },
+          { rubricId: 'R-101', criterionId: 'RC-101', response: `trajectory: ${JSON.stringify(reference)}\n`, expectedLevel: 3 },
+        ],
+      });
     });
   const accepted = make('numeric', '--numeric');
   const result = evaluate(accepted.folder, 'run');
@@ -291,7 +301,7 @@ function numeric() {
   }
   const refused = make('off-scale', '--off-scale');
   const bad = evaluate(refused.folder, 'run');
-  check(bad.status === 12, `off-scale AgentEvals run exited ${bad.status}, expected 12: ${bad.output}`);
+  check(bad.status === 11, `off-scale AgentEvals calibration exited ${bad.status}, expected 11: ${bad.output}`);
   const run = latestRun(refused.folder);
   check(run !== null && !fs.existsSync(path.join(run, 'trial-sets.json')), 'an off-scale score wrote a trial set');
   const sets = run === null ? null : path.join(run, 'trial-sets');

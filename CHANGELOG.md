@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `tea-evaluate run --partition` selects development or held-out probes. Scoring writes evidence-derived `partitions.json` and a `gap-view.json` that redacts held-out probe details. Rubric runs calibrate their scorer against adopter-labelled examples before trials, report agreement, and bind the calibration file digest and minimum agreement to the evaluator configuration. `check` refuses rubric scores imported from harness records until their scorer has a verifiable calibration path (Story 1.21; follow-up Story 1.40).
 - `tea-evaluate` imports deterministic promptfoo assertion results through its existing command evaluator contract (Story 1.20). A disposable summarizer fixture proves that a clean summary passes and an omitted required item is caught, with each failed judgment citing observed stdout. `npm run test:evaluate-promptfoo` covers JSONL component results, single-assertion and error fallbacks, the Node engine floor and the full check, preflight, run and score pipeline. Scoped licence evidence and an exact optional-SDK verifier keep the supply-chain gate active for promptfoo's dependency graph.
 - `tea-evaluate` runs a calling agent's own command in a disposable copy and judges its stdout tool-call trajectory with AgentEvals' deterministic strict matcher (Story 1.19). The adopter-owned evaluator imports its pass or fail judgment through the existing mapping contract; the clean control passes, a wrong-tool rules mutation is caught, and an always-pass evaluator leaves the defect uncaught. `npm run test:evaluate-tool-use` joins the default test chain and verifies the installed AgentEvals `LICENSE` text that supports the licence gate's MIT exception.
 - `tea-evaluate` evaluates a multi-step workflow over its own interface kind, binding a later step to a value an earlier step produced (Story 1.18, AD-4).
@@ -222,6 +223,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `tea-evaluate score` refuses a planted `scores` symlink before running the scorer, so a pre-existing link cannot redirect score artifacts into the adopter's repository. The remaining concurrent directory-swap case is tracked by Story 1.41.
 - A `copy` workspace reproduced for a trial or a qualification now holds what the pristine copy held when it was made (Story 1.18).
   The reproduction copied the pristine copy as it stood after the preflight legs ran in it, so a target whose operation writes (a workflow step that stores a record) left the pristine copy changed, and every later workspace was refused with exit 12 as not reproducing it; the pristine copy now keeps a snapshot beside itself, its links contained and its provisioned directories left out, and a snapshot changed after it was made still exits 12.
   A reproduction provisions only the directories the pristine copy provisioned when it was made, so a provisioned directory a target makes there during the legs reaches no later workspace, and one planted in the snapshot or moved out of the pristine copy exits 12.

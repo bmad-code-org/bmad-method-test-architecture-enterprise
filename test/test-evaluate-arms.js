@@ -1689,6 +1689,7 @@ function makeJudgedProject(label, { rubric = true, mode = 'score', timeoutMs, ed
       if (rubric) {
         editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
           evaluation.judge = judgeWiring(log, capture, mode, { timeoutMs });
+          evaluation.judgeCalibration = { minimumAgreement: 0 };
         });
         editJson(path.join(folder, 'contract.json'), (contract) => {
           contract.rubrics = [RUBRIC];
@@ -1698,6 +1699,14 @@ function makeJudgedProject(label, { rubric = true, mode = 'score', timeoutMs, ed
           modelSnapshot: 'none',
           systemPromptDigest: sha256(Buffer.alloc(0)),
           judge: { modelSnapshot: JUDGE_SNAPSHOT },
+        });
+        writeJson(path.join(folder, 'policy', 'judge-calibration.json'), {
+          items: [0, 1].map((level) => ({
+            rubricId: 'R-101',
+            criterionId: 'RC-101',
+            response: `calibration example ${level}`,
+            expectedLevel: level,
+          })),
         });
       }
       edit({ folder });
@@ -1720,7 +1729,7 @@ async function checkRubric() {
   const project = makeJudgedProject('rubric');
   const ran = evaluate(['run', '--evaluation', project.folder], project.env);
   check(ran.status === 0, `a run over a contract with a rubric exited ${ran.status}; expected 0\n${ran.output}`);
-  check(judgeCalls(project) === 2 * TRIALS, `the judge was called ${judgeCalls(project)} times; expected one per trial, ${2 * TRIALS}`);
+  check(judgeCalls(project) === 2 * TRIALS + 2, `the judge was called ${judgeCalls(project)} times; expected calibration and trials`);
   const runDirectory = runDirectoryOf(project.folder);
   if (runDirectory === null) {
     check(false, 'the rubric run wrote no run directory');
@@ -1762,7 +1771,7 @@ async function checkRubric() {
         .map((line) => JSON.parse(line))
     : [];
   check(
-    directories.length === 2 * TRIALS &&
+    directories.length === 2 * TRIALS + 2 &&
       directories.every((entry) => path.basename(entry.cwd).startsWith('tea-evaluate-judge-') && entry.entries.length === 0),
     `the judge ran in ${JSON.stringify(directories)}; expected an empty tea-evaluate-judge-* directory per call`,
   );
@@ -1774,7 +1783,7 @@ async function checkRubric() {
         .filter((line) => line.length > 0)
         .map((line) => JSON.parse(line))
     : [];
-  check(prompts.length === 2 * TRIALS, `the judge captured ${prompts.length} prompts; expected ${2 * TRIALS}`);
+  check(prompts.length === 2 * TRIALS + 2, `the judge captured ${prompts.length} prompts; expected calibration and trials`);
   // The withheld set is every string in the contract; what the judge may see is the template, the rubric's own
   // IDs, anchors, penalties and criterion text, the material's own keys, and the evidence each prompt carries.
   const contract = readJson(path.join(project.folder, 'contract.json'));
@@ -1801,7 +1810,7 @@ async function checkRubric() {
         prompt.includes(RUBRIC.failureModePenalties[0].description),
       `${which} lacks the criterion, a scale anchor or a penalty description`,
     );
-    check(prompt.includes('verdict: '), `${which} lacks the evidence its criterion points at`);
+    check(prompt.includes(index < 2 ? 'calibration example' : 'verdict: '), `${which} lacks the evidence its criterion points at`);
     const material = JSON.parse(prompt.slice(prompt.indexOf(MATERIAL_HEADING) + MATERIAL_HEADING.length));
     const answerLine = prompt.split('\n').find((line) => line.startsWith(ANSWER_LINE)) ?? '';
     check(/<judge-answer nonce="[0-9a-f]{32}">/.test(answerLine), `${which} names no answer block with a 128-bit nonce`);
@@ -1845,11 +1854,11 @@ async function checkRubric() {
     'a run whose judge failed wrote a record',
   );
   check(judgeCalls(failing) === 1, `a failing judge was called ${judgeCalls(failing)} times; the first failure ends the run`);
-  const faultFile = failedDirectory === null ? null : path.join(failedDirectory, 'trials', 'clean', 'trial-1.json');
-  const fault = faultFile !== null && fs.existsSync(faultFile) ? readJson(faultFile).judge : null;
+  const faultFile = failedDirectory === null ? null : path.join(failedDirectory, 'judge-calibration.json');
+  const fault = faultFile !== null && fs.existsSync(faultFile) ? readJson(faultFile) : null;
   check(
     typeof fault?.stderr === 'string' && fault.stderr.includes('asked to fail') && fault.stdout.includes('no scores'),
-    `a failing judge's streams are not in the trial's evidence: ${JSON.stringify(fault)}`,
+    `a failing judge's streams are not in the calibration evidence: ${JSON.stringify(fault)}`,
   );
 
   // A judge whose reply holds no answer block with this call's nonce (untagged, another nonce) or two of them leaves

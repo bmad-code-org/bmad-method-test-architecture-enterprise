@@ -252,11 +252,23 @@ function judgeResultsFrom(contract, reply, nonce) {
  * @returns {Promise<{ called: boolean, results: object[], nonce?: string, prompt: string|null, stdout: string, stderr: string }>}
  * @throws {JudgeError}
  */
-async function judgeRubrics({ contract, stepObservations, judge, scratch = [] }) {
+async function judgeRubrics({ contract, stepObservations, judge, scratch = [], calibrationResponse = null }) {
   if ((contract.rubrics ?? []).length === 0) return { called: false, results: [], prompt: null, stdout: '', stderr: '' };
+  const judgedContract =
+    calibrationResponse === null
+      ? contract
+      : {
+          ...contract,
+          rubrics: contract.rubrics
+            .filter((rubric) => rubric.id === calibrationResponse.rubricId)
+            .map((rubric) => ({
+              ...rubric,
+              criteria: rubric.criteria.filter((criterion) => criterion.id === calibrationResponse.criterionId),
+            })),
+        };
   // The nonce is drawn here, after the target ran, so nothing the target printed can carry it.
   const nonce = answerNonce();
-  const prompt = await judgePrompt({ contract, stepObservations, nonce });
+  const prompt = await judgePrompt({ contract: judgedContract, stepObservations, nonce });
   // The judge runs in an empty directory of its own, which holds nothing of the evaluation, in the run's scratch.
   const cwd = makeScratchDirectory(scratch, 'tea-evaluate-judge-');
   let answered;
@@ -294,7 +306,7 @@ async function judgeRubrics({ contract, stepObservations, judge, scratch = [] })
   }
   return {
     called: true,
-    results: judgeResultsFrom(contract, answered.stdout, nonce),
+    results: judgeResultsFrom(judgedContract, answered.stdout, nonce),
     nonce,
     prompt,
     stdout: answered.stdout,

@@ -90,6 +90,7 @@ if (mode === 'write-beside') {
   fs.mkdirSync(path.join(__dirname, '__pycache__'), { recursive: true });
   fs.writeFileSync(path.join(__dirname, '__pycache__', 'cache.bin'), 'cached\n');
 }
+if (mode === 'write-project') fs.writeFileSync(flag('--touch'), 'written during calibration\n');
 if (mode === 'rewrite-self') fs.appendFileSync(__filename, '// rewritten by the evaluator during its trial\n');
 if (mode === 'lock-cwd') {
   fs.mkdirSync('locked');
@@ -111,6 +112,17 @@ if (mode === 'hang') {
 } else if (mode !== 'raw-bytes') answer();
 
 function answer() {
+  const calibration = input.observations.find((observation) => observation.observationId === 'calibration');
+  if (calibration !== undefined) {
+    const observed = calibration.stdout.value ?? calibration.stderr.value ?? calibration.responseBody;
+    const response = typeof observed === 'string' ? observed : observed?.example ?? observed?.[0];
+    const level = Number(/calibration example at level ([123])/.exec(response)?.[1]);
+    process.stdout.write(`${JSON.stringify({ rows: [
+      { key: 'verdict-accepted', outcome: 'pass', observationIds: ['calibration'] },
+      { key: 'verdict-quality', outcome: 'score', score: level, observationIds: ['calibration'] },
+    ] })}\n`);
+    return;
+  }
   const text = (body) => (body?.kind === 'text' ? body.value : body?.kind === 'json' ? JSON.stringify(body.value) : '');
   const judged = input.observations.find((observation) => text(observation.stdout).includes('verdict:')) ?? input.observations[0];
   const accepted = text(judged.stdout).includes('verdict: accepted');

@@ -162,7 +162,7 @@ function preflightCommand(options) {
 }
 
 function runCommand(options) {
-  return runDriven('run', runRunCommand, options, { fromWorkingTree: options.fromWorkingTree === true });
+  return runDriven('run', runRunCommand, options, { fromWorkingTree: options.fromWorkingTree === true, partition: options.partition });
 }
 
 function scoreCommand(options) {
@@ -200,6 +200,7 @@ function buildProgram(run) {
     .description('Run the preflight, then each arm the probes need as a trial set in fresh workspaces, sealed under runs/<invocationId>/.')
     .option('--evaluation <path>', 'the evaluation folder, or its evaluation.json')
     .option('--from-working-tree', 'evaluate the working tree, uncommitted work included, in a temp copy recorded as dirty')
+    .option('--partition <name>', 'development or held-out; omitted runs both')
     .action((options) => run(runCommand, options));
   program
     .command('score')
