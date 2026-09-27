@@ -72,7 +72,7 @@ const { admissionRefusal, armVerdict, referenceTo } = require('./admission');
 const { callLabel, causeNote, faultRecord, hostEnvironmentPort, persistableRequest, reasonNote, runArm } = require('./arm');
 const { runCommandEvaluator } = require('./command-evaluator');
 const { corpusDigestOf } = require('./corpus-index');
-const { readCalibration, runCalibration } = require('./calibration');
+const { calibrationObservation, readCalibration, runCalibration } = require('./calibration');
 const { expectedSchemaVersion, loadEngine } = require('./engine');
 const { evaluateOracles, judgeTrial, oraclesOfBehaviors } = require('./evaluator');
 const {
@@ -843,28 +843,19 @@ async function runTrialSets(given) {
   let calibrationDigest = null;
   if ((contract.rubrics ?? []).length > 0) {
     const { layer } = snapshot;
-    const judgeItem = async ({ rubric, criterion, response }) => {
+    const judgeItem = async ({ rubric, criterion, response, responseKind }) => {
       const stepId = /^\/interactions\/([^/]+)/.exec(criterion.evidence)?.[1];
       const operationId = contract.interactionPlan?.find((step) => step.stepId === stepId)?.operationId ?? 'calibration';
-      const observation = {
-        observationId: 'calibration',
-        sequence: 1,
-        operationId,
-        provenance: 'evaluator-chosen',
-        response,
-        stdout: { kind: 'text', value: response },
-        stderr: { kind: 'text', value: '' },
-        exitCode: 0,
-        responseBody: { kind: 'text', value: response },
-      };
+      const observation = calibrationObservation({ criterion, response, responseKind, operationId });
       if (kind === 'deterministic') {
         const result = await judgeRubrics({
           contract,
-          stepObservations: {},
+          stepObservations: { [stepId]: observation },
           judge: evaluation.judge,
           scratch: context.scratch,
-          calibrationResponse: { rubricId: rubric.id, criterionId: criterion.id, response },
+          calibrationResponse: { rubricId: rubric.id, criterionId: criterion.id },
         });
+        treeUnchanged('calibration');
         return result.results.find((entry) => entry.rubricId === rubric.id && entry.criterionId === criterion.id)?.score ?? null;
       }
       const key = Object.entries(layer.mapping.keys).find(
@@ -886,6 +877,17 @@ async function runTrialSets(given) {
         });
         answer = result.answer;
       } else if (kind === 'sealed-brief-agent') {
+        const calibrationView = {
+          observationId: observation.observationId,
+          callInputs: observation.callInputs,
+          stdout: observation.stdout,
+          stderr: observation.stderr,
+          exitCode: observation.exitCode,
+          responseBody: observation.responseBody,
+          responseHeaders: observation.responseHeaders,
+          responseStatus: observation.responseStatus,
+          artifacts: observation.artifacts,
+        };
         const nonce = answerNonce();
         const router = bridgeRouter({
           contract,
@@ -909,12 +911,13 @@ async function runTrialSets(given) {
           nonce,
           scratch: context.scratch,
           env: context.env,
-          calibrationObservation: { observationId: observation.observationId, response },
+          calibrationObservation: calibrationView,
         });
         answer = result.answer;
       } else throw new Error(`the ${kind} evaluator cannot calibrate a rubric`);
       const changedAfter = evaluatorLayerChange(folder, layer.files);
       if (changedAfter !== null) throw new EvaluatorError(`the evaluation layer changed during calibration: ${changedAfter}`);
+      treeUnchanged('calibration');
       return answer.rows.find((row) => row.key === key && row.outcome === 'score')?.score ?? null;
     };
     try {
@@ -926,6 +929,8 @@ async function runTrialSets(given) {
         throw stop({ stage: 'trial', exitCode: 12, message: `judge calibration could not run: ${error.message}` });
       }
       throw error;
+    } finally {
+      treeUnchanged('calibration');
     }
   }
 

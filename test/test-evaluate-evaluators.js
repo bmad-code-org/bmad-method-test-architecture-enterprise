@@ -81,6 +81,7 @@ const { spawn, spawnSync } = require('node:child_process');
 
 const { ENGINE_CLI_ENV, engineCliPath, loadEngine } = require('../cli/lib/evaluate/engine');
 const { createArtifactValidator } = require('../cli/lib/evaluate/records');
+const { runCalibration } = require('../cli/lib/evaluate/calibration');
 const { registryFromEvaluation } = require('../cli/lib/evaluate/registry');
 const { hostEnvironmentPort } = require('../cli/lib/evaluate/arm');
 const { AGENT_ADAPTERS, bridgedArgsRefused } = require('../cli/lib/agent-adapters');
@@ -373,8 +374,133 @@ async function checkCalibrationDisagreementAcrossEvaluators() {
       const input = kind === 'command' ? JSON.stringify(call.input) : call.prompt;
       check(!input.includes('expectedLevel'), `${kind} scorer input carried a calibration label`);
       check(input.includes('calibration example at level 2'), `${kind} scorer input omitted the response`);
+      if (kind === 'sealed-brief-agent') check(!input.includes('operationId'), 'sealed calibration prompt exposed an operation ID');
+      if (kind === 'command') {
+        const observation = call.input.observations[0];
+        check(observation.principal === null, 'command calibration observation omitted its principal');
+        check(observation.callInputs?.path === null, 'command calibration observation omitted total call inputs');
+        check(observation.responseHeaders === null, 'command calibration observation omitted response headers');
+        check(observation.responseStatus === null, 'command calibration observation omitted response status');
+        check(observation.artifacts !== undefined, 'command calibration observation omitted artifacts');
+      }
     }
   }
+}
+
+function checkCalibrationFollowsEvidenceChannel() {
+  const capture = path.join(scratch.make('command-stderr-calibration-capture'), 'calls.jsonl');
+  const project = makeProject('command-stderr-calibration', {
+    edit: ({ folder }) => {
+      useCommandEvaluator(folder, { mode: 'score', args: ['--log', capture] });
+      addRubric(folder);
+      editJson(path.join(folder, 'contract.json'), (contract) => {
+        contract.rubrics[0].criteria[0].evidence = '/interactions/judge-run/stderr';
+      });
+    },
+  });
+  const ran = evaluate(['run', '--evaluation', project.folder], project.env);
+  check(ran.status === 0, `a stderr criterion calibrated through command observation exited ${ran.status}; expected 0\n${ran.output}`);
+  const calls = captures(capture).filter((call) =>
+    call.input.observations.some((observation) => observation.observationId === 'calibration'),
+  );
+  check(calls.length === 3, `the stderr criterion received ${calls.length} calibration calls; expected 3`);
+  for (const call of calls) {
+    const observation = call.input.observations[0];
+    check(
+      observation.stderr.value?.startsWith('calibration example at level '),
+      'stderr calibration response missed the criterion channel',
+    );
+    check(observation.stdout.kind === 'absent', 'stderr calibration populated unrelated stdout');
+  }
+}
+
+function checkCalibrationJsonRoot() {
+  for (const kind of ['command', 'sealed-brief-agent']) {
+    const capture = path.join(scratch.make(`${kind}-json-calibration-capture`), 'calls.jsonl');
+    const project = makeProject(`${kind}-json-calibration`, {
+      edit: ({ folder }) => {
+        if (kind === 'command') {
+          useCommandEvaluator(folder, { mode: 'score', args: ['--log', capture] });
+          addRubric(folder);
+        } else useSealedBriefAgent(folder, { capture, rubric: true });
+        writeJson(path.join(folder, 'policy/judge-calibration.json'), {
+          items: [1, 2, 3].map((level) => ({
+            rubricId: 'R-101',
+            criterionId: 'RC-101',
+            response: JSON.stringify({ example: `calibration example at level ${level}` }),
+            responseKind: 'json',
+            expectedLevel: level,
+          })),
+        });
+      },
+    });
+    const ran = evaluate(['run', '--evaluation', project.folder], project.env);
+    check(ran.status === 0, `${kind} JSON-root rubric calibration exited ${ran.status}; expected 0\n${ran.output}`);
+    const calls = captures(capture)
+      .map((call) =>
+        kind === 'command'
+          ? call.input.observations.find((observation) => observation.observationId === 'calibration')
+          : JSON.parse(
+              call.prompt.slice(
+                call.prompt.indexOf('Sealed brief and keys to judge (JSON):') + 'Sealed brief and keys to judge (JSON):'.length,
+              ),
+            ).observation,
+      )
+      .filter((observation) => observation?.observationId === 'calibration');
+    check(calls.length === 3, `${kind} JSON-root rubric received ${calls.length} calibration calls; expected 3`);
+    for (const observation of calls) {
+      check(observation.stdout.kind === 'json', `${kind} JSON-root calibration reached the scorer as text`);
+      check(
+        observation.stdout.value?.example?.startsWith('calibration example at level '),
+        `${kind} JSON-root calibration omitted its value`,
+      );
+    }
+  }
+}
+
+async function checkCalibrationSnapshotGuard() {
+  const engine = await loadEngine();
+  const contract = {
+    rubrics: [{ id: 'R-101', criteria: [{ id: 'RC-101', evidence: '/interactions/judge-run/stdout' }], scaleLevels: [{ level: 1 }] }],
+  };
+  let judgeCalls = 0;
+  for (const calibration of [null, { value: { items: [] }, bytes: Buffer.from('{}') }]) {
+    let stopped = false;
+    try {
+      await runCalibration({
+        calibration,
+        evaluation: { judgeCalibration: { minimumAgreement: 1 } },
+        contract,
+        engine,
+        stop: (outcome) => Object.assign(new Error(outcome.message), outcome),
+        writer: { writeJson: () => {} },
+        judgeItem: () => {
+          judgeCalls++;
+          return 1;
+        },
+      });
+    } catch (error) {
+      stopped = error.exitCode === 12 && error.message.includes('judge calibration became invalid');
+    }
+    check(stopped, 'a missing or empty captured calibration passed into scorer execution');
+  }
+  check(judgeCalls === 0, `an invalid captured calibration launched ${judgeCalls} scorer call(s)`);
+}
+
+function checkCalibrationHoldsAdopterTree() {
+  const project = makeProject('command-calibration-project-write', {
+    edit: ({ folder, repository }) => {
+      useCommandEvaluator(folder, { mode: 'write-project', args: ['--touch', path.join(repository, 'calibration-touch.txt')] });
+      addRubric(folder);
+      setHalfAgreement(folder);
+    },
+  });
+  const ran = evaluate(['run', '--evaluation', project.folder], project.env);
+  check(
+    ran.status === 12 && ran.output.includes('changed during the calibration'),
+    `a command scorer changing the adopter tree during a failed calibration exited ${ran.status}; expected integrity exit 12\n${ran.output}`,
+  );
+  check(recordFiles(runDirectoryOf(project.folder)).length === 0, 'a calibration scorer changing the adopter tree wrote a trial record');
 }
 
 /** The verdict command's `residue.txt`, which a lenient run leaves behind, declared as the written file `residue`. */
@@ -2141,6 +2267,10 @@ async function main() {
     await runCase('the bridge', checkBridge);
     await runCase('the command evaluator row shapes', checkCommandRowShapes);
     await runCase('command and agent calibration disagreement', checkCalibrationDisagreementAcrossEvaluators);
+    await runCase('calibration follows its evidence channel', checkCalibrationFollowsEvidenceChannel);
+    await runCase('calibration preserves a JSON channel root', checkCalibrationJsonRoot);
+    await runCase('calibration rejects an invalid captured snapshot', checkCalibrationSnapshotGuard);
+    await runCase('calibration holds the adopter tree', checkCalibrationHoldsAdopterTree);
     await runCase('an unwitnessed quote', checkUnwitnessedQuote);
     await runCase('evaluators outside the import contract', checkEvaluatorFailures);
     await runCase('a hung evaluator', checkEvaluatorTimeout);

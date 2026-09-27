@@ -149,8 +149,8 @@ function answerNonce() {
  *
  * @returns {Promise<string>}
  */
-async function judgePrompt({ contract, stepObservations, nonce, calibrationResponse = null }) {
-  const material = await judgeMaterial({ contract, stepObservations, calibrationResponse });
+async function judgePrompt({ contract, stepObservations, nonce }) {
+  const material = await judgeMaterial({ contract, stepObservations });
   return [
     JUDGE_INSTRUCTIONS,
     '',
@@ -163,7 +163,7 @@ async function judgePrompt({ contract, stepObservations, nonce, calibrationRespo
 }
 
 /** What a judge call carries after the template: each rubric with its criteria and the evidence each points at. */
-async function judgeMaterial({ contract, stepObservations, calibrationResponse = null }) {
+async function judgeMaterial({ contract, stepObservations }) {
   const engine = await loadEngine();
   return {
     rubrics: (contract.rubrics ?? []).map((rubric) => ({
@@ -177,10 +177,7 @@ async function judgeMaterial({ contract, stepObservations, calibrationResponse =
       criteria: rubric.criteria.map((criterion) => ({
         criterionId: criterion.id,
         text: criterion.text,
-        evidence:
-          calibrationResponse?.rubricId === rubric.id && calibrationResponse?.criterionId === criterion.id
-            ? calibrationResponse.response
-            : evidenceOf(engine, stepObservations, criterion.evidence),
+        evidence: evidenceOf(engine, stepObservations, criterion.evidence),
       })),
     })),
   };
@@ -271,7 +268,7 @@ async function judgeRubrics({ contract, stepObservations, judge, scratch = [], c
         };
   // The nonce is drawn here, after the target ran, so nothing the target printed can carry it.
   const nonce = answerNonce();
-  const prompt = await judgePrompt({ contract: judgedContract, stepObservations, nonce, calibrationResponse });
+  const prompt = await judgePrompt({ contract: judgedContract, stepObservations, nonce });
   // The judge runs in an empty directory of its own, which holds nothing of the evaluation, in the run's scratch.
   const cwd = makeScratchDirectory(scratch, 'tea-evaluate-judge-');
   let answered;

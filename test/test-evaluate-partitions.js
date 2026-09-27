@@ -90,6 +90,17 @@ try {
     JSON.stringify(read(path.join(latest, 'partitions.json'))['held-out'][0].outcome),
     JSON.stringify(edited.reducedProbeOutcomes[0]),
   );
+  for (const name of ['partitions.json', 'gap-view.json']) {
+    const view = path.join(latest, name);
+    const sentinel = path.join(project.directory, `${name}.sentinel`);
+    fs.writeFileSync(sentinel, `outside ${name}\n`);
+    fs.unlinkSync(view);
+    fs.symlinkSync(sentinel, view);
+    const rescored = test.cli(project.folder, 'score', ['--run', path.basename(latest)], project.env);
+    assert.equal(rescored.status, 0, rescored.output);
+    assert.equal(fs.readFileSync(sentinel, 'utf8'), `outside ${name}\n`);
+    assert.equal(fs.lstatSync(view).isFile(), true);
+  }
   const invalid = test.cli(project.folder, 'run', ['--partition', 'unknown'], project.env);
   assert.equal(invalid.status, 64);
   process.stdout.write('Evaluate partition selection and evidence projections passed.\n');

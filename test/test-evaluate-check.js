@@ -208,7 +208,7 @@ function plantCalibration(folder, rubric) {
           rubric.scaleLevels.map((level) => ({
             rubricId: rubric.id,
             criterionId: criterion.id,
-            response: `example at level ${level.level}`,
+            response: /\/(?:exit-code|response-status)$/.test(criterion.evidence) ? String(level.level) : `example at level ${level.level}`,
             expectedLevel: level.level,
           })),
         ),

@@ -73,7 +73,10 @@ async function main() {
   const initialized = await request('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'stub', version: '1' } });
   child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`);
   const listed = await request('tools/list', {});
-  const calibration = /"response": "calibration example at level ([123])"/.exec(prompt);
+  const material = JSON.parse(prompt.slice(prompt.indexOf('Sealed brief and keys to judge (JSON):') + 'Sealed brief and keys to judge (JSON):'.length));
+  const observed = material.observation?.stdout?.value ?? material.observation?.stderr?.value ?? material.observation?.responseBody;
+  const response = typeof observed === 'string' ? observed : observed?.example;
+  const calibration = /calibration example at level ([123])/.exec(response ?? '');
   if (calibration !== null) {
     child.stdin.end();
     if (capture !== null) fs.appendFileSync(capture, `${JSON.stringify({ prompt, argv, config, server: name, initialized, tools: listed.result?.tools, results: [] })}\n`);

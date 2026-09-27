@@ -3,6 +3,24 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const crypto = require('node:crypto');
+
+function replaceView(runDirectory, name, value) {
+  const temporary = path.join(runDirectory, `.${name}.${crypto.randomBytes(6).toString('hex')}.tmp`);
+  const destination = path.join(runDirectory, name);
+  try {
+    fs.writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`, { flag: 'wx', mode: 0o600 });
+    // Rename replaces a planted link as a directory entry without following it.
+    fs.renameSync(temporary, destination);
+  } catch (error) {
+    try {
+      fs.unlinkSync(temporary);
+    } catch (cleanupError) {
+      if (cleanupError.code !== 'ENOENT') throw cleanupError;
+    }
+    throw error;
+  }
+}
 
 function writePartitionViews({ folder, runDirectory, scoreInvocationId, trialSets, scores, heldOutProbes }) {
   const heldOut = new Set(heldOutProbes ?? []);
@@ -24,7 +42,7 @@ function writePartitionViews({ folder, runDirectory, scoreInvocationId, trialSet
     ['partitions.json', partitions],
     ['gap-view.json', gapView],
   ])
-    fs.writeFileSync(path.join(runDirectory, name), `${JSON.stringify(value, null, 2)}\n`);
+    replaceView(runDirectory, name, value);
 }
 
 module.exports = { writePartitionViews };

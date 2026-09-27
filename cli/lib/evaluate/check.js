@@ -1384,7 +1384,7 @@ function checkHeldOut(report, folder, evaluation) {
   }
 }
 
-function checkCalibration(report, folder, evaluation, contract) {
+function checkCalibration(report, folder, evaluation, contract, engine) {
   let calibration;
   try {
     calibration = readCalibration(folder);
@@ -1392,7 +1392,7 @@ function checkCalibration(report, folder, evaluation, contract) {
     report.add(CALIBRATION_PATH, 'judge-calibration', error.message);
     return;
   }
-  for (const problem of calibrationProblems(evaluation, contract, calibration?.value))
+  for (const problem of calibrationProblems(evaluation, contract, calibration?.value, engine))
     report.add(CALIBRATION_PATH, 'judge-calibration', problem);
 }
 
@@ -1696,7 +1696,7 @@ async function checkEvaluation(folder) {
   checkSkillRunner(report, evaluation, context.contract, provision);
   const routes = checkProbes(report, folder, context, behaviors, mutations, registry);
   checkHeldOut(report, folder, evaluation);
-  checkCalibration(report, folder, evaluation, context.contract);
+  checkCalibration(report, folder, evaluation, context.contract, context.engine);
   const policy = checkScoringPolicy(report, folder, context, routes);
   checkArmsAndTrials(report, evaluation, routes, policy);
   checkEvaluatorConditions(report, folder, context, registry);
