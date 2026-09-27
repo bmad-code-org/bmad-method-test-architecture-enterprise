@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Evaluate now guides contract authoring, oracle and rubric design, and adapter wiring for every target kind. A fillable contract skeleton and engine-backed guidance checks cover exact requirements-byte lineage, compile and seal, worked examples, and nonzero validation exits (Story 1.13).
 - Evaluate now guides target inspection, adopter-confirmed requirements and corpus design for six target kinds. The evaluation manifest records the confirmed `requirements.md` path and its byte digest, which `tea-evaluate check` validates (Story 1.12).
 - `tea-evaluate check` validates an operation's `process` or `outcome` phase against the compiled contract. Scoring writes `interpretation.json` with finding citations, oracle evidence pointers, phase partitions and the first material error, alongside judgment fields copied from eval-quality's evidence artifacts (Story 1.22).
 - `tea-evaluate run --partition` selects development or held-out probes. Scoring writes evidence-derived `partitions.json` and a `gap-view.json` that redacts held-out probe details. Rubric runs calibrate their scorer against adopter-labelled examples before trials, report agreement, and bind the calibration file digest and minimum agreement to the evaluator configuration. `check` refuses rubric scores imported from harness records until their scorer has a verifiable calibration path (Story 1.21; follow-up Story 1.40).

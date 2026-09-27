@@ -551,7 +551,52 @@
   "package-boundary": {
     "paths": [
       {
-        "path": "src"
+        "path": "src/agents"
+      },
+      {
+        "path": "src/module-help.csv"
+      },
+      {
+        "path": "src/module.yaml"
+      },
+      {
+        "path": "src/workflows/testarch/bmad-teach-me-testing"
+      },
+      {
+        "path": "src/workflows/testarch/bmad-testarch-atdd"
+      },
+      {
+        "path": "src/workflows/testarch/bmad-testarch-automate"
+      },
+      {
+        "path": "src/workflows/testarch/bmad-testarch-ci"
+      },
+      {
+        "path": "src/workflows/testarch/bmad-testarch-evaluate/SKILL.md"
+      },
+      {
+        "path": "src/workflows/testarch/bmad-testarch-evaluate/assets"
+      },
+      {
+        "path": "src/workflows/testarch/bmad-testarch-evaluate/customize.toml"
+      },
+      {
+        "path": "src/workflows/testarch/bmad-testarch-evaluate/references"
+      },
+      {
+        "path": "src/workflows/testarch/bmad-testarch-framework"
+      },
+      {
+        "path": "src/workflows/testarch/bmad-testarch-nfr"
+      },
+      {
+        "path": "src/workflows/testarch/bmad-testarch-test-design"
+      },
+      {
+        "path": "src/workflows/testarch/bmad-testarch-test-review"
+      },
+      {
+        "path": "src/workflows/testarch/bmad-testarch-trace"
       },
       {
         "path": "cli"
@@ -579,8 +624,8 @@
       },
       {
         "name": "tea-dev-test-file",
-        "match": "(?<!/)\\btest/[\\w./-]+\\.(?:js|json)\\b",
-        "reason": "a file under this repository's own dev tree, not part of the published tarball"
+        "match": "(?<!/)\\btest/(?!fixtures/evaluate(?:/|-[\\w-]+/))[\\w./-]+\\.(?:js|json)\\b",
+        "reason": "a file under this repository's own dev tree, not part of the published tarball; Evaluate guide fixture references are checked against existing files by test:evaluate-guidance"
       },
       {
         "name": "docs-path",

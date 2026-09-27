@@ -153,6 +153,22 @@ function checkWiring(config) {
     );
     check(config[gate] !== undefined, `eval-quality.config.json has no "${gate}" section, so ${script} would refuse at exit 64`);
   }
+
+  const packed = spawnSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], {
+    cwd: PROJECT_ROOT,
+    encoding: 'utf8',
+  });
+  check(packed.status === 0, `npm pack could not list published files: ${packed.stderr}`);
+  if (packed.status === 0) {
+    const published = JSON.parse(packed.stdout)[0].files.map((entry) => entry.path);
+    const declared = config['package-boundary'].paths.map((entry) => entry.path);
+    for (const file of published.filter((path) => path.startsWith('src/'))) {
+      check(
+        declared.some((path) => file === path || file.startsWith(`${path}/`)),
+        `package-boundary does not scan published file ${file}`,
+      );
+    }
+  }
 }
 
 function checkBoundarySeed(binary) {

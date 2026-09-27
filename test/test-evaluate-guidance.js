@@ -9,9 +9,12 @@
 
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 const AjvModule = require('ajv/dist/2020');
-const { engineSchemaPath, loadEngine } = require('../cli/lib/evaluate/engine');
+const { engineCliPath, engineSchemaPath, loadEngine } = require('../cli/lib/evaluate/engine');
+const { calibrationProblems } = require('../cli/lib/evaluate/calibration');
 
 const Ajv = AjvModule.default ?? AjvModule;
 
@@ -645,6 +648,350 @@ function checkCorpus(corpus, engine, failures) {
   if (zeroActionDefectCount === 0) failures.push('corpus.md lacks a worked zero-action defect for a mandatory-action behavior');
 }
 
+function taggedExamples(content, tag) {
+  const fence = String.fromCodePoint(96).repeat(3);
+  const expression = new RegExp(String.raw`<!-- example:${tag} -->\s*${fence}json\n([\s\S]*?)\n${fence}`, 'g');
+  return [...content.matchAll(expression)].map((match) => JSON.parse(match[1]));
+}
+
+function headingBody(content, heading) {
+  const start = content.indexOf('\n' + heading + '\n');
+  if (start === -1) return '';
+  const body = content.slice(start + heading.length + 2);
+  const next = body.search(/\n#{2,3} /);
+  return next < 0 ? body : body.slice(0, next);
+}
+
+function fillContractSkeleton(skeleton, fill) {
+  const placeholders = [...skeleton.matchAll(/\{\{([A-Za-z][A-Za-z0-9]*)\}\}/g)].map((match) => match[1]);
+  if (placeholders.length === 0) throw new Error('contract skeleton has no placeholders');
+  for (const key of placeholders) {
+    if (!Object.hasOwn(fill, key)) throw new Error('contract skeleton missing fill value: ' + key);
+  }
+  return JSON.parse(skeleton.replaceAll(/"\{\{([A-Za-z][A-Za-z0-9]*)\}\}"/g, (_, key) => JSON.stringify(fill[key])));
+}
+
+function setJsonPointer(object, pointer, value) {
+  const parts = pointer.split('/').slice(1);
+  let node = object;
+  for (const part of parts.slice(0, -1)) {
+    if (node === null || typeof node !== 'object' || !Object.hasOwn(node, part)) throw new Error('unknown patch path ' + pointer);
+    node = node[part];
+  }
+  const key = parts.at(-1);
+  if (node === null || typeof node !== 'object' || !Object.hasOwn(node, key)) throw new Error('unknown patch path ' + pointer);
+  node[key] = value;
+}
+
+function engineCommand(command, contract, tempRoot) {
+  const input = path.join(tempRoot, 'contract.json');
+  const output = path.join(tempRoot, command + '.json');
+  fs.writeFileSync(input, JSON.stringify(contract));
+  fs.rmSync(output, { force: true });
+  return spawnSync(process.execPath, [engineCliPath(), command, '--in', input, '--out', output], { encoding: 'utf8' });
+}
+
+function assertEngineSuccess(command, contract, tempRoot, label, failures) {
+  const run = engineCommand(command, contract, tempRoot);
+  if (run.status !== 0) failures.push(label + ': eval-quality ' + command + ' exited ' + run.status + ': ' + run.stderr.trim());
+}
+
+function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapterGuide, engine, failures) {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-contract-guidance-'));
+  try {
+    const fill = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'evaluate', 'contract-fill.json'), 'utf8'));
+    const requirements = fs.readFileSync(path.join(__dirname, 'fixtures', 'evaluate', 'requirements.md'));
+    const skeleton = fs.readFileSync(ASSET('contract.skeleton.json'), 'utf8');
+    const contract = fillContractSkeleton(skeleton, fill);
+    const schema = JSON.parse(fs.readFileSync(engineSchemaPath('eval-contract.schema.json'), 'utf8'));
+    const tick = String.fromCodePoint(96);
+    for (const field of schema.required) requireText(contractGuide, tick + field + tick, 'contract.md', failures);
+    assert.deepStrictEqual(new Set(Object.keys(contract)), new Set(schema.required));
+    assert.strictEqual(contract.sourceSpecDigest, engine.digestBytes(requirements));
+    assert.strictEqual(
+      contract.behaviors.every((behavior) => typeof behavior.observableSuccessCriterion === 'string'),
+      true,
+    );
+    const witness = contract.permittedInterfaces[0].operations[0].sensitivityWitness;
+    assert.deepStrictEqual(
+      witness.legs.map((leg) => leg.inputs.stdin.value),
+      ['Say alpha.', 'Say beta.'],
+    );
+    assert.strictEqual(witness.relation.operands.length, 4);
+    assert.match(JSON.stringify(witness.relation), /witness-beta\/stdout/);
+    assert.deepStrictEqual(contract.forbiddenInputs, [
+      'original-spec',
+      'source-code',
+      'repository',
+      'builder-transcript',
+      'implementation-logs',
+      'comparator-results',
+      'human-labels',
+    ]);
+    assertEngineSuccess('compile', contract, tempRoot, 'filled skeleton', failures);
+    assertEngineSuccess('seal', contract, tempRoot, 'filled skeleton', failures);
+    const evaluationRoot = path.join(tempRoot, 'preflight');
+    {
+      fs.cpSync(path.join(__dirname, 'fixtures', 'evaluate', 'preflight'), evaluationRoot, { recursive: true });
+      fs.cpSync(path.join(__dirname, 'fixtures', 'evaluate', 'stub-agent'), path.join(tempRoot, 'stub-agent'), { recursive: true });
+      fs.writeFileSync(path.join(evaluationRoot, 'contract.json'), JSON.stringify(contract));
+      fs.copyFileSync(path.join(__dirname, 'fixtures', 'evaluate', 'requirements.md'), path.join(evaluationRoot, 'requirements.md'));
+      const manifestPath = path.join(evaluationRoot, 'evaluation.json');
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+      manifest.requirements = { path: 'requirements.md', digest: contract.sourceSpecDigest };
+      fs.writeFileSync(manifestPath, JSON.stringify(manifest));
+      const check = spawnSync(
+        process.execPath,
+        [path.join(__dirname, '..', 'cli', 'evaluate.js'), 'check', '--evaluation', evaluationRoot],
+        { encoding: 'utf8' },
+      );
+      if (check.status !== 0) failures.push('filled skeleton: tea-evaluate check exited ' + check.status + ': ' + check.stderr.trim());
+      fs.appendFileSync(path.join(evaluationRoot, 'requirements.md'), 'changed byte\n');
+      const stale = spawnSync(
+        process.execPath,
+        [path.join(__dirname, '..', 'cli', 'evaluate.js'), 'check', '--evaluation', evaluationRoot],
+        { encoding: 'utf8' },
+      );
+      if (stale.status !== 10 || !(stale.stdout + stale.stderr).includes('requirements'))
+        failures.push('changed requirements bytes did not fail tea-evaluate check with exit 10');
+    }
+    const missing = { ...fill };
+    delete missing.schemaVersion;
+    assert.throws(() => fillContractSkeleton(skeleton, missing), /missing fill value: schemaVersion/);
+    const noForbidden = structuredClone(contract);
+    delete noForbidden.forbiddenInputs;
+    const forbiddenFailure = engineCommand('compile', noForbidden, tempRoot);
+    assert.notStrictEqual(forbiddenFailure.status, 0);
+    assert.match(forbiddenFailure.stderr, /forbiddenInputs/);
+
+    for (const heading of [
+      '## Identity and lineage fields',
+      '## Authored fields',
+      '## Authoring discipline',
+      '## Interaction-plan design',
+      '## Sensitivity-witness design',
+      '## Waiver discipline',
+      '## Compile and seal',
+      '## Worked end-to-end contract',
+    ])
+      requireHeading(contractGuide, heading, 'contract.md', failures);
+    const rules = [
+      'success-indicator-separation',
+      'whole-body',
+      'malformed-input',
+      'per-record',
+      'sibling-cross-check',
+      'omission-and-completeness',
+      'state-change-read-back',
+    ];
+    for (const rule of rules) {
+      requireHeading(contractGuide, '### ' + rule, 'contract.md', failures);
+      const section = headingBody(contractGuide, '### ' + rule);
+      requireText(section, 'Without this rule', 'contract.md ' + rule, failures);
+      if (taggedExamples(section, 'contract-patch').length !== 1) failures.push('contract.md ' + rule + ' needs one tagged contract patch');
+    }
+    for (const heading of ['## Interaction-plan design', '## Sensitivity-witness design', '## Waiver discipline']) {
+      if (taggedExamples(headingBody(contractGuide, heading), 'contract-patch').length !== 1)
+        failures.push('contract.md ' + heading + ' needs one tagged contract patch');
+    }
+    const workflowContract = JSON.parse(
+      fs.readFileSync(path.join(__dirname, 'fixtures', 'evaluate-workflow', 'evals', 'records', 'contract.json')),
+    );
+    for (const [index, patch] of taggedExamples(contractGuide, 'contract-patch').entries()) {
+      const edited = structuredClone(patch.base === 'workflow' ? workflowContract : contract);
+      for (const edit of patch.patches ?? [patch]) setJsonPointer(edited, edit.path, edit.value);
+      if (index === 2) {
+        assert.match(edited.interactionPlan[0].inputBinding.stdin.prompt.literal, /NaN/);
+        assert.match(JSON.stringify(edited.oracles[0].check), /invalid amount/);
+      }
+      if (index === 3) {
+        assert.deepStrictEqual(edited.permittedInterfaces[0].operations[0].responseDescriptor.types, { records: 'array' });
+        assert.deepStrictEqual(
+          edited.oracles[0].check.operands.map((operand) => operand.operands[0].pointer),
+          [
+            '/interactions/answer-run/stdout/records/0/id',
+            '/interactions/answer-run/stdout/records/0/decision',
+            '/interactions/answer-run/stdout/records/1/id',
+            '/interactions/answer-run/stdout/records/1/decision',
+          ],
+        );
+      }
+      if (index === 4) {
+        const crossCheck = edited.oracles[0].check.operands.find(
+          (operand) => operand.op === 'equality' && operand.operands?.every((value) => typeof value.pointer === 'string'),
+        );
+        assert.deepStrictEqual(
+          crossCheck?.operands.map((value) => value.pointer),
+          ['/interactions/read-back/stdout/id', '/interactions/create/stdout/id'],
+        );
+      }
+      if (index === 5) {
+        assert.strictEqual(edited.oracles[0].check.op, 'equality');
+        assert.strictEqual(edited.oracles[0].check.operands[0].pointer, '/interactions/answer-run/stdout/records');
+        assert.deepStrictEqual(
+          edited.oracles[0].check.operands[1].literal.map((record) => record.id),
+          ['A', 'B'],
+        );
+      }
+      if (index === 6) {
+        assert.strictEqual(
+          edited.permittedInterfaces[0].operations.find((operation) => operation.operationId === 'create')?.stateChangeMarker,
+          true,
+        );
+        const readBack = edited.interactionPlan.find((step) => step.stepId === 'read-back');
+        assert.strictEqual(readBack.after, 'create');
+        assert.strictEqual(readBack.inputBinding.option.id.captured, '/interactions/create/stdout/id');
+      }
+      if (index === 7) {
+        assert.strictEqual(edited.interactionPlan.length, 2);
+        assert.strictEqual(edited.interactionPlan.find((step) => step.stepId === 'read-back')?.after, 'create');
+        assert.strictEqual(
+          edited.interactionPlan.find((step) => step.stepId === 'read-back')?.inputBinding.option.id.captured,
+          '/interactions/create/stdout/id',
+        );
+        assert.ok(edited.testData.principals.operator);
+        assert.ok(edited.probeStepBound >= edited.interactionPlan.length);
+      }
+      if (index === 9) {
+        const waiver = edited.waivers[0];
+        for (const field of ['rule', 'rationale', 'condition', 'approval']) assert.ok(waiver[field]);
+        assert.match(waiver.condition, /Number\.isFinite/);
+        assert.match(waiver.expiresAt, /^\d{4}-\d{2}-\d{2}T/);
+      }
+      assertEngineSuccess('compile', edited, tempRoot, 'contract patch ' + (index + 1), failures);
+    }
+    const complete = taggedExamples(contractGuide, 'contract');
+    assert.strictEqual(complete.length, 1);
+    assert.deepStrictEqual(complete[0], contract);
+    assertEngineSuccess('compile', complete[0], tempRoot, 'worked contract', failures);
+    assertEngineSuccess('seal', complete[0], tempRoot, 'worked contract', failures);
+    for (const marker of ['oracle checks', 'interaction plan', 'test data', 'sealed brief digest'])
+      requireText(contractGuide.toLowerCase(), marker, 'contract.md sealing lesson', failures);
+    const contractStage = skillContent.match(/### Stage 4: Contract\n([\s\S]*?)(?:\n### |$)/)?.[1] ?? '';
+    for (const marker of ['sourceSpecDigest', 'digestBytes', 'requirements.md', 'requirements.digest'])
+      requireText(contractStage, marker, 'SKILL.md Stage 4', failures);
+    const stage = skillContent.match(/### Stage 6: Adapters\n([\s\S]*?)(?:\n### |$)/)?.[1] ?? '';
+    const order = ['tea-evaluate check', 'eval-quality compile', 'eval-quality seal'].map((command) => stage.indexOf(command));
+    if (order.some((index) => index < 0) || !(order[0] < order[1] && order[1] < order[2]))
+      failures.push('SKILL.md Stage 6 must run check, compile, seal in order');
+    for (const marker of ['nonzero exit', 'exit code', 'stderr']) requireText(stage, marker, 'SKILL.md Stage 6', failures);
+
+    for (const heading of [
+      '## One oracle per discharged behavior',
+      '## Oracle relation choice',
+      '## Exact checks and evidence pointers',
+      '## Semantic rubrics',
+      '## Judge calibration design',
+      '## Loose oracle and degenerate response',
+    ])
+      requireHeading(oracleGuide, heading, 'oracles.md', failures);
+    for (const marker of ['expects-hold', 'expects-violation', 'unreachable-check-evidence', 'minimumAgreement', 'labels'])
+      requireText(oracleGuide, marker, 'oracles.md', failures);
+    const validContract = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'evaluate', 'valid', 'contract.json')));
+    for (const [index, oracle] of taggedExamples(oracleGuide, 'oracle').entries()) {
+      const base = oracle.direction?.evidenceTargets?.some((pointer) => pointer.includes('/create/')) ? workflowContract : validContract;
+      const edited = structuredClone(base);
+      edited.oracles[0] = oracle;
+      assertEngineSuccess('compile', edited, tempRoot, 'oracle example ' + (index + 1), failures);
+    }
+    const unreachable = structuredClone(validContract);
+    unreachable.oracles[0] = structuredClone(taggedExamples(oracleGuide, 'oracle')[1]);
+    unreachable.oracles[0].direction.evidenceTargets[0] = '/interactions/ghost/exit-code';
+    unreachable.oracles[0].check.operands[0].operands[0].pointer = '/interactions/ghost/exit-code';
+    const unreachableResult = engineCommand('compile', unreachable, tempRoot);
+    if (unreachableResult.status === 0 || !unreachableResult.stderr.includes('unreachable-check-evidence'))
+      failures.push('unreachable oracle evidence did not fail compile');
+    const looseSection = headingBody(oracleGuide, '## Loose oracle and degenerate response');
+    const pair = taggedExamples(looseSection, 'oracle');
+    const degenerate = taggedExamples(looseSection, 'degenerate-response');
+    assert.strictEqual(pair.length, 2);
+    assert.strictEqual(degenerate.length, 1);
+    const validateDegenerate = new Ajv({ strict: false, allErrors: true }).compile(
+      JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'cli', 'lib', 'evaluate', 'schemas', 'degenerate-response.schema.json'))),
+    );
+    assert.strictEqual(validateDegenerate(degenerate[0]), true, JSON.stringify(validateDegenerate.errors));
+    const answer = degenerate[0].steps['tea-atdd-runner-run'];
+    const resolve = engine.makeResolveOperand(
+      {
+        'tea-atdd-runner-run': {
+          exitCode: answer.exitCode,
+          stdout: { kind: 'text', value: answer.stdout },
+          stderr: { kind: 'text', value: answer.stderr },
+          artifacts: {},
+        },
+      },
+      {},
+    );
+    assert.strictEqual(engine.resolveCheck(pair[0].check, resolve, () => false, {}, 1000, 'loose-oracle').resolution, 'true');
+    assert.strictEqual(engine.resolveCheck(pair[1].check, resolve, () => false, {}, 1000, 'tight-oracle').resolution, 'false');
+    const rubrics = taggedExamples(oracleGuide, 'rubric');
+    if (rubrics.length !== 1) failures.push('oracles.md needs one tagged rubric');
+    for (const rubric of rubrics) {
+      const edited = structuredClone(validContract);
+      edited.rubrics = [rubric];
+      assertEngineSuccess('compile', edited, tempRoot, 'rubric example', failures);
+      assert.strictEqual(
+        rubric.scaleLevels.every((level) => level.anchor.includes('criterion being scored')),
+        true,
+      );
+      const calibration = taggedExamples(oracleGuide, 'calibration');
+      assert.strictEqual(calibration.length, 1);
+      assert.deepStrictEqual(calibrationProblems({ judgeCalibration: { minimumAgreement: 0.8 } }, edited, calibration[0], engine), []);
+      const unanchored = structuredClone(edited);
+      unanchored.rubrics[0].scaleLevels = [];
+      const rejected = engineCommand('compile', unanchored, tempRoot);
+      if (rejected.status === 0 || !rejected.stderr.includes('rubric-unanchored'))
+        failures.push('unanchored rubric example did not fail with rubric-unanchored');
+    }
+    requireText(adapterGuide, 'interface-not-authorized', 'adapters.md', failures);
+    requireText(adapterGuide, 'executable-not-authorized', 'adapters.md', failures);
+    const adapterRows = adapterGuide.match(/## Target kind to adapter mapping\n([\s\S]*?)(?:\n## |$)/)?.[1] ?? '';
+    const expectedKinds = [
+      'Skill',
+      'Agent',
+      'Workflow',
+      'Tool-use system: calling agent',
+      'Tool-use system: tool server',
+      'AI feature or any web application',
+      'Tool server reached over HTTP',
+      'Test-review mechanism',
+    ];
+    const rows = adapterRows
+      .split('\n')
+      .filter((line) => line.startsWith('| ') && !line.startsWith('| ---'))
+      .slice(1)
+      .map((line) =>
+        line
+          .split('|')
+          .slice(1, -1)
+          .map((cell) => cell.trim()),
+      );
+    assert.deepStrictEqual(
+      rows.map((row) => row[0]),
+      expectedKinds,
+    );
+    for (const row of rows) {
+      const fixture = row[3]?.match(/test\/fixtures\/[^| ]+/)?.[0]?.replaceAll(String.fromCodePoint(96), '');
+      if (!fixture || !fs.existsSync(path.join(__dirname, '..', fixture)))
+        failures.push('adapters.md ' + row[0] + ' cites no working fixture');
+    }
+    const registryEntries = taggedExamples(adapterGuide, 'registry');
+    if (registryEntries.length !== expectedKinds.length) failures.push('adapters.md needs a tagged registry for every AD-4 row');
+    const evaluationSchema = JSON.parse(
+      fs.readFileSync(path.join(__dirname, '..', 'cli', 'lib', 'evaluate', 'schemas', 'evaluation.schema.json')),
+    );
+    const validateEvaluation = new Ajv({ strict: false, allErrors: true }).compile(evaluationSchema);
+    const starter = JSON.parse(fs.readFileSync(ASSET('evaluation.json'), 'utf8'));
+    for (const [index, entry] of registryEntries.entries()) {
+      const candidate = { ...starter, registry: [entry] };
+      if (!validateEvaluation(candidate))
+        failures.push('adapters.md registry ' + (index + 1) + ' fails runtime schema: ' + JSON.stringify(validateEvaluation.errors));
+    }
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+}
+
 async function main() {
   const failures = [];
   let skillContent;
@@ -700,6 +1047,18 @@ async function main() {
   checkInspection(inspection, failures);
   checkIntake(intake, failures);
   checkCorpus(corpus, engine, failures);
+  try {
+    checkContractGuidance(
+      skillContent,
+      fs.readFileSync(REFERENCE('contract'), 'utf8'),
+      fs.readFileSync(REFERENCE('oracles'), 'utf8'),
+      fs.readFileSync(REFERENCE('adapters'), 'utf8'),
+      engine,
+      failures,
+    );
+  } catch (error) {
+    failures.push('contract guidance: ' + error.stack);
+  }
 
   const template = JSON.parse(fs.readFileSync(ASSET('evaluation.json'), 'utf8'));
   const validateEvaluation = new Ajv({ strict: false, allErrors: true }).compile(
@@ -723,7 +1082,7 @@ async function main() {
     process.exit(1);
   }
   console.log(
-    `evaluate-guidance: ${EXPECTED_STAGES.length} stages, three worked guides, 36 engine-valid tagged probes, and valid templates`,
+    `evaluate-guidance: ${EXPECTED_STAGES.length} stages, six worked guides, 36 engine-valid tagged probes, contract examples, and valid templates`,
   );
 }
 

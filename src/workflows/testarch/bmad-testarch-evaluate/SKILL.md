@@ -1,13 +1,13 @@
 ---
 name: bmad-testarch-evaluate
-description: 'Build and run a scored, evidence-backed evaluation of a target. Use when the user says "evaluate this agent" or "I want proof this behaves correctly"'
+description: 'Author a checked, compiled and sealed Behavioral Evaluation Contract with target wiring. Use when the user says "evaluate this agent" or "I want proof this behaves correctly"'
 ---
 
 # Evaluate
 
 ## Overview
 
-**Goal:** Take an adopter from a described target to a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches every seeded defect, then wire the proof into CI.
+**Goal:** Take an adopter from a described target to a checked, compiling and sealed Behavioral Evaluation Contract with a wired target. This build completes through Stage 6. Later stages will run and score clean and mutated arms, then wire proof into CI.
 
 **Role:** You are the Master Test Architect.
 
@@ -17,7 +17,7 @@ You will continue to operate with your given name, identity, and communication_s
 
 - Bare paths (e.g. `references/inspection.md`) resolve from the skill root.
 - `{skill-root}` resolves to this skill's installed directory (where `customize.toml` lives).
-- `{project-root}` is the nearest folder containing `_bmad/`, starting at the project working directory and moving up through its parents.
+- `{project-root}` is the nearest ancestor of the working directory that contains an `_bmad/` directory.
 - `{skill-name}` resolves to the skill directory's basename.
 - Resolve sibling files such as `references/...` and `assets/...` from `{skill-root}`.
 
@@ -66,6 +66,8 @@ Activation is complete. Begin the workflow below.
 
 Evaluate is one continuous loop over twelve stages, run inline rather than as separate step files: each stage's craft lives in its own `references/` guide, loaded when that stage is reached. Work under `{tea_evaluations_folder}` unless the adopter names another location. On resume, read the existing inspection record, `evaluation.json`, and any `requirements.md` before choosing a stage. Before Stage 3, require the adopter's confirmation in the statement and compare `requirements.digest` with eval-quality's `digestBytes` over the committed file; otherwise return to intake. Continue from the first incomplete stage, or the adopter's requested stage when its prerequisites hold.
 
+At activation, tell the adopter that this build can produce a checked, compiled and sealed contract with target wiring through Stage 6. Stages 7 through 12 are pending; a scored run and CI proof will need a later build.
+
 If the loaded `references/<stage>.md` guide is a placeholder (it says "Placeholder." and names the story that fills it), tell the adopter that stage is not yet available and stop there. Never improvise the stage's craft yourself, and never compute a verdict, score, or pass/fail decision outside `eval-quality`'s own CLI (AD-6): a placeholder stage has no craft to improvise from, and a verdict this skill computed itself would not be one `eval-quality` sealed.
 
 ### Stage 1: Inspection
@@ -82,7 +84,7 @@ Design the probe corpus. Load `references/corpus.md`.
 
 ### Stage 4: Contract
 
-Author the Behavioral Evaluation Contract. Load `references/contract.md`.
+Author the Behavioral Evaluation Contract. Load `references/contract.md`. Stamp its `sourceSpecDigest` with eval-quality's `digestBytes` over the confirmed `requirements.md` bytes, matching `evaluation.json` `requirements.digest`.
 
 ### Stage 5: Oracles
 
@@ -91,6 +93,8 @@ Design oracles and rubrics. Load `references/oracles.md`.
 ### Stage 6: Adapters
 
 Scaffold the execution-target registry and adapters. Load `references/adapters.md`.
+
+When the contract, oracles and registry are filled, run `npm exec --prefix {tea_evaluations_folder} -- tea-evaluate check --evaluation <evaluation-folder>`, then `npm exec --prefix {tea_evaluations_folder} -- eval-quality compile --in <evaluation-folder>/contract.json --out <evaluation-folder>/compiled-contract.json`, then `npm exec --prefix {tea_evaluations_folder} -- eval-quality seal --in <evaluation-folder>/contract.json --out <evaluation-folder>/sealed-brief.json`. Stop at the first nonzero exit. Report its command, exit code and stderr before changing the artifact and rerunning that stage.
 
 ### Stage 7: Evaluator
 
