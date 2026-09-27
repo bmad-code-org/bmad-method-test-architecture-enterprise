@@ -2,9 +2,9 @@
 title: 'Inspect the target, capture requirements and design the corpus'
 type: 'feature'
 created: '2026-09-27'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
-review_loop_iteration: 3
+review_loop_iteration: 4
 baseline_commit: '0cfaa7f9f855711565028f47a93c48d1463fbfed'
 context:
   - '_bmad-output/planning-artifacts/evaluate/epics.md'
@@ -121,7 +121,7 @@ Builder Analyze produced a `good` report with zero critical or high findings. It
 
 **Commands:**
 
-- `npm run test:evaluate-guidance`: 12 stages, three worked guides, 36 tagged probe examples, six gameability responses and valid templates passed after second-round corrections.
+- `npm run test:evaluate-guidance`: 12 stages, three worked guides, 36 tagged probe examples, six gameability responses and valid templates passed on the final corrected tree.
 - `npm run test:evaluate-check`: 683 checks passed, including a timed FIFO swap case and malformed digest object refusal.
 - `npm run test:boundary`: 828 package entries scanned with zero violations after the packaging fix.
 - `npm run test:install`, `npm run lint`, `npm run lint:md`, `npm run format:check` and the post-boundary tail of `npm test`: passed on the corrected tree.
@@ -129,4 +129,4 @@ Builder Analyze produced a `good` report with zero critical or high findings. It
 - Engine export check from Build Rules: passed at takeover and after the second-round corrections.
 - The private-prefix `tea-evaluate` invocation ran from a temporary non-project directory, and Node resolved eval-quality from a parent private `node_modules` directory.
 - `npm run docs:validate-links` passed with zero issues across 44 public Markdown files.
-- Full `npm test` passed after the second-round corrections. The focused guidance test passed again after binding the final held-out examples to concrete inputs; all 36 tagged probes and six gameability responses validated.
+- Full `npm test` passed on the third-round correction commit. The focused guidance test passed again after binding the final held-out examples to concrete inputs; all 36 tagged probes and six gameability responses validated.
