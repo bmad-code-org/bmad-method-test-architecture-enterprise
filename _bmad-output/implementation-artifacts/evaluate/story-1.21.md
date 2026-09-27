@@ -2,9 +2,9 @@
 title: 'Hold out probes and calibrate rubric judges'
 type: 'feature'
 created: '2026-09-26'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
-review_loop_iteration: 0
+review_loop_iteration: 3
 baseline_commit: '0613452d2e4b8c4d19d646cf295fd0abdc5ce401'
 context:
   - '_bmad-output/planning-artifacts/evaluate/epics.md'
