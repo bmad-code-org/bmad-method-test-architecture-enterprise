@@ -11,6 +11,8 @@
  *
  * - `stale-index`: `corpus-index.json` does not match the folder's bytes.
  * - `schema-version`: `evaluation.json` carries a version this runtime does not know.
+ * - `requirements`: a declared requirements statement is absent, is not a regular file held by
+ *   the evaluation folder, or its committed bytes disagree with the recorded digest.
  * - `runtime-owned-field`: a committed probe carries a field the runtime writes.
  * - `mutation-operator`: a mutation is not `replace-exact` with exactly one occurrence.
  * - `provisioned-target`: a mutation's `targetArtifact` sits inside a provisioned directory, which every
@@ -1656,6 +1658,47 @@ function schemaVersionMessage(version) {
   );
 }
 
+/** The declared statement must be the committed file whose exact bytes the manifest digests. */
+function checkRequirements(report, folder, evaluation, engine) {
+  const statement = evaluation.requirements;
+  if (statement === undefined) return;
+  // The schema reports malformed values. Never resolve a path it has not accepted.
+  if (statement?.path !== 'requirements.md' || !/^sha256:[0-9a-f]{64}$/.test(statement.digest)) return;
+  const file = path.join(folder, statement.path);
+  let bytes;
+  let descriptor;
+  try {
+    if (!fs.lstatSync(file).isFile()) {
+      report.add(statement.path, 'requirements', `${statement.path} is not a regular file held by the evaluation folder`);
+      return;
+    }
+    // Nonblocking open keeps a FIFO swapped in after lstat from hanging check.
+    descriptor = fs.openSync(file, fs.constants.O_RDONLY | (fs.constants.O_NONBLOCK ?? 0) | (fs.constants.O_NOFOLLOW ?? 0));
+    if (!fs.fstatSync(descriptor).isFile()) {
+      report.add(statement.path, 'requirements', `${statement.path} is not a regular file held by the evaluation folder`);
+      return;
+    }
+    bytes = fs.readFileSync(descriptor);
+  } catch (error) {
+    report.add(
+      statement.path,
+      'requirements',
+      `${statement.path} cannot be read from the evaluation folder (${error.code ?? error.message})`,
+    );
+    return;
+  } finally {
+    if (descriptor !== undefined) fs.closeSync(descriptor);
+  }
+  const actual = engine.digestBytes(bytes);
+  if (actual !== statement.digest) {
+    report.add(
+      statement.path,
+      'requirements',
+      `evaluation.json records digest ${statement.digest}; ${statement.path} digests to ${actual}`,
+    );
+  }
+}
+
 /** A sealed observation has operationId but no interfaceId, so IDs must identify one operation. */
 function checkOperationPhases(report, evaluation, contract) {
   if (!contract || !Array.isArray(contract.permittedInterfaces)) return;
@@ -1708,6 +1751,7 @@ async function checkEvaluation(folder) {
 
   const context = await buildContext();
   validateInto(report, MANIFEST_NAME, 'schema', context.validate.evaluation, evaluation);
+  checkRequirements(report, folder, evaluation, context.engine);
   const registry = Array.isArray(evaluation.registry) ? evaluation.registry : undefined;
   for (const problem of registry === undefined ? [] : [...repeatedPairs(registry), ...sharedInterfaces(registry)]) {
     report.add(MANIFEST_NAME, 'registry', problem);

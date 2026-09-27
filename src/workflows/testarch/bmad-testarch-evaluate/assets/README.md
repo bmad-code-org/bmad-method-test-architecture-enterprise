@@ -1,9 +1,15 @@
 # Evaluate assets
 
 Templates an authored evaluation starts from.
-Each JSON template ships with the values only the adopter can choose left `null`, so a copy validates only once those are filled.
+The scoring policy and evaluator conditions JSON templates leave adopter choices `null`, so a copy validates only once those are filled.
 The one exception is the scoring-policy template's `parentDigest: null`, which is already its final value: a new policy has no parent.
 
+- `evaluation.json` is a schema-valid worked starter for a reservation-review skill.
+  Replace its target, launch and registry paths using the inspection record before running `tea-evaluate check`.
+  Its `requirements.digest` matches the exact bytes of `requirements-statement.md`; recalculate it with eval-quality's `digestBytes` after filling the statement and copying it to `requirements.md`.
+- `inspection-record.md` is copied to a run-specific working draft and captures the target's entry points, behaviors, surfaces, existing tests and failure history without recording a second target-kind field.
+- `requirements-statement.md` supplies the six intake sections.
+  Copy it to the working drafts folder, fill and confirm that copy with the adopter, then copy the confirmed bytes to the committed evaluation folder as `requirements.md`.
 - `scoring-policy.template.json` becomes `policy/scoring-policy.json`, eval-quality's scoring policy.
   The adopter sets `policyId`, `severityFloor`, `catchThreshold` and `minimumTrialCount`; `confidenceThreshold` and the three caps carry eval-quality's published defaults, which the adopter may change.
 - `evaluator-conditions.template.json` becomes `policy/evaluator-conditions.json`, the model a run uses, the digest of its system prompt and, in its `judge` block, the model the rubric judge uses, which `tea-evaluate run` records in every run's evaluator configuration.

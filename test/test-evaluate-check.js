@@ -357,6 +357,130 @@ async function checkValidFixture() {
   );
 }
 
+/** Story 1.12's statement is an optional additive manifest field until earlier fixtures are backfilled in Story 2.2. */
+async function checkRequirementsStatement() {
+  const engine = await loadEngine();
+  const assets = path.join(PROJECT_ROOT, 'src', 'workflows', 'testarch', 'bmad-testarch-evaluate', 'assets');
+  const starter = JSON.parse(fs.readFileSync(path.join(assets, 'evaluation.json'), 'utf8'));
+  const starterBytes = fs.readFileSync(path.join(assets, 'requirements-statement.md'));
+  const validateStarter = new Ajv({ strict: false, allErrors: true }).compile(
+    JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate', 'schemas', 'evaluation.schema.json'), 'utf8')),
+  );
+  check(validateStarter(starter), `the filled evaluation.json starter fails the runtime schema: ${JSON.stringify(validateStarter.errors)}`);
+  check(
+    starter.requirements?.digest === engine.digestBytes(starterBytes),
+    'the filled evaluation.json starter does not digest the exact requirements statement template bytes',
+  );
+  const fromStarter = copyValid();
+  fs.writeFileSync(path.join(fromStarter, 'requirements.md'), starterBytes);
+  editJson(fromStarter, 'evaluation.json', (value) => (value.requirements = starter.requirements));
+  const starterCheck = runCli(['check', '--evaluation', fromStarter]);
+  check(
+    starterCheck.status === 0,
+    `a fixture filled from the evaluation.json starter exited ${starterCheck.status}; expected 0\n${starterCheck.output}`,
+  );
+
+  const bytes = Buffer.from('# Confirmed requirements\n\nThe target returns the expected result.\n');
+  const recorded = engine.digestBytes(bytes);
+  const withStatement = () => {
+    const folder = copyValid();
+    fs.writeFileSync(path.join(folder, 'requirements.md'), bytes);
+    editJson(folder, 'evaluation.json', (value) => (value.requirements = { path: 'requirements.md', digest: recorded }));
+    return folder;
+  };
+
+  const valid = withStatement();
+  const accepted = runCli(['check', '--evaluation', valid]);
+  check(accepted.status === 0, `a committed requirements statement exited ${accepted.status}; expected 0\n${accepted.output}`);
+  check(
+    JSON.parse(fs.readFileSync(path.join(valid, 'contract.json'), 'utf8')).sourceSpecDigest !== recorded,
+    'the fixture contract unexpectedly has the requirements digest, so this case cannot prove Story 2.2 freshness is deferred',
+  );
+
+  for (const [label, edit, named] of [
+    ['missing digest', (value) => delete value.requirements.digest, '/requirements'],
+    ['malformed digest', (value) => (value.requirements.digest = 'sha256:BAD'), '/requirements/digest'],
+    ['parent path', (value) => (value.requirements.path = '../requirements.md'), '/requirements/path'],
+    ['absolute path', (value) => (value.requirements.path = '/tmp/requirements.md'), '/requirements/path'],
+  ]) {
+    const folder = withStatement();
+    editJson(folder, 'evaluation.json', edit);
+    const result = runCli(['check', '--evaluation', folder]);
+    check(result.status === 10, `${label} exited ${result.status}; expected 10\n${result.output}`);
+    check(
+      result.stdout.includes('evaluation.json: [schema]') && result.stdout.includes(named),
+      `${label} lacks its schema finding\n${result.output}`,
+    );
+  }
+
+  const missing = withStatement();
+  fs.rmSync(path.join(missing, 'requirements.md'));
+  const missingResult = runCli(['check', '--evaluation', missing]);
+  check(missingResult.status === 10, `missing requirements.md exited ${missingResult.status}; expected 10\n${missingResult.output}`);
+  check(
+    missingResult.stdout.includes('requirements.md: [requirements]'),
+    `missing requirements.md lacks a finding\n${missingResult.output}`,
+  );
+
+  const changed = withStatement();
+  fs.appendFileSync(path.join(changed, 'requirements.md'), '\n');
+  const changedResult = runCli(['check', '--evaluation', changed]);
+  check(changedResult.status === 10, `changed requirements bytes exited ${changedResult.status}; expected 10\n${changedResult.output}`);
+  check(
+    changedResult.stdout.includes('requirements.md: [requirements]'),
+    `changed requirements bytes lack a finding\n${changedResult.output}`,
+  );
+
+  if (process.platform !== 'win32') {
+    const linked = withStatement();
+    fs.rmSync(path.join(linked, 'requirements.md'));
+    const outside = path.join(tempDir('outside-requirements'), 'requirements.md');
+    fs.writeFileSync(outside, bytes);
+    fs.symlinkSync(outside, path.join(linked, 'requirements.md'));
+    const linkedResult = runCli(['check', '--evaluation', linked]);
+    check(linkedResult.status === 10, `linked requirements.md exited ${linkedResult.status}; expected 10\n${linkedResult.output}`);
+    check(
+      linkedResult.stdout.includes('requirements.md: [requirements]'),
+      `linked requirements.md lacks a finding\n${linkedResult.output}`,
+    );
+
+    // Simulate a FIFO swapped in after lstat has reported a regular file.
+    // Without O_NONBLOCK the subsequent open waits for a writer indefinitely.
+    const swapped = withStatement();
+    const fifo = path.join(swapped, 'requirements.md');
+    fs.rmSync(fifo);
+    const made = spawnSync('mkfifo', [fifo], { encoding: 'utf8' });
+    check(made.status === 0, `could not create the FIFO race fixture: ${made.stderr}`);
+    if (made.status === 0) {
+      const preloader = path.join(tempDir('fifo-race'), 'lstat-preloader.cjs');
+      fs.writeFileSync(
+        preloader,
+        [
+          "const fs = require('node:fs');",
+          'const original = fs.lstatSync;',
+          'fs.lstatSync = function (file, ...args) {',
+          '  const stats = original.call(this, file, ...args);',
+          '  if (file === process.env.TEA_TEST_REQUIREMENTS_FIFO && stats.isFIFO()) return { isFile: () => true };',
+          '  return stats;',
+          '};',
+        ].join('\n'),
+      );
+      const raced = spawnSync(process.execPath, ['--require', preloader, CLI, 'check', '--evaluation', swapped], {
+        cwd: PROJECT_ROOT,
+        encoding: 'utf8',
+        env: { ...process.env, TEA_TEST_REQUIREMENTS_FIFO: fifo },
+        timeout: 10_000,
+      });
+      check(!raced.error, `a FIFO swapped after lstat hung or failed: ${raced.error?.message}`);
+      check(raced.status === 10, `a FIFO swapped after lstat exited ${raced.status}; expected 10\n${raced.stdout}${raced.stderr}`);
+      check(
+        raced.stdout.includes('requirements.md: [requirements]'),
+        `a FIFO swapped after lstat lacks a requirements finding\n${raced.stdout}${raced.stderr}`,
+      );
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // The registry (Story 1.5)
 
@@ -2634,6 +2758,7 @@ function checkPackedInstall() {
 async function main() {
   try {
     await checkValidFixture();
+    await checkRequirementsStatement();
     checkRegistry();
     checkEngineAbsent();
     checkUsage();
