@@ -400,6 +400,7 @@ async function checkRequirementsStatement() {
   for (const [label, edit, named] of [
     ['missing digest', (value) => delete value.requirements.digest, '/requirements'],
     ['malformed digest', (value) => (value.requirements.digest = 'sha256:BAD'), '/requirements/digest'],
+    ['digest object with shadowed toString', (value) => (value.requirements.digest = { toString: 'x' }), '/requirements/digest'],
     ['parent path', (value) => (value.requirements.path = '../requirements.md'), '/requirements/path'],
     ['absolute path', (value) => (value.requirements.path = '/tmp/requirements.md'), '/requirements/path'],
   ]) {

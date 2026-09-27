@@ -1663,7 +1663,8 @@ function checkRequirements(report, folder, evaluation, engine) {
   const statement = evaluation.requirements;
   if (statement === undefined) return;
   // The schema reports malformed values. Never resolve a path it has not accepted.
-  if (statement?.path !== 'requirements.md' || !/^sha256:[0-9a-f]{64}$/.test(statement.digest)) return;
+  if (statement?.path !== 'requirements.md' || typeof statement.digest !== 'string' || !/^sha256:[0-9a-f]{64}$/.test(statement.digest))
+    return;
   const file = path.join(folder, statement.path);
   let bytes;
   let descriptor;

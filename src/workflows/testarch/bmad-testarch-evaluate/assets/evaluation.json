@@ -12,7 +12,7 @@
       "artifacts": {},
       "environmentKeys": [],
       "maxElapsedMs": 30000,
-      "infrastructureExitCodes": [3]
+      "infrastructureExitCodes": [3, 4, 5, 6]
     }
   ],
   "launch": {

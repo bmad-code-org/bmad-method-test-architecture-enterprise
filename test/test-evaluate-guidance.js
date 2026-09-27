@@ -65,23 +65,59 @@ function checkInspection(inspection, failures) {
     requireHeading(inspection, heading, 'inspection.md', failures);
 
   const expectedRows = [
-    ['Skill', '`cli`', '`createCommandLineAdapter`'],
-    ['Agent', '`cli`', '`createCommandLineAdapter`'],
-    ['Workflow', "target's own `cli`, `api` or `mcp` kind", 'adapter for that kind'],
-    ['Tool-use system: calling agent', '`cli`', '`createCommandLineAdapter`'],
-    ['Tool-use system: tool server', '`mcp`', '`createMcpAdapter`'],
-    ['AI feature or any web application', '`api`', 'adopter-owned `EnvironmentProbePort`'],
-    ['Tool server reached over HTTP', '`api`', 'adopter-owned `EnvironmentProbePort`'],
-    ['Test-review mechanism', 'kind of how it runs, usually `cli`', 'adapter for that kind'],
+    [
+      'Skill',
+      '`cli`',
+      '`createCommandLineAdapter`',
+      'Generic skill runner registry entry with explicit `--skill-root` inside the disposable copy',
+    ],
+    [
+      'Agent',
+      '`cli`',
+      '`createCommandLineAdapter`',
+      "Adopter's non-interactive command registry entry; use the skill runner when no command exists",
+    ],
+    [
+      'Workflow',
+      "target's own `cli`, `api` or `mcp` kind",
+      'adapter for that kind',
+      'Interaction plan with ordered `after` steps and `captured` bindings from earlier observations',
+    ],
+    [
+      'Tool-use system: calling agent',
+      '`cli`',
+      '`createCommandLineAdapter`',
+      'Agent command and tool-call trajectory on stdout for its oracle',
+    ],
+    ['Tool-use system: tool server', '`mcp`', '`createMcpAdapter`', 'Registry entry supplying `McpTargetAuthorization`'],
+    [
+      'AI feature or any web application',
+      '`api`',
+      'adopter-owned `EnvironmentProbePort`',
+      '`adapter/http-probe-port.mjs` and its conformance file, with address decisions delegated to eval-quality',
+    ],
+    [
+      'Tool server reached over HTTP',
+      '`api`',
+      'adopter-owned `EnvironmentProbePort`',
+      "HTTP port as above; eval-quality's MCP adapter is for stdio",
+    ],
+    [
+      'Test-review mechanism',
+      'kind of how it runs, usually `cli`',
+      'adapter for that kind',
+      'Skill runner or own command, with seeded test smells and clean tests in its corpus',
+    ],
   ];
-  const actualRows = inspection
+  const mappingBody = sections(inspection, 2).find((section) => section.title === 'Classify the target and choose its adapter')?.body ?? '';
+  const actualRows = mappingBody
     .split('\n')
     .filter((line) => line.startsWith('| ') && !line.startsWith('| ---'))
-    .slice(1, 9)
+    .slice(1)
     .map((line) =>
       line
         .split('|')
-        .slice(1, 4)
+        .slice(1, 5)
         .map((cell) => cell.trim()),
     );
   try {
@@ -106,6 +142,17 @@ function checkInspection(inspection, failures) {
     'incident notes',
   ])
     requireText(inspection, marker, 'inspection.md', failures);
+  const worked = {
+    'Entry points': ['skills/reservation-review/SKILL.md', 'stdin', '--skill-root'],
+    Behaviors: ['B-001', 'B-002', 'references/limits.md'],
+    Surfaces: ['stdout', 'tool-call trajectory', 'audit file'],
+    'Existing tests': ['checks/reservation-review.test.js', 'keyword assertion', 'checks/limits.snapshot.js'],
+    'Failure history': ['limit edit', 'always-decline answer', 'corpus'],
+  };
+  for (const [heading, markers] of Object.entries(worked)) {
+    const body = sections(inspection, 2).find((section) => section.title === heading)?.body ?? '';
+    for (const marker of markers) requireText(body, marker, `inspection.md ${heading}`, failures);
+  }
   const record = fs.readFileSync(ASSET('inspection-record.md'), 'utf8');
   for (const heading of [
     '## Target and scope',
@@ -135,12 +182,25 @@ function checkIntake(intake, failures) {
     const body = sections(intake, 2).find((section) => section.title === family)?.body ?? '';
     if (!body.includes('Ask:') || !body.includes('Worked answer:')) failures.push(`intake.md ${family} lacks a question or worked answer`);
   }
+  try {
+    assert.deepStrictEqual(
+      sections(statement, 2).map((section) => section.title),
+      families,
+    );
+  } catch (error) {
+    failures.push(`requirements-statement.md must have exactly the six intake sections: ${error.message}`);
+  }
   requireHeading(intake, '## Write and confirm the statement', 'intake.md', failures);
   for (const marker of [
     '{test_artifacts}/evaluate/<evaluationId>/requirements-statement.md',
     "Halt for the adopter's explicit confirmation before corpus design",
     '{tea_evaluations_folder}/<evaluationId>/requirements.md',
     '`digestBytes`',
+    '{tea_evaluations_folder}/package.json',
+    '`{"private":true,"devDependencies":{"eval-quality":"latest","bmad-method-test-architecture-enterprise":"latest"}}`',
+    'npm install --prefix {tea_evaluations_folder}',
+    'From `{tea_evaluations_folder}/<evaluationId>/`',
+    'npm exec --prefix {tea_evaluations_folder} -- tea-evaluate check',
   ])
     requireText(intake, marker, 'intake.md', failures);
 }
@@ -158,13 +218,23 @@ function checkCorpus(corpus, failures) {
     'must not read held-out input or expected answer',
     '`corpus-index.json`',
     '`digestArtifact`',
-    'tea-evaluate digest --evaluation <folder>',
+    'npm exec --prefix {tea_evaluations_folder} -- tea-evaluate digest',
+    'npm install --prefix {tea_evaluations_folder}',
+    'non-Node adopter repositories',
   ])
     requireText(corpus, marker, 'corpus.md', failures);
 
   const kinds = ['Agent', 'Skill', 'Workflow', 'Tool-use system', 'AI feature', 'Test-review mechanism'];
   const headingNames = ['Representative inputs', 'Negative and malformed inputs', 'Gameability design', 'Held-out probe selection'];
-  const tags = ['representative', 'negative', 'malformed', 'negative', 'gameability', 'held-out'];
+  const ordinaryTags = ['representative', 'negative', 'malformed', 'gameability', 'held-out'];
+  const malformedKeys = {
+    Agent: 'stdin.customerId',
+    Skill: 'stdin.amount',
+    Workflow: 'argument.reservationId',
+    'Tool-use system': 'stdin.amount',
+    'AI feature': 'body.answer',
+    'Test-review mechanism': 'stdin.testSource',
+  };
   const kindSections = sections(corpus, 2).filter((section) => kinds.includes(section.title));
   try {
     assert.deepStrictEqual(
@@ -197,6 +267,16 @@ function checkCorpus(corpus, failures) {
     }
     const foundTags = [];
     const probes = [];
+    const headings = new Map(subheads.map((section) => [section.title, section.body]));
+    const malformedBody = headings.get('Negative and malformed inputs') ?? '';
+    for (const marker of [
+      `declare \`${malformedKeys[kind.title]}\``,
+      'For `malformed-input`',
+      '{ matcher: "type-violating" }',
+      '/interactions/malformed-input/',
+      '`O-003` checks',
+    ])
+      requireText(malformedBody, marker, `corpus.md ${kind.title} malformed input`, failures);
     for (const match of kind.body.matchAll(/<!-- example:probe -->\s*```json\n([\s\S]*?)\n```/g)) {
       let probe;
       try {
@@ -206,7 +286,7 @@ function checkCorpus(corpus, failures) {
         continue;
       }
       const tag = probe.rationale?.match(/^\[([a-z-]+)\]/)?.[1];
-      if (!tags.includes(tag)) failures.push(`corpus.md ${kind.title} probe ${probe.probeId} has no permitted rationale tag`);
+      if (!ordinaryTags.includes(tag)) failures.push(`corpus.md ${kind.title} probe ${probe.probeId} has no permitted rationale tag`);
       foundTags.push(tag);
       probes.push(probe);
       if (!validateCommitted(probe))
@@ -242,7 +322,10 @@ function checkCorpus(corpus, failures) {
         failures.push(`corpus.md ${kind.title} ${probe.probeId} fails eval-quality probe schema: ${JSON.stringify(validateEngine.errors)}`);
     }
     try {
-      assert.deepStrictEqual(foundTags, tags);
+      assert.deepStrictEqual(
+        foundTags,
+        kind.title === 'Skill' ? ['representative', 'negative', 'malformed', 'negative', 'gameability', 'held-out'] : ordinaryTags,
+      );
     } catch (error) {
       failures.push(`corpus.md ${kind.title} tagged corpus changed: ${error.message}`);
     }
@@ -253,6 +336,52 @@ function checkCorpus(corpus, failures) {
       seed.defects?.[0]?.manifestationWitness == null
     )
       failures.push(`corpus.md ${kind.title} lacks a worked seeded defect with a manifestation witness`);
+    const heldOut = kind.title === 'Skill' ? ['P-004', 'P-006'] : ['P-006'];
+    const heldOutBody = headings.get('Held-out probe selection') ?? '';
+    for (const id of heldOut) requireText(heldOutBody, `\`${id}\``, `corpus.md ${kind.title} held-out selection`, failures);
+    for (const id of heldOut) {
+      const selected = probes.find((probe) => probe.probeId === id);
+      if (!selected || selected.expectedClean !== false || selected.qualification?.route === 'clean-control')
+        failures.push(`corpus.md ${kind.title} held-out ${id} must be non-clean`);
+      if (!probes.some((probe) => !heldOut.includes(probe.probeId) && probe.behaviorId === selected?.behaviorId))
+        failures.push(`corpus.md ${kind.title} held-out ${id} lacks a development probe for ${selected?.behaviorId}`);
+    }
+    const malformed = probes.find((probe) => probe.probeId === 'P-003');
+    if (!malformed?.rationale.startsWith('[malformed]') || !malformed.rationale.includes('type-violating'))
+      failures.push(`corpus.md ${kind.title} P-003 lacks a type-violating malformed input`);
+    const gameability = probes.find((probe) => probe.probeId === 'P-004');
+    if (
+      gameability?.behaviorId !== 'B-001' ||
+      gameability.qualification?.naiveOracle !== 'O-002' ||
+      (!(headings.get('Gameability design') ?? '').includes('different behavior') && kind.title !== 'Skill')
+    )
+      failures.push(`corpus.md ${kind.title} gameability does not contrast B-001's disciplined oracle with B-002's naive oracle`);
+    if (kind.title === 'Skill') {
+      for (const id of ['P-002', 'P-003', 'P-006'])
+        if (probes.find((probe) => probe.probeId === id)?.behaviorId !== 'B-002')
+          failures.push(`corpus.md Skill ${id} must cover critical B-002`);
+      if (probes.find((probe) => probe.probeId === 'P-007')?.behaviorId !== 'B-001')
+        failures.push('corpus.md Skill needs a B-001 development seed');
+      requireText(headings.get('Gameability design') ?? '', "O-002` is B-002's naive decline oracle", 'corpus.md Skill', failures);
+      if (
+        !gameability?.rationale?.includes("B-002's refusal-only oracle") ||
+        seed?.defects?.[0]?.severity !== 'critical' ||
+        seed?.defects?.[0]?.manifestationWitness?.relation?.operands?.[0]?.pointer !==
+          '/interactions/manifest-rule-fault/stdout/reservationCallCount' ||
+        seed?.defects?.[0]?.manifestationWitness?.relation?.operands?.[1]?.literal !== 1 ||
+        seed?.defectSignature?.condition?.predicate?.operands?.[0]?.pointer !== '/interactions/observed/stdout/reservationCallCount' ||
+        seed?.defectSignature?.condition?.predicate?.operands?.[1]?.literal !== 1
+      )
+        failures.push('corpus.md Skill must show B-002 no-call evidence and B-001 gameability relation');
+    }
+    if (
+      kind.title === 'Workflow' &&
+      (seed?.probeClass !== 'zero-action' ||
+        !seed.rationale.includes('suppresses both create and read-back') ||
+        seed.defects?.[0]?.manifestationWitness?.relation?.operands?.[1]?.literal !== 0 ||
+        seed.defectSignature?.condition?.predicate?.operands?.[1]?.literal !== true)
+    )
+      failures.push('corpus.md Workflow P-006 must skip all required actions while claiming success');
     if (seed?.probeClass === 'zero-action') zeroActionDefectCount += 1;
   }
   if (zeroActionDefectCount === 0) failures.push('corpus.md lacks a worked zero-action defect for a mandatory-action behavior');
@@ -320,6 +449,11 @@ async function main() {
   if (!validateEvaluation(template))
     failures.push(`assets/evaluation.json fails runtime schema: ${JSON.stringify(validateEvaluation.errors)}`);
   if (template.interface === 'web') failures.push('assets/evaluation.json emits web');
+  try {
+    assert.deepStrictEqual(template.registry?.[0]?.infrastructureExitCodes, [3, 4, 5, 6]);
+  } catch (error) {
+    failures.push(`assets/evaluation.json starter runner codes changed: ${error.message}`);
+  }
   const engine = await loadEngine();
   const actualDigest = engine.digestBytes(fs.readFileSync(ASSET('requirements-statement.md')));
   if (template.requirements?.path !== 'requirements.md' || template.requirements.digest !== actualDigest)
@@ -331,7 +465,7 @@ async function main() {
     process.exit(1);
   }
   console.log(
-    `evaluate-guidance: ${EXPECTED_STAGES.length} stages, three worked guides, 36 engine-valid tagged probes, and valid templates`,
+    `evaluate-guidance: ${EXPECTED_STAGES.length} stages, three worked guides, 31 engine-valid tagged probes, and valid templates`,
   );
 }
 
