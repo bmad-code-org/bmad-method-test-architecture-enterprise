@@ -2,7 +2,7 @@
 title: 'Attribute findings for interpretation'
 type: 'feature'
 created: '2026-09-26'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '5d613bc1c5c40fbc8d06bfff24eeb521c4c5b3f0'
@@ -73,6 +73,8 @@ The implementation makes `operationPhases` additive at the schema level and enfo
 
 Story 1.42 was appended to the Epic 1 plan, test design, dependency table and sprint backlog for interface-qualified observations. Story 1.22 safely refuses cross-interface operation-ID reuse until a published eval-quality record can identify each observation's interface. No eval-quality release is needed for this story.
 
+Three fresh final-review rounds completed. The first two rounds produced verified runtime, AD-23 and test-strength fixes; the third round passed all three lenses. CodeRabbit posted no review within 20 minutes of green checks, so the relay's Codex review stands in.
+
 Five targeted revert checks failed their named suites and restored the source bytes: phase coverage (`test:evaluate-check`), oracle pointer projection (`test:evaluate-interpret`), severity filtering (`test:evaluate-interpret`), direct strength copy (`test:evaluate-interpret`), and chain registration (`test:ci-coverage`).
 
 ## Spec Change Log
@@ -108,7 +110,7 @@ Five targeted revert checks failed their named suites and restored the source by
 
 - `npm run test:evaluate-check`: 658 checks passed.
 - `npm run test:evaluate-interpret`: passed, including real scoring, Invalid exit 3, and malformed citation refusal.
-- `npm test`: all 94 chained checks passed on the initial PR commit, in an independent final review, and on the review-fix tree.
+- `npm test`: all 94 chained checks passed on the initial PR commit, in an independent final review, on the review-fix tree, and on the done-status tree.
 - `npm run docs:validate-links`: 44 documentation files checked with no issue.
 - `npm run docs:build`: passed on the initial PR commit and review-fix tree.
 - Engine export check from the Evaluate build rules: passed at the start and end.
