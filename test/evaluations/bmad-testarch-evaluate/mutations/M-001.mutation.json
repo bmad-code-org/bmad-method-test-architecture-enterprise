@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "mutationId": "M-001",
+  "mutationSource": "references/gaps.md: the tea-evaluate 11 row of the AD-10 exit table gives the infrastructure class",
+  "targetArtifact": "src/workflows/testarch/bmad-testarch-evaluate/references/gaps.md",
+  "operator": {
+    "kind": "replace-exact",
+    "find": "| `tea-evaluate 11`       | evaluation weakness                           |",
+    "replace": "| `tea-evaluate 11`       | infrastructure                                |",
+    "occurrences": 1
+  },
+  "expectedObservableFailure": "Asked about a run that exited 11, Stage 11 names infrastructure, so the classify-exits reply carries exit11 \"infrastructure\"."
+}

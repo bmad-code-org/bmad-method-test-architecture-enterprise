@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "mutationId": "M-002",
+  "mutationSource": "references/gaps.md: the tea-evaluate 12 row of the AD-10 exit table gives the evaluation weakness class",
+  "targetArtifact": "src/workflows/testarch/bmad-testarch-evaluate/references/gaps.md",
+  "operator": {
+    "kind": "replace-exact",
+    "find": "| `tea-evaluate 12`       | infrastructure                                |",
+    "replace": "| `tea-evaluate 12`       | evaluation weakness                           |",
+    "occurrences": 1
+  },
+  "expectedObservableFailure": "Asked about a preflight that exited 12, Stage 11 names evaluation weakness, so the classify-exits reply carries exit12 \"evaluation weakness\"."
+}

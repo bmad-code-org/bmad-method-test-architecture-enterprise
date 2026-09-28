@@ -1,6 +1,12 @@
 # Test fixtures with intentionally broken/malformed files
 test/fixtures/**
 
+# Evaluate-authored evaluation folders. corpus-index.json digests the exact
+# bytes of the probes, mutations and corpus files beside it, and
+# tea-evaluate check refuses a stale index, so reformatting them would break
+# the digest the evaluation commits.
+test/evaluations/**
+
 # Stored GitHub Actions workflow files the ci eval replay corpus scores.
 # Several are deliberately malformed YAML that a real run could produce, and
 # reformatting them would fail the check they exist to be scored against.

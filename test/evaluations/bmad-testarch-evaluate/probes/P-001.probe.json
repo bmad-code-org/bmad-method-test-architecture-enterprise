@@ -1,0 +1,12 @@
+{
+  "probeId": "P-001",
+  "probeClass": "zero-action",
+  "behaviorId": "B-001",
+  "expectedClean": true,
+  "rationale": "[representative] Clean control: the committed exit table classes exit 11 of tea-evaluate an evaluation weakness and exit 12 infrastructure.",
+  "defects": [],
+  "qualification": {
+    "route": "clean-control",
+    "noKnownDefectStatement": "The exit table in references/gaps.md matches AD-10 at this revision, which the guidance gate holds."
+  }
+}

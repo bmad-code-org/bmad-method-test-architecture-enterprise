@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Evaluate authored and ran the behavioral suite for its own skill, `bmad-testarch-evaluate`, live through the local Claude Code CLI (Story 1.16, AD-15). The committed evaluation at `test/evaluations/bmad-testarch-evaluate/` checks that Stage 11 names the AD-10 class of a failed `tea-evaluate` exit and that Stage 1 maps a web application to `api`, seeds a class swap in the gap guide's exit table with a held-out second swap, and holds each reply to one JSON object through the runner's `--agent-arg`. It replaces the manifest's last `deferred` entry as an `evaluate-authored` suite, and the proof run, its rollback digests and an independent `eval-quality score` replay are recorded in `epic-1-proof.md`. `.prettierignore` keeps the evaluation folder's digested bytes out of formatting.
 - Evaluate-authored suites can be registered alongside generator-owned suites, with manifest and evaluation policy checks before they enter the test inventory. `eval:all` records their IDs when it skips them (Story 1.15).
 - Evaluate now guides mutation planning, adopter-set risk policy, the private run and score sequence, and evidence-led gap repair through Stage 11. The guidance gate validates tagged mutation files against the runtime schema and checks installed outcome, discipline, preflight and exit mappings. Run-wide class strength is tracked separately because the current engine emits per-probe evidence (Story 1.14).
 - Evaluate now teaches how to choose and build an evaluation layer with a six-option rubric, a primary-source procedure for unfamiliar frameworks, and command, AgentEvals, promptfoo, mapping and learning templates. The starters bind promptfoo assertions to stable keys, require tracked AgentEvals references, and reject ambiguous observation selection. The guidance gate runs both framework templates through clean-control and seeded-defect fixture evaluations (Story 1.23).
@@ -230,6 +231,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The README's suite counts and `test:cli`'s `eval:all` invocation count read only the manifest suites a harness runs, so an `evaluate-authored` entry, which declares no runner capabilities and which `eval:all` skips, no longer crashes `test:doc-count-sources` or miscounts the live harnesses (Story 1.16).
 - The mutation test clears its interrupted-run deadline when the child closes, so `npm run test:evaluate-mutation` exits promptly after reporting success.
 - `tea-evaluate score` refuses a planted `scores` symlink before running the scorer, so a pre-existing link cannot redirect score artifacts into the adopter's repository. The remaining concurrent directory-swap case is tracked by Story 1.41.
 - A `copy` workspace reproduced for a trial or a qualification now holds what the pristine copy held when it was made (Story 1.18).

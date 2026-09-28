@@ -38,7 +38,7 @@ inputDocuments:
 
 ## Executive Summary
 
-**Scope:** full epic-level test design for Stories 1.1 to 1.45 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.45. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
+**Scope:** full epic-level test design for Stories 1.1 to 1.46 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.46. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
 
 **Risk summary:**
 
@@ -738,6 +738,17 @@ Added 2026-09-28 in Story 1.14's final review. Levels: integration over a publis
 | Class floors govern held-out readiness | Four of five caught at floor `0.75` meets it; the same evidence at `0.9` does not; the guide reads only that engine decision                                                 | Integration, guidance              | P0  | Removing the floor comparison or changing either expected decision fails      |
 | Null and comparability remain distinct | Exercise no eligible probe, an admitted but unexercised probe, and a trial set below `minimumTrialCount`; exclude controls and canaries from the denominator                 | Integration                        | P0  | Counting an excluded probe or converting a null or non-comparable state fails |
 | Replay preserves the class result      | Replay the sealed inputs and compare the aggregate and lineage byte for byte; reject a missing or mismatched result                                                          | Replay                             | P0  | Replaying a changed artifact without a changed aggregate fails                |
+
+### Story 1.46: Close the dogfood suite's coverage gaps
+
+Added 2026-09-28 by Story 1.16's proof run. Levels: live (the gap-loop session and its rerun), integration over real eval-quality, and static. The before state is Story 1.16's recorded `CONCERNS` evidence.
+
+| AC                                  | Test                                                                                                                                              | Level                              | P   | Revert check                                                                           |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | --- | -------------------------------------------------------------------------------------- |
+| Each named rule gets its repair     | `tea-evaluate check`, `compile` and `seal` exit 0 on the repaired folder; the rerun's evidence lists no unsatisfied rule at or above the floor    | Live, integration                  | P0  | Removing the malformed-input probe or the completeness probe restores its coverage gap |
+| B-002 seeded or refused with reason | A seeded B-002 probe resolves `caught`; otherwise `corpus/README.md` keeps the refusal and the guides still state the rule in more than one place | Live, static                       | P1  | A seed whose rule is restated elsewhere fails to qualify (exit 11)                     |
+| PASS at `minimumTrialCount`         | Every evidence artifact records `contractVerdict: PASS`; clean controls `passed-clean-control`; every seeded probe `caught`                       | Integration over real eval-quality | P0  | Reverting any repair reproduces Story 1.16's `CONCERNS`                                |
+| Thresholds stay registered          | `test:eval-schemas` cross-checks the manifest entry against `evaluation.json` and the scoring policy                                              | Static                             | P1  | Changing one threshold on one side fails                                               |
 
 ## The Dogfood Proof (AD-15)
 

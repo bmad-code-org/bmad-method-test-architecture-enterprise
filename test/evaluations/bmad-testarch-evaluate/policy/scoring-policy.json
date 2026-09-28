@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 2,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "policyId": "bmad-testarch-evaluate",
+  "severityFloor": "material",
+  "confidenceThreshold": 0.5,
+  "catchThreshold": 0.6,
+  "minimumTrialCount": 5,
+  "reExecutionCap": 2,
+  "remediationCap": 3,
+  "regexMatchStepBudget": 1000000
+}

@@ -6,7 +6,7 @@
     "That refusal is the point: a suite list with a skill missing from it reads as coverage, and reading it that",
     "way is the most expensive possible mistake to make about your own quality gate.",
     "",
-    "Only `evalType: behavioral` discharges a skill's coverage obligation. Fragment selection measures which",
+    "Only `evalType: behavioral` and `evalType: evaluate-authored` discharge a skill's coverage obligation. Fragment selection measures which",
     "knowledge a run loads, which is a routing decision taken before the workflow produces anything, so none of the",
     "eight skills it spans is still listed under `deferred`. All eight, `atdd`, `automate`, `ci`, `framework`, `nfr`,",
     "`test-design`, `test-review` and `trace`, each carry a behavioral suite of their own, and that is what",
@@ -754,14 +754,31 @@
       "caseCount": 1,
       "ciTier": "full-matrix",
       "runnerCapabilities": ["scoped-artifact-writes"]
+    },
+    {
+      "$comment": [
+        "Authored by Evaluate itself (Story 1.16, AD-15): the evaluation folder is committed and guarded by",
+        "tea-evaluate check, and no generator or harness in this repository writes it (AD-14). Its live legs run the",
+        "skill through the generic skill runner and the local Claude Code CLI; the proof run is recorded in",
+        "_bmad-output/implementation-artifacts/evaluate/epic-1-proof.md. eval:all leaves it to tea-evaluate.",
+        "",
+        "The thresholds restate evaluation.json (trials, strengthFloor) and policy/scoring-policy.json",
+        "(catchThreshold, minimumTrialCount, severityFloor); tools/validate-eval-schemas.js fails on any drift."
+      ],
+      "id": "evaluate",
+      "skill": "bmad-testarch-evaluate",
+      "evalType": "evaluate-authored",
+      "evaluation": "test/evaluations/bmad-testarch-evaluate/evaluation.json",
+      "thresholds": {
+        "trials": 5,
+        "strengthFloor": {
+          "defect": 1
+        },
+        "catchThreshold": 0.6,
+        "minimumTrialCount": 5,
+        "severityFloor": "material"
+      }
     }
   ],
-  "deferred": [
-    {
-      "skill": "bmad-testarch-evaluate",
-      "owner": "TEA maintainer",
-      "missingEvidence": "no behavioral suite exists yet for bmad-testarch-evaluate",
-      "exitCondition": "Story 1.16 authors and lands bmad-testarch-evaluate's own behavioral suite"
-    }
-  ]
+  "deferred": []
 }

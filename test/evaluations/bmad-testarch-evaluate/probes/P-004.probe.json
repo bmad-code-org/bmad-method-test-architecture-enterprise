@@ -1,0 +1,12 @@
+{
+  "probeId": "P-004",
+  "probeClass": "zero-action",
+  "behaviorId": "B-002",
+  "expectedClean": true,
+  "rationale": "[representative] Clean control: a web application with no AI features is an ai-feature target reached as api under the committed inspection mapping.",
+  "defects": [],
+  "qualification": {
+    "route": "clean-control",
+    "noKnownDefectStatement": "The inspection mapping sends any web application to api at this revision, which the guidance gate holds."
+  }
+}

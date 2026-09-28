@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "evaluationId": "bmad-testarch-evaluate",
+  "requirements": {
+    "path": "requirements.md",
+    "digest": "sha256:b1e246bffd06e8dff03fa6c4c03a1dac53b6d94b3a925bd72a49f5dbccec054b"
+  },
+  "targetKind": "skill",
+  "interface": "cli",
+  "operationPhases": {
+    "run-skill": "outcome"
+  },
+  "registry": [
+    {
+      "interfaceId": "evaluate-skill",
+      "executable": "tea-skill-runner",
+      "target": "cli/skill-runner.js",
+      "subcommandPaths": [
+        []
+      ],
+      "artifacts": {},
+      "environmentKeys": [
+        "HOME",
+        "LOGNAME",
+        "USER"
+      ],
+      "maxElapsedMs": 360000,
+      "infrastructureExitCodes": [
+        3,
+        4,
+        5,
+        6
+      ]
+    }
+  ],
+  "launch": {
+    "root": "../../..",
+    "skillRoot": "src/workflows/testarch/bmad-testarch-evaluate"
+  },
+  "workspace": {
+    "kind": "git",
+    "provision": [
+      "_bmad",
+      "node_modules"
+    ]
+  },
+  "arms": [
+    "clean",
+    "mutated"
+  ],
+  "heldOutProbes": [
+    "P-003"
+  ],
+  "trials": 5,
+  "tiers": [
+    "pr",
+    "scheduled",
+    "release"
+  ],
+  "strengthFloor": {
+    "defect": 1
+  }
+}
