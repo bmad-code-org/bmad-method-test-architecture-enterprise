@@ -72,7 +72,7 @@ function contentLines(lines) {
     const listMarker = /^([ \t]*)(?:[-+*]|\d{1,9}[.)])([ \t]+)/.exec(line);
     if (listMarker && indentation - containerIndent <= 3) {
       listIndents.push(columnsThrough(listMarker[0]));
-      return '';
+      return line.slice(listMarker[0].length);
     }
     const relativeIndent = indentation - containerIndent;
     // Code starts four columns beyond the current list item's content edge.

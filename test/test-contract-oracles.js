@@ -1111,6 +1111,62 @@ async function checkTestDesignOracles(evaluator) {
       riskRowCount: 1,
     },
     {
+      label: 'scored risk in a bullet table whose header starts on the marker line',
+      document:
+        register('The local queue is checked before upload.', 1, 2, 2, 'Document') +
+        '\n- | Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '  | --- | --- | --- | --- | --- | --- | --- |\n' +
+        `  | R-002 | SEC | ${marker} | 2 | 2 | 4 | Test |\n`,
+      mentioned: true,
+      riskRowCount: 2,
+    },
+    {
+      label: 'scored risk in a nested ordered table whose header starts on the marker line',
+      document:
+        register('The local queue is checked before upload.', 1, 2, 2, 'Document') +
+        '\n- Risks:\n  10. | Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '      | --- | --- | --- | --- | --- | --- | --- |\n' +
+        `      | R-002 | SEC | ${marker} | 2 | 2 | 4 | Test |\n`,
+      mentioned: true,
+      riskRowCount: 2,
+    },
+    {
+      label: 'backtick fenced scored example starts on a list marker line',
+      document:
+        register('The local queue is checked before upload.', 1, 2, 2, 'Document') +
+        '\n- ```markdown\n' +
+        '  | Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '  | --- | --- | --- | --- | --- | --- | --- |\n' +
+        `  | R-002 | SEC | ${marker} | 2 | 2 | 4 | Test |\n` +
+        '  ```\n',
+      mentioned: false,
+      riskRowCount: 1,
+    },
+    {
+      label: 'tilde fenced scored example starts on a nested list marker line',
+      document:
+        register('The local queue is checked before upload.', 1, 2, 2, 'Document') +
+        '\n- Examples:\n  - ~~~markdown\n' +
+        '    | Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '    | --- | --- | --- | --- | --- | --- | --- |\n' +
+        `    | R-002 | SEC | ${marker} | 2 | 2 | 4 | Test |\n` +
+        '    ~~~\n',
+      mentioned: false,
+      riskRowCount: 1,
+    },
+    {
+      label: 'risk heading starts on a list marker line',
+      document:
+        register('The local queue is checked before upload.', 1, 2, 2, 'Document') +
+        '\n- ### List Risk Register (Score 1-9)\n\n' +
+        '  | Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '  | --- | --- | --- | --- | --- | --- | --- |\n' +
+        `  | R-002 | SEC | ${marker} | 2 | 2 | 4 | Test |\n`,
+      mentioned: true,
+      riskRowCount: 2,
+      riskHeading: 'List Risk Register (Score 1-9)',
+    },
+    {
       label: 'prose and fenced example',
       document:
         register('The local queue is checked before upload.', 1, 2, 2, 'Document') + `\n${marker}\n\n\`\`\`text\n${marker}\n\`\`\`\n`,
@@ -1125,6 +1181,12 @@ async function checkTestDesignOracles(evaluator) {
     const scored = scoreTestDesignRun(seeded, read.design, categories);
     if (example.riskRowCount !== undefined) {
       assert(read.design.risks.length === example.riskRowCount, `${example.label}: only register rows are parsed`);
+    }
+    if (example.riskHeading) {
+      assert(
+        read.design.risks.at(-1)?.headings.includes(example.riskHeading),
+        `${example.label}: the list heading belongs to its risk row`,
+      );
     }
     const results = evaluateOracles(evaluator, contract, {
       [testDesignStepId(seeded)]: observation({
