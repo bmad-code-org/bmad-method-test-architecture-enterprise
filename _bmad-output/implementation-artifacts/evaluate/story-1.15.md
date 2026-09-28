@@ -78,6 +78,7 @@ context:
 - Five source reversions were run and restored: the fixed engine spec, covering counter, dual-authoring rule, threshold cross-check and `eval:all` skip route each made their focused gate fail.
 - Fresh adversarial review found three valid gaps. The historical result reader now keeps `evaluate-authored` out of its frozen 1.4.0 enum. Run comparison reports added and removed skipped authored suite IDs. Threshold validation rejects null and non-object evaluation or policy documents. Focused diagnostics, comparison, manifest and schema gates pass.
 - A bounded concurrency review found that the production-path manifest test rewrote the tracked manifest while `eval:all` ran. `eval:all` now accepts the `TEA_EVAL_MANIFEST_PATH` test hook, and the test writes an isolated temporary manifest. Concurrent `test:suite-manifest`, `test:eval-schemas`, `test:direction`, `test:eval-diagnostics`, and `test:compare-eval-runs` runs passed without changing tracked files. The final bounded reviewer agents reached their usage limit before a new pass; the coordinator rechecked the isolated path and the complete gate.
+- CodeRabbit found that authored documents were checked only for object shape. `checkEvaluateAuthored` now validates `evaluation.json` against TeA's runtime schema and `scoring-policy.json` against the installed eval-quality schema, with malformed-object regressions covered. Focused suite-manifest, eval-schemas and ESLint checks passed; the CodeRabbit review has no remaining actionable findings.
 
 ## Verification
 
@@ -88,3 +89,4 @@ context:
 - `npm run test:compare-eval-runs`, `npm run test:eval-diagnostics`, and `npm run test:eval-schemas` passed after the final review fixes.
 - The first complete traversal of `npm test` reached `test:direction` and failed on that import. A fresh complete run on the corrected tree completed through lint, Markdownlint and Prettier with exit code 0 (`/tmp/evaluate115b-npm-test-final2.log`).
 - The isolated-manifest correction passed `npm run test:suite-manifest` and the concurrent focused run, with no tracked manifest mutation.
+- The CodeRabbit schema-validation correction passed `npm run test:suite-manifest`, `npm run test:eval-schemas`, `npm run lint`, syntax checks and Prettier.

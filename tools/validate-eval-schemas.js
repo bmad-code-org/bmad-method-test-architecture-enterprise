@@ -44,8 +44,11 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { isDeepStrictEqual } = require('node:util');
+const AjvModule = require('ajv/dist/2020');
 const { zodToJsonSchema } = require('zod-to-json-schema');
 
+const Ajv = AjvModule.default ?? AjvModule;
+const { addFormats } = require('../cli/lib/evaluate/formats');
 const { loadSuiteManifest, skillsOf, unaccountedSkills, MANIFEST_RELATIVE_PATH } = require('../test/lib/suite-manifest');
 const { teaSkills } = require('../test/lib/tea-skills');
 const { evalResultSchema, evalRunSchema } = require('../test/schema/eval-result');
@@ -54,6 +57,30 @@ const PROJECT_ROOT = path.join(__dirname, '..');
 const RESULT_SCHEMA_PATH = path.join(PROJECT_ROOT, 'test', 'schema', 'eval-result.schema.json');
 const RESULT_SCHEMA_RELATIVE_PATH = path.relative(PROJECT_ROOT, RESULT_SCHEMA_PATH);
 const CONTRACT_ROOT = path.join(PROJECT_ROOT, 'test', 'contracts');
+let authoredValidators;
+
+function authoredSchemaValidators() {
+  if (authoredValidators) return authoredValidators;
+  const ajv = new Ajv({ strict: false, allErrors: true });
+  addFormats(ajv);
+  authoredValidators = {
+    evaluation: ajv.compile(
+      JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate', 'schemas', 'evaluation.schema.json'), 'utf8')),
+    ),
+    scoringPolicy: ajv.compile(JSON.parse(fs.readFileSync(require.resolve('eval-quality/schemas/scoring-policy.schema.json'), 'utf8'))),
+  };
+  return authoredValidators;
+}
+
+function authoredSchemaErrorText(validate) {
+  return (validate.errors ?? [])
+    .slice(0, 10)
+    .map((error) => {
+      const where = error.instancePath === '' ? '(root)' : error.instancePath;
+      return `${where} ${error.message}`;
+    })
+    .join('; ');
+}
 
 /** The JSON Schema projection of the Zod source, byte-for-byte as it is committed. */
 function generateResultSchema() {
@@ -284,6 +311,13 @@ function checkEvaluateAuthored(entry, problems, projectRoot = PROJECT_ROOT) {
       const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
       if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
         problems.push(`${entry.id}: ${label} at ${path.relative(projectRoot, file)} must be a JSON object`);
+        continue;
+      }
+      const validate = authoredSchemaValidators()[label === 'evaluation' ? 'evaluation' : 'scoringPolicy'];
+      if (!validate(parsed)) {
+        problems.push(
+          `${entry.id}: ${label} at ${path.relative(projectRoot, file)} does not match its runtime schema: ${authoredSchemaErrorText(validate)}`,
+        );
         continue;
       }
       assign(parsed);

@@ -121,7 +121,7 @@ check('Evaluate-authored thresholds agree with evaluation and scoring policy', (
   assert.match(problems.join('\n'), /catchThreshold/);
 });
 
-check('Evaluate-authored validation rejects null evaluation and policy documents', () => {
+check('Evaluate-authored validation rejects invalid evaluation and policy documents', () => {
   const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-authored-docs-'));
   try {
     fs.mkdirSync(path.join(folder, 'policy'));
@@ -131,6 +131,11 @@ check('Evaluate-authored validation rejects null evaluation and policy documents
     checkEvaluateAuthored({ ...authoredSuite, evaluation: 'evaluation.json' }, evaluationProblems, folder);
     assert.match(evaluationProblems.join('\n'), /evaluation .* must be a JSON object/);
 
+    fs.writeFileSync(path.join(folder, 'evaluation.json'), JSON.stringify({ schemaVersion: 1 }));
+    const malformedEvaluationProblems = [];
+    checkEvaluateAuthored({ ...authoredSuite, evaluation: 'evaluation.json' }, malformedEvaluationProblems, folder);
+    assert.match(malformedEvaluationProblems.join('\n'), /evaluation .* does not match its runtime schema/);
+
     fs.writeFileSync(
       path.join(folder, 'evaluation.json'),
       fs.readFileSync(path.join(__dirname, 'fixtures/evaluate/valid/evaluation.json')),
@@ -139,6 +144,11 @@ check('Evaluate-authored validation rejects null evaluation and policy documents
     const policyProblems = [];
     checkEvaluateAuthored({ ...authoredSuite, evaluation: 'evaluation.json' }, policyProblems, folder);
     assert.match(policyProblems.join('\n'), /scoring policy .* must be a JSON object/);
+
+    fs.writeFileSync(path.join(folder, 'policy', 'scoring-policy.json'), JSON.stringify({ schemaVersion: 2 }));
+    const malformedPolicyProblems = [];
+    checkEvaluateAuthored({ ...authoredSuite, evaluation: 'evaluation.json' }, malformedPolicyProblems, folder);
+    assert.match(malformedPolicyProblems.join('\n'), /scoring policy .* does not match its runtime schema/);
   } finally {
     fs.rmSync(folder, { recursive: true, force: true });
   }
