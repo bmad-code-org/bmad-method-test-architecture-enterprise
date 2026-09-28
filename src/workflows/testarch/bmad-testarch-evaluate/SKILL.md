@@ -1,13 +1,13 @@
 ---
 name: bmad-testarch-evaluate
-description: 'Author a checked, compiled and sealed Behavioral Evaluation Contract with target wiring. Use when the user says "evaluate this agent" or "I want proof this behaves correctly"'
+description: 'Run scored behavioral evaluations and repair gaps. Use when the user says "evaluate this agent" or "I want proof this behaves correctly"'
 ---
 
 # Evaluate
 
 ## Overview
 
-**Goal:** Take an adopter from a described target to a checked, compiling and sealed Behavioral Evaluation Contract with a wired target and a chosen evaluation layer. This build completes through Stage 7. Later stages will run and score clean and mutated arms, then wire proof into CI.
+**Goal:** Take an adopter from a described target through a scored development and held-out evaluation with named gaps and repairs. This build completes through Stage 11. CI proof follows in Stage 12.
 
 **Role:** You are the Master Test Architect.
 
@@ -64,9 +64,9 @@ Activation is complete. Begin the workflow below.
 
 ## Workflow
 
-Evaluate is one continuous loop over twelve stages, run inline rather than as separate step files: each stage's craft lives in its own `references/` guide, loaded when that stage is reached. Work under `{tea_evaluations_folder}` unless the adopter names another location. On resume, read the existing inspection record, `evaluation.json`, and any `requirements.md` before choosing a stage. Before Stage 3, require the adopter's confirmation in the statement and compare `requirements.digest` with eval-quality's `digestBytes` over the committed file; otherwise return to intake. Continue from the first incomplete stage, or the adopter's requested stage when its prerequisites hold.
+Evaluate is one continuous loop over twelve stages, run inline rather than as separate step files: each stage's craft lives in its own `references/` guide, loaded when that stage is reached. Work under `{tea_evaluations_folder}` unless the adopter names another location. On resume, read the existing inspection record, `evaluation.json`, any `requirements.md`, and any `{test_artifacts}/evaluate/<evaluationId>/gap-report.md` before choosing a stage. Before Stage 3, require the adopter's confirmation in the statement and compare `requirements.digest` with eval-quality's `digestBytes` over the committed file; otherwise return to intake. Continue from the first incomplete stage, or the adopter's requested stage when its prerequisites hold.
 
-At activation, tell the adopter that this build can produce a checked, compiled and sealed contract with target wiring and evaluation-layer guidance through Stage 7. Stages 8 through 12 are pending; a scored run and CI proof will need a later build.
+At activation, tell the adopter that this build can plan mutations, choose policy, run and score the evaluation, and repair gaps through Stage 11. Stage 12 CI wiring is pending.
 
 If the loaded `references/<stage>.md` guide is a placeholder (it says "Placeholder." and names the story that fills it), tell the adopter that stage is not yet available and stop there. Never improvise the stage's craft yourself, and never compute a verdict, score, or pass/fail decision outside `eval-quality`'s own CLI (AD-6): a placeholder stage has no craft to improvise from, and a verdict this skill computed itself would not be one `eval-quality` sealed.
 
@@ -94,9 +94,13 @@ Design oracles and rubrics. Load `references/oracles.md`.
 
 Scaffold the execution-target registry and adapters. Load `references/adapters.md`.
 
-When the contract, oracles and registry are filled, copy `assets/evaluator-conditions.template.json` to `policy/evaluator-conditions.json` and fill the target's `modelSnapshot` and `systemPromptDigest`. A `tea-skill-runner` registry needs a real model snapshot. For a deterministic evaluator with a rubric, declare `evaluation.json.judge` and fill `judge.modelSnapshot`; remove the unused template `judge` block for other cases. Ensure `policy/scoring-policy.json` has been copied from the installed template and filled if any probe takes the `controlled-mutation`, `historical`, or `gameability` route. Run `npm exec --prefix {tea_evaluations_folder} -- tea-evaluate check --evaluation <evaluation-folder>`, then `npm exec --prefix {tea_evaluations_folder} -- eval-quality compile --in <evaluation-folder>/contract.json --out <evaluation-folder>/compiled-contract.json`, then `npm exec --prefix {tea_evaluations_folder} -- eval-quality seal --in <evaluation-folder>/contract.json --out <evaluation-folder>/sealed-brief.json`. Stop at the first nonzero exit. Report its command, exit code and stderr before changing the artifact and rerunning that stage.
+When the contract, oracles and registry are filled, copy `assets/evaluator-conditions.template.json` to `policy/evaluator-conditions.json` and fill the target's `modelSnapshot` and `systemPromptDigest`. A `tea-skill-runner` registry needs a real model snapshot. For a deterministic evaluator with a rubric, declare `evaluation.json.judge` and fill `judge.modelSnapshot`; remove the unused template `judge` block for other cases. Ensure `policy/scoring-policy.json` has been copied from the installed template and filled if any probe takes the `controlled-mutation`, `historical`, or `gameability` route. Ask the adopter for its `policyId` and thresholds, then set `evaluation.json.trials` at or above `minimumTrialCount`.
 
-After seal succeeds, run `npm exec --prefix {tea_evaluations_folder} -- tea-evaluate preflight --evaluation <evaluation-folder>` to verify the selected registry can launch and satisfy its clean control. Stop and report the command, exit code and stderr on failure; complete adapter wiring only after preflight succeeds.
+Before the first `tea-evaluate check`, load `references/mutation.md` and author every `mutations/<mutationId>.mutation.json` named by a Stage 3 `controlled-mutation` probe. Use an adopter-owned target, a single exact replacement, and the probe's observable defect signature. Refresh `corpus-index.json` after writing those files. For an adopter installation, run `npm exec --prefix {tea_evaluations_folder} -- tea-evaluate digest --evaluation <evaluation-folder>`; for TeA's own package, run `node cli/evaluate.js digest --evaluation <evaluation-folder>` from the repository root. Stage 6 preflight qualifies the nominated probes; Stage 8 inspects their manifestation and rollback evidence and expands the mutation set.
+
+For an adopter installation, run `npm exec --prefix {tea_evaluations_folder} -- tea-evaluate check --evaluation <evaluation-folder>`, then `npm exec --prefix {tea_evaluations_folder} -- eval-quality compile --in <evaluation-folder>/contract.json --out <evaluation-folder>/compiled-contract.json`, then `npm exec --prefix {tea_evaluations_folder} -- eval-quality seal --in <evaluation-folder>/contract.json --out <evaluation-folder>/sealed-brief.json`. For TeA's own package, run `node cli/evaluate.js check --evaluation <evaluation-folder>`, then `./node_modules/.bin/eval-quality compile --in <evaluation-folder>/contract.json --out <evaluation-folder>/compiled-contract.json`, then `./node_modules/.bin/eval-quality seal --in <evaluation-folder>/contract.json --out <evaluation-folder>/sealed-brief.json` from the repository root. The local CLI and binary use that root's one eval-quality installation. Stop at the first nonzero exit. Report its command, exit code and stderr before changing the artifact and rerunning that stage.
+
+After seal succeeds, copy `assets/evaluation-folder.gitignore` to `<evaluation-folder>/.gitignore` before the first preflight creates `runs/`. For an adopter installation, run `npm exec --prefix {tea_evaluations_folder} -- tea-evaluate preflight --evaluation <evaluation-folder>`; for TeA's own package, run `node cli/evaluate.js preflight --evaluation <evaluation-folder>` from the repository root. This verifies the selected registry can launch and satisfy its clean control. Stop and report the command, exit code and stderr on failure; complete adapter wiring only after preflight succeeds.
 
 ### Stage 7: Evaluator
 

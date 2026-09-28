@@ -1788,6 +1788,422 @@ function checkEvaluatorGuidance(guide, failures) {
     failures.push(`assets/evaluators/mapping.json fails runtime schema: ${JSON.stringify(validateMapping.errors)}`);
 }
 
+function tableRows(content, heading, columns, failures) {
+  const lines = headingBody(content, heading)
+    .split('\n')
+    .filter((line) => line.startsWith('|'));
+  const rows = lines.map((line) =>
+    line
+      .split('|')
+      .slice(1, -1)
+      .map((cell) => cell.trim()),
+  );
+  if (JSON.stringify(rows[0]) !== JSON.stringify(columns)) failures.push(`${heading} table columns changed`);
+  if (rows[1]?.length !== columns.length || rows[1].some((cell) => !/^:?-{3,}:?$/.test(cell)))
+    failures.push(`${heading} table separator changed`);
+  return rows.slice(2);
+}
+
+function checkMutationGuidance(guide, failures) {
+  const headings = [
+    'Weaken or remove a prompt instruction',
+    'Remove required context',
+    'Drop a validation step',
+    'Alter a tool result',
+    'Change the agent configuration',
+    'Break a state write or its read-back',
+    'Remove a test-review smell rule',
+  ];
+  const signatureChannels = ['stdout', 'stdout', 'responseBody', 'stdout', 'stdout', 'responseBody', 'stdout'];
+  const expectedFailures = [
+    'over-limit request approved on stdout',
+    'stdout omits the required limit',
+    'malformed amount accepted in HTTP response body',
+    'stdout trajectory includes a create call for an over-limit request',
+    'stdout trajectory includes unauthorized reservation-write',
+    'read-back HTTP response body lacks saved decision',
+    'stdout report omits keyword-only assertion finding',
+  ];
+  const schema = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'cli/lib/evaluate/schemas/mutation.schema.json'), 'utf8'));
+  const validate = new Ajv({ strict: false, allErrors: true }).compile(schema);
+  for (const [index, heading] of headings.entries()) {
+    requireHeading(guide, `## ${heading}`, 'mutation.md', failures);
+    const body = headingBody(guide, `## ${heading}`);
+    const examples = taggedExamples(body, 'mutation');
+    if (examples.length !== 1) {
+      failures.push(`mutation.md ${heading} needs one tagged example`);
+      continue;
+    }
+    const mutation = examples[0];
+    if (!validate(mutation)) failures.push(`mutation.md ${heading} fails runtime mutation schema: ${JSON.stringify(validate.errors)}`);
+    if (mutation.mutationId !== `M-${String(index + 1).padStart(3, '0')}`) failures.push(`mutation.md ${heading} mutation ID changed`);
+    if (mutation.expectedObservableFailure !== expectedFailures[index])
+      failures.push(`mutation.md ${heading} no longer names the demonstrated failure`);
+    if (
+      mutation.operator?.kind !== 'replace-exact' ||
+      mutation.operator.occurrences !== 1 ||
+      !mutation.operator.find ||
+      mutation.operator.find === mutation.operator.replace
+    )
+      failures.push(`mutation.md ${heading} has an invalid runtime operator`);
+    const lesson = body.split('<!-- example:mutation -->')[0];
+    for (const marker of [`B-00${index + 1}`, 'Expect', 'sign', signatureChannels[index]])
+      requireText(lesson, marker, `mutation.md ${heading}`, failures);
+    const signatureClause = lesson.match(/\bsign\b[^.;]*/i)?.[0] ?? '';
+    if (!signatureClause.includes(signatureChannels[index])) failures.push(`mutation.md ${heading} signs the wrong observation channel`);
+  }
+  for (const marker of [
+    'mutations/M-NNN.mutation.json',
+    'tea-evaluate digest --evaluation <evaluation-folder>',
+    'corpus-index.json`, then `npm exec --prefix {tea_evaluations_folder} -- tea-evaluate check',
+    'node cli/evaluate.js',
+    'defectSignature',
+    'single source',
+    'several files',
+    'Refuse',
+    'model-weight',
+    'provider switch',
+    'rollbackVerified',
+    'disposable copy',
+  ])
+    requireText(guide, marker, 'mutation.md', failures);
+  const toolLesson = headingBody(guide, '## Alter a tool result');
+  for (const marker of [
+    'adopter-owned reservation tool to deny an over-limit request',
+    "calling agent's stdout trajectory to show a create call for the over-limit request",
+    'stdout trajectory includes a create call for an over-limit request',
+  ])
+    requireText(toolLesson, marker, 'mutation.md tool-result lesson', failures);
+}
+
+function checkHarnessGuidance(guide, failures) {
+  for (const heading of ['## Choose risk and trials', '## Record evaluator conditions', '## Verify isolation'])
+    requireHeading(guide, heading, 'harness.md', failures);
+  for (const marker of [
+    'severityFloor',
+    'policyId',
+    'minimumTrialCount',
+    'catchThreshold',
+    'assets/scoring-policy.template.json',
+    'policy/scoring-policy.json',
+    'assets/evaluator-conditions.template.json',
+    'policy/evaluator-conditions.json',
+    'digestBytes',
+    'actual system prompt bytes',
+    'caughtCount / validCount > catchThreshold',
+    'strength vector non-comparable',
+    'per-trial-set isolation manifest',
+    'Stage 6 may already have created',
+    'confidenceThreshold',
+    'reExecutionCap',
+    'remediationCap',
+    'regexMatchStepBudget',
+    'fewer completed trials than `minimumTrialCount`',
+    '`severityFloor: low` blocks low, material and critical failures',
+    '`severityFloor: critical` blocks critical failures',
+    'A lower floor is stricter',
+    'Stage 7 may update it for the chosen evaluator',
+    'Copy the template only if the file is absent',
+    'Set `evaluation.json.trials` to at least the chosen `minimumTrialCount` before `tea-evaluate check`',
+    'exits 10 when the manifest plans fewer trials',
+    'npm exec --prefix {tea_evaluations_folder} -- tea-evaluate check --evaluation <evaluation-folder>',
+    'node cli/evaluate.js check --evaluation <evaluation-folder>',
+  ])
+    requireText(guide, marker, 'harness.md', failures);
+  const rows = tableRows(
+    guide,
+    '## Choose risk and trials',
+    ['Target', 'Risk', 'Example `severityFloor`', 'Example `minimumTrialCount`', 'Example `catchThreshold`', 'Why discuss this choice'],
+    failures,
+  );
+  const actual = rows.map((row) => `${row[0]}:${row[1]}`);
+  const expected = [
+    'Deterministic:low',
+    'Deterministic:material',
+    'Deterministic:critical',
+    'Sampled model:low',
+    'Sampled model:material',
+    'Sampled model:critical',
+  ];
+  if (JSON.stringify(actual) !== JSON.stringify(expected) || rows.some((row) => row.length !== 6 || row.some((cell) => !cell)))
+    failures.push('harness.md risk table lacks a complete target and risk row');
+  const policy = JSON.parse(fs.readFileSync(ASSET('scoring-policy.template.json'), 'utf8'));
+  const validatePolicy = new Ajv({ strict: false, allErrors: true }).compile(
+    JSON.parse(fs.readFileSync(engineSchemaPath('scoring-policy.schema.json'), 'utf8')),
+  );
+  const expectedFloors = ['critical', 'material', 'low', 'critical', 'material', 'low'];
+  for (const [index, row] of rows.entries()) {
+    const severityFloor = row[2]?.replaceAll('`', '');
+    const minimumTrialCount = Number(row[3]?.replaceAll('`', ''));
+    const catchThreshold = Number(row[4]?.replaceAll('`', ''));
+    const example = { ...policy, policyId: 'example-policy', severityFloor, minimumTrialCount, catchThreshold };
+    if (!validatePolicy(example))
+      failures.push(`harness.md risk row ${index + 1} fails engine policy schema: ${JSON.stringify(validatePolicy.errors)}`);
+    if (severityFloor !== expectedFloors[index]) failures.push(`harness.md risk row ${index + 1} reverses the severity floor`);
+    if (index % 3 > 0) {
+      const previousCount = Number(rows[index - 1][3]?.replaceAll('`', ''));
+      const previousThreshold = Number(rows[index - 1][4]?.replaceAll('`', ''));
+      if (minimumTrialCount <= previousCount || catchThreshold <= previousThreshold)
+        failures.push(`harness.md risk row ${index + 1} does not tighten trials and catch threshold`);
+    }
+  }
+  for (const key of ['policyId', 'severityFloor', 'minimumTrialCount', 'catchThreshold'])
+    if (policy[key] !== null) failures.push(`scoring policy template sets ${key} without adopter choice`);
+  const conditions = JSON.parse(fs.readFileSync(ASSET('evaluator-conditions.template.json'), 'utf8'));
+  if (conditions.modelSnapshot !== null || conditions.systemPromptDigest !== null)
+    failures.push('evaluator conditions template pre-fills model identity');
+}
+
+function checkRunGuidance(guide, failures) {
+  for (const heading of [
+    '## Install the private latest-spec runtime',
+    '## Check, compile, seal and preflight',
+    '## Run development and score',
+    '## Read development strength before held-out',
+    '## Run held-out after development review',
+  ])
+    requireHeading(guide, heading, 'run.md', failures);
+  for (const marker of [
+    '"private": true',
+    '"devDependencies"',
+    '"eval-quality": "latest"',
+    '"bmad-method-test-architecture-enterprise": "latest"',
+    'npm install --prefix {tea_evaluations_folder}',
+    'assets/evaluation-folder.gitignore',
+    '.gitignore',
+    'npm exec --prefix {tea_evaluations_folder} -- tea-evaluate check',
+    'npm exec --prefix {tea_evaluations_folder} -- eval-quality compile',
+    'npm exec --prefix {tea_evaluations_folder} -- eval-quality seal',
+    'npm exec --prefix {tea_evaluations_folder} -- tea-evaluate preflight',
+    'npm exec --prefix {tea_evaluations_folder} -- tea-evaluate run',
+    'npm exec --prefix {tea_evaluations_folder} -- tea-evaluate score',
+    'node cli/evaluate.js',
+    '--partition development',
+    '--partition held-out',
+    'score.json',
+    'stderr',
+    'If a development `score` exits 3 with no artifact',
+    'For a held-out fault, read only `gap-view.json`',
+    'passed-clean-control',
+    'caught',
+    'gap-view.json',
+    '--run <invocationId>',
+    'runs/<invocationId>/scores/<scoreInvocationId>/',
+    'Each trial set has its own `runId`',
+    'before the first preflight',
+    'strength.comparable',
+    'strength.vector',
+    'evaluation.json.strengthFloor',
+    'one probe',
+    'no engine-owned class rate across all probes',
+    'no class-wide strength claim',
+    './node_modules/.bin/eval-quality compile',
+  ])
+    requireText(guide, marker, 'run.md', failures);
+  const packages = taggedExamples(guide, 'package');
+  if (
+    packages.length !== 1 ||
+    packages[0]?.private !== true ||
+    JSON.stringify(packages[0].devDependencies) !==
+      JSON.stringify({
+        'eval-quality': 'latest',
+        'bmad-method-test-architecture-enterprise': 'latest',
+      }) ||
+    Object.hasOwn(packages[0], 'dependencies')
+  )
+    failures.push('run.md AD-20 private package example changed');
+  const expectedCommands = [
+    'npm exec --prefix {tea_evaluations_folder} -- tea-evaluate check --evaluation <evaluation-folder>',
+    'npm exec --prefix {tea_evaluations_folder} -- eval-quality compile --in <evaluation-folder>/contract.json --out <evaluation-folder>/compiled-contract.json',
+    'npm exec --prefix {tea_evaluations_folder} -- eval-quality seal --in <evaluation-folder>/contract.json --out <evaluation-folder>/sealed-brief.json',
+    'npm exec --prefix {tea_evaluations_folder} -- tea-evaluate preflight --evaluation <evaluation-folder>',
+    'npm exec --prefix {tea_evaluations_folder} -- tea-evaluate run --evaluation <evaluation-folder> --partition development',
+    'npm exec --prefix {tea_evaluations_folder} -- tea-evaluate score --evaluation <evaluation-folder> --run <invocationId>',
+  ];
+  const commands = [...guide.matchAll(/^npm exec --prefix \{tea_evaluations_folder\} -- (?:tea-evaluate|eval-quality) .+$/gm)].map(
+    ([command]) => command,
+  );
+  if (JSON.stringify(commands) !== JSON.stringify(expectedCommands))
+    failures.push('run.md check-through-score command sequence or required arguments changed');
+}
+
+function checkGapsGuidance(guide, engine, failures) {
+  for (const heading of [
+    '## Read the strength vector',
+    '## Read a loose oracle',
+    '## Separate process from outcome',
+    '## Read held-out results',
+    '## Map engine outcomes to repairs',
+    '## Map discipline and preflight checks to repairs',
+    '## Map AD-10 exits and classes to repairs',
+    '## Author, rerun and rescore',
+  ])
+    requireHeading(guide, heading, 'gaps.md', failures);
+  for (const [heading, markers] of [
+    [
+      '## Read the strength vector',
+      [
+        'unique qualified probe IDs exercised per class',
+        'An admitted probe that was not exercised contributes no denominator',
+        '`defect`, `gameability` or `zero-action`',
+        "each probe's trials are reduced",
+        'alone decides whether that probe is caught',
+        'fewer completed trials than `minimumTrialCount` make its strength non-comparable',
+        '`null` class',
+        '`rate: null`',
+        'Clean controls and canaries',
+        'minimumTrialCount',
+        'One `caught`',
+        'caughtCount / validCount > catchThreshold',
+        'one evidence artifact reports only that probe',
+        'no class-wide catch rate across probes',
+      ],
+    ],
+    ['## Read a loose oracle', ['gameability probe', 'fails qualification', 'does not resolve `caught`', 'clean control', 'oracle']],
+    [
+      '## Separate process from outcome',
+      ['interpretation.json', '`process`', '`outcome`', '`firstMaterialError`', 'lowest-sequence', 'sequence 3'],
+    ],
+    [
+      '## Read held-out results',
+      [
+        'gap-view.json',
+        'only',
+        'probe ID',
+        'class',
+        'outcome.caught: false',
+        'An `outcome: null` leaves the held-out cause undisclosed',
+        'outcome.trialVotes',
+        'validCount',
+        'caughtCount',
+        'development',
+      ],
+    ],
+  ])
+    for (const marker of markers) requireText(headingBody(guide, heading), marker, `gaps.md ${heading}`, failures);
+  const concreteRepair = (cell) =>
+    /^(?:Read|Inspect|Repair|Fix|Add|Supply|Restore|Make|Keep|Check|Run|For|Author|Requalify|Retain|Narrow|Choose|Tighten)\b/.test(cell) &&
+    cell.trim().split(/\s+/).length >= 7 &&
+    /probe|control|oracle|evidence|registry|diagnostic|invocation|workspace|mutation|judge|target|CI|gate|calibration|isolation|artifact|contract|response|state|behavior|input|execution|baseline|policy/i.test(
+      cell,
+    );
+  const checkKeys = (heading, column, keys) => {
+    const rows = tableRows(guide, heading, column, failures);
+    const found = rows.map((row) => row[0].replaceAll('`', ''));
+    if (JSON.stringify(found) !== JSON.stringify(keys)) failures.push(`gaps.md ${heading} key set changed`);
+    for (const row of rows)
+      if (row.length !== column.length || !concreteRepair(row[1]))
+        failures.push(`gaps.md ${heading} lacks concrete repair: ${row.join(' | ')}`);
+  };
+  checkKeys('## Map engine outcomes to repairs', ['Outcome state', 'Concrete repair'], [...engine.OUTCOME_STATES]);
+  const allTables = headingBody(guide, '## Map discipline and preflight checks to repairs');
+  const discipline = allTables.split('\n\n| Preflight check')[0];
+  const preflight = '| Preflight check' + (allTables.split('\n\n| Preflight check')[1] ?? '');
+  const mappingRows = (content) =>
+    content
+      .split('\n')
+      .filter((line) => line.startsWith('| `'))
+      .map((line) =>
+        line
+          .split('|')
+          .slice(1, -1)
+          .map((cell) => cell.trim()),
+      );
+  const keys = (content) => mappingRows(content).map((row) => row[0].replaceAll('`', ''));
+  if (JSON.stringify(keys(discipline)) !== JSON.stringify([...engine.DISCIPLINE_RULES]))
+    failures.push('gaps.md discipline rule key set changed');
+  const preflightSchema = JSON.parse(fs.readFileSync(engineSchemaPath('preflight-verdict.schema.json'), 'utf8'));
+  const preflightKinds = preflightSchema.properties.checks.items.properties.kind.enum;
+  if (JSON.stringify(keys(preflight)) !== JSON.stringify(preflightKinds)) failures.push('gaps.md preflight check key set changed');
+  for (const row of [...mappingRows(discipline), ...mappingRows(preflight)])
+    if (row.length !== 2 || !concreteRepair(row[1])) failures.push(`gaps.md lacks concrete repair: ${row.join(' | ')}`);
+  const ad10 = fs
+    .readFileSync(path.join(__dirname, '..', '_bmad-output/planning-artifacts/evaluate/ARCHITECTURE-SPINE.md'), 'utf8')
+    .split('### AD-10:')[1]
+    ?.split('### AD-11:')[0];
+  if (!ad10) failures.push('AD-10 source table is unavailable');
+  const sourceClasses = new Map(
+    [...(ad10 ?? '').matchAll(/^\|\s*(\d+)\s*\|\s*`?(eval-quality(?:-gates)?|tea-evaluate)`?\s*\|\s*([^|]+)\|/gm)].map(
+      ([, exit, source, classText]) => [`${source} ${exit}`, classText.trim().replaceAll(/\s+/g, ' ')],
+    ),
+  );
+  const exits = [...sourceClasses.keys()];
+  const expectedClasses = new Map([
+    ['eval-quality 0', ['pass or CONCERNS', 'pass. CONCERNS']],
+    ['eval-quality 2', ['target behavior failure or evidence integrity', 'target behavior failure, or evidence or lineage integrity']],
+    ['eval-quality 3', ['infrastructure or integrity', 'infrastructure or integrity']],
+    ['eval-quality 4', ['contract authoring defect', 'contract authoring defect']],
+    ['eval-quality 5', ['runtime fault', 'runtime fault']],
+    ['eval-quality 64', ['wiring defect', 'wiring defect']],
+    ['tea-evaluate 10', ['authoring defect', 'authoring defect']],
+    ['tea-evaluate 11', ['evaluation weakness', 'evaluation weakness']],
+    ['tea-evaluate 12', ['infrastructure', 'infrastructure: workspace']],
+    ['tea-evaluate 13', ['evaluation evidence drift', 'evaluation evidence drift']],
+    ['tea-evaluate 64', ['wiring defect', 'wiring defect']],
+    ['eval-quality-gates 1', ['repository policy violation', 'repository policy violation']],
+    ['eval-quality-gates 64', ['wiring defect', 'wiring defect']],
+  ]);
+  const rows = tableRows(
+    guide,
+    '## Map AD-10 exits and classes to repairs',
+    ['Source and exit', 'AD-10 class', 'Concrete repair'],
+    failures,
+  );
+  if (
+    exits.length !== expectedClasses.size ||
+    JSON.stringify(rows.map((row) => row[0].replaceAll('`', '')).sort()) !== JSON.stringify(exits.sort()) ||
+    rows.some((row) => {
+      const key = row[0].replaceAll('`', '');
+      const [guideClass, sourceClass] = expectedClasses.get(key) ?? [];
+      return row.length !== 3 || row[1] !== guideClass || !sourceClasses.get(key)?.includes(sourceClass) || !concreteRepair(row[2]);
+    })
+  )
+    failures.push('gaps.md AD-10 exit mapping changed');
+  requireText(guide, 'planned Stage 12 PR replay', 'gaps.md exit 13', failures);
+  for (const marker of [
+    'score` exit 3',
+    'For a development `score` exit 3',
+    'For a held-out score failure, read only its `gap-view.json` row',
+    'score.json',
+    'stdout and stderr diagnostics',
+    'gap-view.json',
+    '{test_artifacts}/evaluate/<evaluationId>/gap-report.md',
+    'prior and new invocation IDs',
+    'runs/<invocationId>/scores/<scoreInvocationId>/<probeId>/score.json',
+  ])
+    requireText(guide, marker, 'gaps.md', failures);
+  const loop = headingBody(guide, '## Author, rerun and rescore');
+  requireText(loop, 'corpus-index.json', 'gaps.md rerun loop', failures);
+  for (const command of [
+    'npm exec --prefix {tea_evaluations_folder} -- tea-evaluate digest --evaluation <evaluation-folder>',
+    'npm exec --prefix {tea_evaluations_folder} -- tea-evaluate check --evaluation <evaluation-folder>',
+    'npm exec --prefix {tea_evaluations_folder} -- eval-quality compile --in <evaluation-folder>/contract.json --out <evaluation-folder>/compiled-contract.json',
+    'npm exec --prefix {tea_evaluations_folder} -- eval-quality seal --in <evaluation-folder>/contract.json --out <evaluation-folder>/sealed-brief.json',
+    'npm exec --prefix {tea_evaluations_folder} -- tea-evaluate run --evaluation <evaluation-folder> --partition development',
+    'npm exec --prefix {tea_evaluations_folder} -- tea-evaluate score --evaluation <evaluation-folder> --run <invocationId>',
+    './node_modules/.bin/eval-quality',
+    'node cli/evaluate.js',
+  ])
+    requireText(loop, command, 'gaps.md executable repair loop', failures);
+  const steps = loop.split('\n').filter((line) => /^\d+\. /.test(line));
+  if (steps.length !== 6 || steps.some((step, index) => !step.startsWith(`${index + 1}. `)))
+    failures.push('gaps.md author, rerun and rescore loop order changed');
+  for (const [index, marker] of [
+    'Name one gap',
+    'Author the missing probe',
+    'tea-evaluate digest --evaluation <evaluation-folder>',
+    'run --evaluation <evaluation-folder> --partition development',
+    'before and after',
+    'held-out partition',
+  ].entries())
+    if (!steps[index]?.includes(marker)) failures.push(`gaps.md loop step ${index + 1} changed`);
+  if (
+    !steps[2]?.includes('tea-evaluate check --evaluation <evaluation-folder>') ||
+    steps[2].indexOf('tea-evaluate digest') >= steps[2].indexOf('tea-evaluate check')
+  )
+    failures.push('gaps.md must digest the corpus before check');
+}
+
 async function main() {
   const failures = [];
   let skillContent;
@@ -1805,7 +2221,7 @@ async function main() {
   if (!workflowSectionMatch) failures.push('SKILL.md has no "## Workflow" section');
   const workflowSection = workflowSectionMatch ? workflowSectionMatch[1] : '';
 
-  const referencedStages = [...workflowSection.matchAll(/references\/([a-z-]+)\.md/g)].map((match) => match[1]);
+  const referencedStages = [...workflowSection.matchAll(/^.*\bLoad `references\/([a-z-]+)\.md`/gm)].map((match) => match[1]);
   const uniqueStages = [...new Set(referencedStages)];
 
   try {
@@ -1827,16 +2243,58 @@ async function main() {
     }
   }
 
-  // Later stages remain placeholders; the stop and verdict boundaries still
-  // apply to those stages.
+  // Stage 12 remains a placeholder; the stop and verdict boundaries apply.
   if (!workflowSection.includes('stop')) {
     failures.push("SKILL.md's Workflow section has no rule to stop on a placeholder stage guide");
   }
   if (!workflowSection.includes('never compute a verdict')) {
     failures.push("SKILL.md's Workflow section has no rule against computing a verdict outside eval-quality's CLI");
   }
-  if (!skillContent.includes('through Stage 7') || skillContent.includes('Stages 7 through 12 are pending'))
-    failures.push('SKILL.md does not make the evaluator stage available');
+  if (!skillContent.includes('through Stage 11') || !skillContent.includes('Stage 12 CI wiring is pending'))
+    failures.push('SKILL.md does not enable stages 8 through 11 and stop at Stage 12');
+  if (!/^description:.*scored behavioral evaluations and repair gaps/m.test(skillContent))
+    failures.push('SKILL.md discovery description omits scoring or gap repair');
+  const stage6 = headingBody(skillContent, '### Stage 6: Adapters');
+  const ignoreBeforePreflight = stage6.indexOf('copy `assets/evaluation-folder.gitignore` to `<evaluation-folder>/.gitignore`');
+  const firstPreflight = stage6.indexOf('tea-evaluate preflight');
+  if (ignoreBeforePreflight === -1 || firstPreflight === -1 || ignoreBeforePreflight >= firstPreflight)
+    failures.push('SKILL.md must install the evaluation ignore file before first preflight');
+  const checkMutationBeforeValidation = (content, found) => {
+    const local = headingBody(content, '### Stage 6: Adapters');
+    const author = local.indexOf('author every `mutations/<mutationId>.mutation.json`');
+    const digest = local.indexOf('tea-evaluate digest --evaluation <evaluation-folder>');
+    const check = local.indexOf('tea-evaluate check --evaluation <evaluation-folder>');
+    if (author === -1 || digest === -1 || check === -1 || author >= digest || digest >= check)
+      found.push('SKILL.md must author and digest nominated mutations before Stage 6 check');
+    requireText(local, 'load `references/mutation.md`', 'SKILL.md early mutation guide', found);
+    requireText(local, 'node cli/evaluate.js digest --evaluation <evaluation-folder>', 'SKILL.md local Stage 6 digest', found);
+  };
+  checkMutationBeforeValidation(skillContent, failures);
+  const mutationOrderingFailures = [];
+  checkMutationBeforeValidation(
+    skillContent.replace('author every `mutations/<mutationId>.mutation.json`', 'plan every mutation file'),
+    mutationOrderingFailures,
+  );
+  if (mutationOrderingFailures.length === 0) failures.push('SKILL.md Stage 6 mutation authoring removal passed its guidance check');
+  const checkLocalStage6 = (content, found) => {
+    const local = headingBody(content, '### Stage 6: Adapters');
+    for (const command of [
+      'node cli/evaluate.js check --evaluation <evaluation-folder>',
+      './node_modules/.bin/eval-quality compile --in <evaluation-folder>/contract.json --out <evaluation-folder>/compiled-contract.json',
+      './node_modules/.bin/eval-quality seal --in <evaluation-folder>/contract.json --out <evaluation-folder>/sealed-brief.json',
+      'node cli/evaluate.js preflight --evaluation <evaluation-folder>',
+    ])
+      requireText(local, command, 'SKILL.md local Stage 6 sequence', found);
+  };
+  checkLocalStage6(skillContent, failures);
+  const removedLocalEngine = skillContent.replace(
+    './node_modules/.bin/eval-quality compile --in <evaluation-folder>/contract.json',
+    'eval-quality compile --in <evaluation-folder>/contract.json',
+  );
+  const localFailures = [];
+  checkLocalStage6(removedLocalEngine, localFailures);
+  if (localFailures.length === 0) failures.push('SKILL.md local Stage 6 engine removal passed its guidance check');
+  requireText(skillContent, '{test_artifacts}/evaluate/<evaluationId>/gap-report.md', 'SKILL.md resume', failures);
 
   const inspection = fs.readFileSync(REFERENCE('inspection'), 'utf8');
   const intake = fs.readFileSync(REFERENCE('intake'), 'utf8');
@@ -1861,6 +2319,185 @@ async function main() {
     checkEvaluatorGuidance(fs.readFileSync(REFERENCE('evaluator'), 'utf8'), failures);
   } catch (error) {
     failures.push('evaluator guidance: ' + error.stack);
+  }
+  for (const [name, check] of [
+    ['mutation', (guide, found) => checkMutationGuidance(guide, found)],
+    ['harness', (guide, found) => checkHarnessGuidance(guide, found)],
+    ['run', (guide, found) => checkRunGuidance(guide, found)],
+    ['gaps', (guide, found) => checkGapsGuidance(guide, engine, found)],
+  ]) {
+    try {
+      const guide = fs.readFileSync(REFERENCE(name), 'utf8');
+      check(guide, failures);
+      const firstHeading = guide.match(/^## .+$/m)?.[0];
+      const reverted = [];
+      check(guide.replace(firstHeading, '## Removed lesson'), reverted);
+      if (reverted.length === 0) failures.push(`${name}.md heading removal did not fail its guidance check`);
+    } catch (error) {
+      failures.push(`${name} guidance: ${error.stack}`);
+    }
+  }
+  try {
+    const negativeCases = [
+      ['mutation example corruption', 'mutation', checkMutationGuidance, (text) => text.replace('"occurrences": 1', '"occurrences": 2')],
+      [
+        'mutation expected failure corruption',
+        'mutation',
+        checkMutationGuidance,
+        (text) => text.replace('malformed amount accepted in HTTP response body', 'malformed amount rejected in HTTP response body'),
+      ],
+      [
+        'mutation signature channel removal',
+        'mutation',
+        checkMutationGuidance,
+        (text) =>
+          text.replace(
+            'Expect an approval on stdout; sign the descriptor-nominated stdout.',
+            'Expect an approval; sign the descriptor-nominated evidence.',
+          ),
+      ],
+      [
+        'mutation signature wrong channel',
+        'mutation',
+        checkMutationGuidance,
+        (text) => text.replace('sign the descriptor-nominated stdout.', 'sign the descriptor-nominated stderr.'),
+      ],
+      ['harness risk row removal', 'harness', checkHarnessGuidance, (text) => text.replace(/^\| Sampled model \| critical \|.*\n/m, '')],
+      [
+        'harness risk floor corruption',
+        'harness',
+        checkHarnessGuidance,
+        (text) => text.replace(/^(\| Deterministic \| low\s+\| )`critical`/m, '$1`low`'),
+      ],
+      [
+        'run command removal',
+        'run',
+        checkRunGuidance,
+        (text) => text.replace(/^npm exec --prefix \{tea_evaluations_folder\} -- tea-evaluate preflight.*\n/m, ''),
+      ],
+      ['run package dependency corruption', 'run', checkRunGuidance, (text) => text.replace('"devDependencies"', '"dependencies"')],
+      [
+        'run evaluation argument removal',
+        'run',
+        checkRunGuidance,
+        (text) => text.replace('tea-evaluate preflight --evaluation <evaluation-folder>', 'tea-evaluate preflight'),
+      ],
+      [
+        'run score invocation argument removal',
+        'run',
+        checkRunGuidance,
+        (text) =>
+          text.replace(
+            'tea-evaluate score --evaluation <evaluation-folder> --run <invocationId>',
+            'tea-evaluate score --evaluation <evaluation-folder>',
+          ),
+      ],
+      [
+        'run invocation identity corruption',
+        'run',
+        checkRunGuidance,
+        (text) => text.replace('--run <invocationId>', '--run <trial-run-id>'),
+      ],
+      [
+        'run local engine removal',
+        'run',
+        checkRunGuidance,
+        (text) => text.replace('./node_modules/.bin/eval-quality compile', 'eval-quality compile'),
+      ],
+      [
+        'gaps outcome removal',
+        'gaps',
+        (text, found) => checkGapsGuidance(text, engine, found),
+        (text) => text.replace(/^\| `caught`[^\n]*\n/m, ''),
+      ],
+      [
+        'gaps discipline removal',
+        'gaps',
+        (text, found) => checkGapsGuidance(text, engine, found),
+        (text) => text.replace(/^\| `whole-body`[^\n]*\n/m, ''),
+      ],
+      [
+        'gaps preflight removal',
+        'gaps',
+        (text, found) => checkGapsGuidance(text, engine, found),
+        (text) => text.replace(/^\| `state-reset`[^\n]*\n/m, ''),
+      ],
+      [
+        'gaps preflight remedy removal',
+        'gaps',
+        (text, found) => checkGapsGuidance(text, engine, found),
+        (text) => text.replace(/^(\| `clean-control`\s*\|)[^\n|]*/m, '$1 '),
+      ],
+      [
+        'gaps outcome placeholder remedy',
+        'gaps',
+        (text, found) => checkGapsGuidance(text, engine, found),
+        (text) => text.replace(/^(\| `missed`\s*\|)[^\n|]*/m, '$1 TBD '),
+      ],
+      [
+        'gaps preflight placeholder remedy',
+        'gaps',
+        (text, found) => checkGapsGuidance(text, engine, found),
+        (text) => text.replace(/^(\| `state-reset`\s*\|)[^\n|]*/m, '$1 probe '),
+      ],
+      [
+        'gaps exit removal',
+        'gaps',
+        (text, found) => checkGapsGuidance(text, engine, found),
+        (text) => text.replace(/^\| `tea-evaluate 11`[^\n]*\n/m, ''),
+      ],
+      [
+        'gaps exit placeholder remedy',
+        'gaps',
+        (text, found) => checkGapsGuidance(text, engine, found),
+        (text) => text.replace(/^(\| `tea-evaluate 11`\s*\|[^|]*\|)[^\n|]*/m, '$1 TBD '),
+      ],
+      [
+        'gaps exit class corruption',
+        'gaps',
+        (text, found) => checkGapsGuidance(text, engine, found),
+        (text) => text.replace(/^(\| `tea-evaluate 13`\s*\|\s*)evaluation evidence drift/m, '$1infrastructure'),
+      ],
+      [
+        'gaps catch threshold operator corruption',
+        'gaps',
+        (text, found) => checkGapsGuidance(text, engine, found),
+        (text) => text.replace('caughtCount / validCount > catchThreshold', 'caughtCount / validCount >= catchThreshold'),
+      ],
+      [
+        'gaps class denominator corruption',
+        'gaps',
+        (text, found) => checkGapsGuidance(text, engine, found),
+        (text) => text.replace('unique qualified probe IDs exercised per class', 'unique qualified probe IDs per class'),
+      ],
+      [
+        'gaps held-out fault guard removal',
+        'gaps',
+        (text, found) => checkGapsGuidance(text, engine, found),
+        (text) => text.replace('An `outcome: null` leaves the held-out cause undisclosed;', 'A held-out score fault exposes its cause;'),
+      ],
+      [
+        'gaps digest removal',
+        'gaps',
+        (text, found) => checkGapsGuidance(text, engine, found),
+        (text) =>
+          text.replace('tea-evaluate digest --evaluation <evaluation-folder>', 'tea-evaluate check --evaluation <evaluation-folder>'),
+      ],
+      ['gaps loop removal', 'gaps', (text, found) => checkGapsGuidance(text, engine, found), (text) => text.replace(/^4\. Rerun.*\n/m, '')],
+    ];
+    for (const [label, file, check, corrupt] of negativeCases) {
+      const original = fs.readFileSync(REFERENCE(file), 'utf8');
+      const changed = corrupt(original);
+      if (changed === original) {
+        failures.push(`${label} could not alter its fixture`);
+        continue;
+      }
+      const rejected = [];
+      check(changed, rejected);
+      if (rejected.length === 0) failures.push(`${label} passed the guidance gate`);
+    }
+  } catch (error) {
+    failures.push(`guidance negative checks: ${error.stack}`);
   }
   checkFrameworkTemplate('agentevals-trajectory.mjs', 'evaluate-tool-use-agent', 'tool-use', 'trajectory.mjs', failures);
   checkFrameworkTemplate('promptfoo-assertions.mjs', 'evaluate-promptfoo', 'summary', 'promptfoo.mjs', failures);
@@ -1887,7 +2524,7 @@ async function main() {
     process.exit(1);
   }
   console.log(
-    `evaluate-guidance: ${EXPECTED_STAGES.length} stages, seven worked guides, 36 engine-valid tagged probes, contract examples, and valid templates`,
+    `evaluate-guidance: ${EXPECTED_STAGES.length} stages, eleven worked guides, 36 engine-valid tagged probes, seven runtime-valid mutations, contract examples, and valid templates`,
   );
 }
 

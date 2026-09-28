@@ -56,7 +56,7 @@ development_status:
   1-12-inspect-the-target-capture-requirements-and-design-the-corpu: done
   1-13-author-the-contract-oracles-rubrics-and-adapter-wiring: done
   1-23-teach-choosing-and-building-the-evaluation-layer: done
-  1-14-drive-the-run-and-interpret-the-gaps: backlog
+  1-14-drive-the-run-and-interpret-the-gaps: done
   1-15-float-the-engine-pin-and-admit-evaluate-authored-suites: backlog
   1-16-evaluate-authors-its-own-suite-run-live-and-recorded: backlog
   1-24-evaluate-authors-strong-suites-for-two-more-target-kinds: backlog
@@ -80,6 +80,7 @@ development_status:
   1-42-attribute-reused-operation-ids-to-their-interfaces: backlog
   1-43-keep-ungraded-framework-errors-out-of-target-findings: backlog
   1-44-record-installed-framework-versions-in-evaluator-provenance: backlog
+  1-45-aggregate-development-strength-through-eval-quality: backlog
   epic-1-retrospective: optional
 
   epic-2: backlog
