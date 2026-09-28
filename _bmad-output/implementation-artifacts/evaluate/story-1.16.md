@@ -4,7 +4,7 @@ type: 'feature'
 created: '2026-09-28'
 status: 'done'
 route: 'dispatch'
-review_loop_iteration: 0
+review_loop_iteration: 1
 baseline_commit: 'a2a032587e72f1c36b265dcb261dab160ba21d99'
 context:
   - '_bmad-output/planning-artifacts/evaluate/epics.md'
@@ -83,6 +83,20 @@ context:
 - The first full `npm test` stopped at `test:doc-count-sources`: `test/lib/doc-count-sources.js` read `runnerCapabilities` from every manifest suite, and the first real `evaluate-authored` entry has none. It now counts only the suites `eval:all` preflights, which the README's "ten of the twelve suites" sentence describes. The second run stopped at `test:doc-claims`: a hash-pinned claim keyed on the old "names exactly one skill" sentence and the adoption guide's manifest table. The roadmap claim and its trigger now read "`deferred` array is empty", the table gains the `evaluate` row, both pins carry the new manifest hash, and two restatements of the empty array were dropped.
 - No file under `src/workflows/testarch/bmad-testarch-evaluate/` changed, so the builder Analyze and Validate Module gates do not apply.
 - The third run stopped at `test:doc-invocations`, whose `npm run test:cli` example failed: `test/test-test-review-cli.js` expected one `eval:all` invocation per manifest suite. It now counts the suites with a harness, since `eval:all` skips the Evaluate-authored one.
+- Review pass 1 disposition: the adversarial, edge-case and verification-gap lenses confirmed that the manifest intentionally records this first suite while its live evidence is `CONCERNS`; the four critical coverage gaps remain assigned to Story 1.46, which owns the new contract and rerun. No duplicate fix was applied to digested artifacts in this story.
+- Review pass 1 disposition: the finding that `eval:all` and CI do not run the live authored suite is deferred to Story 1.24's `test:evaluate-authoring` and Epic 2's CI plan. Story 1.16's scope is the live proof and registration of the first authored suite.
+- Review pass 1 disposition: the finding that the manifest's `strengthFloor.defect` might be unenforced was rejected after checking the eval-quality strength vector and the story's explicit 5-of-5 defect-arm assertions. The manifest threshold is cross-checked against `evaluation.json` by `test:eval-schemas`.
+- Review pass 1 disposition: the finding that B-002 has no seeded or held-out probe is carried to Story 1.46 because its four repeated guide statements require a source consolidation and a new sealed run.
+- Review pass 1 disposition: the finding for missing malformed-input coverage is carried to Story 1.46, which adds the refusal probe and oracle.
+- Review pass 1 disposition: the finding for incomplete exit coverage is carried to Story 1.46, which adds the completeness probe and oracle.
+- Review pass 1 disposition: the finding for missing success-indicator separation is carried to Story 1.46, which adds independent evidence and an oracle.
+- Review pass 1 disposition: the finding for missing per-record coverage is carried to Story 1.46, which declares the classified exits as a collection with per-record evidence pointers.
+- Review pass 1 disposition: the finding that the dogfood interactions stop after classification is accepted as the approved Story 1.16 probe scope. Full authoring and artifact production are covered by Story 1.24.
+- Review pass 1 disposition: the finding for the shared `D-001` identifier is carried to Story 1.46 because changing it requires restamping the digested corpus and rerunning evidence.
+- Review pass 1 disposition: the finding that `requirements.md` describes fixed answer lines while the contract reads JSON fields is carried to Story 1.46 because the requirements digest and source digest must be regenerated together.
+- Review pass 1 disposition: the finding that `corpus/README.md` counts three web-to-`api` statements is carried to Story 1.46. The verified count is four.
+- Review pass 1 disposition: the evaluator system-prompt digest concern was rejected. The policy records the fixed model condition and evaluator configuration, while probe request bytes remain input data and `basis` is explicitly volatile.
+- Review pass 1 disposition: the verification-gap finding that the registered folder is not checked by the normal gate is deferred to Story 2.5, whose planned `test:evaluate-authoring` walks committed evaluations through `check`, compile, seal, replay and score.
 
 ## Verification
 
