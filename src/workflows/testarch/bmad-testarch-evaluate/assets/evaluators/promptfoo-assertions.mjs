@@ -39,6 +39,9 @@ function promptfooEntrypoint() {
 
 export function rowsFromResults(results, observation) {
   const stdout = observation.stdout.value;
+  // The installed promptfoo --model-outputs path removes one final LF. It
+  // preserves other trailing whitespace, which can affect assertions.
+  const gradedOutput = stdout.endsWith('\n') ? stdout.slice(0, -1) : stdout;
   const failureEvidence = () => {
     if (stdout.length > 0) return { quote: stdout, quoteChannel: 'stdout' };
     if (Number.isInteger(observation.exitCode)) return { quote: String(observation.exitCode), quoteChannel: 'exit-code' };
@@ -47,10 +50,7 @@ export function rowsFromResults(results, observation) {
   const rows = [];
   for (const result of results) {
     const graded = result.gradingResult !== undefined && result.gradingResult !== null;
-    if (
-      result.response?.output !== undefined &&
-      (typeof result.response.output !== 'string' || result.response.output.trimEnd() !== stdout.trimEnd())
-    ) {
+    if (result.response?.output !== undefined && (typeof result.response.output !== 'string' || result.response.output !== gradedOutput)) {
       throw new Error('promptfoo output differs from the cited stdout observation');
     }
     if (graded && typeof result.response?.output !== 'string') {

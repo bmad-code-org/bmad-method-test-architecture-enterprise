@@ -1467,6 +1467,8 @@ function checkFrameworkTemplate(template, fixtureName, evaluationName, executabl
       alternate[0].content = 'Weather in Boston';
       alternate[1].tool_calls[0].function.arguments = '{"city":"Boston"}';
       fs.writeFileSync(path.join(evaluation, 'evaluator', 'reference', 'alternate.json'), JSON.stringify(alternate));
+      const added = run('git', ['add', 'evals/tool-use/evaluator/reference/alternate.json'], root);
+      assert.strictEqual(added.status, 0, `AgentEvals alternate reference setup failed: ${added.stderr}`);
       const result = spawnSync(process.execPath, [destination, '--reference=reference/alternate.json', '--prefix=selected: '], {
         cwd: evaluation,
         env,
@@ -1497,6 +1499,39 @@ function checkFrameworkTemplate(template, fixtureName, evaluationName, executabl
       });
       assert.notStrictEqual(ambiguous.status, 0, 'AgentEvals template accepted an ambiguous trajectory prefix');
       assert.match(ambiguous.stderr, /expected one stdout trajectory matching the prefix, found 2/);
+      const missingMessage = `trajectory: ${JSON.stringify(reference.slice(1))}`;
+      const missing = spawnSync(process.execPath, [destination], {
+        cwd: evaluation,
+        env,
+        encoding: 'utf8',
+        input: JSON.stringify({ observations: [{ observationId: 'missing', stdout: { kind: 'text', value: missingMessage } }] }),
+      });
+      assert.strictEqual(missing.status, 0, `AgentEvals missing-message result failed: ${missing.stderr}`);
+      assert.deepStrictEqual(
+        JSON.parse(missing.stdout).rows.map((row) => [row.outcome, row.quote, row.observationIds]),
+        [['fail', missingMessage, ['missing']]],
+      );
+      const outside = path.join(evaluation, 'outside.json');
+      fs.writeFileSync(outside, JSON.stringify(reference));
+      const referenceInput = JSON.stringify({
+        observations: [{ observationId: 'reference-test', stdout: { kind: 'text', value: `trajectory: ${JSON.stringify(reference)}` } }],
+      });
+      fs.writeFileSync(path.join(evaluation, 'evaluator', 'reference', 'untracked.json'), JSON.stringify(reference));
+      fs.symlinkSync(outside, path.join(evaluation, 'evaluator', 'reference', 'linked.json'));
+      for (const [argument, reason] of [
+        ['--reference=../outside.json', /under evaluator\/reference/],
+        ['--reference=reference/untracked.json', /git must track/],
+        ['--reference=reference/linked.json', /regular file.*no linked path/],
+      ]) {
+        const rejected = spawnSync(process.execPath, [destination, argument], {
+          cwd: evaluation,
+          env,
+          encoding: 'utf8',
+          input: referenceInput,
+        });
+        assert.notStrictEqual(rejected.status, 0, `AgentEvals template accepted ${argument}`);
+        assert.match(rejected.stderr, reason);
+      }
     } else {
       checkPromptfooTemplateIdentity(destination, evaluation, env);
     }
@@ -1551,7 +1586,12 @@ function checkPromptfooTemplateIdentity(destination, evaluation, env) {
   }
 
   const assertion = (metric, type, value) => ({ metric, type, value });
-  const map = (assertions, passes, observation = selected, output = observation.stdout.value) => {
+  const map = (
+    assertions,
+    passes,
+    observation = selected,
+    output = observation.stdout.value.endsWith('\n') ? observation.stdout.value.slice(0, -1) : observation.stdout.value,
+  ) => {
     const result = {
       response: { output },
       testCase: { assert: assertions },
@@ -1589,6 +1629,10 @@ function checkPromptfooTemplateIdentity(destination, evaluation, env) {
   const mismatchedOutput = map([assertion('required-pears', 'contains', 'pears')], [true], selected, 'another output');
   assert.notStrictEqual(mismatchedOutput.status, 0, 'promptfoo template accepted a grade for different stdout');
   assert.match(mismatchedOutput.stderr, /output differs from the cited stdout observation/);
+  const whitespace = { observationId: 'whitespace', stdout: { kind: 'text', value: 'Selected summary: apples, pears \n' } };
+  const whitespaceMismatch = map([assertion('required-pears', 'contains', 'pears')], [true], whitespace, 'Selected summary: apples, pears');
+  assert.notStrictEqual(whitespaceMismatch.status, 0, 'promptfoo template accepted a grade for different trailing whitespace');
+  assert.match(whitespaceMismatch.stderr, /output differs from the cited stdout observation/);
   const empty = { observationId: 'empty', stdout: { kind: 'text', value: '' }, exitCode: 0 };
   const missingContent = map([assertion('required-pears', 'contains', 'pears')], [false], empty);
   assert.strictEqual(missingContent.status, 0, `promptfoo template could not cite empty stdout: ${missingContent.stderr}`);
@@ -1618,7 +1662,18 @@ function checkEvaluatorGuidance(guide, failures) {
     ],
     [
       '## Judge the behavior',
-      ['resolveCheck', 'calibrated judge', 'sealed brief', 'adopter code', 'evaluator/mapping.json', 'oracle and behavior'],
+      [
+        'resolveCheck',
+        'calibrated judge',
+        'sealed brief',
+        'adopter code',
+        'evaluator/mapping.json',
+        'oracle and behavior',
+        'evaluation.json.judge',
+        'policy/evaluator-conditions.json.judge',
+        'policy/judge-calibration.json',
+        'judgeCalibration.minimumAgreement',
+      ],
     ],
     [
       '## Emit judgment rows or sealed records',

@@ -4,7 +4,7 @@ type: 'feature'
 created: '2026-09-27'
 status: 'in-review'
 route: 'dispatch'
-review_loop_iteration: 2
+review_loop_iteration: 3
 baseline_commit: '8c260be057b089d14fd9f696e8c504fd35f1ee6f'
 context:
   - '_bmad-output/planning-artifacts/evaluate/epics.md'
@@ -69,8 +69,11 @@ context:
 - Revert checks: removing the run-system heading, the external-framework rubric row, learning step 4, or the known-fail section of `LEARNED.md` each failed `test:evaluate-guidance` with the expected diagnostic. Forcing the AgentEvals template to pass every row made its rendered fixture's `score` exit 2 and failed the guidance gate. Every source file was restored after its check.
 - During the full gate, `test:evaluate-mutation` printed success but held its process open for its interrupted-run timeout. The test now clears that deadline when the child closes, preserving the timeout failure case. A focused wrapper observed exit 11 ms after the success line and failed if that gap exceeded 5 seconds.
 - Review fixes require stable promptfoo assertion metrics and complete normal-run mapping coverage. The guidance gate now exercises both templates' optional selection arguments, reordered results, ambiguity rejection, empty-output evidence, and output-to-observation binding. The guide adds runnable sealed-agent and records configuration details and records framework versions in the digested evaluator tree.
+- Final source review closed AgentEvals reference containment and incomplete mismatch evidence, promptfoo trailing-whitespace binding, the rubric judge transition, and the current Stage 7 versus later scored-proof instruction. Stories 1.43 and 1.44 carry the two inherited evaluator-provenance risks into separate acceptance gates.
 
 ## Spec Change Log
+
+- The approved Story 1.23 scope remains intact. Review findings on inherited promptfoo error classification and dependency-version provenance are appended as Stories 1.43 and 1.44, with their own tests and dependency rows.
 
 ## Review Triage Log
 
@@ -103,6 +106,18 @@ Three independent reviewers examined the committed story diff. Their findings we
 ### Full-gate correction
 
 The first full `npm test` after review fixes reached `test:boundary` and failed because the guide linked to a relative `docs/` path absent from the published package. Both links now point to the repository's public documentation, and `npm run test:boundary` passes. The final commit hook reruns the complete gate on the corrected tree.
+
+### Round 3
+
+| Finding                                                                                             | Verdict        | Resolution                                                                                                                                                    |
+| --------------------------------------------------------------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| AgentEvals strict mismatches outside named branches quote only the prefix                           | Valid          | Default to the full observed trajectory and test a missing reference message.                                                                                 |
+| AgentEvals `--reference` can escape or read an untracked file outside the digested layer            | Valid          | Require a regular, unlinked, git-tracked file under `evaluator/reference/` and test traversal, untracked and linked paths.                                    |
+| Promptfoo's `trimEnd()` accepts grades over different trailing whitespace                           | Valid          | Match the installed CLI's observed one-final-LF normalization exactly, test extra whitespace rejection, and document the limit for newline-sensitive oracles. |
+| Stage 6 deterministic rubric judge fields survive a switch to a row-converting evaluator            | Valid          | Tell adopters to remove both unused judge fields while preserving calibration labels and mapping rubric keys.                                                 |
+| Stage 7 directs a fresh adopter to run and score before later mutation/run stages exist             | Valid          | Make `check` and `preflight` current work; reserve full scored proof for the later stages.                                                                    |
+| An ungraded promptfoo error becomes a scored target failure                                         | Follow-up 1.43 | Story 1.20 explicitly requires this behavior. The new story changes that established contract and proves evaluator errors cannot count as caught defects.     |
+| An installed framework version can drift while a stale manual version record leaves the same digest | Follow-up 1.44 | Story 1.23 tells the adopter to update its tracked version record. The new story binds installed dependency identity independently of that manual record.     |
 
 ## Verification
 

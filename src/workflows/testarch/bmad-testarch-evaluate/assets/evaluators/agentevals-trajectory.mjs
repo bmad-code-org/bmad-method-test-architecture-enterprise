@@ -2,6 +2,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { isDeepStrictEqual } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { createTrajectoryMatchEvaluator } from 'agentevals';
@@ -13,7 +14,30 @@ const referenceFile =
   process.argv.find((argument) => argument.startsWith('--reference='))?.slice('--reference='.length) ?? 'reference/trajectory.json';
 const trajectoryPrefix = process.argv.find((argument) => argument.startsWith('--prefix='))?.slice('--prefix='.length) ?? 'trajectory: ';
 if (!trajectoryPrefix) throw new Error('trajectory stdout prefix must be non-empty');
-const referenceOutputs = JSON.parse(fs.readFileSync(path.join(directory, referenceFile), 'utf8'));
+const referenceParts = referenceFile.split('/');
+if (
+  referenceParts[0] !== 'reference' ||
+  referenceParts.length < 2 ||
+  referenceParts.some((part) => part === '' || part === '.' || part === '..' || part.includes('\\'))
+) {
+  throw new Error('the trajectory reference must be a file under evaluator/reference/');
+}
+const referenceRoot = path.join(directory, 'reference');
+const referencePath = path.join(directory, ...referenceParts);
+if (
+  !fs.lstatSync(referenceRoot).isDirectory() ||
+  fs.realpathSync(referenceRoot) !== referenceRoot ||
+  !fs.lstatSync(referencePath).isFile() ||
+  fs.realpathSync(referencePath) !== referencePath
+) {
+  throw new Error('the trajectory reference must be a regular file under evaluator/reference/ with no linked path');
+}
+const git = spawnSync('git', ['rev-parse', '--is-inside-work-tree'], { cwd: directory, encoding: 'utf8' });
+if (git.status === 0 && git.stdout.trim() === 'true') {
+  const tracked = spawnSync('git', ['ls-files', '--error-unmatch', '--', referenceFile], { cwd: directory, encoding: 'utf8' });
+  if (tracked.status !== 0) throw new Error(`git must track evaluator/${referenceFile}; run git add on the reference`);
+}
+const referenceOutputs = JSON.parse(fs.readFileSync(referencePath, 'utf8'));
 const input = JSON.parse(fs.readFileSync(0, 'utf8'));
 const matchingObservations = input.observations.filter(
   (candidate) => candidate.stdout?.kind === 'text' && candidate.stdout.value.startsWith(trajectoryPrefix),
@@ -44,7 +68,7 @@ const argumentsOf = (call) => {
     return call?.function?.arguments;
   }
 };
-let quote = trajectoryPrefix;
+let quote = stdout;
 let mismatch = 'trajectory differs from the reference';
 if (assistant === undefined) {
   quote = quoted(JSON.stringify(outputs));

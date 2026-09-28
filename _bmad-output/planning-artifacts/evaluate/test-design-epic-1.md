@@ -38,7 +38,7 @@ inputDocuments:
 
 ## Executive Summary
 
-**Scope:** full epic-level test design for Stories 1.1 to 1.31 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; their scenarios, risks and gates are below, and sections appear in execution order. The stories are built overnight by `/bmad-build` workers in order, uncommitted, so every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
+**Scope:** full epic-level test design for Stories 1.1 to 1.44 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.44. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
 
 **Risk summary:**
 
@@ -47,6 +47,8 @@ inputDocuments:
 - Dominant categories: TECH (engine boundary, runtime moves, evaluator isolation, shape tests), DATA (rollback, evidence and held-out integrity) and BUS (guidance that looks complete and produces weak evaluations)
 
 **Coverage summary:**
+
+The scenario counts below are the initial planning estimate. Appended stories are itemized in their sections and have not been re-estimated.
 
 - P0: 81 scenarios over the runtime's integrity paths (rollback, verdict source, infrastructure classification, evaluator isolation, held-out redaction, calibration, the dogfood proof, the behavioral proofs of guidance)
 - P1: 67 scenarios over authoring checks, adapters, registration, the evaluation layer and craft headings
@@ -384,6 +386,8 @@ File: `test/test-evaluate-tool-use.js` (`test:evaluate-tool-use`), fixture `test
 
 File: `test/test-evaluate-promptfoo.js` (`test:evaluate-promptfoo`), fixture `test/fixtures/evaluate-promptfoo/`.
 
+The error-row rule in this historical Story 1.20 section is superseded by Story 1.43. An ungraded framework error becomes an evaluator infrastructure failure under that later story.
+
 | AC                                                                                                                                                                                                                                                                                                                                          | Test                                                                                                                    | Level                              | P   | Revert check                                                                           |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | --- | -------------------------------------------------------------------------------------- |
 | Evaluator runs `promptfoo eval --assertions --model-outputs --output <results.jsonl> --no-cache` with telemetry and update checks off, reads the JSONL rows, prints one row per `componentResults` entry, falls back to `gradingResult` when `componentResults` is absent, and prints a `fail` row for an error row with no `gradingResult` | Run the fixture evaluator on a multi-assertion row, a single-assertion row with no `componentResults`, and an error row | Integration                        | P0  | Reading only `componentResults` drops the single-assertion row, which the case catches |
@@ -701,6 +705,29 @@ Added 2026-09-26 in Story 1.22. Levels: contract, integration over real eval-qua
 | Reused operation IDs retain distinct phases   | Score both interfaces, compare each citation's interface and phase with its record and manifest, and inspect the phase lists   | Integration over real eval-quality | P0  | Dropping interface identity misclassifies one finding           |
 | Prior records and engine versions are refused | A prior-version record fails with a named compatibility finding; inspect the published engine floor and lockfile after release | Contract                           | P1  | Accepting an old record or floor fails the fixture              |
 
+### Story 1.43: Keep ungraded framework errors out of target findings
+
+Added 2026-09-27 in Story 1.23. Levels: integration over real eval-quality, unit, guidance. Files: `test/test-evaluate-promptfoo.js` (`test:evaluate-promptfoo`), `test/test-evaluate-guidance.js` (`test:evaluate-guidance`), and the promptfoo fixture and rendered starter.
+
+| AC                                               | Test                                                                                                                                           | Level                              | P   | Revert check                                                                           |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | --- | -------------------------------------------------------------------------------------- |
+| Ungraded framework error stops as infrastructure | Feed a JSONL row with an `error`, target stdout and no `gradingResult` through fixture and starter; `run` exits 12 with no sealed trial record | Integration over real eval-quality | P0  | Restoring the Story 1.20 fail-row conversion creates a target finding or sealed record |
+| Graded assertion outcomes retain their meaning   | A `pass: false` component emits a cited target fail; a `pass: true` component emits pass; run both through the fixture and rendered starter    | Integration                        | P0  | Rejecting graded failures or passing them changes the expected rows                    |
+| Grade set is complete and unique                 | Missing, duplicate and malformed components stop the trial with no record, including a partial grade set where one assertion succeeded         | Unit, integration                  | P1  | Permitting a partial set writes a record                                               |
+| Guide names the failure boundary                 | Assert the evaluator guide distinguishes ungraded framework errors from graded target failures by exact section and runnable examples          | Guidance                           | P1  | Removing the distinction fails the guidance assertion                                  |
+
+### Story 1.44: Record installed framework versions in evaluator provenance
+
+Added 2026-09-27 in Story 1.23. Levels: integration over real eval-quality, contract, guidance. Files: `test/test-evaluate-evaluators.js` (`test:evaluate-evaluators`), `test/test-evaluate-guidance.js` (`test:evaluate-guidance`), isolated installed-package fixtures, and both rendered framework starters.
+
+| AC                                              | Test                                                                                                                                                                                                                                                  | Level                              | P   | Revert check                                                                           |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | --- | -------------------------------------------------------------------------------------- |
+| Every command layer declares its dependencies   | `check` rejects an absent or malformed tracked declaration; accepts an explicit empty list for framework-free code; rejects a nonempty declaration inconsistent with `LEARNED.md`                                                                     | Contract                           | P1  | Removing the declaration check accepts a stale or absent record                        |
+| Installed version binds the configuration       | Run against installed framework versions A and B; B first fails against A's declaration, then succeeds after declaration and `LEARNED.md` update; a direct configuration test holds the evaluator tree fixed while changing only the observed version | Integration over real eval-quality | P0  | Omitting observed version from configuration leaves the direct test's digest unchanged |
+| Missing or mismatched package stops the run     | Remove the installed fixture package, then install a different version; each run exits 12 before a trial record, with diagnostic and observed-version artifact where available                                                                        | Integration                        | P0  | Trusting the stale `LEARNED.md` produces a record                                      |
+| Mid-run dependency change stops the trial       | Change the isolated package version between trials and during one trial; assert exit 12 and no sealed record for the affected trial                                                                                                                   | Integration                        | P0  | Removing either recheck lets the changed dependency judge under the original digest    |
+| Templates and guidance remain framework neutral | Render the AgentEvals and promptfoo starters, verify package identity and installed version observation, read unfamiliar-framework guidance, run `test:direction` and boundary checks                                                                 | Guidance, static                   | P1  | Removing a starter's declaration or adding a framework import to `cli/` fails          |
+
 ## The Dogfood Proof (AD-15)
 
 ### What the run must produce
@@ -739,6 +766,8 @@ Staged, uncommitted overnight: `test/evaluations/bmad-testarch-evaluate/` (`eval
 - **Nightly and weekly:** none in this epic; Epic 2 defines the `scheduled` tier.
 
 ## Resource Estimates
+
+This is the initial planning estimate. It excludes the stories appended after that estimate was made.
 
 | Priority | Scenarios | Effort range                                       |
 | -------- | --------- | -------------------------------------------------- |

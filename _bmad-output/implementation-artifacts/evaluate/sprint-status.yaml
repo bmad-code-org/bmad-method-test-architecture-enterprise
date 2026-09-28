@@ -78,6 +78,8 @@ development_status:
   1-40-calibrate-rubric-scores-imported-from-harness-records: backlog
   1-41-confine-score-output-during-concurrent-run-directory-changes: backlog
   1-42-attribute-reused-operation-ids-to-their-interfaces: backlog
+  1-43-keep-ungraded-framework-errors-out-of-target-findings: backlog
+  1-44-record-installed-framework-versions-in-evaluator-provenance: backlog
   epic-1-retrospective: optional
 
   epic-2: backlog
