@@ -1038,6 +1038,79 @@ async function checkTestDesignOracles(evaluator) {
       mentioned: false,
     },
     {
+      label: 'four-space indented scored example',
+      document:
+        register('The local queue is checked before upload.', 1, 2, 2, 'Document') +
+        '\n    | Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '    | --- | --- | --- | --- | --- | --- | --- |\n' +
+        `    | R-002 | SEC | ${marker} | 2 | 2 | 4 | Test |\n`,
+      mentioned: false,
+      riskRowCount: 1,
+    },
+    {
+      label: 'tab-indented scored example',
+      document:
+        register('The local queue is checked before upload.', 1, 2, 2, 'Document') +
+        '\n\t| Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '\t| --- | --- | --- | --- | --- | --- | --- | --- |\n' +
+        `\t| R-002 | SEC | ${marker} | 2 | 2 | 4 | Test |\n`,
+      mentioned: false,
+      riskRowCount: 1,
+    },
+    {
+      label: 'indented scored example inside a bullet list',
+      document:
+        register('The local queue is checked before upload.', 1, 2, 2, 'Document') +
+        '\n- Example:\n\n' +
+        '      | Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '      | --- | --- | --- | --- | --- | --- | --- | --- |\n' +
+        `      | R-002 | SEC | ${marker} | 2 | 2 | 4 | Test |\n`,
+      mentioned: false,
+      riskRowCount: 1,
+    },
+    {
+      label: 'tab-indented scored example inside a bullet list',
+      document:
+        register('The local queue is checked before upload.', 1, 2, 2, 'Document') +
+        '\n- Example:\n\n' +
+        '\t  | Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '\t  | --- | --- | --- | --- | --- | --- | --- |\n' +
+        `\t  | R-002 | SEC | ${marker} | 2 | 2 | 4 | Test |\n`,
+      mentioned: false,
+      riskRowCount: 1,
+    },
+    {
+      label: 'indented scored example after a completed list',
+      document:
+        register('The local queue is checked before upload.', 1, 2, 2, 'Document') +
+        '\n- Notes\n\n\n' +
+        '    | Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '    | --- | --- | --- | --- | --- | --- | --- | --- |\n' +
+        `    | R-002 | SEC | ${marker} | 2 | 2 | 4 | Test |\n`,
+      mentioned: false,
+      riskRowCount: 1,
+    },
+    {
+      label: 'three-space indented scored register',
+      document:
+        '# Test Design: Epic 7\n\n### Risk Register (Score 1-9)\n\n' +
+        '   | Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '   | --- | --- | --- | --- | --- | --- | --- | --- |\n' +
+        `   | R-001 | SEC | ${marker} | 2 | 2 | 4 | Test |\n`,
+      mentioned: true,
+      riskRowCount: 1,
+    },
+    {
+      label: 'four-space table inside an ordered list item',
+      document:
+        '# Test Design: Epic 7\n\n### Risk Register (Score 1-9)\n\n10. Risk register:\n\n' +
+        '    | Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '    | --- | --- | --- | --- | --- | --- | --- | --- |\n' +
+        `    | R-001 | SEC | ${marker} | 2 | 2 | 4 | Test |\n`,
+      mentioned: true,
+      riskRowCount: 1,
+    },
+    {
       label: 'prose and fenced example',
       document:
         register('The local queue is checked before upload.', 1, 2, 2, 'Document') + `\n${marker}\n\n\`\`\`text\n${marker}\n\`\`\`\n`,
@@ -1050,6 +1123,9 @@ async function checkTestDesignOracles(evaluator) {
     assert(read.ok, `${example.label}: the register parses`);
     if (!read.ok) continue;
     const scored = scoreTestDesignRun(seeded, read.design, categories);
+    if (example.riskRowCount !== undefined) {
+      assert(read.design.risks.length === example.riskRowCount, `${example.label}: only register rows are parsed`);
+    }
     const results = evaluateOracles(evaluator, contract, {
       [testDesignStepId(seeded)]: observation({
         operationId: TEST_DESIGN_OPERATION,

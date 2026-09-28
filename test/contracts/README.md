@@ -211,7 +211,7 @@ of the binding being correct, and it is paid by a generated file rather than by 
 ## `test-design.contract.json` reads vocabulary at its declared scope
 
 `bmad-testarch-test-design` declares one epic-level deliverable: `{test_artifacts}/test-design/test-design-epic-{epic_num}.md`.
-The runner emits a JSON projection on stdout after the agent finishes. It uses the same parser as the harness and carries the original Markdown, the parsed risk-row count, descriptions from risk rows scored above 3, and their count. The parser maps score and description columns by header and skips fenced examples. The workflow produces one Markdown file.
+The runner emits a JSON projection on stdout after the agent finishes. It uses the same parser as the harness and carries the original Markdown, the parsed risk-row count, descriptions from risk rows scored above 3, and their count. The parser maps score and description columns by header and skips fenced and indented code examples. The workflow produces one Markdown file.
 
 Material-risk vocabulary is read from the original document text. Unsupported-risk vocabulary is read from one parsed scored-risk description at a time. The `for-any` check is guarded by the projected count, so an empty scored-risk collection passes the exclusion oracle while missing stdout yields insufficient evidence. `test/test-contract-oracles.js` compares both readings with the harness predicate on stored and constructed designs.
 

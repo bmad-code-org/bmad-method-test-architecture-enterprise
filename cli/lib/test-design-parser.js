@@ -46,6 +46,41 @@ function isSeparatorRow(line) {
   return cells.length >= 2 && cells.every((cell) => /^:?-+:?$/.test(cell));
 }
 
+/** Markdown indentation uses tab stops every four columns. */
+function columnsThrough(value) {
+  let columns = 0;
+  for (const character of value) columns += character === '\t' ? 4 - (columns % 4) : 1;
+  return columns;
+}
+
+/** Exclude indented code while retaining tables inside list-item content. */
+function contentLines(lines) {
+  const listIndents = [];
+  let blankLines = 0;
+  return lines.map((line) => {
+    if (line.trim() === '') {
+      blankLines += 1;
+      // Two blank lines end containing lists, so later code uses document indentation.
+      if (blankLines > 1) listIndents.length = 0;
+      return '';
+    }
+    blankLines = 0;
+    const leading = /^[ \t]*/.exec(line)[0];
+    const indentation = columnsThrough(leading);
+    while (listIndents.length > 0 && indentation < listIndents.at(-1)) listIndents.pop();
+    const containerIndent = listIndents.at(-1) ?? 0;
+    const listMarker = /^([ \t]*)(?:[-+*]|\d{1,9}[.)])([ \t]+)/.exec(line);
+    if (listMarker && indentation - containerIndent <= 3) {
+      listIndents.push(columnsThrough(listMarker[0]));
+      return '';
+    }
+    const relativeIndent = indentation - containerIndent;
+    // Code starts four columns beyond the current list item's content edge.
+    if (relativeIndent >= 4) return '';
+    return `${' '.repeat(relativeIndent)}${line.slice(leading.length)}`;
+  });
+}
+
 /**
  * Every markdown table in the document, with the headings it sits under.
  *
@@ -58,7 +93,7 @@ function isSeparatorRow(line) {
  * @returns {Array<{headings: string[], header: string[], rows: string[][]}>}
  */
 function parseTables(text) {
-  const lines = text.split(/\r?\n/);
+  const lines = contentLines(text.split(/\r?\n/));
   const tables = [];
   const headings = [];
   let fence = null;

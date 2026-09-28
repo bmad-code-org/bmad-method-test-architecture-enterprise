@@ -84,6 +84,7 @@ development_status:
   1-46-close-the-dogfood-suites-coverage-gaps: backlog
   1-47-distinguish-reference-risk-tables-from-the-scored-register: backlog
   1-48-report-whole-document-coverage-for-a-structured-design-artifact: backlog
+  1-49-prove-test-design-mutation-rollback-before-claiming-it: backlog
   epic-1-retrospective: optional
 
   epic-2: backlog

@@ -23,7 +23,7 @@ inputDocuments:
 
 ## Overview
 
-This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and fifty-four stories, including H.1 (Stories 1.27 to 1.48 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
+This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and fifty-five stories, including H.1 (Stories 1.27 to 1.49 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
 
 Evaluate is fully stacked. The stack runs system under test, then the evaluation (the mechanism that runs the system, collects evidence and makes judgments), then the Behavioral Evaluation Contract (what behavior matters, what evidence counts, how success and failure resolve), then eval-quality (contract sanity, evidence support, and whether the evaluation catches defects). TeA owns every layer above eval-quality, including each concern eval-quality states it leaves to the caller, so an adopter can evaluate any target end to end. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3 onward, Epic 2 and H.1 to close the plan gap audit; the Traceability section maps each audit item to the story that closes it.
 
@@ -150,7 +150,7 @@ None. Evaluate has no graphical interface.
 ### Epic 1: The Evaluate authoring loop
 
 An adopter describes a target, answers Evaluate's questions, chooses or builds the evaluation layer and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches the seeded defect, with the gaps named and closed. The epic closes by running Evaluate on `bmad-testarch-evaluate` itself, then proving the guidance on two more target kinds, on seeded weaknesses and on an evaluation framework its guides never name.
-Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.48.
+Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.49.
 
 **FRs covered:** FR1 to FR10, FR13, FR14.
 
@@ -214,12 +214,13 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 46    | 1.46  | 1.16                         |
 | 47    | 1.47  | 1.27                         |
 | 48    | 1.48  | 1.27                         |
-| 49    | 2.1   | 1.16, 1.26, 1.45             |
-| 50    | 2.2   | 2.1                          |
-| 51    | 2.3   | 2.2                          |
-| 52    | 2.4   | 2.3                          |
-| 53    | 2.5   | 2.4                          |
-| 54    | H.1   | 2.5                          |
+| 49    | 1.49  | 1.27                         |
+| 50    | 2.1   | 1.16, 1.26, 1.45             |
+| 51    | 2.2   | 2.1                          |
+| 52    | 2.3   | 2.2                          |
+| 53    | 2.4   | 2.3                          |
+| 54    | 2.5   | 2.4                          |
+| 55    | H.1   | 2.5                          |
 
 ## Epic 1: The Evaluate authoring loop
 
@@ -1376,6 +1377,25 @@ So that the baseline reports the coverage this contract actually exercises.
 
 **Dependencies:** 1.27.
 **Gate:** engine release and export check when needed, `npm test`, suite-only staged preflight.
+
+### Story 1.49: Prove test-design mutation rollback before claiming it
+
+Added in Story 1.27's final review. The test-design probe generator inherited a twin-fixture qualification whose `rollbackVerified: true` is hard-coded. AD-8 requires a performed restore, digest equality and a clean rerun before that claim. The stored before and after designs are useful corpus examples, but their existence proves no rollback.
+
+As a maintainer of the test-design evaluation,
+I want each controlled mutation qualified in a disposable copy with a verified restore,
+So that a test-design probe cannot claim rollback based only on two stored files.
+
+**Acceptance Criteria:**
+
+**Given** the test-design controlled-mutation probes generated from stored clean and seeded designs
+**When** the qualification is performed for each probe
+**Then** a disposable target copy runs the clean arm, applies one exact mutation, runs the mutated arm, restores the original bytes, verifies the artifact digest, and reruns the clean arm; only that sequence can set `rollbackVerified: true`, and the adopter's worktree remains unchanged
+**And** a failed restore, mismatched digest, missing baseline pass or missing mutated failure emits no qualified probe with a true rollback claim; fixtures exercise each failure and reverting the verification makes them fail
+**And** the generated probes, corpus checks, replay and staged test-design preflight use the qualified evidence and retain their expected behavioral outcomes; `npm test` passes.
+
+**Dependencies:** 1.27.
+**Gate:** `npm test`, suite-only staged preflight.
 
 ## Epic 2: Continuous proof in CI
 
