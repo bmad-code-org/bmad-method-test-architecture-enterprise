@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-22-2026 18:09
-last_updated: 09-27-2026 18:51
+last_updated: 09-27-2026 21:01
 project: "bmad-method-test-architecture-enterprise: Evaluate"
 project_key: NOKEY
 tracking_system: file-system
@@ -55,7 +55,7 @@ development_status:
   1-22-attribute-findings-for-interpretation: done
   1-12-inspect-the-target-capture-requirements-and-design-the-corpu: done
   1-13-author-the-contract-oracles-rubrics-and-adapter-wiring: done
-  1-23-teach-choosing-and-building-the-evaluation-layer: backlog
+  1-23-teach-choosing-and-building-the-evaluation-layer: review
   1-14-drive-the-run-and-interpret-the-gaps: backlog
   1-15-float-the-engine-pin-and-admit-evaluate-authored-suites: backlog
   1-16-evaluate-authors-its-own-suite-run-live-and-recorded: backlog

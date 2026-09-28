@@ -1182,7 +1182,16 @@ async function checkInterrupted() {
   }
   check(target !== null, 'the interrupted run never reached its mutated arm');
   child.kill('SIGTERM');
-  const ended = await Promise.race([closed, delay(SPAWN_TIMEOUT_MS).then(() => null)]);
+  let timeout;
+  const deadline = new Promise((resolve) => {
+    timeout = setTimeout(() => resolve(null), SPAWN_TIMEOUT_MS);
+  });
+  let ended;
+  try {
+    ended = await Promise.race([closed, deadline]);
+  } finally {
+    clearTimeout(timeout);
+  }
   if (ended === null) {
     child.kill('SIGKILL');
     check(false, `the interrupted run was still running ${SPAWN_TIMEOUT_MS} ms after SIGTERM`);

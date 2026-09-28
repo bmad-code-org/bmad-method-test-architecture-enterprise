@@ -496,6 +496,18 @@
         "imports": ["test", "cli", "tools", "hooks-cjs", "evaluate-engine", "evaluate-templates"]
       },
       {
+        "name": "evaluate-evaluator-templates",
+        "match": "prefix",
+        "path": "src/workflows/testarch/bmad-testarch-evaluate/assets/evaluators/",
+        "label": "the Evaluate skill's adopter evaluator templates",
+        "imports": ["evaluate-evaluator-templates"],
+        "externals": {
+          "policy": "allow",
+          "modules": ["agentevals", "node:child_process", "node:fs", "node:module", "node:os", "node:path", "node:url", "node:util"],
+          "rule": "the evaluator templates run from the adopter's evaluator/ folder, with AgentEvals installed by the adopter; they use Node builtins for local observations, references and promptfoo CLI execution, while cli/ remains framework-neutral"
+        }
+      },
+      {
         "name": "evaluate-templates",
         "match": "prefix",
         "path": "src/workflows/testarch/bmad-testarch-evaluate/assets/",

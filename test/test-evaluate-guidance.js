@@ -14,7 +14,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const { spawnSync } = require('node:child_process');
 const AjvModule = require('ajv/dist/2020');
-const { engineCliPath, engineSchemaPath, loadEngine } = require('../cli/lib/evaluate/engine');
+const { ENGINE_CLI_ENV, engineCliPath, engineSchemaPath, loadEngine } = require('../cli/lib/evaluate/engine');
 const { calibrationProblems } = require('../cli/lib/evaluate/calibration');
 
 const Ajv = AjvModule.default ?? AjvModule;
@@ -1385,6 +1385,189 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
   }
 }
 
+function checkFrameworkTemplate(template, fixtureName, evaluationName, executable, failures) {
+  const source = ASSET(path.join('evaluators', template));
+  if (!fs.existsSync(source)) {
+    failures.push(`assets/evaluators/${template} is missing`);
+    return;
+  }
+  const root = fs.mkdtempSync(path.join(__dirname, '.tea-guidance-template-'));
+  const evaluation = path.join(root, 'evals', evaluationName);
+  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== ENGINE_CLI_ENV && !key.startsWith('GIT_')));
+  const run = (bin, args, cwd = path.join(__dirname, '..')) => {
+    const result = spawnSync(bin, args, { cwd, env, encoding: 'utf8', timeout: 300_000 });
+    if (result.error) throw result.error;
+    return result;
+  };
+  try {
+    fs.cpSync(path.join(__dirname, 'fixtures', fixtureName), root, { recursive: true });
+    const destination = path.join(evaluation, 'evaluator', executable);
+    fs.copyFileSync(source, destination);
+    fs.chmodSync(destination, 0o755);
+    if (template === 'agentevals-trajectory.mjs') {
+      fs.copyFileSync(
+        path.join(evaluation, 'evaluator', 'reference', 'weather.json'),
+        path.join(evaluation, 'evaluator', 'reference', 'trajectory.json'),
+      );
+    }
+    for (const [bin, args, cwd] of [
+      [process.execPath, [path.join(__dirname, '..', 'cli', 'evaluate.js'), 'digest', '--evaluation', evaluation]],
+      ['git', ['init', '--quiet', '--initial-branch', 'main'], root],
+      ['git', ['add', '--all'], root],
+      ['git', ['-c', 'user.name=TeA test', '-c', 'user.email=tea-test@example.test', 'commit', '--quiet', '-m', 'template fixture'], root],
+    ]) {
+      const result = run(bin, args, cwd);
+      if (result.status !== 0) {
+        failures.push(`${template} setup failed: ${result.stdout}${result.stderr}`);
+        return;
+      }
+    }
+    for (const subcommand of ['check', 'preflight', 'run', 'score']) {
+      const result = run(process.execPath, [path.join(__dirname, '..', 'cli', 'evaluate.js'), subcommand, '--evaluation', evaluation]);
+      if (result.status !== 0) {
+        failures.push(`${template} ${subcommand} exited ${result.status}: ${result.stdout}${result.stderr}`);
+        return;
+      }
+    }
+    const runs = path.join(evaluation, 'runs');
+    const latest = fs
+      .readdirSync(runs)
+      .filter((name) => name !== '.gitignore')
+      .sort()
+      .at(-1);
+    const scores = path.join(runs, latest, 'scores');
+    const score = fs.readdirSync(scores).sort().at(-1);
+    for (const [probeId, expected] of [
+      ['P-001', 'passed-clean-control'],
+      ['P-002', 'caught'],
+    ]) {
+      const evidence = JSON.parse(fs.readFileSync(path.join(scores, score, probeId, 'evidence-artifact.json'), 'utf8'));
+      const states = evidence.reducedProbeOutcomes[0].trialVotes.map((vote) => vote.state);
+      if (states.length !== 3 || !states.every((state) => state === expected))
+        failures.push(`${template} ${probeId} resolved ${states.join(', ')}, expected three ${expected} votes`);
+    }
+  } catch (error) {
+    failures.push(`${template} template pipeline: ${error.stack}`);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+}
+
+function checkEvaluatorGuidance(guide, failures) {
+  for (const heading of [
+    '## Run the system',
+    '## Capture observations on every oracle channel',
+    '## Judge the behavior',
+    '## Emit judgment rows or sealed records',
+    '## Selection rubric',
+    '## Framework landscape',
+    '## Learn an unfamiliar framework',
+    '## Vendor rule',
+  ])
+    requireHeading(guide, heading, 'evaluator.md', failures);
+
+  const rubric = headingBody(guide, '## Selection rubric');
+  const lines = rubric.split('\n').filter((line) => line.startsWith('|'));
+  const cells = lines.map((line) =>
+    line
+      .split('|')
+      .slice(1, -1)
+      .map((cell) => cell.trim()),
+  );
+  const criteria = [
+    'Determinism',
+    'Need for a model and its credentials',
+    'Visibility of process and trajectory',
+    'Need for reference outputs',
+    'Rubric and calibration needs',
+    'Language and runtime fit with adopter',
+    'Licence',
+    'Maintenance and version drift',
+    'Cost per trial',
+    'CI tier fit',
+  ];
+  try {
+    assert.deepStrictEqual(cells[0], ['Option', '`evaluator.kind`', ...criteria]);
+    assert.ok(
+      cells[1]?.every((cell) => /^-{3,}$/.test(cell)),
+      'rubric separator is missing',
+    );
+  } catch (error) {
+    failures.push(`evaluator.md selection rubric columns changed: ${error.message}`);
+  }
+  const options = new Map([
+    ['TeA deterministic evaluator', 'deterministic'],
+    ['Sealed-brief agent evaluator', 'sealed-brief-agent'],
+    ['Adopter harness sealing records', 'records'],
+    ['Skill-specific evaluator', 'command'],
+    ['Custom evaluation code', 'command'],
+    ['External evaluation framework', 'command'],
+  ]);
+  const validKinds = JSON.parse(
+    fs.readFileSync(path.join(__dirname, '..', 'cli', 'lib', 'evaluate', 'schemas', 'evaluation.schema.json'), 'utf8'),
+  ).properties.evaluator.properties.kind.enum;
+  for (const [option, kind] of options) {
+    const row = cells.slice(2).find((candidate) => candidate[0] === option);
+    if (!row || row.length !== cells[0]?.length || row.some((cell) => cell.length === 0)) {
+      failures.push(`evaluator.md selection rubric lacks a complete ${option} row`);
+      continue;
+    }
+    if (row[1] !== `\`${kind}\`` || !validKinds.includes(kind))
+      failures.push(`evaluator.md ${option} has an invalid runtime evaluator kind ${row[1]}`);
+  }
+  if (cells.length !== options.size + 2) failures.push('evaluator.md selection rubric has missing or extra option rows');
+
+  const landscape = headingBody(guide, '## Framework landscape');
+  for (const marker of [
+    'list is illustrative',
+    'Any framework is admissible',
+    'AgentEvals',
+    'promptfoo',
+    'evaluate-tool-use-agent',
+    'evaluate-promptfoo',
+  ])
+    requireText(landscape, marker, 'evaluator.md Framework landscape', failures);
+  const learning = headingBody(guide, '## Learn an unfamiliar framework');
+  for (const [index, markers] of [
+    ['primary sources only', 'documentation', 'repository', 'API reference', 'examples', 'changelog', 'secondary summary'],
+    ['takes inputs', 'judges', 'returns results', 'model', 'credentials'],
+    ['Install the version the adopter uses', 'installed version'],
+    ['Execute a minimal example', 'known pass', 'known fail', 'stdout', 'stderr', 'contradicts'],
+    ['evaluator/LEARNED.md', 'primary source', 'contradictions'],
+    ['evaluator/mapping.json', 'judgment', 'passed-clean-control', 'caught'],
+  ].entries()) {
+    const step = learning.match(new RegExp(`^${index + 1}\\. (.+)$`, 'm'))?.[1] ?? '';
+    for (const marker of markers) requireText(step, marker, `evaluator.md learning step ${index + 1}`, failures);
+  }
+  const vendor = headingBody(guide, '## Vendor rule');
+  for (const marker of ['framework', 'judge model', 'fixed conditions', 'system under test', "adopter's use"])
+    requireText(vendor, marker, 'evaluator.md Vendor rule', failures);
+
+  const learned = fs.readFileSync(ASSET(path.join('evaluators', 'LEARNED.md')), 'utf8');
+  for (const heading of [
+    '## Framework and installed version',
+    '## Primary-source facts used',
+    '## Executed minimal example: known pass',
+    '## Executed minimal example: known fail',
+    '## Documented claims contradicted by execution',
+    '## Mapping and pipeline result',
+  ])
+    requireHeading(learned, heading, 'assets/evaluators/LEARNED.md', failures);
+  for (const template of ['command-evaluator.mjs', 'mapping.json', 'agentevals-trajectory.mjs', 'promptfoo-assertions.mjs']) {
+    const file = ASSET(path.join('evaluators', template));
+    if (!fs.existsSync(file) || fs.readFileSync(file, 'utf8').trim().length === 0)
+      failures.push(`assets/evaluators/${template} is missing or empty`);
+    else if (template.endsWith('.mjs') && (fs.statSync(file).mode & 0o111) === 0)
+      failures.push(`assets/evaluators/${template} is not executable`);
+  }
+  const mapping = JSON.parse(fs.readFileSync(ASSET(path.join('evaluators', 'mapping.json')), 'utf8'));
+  const validateMapping = new Ajv({ strict: false, allErrors: true }).compile(
+    JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'cli', 'lib', 'evaluate', 'schemas', 'evaluator-mapping.schema.json'), 'utf8')),
+  );
+  if (!validateMapping(mapping))
+    failures.push(`assets/evaluators/mapping.json fails runtime schema: ${JSON.stringify(validateMapping.errors)}`);
+}
+
 async function main() {
   const failures = [];
   let skillContent;
@@ -1432,6 +1615,8 @@ async function main() {
   if (!workflowSection.includes('never compute a verdict')) {
     failures.push("SKILL.md's Workflow section has no rule against computing a verdict outside eval-quality's CLI");
   }
+  if (!skillContent.includes('through Stage 7') || skillContent.includes('Stages 7 through 12 are pending'))
+    failures.push('SKILL.md does not make the evaluator stage available');
 
   const inspection = fs.readFileSync(REFERENCE('inspection'), 'utf8');
   const intake = fs.readFileSync(REFERENCE('intake'), 'utf8');
@@ -1452,6 +1637,13 @@ async function main() {
   } catch (error) {
     failures.push('contract guidance: ' + error.stack);
   }
+  try {
+    checkEvaluatorGuidance(fs.readFileSync(REFERENCE('evaluator'), 'utf8'), failures);
+  } catch (error) {
+    failures.push('evaluator guidance: ' + error.stack);
+  }
+  checkFrameworkTemplate('agentevals-trajectory.mjs', 'evaluate-tool-use-agent', 'tool-use', 'trajectory.mjs', failures);
+  checkFrameworkTemplate('promptfoo-assertions.mjs', 'evaluate-promptfoo', 'summary', 'promptfoo.mjs', failures);
 
   const template = JSON.parse(fs.readFileSync(ASSET('evaluation.json'), 'utf8'));
   const validateEvaluation = new Ajv({ strict: false, allErrors: true }).compile(
@@ -1475,7 +1667,7 @@ async function main() {
     process.exit(1);
   }
   console.log(
-    `evaluate-guidance: ${EXPECTED_STAGES.length} stages, six worked guides, 36 engine-valid tagged probes, contract examples, and valid templates`,
+    `evaluate-guidance: ${EXPECTED_STAGES.length} stages, seven worked guides, 36 engine-valid tagged probes, contract examples, and valid templates`,
   );
 }
 

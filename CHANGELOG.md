@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Evaluate now teaches how to choose and build an evaluation layer with a six-option rubric, a primary-source procedure for unfamiliar frameworks, and command, AgentEvals, promptfoo, mapping and learning templates. The guidance gate runs both framework templates through clean-control and seeded-defect fixture evaluations (Story 1.23).
 - Evaluate now guides contract authoring, oracle and rubric design, and adapter wiring for every target kind. A fillable contract skeleton and engine-backed guidance checks cover exact requirements-byte lineage, compile and seal, worked examples, and nonzero validation exits (Story 1.13).
 - Evaluate now guides target inspection, adopter-confirmed requirements and corpus design for six target kinds. The evaluation manifest records the confirmed `requirements.md` path and its byte digest, which `tea-evaluate check` validates (Story 1.12).
 - `tea-evaluate check` validates an operation's `process` or `outcome` phase against the compiled contract. Scoring writes `interpretation.json` with finding citations, oracle evidence pointers, phase partitions and the first material error, alongside judgment fields copied from eval-quality's evidence artifacts (Story 1.22).
@@ -226,6 +227,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The mutation test clears its interrupted-run deadline when the child closes, so `npm run test:evaluate-mutation` exits promptly after reporting success.
 - `tea-evaluate score` refuses a planted `scores` symlink before running the scorer, so a pre-existing link cannot redirect score artifacts into the adopter's repository. The remaining concurrent directory-swap case is tracked by Story 1.41.
 - A `copy` workspace reproduced for a trial or a qualification now holds what the pristine copy held when it was made (Story 1.18).
   The reproduction copied the pristine copy as it stood after the preflight legs ran in it, so a target whose operation writes (a workflow step that stores a record) left the pristine copy changed, and every later workspace was refused with exit 12 as not reproducing it; the pristine copy now keeps a snapshot beside itself, its links contained and its provisioned directories left out, and a snapshot changed after it was made still exits 12.
