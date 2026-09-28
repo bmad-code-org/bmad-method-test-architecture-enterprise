@@ -1056,9 +1056,13 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
         );
       }
       if (index === 9) {
+        assert.strictEqual(patch.base, 'numeric');
+        assert.strictEqual(edited.permittedInterfaces[0].operations[0].invocation.executable, 'numeric-amount');
         const waiver = edited.waivers[0];
         for (const field of ['rule', 'rationale', 'condition', 'approval']) assert.ok(waiver[field]);
+        assert.strictEqual(waiver.rule, 'per-record');
         assert.match(waiver.condition, /Number\.isFinite/);
+        assert.match(waiver.condition, /Object\.keys\(request\)\.length === 1/);
         assert.match(waiver.expiresAt, /^\d{4}-\d{2}-\d{2}T/);
       }
       assertEngineSuccess('compile', edited, tempRoot, 'contract patch ' + (index + 1), failures);
@@ -1185,7 +1189,8 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
       'When an agent has no own non-interactive command',
       'shipped generic `tea-skill-runner`',
       '`SKILL.md` wrapper',
-      'launch.skillRoot',
+      'Omit `launch.skillRoot` for `targetKind: "agent"`',
+      "contract's `--skill-root` option",
       'disposable copy',
       'registry shape in the Skill runner section',
     ])

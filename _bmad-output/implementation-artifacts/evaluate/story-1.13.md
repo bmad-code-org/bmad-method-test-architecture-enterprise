@@ -4,7 +4,7 @@ type: 'feature'
 created: '2026-09-27'
 status: 'done'
 route: 'dispatch'
-review_loop_iteration: 2
+review_loop_iteration: 3
 baseline_commit: 'a6d94428fdf0ce725cf86ec4f50839222c53a2d1'
 context:
   - '_bmad-output/planning-artifacts/evaluate/epics.md'
@@ -98,6 +98,8 @@ The workflow-builder Analyze report has zero critical and zero high findings, wi
 | Final review round: the adapter guide gave a preflight command without its required evaluation path.                                                       | Documented the full installed command, added it after seal in Stage 6, and asserted both instructions.                                                                                                                                                                                                                                                                               |
 | Final review round: the numeric fixture failed direct process launch with `EACCES`.                                                                        | Marked it executable and launched it directly in the guidance gate, which catches a mode revert. This lesson is a tagged contract fragment; the separate starter contract supplies the required end-to-end preflight.                                                                                                                                                                |
 | Final review round: the omission example's commentary claimed skill loading and exit evidence that its records-array check did not read.                   | Rewrote the commentary to describe the exact array result and asserted it in the guidance gate.                                                                                                                                                                                                                                                                                      |
+| Regression review round 3: the Agent fallback set `launch.skillRoot` to a wrapper while controlled mutations could target implementation files outside it. | Omitted the optional field for Agent fallback and bound the contract runner's `--skill-root` to the wrapper. A live engine check accepted a mutation outside the wrapper with this binding and refused it when `launch.skillRoot` was set. The guidance gate now asserts the instruction.                                                                                            |
+| Regression review round 3: the waiver used `request.amount` while inheriting the stub skill contract, which has a text prompt.                             | Based the waiver on the numeric target's actual request, scoped it to the per-record discipline for a scalar result, and asserted the target and condition in the guidance gate.                                                                                                                                                                                                     |
 
 ## Verification
 

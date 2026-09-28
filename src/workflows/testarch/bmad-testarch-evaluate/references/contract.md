@@ -482,19 +482,20 @@ Use two legs that differ in one input and a relation that must change on the des
 
 ## Waiver discipline
 
-A waiver names the rule, a rationale, a machine-checkable condition, the adopter's approval, and an RFC 3339 UTC expiry. Write one only for a decision the adopter made after seeing the coverage gap. The starter carries an empty list until that approval exists. The following illustrative fixture waiver includes all four elements; copy it only after the adopter makes that decision.
+A waiver names the rule, a rationale, a machine-checkable condition, the adopter's approval, and an RFC 3339 UTC expiry. Write one only for a decision the adopter made after seeing the coverage gap. The starter carries an empty list until that approval exists. The following illustrative waiver uses the numeric target's parsed JSON stdin request. Its scalar output has no records to check; copy the waiver only after the adopter approves that scope decision.
 
 <!-- example:contract-patch -->
 
 ```json
 {
+  "base": "numeric",
   "path": "/waivers",
   "value": [
     {
       "id": "W-001",
-      "rule": "malformed-input",
-      "rationale": "The confirmed fixture accepts only prevalidated numeric requests.",
-      "condition": "typeof request.amount === 'number' && Number.isFinite(request.amount)",
+      "rule": "per-record",
+      "rationale": "The approved numeric-amount operation takes one scalar amount and emits one scalar result, so there are no records to check.",
+      "condition": "request !== null && typeof request === 'object' && !Array.isArray(request) && typeof request.amount === 'number' && Number.isFinite(request.amount) && Object.keys(request).length === 1",
       "approval": "fixture adopter, 2026-09-27",
       "expiresAt": "2027-12-31T00:00:00Z"
     }
