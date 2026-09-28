@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Evaluate-authored suites can be registered alongside generator-owned suites, with manifest and evaluation policy checks before they enter the test inventory. `eval:all` records their IDs when it skips them (Story 1.15).
 - Evaluate now guides mutation planning, adopter-set risk policy, the private run and score sequence, and evidence-led gap repair through Stage 11. The guidance gate validates tagged mutation files against the runtime schema and checks installed outcome, discipline, preflight and exit mappings. Run-wide class strength is tracked separately because the current engine emits per-probe evidence (Story 1.14).
 - Evaluate now teaches how to choose and build an evaluation layer with a six-option rubric, a primary-source procedure for unfamiliar frameworks, and command, AgentEvals, promptfoo, mapping and learning templates. The starters bind promptfoo assertions to stable keys, require tracked AgentEvals references, and reject ambiguous observation selection. The guidance gate runs both framework templates through clean-control and seeded-defect fixture evaluations (Story 1.23).
 - Evaluate now guides contract authoring, oracle and rubric design, and adapter wiring for every target kind. A fillable contract skeleton and engine-backed guidance checks cover exact requirements-byte lineage, compile and seal, worked examples, and nonzero validation exits (Story 1.13).
@@ -151,6 +152,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- TeA follows the latest published eval-quality release while its lockfile and corpus gate record and verify the installed version (Story 1.15).
 - The `eval-quality` devDependency moves to 4.3.0 and the optional peer's floor to `>=4.3.0`, the first release exporting `staysOnHost`, the on-host predicate `check` now holds an `auth` header over `http` to (Story 1.11, eval-quality#165).
   `classifyAddress` classes the NAT64 (`64:ff9b::7f00:1`) and IPv4-compatible (`::127.0.0.1`) spellings of a loopback address `loopback`, and a connection to either goes through a translator and leaves the host, so `check` now refuses both.
 - The `eval-quality` devDependency moves to 4.2.0 and the optional peer's floor to `>=4.2.0`, the first release whose command-line and MCP adapters carry the policy's `reason` on a `forbidden-target` fault (Story 1.10).

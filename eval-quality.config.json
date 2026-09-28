@@ -6,7 +6,7 @@
     "exclude": [
       {
         "name": "eval-quality",
-        "reason": "TEA pins it exactly and a human drives that release; the resolution floor's own min-release-age-exclude names it for the same reason.",
+        "reason": "TEA follows eval-quality's latest published release; the lockfile records the resolved version, and the resolution floor's min-release-age-exclude allows adoption when a release is published.",
         "lockfiles": ["package-lock.json"]
       }
     ]
@@ -1520,7 +1520,7 @@
           "flags": "i"
         },
         {
-          "match": "the pin is \\d+\\.\\d+\\.\\d+ now",
+          "match": "the lockfile records the resolved eval-quality release",
           "flags": "i"
         },
         {
@@ -1566,7 +1566,7 @@
             "module": "test/lib/doc-claim-sources.js",
             "export": "EVAL_QUALITY_AT_LEAST_1_4_0"
           },
-          "reason": "the eval-quality pin in package.json, compared >= 1.4.0"
+          "reason": "the eval-quality version resolved in package-lock.json, compared >= 1.4.0"
         },
         {
           "file": "docs/explanation/eval-quality-command-adapter.md",
@@ -1575,7 +1575,7 @@
             "module": "test/lib/doc-claim-sources.js",
             "export": "EVAL_QUALITY_AT_LEAST_1_4_0"
           },
-          "reason": "the eval-quality pin in package.json, compared >= 1.4.0"
+          "reason": "the eval-quality version resolved in package-lock.json, compared >= 1.4.0"
         },
         {
           "file": "README.md",
@@ -1652,12 +1652,12 @@
         },
         {
           "file": "docs/explanation/eval-quality-roadmap.md",
-          "key": "The pin is 4.3.0 now",
+          "key": "The lockfile records the resolved eval-quality release",
           "settles": {
             "module": "test/lib/doc-claim-sources.js",
-            "export": "EVAL_QUALITY_PIN_IS_4_3_0"
+            "export": "EVAL_QUALITY_LOCKFILE_RECORDS_RELEASE"
           },
-          "reason": "package.json's eval-quality devDependency, compared for an exact match"
+          "reason": "package-lock.json's resolved eval-quality entry contains a plain major.minor.patch version"
         },
         {
           "file": "docs/explanation/eval-quality-roadmap.md",
@@ -1666,7 +1666,7 @@
             "module": "test/lib/doc-claim-sources.js",
             "export": "EVAL_QUALITY_AT_LEAST_1_2_0"
           },
-          "reason": "the eval-quality pin in package.json, compared >= 1.2.0"
+          "reason": "the eval-quality version resolved in package-lock.json, compared >= 1.2.0"
         },
         {
           "file": "docs/explanation/eval-quality-roadmap.md",
@@ -1675,7 +1675,7 @@
             "module": "test/lib/doc-claim-sources.js",
             "export": "EVAL_QUALITY_AT_LEAST_3_0_0"
           },
-          "reason": "the eval-quality pin in package.json, compared >= 3.0.0"
+          "reason": "the eval-quality version resolved in package-lock.json, compared >= 3.0.0"
         },
         {
           "file": "docs/explanation/verification-architecture.md",

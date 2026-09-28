@@ -395,9 +395,9 @@ known failure from reading as a passing check, and what makes the day a contract
 visible instead of silent, so any movement in either direction fails the check until the baseline is
 updated to say so. Regenerate it with `--write` once you have read why something moved.
 
-`eval-quality` is a declared devDependency, pinned at an exact version. `0.3.0` is the release that
-closed the gap the table above describes, and the pin has moved forward since without the compile
-status changing.
+`eval-quality` is a declared devDependency with the `latest` spec. The lockfile records the
+installed release. `0.3.0` closed the gap the table above describes, and later releases have
+left the compile status unchanged.
 
 ## What the generator enforces
 

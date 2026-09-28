@@ -367,7 +367,7 @@ function suiteResultRecord({
  * @param {object} input
  * @returns {object} A record shaped for evalRunSchema.
  */
-function runSummaryRecord({ generatedAt, repository, suites, unaccountedSkills, durationMs }) {
+function runSummaryRecord({ generatedAt, repository, suites, unaccountedSkills, skippedSuiteIds = [], durationMs }) {
   const failureClass = worstFailureClass([
     ...suites.map((suite) => suite.failureClass),
     ...(unaccountedSkills.length > 0 ? ['environment-configuration'] : []),
@@ -384,6 +384,7 @@ function runSummaryRecord({ generatedAt, repository, suites, unaccountedSkills, 
     evalQualityVersion: EVAL_QUALITY_VERSION,
     suites,
     unaccountedSkills,
+    skippedSuiteIds,
     durationMs,
     failureClass,
     exitCode: exitCodeForFailureClass(failureClass),

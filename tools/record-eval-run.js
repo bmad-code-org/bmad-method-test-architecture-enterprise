@@ -196,6 +196,10 @@ function printComparison(comparison, storedPresent) {
 
   for (const id of comparison.addedSuites) console.log(`  + ${id}: present in this run and not in the earlier one`);
   for (const id of comparison.removedSuites) console.log(`  - ${id}: present in the earlier run and not in this one`);
+  for (const id of comparison.addedSkippedSuiteIds ?? [])
+    console.log(`  + ${id}: Evaluate-authored suite skipped in this run and not in the earlier one`);
+  for (const id of comparison.removedSkippedSuiteIds ?? [])
+    console.log(`  - ${id}: Evaluate-authored suite skipped in the earlier run and not in this one`);
   for (const change of comparison.suiteChanges) {
     if (change.failureClass) console.log(`  ~ ${change.id}: failureClass ${change.failureClass.from} -> ${change.failureClass.to}`);
     for (const measurement of change.measurementChanges) {

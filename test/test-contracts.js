@@ -31,11 +31,11 @@
  * chain of thirty-odd checks whose whole output is the last line.
  *
  * So an unresolvable package exits 2 and says how many contracts went unchecked,
- * and so does a tree resolving a version other than the one package.json pins,
+ * and so does a tree resolving a version other than the one package-lock.json locks,
  * because fourteen contracts compiled against the wrong release are fourteen
- * results about a package this repository does not declare. The pin is read
- * through `pinnedVersion` in test/test-eval-quality-corpus.js, which is the one
- * comparison of its kind in this repository rather than a second copy of it.
+ * results about a package this repository does not lock. The floating engine
+ * spec and lockfile version are read through the helpers in
+ * test/test-eval-quality-corpus.js.
  * To run this against an unreleased build, `npm link` it (or `npm install` its
  * packed tarball) so `node_modules/eval-quality` resolves to it, then run this
  * check with no flags; there is no `--package` path override here, since an
@@ -63,11 +63,12 @@
  *   0  every contract matched its recorded status
  *   1  a contract's status or failure shape moved away from the baseline; a
  *      seeded fault stopped reporting the shape recorded for it; package.json
- *      declares no eval-quality pin this check can compare against; or one of
+ *      does not declare eval-quality as latest; or one of
  *      this file's own fail-closed refusals stopped refusing
  *   2  the compiler could not be loaded, whether it was named, unresolvable
  *      from the tree, or resolved to a manifest that would not read; the
- *      installed version is not the one package.json pins; the compiler
+ *      lockfile has no resolved eval-quality version; the installed version
+ *      differs from the lockfile; the compiler
  *      failed in a way that is neither of its two declared error classes; or
  *      it reported a code no published registry carries
  */
@@ -79,10 +80,8 @@ const path = require('node:path');
 
 const { loadEvalQuality, validateArtifact } = require('./lib/eval-quality-inputs');
 const { publishedMember } = require('./lib/vocabularies');
-// The one pin comparison in this repository. `test/test-eval-quality-corpus.js`
-// already owns it and already exports it, and a second copy here would be a
-// second thing to keep in step with package.json's spelling.
-const { pinnedVersion } = require('./test-eval-quality-corpus');
+// Share the engine declaration and lockfile lookup with the corpus gate.
+const { engineSpec, lockedVersion } = require('./test-eval-quality-corpus');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const CONTRACT_ROOT = path.join(__dirname, 'contracts');
@@ -128,16 +127,16 @@ function findContracts(directory) {
  * mean. Not one of them returns null: a null used to reach the caller as a skip
  * that exits 0, which is the failure mode the header now describes.
  *
- * The three reads of the installed tree - the manifest path, this repository's
- * own pin, and the version that path resolves to - arrive as an injectable
+ * The reads of the installed tree - the manifest path, this repository's
+ * own engine spec, lockfile, and the version that path resolves to - arrive as an injectable
  * `reads` object, each defaulting to the real read. `checkFailClosed` overrides
  * one at a time so it drives this function itself through every refusal rather
  * than reconstructing the refusal from a second copy of the logic: a wiring
- * bug in the calls below (the wrong value passed to `offThePin`, a swapped
+ * bug in the calls below (the wrong value passed to `offTheLock`, a swapped
  * argument) then fails the same way a real broken tree would.
  *
  * @param {number} contractCount How many contracts go unchecked when this fails, which is what makes the message worth reading.
- * @param {{resolveManifestPath?: () => string, readTeaManifest?: () => object, readInstalledVersion?: (manifestPath: string) => string}} [reads]
+ * @param {{resolveManifestPath?: () => string, readTeaManifest?: () => object, readTeaLockfile?: () => object, readInstalledVersion?: (manifestPath: string) => string}} [reads]
  * @returns {Promise<{ok: true, module: object}|{ok: false, exitCode: 1|2, lines: string[]}>}
  */
 async function resolveCompiler(contractCount, reads = {}) {
@@ -148,6 +147,7 @@ async function resolveCompiler(contractCount, reads = {}) {
     // pass over contracts nobody compiled.
     resolveManifestPath = () => require.resolve('eval-quality/package.json', { paths: [PROJECT_ROOT] }),
     readTeaManifest = () => JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'package.json'), 'utf8')),
+    readTeaLockfile = () => JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'package-lock.json'), 'utf8')),
     readInstalledVersion = (manifestPath) => JSON.parse(fs.readFileSync(manifestPath, 'utf8')).version,
   } = reads;
 
@@ -158,14 +158,20 @@ async function resolveCompiler(contractCount, reads = {}) {
     return unresolvable(error.message, contractCount);
   }
 
-  let pinned;
+  let locked;
   try {
-    pinned = pinnedVersion(readTeaManifest());
+    engineSpec(readTeaManifest());
   } catch (error) {
     // Exit 1 rather than 2, which is the class test/test-eval-quality-corpus.js
-    // gives the same condition: a pin this repository declares and nothing can
-    // compare is a defect here rather than an environment that could not answer.
+    // gives the same condition: an invalid dependency declaration is a defect
+    // in this repository.
     return { ok: false, exitCode: 1, lines: [error.message] };
+  }
+
+  try {
+    locked = lockedVersion(readTeaLockfile());
+  } catch (error) {
+    return { ok: false, exitCode: 2, lines: [`${error.message}, so ${contractCount} contract(s) went unchecked.`] };
   }
 
   let resolved;
@@ -179,7 +185,7 @@ async function resolveCompiler(contractCount, reads = {}) {
     // generic message that does not.
     return unresolvable(`eval-quality's manifest at ${manifestPath} could not be read: ${error.message}`, contractCount);
   }
-  const mismatch = offThePin(pinned, resolved, contractCount);
+  const mismatch = offTheLock(locked, resolved, contractCount);
   if (mismatch !== null) return mismatch;
   return { ok: true, module: await loadEvalQuality() };
 }
@@ -210,19 +216,19 @@ function unresolvable(detail, contractCount) {
 }
 
 /**
- * @param {string} pinned What package.json declares.
+ * @param {string} locked What package-lock.json resolves.
  * @param {string} resolved What the installed tree answers.
  * @param {number} contractCount
  * @returns {null|{ok: false, exitCode: 2, lines: string[]}} Null when the tree is the tree this repository declares.
  */
-function offThePin(pinned, resolved, contractCount) {
-  if (resolved === pinned) return null;
+function offTheLock(locked, resolved, contractCount) {
+  if (resolved === locked) return null;
   return {
     ok: false,
     exitCode: 2,
     lines: [
-      `package.json pins eval-quality ${pinned} and the installed tree resolves ${resolved}, so ${contractCount} contract(s) went unchecked.`,
-      'Run npm ci. A contract compiled against a release this repository does not declare is a result about some other package.',
+      `package-lock.json resolves eval-quality ${locked} and the installed tree resolves ${resolved}, so ${contractCount} contract(s) went unchecked.`,
+      'Run npm ci. A contract compiled against a release this repository does not lock is a result about some other package.',
     ],
   };
 }
@@ -237,15 +243,16 @@ function offThePin(pinned, resolved, contractCount) {
  * refusal nobody has watched is a refusal nobody has tested, and this one was
  * wrong for the whole life of the check.
  *
- * Each case injects one of `resolveCompiler`'s three reads to fail the way a
+ * Each case injects one of `resolveCompiler`'s reads to fail the way a
  * real tree would - an unresolvable manifest, a manifest that resolves and
- * will not parse, a `package.json` with no comparable pin, or an installed
- * version other than the one declared - and lets the real function's own
- * calls to `unresolvable` and `offThePin` produce the refusal. A wiring bug
+ * will not parse, a `package.json` without the floating spec, a lockfile
+ * without a resolved version, or an installed version other than the locked
+ * version - and lets the real function's own calls to `unresolvable` and
+ * `offTheLock` produce the refusal. A wiring bug
  * inside `resolveCompiler`
- * (the wrong value threaded to `offThePin`, a swapped argument to
+ * (the wrong value threaded to `offTheLock`, a swapped argument to
  * `unresolvable`) fails here the same way an actually broken tree would,
- * which a case built from `unresolvable(...)` or `offThePin(...)` called
+ * which a case built from `unresolvable(...)` or `offTheLock(...)` called
  * directly cannot catch.
  *
  * Each asserts the exit class and the unchecked count, because the count is what
@@ -283,12 +290,16 @@ async function checkFailClosed(contractCount) {
       }),
     },
     {
-      id: 'a package.json with no eval-quality pin to compare',
+      id: 'a package.json with no eval-quality spec',
       result: await resolveCompiler(contractCount, { readTeaManifest: () => ({}) }),
     },
     {
-      id: 'an installed version other than the pin',
-      result: await resolveCompiler(contractCount, { readInstalledVersion: () => '1.4.0' }),
+      id: 'a package-lock.json with no resolved eval-quality version',
+      result: await resolveCompiler(contractCount, { readTeaLockfile: () => ({}) }),
+    },
+    {
+      id: 'an installed version other than the lockfile',
+      result: await resolveCompiler(contractCount, { readInstalledVersion: () => '0.0.0-test' }),
     },
   ];
   for (const { id, result } of cases) {
@@ -296,15 +307,12 @@ async function checkFailClosed(contractCount) {
       problems.push(`${id} produced a compiler rather than a refusal, so this check would compile against it or skip`);
       continue;
     }
-    // The malformed-pin case is exit 1, the class test/test-eval-quality-corpus.js
-    // gives the same condition, and it names no unchecked count because a pin
-    // this repository cannot compare is a defect here rather than an
-    // environment that measured nothing. Every other refusal is exit 2 and
-    // names the count.
-    if (id === 'a package.json with no eval-quality pin to compare') {
-      if (result.exitCode !== 1) problems.push(`${id} refuses with exit ${result.exitCode}, and a pin this repository declares exits 1`);
+    // An invalid dependency declaration exits 1. Install and lockfile faults
+    // exit 2 and name the unchecked count.
+    if (id === 'a package.json with no eval-quality spec') {
+      if (result.exitCode !== 1) problems.push(`${id} refuses with exit ${result.exitCode}, and an invalid dependency declaration exits 1`);
       if (!result.lines.some((line) => line.includes('eval-quality devDependency'))) {
-        problems.push(`${id} refuses without naming the missing pin: ${JSON.stringify(result.lines)}`);
+        problems.push(`${id} refuses without naming the missing spec: ${JSON.stringify(result.lines)}`);
       }
       continue;
     }
@@ -320,18 +328,18 @@ async function checkFailClosed(contractCount) {
       `an eval-quality manifest that resolves and will not read is not distinguished from one that never resolved: ${JSON.stringify(unreadableManifest?.lines ?? null)}`,
     );
   }
-  // `pinned` here comes from the real package.json this repository ships,
-  // read through the real (non-injected) `readTeaManifest`, so the message is
-  // checked against both the real pin and the injected installed version
+  // `locked` here comes from the real package-lock.json this repository ships,
+  // read through the real (non-injected) `readTeaLockfile`, so the message is
+  // checked against both the locked and injected installed versions
   // rather than against a literal transcribed here. Each is checked in its
   // own attributed phrase, not merely present anywhere in the message: a call
-  // that swapped `pinned` and `resolved` would still mention both versions,
+  // that swapped `locked` and `resolved` would still mention both versions,
   // and a check for bare presence would not notice they had traded places.
-  const realPin = pinnedVersion(JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'package.json'), 'utf8')));
-  const mismatch = cases.find((c) => c.id === 'an installed version other than the pin').result;
-  if (!mismatch?.lines.some((line) => line.includes(`pins eval-quality ${realPin}`) && line.includes('resolves 1.4.0'))) {
+  const realLock = lockedVersion(JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'package-lock.json'), 'utf8')));
+  const mismatch = cases.find((c) => c.id === 'an installed version other than the lockfile').result;
+  if (!mismatch?.lines.some((line) => line.includes(`resolves eval-quality ${realLock}`) && line.includes('resolves 0.0.0-test'))) {
     problems.push(
-      `an installed version other than the pin refuses without correctly attributing the pin and the installed version: ${JSON.stringify(mismatch?.lines ?? null)}`,
+      `an installed version other than the lockfile refuses without correctly attributing the locked and installed versions: ${JSON.stringify(mismatch?.lines ?? null)}`,
     );
   }
   // The other half of the same guarantee: the tree this repository actually
@@ -571,7 +579,7 @@ function writeBaseline(observed) {
       'The status this repository expects from each contract under test/contracts/.',
       '',
       'test/contracts/README.md records the finding behind whatever a contract here is not',
-      '`compiles`: which failure code it carries against the pinned eval-quality release, and why.',
+      '`compiles`: which failure code it carries against the locked eval-quality release, and why.',
       '',
       'A contract whose status moves in either direction fails test/test-contracts.js. Moving to',
       '`compiles` is the good direction and still fails, on purpose: a baseline nobody has to update is',
@@ -623,7 +631,7 @@ async function main(argv) {
     return 1;
   }
   console.log(
-    `${colors.green}OK${colors.reset}   ${driven} refusal(s) drive the fail-closed path ${colors.dim}(a package this repository cannot compare exits 1; every other refusal exits 2 and names ${contracts.length} contract(s) unchecked)${colors.reset}`,
+    `${colors.green}OK${colors.reset}   ${driven} refusal(s) drive the fail-closed path ${colors.dim}(an invalid engine spec exits 1; every other refusal exits 2 and names ${contracts.length} contract(s) unchecked)${colors.reset}`,
   );
 
   const resolution = await resolveCompiler(contracts.length);
@@ -798,7 +806,7 @@ module.exports = {
   checkFailClosed,
   checkFailureShapeHoldsRegistry,
   findContracts,
-  offThePin,
+  offTheLock,
   resolveCompiler,
   failureShape,
   issueShape,

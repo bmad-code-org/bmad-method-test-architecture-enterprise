@@ -11,7 +11,7 @@
  * - the runner capabilities it declares are the ones the harness grants its runner,
  * - the preflight argv it declares really probes the runner, in both directions,
  * - every generated contract under test/contracts is claimed by a suite,
- * - every TEA skill has a behavioral suite or a deferred declaration, and
+ * - every TEA skill has a covering suite or a deferred declaration, and
  * - test/schema/eval-result.schema.json is what the Zod source generates.
  *
  * The threshold check is the one that earns its place. A manifest that declares
@@ -43,8 +43,12 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const { isDeepStrictEqual } = require('node:util');
+const AjvModule = require('ajv/dist/2020');
 const { zodToJsonSchema } = require('zod-to-json-schema');
 
+const Ajv = AjvModule.default ?? AjvModule;
+const { addFormats } = require('../cli/lib/evaluate/formats');
 const { loadSuiteManifest, skillsOf, unaccountedSkills, MANIFEST_RELATIVE_PATH } = require('../test/lib/suite-manifest');
 const { teaSkills } = require('../test/lib/tea-skills');
 const { evalResultSchema, evalRunSchema } = require('../test/schema/eval-result');
@@ -53,6 +57,30 @@ const PROJECT_ROOT = path.join(__dirname, '..');
 const RESULT_SCHEMA_PATH = path.join(PROJECT_ROOT, 'test', 'schema', 'eval-result.schema.json');
 const RESULT_SCHEMA_RELATIVE_PATH = path.relative(PROJECT_ROOT, RESULT_SCHEMA_PATH);
 const CONTRACT_ROOT = path.join(PROJECT_ROOT, 'test', 'contracts');
+let authoredValidators;
+
+function authoredSchemaValidators() {
+  if (authoredValidators) return authoredValidators;
+  const ajv = new Ajv({ strict: false, allErrors: true });
+  addFormats(ajv);
+  authoredValidators = {
+    evaluation: ajv.compile(
+      JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate', 'schemas', 'evaluation.schema.json'), 'utf8')),
+    ),
+    scoringPolicy: ajv.compile(JSON.parse(fs.readFileSync(require.resolve('eval-quality/schemas/scoring-policy.schema.json'), 'utf8'))),
+  };
+  return authoredValidators;
+}
+
+function authoredSchemaErrorText(validate) {
+  return (validate.errors ?? [])
+    .slice(0, 10)
+    .map((error) => {
+      const where = error.instancePath === '' ? '(root)' : error.instancePath;
+      return `${where} ${error.message}`;
+    })
+    .join('; ');
+}
 
 /** The JSON Schema projection of the Zod source, byte-for-byte as it is committed. */
 function generateResultSchema() {
@@ -66,8 +94,7 @@ function generateResultSchema() {
 
 /**
  * Every harness `suite-manifest.json` names, as a literal require() rather than
- * one built from `entry.harness` at runtime. The manifest's own schema fixes
- * this to a closed, ten-entry set, and a literal keeps the load inside the
+ * one built from `entry.harness` at runtime. A literal keeps the load inside the
  * dependency-direction gate's declared edges rather than escaping its notice
  * as a specifier the gate could not read.
  *
@@ -263,6 +290,105 @@ function checkPaths(entry, problems) {
   }
 }
 
+/** Check the thresholds that Evaluate and its scoring policy actually use. */
+function checkEvaluateAuthored(entry, problems, projectRoot = PROJECT_ROOT) {
+  const evaluationPath = path.join(projectRoot, entry.evaluation);
+  const policyPath = path.join(path.dirname(evaluationPath), 'policy', 'scoring-policy.json');
+  const realRoot = fs.realpathSync(projectRoot);
+  let evaluation;
+  let policy;
+  for (const [label, file, assign] of [
+    ['evaluation', evaluationPath, (value) => (evaluation = value)],
+    ['scoring policy', policyPath, (value) => (policy = value)],
+  ]) {
+    try {
+      const realFile = fs.realpathSync(file);
+      const relative = path.relative(realRoot, realFile);
+      if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+        problems.push(`${entry.id}: ${label} resolves outside the repository: ${path.relative(projectRoot, file)}`);
+        continue;
+      }
+      const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+      if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        problems.push(`${entry.id}: ${label} at ${path.relative(projectRoot, file)} must be a JSON object`);
+        continue;
+      }
+      const validate = authoredSchemaValidators()[label === 'evaluation' ? 'evaluation' : 'scoringPolicy'];
+      if (!validate(parsed)) {
+        problems.push(
+          `${entry.id}: ${label} at ${path.relative(projectRoot, file)} does not match its runtime schema: ${authoredSchemaErrorText(validate)}`,
+        );
+        continue;
+      }
+      assign(parsed);
+    } catch (error) {
+      problems.push(`${entry.id}: cannot read ${label} at ${path.relative(projectRoot, file)}: ${error.message}`);
+    }
+  }
+  if (evaluation === undefined || policy === undefined) return;
+  const expected = {
+    trials: evaluation.trials,
+    strengthFloor: evaluation.strengthFloor,
+    catchThreshold: policy.catchThreshold,
+    minimumTrialCount: policy.minimumTrialCount,
+    severityFloor: policy.severityFloor,
+  };
+  for (const [key, value] of Object.entries(expected)) {
+    if (!isDeepStrictEqual(entry.thresholds[key], value)) {
+      problems.push(
+        `${entry.id}: threshold ${key} differs from ${key === 'trials' || key === 'strengthFloor' ? entry.evaluation : path.relative(projectRoot, policyPath)}`,
+      );
+    }
+  }
+}
+
+function coveringSuites(manifest) {
+  return manifest.suites.filter((entry) => entry.evalType === 'behavioral' || entry.evalType === 'evaluate-authored');
+}
+
+function checkAuthoredFixture(
+  problems,
+  fixturePath = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'suite-manifest-authored.json'),
+) {
+  let fixture;
+  try {
+    fixture = JSON.parse(fs.readFileSync(fixturePath, 'utf8'));
+  } catch (error) {
+    problems.push(`Evaluate-authored fixture manifest cannot be read: ${error.message}`);
+    return;
+  }
+  const parsed = require('../test/schema/suite-manifest').validateSuiteManifest(fixture);
+  if (!parsed.success) {
+    problems.push(`Evaluate-authored fixture manifest is off-schema: ${parsed.error.issues[0]?.message}`);
+    return;
+  }
+  const fixtureSkills = ['temp-skill'];
+  for (const skill of unaccountedSkills(parsed.data, fixtureSkills)) problems.push(`Evaluate-authored fixture leaves ${skill} unaccounted`);
+  const covered = new Set(coveringSuites(parsed.data).flatMap(skillsOf));
+  for (const skill of fixtureSkills) {
+    if (!covered.has(skill)) problems.push(`Evaluate-authored fixture covering count omits ${skill}`);
+  }
+  if (!parsed.data.suites.some((entry) => entry.evalType === 'evaluate-authored')) {
+    problems.push('Evaluate-authored fixture has no Evaluate-authored suite');
+  }
+  checkAuthoringPaths(parsed.data, problems);
+  for (const entry of parsed.data.suites) {
+    if (entry.evalType === 'evaluate-authored') checkEvaluateAuthored(entry, problems);
+  }
+}
+
+function checkAuthoringPaths(manifest, problems) {
+  const authoringPath = new Map();
+  for (const entry of manifest.suites) {
+    if (entry.evalType !== 'behavioral' && entry.evalType !== 'evaluate-authored') continue;
+    for (const skill of skillsOf(entry)) {
+      const previous = authoringPath.get(skill);
+      if (previous && previous !== entry.evalType) problems.push(`${skill}: has both behavioral and Evaluate-authored suites (AD-14)`);
+      authoringPath.set(skill, entry.evalType);
+    }
+  }
+}
+
 /** Every *.contract.json under test/contracts, at any depth, repository-relative. */
 function generatedContracts(directory = CONTRACT_ROOT) {
   const found = [];
@@ -286,13 +412,29 @@ function generatedContracts(directory = CONTRACT_ROOT) {
  * @param {string[]} problems
  */
 function checkContractsAreClaimed(manifest, problems) {
-  const claimed = new Set(manifest.suites.flatMap((entry) => entry.contracts));
+  const claimed = new Set(manifest.suites.flatMap((entry) => entry.contracts ?? []));
   for (const relative of generatedContracts()) {
     if (!claimed.has(relative)) problems.push(`${relative}: exists under test/contracts and no suite in the manifest names it`);
   }
 }
 
 async function main() {
+  const fixtureArg = process.argv.indexOf('--fixture-manifest');
+  if (fixtureArg !== -1) {
+    const fixturePath = process.argv[fixtureArg + 1];
+    if (!fixturePath) {
+      console.error('❌ --fixture-manifest requires a path');
+      process.exit(2);
+    }
+    const fixtureProblems = [];
+    checkAuthoredFixture(fixtureProblems, fixturePath);
+    if (fixtureProblems.length > 0) {
+      console.error(fixtureProblems.join('\n'));
+      process.exit(1);
+    }
+    console.log('✅ Evaluate-authored fixture manifest is valid');
+    return;
+  }
   const write = process.argv.slice(2).includes('--write');
   const problems = [];
 
@@ -311,15 +453,21 @@ async function main() {
   }
 
   const known = new Set(skills);
+  checkAuthoringPaths(manifest, problems);
+  checkAuthoredFixture(problems);
   for (const entry of manifest.suites) {
-    checkPaths(entry, problems);
-    compareThresholds(entry, problems);
-    compareRunnerCapabilities(entry, problems);
-    checkPreflightProbesRunner(entry, problems);
+    if (entry.evalType === 'evaluate-authored') {
+      checkEvaluateAuthored(entry, problems);
+    } else {
+      checkPaths(entry, problems);
+      compareThresholds(entry, problems);
+      compareRunnerCapabilities(entry, problems);
+      checkPreflightProbesRunner(entry, problems);
 
-    const ids = await harnessCaseIds(entry, problems);
-    if (ids && ids.length !== entry.caseCount) {
-      problems.push(`${entry.id}: manifest declares ${entry.caseCount} case(s), ${entry.harness} scores ${ids.length}`);
+      const ids = await harnessCaseIds(entry, problems);
+      if (ids && ids.length !== entry.caseCount) {
+        problems.push(`${entry.id}: manifest declares ${entry.caseCount} case(s), ${entry.harness} scores ${ids.length}`);
+      }
     }
 
     for (const skill of skillsOf(entry)) {
@@ -334,7 +482,7 @@ async function main() {
   checkContractsAreClaimed(manifest, problems);
 
   for (const skill of unaccountedSkills(manifest, skills)) {
-    problems.push(`${skill}: has no behavioral suite and no deferred declaration, so eval:all would imply coverage that does not exist`);
+    problems.push(`${skill}: has no covering suite and no deferred declaration, so eval:all would imply coverage that does not exist`);
   }
 
   const generated = generateResultSchema();
@@ -356,9 +504,10 @@ async function main() {
     process.exit(1);
   }
 
-  const covered = manifest.suites.filter((entry) => entry.evalType === 'behavioral').length;
+  const covered = coveringSuites(manifest).length;
+  const authored = manifest.suites.filter((entry) => entry.evalType === 'evaluate-authored').length;
   console.log(
-    `✅ ${MANIFEST_RELATIVE_PATH}: ${manifest.suites.length} suite(s) (${covered} behavioral), ` +
+    `✅ ${MANIFEST_RELATIVE_PATH}: ${manifest.suites.length} suite(s) (${covered} covering, ${authored} Evaluate-authored), ` +
       `${manifest.deferred.length} deferred, ${skills.length} TEA skill(s) accounted for`,
   );
   console.log(
@@ -375,4 +524,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { generateResultSchema, generatedContracts };
+module.exports = { generateResultSchema, generatedContracts, checkEvaluateAuthored, checkAuthoringPaths };

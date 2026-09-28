@@ -191,8 +191,29 @@ async function checkNoDrift() {
   check(result.status === 'compared', `expected status "compared", got "${result.status}"`);
   check(result.drift === false, 'two identical runs reported drift');
   check(
-    result.addedSuites.length === 0 && result.removedSuites.length === 0 && result.suiteChanges.length === 0,
+    result.addedSuites.length === 0 &&
+      result.removedSuites.length === 0 &&
+      result.addedSkippedSuiteIds.length === 0 &&
+      result.removedSkippedSuiteIds.length === 0 &&
+      result.suiteChanges.length === 0,
     'a clean comparison reported a change',
+  );
+}
+
+async function checkSkippedSuiteChangeReported() {
+  const previous = runSummary([], { skippedSuiteIds: [] });
+  const current = runSummary([], { skippedSuiteIds: ['evaluate-authored'] });
+  const result = await compareEvalRuns(previous, current);
+  check(result.status === 'compared', `expected status "compared", got "${result.status}"`);
+  check(result.drift === true, 'a changed skipped suite set did not read as drift');
+  check(
+    result.addedSkippedSuiteIds.length === 1 && result.addedSkippedSuiteIds[0] === 'evaluate-authored',
+    `the added skipped suite was not named: ${JSON.stringify(result.addedSkippedSuiteIds)}`,
+  );
+  const removed = await compareEvalRuns(current, previous);
+  check(
+    removed.removedSkippedSuiteIds.length === 1 && removed.removedSkippedSuiteIds[0] === 'evaluate-authored',
+    `the removed skipped suite was not named: ${JSON.stringify(removed.removedSkippedSuiteIds)}`,
   );
 }
 
@@ -469,6 +490,7 @@ function checkPortableRecordedExecutables() {
 async function main() {
   await checkFirstRun();
   await checkNoDrift();
+  await checkSkippedSuiteChangeReported();
   await checkRegressionReported();
   await checkMeasurementChangeReported();
   await checkAddedSuiteNamed();

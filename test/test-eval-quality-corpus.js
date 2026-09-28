@@ -2,12 +2,10 @@
  * `eval-quality` proven against its own published corpus, before any TEA
  * artifact is asked to run on it.
  *
- * TEA is upgrading from `eval-quality` 1.4.0 to 3.0.0, and that upgrade moves
- * TEA's probes, contracts and command policies at the same time. A failure
- * during that migration has two candidate causes, TEA's artifacts or the
- * package, and nothing in this repository could tell them apart: every existing
- * check feeds TEA's own bytes to the package, so a package regression and a bad
- * migration read identically.
+ * TEA follows eval-quality's latest published release. A failure in TEA's
+ * artifacts can come from those artifacts or a changed engine release. Every
+ * other check feeds TEA's own bytes to the package, so this gate runs the
+ * engine's published corpus to distinguish those causes.
  *
  * This check removes one of those candidates. It feeds the package nothing of
  * TEA's. `eval-quality` publishes its development corpus under the `./corpus/*`
@@ -19,9 +17,8 @@
  *
  * WHAT IS CHECKED
  *
- * - The resolved package version is the version `package.json` pins. The pin is
- *   exact, so a resolved version that differs means the tree is not the tree the
- *   repository declares.
+ * - `package.json` declares `latest`; the installed version matches the
+ *   lockfile's resolved version. This records the release that the gate measured.
  * - Every corpus file the index names exists, and its bytes digest to the digest
  *   the index records. Compiling bytes the index does not vouch for would prove
  *   nothing about the published corpus.
@@ -43,9 +40,9 @@
  * Exit codes:
  *   0  the corpus compiled and sealed exactly as it declares
  *   1  a compile status, a digest or the sealed brief moved, or this repository
- *      declares a pin this check cannot compare
+ *      does not declare the floating engine spec
  *   2  the package, its corpus subpath or its index could not be read, an index
- *      that names no contract, or a tree resolving a version other than the pin:
+ *      that names no contract, or a tree resolving a version other than the lockfile:
  *      in each case nothing about the corpus was measured
  */
 
@@ -74,20 +71,22 @@ const colors = {
   dim: '[2m',
 };
 
-/**
- * The version `package.json` pins for `eval-quality`.
- *
- * The pin is a bare version with no range operator, which is what lets this
- * compare it to the resolved version directly. A range would make the question
- * unanswerable here and is a change this check should fail on.
- */
-function pinnedVersion(manifest) {
+/** Require the floating spec; npm ci still installs the committed lockfile. */
+function engineSpec(manifest) {
   const declared = manifest.devDependencies?.['eval-quality'];
   if (declared === undefined) throw new Error('package.json declares no eval-quality devDependency');
-  if (!/^\d+\.\d+\.\d+(?:-[\w.]+)?$/.test(declared)) {
-    throw new Error(`the eval-quality pin must be an exact version, and package.json declares ${JSON.stringify(declared)}`);
+  if (declared !== 'latest') {
+    throw new Error(`the eval-quality devDependency must be latest, and package.json declares ${JSON.stringify(declared)}`);
   }
   return declared;
+}
+
+function lockedVersion(lockfile) {
+  const version = lockfile.packages?.['node_modules/eval-quality']?.version;
+  if (typeof version !== 'string' || version.length === 0) {
+    throw new Error('package-lock.json has no resolved eval-quality version');
+  }
+  return version;
 }
 
 /** Every file under the corpus directory, as paths relative to the package root. */
@@ -151,23 +150,30 @@ async function main() {
 
   const packageRoot = path.dirname(manifestPath);
   const teaManifest = JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'package.json'), 'utf8'));
+  const teaLockfile = JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'package-lock.json'), 'utf8'));
   const resolvedVersion = JSON.parse(fs.readFileSync(manifestPath, 'utf8')).version;
-  let pinned;
   try {
-    pinned = pinnedVersion(teaManifest);
+    engineSpec(teaManifest);
   } catch (error) {
-    // A pin this check cannot compare is a defect in this repository, so it
+    // A spec this check cannot accept is a defect in this repository, so it
     // reads as a measured failure rather than as an environment that could not
     // answer.
     console.error(`${colors.red}${error.message}${colors.reset}`);
     return 1;
   }
-  if (resolvedVersion !== pinned) {
-    // Exit 2. A tree that is not the tree this repository declares is an
+  let locked;
+  try {
+    locked = lockedVersion(teaLockfile);
+  } catch (error) {
+    console.error(`${colors.red}${error.message}${colors.reset}`);
+    return 2;
+  }
+  if (resolvedVersion !== locked) {
+    // Exit 2. A tree that is not the tree this repository locks is an
     // environment that could not answer the question, and calling it a moved
     // corpus would read an install fault as a package regression.
     console.error(
-      `${colors.red}package.json pins eval-quality ${pinned} and the installed tree resolves ${resolvedVersion}${colors.reset}`,
+      `${colors.red}package-lock.json resolves eval-quality ${locked} and the installed tree resolves ${resolvedVersion}${colors.reset}`,
     );
     console.error(`${colors.dim}Run npm ci. Nothing about the published corpus was measured.${colors.reset}`);
     return 2;
@@ -298,4 +304,4 @@ if (require.main === module) {
   );
 }
 
-module.exports = { compileStatus, corpusFiles, declaredStatus, pinnedVersion, sameStatus };
+module.exports = { compileStatus, corpusFiles, declaredStatus, engineSpec, lockedVersion, sameStatus };

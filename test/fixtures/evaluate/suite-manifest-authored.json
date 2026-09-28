@@ -1,0 +1,22 @@
+{
+  "manifestVersion": 1,
+  "suites": [
+    {
+      "id": "temp-evaluate-authored",
+      "skill": "temp-skill",
+      "evalType": "evaluate-authored",
+      "evaluation": "test/fixtures/evaluate/valid/evaluation.json",
+      "thresholds": {
+        "trials": 3,
+        "strengthFloor": {
+          "defect": 1,
+          "zero-action": 1
+        },
+        "catchThreshold": 0.5,
+        "minimumTrialCount": 3,
+        "severityFloor": "material"
+      }
+    }
+  ],
+  "deferred": []
+}

@@ -227,7 +227,7 @@ async function dominanceFor(previousSuiteResult, currentSuiteResult) {
  * @returns {Promise<
  *   | {status: 'first-run', message: string}
  *   | {status: 'refused', reason: string}
- *   | {status: 'compared', drift: boolean, addedSuites: string[], removedSuites: string[], suiteChanges: Array<object>}
+ *   | {status: 'compared', drift: boolean, addedSuites: string[], removedSuites: string[], addedSkippedSuiteIds: string[], removedSkippedSuiteIds: string[], suiteChanges: Array<object>}
  * >}
  */
 async function compareEvalRuns(previous, current) {
@@ -243,6 +243,10 @@ async function compareEvalRuns(previous, current) {
 
   const addedSuites = [...currentSuites.keys()].filter((id) => !previousSuites.has(id)).sort();
   const removedSuites = [...previousSuites.keys()].filter((id) => !currentSuites.has(id)).sort();
+  const previousSkippedSuiteIds = new Set(previous.skippedSuiteIds ?? []);
+  const currentSkippedSuiteIds = new Set(current.skippedSuiteIds ?? []);
+  const addedSkippedSuiteIds = [...currentSkippedSuiteIds].filter((id) => !previousSkippedSuiteIds.has(id)).sort();
+  const removedSkippedSuiteIds = [...previousSkippedSuiteIds].filter((id) => !currentSkippedSuiteIds.has(id)).sort();
 
   const suiteChanges = [];
   for (const [id, previousResult] of previousSuites) {
@@ -270,9 +274,16 @@ async function compareEvalRuns(previous, current) {
 
   return {
     status: 'compared',
-    drift: addedSuites.length > 0 || removedSuites.length > 0 || suiteChanges.length > 0,
+    drift:
+      addedSuites.length > 0 ||
+      removedSuites.length > 0 ||
+      addedSkippedSuiteIds.length > 0 ||
+      removedSkippedSuiteIds.length > 0 ||
+      suiteChanges.length > 0,
     addedSuites,
     removedSuites,
+    addedSkippedSuiteIds,
+    removedSkippedSuiteIds,
     suiteChanges,
   };
 }

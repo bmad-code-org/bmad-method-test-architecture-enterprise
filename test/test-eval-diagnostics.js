@@ -1040,6 +1040,9 @@ async function main() {
   const legacy = JSON.parse(fs.readFileSync(LEGACY_RESULT, 'utf8'));
   check(legacy.schemaVersion === LEGACY_SCHEMA_VERSION, `protected baseline is ${legacy.schemaVersion}, expected ${LEGACY_SCHEMA_VERSION}`);
   check(validateEvalRun(legacy).success, 'the protected 1.3.0 run remains readable');
+  const legacyWithFutureEvalType = structuredClone(legacy);
+  legacyWithFutureEvalType.suites[0].suite.evalType = 'evaluate-authored';
+  check(!validateEvalRun(legacyWithFutureEvalType).success, 'the legacy reader rejects a future Evaluate-authored suite type');
   check(
     createHash('sha256').update(fs.readFileSync(LEGACY_RESULT)).digest('hex') ===
       '201138d028e6c5612dc5786a1617025c6b9d01cf0de2d34e00f37cff8c8c7631',
@@ -1065,6 +1068,9 @@ async function main() {
     validateEvalResult(frozenPreviousResult).success,
     'the checked-in artifact emitted by the 1.4.0 writer validates through its frozen reader',
   );
+  const previousResultWithFutureEvalType = structuredClone(frozenPreviousResult);
+  previousResultWithFutureEvalType.suite.evalType = 'evaluate-authored';
+  check(!validateEvalResult(previousResultWithFutureEvalType).success, 'the frozen reader rejects a future Evaluate-authored suite type');
   const previousResultWithTriage = structuredClone(frozenPreviousResult);
   for (const resultRunner of previousResultWithTriage.runners) {
     for (const diagnostic of resultRunner.diagnostics) {
@@ -1137,6 +1143,7 @@ async function main() {
   const previousRun = structuredClone(currentRun);
   previousRun.schemaVersion = PREVIOUS_SCHEMA_VERSION;
   previousRun.suites = [previousResult];
+  delete previousRun.skippedSuiteIds;
   check(validateEvalRun(previousRun).success, 'a stored 1.4.0 run summary validates through the frozen reader');
   const inconsistentRun = structuredClone(currentRun);
   inconsistentRun.failureClass = 'none';
@@ -1145,6 +1152,7 @@ async function main() {
 
   const legacyPair = structuredClone(currentRun);
   legacyPair.schemaVersion = LEGACY_SCHEMA_VERSION;
+  delete legacyPair.skippedSuiteIds;
   for (const suite of legacyPair.suites) {
     suite.schemaVersion = LEGACY_SCHEMA_VERSION;
     delete suite.suiteDiagnostics;

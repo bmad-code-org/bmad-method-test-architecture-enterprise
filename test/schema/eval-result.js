@@ -508,6 +508,10 @@ const previousRunnerResultSchema = z
 
 const legacyRunnerResultSchema = z.object(runnerResultFields).strict();
 
+// Historical result readers stay closed over the eval types that existed when
+// their writers ran. New manifest types must not silently enter old evidence.
+const PREVIOUS_EVAL_TYPES = ['fragment-selection', 'behavioral', 'infrastructure'];
+
 // One entry per eval contract the suite is expressed as. `version` is the
 // contract's own revision once something reads one; null says nothing has.
 const suiteContractSchema = z.object({ path: nonEmptyString, version: z.string().nullable() }).strict();
@@ -561,7 +565,7 @@ const previousSuiteContractSchema = z.object({ path: nonEmptyString, version: z.
 const previousSuiteResultSchema = z
   .object({
     id: nonEmptyString,
-    evalType: z.enum(EVAL_TYPES),
+    evalType: z.enum(PREVIOUS_EVAL_TYPES),
     skills: z.array(nonEmptyString),
     contracts: z.array(previousSuiteContractSchema),
     ciTier: z.enum(CI_TIERS),
@@ -804,7 +808,7 @@ const previousEvalResultSchema = resultSchemaFor(
   'previous',
   previousSuiteResultSchema,
 );
-const legacyEvalResultSchema = resultSchemaFor(LEGACY_SCHEMA_VERSION, legacyRunnerResultSchema);
+const legacyEvalResultSchema = resultSchemaFor(LEGACY_SCHEMA_VERSION, legacyRunnerResultSchema, null, 'none', previousSuiteResultSchema);
 
 const evalRunSchema = z
   .object({
@@ -822,6 +826,9 @@ const evalRunSchema = z
     // Skills with neither a behavioral suite nor a deferred declaration. A
     // non-empty list is an environment failure, not a finding to read past.
     unaccountedSkills: z.array(nonEmptyString),
+    // eval:all leaves Evaluate-authored suites to tea-evaluate ci. Older run
+    // summaries at this schema version predate this field, so it is optional.
+    skippedSuiteIds: z.array(nonEmptyString).optional(),
     durationMs: nonNegativeInteger,
     failureClass: z.enum(FAILURE_CLASSES),
     exitCode: z.union([z.literal(0), z.literal(1), z.literal(2)]),
