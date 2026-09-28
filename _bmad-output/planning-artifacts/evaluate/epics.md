@@ -749,7 +749,7 @@ So that the mechanism that runs my system and judges it is as deliberate as the 
 **Acceptance Criteria:**
 
 **Given** the evaluator kinds and import contract from Story 1.17 and the framework fixtures from Stories 1.19 and 1.20
-**When** `/bmad-workflow-builder` Edit writes `references/evaluator.md` and the `assets/evaluators/` templates
+**When** `references/evaluator.md` and the `assets/evaluators/` templates are authored in the skill directory after a bounded headless `/bmad-workflow-builder` Edit attempt that produced no usable artifact
 **Then** the guide teaches, each under its own heading, what an evaluation layer must provide (run the system, capture observations on every channel an oracle reads, judge, emit evidence as judgment rows or sealed records) and which TeA evaluator kind carries each duty
 **And** it holds a selection rubric as a table keyed by option (TeA's deterministic evaluator, a sealed-brief agent evaluator, an adopter harness that seals its own records, a skill-specific evaluator, custom evaluation code, an external framework) and scored on named criteria: determinism, need for a model and its credentials, visibility of process and trajectory, need for reference outputs, rubric and calibration needs, language and runtime fit with the adopter, licence, maintenance and version drift, cost per trial, and CI tier fit; each row names the `evaluator.kind` it produces
 **And** a landscape section describes established frameworks as worked examples (AgentEvals and promptfoo from `evaluation-framework-facts.md`, each with its fixture) and states that the list is illustrative: any framework is admissible through the import contract

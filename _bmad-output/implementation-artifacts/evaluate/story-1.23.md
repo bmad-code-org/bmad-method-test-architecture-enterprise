@@ -2,9 +2,9 @@
 title: 'Teach choosing and building the evaluation layer'
 type: 'feature'
 created: '2026-09-27'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
-review_loop_iteration: 4
+review_loop_iteration: 5
 baseline_commit: '8c260be057b089d14fd9f696e8c504fd35f1ee6f'
 context:
   - '_bmad-output/planning-artifacts/evaluate/epics.md'
@@ -65,7 +65,7 @@ context:
 - Stage 7 now opens in `SKILL.md`. The guide covers four layer duties, six selection options, all ten criteria, framework examples, primary-source learning, and the vendor rule. The five starter files live under `assets/evaluators/`. The AgentEvals template accepts a reference path and stdout prefix; the promptfoo template derives row keys from `mapping.json` and accepts a stdout prefix.
 - The guidance gate copies each framework template into its existing fixture and runs `check`, `preflight`, `run`, and `score`. Both clean controls resolved as `passed-clean-control` and both seeded defects resolved as `caught`, with three votes each.
 - A narrow dependency-direction layer admits only the evaluator templates' Node builtins and AgentEvals import. `cli/` remains framework-neutral. ESLint treats these templates as adopter executables.
-- Headless `/bmad-workflow-builder` Edit produced no files or diagnostic output and ended with `Execution error` after a bounded wait. Headless Analyze produced no output and exited 142 at its 45-second bound. Builder quick validation, workflow-integrity prepass, and script scan passed. Its path scan cited nine pre-existing highs in ignored builder artifacts, `SKILL.md`, and `references/adapters.md`; none cited the new evaluator guide or assets.
+- Headless `/bmad-workflow-builder` Edit produced no files or diagnostic output and ended with `Execution error` after a bounded wait. Headless Analyze produced no output and exited 142 at its 45-second bound. The Analyze skill gate remains unavailable; it is not recorded as passed. Builder quick validation, workflow-integrity prepass, and script scan passed. Its path scan cited nine pre-existing highs in ignored builder artifacts, `SKILL.md`, and `references/adapters.md`; none cited the new evaluator guide or assets. Independent code, guidance, and test reviews found no material issue in the final source. The guidance review and real copied-template integration tests provide compensating product evidence.
 - Revert checks: removing the run-system heading, the external-framework rubric row, learning step 4, or the known-fail section of `LEARNED.md` each failed `test:evaluate-guidance` with the expected diagnostic. Forcing the AgentEvals template to pass every row made its rendered fixture's `score` exit 2 and failed the guidance gate. Every source file was restored after its check.
 - During the full gate, `test:evaluate-mutation` printed success but held its process open for its interrupted-run timeout. The test now clears that deadline when the child closes, preserving the timeout failure case. A focused wrapper observed exit 11 ms after the success line and failed if that gap exceeded 5 seconds.
 - Review fixes require stable promptfoo assertion metrics and complete normal-run mapping coverage. The guidance gate now exercises both templates' optional selection arguments, reordered results, ambiguity rejection, empty-output evidence, and output-to-observation binding. The guide adds runnable sealed-agent and records configuration details and records framework versions in the digested evaluator tree.
@@ -74,7 +74,7 @@ context:
 
 ## Spec Change Log
 
-- The approved Story 1.23 scope remains intact. Review findings on inherited promptfoo error classification and dependency-version provenance are appended as Stories 1.43 and 1.44, with their own tests and dependency rows.
+- The approved Story 1.23 product scope remains intact. The builder Edit clause in `epics.md` now names the actual authoring path because the headless builder produced no artifact. The unavailable Analyze gate is recorded above. Review findings on inherited promptfoo error classification and dependency-version provenance are appended as Stories 1.43 and 1.44, with their own tests and dependency rows.
 
 ## Review Triage Log
 
@@ -126,10 +126,15 @@ The first full `npm test` after review fixes reached `test:boundary` and failed 
 | ------------------------------------------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------- |
 | Git pathspec matching can accept an untracked reference filename with `*` | Valid   | Use Git's literal pathspec form and test the untracked wildcard filename against a real tracked reference file. |
 
+### Round 5
+
+Three fresh reviewers examined exact source head `3857031d` for material regressions, guidance and architecture compliance, and test quality. All passed with no material finding. Each ran `npm test` to exit 0 in an isolated worktree. The guidance reviewer assessed the unavailable builder Analyze gate and found no material product gap in the shipped guide or templates; the failed invocation remains a process exception recorded above.
+
 ## Verification
 
 **Commands:**
 
 - `npm run test:evaluate-guidance`: structural and real template checks pass.
 - `npm test`: final full quality gate completed with exit code 0 after the timer repair and restored revert checks.
+- Three independent reviewers ran `npm test` on `3857031d` in separate worktrees; all exited 0.
 - `node --input-type=module -e "const m = await import('eval-quality'); if (typeof m.evaluateTarget !== 'function') process.exit(1)"`: published engine export remains available.
