@@ -4,7 +4,7 @@ type: 'feature'
 created: '2026-09-27'
 status: 'done'
 route: 'dispatch'
-review_loop_iteration: 4
+review_loop_iteration: 5
 baseline_commit: 'a6d94428fdf0ce725cf86ec4f50839222c53a2d1'
 context:
   - '_bmad-output/planning-artifacts/evaluate/epics.md'
@@ -101,6 +101,7 @@ The workflow-builder Analyze report has zero critical and zero high findings, wi
 | Regression review round 3: the Agent fallback set `launch.skillRoot` to a wrapper while controlled mutations could target implementation files outside it. | Omitted the optional field for Agent fallback and bound the contract runner's `--skill-root` to the wrapper. A live engine check accepted a mutation outside the wrapper with this binding and refused it when `launch.skillRoot` was set. The guidance gate now asserts the instruction.                                                                                                                                                                                         |
 | Regression review round 3: the waiver used `request.amount` while inheriting the stub skill contract, which has a text prompt.                             | Based the waiver on the numeric target's actual request and scoped it to the per-record discipline for a scalar result. Round 4 exposed the numeric base's inherited stub oracle; its behavior and oracle now describe the finite-number command, while the malformed-input lesson patches in the refusal case. Both use exact stdout checks that reject a changed amount or contradictory acceptance. The gate checks observed output and both true and false waiver conditions. |
 | Regression review round 4: Stage 6 ran `check` without first filling evaluator conditions, and rubric contracts lacked their required judge metadata.      | Added the evaluator-conditions template fill before `check`, including the real model snapshot, exact prompt digest and the rubric judge block when required. The guidance gate now proves the missing-file refusal and filled-file success.                                                                                                                                                                                                                                      |
+| Regression review round 5: oracle guidance implied a judge prompt digest belonged in `policy/evaluator-conditions.json`.                                   | Clarified that conditions carry `judge.modelSnapshot`; the runtime digests the judge instructions. The guidance gate verifies the schema accepts the snapshot and rejects a judge prompt digest field.                                                                                                                                                                                                                                                                            |
 
 ## Verification
 

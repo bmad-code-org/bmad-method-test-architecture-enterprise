@@ -1203,6 +1203,27 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
       'A loose oracle that checks only a clean exit accepts this degenerate response',
     ])
       requireText(oracleGuide, lesson, 'oracles.md lesson', failures);
+    const calibrationLesson = headingBody(oracleGuide, '## Judge calibration design');
+    for (const marker of ['`judge.modelSnapshot`', '`policy/evaluator-conditions.json`', 'runtime digests its fixed judge instructions'])
+      requireText(calibrationLesson, marker, 'oracles.md judge calibration', failures);
+    const conditionsSchema = JSON.parse(
+      fs.readFileSync(path.join(__dirname, '..', 'cli', 'lib', 'evaluate', 'schemas', 'evaluator-conditions.schema.json')),
+    );
+    const validateConditions = new Ajv({ strict: false, allErrors: true }).compile(conditionsSchema);
+    const judgeConditions = {
+      schemaVersion: 1,
+      modelSnapshot: 'none',
+      systemPromptDigest: engine.digestBytes(Buffer.alloc(0)),
+      judge: { modelSnapshot: 'fixed-judge-fixture' },
+    };
+    assert.strictEqual(validateConditions(judgeConditions), true, JSON.stringify(validateConditions.errors));
+    assert.strictEqual(
+      validateConditions({
+        ...judgeConditions,
+        judge: { ...judgeConditions.judge, systemPromptDigest: engine.digestBytes(Buffer.alloc(0)) },
+      }),
+      false,
+    );
     const validContract = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'evaluate', 'valid', 'contract.json')));
     for (const [index, oracle] of taggedExamples(oracleGuide, 'oracle').entries()) {
       const base = oracle.direction?.evidenceTargets?.some((pointer) => pointer.includes('/create/')) ? workflowContract : validContract;
