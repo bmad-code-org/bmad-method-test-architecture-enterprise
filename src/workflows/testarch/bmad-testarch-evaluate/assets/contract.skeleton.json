@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "{{schemaVersion}}",
+  "parentDigest": "{{parentDigest}}",
+  "revisionCount": "{{revisionCount}}",
+  "contractId": "{{contractId}}",
+  "sourceSpecDigest": "{{sourceSpecDigest}}",
+  "behaviors": "{{behaviors}}",
+  "oracles": "{{oracles}}",
+  "rubrics": "{{rubrics}}",
+  "waivers": "{{waivers}}",
+  "permittedInterfaces": "{{permittedInterfaces}}",
+  "referenceSets": "{{referenceSets}}",
+  "siblingGroups": "{{siblingGroups}}",
+  "interactionPlan": "{{interactionPlan}}",
+  "scopedResources": "{{scopedResources}}",
+  "forbiddenInputs": "{{forbiddenInputs}}",
+  "testData": "{{testData}}",
+  "budgets": "{{budgets}}",
+  "safetyLimits": "{{safetyLimits}}",
+  "requiredEvidence": "{{requiredEvidence}}",
+  "probeStepBound": "{{probeStepBound}}",
+  "fixtureReset": "{{fixtureReset}}"
+}

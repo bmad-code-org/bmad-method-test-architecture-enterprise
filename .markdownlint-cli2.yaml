@@ -17,6 +17,8 @@ ignores:
   # _bmad/scripts/memlog.py, never edited by hand, so its layout is the
   # script's to own.
   - "**/.memlog.md"
+  # Workflow-builder Analyze reports are generated under the skill root.
+  - "**/.analysis/**"
 
 # Rule configuration
 #
