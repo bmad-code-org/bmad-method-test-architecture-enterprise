@@ -97,6 +97,8 @@ context:
 - Final PR review round 1: the earlier Blind 6 removal decision was wrong. AD-10 reserves `tea-evaluate` exit 13 for the planned PR replay even though the current CLI cannot emit it. The guide restores that row with its future-stage scope; the guidance gate derives its exit key set from AD-10 and checks every class value.
 - Final PR review round 1: the reviewers also found bare commands outside the installed private prefix, a TeA self-run path that could mix engine versions, and a remedy check satisfied by the key text when its remedy cell was blank. Stages 6, 8, 9, 10 and 11 now give the executable paths, while the guidance gate checks the local engine, class mapping, remedy cells and corruption cases.
 - Final review checkout limitation: the first round's three isolated checkouts linked `node_modules` to the main checkout. Their full `npm test` runs reached `test:evaluate-promptfoo`, where a path-identity assertion failed on that symlink's real path. The source commit's own full test and commit-hook full test passed. The next review round will use copied dependencies.
+- Final PR review round 2: CodeRabbit and the adversarial reviewer reproduced a Stage 6 blocker. A controlled-mutation probe named `M-001`, while its file was absent; `digest` passed and `check` exited 10 before Stage 8. Stage 6 now authors and digests nominated mutation files before `check`. Its preflight qualifies them; Stage 8 reads the evidence and expands the set. The guidance gate removes that early authoring instruction to prove the check rejects the regression.
+- Final PR review round 2: the edge reviewer found that eval-quality divides class catches by exercised qualified probe IDs. The gap guide now states that denominator and keeps held-out score diagnostics closed. A held-out `outcome: null` routes to a development reproduction or a blocked gap. The test-quality reviewer found that AD-10 class changes, placeholder remedies and a wrong mutation signature channel could escape the guidance gate. The gate now reads AD-10 source classes, rejects placeholder remedies and checks the channel in each signature clause, with negative cases.
 
 ## Verification
 
@@ -104,5 +106,6 @@ context:
 
 - `npm run test:evaluate-guidance`: passed with seven runtime-schema-valid mutation examples and negative removal or corruption checks.
 - `node --input-type=module -e "const m = await import('eval-quality'); if (typeof m.evaluateTarget !== 'function') process.exit(1)"`: passed.
-- `npm test`: passed on the final reviewed tree after all review fixes and the lint correction. The run ended with clean ESLint, markdownlint and Prettier checks.
-- First PR review: changes requested, all verified; one engine-owned aggregate remains as Story 1.45. A fresh review and full verification are pending on the amended tree.
+- `npm test`: passed after the direct Analyze fixes, the first PR review fixes, and the round-two fixes. The latest full run ended with clean ESLint, markdownlint and Prettier checks. Each round-two reviewer also passed `npm test` on the prior pushed commit in an isolated checkout with copied dependencies.
+- `npm run docs:validate-links`: passed with 44 files scanned and zero issues.
+- First and second PR reviews: changes requested and verified. Their Story 1.14 findings were corrected; one engine-owned aggregate remains as Story 1.45. A fresh final review and CI on the amended commit are pending.

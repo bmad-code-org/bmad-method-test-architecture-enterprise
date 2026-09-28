@@ -1849,6 +1849,8 @@ function checkMutationGuidance(guide, failures) {
     const lesson = body.split('<!-- example:mutation -->')[0];
     for (const marker of [`B-00${index + 1}`, 'Expect', 'sign', signatureChannels[index]])
       requireText(lesson, marker, `mutation.md ${heading}`, failures);
+    const signatureClause = lesson.match(/\bsign\b[^.;]*/i)?.[0] ?? '';
+    if (!signatureClause.includes(signatureChannels[index])) failures.push(`mutation.md ${heading} signs the wrong observation channel`);
   }
   for (const marker of [
     'mutations/M-NNN.mutation.json',
@@ -1980,6 +1982,8 @@ function checkRunGuidance(guide, failures) {
     '--partition held-out',
     'score.json',
     'stderr',
+    'If a development `score` exits 3 with no artifact',
+    'For a held-out fault, read only `gap-view.json`',
     'passed-clean-control',
     'caught',
     'gap-view.json',
@@ -2039,7 +2043,8 @@ function checkGapsGuidance(guide, engine, failures) {
     [
       '## Read the strength vector',
       [
-        'unique qualified probe IDs',
+        'unique qualified probe IDs exercised per class',
+        'An admitted probe that was not exercised contributes no denominator',
         '`defect`, `gameability` or `zero-action`',
         "each probe's trials are reduced",
         'alone decides whether that probe is caught',
@@ -2067,6 +2072,7 @@ function checkGapsGuidance(guide, engine, failures) {
         'probe ID',
         'class',
         'outcome.caught: false',
+        'An `outcome: null` leaves the held-out cause undisclosed',
         'outcome.trialVotes',
         'validCount',
         'caughtCount',
@@ -2075,20 +2081,19 @@ function checkGapsGuidance(guide, engine, failures) {
     ],
   ])
     for (const marker of markers) requireText(headingBody(guide, heading), marker, `gaps.md ${heading}`, failures);
+  const concreteRepair = (cell) =>
+    /^(?:Read|Inspect|Repair|Fix|Add|Supply|Restore|Make|Keep|Check|Run|For|Author|Requalify|Retain|Narrow|Choose|Tighten)\b/.test(cell) &&
+    cell.trim().split(/\s+/).length >= 7 &&
+    /probe|control|oracle|evidence|registry|diagnostic|invocation|workspace|mutation|judge|target|CI|gate|calibration|isolation|artifact|contract|response|state|behavior|input|execution|baseline|policy/i.test(
+      cell,
+    );
   const checkKeys = (heading, column, keys) => {
     const rows = tableRows(guide, heading, column, failures);
     const found = rows.map((row) => row[0].replaceAll('`', ''));
-    if (
-      JSON.stringify(found) !== JSON.stringify(keys) ||
-      rows.some(
-        (row) =>
-          row.length !== column.length ||
-          !row[1]?.match(
-            /probe|control|oracle|evidence|registry|diagnostic|invocation|workspace|mutation|judge|target|CI|gate|calibration|isolation/i,
-          ),
-      )
-    )
-      failures.push(`gaps.md ${heading} key set or concrete remedy changed`);
+    if (JSON.stringify(found) !== JSON.stringify(keys)) failures.push(`gaps.md ${heading} key set changed`);
+    for (const row of rows)
+      if (row.length !== column.length || !concreteRepair(row[1]))
+        failures.push(`gaps.md ${heading} lacks concrete repair: ${row.join(' | ')}`);
   };
   checkKeys('## Map engine outcomes to repairs', ['Outcome state', 'Concrete repair'], [...engine.OUTCOME_STATES]);
   const allTables = headingBody(guide, '## Map discipline and preflight checks to repairs');
@@ -2111,30 +2116,32 @@ function checkGapsGuidance(guide, engine, failures) {
   const preflightKinds = preflightSchema.properties.checks.items.properties.kind.enum;
   if (JSON.stringify(keys(preflight)) !== JSON.stringify(preflightKinds)) failures.push('gaps.md preflight check key set changed');
   for (const row of [...mappingRows(discipline), ...mappingRows(preflight)])
-    if (row.length !== 2 || !row[1] || !/probe|control|oracle|evidence|registry|mutation|judge|isolation/i.test(row[1]))
-      failures.push(`gaps.md lacks concrete repair: ${row.join(' | ')}`);
+    if (row.length !== 2 || !concreteRepair(row[1])) failures.push(`gaps.md lacks concrete repair: ${row.join(' | ')}`);
   const ad10 = fs
     .readFileSync(path.join(__dirname, '..', '_bmad-output/planning-artifacts/evaluate/ARCHITECTURE-SPINE.md'), 'utf8')
     .split('### AD-10:')[1]
     ?.split('### AD-11:')[0];
   if (!ad10) failures.push('AD-10 source table is unavailable');
-  const exits = [...(ad10 ?? '').matchAll(/^\|\s*(\d+)\s*\|\s*`?(eval-quality(?:-gates)?|tea-evaluate)`?\s*\|/gm)].map(
-    ([, exit, source]) => `${source} ${exit}`,
+  const sourceClasses = new Map(
+    [...(ad10 ?? '').matchAll(/^\|\s*(\d+)\s*\|\s*`?(eval-quality(?:-gates)?|tea-evaluate)`?\s*\|\s*([^|]+)\|/gm)].map(
+      ([, exit, source, classText]) => [`${source} ${exit}`, classText.trim().replaceAll(/\s+/g, ' ')],
+    ),
   );
+  const exits = [...sourceClasses.keys()];
   const expectedClasses = new Map([
-    ['eval-quality 0', 'pass or CONCERNS'],
-    ['eval-quality 2', 'target behavior failure or evidence integrity'],
-    ['eval-quality 3', 'infrastructure or integrity'],
-    ['eval-quality 4', 'contract authoring defect'],
-    ['eval-quality 5', 'runtime fault'],
-    ['eval-quality 64', 'wiring defect'],
-    ['tea-evaluate 10', 'authoring defect'],
-    ['tea-evaluate 11', 'evaluation weakness'],
-    ['tea-evaluate 12', 'infrastructure'],
-    ['tea-evaluate 13', 'evaluation evidence drift'],
-    ['tea-evaluate 64', 'wiring defect'],
-    ['eval-quality-gates 1', 'repository policy violation'],
-    ['eval-quality-gates 64', 'wiring defect'],
+    ['eval-quality 0', ['pass or CONCERNS', 'pass. CONCERNS']],
+    ['eval-quality 2', ['target behavior failure or evidence integrity', 'target behavior failure, or evidence or lineage integrity']],
+    ['eval-quality 3', ['infrastructure or integrity', 'infrastructure or integrity']],
+    ['eval-quality 4', ['contract authoring defect', 'contract authoring defect']],
+    ['eval-quality 5', ['runtime fault', 'runtime fault']],
+    ['eval-quality 64', ['wiring defect', 'wiring defect']],
+    ['tea-evaluate 10', ['authoring defect', 'authoring defect']],
+    ['tea-evaluate 11', ['evaluation weakness', 'evaluation weakness']],
+    ['tea-evaluate 12', ['infrastructure', 'infrastructure: workspace']],
+    ['tea-evaluate 13', ['evaluation evidence drift', 'evaluation evidence drift']],
+    ['tea-evaluate 64', ['wiring defect', 'wiring defect']],
+    ['eval-quality-gates 1', ['repository policy violation', 'repository policy violation']],
+    ['eval-quality-gates 64', ['wiring defect', 'wiring defect']],
   ]);
   const rows = tableRows(
     guide,
@@ -2145,12 +2152,18 @@ function checkGapsGuidance(guide, engine, failures) {
   if (
     exits.length !== expectedClasses.size ||
     JSON.stringify(rows.map((row) => row[0].replaceAll('`', '')).sort()) !== JSON.stringify(exits.sort()) ||
-    rows.some((row) => row.length !== 3 || !row[2] || row[1] !== expectedClasses.get(row[0].replaceAll('`', '')))
+    rows.some((row) => {
+      const key = row[0].replaceAll('`', '');
+      const [guideClass, sourceClass] = expectedClasses.get(key) ?? [];
+      return row.length !== 3 || row[1] !== guideClass || !sourceClasses.get(key)?.includes(sourceClass) || !concreteRepair(row[2]);
+    })
   )
     failures.push('gaps.md AD-10 exit mapping changed');
   requireText(guide, 'planned Stage 12 PR replay', 'gaps.md exit 13', failures);
   for (const marker of [
     'score` exit 3',
+    'For a development `score` exit 3',
+    'For a held-out score failure, read only its `gap-view.json` row',
     'score.json',
     'stdout and stderr diagnostics',
     'gap-view.json',
@@ -2208,7 +2221,7 @@ async function main() {
   if (!workflowSectionMatch) failures.push('SKILL.md has no "## Workflow" section');
   const workflowSection = workflowSectionMatch ? workflowSectionMatch[1] : '';
 
-  const referencedStages = [...workflowSection.matchAll(/references\/([a-z-]+)\.md/g)].map((match) => match[1]);
+  const referencedStages = [...workflowSection.matchAll(/^.*\bLoad `references\/([a-z-]+)\.md`/gm)].map((match) => match[1]);
   const uniqueStages = [...new Set(referencedStages)];
 
   try {
@@ -2246,6 +2259,23 @@ async function main() {
   const firstPreflight = stage6.indexOf('tea-evaluate preflight');
   if (ignoreBeforePreflight === -1 || firstPreflight === -1 || ignoreBeforePreflight >= firstPreflight)
     failures.push('SKILL.md must install the evaluation ignore file before first preflight');
+  const checkMutationBeforeValidation = (content, found) => {
+    const local = headingBody(content, '### Stage 6: Adapters');
+    const author = local.indexOf('author every `mutations/<mutationId>.mutation.json`');
+    const digest = local.indexOf('tea-evaluate digest --evaluation <evaluation-folder>');
+    const check = local.indexOf('tea-evaluate check --evaluation <evaluation-folder>');
+    if (author === -1 || digest === -1 || check === -1 || author >= digest || digest >= check)
+      found.push('SKILL.md must author and digest nominated mutations before Stage 6 check');
+    requireText(local, 'load `references/mutation.md`', 'SKILL.md early mutation guide', found);
+    requireText(local, 'node cli/evaluate.js digest --evaluation <evaluation-folder>', 'SKILL.md local Stage 6 digest', found);
+  };
+  checkMutationBeforeValidation(skillContent, failures);
+  const mutationOrderingFailures = [];
+  checkMutationBeforeValidation(
+    skillContent.replace('author every `mutations/<mutationId>.mutation.json`', 'plan every mutation file'),
+    mutationOrderingFailures,
+  );
+  if (mutationOrderingFailures.length === 0) failures.push('SKILL.md Stage 6 mutation authoring removal passed its guidance check');
   const checkLocalStage6 = (content, found) => {
     const local = headingBody(content, '### Stage 6: Adapters');
     for (const command of [
@@ -2326,6 +2356,12 @@ async function main() {
             'Expect an approval; sign the descriptor-nominated evidence.',
           ),
       ],
+      [
+        'mutation signature wrong channel',
+        'mutation',
+        checkMutationGuidance,
+        (text) => text.replace('sign the descriptor-nominated stdout.', 'sign the descriptor-nominated stderr.'),
+      ],
       ['harness risk row removal', 'harness', checkHarnessGuidance, (text) => text.replace(/^\| Sampled model \| critical \|.*\n/m, '')],
       [
         'harness risk floor corruption',
@@ -2393,10 +2429,28 @@ async function main() {
         (text) => text.replace(/^(\| `clean-control`\s*\|)[^\n|]*/m, '$1 '),
       ],
       [
+        'gaps outcome placeholder remedy',
+        'gaps',
+        (text, found) => checkGapsGuidance(text, engine, found),
+        (text) => text.replace(/^(\| `missed`\s*\|)[^\n|]*/m, '$1 TBD '),
+      ],
+      [
+        'gaps preflight placeholder remedy',
+        'gaps',
+        (text, found) => checkGapsGuidance(text, engine, found),
+        (text) => text.replace(/^(\| `state-reset`\s*\|)[^\n|]*/m, '$1 probe '),
+      ],
+      [
         'gaps exit removal',
         'gaps',
         (text, found) => checkGapsGuidance(text, engine, found),
         (text) => text.replace(/^\| `tea-evaluate 11`[^\n]*\n/m, ''),
+      ],
+      [
+        'gaps exit placeholder remedy',
+        'gaps',
+        (text, found) => checkGapsGuidance(text, engine, found),
+        (text) => text.replace(/^(\| `tea-evaluate 11`\s*\|[^|]*\|)[^\n|]*/m, '$1 TBD '),
       ],
       [
         'gaps exit class corruption',
@@ -2409,6 +2463,18 @@ async function main() {
         'gaps',
         (text, found) => checkGapsGuidance(text, engine, found),
         (text) => text.replace('caughtCount / validCount > catchThreshold', 'caughtCount / validCount >= catchThreshold'),
+      ],
+      [
+        'gaps class denominator corruption',
+        'gaps',
+        (text, found) => checkGapsGuidance(text, engine, found),
+        (text) => text.replace('unique qualified probe IDs exercised per class', 'unique qualified probe IDs per class'),
+      ],
+      [
+        'gaps held-out fault guard removal',
+        'gaps',
+        (text, found) => checkGapsGuidance(text, engine, found),
+        (text) => text.replace('An `outcome: null` leaves the held-out cause undisclosed;', 'A held-out score fault exposes its cause;'),
       ],
       [
         'gaps digest removal',
