@@ -1489,7 +1489,7 @@
           "match": "still listed as deferred"
         },
         {
-          "match": "deferred` array names exactly one skill"
+          "match": "deferred` array is empty"
         },
         {
           "match": "the \\d+ CONCERNS the stored corpus scores"
@@ -1542,12 +1542,12 @@
         },
         {
           "file": "docs/explanation/eval-quality-roadmap.md",
-          "key": "`test/evals/suite-manifest.json`'s `deferred` array names exactly one skill",
+          "key": "`test/evals/suite-manifest.json`'s `deferred` array is empty",
           "settles": "read",
-          "reason": "a hand-read count of test/evals/suite-manifest.json's deferred array; no export replaced NO_SKILLS_DEFERRED because the invariant this sentence states (exactly one named skill, not zero) legitimately changes as skills are deferred and un-deferred, so it is pinned to the file's hash instead of a boolean. When this claim's hash goes stale after a legitimate manifest edit: re-count the deferred array, update the sentence if the count or the named skill changed, then run `node tools/regenerate-doc-claim-hash.mjs test/evals/suite-manifest.json` and paste the printed hash in below",
+          "reason": "a hand-read count of test/evals/suite-manifest.json's deferred array; no export replaced NO_SKILLS_DEFERRED because the invariant this sentence states (zero named skills since Story 1.16 registered bmad-testarch-evaluate's own suite) legitimately changes as skills are deferred and un-deferred, so it is pinned to the file's hash instead of a boolean. When this claim's hash goes stale after a legitimate manifest edit: re-count the deferred array, update the sentence if the count or the named skill changed, then run `node tools/regenerate-doc-claim-hash.mjs test/evals/suite-manifest.json` and paste the printed hash in below",
           "asOf": {
             "subject": "test/evals/suite-manifest.json",
-            "hash": "c7d0cd0c526c7c357f552a31923e707675d1ccf1bf7e2acfc7777a4ef6ab8530"
+            "hash": "af637efbf41f6d29fb10b0b45208ec92b92e40be414ea023d7bdb79708271b6c"
           }
         },
         {
@@ -1635,7 +1635,7 @@
           "reason": "an intro label for the table that follows, transcribed by hand from test/evals/suite-manifest.json's own suites and deferred entries; no predicate reads the manifest and regenerates the table, but the transcription can be pinned to the file it was read against. When this claim's hash goes stale after a legitimate manifest edit: re-read the table above against the new manifest, update it if it drifted, then run `node tools/regenerate-doc-claim-hash.mjs test/evals/suite-manifest.json` and paste the printed hash in below",
           "asOf": {
             "subject": "test/evals/suite-manifest.json",
-            "hash": "c7d0cd0c526c7c357f552a31923e707675d1ccf1bf7e2acfc7777a4ef6ab8530"
+            "hash": "af637efbf41f6d29fb10b0b45208ec92b92e40be414ea023d7bdb79708271b6c"
           }
         },
         {

@@ -23,7 +23,7 @@ inputDocuments:
 
 ## Overview
 
-This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and fifty-one stories, including H.1 (Stories 1.27 to 1.45 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
+This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and fifty-two stories, including H.1 (Stories 1.27 to 1.46 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
 
 Evaluate is fully stacked. The stack runs system under test, then the evaluation (the mechanism that runs the system, collects evidence and makes judgments), then the Behavioral Evaluation Contract (what behavior matters, what evidence counts, how success and failure resolve), then eval-quality (contract sanity, evidence support, and whether the evaluation catches defects). TeA owns every layer above eval-quality, including each concern eval-quality states it leaves to the caller, so an adopter can evaluate any target end to end. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3 onward, Epic 2 and H.1 to close the plan gap audit; the Traceability section maps each audit item to the story that closes it.
 
@@ -132,14 +132,14 @@ None. Evaluate has no graphical interface.
 | ------------- | ------------------------------------------- |
 | FR1 (CAP-1)   | 1.3, 1.12, 1.13, 1.24                       |
 | FR2 (CAP-2)   | 1.12, 1.24                                  |
-| FR3 (CAP-3)   | 1.4, 1.12, 1.16, 1.21, 1.24                 |
+| FR3 (CAP-3)   | 1.4, 1.12, 1.16, 1.21, 1.24, 1.46           |
 | FR4 (CAP-4)   | 1.4, 1.13, 1.16, 1.24                       |
 | FR5 (CAP-5)   | 1.9, 1.13, 1.21, 1.24                       |
 | FR6 (CAP-6)   | 1.1, 1.5, 1.6, 1.10, 1.11, 1.13, 1.18, 1.19 |
 | FR7 (CAP-7)   | 1.7, 1.9, 1.14, 1.16                        |
 | FR8 (CAP-8)   | 1.8, 1.14                                   |
 | FR9 (CAP-9)   | 1.6, 1.8, 1.14, 1.16, 1.17, 1.45            |
-| FR10 (CAP-10) | 1.14, 1.16, 1.22, 1.25, 1.42, 1.45          |
+| FR10 (CAP-10) | 1.14, 1.16, 1.22, 1.25, 1.42, 1.45, 1.46    |
 | FR11 (CAP-11) | 2.2, 2.3, 2.4, 2.5, H.1                     |
 | FR12 (CAP-12) | 1.8, 2.1, 2.5, H.1                          |
 | FR13 (CAP-13) | 1.17, 1.19, 1.20, 1.23, 1.26, 1.43, 1.44    |
@@ -150,7 +150,7 @@ None. Evaluate has no graphical interface.
 ### Epic 1: The Evaluate authoring loop
 
 An adopter describes a target, answers Evaluate's questions, chooses or builds the evaluation layer and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches the seeded defect, with the gaps named and closed. The epic closes by running Evaluate on `bmad-testarch-evaluate` itself, then proving the guidance on two more target kinds, on seeded weaknesses and on an evaluation framework its guides never name.
-Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.45.
+Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.46.
 
 **FRs covered:** FR1 to FR10, FR13, FR14.
 
@@ -211,12 +211,13 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 43    | 1.43  | 1.20, 1.23                   |
 | 44    | 1.44  | 1.17, 1.23                   |
 | 45    | 1.45  | 1.8, 1.14, 1.21              |
-| 46    | 2.1   | 1.16, 1.26, 1.45             |
-| 47    | 2.2   | 2.1                          |
-| 48    | 2.3   | 2.2                          |
-| 49    | 2.4   | 2.3                          |
-| 50    | 2.5   | 2.4                          |
-| 51    | H.1   | 2.5                          |
+| 46    | 1.46  | 1.16                         |
+| 47    | 2.1   | 1.16, 1.26, 1.45             |
+| 48    | 2.2   | 2.1                          |
+| 49    | 2.3   | 2.2                          |
+| 50    | 2.4   | 2.3                          |
+| 51    | 2.5   | 2.4                          |
+| 52    | H.1   | 2.5                          |
 
 ## Epic 1: The Evaluate authoring loop
 
@@ -1314,6 +1315,27 @@ So that the class floors I chose can govern held-out readiness using an engine-o
 
 **Dependencies:** 1.8, 1.14, 1.21.
 **Gate:** engine release and export check, skill gates, `npm test`, `npm run test:release-metadata` when the pin changes.
+
+### Story 1.46: Close the dogfood suite's coverage gaps
+
+Added 2026-09-28 by Story 1.16's proof run. Every evidence artifact of that run records `contractVerdict: CONCERNS`: eval-quality found the `success-indicator-separation`, `malformed-input`, `per-record` and `omission-and-completeness` rules unsatisfied at `critical`, and B-002 (Stage 1 maps a web application to `api`) has no seeded or held-out probe because its rule is stated four times across `references/inspection.md` and `references/adapters.md`. The proof also records drift this story corrects: `requirements.md` describes fixed answer lines where the contract reads JSON fields, P-002 and P-003 share the defect ID `D-001`, `corpus/README.md` counts three statements of the rule, and `assets/evaluation-folder.gitignore` leaves the compile and seal outputs Stage 6 writes unignored. Story 1.16 records the run once, as found; closing the gaps changes the contract and needs a new run.
+
+As a TEA maintainer,
+I want Evaluate's gap loop to close the gaps it named on its own suite,
+So that the baseline Story H.1 accepts is a PASS with no coverage gap at or above the severity floor (CAP-3, CAP-10, AD-15).
+
+**Acceptance Criteria:**
+
+**Given** `test/evaluations/bmad-testarch-evaluate/` and the gaps G-1 to G-5 recorded in `epic-1-proof.md`
+**When** a maintainer session runs Evaluate's Stage 11 author, rerun and rescore loop on it through the local Claude Code CLI
+**Then** it authors the probe, oracle or evidence pointer each unsatisfied rule names: an oracle that holds the answer to evidence independent of the skill's own claim, a malformed-input probe (an exit the exit table does not list, or a request naming no exit) with an oracle for a refusal to guess a class, the classified exits declared as a collection with per-record pointers, and a completeness probe over every exit the table lists
+**And** B-002 either carries a seeded probe whose mutation edits the single place the web-to-`api` rule is stated, after the skill states it in one place through the builder's Edit process, or keeps its refusal with the reason, recorded in the evaluation's `corpus/README.md`
+**And** `tea-evaluate check`, `eval-quality compile` and `seal` exit 0, preflight passes, every clean control resolves `passed-clean-control`, every seeded probe, development and held-out, resolves `caught` at `minimumTrialCount`, and every evidence artifact records `contractVerdict: PASS` with no coverage gap at or above `severityFloor`
+**And** `requirements.md` states the JSON answer fields as the admissible evidence, with `sourceSpecDigest` and `requirements.digest` restamped, each seeded probe carries its own defect ID, `corpus/README.md` counts the rule's statements correctly, and the skill's `assets/evaluation-folder.gitignore` ignores `compiled-contract.json` and `sealed-brief.json`
+**And** the before and after outcome of each gap is recorded in the gap report and in `epic-1-proof.md`, and the suite manifest's thresholds still equal `evaluation.json` and the scoring policy, which `test:eval-schemas` holds
+
+**Dependencies:** 1.16.
+**Gate:** skill gates when a guide changes, `npm test`.
 
 ## Epic 2: Continuous proof in CI
 

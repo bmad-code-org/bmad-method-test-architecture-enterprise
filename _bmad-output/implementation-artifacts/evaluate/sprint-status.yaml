@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-22-2026 18:09
-last_updated: 09-28-2026 07:42
+last_updated: 09-28-2026 11:04
 project: "bmad-method-test-architecture-enterprise: Evaluate"
 project_key: NOKEY
 tracking_system: file-system
@@ -58,7 +58,7 @@ development_status:
   1-23-teach-choosing-and-building-the-evaluation-layer: done
   1-14-drive-the-run-and-interpret-the-gaps: done
   1-15-float-the-engine-pin-and-admit-evaluate-authored-suites: done
-  1-16-evaluate-authors-its-own-suite-run-live-and-recorded: backlog
+  1-16-evaluate-authors-its-own-suite-run-live-and-recorded: done
   1-24-evaluate-authors-strong-suites-for-two-more-target-kinds: backlog
   1-25-close-seeded-weaknesses-through-the-gap-loop: backlog
   1-26-learn-an-unfamiliar-evaluation-framework-on-the-go: backlog
@@ -81,6 +81,7 @@ development_status:
   1-43-keep-ungraded-framework-errors-out-of-target-findings: backlog
   1-44-record-installed-framework-versions-in-evaluator-provenance: backlog
   1-45-aggregate-development-strength-through-eval-quality: backlog
+  1-46-close-the-dogfood-suites-coverage-gaps: backlog
   epic-1-retrospective: optional
 
   epic-2: backlog

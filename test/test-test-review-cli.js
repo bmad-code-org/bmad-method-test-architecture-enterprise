@@ -2678,8 +2678,9 @@ async function runTests() {
       const parsedAll = parseAllEvalArgs(['--agent', 'codex', '--fragment-runs', '2', '--review-runs', '3']);
       const allInvocations = buildInvocations(parsedAll, evalSuiteManifest);
       // One invocation per live suite in the manifest, so adding a suite moves this
-      // number rather than leaving a new harness silently unrun.
-      const liveSuiteCount = evalSuiteManifest.suites.length;
+      // number rather than leaving a new harness silently unrun. An Evaluate-authored
+      // suite has no harness: tea-evaluate runs it and eval:all records it as skipped.
+      const liveSuiteCount = evalSuiteManifest.suites.filter((suite) => suite.evalType !== 'evaluate-authored').length;
       // Looked up by suite id rather than by position. The two overrides belong to
       // two named suites, and indexing assumed those two sat at the front of the
       // manifest, which nothing held: the order was an accident of the order the

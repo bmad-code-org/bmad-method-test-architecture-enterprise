@@ -1,0 +1,427 @@
+{
+  "schemaVersion": 5,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "contractId": "bmad-testarch-evaluate",
+  "sourceSpecDigest": "sha256:b1e246bffd06e8dff03fa6c4c03a1dac53b6d94b3a925bd72a49f5dbccec054b",
+  "behaviors": [
+    {
+      "id": "B-001",
+      "description": "Stage 11 keeps the failure classes apart: asked about a failed tea-evaluate command, it names the AD-10 class its gaps guide's exit table assigns to that source and exit.",
+      "severity": "material",
+      "observableSuccessCriterion": "Asked about a tea-evaluate run that exited 11 and a tea-evaluate preflight that exited 12, the runner prints one JSON object whose exit11 is \"evaluation weakness\" and whose exit12 is \"infrastructure\".",
+      "requirementLinks": [
+        {
+          "scheme": "tea-evaluate-spec",
+          "id": "CAP-10"
+        },
+        {
+          "scheme": "tea-evaluate-spec",
+          "id": "CAP-11"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-evaluate-requirements",
+          "id": "exit-table-class-swap"
+        }
+      ],
+      "oracles": [
+        "O-001"
+      ]
+    },
+    {
+      "id": "B-002",
+      "description": "Stage 1 maps a web application, one with no AI features included, to target kind ai-feature reached through its HTTP surface as interface api, and never emits web.",
+      "severity": "critical",
+      "observableSuccessCriterion": "Asked to classify a web application with no AI features, the runner prints one JSON object whose targetKind is \"ai-feature\" and whose interface is \"api\".",
+      "requirementLinks": [
+        {
+          "scheme": "tea-evaluate-spec",
+          "id": "CAP-1"
+        },
+        {
+          "scheme": "tea-evaluate-spec",
+          "id": "interface-kinds"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-evaluate-requirements",
+          "id": "web-interface-emitted"
+        }
+      ],
+      "oracles": [
+        "O-002"
+      ]
+    }
+  ],
+  "oracles": [
+    {
+      "id": "O-001",
+      "polarity": "expects-hold",
+      "commentary": "The gaps guide names exit 11 of tea-evaluate an evaluation weakness and exit 12 infrastructure, so the classify-exits reply carries those two classes, each in its own field.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The two class fields of the JSON object the classify-exits step prints on stdout.",
+        "negativeDomain": "A reply whose exit11 field is anything but \"evaluation weakness\", or whose exit12 field is anything but \"infrastructure\", including a reply that gives both exits one class.",
+        "evidenceTargets": [
+          "/interactions/classify-exits/stdout/exit11",
+          "/interactions/classify-exits/stdout/exit12"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/classify-exits/stdout/exit11"
+              },
+              {
+                "literal": "evaluation weakness"
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/classify-exits/stdout/exit12"
+              },
+              {
+                "literal": "infrastructure"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-002",
+      "polarity": "expects-hold",
+      "commentary": "The inspection mapping sends any web application to the ai-feature kind reached as api, so the classify-web-app reply names targetKind ai-feature and interface api.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The targetKind and interface fields of the JSON object the classify-web-app step prints on stdout.",
+        "negativeDomain": "A reply whose interface is web or any kind but api, or whose targetKind is anything but ai-feature.",
+        "evidenceTargets": [
+          "/interactions/classify-web-app/stdout/targetKind",
+          "/interactions/classify-web-app/stdout/interface"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/classify-web-app/stdout/targetKind"
+              },
+              {
+                "literal": "ai-feature"
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/classify-web-app/stdout/interface"
+              },
+              {
+                "literal": "api"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "rubrics": [],
+  "waivers": [],
+  "permittedInterfaces": [
+    {
+      "logicalId": "evaluate-skill",
+      "kind": "cli",
+      "operations": [
+        {
+          "operationId": "run-skill",
+          "invocation": {
+            "executable": "tea-skill-runner",
+            "subcommandPath": []
+          },
+          "stateChangeMarker": false,
+          "requestShape": {
+            "argument": {
+              "requiredKeys": [],
+              "permittedKeys": [],
+              "types": {}
+            },
+            "option": {
+              "requiredKeys": [
+                "agent",
+                "agent-arg",
+                "capability",
+                "model",
+                "skill-root",
+                "timeout-ms"
+              ],
+              "permittedKeys": [
+                "agent",
+                "agent-arg",
+                "capability",
+                "model",
+                "skill-root",
+                "timeout-ms"
+              ],
+              "types": {
+                "agent": "string",
+                "agent-arg": "string",
+                "capability": "string",
+                "model": "string",
+                "skill-root": "string",
+                "timeout-ms": "string"
+              }
+            },
+            "environment": {
+              "requiredKeys": [],
+              "permittedKeys": [],
+              "types": {}
+            },
+            "stdin": {
+              "requiredKeys": [
+                "prompt"
+              ],
+              "permittedKeys": [
+                "prompt"
+              ],
+              "types": {
+                "prompt": "string"
+              }
+            }
+          },
+          "artifacts": [],
+          "descriptorChannel": {
+            "kind": "stream",
+            "channel": "stdout"
+          },
+          "responseDescriptor": {
+            "requiredKeys": [
+              "basis"
+            ],
+            "permittedKeys": [
+              "basis",
+              "class",
+              "exit11",
+              "exit12",
+              "interface",
+              "targetKind"
+            ],
+            "types": {
+              "basis": "string",
+              "class": "string",
+              "exit11": "string",
+              "exit12": "string",
+              "interface": "string",
+              "targetKind": "string"
+            },
+            "successIndicator": null,
+            "channelRoles": null,
+            "collectionLocations": null
+          },
+          "volatilePointers": [
+            "/basis"
+          ],
+          "sensitivityWitness": {
+            "witnessId": "class-follows-the-exit",
+            "channel": "stdin",
+            "legs": [
+              {
+                "legId": "witness-exit-11",
+                "inputs": {
+                  "argument": {},
+                  "option": {
+                    "agent": "claude",
+                    "agent-arg": "--json-schema={\"type\":\"object\",\"properties\":{\"basis\":{\"type\":\"string\"},\"class\":{\"type\":\"string\"}},\"required\":[\"basis\",\"class\"],\"additionalProperties\":false}",
+                    "capability": "read-only",
+                    "model": "claude-sonnet-5",
+                    "skill-root": "src/workflows/testarch/bmad-testarch-evaluate",
+                    "timeout-ms": "300000"
+                  },
+                  "environment": {},
+                  "stdin": {
+                    "kind": "text",
+                    "value": "Run only Stage 11 (Gaps) of this skill for the case below. Answer from the skill's own guides; do not run commands and do not write files.\n\nThe adopter reports one failed command, with no evidence artifact: `node cli/evaluate.js run --evaluation test/evaluations/example --partition development` exited 11.\n\nFind the AD-10 class the gaps guide assigns to that source and exit. Put any explanation in the object's basis field. Your entire reply must be exactly one JSON object on one line and nothing else: no text before or after it, no Markdown, no backticks and no code fence. It must parse with JSON.parse as written:\n{\"basis\": \"<one sentence naming the guide row you used>\", \"class\": \"<the class as the guide names it>\"}\n"
+                  }
+                }
+              },
+              {
+                "legId": "witness-exit-10",
+                "inputs": {
+                  "argument": {},
+                  "option": {
+                    "agent": "claude",
+                    "agent-arg": "--json-schema={\"type\":\"object\",\"properties\":{\"basis\":{\"type\":\"string\"},\"class\":{\"type\":\"string\"}},\"required\":[\"basis\",\"class\"],\"additionalProperties\":false}",
+                    "capability": "read-only",
+                    "model": "claude-sonnet-5",
+                    "skill-root": "src/workflows/testarch/bmad-testarch-evaluate",
+                    "timeout-ms": "300000"
+                  },
+                  "environment": {},
+                  "stdin": {
+                    "kind": "text",
+                    "value": "Run only Stage 11 (Gaps) of this skill for the case below. Answer from the skill's own guides; do not run commands and do not write files.\n\nThe adopter reports one failed command, with no evidence artifact: `node cli/evaluate.js run --evaluation test/evaluations/example --partition development` exited 10.\n\nFind the AD-10 class the gaps guide assigns to that source and exit. Put any explanation in the object's basis field. Your entire reply must be exactly one JSON object on one line and nothing else: no text before or after it, no Markdown, no backticks and no code fence. It must parse with JSON.parse as written:\n{\"basis\": \"<one sentence naming the guide row you used>\", \"class\": \"<the class as the guide names it>\"}\n"
+                  }
+                }
+              }
+            ],
+            "relation": {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/witness-exit-11/stdout/class"
+                    },
+                    {
+                      "literal": "evaluation weakness"
+                    }
+                  ]
+                },
+                {
+                  "op": "not",
+                  "operands": [
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "/interactions/witness-exit-10/stdout/class"
+                        },
+                        {
+                          "literal": "evaluation weakness"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "referenceSets": {},
+  "siblingGroups": {
+    "operations": [],
+    "parameters": []
+  },
+  "interactionPlan": [
+    {
+      "stepId": "classify-exits",
+      "operationId": "run-skill",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": {
+          "agent": {
+            "literal": "claude"
+          },
+          "agent-arg": {
+            "literal": "--json-schema={\"type\":\"object\",\"properties\":{\"basis\":{\"type\":\"string\"},\"exit11\":{\"type\":\"string\"},\"exit12\":{\"type\":\"string\"}},\"required\":[\"basis\",\"exit11\",\"exit12\"],\"additionalProperties\":false}"
+          },
+          "capability": {
+            "literal": "read-only"
+          },
+          "model": {
+            "literal": "claude-sonnet-5"
+          },
+          "skill-root": {
+            "literal": "src/workflows/testarch/bmad-testarch-evaluate"
+          },
+          "timeout-ms": {
+            "literal": "300000"
+          }
+        },
+        "environment": null,
+        "stdin": {
+          "prompt": {
+            "literal": "Run only Stage 11 (Gaps) of this skill for the case below. Answer from the skill's own guides; do not run commands and do not write files.\n\nThe adopter reports two failed commands, each with no evidence artifact:\n1. `node cli/evaluate.js run --evaluation test/evaluations/example --partition development` exited 11.\n2. `node cli/evaluate.js preflight --evaluation test/evaluations/example` exited 12.\n\nFor each, find the AD-10 class the gaps guide assigns to that source and exit. Put any explanation in the object's basis field. Your entire reply must be exactly one JSON object on one line and nothing else: no text before or after it, no Markdown, no backticks and no code fence. It must parse with JSON.parse as written:\n{\"basis\": \"<one sentence naming the guide rows you used>\", \"exit11\": \"<the class of the first command, as the guide names it>\", \"exit12\": \"<the class of the second command, as the guide names it>\"}\n"
+          }
+        }
+      }
+    },
+    {
+      "stepId": "classify-web-app",
+      "operationId": "run-skill",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": {
+          "agent": {
+            "literal": "claude"
+          },
+          "agent-arg": {
+            "literal": "--json-schema={\"type\":\"object\",\"properties\":{\"basis\":{\"type\":\"string\"},\"targetKind\":{\"type\":\"string\"},\"interface\":{\"type\":\"string\"}},\"required\":[\"basis\",\"targetKind\",\"interface\"],\"additionalProperties\":false}"
+          },
+          "capability": {
+            "literal": "read-only"
+          },
+          "model": {
+            "literal": "claude-sonnet-5"
+          },
+          "skill-root": {
+            "literal": "src/workflows/testarch/bmad-testarch-evaluate"
+          },
+          "timeout-ms": {
+            "literal": "300000"
+          }
+        },
+        "environment": null,
+        "stdin": {
+          "prompt": {
+            "literal": "Run only Stage 1 (Inspection) of this skill for the target described below, and stop once it is classified. Answer from the skill's own guides; do not run commands and do not write files.\n\nTarget: a web application for booking dental appointments. Patients use it in a browser; it serves HTML pages and a JSON HTTP API. It has no AI features.\n\nClassify the target with the skill's mapping. Put any explanation in the object's basis field. Your entire reply must be exactly one JSON object on one line and nothing else: no text before or after it, no Markdown, no backticks and no code fence. It must parse with JSON.parse as written:\n{\"basis\": \"<one sentence naming the guide rows you used>\", \"targetKind\": \"<the targetKind value>\", \"interface\": \"<the interface kind>\"}\n"
+          }
+        }
+      }
+    }
+  ],
+  "scopedResources": null,
+  "forbiddenInputs": [
+    "original-spec",
+    "source-code",
+    "repository",
+    "builder-transcript",
+    "implementation-logs",
+    "comparator-results",
+    "human-labels"
+  ],
+  "testData": {
+    "setup": "Nothing is staged by hand: tea-evaluate copies the repository into a disposable workspace, provisions _bmad/ (the gitignored TEA config the skill loads) and node_modules/ read-only, and runs the skill runner there.",
+    "cleanup": "Nothing to remove: the agent runs read-only, and tea-evaluate removes every workspace when the run ends.",
+    "principals": null,
+    "resources": null
+  },
+  "budgets": {
+    "maxToolCalls": 2,
+    "maxWallClockMinutes": 12,
+    "maxCostUsd": "0.00"
+  },
+  "safetyLimits": [
+    "The agent runs with the read-only capability: it can read and search files and cannot write files or run commands.",
+    "Live legs run through the local Claude Code CLI on the owner's subscription, with no API key and no metered spend."
+  ],
+  "requiredEvidence": [
+    "The exit code and stdout of every skill runner call."
+  ],
+  "probeStepBound": 2,
+  "fixtureReset": null
+}
