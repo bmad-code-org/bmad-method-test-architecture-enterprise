@@ -2,7 +2,7 @@
 title: 'Float the engine pin and admit Evaluate-authored suites'
 type: 'feature'
 created: '2026-09-28'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '96bb820ec2cb7428426a107b9ff570cf97978523'
@@ -51,7 +51,7 @@ context:
 - [x] Float the dependency through `npm install`, update the corpus and contract gates, and prove the engine and supply-chain checks.
 - [x] Admit Evaluate-authored entries through schema, inventory and runner routing without changing generator-owned behavior.
 - [x] Cross-check evaluation thresholds and policy, enforce one authoring path per skill, and add focused positive and negative fixtures.
-- [ ] Run each revert check and `npm test`; update changelog, sprint row and outcome record; review, push and merge one PR.
+- [x] Run each revert check and `npm test`; update changelog, sprint row and outcome record; review, push and merge one PR.
 
 **Acceptance Criteria:**
 
