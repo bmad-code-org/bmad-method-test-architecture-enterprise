@@ -176,11 +176,11 @@ check('atLeast() compares a real version correctly and refuses a version it cann
   assert.throws(() => source.atLeast('1.4', '1.4.0'), /is not a plain major\.minor\.patch version/);
   assert.throws(() => source.atLeast('1.4.0-beta.1', '1.4.0'), /is not a plain major\.minor\.patch version/);
 
-  // A relative require() of package.json reads as an import escaping this
-  // file's declared dependency-direction root (test/), since package.json
-  // sits outside it; reading it as data through fs keeps the check honest.
-  const pin = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8')).devDependencies['eval-quality'];
-  assert.strictEqual(source.EVAL_QUALITY_PIN_IS_4_3_0, pin === '4.3.0');
+  const resolved = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package-lock.json'), 'utf8')).packages[
+    'node_modules/eval-quality'
+  ].version;
+  assert.strictEqual(source.EVAL_QUALITY_LOCKFILE_RECORDS_RELEASE, /^\d+\.\d+\.\d+$/.test(resolved));
+  assert.strictEqual(source.EVAL_QUALITY_AT_LEAST_1_4_0, source.atLeast(resolved, '1.4.0'));
 });
 
 check('keyIsUnread reports a genuinely referenced key as read, not just an injected probe as unread', () => {

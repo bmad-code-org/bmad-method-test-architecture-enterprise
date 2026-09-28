@@ -5,16 +5,16 @@
  * The manifest is the only place that answers "what does a green eval:all
  * actually prove". Two rules give it that authority:
  *
- * 1. `evalType: behavioral` is the only kind of entry that discharges a skill's
+ * 1. `behavioral` and `evaluate-authored` entries discharge a skill's
  *    coverage obligation. Fragment selection measures which knowledge a run
  *    loads, which is a routing decision taken before the workflow produces
  *    anything, so a skill listed only there is still uncovered.
- * 2. A skill with no behavioral suite must appear in `deferred` with an owner,
+ * 2. A skill with no covering suite must appear in `deferred` with an owner,
  *    the evidence that is missing, and the condition that retires the entry.
  *    Silence is what lets a suite list imply coverage that does not exist.
  *
- * Thresholds live here as declared values and are checked against the harness
- * constants by tools/validate-eval-schemas.js, so neither side can drift.
+ * Thresholds live here as declared values and are checked against harness
+ * constants or Evaluate's evaluation and scoring policy by the validator.
  */
 
 'use strict';
@@ -25,10 +25,10 @@ const MANIFEST_VERSION = 1;
 
 // fragment-selection is routing evidence; behavioral is end-to-end artifact
 // evidence. infrastructure proves a harness mechanism rather than a skill's
-// behavior, so it is a third kind rather than a weaker `behavioral`: a suite
+// behavior, so it has its own kind: a suite
 // carrying it declares neither `skill` nor `skills`, and discharges no
 // coverage obligation, the same way fragment-selection already does not.
-const EVAL_TYPES = ['fragment-selection', 'behavioral', 'infrastructure'];
+const EVAL_TYPES = ['fragment-selection', 'behavioral', 'infrastructure', 'evaluate-authored'];
 
 // The tiers in the roadmap's CI policy: deterministic runs on every pull
 // request with no credentials, smoke runs one case per suite, full-matrix runs
@@ -69,13 +69,13 @@ const harnessOptionsSchema = z
   })
   .strict();
 
-const suiteEntrySchema = z
+const harnessSuiteEntrySchema = z
   .object({
     $comment: commentSchema.optional(),
     id: nonEmptyString('suites[].id'),
     skill: nonEmptyString('suites[].skill').optional(),
     skills: z.array(nonEmptyString('suites[].skills[]')).min(1).optional(),
-    evalType: z.enum(EVAL_TYPES),
+    evalType: z.enum(['fragment-selection', 'behavioral', 'infrastructure']),
     harness: repositoryPath('suites[].harness'),
     harnessOptions: harnessOptionsSchema,
     // The files the case feeds the agent. The result record's fixture digest is
@@ -126,6 +126,43 @@ const suiteEntrySchema = z
     }
   });
 
+// Evaluate owns the corpus and runner for this kind of suite. Keeping its
+// manifest branch strict prevents a second, harness-owned authoring path.
+const evaluateAuthoredEntrySchema = z
+  .object({
+    $comment: commentSchema.optional(),
+    id: nonEmptyString('suites[].id'),
+    skill: nonEmptyString('suites[].skill').optional(),
+    skills: z.array(nonEmptyString('suites[].skills[]')).min(1).optional(),
+    evalType: z.literal('evaluate-authored'),
+    evaluation: repositoryPath('suites[].evaluation').refine((value) => value.endsWith('/evaluation.json'), {
+      message: 'an Evaluate-authored suite must point at an evaluation.json',
+    }),
+    thresholds: z
+      .object({
+        trials: z.number().int().positive(),
+        strengthFloor: z.record(z.number().nonnegative()),
+        catchThreshold: z.number(),
+        minimumTrialCount: z.number().int().positive(),
+        severityFloor: nonEmptyString('suites[].thresholds.severityFloor'),
+      })
+      .strict(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (Boolean(value.skill) === Boolean(value.skills)) {
+      ctx.addIssue({ code: 'custom', message: 'a suite entry declares exactly one of "skill" or "skills"' });
+    }
+    if (value.skills && new Set(value.skills).size !== value.skills.length) {
+      ctx.addIssue({ code: 'custom', path: ['skills'], message: 'suites[].skills must not repeat a skill' });
+    }
+    if (Object.keys(value.thresholds.strengthFloor).length === 0) {
+      ctx.addIssue({ code: 'custom', path: ['thresholds', 'strengthFloor'], message: 'strengthFloor must name a probe class' });
+    }
+  });
+
+const suiteEntrySchema = z.union([harnessSuiteEntrySchema, evaluateAuthoredEntrySchema]);
+
 const deferredEntrySchema = z
   .object({
     $comment: commentSchema.optional(),
@@ -161,11 +198,10 @@ const suiteManifestSchema = z
       deferredSkills.add(entry.skill);
     }
 
-    // A skill cannot be both covered and deferred: a deferred entry means no
-    // behavioral evidence exists, and a behavioral suite is that evidence.
+    // A skill cannot be both covered and deferred.
     const covered = new Set();
     for (const suite of value.suites) {
-      if (suite.evalType !== 'behavioral') continue;
+      if (suite.evalType !== 'behavioral' && suite.evalType !== 'evaluate-authored') continue;
       for (const skill of suite.skills ?? [suite.skill]) covered.add(skill);
     }
     for (const [index, entry] of value.deferred.entries()) {
@@ -173,7 +209,7 @@ const suiteManifestSchema = z
         ctx.addIssue({
           code: 'custom',
           path: ['deferred', index, 'skill'],
-          message: `"${entry.skill}" has a behavioral suite, so it cannot also be deferred`,
+          message: `"${entry.skill}" has a suite, so it cannot also be deferred`,
         });
       }
     }

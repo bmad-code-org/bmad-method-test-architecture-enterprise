@@ -55,7 +55,8 @@
               "enum": [
                 "fragment-selection",
                 "behavioral",
-                "infrastructure"
+                "infrastructure",
+                "evaluate-authored"
               ]
             },
             "skills": {
@@ -696,6 +697,12 @@
           }
         },
         "unaccountedSkills": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/EvalResult/properties/suite/properties/id"
+          }
+        },
+        "skippedSuiteIds": {
           "type": "array",
           "items": {
             "$ref": "#/definitions/EvalResult/properties/suite/properties/id"

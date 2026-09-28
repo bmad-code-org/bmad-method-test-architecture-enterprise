@@ -3,7 +3,7 @@
  *
  * The suite list comes from test/evals/suite-manifest.json, never from this
  * file. That is what makes the accounting check below possible: before anything
- * runs, every TEA skill in the repository must have either a behavioral suite or
+ * runs, every TEA skill in the repository must have either a covering suite or
  * an explicit deferred declaration, and a skill in neither is exit 2 with
  * nothing measured. A runner that quietly skips the skill it has no eval for
  * reports a green run that means less than the reader thinks, and that is the
@@ -61,8 +61,9 @@ const REPETITION_OVERRIDES = { fragmentRuns: 'fragment-selection', reviewRuns: '
 
 const USAGE = `Usage: npm run eval:all -- --agent <agy|claude|codex|custom> [options]
 
-Runs every suite registered in test/evals/suite-manifest.json, and refuses to run
-when a TEA skill has neither a behavioral suite nor a deferred declaration.
+Runs every generator-owned suite registered in test/evals/suite-manifest.json.
+Evaluate-authored suites are recorded as skipped for tea-evaluate ci, and the
+command refuses to run when a TEA skill has neither covering suite nor deferred declaration.
 
 Options:
   --agent <name>         Runner to use. Repeat for multiple built-in runners.
@@ -209,24 +210,31 @@ function repetitionsFor(suite, options) {
  */
 function buildInvocations(options, manifest, jsonDirectory = null) {
   const workflows = options.workflows.flatMap((workflow) => ['--workflow', workflow]);
-  return manifest.suites.map((suite) => {
-    const jsonPath = jsonDirectory ? path.join(jsonDirectory, `${suite.id}.json`) : null;
-    const args = [...sharedRunnerArgs(options)];
-    if (suite.harnessOptions.acceptsWorkflowFilter) args.push(...workflows);
-    if (options.preflightOnly) {
-      args.push(...suite.harnessOptions.preflightArgs);
-    } else {
-      args.push(suite.harnessOptions.repetitionFlag, String(repetitionsFor(suite, options)));
-    }
-    if (jsonPath) args.push('--json', jsonPath);
-    return {
-      suite,
-      label: `${suite.id} ${options.preflightOnly ? 'preflight' : 'live eval'}`,
-      script: path.join(PROJECT_ROOT, suite.harness),
-      args,
-      jsonPath,
-    };
-  });
+  return manifest.suites
+    .filter((suite) => suite.evalType !== 'evaluate-authored')
+    .map((suite) => {
+      const jsonPath = jsonDirectory ? path.join(jsonDirectory, `${suite.id}.json`) : null;
+      const args = [...sharedRunnerArgs(options)];
+      if (suite.harnessOptions.acceptsWorkflowFilter) args.push(...workflows);
+      if (options.preflightOnly) {
+        args.push(...suite.harnessOptions.preflightArgs);
+      } else {
+        args.push(suite.harnessOptions.repetitionFlag, String(repetitionsFor(suite, options)));
+      }
+      if (jsonPath) args.push('--json', jsonPath);
+      return {
+        suite,
+        label: `${suite.id} ${options.preflightOnly ? 'preflight' : 'live eval'}`,
+        script: path.join(PROJECT_ROOT, suite.harness),
+        args,
+        jsonPath,
+      };
+    });
+}
+
+/** Suite IDs handled by tea-evaluate ci rather than this runner. */
+function skippedEvaluateAuthoredSuiteIds(manifest) {
+  return manifest.suites.filter((suite) => suite.evalType === 'evaluate-authored').map((suite) => suite.id);
 }
 
 /** The failure class that matches an exit code, for a child that recorded none. */
@@ -620,7 +628,7 @@ async function main() {
 
   let manifest;
   try {
-    ({ manifest } = await loadSuiteManifest(PROJECT_ROOT));
+    ({ manifest } = await loadSuiteManifest(PROJECT_ROOT, process.env.TEA_EVAL_MANIFEST_PATH || null));
   } catch (error) {
     console.error(`eval:all: ${error.message}`);
     process.exit(2);
@@ -632,13 +640,19 @@ async function main() {
   const startedAt = await nowMs();
 
   const skills = teaSkills(PROJECT_ROOT);
+  const skippedSuiteIds = skippedEvaluateAuthoredSuiteIds(manifest);
+  if (skippedSuiteIds.length > 0) {
+    console.log(`eval:all: skipping ${skippedSuiteIds.length} Evaluate-authored suite(s); run them with tea-evaluate ci`);
+  }
   const unaccounted = unaccountedSkills(manifest, skills);
   if (unaccounted.length > 0) {
     console.error('eval:all: the suite manifest does not account for every TEA skill; nothing was measured.');
     for (const skill of unaccounted) {
-      console.error(`  - ${skill}: no behavioral suite and no deferred declaration in test/evals/suite-manifest.json`);
+      console.error(`  - ${skill}: no covering suite and no deferred declaration in test/evals/suite-manifest.json`);
     }
-    console.error('\nAdd a behavioral suite, or a deferred entry naming its owner, missing evidence, and exit condition.');
+    console.error(
+      '\nAdd a behavioral or Evaluate-authored suite, or a deferred entry naming its owner, missing evidence, and exit condition.',
+    );
     if (options.jsonPath) {
       await writeRunSummary(
         options.jsonPath,
@@ -647,6 +661,7 @@ async function main() {
           repository: repositoryState(PROJECT_ROOT),
           suites: [],
           unaccountedSkills: unaccounted,
+          skippedSuiteIds,
           durationMs: await elapsedMsSince(startedAt),
         }),
       );
@@ -697,6 +712,7 @@ async function main() {
       repository: repositoryState(PROJECT_ROOT),
       suites: children.map((child) => child.record).filter(Boolean),
       unaccountedSkills: [],
+      skippedSuiteIds,
       durationMs: await elapsedMsSince(startedAt),
     });
     aggregate = options.jsonPath ? summary.exitCode : aggregateExitCodes(children.map((child) => child.exitCode));
@@ -729,6 +745,7 @@ module.exports = {
   parseArgs,
   sharedRunnerArgs,
   buildInvocations,
+  skippedEvaluateAuthoredSuiteIds,
   aggregateExitCodes,
   runFailureClass,
   repetitionsFor,

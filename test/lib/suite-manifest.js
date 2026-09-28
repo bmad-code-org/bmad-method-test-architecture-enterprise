@@ -21,7 +21,8 @@ function manifestError(message) {
 }
 
 /**
- * Load and validate test/evals/suite-manifest.json.
+ * Load and validate test/evals/suite-manifest.json, or a supplied manifest
+ * path for isolated callers and fixtures.
  *
  * Read through `test/lib/file-system-port.js`, so this module makes no direct
  * `fs` call at all. The existence check that used to guard the read is gone: the
@@ -33,25 +34,28 @@ function manifestError(message) {
  * frame.
  *
  * @param {string} [projectRoot]
+ * @param {string} [manifestPathOverride]
  * @returns {Promise<{manifest: object, manifestPath: string}>}
  * @throws {Error} EVAL_MANIFEST_INVALID when the file is missing, unparseable, or off-schema.
  */
-async function loadSuiteManifest(projectRoot = PROJECT_ROOT) {
-  const manifestPath = path.join(projectRoot, MANIFEST_RELATIVE_PATH);
+async function loadSuiteManifest(projectRoot = PROJECT_ROOT, manifestPathOverride = null) {
+  const manifestPath = manifestPathOverride
+    ? path.resolve(projectRoot, manifestPathOverride)
+    : path.join(projectRoot, MANIFEST_RELATIVE_PATH);
   const read = await readText(manifestPath);
-  if (!read.present) throw manifestError(`no suite manifest at ${MANIFEST_RELATIVE_PATH}`);
+  if (!read.present) throw manifestError(`no suite manifest at ${manifestPath}`);
 
   let parsed;
   try {
     parsed = JSON.parse(read.text);
   } catch (error) {
-    throw manifestError(`${MANIFEST_RELATIVE_PATH} is not valid JSON: ${error.message}`);
+    throw manifestError(`${manifestPath} is not valid JSON: ${error.message}`);
   }
 
   const result = validateSuiteManifest(parsed);
   if (!result.success) {
     const issues = result.error.issues.map((issue) => `  ${issue.path.join('.') || '(root)'}: ${issue.message}`).join('\n');
-    throw manifestError(`${MANIFEST_RELATIVE_PATH} does not match its schema:\n${issues}`);
+    throw manifestError(`${manifestPath} does not match its schema:\n${issues}`);
   }
   return { manifest: result.data, manifestPath };
 }
@@ -71,7 +75,7 @@ function skillsOf(entry) {
 }
 
 /**
- * Skills with neither a behavioral suite nor a deferred declaration.
+ * Skills with neither a covering suite nor a deferred declaration.
  *
  * Fragment selection deliberately does not count. It measures which knowledge a
  * run loads, which happens before the workflow produces anything, so treating
@@ -84,7 +88,7 @@ function skillsOf(entry) {
 function unaccountedSkills(manifest, skills) {
   const accounted = new Set(manifest.deferred.map((entry) => entry.skill));
   for (const entry of manifest.suites) {
-    if (entry.evalType !== 'behavioral') continue;
+    if (entry.evalType !== 'behavioral' && entry.evalType !== 'evaluate-authored') continue;
     for (const skill of skillsOf(entry)) accounted.add(skill);
   }
   return skills.filter((skill) => !accounted.has(skill)).sort();
