@@ -1095,7 +1095,7 @@ async function checkTestDesignOracles(evaluator) {
       document:
         '# Test Design: Epic 7\n\n### Risk Register (Score 1-9)\n\n' +
         '   | Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
-        '   | --- | --- | --- | --- | --- | --- | --- | --- |\n' +
+        '   | --- | --- | --- | --- | --- | --- | --- |\n' +
         `   | R-001 | SEC | ${marker} | 2 | 2 | 4 | Test |\n`,
       mentioned: true,
       riskRowCount: 1,
@@ -1105,7 +1105,7 @@ async function checkTestDesignOracles(evaluator) {
       document:
         '# Test Design: Epic 7\n\n### Risk Register (Score 1-9)\n\n10. Risk register:\n\n' +
         '    | Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
-        '    | --- | --- | --- | --- | --- | --- | --- | --- |\n' +
+        '    | --- | --- | --- | --- | --- | --- | --- |\n' +
         `    | R-001 | SEC | ${marker} | 2 | 2 | 4 | Test |\n`,
       mentioned: true,
       riskRowCount: 1,
@@ -1121,10 +1121,40 @@ async function checkTestDesignOracles(evaluator) {
       riskRowCount: 2,
     },
     {
+      label: 'scored risk in a bullet table with four spaces after its marker',
+      document:
+        register('The local queue is checked before upload.', 1, 2, 2, 'Document') +
+        '\n-    | Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '     | --- | --- | --- | --- | --- | --- | --- |\n' +
+        `     | R-002 | SEC | ${marker} | 2 | 2 | 4 | Test |\n`,
+      mentioned: true,
+      riskRowCount: 2,
+    },
+    {
+      label: 'scored example in indented code after five list marker spaces',
+      document:
+        register('The local queue is checked before upload.', 1, 2, 2, 'Document') +
+        '\n-     | Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '      | --- | --- | --- | --- | --- | --- | --- |\n' +
+        `      | R-002 | SEC | ${marker} | 2 | 2 | 4 | Test |\n`,
+      mentioned: false,
+      riskRowCount: 1,
+    },
+    {
+      label: 'scored example in nested indented code after five list marker spaces',
+      document:
+        register('The local queue is checked before upload.', 1, 2, 2, 'Document') +
+        '\n- Examples:\n  -     | Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '        | --- | --- | --- | --- | --- | --- | --- |\n' +
+        `        | R-002 | SEC | ${marker} | 2 | 2 | 4 | Test |\n`,
+      mentioned: false,
+      riskRowCount: 1,
+    },
+    {
       label: 'scored risk in a nested ordered table whose header starts on the marker line',
       document:
         register('The local queue is checked before upload.', 1, 2, 2, 'Document') +
-        '\n- Risks:\n  10. | Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '\n- Risks:\n\n  10. | Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
         '      | --- | --- | --- | --- | --- | --- | --- |\n' +
         `      | R-002 | SEC | ${marker} | 2 | 2 | 4 | Test |\n`,
       mentioned: true,
@@ -1139,6 +1169,18 @@ async function checkTestDesignOracles(evaluator) {
         '  | --- | --- | --- | --- | --- | --- | --- |\n' +
         `  | R-002 | SEC | ${marker} | 2 | 2 | 4 | Test |\n` +
         '  ```\n',
+      mentioned: false,
+      riskRowCount: 1,
+    },
+    {
+      label: 'backtick fenced scored example follows four list marker spaces',
+      document:
+        register('The local queue is checked before upload.', 1, 2, 2, 'Document') +
+        '\n-    ```markdown\n' +
+        '     | Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '     | --- | --- | --- | --- | --- | --- | --- |\n' +
+        `     | R-002 | SEC | ${marker} | 2 | 2 | 4 | Test |\n` +
+        '     ```\n',
       mentioned: false,
       riskRowCount: 1,
     },

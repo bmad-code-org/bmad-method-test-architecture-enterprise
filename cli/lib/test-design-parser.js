@@ -4,133 +4,61 @@
  */
 'use strict';
 
+const MarkdownIt = require('markdown-it');
+
 const RISK_ID_PATTERN = /^R-\d{3}$/;
 const RISK_REFERENCE_PATTERN = /R-\d{3}/g;
+const markdown = new MarkdownIt();
 
-/** One markdown table cell, with the emphasis and code fencing a template seeds stripped off. */
-function cellText(value) {
-  return String(value ?? '')
-    .replaceAll('`', '')
-    .replaceAll('**', '')
-    .replace(/^\s*\|/, '')
+/** The visible text of a heading or table cell, including inline code and link labels. */
+function inlineText(token) {
+  return (token.children ?? [])
+    .filter((child) => ['text', 'code_inline', 'html_inline'].includes(child.type))
+    .map((child) => child.content)
+    .join('')
     .trim();
 }
 
-/** Split a Markdown table row at unescaped pipes, with or without outer pipes. */
-function tableCells(line) {
-  const trimmed = line.trim();
-  const cells = [];
-  let cell = '';
-  let escaped = false;
-  let lastWasSeparator = false;
-  for (const character of trimmed) {
-    if (character === '|' && !escaped) {
-      cells.push(cell);
-      cell = '';
-      lastWasSeparator = true;
-    } else {
-      cell += character;
-      lastWasSeparator = false;
-    }
-    escaped = character === '\\' && !escaped;
-  }
-  cells.push(cell);
-  if (trimmed.startsWith('|')) cells.shift();
-  if (lastWasSeparator) cells.pop();
-  return cells.map((value) => cellText(value.replaceAll(String.raw`\|`, '|')));
-}
-
-/** Is this the `| --- | --- |` or `--- | ---` separator row? */
-function isSeparatorRow(line) {
-  const cells = tableCells(line);
-  return cells.length >= 2 && cells.every((cell) => /^:?-+:?$/.test(cell));
-}
-
-/** Markdown indentation uses tab stops every four columns. */
-function columnsThrough(value) {
-  let columns = 0;
-  for (const character of value) columns += character === '\t' ? 4 - (columns % 4) : 1;
-  return columns;
-}
-
-/** Exclude indented code while retaining tables inside list-item content. */
-function contentLines(lines) {
-  const listIndents = [];
-  let blankLines = 0;
-  return lines.map((line) => {
-    if (line.trim() === '') {
-      blankLines += 1;
-      // Two blank lines end containing lists, so later code uses document indentation.
-      if (blankLines > 1) listIndents.length = 0;
-      return '';
-    }
-    blankLines = 0;
-    const leading = /^[ \t]*/.exec(line)[0];
-    const indentation = columnsThrough(leading);
-    while (listIndents.length > 0 && indentation < listIndents.at(-1)) listIndents.pop();
-    const containerIndent = listIndents.at(-1) ?? 0;
-    const listMarker = /^([ \t]*)(?:[-+*]|\d{1,9}[.)])([ \t]+)/.exec(line);
-    if (listMarker && indentation - containerIndent <= 3) {
-      listIndents.push(columnsThrough(listMarker[0]));
-      return line.slice(listMarker[0].length);
-    }
-    const relativeIndent = indentation - containerIndent;
-    // Code starts four columns beyond the current list item's content edge.
-    if (relativeIndent >= 4) return '';
-    return `${' '.repeat(relativeIndent)}${line.slice(leading.length)}`;
-  });
-}
-
 /**
- * Every markdown table in the document, with the headings it sits under.
+ * Every GFM table in the document, with the headings it sits under.
  *
- * Headings are tracked rather than the table located by index, because the
- * template seeds three risk tables and four coverage tables and a run may merge,
- * split or rename any of them. What a table is, is decided by its own column
- * names; where it sits decides which priority its rows carry.
+ * Markdown block tokens exclude fenced and indented code, including code in
+ * lists. Headings are tracked because the template seeds three risk tables and
+ * four coverage tables; a run may merge, split or rename any of them. A table
+ * qualifies by its column names; its headings determine the priority of its rows.
  *
  * @param {string} text
  * @returns {Array<{headings: string[], header: string[], rows: string[][]}>}
  */
 function parseTables(text) {
-  const lines = contentLines(text.split(/\r?\n/));
+  const tokens = markdown.parse(text, {});
   const tables = [];
   const headings = [];
-  let fence = null;
-  for (let index = 0; index < lines.length; index += 1) {
-    // A fenced block is illustration, never the register. The workflow's own
-    // knowledge fragments and its worked example are full of them, and
-    // resources/test-design-epic-3.example.md is a register the agent is invited
-    // to imitate, so a run that quoted one into its own document scored the
-    // example's rows as its own and hard-failed three checks for quoting.
-    const marker = /^\s{0,3}(`{3,}|~{3,})(.*)$/.exec(lines[index]);
-    // CommonMark forbids backticks in a backtick fence's info string.
-    if (marker && !fence && (marker[1][0] === '~' || !marker[2].includes('`'))) {
-      fence = { character: marker[1][0], width: marker[1].length };
-      continue;
-    }
-    if (fence) {
-      if (marker && marker[1][0] === fence.character && marker[1].length >= fence.width && marker[2].trim() === '') fence = null;
-      continue;
-    }
-    const heading = /^(#{1,6})\s+(.*)$/.exec(lines[index]);
-    if (heading) {
-      const level = heading[1].length;
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (token.type === 'heading_open') {
+      const level = Number.parseInt(token.tag.slice(1), 10);
       headings.length = Math.min(headings.length, level - 1);
-      headings[level - 1] = cellText(heading[2]);
+      headings[level - 1] = inlineText(tokens[index + 1]);
       continue;
     }
-    if (tableCells(lines[index]).length < 2) continue;
-    if (index + 1 >= lines.length || !isSeparatorRow(lines[index + 1])) continue;
-    const header = tableCells(lines[index]);
-    const rows = [];
-    let cursor = index + 2;
-    while (cursor < lines.length && tableCells(lines[cursor]).length > 1 && !/^\s{0,3}(?:`{3,}|~{3,})/.test(lines[cursor])) {
-      rows.push(tableCells(lines[cursor]));
-      cursor += 1;
+    if (token.type !== 'table_open') continue;
+    const table = { headings: headings.filter(Boolean), header: [], rows: [] };
+    let row = null;
+    let inHeader = false;
+    while (++index < tokens.length && tokens[index].type !== 'table_close') {
+      const part = tokens[index];
+      if (part.type === 'thead_open') inHeader = true;
+      if (part.type === 'tbody_open') inHeader = false;
+      if (part.type === 'tr_open') row = [];
+      if (part.type === 'inline' && row) row.push(inlineText(part));
+      if (part.type === 'tr_close') {
+        if (inHeader) table.header = row;
+        else table.rows.push(row);
+        row = null;
+      }
     }
-    tables.push({ headings: headings.filter(Boolean), header, rows });
-    index = cursor - 1;
+    tables.push(table);
   }
   return tables;
 }
