@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "keys": {
+    "example-oracle": {
+      "oracleId": "O-001",
+      "behaviorId": "B-001"
+    }
+  }
+}

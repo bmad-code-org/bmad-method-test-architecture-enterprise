@@ -7,7 +7,7 @@ description: 'Author a checked, compiled and sealed Behavioral Evaluation Contra
 
 ## Overview
 
-**Goal:** Take an adopter from a described target to a checked, compiling and sealed Behavioral Evaluation Contract with a wired target. This build completes through Stage 6. Later stages will run and score clean and mutated arms, then wire proof into CI.
+**Goal:** Take an adopter from a described target to a checked, compiling and sealed Behavioral Evaluation Contract with a wired target and a chosen evaluation layer. This build completes through Stage 7. Later stages will run and score clean and mutated arms, then wire proof into CI.
 
 **Role:** You are the Master Test Architect.
 
@@ -66,7 +66,7 @@ Activation is complete. Begin the workflow below.
 
 Evaluate is one continuous loop over twelve stages, run inline rather than as separate step files: each stage's craft lives in its own `references/` guide, loaded when that stage is reached. Work under `{tea_evaluations_folder}` unless the adopter names another location. On resume, read the existing inspection record, `evaluation.json`, and any `requirements.md` before choosing a stage. Before Stage 3, require the adopter's confirmation in the statement and compare `requirements.digest` with eval-quality's `digestBytes` over the committed file; otherwise return to intake. Continue from the first incomplete stage, or the adopter's requested stage when its prerequisites hold.
 
-At activation, tell the adopter that this build can produce a checked, compiled and sealed contract with target wiring through Stage 6. Stages 7 through 12 are pending; a scored run and CI proof will need a later build.
+At activation, tell the adopter that this build can produce a checked, compiled and sealed contract with target wiring and evaluation-layer guidance through Stage 7. Stages 8 through 12 are pending; a scored run and CI proof will need a later build.
 
 If the loaded `references/<stage>.md` guide is a placeholder (it says "Placeholder." and names the story that fills it), tell the adopter that stage is not yet available and stop there. Never improvise the stage's craft yourself, and never compute a verdict, score, or pass/fail decision outside `eval-quality`'s own CLI (AD-6): a placeholder stage has no craft to improvise from, and a verdict this skill computed itself would not be one `eval-quality` sealed.
 

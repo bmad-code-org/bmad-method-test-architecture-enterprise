@@ -14,7 +14,8 @@ const path = require('node:path');
 const vm = require('node:vm');
 const { spawnSync } = require('node:child_process');
 const AjvModule = require('ajv/dist/2020');
-const { engineCliPath, engineSchemaPath, loadEngine } = require('../cli/lib/evaluate/engine');
+const YAML = require('yaml');
+const { ENGINE_CLI_ENV, engineCliPath, engineSchemaPath, loadEngine } = require('../cli/lib/evaluate/engine');
 const { calibrationProblems } = require('../cli/lib/evaluate/calibration');
 
 const Ajv = AjvModule.default ?? AjvModule;
@@ -1385,6 +1386,408 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
   }
 }
 
+function checkFrameworkTemplate(template, fixtureName, evaluationName, executable, failures) {
+  const source = ASSET(path.join('evaluators', template));
+  if (!fs.existsSync(source)) {
+    failures.push(`assets/evaluators/${template} is missing`);
+    return;
+  }
+  const root = fs.mkdtempSync(path.join(__dirname, '.tea-guidance-template-'));
+  const evaluation = path.join(root, 'evals', evaluationName);
+  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== ENGINE_CLI_ENV && !key.startsWith('GIT_')));
+  const run = (bin, args, cwd = path.join(__dirname, '..')) => {
+    const result = spawnSync(bin, args, { cwd, env, encoding: 'utf8', timeout: 300_000 });
+    if (result.error) throw result.error;
+    return result;
+  };
+  try {
+    fs.cpSync(path.join(__dirname, 'fixtures', fixtureName), root, { recursive: true });
+    const destination = path.join(evaluation, 'evaluator', executable);
+    fs.copyFileSync(source, destination);
+    fs.chmodSync(destination, 0o755);
+    if (template === 'agentevals-trajectory.mjs') {
+      fs.copyFileSync(
+        path.join(evaluation, 'evaluator', 'reference', 'weather.json'),
+        path.join(evaluation, 'evaluator', 'reference', 'trajectory.json'),
+      );
+    } else {
+      const assertionsFile = path.join(evaluation, 'evaluator', 'asserts.yaml');
+      const assertions = YAML.parse(fs.readFileSync(assertionsFile, 'utf8'));
+      const metricByAssertion = new Map([
+        ['contains:apples', 'required-apples'],
+        ['contains:pears', 'required-pears'],
+        ['not-contains:shellfish', 'forbidden-shellfish'],
+      ]);
+      for (const assertion of assertions) assertion.metric = metricByAssertion.get(`${assertion.type}:${assertion.value}`);
+      assert.ok(
+        assertions.every((assertion) => assertion.metric),
+        'fixture assertion lacks a mapping metric',
+      );
+      fs.writeFileSync(assertionsFile, YAML.stringify(assertions));
+    }
+    for (const [bin, args, cwd] of [
+      [process.execPath, [path.join(__dirname, '..', 'cli', 'evaluate.js'), 'digest', '--evaluation', evaluation]],
+      ['git', ['init', '--quiet', '--initial-branch', 'main'], root],
+      ['git', ['add', '--all'], root],
+      ['git', ['-c', 'user.name=TeA test', '-c', 'user.email=tea-test@example.test', 'commit', '--quiet', '-m', 'template fixture'], root],
+    ]) {
+      const result = run(bin, args, cwd);
+      if (result.status !== 0) {
+        failures.push(`${template} setup failed: ${result.stdout}${result.stderr}`);
+        return;
+      }
+    }
+    for (const subcommand of ['check', 'preflight', 'run', 'score']) {
+      const result = run(process.execPath, [path.join(__dirname, '..', 'cli', 'evaluate.js'), subcommand, '--evaluation', evaluation]);
+      if (result.status !== 0) {
+        failures.push(`${template} ${subcommand} exited ${result.status}: ${result.stdout}${result.stderr}`);
+        return;
+      }
+    }
+    const runs = path.join(evaluation, 'runs');
+    const latest = fs
+      .readdirSync(runs)
+      .filter((name) => name !== '.gitignore')
+      .sort()
+      .at(-1);
+    const scores = path.join(runs, latest, 'scores');
+    const score = fs.readdirSync(scores).sort().at(-1);
+    for (const [probeId, expected] of [
+      ['P-001', 'passed-clean-control'],
+      ['P-002', 'caught'],
+    ]) {
+      const evidence = JSON.parse(fs.readFileSync(path.join(scores, score, probeId, 'evidence-artifact.json'), 'utf8'));
+      const states = evidence.reducedProbeOutcomes[0].trialVotes.map((vote) => vote.state);
+      if (states.length !== 3 || !states.every((state) => state === expected))
+        failures.push(`${template} ${probeId} resolved ${states.join(', ')}, expected three ${expected} votes`);
+    }
+    if (template === 'agentevals-trajectory.mjs') {
+      const reference = JSON.parse(fs.readFileSync(path.join(evaluation, 'evaluator', 'reference', 'weather.json'), 'utf8'));
+      const alternate = structuredClone(reference);
+      alternate[0].content = 'Weather in Boston';
+      alternate[1].tool_calls[0].function.arguments = '{"city":"Boston"}';
+      fs.writeFileSync(path.join(evaluation, 'evaluator', 'reference', 'alternate.json'), JSON.stringify(alternate));
+      const added = run('git', ['add', 'evals/tool-use/evaluator/reference/alternate.json'], root);
+      assert.strictEqual(added.status, 0, `AgentEvals alternate reference setup failed: ${added.stderr}`);
+      const result = spawnSync(process.execPath, [destination, '--reference=reference/alternate.json', '--prefix=selected: '], {
+        cwd: evaluation,
+        env,
+        encoding: 'utf8',
+        input: JSON.stringify({
+          observations: [
+            { observationId: 'decoy', stdout: { kind: 'text', value: `trajectory: ${JSON.stringify(reference)}` } },
+            { observationId: 'selected', stdout: { kind: 'text', value: `selected: ${JSON.stringify(alternate)}` } },
+          ],
+        }),
+      });
+      assert.strictEqual(result.status, 0, `AgentEvals template flags failed: ${result.stderr}`);
+      const rows = JSON.parse(result.stdout).rows;
+      assert.deepStrictEqual(
+        rows.map((row) => [row.key, row.outcome, row.observationIds]),
+        [['trajectory_strict_match', 'pass', ['selected']]],
+      );
+      const ambiguous = spawnSync(process.execPath, [destination, '--reference=reference/alternate.json', '--prefix=selected: '], {
+        cwd: evaluation,
+        env,
+        encoding: 'utf8',
+        input: JSON.stringify({
+          observations: [
+            { observationId: 'first', stdout: { kind: 'text', value: `selected: ${JSON.stringify(alternate)}` } },
+            { observationId: 'second', stdout: { kind: 'text', value: `selected: ${JSON.stringify(reference)}` } },
+          ],
+        }),
+      });
+      assert.notStrictEqual(ambiguous.status, 0, 'AgentEvals template accepted an ambiguous trajectory prefix');
+      assert.match(ambiguous.stderr, /expected one stdout trajectory matching the prefix, found 2/);
+      const missingMessage = `trajectory: ${JSON.stringify(reference.slice(1))}`;
+      const missing = spawnSync(process.execPath, [destination], {
+        cwd: evaluation,
+        env,
+        encoding: 'utf8',
+        input: JSON.stringify({ observations: [{ observationId: 'missing', stdout: { kind: 'text', value: missingMessage } }] }),
+      });
+      assert.strictEqual(missing.status, 0, `AgentEvals missing-message result failed: ${missing.stderr}`);
+      assert.deepStrictEqual(
+        JSON.parse(missing.stdout).rows.map((row) => [row.outcome, row.quote, row.observationIds]),
+        [['fail', missingMessage, ['missing']]],
+      );
+      const outside = path.join(evaluation, 'outside.json');
+      fs.writeFileSync(outside, JSON.stringify(reference));
+      const referenceInput = JSON.stringify({
+        observations: [{ observationId: 'reference-test', stdout: { kind: 'text', value: `trajectory: ${JSON.stringify(reference)}` } }],
+      });
+      fs.writeFileSync(path.join(evaluation, 'evaluator', 'reference', 'untracked.json'), JSON.stringify(reference));
+      fs.writeFileSync(path.join(evaluation, 'evaluator', 'reference', 'trajectory*.json'), JSON.stringify(reference));
+      fs.symlinkSync(outside, path.join(evaluation, 'evaluator', 'reference', 'linked.json'));
+      for (const [argument, reason] of [
+        ['--reference=../outside.json', /under evaluator\/reference/],
+        ['--reference=reference/untracked.json', /git must track/],
+        ['--reference=reference/trajectory*.json', /git must track/],
+        ['--reference=reference/linked.json', /regular file.*no linked path/],
+      ]) {
+        const rejected = spawnSync(process.execPath, [destination, argument], {
+          cwd: evaluation,
+          env,
+          encoding: 'utf8',
+          input: referenceInput,
+        });
+        assert.notStrictEqual(rejected.status, 0, `AgentEvals template accepted ${argument}`);
+        assert.match(rejected.stderr, reason);
+      }
+    } else {
+      checkPromptfooTemplateIdentity(destination, evaluation, env);
+    }
+  } catch (error) {
+    failures.push(`${template} template pipeline: ${error.stack}`);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+}
+
+function checkPromptfooTemplateIdentity(destination, evaluation, env) {
+  const selected = { observationId: 'selected', stdout: { kind: 'text', value: 'Selected summary: apples, pears\n' } };
+  const input = {
+    observations: [{ observationId: 'decoy', stdout: { kind: 'text', value: 'Decoy summary: apples, pears\n' } }, selected],
+  };
+  const run = (args, payload) => {
+    const result = spawnSync(process.execPath, [destination, ...args], {
+      cwd: evaluation,
+      env,
+      encoding: 'utf8',
+      input: JSON.stringify(payload),
+      timeout: 90_000,
+    });
+    if (result.error) throw result.error;
+    return result;
+  };
+  const real = run(['--stdout-prefix=Selected summary:'], input);
+  assert.strictEqual(real.status, 0, `promptfoo template stdout selection failed: ${real.stderr}`);
+  const realRows = JSON.parse(real.stdout).rows;
+  assert.deepStrictEqual(
+    realRows.map((row) => [row.key, row.observationIds]),
+    [
+      ['required-apples', ['selected']],
+      ['required-pears', ['selected']],
+      ['forbidden-shellfish', ['selected']],
+    ],
+  );
+  const ambiguous = run(['--stdout-prefix=Selected summary:'], {
+    observations: [selected, { observationId: 'another', stdout: { kind: 'text', value: 'Selected summary: shellfish\n' } }],
+  });
+  assert.notStrictEqual(ambiguous.status, 0, 'promptfoo template accepted an ambiguous stdout prefix');
+  assert.match(ambiguous.stderr, /expected one stdout observation matching the prefix, found 2/);
+  const assertionsFile = path.join(evaluation, 'evaluator', 'asserts.yaml');
+  const fullAssertions = fs.readFileSync(assertionsFile, 'utf8');
+  try {
+    fs.writeFileSync(assertionsFile, YAML.stringify(YAML.parse(fullAssertions).slice(0, 2)));
+    const incomplete = run(['--stdout-prefix=Selected summary:'], input);
+    assert.notStrictEqual(incomplete.status, 0, 'promptfoo template accepted an incomplete assertion set');
+    assert.match(incomplete.stderr, /did not judge every mapped assertion exactly once/);
+  } finally {
+    fs.writeFileSync(assertionsFile, fullAssertions);
+  }
+
+  const assertion = (metric, type, value) => ({ metric, type, value });
+  const map = (
+    assertions,
+    passes,
+    observation = selected,
+    output = observation.stdout.value.endsWith('\n') ? observation.stdout.value.slice(0, -1) : observation.stdout.value,
+  ) => {
+    const result = {
+      response: { output },
+      testCase: { assert: assertions },
+      gradingResult: {
+        componentResults: assertions.map((item, index) => ({ assertion: item, pass: passes[index] })),
+      },
+    };
+    return run(['--map-results'], { results: [result], observation });
+  };
+  const reordered = map(
+    [
+      assertion('forbidden-shellfish', 'not-contains', 'shellfish'),
+      assertion('required-apples', 'contains', 'apples'),
+      assertion('required-pears', 'contains', 'pears'),
+    ],
+    [false, true, false],
+  );
+  assert.strictEqual(reordered.status, 0, `promptfoo template reordered assertions failed: ${reordered.stderr}`);
+  assert.deepStrictEqual(
+    JSON.parse(reordered.stdout).rows.map((row) => [row.key, row.outcome]),
+    [
+      ['forbidden-shellfish', 'fail'],
+      ['required-apples', 'pass'],
+      ['required-pears', 'fail'],
+    ],
+  );
+  const subset = map([assertion('required-pears', 'contains', 'pears')], [true]);
+  assert.strictEqual(subset.status, 0, `promptfoo template subset failed: ${subset.stderr}`);
+  assert.deepStrictEqual(
+    JSON.parse(subset.stdout).rows.map((row) => [row.key, row.outcome]),
+    [['required-pears', 'pass']],
+  );
+  const missingIdentity = map([assertion(undefined, 'contains', 'pears')], [true]);
+  assert.notStrictEqual(missingIdentity.status, 0, 'promptfoo template accepted an assertion without a mapping metric');
+  const mismatchedOutput = map([assertion('required-pears', 'contains', 'pears')], [true], selected, 'another output');
+  assert.notStrictEqual(mismatchedOutput.status, 0, 'promptfoo template accepted a grade for different stdout');
+  assert.match(mismatchedOutput.stderr, /output differs from the cited stdout observation/);
+  const whitespace = { observationId: 'whitespace', stdout: { kind: 'text', value: 'Selected summary: apples, pears \n' } };
+  const whitespaceMismatch = map([assertion('required-pears', 'contains', 'pears')], [true], whitespace, 'Selected summary: apples, pears');
+  assert.notStrictEqual(whitespaceMismatch.status, 0, 'promptfoo template accepted a grade for different trailing whitespace');
+  assert.match(whitespaceMismatch.stderr, /output differs from the cited stdout observation/);
+  const empty = { observationId: 'empty', stdout: { kind: 'text', value: '' }, exitCode: 0 };
+  const missingContent = map([assertion('required-pears', 'contains', 'pears')], [false], empty);
+  assert.strictEqual(missingContent.status, 0, `promptfoo template could not cite empty stdout: ${missingContent.stderr}`);
+  assert.deepStrictEqual(
+    JSON.parse(missingContent.stdout).rows.map((row) => [row.quote, row.quoteChannel, row.observationIds]),
+    [['0', 'exit-code', ['empty']]],
+  );
+}
+
+function checkEvaluatorGuidance(guide, failures) {
+  for (const heading of [
+    '## Run the system',
+    '## Capture observations on every oracle channel',
+    '## Judge the behavior',
+    '## Emit judgment rows or sealed records',
+    '## Selection rubric',
+    '## Framework landscape',
+    '## Learn an unfamiliar framework',
+    '## Vendor rule',
+  ])
+    requireHeading(guide, heading, 'evaluator.md', failures);
+  for (const [heading, markers] of [
+    ['## Run the system', ['authorized interface', 'deterministic', 'command', 'sealed-brief-agent', 'records', 'clean and defect arms']],
+    [
+      '## Capture observations on every oracle channel',
+      ['stdout', 'stderr', 'HTTP response', 'MCP result', 'observation IDs', 'quoteChannel', 'SealedRunRecord'],
+    ],
+    [
+      '## Judge the behavior',
+      [
+        'resolveCheck',
+        'calibrated judge',
+        'sealed brief',
+        'adopter code',
+        'evaluator/mapping.json',
+        'oracle and behavior',
+        'evaluation.json.judge',
+        'policy/evaluator-conditions.json.judge',
+        'policy/judge-calibration.json',
+        'judgeCalibration.minimumAgreement',
+      ],
+    ],
+    [
+      '## Emit judgment rows or sealed records',
+      ['{ "rows":', 'observationIds', 'quoteChannel', 'confidence', 'anchored integer', 'SealedRunRecord'],
+    ],
+  ]) {
+    const body = headingBody(guide, heading);
+    for (const marker of markers) requireText(body, marker, `evaluator.md ${heading}`, failures);
+  }
+
+  const rubric = headingBody(guide, '## Selection rubric');
+  const lines = rubric.split('\n').filter((line) => line.startsWith('|'));
+  const cells = lines.map((line) =>
+    line
+      .split('|')
+      .slice(1, -1)
+      .map((cell) => cell.trim()),
+  );
+  const criteria = [
+    'Determinism',
+    'Need for a model and its credentials',
+    'Visibility of process and trajectory',
+    'Need for reference outputs',
+    'Rubric and calibration needs',
+    'Language and runtime fit with adopter',
+    'Licence',
+    'Maintenance and version drift',
+    'Cost per trial',
+    'CI tier fit',
+  ];
+  try {
+    assert.deepStrictEqual(cells[0], ['Option', '`evaluator.kind`', ...criteria]);
+    assert.ok(
+      cells[1]?.every((cell) => /^-{3,}$/.test(cell)),
+      'rubric separator is missing',
+    );
+  } catch (error) {
+    failures.push(`evaluator.md selection rubric columns changed: ${error.message}`);
+  }
+  const options = new Map([
+    ['TeA deterministic evaluator', 'deterministic'],
+    ['Sealed-brief agent evaluator', 'sealed-brief-agent'],
+    ['Adopter harness sealing records', 'records'],
+    ['Skill-specific evaluator', 'command'],
+    ['Custom evaluation code', 'command'],
+    ['External evaluation framework', 'command'],
+  ]);
+  const validKinds = JSON.parse(
+    fs.readFileSync(path.join(__dirname, '..', 'cli', 'lib', 'evaluate', 'schemas', 'evaluation.schema.json'), 'utf8'),
+  ).properties.evaluator.properties.kind.enum;
+  for (const [option, kind] of options) {
+    const row = cells.slice(2).find((candidate) => candidate[0] === option);
+    if (!row || row.length !== cells[0]?.length || row.some((cell) => cell.length === 0)) {
+      failures.push(`evaluator.md selection rubric lacks a complete ${option} row`);
+      continue;
+    }
+    if (row[1] !== `\`${kind}\`` || !validKinds.includes(kind))
+      failures.push(`evaluator.md ${option} has an invalid runtime evaluator kind ${row[1]}`);
+  }
+  if (cells.length !== options.size + 2) failures.push('evaluator.md selection rubric has missing or extra option rows');
+
+  const landscape = headingBody(guide, '## Framework landscape');
+  for (const marker of [
+    'list is illustrative',
+    'Any framework is admissible',
+    'AgentEvals',
+    'promptfoo',
+    'evaluate-tool-use-agent',
+    'evaluate-promptfoo',
+  ])
+    requireText(landscape, marker, 'evaluator.md Framework landscape', failures);
+  const learning = headingBody(guide, '## Learn an unfamiliar framework');
+  for (const [index, markers] of [
+    ['primary sources only', 'documentation', 'repository', 'API reference', 'examples', 'changelog', 'secondary summary'],
+    ['takes inputs', 'judges', 'returns results', 'model', 'credentials'],
+    ['Install the version the adopter uses', 'installed version'],
+    ['Execute a minimal example', 'known pass', 'known fail', 'stdout', 'stderr', 'contradicts'],
+    ['evaluator/LEARNED.md', 'primary source', 'contradictions'],
+    ['evaluator/mapping.json', 'judgment', 'passed-clean-control', 'caught'],
+  ].entries()) {
+    const step = learning.match(new RegExp(`^${index + 1}\\. (.+)$`, 'm'))?.[1] ?? '';
+    for (const marker of markers) requireText(step, marker, `evaluator.md learning step ${index + 1}`, failures);
+  }
+  const vendor = headingBody(guide, '## Vendor rule');
+  for (const marker of ['framework', 'judge model', 'fixed conditions', 'system under test', "adopter's use"])
+    requireText(vendor, marker, 'evaluator.md Vendor rule', failures);
+
+  const learned = fs.readFileSync(ASSET(path.join('evaluators', 'LEARNED.md')), 'utf8');
+  for (const heading of [
+    '## Framework and installed version',
+    '## Primary-source facts used',
+    '## Executed minimal example: known pass',
+    '## Executed minimal example: known fail',
+    '## Documented claims contradicted by execution',
+    '## Mapping and pipeline result',
+  ])
+    requireHeading(learned, heading, 'assets/evaluators/LEARNED.md', failures);
+  for (const template of ['command-evaluator.mjs', 'mapping.json', 'agentevals-trajectory.mjs', 'promptfoo-assertions.mjs']) {
+    const file = ASSET(path.join('evaluators', template));
+    if (!fs.existsSync(file) || fs.readFileSync(file, 'utf8').trim().length === 0)
+      failures.push(`assets/evaluators/${template} is missing or empty`);
+    else if (template.endsWith('.mjs') && (fs.statSync(file).mode & 0o111) === 0)
+      failures.push(`assets/evaluators/${template} is not executable`);
+  }
+  const mapping = JSON.parse(fs.readFileSync(ASSET(path.join('evaluators', 'mapping.json')), 'utf8'));
+  const validateMapping = new Ajv({ strict: false, allErrors: true }).compile(
+    JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'cli', 'lib', 'evaluate', 'schemas', 'evaluator-mapping.schema.json'), 'utf8')),
+  );
+  if (!validateMapping(mapping))
+    failures.push(`assets/evaluators/mapping.json fails runtime schema: ${JSON.stringify(validateMapping.errors)}`);
+}
+
 async function main() {
   const failures = [];
   let skillContent;
@@ -1432,6 +1835,8 @@ async function main() {
   if (!workflowSection.includes('never compute a verdict')) {
     failures.push("SKILL.md's Workflow section has no rule against computing a verdict outside eval-quality's CLI");
   }
+  if (!skillContent.includes('through Stage 7') || skillContent.includes('Stages 7 through 12 are pending'))
+    failures.push('SKILL.md does not make the evaluator stage available');
 
   const inspection = fs.readFileSync(REFERENCE('inspection'), 'utf8');
   const intake = fs.readFileSync(REFERENCE('intake'), 'utf8');
@@ -1452,6 +1857,13 @@ async function main() {
   } catch (error) {
     failures.push('contract guidance: ' + error.stack);
   }
+  try {
+    checkEvaluatorGuidance(fs.readFileSync(REFERENCE('evaluator'), 'utf8'), failures);
+  } catch (error) {
+    failures.push('evaluator guidance: ' + error.stack);
+  }
+  checkFrameworkTemplate('agentevals-trajectory.mjs', 'evaluate-tool-use-agent', 'tool-use', 'trajectory.mjs', failures);
+  checkFrameworkTemplate('promptfoo-assertions.mjs', 'evaluate-promptfoo', 'summary', 'promptfoo.mjs', failures);
 
   const template = JSON.parse(fs.readFileSync(ASSET('evaluation.json'), 'utf8'));
   const validateEvaluation = new Ajv({ strict: false, allErrors: true }).compile(
@@ -1475,7 +1887,7 @@ async function main() {
     process.exit(1);
   }
   console.log(
-    `evaluate-guidance: ${EXPECTED_STAGES.length} stages, six worked guides, 36 engine-valid tagged probes, contract examples, and valid templates`,
+    `evaluate-guidance: ${EXPECTED_STAGES.length} stages, seven worked guides, 36 engine-valid tagged probes, contract examples, and valid templates`,
   );
 }
 

@@ -148,6 +148,16 @@ export default [
     },
   },
 
+  // Evaluator starters become executable files in the adopter's evaluation
+  // folder, where their framework dependencies are installed.
+  {
+    files: ['src/workflows/testarch/bmad-testarch-evaluate/assets/evaluators/*.mjs'],
+    rules: {
+      'n/hashbang': 'off',
+      'n/no-unpublished-import': 'off',
+    },
+  },
+
   // ESLint config file should not be checked for publish-related Node rules
   {
     files: ['eslint.config.mjs'],

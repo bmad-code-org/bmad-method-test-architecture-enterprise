@@ -23,7 +23,7 @@ inputDocuments:
 
 ## Overview
 
-This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and forty-eight stories, including H.1 (Stories 1.27 to 1.42 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
+This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and fifty stories, including H.1 (Stories 1.27 to 1.44 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
 
 Evaluate is fully stacked. The stack runs system under test, then the evaluation (the mechanism that runs the system, collects evidence and makes judgments), then the Behavioral Evaluation Contract (what behavior matters, what evidence counts, how success and failure resolve), then eval-quality (contract sanity, evidence support, and whether the evaluation catches defects). TeA owns every layer above eval-quality, including each concern eval-quality states it leaves to the caller, so an adopter can evaluate any target end to end. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3 onward, Epic 2 and H.1 to close the plan gap audit; the Traceability section maps each audit item to the story that closes it.
 
@@ -142,7 +142,7 @@ None. Evaluate has no graphical interface.
 | FR10 (CAP-10) | 1.14, 1.16, 1.22, 1.25, 1.42                |
 | FR11 (CAP-11) | 2.2, 2.3, 2.4, 2.5, H.1                     |
 | FR12 (CAP-12) | 1.8, 2.1, 2.5, H.1                          |
-| FR13 (CAP-13) | 1.17, 1.19, 1.20, 1.23, 1.26                |
+| FR13 (CAP-13) | 1.17, 1.19, 1.20, 1.23, 1.26, 1.43, 1.44    |
 | FR14 (CAP-14) | 1.21, 2.2                                   |
 
 ## Epic List
@@ -150,7 +150,7 @@ None. Evaluate has no graphical interface.
 ### Epic 1: The Evaluate authoring loop
 
 An adopter describes a target, answers Evaluate's questions, chooses or builds the evaluation layer and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches the seeded defect, with the gaps named and closed. The epic closes by running Evaluate on `bmad-testarch-evaluate` itself, then proving the guidance on two more target kinds, on seeded weaknesses and on an evaluation framework its guides never name.
-Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.42.
+Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.44.
 
 **FRs covered:** FR1 to FR10, FR13, FR14.
 
@@ -208,12 +208,14 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 40    | 1.40  | 1.17, 1.21                   |
 | 41    | 1.41  | 1.8, 1.21                    |
 | 42    | 1.42  | 1.22                         |
-| 43    | 2.1   | 1.16, 1.26                   |
-| 44    | 2.2   | 2.1                          |
-| 45    | 2.3   | 2.2                          |
-| 46    | 2.4   | 2.3                          |
-| 47    | 2.5   | 2.4                          |
-| 48    | H.1   | 2.5                          |
+| 43    | 1.43  | 1.20, 1.23                   |
+| 44    | 1.44  | 1.17, 1.23                   |
+| 45    | 2.1   | 1.16, 1.26                   |
+| 46    | 2.2   | 2.1                          |
+| 47    | 2.3   | 2.2                          |
+| 48    | 2.4   | 2.3                          |
+| 49    | 2.5   | 2.4                          |
+| 50    | H.1   | 2.5                          |
 
 ## Epic 1: The Evaluate authoring loop
 
@@ -747,7 +749,7 @@ So that the mechanism that runs my system and judges it is as deliberate as the 
 **Acceptance Criteria:**
 
 **Given** the evaluator kinds and import contract from Story 1.17 and the framework fixtures from Stories 1.19 and 1.20
-**When** `/bmad-workflow-builder` Edit writes `references/evaluator.md` and the `assets/evaluators/` templates
+**When** `references/evaluator.md` and the `assets/evaluators/` templates are authored in the skill directory after a bounded headless `/bmad-workflow-builder` Edit attempt that produced no usable artifact
 **Then** the guide teaches, each under its own heading, what an evaluation layer must provide (run the system, capture observations on every channel an oracle reads, judge, emit evidence as judgment rows or sealed records) and which TeA evaluator kind carries each duty
 **And** it holds a selection rubric as a table keyed by option (TeA's deterministic evaluator, a sealed-brief agent evaluator, an adopter harness that seals its own records, a skill-specific evaluator, custom evaluation code, an external framework) and scored on named criteria: determinism, need for a model and its credentials, visibility of process and trajectory, need for reference outputs, rubric and calibration needs, language and runtime fit with the adopter, licence, maintenance and version drift, cost per trial, and CI tier fit; each row names the `evaluator.kind` it produces
 **And** a landscape section describes established frameworks as worked examples (AgentEvals and promptfoo from `evaluation-framework-facts.md`, each with its fixture) and states that the list is illustrative: any framework is admissible through the import contract
@@ -1243,6 +1245,49 @@ So that process and outcome findings keep their correct phase (AD-23).
 
 **Dependencies:** 1.22 and a published eval-quality release carrying interface identity in sealed observations.
 **Gate:** `npm test`, `npm run test:release-metadata`, engine check.
+
+### Story 1.43: Keep ungraded framework errors out of target findings
+
+Added 2026-09-27 in Story 1.23's final review. Story 1.20 explicitly converts a promptfoo result with no `gradingResult` into a failing judgment row. That result says the framework could not grade the output. It does not establish that the target violated an oracle. This story supersedes that one Story 1.20 error-row rule and its matching test-design row.
+
+As an adopter using an external evaluation framework,
+I want an ungraded framework result reported as an evaluation failure,
+So that an assertion crash cannot appear as a caught target defect (CAP-13, AD-10, AD-21).
+
+**Acceptance Criteria:**
+
+**Given** a promptfoo JSONL row whose `gradingResult` is absent, including one with an `error` string and a target stdout observation to cite
+**When** the Story 1.20 fixture evaluator or the Story 1.23 starter template imports that row
+**Then** it refuses the row with a diagnostic that names the ungraded framework error; `tea-evaluate run` exits 12 as evaluator infrastructure failure and writes no sealed trial record for it; reverting the refusal lets the same row become a target `fail` judgment and makes the test fail
+**And** a graded assertion with `pass: false` still maps to a target `fail` row with its observed quote, while a graded `pass: true` still maps to `pass`; a test that turns either graded result into infrastructure failure fails
+**And** the imported result must include every expected assertion grade exactly once. Missing, duplicate or malformed grades are evaluation failures with no trial record, even when another assertion graded successfully
+**And** the evaluator guide and promptfoo example explain that an ungraded framework row stops the evaluation, while a graded failing assertion supplies target evidence; a guidance test fails when that distinction is removed
+**And** `test:evaluate-promptfoo` and `test:evaluate-guidance`, both in `npm test`, exercise the fixture and rendered starter against an ungraded row, a graded fail and a graded pass, and the completion notes record each revert check.
+
+**Dependencies:** 1.20, 1.23.
+**Gate:** skill gates, `npm test`, engine check.
+
+### Story 1.44: Record installed framework versions in evaluator provenance
+
+Added 2026-09-27 in Story 1.23's final review. The command evaluator digests tracked `evaluator/` files and wiring, including `LEARNED.md`, but an installed dependency outside that tree can change while those bytes stay fixed. Its new behavior can produce judgments under the same evaluator configuration digest.
+
+As an adopter whose evaluator uses an installed external framework,
+I want each run bound to the framework version that actually executed,
+So that a package upgrade cannot silently reuse the old scoring configuration (CAP-13, AD-21).
+
+**Acceptance Criteria:**
+
+**Given** a `command` evaluator with one or more external framework dependencies
+**When** `tea-evaluate check` and `run` prepare its layer
+**Then** the evaluation declares each dependency's package identity, expected version and version-probe command in tracked, machine-readable `evaluator/` metadata; the probe runs with the command evaluator's environment and reports installed package identity and version without importing that framework into `cli/`; a dependency-free `command` evaluator declares an empty list; `check` refuses an absent or malformed declaration and verifies that the versions recorded in `evaluator/LEARNED.md` agree with nonempty declarations
+**And** `run` reads the installed versions before any evaluator trial, refuses a missing dependency or an installed version that differs from the declaration with exit 12 and no sealed trial record, and records the observed package identities and versions in `EvaluatorConfiguration.decodingParameters` and an auditable run artifact; reverting that observation lets an installed-package upgrade pass under the old configuration digest and makes the test fail
+**And** the run rechecks those installed versions before each evaluator launch and after each trial. A change during the run exits 12 without sealing the affected trial's record; reverting the recheck lets a changed dependency judge a trial under the earlier configuration digest and makes the test fail
+**And** a deliberate upgrade updates the tracked declaration and `LEARNED.md`; its next run succeeds and produces a different `EvaluatorConfiguration` digest and scoring version, even when every evaluator source file and `evaluation.json` field is otherwise unchanged; a direct configuration test with the same evaluator tree and wiring also proves that changing only the observed version changes the digest
+**And** the AgentEvals and promptfoo starter templates demonstrate the declaration and version observation, and `references/evaluator.md` teaches the same step for an unfamiliar framework without adding a framework import to `cli/`; `test:direction` and `test:evaluate-boundaries` hold framework neutrality
+**And** `test:evaluate-evaluators` and `test:evaluate-guidance`, both in `npm test`, use isolated installed-package fixtures to prove stale documentation, missing package, package upgrade and mid-run change behavior, with each named revert check recorded in completion notes.
+
+**Dependencies:** 1.17, 1.23.
+**Gate:** skill gates, `npm test`, engine check.
 
 ## Epic 2: Continuous proof in CI
 
