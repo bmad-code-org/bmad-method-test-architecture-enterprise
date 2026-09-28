@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Evaluate now guides mutation planning, adopter-set risk policy, the private run and score sequence, and evidence-led gap repair through Stage 11. The guidance gate validates tagged mutation files against the runtime schema and checks installed outcome, discipline, preflight and exit mappings (Story 1.14).
 - Evaluate now teaches how to choose and build an evaluation layer with a six-option rubric, a primary-source procedure for unfamiliar frameworks, and command, AgentEvals, promptfoo, mapping and learning templates. The starters bind promptfoo assertions to stable keys, require tracked AgentEvals references, and reject ambiguous observation selection. The guidance gate runs both framework templates through clean-control and seeded-defect fixture evaluations (Story 1.23).
 - Evaluate now guides contract authoring, oracle and rubric design, and adapter wiring for every target kind. A fillable contract skeleton and engine-backed guidance checks cover exact requirements-byte lineage, compile and seal, worked examples, and nonzero validation exits (Story 1.13).
 - Evaluate now guides target inspection, adopter-confirmed requirements and corpus design for six target kinds. The evaluation manifest records the confirmed `requirements.md` path and its byte digest, which `tea-evaluate check` validates (Story 1.12).
