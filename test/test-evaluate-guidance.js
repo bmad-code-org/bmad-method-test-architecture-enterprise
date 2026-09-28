@@ -11,6 +11,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const vm = require('node:vm');
 const { spawnSync } = require('node:child_process');
 const AjvModule = require('ajv/dist/2020');
 const { engineCliPath, engineSchemaPath, loadEngine } = require('../cli/lib/evaluate/engine');
@@ -790,6 +791,29 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
         { encoding: 'utf8' },
       );
       if (check.status !== 0) failures.push('filled skeleton: tea-evaluate check exited ' + check.status + ': ' + check.stderr.trim());
+      const conditionsPath = path.join(evaluationRoot, 'policy', 'evaluator-conditions.json');
+      fs.rmSync(conditionsPath);
+      const withoutConditions = spawnSync(
+        process.execPath,
+        [path.join(__dirname, '..', 'cli', 'evaluate.js'), 'check', '--evaluation', evaluationRoot],
+        { encoding: 'utf8' },
+      );
+      if (
+        withoutConditions.status !== 10 ||
+        !(withoutConditions.stdout + withoutConditions.stderr).includes('policy/evaluator-conditions.json')
+      )
+        failures.push('skill runner without evaluator conditions did not fail check at exit 10');
+      const conditions = JSON.parse(fs.readFileSync(ASSET('evaluator-conditions.template.json'), 'utf8'));
+      conditions.modelSnapshot = 'stub-agent-fixture';
+      conditions.systemPromptDigest = engine.digestBytes(Buffer.alloc(0));
+      delete conditions.judge;
+      fs.writeFileSync(conditionsPath, JSON.stringify(conditions));
+      const withConditions = spawnSync(
+        process.execPath,
+        [path.join(__dirname, '..', 'cli', 'evaluate.js'), 'check', '--evaluation', evaluationRoot],
+        { encoding: 'utf8' },
+      );
+      if (withConditions.status !== 0) failures.push('filled evaluator conditions did not pass check: ' + withConditions.stderr.trim());
       const preflight = spawnSync(
         process.execPath,
         [path.join(__dirname, '..', 'cli', 'evaluate.js'), 'preflight', '--evaluation', evaluationRoot],
@@ -917,10 +941,29 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
     numericContract.sourceSpecDigest = engine.digestBytes(
       fs.readFileSync(path.join(__dirname, 'fixtures', 'evaluate', 'numeric-requirements.md')),
     );
-    numericContract.behaviors[0].description = 'The numeric-amount command refuses an amount whose JSON type is not number.';
-    numericContract.behaviors[0].observableSuccessCriterion = 'A string amount is refused on stdout with a clean exit.';
+    numericContract.behaviors[0].description = 'The numeric-amount command accepts a finite JSON number and exits clean.';
+    numericContract.behaviors[0].observableSuccessCriterion = 'A finite amount is echoed on stdout with a clean exit.';
     numericContract.behaviors[0].requirementLinks[0].id = 'numeric-amount-type';
-    numericContract.behaviors[0].riskLinks[0].id = 'silent-amount-coercion';
+    numericContract.behaviors[0].riskLinks[0].id = 'valid-amount-rejected';
+    numericContract.oracles[0] = {
+      id: 'O-001',
+      polarity: 'expects-hold',
+      commentary: 'The numeric-amount command echoes the accepted finite amount and exits clean.',
+      direction: {
+        polarity: 'expects-hold',
+        relation: 'all',
+        scope: 'The exit code and stdout of the numeric amount run.',
+        negativeDomain: 'A valid numeric amount is refused, changed, or exits nonzero.',
+        evidenceTargets: ['/interactions/answer-run/exit-code', '/interactions/answer-run/stdout'],
+      },
+      check: {
+        op: 'all',
+        operands: [
+          { op: 'equality', operands: [{ pointer: '/interactions/answer-run/exit-code' }, { literal: 0 }] },
+          { op: 'equality', operands: [{ pointer: '/interactions/answer-run/stdout' }, { literal: 'accepted amount: 7\n' }] },
+        ],
+      },
+    };
     const numericOperation = numericContract.permittedInterfaces[0].operations[0];
     numericContract.permittedInterfaces[0].logicalId = 'numeric-amount';
     numericOperation.invocation = { executable: 'numeric-amount', subcommandPath: [] };
@@ -937,6 +980,8 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
       check.operands[1].literal = expectedWitnessLiterals[index];
     }
     numericContract.testData.setup = 'The numeric-amount fixture is copied into the disposable workspace.';
+    numericContract.testData.cleanup = 'Nothing to remove: the numeric-amount command writes no file.';
+    numericContract.safetyLimits = ['The numeric-amount command writes no file and makes no network call.'];
     for (const [index, patch] of taggedExamples(contractGuide, 'contract-patch').entries()) {
       const edited = structuredClone(patch.base === 'workflow' ? workflowContract : patch.base === 'numeric' ? numericContract : contract);
       for (const edit of patch.patches ?? [patch]) setJsonPointer(edited, edit.path, edit.value);
@@ -961,6 +1006,7 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
       }
       if (index === 2) {
         assert.strictEqual(edited.permittedInterfaces[0].operations[0].invocation.executable, 'numeric-amount');
+        assert.match(edited.behaviors[0].observableSuccessCriterion, /string amount is refused/);
         assert.strictEqual(typeof JSON.parse(edited.interactionPlan[0].inputBinding.stdin.prompt.literal).amount, 'string');
         assert.match(JSON.stringify(edited.oracles[0].check), /invalid amount/);
         const numericTarget = path.join(__dirname, 'fixtures', 'evaluate', 'numeric-amount.js');
@@ -973,6 +1019,24 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
         assert.strictEqual(refused.stdout, 'error: invalid amount\n');
         assert.strictEqual(accepted.status, 0, accepted.error?.message ?? accepted.stderr);
         assert.strictEqual(accepted.stdout, 'accepted amount: 7\n');
+        const numericObservation = (stdout) =>
+          engine.makeResolveOperand({ 'answer-run': { exitCode: 0, stdout: { kind: 'text', value: stdout } } }, {});
+        assert.strictEqual(
+          engine.resolveCheck(edited.oracles[0].check, numericObservation(refused.stdout), () => false, {}, 1000, 'malformed amount')
+            .resolution,
+          'true',
+        );
+        assert.strictEqual(
+          engine.resolveCheck(
+            edited.oracles[0].check,
+            numericObservation('accepted amount: NaN\nerror: invalid amount\n'),
+            () => false,
+            {},
+            1000,
+            'contradictory malformed amount',
+          ).resolution,
+          'false',
+        );
       }
       if (index === 3) {
         assert.deepStrictEqual(edited.permittedInterfaces[0].operations[0].responseDescriptor.types, { records: 'array' });
@@ -1058,12 +1122,39 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
       if (index === 9) {
         assert.strictEqual(patch.base, 'numeric');
         assert.strictEqual(edited.permittedInterfaces[0].operations[0].invocation.executable, 'numeric-amount');
+        assert.match(edited.behaviors[0].observableSuccessCriterion, /finite amount is echoed/);
         const waiver = edited.waivers[0];
         for (const field of ['rule', 'rationale', 'condition', 'approval']) assert.ok(waiver[field]);
         assert.strictEqual(waiver.rule, 'per-record');
         assert.match(waiver.condition, /Number\.isFinite/);
         assert.match(waiver.condition, /Object\.keys\(request\)\.length === 1/);
         assert.match(waiver.expiresAt, /^\d{4}-\d{2}-\d{2}T/);
+        for (const [request, expected] of [
+          [{ amount: 7 }, true],
+          [{ amount: 'NaN' }, false],
+          [{ amount: 7, records: [] }, false],
+          [null, false],
+        ])
+          assert.strictEqual(vm.runInNewContext(waiver.condition, { request }, { timeout: 1000 }), expected);
+        const numericTarget = path.join(__dirname, 'fixtures', 'evaluate', 'numeric-amount.js');
+        const accepted = spawnSync(numericTarget, [], { input: '{"amount":7}', encoding: 'utf8' });
+        assert.strictEqual(accepted.status, 0, accepted.error?.message ?? accepted.stderr);
+        const observation = engine.makeResolveOperand(
+          { 'answer-run': { exitCode: accepted.status, stdout: { kind: 'text', value: accepted.stdout } } },
+          {},
+        );
+        assert.strictEqual(
+          engine.resolveCheck(edited.oracles[0].check, observation, () => false, {}, 1000, 'numeric waiver base').resolution,
+          'true',
+        );
+        const corrupted = engine.makeResolveOperand(
+          { 'answer-run': { exitCode: 0, stdout: { kind: 'text', value: 'accepted amount: 70\n' } } },
+          {},
+        );
+        assert.strictEqual(
+          engine.resolveCheck(edited.oracles[0].check, corrupted, () => false, {}, 1000, 'wrong numeric amount').resolution,
+          'false',
+        );
       }
       assertEngineSuccess('compile', edited, tempRoot, 'contract patch ' + (index + 1), failures);
     }
@@ -1078,6 +1169,15 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
     for (const marker of ['sourceSpecDigest', 'digestBytes', 'requirements.md', 'requirements.digest'])
       requireText(contractStage, marker, 'SKILL.md Stage 4', failures);
     const stage = skillContent.match(/### Stage 6: Adapters\n([\s\S]*?)(?:\n### |$)/)?.[1] ?? '';
+    for (const marker of [
+      'assets/evaluator-conditions.template.json',
+      'policy/evaluator-conditions.json',
+      'modelSnapshot',
+      'systemPromptDigest',
+      'evaluation.json.judge',
+      'judge.modelSnapshot',
+    ])
+      requireText(stage, marker, 'SKILL.md Stage 6', failures);
     const order = ['tea-evaluate check', 'eval-quality compile', 'eval-quality seal'].map((command) => stage.indexOf(command));
     if (order.some((index) => index < 0) || !(order[0] < order[1] && order[1] < order[2]))
       failures.push('SKILL.md Stage 6 must run check, compile, seal in order');
@@ -1178,8 +1278,18 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
     }
     requireText(adapterGuide, 'interface-not-authorized', 'adapters.md', failures);
     requireText(adapterGuide, 'executable-not-authorized', 'adapters.md', failures);
+    const adapterOpening = adapterGuide.split('\n## ')[0];
+    for (const marker of [
+      'assets/evaluator-conditions.template.json',
+      'policy/evaluator-conditions.json',
+      'modelSnapshot: "none"',
+      '`judge` block',
+      'evaluation.json.judge',
+      'judge.modelSnapshot',
+    ])
+      requireText(adapterOpening, marker, 'adapters.md opening', failures);
     requireText(
-      adapterGuide.split('\n## ')[0],
+      adapterOpening,
       'npm exec --prefix {tea_evaluations_folder} -- tea-evaluate preflight --evaluation <evaluation-folder>',
       'adapters.md opening',
       failures,

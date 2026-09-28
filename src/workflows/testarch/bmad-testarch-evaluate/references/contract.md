@@ -68,6 +68,15 @@ Bind a type-violating input and require a refusal on the nominated channel. This
   "base": "numeric",
   "patches": [
     {
+      "path": "/behaviors/0/description",
+      "value": "The numeric-amount command refuses an amount whose JSON type is not number."
+    },
+    {
+      "path": "/behaviors/0/observableSuccessCriterion",
+      "value": "A string amount is refused on stdout with a clean exit."
+    },
+    { "path": "/behaviors/0/riskLinks/0/id", "value": "silent-amount-coercion" },
+    {
       "path": "/interactionPlan/0/inputBinding/stdin/prompt/literal",
       "value": "{\"amount\":\"NaN\"}"
     },
@@ -99,13 +108,13 @@ Bind a type-violating input and require a refusal on the nominated channel. This
               ]
             },
             {
-              "op": "containment",
+              "op": "equality",
               "operands": [
                 {
                   "pointer": "/interactions/answer-run/stdout"
                 },
                 {
-                  "literal": "error: invalid amount"
+                  "literal": "error: invalid amount\n"
                 }
               ]
             }
