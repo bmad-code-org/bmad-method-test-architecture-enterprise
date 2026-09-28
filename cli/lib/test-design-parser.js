@@ -69,7 +69,8 @@ function parseTables(text) {
     // to imitate, so a run that quoted one into its own document scored the
     // example's rows as its own and hard-failed three checks for quoting.
     const marker = /^\s{0,3}(`{3,}|~{3,})(.*)$/.exec(lines[index]);
-    if (marker && !fence) {
+    // CommonMark forbids backticks in a backtick fence's info string.
+    if (marker && !fence && (marker[1][0] === '~' || !marker[2].includes('`'))) {
       fence = { character: marker[1][0], width: marker[1].length };
       continue;
     }
@@ -301,7 +302,7 @@ function readDesign(artifact) {
 /** The runner's machine-readable view of the same parsed risk rows the scorer uses. */
 function scoredRiskProjection(design) {
   const scoredRiskDescriptions = design.risks.filter((risk) => risk.score > 3).map((risk) => risk.description);
-  return { design: design.text, scoredRiskDescriptions, scoredRiskCount: scoredRiskDescriptions.length };
+  return { design: design.text, riskRowCount: design.risks.length, scoredRiskDescriptions, scoredRiskCount: scoredRiskDescriptions.length };
 }
 
 module.exports = {

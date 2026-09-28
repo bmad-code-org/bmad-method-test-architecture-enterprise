@@ -682,10 +682,10 @@ function buildTraceProbes() {
 // test-design
 // ---------------------------------------------------------------------------
 
-/** The pointer a test-design oracle reads in the runner's companion artifact. */
-function testDesignArtifactPointer(stepId, artifactId = 'design') {
-  const root = `/interactions/${stepId}/artifact/scored-risks`;
-  return artifactId === 'design' ? `${root}/design` : root;
+/** The pointer a test-design oracle reads in the runner's JSON stdout. */
+function testDesignStdoutPointer(stepId, field = null) {
+  const root = `/interactions/${stepId}/stdout`;
+  return field === null ? root : `${root}/${field}`;
 }
 
 /** One expression with every pointer equal to `from` rewritten to `to`, and nothing else touched. */
@@ -835,15 +835,15 @@ function testDesignOracleIndex(contract, sets) {
     const oracleId = `O-${pad(position + 1)}`;
     const oracle = contract.oracles.find((candidate) => candidate.id === oracleId);
     assert(oracle, `test-design.contract.json states no ${oracleId}`);
-    const artifactId = entry.kind === 'unsupported-vocabulary' ? 'scored-risks' : 'design';
-    const pointer = testDesignArtifactPointer(`design-${entry.set.id}`, artifactId);
+    const field = entry.kind === 'run-measured' ? 'riskRowCount' : entry.kind === 'material-vocabulary' ? 'design' : null;
+    const pointer = testDesignStdoutPointer(`design-${entry.set.id}`, field);
     assert(
       oracle.direction.evidenceTargets.length === 1 &&
         oracle.direction.evidenceTargets[0] === (entry.kind === 'unsupported-vocabulary' ? `${pointer}/scoredRiskDescriptions` : pointer),
       `${oracleId} reads ${oracle.direction.evidenceTargets.join(', ')} and the corpus places ${entry.set.id}, which reads ${pointer}, there`,
     );
     assert(
-      (oracle.check.op === 'not') === (entry.kind === 'unsupported-vocabulary'),
+      (oracle.check.op === 'not') === (entry.kind !== 'material-vocabulary'),
       `${oracleId} is a "${oracle.check.op}" check and the corpus places a ${entry.kind} oracle there`,
     );
     return { ...entry, oracleId, oracle, pointer, behaviorId: soleBehaviorFor(contract, oracleId) };
@@ -963,17 +963,18 @@ function buildTestDesignProbes() {
     );
     const mutated = violating[0];
     const legId = kind === 'run-measured' ? `manifest-${set.id}-register` : `manifest-${risk.id}`;
-    const legPointer = testDesignArtifactPointer(legId, kind === 'unsupported-vocabulary' ? 'scored-risks' : 'design');
+    const legField = kind === 'run-measured' ? 'riskRowCount' : kind === 'material-vocabulary' ? 'design' : null;
+    const legPointer = testDesignStdoutPointer(legId, legField);
 
     const authored = {
       'run-measured': {
         operator: 'write-no-risk-register',
         summary: `The document written for ${set.id} carries no table with a risk id and a score: ${mutated.result.unmeasurable}`,
-        failure: `The document carries no table cell holding an R-NNN identifier, so ${oracleId} resolves false and the harness refuses the run as ${mutated.result.unmeasurable} rather than scoring an empty register.`,
+        failure: `The runner counts zero parsed risk rows, so ${oracleId} resolves false and the harness refuses the run as ${mutated.result.unmeasurable}.`,
         rationale:
           `${mutated.id} is a stored run that wrote a document with no risk register at all, and a document the harness ` +
           `cannot read is refused as ${mutated.result.unmeasurable} rather than scored as a register with nothing wrong in ` +
-          `it. ${oracleId} catches the same thing from the body alone, by finding no R-NNN in any table cell, and ` +
+          `it. ${oracleId} catches the same thing through the parser's zero row count, and ` +
           `${behaviorId} is the behavior it discharges.`,
       },
       'material-vocabulary': {
@@ -1048,33 +1049,25 @@ function buildTestDesignProbes() {
             relation: {
               op: 'all',
               operands: [
-                testDesignEpicMarker(testDesignArtifactPointer(legId), set.epicNum),
+                testDesignEpicMarker(testDesignStdoutPointer(legId, 'design'), set.epicNum),
                 negated(repointed(oracle.check, pointer, legPointer)),
               ],
             },
           },
         },
       ],
-      // The artifact channel, because the deliverable is the only thing this
-      // command produces and the exit code says nothing: cli/lib/runner-exit-codes.js
+      // Stdout carries the parser projection. The deliverable is the only file this
+      // command produces, and the exit code says nothing: cli/lib/runner-exit-codes.js
       // gives 0 to every run whose agent completed, so a run that wrote a document
       // with no risk analysis in it and a correct run both exit 0. The signature
-      // therefore states the truth about the defect and is refused as
-      // `condition-artifact-channel-contract-local`, which is the same trade
-      // tea-trace-runner's probes record; see the header.
+      // therefore states the truth about the defect through stdout.
       defectSignature: {
         interfaceKind: 'cli',
         invocation: { executable: TEST_DESIGN_INTERFACE, subcommandPath: [] },
-        observableChannel: 'artifact',
+        observableChannel: 'stdout',
         condition: {
           selector: selector({ option: { agent: { matcher: 'any' } } }),
-          predicate: negated(
-            repointed(
-              oracle.check,
-              pointer,
-              testDesignArtifactPointer('observed', kind === 'unsupported-vocabulary' ? 'scored-risks' : 'design'),
-            ),
-          ),
+          predicate: negated(repointed(oracle.check, pointer, testDesignStdoutPointer('observed', legField))),
         },
       },
     };
@@ -1119,7 +1112,7 @@ function buildTestDesignProbes() {
       `A document with ${reference.id}'s mentions map and ${generic[0].id}'s grounding block satisfies every one of the ` +
       `${seededEntries.length} oracles this contract states for ${seededSet.id} and reports nothing the epic supports. Its ` +
       'register rows describe risks the epic neither supports nor rules out, and a mitigation section names every material ' +
-      `risk's deciding vocabulary in prose, so ${seededEntries[0].oracleId} finds R-NNN identifiers in a table, the ` +
+      `risk's deciding vocabulary in prose, so ${seededEntries[0].oracleId} counts parsed risk rows, the ` +
       `${seededEntries.filter((entry) => entry.kind === 'material-vocabulary').length} material-vocabulary oracles find ` +
       `their tokens somewhere in the body, and the ` +
       `${seededEntries.filter((entry) => entry.kind === 'unsupported-vocabulary').length} unsupported-vocabulary oracles ` +
@@ -1144,13 +1137,13 @@ function buildTestDesignProbes() {
     defectSignature: {
       interfaceKind: 'cli',
       invocation: { executable: TEST_DESIGN_INTERFACE, subcommandPath: [] },
-      observableChannel: 'artifact',
+      observableChannel: 'stdout',
       condition: {
         selector: selector({ option: { agent: { matcher: 'any' } } }),
         // Every oracle this contract states for the seeded set, read off the one
         // document. The condition states what the degenerate reply satisfies
         // rather than what separates it from a correct one, because nothing
-        // expressible over this artifact separates the two: the reference run
+        // expressible over this projection separates the two: the reference run
         // satisfies the same conjunction. That is the measurement this probe
         // exists to record.
         predicate: {
@@ -1159,7 +1152,10 @@ function buildTestDesignProbes() {
             repointed(
               entry.oracle.check,
               entry.pointer,
-              testDesignArtifactPointer('observed', entry.kind === 'unsupported-vocabulary' ? 'scored-risks' : 'design'),
+              testDesignStdoutPointer(
+                'observed',
+                entry.kind === 'run-measured' ? 'riskRowCount' : entry.kind === 'material-vocabulary' ? 'design' : null,
+              ),
             ),
           ),
         },

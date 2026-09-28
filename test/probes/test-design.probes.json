@@ -10,7 +10,7 @@
     "commitDigest": "sha256:54c59356a36edc10f75d6dae276c26e72d5db7c74a3fba972f9f9ea91dcbc2f2",
     "probeClass": "defect",
     "artifactDigest": "sha256:03e7ccbff9f7deaede352514e78819f9ab4285a0f272ca61fd34a022b251ac18",
-    "rationale": "seeded-register-absent is a stored run that wrote a document with no risk register at all, and a document the harness cannot read is refused as environment-parser rather than scored as a register with nothing wrong in it. O-001 catches the same thing from the body alone, by finding no R-NNN in any table cell, and B-001 is the behavior it discharges.",
+    "rationale": "seeded-register-absent is a stored run that wrote a document with no risk register at all, and a document the harness cannot read is refused as environment-parser rather than scored as a register with nothing wrong in it. O-001 catches the same thing through the parser's zero row count, and B-001 is the behavior it discharges.",
     "qualification": {
       "route": "controlled-mutation",
       "mutationSource": "test/replay/test-design/seeded-correct-run/design.md",
@@ -21,7 +21,7 @@
         "privateRef": null,
         "digest": "sha256:f0e475508a6601e6457bd3d037a10e283cf78a0eb7adfdd4298009560bd94e96"
       },
-      "expectedObservableFailure": "The document carries no table cell holding an R-NNN identifier, so O-001 resolves false and the harness refuses the run as environment-parser rather than scoring an empty register.",
+      "expectedObservableFailure": "The runner counts zero parsed risk rows, so O-001 resolves false and the harness refuses the run as environment-parser.",
       "baselinePassEvidence": {
         "storage": "public",
         "path": "test/replay/test-design/seeded-correct-run/expected.json",
@@ -81,22 +81,19 @@
                 "op": "regex",
                 "operands": [
                   {
-                    "pointer": "/interactions/manifest-seeded-offline-order-capture-register/artifact/scored-risks/design"
+                    "pointer": "/interactions/manifest-seeded-offline-order-capture-register/stdout/design"
                   }
                 ],
                 "pattern": "^[\\s\\S]*Epic\\s+7[\\s\\S]*$"
               },
               {
-                "op": "not",
+                "op": "equality",
                 "operands": [
                   {
-                    "op": "regex",
-                    "operands": [
-                      {
-                        "pointer": "/interactions/manifest-seeded-offline-order-capture-register/artifact/scored-risks/design"
-                      }
-                    ],
-                    "pattern": "^[\\s\\S]*\\|[^|\\n]*R-[0-9]{3}[^|\\n]*\\|[\\s\\S]*$"
+                    "pointer": "/interactions/manifest-seeded-offline-order-capture-register/stdout/riskRowCount"
+                  },
+                  {
+                    "literal": 0
                   }
                 ]
               }
@@ -111,7 +108,7 @@
         "executable": "tea-test-design-runner",
         "subcommandPath": []
       },
-      "observableChannel": "artifact",
+      "observableChannel": "stdout",
       "condition": {
         "selector": {
           "inputBinding": {
@@ -131,16 +128,13 @@
           }
         },
         "predicate": {
-          "op": "not",
+          "op": "equality",
           "operands": [
             {
-              "op": "regex",
-              "operands": [
-                {
-                  "pointer": "/interactions/observed/artifact/scored-risks/design"
-                }
-              ],
-              "pattern": "^[\\s\\S]*\\|[^|\\n]*R-[0-9]{3}[^|\\n]*\\|[\\s\\S]*$"
+              "pointer": "/interactions/observed/stdout/riskRowCount"
+            },
+            {
+              "literal": 0
             }
           ]
         }
@@ -229,7 +223,7 @@
                 "op": "regex",
                 "operands": [
                   {
-                    "pointer": "/interactions/manifest-sec-unencrypted-offline-queue/artifact/scored-risks/design"
+                    "pointer": "/interactions/manifest-sec-unencrypted-offline-queue/stdout/design"
                   }
                 ],
                 "pattern": "^[\\s\\S]*Epic\\s+7[\\s\\S]*$"
@@ -244,7 +238,7 @@
                         "op": "regex",
                         "operands": [
                           {
-                            "pointer": "/interactions/manifest-sec-unencrypted-offline-queue/artifact/scored-risks/design"
+                            "pointer": "/interactions/manifest-sec-unencrypted-offline-queue/stdout/design"
                           }
                         ],
                         "pattern": "^[\\s\\S]*(?:[Uu][Nn][Ee][Nn][Cc][Rr][Yy][Pp][Tt][Ee][Dd]|[Nn][Oo][Tt]\\s+[Ee][Nn][Cc][Rr][Yy][Pp][Tt][Ee][Dd]|[Pp][Ll][Aa][Ii][Nn][Tt][Ee][Xx][Tt]|[Pp][Ll][Aa][Ii][Nn]\\s+[Tt][Ee][Xx][Tt]|[Cc][Ll][Ee][Aa][Rr][Tt][Ee][Xx][Tt]|[Ee][Nn][Cc][Rr][Yy][Pp][Tt][Ii][Oo][Nn]|[Ee][Nn][Cc][Rr][Yy][Pp][Tt])[\\s\\S]*$"
@@ -253,7 +247,7 @@
                         "op": "regex",
                         "operands": [
                           {
-                            "pointer": "/interactions/manifest-sec-unencrypted-offline-queue/artifact/scored-risks/design"
+                            "pointer": "/interactions/manifest-sec-unencrypted-offline-queue/stdout/design"
                           }
                         ],
                         "pattern": "^[\\s\\S]*(?:[Qq][Uu][Ee][Uu][Ee]|[Ll][Oo][Cc][Aa][Ll]|[Dd][Ee][Vv][Ii][Cc][Ee]|[Ss][Qq][Ll][Ii][Tt][Ee]|[Oo][Nn]-[Dd][Ii][Ss][Kk]|[Aa][Tt]\\s+[Rr][Ee][Ss][Tt]|[Ss][Tt][Oo][Rr][Aa][Gg][Ee]|[Ss][Tt][Oo][Rr][Ee][Dd])[\\s\\S]*$"
@@ -273,7 +267,7 @@
         "executable": "tea-test-design-runner",
         "subcommandPath": []
       },
-      "observableChannel": "artifact",
+      "observableChannel": "stdout",
       "condition": {
         "selector": {
           "inputBinding": {
@@ -302,7 +296,7 @@
                   "op": "regex",
                   "operands": [
                     {
-                      "pointer": "/interactions/observed/artifact/scored-risks/design"
+                      "pointer": "/interactions/observed/stdout/design"
                     }
                   ],
                   "pattern": "^[\\s\\S]*(?:[Uu][Nn][Ee][Nn][Cc][Rr][Yy][Pp][Tt][Ee][Dd]|[Nn][Oo][Tt]\\s+[Ee][Nn][Cc][Rr][Yy][Pp][Tt][Ee][Dd]|[Pp][Ll][Aa][Ii][Nn][Tt][Ee][Xx][Tt]|[Pp][Ll][Aa][Ii][Nn]\\s+[Tt][Ee][Xx][Tt]|[Cc][Ll][Ee][Aa][Rr][Tt][Ee][Xx][Tt]|[Ee][Nn][Cc][Rr][Yy][Pp][Tt][Ii][Oo][Nn]|[Ee][Nn][Cc][Rr][Yy][Pp][Tt])[\\s\\S]*$"
@@ -311,7 +305,7 @@
                   "op": "regex",
                   "operands": [
                     {
-                      "pointer": "/interactions/observed/artifact/scored-risks/design"
+                      "pointer": "/interactions/observed/stdout/design"
                     }
                   ],
                   "pattern": "^[\\s\\S]*(?:[Qq][Uu][Ee][Uu][Ee]|[Ll][Oo][Cc][Aa][Ll]|[Dd][Ee][Vv][Ii][Cc][Ee]|[Ss][Qq][Ll][Ii][Tt][Ee]|[Oo][Nn]-[Dd][Ii][Ss][Kk]|[Aa][Tt]\\s+[Rr][Ee][Ss][Tt]|[Ss][Tt][Oo][Rr][Aa][Gg][Ee]|[Ss][Tt][Oo][Rr][Ee][Dd])[\\s\\S]*$"
@@ -405,7 +399,7 @@
                 "op": "regex",
                 "operands": [
                   {
-                    "pointer": "/interactions/manifest-data-sync-conflict-overwrite/artifact/scored-risks/design"
+                    "pointer": "/interactions/manifest-data-sync-conflict-overwrite/stdout/design"
                   }
                 ],
                 "pattern": "^[\\s\\S]*Epic\\s+7[\\s\\S]*$"
@@ -420,7 +414,7 @@
                         "op": "regex",
                         "operands": [
                           {
-                            "pointer": "/interactions/manifest-data-sync-conflict-overwrite/artifact/scored-risks/design"
+                            "pointer": "/interactions/manifest-data-sync-conflict-overwrite/stdout/design"
                           }
                         ],
                         "pattern": "^[\\s\\S]*(?:[Cc][Oo][Nn][Ff][Ll][Ii][Cc][Tt]|[Oo][Vv][Ee][Rr][Ww][Rr][Ii][Tt][Ee]|[Oo][Vv][Ee][Rr][Ww][Rr][Ii][Tt]|[Cc][Ll][Oo][Bb][Bb][Ee][Rr]|[Ll][Aa][Ss][Tt]\\s+[Ww][Rr][Ii][Tt][Ee]|[Ll][Aa][Ss][Tt]-[Ww][Rr][Ii][Tt][Ee]|[Ll][Oo][Ss][Tt]\\s+[Uu][Pp][Dd][Aa][Tt][Ee])[\\s\\S]*$"
@@ -429,7 +423,7 @@
                         "op": "regex",
                         "operands": [
                           {
-                            "pointer": "/interactions/manifest-data-sync-conflict-overwrite/artifact/scored-risks/design"
+                            "pointer": "/interactions/manifest-data-sync-conflict-overwrite/stdout/design"
                           }
                         ],
                         "pattern": "^[\\s\\S]*(?:[Cc][Oo][Nn][Cc][Uu][Rr][Rr][Ee][Nn][Tt]|[Ss][Ii][Mm][Uu][Ll][Tt][Aa][Nn][Ee][Oo][Uu][Ss]|[Tt][Ww][Oo]\\s+[Tt][Ee][Cc][Hh][Nn][Ii][Cc][Ii][Aa][Nn][Ss]|[Ss][Ee][Cc][Oo][Nn][Dd]\\s+[Dd][Ee][Vv][Ii][Cc][Ee]|[Ss][Aa][Mm][Ee]\\s+[Ww][Oo][Rr][Kk]\\s+[Oo][Rr][Dd][Ee][Rr]|[Vv][Ee][Rr][Ss][Ii][Oo][Nn]|[Tt][Ii][Mm][Ee][Ss][Tt][Aa][Mm][Pp])[\\s\\S]*$"
@@ -449,7 +443,7 @@
         "executable": "tea-test-design-runner",
         "subcommandPath": []
       },
-      "observableChannel": "artifact",
+      "observableChannel": "stdout",
       "condition": {
         "selector": {
           "inputBinding": {
@@ -478,7 +472,7 @@
                   "op": "regex",
                   "operands": [
                     {
-                      "pointer": "/interactions/observed/artifact/scored-risks/design"
+                      "pointer": "/interactions/observed/stdout/design"
                     }
                   ],
                   "pattern": "^[\\s\\S]*(?:[Cc][Oo][Nn][Ff][Ll][Ii][Cc][Tt]|[Oo][Vv][Ee][Rr][Ww][Rr][Ii][Tt][Ee]|[Oo][Vv][Ee][Rr][Ww][Rr][Ii][Tt]|[Cc][Ll][Oo][Bb][Bb][Ee][Rr]|[Ll][Aa][Ss][Tt]\\s+[Ww][Rr][Ii][Tt][Ee]|[Ll][Aa][Ss][Tt]-[Ww][Rr][Ii][Tt][Ee]|[Ll][Oo][Ss][Tt]\\s+[Uu][Pp][Dd][Aa][Tt][Ee])[\\s\\S]*$"
@@ -487,7 +481,7 @@
                   "op": "regex",
                   "operands": [
                     {
-                      "pointer": "/interactions/observed/artifact/scored-risks/design"
+                      "pointer": "/interactions/observed/stdout/design"
                     }
                   ],
                   "pattern": "^[\\s\\S]*(?:[Cc][Oo][Nn][Cc][Uu][Rr][Rr][Ee][Nn][Tt]|[Ss][Ii][Mm][Uu][Ll][Tt][Aa][Nn][Ee][Oo][Uu][Ss]|[Tt][Ww][Oo]\\s+[Tt][Ee][Cc][Hh][Nn][Ii][Cc][Ii][Aa][Nn][Ss]|[Ss][Ee][Cc][Oo][Nn][Dd]\\s+[Dd][Ee][Vv][Ii][Cc][Ee]|[Ss][Aa][Mm][Ee]\\s+[Ww][Oo][Rr][Kk]\\s+[Oo][Rr][Dd][Ee][Rr]|[Vv][Ee][Rr][Ss][Ii][Oo][Nn]|[Tt][Ii][Mm][Ee][Ss][Tt][Aa][Mm][Pp])[\\s\\S]*$"
@@ -581,7 +575,7 @@
                 "op": "regex",
                 "operands": [
                   {
-                    "pointer": "/interactions/manifest-tech-uncapped-retry-loop/artifact/scored-risks/design"
+                    "pointer": "/interactions/manifest-tech-uncapped-retry-loop/stdout/design"
                   }
                 ],
                 "pattern": "^[\\s\\S]*Epic\\s+7[\\s\\S]*$"
@@ -596,7 +590,7 @@
                         "op": "regex",
                         "operands": [
                           {
-                            "pointer": "/interactions/manifest-tech-uncapped-retry-loop/artifact/scored-risks/design"
+                            "pointer": "/interactions/manifest-tech-uncapped-retry-loop/stdout/design"
                           }
                         ],
                         "pattern": "^[\\s\\S]*(?:[Rr][Ee][Tt][Rr][Yy]|[Rr][Ee][Tt][Rr][Ii][Ee][Ss]|[Rr][Ee][Tt][Rr][Ii][Ee][Dd]|[Bb][Aa][Cc][Kk][Oo][Ff][Ff]|[Bb][Aa][Cc][Kk]-[Oo][Ff][Ff]|[Dd][Ee][Aa][Dd]\\s+[Ll][Ee][Tt][Tt][Ee][Rr]|[Dd][Ee][Aa][Dd]-[Ll][Ee][Tt][Tt][Ee][Rr])[\\s\\S]*$"
@@ -605,7 +599,7 @@
                         "op": "regex",
                         "operands": [
                           {
-                            "pointer": "/interactions/manifest-tech-uncapped-retry-loop/artifact/scored-risks/design"
+                            "pointer": "/interactions/manifest-tech-uncapped-retry-loop/stdout/design"
                           }
                         ],
                         "pattern": "^[\\s\\S]*(?:[Cc][Aa][Pp]|[Uu][Nn][Bb][Oo][Uu][Nn][Dd][Ee][Dd]|[Ii][Nn][Dd][Ee][Ff][Ii][Nn][Ii][Tt]|[Ii][Nn][Ff][Ii][Nn][Ii][Tt][Ee]|[Ll][Oo][Oo][Pp]|[Ss][Tt][Oo][Rr][Mm]|[Ee][Xx][Hh][Aa][Uu][Ss][Tt]|[Nn][Oo]\\s+[Ll][Ii][Mm][Ii][Tt]|[Ff][Oo][Rr][Ee][Vv][Ee][Rr])[\\s\\S]*$"
@@ -625,7 +619,7 @@
         "executable": "tea-test-design-runner",
         "subcommandPath": []
       },
-      "observableChannel": "artifact",
+      "observableChannel": "stdout",
       "condition": {
         "selector": {
           "inputBinding": {
@@ -654,7 +648,7 @@
                   "op": "regex",
                   "operands": [
                     {
-                      "pointer": "/interactions/observed/artifact/scored-risks/design"
+                      "pointer": "/interactions/observed/stdout/design"
                     }
                   ],
                   "pattern": "^[\\s\\S]*(?:[Rr][Ee][Tt][Rr][Yy]|[Rr][Ee][Tt][Rr][Ii][Ee][Ss]|[Rr][Ee][Tt][Rr][Ii][Ee][Dd]|[Bb][Aa][Cc][Kk][Oo][Ff][Ff]|[Bb][Aa][Cc][Kk]-[Oo][Ff][Ff]|[Dd][Ee][Aa][Dd]\\s+[Ll][Ee][Tt][Tt][Ee][Rr]|[Dd][Ee][Aa][Dd]-[Ll][Ee][Tt][Tt][Ee][Rr])[\\s\\S]*$"
@@ -663,7 +657,7 @@
                   "op": "regex",
                   "operands": [
                     {
-                      "pointer": "/interactions/observed/artifact/scored-risks/design"
+                      "pointer": "/interactions/observed/stdout/design"
                     }
                   ],
                   "pattern": "^[\\s\\S]*(?:[Cc][Aa][Pp]|[Uu][Nn][Bb][Oo][Uu][Nn][Dd][Ee][Dd]|[Ii][Nn][Dd][Ee][Ff][Ii][Nn][Ii][Tt]|[Ii][Nn][Ff][Ii][Nn][Ii][Tt][Ee]|[Ll][Oo][Oo][Pp]|[Ss][Tt][Oo][Rr][Mm]|[Ee][Xx][Hh][Aa][Uu][Ss][Tt]|[Nn][Oo]\\s+[Ll][Ii][Mm][Ii][Tt]|[Ff][Oo][Rr][Ee][Vv][Ee][Rr])[\\s\\S]*$"
@@ -757,7 +751,7 @@
                 "op": "regex",
                 "operands": [
                   {
-                    "pointer": "/interactions/manifest-perf-backlog-sync-budget/artifact/scored-risks/design"
+                    "pointer": "/interactions/manifest-perf-backlog-sync-budget/stdout/design"
                   }
                 ],
                 "pattern": "^[\\s\\S]*Epic\\s+7[\\s\\S]*$"
@@ -772,7 +766,7 @@
                         "op": "regex",
                         "operands": [
                           {
-                            "pointer": "/interactions/manifest-perf-backlog-sync-budget/artifact/scored-risks/design"
+                            "pointer": "/interactions/manifest-perf-backlog-sync-budget/stdout/design"
                           }
                         ],
                         "pattern": "^[\\s\\S]*(?:[Bb][Aa][Cc][Kk][Ll][Oo][Gg]|2,000|2000|[Bb][Uu][Ll][Kk]|[Vv][Oo][Ll][Uu][Mm][Ee]|[Tt][Hh][Rr][Oo][Uu][Gg][Hh][Pp][Uu][Tt]|[Ll][Aa][Rr][Gg][Ee]\\s+[Qq][Uu][Ee][Uu][Ee])[\\s\\S]*$"
@@ -781,7 +775,7 @@
                         "op": "regex",
                         "operands": [
                           {
-                            "pointer": "/interactions/manifest-perf-backlog-sync-budget/artifact/scored-risks/design"
+                            "pointer": "/interactions/manifest-perf-backlog-sync-budget/stdout/design"
                           }
                         ],
                         "pattern": "^[\\s\\S]*(?:30\\s+[Ss][Ee][Cc][Oo][Nn][Dd]|30[Ss]|[Ll][Aa][Tt][Ee][Nn][Cc][Yy]|[Ss][Ll][Oo][Ww]|[Bb][Uu][Dd][Gg][Ee][Tt]|[Ww][Ii][Tt][Hh][Ii][Nn]\\s+30|[Ss][Yy][Nn][Cc]\\s+[Tt][Ii][Mm][Ee]|[Dd][Uu][Rr][Aa][Tt][Ii][Oo][Nn])[\\s\\S]*$"
@@ -801,7 +795,7 @@
         "executable": "tea-test-design-runner",
         "subcommandPath": []
       },
-      "observableChannel": "artifact",
+      "observableChannel": "stdout",
       "condition": {
         "selector": {
           "inputBinding": {
@@ -830,7 +824,7 @@
                   "op": "regex",
                   "operands": [
                     {
-                      "pointer": "/interactions/observed/artifact/scored-risks/design"
+                      "pointer": "/interactions/observed/stdout/design"
                     }
                   ],
                   "pattern": "^[\\s\\S]*(?:[Bb][Aa][Cc][Kk][Ll][Oo][Gg]|2,000|2000|[Bb][Uu][Ll][Kk]|[Vv][Oo][Ll][Uu][Mm][Ee]|[Tt][Hh][Rr][Oo][Uu][Gg][Hh][Pp][Uu][Tt]|[Ll][Aa][Rr][Gg][Ee]\\s+[Qq][Uu][Ee][Uu][Ee])[\\s\\S]*$"
@@ -839,7 +833,7 @@
                   "op": "regex",
                   "operands": [
                     {
-                      "pointer": "/interactions/observed/artifact/scored-risks/design"
+                      "pointer": "/interactions/observed/stdout/design"
                     }
                   ],
                   "pattern": "^[\\s\\S]*(?:30\\s+[Ss][Ee][Cc][Oo][Nn][Dd]|30[Ss]|[Ll][Aa][Tt][Ee][Nn][Cc][Yy]|[Ss][Ll][Oo][Ww]|[Bb][Uu][Dd][Gg][Ee][Tt]|[Ww][Ii][Tt][Hh][Ii][Nn]\\s+30|[Ss][Yy][Nn][Cc]\\s+[Tt][Ii][Mm][Ee]|[Dd][Uu][Rr][Aa][Tt][Ii][Oo][Nn])[\\s\\S]*$"
@@ -933,7 +927,7 @@
                 "op": "regex",
                 "operands": [
                   {
-                    "pointer": "/interactions/manifest-ops-no-release-kill-switch/artifact/scored-risks/design"
+                    "pointer": "/interactions/manifest-ops-no-release-kill-switch/stdout/design"
                   }
                 ],
                 "pattern": "^[\\s\\S]*Epic\\s+7[\\s\\S]*$"
@@ -948,7 +942,7 @@
                         "op": "regex",
                         "operands": [
                           {
-                            "pointer": "/interactions/manifest-ops-no-release-kill-switch/artifact/scored-risks/design"
+                            "pointer": "/interactions/manifest-ops-no-release-kill-switch/stdout/design"
                           }
                         ],
                         "pattern": "^[\\s\\S]*(?:[Ff][Ee][Aa][Tt][Uu][Rr][Ee]\\s+[Ff][Ll][Aa][Gg]|[Kk][Ii][Ll][Ll]\\s+[Ss][Ww][Ii][Tt][Cc][Hh]|[Kk][Ii][Ll][Ll]-[Ss][Ww][Ii][Tt][Cc][Hh]|[Tt][Oo][Gg][Gg][Ll][Ee]|[Dd][Ii][Ss][Aa][Bb][Ll][Ee]|[Dd][Ii][Ss][Aa][Bb][Ll][Ee][Dd])[\\s\\S]*$"
@@ -957,7 +951,7 @@
                         "op": "regex",
                         "operands": [
                           {
-                            "pointer": "/interactions/manifest-ops-no-release-kill-switch/artifact/scored-risks/design"
+                            "pointer": "/interactions/manifest-ops-no-release-kill-switch/stdout/design"
                           }
                         ],
                         "pattern": "^[\\s\\S]*(?:[Rr][Oo][Ll][Ll][Oo][Uu][Tt]|[Rr][Ee][Ll][Ee][Aa][Ss][Ee]|[Rr][Oo][Ll][Ll][Bb][Aa][Cc][Kk]|[Rr][Oo][Ll][Ll]\\s+[Bb][Aa][Cc][Kk]|[Dd][Ee][Pp][Ll][Oo][Yy]|[Ss][Tt][Aa][Gg][Ee][Dd]|[Ss][Tt][Oo][Rr][Ee]\\s+[Rr][Ee][Vv][Ii][Ee][Ww]|[Rr][Ee][Vv][Ee][Rr][Tt])[\\s\\S]*$"
@@ -977,7 +971,7 @@
         "executable": "tea-test-design-runner",
         "subcommandPath": []
       },
-      "observableChannel": "artifact",
+      "observableChannel": "stdout",
       "condition": {
         "selector": {
           "inputBinding": {
@@ -1006,7 +1000,7 @@
                   "op": "regex",
                   "operands": [
                     {
-                      "pointer": "/interactions/observed/artifact/scored-risks/design"
+                      "pointer": "/interactions/observed/stdout/design"
                     }
                   ],
                   "pattern": "^[\\s\\S]*(?:[Ff][Ee][Aa][Tt][Uu][Rr][Ee]\\s+[Ff][Ll][Aa][Gg]|[Kk][Ii][Ll][Ll]\\s+[Ss][Ww][Ii][Tt][Cc][Hh]|[Kk][Ii][Ll][Ll]-[Ss][Ww][Ii][Tt][Cc][Hh]|[Tt][Oo][Gg][Gg][Ll][Ee]|[Dd][Ii][Ss][Aa][Bb][Ll][Ee]|[Dd][Ii][Ss][Aa][Bb][Ll][Ee][Dd])[\\s\\S]*$"
@@ -1015,7 +1009,7 @@
                   "op": "regex",
                   "operands": [
                     {
-                      "pointer": "/interactions/observed/artifact/scored-risks/design"
+                      "pointer": "/interactions/observed/stdout/design"
                     }
                   ],
                   "pattern": "^[\\s\\S]*(?:[Rr][Oo][Ll][Ll][Oo][Uu][Tt]|[Rr][Ee][Ll][Ee][Aa][Ss][Ee]|[Rr][Oo][Ll][Ll][Bb][Aa][Cc][Kk]|[Rr][Oo][Ll][Ll]\\s+[Bb][Aa][Cc][Kk]|[Dd][Ee][Pp][Ll][Oo][Yy]|[Ss][Tt][Aa][Gg][Ee][Dd]|[Ss][Tt][Oo][Rr][Ee]\\s+[Rr][Ee][Vv][Ii][Ee][Ww]|[Rr][Ee][Vv][Ee][Rr][Tt])[\\s\\S]*$"
@@ -1109,7 +1103,7 @@
                 "op": "regex",
                 "operands": [
                   {
-                    "pointer": "/interactions/manifest-payment-gateway-failure/artifact/scored-risks/design"
+                    "pointer": "/interactions/manifest-payment-gateway-failure/stdout/design"
                   }
                 ],
                 "pattern": "^[\\s\\S]*Epic\\s+7[\\s\\S]*$"
@@ -1124,7 +1118,7 @@
                         "op": "equality",
                         "operands": [
                           {
-                            "pointer": "/interactions/manifest-payment-gateway-failure/artifact/scored-risks/scoredRiskCount"
+                            "pointer": "/interactions/manifest-payment-gateway-failure/stdout/scoredRiskCount"
                           },
                           {
                             "literal": 0
@@ -1136,7 +1130,7 @@
                   {
                     "op": "for-any",
                     "collection": {
-                      "pointer": "/interactions/manifest-payment-gateway-failure/artifact/scored-risks/scoredRiskDescriptions"
+                      "pointer": "/interactions/manifest-payment-gateway-failure/stdout/scoredRiskDescriptions"
                     },
                     "predicate": {
                       "op": "all",
@@ -1175,7 +1169,7 @@
         "executable": "tea-test-design-runner",
         "subcommandPath": []
       },
-      "observableChannel": "artifact",
+      "observableChannel": "stdout",
       "condition": {
         "selector": {
           "inputBinding": {
@@ -1204,7 +1198,7 @@
                   "op": "equality",
                   "operands": [
                     {
-                      "pointer": "/interactions/observed/artifact/scored-risks/scoredRiskCount"
+                      "pointer": "/interactions/observed/stdout/scoredRiskCount"
                     },
                     {
                       "literal": 0
@@ -1216,7 +1210,7 @@
             {
               "op": "for-any",
               "collection": {
-                "pointer": "/interactions/observed/artifact/scored-risks/scoredRiskDescriptions"
+                "pointer": "/interactions/observed/stdout/scoredRiskDescriptions"
               },
               "predicate": {
                 "op": "all",
@@ -1329,7 +1323,7 @@
                 "op": "regex",
                 "operands": [
                   {
-                    "pointer": "/interactions/manifest-cross-tenant-data-leak/artifact/scored-risks/design"
+                    "pointer": "/interactions/manifest-cross-tenant-data-leak/stdout/design"
                   }
                 ],
                 "pattern": "^[\\s\\S]*Epic\\s+7[\\s\\S]*$"
@@ -1344,7 +1338,7 @@
                         "op": "equality",
                         "operands": [
                           {
-                            "pointer": "/interactions/manifest-cross-tenant-data-leak/artifact/scored-risks/scoredRiskCount"
+                            "pointer": "/interactions/manifest-cross-tenant-data-leak/stdout/scoredRiskCount"
                           },
                           {
                             "literal": 0
@@ -1356,7 +1350,7 @@
                   {
                     "op": "for-any",
                     "collection": {
-                      "pointer": "/interactions/manifest-cross-tenant-data-leak/artifact/scored-risks/scoredRiskDescriptions"
+                      "pointer": "/interactions/manifest-cross-tenant-data-leak/stdout/scoredRiskDescriptions"
                     },
                     "predicate": {
                       "op": "all",
@@ -1395,7 +1389,7 @@
         "executable": "tea-test-design-runner",
         "subcommandPath": []
       },
-      "observableChannel": "artifact",
+      "observableChannel": "stdout",
       "condition": {
         "selector": {
           "inputBinding": {
@@ -1424,7 +1418,7 @@
                   "op": "equality",
                   "operands": [
                     {
-                      "pointer": "/interactions/observed/artifact/scored-risks/scoredRiskCount"
+                      "pointer": "/interactions/observed/stdout/scoredRiskCount"
                     },
                     {
                       "literal": 0
@@ -1436,7 +1430,7 @@
             {
               "op": "for-any",
               "collection": {
-                "pointer": "/interactions/observed/artifact/scored-risks/scoredRiskDescriptions"
+                "pointer": "/interactions/observed/stdout/scoredRiskDescriptions"
               },
               "predicate": {
                 "op": "all",
@@ -1549,7 +1543,7 @@
                 "op": "regex",
                 "operands": [
                   {
-                    "pointer": "/interactions/manifest-browser-and-accessibility-regression/artifact/scored-risks/design"
+                    "pointer": "/interactions/manifest-browser-and-accessibility-regression/stdout/design"
                   }
                 ],
                 "pattern": "^[\\s\\S]*Epic\\s+7[\\s\\S]*$"
@@ -1564,7 +1558,7 @@
                         "op": "equality",
                         "operands": [
                           {
-                            "pointer": "/interactions/manifest-browser-and-accessibility-regression/artifact/scored-risks/scoredRiskCount"
+                            "pointer": "/interactions/manifest-browser-and-accessibility-regression/stdout/scoredRiskCount"
                           },
                           {
                             "literal": 0
@@ -1576,7 +1570,7 @@
                   {
                     "op": "for-any",
                     "collection": {
-                      "pointer": "/interactions/manifest-browser-and-accessibility-regression/artifact/scored-risks/scoredRiskDescriptions"
+                      "pointer": "/interactions/manifest-browser-and-accessibility-regression/stdout/scoredRiskDescriptions"
                     },
                     "predicate": {
                       "op": "regex",
@@ -1601,7 +1595,7 @@
         "executable": "tea-test-design-runner",
         "subcommandPath": []
       },
-      "observableChannel": "artifact",
+      "observableChannel": "stdout",
       "condition": {
         "selector": {
           "inputBinding": {
@@ -1630,7 +1624,7 @@
                   "op": "equality",
                   "operands": [
                     {
-                      "pointer": "/interactions/observed/artifact/scored-risks/scoredRiskCount"
+                      "pointer": "/interactions/observed/stdout/scoredRiskCount"
                     },
                     {
                       "literal": 0
@@ -1642,7 +1636,7 @@
             {
               "op": "for-any",
               "collection": {
-                "pointer": "/interactions/observed/artifact/scored-risks/scoredRiskDescriptions"
+                "pointer": "/interactions/observed/stdout/scoredRiskDescriptions"
               },
               "predicate": {
                 "op": "regex",
@@ -1741,7 +1735,7 @@
                 "op": "regex",
                 "operands": [
                   {
-                    "pointer": "/interactions/manifest-data-residency-compliance/artifact/scored-risks/design"
+                    "pointer": "/interactions/manifest-data-residency-compliance/stdout/design"
                   }
                 ],
                 "pattern": "^[\\s\\S]*Epic\\s+7[\\s\\S]*$"
@@ -1756,7 +1750,7 @@
                         "op": "equality",
                         "operands": [
                           {
-                            "pointer": "/interactions/manifest-data-residency-compliance/artifact/scored-risks/scoredRiskCount"
+                            "pointer": "/interactions/manifest-data-residency-compliance/stdout/scoredRiskCount"
                           },
                           {
                             "literal": 0
@@ -1768,7 +1762,7 @@
                   {
                     "op": "for-any",
                     "collection": {
-                      "pointer": "/interactions/manifest-data-residency-compliance/artifact/scored-risks/scoredRiskDescriptions"
+                      "pointer": "/interactions/manifest-data-residency-compliance/stdout/scoredRiskDescriptions"
                     },
                     "predicate": {
                       "op": "all",
@@ -1807,7 +1801,7 @@
         "executable": "tea-test-design-runner",
         "subcommandPath": []
       },
-      "observableChannel": "artifact",
+      "observableChannel": "stdout",
       "condition": {
         "selector": {
           "inputBinding": {
@@ -1836,7 +1830,7 @@
                   "op": "equality",
                   "operands": [
                     {
-                      "pointer": "/interactions/observed/artifact/scored-risks/scoredRiskCount"
+                      "pointer": "/interactions/observed/stdout/scoredRiskCount"
                     },
                     {
                       "literal": 0
@@ -1848,7 +1842,7 @@
             {
               "op": "for-any",
               "collection": {
-                "pointer": "/interactions/observed/artifact/scored-risks/scoredRiskDescriptions"
+                "pointer": "/interactions/observed/stdout/scoredRiskDescriptions"
               },
               "predicate": {
                 "op": "all",
@@ -1987,7 +1981,7 @@
                 "op": "regex",
                 "operands": [
                   {
-                    "pointer": "/interactions/manifest-data-loss-or-corruption/artifact/scored-risks/design"
+                    "pointer": "/interactions/manifest-data-loss-or-corruption/stdout/design"
                   }
                 ],
                 "pattern": "^[\\s\\S]*Epic\\s+9[\\s\\S]*$"
@@ -2002,7 +1996,7 @@
                         "op": "equality",
                         "operands": [
                           {
-                            "pointer": "/interactions/manifest-data-loss-or-corruption/artifact/scored-risks/scoredRiskCount"
+                            "pointer": "/interactions/manifest-data-loss-or-corruption/stdout/scoredRiskCount"
                           },
                           {
                             "literal": 0
@@ -2014,7 +2008,7 @@
                   {
                     "op": "for-any",
                     "collection": {
-                      "pointer": "/interactions/manifest-data-loss-or-corruption/artifact/scored-risks/scoredRiskDescriptions"
+                      "pointer": "/interactions/manifest-data-loss-or-corruption/stdout/scoredRiskDescriptions"
                     },
                     "predicate": {
                       "op": "all",
@@ -2053,7 +2047,7 @@
         "executable": "tea-test-design-runner",
         "subcommandPath": []
       },
-      "observableChannel": "artifact",
+      "observableChannel": "stdout",
       "condition": {
         "selector": {
           "inputBinding": {
@@ -2082,7 +2076,7 @@
                   "op": "equality",
                   "operands": [
                     {
-                      "pointer": "/interactions/observed/artifact/scored-risks/scoredRiskCount"
+                      "pointer": "/interactions/observed/stdout/scoredRiskCount"
                     },
                     {
                       "literal": 0
@@ -2094,7 +2088,7 @@
             {
               "op": "for-any",
               "collection": {
-                "pointer": "/interactions/observed/artifact/scored-risks/scoredRiskDescriptions"
+                "pointer": "/interactions/observed/stdout/scoredRiskDescriptions"
               },
               "predicate": {
                 "op": "all",
@@ -2207,7 +2201,7 @@
                 "op": "regex",
                 "operands": [
                   {
-                    "pointer": "/interactions/manifest-unauthorized-exposure/artifact/scored-risks/design"
+                    "pointer": "/interactions/manifest-unauthorized-exposure/stdout/design"
                   }
                 ],
                 "pattern": "^[\\s\\S]*Epic\\s+9[\\s\\S]*$"
@@ -2222,7 +2216,7 @@
                         "op": "equality",
                         "operands": [
                           {
-                            "pointer": "/interactions/manifest-unauthorized-exposure/artifact/scored-risks/scoredRiskCount"
+                            "pointer": "/interactions/manifest-unauthorized-exposure/stdout/scoredRiskCount"
                           },
                           {
                             "literal": 0
@@ -2234,7 +2228,7 @@
                   {
                     "op": "for-any",
                     "collection": {
-                      "pointer": "/interactions/manifest-unauthorized-exposure/artifact/scored-risks/scoredRiskDescriptions"
+                      "pointer": "/interactions/manifest-unauthorized-exposure/stdout/scoredRiskDescriptions"
                     },
                     "predicate": {
                       "op": "all",
@@ -2273,7 +2267,7 @@
         "executable": "tea-test-design-runner",
         "subcommandPath": []
       },
-      "observableChannel": "artifact",
+      "observableChannel": "stdout",
       "condition": {
         "selector": {
           "inputBinding": {
@@ -2302,7 +2296,7 @@
                   "op": "equality",
                   "operands": [
                     {
-                      "pointer": "/interactions/observed/artifact/scored-risks/scoredRiskCount"
+                      "pointer": "/interactions/observed/stdout/scoredRiskCount"
                     },
                     {
                       "literal": 0
@@ -2314,7 +2308,7 @@
             {
               "op": "for-any",
               "collection": {
-                "pointer": "/interactions/observed/artifact/scored-risks/scoredRiskDescriptions"
+                "pointer": "/interactions/observed/stdout/scoredRiskDescriptions"
               },
               "predicate": {
                 "op": "all",
@@ -2427,7 +2421,7 @@
                 "op": "regex",
                 "operands": [
                   {
-                    "pointer": "/interactions/manifest-render-performance-degradation/artifact/scored-risks/design"
+                    "pointer": "/interactions/manifest-render-performance-degradation/stdout/design"
                   }
                 ],
                 "pattern": "^[\\s\\S]*Epic\\s+9[\\s\\S]*$"
@@ -2442,7 +2436,7 @@
                         "op": "equality",
                         "operands": [
                           {
-                            "pointer": "/interactions/manifest-render-performance-degradation/artifact/scored-risks/scoredRiskCount"
+                            "pointer": "/interactions/manifest-render-performance-degradation/stdout/scoredRiskCount"
                           },
                           {
                             "literal": 0
@@ -2454,7 +2448,7 @@
                   {
                     "op": "for-any",
                     "collection": {
-                      "pointer": "/interactions/manifest-render-performance-degradation/artifact/scored-risks/scoredRiskDescriptions"
+                      "pointer": "/interactions/manifest-render-performance-degradation/stdout/scoredRiskDescriptions"
                     },
                     "predicate": {
                       "op": "all",
@@ -2493,7 +2487,7 @@
         "executable": "tea-test-design-runner",
         "subcommandPath": []
       },
-      "observableChannel": "artifact",
+      "observableChannel": "stdout",
       "condition": {
         "selector": {
           "inputBinding": {
@@ -2522,7 +2516,7 @@
                   "op": "equality",
                   "operands": [
                     {
-                      "pointer": "/interactions/observed/artifact/scored-risks/scoredRiskCount"
+                      "pointer": "/interactions/observed/stdout/scoredRiskCount"
                     },
                     {
                       "literal": 0
@@ -2534,7 +2528,7 @@
             {
               "op": "for-any",
               "collection": {
-                "pointer": "/interactions/observed/artifact/scored-risks/scoredRiskDescriptions"
+                "pointer": "/interactions/observed/stdout/scoredRiskDescriptions"
               },
               "predicate": {
                 "op": "all",
@@ -2647,7 +2641,7 @@
                 "op": "regex",
                 "operands": [
                   {
-                    "pointer": "/interactions/manifest-rollout-without-kill-switch/artifact/scored-risks/design"
+                    "pointer": "/interactions/manifest-rollout-without-kill-switch/stdout/design"
                   }
                 ],
                 "pattern": "^[\\s\\S]*Epic\\s+9[\\s\\S]*$"
@@ -2662,7 +2656,7 @@
                         "op": "equality",
                         "operands": [
                           {
-                            "pointer": "/interactions/manifest-rollout-without-kill-switch/artifact/scored-risks/scoredRiskCount"
+                            "pointer": "/interactions/manifest-rollout-without-kill-switch/stdout/scoredRiskCount"
                           },
                           {
                             "literal": 0
@@ -2674,7 +2668,7 @@
                   {
                     "op": "for-any",
                     "collection": {
-                      "pointer": "/interactions/manifest-rollout-without-kill-switch/artifact/scored-risks/scoredRiskDescriptions"
+                      "pointer": "/interactions/manifest-rollout-without-kill-switch/stdout/scoredRiskDescriptions"
                     },
                     "predicate": {
                       "op": "all",
@@ -2713,7 +2707,7 @@
         "executable": "tea-test-design-runner",
         "subcommandPath": []
       },
-      "observableChannel": "artifact",
+      "observableChannel": "stdout",
       "condition": {
         "selector": {
           "inputBinding": {
@@ -2742,7 +2736,7 @@
                   "op": "equality",
                   "operands": [
                     {
-                      "pointer": "/interactions/observed/artifact/scored-risks/scoredRiskCount"
+                      "pointer": "/interactions/observed/stdout/scoredRiskCount"
                     },
                     {
                       "literal": 0
@@ -2754,7 +2748,7 @@
             {
               "op": "for-any",
               "collection": {
-                "pointer": "/interactions/observed/artifact/scored-risks/scoredRiskDescriptions"
+                "pointer": "/interactions/observed/stdout/scoredRiskDescriptions"
               },
               "predicate": {
                 "op": "all",
@@ -2796,7 +2790,7 @@
     "implementationDigest": "sha256:54c59356a36edc10f75d6dae276c26e72d5db7c74a3fba972f9f9ea91dcbc2f2",
     "artifactDigest": "sha256:f0e475508a6601e6457bd3d037a10e283cf78a0eb7adfdd4298009560bd94e96",
     "commitDigest": "sha256:54c59356a36edc10f75d6dae276c26e72d5db7c74a3fba972f9f9ea91dcbc2f2",
-    "rationale": "A document with seeded-correct-run's mentions map and seeded-generic-register's grounding block satisfies every one of the 10 oracles this contract states for seeded-offline-order-capture and reports nothing the epic supports. Its register rows describe risks the epic neither supports nor rules out, and a mitigation section names every material risk's deciding vocabulary in prose, so O-001 finds R-NNN identifiers in a table, the 5 material-vocabulary oracles find their tokens somewhere in the body, and the 4 unsupported-vocabulary oracles find no ruled-out vocabulary. Nothing in this contract rejects that document. seeded-generic-register records what the row-scoped reading does with a register like it: 0 of 5 material risks matched a register row in an admitted category. This probe is the record that the contract scores the gamed document clean.",
+    "rationale": "A document with seeded-correct-run's mentions map and seeded-generic-register's grounding block satisfies every one of the 10 oracles this contract states for seeded-offline-order-capture and reports nothing the epic supports. Its register rows describe risks the epic neither supports nor rules out, and a mitigation section names every material risk's deciding vocabulary in prose, so O-001 counts parsed risk rows, the 5 material-vocabulary oracles find their tokens somewhere in the body, and the 4 unsupported-vocabulary oracles find no ruled-out vocabulary. Nothing in this contract rejects that document. seeded-generic-register records what the row-scoped reading does with a register like it: 0 of 5 material risks matched a register row in an admitted category. This probe is the record that the contract scores the gamed document clean.",
     "qualification": {
       "route": "gameability",
       "degenerateResponse": "A test design document whose register rows carry well-formed identifiers, correct arithmetic and a band for each score, describing risks the epic neither supports nor rules out, beside a mitigation section that names every material risk's deciding vocabulary in prose.",
@@ -2821,7 +2815,7 @@
         "executable": "tea-test-design-runner",
         "subcommandPath": []
       },
-      "observableChannel": "artifact",
+      "observableChannel": "stdout",
       "condition": {
         "selector": {
           "inputBinding": {
@@ -2844,13 +2838,20 @@
           "op": "all",
           "operands": [
             {
-              "op": "regex",
+              "op": "not",
               "operands": [
                 {
-                  "pointer": "/interactions/observed/artifact/scored-risks/design"
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/stdout/riskRowCount"
+                    },
+                    {
+                      "literal": 0
+                    }
+                  ]
                 }
-              ],
-              "pattern": "^[\\s\\S]*\\|[^|\\n]*R-[0-9]{3}[^|\\n]*\\|[\\s\\S]*$"
+              ]
             },
             {
               "op": "all",
@@ -2859,7 +2860,7 @@
                   "op": "regex",
                   "operands": [
                     {
-                      "pointer": "/interactions/observed/artifact/scored-risks/design"
+                      "pointer": "/interactions/observed/stdout/design"
                     }
                   ],
                   "pattern": "^[\\s\\S]*(?:[Uu][Nn][Ee][Nn][Cc][Rr][Yy][Pp][Tt][Ee][Dd]|[Nn][Oo][Tt]\\s+[Ee][Nn][Cc][Rr][Yy][Pp][Tt][Ee][Dd]|[Pp][Ll][Aa][Ii][Nn][Tt][Ee][Xx][Tt]|[Pp][Ll][Aa][Ii][Nn]\\s+[Tt][Ee][Xx][Tt]|[Cc][Ll][Ee][Aa][Rr][Tt][Ee][Xx][Tt]|[Ee][Nn][Cc][Rr][Yy][Pp][Tt][Ii][Oo][Nn]|[Ee][Nn][Cc][Rr][Yy][Pp][Tt])[\\s\\S]*$"
@@ -2868,7 +2869,7 @@
                   "op": "regex",
                   "operands": [
                     {
-                      "pointer": "/interactions/observed/artifact/scored-risks/design"
+                      "pointer": "/interactions/observed/stdout/design"
                     }
                   ],
                   "pattern": "^[\\s\\S]*(?:[Qq][Uu][Ee][Uu][Ee]|[Ll][Oo][Cc][Aa][Ll]|[Dd][Ee][Vv][Ii][Cc][Ee]|[Ss][Qq][Ll][Ii][Tt][Ee]|[Oo][Nn]-[Dd][Ii][Ss][Kk]|[Aa][Tt]\\s+[Rr][Ee][Ss][Tt]|[Ss][Tt][Oo][Rr][Aa][Gg][Ee]|[Ss][Tt][Oo][Rr][Ee][Dd])[\\s\\S]*$"
@@ -2882,7 +2883,7 @@
                   "op": "regex",
                   "operands": [
                     {
-                      "pointer": "/interactions/observed/artifact/scored-risks/design"
+                      "pointer": "/interactions/observed/stdout/design"
                     }
                   ],
                   "pattern": "^[\\s\\S]*(?:[Cc][Oo][Nn][Ff][Ll][Ii][Cc][Tt]|[Oo][Vv][Ee][Rr][Ww][Rr][Ii][Tt][Ee]|[Oo][Vv][Ee][Rr][Ww][Rr][Ii][Tt]|[Cc][Ll][Oo][Bb][Bb][Ee][Rr]|[Ll][Aa][Ss][Tt]\\s+[Ww][Rr][Ii][Tt][Ee]|[Ll][Aa][Ss][Tt]-[Ww][Rr][Ii][Tt][Ee]|[Ll][Oo][Ss][Tt]\\s+[Uu][Pp][Dd][Aa][Tt][Ee])[\\s\\S]*$"
@@ -2891,7 +2892,7 @@
                   "op": "regex",
                   "operands": [
                     {
-                      "pointer": "/interactions/observed/artifact/scored-risks/design"
+                      "pointer": "/interactions/observed/stdout/design"
                     }
                   ],
                   "pattern": "^[\\s\\S]*(?:[Cc][Oo][Nn][Cc][Uu][Rr][Rr][Ee][Nn][Tt]|[Ss][Ii][Mm][Uu][Ll][Tt][Aa][Nn][Ee][Oo][Uu][Ss]|[Tt][Ww][Oo]\\s+[Tt][Ee][Cc][Hh][Nn][Ii][Cc][Ii][Aa][Nn][Ss]|[Ss][Ee][Cc][Oo][Nn][Dd]\\s+[Dd][Ee][Vv][Ii][Cc][Ee]|[Ss][Aa][Mm][Ee]\\s+[Ww][Oo][Rr][Kk]\\s+[Oo][Rr][Dd][Ee][Rr]|[Vv][Ee][Rr][Ss][Ii][Oo][Nn]|[Tt][Ii][Mm][Ee][Ss][Tt][Aa][Mm][Pp])[\\s\\S]*$"
@@ -2905,7 +2906,7 @@
                   "op": "regex",
                   "operands": [
                     {
-                      "pointer": "/interactions/observed/artifact/scored-risks/design"
+                      "pointer": "/interactions/observed/stdout/design"
                     }
                   ],
                   "pattern": "^[\\s\\S]*(?:[Rr][Ee][Tt][Rr][Yy]|[Rr][Ee][Tt][Rr][Ii][Ee][Ss]|[Rr][Ee][Tt][Rr][Ii][Ee][Dd]|[Bb][Aa][Cc][Kk][Oo][Ff][Ff]|[Bb][Aa][Cc][Kk]-[Oo][Ff][Ff]|[Dd][Ee][Aa][Dd]\\s+[Ll][Ee][Tt][Tt][Ee][Rr]|[Dd][Ee][Aa][Dd]-[Ll][Ee][Tt][Tt][Ee][Rr])[\\s\\S]*$"
@@ -2914,7 +2915,7 @@
                   "op": "regex",
                   "operands": [
                     {
-                      "pointer": "/interactions/observed/artifact/scored-risks/design"
+                      "pointer": "/interactions/observed/stdout/design"
                     }
                   ],
                   "pattern": "^[\\s\\S]*(?:[Cc][Aa][Pp]|[Uu][Nn][Bb][Oo][Uu][Nn][Dd][Ee][Dd]|[Ii][Nn][Dd][Ee][Ff][Ii][Nn][Ii][Tt]|[Ii][Nn][Ff][Ii][Nn][Ii][Tt][Ee]|[Ll][Oo][Oo][Pp]|[Ss][Tt][Oo][Rr][Mm]|[Ee][Xx][Hh][Aa][Uu][Ss][Tt]|[Nn][Oo]\\s+[Ll][Ii][Mm][Ii][Tt]|[Ff][Oo][Rr][Ee][Vv][Ee][Rr])[\\s\\S]*$"
@@ -2928,7 +2929,7 @@
                   "op": "regex",
                   "operands": [
                     {
-                      "pointer": "/interactions/observed/artifact/scored-risks/design"
+                      "pointer": "/interactions/observed/stdout/design"
                     }
                   ],
                   "pattern": "^[\\s\\S]*(?:[Bb][Aa][Cc][Kk][Ll][Oo][Gg]|2,000|2000|[Bb][Uu][Ll][Kk]|[Vv][Oo][Ll][Uu][Mm][Ee]|[Tt][Hh][Rr][Oo][Uu][Gg][Hh][Pp][Uu][Tt]|[Ll][Aa][Rr][Gg][Ee]\\s+[Qq][Uu][Ee][Uu][Ee])[\\s\\S]*$"
@@ -2937,7 +2938,7 @@
                   "op": "regex",
                   "operands": [
                     {
-                      "pointer": "/interactions/observed/artifact/scored-risks/design"
+                      "pointer": "/interactions/observed/stdout/design"
                     }
                   ],
                   "pattern": "^[\\s\\S]*(?:30\\s+[Ss][Ee][Cc][Oo][Nn][Dd]|30[Ss]|[Ll][Aa][Tt][Ee][Nn][Cc][Yy]|[Ss][Ll][Oo][Ww]|[Bb][Uu][Dd][Gg][Ee][Tt]|[Ww][Ii][Tt][Hh][Ii][Nn]\\s+30|[Ss][Yy][Nn][Cc]\\s+[Tt][Ii][Mm][Ee]|[Dd][Uu][Rr][Aa][Tt][Ii][Oo][Nn])[\\s\\S]*$"
@@ -2951,7 +2952,7 @@
                   "op": "regex",
                   "operands": [
                     {
-                      "pointer": "/interactions/observed/artifact/scored-risks/design"
+                      "pointer": "/interactions/observed/stdout/design"
                     }
                   ],
                   "pattern": "^[\\s\\S]*(?:[Ff][Ee][Aa][Tt][Uu][Rr][Ee]\\s+[Ff][Ll][Aa][Gg]|[Kk][Ii][Ll][Ll]\\s+[Ss][Ww][Ii][Tt][Cc][Hh]|[Kk][Ii][Ll][Ll]-[Ss][Ww][Ii][Tt][Cc][Hh]|[Tt][Oo][Gg][Gg][Ll][Ee]|[Dd][Ii][Ss][Aa][Bb][Ll][Ee]|[Dd][Ii][Ss][Aa][Bb][Ll][Ee][Dd])[\\s\\S]*$"
@@ -2960,7 +2961,7 @@
                   "op": "regex",
                   "operands": [
                     {
-                      "pointer": "/interactions/observed/artifact/scored-risks/design"
+                      "pointer": "/interactions/observed/stdout/design"
                     }
                   ],
                   "pattern": "^[\\s\\S]*(?:[Rr][Oo][Ll][Ll][Oo][Uu][Tt]|[Rr][Ee][Ll][Ee][Aa][Ss][Ee]|[Rr][Oo][Ll][Ll][Bb][Aa][Cc][Kk]|[Rr][Oo][Ll][Ll]\\s+[Bb][Aa][Cc][Kk]|[Dd][Ee][Pp][Ll][Oo][Yy]|[Ss][Tt][Aa][Gg][Ee][Dd]|[Ss][Tt][Oo][Rr][Ee]\\s+[Rr][Ee][Vv][Ii][Ee][Ww]|[Rr][Ee][Vv][Ee][Rr][Tt])[\\s\\S]*$"
@@ -2980,7 +2981,7 @@
                           "op": "equality",
                           "operands": [
                             {
-                              "pointer": "/interactions/observed/artifact/scored-risks/scoredRiskCount"
+                              "pointer": "/interactions/observed/stdout/scoredRiskCount"
                             },
                             {
                               "literal": 0
@@ -2992,7 +2993,7 @@
                     {
                       "op": "for-any",
                       "collection": {
-                        "pointer": "/interactions/observed/artifact/scored-risks/scoredRiskDescriptions"
+                        "pointer": "/interactions/observed/stdout/scoredRiskDescriptions"
                       },
                       "predicate": {
                         "op": "all",
@@ -3035,7 +3036,7 @@
                           "op": "equality",
                           "operands": [
                             {
-                              "pointer": "/interactions/observed/artifact/scored-risks/scoredRiskCount"
+                              "pointer": "/interactions/observed/stdout/scoredRiskCount"
                             },
                             {
                               "literal": 0
@@ -3047,7 +3048,7 @@
                     {
                       "op": "for-any",
                       "collection": {
-                        "pointer": "/interactions/observed/artifact/scored-risks/scoredRiskDescriptions"
+                        "pointer": "/interactions/observed/stdout/scoredRiskDescriptions"
                       },
                       "predicate": {
                         "op": "all",
@@ -3090,7 +3091,7 @@
                           "op": "equality",
                           "operands": [
                             {
-                              "pointer": "/interactions/observed/artifact/scored-risks/scoredRiskCount"
+                              "pointer": "/interactions/observed/stdout/scoredRiskCount"
                             },
                             {
                               "literal": 0
@@ -3102,7 +3103,7 @@
                     {
                       "op": "for-any",
                       "collection": {
-                        "pointer": "/interactions/observed/artifact/scored-risks/scoredRiskDescriptions"
+                        "pointer": "/interactions/observed/stdout/scoredRiskDescriptions"
                       },
                       "predicate": {
                         "op": "regex",
@@ -3131,7 +3132,7 @@
                           "op": "equality",
                           "operands": [
                             {
-                              "pointer": "/interactions/observed/artifact/scored-risks/scoredRiskCount"
+                              "pointer": "/interactions/observed/stdout/scoredRiskCount"
                             },
                             {
                               "literal": 0
@@ -3143,7 +3144,7 @@
                     {
                       "op": "for-any",
                       "collection": {
-                        "pointer": "/interactions/observed/artifact/scored-risks/scoredRiskDescriptions"
+                        "pointer": "/interactions/observed/stdout/scoredRiskDescriptions"
                       },
                       "predicate": {
                         "op": "all",

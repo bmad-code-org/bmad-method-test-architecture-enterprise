@@ -3216,7 +3216,7 @@
   },
   "test-design": {
     "contractId": "tea-test-design-behavioral",
-    "corpusDigest": "sha256:d3930aea6ae7e3caeafbb865ed99edd1360445207ea62b29ee80c2c777d7f54c",
+    "corpusDigest": "sha256:783e7fa2bf8d0567b504b8630e1c10f63c7dcc89ade7d6dc2fa23db15a0e1774",
     "probeCount": 16,
     "strength": {
       "defect": {
@@ -3225,9 +3225,9 @@
         "rate": null
       },
       "gameability": {
-        "exercised": 0,
+        "exercised": 1,
         "caught": 0,
-        "rate": null
+        "rate": 0
       },
       "zero-action": null
     },
@@ -3242,8 +3242,8 @@
         "verdict": null,
         "exitCode": 3,
         "strictPromotable": true,
-        "basis": ["oracle resolved infrastructure-error", "pre-flight verdict did not pass"],
-        "qualification": ["condition-artifact-channel-contract-local"],
+        "basis": ["pre-flight verdict did not pass"],
+        "qualification": null,
         "strength": null,
         "comparableResult": null
       },
@@ -3256,8 +3256,8 @@
         "verdict": null,
         "exitCode": 3,
         "strictPromotable": true,
-        "basis": ["oracle resolved infrastructure-error", "pre-flight verdict did not pass"],
-        "qualification": ["condition-artifact-channel-contract-local", "condition-artifact-channel-contract-local"],
+        "basis": ["pre-flight verdict did not pass"],
+        "qualification": null,
         "strength": null,
         "comparableResult": null
       },
@@ -3270,8 +3270,8 @@
         "verdict": null,
         "exitCode": 3,
         "strictPromotable": true,
-        "basis": ["oracle resolved infrastructure-error", "pre-flight verdict did not pass"],
-        "qualification": ["condition-artifact-channel-contract-local", "condition-artifact-channel-contract-local"],
+        "basis": ["pre-flight verdict did not pass"],
+        "qualification": null,
         "strength": null,
         "comparableResult": null
       },
@@ -3284,8 +3284,8 @@
         "verdict": null,
         "exitCode": 3,
         "strictPromotable": true,
-        "basis": ["oracle resolved infrastructure-error", "pre-flight verdict did not pass"],
-        "qualification": ["condition-artifact-channel-contract-local", "condition-artifact-channel-contract-local"],
+        "basis": ["pre-flight verdict did not pass"],
+        "qualification": null,
         "strength": null,
         "comparableResult": null
       },
@@ -3298,8 +3298,8 @@
         "verdict": null,
         "exitCode": 3,
         "strictPromotable": true,
-        "basis": ["oracle resolved infrastructure-error", "pre-flight verdict did not pass"],
-        "qualification": ["condition-artifact-channel-contract-local", "condition-artifact-channel-contract-local"],
+        "basis": ["pre-flight verdict did not pass"],
+        "qualification": null,
         "strength": null,
         "comparableResult": null
       },
@@ -3312,8 +3312,8 @@
         "verdict": null,
         "exitCode": 3,
         "strictPromotable": true,
-        "basis": ["oracle resolved infrastructure-error", "pre-flight verdict did not pass"],
-        "qualification": ["condition-artifact-channel-contract-local", "condition-artifact-channel-contract-local"],
+        "basis": ["pre-flight verdict did not pass"],
+        "qualification": null,
         "strength": null,
         "comparableResult": null
       },
@@ -3326,8 +3326,8 @@
         "verdict": null,
         "exitCode": 3,
         "strictPromotable": true,
-        "basis": ["oracle resolved infrastructure-error", "pre-flight verdict did not pass"],
-        "qualification": ["condition-artifact-channel-contract-local", "condition-artifact-channel-contract-local"],
+        "basis": ["pre-flight verdict did not pass"],
+        "qualification": null,
         "strength": null,
         "comparableResult": null
       },
@@ -3340,8 +3340,8 @@
         "verdict": null,
         "exitCode": 3,
         "strictPromotable": true,
-        "basis": ["oracle resolved infrastructure-error", "pre-flight verdict did not pass"],
-        "qualification": ["condition-artifact-channel-contract-local", "condition-artifact-channel-contract-local"],
+        "basis": ["pre-flight verdict did not pass"],
+        "qualification": null,
         "strength": null,
         "comparableResult": null
       },
@@ -3354,8 +3354,8 @@
         "verdict": null,
         "exitCode": 3,
         "strictPromotable": true,
-        "basis": ["oracle resolved infrastructure-error", "pre-flight verdict did not pass"],
-        "qualification": ["condition-artifact-channel-contract-local", "condition-artifact-channel-contract-local"],
+        "basis": ["pre-flight verdict did not pass"],
+        "qualification": null,
         "strength": null,
         "comparableResult": null
       },
@@ -3368,8 +3368,8 @@
         "verdict": null,
         "exitCode": 3,
         "strictPromotable": true,
-        "basis": ["oracle resolved infrastructure-error", "pre-flight verdict did not pass"],
-        "qualification": ["condition-artifact-channel-contract-local", "condition-artifact-channel-contract-local"],
+        "basis": ["pre-flight verdict did not pass"],
+        "qualification": null,
         "strength": null,
         "comparableResult": null
       },
@@ -3534,8 +3534,8 @@
         "verdict": null,
         "exitCode": 3,
         "strictPromotable": true,
-        "basis": ["oracle resolved infrastructure-error", "pre-flight verdict did not pass"],
-        "qualification": ["condition-artifact-channel-contract-local", "condition-artifact-channel-contract-local"],
+        "basis": ["pre-flight verdict did not pass"],
+        "qualification": null,
         "strength": null,
         "comparableResult": null
       },
@@ -3548,8 +3548,8 @@
         "verdict": null,
         "exitCode": 3,
         "strictPromotable": true,
-        "basis": ["oracle resolved infrastructure-error", "pre-flight verdict did not pass"],
-        "qualification": ["condition-artifact-channel-contract-local", "condition-artifact-channel-contract-local"],
+        "basis": ["pre-flight verdict did not pass"],
+        "qualification": null,
         "strength": null,
         "comparableResult": null
       },
@@ -3562,8 +3562,8 @@
         "verdict": null,
         "exitCode": 3,
         "strictPromotable": true,
-        "basis": ["oracle resolved infrastructure-error", "pre-flight verdict did not pass"],
-        "qualification": ["condition-artifact-channel-contract-local", "condition-artifact-channel-contract-local"],
+        "basis": ["pre-flight verdict did not pass"],
+        "qualification": null,
         "strength": null,
         "comparableResult": null
       },
@@ -3576,8 +3576,8 @@
         "verdict": null,
         "exitCode": 3,
         "strictPromotable": true,
-        "basis": ["oracle resolved infrastructure-error", "pre-flight verdict did not pass"],
-        "qualification": ["condition-artifact-channel-contract-local", "condition-artifact-channel-contract-local"],
+        "basis": ["pre-flight verdict did not pass"],
+        "qualification": null,
         "strength": null,
         "comparableResult": null
       },
@@ -3587,33 +3587,155 @@
         "behaviorId": "B-002",
         "preflight": "passed",
         "preflightLegs": 2,
-        "verdict": null,
-        "exitCode": 3,
+        "verdict": "FAIL",
+        "exitCode": 2,
         "strictPromotable": true,
-        "basis": ["oracle resolved infrastructure-error"],
-        "qualification": [
-          "condition-artifact-channel-contract-local",
-          "condition-artifact-channel-contract-local",
-          "condition-artifact-channel-contract-local",
-          "condition-artifact-channel-contract-local",
-          "condition-artifact-channel-contract-local",
-          "condition-artifact-channel-contract-local",
-          "condition-artifact-channel-contract-local",
-          "condition-artifact-channel-contract-local",
-          "condition-artifact-channel-contract-local",
-          "condition-artifact-channel-contract-local",
-          "condition-artifact-channel-contract-local",
-          "condition-artifact-channel-contract-local",
-          "condition-artifact-channel-contract-local",
-          "condition-artifact-channel-contract-local",
-          "condition-artifact-channel-contract-local",
-          "condition-artifact-channel-contract-local",
-          "condition-artifact-channel-contract-local",
-          "condition-artifact-channel-contract-local",
-          "condition-artifact-channel-contract-local"
-        ],
-        "strength": null,
-        "comparableResult": null
+        "basis": ["oracle resolved missed at or above the severity floor"],
+        "qualification": null,
+        "strength": {
+          "defect": null,
+          "gameability": {
+            "caught": 0,
+            "exercised": 1,
+            "rate": 0
+          },
+          "zero-action": null
+        },
+        "comparableResult": {
+          "comparabilityKey": "sha256:aa7448dee87a19a87ed58d4ab9f03b74116422ade13e41f591bcdab153f8cd00",
+          "scoredProbeId": "P-016",
+          "strength": {
+            "denominator": "unique qualified probe identifiers exercised per class, across 1 completed trial",
+            "basis": "measured",
+            "vector": {
+              "defect": null,
+              "gameability": {
+                "caught": 0,
+                "exercised": 1,
+                "rate": 0
+              },
+              "zero-action": null
+            },
+            "comparable": true,
+            "note": "1 admitted probe over 1 completed trial."
+          },
+          "trials": {
+            "declaredMinimum": 1,
+            "completed": 1,
+            "completedAttempts": [1],
+            "invalidatedAttempts": []
+          },
+          "reducedProbeOutcomes": [
+            {
+              "probeId": "P-016",
+              "severity": "critical",
+              "exercised": true,
+              "caught": false,
+              "catchThreshold": 0.5,
+              "trialVotes": [
+                {
+                  "trialIndex": 1,
+                  "state": "missed"
+                }
+              ],
+              "validCount": 1,
+              "caughtCount": 0,
+              "invalidatedAttempts": []
+            }
+          ],
+          "outcomes": [
+            {
+              "probeId": "P-016",
+              "state": "confirmed",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-016",
+              "state": "missed",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-016",
+              "state": "confirmed",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-016",
+              "state": "confirmed",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-016",
+              "state": "confirmed",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-016",
+              "state": "confirmed",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-016",
+              "state": "confirmed",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-016",
+              "state": "confirmed",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-016",
+              "state": "confirmed",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-016",
+              "state": "confirmed",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-016",
+              "state": "confirmed",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-016",
+              "state": "confirmed",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-016",
+              "state": "confirmed",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-016",
+              "state": "confirmed",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-016",
+              "state": "confirmed",
+              "severity": "critical",
+              "trialIndex": 1
+            }
+          ]
+        }
       }
     }
   },

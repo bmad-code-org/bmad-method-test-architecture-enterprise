@@ -211,15 +211,15 @@ of the binding being correct, and it is paid by a generated file rather than by 
 ## `test-design.contract.json` reads vocabulary at its declared scope
 
 `bmad-testarch-test-design` declares one epic-level deliverable: `{test_artifacts}/test-design/test-design-epic-{epic_num}.md`.
-The runner creates an internal JSON companion after the agent finishes. It uses the same parser as the harness and carries the original Markdown, descriptions from risk rows scored above 3, and their count. The parser maps score and description columns by header and skips fenced examples. The companion is evaluator evidence; the workflow still produces one Markdown deliverable.
+The runner emits a JSON projection on stdout after the agent finishes. It uses the same parser as the harness and carries the original Markdown, the parsed risk-row count, descriptions from risk rows scored above 3, and their count. The parser maps score and description columns by header and skips fenced examples. The workflow produces one Markdown file.
 
-Material-risk vocabulary is read from the original document text. Unsupported-risk vocabulary is read from one parsed scored-risk description at a time. The `for-any` check is guarded by the projected count, so an empty scored-risk collection passes the exclusion oracle while a missing companion yields insufficient evidence. `test/test-contract-oracles.js` compares both readings with the harness predicate on stored and constructed designs.
+Material-risk vocabulary is read from the original document text. Unsupported-risk vocabulary is read from one parsed scored-risk description at a time. The `for-any` check is guarded by the projected count, so an empty scored-risk collection passes the exclusion oracle while missing stdout yields insufficient evidence. `test/test-contract-oracles.js` compares both readings with the harness predicate on stored and constructed designs.
 
 What a green `test-contract-oracles.js` buys here is narrow, so it is worth stating plainly.
 It says the contract and the harness agree about material vocabulary in the document and unsupported vocabulary in scored risk rows. The 1-3 scale, score arithmetic, band placement, coverage levels and pairwise priority ordering remain harness checks.
 
 Fifteen oracles, in three kinds.
-One `run-measured` per fixture set asserts the document carries a table cell holding an `R-NNN` identifier, which is the shape the harness reads rows out of, and a document with none is refused before it is scored at all.
+One `run-measured` per fixture set asserts that the shared parser found at least one risk-register row. A document with none is refused before it is scored.
 One `material-vocabulary` per material risk, five on the seeded set and none on the clean one, asserts the document reaches the deciding vocabulary of a risk the epic supports in as many words.
 One `unsupported-vocabulary` per ruled-out risk, four on each set, asserts that no risk row scored above 3 describes a risk the epic rules out.
 The two `run-measured` behaviors grade `material` and the other thirteen grade `critical`.
@@ -341,8 +341,9 @@ The oracle check is the one that reads the oracles. It evaluates every oracle in
 `eval-quality`'s own evaluator, loaded from the installed package, over evidence this repository
 already holds: each stored verdict under `test/replay/test-review/` as one observation of the
 `review-corpus` step, each fragment-selection case over three constructed selections and the stored
-captures, each stored test design under `test/replay/test-design/` as its Markdown artifact and parsed JSON companion in
-fixture set's plan step, each stored trace run under `test/replay/trace/` as one observation of its
+captures, each stored test design under `test/replay/test-design/` as one observation of its fixture
+set's plan step with a Markdown artifact and parsed JSON stdout, each stored trace run under
+`test/replay/trace/` as one observation of its
 fixture set's plan step, and each stored NFR run under `test/replay/nfr/` as one observation of its
 evidence bundle's plan step, the last three evaluated under both of their suite's sets so that every
 test-design, trace and nfr oracle is also seen failing. Each answer is compared with the harness

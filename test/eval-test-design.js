@@ -460,7 +460,7 @@ function projectRootOf(set) {
  */
 function designArtifactPaths(set) {
   const design = path.posix.join(projectRootOf(set), 'test-artifacts', 'test-design', `test-design-epic-${set.epicNum}.md`);
-  return { design, 'scored-risks': design.replace(/\.md$/, '.scored-risks.json') };
+  return { design };
 }
 
 /** Whitespace-collapsed, lowercased text, which is what every token and quote test reads. */
@@ -1455,12 +1455,12 @@ async function runCase(set, options, agent, runIndex, categories) {
 
     const design = readDesign(observation.artifacts.design);
     if (!design.ok) return design;
-    const scoredRisks = observation.artifacts['scored-risks'];
-    if (!scoredRisks || scoredRisks.kind === 'absent') {
-      return { ok: false, failureClass: 'environment-missing-artifact', reason: 'no scored-risk companion was written' };
+    const projection = observation.stdout;
+    if (!projection || projection.kind === 'absent') {
+      return { ok: false, failureClass: 'environment-missing-artifact', reason: 'no scored-risk projection was returned' };
     }
-    if (scoredRisks.kind !== 'json' || JSON.stringify(scoredRisks.value) !== JSON.stringify(scoredRiskProjection(design.design))) {
-      return { ok: false, failureClass: 'environment-parser', reason: 'the scored-risk companion disagrees with the design document' };
+    if (projection.kind !== 'json' || JSON.stringify(projection.value) !== JSON.stringify(scoredRiskProjection(design.design))) {
+      return { ok: false, failureClass: 'environment-parser', reason: 'the scored-risk projection disagrees with the design document' };
     }
 
     return {

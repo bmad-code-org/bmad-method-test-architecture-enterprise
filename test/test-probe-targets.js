@@ -667,15 +667,16 @@ async function checkTestDesignProbe(runDir) {
   console.log('\ntea-test-design-runner through the adapter');
   const cwd = fs.mkdtempSync(path.join(runDir, 'test-design-'));
   const designPath = 'field-order-capture/test-artifacts/test-design/test-design-epic-7.md';
+  const sidecar = path.join(cwd, designPath.replace(/\.md$/, '.scored-risks.json'));
+  const outside = path.join(runDir, 'outside-scored-risks.json');
+  const outsideBytes = 'outside file must stay untouched\n';
+  fs.mkdirSync(path.dirname(sidecar), { recursive: true });
+  fs.writeFileSync(outside, outsideBytes);
+  fs.symlinkSync(outside, sidecar);
   const { port } = await createProbePort({
     cwd,
     interfaceIds: ['tea-test-design-runner'],
-    artifacts: {
-      'tea-test-design-runner': {
-        design: designPath,
-        'scored-risks': designPath.replace(/\.md$/, '.scored-risks.json'),
-      },
-    },
+    artifacts: { 'tea-test-design-runner': { design: designPath } },
     environmentKeys: { 'tea-test-design-runner': STUB_ENVIRONMENT_KEYS },
   });
   const result = await probeCommand(
@@ -698,7 +699,8 @@ async function checkTestDesignProbe(runDir) {
   );
   assert(result.ok && result.observation.exitCode === 0, 'the test-design stub completes through the runner', JSON.stringify(result));
   if (!result.ok) return;
-  const { design, 'scored-risks': scoredRisks } = result.observation.artifacts;
+  const { design } = result.observation.artifacts;
+  const projection = result.observation.stdout;
   const expectedDescriptions = [
     'The outbound queue is stored unencrypted on the device, so anyone reaching the local file can read the stored card reference.',
     'Concurrent offline edits to the same work order overwrite each other on sync, because the server applies queued edits by arrival with no version check.',
@@ -706,13 +708,51 @@ async function checkTestDesignProbe(runDir) {
     'A 2000 item backlog may not finish syncing inside the 30 second budget on the mid-range hardware the fleet carries.',
   ];
   assert(design?.kind === 'text', 'the runner observation carries the Markdown design');
-  assert(scoredRisks?.kind === 'json', 'the runner observation carries the scored-risk companion');
+  assert(projection?.kind === 'json', 'the runner observation carries JSON stdout');
+  assert(/Wrote .*test-design-epic-7\.md/.test(observedText(result.observation.stderr)), 'agent diagnostics are on stderr');
   assert(
-    scoredRisks?.value?.design === design?.value &&
-      scoredRisks.value.scoredRiskCount === expectedDescriptions.length &&
-      JSON.stringify(scoredRisks.value.scoredRiskDescriptions) === JSON.stringify(expectedDescriptions),
-    'the companion contains the expected scored descriptions from the stub document',
-    JSON.stringify(scoredRisks),
+    projection?.value?.design === design?.value &&
+      projection.value.riskRowCount === 5 &&
+      projection.value.scoredRiskCount === expectedDescriptions.length &&
+      JSON.stringify(projection.value.scoredRiskDescriptions) === JSON.stringify(expectedDescriptions),
+    'JSON stdout contains the expected parsed risk rows and scored descriptions',
+    JSON.stringify(projection),
+  );
+  assert(fs.lstatSync(sidecar).isSymbolicLink(), 'the planted sidecar symlink remains in place');
+  assert(fs.readFileSync(outside, 'utf8') === outsideBytes, 'the runner leaves the symlink target byte-identical');
+
+  const emptyCwd = fs.mkdtempSync(path.join(runDir, 'test-design-empty-'));
+  const { port: emptyPort } = await createProbePort({
+    cwd: emptyCwd,
+    interfaceIds: ['tea-test-design-runner'],
+    artifacts: { 'tea-test-design-runner': { design: designPath } },
+    environmentKeys: { 'tea-test-design-runner': STUB_ENVIRONMENT_KEYS },
+  });
+  const missing = await probeCommand(
+    emptyPort,
+    probeRequest({
+      probeId: 'test-design-missing',
+      interfaceId: 'tea-test-design-runner',
+      operationId: 'design-fixture-set',
+      option: {
+        agent: 'custom',
+        'agent-cmd': TEST_DESIGN_STUB_AGENT,
+        'design-path': designPath,
+        'env-pass': 'STUB_MODE',
+        'timeout-ms': '60000',
+      },
+      environment: { STUB_MODE: 'nothing' },
+      stdin: { kind: 'text', value: '- `{project-root}`: `field-order-capture`\n- `epic_num`: `7`\n' },
+    }),
+    new AbortController().signal,
+  );
+  assert(
+    missing.ok &&
+      missing.observation.artifacts.design.kind === 'absent' &&
+      missing.observation.stdout.kind === 'text' &&
+      missing.observation.stdout.value === '',
+    'a missing Markdown design yields no projection evidence',
+    JSON.stringify(missing),
   );
 }
 

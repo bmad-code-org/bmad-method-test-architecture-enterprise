@@ -9,8 +9,8 @@
  *   prompt on standard input -> the agent runs in the working directory
  *                            -> the test design document is left on disk
  *
- * The workflow writes one Markdown deliverable. The runner also writes a JSON
- * projection for the evaluator when given --design-path. The prompt belongs
+ * The workflow writes one Markdown deliverable. The runner emits a JSON
+ * projection on stdout for the evaluator when given --design-path. The prompt belongs
  * to the eval corpus, so this command builds none: only the harness knows which
  * fixture set is staged, which epic it names, and where the workflow is. The
  * vendor call is TEA's own (cli/lib/run-agent.js), so vendor argv, the minimal
@@ -18,7 +18,7 @@
  * one place that already decides them for the other three commands. This file
  * adds no vendor knowledge.
  *
- * The adapter reads the deliverable and the projection through its artifact map.
+ * The adapter reads the deliverable as an artifact and the projection from stdout.
  * The projection carries the original Markdown and descriptions of parsed rows
  * scored above 3. Both the runner and harness import the same parser module.
  * A missing deliverable remains an absent artifact for the harness to classify.
@@ -91,7 +91,7 @@ function collect(value, previous) {
   return [...previous, value];
 }
 
-/** Everything this process prints on stderr is diagnostic; stdout carries only what the agent printed. */
+/** Everything this process prints on stderr is diagnostic; stdout carries only the projection. */
 function fail(failureClass, message) {
   process.stderr.write(`tea-test-design-runner: ${message}\n`);
   process.exit(EXIT_CODES[failureClass]);
@@ -106,14 +106,14 @@ function readPrompt() {
   }
 }
 
-/** Write a fresh internal projection only after the agent has finished its document. */
-function writeScoredRiskProjection(cwd, relativeDesignPath) {
+/** Derive a projection only after the agent has finished its document. */
+function projectScoredRisks(cwd, relativeDesignPath) {
   const relative = path.normalize(relativeDesignPath);
   if (path.isAbsolute(relative) || relative.startsWith(`..${path.sep}`) || relative === '..' || !relative.endsWith('.md')) {
     throw new Error(`--design-path must name a markdown file inside the working directory: ${JSON.stringify(relativeDesignPath)}`);
   }
   const designPath = path.join(cwd, relative);
-  if (!fs.existsSync(designPath)) return false;
+  if (!fs.existsSync(designPath)) return null;
   const realRoot = fs.realpathSync(cwd);
   const realDesign = fs.realpathSync(designPath);
   const fromRoot = path.relative(realRoot, realDesign);
@@ -122,17 +122,7 @@ function writeScoredRiskProjection(cwd, relativeDesignPath) {
   }
   const text = fs.readFileSync(designPath, 'utf8');
   const read = readDesign({ kind: 'text', value: text });
-  if (!read.ok) throw new Error(read.reason);
-  const projection = scoredRiskProjection(read.design);
-  const projectionPath = designPath.replace(/\.md$/, '.scored-risks.json');
-  // Exclusive creation rejects a sidecar the agent planted, including a symlink.
-  const descriptor = fs.openSync(projectionPath, 'wx');
-  try {
-    fs.writeFileSync(descriptor, `${JSON.stringify(projection)}\n`);
-  } finally {
-    fs.closeSync(descriptor);
-  }
-  return true;
+  return scoredRiskProjection(read.ok ? read.design : { risks: [], text });
 }
 
 function main(argv) {
@@ -195,16 +185,14 @@ function main(argv) {
 
   if (options.designPath) {
     try {
-      writeScoredRiskProjection(process.cwd(), options.designPath);
+      const projection = projectScoredRisks(process.cwd(), options.designPath);
+      if (projection) process.stdout.write(`${JSON.stringify(projection)}\n`);
     } catch (error) {
       fail('environment-parser', `could not project scored risks: ${error.message}`);
     }
   }
 
-  // What the agent printed, unchanged. The deliverable is the document it wrote,
-  // and the prompt tells it nothing it prints is read, so this is diagnostic
-  // output for an operator watching the run rather than a channel a caller scores.
-  if (stdout.length > 0) process.stdout.write(stdout.endsWith('\n') ? stdout : `${stdout}\n`);
+  if (stdout.length > 0) process.stderr.write(stdout.endsWith('\n') ? stdout : `${stdout}\n`);
 }
 
 // Guarded so tools/generate-contracts.js can read the declarations above without
@@ -218,7 +206,7 @@ module.exports = {
   TEST_DESIGN_REQUEST_KEYS,
   classOfAgentError,
   failureClassForExit,
-  writeScoredRiskProjection,
+  projectScoredRisks,
 };
 
 if (require.main === module) {

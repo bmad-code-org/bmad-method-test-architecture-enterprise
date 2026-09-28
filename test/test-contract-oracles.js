@@ -107,7 +107,6 @@
 'use strict';
 
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 
 const { parseSelection } = require('../cli/lib/parse-selection');
@@ -155,7 +154,6 @@ const {
 // oracle and the harness predicate it is paired with, so it is imported rather
 // than restated here.
 const { testDesignOracleSpecs, testDesignStepId } = require('../tools/generate-contracts');
-const { writeScoredRiskProjection } = require('../cli/test-design-runner');
 const {
   readDesign: readTestDesign,
   scoredRiskProjection,
@@ -827,7 +825,7 @@ async function checkRoutingOracles(evaluator) {
 
 /**
  * One stored test-design run as the Markdown artifact a probe observation carries.
- * The runner derives its JSON companion from this body with the scorer's parser.
+ * The runner derives JSON stdout from this body with the scorer's parser.
  */
 function testDesignArtifactOf(directory, expected) {
   const designPath = path.join(directory, expected.storedOutput?.design ?? 'design.md');
@@ -873,7 +871,7 @@ async function checkTestDesignOracles(evaluator) {
     const probe = probes.find((entry) => entry.behaviorId === spec.id.replace('O-', 'B-'));
     const witness = probe?.defects?.[0]?.manifestationWitness;
     const originalPointer = spec.oracle.direction.evidenceTargets[0].replace(/\/scoredRiskDescriptions$/, '');
-    const legPointer = `/interactions/${witness?.legId}/artifact/scored-risks`;
+    const legPointer = `/interactions/${witness?.legId}/stdout`;
     const expected = repoint(spec.oracle.check.operands[0], originalPointer, legPointer);
     assert(
       JSON.stringify(witness?.relation?.operands?.[1]) === JSON.stringify(expected),
@@ -896,14 +894,18 @@ async function checkTestDesignOracles(evaluator) {
     // is the agreement check proper; the other set is the document seen as a wrong
     // answer to a different question, which is what makes an oracle resolve false.
     const parsed = readTestDesign(artifact);
-    const scoredRisks = parsed.ok ? { kind: 'json', value: scoredRiskProjection(parsed.design) } : { kind: 'absent' };
+    const projection =
+      artifact.kind === 'text'
+        ? { kind: 'json', value: scoredRiskProjection(parsed.ok ? parsed.design : { risks: [], text: artifact.value }) }
+        : { kind: 'absent' };
     for (const set of groundTruth.fixtureSets ?? []) {
       const stepId = testDesignStepId(set);
       const results = evaluateOracles(evaluator, contract, {
         [stepId]: observation({
           operationId: TEST_DESIGN_OPERATION,
           exitCode: 0,
-          artifacts: { design: artifact, 'scored-risks': scoredRisks },
+          stdout: projection,
+          artifacts: { design: artifact },
         }),
       });
       const read = readTestDesign(artifact);
@@ -920,7 +922,7 @@ async function checkTestDesignOracles(evaluator) {
             continue;
           }
           assert(
-            agrees(results.get(spec.id), null),
+            agrees(results.get(spec.id), artifact.kind === 'text' ? false : null),
             `${label}: ${spec.id} (${spec.kind}) refuses the document the harness refuses (${read.reason})`,
             `oracle ${describe(results.get(spec.id))}`,
           );
@@ -943,6 +945,7 @@ async function checkTestDesignOracles(evaluator) {
     }
   }
   const seeded = setsById.get('seeded-offline-order-capture');
+  const runMeasured = specs.find((spec) => spec.setId === seeded.id && spec.kind === 'run-measured');
   const excluded = specs.find((spec) => spec.setId === seeded.id && spec.riskId === 'cross-tenant-data-leak');
   assert(excluded?.id === 'O-008', 'the guard cases address O-008');
   const marker = 'A queued order from one organization could be applied to another organization, so tenant isolation must be proven.';
@@ -993,6 +996,15 @@ async function checkTestDesignOracles(evaluator) {
       mentioned: true,
     },
     {
+      label: 'backtick in fence info string leaves the register visible',
+      document:
+        '# Test Design: Epic 7\n\n```markdown`example\n' +
+        '| Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '| --- | --- | --- | --- | --- | --- | --- |\n' +
+        `| R-001 | SEC | ${marker} | 2 | 2 | 4 | Test |\n`,
+      mentioned: true,
+    },
+    {
       label: 'fenced scored example',
       document:
         register('The local queue is checked before upload.', 1, 2, 2, 'Document') +
@@ -1015,6 +1027,17 @@ async function checkTestDesignOracles(evaluator) {
       mentioned: false,
     },
     {
+      label: 'tilde fence with a backtick in its info string',
+      document:
+        register('The local queue is checked before upload.', 1, 2, 2, 'Document') +
+        '\n~~~markdown`example\n' +
+        '| Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '| --- | --- | --- | --- | --- | --- | --- |\n' +
+        `| R-002 | SEC | ${marker} | 2 | 2 | 4 | Test |\n` +
+        '~~~\n',
+      mentioned: false,
+    },
+    {
       label: 'prose and fenced example',
       document:
         register('The local queue is checked before upload.', 1, 2, 2, 'Document') + `\n${marker}\n\n\`\`\`text\n${marker}\n\`\`\`\n`,
@@ -1031,9 +1054,11 @@ async function checkTestDesignOracles(evaluator) {
       [testDesignStepId(seeded)]: observation({
         operationId: TEST_DESIGN_OPERATION,
         exitCode: 0,
-        artifacts: { design: artifact, 'scored-risks': { kind: 'json', value: scoredRiskProjection(read.design) } },
+        stdout: { kind: 'json', value: scoredRiskProjection(read.design) },
+        artifacts: { design: artifact },
       }),
     });
+    assert(agrees(results.get(runMeasured.id), true), `${example.label}: O-001 accepts the parsed register`);
     assert(scored.mentions[excluded.riskId] === example.mentioned, `${example.label}: the harness reads the scored row`);
     assert(
       scored.ungrounded.some((entry) => entry.unsupportedId === excluded.riskId) === example.mentioned,
@@ -1044,60 +1069,6 @@ async function checkTestDesignOracles(evaluator) {
       `${example.label}: O-008 ${example.mentioned ? 'fires' : 'stays unfired'}`,
       describe(results.get(excluded.id)),
     );
-  }
-  // The runner's companion artifact is derived by the scorer's exact parser.
-  // Exclusive sidecar creation and realpath checks keep agent-created links
-  // from changing a file outside the staged workspace.
-  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-scored-risks-'));
-  try {
-    const workspace = path.join(temporary, 'workspace');
-    const relative = 'field-order-capture/test-artifacts/test-design/test-design-epic-7.md';
-    const designPath = path.join(workspace, relative);
-    const sidecar = designPath.replace(/\.md$/, '.scored-risks.json');
-    fs.mkdirSync(path.dirname(designPath), { recursive: true });
-    const document = examples.find((example) => example.label === 'reordered scored columns').document;
-    fs.writeFileSync(designPath, document);
-    assert(writeScoredRiskProjection(workspace, relative), 'runner writes the projection after a design appears');
-    assert(
-      JSON.stringify(JSON.parse(fs.readFileSync(sidecar, 'utf8'))) ===
-        JSON.stringify(scoredRiskProjection(readTestDesign({ kind: 'text', value: document }).design)),
-      'runner projection equals the scorer parser projection',
-    );
-    const invalidDesign = path.join(path.dirname(designPath), 'test-design-epic-9.md');
-    fs.writeFileSync(invalidDesign, '# Test Design without a risk register\n');
-    let parseRejected = false;
-    try {
-      writeScoredRiskProjection(workspace, path.relative(workspace, invalidDesign));
-    } catch {
-      parseRejected = true;
-    }
-    assert(parseRejected, 'runner rejects a design the shared parser cannot score');
-    assert(!fs.existsSync(invalidDesign.replace(/\.md$/, '.scored-risks.json')), 'runner writes no sidecar for a rejected design');
-    const outside = path.join(temporary, 'outside.md');
-    fs.writeFileSync(outside, document);
-    const linkedDesign = path.join(path.dirname(designPath), 'test-design-epic-8.md');
-    fs.symlinkSync(outside, linkedDesign);
-    let escapedDesignRejected = false;
-    try {
-      writeScoredRiskProjection(workspace, path.relative(workspace, linkedDesign));
-    } catch {
-      escapedDesignRejected = true;
-    }
-    assert(escapedDesignRejected, 'runner rejects an agent-created design symlink outside the workspace');
-    const outsideSidecar = path.join(temporary, 'outside.json');
-    fs.writeFileSync(outsideSidecar, 'untouched');
-    fs.rmSync(sidecar);
-    fs.symlinkSync(outsideSidecar, sidecar);
-    let linkedSidecarRejected = false;
-    try {
-      writeScoredRiskProjection(workspace, relative);
-    } catch {
-      linkedSidecarRejected = true;
-    }
-    assert(linkedSidecarRejected, 'runner refuses an agent-created sidecar symlink');
-    assert(fs.readFileSync(outsideSidecar, 'utf8') === 'untouched', 'runner leaves the symlink target untouched');
-  } finally {
-    fs.rmSync(temporary, { recursive: true, force: true });
   }
   // Every oracle but the shape one has to have been seen failing somewhere, or this
   // check has only ever confirmed that a correct run passes.

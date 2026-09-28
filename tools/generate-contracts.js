@@ -4118,10 +4118,10 @@ function testDesignStepId(set) {
   return `design-${set.id}`;
 }
 
-/** One artifact this operation declares, as an interaction-rooted pointer. */
-function testDesignArtifactPointer(stepId, artifactId = 'design') {
-  const root = `/interactions/${stepId}/artifact/scored-risks`;
-  return artifactId === 'design' ? `${root}/design` : root;
+/** One field of the runner's JSON stdout, as an interaction-rooted pointer. */
+function testDesignStdoutPointer(stepId, field = null) {
+  const root = `/interactions/${stepId}/stdout`;
+  return field === null ? root : `${root}/${field}`;
 }
 
 /**
@@ -4221,8 +4221,9 @@ function testDesignOracleSpecs(groundTruth) {
 
   for (const set of groundTruth.fixtureSets ?? []) {
     const stepId = testDesignStepId(set);
-    const pointer = testDesignArtifactPointer(stepId);
-    const scoredRiskPointer = testDesignArtifactPointer(stepId, 'scored-risks');
+    const pointer = testDesignStdoutPointer(stepId, 'design');
+    const scoredRiskPointer = testDesignStdoutPointer(stepId);
+    const riskRowPointer = testDesignStdoutPointer(stepId, 'riskRowCount');
 
     specs.push({
       id: nextId(),
@@ -4231,17 +4232,15 @@ function testDesignOracleSpecs(groundTruth) {
       riskId: null,
       oracle: {
         polarity: 'expects-hold',
-        commentary:
-          `${set.id}: the document carries a risk register. A table cell holding an R-NNN identifier is the shape the harness ` +
-          `reads rows out of, and a document with none is refused before it is scored rather than scored as an empty register.`,
+        commentary: `${set.id}: the runner's parser counted at least one risk-register row in the document. A document with no parsed risk row is refused before scoring.`,
         direction: {
           polarity: 'expects-hold',
-          relation: 'regex',
-          scope: `The test design document written for ${set.id}, taken whole.`,
-          negativeDomain: 'A run that wrote a document carrying no risk identifier in any table.',
-          evidenceTargets: [pointer],
+          relation: 'not',
+          scope: `The parsed risk-register rows in the test design document written for ${set.id}.`,
+          negativeDomain: 'A run whose document carries no parsed risk-register row.',
+          evidenceTargets: [riskRowPointer],
         },
-        check: { op: 'regex', operands: [{ pointer }], pattern: String.raw`^[\s\S]*\|[^|\n]*R-[0-9]{3}[^|\n]*\|[\s\S]*$` },
+        check: { op: 'not', operands: [{ op: 'equality', operands: [{ pointer: riskRowPointer }, { literal: 0 }] }] },
       },
       scorer: (scored) => scored.shape.rows > 0,
     });
@@ -4363,7 +4362,7 @@ function buildTestDesignContract() {
   // witness records: their documents differ because their staged epics differ,
   // which attributes to the prompt an effect the workspace produced.
   const witnessSet = clean[0];
-  const witnessPointer = (legId) => testDesignArtifactPointer(legId);
+  const witnessPointer = (legId) => testDesignStdoutPointer(legId, 'design');
 
   return {
     schemaVersion: EVAL_CONTRACT_SCHEMA_VERSION,
@@ -4385,16 +4384,21 @@ function buildTestDesignContract() {
             invocation: { executable: TEST_DESIGN_INTERFACE, subcommandPath: [] },
             stateChangeMarker: true,
             requestShape: TEST_DESIGN_REQUEST_SHAPE,
-            artifacts: ['design', 'scored-risks'],
-            // The runner derives this JSON view from the same parser the scorer
-            // uses. The workflow still writes its single markdown deliverable.
-            descriptorChannel: { kind: 'artifact', artifactId: 'scored-risks' },
+            artifacts: ['design'],
+            // The runner emits this JSON view from the same parser the scorer
+            // uses. The workflow writes its single Markdown deliverable.
+            descriptorChannel: { kind: 'stream', channel: 'stdout' },
             responseDescriptor: {
-              requiredKeys: ['design', 'scoredRiskDescriptions', 'scoredRiskCount'],
-              permittedKeys: ['design', 'scoredRiskDescriptions', 'scoredRiskCount'],
-              types: { design: 'string', scoredRiskDescriptions: 'array', scoredRiskCount: 'number' },
+              requiredKeys: ['design', 'riskRowCount', 'scoredRiskDescriptions', 'scoredRiskCount'],
+              permittedKeys: ['design', 'riskRowCount', 'scoredRiskDescriptions', 'scoredRiskCount'],
+              types: { design: 'string', riskRowCount: 'number', scoredRiskDescriptions: 'array', scoredRiskCount: 'number' },
               successIndicator: '',
-              channelRoles: { '/design': 'payload', '/scoredRiskDescriptions': 'collection', '/scoredRiskCount': 'payload' },
+              channelRoles: {
+                '/design': 'payload',
+                '/riskRowCount': 'payload',
+                '/scoredRiskDescriptions': 'collection',
+                '/scoredRiskCount': 'payload',
+              },
               collectionLocations: [
                 { pointer: '/scoredRiskDescriptions', referenceSet: null, expectedCardinality: { mode: 'at-most', max: 200 } },
               ],
