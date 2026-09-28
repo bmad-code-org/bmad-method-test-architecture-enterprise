@@ -80,6 +80,7 @@ development_status:
   1-42-attribute-reused-operation-ids-to-their-interfaces: backlog
   1-43-keep-ungraded-framework-errors-out-of-target-findings: backlog
   1-44-record-installed-framework-versions-in-evaluator-provenance: backlog
+  1-45-aggregate-development-strength-through-eval-quality: backlog
   epic-1-retrospective: optional
 
   epic-2: backlog

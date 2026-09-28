@@ -23,7 +23,7 @@ npm exec --prefix {tea_evaluations_folder} -- eval-quality seal --in <evaluation
 npm exec --prefix {tea_evaluations_folder} -- tea-evaluate preflight --evaluation <evaluation-folder>
 ```
 
-Inside TeA, replace each `tea-evaluate` command with `node cli/evaluate.js`, retaining its arguments. For example, `node cli/evaluate.js preflight --evaluation <evaluation-folder>`.
+Inside TeA, run `node cli/evaluate.js` from the repository root for every `tea-evaluate` subcommand, retaining its arguments. Run compile and seal through `./node_modules/.bin/eval-quality` from that same root. For example, `node cli/evaluate.js preflight --evaluation <evaluation-folder>` and `./node_modules/.bin/eval-quality compile --in <evaluation-folder>/contract.json --out <evaluation-folder>/compiled-contract.json` use the repository's one local eval-quality installation. The Stage 6 sequence uses this same branch before the first preflight.
 
 ## Run development and score
 
@@ -36,8 +36,8 @@ Use the `invocationId` emitted by `run`; it names `runs/<invocationId>/` and is 
 
 ## Read development strength before held-out
 
-Read eval-quality's `strength.comparable` and `strength.vector` from each scored development evidence artifact. For each exercised class in `defect`, `gameability` and `zero-action`, compare its engine-reported `rate` with that class's `evaluation.json.strengthFloor` value. Record the artifact path and whether the rate meets the adopter's floor. Across the development artifacts, a class planned for enforcement that stays `null` or has `rate: null` calls for more development evidence before a strength claim. `strength.comparable: false` also calls for more evidence. Clean controls and canaries have their own outcomes and stay outside the engine's strength vector. Use the engine's reported rates; the guide adds no scoring calculation.
+Read eval-quality's `strength.comparable` and `strength.vector` from each scored development evidence artifact. Each `score` call covers one probe, so an artifact's class component reports that probe's reduced catch result; unrelated classes are `null` in that artifact. Record the artifact path, probe ID, class, engine outcome, and any `strength.comparable: false` or `rate: null` for the probe's own class. Inspect missed probes and uncovered classes. Clean controls and canaries have their own outcomes and stay outside the engine's strength vector. The current run emits no engine-owned class rate across all probes, so `evaluation.json.strengthFloor` cannot be assessed as a run-wide gate here. Record that limitation, show the adopter the per-probe evidence and unresolved gaps, and ask whether to proceed with held-out. Make no class-wide strength claim or new verdict.
 
-## Run held-out after development is strong
+## Run held-out after development review
 
-After the development partition is strong at the adopter's policy, run `tea-evaluate run --evaluation <evaluation-folder> --partition held-out`, then score that invocation ID. Read held-out outcomes through `gap-view.json` only. Keep held-out probe content closed during the authoring loop; use its ID, class and outcome to identify the class needing new development evidence.
+After the adopter confirms held-out readiness from the development evidence and recorded gaps, run `npm exec --prefix {tea_evaluations_folder} -- tea-evaluate run --evaluation <evaluation-folder> --partition held-out`, then score that invocation ID with the command form above. In TeA's own package, use `node cli/evaluate.js` from the repository root. Read held-out outcomes through `gap-view.json` only. Keep held-out probe content closed during the authoring loop; use its ID, class and outcome to identify the class needing new development evidence.

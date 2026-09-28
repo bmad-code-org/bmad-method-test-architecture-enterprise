@@ -23,7 +23,7 @@ inputDocuments:
 
 ## Overview
 
-This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and fifty stories, including H.1 (Stories 1.27 to 1.44 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
+This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and fifty-one stories, including H.1 (Stories 1.27 to 1.45 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
 
 Evaluate is fully stacked. The stack runs system under test, then the evaluation (the mechanism that runs the system, collects evidence and makes judgments), then the Behavioral Evaluation Contract (what behavior matters, what evidence counts, how success and failure resolve), then eval-quality (contract sanity, evidence support, and whether the evaluation catches defects). TeA owns every layer above eval-quality, including each concern eval-quality states it leaves to the caller, so an adopter can evaluate any target end to end. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3 onward, Epic 2 and H.1 to close the plan gap audit; the Traceability section maps each audit item to the story that closes it.
 
@@ -138,8 +138,8 @@ None. Evaluate has no graphical interface.
 | FR6 (CAP-6)   | 1.1, 1.5, 1.6, 1.10, 1.11, 1.13, 1.18, 1.19 |
 | FR7 (CAP-7)   | 1.7, 1.9, 1.14, 1.16                        |
 | FR8 (CAP-8)   | 1.8, 1.14                                   |
-| FR9 (CAP-9)   | 1.6, 1.8, 1.14, 1.16, 1.17                  |
-| FR10 (CAP-10) | 1.14, 1.16, 1.22, 1.25, 1.42                |
+| FR9 (CAP-9)   | 1.6, 1.8, 1.14, 1.16, 1.17, 1.45            |
+| FR10 (CAP-10) | 1.14, 1.16, 1.22, 1.25, 1.42, 1.45          |
 | FR11 (CAP-11) | 2.2, 2.3, 2.4, 2.5, H.1                     |
 | FR12 (CAP-12) | 1.8, 2.1, 2.5, H.1                          |
 | FR13 (CAP-13) | 1.17, 1.19, 1.20, 1.23, 1.26, 1.43, 1.44    |
@@ -150,7 +150,7 @@ None. Evaluate has no graphical interface.
 ### Epic 1: The Evaluate authoring loop
 
 An adopter describes a target, answers Evaluate's questions, chooses or builds the evaluation layer and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches the seeded defect, with the gaps named and closed. The epic closes by running Evaluate on `bmad-testarch-evaluate` itself, then proving the guidance on two more target kinds, on seeded weaknesses and on an evaluation framework its guides never name.
-Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.44.
+Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.45.
 
 **FRs covered:** FR1 to FR10, FR13, FR14.
 
@@ -210,12 +210,13 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 42    | 1.42  | 1.22                         |
 | 43    | 1.43  | 1.20, 1.23                   |
 | 44    | 1.44  | 1.17, 1.23                   |
-| 45    | 2.1   | 1.16, 1.26                   |
-| 46    | 2.2   | 2.1                          |
-| 47    | 2.3   | 2.2                          |
-| 48    | 2.4   | 2.3                          |
-| 49    | 2.5   | 2.4                          |
-| 50    | H.1   | 2.5                          |
+| 45    | 1.45  | 1.8, 1.14, 1.21              |
+| 46    | 2.1   | 1.16, 1.26, 1.45             |
+| 47    | 2.2   | 2.1                          |
+| 48    | 2.3   | 2.2                          |
+| 49    | 2.4   | 2.3                          |
+| 50    | 2.5   | 2.4                          |
+| 51    | H.1   | 2.5                          |
 
 ## Epic 1: The Evaluate authoring loop
 
@@ -781,8 +782,8 @@ So that a CONCERNS, FAIL or Invalid result, or a weak strength vector, ends in a
 **And** harness teaches choosing those values for a stated risk with a worked table covering a deterministic target and a sampled-model target at `low`, `material` and `critical` risk, the reason for each value, eval-quality's strict `caughtCount / validCount > catchThreshold` rule, and why fewer trials than `minimumTrialCount` leave the strength vector non-comparable
 **And** run invokes `tea-evaluate preflight`, `run` and `score` through `npm exec --prefix {tea_evaluations_folder}` after writing the AD-20 private `package.json` with `eval-quality` and TeA's package at the `latest` spec and running `npm install --prefix {tea_evaluations_folder}`; when `{project-root}` is TeA's own package it invokes `node cli/evaluate.js`
 **And** gaps reads the evidence artifact, or for a `score` exit 3 with no artifact the persisted `score` diagnostics, and maps every outcome state, every AD-10 exit and class, every preflight check and every coverage rule to the probe, control, oracle or evidence that closes it
-**And** gaps teaches, each under its own heading with a worked reading: the strength vector (a catch rate per probe class, what a low rate says about that class, a `null` rate as an unexercised class, why clean controls and canaries never enter it, and why one caught defect does not make a contract strong); a loose oracle that passes a degenerate response, recognised from a gameability probe that fails qualification or does not resolve `caught`; process versus outcome separation and first material error attribution read from `interpretation.json` (Story 1.22); and held-out results read from `gap-view.json` only (Story 1.21)
-**And** gaps runs the author, rerun and rescore loop: for each named gap it authors the missing probe, control, oracle, rubric criterion or evidence pointer, reruns `tea-evaluate check`, `eval-quality compile` and `seal`, reruns `run --partition development` and `score`, records the before and after outcome of the gap in the gap report, and stops when the gap is closed or the adopter declines it; the held-out partition runs only once the development partition is strong
+**And** gaps teaches, each under its own heading with a worked reading: the strength vector in each current per-probe evidence artifact (that probe's class component, an unrelated `null` class, a `rate: null` for an unexercised admitted probe, why clean controls and canaries never enter it, and why one caught defect does not make a contract strong); a loose oracle that passes a degenerate response, recognised from a gameability probe that fails qualification or does not resolve `caught`; process versus outcome separation and first material error attribution read from `interpretation.json` (Story 1.22); and held-out results read from `gap-view.json` only (Story 1.21)
+**And** gaps runs the author, rerun and rescore loop: for each named gap it authors the missing probe, control, oracle, rubric criterion or evidence pointer, reruns `tea-evaluate digest` and `check`, `eval-quality compile` and `seal`, reruns `run --partition development` and `score` through the installed binaries, records the before and after outcome of the gap in the gap report, and stops when the gap is closed or the adopter declines it; the held-out partition runs only after the adopter reviews the engine-produced per-probe development evidence and confirms readiness, with the unavailable run-wide class gate recorded and no class-wide strength claim
 
 **Given** the guidance test
 **When** it runs
@@ -794,6 +795,8 @@ So that a CONCERNS, FAIL or Invalid result, or a weak strength vector, ends in a
 **Gate:** skill gates (no registration change), `npm test`.
 
 The 2026-09-28 Codex amendment names the builder procedure used for Story 1.14 because the slash skill is unavailable in this runtime. The outcome record identifies its direct Edit steps, scanner commands and independent Analyze lenses.
+
+The 2026-09-28 final review found that `tea-evaluate score` calls eval-quality once per probe, so no run-wide class rate exists to compare with `evaluation.json.strengthFloor`. Story 1.14 teaches the per-probe evidence and records the adopter's held-out decision without claiming a run-wide gate. Story 1.45 adds engine-owned aggregation and enforcement.
 
 ### Story 1.15: Float the engine pin and admit Evaluate-authored suites
 
@@ -1291,6 +1294,27 @@ So that a package upgrade cannot silently reuse the old scoring configuration (C
 **Dependencies:** 1.17, 1.23.
 **Gate:** skill gates, `npm test`, engine check.
 
+### Story 1.45: Aggregate development strength through eval-quality
+
+Added 2026-09-28 in Story 1.14's final review. The current `tea-evaluate score` invokes eval-quality once per probe and persists one evidence artifact per probe. A class component in that artifact describes only that probe. `evaluation.json.strengthFloor` cannot be applied to all probes in a run from those artifacts without a new aggregation contract; TeA must not invent a strength verdict outside eval-quality (AD-6).
+
+As an adopter,
+I want eval-quality to report the run-wide strength of my qualified development probes,
+So that the class floors I chose can govern held-out readiness using an engine-owned result (CAP-9, CAP-10, AD-6).
+
+**Acceptance Criteria:**
+
+**Given** a completed development run with several qualified probes in one class
+**When** `tea-evaluate score` reads the engine-owned aggregate result
+**Then** the result reports the distinct qualified probe denominator, caught count, class rate, comparability, and the decision against each declared `evaluation.json.strengthFloor`; TeA copies that result and its lineage into the run without recomputing a rate or verdict
+**And** a fixture with four caught probes among five at a `0.75` floor meets the floor, while the same engine evidence at a `0.9` floor does not; reverting the aggregation or floor comparison makes both fixture assertions fail
+**And** a class with no eligible probe remains `null`, an admitted class with no exercised probe reports `rate: null`, and a trial set below `minimumTrialCount` is non-comparable; clean controls and canaries remain outside every class denominator, with each boundary held by a revert check
+**And** the aggregate is produced by a published eval-quality release, bound to the run's engine version and evidence digests, and reproduced byte for byte by replay; a mismatched or missing aggregate blocks a class-wide strength claim
+**And** `references/run.md` and `references/gaps.md` read that aggregate to enforce the adopter's class floors before held-out execution. Their guidance test fails if the source, floor decision, or null and non-comparable readings are removed.
+
+**Dependencies:** 1.8, 1.14, 1.21.
+**Gate:** engine release and export check, skill gates, `npm test`, `npm run test:release-metadata` when the pin changes.
+
 ## Epic 2: Continuous proof in CI
 
 The evaluation Epic 1 produced is proven on every pull request, with the evidence to audit it.
@@ -1466,8 +1490,8 @@ So that the `pr` replay of `bmad-testarch-evaluate` has an accepted baseline to 
 | CAP-6      | 1.1, 1.5, 1.6, 1.10, 1.11, 1.13, 1.18, 1.19 | `test:evaluate-preflight`, `-mcp`, `-api`, `-workflow`, `-tool-use`                                                              |
 | CAP-7      | 1.7, 1.9, 1.14, 1.16                        | `test:evaluate-mutation`; tagged mutation examples; 1.16 rollback evidence                                                       |
 | CAP-8      | 1.8, 1.14                                   | template schema validation; guidance test (risk table)                                                                           |
-| CAP-9      | 1.6, 1.8, 1.14, 1.16, 1.17                  | `test:evaluate-run`; `test:evaluate-evaluators`; 1.16 live verdicts                                                              |
-| CAP-10     | 1.14, 1.16, 1.22, 1.25                      | guidance test over exported vocabularies; `test:evaluate-interpret`; `test:evaluate-gap-loop`                                    |
+| CAP-9      | 1.6, 1.8, 1.14, 1.16, 1.17, 1.45            | `test:evaluate-run`; `test:evaluate-evaluators`; 1.16 live verdicts; 1.45 engine-owned aggregate                                 |
+| CAP-10     | 1.14, 1.16, 1.22, 1.25, 1.45                | guidance test over exported vocabularies; `test:evaluate-interpret`; `test:evaluate-gap-loop`; 1.45 class-floor gate             |
 | CAP-11     | 2.2, 2.3, 2.4, 2.5, H.1                     | `test:evaluate-ci` (placement, gameability, freshness, agreement); rendering test; the `quality.yaml` `chain` matrix; H.1 step 4 |
 | CAP-12     | 1.8, 2.1, 2.5, H.1                          | `run.json`; `test:evaluate-compare`; H.1 step 3                                                                                  |
 | CAP-13     | 1.17, 1.19, 1.20, 1.23, 1.26                | `test:evaluate-evaluators`, `-tool-use`, `-promptfoo`, `-learned-framework`; template rendering in the guidance test             |
@@ -1503,7 +1527,7 @@ The 2026-09-23 audit of this plan found eleven partial and two missing items, se
 | Addendum A: `seal` in the skill's compile-and-validate stage                                | Story 1.13 (stage and guide); Story 1.16 (proof runs `seal`)                                                                                                                                 |
 | Addendum B: vendor-model requests redirected                                                | Story 1.12 (passage and test); Story 1.24 (recorded redirect); AD-4                                                                                                                          |
 | Addendum: repetition count and thresholds for a risk                                        | Story 1.14 (harness risk table)                                                                                                                                                              |
-| Addendum: low catch rate, strength-vector reading, loose oracle                             | Story 1.14 (gaps readings)                                                                                                                                                                   |
+| Addendum: low catch rate, strength-vector reading, loose oracle                             | Story 1.14 (per-probe gaps readings); Story 1.45 (run-wide engine aggregate)                                                                                                                 |
 | Addendum: exact checks and semantic rubrics                                                 | Story 1.13 (tagged examples compile)                                                                                                                                                         |
 | Addendum: adopter-owned harness or custom evaluator into `score`                            | Story 1.17 (`command` and `records` kinds)                                                                                                                                                   |
 

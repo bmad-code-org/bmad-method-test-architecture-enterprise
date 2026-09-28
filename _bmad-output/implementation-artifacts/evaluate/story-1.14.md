@@ -2,7 +2,7 @@
 title: 'Drive the run and interpret the gaps'
 type: 'feature'
 created: '2026-09-28'
-status: 'done'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '1012274bb123e34ef6f30b42288109ca961a2dc2'
@@ -93,6 +93,10 @@ context:
 - Edge 4, `test/test-evaluate-guidance.js:2005`: medium, patch. The gaps gate does not assert the strict catch-rate operator; changing `>` to `<` can pass it. Add an exact reading check and a corruption case.
 - Verification Gap: no findings.
 - Review fixes: all verified patch findings were corrected in the guides and guidance gate. The first full run after review reached lint, which rejected an absent-index comparison in the new Stage 6 test; the corrected assertion passed focused guidance, lint and formatting checks before the final full rerun.
+- Final PR review round 1: three fresh reviewers verified that `tea-evaluate score` emits one evidence artifact per probe. The previous worked two-of-five class rate and per-artifact `strengthFloor` comparison would make a false run-wide claim. The guides now read each artifact as per-probe evidence, record the absent run-wide gate, and ask the adopter to confirm held-out readiness. Story 1.45 carries the engine-owned aggregate and floor gate; the Epic 1 dependency, test design and sprint row were added in this PR.
+- Final PR review round 1: the earlier Blind 6 removal decision was wrong. AD-10 reserves `tea-evaluate` exit 13 for the planned PR replay even though the current CLI cannot emit it. The guide restores that row with its future-stage scope; the guidance gate derives its exit key set from AD-10 and checks every class value.
+- Final PR review round 1: the reviewers also found bare commands outside the installed private prefix, a TeA self-run path that could mix engine versions, and a remedy check satisfied by the key text when its remedy cell was blank. Stages 6, 8, 9, 10 and 11 now give the executable paths, while the guidance gate checks the local engine, class mapping, remedy cells and corruption cases.
+- Final review checkout limitation: the first round's three isolated checkouts linked `node_modules` to the main checkout. Their full `npm test` runs reached `test:evaluate-promptfoo`, where a path-identity assertion failed on that symlink's real path. The source commit's own full test and commit-hook full test passed. The next review round will use copied dependencies.
 
 ## Verification
 
@@ -101,3 +105,4 @@ context:
 - `npm run test:evaluate-guidance`: passed with seven runtime-schema-valid mutation examples and negative removal or corruption checks.
 - `node --input-type=module -e "const m = await import('eval-quality'); if (typeof m.evaluateTarget !== 'function') process.exit(1)"`: passed.
 - `npm test`: passed on the final reviewed tree after all review fixes and the lint correction. The run ended with clean ESLint, markdownlint and Prettier checks.
+- First PR review: changes requested, all verified; one engine-owned aggregate remains as Story 1.45. A fresh review and full verification are pending on the amended tree.
