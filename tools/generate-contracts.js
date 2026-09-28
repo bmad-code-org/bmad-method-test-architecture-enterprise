@@ -88,7 +88,12 @@ const {
 // shape and its default agent, and the harness owns the prompt, because the harness
 // is the only thing that assembles one.
 const { TEST_DESIGN_REQUEST_KEYS, DEFAULT_AGENT: TEST_DESIGN_DEFAULT_AGENT } = require('../cli/test-design-runner');
-const { buildPrompt: buildTestDesignPrompt, TEST_DESIGN_INTERFACE, TEST_DESIGN_OPERATION } = require('../test/eval-test-design');
+const {
+  buildPrompt: buildTestDesignPrompt,
+  designArtifactPaths: testDesignArtifactPaths,
+  TEST_DESIGN_INTERFACE,
+  TEST_DESIGN_OPERATION,
+} = require('../test/eval-test-design');
 // The prompt a selection witness leg sends is the prompt the harness assembles,
 // for the reason the trace witness reads its two prompts from the harness as
 // well: a leg carrying a description of a prompt parses, compiles, schedules,
@@ -4113,9 +4118,10 @@ function testDesignStepId(set) {
   return `design-${set.id}`;
 }
 
-/** The one artifact this operation declares, as an interaction-rooted pointer. */
-function testDesignArtifactPointer(stepId) {
-  return `/interactions/${stepId}/artifact/design`;
+/** One field of the runner's JSON stdout, as an interaction-rooted pointer. */
+function testDesignStdoutPointer(stepId, field = null) {
+  const root = `/interactions/${stepId}/stdout`;
+  return field === null ? root : `${root}/${field}`;
 }
 
 /**
@@ -4159,11 +4165,26 @@ function matcherExpression(pointer, groups) {
   return operands.length === 1 ? operands[0] : { op: 'all', operands };
 }
 
+/** A ruled-out risk is invented only in a parsed risk row above the 1–3 guard band. */
+function scoredUnsupportedRiskExpression(pointer, groups) {
+  const descriptions = `${pointer}/scoredRiskDescriptions`;
+  return {
+    op: 'all',
+    operands: [
+      {
+        op: 'not',
+        operands: [{ op: 'equality', operands: [{ pointer: `${pointer}/scoredRiskCount` }, { literal: 0 }] }],
+      },
+      { op: 'for-any', collection: { pointer: descriptions }, predicate: matcherExpression('@/', groups) },
+    ],
+  };
+}
+
 /**
  * Every oracle this contract states, with the harness predicate each one is paired
  * with, in a stable order.
  *
- * WHY THESE ORACLES ARE THE WEAK READING, AND WHY THAT IS STATED RATHER THAN HIDDEN
+ * WHY MATERIAL ORACLES KEEP THE WEAK READING
  *
  * `bmad-testarch-test-design` declares one output and it is prose:
  * `{test_artifacts}/test-design/test-design-epic-{epic_num}.md` and nothing machine-readable
@@ -4176,19 +4197,16 @@ function matcherExpression(pointer, groups) {
  * The consequence is concrete. test/eval-test-design.js scores each risk row's own
  * category, probability, impact, score, band and description, and checks arithmetic,
  * scale, band placement, grounding, coverage mapping and pairwise priority ordering.
- * None of that is expressible here, because an oracle over a markdown body cannot
- * tell which row a token sits in and cannot do arithmetic at all.
+ * The runner's JSON projection carries parsed descriptions from rows scored above
+ * 3, using the harness parser. Arithmetic and mapping checks stay in the harness.
  *
- * So every oracle below is paired with `documentMentions`, the harness's own
- * document-global predicate, rather than with the row-scoped result. That makes the
- * agreement test/test-contract-oracles.js runs true by construction. Pairing an
- * oracle against the row-scoped result instead would make the two agree by
- * coincidence on whatever the replay corpus happens to hold, which reads as coverage
- * and holds nothing.
+ * Material vocabulary remains document-global through the projection's original
+ * Markdown field. Unsupported vocabulary is bounded to parsed scored rows. This
+ * preserves the parser's reordered-column and fenced-block behavior. A score of
+ * 1–3 records a documented guard; a score above 3 asserts an invented risk.
  *
- * A green test-contract-oracles.js therefore says the contract and the harness agree
- * about which vocabulary the document carries. It does not say the suite passed, and
- * it says nothing at all about the arithmetic or the mapping.
+ * A green test-contract-oracles.js says the contract and harness agree on those
+ * readings. Arithmetic, band placement and coverage mapping remain harness checks.
  *
  * @param {object} groundTruth Parsed test/fixtures/test-design-eval/ground-truth.json.
  * @returns {Array<object>}
@@ -4203,7 +4221,9 @@ function testDesignOracleSpecs(groundTruth) {
 
   for (const set of groundTruth.fixtureSets ?? []) {
     const stepId = testDesignStepId(set);
-    const pointer = testDesignArtifactPointer(stepId);
+    const pointer = testDesignStdoutPointer(stepId, 'design');
+    const scoredRiskPointer = testDesignStdoutPointer(stepId);
+    const riskRowPointer = testDesignStdoutPointer(stepId, 'riskRowCount');
 
     specs.push({
       id: nextId(),
@@ -4212,17 +4232,15 @@ function testDesignOracleSpecs(groundTruth) {
       riskId: null,
       oracle: {
         polarity: 'expects-hold',
-        commentary:
-          `${set.id}: the document carries a risk register. A table cell holding an R-NNN identifier is the shape the harness ` +
-          `reads rows out of, and a document with none is refused before it is scored rather than scored as an empty register.`,
+        commentary: `${set.id}: the runner's parser counted at least one risk-register row in the document. A document with no parsed risk row is refused before scoring.`,
         direction: {
           polarity: 'expects-hold',
-          relation: 'regex',
-          scope: `The test design document written for ${set.id}, taken whole.`,
-          negativeDomain: 'A run that wrote a document carrying no risk identifier in any table.',
-          evidenceTargets: [pointer],
+          relation: 'not',
+          scope: `The parsed risk-register rows in the test design document written for ${set.id}.`,
+          negativeDomain: 'A run whose document carries no parsed risk-register row.',
+          evidenceTargets: [riskRowPointer],
         },
-        check: { op: 'regex', operands: [{ pointer }], pattern: String.raw`^[\s\S]*\|[^|\n]*R-[0-9]{3}[^|\n]*\|[\s\S]*$` },
+        check: { op: 'not', operands: [{ op: 'equality', operands: [{ pointer: riskRowPointer }, { literal: 0 }] }] },
       },
       scorer: (scored) => scored.shape.rows > 0,
     });
@@ -4261,17 +4279,16 @@ function testDesignOracleSpecs(groundTruth) {
         oracle: {
           polarity: 'expects-hold',
           commentary:
-            `${set.id}: the document does not carry ${risk.id}, which the epic rules out in as many words: ` +
-            `"${risk.exclusionQuote}" A risk list that reaches it is a list that would fit any feature, which is the whole ` +
-            `failure this suite exists to catch.`,
+            `${set.id}: no scored risk-register row above the 1–3 guard band reports ${risk.id}, which the epic rules out: ` +
+            `"${risk.exclusionQuote}"`,
           direction: {
             polarity: 'expects-hold',
             relation: 'not',
-            scope: `The test design document written for ${set.id}, taken whole.`,
-            negativeDomain: `A run whose document reports ${risk.id} against a feature description that excludes it.`,
-            evidenceTargets: [pointer],
+            scope: `The scored risk-register rows in the test design document written for ${set.id}.`,
+            negativeDomain: `A row scored above 3 reports ${risk.id} against a feature description that excludes it.`,
+            evidenceTargets: [`${scoredRiskPointer}/scoredRiskDescriptions`],
           },
-          check: { op: 'not', operands: [matcherExpression(pointer, risk.anyOf)] },
+          check: { op: 'not', operands: [scoredUnsupportedRiskExpression(scoredRiskPointer, risk.anyOf)] },
         },
         scorer: (scored) => scored.mentions[risk.id] === false,
       });
@@ -4298,7 +4315,7 @@ const TEST_DESIGN_BEHAVIORS = {
     severity: 'critical',
     risk: 'ungrounded-risk',
     requirement: 'no-invented-risks',
-    success: 'No risk the feature description rules out appears in the document.',
+    success: 'No scored risk-register row above the 1–3 guard band reports a risk the feature description rules out.',
   },
 };
 
@@ -4345,7 +4362,7 @@ function buildTestDesignContract() {
   // witness records: their documents differ because their staged epics differ,
   // which attributes to the prompt an effect the workspace produced.
   const witnessSet = clean[0];
-  const witnessPointer = (legId) => testDesignArtifactPointer(legId);
+  const witnessPointer = (legId) => testDesignStdoutPointer(legId, 'design');
 
   return {
     schemaVersion: EVAL_CONTRACT_SCHEMA_VERSION,
@@ -4368,18 +4385,23 @@ function buildTestDesignContract() {
             stateChangeMarker: true,
             requestShape: TEST_DESIGN_REQUEST_SHAPE,
             artifacts: ['design'],
-            // The deliverable is markdown and the workflow declares nothing
-            // machine-readable beside it, so the descriptor addresses the body as
-            // a whole. The empty pointer is RFC 6901's whole document, which is
-            // the only structure this artifact has.
-            descriptorChannel: { kind: 'artifact', artifactId: 'design' },
+            // The runner emits this JSON view from the same parser the scorer
+            // uses. The workflow writes its single Markdown deliverable.
+            descriptorChannel: { kind: 'stream', channel: 'stdout' },
             responseDescriptor: {
-              requiredKeys: [],
-              permittedKeys: [],
-              types: {},
+              requiredKeys: ['design', 'riskRowCount', 'scoredRiskDescriptions', 'scoredRiskCount'],
+              permittedKeys: ['design', 'riskRowCount', 'scoredRiskDescriptions', 'scoredRiskCount'],
+              types: { design: 'string', riskRowCount: 'number', scoredRiskDescriptions: 'array', scoredRiskCount: 'number' },
               successIndicator: '',
-              channelRoles: { '': 'payload' },
-              collectionLocations: [],
+              channelRoles: {
+                '/design': 'payload',
+                '/riskRowCount': 'payload',
+                '/scoredRiskDescriptions': 'collection',
+                '/scoredRiskCount': 'payload',
+              },
+              collectionLocations: [
+                { pointer: '/scoredRiskDescriptions', referenceSet: null, expectedCardinality: { mode: 'at-most', max: 200 } },
+              ],
             },
             volatilePointers: [],
             sensitivityWitness: {
@@ -4390,7 +4412,7 @@ function buildTestDesignContract() {
                   legId: 'witness-design-level-full',
                   inputs: witnessInputs(
                     TEST_DESIGN_REQUEST_SHAPE,
-                    { option: { agent: TEST_DESIGN_DEFAULT_AGENT } },
+                    { option: { agent: TEST_DESIGN_DEFAULT_AGENT, 'design-path': testDesignArtifactPaths(witnessSet).design } },
                     { kind: 'text', value: buildTestDesignPrompt(witnessSet, { designLevel: 'full' }) },
                   ),
                 },
@@ -4398,7 +4420,7 @@ function buildTestDesignContract() {
                   legId: 'witness-design-level-minimal',
                   inputs: witnessInputs(
                     TEST_DESIGN_REQUEST_SHAPE,
-                    { option: { agent: TEST_DESIGN_DEFAULT_AGENT } },
+                    { option: { agent: TEST_DESIGN_DEFAULT_AGENT, 'design-path': testDesignArtifactPaths(witnessSet).design } },
                     { kind: 'text', value: buildTestDesignPrompt(witnessSet, { designLevel: 'minimal' }) },
                   ),
                 },
@@ -4436,7 +4458,7 @@ function buildTestDesignContract() {
       // buildPrompt, so the literal here and the bytes a run sends are one function.
       inputBinding: {
         argument: null,
-        option: { agent: { matcher: 'any' } },
+        option: { agent: { matcher: 'any' }, 'design-path': { literal: testDesignArtifactPaths(set).design } },
         environment: null,
         stdin: { prompt: { literal: buildTestDesignPrompt(set) } },
       },

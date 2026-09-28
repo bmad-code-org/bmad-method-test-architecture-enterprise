@@ -106,7 +106,20 @@ try {
     null,
   );
 
-  const project = test.project('scored');
+  // A Git hook exports repository-local GIT_* values. Fixture commits must
+  // create their own repository even when this test runs inside that hook.
+  const gitNames = ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE'];
+  const inheritedGit = gitNames.map((name) => [name, process.env[name]]);
+  for (const name of gitNames) process.env[name] = '/dev/null';
+  let project;
+  try {
+    project = test.project('scored');
+  } finally {
+    for (const [name, value] of inheritedGit) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
   const ran = test.cli(project.folder, 'run', [], project.env);
   assert.equal(ran.status, 0, ran.output);
   const run = test.latest(project.folder);

@@ -38,7 +38,7 @@ inputDocuments:
 
 ## Executive Summary
 
-**Scope:** full epic-level test design for Stories 1.1 to 1.46 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.46. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
+**Scope:** full epic-level test design for Stories 1.1 to 1.49 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.49. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
 
 **Risk summary:**
 
@@ -749,6 +749,36 @@ Added 2026-09-28 by Story 1.16's proof run. Levels: live (the gap-loop session a
 | B-002 seeded or refused with reason | A seeded B-002 probe resolves `caught`; otherwise `corpus/README.md` keeps the refusal and the guides still state the rule in more than one place | Live, static                       | P1  | A seed whose rule is restated elsewhere fails to qualify (exit 11)                     |
 | PASS at `minimumTrialCount`         | Every evidence artifact records `contractVerdict: PASS`; clean controls `passed-clean-control`; every seeded probe `caught`                       | Integration over real eval-quality | P0  | Reverting any repair reproduces Story 1.16's `CONCERNS`                                |
 | Thresholds stay registered          | `test:eval-schemas` cross-checks the manifest entry against `evaluation.json` and the scoring policy                                              | Static                             | P1  | Changing one threshold on one side fails                                               |
+
+### Story 1.47: Distinguish reference risk tables from the scored register
+
+Added in Story 1.27's review. Levels: parser, contract oracle, replay, and staged preflight. The fixture must make the reference context explicit and keep a real scored register in the same document.
+
+| AC                                 | Test                                                                                                           | Level                   | P   | Revert check                                                    |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------- | ----------------------- | --- | --------------------------------------------------------------- |
+| Reference rows stay contextual     | Put a ruled-out category in a labeled reference table; verify it changes no register count or exclusion oracle | Parser, contract oracle | P1  | Restoring table-global parsing fires the oracle                 |
+| Scored rows still count            | Put the same category in the scored register above 3; verify harness and oracle both fire                      | Contract oracle, replay | P0  | Filtering both tables makes the scored-register assertion fail  |
+| Live projection stays in agreement | Run the staged preflight and full gate with the reference and register fixtures                                | Integration             | P1  | Divergent parser and projection fail the oracle agreement check |
+
+### Story 1.48: Report whole-document coverage for a structured design artifact
+
+Added in Story 1.27's review. Levels: engine coverage contract, generated strength baseline, and staged preflight.
+
+| AC                               | Test                                                                                                               | Level                      | P   | Revert check                                                 |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------ | -------------------------- | --- | ------------------------------------------------------------ |
+| Full Markdown earns coverage     | An oracle reading the complete `/design` string satisfies whole-body coverage                                      | Engine coverage fixture    | P1  | Removing the nested complete-body rule leaves it unsatisfied |
+| Scored rows alone do not earn it | The same artifact with only `/scoredRiskDescriptions` as evidence target remains unsatisfied                       | Engine coverage fixture    | P1  | Treating any structured field as whole-body makes this fail  |
+| Probe outcomes remain stable     | Regenerate and preflight the test-design corpus; all existing probe outcomes match while coverage metadata changes | Baseline, live integration | P1  | A changed probe verdict fails the baseline comparison        |
+
+### Story 1.49: Prove test-design mutation rollback before claiming it
+
+Added in Story 1.27's final review. Levels: mutation qualification in a disposable copy, negative integration fixtures, corpus check and staged preflight.
+
+| AC                                   | Test                                                                                                                                         | Level                       | P   | Revert check                                                        |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- | --- | ------------------------------------------------------------------- |
+| True rollback follows a real restore | Run each clean, mutate, fail, restore, digest and clean-rerun sequence in a disposable copy; inspect the qualification evidence and worktree | Integration, file isolation | P0  | Hard-coding `rollbackVerified: true` fails the performed-step proof |
+| Failed steps cannot qualify          | Break the baseline, mutation outcome, restore and digest separately; each case emits no qualified probe with a true rollback claim           | Negative integration        | P0  | Omitting one guard lets its planted failure qualify                 |
+| Behavioral baseline stays stable     | Regenerate probes, run corpus and replay gates, then run staged suite-only preflight; compare every probe outcome                            | Corpus, replay, live        | P1  | A drifted witness or outcome fails the baseline comparison          |
 
 ## The Dogfood Proof (AD-15)
 

@@ -245,6 +245,15 @@ function checkContractsAgainstRegistry() {
           `${relative}: ${operation.operationId}'s environment keys are the ones its authorization permits`,
           `contract ${JSON.stringify(contractKeys)}, policy ${JSON.stringify(policyKeys)}`,
         );
+        if (iface.logicalId === 'tea-test-design-runner') {
+          const contractArtifacts = [...(operation.artifacts ?? [])].sort();
+          const policyArtifacts = Object.keys(target?.artifacts ?? {}).sort();
+          assert(
+            JSON.stringify(contractArtifacts) === JSON.stringify(policyArtifacts),
+            'the test-design default authorization names every contract artifact',
+            `contract ${JSON.stringify(contractArtifacts)}, policy ${JSON.stringify(policyArtifacts)}`,
+          );
+        }
       }
     }
   }
@@ -650,6 +659,100 @@ async function traceProbe(runDir, probeId, stubMode, { artifacts, budgets, stage
       stdin: { kind: 'text', value: 'Run the trace workflow against project/ and write both deliverables.' },
     }),
     new AbortController().signal,
+  );
+}
+
+/** A staged test-design document through the real runner and command adapter. */
+async function checkTestDesignProbe(runDir) {
+  console.log('\ntea-test-design-runner through the adapter');
+  const cwd = fs.mkdtempSync(path.join(runDir, 'test-design-'));
+  const designPath = 'field-order-capture/test-artifacts/test-design/test-design-epic-7.md';
+  const sidecar = path.join(cwd, designPath.replace(/\.md$/, '.scored-risks.json'));
+  const outside = path.join(runDir, 'outside-scored-risks.json');
+  const outsideBytes = 'outside file must stay untouched\n';
+  fs.mkdirSync(path.dirname(sidecar), { recursive: true });
+  fs.writeFileSync(outside, outsideBytes);
+  fs.symlinkSync(outside, sidecar);
+  const { port } = await createProbePort({
+    cwd,
+    interfaceIds: ['tea-test-design-runner'],
+    artifacts: { 'tea-test-design-runner': { design: designPath } },
+    environmentKeys: { 'tea-test-design-runner': STUB_ENVIRONMENT_KEYS },
+  });
+  const result = await probeCommand(
+    port,
+    probeRequest({
+      probeId: 'test-design-complete',
+      interfaceId: 'tea-test-design-runner',
+      operationId: 'design-fixture-set',
+      option: {
+        agent: 'custom',
+        'agent-cmd': TEST_DESIGN_STUB_AGENT,
+        'design-path': designPath,
+        'env-pass': 'STUB_MODE',
+        'timeout-ms': '60000',
+      },
+      environment: { STUB_MODE: 'complete' },
+      stdin: { kind: 'text', value: '- `{project-root}`: `field-order-capture`\n- `epic_num`: `7`\n' },
+    }),
+    new AbortController().signal,
+  );
+  assert(result.ok && result.observation.exitCode === 0, 'the test-design stub completes through the runner', JSON.stringify(result));
+  if (!result.ok) return;
+  const { design } = result.observation.artifacts;
+  const projection = result.observation.stdout;
+  const expectedDescriptions = [
+    'The outbound queue is stored unencrypted on the device, so anyone reaching the local file can read the stored card reference.',
+    'Concurrent offline edits to the same work order overwrite each other on sync, because the server applies queued edits by arrival with no version check.',
+    'A rejected payload is retried forever with no backoff and no attempt cap, so one bad item loops until the application is killed.',
+    'A 2000 item backlog may not finish syncing inside the 30 second budget on the mid-range hardware the fleet carries.',
+  ];
+  assert(design?.kind === 'text', 'the runner observation carries the Markdown design');
+  assert(projection?.kind === 'json', 'the runner observation carries JSON stdout');
+  assert(/Wrote .*test-design-epic-7\.md/.test(observedText(result.observation.stderr)), 'agent diagnostics are on stderr');
+  assert(
+    projection?.value?.design === design?.value &&
+      projection.value.riskRowCount === 5 &&
+      projection.value.scoredRiskCount === expectedDescriptions.length &&
+      JSON.stringify(projection.value.scoredRiskDescriptions) === JSON.stringify(expectedDescriptions),
+    'JSON stdout contains the expected parsed risk rows and scored descriptions',
+    JSON.stringify(projection),
+  );
+  assert(fs.lstatSync(sidecar).isSymbolicLink(), 'the planted sidecar symlink remains in place');
+  assert(fs.readFileSync(outside, 'utf8') === outsideBytes, 'the runner leaves the symlink target byte-identical');
+
+  const emptyCwd = fs.mkdtempSync(path.join(runDir, 'test-design-empty-'));
+  const { port: emptyPort } = await createProbePort({
+    cwd: emptyCwd,
+    interfaceIds: ['tea-test-design-runner'],
+    artifacts: { 'tea-test-design-runner': { design: designPath } },
+    environmentKeys: { 'tea-test-design-runner': STUB_ENVIRONMENT_KEYS },
+  });
+  const missing = await probeCommand(
+    emptyPort,
+    probeRequest({
+      probeId: 'test-design-missing',
+      interfaceId: 'tea-test-design-runner',
+      operationId: 'design-fixture-set',
+      option: {
+        agent: 'custom',
+        'agent-cmd': TEST_DESIGN_STUB_AGENT,
+        'design-path': designPath,
+        'env-pass': 'STUB_MODE',
+        'timeout-ms': '60000',
+      },
+      environment: { STUB_MODE: 'nothing' },
+      stdin: { kind: 'text', value: '- `{project-root}`: `field-order-capture`\n- `epic_num`: `7`\n' },
+    }),
+    new AbortController().signal,
+  );
+  assert(
+    missing.ok &&
+      missing.observation.artifacts.design.kind === 'absent' &&
+      missing.observation.stdout.kind === 'text' &&
+      missing.observation.stdout.value === '',
+    'a missing Markdown design yields no projection evidence',
+    JSON.stringify(missing),
   );
 }
 
@@ -1432,10 +1535,9 @@ function checkTestDesignHarnessSmoke(runDir) {
     JSON.stringify(recordedFailures(band)),
   );
 
-  // The register this suite exists to catch: four plausible risks, every one of them
-  // ruled out by the epic in as many words. Precision and recall both have to report
-  // it, and the two metrics that need a matched risk go unmeasurable, because an
-  // empty denominator would otherwise clear the bar it never met.
+  // The generic register reports three scored risks the epic rules out and one
+  // score-2 Document guard. Precision and recall report the scored risks. The two
+  // metrics that need a matched material risk remain unmeasurable.
   const generic = runTestDesignHarness(runDir, 'generic-register', SEEDED_DESIGN_CASE);
   assert(generic.status === 1, 'a register of risks the epic rules out exits 1', `exit ${generic.status}`);
   assert(
@@ -1446,15 +1548,15 @@ function checkTestDesignHarnessSmoke(runDir) {
           'riskPrecision',
           'priorityOrderingAccuracy (unmeasurable)',
           'coverageMappingAccuracy (unmeasurable)',
-          '4 risk(s) the epic rules out in as many words',
+          '3 risk(s) the epic rules out in as many words',
           '1 of the most severe risk(s) went unreported',
         ]),
-    'the record names recall, precision, the two metrics a matched risk would have made measurable, the four invented risks, and the top-severity miss',
+    'the record names recall, precision, the two metrics a matched risk would have made measurable, three invented risks, and the top-severity miss',
     JSON.stringify(recordedFailures(generic)),
   );
   assert(
-    generic.record?.runners?.[0]?.measurements?.ungroundedRisks === 4,
-    'all four reported risks are counted as ones the epic rules out',
+    generic.record?.runners?.[0]?.measurements?.ungroundedRisks === 3,
+    'the three scored risks are counted and the Document guard is excluded',
     JSON.stringify(generic.record?.runners?.[0]?.measurements?.ungroundedRisks),
   );
 }
@@ -2174,6 +2276,7 @@ async function main() {
     await checkTestReviewProbe(runDir);
     await checkFragmentSelectionProbe(runDir);
     await checkTraceProbe(runDir);
+    await checkTestDesignProbe(runDir);
     await checkNfrProbe(runDir);
     await checkCiProbe(runDir);
     await checkTranscriptProbe(runDir);

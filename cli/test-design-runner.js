@@ -9,7 +9,8 @@
  *   prompt on standard input -> the agent runs in the working directory
  *                            -> the test design document is left on disk
  *
- * It is `tea-trace-runner` with one artifact instead of two. The prompt belongs
+ * The workflow writes one Markdown deliverable. The runner emits a JSON
+ * projection on stdout for the evaluator when given --design-path. The prompt belongs
  * to the eval corpus, so this command builds none: only the harness knows which
  * fixture set is staged, which epic it names, and where the workflow is. The
  * vendor call is TEA's own (cli/lib/run-agent.js), so vendor argv, the minimal
@@ -17,12 +18,10 @@
  * one place that already decides them for the other three commands. This file
  * adds no vendor knowledge.
  *
- * The artifact is the workflow's, written where the prompt says to write it, and
- * this command neither names nor reads it. A caller behind the adapter declares
- * it in the authorization's artifact map and gets it back tagged `json`, `text`
- * or `absent`; a file the run never wrote is `absent` there, which the harness
- * classifies as a missing artifact. Reading the file here as well would be a
- * second parser with its own opinion.
+ * The adapter reads the deliverable as an artifact and the projection from stdout.
+ * The projection carries the original Markdown and descriptions of parsed rows
+ * scored above 3. Both the runner and harness import the same parser module.
+ * A missing deliverable remains an absent artifact for the harness to classify.
  *
  * It declares `scoped-artifact-writes`: the deliverable is a document inside the
  * working directory, so claude runs with its write tools and no shell, and codex
@@ -52,11 +51,13 @@
 'use strict';
 
 const fs = require('node:fs');
+const path = require('node:path');
 const { Command } = require('commander');
 
 const { AGENT_ADAPTERS } = require('./lib/agent-adapters');
 const { runAgent } = require('./lib/run-agent');
 const { EXIT_CODES, classOfAgentError, failureClassForExit, vendorEnvironmentNames } = require('./lib/runner-exit-codes');
+const { readDesign, scoredRiskProjection } = require('./lib/test-design-parser');
 
 /** The same default the other three commands declare, so this command changes no run that omits `--agent`. */
 const DEFAULT_AGENT = 'claude';
@@ -79,8 +80,8 @@ const RUNNER_CAPABILITIES = ['scoped-artifact-writes'];
 const TEST_DESIGN_REQUEST_KEYS = {
   argument: { required: [], permitted: [] },
   option: {
-    required: ['agent'],
-    permitted: ['agent', 'agent-cmd', 'agent-arg', 'env-pass', 'model', 'timeout-ms'],
+    required: ['agent', 'design-path'],
+    permitted: ['agent', 'agent-cmd', 'agent-arg', 'design-path', 'env-pass', 'model', 'timeout-ms'],
   },
   environment: { required: [], permitted: vendorEnvironmentNames() },
   stdin: { required: ['prompt'], permitted: ['prompt'] },
@@ -90,7 +91,7 @@ function collect(value, previous) {
   return [...previous, value];
 }
 
-/** Everything this process prints on stderr is diagnostic; stdout carries only what the agent printed. */
+/** Everything this process prints on stderr is diagnostic; stdout carries only the projection. */
 function fail(failureClass, message) {
   process.stderr.write(`tea-test-design-runner: ${message}\n`);
   process.exit(EXIT_CODES[failureClass]);
@@ -105,6 +106,25 @@ function readPrompt() {
   }
 }
 
+/** Derive a projection only after the agent has finished its document. */
+function projectScoredRisks(cwd, relativeDesignPath) {
+  const relative = path.normalize(relativeDesignPath);
+  if (path.isAbsolute(relative) || relative.startsWith(`..${path.sep}`) || relative === '..' || !relative.endsWith('.md')) {
+    throw new Error(`--design-path must name a markdown file inside the working directory: ${JSON.stringify(relativeDesignPath)}`);
+  }
+  const designPath = path.join(cwd, relative);
+  if (!fs.existsSync(designPath)) return null;
+  const realRoot = fs.realpathSync(cwd);
+  const realDesign = fs.realpathSync(designPath);
+  const fromRoot = path.relative(realRoot, realDesign);
+  if (fromRoot === '..' || fromRoot.startsWith(`..${path.sep}`) || path.isAbsolute(fromRoot) || fs.lstatSync(designPath).isSymbolicLink()) {
+    throw new Error(`design path escapes the working directory: ${JSON.stringify(relativeDesignPath)}`);
+  }
+  const text = fs.readFileSync(designPath, 'utf8');
+  const read = readDesign({ kind: 'text', value: text });
+  return scoredRiskProjection(read.ok ? read.design : { risks: [], text });
+}
+
 function main(argv) {
   const program = new Command();
   program
@@ -115,6 +135,7 @@ function main(argv) {
     .option('--agent-arg <arg>', 'extra argument appended to the agent CLI argv (repeatable)', collect, [])
     .option('--env-pass <NAME>', 'environment variable name allowed through to the agent (repeatable)', collect, [])
     .option('--model <name>', 'model to pin for this run; defaults to the adapter default')
+    .option('--design-path <path>', 'staged design document path for a deterministic scored-risk projection')
     .option('--timeout-ms <n>', 'agent wall-clock timeout in milliseconds', String(DEFAULT_TIMEOUT_MS));
 
   program.exitOverride();
@@ -162,19 +183,21 @@ function main(argv) {
     fail(classOfAgentError(error), error.message);
   }
 
-  // What the agent printed, unchanged. The deliverable is the document it wrote,
-  // and the prompt tells it nothing it prints is read, so this is diagnostic
-  // output for an operator watching the run rather than a channel a caller scores.
-  if (stdout.length > 0) process.stdout.write(stdout.endsWith('\n') ? stdout : `${stdout}\n`);
+  if (options.designPath) {
+    try {
+      const projection = projectScoredRisks(process.cwd(), options.designPath);
+      if (projection) process.stdout.write(`${JSON.stringify(projection)}\n`);
+    } catch (error) {
+      fail('environment-parser', `could not project scored risks: ${error.message}`);
+    }
+  }
+
+  if (stdout.length > 0) process.stderr.write(stdout.endsWith('\n') ? stdout : `${stdout}\n`);
 }
 
 // Guarded so tools/generate-contracts.js can read the declarations above without
 // running a command, the same way it reads TRACE_REQUEST_KEYS out of
 // cli/trace-runner.js.
-if (require.main === module) {
-  main(process.argv);
-}
-
 module.exports = {
   DEFAULT_AGENT,
   DEFAULT_TIMEOUT_MS,
@@ -183,4 +206,9 @@ module.exports = {
   TEST_DESIGN_REQUEST_KEYS,
   classOfAgentError,
   failureClassForExit,
+  projectScoredRisks,
 };
+
+if (require.main === module) {
+  main(process.argv);
+}

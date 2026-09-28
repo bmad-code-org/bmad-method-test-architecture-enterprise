@@ -156,6 +156,8 @@ const {
 const { testDesignOracleSpecs, testDesignStepId } = require('../tools/generate-contracts');
 const {
   readDesign: readTestDesign,
+  bandFor: testDesignBandFor,
+  scoredRiskProjection,
   scoreRun: scoreTestDesignRun,
   loadGroundTruth: loadTestDesignGroundTruth,
   TEST_DESIGN_OPERATION,
@@ -823,12 +825,8 @@ async function checkRoutingOracles(evaluator) {
 // ---------------------------------------------------------------------------
 
 /**
- * One stored test-design run as the artifact a probe observation would carry.
- *
- * The deliverable is markdown, so the adapter tags it `text` and there is nothing
- * else on the observation to read. That is the whole reason this contract's oracles
- * are what they are; see the comment above testDesignOracleSpecs in
- * tools/generate-contracts.js.
+ * One stored test-design run as the Markdown artifact a probe observation carries.
+ * The runner derives JSON stdout from this body with the scorer's parser.
  */
 function testDesignArtifactOf(directory, expected) {
   const designPath = path.join(directory, expected.storedOutput?.design ?? 'design.md');
@@ -839,16 +837,12 @@ function testDesignArtifactOf(directory, expected) {
  * Evaluate every test-design oracle over every stored document and compare each
  * answer with the harness predicate the generator paired it with.
  *
- * Each spec's `scorer` reads `documentMentions`, the harness's own document-global
- * predicate, rather than the row-scoped scored result. That is deliberate and it is
- * what makes this comparison meaningful: an oracle over a markdown body cannot tell
- * which row a token sits in, so pairing it with the row-scoped answer would make the
- * two agree by coincidence on whatever this corpus happens to hold.
+ * Material specs read document-wide vocabulary. Unsupported specs read a scored
+ * register row above the 1–3 guard band, paired with the harness's same predicate.
  *
  * A green run here therefore says the contract and the harness agree about which
- * vocabulary a document carries. It does not say the suite passed, and it says
- * nothing about the arithmetic, the band placement, the coverage mapping or the
- * priority ordering, all of which only the harness checks.
+ * vocabulary the document carries and which excluded risks it scores. Arithmetic,
+ * band placement, coverage mapping and priority ordering remain harness checks.
  */
 async function checkTestDesignOracles(evaluator) {
   console.log('\ntest-design.contract.json over every stored test design');
@@ -861,6 +855,30 @@ async function checkTestDesignOracles(evaluator) {
     'the contract declares exactly the oracles the generator specifies, in order',
     `${contract.oracles.length} on disk, ${specs.length} specified`,
   );
+  const probes = readJson(path.join(__dirname, 'probes', 'test-design.probes.json'), 'the test-design probes');
+  const repoint = (node, from, to) => {
+    if (Array.isArray(node)) return node.map((entry) => repoint(entry, from, to));
+    if (node === null || typeof node !== 'object') return node;
+    return Object.fromEntries(
+      Object.entries(node).map(([key, value]) => [
+        key,
+        key === 'pointer' && (value === from || value.startsWith(`${from}/`))
+          ? `${to}${value.slice(from.length)}`
+          : repoint(value, from, to),
+      ]),
+    );
+  };
+  for (const spec of specs.filter((entry) => entry.kind === 'unsupported-vocabulary')) {
+    const probe = probes.find((entry) => entry.behaviorId === spec.id.replace('O-', 'B-'));
+    const witness = probe?.defects?.[0]?.manifestationWitness;
+    const originalPointer = spec.oracle.direction.evidenceTargets[0].replace(/\/scoredRiskDescriptions$/, '');
+    const legPointer = `/interactions/${witness?.legId}/stdout`;
+    const expected = repoint(spec.oracle.check.operands[0], originalPointer, legPointer);
+    assert(
+      JSON.stringify(witness?.relation?.operands?.[1]) === JSON.stringify(expected),
+      `${spec.id}: manifestation witness is the negation of its oracle on the manifestation leg`,
+    );
+  }
 
   const categories = new Set(groundTruth.riskCategories ?? []);
   const setsById = new Map((groundTruth.fixtureSets ?? []).map((set) => [set.id, set]));
@@ -876,10 +894,20 @@ async function checkTestDesignOracles(evaluator) {
     // Every set's oracles over this document. The set the document was frozen from
     // is the agreement check proper; the other set is the document seen as a wrong
     // answer to a different question, which is what makes an oracle resolve false.
+    const parsed = readTestDesign(artifact);
+    const projection =
+      artifact.kind === 'text'
+        ? { kind: 'json', value: scoredRiskProjection(parsed.ok ? parsed.design : { risks: [], text: artifact.value }) }
+        : { kind: 'absent' };
     for (const set of groundTruth.fixtureSets ?? []) {
       const stepId = testDesignStepId(set);
       const results = evaluateOracles(evaluator, contract, {
-        [stepId]: observation({ operationId: TEST_DESIGN_OPERATION, exitCode: 0, artifacts: { design: artifact } }),
+        [stepId]: observation({
+          operationId: TEST_DESIGN_OPERATION,
+          exitCode: 0,
+          stdout: projection,
+          artifacts: { design: artifact },
+        }),
       });
       const read = readTestDesign(artifact);
       const own = specs.filter((spec) => spec.setId === set.id);
@@ -895,7 +923,7 @@ async function checkTestDesignOracles(evaluator) {
             continue;
           }
           assert(
-            agrees(results.get(spec.id), null),
+            agrees(results.get(spec.id), artifact.kind === 'text' ? false : null),
             `${label}: ${spec.id} (${spec.kind}) refuses the document the harness refuses (${read.reason})`,
             `oracle ${describe(results.get(spec.id))}`,
           );
@@ -916,6 +944,352 @@ async function checkTestDesignOracles(evaluator) {
         evaluated += 1;
       }
     }
+  }
+  const seeded = setsById.get('seeded-offline-order-capture');
+  const runMeasured = specs.find((spec) => spec.setId === seeded.id && spec.kind === 'run-measured');
+  const excluded = specs.find((spec) => spec.setId === seeded.id && spec.riskId === 'cross-tenant-data-leak');
+  assert(excluded?.id === 'O-008', 'the guard cases address O-008');
+  const marker = 'A queued order from one organization could be applied to another organization, so tenant isolation must be proven.';
+  const register = (description, probability, impact, score, action) =>
+    '# Test Design: Epic 7\n\n### Risk Register (Score 1-9)\n\n' +
+    '| Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+    '| --- | --- | --- | --- | --- | --- | --- |\n' +
+    `| R-001 | SEC | ${description} | ${probability} | ${impact} | ${score} | ${action} |\n`;
+  const examples = [
+    { label: 'Document guard', document: register(marker, 1, 2, 2, 'Document'), mentioned: false },
+    { label: 'top of Document guard band', document: register(marker, 1, 3, 3, 'Document'), mentioned: false },
+    { label: 'scored invented risk', document: register(marker, 2, 2, 4, 'Test'), mentioned: true },
+    { label: 'scored row with Document action', document: register(marker, 2, 2, 4, 'Document'), mentioned: true },
+    {
+      label: 'reordered scored columns',
+      document:
+        '# Test Design: Epic 7\n\n### Risk Register (Score 1-9)\n\n' +
+        '| Score | Description | Risk ID | Category | Impact | Probability | Action |\n' +
+        '| --- | --- | --- | --- | --- | --- | --- |\n' +
+        `| 4 | ${marker} | R-001 | SEC | 2 | 2 | Test |\n`,
+      mentioned: true,
+    },
+    {
+      label: 'decorated score column',
+      document:
+        '# Test Design: Epic 7\n\n### Risk Register (Score 1-9)\n\n' +
+        '| Risk ID | Category | Description | Probability | Impact | Score (P×I) | Action |\n' +
+        '| --- | --- | --- | --- | --- | --- | --- |\n' +
+        `| R-001 | SEC | ${marker} | 2 | 2 | 4 | Test |\n`,
+      mentioned: true,
+    },
+    {
+      label: 'escaped pipe before scored risk columns',
+      document:
+        '# Test Design: Epic 7\n\n### Risk Register (Score 1-9)\n\n' +
+        '| Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '| --- | --- | --- | --- | --- | --- | --- |\n' +
+        `| R-001 | SEC | Local queue \\| ${marker} | 2 | 2 | 4 | Test |\n`,
+      mentioned: true,
+    },
+    {
+      label: 'table without outer pipes',
+      document:
+        '# Test Design: Epic 7\n\n### Risk Register (Score 1-9)\n\n' +
+        'Risk ID | Category | Description | Probability | Impact | Score | Action\n' +
+        '--- | --- | --- | --- | --- | --- | ---\n' +
+        `R-001 | SEC | ${marker} | 2 | 2 | 4 | Test\n`,
+      mentioned: true,
+    },
+    {
+      label: 'backtick in fence info string leaves the register visible',
+      document:
+        '# Test Design: Epic 7\n\n```markdown`example\n' +
+        '| Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '| --- | --- | --- | --- | --- | --- | --- |\n' +
+        `| R-001 | SEC | ${marker} | 2 | 2 | 4 | Test |\n`,
+      mentioned: true,
+    },
+    {
+      label: 'fenced scored example',
+      document:
+        register('The local queue is checked before upload.', 1, 2, 2, 'Document') +
+        '\n```markdown\n' +
+        '| Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '| --- | --- | --- | --- | --- | --- | --- |\n' +
+        `| R-002 | SEC | ${marker} | 2 | 2 | 4 | Test |\n` +
+        '```\n',
+      mentioned: false,
+    },
+    {
+      label: 'shorter fence inside a long fenced example',
+      document:
+        register('The local queue is checked before upload.', 1, 2, 2, 'Document') +
+        '\n````markdown\n```\n' +
+        '| Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '| --- | --- | --- | --- | --- | --- | --- |\n' +
+        `| R-002 | SEC | ${marker} | 2 | 2 | 4 | Test |\n` +
+        '````\n',
+      mentioned: false,
+    },
+    {
+      label: 'tilde fence with a backtick in its info string',
+      document:
+        register('The local queue is checked before upload.', 1, 2, 2, 'Document') +
+        '\n~~~markdown`example\n' +
+        '| Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '| --- | --- | --- | --- | --- | --- | --- |\n' +
+        `| R-002 | SEC | ${marker} | 2 | 2 | 4 | Test |\n` +
+        '~~~\n',
+      mentioned: false,
+    },
+    {
+      label: 'blockquoted scored risk table is an example',
+      document:
+        register('The local queue is checked before upload.', 1, 2, 2, 'Document') +
+        '\n> ### Example Risk Register (Score 1-9)\n>\n' +
+        '> | Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '> | --- | --- | --- | --- | --- | --- | --- |\n' +
+        `> | R-002 | SEC | ${marker} | 2 | 2 | 4 | Test |\n`,
+      mentioned: false,
+      riskRowCount: 1,
+    },
+    {
+      label: 'blockquoted low band does not classify a later top-level risk',
+      document:
+        '# Test Design: Epic 7\n\n> ### Low-Priority Risks (Score 1-2)\n\n' +
+        '| Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '| --- | --- | --- | --- | --- | --- | --- |\n' +
+        `| R-001 | SEC | ${marker} | 2 | 3 | 6 | Test |\n`,
+      mentioned: true,
+      riskRowCount: 1,
+      expectNoBand: true,
+    },
+    {
+      label: 'four-space indented scored example',
+      document:
+        register('The local queue is checked before upload.', 1, 2, 2, 'Document') +
+        '\n    | Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '    | --- | --- | --- | --- | --- | --- | --- |\n' +
+        `    | R-002 | SEC | ${marker} | 2 | 2 | 4 | Test |\n`,
+      mentioned: false,
+      riskRowCount: 1,
+    },
+    {
+      label: 'tab-indented scored example',
+      document:
+        register('The local queue is checked before upload.', 1, 2, 2, 'Document') +
+        '\n\t| Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '\t| --- | --- | --- | --- | --- | --- | --- | --- |\n' +
+        `\t| R-002 | SEC | ${marker} | 2 | 2 | 4 | Test |\n`,
+      mentioned: false,
+      riskRowCount: 1,
+    },
+    {
+      label: 'indented scored example inside a bullet list',
+      document:
+        register('The local queue is checked before upload.', 1, 2, 2, 'Document') +
+        '\n- Example:\n\n' +
+        '      | Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '      | --- | --- | --- | --- | --- | --- | --- | --- |\n' +
+        `      | R-002 | SEC | ${marker} | 2 | 2 | 4 | Test |\n`,
+      mentioned: false,
+      riskRowCount: 1,
+    },
+    {
+      label: 'tab-indented scored example inside a bullet list',
+      document:
+        register('The local queue is checked before upload.', 1, 2, 2, 'Document') +
+        '\n- Example:\n\n' +
+        '\t  | Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '\t  | --- | --- | --- | --- | --- | --- | --- |\n' +
+        `\t  | R-002 | SEC | ${marker} | 2 | 2 | 4 | Test |\n`,
+      mentioned: false,
+      riskRowCount: 1,
+    },
+    {
+      label: 'indented scored example after a completed list',
+      document:
+        register('The local queue is checked before upload.', 1, 2, 2, 'Document') +
+        '\n- Notes\n\n\n' +
+        '    | Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '    | --- | --- | --- | --- | --- | --- | --- | --- |\n' +
+        `    | R-002 | SEC | ${marker} | 2 | 2 | 4 | Test |\n`,
+      mentioned: false,
+      riskRowCount: 1,
+    },
+    {
+      label: 'three-space indented scored register',
+      document:
+        '# Test Design: Epic 7\n\n### Risk Register (Score 1-9)\n\n' +
+        '   | Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '   | --- | --- | --- | --- | --- | --- | --- |\n' +
+        `   | R-001 | SEC | ${marker} | 2 | 2 | 4 | Test |\n`,
+      mentioned: true,
+      riskRowCount: 1,
+    },
+    {
+      label: 'four-space table inside an ordered list item',
+      document:
+        '# Test Design: Epic 7\n\n### Risk Register (Score 1-9)\n\n10. Risk register:\n\n' +
+        '    | Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '    | --- | --- | --- | --- | --- | --- | --- |\n' +
+        `    | R-001 | SEC | ${marker} | 2 | 2 | 4 | Test |\n`,
+      mentioned: true,
+      riskRowCount: 1,
+    },
+    {
+      label: 'scored risk in a bullet table whose header starts on the marker line',
+      document:
+        register('The local queue is checked before upload.', 1, 2, 2, 'Document') +
+        '\n- | Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '  | --- | --- | --- | --- | --- | --- | --- |\n' +
+        `  | R-002 | SEC | ${marker} | 2 | 2 | 4 | Test |\n`,
+      mentioned: true,
+      riskRowCount: 2,
+    },
+    {
+      label: 'scored risk in a bullet table with four spaces after its marker',
+      document:
+        register('The local queue is checked before upload.', 1, 2, 2, 'Document') +
+        '\n-    | Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '     | --- | --- | --- | --- | --- | --- | --- |\n' +
+        `     | R-002 | SEC | ${marker} | 2 | 2 | 4 | Test |\n`,
+      mentioned: true,
+      riskRowCount: 2,
+    },
+    {
+      label: 'scored example in indented code after five list marker spaces',
+      document:
+        register('The local queue is checked before upload.', 1, 2, 2, 'Document') +
+        '\n-     | Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '      | --- | --- | --- | --- | --- | --- | --- |\n' +
+        `      | R-002 | SEC | ${marker} | 2 | 2 | 4 | Test |\n`,
+      mentioned: false,
+      riskRowCount: 1,
+    },
+    {
+      label: 'scored example in nested indented code after five list marker spaces',
+      document:
+        register('The local queue is checked before upload.', 1, 2, 2, 'Document') +
+        '\n- Examples:\n  -     | Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '        | --- | --- | --- | --- | --- | --- | --- |\n' +
+        `        | R-002 | SEC | ${marker} | 2 | 2 | 4 | Test |\n`,
+      mentioned: false,
+      riskRowCount: 1,
+    },
+    {
+      label: 'scored risk in a nested ordered table whose header starts on the marker line',
+      document:
+        register('The local queue is checked before upload.', 1, 2, 2, 'Document') +
+        '\n- Risks:\n\n  10. | Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '      | --- | --- | --- | --- | --- | --- | --- |\n' +
+        `      | R-002 | SEC | ${marker} | 2 | 2 | 4 | Test |\n`,
+      mentioned: true,
+      riskRowCount: 2,
+    },
+    {
+      label: 'backtick fenced scored example starts on a list marker line',
+      document:
+        register('The local queue is checked before upload.', 1, 2, 2, 'Document') +
+        '\n- ```markdown\n' +
+        '  | Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '  | --- | --- | --- | --- | --- | --- | --- |\n' +
+        `  | R-002 | SEC | ${marker} | 2 | 2 | 4 | Test |\n` +
+        '  ```\n',
+      mentioned: false,
+      riskRowCount: 1,
+    },
+    {
+      label: 'backtick fenced scored example follows four list marker spaces',
+      document:
+        register('The local queue is checked before upload.', 1, 2, 2, 'Document') +
+        '\n-    ```markdown\n' +
+        '     | Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '     | --- | --- | --- | --- | --- | --- | --- |\n' +
+        `     | R-002 | SEC | ${marker} | 2 | 2 | 4 | Test |\n` +
+        '     ```\n',
+      mentioned: false,
+      riskRowCount: 1,
+    },
+    {
+      label: 'tilde fenced scored example starts on a nested list marker line',
+      document:
+        register('The local queue is checked before upload.', 1, 2, 2, 'Document') +
+        '\n- Examples:\n  - ~~~markdown\n' +
+        '    | Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '    | --- | --- | --- | --- | --- | --- | --- |\n' +
+        `    | R-002 | SEC | ${marker} | 2 | 2 | 4 | Test |\n` +
+        '    ~~~\n',
+      mentioned: false,
+      riskRowCount: 1,
+    },
+    {
+      label: 'risk heading starts on a list marker line',
+      document:
+        register('The local queue is checked before upload.', 1, 2, 2, 'Document') +
+        '\n- ### List Risk Register (Score 1-9)\n\n' +
+        '  | Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '  | --- | --- | --- | --- | --- | --- | --- |\n' +
+        `  | R-002 | SEC | ${marker} | 2 | 2 | 4 | Test |\n`,
+      mentioned: true,
+      riskRowCount: 2,
+      riskHeading: 'List Risk Register (Score 1-9)',
+    },
+    {
+      label: 'prose and fenced example',
+      document:
+        register('The local queue is checked before upload.', 1, 2, 2, 'Document') + `\n${marker}\n\n\`\`\`text\n${marker}\n\`\`\`\n`,
+      mentioned: false,
+    },
+  ];
+  for (const example of examples) {
+    const artifact = { kind: 'text', value: example.document };
+    const read = readTestDesign(artifact);
+    assert(read.ok, `${example.label}: the register parses`);
+    if (!read.ok) continue;
+    const scored = scoreTestDesignRun(seeded, read.design, categories);
+    if (example.riskRowCount !== undefined) {
+      assert(read.design.risks.length === example.riskRowCount, `${example.label}: only register rows are parsed`);
+    }
+    if (example.riskHeading) {
+      assert(
+        read.design.risks.at(-1)?.headings.includes(example.riskHeading),
+        `${example.label}: the list heading belongs to its risk row`,
+      );
+    }
+    if (example.expectNoBand) {
+      assert(testDesignBandFor(read.design.risks[0].headings) === null, `${example.label}: the quote heading does not set a score band`);
+    }
+    const results = evaluateOracles(evaluator, contract, {
+      [testDesignStepId(seeded)]: observation({
+        operationId: TEST_DESIGN_OPERATION,
+        exitCode: 0,
+        stdout: { kind: 'json', value: scoredRiskProjection(read.design) },
+        artifacts: { design: artifact },
+      }),
+    });
+    assert(agrees(results.get(runMeasured.id), true), `${example.label}: O-001 accepts the parsed register`);
+    assert(scored.mentions[excluded.riskId] === example.mentioned, `${example.label}: the harness reads the scored row`);
+    assert(
+      scored.ungrounded.some((entry) => entry.unsupportedId === excluded.riskId) === example.mentioned,
+      `${example.label}: the scored result agrees with the mention predicate`,
+    );
+    assert(
+      agrees(results.get(excluded.id), !example.mentioned),
+      `${example.label}: O-008 ${example.mentioned ? 'fires' : 'stays unfired'}`,
+      describe(results.get(excluded.id)),
+    );
+  }
+  const coverageDocument =
+    register('The local queue is checked before upload.', 1, 2, 2, 'Document') +
+    '\n## P1 Coverage\n\n- ### P0: List item coverage\n\n' +
+    '  | Test Level | Risk Link |\n  | --- | --- |\n  | E2E | R-001 |\n\n' +
+    '- | Test Level | Risk Link |\n  | --- | --- |\n  | E2E | R-001 |\n\n' +
+    '| Test Level | Risk Link |\n| --- | --- |\n| E2E | R-001 |\n\n' +
+    '> | Test Level | Risk Link |\n> | --- | --- |\n> | E2E | R-001 |\n';
+  const coverageRead = readTestDesign({ kind: 'text', value: coverageDocument });
+  assert(coverageRead.ok, 'coverage heading scope: the document parses');
+  if (coverageRead.ok) {
+    assert(
+      JSON.stringify(coverageRead.design.coverage.map((row) => row.priority)) === JSON.stringify(['P0', 'P1', 'P1']),
+      'coverage heading scope: the list item keeps P0; sibling and top-level tables return to P1; quoted examples are ignored',
+    );
   }
   // Every oracle but the shape one has to have been seen failing somewhere, or this
   // check has only ever confirmed that a correct run passes.

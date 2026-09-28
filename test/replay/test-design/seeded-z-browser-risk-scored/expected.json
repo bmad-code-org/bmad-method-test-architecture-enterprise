@@ -1,0 +1,81 @@
+{
+  "$comment": [
+    "A one-row mutation of seeded-correct-run: R-006 reports a browser and screen-reader risk the epic rules out.",
+    "Its 2 x 2 score of 4 is above the 1-3 documented-guard band, so O-009 fires."
+  ],
+  "id": "seeded-z-browser-risk-scored",
+  "suite": "test-design",
+  "scorerVersion": 15,
+  "storedOutput": {
+    "origin": "constructed",
+    "design": "design.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/test-design-eval/ground-truth.json",
+    "fixtureSet": "seeded-offline-order-capture",
+    "scoringInputsDigest": "sha256:963962660c273f960aff6e4c02361691190a06c7f824dd78deca3382e85ac0c9"
+  },
+  "derivation": [
+    "R-006 is a sixth valid, correctly scored and banded row. The five material risks still match.",
+    "R-006 matches browser-and-accessibility-regression in a scored row above 3, so mentions records true and ungrounded names R-006.",
+    "The risk ceiling is 8. Six rows leave no excess. The five material coverage rows and their ordering are unchanged."
+  ],
+  "result": {
+    "mentions": {
+      "sec-unencrypted-offline-queue": true,
+      "data-sync-conflict-overwrite": true,
+      "tech-uncapped-retry-loop": true,
+      "perf-backlog-sync-budget": true,
+      "ops-no-release-kill-switch": true,
+      "payment-gateway-failure": false,
+      "cross-tenant-data-leak": false,
+      "browser-and-accessibility-regression": true,
+      "data-residency-compliance": false
+    },
+    "shape": {
+      "rows": 6,
+      "wellFormedIds": 6,
+      "validCategories": 6,
+      "inScale": 6,
+      "arithmeticOk": 6,
+      "banded": 6,
+      "bandOk": 6,
+      "arithmeticTotal": 6
+    },
+    "shapeFailures": [],
+    "links": {
+      "total": 5,
+      "resolved": 5,
+      "dangling": []
+    },
+    "grounding": {
+      "declared": 5,
+      "matched": 5,
+      "missed": [],
+      "topSeverityMissed": 0
+    },
+    "ungrounded": [
+      {
+        "unsupportedId": "browser-and-accessibility-regression",
+        "rowId": "R-006"
+      }
+    ],
+    "ceiling": {
+      "maxRisks": 8,
+      "excess": 0
+    },
+    "unscoredRiskTables": [],
+    "coverage": {
+      "evaluated": 5,
+      "satisfied": 5,
+      "failures": []
+    },
+    "ordering": {
+      "pairs": 9,
+      "resolvable": 9,
+      "satisfied": 9,
+      "flattened": false,
+      "failures": []
+    }
+  }
+}

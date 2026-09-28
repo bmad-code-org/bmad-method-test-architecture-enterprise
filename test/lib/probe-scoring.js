@@ -74,7 +74,12 @@ const { buildPrompt: buildCiPrompt } = require('../eval-ci');
 // prompt selects nothing and the record is scored against no evidence at all.
 const { buildPrompt: buildRoutingPrompt, correctRoutingAnswer } = require('../eval-bmad-tea-routing');
 const { ROUTING_CONTRACTS } = require('../../tools/generate-contracts');
-const { buildPrompt: buildTestDesignPrompt } = require('../eval-test-design');
+const {
+  buildPrompt: buildTestDesignPrompt,
+  designArtifactPaths: testDesignArtifactPaths,
+  readDesign: readTestDesign,
+  scoredRiskProjection,
+} = require('../eval-test-design');
 const {
   evaluatorConfiguration,
   isolationManifest,
@@ -507,19 +512,23 @@ async function storedDesign(caseId) {
 }
 
 /**
- * One stored test design, as the single text artifact this operation declares.
+ * One stored test design with the same JSON stdout the live runner emits.
  *
  * The document is passed in rather than read here, so a caller with several legs
  * over one stored case reads it once. Everything below it is pure.
  */
-function testDesignArtifacts(text, designLevel, epicNum) {
+function testDesignEvidenceChannels(text, designLevel, epicNum) {
   // The template renders design_level into the document's Scope line, which is the
   // one effect the prompt has on the bytes and the whole basis of this contract's
   // sensitivity witness. The stored documents carry no Scope line, so it is applied
   // here from the level the leg asked for. A leg asking for `full` and a leg asking
   // for `minimal` then differ in exactly that line, which is what the witness claims.
   const scoped = text.replace(/^(# .*\n)/, `$1\n**Scope:** ${designLevel} test design for Epic ${epicNum}\n`);
-  return { design: { kind: 'text', value: scoped } };
+  const read = readTestDesign({ kind: 'text', value: scoped });
+  return {
+    stdout: { kind: 'json', value: scoredRiskProjection(read.ok ? read.design : { risks: [], text: scoped }) },
+    artifacts: { design: { kind: 'text', value: scoped } },
+  };
 }
 
 /**
@@ -553,6 +562,7 @@ async function testDesignEvidence(contract) {
       observationId: `design-${set.id}-run`,
       projectRoot: set.projectRoot,
       epicNum: set.epicNum,
+      designPath: testDesignArtifactPaths(set).design,
       step,
       prompt,
     };
@@ -571,9 +581,8 @@ async function testDesignEvidence(contract) {
       const leg = matched[1];
       return {
         exitCode: 0,
-        stdout: { kind: 'text', value: '' },
+        ...testDesignEvidenceChannels(await storedDesign(leg.caseId), designLevelOf(prompt), leg.epicNum),
         stderr: { kind: 'text', value: '' },
-        artifacts: testDesignArtifacts(await storedDesign(leg.caseId), designLevelOf(prompt), leg.epicNum),
       };
     },
     async recordInputs() {
@@ -594,11 +603,10 @@ async function testDesignEvidence(contract) {
           observationId: leg.observationId,
           sequence: index + 1,
           operationId: leg.step.operationId,
-          callInputs: { option: { agent: 'claude' }, stdin: { prompt: leg.prompt } },
-          stdout: { kind: 'text', value: '' },
+          callInputs: { option: { agent: 'claude', 'design-path': leg.designPath }, stdin: { prompt: leg.prompt } },
+          ...testDesignEvidenceChannels(designByCase.get(leg.caseId), 'full', leg.epicNum),
           stderr: { kind: 'text', value: '' },
           exitCode: 0,
-          artifacts: testDesignArtifacts(designByCase.get(leg.caseId), 'full', leg.epicNum),
         }),
       );
       const observationIdByStep = new Map(legs.map((leg) => [leg.step.stepId, leg.observationId]));
