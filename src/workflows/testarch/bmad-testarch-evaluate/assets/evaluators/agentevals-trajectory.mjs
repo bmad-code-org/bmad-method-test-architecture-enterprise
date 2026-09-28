@@ -15,10 +15,13 @@ const trajectoryPrefix = process.argv.find((argument) => argument.startsWith('--
 if (!trajectoryPrefix) throw new Error('trajectory stdout prefix must be non-empty');
 const referenceOutputs = JSON.parse(fs.readFileSync(path.join(directory, referenceFile), 'utf8'));
 const input = JSON.parse(fs.readFileSync(0, 'utf8'));
-const observation = input.observations.find(
+const matchingObservations = input.observations.filter(
   (candidate) => candidate.stdout?.kind === 'text' && candidate.stdout.value.startsWith(trajectoryPrefix),
 );
-if (observation === undefined) throw new Error('the calling agent supplied no stdout trajectory');
+if (matchingObservations.length !== 1) {
+  throw new Error(`expected one stdout trajectory matching the prefix, found ${matchingObservations.length}`);
+}
+const [observation] = matchingObservations;
 
 const stdout = observation.stdout.value;
 const outputs = JSON.parse(stdout.slice(trajectoryPrefix.length));
@@ -31,7 +34,9 @@ const referenceAssistant = referenceOutputs.find((message) => message.role === '
 const firstCall = assistant?.tool_calls?.[0];
 const referenceCall = referenceAssistant?.tool_calls?.[0];
 const name = firstCall?.function?.name;
-const quoted = (candidate) => (stdout.includes(candidate) ? candidate : trajectoryPrefix);
+// JSON output may contain whitespace that compact JSON.stringify omits. The
+// complete observed trajectory is a verbatim fallback with the mismatch in it.
+const quoted = (candidate) => (stdout.includes(candidate) ? candidate : stdout);
 const argumentsOf = (call) => {
   try {
     return JSON.parse(call?.function?.arguments);

@@ -14,6 +14,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const { spawnSync } = require('node:child_process');
 const AjvModule = require('ajv/dist/2020');
+const YAML = require('yaml');
 const { ENGINE_CLI_ENV, engineCliPath, engineSchemaPath, loadEngine } = require('../cli/lib/evaluate/engine');
 const { calibrationProblems } = require('../cli/lib/evaluate/calibration');
 
@@ -1409,6 +1410,20 @@ function checkFrameworkTemplate(template, fixtureName, evaluationName, executabl
         path.join(evaluation, 'evaluator', 'reference', 'weather.json'),
         path.join(evaluation, 'evaluator', 'reference', 'trajectory.json'),
       );
+    } else {
+      const assertionsFile = path.join(evaluation, 'evaluator', 'asserts.yaml');
+      const assertions = YAML.parse(fs.readFileSync(assertionsFile, 'utf8'));
+      const metricByAssertion = new Map([
+        ['contains:apples', 'required-apples'],
+        ['contains:pears', 'required-pears'],
+        ['not-contains:shellfish', 'forbidden-shellfish'],
+      ]);
+      for (const assertion of assertions) assertion.metric = metricByAssertion.get(`${assertion.type}:${assertion.value}`);
+      assert.ok(
+        assertions.every((assertion) => assertion.metric),
+        'fixture assertion lacks a mapping metric',
+      );
+      fs.writeFileSync(assertionsFile, YAML.stringify(assertions));
     }
     for (const [bin, args, cwd] of [
       [process.execPath, [path.join(__dirname, '..', 'cli', 'evaluate.js'), 'digest', '--evaluation', evaluation]],
@@ -1446,11 +1461,141 @@ function checkFrameworkTemplate(template, fixtureName, evaluationName, executabl
       if (states.length !== 3 || !states.every((state) => state === expected))
         failures.push(`${template} ${probeId} resolved ${states.join(', ')}, expected three ${expected} votes`);
     }
+    if (template === 'agentevals-trajectory.mjs') {
+      const reference = JSON.parse(fs.readFileSync(path.join(evaluation, 'evaluator', 'reference', 'weather.json'), 'utf8'));
+      const alternate = structuredClone(reference);
+      alternate[0].content = 'Weather in Boston';
+      alternate[1].tool_calls[0].function.arguments = '{"city":"Boston"}';
+      fs.writeFileSync(path.join(evaluation, 'evaluator', 'reference', 'alternate.json'), JSON.stringify(alternate));
+      const result = spawnSync(process.execPath, [destination, '--reference=reference/alternate.json', '--prefix=selected: '], {
+        cwd: evaluation,
+        env,
+        encoding: 'utf8',
+        input: JSON.stringify({
+          observations: [
+            { observationId: 'decoy', stdout: { kind: 'text', value: `trajectory: ${JSON.stringify(reference)}` } },
+            { observationId: 'selected', stdout: { kind: 'text', value: `selected: ${JSON.stringify(alternate)}` } },
+          ],
+        }),
+      });
+      assert.strictEqual(result.status, 0, `AgentEvals template flags failed: ${result.stderr}`);
+      const rows = JSON.parse(result.stdout).rows;
+      assert.deepStrictEqual(
+        rows.map((row) => [row.key, row.outcome, row.observationIds]),
+        [['trajectory_strict_match', 'pass', ['selected']]],
+      );
+      const ambiguous = spawnSync(process.execPath, [destination, '--reference=reference/alternate.json', '--prefix=selected: '], {
+        cwd: evaluation,
+        env,
+        encoding: 'utf8',
+        input: JSON.stringify({
+          observations: [
+            { observationId: 'first', stdout: { kind: 'text', value: `selected: ${JSON.stringify(alternate)}` } },
+            { observationId: 'second', stdout: { kind: 'text', value: `selected: ${JSON.stringify(reference)}` } },
+          ],
+        }),
+      });
+      assert.notStrictEqual(ambiguous.status, 0, 'AgentEvals template accepted an ambiguous trajectory prefix');
+      assert.match(ambiguous.stderr, /expected one stdout trajectory matching the prefix, found 2/);
+    } else {
+      checkPromptfooTemplateIdentity(destination, evaluation, env);
+    }
   } catch (error) {
     failures.push(`${template} template pipeline: ${error.stack}`);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
+}
+
+function checkPromptfooTemplateIdentity(destination, evaluation, env) {
+  const selected = { observationId: 'selected', stdout: { kind: 'text', value: 'Selected summary: apples, pears\n' } };
+  const input = {
+    observations: [{ observationId: 'decoy', stdout: { kind: 'text', value: 'Decoy summary: apples, pears\n' } }, selected],
+  };
+  const run = (args, payload) => {
+    const result = spawnSync(process.execPath, [destination, ...args], {
+      cwd: evaluation,
+      env,
+      encoding: 'utf8',
+      input: JSON.stringify(payload),
+      timeout: 90_000,
+    });
+    if (result.error) throw result.error;
+    return result;
+  };
+  const real = run(['--stdout-prefix=Selected summary:'], input);
+  assert.strictEqual(real.status, 0, `promptfoo template stdout selection failed: ${real.stderr}`);
+  const realRows = JSON.parse(real.stdout).rows;
+  assert.deepStrictEqual(
+    realRows.map((row) => [row.key, row.observationIds]),
+    [
+      ['required-apples', ['selected']],
+      ['required-pears', ['selected']],
+      ['forbidden-shellfish', ['selected']],
+    ],
+  );
+  const ambiguous = run(['--stdout-prefix=Selected summary:'], {
+    observations: [selected, { observationId: 'another', stdout: { kind: 'text', value: 'Selected summary: shellfish\n' } }],
+  });
+  assert.notStrictEqual(ambiguous.status, 0, 'promptfoo template accepted an ambiguous stdout prefix');
+  assert.match(ambiguous.stderr, /expected one stdout observation matching the prefix, found 2/);
+  const assertionsFile = path.join(evaluation, 'evaluator', 'asserts.yaml');
+  const fullAssertions = fs.readFileSync(assertionsFile, 'utf8');
+  try {
+    fs.writeFileSync(assertionsFile, YAML.stringify(YAML.parse(fullAssertions).slice(0, 2)));
+    const incomplete = run(['--stdout-prefix=Selected summary:'], input);
+    assert.notStrictEqual(incomplete.status, 0, 'promptfoo template accepted an incomplete assertion set');
+    assert.match(incomplete.stderr, /did not judge every mapped assertion exactly once/);
+  } finally {
+    fs.writeFileSync(assertionsFile, fullAssertions);
+  }
+
+  const assertion = (metric, type, value) => ({ metric, type, value });
+  const map = (assertions, passes, observation = selected, output = observation.stdout.value) => {
+    const result = {
+      response: { output },
+      testCase: { assert: assertions },
+      gradingResult: {
+        componentResults: assertions.map((item, index) => ({ assertion: item, pass: passes[index] })),
+      },
+    };
+    return run(['--map-results'], { results: [result], observation });
+  };
+  const reordered = map(
+    [
+      assertion('forbidden-shellfish', 'not-contains', 'shellfish'),
+      assertion('required-apples', 'contains', 'apples'),
+      assertion('required-pears', 'contains', 'pears'),
+    ],
+    [false, true, false],
+  );
+  assert.strictEqual(reordered.status, 0, `promptfoo template reordered assertions failed: ${reordered.stderr}`);
+  assert.deepStrictEqual(
+    JSON.parse(reordered.stdout).rows.map((row) => [row.key, row.outcome]),
+    [
+      ['forbidden-shellfish', 'fail'],
+      ['required-apples', 'pass'],
+      ['required-pears', 'fail'],
+    ],
+  );
+  const subset = map([assertion('required-pears', 'contains', 'pears')], [true]);
+  assert.strictEqual(subset.status, 0, `promptfoo template subset failed: ${subset.stderr}`);
+  assert.deepStrictEqual(
+    JSON.parse(subset.stdout).rows.map((row) => [row.key, row.outcome]),
+    [['required-pears', 'pass']],
+  );
+  const missingIdentity = map([assertion(undefined, 'contains', 'pears')], [true]);
+  assert.notStrictEqual(missingIdentity.status, 0, 'promptfoo template accepted an assertion without a mapping metric');
+  const mismatchedOutput = map([assertion('required-pears', 'contains', 'pears')], [true], selected, 'another output');
+  assert.notStrictEqual(mismatchedOutput.status, 0, 'promptfoo template accepted a grade for different stdout');
+  assert.match(mismatchedOutput.stderr, /output differs from the cited stdout observation/);
+  const empty = { observationId: 'empty', stdout: { kind: 'text', value: '' }, exitCode: 0 };
+  const missingContent = map([assertion('required-pears', 'contains', 'pears')], [false], empty);
+  assert.strictEqual(missingContent.status, 0, `promptfoo template could not cite empty stdout: ${missingContent.stderr}`);
+  assert.deepStrictEqual(
+    JSON.parse(missingContent.stdout).rows.map((row) => [row.quote, row.quoteChannel, row.observationIds]),
+    [['0', 'exit-code', ['empty']]],
+  );
 }
 
 function checkEvaluatorGuidance(guide, failures) {
@@ -1465,6 +1610,24 @@ function checkEvaluatorGuidance(guide, failures) {
     '## Vendor rule',
   ])
     requireHeading(guide, heading, 'evaluator.md', failures);
+  for (const [heading, markers] of [
+    ['## Run the system', ['authorized interface', 'deterministic', 'command', 'sealed-brief-agent', 'records', 'clean and defect arms']],
+    [
+      '## Capture observations on every oracle channel',
+      ['stdout', 'stderr', 'HTTP response', 'MCP result', 'observation IDs', 'quoteChannel', 'SealedRunRecord'],
+    ],
+    [
+      '## Judge the behavior',
+      ['resolveCheck', 'calibrated judge', 'sealed brief', 'adopter code', 'evaluator/mapping.json', 'oracle and behavior'],
+    ],
+    [
+      '## Emit judgment rows or sealed records',
+      ['{ "rows":', 'observationIds', 'quoteChannel', 'confidence', 'anchored integer', 'SealedRunRecord'],
+    ],
+  ]) {
+    const body = headingBody(guide, heading);
+    for (const marker of markers) requireText(body, marker, `evaluator.md ${heading}`, failures);
+  }
 
   const rubric = headingBody(guide, '## Selection rubric');
   const lines = rubric.split('\n').filter((line) => line.startsWith('|'));

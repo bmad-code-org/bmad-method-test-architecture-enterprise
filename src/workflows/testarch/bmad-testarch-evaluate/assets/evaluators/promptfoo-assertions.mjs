@@ -8,22 +8,15 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
 const directory = path.dirname(fileURLToPath(import.meta.url));
-// The mapping key order follows the assertions in asserts.yaml. Give each
-// assertion a distinct type/value pair, or a matching metric when supported.
+// Give every assertion in asserts.yaml a metric that exactly matches one key
+// in mapping.json. The metric remains its identity if assertions are reordered.
 const mapping = JSON.parse(fs.readFileSync(path.join(directory, 'mapping.json'), 'utf8'));
 const mappedKeys = Object.keys(mapping.keys);
 const knownKeys = new Set(mappedKeys);
 
-function assertionKey(assertion, keys) {
-  const byTypeAndValue = keys.get(`${assertion?.type}:${assertion?.value}`);
+function assertionKey(assertion) {
   const metric = assertion?.metric;
-  if (
-    (metric !== undefined && (!knownKeys.has(metric) || (byTypeAndValue !== undefined && metric !== byTypeAndValue))) ||
-    (metric !== undefined && assertion?.type !== 'javascript' && byTypeAndValue === undefined)
-  ) {
-    throw new Error('promptfoo assertion metric conflicts with its type and value');
-  }
-  return byTypeAndValue ?? metric;
+  return typeof metric === 'string' && knownKeys.has(metric) ? metric : undefined;
 }
 
 function completedStatus(status, stderr = '') {
@@ -46,6 +39,11 @@ function promptfooEntrypoint() {
 
 export function rowsFromResults(results, observation) {
   const stdout = observation.stdout.value;
+  const failureEvidence = () => {
+    if (stdout.length > 0) return { quote: stdout, quoteChannel: 'stdout' };
+    if (Number.isInteger(observation.exitCode)) return { quote: String(observation.exitCode), quoteChannel: 'exit-code' };
+    throw new Error('promptfoo cannot cite empty stdout without an observed exit code');
+  };
   const rows = [];
   for (const result of results) {
     const graded = result.gradingResult !== undefined && result.gradingResult !== null;
@@ -62,8 +60,7 @@ export function rowsFromResults(results, observation) {
     if (!Array.isArray(assertions) || assertions.length > mappedKeys.length) {
       throw new Error('promptfoo returned assertions outside evaluator/mapping.json');
     }
-    const keys = new Map(assertions.map((assertion, index) => [`${assertion?.type}:${assertion?.value}`, mappedKeys[index]]));
-    const expected = assertions.map((assertion) => assertionKey(assertion, keys));
+    const expected = assertions.map((assertion) => assertionKey(assertion));
     if (!Array.isArray(expected) || expected.length === 0 || expected.includes(undefined) || new Set(expected).size !== expected.length) {
       throw new Error('promptfoo returned missing, unknown, or repeated assertion metadata');
     }
@@ -80,8 +77,7 @@ export function rowsFromResults(results, observation) {
           key,
           outcome: 'fail',
           observationIds: [observation.observationId],
-          quote: stdout,
-          quoteChannel: 'stdout',
+          ...failureEvidence(),
           confidence: 1,
           comment: `promptfoo returned an ungraded error for observed stdout: ${result.error ?? 'no gradingResult'}`,
         });
@@ -98,7 +94,7 @@ export function rowsFromResults(results, observation) {
     const observedKeys = new Set();
     for (const [index, grade] of grades.entries()) {
       if (typeof grade?.pass !== 'boolean') throw new Error('promptfoo returned a grade without a boolean pass');
-      const key = assertionKey(grade?.assertion ?? (expected.length === 1 ? assertions[index] : undefined), keys);
+      const key = assertionKey(grade?.assertion ?? (expected.length === 1 ? assertions[index] : undefined));
       if (key === undefined || !expected.includes(key) || observedKeys.has(key)) {
         throw new Error('promptfoo returned a grade without a unique expected assertion');
       }
@@ -111,8 +107,7 @@ export function rowsFromResults(results, observation) {
               key,
               outcome: 'fail',
               observationIds: [observation.observationId],
-              quote: stdout,
-              quoteChannel: 'stdout',
+              ...failureEvidence(),
               confidence: 1,
               comment: grade?.reason ?? `promptfoo returned an ungraded error for observed stdout: ${result.error ?? 'no gradingResult'}`,
             },
@@ -126,15 +121,17 @@ export function rowsFromResults(results, observation) {
 function main() {
   const input = JSON.parse(fs.readFileSync(0, 'utf8'));
   const stdoutPrefix = process.argv.find((argument) => argument.startsWith('--stdout-prefix='))?.slice('--stdout-prefix='.length) ?? '';
-  const observation = input.observations.find(
+  const matchingObservations = input.observations.filter(
     (candidate) => candidate.stdout?.kind === 'text' && candidate.stdout.value.startsWith(stdoutPrefix),
   );
-  if (observation === undefined) throw new Error('the target supplied no matching stdout observation');
+  if (matchingObservations.length !== 1) {
+    throw new Error(`expected one stdout observation matching the prefix, found ${matchingObservations.length}`);
+  }
+  const [observation] = matchingObservations;
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-promptfoo-'));
   try {
     fs.writeFileSync(path.join(temporary, 'outputs.json'), JSON.stringify([observation.stdout.value]));
-    const assertions = process.argv.includes('--single') ? 'asserts-single.yaml' : 'asserts.yaml';
-    fs.copyFileSync(path.join(directory, assertions), path.join(temporary, 'asserts.yaml'));
+    fs.copyFileSync(path.join(directory, 'asserts.yaml'), path.join(temporary, 'asserts.yaml'));
     const command = spawnSync(
       process.execPath,
       [
@@ -174,7 +171,9 @@ function main() {
       .split('\n')
       .map((line) => JSON.parse(line));
     const rows = rowsFromResults(results, observation);
-    if (rows.length === 0) throw new Error('promptfoo returned no assertion judgments');
+    if (rows.length !== mappedKeys.length || new Set(rows.map((row) => row.key)).size !== mappedKeys.length) {
+      throw new Error('promptfoo did not judge every mapped assertion exactly once');
+    }
     process.stdout.write(`${JSON.stringify({ rows })}\n`);
   } finally {
     fs.rmSync(temporary, { recursive: true, force: true });

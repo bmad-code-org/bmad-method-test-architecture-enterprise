@@ -12,19 +12,32 @@ function judge() {
   throw new Error('implement a known-pass and known-fail judgment before running this evaluator');
 }
 
-const observation = observations.find((item) => item.stdout?.kind === 'text');
-if (!observation) throw new Error('the oracle needs an observed stdout channel');
-const result = await judge({ sealedBrief, observations, observation });
-if (typeof result?.passed !== 'boolean') throw new Error('judge must return { passed, comment, quote? }');
+// Select an observation and evidence channel in judge() for the oracle at hand.
+// Stdout, stderr, HTTP and MCP responses, exit codes, and artifacts can each
+// support a different oracle. The observation ID must name the selected input.
+const result = await judge({ sealedBrief, observations });
+if (typeof result?.passed !== 'boolean' || typeof result.observationId !== 'string' || typeof result.comment !== 'string') {
+  throw new TypeError('judge must return { passed, observationId, comment, quote?, quoteChannel?, artifactId? }');
+}
+if (!observations.some((item) => item.observationId === result.observationId)) {
+  throw new Error('judge cited an observation outside this trial');
+}
+if (!result.passed && (typeof result.quote !== 'string' || !result.quote || typeof result.quoteChannel !== 'string')) {
+  throw new Error('a failed judgment needs a verbatim quote and its observation channel');
+}
+if (!result.passed && result.quoteChannel === 'artifact' && typeof result.artifactId !== 'string') {
+  throw new Error('an artifact quote needs its artifactId');
+}
 
 const row = result.passed
-  ? { key: 'example-oracle', outcome: 'pass', observationIds: [observation.observationId], comment: result.comment }
+  ? { key: 'example-oracle', outcome: 'pass', observationIds: [result.observationId], comment: result.comment }
   : {
       key: 'example-oracle',
       outcome: 'fail',
-      observationIds: [observation.observationId],
+      observationIds: [result.observationId],
       quote: result.quote,
-      quoteChannel: 'stdout',
+      quoteChannel: result.quoteChannel,
+      ...(result.quoteChannel === 'artifact' ? { artifactId: result.artifactId } : {}),
       confidence: 1,
       comment: result.comment,
     };
