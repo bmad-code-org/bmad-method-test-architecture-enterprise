@@ -1517,10 +1517,12 @@ function checkFrameworkTemplate(template, fixtureName, evaluationName, executabl
         observations: [{ observationId: 'reference-test', stdout: { kind: 'text', value: `trajectory: ${JSON.stringify(reference)}` } }],
       });
       fs.writeFileSync(path.join(evaluation, 'evaluator', 'reference', 'untracked.json'), JSON.stringify(reference));
+      fs.writeFileSync(path.join(evaluation, 'evaluator', 'reference', 'trajectory*.json'), JSON.stringify(reference));
       fs.symlinkSync(outside, path.join(evaluation, 'evaluator', 'reference', 'linked.json'));
       for (const [argument, reason] of [
         ['--reference=../outside.json', /under evaluator\/reference/],
         ['--reference=reference/untracked.json', /git must track/],
+        ['--reference=reference/trajectory*.json', /git must track/],
         ['--reference=reference/linked.json', /regular file.*no linked path/],
       ]) {
         const rejected = spawnSync(process.execPath, [destination, argument], {

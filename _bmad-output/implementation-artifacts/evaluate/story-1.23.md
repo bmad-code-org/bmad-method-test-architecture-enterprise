@@ -4,7 +4,7 @@ type: 'feature'
 created: '2026-09-27'
 status: 'in-review'
 route: 'dispatch'
-review_loop_iteration: 3
+review_loop_iteration: 4
 baseline_commit: '8c260be057b089d14fd9f696e8c504fd35f1ee6f'
 context:
   - '_bmad-output/planning-artifacts/evaluate/epics.md'
@@ -70,6 +70,7 @@ context:
 - During the full gate, `test:evaluate-mutation` printed success but held its process open for its interrupted-run timeout. The test now clears that deadline when the child closes, preserving the timeout failure case. A focused wrapper observed exit 11 ms after the success line and failed if that gap exceeded 5 seconds.
 - Review fixes require stable promptfoo assertion metrics and complete normal-run mapping coverage. The guidance gate now exercises both templates' optional selection arguments, reordered results, ambiguity rejection, empty-output evidence, and output-to-observation binding. The guide adds runnable sealed-agent and records configuration details and records framework versions in the digested evaluator tree.
 - Final source review closed AgentEvals reference containment and incomplete mismatch evidence, promptfoo trailing-whitespace binding, the rubric judge transition, and the current Stage 7 versus later scored-proof instruction. Stories 1.43 and 1.44 carry the two inherited evaluator-provenance risks into separate acceptance gates.
+- A further reference-path review found that Git interpreted a filename containing `*` as a path pattern. The guidance gate reproduced acceptance of an untracked literal file. The template now asks Git for a literal path, and the same gate rejects that case.
 
 ## Spec Change Log
 
@@ -118,6 +119,12 @@ The first full `npm test` after review fixes reached `test:boundary` and failed 
 | Stage 7 directs a fresh adopter to run and score before later mutation/run stages exist             | Valid          | Make `check` and `preflight` current work; reserve full scored proof for the later stages.                                                                    |
 | An ungraded promptfoo error becomes a scored target failure                                         | Follow-up 1.43 | Story 1.20 explicitly requires this behavior. The new story changes that established contract and proves evaluator errors cannot count as caught defects.     |
 | An installed framework version can drift while a stale manual version record leaves the same digest | Follow-up 1.44 | Story 1.23 tells the adopter to update its tracked version record. The new story binds installed dependency identity independently of that manual record.     |
+
+### Round 4
+
+| Finding                                                                   | Verdict | Resolution                                                                                                      |
+| ------------------------------------------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------- |
+| Git pathspec matching can accept an untracked reference filename with `*` | Valid   | Use Git's literal pathspec form and test the untracked wildcard filename against a real tracked reference file. |
 
 ## Verification
 

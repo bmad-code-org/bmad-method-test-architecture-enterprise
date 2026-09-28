@@ -34,7 +34,10 @@ if (
 }
 const git = spawnSync('git', ['rev-parse', '--is-inside-work-tree'], { cwd: directory, encoding: 'utf8' });
 if (git.status === 0 && git.stdout.trim() === 'true') {
-  const tracked = spawnSync('git', ['ls-files', '--error-unmatch', '--', referenceFile], { cwd: directory, encoding: 'utf8' });
+  const tracked = spawnSync('git', ['ls-files', '--error-unmatch', '--', `:(literal)${referenceFile}`], {
+    cwd: directory,
+    encoding: 'utf8',
+  });
   if (tracked.status !== 0) throw new Error(`git must track evaluator/${referenceFile}; run git add on the reference`);
 }
 const referenceOutputs = JSON.parse(fs.readFileSync(referencePath, 'utf8'));
