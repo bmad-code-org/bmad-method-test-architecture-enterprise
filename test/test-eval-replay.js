@@ -392,7 +392,7 @@ const ATDD_GROUND_TRUTH = path.join(__dirname, 'fixtures', 'atdd-eval', 'ground-
  * the matrix at its new path. No test-review, fragment-selection, test-design,
  * routing, ci, atdd or nfr case moved.
  */
-const SCORER_VERSION = 14;
+const SCORER_VERSION = 15;
 
 const colors = {
   reset: '[0m',

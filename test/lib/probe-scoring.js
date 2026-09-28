@@ -74,7 +74,12 @@ const { buildPrompt: buildCiPrompt } = require('../eval-ci');
 // prompt selects nothing and the record is scored against no evidence at all.
 const { buildPrompt: buildRoutingPrompt, correctRoutingAnswer } = require('../eval-bmad-tea-routing');
 const { ROUTING_CONTRACTS } = require('../../tools/generate-contracts');
-const { buildPrompt: buildTestDesignPrompt } = require('../eval-test-design');
+const {
+  buildPrompt: buildTestDesignPrompt,
+  designArtifactPaths: testDesignArtifactPaths,
+  readDesign: readTestDesign,
+  scoredRiskProjection,
+} = require('../eval-test-design');
 const {
   evaluatorConfiguration,
   isolationManifest,
@@ -507,7 +512,7 @@ async function storedDesign(caseId) {
 }
 
 /**
- * One stored test design, as the single text artifact this operation declares.
+ * One stored test design with the same companion the live runner writes.
  *
  * The document is passed in rather than read here, so a caller with several legs
  * over one stored case reads it once. Everything below it is pure.
@@ -519,7 +524,14 @@ function testDesignArtifacts(text, designLevel, epicNum) {
   // here from the level the leg asked for. A leg asking for `full` and a leg asking
   // for `minimal` then differ in exactly that line, which is what the witness claims.
   const scoped = text.replace(/^(# .*\n)/, `$1\n**Scope:** ${designLevel} test design for Epic ${epicNum}\n`);
-  return { design: { kind: 'text', value: scoped } };
+  const read = readTestDesign({ kind: 'text', value: scoped });
+  return {
+    design: { kind: 'text', value: scoped },
+    'scored-risks': {
+      kind: 'json',
+      value: scoredRiskProjection(read.ok ? read.design : { risks: [], text: scoped }),
+    },
+  };
 }
 
 /**
@@ -553,6 +565,7 @@ async function testDesignEvidence(contract) {
       observationId: `design-${set.id}-run`,
       projectRoot: set.projectRoot,
       epicNum: set.epicNum,
+      designPath: testDesignArtifactPaths(set).design,
       step,
       prompt,
     };
@@ -594,7 +607,7 @@ async function testDesignEvidence(contract) {
           observationId: leg.observationId,
           sequence: index + 1,
           operationId: leg.step.operationId,
-          callInputs: { option: { agent: 'claude' }, stdin: { prompt: leg.prompt } },
+          callInputs: { option: { agent: 'claude', 'design-path': leg.designPath }, stdin: { prompt: leg.prompt } },
           stdout: { kind: 'text', value: '' },
           stderr: { kind: 'text', value: '' },
           exitCode: 0,

@@ -107,6 +107,7 @@
 'use strict';
 
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 
 const { parseSelection } = require('../cli/lib/parse-selection');
@@ -154,8 +155,10 @@ const {
 // oracle and the harness predicate it is paired with, so it is imported rather
 // than restated here.
 const { testDesignOracleSpecs, testDesignStepId } = require('../tools/generate-contracts');
+const { writeScoredRiskProjection } = require('../cli/test-design-runner');
 const {
   readDesign: readTestDesign,
+  scoredRiskProjection,
   scoreRun: scoreTestDesignRun,
   loadGroundTruth: loadTestDesignGroundTruth,
   TEST_DESIGN_OPERATION,
@@ -823,12 +826,8 @@ async function checkRoutingOracles(evaluator) {
 // ---------------------------------------------------------------------------
 
 /**
- * One stored test-design run as the artifact a probe observation would carry.
- *
- * The deliverable is markdown, so the adapter tags it `text` and there is nothing
- * else on the observation to read. That is the whole reason this contract's oracles
- * are what they are; see the comment above testDesignOracleSpecs in
- * tools/generate-contracts.js.
+ * One stored test-design run as the Markdown artifact a probe observation carries.
+ * The runner derives its JSON companion from this body with the scorer's parser.
  */
 function testDesignArtifactOf(directory, expected) {
   const designPath = path.join(directory, expected.storedOutput?.design ?? 'design.md');
@@ -839,16 +838,12 @@ function testDesignArtifactOf(directory, expected) {
  * Evaluate every test-design oracle over every stored document and compare each
  * answer with the harness predicate the generator paired it with.
  *
- * Each spec's `scorer` reads `documentMentions`, the harness's own document-global
- * predicate, rather than the row-scoped scored result. That is deliberate and it is
- * what makes this comparison meaningful: an oracle over a markdown body cannot tell
- * which row a token sits in, so pairing it with the row-scoped answer would make the
- * two agree by coincidence on whatever this corpus happens to hold.
+ * Material specs read document-wide vocabulary. Unsupported specs read a scored
+ * register row above the 1–3 guard band, paired with the harness's same predicate.
  *
  * A green run here therefore says the contract and the harness agree about which
- * vocabulary a document carries. It does not say the suite passed, and it says
- * nothing about the arithmetic, the band placement, the coverage mapping or the
- * priority ordering, all of which only the harness checks.
+ * vocabulary the document carries and which excluded risks it scores. Arithmetic,
+ * band placement, coverage mapping and priority ordering remain harness checks.
  */
 async function checkTestDesignOracles(evaluator) {
   console.log('\ntest-design.contract.json over every stored test design');
@@ -861,6 +856,30 @@ async function checkTestDesignOracles(evaluator) {
     'the contract declares exactly the oracles the generator specifies, in order',
     `${contract.oracles.length} on disk, ${specs.length} specified`,
   );
+  const probes = readJson(path.join(__dirname, 'probes', 'test-design.probes.json'), 'the test-design probes');
+  const repoint = (node, from, to) => {
+    if (Array.isArray(node)) return node.map((entry) => repoint(entry, from, to));
+    if (node === null || typeof node !== 'object') return node;
+    return Object.fromEntries(
+      Object.entries(node).map(([key, value]) => [
+        key,
+        key === 'pointer' && (value === from || value.startsWith(`${from}/`))
+          ? `${to}${value.slice(from.length)}`
+          : repoint(value, from, to),
+      ]),
+    );
+  };
+  for (const spec of specs.filter((entry) => entry.kind === 'unsupported-vocabulary')) {
+    const probe = probes.find((entry) => entry.behaviorId === spec.id.replace('O-', 'B-'));
+    const witness = probe?.defects?.[0]?.manifestationWitness;
+    const originalPointer = spec.oracle.direction.evidenceTargets[0].replace(/\/scoredRiskDescriptions$/, '');
+    const legPointer = `/interactions/${witness?.legId}/artifact/scored-risks`;
+    const expected = repoint(spec.oracle.check.operands[0], originalPointer, legPointer);
+    assert(
+      JSON.stringify(witness?.relation?.operands?.[1]) === JSON.stringify(expected),
+      `${spec.id}: manifestation witness is the negation of its oracle on the manifestation leg`,
+    );
+  }
 
   const categories = new Set(groundTruth.riskCategories ?? []);
   const setsById = new Map((groundTruth.fixtureSets ?? []).map((set) => [set.id, set]));
@@ -876,10 +895,16 @@ async function checkTestDesignOracles(evaluator) {
     // Every set's oracles over this document. The set the document was frozen from
     // is the agreement check proper; the other set is the document seen as a wrong
     // answer to a different question, which is what makes an oracle resolve false.
+    const parsed = readTestDesign(artifact);
+    const scoredRisks = parsed.ok ? { kind: 'json', value: scoredRiskProjection(parsed.design) } : { kind: 'absent' };
     for (const set of groundTruth.fixtureSets ?? []) {
       const stepId = testDesignStepId(set);
       const results = evaluateOracles(evaluator, contract, {
-        [stepId]: observation({ operationId: TEST_DESIGN_OPERATION, exitCode: 0, artifacts: { design: artifact } }),
+        [stepId]: observation({
+          operationId: TEST_DESIGN_OPERATION,
+          exitCode: 0,
+          artifacts: { design: artifact, 'scored-risks': scoredRisks },
+        }),
       });
       const read = readTestDesign(artifact);
       const own = specs.filter((spec) => spec.setId === set.id);
@@ -916,6 +941,163 @@ async function checkTestDesignOracles(evaluator) {
         evaluated += 1;
       }
     }
+  }
+  const seeded = setsById.get('seeded-offline-order-capture');
+  const excluded = specs.find((spec) => spec.setId === seeded.id && spec.riskId === 'cross-tenant-data-leak');
+  assert(excluded?.id === 'O-008', 'the guard cases address O-008');
+  const marker = 'A queued order from one organization could be applied to another organization, so tenant isolation must be proven.';
+  const register = (description, probability, impact, score, action) =>
+    '# Test Design: Epic 7\n\n### Risk Register (Score 1-9)\n\n' +
+    '| Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+    '| --- | --- | --- | --- | --- | --- | --- |\n' +
+    `| R-001 | SEC | ${description} | ${probability} | ${impact} | ${score} | ${action} |\n`;
+  const examples = [
+    { label: 'Document guard', document: register(marker, 1, 2, 2, 'Document'), mentioned: false },
+    { label: 'top of Document guard band', document: register(marker, 1, 3, 3, 'Document'), mentioned: false },
+    { label: 'scored invented risk', document: register(marker, 2, 2, 4, 'Test'), mentioned: true },
+    { label: 'scored row with Document action', document: register(marker, 2, 2, 4, 'Document'), mentioned: true },
+    {
+      label: 'reordered scored columns',
+      document:
+        '# Test Design: Epic 7\n\n### Risk Register (Score 1-9)\n\n' +
+        '| Score | Description | Risk ID | Category | Impact | Probability | Action |\n' +
+        '| --- | --- | --- | --- | --- | --- | --- |\n' +
+        `| 4 | ${marker} | R-001 | SEC | 2 | 2 | Test |\n`,
+      mentioned: true,
+    },
+    {
+      label: 'decorated score column',
+      document:
+        '# Test Design: Epic 7\n\n### Risk Register (Score 1-9)\n\n' +
+        '| Risk ID | Category | Description | Probability | Impact | Score (P×I) | Action |\n' +
+        '| --- | --- | --- | --- | --- | --- | --- |\n' +
+        `| R-001 | SEC | ${marker} | 2 | 2 | 4 | Test |\n`,
+      mentioned: true,
+    },
+    {
+      label: 'escaped pipe before scored risk columns',
+      document:
+        '# Test Design: Epic 7\n\n### Risk Register (Score 1-9)\n\n' +
+        '| Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '| --- | --- | --- | --- | --- | --- | --- |\n' +
+        `| R-001 | SEC | Local queue \\| ${marker} | 2 | 2 | 4 | Test |\n`,
+      mentioned: true,
+    },
+    {
+      label: 'table without outer pipes',
+      document:
+        '# Test Design: Epic 7\n\n### Risk Register (Score 1-9)\n\n' +
+        'Risk ID | Category | Description | Probability | Impact | Score | Action\n' +
+        '--- | --- | --- | --- | --- | --- | ---\n' +
+        `R-001 | SEC | ${marker} | 2 | 2 | 4 | Test\n`,
+      mentioned: true,
+    },
+    {
+      label: 'fenced scored example',
+      document:
+        register('The local queue is checked before upload.', 1, 2, 2, 'Document') +
+        '\n```markdown\n' +
+        '| Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '| --- | --- | --- | --- | --- | --- | --- |\n' +
+        `| R-002 | SEC | ${marker} | 2 | 2 | 4 | Test |\n` +
+        '```\n',
+      mentioned: false,
+    },
+    {
+      label: 'shorter fence inside a long fenced example',
+      document:
+        register('The local queue is checked before upload.', 1, 2, 2, 'Document') +
+        '\n````markdown\n```\n' +
+        '| Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '| --- | --- | --- | --- | --- | --- | --- |\n' +
+        `| R-002 | SEC | ${marker} | 2 | 2 | 4 | Test |\n` +
+        '````\n',
+      mentioned: false,
+    },
+    {
+      label: 'prose and fenced example',
+      document:
+        register('The local queue is checked before upload.', 1, 2, 2, 'Document') + `\n${marker}\n\n\`\`\`text\n${marker}\n\`\`\`\n`,
+      mentioned: false,
+    },
+  ];
+  for (const example of examples) {
+    const artifact = { kind: 'text', value: example.document };
+    const read = readTestDesign(artifact);
+    assert(read.ok, `${example.label}: the register parses`);
+    if (!read.ok) continue;
+    const scored = scoreTestDesignRun(seeded, read.design, categories);
+    const results = evaluateOracles(evaluator, contract, {
+      [testDesignStepId(seeded)]: observation({
+        operationId: TEST_DESIGN_OPERATION,
+        exitCode: 0,
+        artifacts: { design: artifact, 'scored-risks': { kind: 'json', value: scoredRiskProjection(read.design) } },
+      }),
+    });
+    assert(scored.mentions[excluded.riskId] === example.mentioned, `${example.label}: the harness reads the scored row`);
+    assert(
+      scored.ungrounded.some((entry) => entry.unsupportedId === excluded.riskId) === example.mentioned,
+      `${example.label}: the scored result agrees with the mention predicate`,
+    );
+    assert(
+      agrees(results.get(excluded.id), !example.mentioned),
+      `${example.label}: O-008 ${example.mentioned ? 'fires' : 'stays unfired'}`,
+      describe(results.get(excluded.id)),
+    );
+  }
+  // The runner's companion artifact is derived by the scorer's exact parser.
+  // Exclusive sidecar creation and realpath checks keep agent-created links
+  // from changing a file outside the staged workspace.
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-scored-risks-'));
+  try {
+    const workspace = path.join(temporary, 'workspace');
+    const relative = 'field-order-capture/test-artifacts/test-design/test-design-epic-7.md';
+    const designPath = path.join(workspace, relative);
+    const sidecar = designPath.replace(/\.md$/, '.scored-risks.json');
+    fs.mkdirSync(path.dirname(designPath), { recursive: true });
+    const document = examples.find((example) => example.label === 'reordered scored columns').document;
+    fs.writeFileSync(designPath, document);
+    assert(writeScoredRiskProjection(workspace, relative), 'runner writes the projection after a design appears');
+    assert(
+      JSON.stringify(JSON.parse(fs.readFileSync(sidecar, 'utf8'))) ===
+        JSON.stringify(scoredRiskProjection(readTestDesign({ kind: 'text', value: document }).design)),
+      'runner projection equals the scorer parser projection',
+    );
+    const invalidDesign = path.join(path.dirname(designPath), 'test-design-epic-9.md');
+    fs.writeFileSync(invalidDesign, '# Test Design without a risk register\n');
+    let parseRejected = false;
+    try {
+      writeScoredRiskProjection(workspace, path.relative(workspace, invalidDesign));
+    } catch {
+      parseRejected = true;
+    }
+    assert(parseRejected, 'runner rejects a design the shared parser cannot score');
+    assert(!fs.existsSync(invalidDesign.replace(/\.md$/, '.scored-risks.json')), 'runner writes no sidecar for a rejected design');
+    const outside = path.join(temporary, 'outside.md');
+    fs.writeFileSync(outside, document);
+    const linkedDesign = path.join(path.dirname(designPath), 'test-design-epic-8.md');
+    fs.symlinkSync(outside, linkedDesign);
+    let escapedDesignRejected = false;
+    try {
+      writeScoredRiskProjection(workspace, path.relative(workspace, linkedDesign));
+    } catch {
+      escapedDesignRejected = true;
+    }
+    assert(escapedDesignRejected, 'runner rejects an agent-created design symlink outside the workspace');
+    const outsideSidecar = path.join(temporary, 'outside.json');
+    fs.writeFileSync(outsideSidecar, 'untouched');
+    fs.rmSync(sidecar);
+    fs.symlinkSync(outsideSidecar, sidecar);
+    let linkedSidecarRejected = false;
+    try {
+      writeScoredRiskProjection(workspace, relative);
+    } catch {
+      linkedSidecarRejected = true;
+    }
+    assert(linkedSidecarRejected, 'runner refuses an agent-created sidecar symlink');
+    assert(fs.readFileSync(outsideSidecar, 'utf8') === 'untouched', 'runner leaves the symlink target untouched');
+  } finally {
+    fs.rmSync(temporary, { recursive: true, force: true });
   }
   // Every oracle but the shape one has to have been seen failing somewhere, or this
   // check has only ever confirmed that a correct run passes.

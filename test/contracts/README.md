@@ -208,27 +208,20 @@ also what the two contracts cost: each step carries the whole assembled prompt, 
 its menu read off disk, so the pair is about 420 kilobytes of mostly repeated bytes. That is the price
 of the binding being correct, and it is paid by a generated file rather than by a reader.
 
-## `test-design.contract.json` states the weak reading, and says so
+## `test-design.contract.json` reads vocabulary at its declared scope
 
-One honest limitation shapes every oracle in this contract, so it is recorded first.
+`bmad-testarch-test-design` declares one epic-level deliverable: `{test_artifacts}/test-design/test-design-epic-{epic_num}.md`.
+The runner creates an internal JSON companion after the agent finishes. It uses the same parser as the harness and carries the original Markdown, descriptions from risk rows scored above 3, and their count. The parser maps score and description columns by header and skips fenced examples. The companion is evaluator evidence; the workflow still produces one Markdown deliverable.
 
-`bmad-testarch-test-design` declares one deliverable in the epic-level mode this contract exercises, and it is prose: `{test_artifacts}/test-design/test-design-epic-{epic_num}.md`, with nothing machine-readable beside it.
-`bmad-testarch-trace` is the contrast that makes the gap legible.
-It writes `e2e-trace-summary-{run_key}.json` beside its markdown matrix, which is why `trace.contract.json` can state the matrix's content through the arithmetic consequences the summary carries and declare the matrix a volatile pointer.
-Test-design has no summary to point its oracles at.
-
-So every oracle in this contract addresses the document as a whole, and the generator pairs each one with `documentMentions`, `test/eval-test-design.js`'s own document-global predicate, rather than with the row-scoped scorer result.
-That makes the agreement `test/test-contract-oracles.js` checks true by construction.
-Pairing an oracle with the row-scoped result would make the two agree by coincidence on whatever the replay corpus happens to hold, which reads as coverage and holds nothing.
+Material-risk vocabulary is read from the original document text. Unsupported-risk vocabulary is read from one parsed scored-risk description at a time. The `for-any` check is guarded by the projected count, so an empty scored-risk collection passes the exclusion oracle while a missing companion yields insufficient evidence. `test/test-contract-oracles.js` compares both readings with the harness predicate on stored and constructed designs.
 
 What a green `test-contract-oracles.js` buys here is narrow, so it is worth stating plainly.
-It says the contract and the harness agree about which vocabulary the document carries.
-It does not say the suite passed, and it says nothing about the arithmetic or the mapping: the 1-3 scale, the arithmetic that makes a score the product of its own two factors, the band a row is filed under, the coverage level and the pairwise priority ordering are the harness's to check, because an oracle over a markdown body cannot tell which row a token sits in and cannot do arithmetic at all.
+It says the contract and the harness agree about material vocabulary in the document and unsupported vocabulary in scored risk rows. The 1-3 scale, score arithmetic, band placement, coverage levels and pairwise priority ordering remain harness checks.
 
 Fifteen oracles, in three kinds.
 One `run-measured` per fixture set asserts the document carries a table cell holding an `R-NNN` identifier, which is the shape the harness reads rows out of, and a document with none is refused before it is scored at all.
 One `material-vocabulary` per material risk, five on the seeded set and none on the clean one, asserts the document reaches the deciding vocabulary of a risk the epic supports in as many words.
-One `unsupported-vocabulary` per ruled-out risk, four on each set, asserts the document does not reach a risk the epic rules out.
+One `unsupported-vocabulary` per ruled-out risk, four on each set, asserts that no risk row scored above 3 describes a risk the epic rules out.
 The two `run-measured` behaviors grade `material` and the other thirteen grade `critical`.
 Each token group becomes one anchored, case-insensitive regex whose spaces are `\s+`, and a matcher's groups are conjoined with `all`: `matchesGroups` lowercases and collapses whitespace before it searches, and without the `\s+` a token like "feature flag" would miss wherever the document wrapped the line between the two words, and the oracle would disagree with its own scorer.
 No lookahead and no backreference anywhere, for the reason the regex limit below records.
@@ -301,7 +294,7 @@ pipeline file, is machine-parseable YAML and the harness reads it structurally, 
 vocabulary still cannot bind a literal to the job or step that carries it, so its oracles state plain
 substring claims rather than the harness's real per-element check. Each is paired with
 `workflowMentions`, `test/eval-ci.js`'s own document-global predicate, the same idiom `test-design`'s
-oracles use and for the same reason: pairing an oracle with the row-scored `checkElement` result would
+material-risk oracles use and for the same reason: pairing an oracle with the row-scored `checkElement` result would
 make the two agree by coincidence on whatever the replay corpus happens to hold, and pairing it with
 the same document-global function the oracle itself restates makes the agreement true by construction.
 Whether a shard count is four, whether a `needs:` chain actually reaches the lint job, and everything
@@ -348,7 +341,7 @@ The oracle check is the one that reads the oracles. It evaluates every oracle in
 `eval-quality`'s own evaluator, loaded from the installed package, over evidence this repository
 already holds: each stored verdict under `test/replay/test-review/` as one observation of the
 `review-corpus` step, each fragment-selection case over three constructed selections and the stored
-captures, each stored test design under `test/replay/test-design/` as the `design` artifact of its
+captures, each stored test design under `test/replay/test-design/` as its Markdown artifact and parsed JSON companion in
 fixture set's plan step, each stored trace run under `test/replay/trace/` as one observation of its
 fixture set's plan step, and each stored NFR run under `test/replay/nfr/` as one observation of its
 evidence bundle's plan step, the last three evaluated under both of their suite's sets so that every
@@ -356,7 +349,7 @@ test-design, trace and nfr oracle is also seen failing. Each answer is compared 
 scorer's on the same evidence: a plant oracle holds exactly when `scoreVerdict` counts the plant as a
 hit, the scope oracle exactly when it counts no finding as out of
 scope, a containment oracle exactly when `scoreCase` misses nothing, each test-design oracle exactly
-when `documentMentions` says the document carries that risk's vocabulary, and each trace oracle exactly
+when `documentMentions` says its declared document or scored-row scope carries that risk's vocabulary, and each trace oracle exactly
 when the `scoreRun` checks it restates all pass, through a correspondence `tools/generate-contracts.js`
 writes beside the oracle. Two trace exceptions are stated in that check's header: the waiver oracles
 are compared only where the harness scored them, because it skips the waiver block when the gate did

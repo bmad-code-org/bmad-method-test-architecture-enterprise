@@ -105,13 +105,16 @@ const EXECUTION_TARGETS = [
     executable: 'tea-test-design-runner',
     target: 'cli/test-design-runner.js',
     subcommandPaths: [[]],
-    // The one deliverable the epic-level test-design workflow writes, at the
-    // workflow's own default location relative to the project root. A caller
+    // The epic-level workflow's Markdown deliverable and the runner's companion,
+    // at their default locations relative to the project root. A caller
     // whose project root is not the run directory, which is every staged eval
     // workspace, supplies its own path through `commandTargetPolicy`'s artifact
     // override; this is what a run gets when it supplies none. The epic number
     // is the workflow's own placeholder and a caller always overrides it.
-    artifacts: { design: 'test-artifacts/test-design/test-design-epic-1.md' },
+    artifacts: {
+      design: 'test-artifacts/test-design/test-design-epic-1.md',
+      'scored-risks': 'test-artifacts/test-design/test-design-epic-1.scored-risks.json',
+    },
     // The same list the other three carry: every variable a shipped vendor
     // adapter consumes, plus HOME and USER, because both shipped vendors resolve
     // a stored login through HOME. The contract declares the same set, and

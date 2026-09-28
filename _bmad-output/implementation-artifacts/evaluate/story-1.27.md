@@ -1,0 +1,107 @@
+---
+title: 'Tell a documented guard from an invented risk in the test-design contract'
+type: 'bugfix'
+created: '2026-09-28'
+status: 'done'
+route: 'dispatch'
+review_loop_iteration: 0
+baseline_commit: 'a2a032587e72f1c36b265dcb261dab160ba21d99'
+context:
+  - '_bmad-output/planning-artifacts/evaluate/epics.md'
+  - '_bmad-output/planning-artifacts/evaluate/test-design-epic-1.md'
+  - '_bmad-output/implementation-artifacts/evaluate/story-1.7.md'
+---
+
+<frozen-after-approval reason="Owner delegated Story 1.27 and the Evaluate relay grants build authority">
+
+## Intent
+
+**Problem:** The test-design contract treats a ruled-out risk mentioned anywhere in a document as an invented risk. Live designs put these categories in low-score “Document” guard rows, causing six test-design preflight outcomes to differ from the stored baseline.
+
+**Approach:** Read unsupported categories in scored risk-register rows and count them only above the score 1–3 guard band. Keep the contract, scorer, probes and stored replay evidence aligned, then prove the staged live preflight matches its baseline.
+
+## Boundaries & Constraints
+
+**Always:** Preserve the probe generator's witness as the exact negation of its oracle. Generate the contract and probe artifacts from their sources. Keep the risk parser, oracle and replay results consistent. Exercise each acceptance check against a local revert.
+
+**Never:** Edit generated JSON by hand or weaken material-risk checks. Change the test-design skill unless its instructions prove to be the source of the live behavior.
+
+## I/O & Edge-Case Matrix
+
+| Scenario      | Input / State                                                                    | Expected Output / Behavior                     | Error Handling                                                           |
+| ------------- | -------------------------------------------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------ |
+| Guard         | Ruled-out category in a scored register row with score 1–3 and “Document” action | O-008 remains unfired                          | A row absent from the register cannot be counted as an invented risk     |
+| Invented risk | Same category in a scored register row above 3                                   | O-008 fires and its negated witness detects it | A seeded replay with an above-band risk remains a valid mutation witness |
+| Prose         | Ruled-out category in prose or a fenced example only                             | Exclusion oracle stays unfired                 | The harness and oracle must agree on the reading                         |
+
+</frozen-after-approval>
+
+## Code Map
+
+- `tools/generate-contracts.js`: `testDesignOracleSpecs` owns O-008 to O-010 and O-012 to O-014; change its unsupported-risk reading. Keep supported-risk vocabulary behavior.
+- `test/eval-test-design.js`: `readRisks` parses register rows; `documentMentions` and `scoreTestDesignRun` currently count unsupported vocabulary globally or in every row. Align the unsupported predicate with the guard band.
+- `tools/generate-probes.js`: `buildTestDesignProbes` selects replay violations and negates contract checks. Regenerate after the oracle and replay changes; preserve equality by construction.
+- `test/test-contract-oracles.js`: evaluate the clean guard and above-band risk through eval-quality, then compare with the harness. Keep stored-run agreement checks.
+- `test/replay/test-design/`, `test/contracts/test-design.contract.json`, `test/probes/test-design.probes.json`, `test/probes/expected-strength.json`: update the seeded risk's score, replay results and generated artifacts together.
+- `test/eval-contract-strength.js`: staged live `--suite test-design --preflight-only` command; its final result must match the baseline.
+
+## Tasks & Acceptance
+
+**Execution:**
+
+- [x] Update the row-scoped unsupported-risk predicate in the generated contract and scorer. Keep the 1–3 guard band explicit.
+- [x] Add oracle cases for a “Document” guard, a scored invented risk and prose-only mention. Preserve witness negation and rerun the generators.
+- [x] Bring stored replay documents and expected results into agreement with the new predicate; regenerate contract, probes and baseline.
+- [x] Run `test:contracts`, `test:contract-oracles`, `test:probe-corpus`, the suite-only staged live preflight and `npm test`; update changelog and sprint status.
+
+**Acceptance Criteria:**
+
+- Given the same ruled-out category in a guard row and a row scored above 3, when O-008 is evaluated, then it stays unfired for the guard and fires for the scored risk; reverting the predicate fails an oracle case.
+- Given a test-design probe, when the corpus is regenerated, then its manifestation witness equals the negation of its oracle and the contract, probes and stored replays agree; reverting one source fails a generator or corpus gate.
+- Given the staged test-design harness, when the suite-only preflight runs, then every probe reduces to `test/probes/expected-strength.json`; reverting the fix reproduces a live mismatch.
+
+## Implementation Notes
+
+- The fix belongs in the contract and scorer. `src/workflows/testarch/bmad-testarch-test-design/steps-c/step-03-risk-and-testability.md` already directs the skill to ground risks in the epic and put unsupported concerns outside the register. Story 1.7's staged documents show the skill still wrote low-score Document rows. The contract needed to recognize those rows as guards.
+- Unsupported-risk oracles now inspect scored register rows and count a match only above score 3. Material-risk vocabulary keeps its existing document-wide reading. The scorer uses the same threshold for `mentions` and `ungrounded`.
+- The generic replay keeps its score-2 browser guard. A new one-row mutation of the seeded correct run scores that category at 4, providing a violation for O-009. Replay results were recorded at scorer version 15. The contract, probes and expected-strength baseline were regenerated from their sources.
+- The fresh baseline live attempt before edits stopped while its first leg was running and produced no verdict. Story 1.7 records the six pre-change mismatches. With the fix, the suite-only staged preflight answered 46 legs from the content-derived cache and matched all 16 baseline outcomes. With the old oracle predicate restored locally, the same preflight reported those six mismatches again.
+- Local revert checks: restoring the old oracle predicate and regenerating the contract made `test:contract-oracles` fail the Document guard and prose cases; the staged preflight exited 2 with P-008 to P-010 and P-012 to P-014 moved. Restoring the old probe generator source made `node tools/generate-probes.js --check` fail on the test-design probe artifact. The fixed sources and generated artifacts were restored after each check.
+- The first `npm test` run exposed an end-to-end probe-target assertion still expecting four invented risks in the generic replay. The score-2 Document row now counts as a guard, so `test/test-probe-targets.js` expects three invented risks and confirms that guard is excluded. `npm run test:probe-targets` then exited 0.
+- The step-03 diff audit reproduced two further oracle disagreements: a scored table with reordered columns was missed, and a scored table inside a fenced example was counted. `test:contract-oracles` failed both cases before the parser-derived projection. The raw Markdown regex cannot align arbitrary header and row positions; eval-quality also rejects a fenced-block skipping pattern as `budget-exhausted` for a nested-quantifier shape.
+- The test-design runner now writes an internal JSON companion beside the Markdown deliverable. It carries the original document and descriptions of parsed risk rows scored above 3. Both runner and harness import `cli/lib/test-design-parser.js`, so reordered columns and fenced examples have one interpretation. The contract reads this structured companion through one descriptor; the workflow still produces its one Markdown deliverable. The runner creates the sidecar exclusively and rejects a design symlink that resolves outside the staged workspace.
+- `test:contract-oracles` now covers the two audit cases, checks the runner projection against the scorer parser, and verifies that design and sidecar symlinks cannot change an outside file. The 2,115 oracle assertions pass. The contract compiler, dependency direction gate and Evaluate boundary gate pass with the shared parser.
+- The runner's `design-path` option is required in contract requests, so generated live witness legs write the companion artifact. The corrected suite-only staged preflight ran one new witness leg through Claude Code in 339.9 seconds and reused 45 content-derived cache entries. All 16 outcomes matched `expected-strength.json`. Both cached witness observations now contain the companion artifact.
+- The regenerated strength baseline retains each probe's state. Its coverage metadata now reports `whole-body` as unsatisfied and repeats a contract-local qualification because eval-quality sees the original Markdown as a field of the structured companion. The document-wide oracles still evaluate the complete original Markdown through that field.
+- Review added shared-parser cases for decorated score headers, longer fences, escaped pipes and tables without outer pipes. It also made a failed parse stop sidecar creation, aligned the default target authorization with both contract artifacts, and exercised the returned sidecar through the real runner and stub adapter. `test:contract-oracles` passed 2,133 checks and `test:probe-targets` passed after those fixes.
+- Stories 1.47 and 1.48 carry the two review findings left open: reference-table context and eval-quality's whole-body coverage metadata. Story 1.16 had already assigned 1.46 to its dogfood coverage gaps. All three are recorded in the Epic 1 plan, test design and sprint backlog.
+- The repository commit hook reproduced an inherited-Git-environment defect in the Evaluate interpretation fixture: its nested `git init` and `git commit` followed the hook's repository variables and moved the outer branch to fixture commits. The story worktree was restored to the recorded baseline with its files intact. The fixture helper now strips inherited `GIT_*` values from its child processes, and the interpretation test poisons those values while creating a scratch project. The focused interpretation gate passes.
+
+## Spec Change Log
+
+## Review Triage Log
+
+- Blind 1, `false`: the approved approach defines the guard by a stated score of 1–3; the Document action is an example of that band, and action text is outside the unsupported-risk predicate.
+- Blind 2, `false`: the exclusion oracle reads the stated score as specified. The harness reports probability-times-impact arithmetic errors through its separate shape check.
+- Blind 3, `medium`, `patch`: the moved parser's decorated-score fallback misses `Score (P×I)`, so the shared projection and scorer can both omit a real register. Accept that header and test it.
+- Blind 4, `medium`, `patch`: toggling on any fence marker allows a shorter marker inside a longer fence to expose an example table. Track fence character and opening width.
+- Blind 5, `maybe-false`, `defer`: the parser treats an unfenced table with risk ID and score columns as a register. Whether an unfenced reference table should be excluded depends on document context that this story does not define; an example with its expected scoring would settle it.
+- Blind 6, `medium`, `patch`: splitting at an escaped pipe shifts score cells and can exempt a scored invented risk. Parse escaped table separators correctly.
+- Blind 7, `medium`, `patch`: the shared parser skips a valid table without outer pipes, leaving the scored risk unread. Accept that Markdown table form and test it.
+- Blind 8, `medium`, `patch`: a failed design parse becomes a successful zero-risk sidecar. Make projection failure explicit so unsupported-risk oracles cannot report a guard-only document.
+- Blind 9 and Edge 1, `false`: `ungrounded` measures risk rows and precision uses the number of rows as its denominator. One row mentioning two exclusions is one ungrounded row; both category oracles still fire.
+- Blind 10, `low`, `defer`: eval-quality marks `whole-body` coverage unsatisfied because the full Markdown is a string field in the structured companion. The contract still evaluates that full string; a separate engine coverage representation would restore the metadata.
+- Blind 11, `low`, rejected: 201 scored rows already violate every fixture set's risk ceiling, so the 200-row descriptor cap cannot turn a valid run into a failure.
+- Blind 12, `false`: exclusive creation intentionally refuses an agent-planted sidecar; the run is classified as a parser failure and does not become a clean verdict.
+- Verification gap 1, `medium`, `patch`: direct writer tests do not prove the normal runner observation contains `scored-risks`. Assert the artifact in the stub-backed end-to-end harness run.
+- Verification gap 2, `medium`, `patch`: the default target policy maps only `design`, so callers using it cannot receive the new artifact. Add the sidecar map and a contract-alignment assertion.
+
+## Verification
+
+**Commands:** `npm run test:contracts`; `npm run test:contract-oracles`; `npm run test:probe-corpus`; `node test/eval-contract-strength.js --suite test-design --preflight-only`; `npm test`; engine export check from the epic build rules.
+
+**Observed before the full gate:** `test:contracts`, `test:contract-oracles`, `test:probe-corpus`, `test:eval-replay` and `test:probe-sources` exited 0. The suite-only staged live preflight exited 0: all 16 outcomes matched the stored baseline, with 46 legs answered from cache. The engine export check exited 0 at the start.
+
+**After the end-to-end assertion update:** `npm run test:probe-targets` and `npm run test:doc-invocations` exited 0. The engine export check exited 0 again, and `git diff -- package.json package-lock.json` was empty.
+
+**Final gate:** `npm test` exited 0 on the stable tree after the review patches and plan follow-ups. Its chained contract, oracle, probe, replay, probe-target, documentation, ESLint, markdownlint and Prettier checks passed. The exact suite-only staged live preflight exited 0 with all 16 outcomes matching baseline, 46 cache hits, and no new model calls. The engine export check and `npm run docs:validate-links` exited 0. `git diff -- package.json package-lock.json` is empty.

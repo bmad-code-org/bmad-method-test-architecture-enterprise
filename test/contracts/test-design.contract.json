@@ -121,9 +121,9 @@
     },
     {
       "id": "B-007",
-      "description": "seeded-offline-order-capture: the document does not carry payment-gateway-failure, which the epic rules out in as many words: \"the existing billing service charges the stored card reference on its own nightly schedule, and this epic does not touch it, call it, or change when it runs\" A risk list that reaches it is a list that would fit any feature, which is the whole failure this suite exists to catch.",
+      "description": "seeded-offline-order-capture: no scored risk-register row above the 1–3 guard band reports payment-gateway-failure, which the epic rules out: \"the existing billing service charges the stored card reference on its own nightly schedule, and this epic does not touch it, call it, or change when it runs\"",
       "severity": "critical",
-      "observableSuccessCriterion": "No risk the feature description rules out appears in the document.",
+      "observableSuccessCriterion": "No scored risk-register row above the 1–3 guard band reports a risk the feature description rules out.",
       "requirementLinks": [
         {
           "scheme": "tea-eval-ground-truth",
@@ -140,9 +140,9 @@
     },
     {
       "id": "B-008",
-      "description": "seeded-offline-order-capture: the document does not carry cross-tenant-data-leak, which the epic rules out in as many words: \"one customer organization per installation, with its own database and its own application servers\" A risk list that reaches it is a list that would fit any feature, which is the whole failure this suite exists to catch.",
+      "description": "seeded-offline-order-capture: no scored risk-register row above the 1–3 guard band reports cross-tenant-data-leak, which the epic rules out: \"one customer organization per installation, with its own database and its own application servers\"",
       "severity": "critical",
-      "observableSuccessCriterion": "No risk the feature description rules out appears in the document.",
+      "observableSuccessCriterion": "No scored risk-register row above the 1–3 guard band reports a risk the feature description rules out.",
       "requirementLinks": [
         {
           "scheme": "tea-eval-ground-truth",
@@ -159,9 +159,9 @@
     },
     {
       "id": "B-009",
-      "description": "seeded-offline-order-capture: the document does not carry browser-and-accessibility-regression, which the epic rules out in as many words: \"There is no browser surface and no web view in this epic\" A risk list that reaches it is a list that would fit any feature, which is the whole failure this suite exists to catch.",
+      "description": "seeded-offline-order-capture: no scored risk-register row above the 1–3 guard band reports browser-and-accessibility-regression, which the epic rules out: \"There is no browser surface and no web view in this epic\"",
       "severity": "critical",
-      "observableSuccessCriterion": "No risk the feature description rules out appears in the document.",
+      "observableSuccessCriterion": "No scored risk-register row above the 1–3 guard band reports a risk the feature description rules out.",
       "requirementLinks": [
         {
           "scheme": "tea-eval-ground-truth",
@@ -178,9 +178,9 @@
     },
     {
       "id": "B-010",
-      "description": "seeded-offline-order-capture: the document does not carry data-residency-compliance, which the epic rules out in as many words: \"Data residency is unchanged and is enforced by the platform's regional routing layer, which this epic does not modify.\" A risk list that reaches it is a list that would fit any feature, which is the whole failure this suite exists to catch.",
+      "description": "seeded-offline-order-capture: no scored risk-register row above the 1–3 guard band reports data-residency-compliance, which the epic rules out: \"Data residency is unchanged and is enforced by the platform's regional routing layer, which this epic does not modify.\"",
       "severity": "critical",
-      "observableSuccessCriterion": "No risk the feature description rules out appears in the document.",
+      "observableSuccessCriterion": "No scored risk-register row above the 1–3 guard band reports a risk the feature description rules out.",
       "requirementLinks": [
         {
           "scheme": "tea-eval-ground-truth",
@@ -216,9 +216,9 @@
     },
     {
       "id": "B-012",
-      "description": "clean-last-sync-indicator: the document does not carry data-loss-or-corruption, which the epic rules out in as many words: \"The settings store is opened read-only for this field, so no order, queue entry or setting can be altered or lost by it.\" A risk list that reaches it is a list that would fit any feature, which is the whole failure this suite exists to catch.",
+      "description": "clean-last-sync-indicator: no scored risk-register row above the 1–3 guard band reports data-loss-or-corruption, which the epic rules out: \"The settings store is opened read-only for this field, so no order, queue entry or setting can be altered or lost by it.\"",
       "severity": "critical",
-      "observableSuccessCriterion": "No risk the feature description rules out appears in the document.",
+      "observableSuccessCriterion": "No scored risk-register row above the 1–3 guard band reports a risk the feature description rules out.",
       "requirementLinks": [
         {
           "scheme": "tea-eval-ground-truth",
@@ -235,9 +235,9 @@
     },
     {
       "id": "B-013",
-      "description": "clean-last-sync-indicator: the document does not carry unauthorized-exposure, which the epic rules out in as many words: \"it is shown to the person holding the device, so the change exposes nothing to anyone who could not already see it, and it adds no personal data to the screen\" A risk list that reaches it is a list that would fit any feature, which is the whole failure this suite exists to catch.",
+      "description": "clean-last-sync-indicator: no scored risk-register row above the 1–3 guard band reports unauthorized-exposure, which the epic rules out: \"it is shown to the person holding the device, so the change exposes nothing to anyone who could not already see it, and it adds no personal data to the screen\"",
       "severity": "critical",
-      "observableSuccessCriterion": "No risk the feature description rules out appears in the document.",
+      "observableSuccessCriterion": "No scored risk-register row above the 1–3 guard band reports a risk the feature description rules out.",
       "requirementLinks": [
         {
           "scheme": "tea-eval-ground-truth",
@@ -254,9 +254,9 @@
     },
     {
       "id": "B-014",
-      "description": "clean-last-sync-indicator: the document does not carry render-performance-degradation, which the epic rules out in as many words: \"The single local key lookup runs on a screen that is already open, so the screen's existing render budget is unchanged.\" A risk list that reaches it is a list that would fit any feature, which is the whole failure this suite exists to catch.",
+      "description": "clean-last-sync-indicator: no scored risk-register row above the 1–3 guard band reports render-performance-degradation, which the epic rules out: \"The single local key lookup runs on a screen that is already open, so the screen's existing render budget is unchanged.\"",
       "severity": "critical",
-      "observableSuccessCriterion": "No risk the feature description rules out appears in the document.",
+      "observableSuccessCriterion": "No scored risk-register row above the 1–3 guard band reports a risk the feature description rules out.",
       "requirementLinks": [
         {
           "scheme": "tea-eval-ground-truth",
@@ -273,9 +273,9 @@
     },
     {
       "id": "B-015",
-      "description": "clean-last-sync-indicator: the document does not carry rollout-without-kill-switch, which the epic rules out in as many words: \"an existing feature flag the release process already toggles per organization, so it can be turned off without a new build\" A risk list that reaches it is a list that would fit any feature, which is the whole failure this suite exists to catch.",
+      "description": "clean-last-sync-indicator: no scored risk-register row above the 1–3 guard band reports rollout-without-kill-switch, which the epic rules out: \"an existing feature flag the release process already toggles per organization, so it can be turned off without a new build\"",
       "severity": "critical",
-      "observableSuccessCriterion": "No risk the feature description rules out appears in the document.",
+      "observableSuccessCriterion": "No scored risk-register row above the 1–3 guard band reports a risk the feature description rules out.",
       "requirementLinks": [
         {
           "scheme": "tea-eval-ground-truth",
@@ -301,13 +301,13 @@
         "relation": "regex",
         "scope": "The test design document written for seeded-offline-order-capture, taken whole.",
         "negativeDomain": "A run that wrote a document carrying no risk identifier in any table.",
-        "evidenceTargets": ["/interactions/design-seeded-offline-order-capture/artifact/design"]
+        "evidenceTargets": ["/interactions/design-seeded-offline-order-capture/artifact/scored-risks/design"]
       },
       "check": {
         "op": "regex",
         "operands": [
           {
-            "pointer": "/interactions/design-seeded-offline-order-capture/artifact/design"
+            "pointer": "/interactions/design-seeded-offline-order-capture/artifact/scored-risks/design"
           }
         ],
         "pattern": "^[\\s\\S]*\\|[^|\\n]*R-[0-9]{3}[^|\\n]*\\|[\\s\\S]*$"
@@ -322,7 +322,7 @@
         "relation": "all",
         "scope": "The test design document written for seeded-offline-order-capture, taken whole.",
         "negativeDomain": "A run whose document never names sec-unencrypted-offline-queue in any of the terms the epic grounds it in.",
-        "evidenceTargets": ["/interactions/design-seeded-offline-order-capture/artifact/design"]
+        "evidenceTargets": ["/interactions/design-seeded-offline-order-capture/artifact/scored-risks/design"]
       },
       "check": {
         "op": "all",
@@ -331,7 +331,7 @@
             "op": "regex",
             "operands": [
               {
-                "pointer": "/interactions/design-seeded-offline-order-capture/artifact/design"
+                "pointer": "/interactions/design-seeded-offline-order-capture/artifact/scored-risks/design"
               }
             ],
             "pattern": "^[\\s\\S]*(?:[Uu][Nn][Ee][Nn][Cc][Rr][Yy][Pp][Tt][Ee][Dd]|[Nn][Oo][Tt]\\s+[Ee][Nn][Cc][Rr][Yy][Pp][Tt][Ee][Dd]|[Pp][Ll][Aa][Ii][Nn][Tt][Ee][Xx][Tt]|[Pp][Ll][Aa][Ii][Nn]\\s+[Tt][Ee][Xx][Tt]|[Cc][Ll][Ee][Aa][Rr][Tt][Ee][Xx][Tt]|[Ee][Nn][Cc][Rr][Yy][Pp][Tt][Ii][Oo][Nn]|[Ee][Nn][Cc][Rr][Yy][Pp][Tt])[\\s\\S]*$"
@@ -340,7 +340,7 @@
             "op": "regex",
             "operands": [
               {
-                "pointer": "/interactions/design-seeded-offline-order-capture/artifact/design"
+                "pointer": "/interactions/design-seeded-offline-order-capture/artifact/scored-risks/design"
               }
             ],
             "pattern": "^[\\s\\S]*(?:[Qq][Uu][Ee][Uu][Ee]|[Ll][Oo][Cc][Aa][Ll]|[Dd][Ee][Vv][Ii][Cc][Ee]|[Ss][Qq][Ll][Ii][Tt][Ee]|[Oo][Nn]-[Dd][Ii][Ss][Kk]|[Aa][Tt]\\s+[Rr][Ee][Ss][Tt]|[Ss][Tt][Oo][Rr][Aa][Gg][Ee]|[Ss][Tt][Oo][Rr][Ee][Dd])[\\s\\S]*$"
@@ -357,7 +357,7 @@
         "relation": "all",
         "scope": "The test design document written for seeded-offline-order-capture, taken whole.",
         "negativeDomain": "A run whose document never names data-sync-conflict-overwrite in any of the terms the epic grounds it in.",
-        "evidenceTargets": ["/interactions/design-seeded-offline-order-capture/artifact/design"]
+        "evidenceTargets": ["/interactions/design-seeded-offline-order-capture/artifact/scored-risks/design"]
       },
       "check": {
         "op": "all",
@@ -366,7 +366,7 @@
             "op": "regex",
             "operands": [
               {
-                "pointer": "/interactions/design-seeded-offline-order-capture/artifact/design"
+                "pointer": "/interactions/design-seeded-offline-order-capture/artifact/scored-risks/design"
               }
             ],
             "pattern": "^[\\s\\S]*(?:[Cc][Oo][Nn][Ff][Ll][Ii][Cc][Tt]|[Oo][Vv][Ee][Rr][Ww][Rr][Ii][Tt][Ee]|[Oo][Vv][Ee][Rr][Ww][Rr][Ii][Tt]|[Cc][Ll][Oo][Bb][Bb][Ee][Rr]|[Ll][Aa][Ss][Tt]\\s+[Ww][Rr][Ii][Tt][Ee]|[Ll][Aa][Ss][Tt]-[Ww][Rr][Ii][Tt][Ee]|[Ll][Oo][Ss][Tt]\\s+[Uu][Pp][Dd][Aa][Tt][Ee])[\\s\\S]*$"
@@ -375,7 +375,7 @@
             "op": "regex",
             "operands": [
               {
-                "pointer": "/interactions/design-seeded-offline-order-capture/artifact/design"
+                "pointer": "/interactions/design-seeded-offline-order-capture/artifact/scored-risks/design"
               }
             ],
             "pattern": "^[\\s\\S]*(?:[Cc][Oo][Nn][Cc][Uu][Rr][Rr][Ee][Nn][Tt]|[Ss][Ii][Mm][Uu][Ll][Tt][Aa][Nn][Ee][Oo][Uu][Ss]|[Tt][Ww][Oo]\\s+[Tt][Ee][Cc][Hh][Nn][Ii][Cc][Ii][Aa][Nn][Ss]|[Ss][Ee][Cc][Oo][Nn][Dd]\\s+[Dd][Ee][Vv][Ii][Cc][Ee]|[Ss][Aa][Mm][Ee]\\s+[Ww][Oo][Rr][Kk]\\s+[Oo][Rr][Dd][Ee][Rr]|[Vv][Ee][Rr][Ss][Ii][Oo][Nn]|[Tt][Ii][Mm][Ee][Ss][Tt][Aa][Mm][Pp])[\\s\\S]*$"
@@ -392,7 +392,7 @@
         "relation": "all",
         "scope": "The test design document written for seeded-offline-order-capture, taken whole.",
         "negativeDomain": "A run whose document never names tech-uncapped-retry-loop in any of the terms the epic grounds it in.",
-        "evidenceTargets": ["/interactions/design-seeded-offline-order-capture/artifact/design"]
+        "evidenceTargets": ["/interactions/design-seeded-offline-order-capture/artifact/scored-risks/design"]
       },
       "check": {
         "op": "all",
@@ -401,7 +401,7 @@
             "op": "regex",
             "operands": [
               {
-                "pointer": "/interactions/design-seeded-offline-order-capture/artifact/design"
+                "pointer": "/interactions/design-seeded-offline-order-capture/artifact/scored-risks/design"
               }
             ],
             "pattern": "^[\\s\\S]*(?:[Rr][Ee][Tt][Rr][Yy]|[Rr][Ee][Tt][Rr][Ii][Ee][Ss]|[Rr][Ee][Tt][Rr][Ii][Ee][Dd]|[Bb][Aa][Cc][Kk][Oo][Ff][Ff]|[Bb][Aa][Cc][Kk]-[Oo][Ff][Ff]|[Dd][Ee][Aa][Dd]\\s+[Ll][Ee][Tt][Tt][Ee][Rr]|[Dd][Ee][Aa][Dd]-[Ll][Ee][Tt][Tt][Ee][Rr])[\\s\\S]*$"
@@ -410,7 +410,7 @@
             "op": "regex",
             "operands": [
               {
-                "pointer": "/interactions/design-seeded-offline-order-capture/artifact/design"
+                "pointer": "/interactions/design-seeded-offline-order-capture/artifact/scored-risks/design"
               }
             ],
             "pattern": "^[\\s\\S]*(?:[Cc][Aa][Pp]|[Uu][Nn][Bb][Oo][Uu][Nn][Dd][Ee][Dd]|[Ii][Nn][Dd][Ee][Ff][Ii][Nn][Ii][Tt]|[Ii][Nn][Ff][Ii][Nn][Ii][Tt][Ee]|[Ll][Oo][Oo][Pp]|[Ss][Tt][Oo][Rr][Mm]|[Ee][Xx][Hh][Aa][Uu][Ss][Tt]|[Nn][Oo]\\s+[Ll][Ii][Mm][Ii][Tt]|[Ff][Oo][Rr][Ee][Vv][Ee][Rr])[\\s\\S]*$"
@@ -427,7 +427,7 @@
         "relation": "all",
         "scope": "The test design document written for seeded-offline-order-capture, taken whole.",
         "negativeDomain": "A run whose document never names perf-backlog-sync-budget in any of the terms the epic grounds it in.",
-        "evidenceTargets": ["/interactions/design-seeded-offline-order-capture/artifact/design"]
+        "evidenceTargets": ["/interactions/design-seeded-offline-order-capture/artifact/scored-risks/design"]
       },
       "check": {
         "op": "all",
@@ -436,7 +436,7 @@
             "op": "regex",
             "operands": [
               {
-                "pointer": "/interactions/design-seeded-offline-order-capture/artifact/design"
+                "pointer": "/interactions/design-seeded-offline-order-capture/artifact/scored-risks/design"
               }
             ],
             "pattern": "^[\\s\\S]*(?:[Bb][Aa][Cc][Kk][Ll][Oo][Gg]|2,000|2000|[Bb][Uu][Ll][Kk]|[Vv][Oo][Ll][Uu][Mm][Ee]|[Tt][Hh][Rr][Oo][Uu][Gg][Hh][Pp][Uu][Tt]|[Ll][Aa][Rr][Gg][Ee]\\s+[Qq][Uu][Ee][Uu][Ee])[\\s\\S]*$"
@@ -445,7 +445,7 @@
             "op": "regex",
             "operands": [
               {
-                "pointer": "/interactions/design-seeded-offline-order-capture/artifact/design"
+                "pointer": "/interactions/design-seeded-offline-order-capture/artifact/scored-risks/design"
               }
             ],
             "pattern": "^[\\s\\S]*(?:30\\s+[Ss][Ee][Cc][Oo][Nn][Dd]|30[Ss]|[Ll][Aa][Tt][Ee][Nn][Cc][Yy]|[Ss][Ll][Oo][Ww]|[Bb][Uu][Dd][Gg][Ee][Tt]|[Ww][Ii][Tt][Hh][Ii][Nn]\\s+30|[Ss][Yy][Nn][Cc]\\s+[Tt][Ii][Mm][Ee]|[Dd][Uu][Rr][Aa][Tt][Ii][Oo][Nn])[\\s\\S]*$"
@@ -462,7 +462,7 @@
         "relation": "all",
         "scope": "The test design document written for seeded-offline-order-capture, taken whole.",
         "negativeDomain": "A run whose document never names ops-no-release-kill-switch in any of the terms the epic grounds it in.",
-        "evidenceTargets": ["/interactions/design-seeded-offline-order-capture/artifact/design"]
+        "evidenceTargets": ["/interactions/design-seeded-offline-order-capture/artifact/scored-risks/design"]
       },
       "check": {
         "op": "all",
@@ -471,7 +471,7 @@
             "op": "regex",
             "operands": [
               {
-                "pointer": "/interactions/design-seeded-offline-order-capture/artifact/design"
+                "pointer": "/interactions/design-seeded-offline-order-capture/artifact/scored-risks/design"
               }
             ],
             "pattern": "^[\\s\\S]*(?:[Ff][Ee][Aa][Tt][Uu][Rr][Ee]\\s+[Ff][Ll][Aa][Gg]|[Kk][Ii][Ll][Ll]\\s+[Ss][Ww][Ii][Tt][Cc][Hh]|[Kk][Ii][Ll][Ll]-[Ss][Ww][Ii][Tt][Cc][Hh]|[Tt][Oo][Gg][Gg][Ll][Ee]|[Dd][Ii][Ss][Aa][Bb][Ll][Ee]|[Dd][Ii][Ss][Aa][Bb][Ll][Ee][Dd])[\\s\\S]*$"
@@ -480,7 +480,7 @@
             "op": "regex",
             "operands": [
               {
-                "pointer": "/interactions/design-seeded-offline-order-capture/artifact/design"
+                "pointer": "/interactions/design-seeded-offline-order-capture/artifact/scored-risks/design"
               }
             ],
             "pattern": "^[\\s\\S]*(?:[Rr][Oo][Ll][Ll][Oo][Uu][Tt]|[Rr][Ee][Ll][Ee][Aa][Ss][Ee]|[Rr][Oo][Ll][Ll][Bb][Aa][Cc][Kk]|[Rr][Oo][Ll][Ll]\\s+[Bb][Aa][Cc][Kk]|[Dd][Ee][Pp][Ll][Oo][Yy]|[Ss][Tt][Aa][Gg][Ee][Dd]|[Ss][Tt][Oo][Rr][Ee]\\s+[Rr][Ee][Vv][Ii][Ee][Ww]|[Rr][Ee][Vv][Ee][Rr][Tt])[\\s\\S]*$"
@@ -491,13 +491,13 @@
     {
       "id": "O-007",
       "polarity": "expects-hold",
-      "commentary": "seeded-offline-order-capture: the document does not carry payment-gateway-failure, which the epic rules out in as many words: \"the existing billing service charges the stored card reference on its own nightly schedule, and this epic does not touch it, call it, or change when it runs\" A risk list that reaches it is a list that would fit any feature, which is the whole failure this suite exists to catch.",
+      "commentary": "seeded-offline-order-capture: no scored risk-register row above the 1–3 guard band reports payment-gateway-failure, which the epic rules out: \"the existing billing service charges the stored card reference on its own nightly schedule, and this epic does not touch it, call it, or change when it runs\"",
       "direction": {
         "polarity": "expects-hold",
         "relation": "not",
-        "scope": "The test design document written for seeded-offline-order-capture, taken whole.",
-        "negativeDomain": "A run whose document reports payment-gateway-failure against a feature description that excludes it.",
-        "evidenceTargets": ["/interactions/design-seeded-offline-order-capture/artifact/design"]
+        "scope": "The scored risk-register rows in the test design document written for seeded-offline-order-capture.",
+        "negativeDomain": "A row scored above 3 reports payment-gateway-failure against a feature description that excludes it.",
+        "evidenceTargets": ["/interactions/design-seeded-offline-order-capture/artifact/scored-risks/scoredRiskDescriptions"]
       },
       "check": {
         "op": "not",
@@ -506,22 +506,49 @@
             "op": "all",
             "operands": [
               {
-                "op": "regex",
+                "op": "not",
                 "operands": [
                   {
-                    "pointer": "/interactions/design-seeded-offline-order-capture/artifact/design"
+                    "op": "equality",
+                    "operands": [
+                      {
+                        "pointer": "/interactions/design-seeded-offline-order-capture/artifact/scored-risks/scoredRiskCount"
+                      },
+                      {
+                        "literal": 0
+                      }
+                    ]
                   }
-                ],
-                "pattern": "^[\\s\\S]*(?:[Pp][Aa][Yy][Mm][Ee][Nn][Tt]\\s+[Gg][Aa][Tt][Ee][Ww][Aa][Yy]|[Gg][Aa][Tt][Ee][Ww][Aa][Yy]|[Cc][Hh][Aa][Rr][Gg][Ii][Nn][Gg]|[Cc][Hh][Aa][Rr][Gg][Ee]\\s+[Ff][Aa][Ii][Ll]|[Ss][Ee][Tt][Tt][Ll][Ee][Mm][Ee][Nn][Tt]|[Cc][Aa][Rr][Dd]\\s+[Pp][Rr][Oo][Cc][Ee][Ss][Ss][Oo][Rr]|[Pp][Aa][Yy][Mm][Ee][Nn][Tt]\\s+[Pp][Rr][Oo][Vv][Ii][Dd][Ee][Rr])[\\s\\S]*$"
+                ]
               },
               {
-                "op": "regex",
-                "operands": [
-                  {
-                    "pointer": "/interactions/design-seeded-offline-order-capture/artifact/design"
-                  }
-                ],
-                "pattern": "^[\\s\\S]*(?:[Oo][Uu][Tt][Aa][Gg][Ee]|[Uu][Nn][Aa][Vv][Aa][Ii][Ll][Aa][Bb][Ll][Ee]|[Dd][Ee][Cc][Ll][Ii][Nn][Ee][Dd]|[Dd][Ee][Cc][Ll][Ii][Nn][Ee]|[Tt][Hh][Ii][Rr][Dd]-[Pp][Aa][Rr][Tt][Yy]|[Tt][Hh][Ii][Rr][Dd]\\s+[Pp][Aa][Rr][Tt][Yy]|[Tt][Ii][Mm][Ee][Oo][Uu][Tt]|[Dd][Oo][Ww][Nn])[\\s\\S]*$"
+                "op": "for-any",
+                "collection": {
+                  "pointer": "/interactions/design-seeded-offline-order-capture/artifact/scored-risks/scoredRiskDescriptions"
+                },
+                "predicate": {
+                  "op": "all",
+                  "operands": [
+                    {
+                      "op": "regex",
+                      "operands": [
+                        {
+                          "pointer": "@/"
+                        }
+                      ],
+                      "pattern": "^[\\s\\S]*(?:[Pp][Aa][Yy][Mm][Ee][Nn][Tt]\\s+[Gg][Aa][Tt][Ee][Ww][Aa][Yy]|[Gg][Aa][Tt][Ee][Ww][Aa][Yy]|[Cc][Hh][Aa][Rr][Gg][Ii][Nn][Gg]|[Cc][Hh][Aa][Rr][Gg][Ee]\\s+[Ff][Aa][Ii][Ll]|[Ss][Ee][Tt][Tt][Ll][Ee][Mm][Ee][Nn][Tt]|[Cc][Aa][Rr][Dd]\\s+[Pp][Rr][Oo][Cc][Ee][Ss][Ss][Oo][Rr]|[Pp][Aa][Yy][Mm][Ee][Nn][Tt]\\s+[Pp][Rr][Oo][Vv][Ii][Dd][Ee][Rr])[\\s\\S]*$"
+                    },
+                    {
+                      "op": "regex",
+                      "operands": [
+                        {
+                          "pointer": "@/"
+                        }
+                      ],
+                      "pattern": "^[\\s\\S]*(?:[Oo][Uu][Tt][Aa][Gg][Ee]|[Uu][Nn][Aa][Vv][Aa][Ii][Ll][Aa][Bb][Ll][Ee]|[Dd][Ee][Cc][Ll][Ii][Nn][Ee][Dd]|[Dd][Ee][Cc][Ll][Ii][Nn][Ee]|[Tt][Hh][Ii][Rr][Dd]-[Pp][Aa][Rr][Tt][Yy]|[Tt][Hh][Ii][Rr][Dd]\\s+[Pp][Aa][Rr][Tt][Yy]|[Tt][Ii][Mm][Ee][Oo][Uu][Tt]|[Dd][Oo][Ww][Nn])[\\s\\S]*$"
+                    }
+                  ]
+                }
               }
             ]
           }
@@ -531,13 +558,13 @@
     {
       "id": "O-008",
       "polarity": "expects-hold",
-      "commentary": "seeded-offline-order-capture: the document does not carry cross-tenant-data-leak, which the epic rules out in as many words: \"one customer organization per installation, with its own database and its own application servers\" A risk list that reaches it is a list that would fit any feature, which is the whole failure this suite exists to catch.",
+      "commentary": "seeded-offline-order-capture: no scored risk-register row above the 1–3 guard band reports cross-tenant-data-leak, which the epic rules out: \"one customer organization per installation, with its own database and its own application servers\"",
       "direction": {
         "polarity": "expects-hold",
         "relation": "not",
-        "scope": "The test design document written for seeded-offline-order-capture, taken whole.",
-        "negativeDomain": "A run whose document reports cross-tenant-data-leak against a feature description that excludes it.",
-        "evidenceTargets": ["/interactions/design-seeded-offline-order-capture/artifact/design"]
+        "scope": "The scored risk-register rows in the test design document written for seeded-offline-order-capture.",
+        "negativeDomain": "A row scored above 3 reports cross-tenant-data-leak against a feature description that excludes it.",
+        "evidenceTargets": ["/interactions/design-seeded-offline-order-capture/artifact/scored-risks/scoredRiskDescriptions"]
       },
       "check": {
         "op": "not",
@@ -546,22 +573,49 @@
             "op": "all",
             "operands": [
               {
-                "op": "regex",
+                "op": "not",
                 "operands": [
                   {
-                    "pointer": "/interactions/design-seeded-offline-order-capture/artifact/design"
+                    "op": "equality",
+                    "operands": [
+                      {
+                        "pointer": "/interactions/design-seeded-offline-order-capture/artifact/scored-risks/scoredRiskCount"
+                      },
+                      {
+                        "literal": 0
+                      }
+                    ]
                   }
-                ],
-                "pattern": "^[\\s\\S]*(?:[Tt][Ee][Nn][Aa][Nn][Tt]|[Cc][Rr][Oo][Ss][Ss]-[Tt][Ee][Nn][Aa][Nn][Tt]|[Mm][Uu][Ll][Tt][Ii]-[Tt][Ee][Nn][Aa][Nn][Tt]|[Oo][Tt][Hh][Ee][Rr]\\s+[Oo][Rr][Gg][Aa][Nn][Ii][Zz][Aa][Tt][Ii][Oo][Nn][Ss]|[Aa][Nn][Oo][Tt][Hh][Ee][Rr]\\s+[Oo][Rr][Gg][Aa][Nn][Ii][Zz][Aa][Tt][Ii][Oo][Nn]|[Oo][Tt][Hh][Ee][Rr]\\s+[Cc][Uu][Ss][Tt][Oo][Mm][Ee][Rr][Ss])[\\s\\S]*$"
+                ]
               },
               {
-                "op": "regex",
-                "operands": [
-                  {
-                    "pointer": "/interactions/design-seeded-offline-order-capture/artifact/design"
-                  }
-                ],
-                "pattern": "^[\\s\\S]*(?:[Ll][Ee][Aa][Kk]|[Ll][Ee][Aa][Kk][Aa][Gg][Ee]|[Ii][Ss][Oo][Ll][Aa][Tt][Ii][Oo][Nn]|[Bb][Ll][Ee][Ee][Dd]|[Ee][Xx][Pp][Oo][Ss][Uu][Rr][Ee]|[Bb][Oo][Uu][Nn][Dd][Aa][Rr][Yy]|[Ss][Ee][Gg][Rr][Ee][Gg][Aa][Tt])[\\s\\S]*$"
+                "op": "for-any",
+                "collection": {
+                  "pointer": "/interactions/design-seeded-offline-order-capture/artifact/scored-risks/scoredRiskDescriptions"
+                },
+                "predicate": {
+                  "op": "all",
+                  "operands": [
+                    {
+                      "op": "regex",
+                      "operands": [
+                        {
+                          "pointer": "@/"
+                        }
+                      ],
+                      "pattern": "^[\\s\\S]*(?:[Tt][Ee][Nn][Aa][Nn][Tt]|[Cc][Rr][Oo][Ss][Ss]-[Tt][Ee][Nn][Aa][Nn][Tt]|[Mm][Uu][Ll][Tt][Ii]-[Tt][Ee][Nn][Aa][Nn][Tt]|[Oo][Tt][Hh][Ee][Rr]\\s+[Oo][Rr][Gg][Aa][Nn][Ii][Zz][Aa][Tt][Ii][Oo][Nn][Ss]|[Aa][Nn][Oo][Tt][Hh][Ee][Rr]\\s+[Oo][Rr][Gg][Aa][Nn][Ii][Zz][Aa][Tt][Ii][Oo][Nn]|[Oo][Tt][Hh][Ee][Rr]\\s+[Cc][Uu][Ss][Tt][Oo][Mm][Ee][Rr][Ss])[\\s\\S]*$"
+                    },
+                    {
+                      "op": "regex",
+                      "operands": [
+                        {
+                          "pointer": "@/"
+                        }
+                      ],
+                      "pattern": "^[\\s\\S]*(?:[Ll][Ee][Aa][Kk]|[Ll][Ee][Aa][Kk][Aa][Gg][Ee]|[Ii][Ss][Oo][Ll][Aa][Tt][Ii][Oo][Nn]|[Bb][Ll][Ee][Ee][Dd]|[Ee][Xx][Pp][Oo][Ss][Uu][Rr][Ee]|[Bb][Oo][Uu][Nn][Dd][Aa][Rr][Yy]|[Ss][Ee][Gg][Rr][Ee][Gg][Aa][Tt])[\\s\\S]*$"
+                    }
+                  ]
+                }
               }
             ]
           }
@@ -571,39 +625,13 @@
     {
       "id": "O-009",
       "polarity": "expects-hold",
-      "commentary": "seeded-offline-order-capture: the document does not carry browser-and-accessibility-regression, which the epic rules out in as many words: \"There is no browser surface and no web view in this epic\" A risk list that reaches it is a list that would fit any feature, which is the whole failure this suite exists to catch.",
+      "commentary": "seeded-offline-order-capture: no scored risk-register row above the 1–3 guard band reports browser-and-accessibility-regression, which the epic rules out: \"There is no browser surface and no web view in this epic\"",
       "direction": {
         "polarity": "expects-hold",
         "relation": "not",
-        "scope": "The test design document written for seeded-offline-order-capture, taken whole.",
-        "negativeDomain": "A run whose document reports browser-and-accessibility-regression against a feature description that excludes it.",
-        "evidenceTargets": ["/interactions/design-seeded-offline-order-capture/artifact/design"]
-      },
-      "check": {
-        "op": "not",
-        "operands": [
-          {
-            "op": "regex",
-            "operands": [
-              {
-                "pointer": "/interactions/design-seeded-offline-order-capture/artifact/design"
-              }
-            ],
-            "pattern": "^[\\s\\S]*(?:[Aa][Cc][Cc][Ee][Ss][Ss][Ii][Bb][Ii][Ll][Ii][Tt][Yy]|[Aa]11[Yy]|[Ss][Cc][Rr][Ee][Ee][Nn]\\s+[Rr][Ee][Aa][Dd][Ee][Rr]|[Ww][Cc][Aa][Gg]|[Bb][Rr][Oo][Ww][Ss][Ee][Rr]|[Cc][Rr][Oo][Ss][Ss]-[Bb][Rr][Oo][Ww][Ss][Ee][Rr]|[Ss][Aa][Ff][Aa][Rr][Ii]|[Ff][Ii][Rr][Ee][Ff][Oo][Xx]|[Rr][Ee][Ss][Pp][Oo][Nn][Ss][Ii][Vv][Ee]\\s+[Ll][Aa][Yy][Oo][Uu][Tt])[\\s\\S]*$"
-          }
-        ]
-      }
-    },
-    {
-      "id": "O-010",
-      "polarity": "expects-hold",
-      "commentary": "seeded-offline-order-capture: the document does not carry data-residency-compliance, which the epic rules out in as many words: \"Data residency is unchanged and is enforced by the platform's regional routing layer, which this epic does not modify.\" A risk list that reaches it is a list that would fit any feature, which is the whole failure this suite exists to catch.",
-      "direction": {
-        "polarity": "expects-hold",
-        "relation": "not",
-        "scope": "The test design document written for seeded-offline-order-capture, taken whole.",
-        "negativeDomain": "A run whose document reports data-residency-compliance against a feature description that excludes it.",
-        "evidenceTargets": ["/interactions/design-seeded-offline-order-capture/artifact/design"]
+        "scope": "The scored risk-register rows in the test design document written for seeded-offline-order-capture.",
+        "negativeDomain": "A row scored above 3 reports browser-and-accessibility-regression against a feature description that excludes it.",
+        "evidenceTargets": ["/interactions/design-seeded-offline-order-capture/artifact/scored-risks/scoredRiskDescriptions"]
       },
       "check": {
         "op": "not",
@@ -612,22 +640,102 @@
             "op": "all",
             "operands": [
               {
-                "op": "regex",
+                "op": "not",
                 "operands": [
                   {
-                    "pointer": "/interactions/design-seeded-offline-order-capture/artifact/design"
+                    "op": "equality",
+                    "operands": [
+                      {
+                        "pointer": "/interactions/design-seeded-offline-order-capture/artifact/scored-risks/scoredRiskCount"
+                      },
+                      {
+                        "literal": 0
+                      }
+                    ]
                   }
-                ],
-                "pattern": "^[\\s\\S]*(?:[Rr][Ee][Ss][Ii][Dd][Ee][Nn][Cc][Yy]|[Gg][Dd][Pp][Rr]|[Ss][Oo][Vv][Ee][Rr][Ee][Ii][Gg][Nn][Tt][Yy]|[Dd][Aa][Tt][Aa]\\s+[Pp][Rr][Oo][Tt][Ee][Cc][Tt][Ii][Oo][Nn]\\s+[Rr][Ee][Gg][Uu][Ll][Aa][Tt][Ii][Oo][Nn])[\\s\\S]*$"
+                ]
               },
               {
-                "op": "regex",
+                "op": "for-any",
+                "collection": {
+                  "pointer": "/interactions/design-seeded-offline-order-capture/artifact/scored-risks/scoredRiskDescriptions"
+                },
+                "predicate": {
+                  "op": "regex",
+                  "operands": [
+                    {
+                      "pointer": "@/"
+                    }
+                  ],
+                  "pattern": "^[\\s\\S]*(?:[Aa][Cc][Cc][Ee][Ss][Ss][Ii][Bb][Ii][Ll][Ii][Tt][Yy]|[Aa]11[Yy]|[Ss][Cc][Rr][Ee][Ee][Nn]\\s+[Rr][Ee][Aa][Dd][Ee][Rr]|[Ww][Cc][Aa][Gg]|[Bb][Rr][Oo][Ww][Ss][Ee][Rr]|[Cc][Rr][Oo][Ss][Ss]-[Bb][Rr][Oo][Ww][Ss][Ee][Rr]|[Ss][Aa][Ff][Aa][Rr][Ii]|[Ff][Ii][Rr][Ee][Ff][Oo][Xx]|[Rr][Ee][Ss][Pp][Oo][Nn][Ss][Ii][Vv][Ee]\\s+[Ll][Aa][Yy][Oo][Uu][Tt])[\\s\\S]*$"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-010",
+      "polarity": "expects-hold",
+      "commentary": "seeded-offline-order-capture: no scored risk-register row above the 1–3 guard band reports data-residency-compliance, which the epic rules out: \"Data residency is unchanged and is enforced by the platform's regional routing layer, which this epic does not modify.\"",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "not",
+        "scope": "The scored risk-register rows in the test design document written for seeded-offline-order-capture.",
+        "negativeDomain": "A row scored above 3 reports data-residency-compliance against a feature description that excludes it.",
+        "evidenceTargets": ["/interactions/design-seeded-offline-order-capture/artifact/scored-risks/scoredRiskDescriptions"]
+      },
+      "check": {
+        "op": "not",
+        "operands": [
+          {
+            "op": "all",
+            "operands": [
+              {
+                "op": "not",
                 "operands": [
                   {
-                    "pointer": "/interactions/design-seeded-offline-order-capture/artifact/design"
+                    "op": "equality",
+                    "operands": [
+                      {
+                        "pointer": "/interactions/design-seeded-offline-order-capture/artifact/scored-risks/scoredRiskCount"
+                      },
+                      {
+                        "literal": 0
+                      }
+                    ]
                   }
-                ],
-                "pattern": "^[\\s\\S]*(?:[Cc][Oo][Mm][Pp][Ll][Ii]|[Rr][Ee][Gg][Uu][Ll][Aa][Tt]|[Jj][Uu][Rr][Ii][Ss][Dd][Ii][Cc][Tt][Ii][Oo][Nn]|[Cc][Rr][Oo][Ss][Ss]-[Bb][Oo][Rr][Dd][Ee][Rr]|[Ll][Aa][Ww][Ff][Uu][Ll]|[Ll][Ee][Gg][Aa][Ll])[\\s\\S]*$"
+                ]
+              },
+              {
+                "op": "for-any",
+                "collection": {
+                  "pointer": "/interactions/design-seeded-offline-order-capture/artifact/scored-risks/scoredRiskDescriptions"
+                },
+                "predicate": {
+                  "op": "all",
+                  "operands": [
+                    {
+                      "op": "regex",
+                      "operands": [
+                        {
+                          "pointer": "@/"
+                        }
+                      ],
+                      "pattern": "^[\\s\\S]*(?:[Rr][Ee][Ss][Ii][Dd][Ee][Nn][Cc][Yy]|[Gg][Dd][Pp][Rr]|[Ss][Oo][Vv][Ee][Rr][Ee][Ii][Gg][Nn][Tt][Yy]|[Dd][Aa][Tt][Aa]\\s+[Pp][Rr][Oo][Tt][Ee][Cc][Tt][Ii][Oo][Nn]\\s+[Rr][Ee][Gg][Uu][Ll][Aa][Tt][Ii][Oo][Nn])[\\s\\S]*$"
+                    },
+                    {
+                      "op": "regex",
+                      "operands": [
+                        {
+                          "pointer": "@/"
+                        }
+                      ],
+                      "pattern": "^[\\s\\S]*(?:[Cc][Oo][Mm][Pp][Ll][Ii]|[Rr][Ee][Gg][Uu][Ll][Aa][Tt]|[Jj][Uu][Rr][Ii][Ss][Dd][Ii][Cc][Tt][Ii][Oo][Nn]|[Cc][Rr][Oo][Ss][Ss]-[Bb][Oo][Rr][Dd][Ee][Rr]|[Ll][Aa][Ww][Ff][Uu][Ll]|[Ll][Ee][Gg][Aa][Ll])[\\s\\S]*$"
+                    }
+                  ]
+                }
               }
             ]
           }
@@ -643,13 +751,13 @@
         "relation": "regex",
         "scope": "The test design document written for clean-last-sync-indicator, taken whole.",
         "negativeDomain": "A run that wrote a document carrying no risk identifier in any table.",
-        "evidenceTargets": ["/interactions/design-clean-last-sync-indicator/artifact/design"]
+        "evidenceTargets": ["/interactions/design-clean-last-sync-indicator/artifact/scored-risks/design"]
       },
       "check": {
         "op": "regex",
         "operands": [
           {
-            "pointer": "/interactions/design-clean-last-sync-indicator/artifact/design"
+            "pointer": "/interactions/design-clean-last-sync-indicator/artifact/scored-risks/design"
           }
         ],
         "pattern": "^[\\s\\S]*\\|[^|\\n]*R-[0-9]{3}[^|\\n]*\\|[\\s\\S]*$"
@@ -658,13 +766,13 @@
     {
       "id": "O-012",
       "polarity": "expects-hold",
-      "commentary": "clean-last-sync-indicator: the document does not carry data-loss-or-corruption, which the epic rules out in as many words: \"The settings store is opened read-only for this field, so no order, queue entry or setting can be altered or lost by it.\" A risk list that reaches it is a list that would fit any feature, which is the whole failure this suite exists to catch.",
+      "commentary": "clean-last-sync-indicator: no scored risk-register row above the 1–3 guard band reports data-loss-or-corruption, which the epic rules out: \"The settings store is opened read-only for this field, so no order, queue entry or setting can be altered or lost by it.\"",
       "direction": {
         "polarity": "expects-hold",
         "relation": "not",
-        "scope": "The test design document written for clean-last-sync-indicator, taken whole.",
-        "negativeDomain": "A run whose document reports data-loss-or-corruption against a feature description that excludes it.",
-        "evidenceTargets": ["/interactions/design-clean-last-sync-indicator/artifact/design"]
+        "scope": "The scored risk-register rows in the test design document written for clean-last-sync-indicator.",
+        "negativeDomain": "A row scored above 3 reports data-loss-or-corruption against a feature description that excludes it.",
+        "evidenceTargets": ["/interactions/design-clean-last-sync-indicator/artifact/scored-risks/scoredRiskDescriptions"]
       },
       "check": {
         "op": "not",
@@ -673,22 +781,49 @@
             "op": "all",
             "operands": [
               {
-                "op": "regex",
+                "op": "not",
                 "operands": [
                   {
-                    "pointer": "/interactions/design-clean-last-sync-indicator/artifact/design"
+                    "op": "equality",
+                    "operands": [
+                      {
+                        "pointer": "/interactions/design-clean-last-sync-indicator/artifact/scored-risks/scoredRiskCount"
+                      },
+                      {
+                        "literal": 0
+                      }
+                    ]
                   }
-                ],
-                "pattern": "^[\\s\\S]*(?:[Cc][Oo][Rr][Rr][Uu][Pp][Tt]|[Dd][Aa][Tt][Aa]\\s+[Ll][Oo][Ss][Ss]|[Ll][Oo][Ss][Ee]\\s+[Dd][Aa][Tt][Aa]|[Ll][Oo][Ss][Tt]|[Oo][Vv][Ee][Rr][Ww][Rr][Ii][Tt][Ee]|[Dd][Ee][Ll][Ee][Tt][Ee]|[Tt][Rr][Uu][Nn][Cc][Aa][Tt])[\\s\\S]*$"
+                ]
               },
               {
-                "op": "regex",
-                "operands": [
-                  {
-                    "pointer": "/interactions/design-clean-last-sync-indicator/artifact/design"
-                  }
-                ],
-                "pattern": "^[\\s\\S]*(?:[Ss][Tt][Oo][Rr][Ee]|[Ss][Tt][Oo][Rr][Aa][Gg][Ee]|[Rr][Ee][Cc][Oo][Rr][Dd]|[Ff][Ii][Ee][Ll][Dd]|[Dd][Aa][Tt][Aa][Bb][Aa][Ss][Ee]|[Ss][Ee][Tt][Tt][Ii][Nn][Gg]|[Qq][Uu][Ee][Uu][Ee])[\\s\\S]*$"
+                "op": "for-any",
+                "collection": {
+                  "pointer": "/interactions/design-clean-last-sync-indicator/artifact/scored-risks/scoredRiskDescriptions"
+                },
+                "predicate": {
+                  "op": "all",
+                  "operands": [
+                    {
+                      "op": "regex",
+                      "operands": [
+                        {
+                          "pointer": "@/"
+                        }
+                      ],
+                      "pattern": "^[\\s\\S]*(?:[Cc][Oo][Rr][Rr][Uu][Pp][Tt]|[Dd][Aa][Tt][Aa]\\s+[Ll][Oo][Ss][Ss]|[Ll][Oo][Ss][Ee]\\s+[Dd][Aa][Tt][Aa]|[Ll][Oo][Ss][Tt]|[Oo][Vv][Ee][Rr][Ww][Rr][Ii][Tt][Ee]|[Dd][Ee][Ll][Ee][Tt][Ee]|[Tt][Rr][Uu][Nn][Cc][Aa][Tt])[\\s\\S]*$"
+                    },
+                    {
+                      "op": "regex",
+                      "operands": [
+                        {
+                          "pointer": "@/"
+                        }
+                      ],
+                      "pattern": "^[\\s\\S]*(?:[Ss][Tt][Oo][Rr][Ee]|[Ss][Tt][Oo][Rr][Aa][Gg][Ee]|[Rr][Ee][Cc][Oo][Rr][Dd]|[Ff][Ii][Ee][Ll][Dd]|[Dd][Aa][Tt][Aa][Bb][Aa][Ss][Ee]|[Ss][Ee][Tt][Tt][Ii][Nn][Gg]|[Qq][Uu][Ee][Uu][Ee])[\\s\\S]*$"
+                    }
+                  ]
+                }
               }
             ]
           }
@@ -698,13 +833,13 @@
     {
       "id": "O-013",
       "polarity": "expects-hold",
-      "commentary": "clean-last-sync-indicator: the document does not carry unauthorized-exposure, which the epic rules out in as many words: \"it is shown to the person holding the device, so the change exposes nothing to anyone who could not already see it, and it adds no personal data to the screen\" A risk list that reaches it is a list that would fit any feature, which is the whole failure this suite exists to catch.",
+      "commentary": "clean-last-sync-indicator: no scored risk-register row above the 1–3 guard band reports unauthorized-exposure, which the epic rules out: \"it is shown to the person holding the device, so the change exposes nothing to anyone who could not already see it, and it adds no personal data to the screen\"",
       "direction": {
         "polarity": "expects-hold",
         "relation": "not",
-        "scope": "The test design document written for clean-last-sync-indicator, taken whole.",
-        "negativeDomain": "A run whose document reports unauthorized-exposure against a feature description that excludes it.",
-        "evidenceTargets": ["/interactions/design-clean-last-sync-indicator/artifact/design"]
+        "scope": "The scored risk-register rows in the test design document written for clean-last-sync-indicator.",
+        "negativeDomain": "A row scored above 3 reports unauthorized-exposure against a feature description that excludes it.",
+        "evidenceTargets": ["/interactions/design-clean-last-sync-indicator/artifact/scored-risks/scoredRiskDescriptions"]
       },
       "check": {
         "op": "not",
@@ -713,22 +848,49 @@
             "op": "all",
             "operands": [
               {
-                "op": "regex",
+                "op": "not",
                 "operands": [
                   {
-                    "pointer": "/interactions/design-clean-last-sync-indicator/artifact/design"
+                    "op": "equality",
+                    "operands": [
+                      {
+                        "pointer": "/interactions/design-clean-last-sync-indicator/artifact/scored-risks/scoredRiskCount"
+                      },
+                      {
+                        "literal": 0
+                      }
+                    ]
                   }
-                ],
-                "pattern": "^[\\s\\S]*(?:[Uu][Nn][Aa][Uu][Tt][Hh][Oo][Rr][Ii]|[Ll][Ee][Aa][Kk]|[Ee][Xx][Pp][Oo][Ss][Uu][Rr][Ee]|[Ee][Xx][Pp][Oo][Ss][Ee]|[Pp][Ii][Ii]|[Pp][Ee][Rr][Ss][Oo][Nn][Aa][Ll]\\s+[Dd][Aa][Tt][Aa]|[Ss][Ee][Nn][Ss][Ii][Tt][Ii][Vv][Ee]|[Cc][Rr][Ee][Dd][Ee][Nn][Tt][Ii][Aa][Ll])[\\s\\S]*$"
+                ]
               },
               {
-                "op": "regex",
-                "operands": [
-                  {
-                    "pointer": "/interactions/design-clean-last-sync-indicator/artifact/design"
-                  }
-                ],
-                "pattern": "^[\\s\\S]*(?:[Aa][Cc][Cc][Ee][Ss][Ss]|[Pp][Ee][Rr][Mm][Ii][Ss][Ss][Ii][Oo][Nn]|[Aa][Uu][Tt][Hh]|[Vv][Ii][Ss][Ii][Bb][Ll][Ee]|[Dd][Ii][Ss][Cc][Ll][Oo][Ss]|[Pp][Rr][Ii][Vv][Aa][Cc][Yy])[\\s\\S]*$"
+                "op": "for-any",
+                "collection": {
+                  "pointer": "/interactions/design-clean-last-sync-indicator/artifact/scored-risks/scoredRiskDescriptions"
+                },
+                "predicate": {
+                  "op": "all",
+                  "operands": [
+                    {
+                      "op": "regex",
+                      "operands": [
+                        {
+                          "pointer": "@/"
+                        }
+                      ],
+                      "pattern": "^[\\s\\S]*(?:[Uu][Nn][Aa][Uu][Tt][Hh][Oo][Rr][Ii]|[Ll][Ee][Aa][Kk]|[Ee][Xx][Pp][Oo][Ss][Uu][Rr][Ee]|[Ee][Xx][Pp][Oo][Ss][Ee]|[Pp][Ii][Ii]|[Pp][Ee][Rr][Ss][Oo][Nn][Aa][Ll]\\s+[Dd][Aa][Tt][Aa]|[Ss][Ee][Nn][Ss][Ii][Tt][Ii][Vv][Ee]|[Cc][Rr][Ee][Dd][Ee][Nn][Tt][Ii][Aa][Ll])[\\s\\S]*$"
+                    },
+                    {
+                      "op": "regex",
+                      "operands": [
+                        {
+                          "pointer": "@/"
+                        }
+                      ],
+                      "pattern": "^[\\s\\S]*(?:[Aa][Cc][Cc][Ee][Ss][Ss]|[Pp][Ee][Rr][Mm][Ii][Ss][Ss][Ii][Oo][Nn]|[Aa][Uu][Tt][Hh]|[Vv][Ii][Ss][Ii][Bb][Ll][Ee]|[Dd][Ii][Ss][Cc][Ll][Oo][Ss]|[Pp][Rr][Ii][Vv][Aa][Cc][Yy])[\\s\\S]*$"
+                    }
+                  ]
+                }
               }
             ]
           }
@@ -738,13 +900,13 @@
     {
       "id": "O-014",
       "polarity": "expects-hold",
-      "commentary": "clean-last-sync-indicator: the document does not carry render-performance-degradation, which the epic rules out in as many words: \"The single local key lookup runs on a screen that is already open, so the screen's existing render budget is unchanged.\" A risk list that reaches it is a list that would fit any feature, which is the whole failure this suite exists to catch.",
+      "commentary": "clean-last-sync-indicator: no scored risk-register row above the 1–3 guard band reports render-performance-degradation, which the epic rules out: \"The single local key lookup runs on a screen that is already open, so the screen's existing render budget is unchanged.\"",
       "direction": {
         "polarity": "expects-hold",
         "relation": "not",
-        "scope": "The test design document written for clean-last-sync-indicator, taken whole.",
-        "negativeDomain": "A run whose document reports render-performance-degradation against a feature description that excludes it.",
-        "evidenceTargets": ["/interactions/design-clean-last-sync-indicator/artifact/design"]
+        "scope": "The scored risk-register rows in the test design document written for clean-last-sync-indicator.",
+        "negativeDomain": "A row scored above 3 reports render-performance-degradation against a feature description that excludes it.",
+        "evidenceTargets": ["/interactions/design-clean-last-sync-indicator/artifact/scored-risks/scoredRiskDescriptions"]
       },
       "check": {
         "op": "not",
@@ -753,22 +915,49 @@
             "op": "all",
             "operands": [
               {
-                "op": "regex",
+                "op": "not",
                 "operands": [
                   {
-                    "pointer": "/interactions/design-clean-last-sync-indicator/artifact/design"
+                    "op": "equality",
+                    "operands": [
+                      {
+                        "pointer": "/interactions/design-clean-last-sync-indicator/artifact/scored-risks/scoredRiskCount"
+                      },
+                      {
+                        "literal": 0
+                      }
+                    ]
                   }
-                ],
-                "pattern": "^[\\s\\S]*(?:[Pp][Ee][Rr][Ff][Oo][Rr][Mm][Aa][Nn][Cc][Ee]|[Ss][Ll][Oo][Ww]|[Ll][Aa][Tt][Ee][Nn][Cc][Yy]|[Jj][Aa][Nn][Kk]|[Ff][Rr][Aa][Mm][Ee]|[Dd][Ee][Gg][Rr][Aa][Dd]|[Tt][Hh][Rr][Oo][Uu][Gg][Hh][Pp][Uu][Tt]|[Rr][Ee][Nn][Dd][Ee][Rr]\\s+[Bb][Uu][Dd][Gg][Ee][Tt])[\\s\\S]*$"
+                ]
               },
               {
-                "op": "regex",
-                "operands": [
-                  {
-                    "pointer": "/interactions/design-clean-last-sync-indicator/artifact/design"
-                  }
-                ],
-                "pattern": "^[\\s\\S]*(?:[Ll][Oo][Aa][Dd]|[Rr][Ee][Nn][Dd][Ee][Rr]|[Ss][Cc][Rr][Ee][Ee][Nn]|[Ss][Tt][Aa][Rr][Tt][Uu][Pp]|[Bb][Uu][Dd][Gg][Ee][Tt]|[Nn][Ee][Tt][Ww][Oo][Rr][Kk]\\s+[Cc][Aa][Ll][Ll]|[Pp][Oo][Ll][Ll])[\\s\\S]*$"
+                "op": "for-any",
+                "collection": {
+                  "pointer": "/interactions/design-clean-last-sync-indicator/artifact/scored-risks/scoredRiskDescriptions"
+                },
+                "predicate": {
+                  "op": "all",
+                  "operands": [
+                    {
+                      "op": "regex",
+                      "operands": [
+                        {
+                          "pointer": "@/"
+                        }
+                      ],
+                      "pattern": "^[\\s\\S]*(?:[Pp][Ee][Rr][Ff][Oo][Rr][Mm][Aa][Nn][Cc][Ee]|[Ss][Ll][Oo][Ww]|[Ll][Aa][Tt][Ee][Nn][Cc][Yy]|[Jj][Aa][Nn][Kk]|[Ff][Rr][Aa][Mm][Ee]|[Dd][Ee][Gg][Rr][Aa][Dd]|[Tt][Hh][Rr][Oo][Uu][Gg][Hh][Pp][Uu][Tt]|[Rr][Ee][Nn][Dd][Ee][Rr]\\s+[Bb][Uu][Dd][Gg][Ee][Tt])[\\s\\S]*$"
+                    },
+                    {
+                      "op": "regex",
+                      "operands": [
+                        {
+                          "pointer": "@/"
+                        }
+                      ],
+                      "pattern": "^[\\s\\S]*(?:[Ll][Oo][Aa][Dd]|[Rr][Ee][Nn][Dd][Ee][Rr]|[Ss][Cc][Rr][Ee][Ee][Nn]|[Ss][Tt][Aa][Rr][Tt][Uu][Pp]|[Bb][Uu][Dd][Gg][Ee][Tt]|[Nn][Ee][Tt][Ww][Oo][Rr][Kk]\\s+[Cc][Aa][Ll][Ll]|[Pp][Oo][Ll][Ll])[\\s\\S]*$"
+                    }
+                  ]
+                }
               }
             ]
           }
@@ -778,13 +967,13 @@
     {
       "id": "O-015",
       "polarity": "expects-hold",
-      "commentary": "clean-last-sync-indicator: the document does not carry rollout-without-kill-switch, which the epic rules out in as many words: \"an existing feature flag the release process already toggles per organization, so it can be turned off without a new build\" A risk list that reaches it is a list that would fit any feature, which is the whole failure this suite exists to catch.",
+      "commentary": "clean-last-sync-indicator: no scored risk-register row above the 1–3 guard band reports rollout-without-kill-switch, which the epic rules out: \"an existing feature flag the release process already toggles per organization, so it can be turned off without a new build\"",
       "direction": {
         "polarity": "expects-hold",
         "relation": "not",
-        "scope": "The test design document written for clean-last-sync-indicator, taken whole.",
-        "negativeDomain": "A run whose document reports rollout-without-kill-switch against a feature description that excludes it.",
-        "evidenceTargets": ["/interactions/design-clean-last-sync-indicator/artifact/design"]
+        "scope": "The scored risk-register rows in the test design document written for clean-last-sync-indicator.",
+        "negativeDomain": "A row scored above 3 reports rollout-without-kill-switch against a feature description that excludes it.",
+        "evidenceTargets": ["/interactions/design-clean-last-sync-indicator/artifact/scored-risks/scoredRiskDescriptions"]
       },
       "check": {
         "op": "not",
@@ -793,22 +982,49 @@
             "op": "all",
             "operands": [
               {
-                "op": "regex",
+                "op": "not",
                 "operands": [
                   {
-                    "pointer": "/interactions/design-clean-last-sync-indicator/artifact/design"
+                    "op": "equality",
+                    "operands": [
+                      {
+                        "pointer": "/interactions/design-clean-last-sync-indicator/artifact/scored-risks/scoredRiskCount"
+                      },
+                      {
+                        "literal": 0
+                      }
+                    ]
                   }
-                ],
-                "pattern": "^[\\s\\S]*(?:[Kk][Ii][Ll][Ll]\\s+[Ss][Ww][Ii][Tt][Cc][Hh]|[Kk][Ii][Ll][Ll]-[Ss][Ww][Ii][Tt][Cc][Hh]|[Nn][Oo]\\s+[Ff][Ee][Aa][Tt][Uu][Rr][Ee]\\s+[Ff][Ll][Aa][Gg]|[Cc][Aa][Nn][Nn][Oo][Tt]\\s+[Bb][Ee]\\s+[Dd][Ii][Ss][Aa][Bb][Ll][Ee][Dd]|[Uu][Nn][Rr][Ee][Cc][Oo][Vv][Ee][Rr][Aa][Bb][Ll][Ee]|[Nn][Oo]\\s+[Ww][Aa][Yy]\\s+[Tt][Oo]\\s+[Dd][Ii][Ss][Aa][Bb][Ll][Ee])[\\s\\S]*$"
+                ]
               },
               {
-                "op": "regex",
-                "operands": [
-                  {
-                    "pointer": "/interactions/design-clean-last-sync-indicator/artifact/design"
-                  }
-                ],
-                "pattern": "^[\\s\\S]*(?:[Rr][Oo][Ll][Ll][Oo][Uu][Tt]|[Rr][Ee][Ll][Ee][Aa][Ss][Ee]|[Rr][Oo][Ll][Ll][Bb][Aa][Cc][Kk]|[Rr][Oo][Ll][Ll]\\s+[Bb][Aa][Cc][Kk]|[Dd][Ee][Pp][Ll][Oo][Yy]|[Rr][Ee][Vv][Ee][Rr][Tt])[\\s\\S]*$"
+                "op": "for-any",
+                "collection": {
+                  "pointer": "/interactions/design-clean-last-sync-indicator/artifact/scored-risks/scoredRiskDescriptions"
+                },
+                "predicate": {
+                  "op": "all",
+                  "operands": [
+                    {
+                      "op": "regex",
+                      "operands": [
+                        {
+                          "pointer": "@/"
+                        }
+                      ],
+                      "pattern": "^[\\s\\S]*(?:[Kk][Ii][Ll][Ll]\\s+[Ss][Ww][Ii][Tt][Cc][Hh]|[Kk][Ii][Ll][Ll]-[Ss][Ww][Ii][Tt][Cc][Hh]|[Nn][Oo]\\s+[Ff][Ee][Aa][Tt][Uu][Rr][Ee]\\s+[Ff][Ll][Aa][Gg]|[Cc][Aa][Nn][Nn][Oo][Tt]\\s+[Bb][Ee]\\s+[Dd][Ii][Ss][Aa][Bb][Ll][Ee][Dd]|[Uu][Nn][Rr][Ee][Cc][Oo][Vv][Ee][Rr][Aa][Bb][Ll][Ee]|[Nn][Oo]\\s+[Ww][Aa][Yy]\\s+[Tt][Oo]\\s+[Dd][Ii][Ss][Aa][Bb][Ll][Ee])[\\s\\S]*$"
+                    },
+                    {
+                      "op": "regex",
+                      "operands": [
+                        {
+                          "pointer": "@/"
+                        }
+                      ],
+                      "pattern": "^[\\s\\S]*(?:[Rr][Oo][Ll][Ll][Oo][Uu][Tt]|[Rr][Ee][Ll][Ee][Aa][Ss][Ee]|[Rr][Oo][Ll][Ll][Bb][Aa][Cc][Kk]|[Rr][Oo][Ll][Ll]\\s+[Bb][Aa][Cc][Kk]|[Dd][Ee][Pp][Ll][Oo][Yy]|[Rr][Ee][Vv][Ee][Rr][Tt])[\\s\\S]*$"
+                    }
+                  ]
+                }
               }
             ]
           }
@@ -837,12 +1053,13 @@
               "types": {}
             },
             "option": {
-              "requiredKeys": ["agent"],
-              "permittedKeys": ["agent", "agent-cmd", "agent-arg", "env-pass", "model", "timeout-ms"],
+              "requiredKeys": ["agent", "design-path"],
+              "permittedKeys": ["agent", "agent-cmd", "agent-arg", "design-path", "env-pass", "model", "timeout-ms"],
               "types": {
                 "agent": "string",
                 "agent-cmd": "string",
                 "agent-arg": "string",
+                "design-path": "string",
                 "env-pass": "string",
                 "model": "string",
                 "timeout-ms": "string"
@@ -868,20 +1085,35 @@
               }
             }
           },
-          "artifacts": ["design"],
+          "artifacts": ["design", "scored-risks"],
           "descriptorChannel": {
             "kind": "artifact",
-            "artifactId": "design"
+            "artifactId": "scored-risks"
           },
           "responseDescriptor": {
-            "requiredKeys": [],
-            "permittedKeys": [],
-            "types": {},
+            "requiredKeys": ["design", "scoredRiskDescriptions", "scoredRiskCount"],
+            "permittedKeys": ["design", "scoredRiskDescriptions", "scoredRiskCount"],
+            "types": {
+              "design": "string",
+              "scoredRiskDescriptions": "array",
+              "scoredRiskCount": "number"
+            },
             "successIndicator": "",
             "channelRoles": {
-              "": "payload"
+              "/design": "payload",
+              "/scoredRiskDescriptions": "collection",
+              "/scoredRiskCount": "payload"
             },
-            "collectionLocations": []
+            "collectionLocations": [
+              {
+                "pointer": "/scoredRiskDescriptions",
+                "referenceSet": null,
+                "expectedCardinality": {
+                  "mode": "at-most",
+                  "max": 200
+                }
+              }
+            ]
           },
           "volatilePointers": [],
           "sensitivityWitness": {
@@ -893,7 +1125,8 @@
                 "inputs": {
                   "argument": {},
                   "option": {
-                    "agent": "claude"
+                    "agent": "claude",
+                    "design-path": "field-sync-indicator/test-artifacts/test-design/test-design-epic-9.md"
                   },
                   "environment": {},
                   "stdin": {
@@ -907,7 +1140,8 @@
                 "inputs": {
                   "argument": {},
                   "option": {
-                    "agent": "claude"
+                    "agent": "claude",
+                    "design-path": "field-sync-indicator/test-artifacts/test-design/test-design-epic-9.md"
                   },
                   "environment": {},
                   "stdin": {
@@ -924,10 +1158,10 @@
                   "op": "deep-equality",
                   "operands": [
                     {
-                      "pointer": "/interactions/witness-design-level-full/artifact/design"
+                      "pointer": "/interactions/witness-design-level-full/artifact/scored-risks/design"
                     },
                     {
-                      "pointer": "/interactions/witness-design-level-minimal/artifact/design"
+                      "pointer": "/interactions/witness-design-level-minimal/artifact/scored-risks/design"
                     }
                   ]
                 }
@@ -954,6 +1188,9 @@
         "option": {
           "agent": {
             "matcher": "any"
+          },
+          "design-path": {
+            "literal": "field-order-capture/test-artifacts/test-design/test-design-epic-7.md"
           }
         },
         "environment": null,
@@ -974,6 +1211,9 @@
         "option": {
           "agent": {
             "matcher": "any"
+          },
+          "design-path": {
+            "literal": "field-sync-indicator/test-artifacts/test-design/test-design-epic-9.md"
           }
         },
         "environment": null,

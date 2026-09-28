@@ -3216,7 +3216,7 @@
   },
   "test-design": {
     "contractId": "tea-test-design-behavioral",
-    "corpusDigest": "sha256:e0277245b62ff8574fd5b0f22f55ab2f5964690cf30e9abe24a1b7c2238b904f",
+    "corpusDigest": "sha256:d3930aea6ae7e3caeafbb865ed99edd1360445207ea62b29ee80c2c777d7f54c",
     "probeCount": 16,
     "strength": {
       "defect": {
@@ -3231,7 +3231,7 @@
       },
       "zero-action": null
     },
-    "unsatisfiedCoverageRules": ["malformed-input", "state-change-read-back"],
+    "unsatisfiedCoverageRules": ["malformed-input", "state-change-read-back", "whole-body"],
     "probes": {
       "P-001": {
         "probeClass": "defect",
@@ -3355,7 +3355,7 @@
         "exitCode": 3,
         "strictPromotable": true,
         "basis": ["oracle resolved infrastructure-error", "pre-flight verdict did not pass"],
-        "qualification": ["condition-artifact-channel-contract-local"],
+        "qualification": ["condition-artifact-channel-contract-local", "condition-artifact-channel-contract-local"],
         "strength": null,
         "comparableResult": null
       },
@@ -3384,7 +3384,8 @@
         "strictPromotable": true,
         "basis": [
           "coverage gap malformed-input unsatisfied at or above the severity floor",
-          "coverage gap state-change-read-back unsatisfied at or above the severity floor"
+          "coverage gap state-change-read-back unsatisfied at or above the severity floor",
+          "coverage gap whole-body unsatisfied at or above the severity floor"
         ],
         "qualification": null,
         "strength": {
@@ -3591,6 +3592,7 @@
         "strictPromotable": true,
         "basis": ["oracle resolved infrastructure-error"],
         "qualification": [
+          "condition-artifact-channel-contract-local",
           "condition-artifact-channel-contract-local",
           "condition-artifact-channel-contract-local",
           "condition-artifact-channel-contract-local",

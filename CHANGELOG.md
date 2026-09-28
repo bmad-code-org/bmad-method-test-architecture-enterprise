@@ -232,6 +232,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - The README's suite counts and `test:cli`'s `eval:all` invocation count read only the manifest suites a harness runs, so an `evaluate-authored` entry, which declares no runner capabilities and which `eval:all` skips, no longer crashes `test:doc-count-sources` or miscounts the live harnesses (Story 1.16).
+- The test-design evaluation treats ruled-out categories in risk rows scored 1–3 as documented guards. Rows scored above 3 trigger invented-risk oracles and probes. The runner derives a scored-risk view from the harness parser, so reordered columns and fenced examples resolve consistently (Story 1.27).
+- The Evaluate interpretation fixture clears inherited Git repository variables before creating its scratch repository, so the full test gate can run safely inside a Git commit hook.
 - The mutation test clears its interrupted-run deadline when the child closes, so `npm run test:evaluate-mutation` exits promptly after reporting success.
 - `tea-evaluate score` refuses a planted `scores` symlink before running the scorer, so a pre-existing link cannot redirect score artifacts into the adopter's repository. The remaining concurrent directory-swap case is tracked by Story 1.41.
 - A `copy` workspace reproduced for a trial or a qualification now holds what the pristine copy held when it was made (Story 1.18).

@@ -9,6 +9,7 @@ const ROOT = path.join(__dirname, '..', '..');
 const CLI = path.join(ROOT, 'cli/evaluate.js');
 const FIXTURE = path.join(ROOT, 'test/fixtures/evaluate/mutation');
 const GIT = ['-c', 'user.name=TeA test', '-c', 'user.email=tea-test@example.test', '-c', 'core.hooksPath=/dev/null'];
+const BASE_ENV = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('GIT_')));
 
 function suite(name) {
   const scratch = scratchDirectories(name);
@@ -17,7 +18,7 @@ function suite(name) {
       cwd: ROOT,
       encoding: 'utf8',
       timeout: 180_000,
-      env: { ...process.env, ...env },
+      env: { ...BASE_ENV, ...env },
     });
     if (run.error) throw run.error;
     return { status: run.status, output: `${run.stdout}${run.stderr}` };
@@ -46,7 +47,7 @@ function suite(name) {
     ]) {
       const run = spawnSync('git', [...GIT, '-C', repository, ...args], {
         encoding: 'utf8',
-        env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' },
+        env: { ...BASE_ENV, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' },
       });
       if (run.status !== 0) throw new Error(`${args.join(' ')}: ${run.stderr}`);
     }
