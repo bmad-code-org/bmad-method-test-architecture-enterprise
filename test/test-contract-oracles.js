@@ -156,6 +156,7 @@ const {
 const { testDesignOracleSpecs, testDesignStepId } = require('../tools/generate-contracts');
 const {
   readDesign: readTestDesign,
+  bandFor: testDesignBandFor,
   scoredRiskProjection,
   scoreRun: scoreTestDesignRun,
   loadGroundTruth: loadTestDesignGroundTruth,
@@ -1038,6 +1039,28 @@ async function checkTestDesignOracles(evaluator) {
       mentioned: false,
     },
     {
+      label: 'blockquoted scored risk table is an example',
+      document:
+        register('The local queue is checked before upload.', 1, 2, 2, 'Document') +
+        '\n> ### Example Risk Register (Score 1-9)\n>\n' +
+        '> | Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '> | --- | --- | --- | --- | --- | --- | --- |\n' +
+        `> | R-002 | SEC | ${marker} | 2 | 2 | 4 | Test |\n`,
+      mentioned: false,
+      riskRowCount: 1,
+    },
+    {
+      label: 'blockquoted low band does not classify a later top-level risk',
+      document:
+        '# Test Design: Epic 7\n\n> ### Low-Priority Risks (Score 1-2)\n\n' +
+        '| Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+        '| --- | --- | --- | --- | --- | --- | --- |\n' +
+        `| R-001 | SEC | ${marker} | 2 | 3 | 6 | Test |\n`,
+      mentioned: true,
+      riskRowCount: 1,
+      expectNoBand: true,
+    },
+    {
       label: 'four-space indented scored example',
       document:
         register('The local queue is checked before upload.', 1, 2, 2, 'Document') +
@@ -1230,6 +1253,9 @@ async function checkTestDesignOracles(evaluator) {
         `${example.label}: the list heading belongs to its risk row`,
       );
     }
+    if (example.expectNoBand) {
+      assert(testDesignBandFor(read.design.risks[0].headings) === null, `${example.label}: the quote heading does not set a score band`);
+    }
     const results = evaluateOracles(evaluator, contract, {
       [testDesignStepId(seeded)]: observation({
         operationId: TEST_DESIGN_OPERATION,
@@ -1248,6 +1274,21 @@ async function checkTestDesignOracles(evaluator) {
       agrees(results.get(excluded.id), !example.mentioned),
       `${example.label}: O-008 ${example.mentioned ? 'fires' : 'stays unfired'}`,
       describe(results.get(excluded.id)),
+    );
+  }
+  const coverageDocument =
+    register('The local queue is checked before upload.', 1, 2, 2, 'Document') +
+    '\n## P1 Coverage\n\n- ### P0: List item coverage\n\n' +
+    '  | Test Level | Risk Link |\n  | --- | --- |\n  | E2E | R-001 |\n\n' +
+    '- | Test Level | Risk Link |\n  | --- | --- |\n  | E2E | R-001 |\n\n' +
+    '| Test Level | Risk Link |\n| --- | --- |\n| E2E | R-001 |\n\n' +
+    '> | Test Level | Risk Link |\n> | --- | --- |\n> | E2E | R-001 |\n';
+  const coverageRead = readTestDesign({ kind: 'text', value: coverageDocument });
+  assert(coverageRead.ok, 'coverage heading scope: the document parses');
+  if (coverageRead.ok) {
+    assert(
+      JSON.stringify(coverageRead.design.coverage.map((row) => row.priority)) === JSON.stringify(['P0', 'P1', 'P1']),
+      'coverage heading scope: the list item keeps P0; sibling and top-level tables return to P1; quoted examples are ignored',
     );
   }
   // Every oracle but the shape one has to have been seen failing somewhere, or this

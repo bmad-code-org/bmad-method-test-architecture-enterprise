@@ -23,7 +23,8 @@ function inlineText(token) {
  * Every GFM table in the document, with the headings it sits under.
  *
  * Markdown block tokens exclude fenced and indented code, including code in
- * lists. Headings are tracked because the template seeds three risk tables and
+ * lists. Blockquote contents are examples; list headings apply only inside their
+ * item. Headings are tracked because the template seeds three risk tables and
  * four coverage tables; a run may merge, split or rename any of them. A table
  * qualifies by its column names; its headings determine the priority of its rows.
  *
@@ -33,9 +34,28 @@ function inlineText(token) {
 function parseTables(text) {
   const tokens = markdown.parse(text, {});
   const tables = [];
-  const headings = [];
+  let headings = [];
+  const listHeadings = [];
+  let quoteDepth = 0;
   for (let index = 0; index < tokens.length; index += 1) {
     const token = tokens[index];
+    if (token.type === 'blockquote_open') {
+      quoteDepth += 1;
+      continue;
+    }
+    if (token.type === 'blockquote_close') {
+      quoteDepth -= 1;
+      continue;
+    }
+    if (quoteDepth > 0) continue;
+    if (token.type === 'list_item_open') {
+      listHeadings.push([...headings]);
+      continue;
+    }
+    if (token.type === 'list_item_close') {
+      headings = listHeadings.pop();
+      continue;
+    }
     if (token.type === 'heading_open') {
       const level = Number.parseInt(token.tag.slice(1), 10);
       headings.length = Math.min(headings.length, level - 1);
