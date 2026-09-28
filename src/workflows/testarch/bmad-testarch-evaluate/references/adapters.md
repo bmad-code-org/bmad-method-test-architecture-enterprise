@@ -1,6 +1,6 @@
 # Adapters
 
-Put each execution target in `evaluation.json.registry`, with one entry per interface. Match `interfaceId` to the contract's `permittedInterfaces[].logicalId`, and match the command `executable` and allowed subcommand paths to its operations. Set `launch.root` so every relative target resolves inside the disposable workspace. After the Stage 6 `check`, `compile` and `seal` sequence succeeds, run `tea-evaluate preflight`; a nonzero exit halts this stage and must be reported with its exit code. Inspect the verdict and fault files for `interface-not-authorized` or `executable-not-authorized` before calling wiring complete. The runtime gives each registry entry to eval-quality's default-deny policy.
+Put each execution target in `evaluation.json.registry`, with one entry per interface. Match `interfaceId` to the contract's `permittedInterfaces[].logicalId`, and match the command `executable` and allowed subcommand paths to its operations. Set `launch.root` so every relative target resolves inside the disposable workspace. After the Stage 6 `check`, `compile` and `seal` sequence succeeds, run `npm exec --prefix {tea_evaluations_folder} -- tea-evaluate preflight --evaluation <evaluation-folder>`; a nonzero exit halts this stage and must be reported with its exit code. Inspect the verdict and fault files for `interface-not-authorized` or `executable-not-authorized` before calling wiring complete. The runtime gives each registry entry to eval-quality's default-deny policy.
 
 ## Target kind to adapter mapping
 
@@ -38,7 +38,7 @@ Set `targetKind: "skill"`, `interface: "cli"`, and `launch.skillRoot` to the ski
 
 ## Agent's own non-interactive command
 
-If the adopter already has a command that accepts a prompt without an interactive session, register that exact executable and target. The command must print a machine-readable observation and distinguish infrastructure exits from behavior failures. The fixture command at [source fixture: calling-agent.js](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/evaluate-tool-use-agent/bin/calling-agent.js) is launched by this entry.
+If the adopter has a command that accepts a prompt without an interactive session, register that exact executable and target. The command must print a machine-readable observation and distinguish infrastructure exits from behavior failures. The fixture command at [source fixture: calling-agent.js](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/evaluate-tool-use-agent/bin/calling-agent.js) is launched by this entry. When an agent has no own non-interactive command, wrap it with the shipped generic `tea-skill-runner`. If the agent has no skill directory, put its task and instructions in a `SKILL.md` wrapper under the target project. Set `launch.skillRoot` to that skill inside the disposable copy and use the registry shape in the Skill runner section, with `executable` and `target` both set to `tea-skill-runner`. Pass the agent adapter options and probe prompt through that runner.
 
 <!-- example:registry -->
 

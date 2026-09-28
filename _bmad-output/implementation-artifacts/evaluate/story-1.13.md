@@ -2,9 +2,9 @@
 title: 'Author the contract, oracles, rubrics and adapter wiring'
 type: 'feature'
 created: '2026-09-27'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
-review_loop_iteration: 1
+review_loop_iteration: 2
 baseline_commit: 'a6d94428fdf0ce725cf86ec4f50839222c53a2d1'
 context:
   - '_bmad-output/planning-artifacts/evaluate/epics.md'
@@ -93,6 +93,11 @@ The workflow-builder Analyze report has zero critical and zero high findings, wi
 | Review round 1: the test-review row cited only a generic runner fixture.                                                                                   | Added the seeded and clean review corpus citations, and distinguished runner transport from review behavior.                                                                                                                                                                                                                                                                         |
 | Review round 1: deleting oracle lessons or changing a registry target could pass the guidance gate.                                                        | Added per-lesson checks, matched registry entries to their cited fixtures, and exercised check and preflight denial paths.                                                                                                                                                                                                                                                           |
 | CodeRabbit: the `forbiddenInputs` revert check accepted any nonzero exit.                                                                                  | Required the documented engine schema-parse exit 5 and retained the stderr check.                                                                                                                                                                                                                                                                                                    |
+| Final review round: deleting one forbidden input name from the authored-fields lesson left the guidance gate green.                                        | Scoped the seven floor-member assertions to that lesson; a targeted revert fails.                                                                                                                                                                                                                                                                                                    |
+| Final review round: the Agent mapping omitted the generic skill runner when the target has no own command.                                                 | Added the AD-4 fallback procedure and a scoped guidance assertion.                                                                                                                                                                                                                                                                                                                   |
+| Final review round: the adapter guide gave a preflight command without its required evaluation path.                                                       | Documented the full installed command, added it after seal in Stage 6, and asserted both instructions.                                                                                                                                                                                                                                                                               |
+| Final review round: the numeric fixture failed direct process launch with `EACCES`.                                                                        | Marked it executable and launched it directly in the guidance gate, which catches a mode revert. This lesson is a tagged contract fragment; the separate starter contract supplies the required end-to-end preflight.                                                                                                                                                                |
+| Final review round: the omission example's commentary claimed skill loading and exit evidence that its records-array check did not read.                   | Rewrote the commentary to describe the exact array result and asserted it in the guidance gate.                                                                                                                                                                                                                                                                                      |
 
 ## Verification
 
@@ -108,7 +113,7 @@ The workflow-builder Analyze report has zero critical and zero high findings, wi
 - `npm run test:evaluate-guidance`: passed with 12 stages, six worked guides, 36 engine-valid tagged probes, and contract examples.
 - `npm run test:boundary`: passed with 827 scanned entries and zero violations. `node test/test-layering-boundary-lineage.js`: 785 checks passed, including pack-list source coverage.
 - `npm run lint`, `npm run lint:md`, and `npm run format:check`: passed after the style and generated-report exclusions.
-- `npm test`: passed again after the first review fixes, including every Evaluate runtime suite, package boundary, source layering, schema validation, lint, markdownlint, and formatting.
+- `npm test`: passed after both review fixes, including every Evaluate runtime suite, package boundary, source layering, schema validation, lint, markdownlint, and formatting. The focused guidance gate passed again after the final wrapper instruction was added.
 - `npm run docs:validate-links`: 44 documentation files scanned with zero link issues after the review fixes.
 - Nine targeted revert mutations were rejected by the guidance gate and restored: missing field name, missing skeleton `forbiddenInputs`, missing fill key, wrong source digest, removed discipline heading, malformed tagged patch, removed seal step, removed degenerate response, and removed workflow adapter row. The unmodified guidance gate passed again.
 - The engine export check passed before and after the work. `git diff --check` passed.

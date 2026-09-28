@@ -307,7 +307,7 @@ Require the whole promised records array, including item identities and values. 
       "value": {
         "id": "O-001",
         "polarity": "expects-hold",
-        "commentary": "The agent read SKILL.md under the skill root the runner was given, so stdout names that skill, and the run exited 0.",
+        "commentary": "The JSON stdout records array contains exactly the two promised records, with their IDs and decisions in order.",
         "direction": {
           "polarity": "expects-hold",
           "relation": "equality",

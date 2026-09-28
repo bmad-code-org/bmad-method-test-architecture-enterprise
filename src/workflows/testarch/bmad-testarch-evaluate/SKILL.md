@@ -96,6 +96,8 @@ Scaffold the execution-target registry and adapters. Load `references/adapters.m
 
 When the contract, oracles and registry are filled, ensure `policy/scoring-policy.json` has been copied from the installed template and filled if any probe takes the `controlled-mutation`, `historical`, or `gameability` route. Run `npm exec --prefix {tea_evaluations_folder} -- tea-evaluate check --evaluation <evaluation-folder>`, then `npm exec --prefix {tea_evaluations_folder} -- eval-quality compile --in <evaluation-folder>/contract.json --out <evaluation-folder>/compiled-contract.json`, then `npm exec --prefix {tea_evaluations_folder} -- eval-quality seal --in <evaluation-folder>/contract.json --out <evaluation-folder>/sealed-brief.json`. Stop at the first nonzero exit. Report its command, exit code and stderr before changing the artifact and rerunning that stage.
 
+After seal succeeds, run `npm exec --prefix {tea_evaluations_folder} -- tea-evaluate preflight --evaluation <evaluation-folder>` to verify the selected registry can launch and satisfy its clean control. Stop and report the command, exit code and stderr on failure; complete adapter wiring only after preflight succeeds.
+
 ### Stage 7: Evaluator
 
 Choose or build the evaluation layer. Load `references/evaluator.md`.

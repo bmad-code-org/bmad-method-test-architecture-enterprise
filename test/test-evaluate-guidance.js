@@ -887,6 +887,9 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
       '## Worked end-to-end contract',
     ])
       requireHeading(contractGuide, heading, 'contract.md', failures);
+    const authoredFields = headingBody(contractGuide, '## Authored fields');
+    for (const member of contract.forbiddenInputs)
+      requireText(authoredFields, tick + member + tick, 'contract.md Authored fields forbiddenInputs floor', failures);
     const rules = [
       'success-indicator-separation',
       'whole-body',
@@ -961,14 +964,14 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
         assert.strictEqual(typeof JSON.parse(edited.interactionPlan[0].inputBinding.stdin.prompt.literal).amount, 'string');
         assert.match(JSON.stringify(edited.oracles[0].check), /invalid amount/);
         const numericTarget = path.join(__dirname, 'fixtures', 'evaluate', 'numeric-amount.js');
-        const refused = spawnSync(process.execPath, [numericTarget], {
+        const refused = spawnSync(numericTarget, [], {
           input: edited.interactionPlan[0].inputBinding.stdin.prompt.literal,
           encoding: 'utf8',
         });
-        const accepted = spawnSync(process.execPath, [numericTarget], { input: '{"amount":7}', encoding: 'utf8' });
-        assert.strictEqual(refused.status, 0, refused.stderr);
+        const accepted = spawnSync(numericTarget, [], { input: '{"amount":7}', encoding: 'utf8' });
+        assert.strictEqual(refused.status, 0, refused.error?.message ?? refused.stderr);
         assert.strictEqual(refused.stdout, 'error: invalid amount\n');
-        assert.strictEqual(accepted.status, 0, accepted.stderr);
+        assert.strictEqual(accepted.status, 0, accepted.error?.message ?? accepted.stderr);
         assert.strictEqual(accepted.stdout, 'accepted amount: 7\n');
       }
       if (index === 3) {
@@ -995,6 +998,8 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
       if (index === 5) {
         assert.strictEqual(edited.oracles[0].check.op, 'equality');
         assert.strictEqual(edited.oracles[0].check.operands[0].pointer, '/interactions/answer-run/stdout/records');
+        assert.match(edited.oracles[0].commentary, /records array contains exactly the two promised records/);
+        assert.doesNotMatch(edited.oracles[0].commentary, /SKILL\.md|skill root|run exited/);
         assert.deepStrictEqual(
           edited.oracles[0].check.operands[1].literal.map((record) => record.id),
           ['A', 'B'],
@@ -1073,6 +1078,7 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
     if (order.some((index) => index < 0) || !(order[0] < order[1] && order[1] < order[2]))
       failures.push('SKILL.md Stage 6 must run check, compile, seal in order');
     for (const marker of ['nonzero exit', 'exit code', 'stderr']) requireText(stage, marker, 'SKILL.md Stage 6', failures);
+    if (stage.indexOf('tea-evaluate preflight') <= order[2]) failures.push('SKILL.md Stage 6 must preflight after seal');
 
     for (const heading of [
       '## One oracle per discharged behavior',
@@ -1168,6 +1174,22 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
     }
     requireText(adapterGuide, 'interface-not-authorized', 'adapters.md', failures);
     requireText(adapterGuide, 'executable-not-authorized', 'adapters.md', failures);
+    requireText(
+      adapterGuide.split('\n## ')[0],
+      'npm exec --prefix {tea_evaluations_folder} -- tea-evaluate preflight --evaluation <evaluation-folder>',
+      'adapters.md opening',
+      failures,
+    );
+    const agentFallback = headingBody(adapterGuide, "## Agent's own non-interactive command");
+    for (const marker of [
+      'When an agent has no own non-interactive command',
+      'shipped generic `tea-skill-runner`',
+      '`SKILL.md` wrapper',
+      'launch.skillRoot',
+      'disposable copy',
+      'registry shape in the Skill runner section',
+    ])
+      requireText(agentFallback, marker, 'adapters.md Agent fallback', failures);
     const adapterRows = adapterGuide.match(/## Target kind to adapter mapping\n([\s\S]*?)(?:\n## |$)/)?.[1] ?? '';
     const expectedKinds = [
       'Skill',
