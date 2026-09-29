@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "mutationId": "M-004",
+  "mutationSource": "strict minimum reduced to normal minimum",
+  "targetArtifact": "server/grade.mjs",
+  "operator": {
+    "kind": "replace-exact",
+    "find": "policy.minimumLength * 2",
+    "replace": "policy.minimumLength",
+    "occurrences": 1
+  },
+  "expectedObservableFailure": "strict answer below doubled minimum passes in HTTP response body"
+}

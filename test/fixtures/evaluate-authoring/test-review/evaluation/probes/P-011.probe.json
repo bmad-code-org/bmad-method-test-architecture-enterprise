@@ -1,0 +1,105 @@
+{
+  "probeId": "P-011",
+  "probeClass": "defect",
+  "behaviorId": "B-002",
+  "expectedClean": false,
+  "rationale": "[held-out] A disabled-test guard bypass misses the same skipped test.",
+  "defects": [
+    {
+      "defectId": "D-011",
+      "behaviorId": "B-002",
+      "summary": "A disabled-test guard bypass misses the same skipped test.",
+      "severity": "material",
+      "source": "controlled-mutation",
+      "manifestationWitness": {
+        "legId": "manifest-p-011",
+        "interfaceId": "review-cli",
+        "operationId": "review",
+        "inputs": {
+          "argument": {},
+          "option": {},
+          "environment": {},
+          "stdin": {
+            "kind": "json",
+            "value": {
+              "action": "review",
+              "file": "cases/disabled-test.test.js"
+            }
+          }
+        },
+        "relation": {
+          "op": "all",
+          "operands": [
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/manifest-p-011/stdout/file"
+                },
+                {
+                  "literal": "cases/disabled-test.test.js"
+                }
+              ]
+            },
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/manifest-p-011/stdout/status"
+                },
+                {
+                  "literal": "clean"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "defectSignature": {
+    "interfaceKind": "cli",
+    "observableChannel": "stdout",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": null,
+          "header": null,
+          "body": null,
+          "argument": null,
+          "option": null,
+          "environment": null,
+          "stdin": {
+            "action": {
+              "literal": "review"
+            },
+            "file": {
+              "literal": "cases/disabled-test.test.js"
+            }
+          },
+          "arguments": null
+        }
+      },
+      "predicate": {
+        "op": "equality",
+        "operands": [
+          {
+            "pointer": "/interactions/observed/stdout/status"
+          },
+          {
+            "literal": "clean"
+          }
+        ]
+      }
+    },
+    "invocation": {
+      "executable": "review",
+      "subcommandPath": []
+    }
+  },
+  "qualification": {
+    "route": "controlled-mutation",
+    "mutation": "M-006"
+  }
+}

@@ -1,0 +1,564 @@
+[
+  {
+    "schemaVersion": 5,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-010",
+    "probeClass": "defect",
+    "behaviorId": "B-001",
+    "systemId": "test-review-json-stdin",
+    "implementationDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
+    "artifactDigest": "sha256:e48e800f1826004bf1b55d586cd20c99a1e98adf55cd0a1010ddbfe8c4c9805b",
+    "commitDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
+    "rationale": "[held-out] A broadened assertion rule misses the same assertion-free test.",
+    "qualification": {
+      "route": "controlled-mutation",
+      "mutationSource": "Adopter-owned B-001 rule change",
+      "mutationOperator": "replace-exact: \"\\\"assert.strictEqual(\\\"\" -> \"\\\"test(\\\"\" (occurrences 1)",
+      "targetArtifact": {
+        "storage": "public",
+        "path": "rules/review.json",
+        "privateRef": null,
+        "digest": "sha256:e48e800f1826004bf1b55d586cd20c99a1e98adf55cd0a1010ddbfe8c4c9805b"
+      },
+      "expectedObservableFailure": "stdout reports the assertion-free test clean because its test call is treated as an assertion",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "runs/20260929T013608696Z-4571b7ff/qualification/P-010/baseline-pass.json",
+        "privateRef": null,
+        "digest": "sha256:39071a2e22b617a79feef9d31c5f781e3d7627d82f714849041344a97601bb03"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "runs/20260929T013608696Z-4571b7ff/qualification/P-010/mutated-fail.json",
+        "privateRef": null,
+        "digest": "sha256:f5b0c51626a0dcf80835024340ee6d414c13b9bc1a45202940bafa701b5de88e"
+      },
+      "rollbackVerified": true
+    },
+    "expectedClean": false,
+    "defects": [
+      {
+        "defectId": "D-010",
+        "behaviorId": "B-001",
+        "summary": "A broadened assertion rule misses the same assertion-free test.",
+        "severity": "critical",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "runs/20260929T013608696Z-4571b7ff/qualification/P-010/mutated-fail.json",
+            "privateRef": null,
+            "digest": "sha256:f5b0c51626a0dcf80835024340ee6d414c13b9bc1a45202940bafa701b5de88e"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "manifest-p-010",
+          "interfaceId": "review-cli",
+          "operationId": "review",
+          "inputs": {
+            "argument": {},
+            "option": {},
+            "environment": {},
+            "stdin": {
+              "kind": "json",
+              "value": {
+                "action": "review",
+                "file": "cases/missing-assertion.test.js"
+              }
+            }
+          },
+          "relation": {
+            "op": "all",
+            "operands": [
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/manifest-p-010/stdout/file"
+                  },
+                  {
+                    "literal": "cases/missing-assertion.test.js"
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/manifest-p-010/stdout/status"
+                  },
+                  {
+                    "literal": "clean"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "defectSignature": {
+      "interfaceKind": "cli",
+      "observableChannel": "stdout",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": null,
+            "argument": null,
+            "option": null,
+            "environment": null,
+            "stdin": {
+              "action": {
+                "literal": "review"
+              },
+              "file": {
+                "literal": "cases/missing-assertion.test.js"
+              }
+            },
+            "arguments": null
+          }
+        },
+        "predicate": {
+          "op": "equality",
+          "operands": [
+            {
+              "pointer": "/interactions/observed/stdout/status"
+            },
+            {
+              "literal": "clean"
+            }
+          ]
+        }
+      },
+      "invocation": {
+        "executable": "review",
+        "subcommandPath": []
+      }
+    }
+  },
+  {
+    "schemaVersion": 5,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-011",
+    "probeClass": "defect",
+    "behaviorId": "B-002",
+    "systemId": "test-review-json-stdin",
+    "implementationDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
+    "artifactDigest": "sha256:f1c323ac0453a1db6835f3f2b7ba670e61da2bcbef79dce9cba717b0286472fe",
+    "commitDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
+    "rationale": "[held-out] A disabled-test guard bypass misses the same skipped test.",
+    "qualification": {
+      "route": "controlled-mutation",
+      "mutationSource": "Adopter-owned B-002 rule change",
+      "mutationOperator": "replace-exact: \"if (rules.disabled.some((token) => source.includes(token)))\" -> \"if (false && rules.disabled.some((token) => source.includes(token)))\" (occurrences 1)",
+      "targetArtifact": {
+        "storage": "public",
+        "path": "bin/review.mjs",
+        "privateRef": null,
+        "digest": "sha256:f1c323ac0453a1db6835f3f2b7ba670e61da2bcbef79dce9cba717b0286472fe"
+      },
+      "expectedObservableFailure": "stdout omits disabled-test for test.skip",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "runs/20260929T013608696Z-4571b7ff/qualification/P-011/baseline-pass.json",
+        "privateRef": null,
+        "digest": "sha256:7ded01e4d773aaebb0cdf5f7a0ec8e4169b469b4e4ab1edabe125991e2eccc4a"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "runs/20260929T013608696Z-4571b7ff/qualification/P-011/mutated-fail.json",
+        "privateRef": null,
+        "digest": "sha256:843c75c0b9931e2542a4f971fec2521634d1a058e32e0e26375e27cdc8db5856"
+      },
+      "rollbackVerified": true
+    },
+    "expectedClean": false,
+    "defects": [
+      {
+        "defectId": "D-011",
+        "behaviorId": "B-002",
+        "summary": "A disabled-test guard bypass misses the same skipped test.",
+        "severity": "material",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "runs/20260929T013608696Z-4571b7ff/qualification/P-011/mutated-fail.json",
+            "privateRef": null,
+            "digest": "sha256:843c75c0b9931e2542a4f971fec2521634d1a058e32e0e26375e27cdc8db5856"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "manifest-p-011",
+          "interfaceId": "review-cli",
+          "operationId": "review",
+          "inputs": {
+            "argument": {},
+            "option": {},
+            "environment": {},
+            "stdin": {
+              "kind": "json",
+              "value": {
+                "action": "review",
+                "file": "cases/disabled-test.test.js"
+              }
+            }
+          },
+          "relation": {
+            "op": "all",
+            "operands": [
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/manifest-p-011/stdout/file"
+                  },
+                  {
+                    "literal": "cases/disabled-test.test.js"
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/manifest-p-011/stdout/status"
+                  },
+                  {
+                    "literal": "clean"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "defectSignature": {
+      "interfaceKind": "cli",
+      "observableChannel": "stdout",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": null,
+            "argument": null,
+            "option": null,
+            "environment": null,
+            "stdin": {
+              "action": {
+                "literal": "review"
+              },
+              "file": {
+                "literal": "cases/disabled-test.test.js"
+              }
+            },
+            "arguments": null
+          }
+        },
+        "predicate": {
+          "op": "equality",
+          "operands": [
+            {
+              "pointer": "/interactions/observed/stdout/status"
+            },
+            {
+              "literal": "clean"
+            }
+          ]
+        }
+      },
+      "invocation": {
+        "executable": "review",
+        "subcommandPath": []
+      }
+    }
+  },
+  {
+    "schemaVersion": 5,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-012",
+    "probeClass": "defect",
+    "behaviorId": "B-003",
+    "systemId": "test-review-json-stdin",
+    "implementationDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
+    "artifactDigest": "sha256:f1c323ac0453a1db6835f3f2b7ba670e61da2bcbef79dce9cba717b0286472fe",
+    "commitDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
+    "rationale": "[held-out] A universal assertion matcher falsely flags the same valid match test.",
+    "qualification": {
+      "route": "controlled-mutation",
+      "mutationSource": "Adopter-owned B-003 rule change",
+      "mutationOperator": "replace-exact: \"rules.assertions.some((token) => source.includes(token))\" -> \"rules.assertions.every((token) => source.includes(token))\" (occurrences 1)",
+      "targetArtifact": {
+        "storage": "public",
+        "path": "bin/review.mjs",
+        "privateRef": null,
+        "digest": "sha256:f1c323ac0453a1db6835f3f2b7ba670e61da2bcbef79dce9cba717b0286472fe"
+      },
+      "expectedObservableFailure": "stdout falsely reports missing-assertion for assert.match",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "runs/20260929T013608696Z-4571b7ff/qualification/P-012/baseline-pass.json",
+        "privateRef": null,
+        "digest": "sha256:7d75b85e94066d7fbea639132413563db461ac5aca615f8d7b1d3cf3e11aa038"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "runs/20260929T013608696Z-4571b7ff/qualification/P-012/mutated-fail.json",
+        "privateRef": null,
+        "digest": "sha256:5867a89f8c7d05f4ab4dc5f08a62de3380c8139e31295ed8b0be9f6e0acd6711"
+      },
+      "rollbackVerified": true
+    },
+    "expectedClean": false,
+    "defects": [
+      {
+        "defectId": "D-012",
+        "behaviorId": "B-003",
+        "summary": "A universal assertion matcher falsely flags the same valid match test.",
+        "severity": "material",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "runs/20260929T013608696Z-4571b7ff/qualification/P-012/mutated-fail.json",
+            "privateRef": null,
+            "digest": "sha256:5867a89f8c7d05f4ab4dc5f08a62de3380c8139e31295ed8b0be9f6e0acd6711"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "manifest-p-012",
+          "interfaceId": "review-cli",
+          "operationId": "review",
+          "inputs": {
+            "argument": {},
+            "option": {},
+            "environment": {},
+            "stdin": {
+              "kind": "json",
+              "value": {
+                "action": "review",
+                "file": "cases/clean-assert-match.test.js"
+              }
+            }
+          },
+          "relation": {
+            "op": "all",
+            "operands": [
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/manifest-p-012/stdout/file"
+                  },
+                  {
+                    "literal": "cases/clean-assert-match.test.js"
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/manifest-p-012/stdout/status"
+                  },
+                  {
+                    "literal": "findings"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "defectSignature": {
+      "interfaceKind": "cli",
+      "observableChannel": "stdout",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": null,
+            "argument": null,
+            "option": null,
+            "environment": null,
+            "stdin": {
+              "action": {
+                "literal": "review"
+              },
+              "file": {
+                "literal": "cases/clean-assert-match.test.js"
+              }
+            },
+            "arguments": null
+          }
+        },
+        "predicate": {
+          "op": "equality",
+          "operands": [
+            {
+              "pointer": "/interactions/observed/stdout/status"
+            },
+            {
+              "literal": "findings"
+            }
+          ]
+        }
+      },
+      "invocation": {
+        "executable": "review",
+        "subcommandPath": []
+      }
+    }
+  },
+  {
+    "schemaVersion": 5,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-013",
+    "probeClass": "defect",
+    "behaviorId": "B-004",
+    "systemId": "test-review-json-stdin",
+    "implementationDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
+    "artifactDigest": "sha256:f1c323ac0453a1db6835f3f2b7ba670e61da2bcbef79dce9cba717b0286472fe",
+    "commitDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
+    "rationale": "[held-out] An inverted request guard accepts the same extra-field request.",
+    "qualification": {
+      "route": "controlled-mutation",
+      "mutationSource": "Adopter-owned B-004 rule change",
+      "mutationOperator": "replace-exact: \"Object.keys(request).length !== 2\" -> \"Object.keys(request).length === 2\" (occurrences 1)",
+      "targetArtifact": {
+        "storage": "public",
+        "path": "bin/review.mjs",
+        "privateRef": null,
+        "digest": "sha256:f1c323ac0453a1db6835f3f2b7ba670e61da2bcbef79dce9cba717b0286472fe"
+      },
+      "expectedObservableFailure": "stdout accepts an extra-field request and returns a clean review",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "runs/20260929T013608696Z-4571b7ff/qualification/P-013/baseline-pass.json",
+        "privateRef": null,
+        "digest": "sha256:6c8fe8a59e039d03f6d0e727a5c5aeb459eeb6bcdab91bccc968488df2087560"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "runs/20260929T013608696Z-4571b7ff/qualification/P-013/mutated-fail.json",
+        "privateRef": null,
+        "digest": "sha256:e125693fc72eff8dfd90568943ce3773e3be2de80a5ee560e7178afa1ae968ee"
+      },
+      "rollbackVerified": true
+    },
+    "expectedClean": false,
+    "defects": [
+      {
+        "defectId": "D-013",
+        "behaviorId": "B-004",
+        "summary": "An inverted request guard accepts the same extra-field request.",
+        "severity": "material",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "runs/20260929T013608696Z-4571b7ff/qualification/P-013/mutated-fail.json",
+            "privateRef": null,
+            "digest": "sha256:e125693fc72eff8dfd90568943ce3773e3be2de80a5ee560e7178afa1ae968ee"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "manifest-p-013",
+          "interfaceId": "review-cli",
+          "operationId": "review",
+          "inputs": {
+            "argument": {},
+            "option": {},
+            "environment": {},
+            "stdin": {
+              "kind": "json",
+              "value": {
+                "action": "review",
+                "file": "cases/clean-strict-equal.test.js",
+                "extra": true
+              }
+            }
+          },
+          "relation": {
+            "op": "all",
+            "operands": [
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/manifest-p-013/stdout/file"
+                  },
+                  {
+                    "literal": "cases/clean-strict-equal.test.js"
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/manifest-p-013/stdout/status"
+                  },
+                  {
+                    "literal": "clean"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "defectSignature": {
+      "interfaceKind": "cli",
+      "observableChannel": "stdout",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": null,
+            "argument": null,
+            "option": null,
+            "environment": null,
+            "stdin": {
+              "raw": {
+                "literal": "{\"action\":\"review\",\"file\":\"cases/clean-strict-equal.test.js\",\"extra\":true}"
+              }
+            },
+            "arguments": null
+          }
+        },
+        "predicate": {
+          "op": "equality",
+          "operands": [
+            {
+              "pointer": "/interactions/observed/stdout/status"
+            },
+            {
+              "literal": "clean"
+            }
+          ]
+        }
+      },
+      "invocation": {
+        "executable": "review",
+        "subcommandPath": []
+      }
+    }
+  }
+]

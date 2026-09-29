@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "mutationId": "M-003",
+  "mutationSource": "malformed type error gets success status",
+  "targetArtifact": "server/grade.mjs",
+  "operator": {
+    "kind": "replace-exact",
+    "find": "response.writeHead(400).end(JSON.stringify({ error: 'answer must be a string' }));",
+    "replace": "response.writeHead(200).end(JSON.stringify({ decision: 'reject', reason: 'invalid-type' }));",
+    "occurrences": 1
+  },
+  "expectedObservableFailure": "malformed answer receives HTTP 200 and a grade-like response body"
+}

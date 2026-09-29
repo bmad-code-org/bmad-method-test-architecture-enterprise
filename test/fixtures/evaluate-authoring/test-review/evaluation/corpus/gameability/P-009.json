@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "steps": {
+    "missing": {
+      "stdout": "{\"file\":\"cases/missing-assertion.test.js\",\"status\":\"findings\",\"findings\":[\"missing-assertion\"]}\n",
+      "stderr": "",
+      "exitCode": 0
+    },
+    "disabled": {
+      "stdout": "{\"file\":\"cases/disabled-test.test.js\",\"status\":\"findings\",\"findings\":[\"disabled-test\"]}\n",
+      "stderr": "",
+      "exitCode": 0
+    },
+    "it-skip": {
+      "stdout": "{\"file\":\"cases/it-skip.test.js\",\"status\":\"findings\",\"findings\":[\"disabled-test\"]}\n",
+      "stderr": "",
+      "exitCode": 0
+    },
+    "strict": {
+      "stdout": "{\"file\":\"cases/clean-strict-equal.test.js\",\"status\":\"clean\",\"findings\":[]}\n",
+      "stderr": "",
+      "exitCode": 0
+    },
+    "match": {
+      "stdout": "{\"file\":\"cases/clean-assert-match.test.js\",\"status\":\"findings\",\"findings\":[\"missing-assertion\"]}\n",
+      "stderr": "",
+      "exitCode": 0
+    },
+    "to-be": {
+      "stdout": "{\"file\":\"cases/expect-to-be.test.js\",\"status\":\"clean\",\"findings\":[]}\n",
+      "stderr": "",
+      "exitCode": 0
+    },
+    "dangling": {
+      "stdout": "{\"file\":\"cases/dangling-expect.test.js\",\"status\":\"findings\",\"findings\":[\"missing-assertion\"]}\n",
+      "stderr": "",
+      "exitCode": 0
+    },
+    "empty": {
+      "stdout": "{\"error\":\"invalid JSON\"}\n",
+      "stderr": "",
+      "exitCode": 0
+    },
+    "invalid-json": {
+      "stdout": "{\"error\":\"invalid JSON\"}\n",
+      "stderr": "",
+      "exitCode": 0
+    },
+    "wrong-file-type": {
+      "stdout": "{\"error\":\"provide a JSON object with action review and a file string\"}\n",
+      "stderr": "",
+      "exitCode": 0
+    },
+    "extra": {
+      "stdout": "{\"error\":\"provide a JSON object with action review and a file string\"}\n",
+      "stderr": "",
+      "exitCode": 0
+    },
+    "missing-action": {
+      "stdout": "{\"error\":\"provide a JSON object with action review and a file string\"}\n",
+      "stderr": "",
+      "exitCode": 0
+    },
+    "wrong-action": {
+      "stdout": "{\"error\":\"provide a JSON object with action review and a file string\"}\n",
+      "stderr": "",
+      "exitCode": 0
+    },
+    "missing-file": {
+      "stdout": "{\"error\":\"provide a JSON object with action review and a file string\"}\n",
+      "stderr": "",
+      "exitCode": 0
+    },
+    "unreadable": {
+      "stdout": "{\"error\":\"cannot read test file\"}\n",
+      "stderr": "",
+      "exitCode": 0
+    },
+    "typed-file": {
+      "stdout": "{\"error\":\"provide a JSON object with action review and a file string\"}\n",
+      "stderr": "",
+      "exitCode": 0
+    }
+  }
+}

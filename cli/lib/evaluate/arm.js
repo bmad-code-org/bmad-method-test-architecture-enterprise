@@ -10,8 +10,9 @@
  * operation's method and path template with its bound `path`, `query` and
  * `header` values and, when bound, its `body` values as one JSON object.
  *
- * A binding is a `literal`, sent as written, or a `captured` pointer (Story
- * 1.18), sent as the value it resolves to on the named earlier step's
+ * A binding is a `literal`, sent as written, a `type-violating` matcher,
+ * materialized as a stable value of another JSON type, or a `captured`
+ * pointer (Story 1.18), sent as the value it resolves to on the named earlier step's
  * observation in this arm, read by eval-quality's own `makeResolveOperand`,
  * the reading its `score` gives the same pointer. A step runs after the step
  * its `after` clause names and after every step its captured bindings read,
@@ -21,7 +22,7 @@
  * not issued, or its observation lacks the value), is not issued: it gets no
  * observation, and `steps` records it as skipped with the reason, so
  * eval-quality reads the missing observation as it reads any evidence that
- * does not exist. A binding this release cannot send (a `matcher`, a
+ * does not exist. A binding this release cannot send (an `any` matcher, a
  * `principal`) and an operation of another kind stop the arm with an
  * `ArmError` (exit 12): the run cannot send the request the contract means.
  * A cycle over the `after` and capture edges never reaches an arm, since
@@ -352,6 +353,8 @@ function capturedStepId(pointer) {
 
 /** The channels whose values are strings on the wire: an HTTP header and a command's environment variable. */
 const STRING_CHANNELS = new Set(['header', 'environment']);
+/** A transport turns these inputs into strings before the target sees them. */
+const STRINGIFIED_CHANNELS = new Set(['path', 'query', 'header', 'argument', 'option', 'environment']);
 /** The channels a command's argument vector and environment carry, where no string can hold a NUL character. */
 const PROCESS_CHANNELS = new Set(['argument', 'option', 'environment']);
 /** A character no HTTP header value may hold: a control other than tab, DEL, or one past U+00FF, which Node refuses to send. */
@@ -373,7 +376,8 @@ function quotedValue(value) {
 
 /**
  * The values one binding channel supplies, or null for an unbound channel: a
- * literal as written, a captured pointer as `resolve` reads it. `absent`
+ * literal as written, a type-violating matcher from the declared key type,
+ * or a captured pointer as `resolve` reads it. `absent`
  * lists each captured binding that resolved to nothing, and `unsendable` each
  * captured value the request cannot carry as the target printed it (a value
  * holding a `__proto__` key, which eval-quality's request parser drops, a
@@ -385,7 +389,7 @@ function quotedValue(value) {
  * `{ binding, pointer }` with the reason for an unsendable one. A literal the
  * request cannot carry is the contract's own defect and stops the arm.
  */
-function boundValues(channel, stepId, name, resolve) {
+function boundValues(channel, stepId, name, resolve, shape) {
   if (channel === null || channel === undefined) return { values: null, absent: [], unsendable: [] };
   const values = {};
   const absent = [];
@@ -402,9 +406,20 @@ function boundValues(channel, stepId, name, resolve) {
       values[key] = binding.literal;
       continue;
     }
+    if (binding?.matcher === 'type-violating') {
+      const declared = shape?.types?.[key];
+      if (declared === undefined || declared === null) {
+        throw new ArmError(`interaction plan step ${stepId} binds ${name}.${key} as type-violating without a declared type`);
+      }
+      if (STRINGIFIED_CHANNELS.has(name)) {
+        throw new ArmError(`interaction plan step ${stepId} cannot send a type-violating ${name}.${key}; the transport requires a string`);
+      }
+      values[key] = declared === 'number' || declared === 'integer' ? 'malformed' : 42;
+      continue;
+    }
     if (!isCaptured(binding)) {
       throw new ArmError(
-        `interaction plan step ${stepId} binds ${name}.${key} with ${JSON.stringify(binding)}; this release sends literal and captured bindings only`,
+        `interaction plan step ${stepId} binds ${name}.${key} with ${JSON.stringify(binding)}; this release sends literal, type-violating and captured bindings only`,
       );
     }
     const site = { binding: `${name}.${key}`, pointer: binding.captured };
@@ -544,7 +559,7 @@ async function runArm({ contract, port, registry, label, provenance = 'baseline'
     const absent = [];
     const unsendable = [];
     const bound = (channel, name) => {
-      const read = boundValues(channel, step.stepId, name, resolve);
+      const read = boundValues(channel, step.stepId, name, resolve, operation.requestShape?.[name]);
       absent.push(...read.absent);
       unsendable.push(...read.unsendable);
       return read.values;

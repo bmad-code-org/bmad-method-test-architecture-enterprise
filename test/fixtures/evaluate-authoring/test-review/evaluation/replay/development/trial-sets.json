@@ -1,0 +1,155 @@
+{
+  "schemaVersion": 1,
+  "invocationId": "20260929T013519187Z-9e9381ce",
+  "corpusDigest": "sha256:f65a177e55c374d2f0362f21f23d118daa1ed37c748e17b2b355826690e52706",
+  "contract": "eval-contract.json",
+  "policy": "scoring-policy.json",
+  "preflightVerdict": "preflight-verdict.json",
+  "evaluatorConfiguration": "evaluator-configuration.json",
+  "trialSets": [
+    {
+      "probeId": "P-001",
+      "runId": "20260929T013519187Z-9e9381ce-P-001",
+      "conditionArm": "clean",
+      "probe": "probes/P-001.probe.json",
+      "records": [
+        "trial-sets/P-001/record-1.json",
+        "trial-sets/P-001/record-2.json",
+        "trial-sets/P-001/record-3.json"
+      ],
+      "isolationManifest": "trial-sets/P-001/isolation-manifest.json"
+    },
+    {
+      "probeId": "P-002",
+      "runId": "20260929T013519187Z-9e9381ce-P-002",
+      "conditionArm": "clean",
+      "probe": "probes/P-002.probe.json",
+      "records": [
+        "trial-sets/P-002/record-1.json",
+        "trial-sets/P-002/record-2.json",
+        "trial-sets/P-002/record-3.json"
+      ],
+      "isolationManifest": "trial-sets/P-002/isolation-manifest.json"
+    },
+    {
+      "probeId": "P-003",
+      "runId": "20260929T013519187Z-9e9381ce-P-003",
+      "conditionArm": "clean",
+      "probe": "probes/P-003.probe.json",
+      "records": [
+        "trial-sets/P-003/record-1.json",
+        "trial-sets/P-003/record-2.json",
+        "trial-sets/P-003/record-3.json"
+      ],
+      "isolationManifest": "trial-sets/P-003/isolation-manifest.json"
+    },
+    {
+      "probeId": "P-004",
+      "runId": "20260929T013519187Z-9e9381ce-P-004",
+      "conditionArm": "clean",
+      "probe": "probes/P-004.probe.json",
+      "records": [
+        "trial-sets/P-004/record-1.json",
+        "trial-sets/P-004/record-2.json",
+        "trial-sets/P-004/record-3.json"
+      ],
+      "isolationManifest": "trial-sets/P-004/isolation-manifest.json"
+    },
+    {
+      "probeId": "P-014",
+      "runId": "20260929T013519187Z-9e9381ce-P-014",
+      "conditionArm": "clean",
+      "probe": "probes/P-014.probe.json",
+      "records": [
+        "trial-sets/P-014/record-1.json",
+        "trial-sets/P-014/record-2.json",
+        "trial-sets/P-014/record-3.json"
+      ],
+      "isolationManifest": "trial-sets/P-014/isolation-manifest.json"
+    },
+    {
+      "probeId": "P-016",
+      "runId": "20260929T013519187Z-9e9381ce-P-016",
+      "conditionArm": "clean",
+      "probe": "probes/P-016.probe.json",
+      "records": [
+        "trial-sets/P-016/record-1.json",
+        "trial-sets/P-016/record-2.json",
+        "trial-sets/P-016/record-3.json"
+      ],
+      "isolationManifest": "trial-sets/P-016/isolation-manifest.json"
+    },
+    {
+      "probeId": "P-005",
+      "runId": "20260929T013519187Z-9e9381ce-P-005",
+      "conditionArm": "mutated:M-001",
+      "probe": "probes/P-005.probe.json",
+      "records": [
+        "trial-sets/P-005/record-1.json",
+        "trial-sets/P-005/record-2.json",
+        "trial-sets/P-005/record-3.json"
+      ],
+      "isolationManifest": "trial-sets/P-005/isolation-manifest.json"
+    },
+    {
+      "probeId": "P-006",
+      "runId": "20260929T013519187Z-9e9381ce-P-006",
+      "conditionArm": "mutated:M-002",
+      "probe": "probes/P-006.probe.json",
+      "records": [
+        "trial-sets/P-006/record-1.json",
+        "trial-sets/P-006/record-2.json",
+        "trial-sets/P-006/record-3.json"
+      ],
+      "isolationManifest": "trial-sets/P-006/isolation-manifest.json"
+    },
+    {
+      "probeId": "P-007",
+      "runId": "20260929T013519187Z-9e9381ce-P-007",
+      "conditionArm": "mutated:M-003",
+      "probe": "probes/P-007.probe.json",
+      "records": [
+        "trial-sets/P-007/record-1.json",
+        "trial-sets/P-007/record-2.json",
+        "trial-sets/P-007/record-3.json"
+      ],
+      "isolationManifest": "trial-sets/P-007/isolation-manifest.json"
+    },
+    {
+      "probeId": "P-008",
+      "runId": "20260929T013519187Z-9e9381ce-P-008",
+      "conditionArm": "mutated:M-004",
+      "probe": "probes/P-008.probe.json",
+      "records": [
+        "trial-sets/P-008/record-1.json",
+        "trial-sets/P-008/record-2.json",
+        "trial-sets/P-008/record-3.json"
+      ],
+      "isolationManifest": "trial-sets/P-008/isolation-manifest.json"
+    },
+    {
+      "probeId": "P-009",
+      "runId": "20260929T013519187Z-9e9381ce-P-009",
+      "conditionArm": "gameability:P-009",
+      "probe": "probes/P-009.probe.json",
+      "records": [
+        "trial-sets/P-009/record-1.json",
+        "trial-sets/P-009/record-2.json",
+        "trial-sets/P-009/record-3.json"
+      ],
+      "isolationManifest": "trial-sets/P-009/isolation-manifest.json"
+    },
+    {
+      "probeId": "P-017",
+      "runId": "20260929T013519187Z-9e9381ce-P-017",
+      "conditionArm": "gameability:P-017",
+      "probe": "probes/P-017.probe.json",
+      "records": [
+        "trial-sets/P-017/record-1.json",
+        "trial-sets/P-017/record-2.json",
+        "trial-sets/P-017/record-3.json"
+      ],
+      "isolationManifest": "trial-sets/P-017/isolation-manifest.json"
+    }
+  ]
+}

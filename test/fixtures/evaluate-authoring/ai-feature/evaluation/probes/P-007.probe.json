@@ -1,0 +1,112 @@
+{
+  "probeId": "P-007",
+  "probeClass": "defect",
+  "behaviorId": "B-003",
+  "expectedClean": false,
+  "rationale": "[malformed] Malformed answer receives success status despite error body.",
+  "defects": [
+    {
+      "defectId": "D-003",
+      "behaviorId": "B-003",
+      "summary": "[malformed] Malformed answer receives success status despite error body.",
+      "severity": "material",
+      "source": "controlled-mutation",
+      "manifestationWitness": {
+        "legId": "p-007-manifest-decision-reject",
+        "interfaceId": "answer-grade",
+        "operationId": "grade-answer",
+        "inputs": {
+          "path": {},
+          "query": {},
+          "header": {},
+          "body": {
+            "kind": "json",
+            "value": {
+              "answer": 42
+            }
+          }
+        },
+        "relation": {
+          "op": "all",
+          "operands": [
+            {
+              "op": "deep-equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/p-007-manifest-decision-reject/call-inputs/body"
+                },
+                {
+                  "literal": {
+                    "answer": 42
+                  }
+                }
+              ]
+            },
+            {
+              "op": "deep-equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/p-007-manifest-decision-reject/call-inputs/query"
+                },
+                {
+                  "literal": {}
+                }
+              ]
+            },
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/p-007-manifest-decision-reject/response-body/decision"
+                },
+                {
+                  "literal": "reject"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "defectSignature": {
+    "interfaceKind": "api",
+    "observableChannel": "response-body",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": null,
+          "header": null,
+          "body": {
+            "answer": {
+              "literal": 42
+            }
+          },
+          "argument": null,
+          "option": null,
+          "environment": null,
+          "stdin": null,
+          "arguments": null
+        }
+      },
+      "predicate": {
+        "op": "equality",
+        "operands": [
+          {
+            "pointer": "/interactions/observed/response-body/decision"
+          },
+          {
+            "literal": "reject"
+          }
+        ]
+      }
+    },
+    "method": "POST",
+    "pathTemplate": "/grade"
+  },
+  "qualification": {
+    "route": "controlled-mutation",
+    "mutation": "M-003"
+  }
+}

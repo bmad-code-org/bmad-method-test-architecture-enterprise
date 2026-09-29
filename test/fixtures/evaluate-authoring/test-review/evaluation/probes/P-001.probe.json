@@ -1,0 +1,12 @@
+{
+  "probeId": "P-001",
+  "probeClass": "zero-action",
+  "behaviorId": "B-001",
+  "expectedClean": true,
+  "rationale": "[representative] Missing assertion, dangling expect, and unrecognized assert.ok receive exactly the documented finding.",
+  "defects": [],
+  "qualification": {
+    "route": "clean-control",
+    "noKnownDefectStatement": "No known defect at this revision."
+  }
+}

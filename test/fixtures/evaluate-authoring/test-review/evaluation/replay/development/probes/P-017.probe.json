@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 5,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "probeId": "P-017",
+  "probeClass": "gameability",
+  "behaviorId": "B-001",
+  "systemId": "test-review-json-stdin",
+  "implementationDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
+  "artifactDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
+  "commitDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
+  "rationale": "[gameability] Always-clean output satisfies the valid-assertion behavior on its fixture while missing the assertion-free test.",
+  "qualification": {
+    "route": "gameability",
+    "degenerateResponse": "Report every test clean.",
+    "naiveOracleSatisfiedEvidence": {
+      "storage": "public",
+      "path": "runs/20260929T013519187Z-9e9381ce/qualification/P-017/naive-oracle-satisfied.json",
+      "privateRef": null,
+      "digest": "sha256:3a8d5504825029f66565664082841133571cc534a94839e0e272d51a9a8c9b7e"
+    },
+    "disciplinedOracleRejectedEvidence": {
+      "storage": "public",
+      "path": "runs/20260929T013519187Z-9e9381ce/qualification/P-017/disciplined-oracle-rejected.json",
+      "privateRef": null,
+      "digest": "sha256:eebfe8f54c26a2fd0a56f99368b7e55d4eeccd33ae44d87cadc26f9fac0629fc"
+    }
+  },
+  "expectedClean": false,
+  "defects": [],
+  "defectSignature": {
+    "interfaceKind": "cli",
+    "observableChannel": "stdout",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": null,
+          "header": null,
+          "body": null,
+          "argument": null,
+          "option": null,
+          "environment": null,
+          "stdin": {
+            "action": {
+              "literal": "review"
+            },
+            "file": {
+              "literal": "cases/missing-assertion.test.js"
+            }
+          },
+          "arguments": null
+        }
+      },
+      "predicate": {
+        "op": "equality",
+        "operands": [
+          {
+            "pointer": "/interactions/observed/stdout/status"
+          },
+          {
+            "literal": "clean"
+          }
+        ]
+      }
+    },
+    "invocation": {
+      "executable": "review",
+      "subcommandPath": []
+    }
+  }
+}

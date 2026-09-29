@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 5,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "probeId": "P-010",
+  "probeClass": "defect",
+  "behaviorId": "B-001",
+  "systemId": "answer-grade",
+  "implementationDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
+  "artifactDigest": "sha256:1645dc943ad0833cf1dd79ed3073864bffd24425d5b55c3fb028d7a8bcf2d71e",
+  "commitDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
+  "rationale": "[negative] Alternate restricted answer tests that defect-signature selectors must match a planned request.",
+  "qualification": {
+    "route": "controlled-mutation",
+    "mutationSource": "restricted term removed from adopter policy",
+    "mutationOperator": "replace-exact: \"[\\\"unsafe\\\", \\\"private\\\"]\" -> \"[\\\"unsafe\\\"]\" (occurrences 1)",
+    "targetArtifact": {
+      "storage": "public",
+      "path": "rules/policy.json",
+      "privateRef": null,
+      "digest": "sha256:1645dc943ad0833cf1dd79ed3073864bffd24425d5b55c3fb028d7a8bcf2d71e"
+    },
+    "expectedObservableFailure": "private answer passes in HTTP response body",
+    "baselinePassEvidence": {
+      "storage": "public",
+      "path": "runs/20260929T015026071Z-cd62054f/qualification/P-010/baseline-pass.json",
+      "privateRef": null,
+      "digest": "sha256:bcc98e3ab4a43fb72d07a0dcac07de05beb6b0231d5b1456fdcd95a5c19a340d"
+    },
+    "mutatedFailEvidence": {
+      "storage": "public",
+      "path": "runs/20260929T015026071Z-cd62054f/qualification/P-010/mutated-fail.json",
+      "privateRef": null,
+      "digest": "sha256:82173516d85c3d3b782e61129dede1a8b12a8302a5e806be124baeeb19736e43"
+    },
+    "rollbackVerified": true
+  },
+  "expectedClean": false,
+  "defects": [
+    {
+      "defectId": "D-008",
+      "behaviorId": "B-001",
+      "summary": "[negative] Alternate restricted answer tests that defect-signature selectors must match a planned request.",
+      "severity": "critical",
+      "oracleEvidence": [
+        {
+          "storage": "public",
+          "path": "runs/20260929T015026071Z-cd62054f/qualification/P-010/mutated-fail.json",
+          "privateRef": null,
+          "digest": "sha256:82173516d85c3d3b782e61129dede1a8b12a8302a5e806be124baeeb19736e43"
+        }
+      ],
+      "source": "controlled-mutation",
+      "manifestationWitness": {
+        "legId": "p-010-manifest-decision-pass",
+        "interfaceId": "answer-grade",
+        "operationId": "grade-answer",
+        "inputs": {
+          "path": {},
+          "query": {},
+          "header": {},
+          "body": {
+            "kind": "json",
+            "value": {
+              "answer": "another private answer"
+            }
+          }
+        },
+        "relation": {
+          "op": "all",
+          "operands": [
+            {
+              "op": "deep-equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/p-010-manifest-decision-pass/call-inputs/body"
+                },
+                {
+                  "literal": {
+                    "answer": "another private answer"
+                  }
+                }
+              ]
+            },
+            {
+              "op": "deep-equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/p-010-manifest-decision-pass/call-inputs/query"
+                },
+                {
+                  "literal": {}
+                }
+              ]
+            },
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/p-010-manifest-decision-pass/response-body/decision"
+                },
+                {
+                  "literal": "pass"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "defectSignature": {
+    "interfaceKind": "api",
+    "observableChannel": "response-body",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": null,
+          "header": null,
+          "body": {
+            "answer": {
+              "literal": "my private note"
+            }
+          },
+          "argument": null,
+          "option": null,
+          "environment": null,
+          "stdin": null,
+          "arguments": null
+        }
+      },
+      "predicate": {
+        "op": "equality",
+        "operands": [
+          {
+            "pointer": "/interactions/observed/response-body/decision"
+          },
+          {
+            "literal": "pass"
+          }
+        ]
+      }
+    },
+    "method": "POST",
+    "pathTemplate": "/grade"
+  }
+}

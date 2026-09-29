@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "mutationId": "M-007",
+  "mutationSource": "Adopter-owned B-003 rule change",
+  "targetArtifact": "bin/review.mjs",
+  "operator": {
+    "kind": "replace-exact",
+    "find": "rules.assertions.some((token) => source.includes(token))",
+    "replace": "rules.assertions.every((token) => source.includes(token))",
+    "occurrences": 1
+  },
+  "expectedObservableFailure": "stdout falsely reports missing-assertion for assert.match"
+}

@@ -1,0 +1,299 @@
+{
+  "probeId": "P-009",
+  "phase": "naive-oracle-satisfied",
+  "degenerateResponse": {
+    "path": "corpus/gameability/P-009.json",
+    "digest": "sha256:90a4363b4452d973cc79ef514f797aab3c583bc27127d0e9b08bafab8e62d61b"
+  },
+  "verdict": "held",
+  "oracles": [
+    {
+      "oracleId": "O-002",
+      "polarity": "expects-hold",
+      "resolution": "true",
+      "disposition": "held",
+      "observationIds": [
+        "degenerate-valid-boundary"
+      ]
+    }
+  ],
+  "steps": [
+    {
+      "stepId": "valid-boundary",
+      "request": {
+        "probeId": "degenerate-valid-boundary",
+        "interfaceId": "answer-grade",
+        "operationId": "grade-answer",
+        "kind": "api",
+        "method": "POST",
+        "pathTemplate": "/grade",
+        "channels": {
+          "path": {},
+          "query": {},
+          "header": {},
+          "body": {
+            "kind": "json",
+            "value": {
+              "answer": "abcdefgh"
+            }
+          }
+        }
+      },
+      "observation": {
+        "probeId": "degenerate-valid-boundary",
+        "interfaceId": "answer-grade",
+        "operationId": "grade-answer",
+        "kind": "api",
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "kind": "json",
+          "value": {
+            "decision": "pass",
+            "reason": "accepted"
+          }
+        }
+      }
+    },
+    {
+      "stepId": "restricted",
+      "request": {
+        "probeId": "degenerate-restricted",
+        "interfaceId": "answer-grade",
+        "operationId": "grade-answer",
+        "kind": "api",
+        "method": "POST",
+        "pathTemplate": "/grade",
+        "channels": {
+          "path": {},
+          "query": {},
+          "header": {},
+          "body": {
+            "kind": "json",
+            "value": {
+              "answer": "my private note"
+            }
+          }
+        }
+      },
+      "observation": {
+        "probeId": "degenerate-restricted",
+        "interfaceId": "answer-grade",
+        "operationId": "grade-answer",
+        "kind": "api",
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "kind": "json",
+          "value": {
+            "decision": "pass",
+            "reason": "restricted-term"
+          }
+        }
+      }
+    },
+    {
+      "stepId": "short",
+      "request": {
+        "probeId": "degenerate-short",
+        "interfaceId": "answer-grade",
+        "operationId": "grade-answer",
+        "kind": "api",
+        "method": "POST",
+        "pathTemplate": "/grade",
+        "channels": {
+          "path": {},
+          "query": {},
+          "header": {},
+          "body": {
+            "kind": "json",
+            "value": {
+              "answer": "abcdefg"
+            }
+          }
+        }
+      },
+      "observation": {
+        "probeId": "degenerate-short",
+        "interfaceId": "answer-grade",
+        "operationId": "grade-answer",
+        "kind": "api",
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "kind": "json",
+          "value": {
+            "decision": "pass",
+            "reason": "accepted"
+          }
+        }
+      }
+    },
+    {
+      "stepId": "strict-boundary",
+      "request": {
+        "probeId": "degenerate-strict-boundary",
+        "interfaceId": "answer-grade",
+        "operationId": "grade-answer",
+        "kind": "api",
+        "method": "POST",
+        "pathTemplate": "/grade",
+        "channels": {
+          "path": {},
+          "query": {
+            "strict": "1"
+          },
+          "header": {},
+          "body": {
+            "kind": "json",
+            "value": {
+              "answer": "abcdefghijklmnop"
+            }
+          }
+        }
+      },
+      "observation": {
+        "probeId": "degenerate-strict-boundary",
+        "interfaceId": "answer-grade",
+        "operationId": "grade-answer",
+        "kind": "api",
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "kind": "json",
+          "value": {
+            "decision": "pass",
+            "reason": "accepted"
+          }
+        }
+      }
+    },
+    {
+      "stepId": "strict-short",
+      "request": {
+        "probeId": "degenerate-strict-short",
+        "interfaceId": "answer-grade",
+        "operationId": "grade-answer",
+        "kind": "api",
+        "method": "POST",
+        "pathTemplate": "/grade",
+        "channels": {
+          "path": {},
+          "query": {
+            "strict": "1"
+          },
+          "header": {},
+          "body": {
+            "kind": "json",
+            "value": {
+              "answer": "abcdefghijklmno"
+            }
+          }
+        }
+      },
+      "observation": {
+        "probeId": "degenerate-strict-short",
+        "interfaceId": "answer-grade",
+        "operationId": "grade-answer",
+        "kind": "api",
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "kind": "json",
+          "value": {
+            "decision": "pass",
+            "reason": "accepted"
+          }
+        }
+      }
+    },
+    {
+      "stepId": "missing",
+      "request": {
+        "probeId": "degenerate-missing",
+        "interfaceId": "answer-grade",
+        "operationId": "grade-answer",
+        "kind": "api",
+        "method": "POST",
+        "pathTemplate": "/grade",
+        "channels": {
+          "path": {},
+          "query": {},
+          "header": {},
+          "body": {
+            "kind": "json",
+            "value": {
+              "case": "missing-answer"
+            }
+          }
+        }
+      },
+      "observation": {
+        "probeId": "degenerate-missing",
+        "interfaceId": "answer-grade",
+        "operationId": "grade-answer",
+        "kind": "api",
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "kind": "json",
+          "value": {
+            "decision": "pass",
+            "reason": "accepted"
+          }
+        }
+      }
+    },
+    {
+      "stepId": "nonstring",
+      "request": {
+        "probeId": "degenerate-nonstring",
+        "interfaceId": "answer-grade",
+        "operationId": "grade-answer",
+        "kind": "api",
+        "method": "POST",
+        "pathTemplate": "/grade",
+        "channels": {
+          "path": {},
+          "query": {},
+          "header": {},
+          "body": {
+            "kind": "json",
+            "value": {
+              "answer": 42
+            }
+          }
+        }
+      },
+      "observation": {
+        "probeId": "degenerate-nonstring",
+        "interfaceId": "answer-grade",
+        "operationId": "grade-answer",
+        "kind": "api",
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "kind": "json",
+          "value": {
+            "decision": "pass",
+            "reason": "accepted"
+          }
+        }
+      }
+    }
+  ]
+}

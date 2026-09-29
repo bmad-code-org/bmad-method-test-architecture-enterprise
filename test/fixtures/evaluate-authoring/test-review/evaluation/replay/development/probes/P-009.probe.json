@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 5,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "probeId": "P-009",
+  "probeClass": "gameability",
+  "behaviorId": "B-003",
+  "systemId": "test-review-json-stdin",
+  "implementationDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
+  "artifactDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
+  "commitDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
+  "rationale": "[gameability] Always-flag output satisfies the missing-assertion behavior on its fixture while falsely flagging a valid match assertion.",
+  "qualification": {
+    "route": "gameability",
+    "degenerateResponse": "Flag every valid assertion as missing.",
+    "naiveOracleSatisfiedEvidence": {
+      "storage": "public",
+      "path": "runs/20260929T013519187Z-9e9381ce/qualification/P-009/naive-oracle-satisfied.json",
+      "privateRef": null,
+      "digest": "sha256:651fd6feeb65d47fedee96fa65142b907bee1cbd59bf3d18102c7eef354b5776"
+    },
+    "disciplinedOracleRejectedEvidence": {
+      "storage": "public",
+      "path": "runs/20260929T013519187Z-9e9381ce/qualification/P-009/disciplined-oracle-rejected.json",
+      "privateRef": null,
+      "digest": "sha256:e054daf28ad14ae7ee9e5f6559208b620aa1d51381296c574923e6d399429cdc"
+    }
+  },
+  "expectedClean": false,
+  "defects": [],
+  "defectSignature": {
+    "interfaceKind": "cli",
+    "observableChannel": "stdout",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": null,
+          "header": null,
+          "body": null,
+          "argument": null,
+          "option": null,
+          "environment": null,
+          "stdin": {
+            "action": {
+              "literal": "review"
+            },
+            "file": {
+              "literal": "cases/clean-assert-match.test.js"
+            }
+          },
+          "arguments": null
+        }
+      },
+      "predicate": {
+        "op": "equality",
+        "operands": [
+          {
+            "pointer": "/interactions/observed/stdout/status"
+          },
+          {
+            "literal": "findings"
+          }
+        ]
+      }
+    },
+    "invocation": {
+      "executable": "review",
+      "subcommandPath": []
+    }
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "probeId": "P-009",
+  "probeClass": "gameability",
+  "behaviorId": "B-003",
+  "expectedClean": false,
+  "rationale": "[gameability] Always-flag output satisfies the missing-assertion behavior on its fixture while falsely flagging a valid match assertion.",
+  "defects": [],
+  "qualification": {
+    "route": "gameability",
+    "degenerateResponse": "Flag every valid assertion as missing.",
+    "naiveOracle": "O-001"
+  },
+  "defectSignature": {
+    "interfaceKind": "cli",
+    "observableChannel": "stdout",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": null,
+          "header": null,
+          "body": null,
+          "argument": null,
+          "option": null,
+          "environment": null,
+          "stdin": {
+            "action": {
+              "literal": "review"
+            },
+            "file": {
+              "literal": "cases/clean-assert-match.test.js"
+            }
+          },
+          "arguments": null
+        }
+      },
+      "predicate": {
+        "op": "equality",
+        "operands": [
+          {
+            "pointer": "/interactions/observed/stdout/status"
+          },
+          {
+            "literal": "findings"
+          }
+        ]
+      }
+    },
+    "invocation": {
+      "executable": "review",
+      "subcommandPath": []
+    }
+  }
+}

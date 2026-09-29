@@ -146,6 +146,44 @@ const request = (interfaceId, method, pathTemplate) => ({
   channels: { path: {}, query: {}, header: {}, body: { kind: 'absent' } },
 });
 
+/** An external watchdog keeps a broken adapter check finite even when a transport hook never settles. */
+async function boundedFault(call) {
+  let watchdog;
+  try {
+    return await Promise.race([
+      call().then(
+        () => 'unexpected observation',
+        (error) => error.code,
+      ),
+      new Promise((resolve) => {
+        watchdog = setTimeout(() => resolve('watchdog expired'), 1000);
+      }),
+    ]);
+  } finally {
+    clearTimeout(watchdog);
+  }
+}
+
+/** An adapter-local check alongside eval-quality's portable conformance assertions. */
+async function checkAdapter(name, port, expected, signal) {
+  const actual = await boundedFault(() => port.probe(request(STUB, 'GET', '/ok'), signal));
+  if (actual === expected) {
+    console.log(`pass adapter/${name}`);
+  } else {
+    console.error(`fail adapter/${name}: expected ${expected}, got ${actual}`);
+    process.exitCode = 1;
+  }
+}
+
+/** The same authorized target with a short cap for transport phase checks. */
+function cappedPort(transport) {
+  return createHttpProbePort({
+    policy: { authorizations: [{ ...policyFor(80).authorizations[0], maxElapsedMs: 80 }] },
+    targets: { [STUB]: { scheme: 'http', host: LOOPBACK, port: 80 } },
+    transport,
+  });
+}
+
 const subject = {
   name: 'http-probe-port',
   sampleRequest: request(STUB, 'GET', '/ok'),
@@ -189,6 +227,50 @@ try {
   const report = await runEnvironmentProbePortConformance(subject);
   console.log(formatConformanceReport(report));
   process.exitCode = report.passed ? 0 : 1;
+
+  // Custom transport hooks can ignore AbortSignal. Each phase must still settle at the declared cap.
+  await checkAdapter('resolve-cap', cappedPort({ resolve: () => new Promise(() => {}) }), 'budget-exhausted');
+  await checkAdapter('prepare-cap', cappedPort({ resolve: resolveHost, prepare: () => new Promise(() => {}) }), 'budget-exhausted');
+  await checkAdapter('send-cap', cappedPort({ resolve: resolveHost, send: () => new Promise(() => {}) }), 'budget-exhausted');
+  let redirectsResolved = 0;
+  const redirect = cappedPort({
+    resolve: () => (++redirectsResolved === 1 ? LOOPBACK : new Promise(() => {})),
+    send: async () => ({ status: 302, headers: { location: ['/ok'] }, body: Buffer.alloc(0) }),
+  });
+  await checkAdapter('redirect-cap', redirect, 'budget-exhausted');
+  const caller = new AbortController();
+  const aborting = cappedPort({ resolve: resolveHost, prepare: () => new Promise(() => {}) });
+  setTimeout(() => caller.abort(), 10);
+  await checkAdapter('prepare-abort', aborting, 'aborted', caller.signal);
+
+  // ProbeTargetPolicy has no upper bound on maxElapsedMs. A large cap must not overflow Node's one-timer limit.
+  const largeCap = createHttpProbePort({
+    policy: { authorizations: [{ ...policyFor(80).authorizations[0], maxElapsedMs: Number.MAX_SAFE_INTEGER }] },
+    targets: { [STUB]: { scheme: 'http', host: LOOPBACK, port: 80 } },
+    transport: {
+      resolve: resolveHost,
+      send: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        return { status: 200, headers: {}, body: Buffer.alloc(0) };
+      },
+    },
+  });
+  let watchdog;
+  const largeCapResult = await Promise.race([
+    largeCap.probe(request(STUB, 'GET', '/ok')).then(
+      (observation) => observation.status,
+      (error) => error.code,
+    ),
+    new Promise((resolve) => {
+      watchdog = setTimeout(() => resolve('watchdog expired'), 1000);
+    }),
+  ]);
+  clearTimeout(watchdog);
+  if (largeCapResult === 200) console.log('pass adapter/large-elapsed-cap');
+  else {
+    console.error(`fail adapter/large-elapsed-cap: expected status 200, got ${largeCapResult}`);
+    process.exitCode = 1;
+  }
 } finally {
   for (const server of open) {
     server.closeAllConnections();

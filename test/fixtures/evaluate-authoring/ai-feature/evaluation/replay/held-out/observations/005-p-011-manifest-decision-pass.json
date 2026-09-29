@@ -1,0 +1,45 @@
+{
+  "legId": "p-011-manifest-decision-pass",
+  "sequence": 5,
+  "workspace": "mutated:M-005",
+  "cwd": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-005-Po07Vw/target",
+  "request": {
+    "probeId": "p-011-manifest-decision-pass",
+    "interfaceId": "answer-grade",
+    "operationId": "grade-answer",
+    "kind": "api",
+    "method": "POST",
+    "pathTemplate": "/grade",
+    "channels": {
+      "path": {},
+      "query": {},
+      "header": {},
+      "body": {
+        "kind": "json",
+        "value": {
+          "answer": "An UNSAFE message"
+        }
+      }
+    }
+  },
+  "observation": {
+    "probeId": "p-011-manifest-decision-pass",
+    "interfaceId": "answer-grade",
+    "operationId": "grade-answer",
+    "kind": "api",
+    "status": 200,
+    "headers": {
+      "content-type": "application/json",
+      "date": "Tue, 29 Sep 2026 01:52:03 GMT",
+      "connection": "close",
+      "transfer-encoding": "chunked"
+    },
+    "body": {
+      "kind": "json",
+      "value": {
+        "decision": "pass",
+        "reason": "accepted"
+      }
+    }
+  }
+}

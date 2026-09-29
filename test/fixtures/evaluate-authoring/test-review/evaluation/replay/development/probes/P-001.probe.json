@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 5,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "probeId": "P-001",
+  "probeClass": "zero-action",
+  "behaviorId": "B-001",
+  "systemId": "test-review-json-stdin",
+  "implementationDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
+  "artifactDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
+  "commitDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
+  "rationale": "[representative] Missing assertion, dangling expect, and unrecognized assert.ok receive exactly the documented finding.",
+  "qualification": {
+    "route": "clean-control",
+    "baselinePassEvidence": {
+      "storage": "public",
+      "path": "runs/20260929T013519187Z-9e9381ce/qualification/P-001/baseline-pass.json",
+      "privateRef": null,
+      "digest": "sha256:53a843896d8a201fcbf910872cc9e1afa5dc8e686007ed8a9ee1ce4d501d9451"
+    },
+    "revisionCommitDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
+    "noKnownDefectStatement": "No known defect at this revision."
+  },
+  "expectedClean": true,
+  "defects": []
+}
