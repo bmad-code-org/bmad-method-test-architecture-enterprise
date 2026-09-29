@@ -59,8 +59,10 @@ function sourcedFacts(learned) {
     ['The result has `name` and `score`', [README_SOURCE]],
     ['No model call is needed for this heuristic scorer', [SCORER_DOC]],
   ]);
+  const observed = rows.map((cells) => cells[1]);
   const approved =
     rows.length === expected.size &&
+    new Set(observed).size === expected.size &&
     rows.every((cells) => {
       const required = expected.get(cells[1]);
       const links = [...(cells[2] ?? '').matchAll(/\]\((https:\/\/[^)]+)\)/g)].map((match) => match[1]);
@@ -179,6 +181,13 @@ function evidenceRecord() {
   check(sourcedFacts(learned), 'LEARNED.md lacks a primary source for a fact used');
   documentedExamples(learned, transcript);
   check(!sourcedFacts(learned.replace(SCORER_SOURCE, 'https://example.test/summary')), 'primary-source guard accepted a secondary source');
+  const factRows = (learned.split('## Primary-source facts used\n')[1]?.split('\n## ')[0] ?? '')
+    .split('\n')
+    .filter((line) => line.startsWith('| ') && !/^\| (?:Fact used|---)/.test(line));
+  check(
+    factRows.length === 4 && !sourcedFacts(learned.replace(factRows[3], factRows[2])),
+    'primary-source guard accepted a duplicate row in place of a required fact',
+  );
   const probes = ['P-001', 'P-002', 'P-003', 'P-004'];
   for (const probe of probes) check(transcript.includes(probe), `transcript lacks ${probe}`);
   check(

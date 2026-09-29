@@ -103,6 +103,7 @@ context:
 | Edge 3: source URL can break                          | medium  | The former domain-only guard admitted an irrelevant link. The pinned exact association test closes it.                                                                                                                                                                           |
 | Verification gap 1: refusal score can be ignored      | medium  | The former scorer stub varied only B-001. It now sets B-002's score to 0 and checks a failed row with the captured stderr quote.                                                                                                                                                 |
 | Final verification: copied wrapper provenance omitted | medium  | The isolated maintainer commit predates three reviewer-driven evaluator repairs. The implementation note now names those edits and distinguishes historical live votes from the committed fixture's replay.                                                                      |
+| PR adversarial: duplicate sourced fact passes         | medium  | Replacing the model-free fact row with a duplicate of another approved row left the four-row gate green. The source check now requires four distinct expected facts, and a negative self-check reproduces the missing-fact case.                                                 |
 
 ## Design Notes
 
@@ -113,8 +114,8 @@ The selected candidate is `autoevals` and its deterministic `ExactMatch` scorer.
 **Commands:**
 
 - The isolated maintainer's final `check`, `compile`, `seal`, `preflight`, development `run` and `score`, and held-out `run` and `score` exited 0. Its transcript names invocation IDs and evidence paths. P-001 and P-004 were clean in three of three trials; P-002 and held-out P-003 caught M-001 in three of three. The final engine verdict retains the one named coverage concern.
-- The final integrated `npm test` exited 0 after all review repairs. It includes 116 learned-framework checks, the supply-chain drift gate, ESLint, Markdown lint and Prettier. An earlier full run also passed before the isolated maintainer fixture replaced the draft.
-- The integrated `npm run test:evaluate-learned-framework` passed 116 checks, including live development and held-out replay through eval-quality, actual installed Autoevals calls, scorer-controlled judgments for both behaviors, changed result-shape rejection, malformed-output guards and broken mapping rejection.
+- The final integrated `npm test` exited 0 after the PR review repair. It includes 117 learned-framework checks, the supply-chain drift gate, ESLint, Markdown lint and Prettier. An earlier full run also passed before the isolated maintainer fixture replaced the draft.
+- The integrated `npm run test:evaluate-learned-framework` passed 117 checks, including live development and held-out replay through eval-quality, actual installed Autoevals calls, scorer-controlled judgments for both behaviors, changed result-shape rejection, malformed-output guards, broken mapping rejection and duplicate source-fact rejection.
 - `npm run docs:validate-links` found zero broken links; `npm run docs:build` exited 0.
 - `git diff --stat origin/main -- cli/` is empty. The published eval-quality export check passed at the start and end of the story.
 
