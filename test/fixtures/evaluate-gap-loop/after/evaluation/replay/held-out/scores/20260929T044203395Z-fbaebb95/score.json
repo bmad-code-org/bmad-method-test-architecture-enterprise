@@ -1,0 +1,36 @@
+{
+  "invocationId": "20260929T044203395Z-fbaebb95",
+  "run": "20260929T044131294Z-86438a1d",
+  "exitCode": 0,
+  "scores": [
+    {
+      "probeId": "P-010",
+      "exitCode": 0,
+      "failure": null,
+      "record": "runs/20260929T044131294Z-86438a1d/scores/20260929T044203395Z-fbaebb95/P-010/score.json",
+      "evidence": "runs/20260929T044131294Z-86438a1d/scores/20260929T044203395Z-fbaebb95/P-010/evidence-artifact.json"
+    },
+    {
+      "probeId": "P-011",
+      "exitCode": 0,
+      "failure": null,
+      "record": "runs/20260929T044131294Z-86438a1d/scores/20260929T044203395Z-fbaebb95/P-011/score.json",
+      "evidence": "runs/20260929T044131294Z-86438a1d/scores/20260929T044203395Z-fbaebb95/P-011/evidence-artifact.json"
+    },
+    {
+      "probeId": "P-012",
+      "exitCode": 0,
+      "failure": null,
+      "record": "runs/20260929T044131294Z-86438a1d/scores/20260929T044203395Z-fbaebb95/P-012/score.json",
+      "evidence": "runs/20260929T044131294Z-86438a1d/scores/20260929T044203395Z-fbaebb95/P-012/evidence-artifact.json"
+    },
+    {
+      "probeId": "P-013",
+      "exitCode": 0,
+      "failure": null,
+      "record": "runs/20260929T044131294Z-86438a1d/scores/20260929T044203395Z-fbaebb95/P-013/score.json",
+      "evidence": "runs/20260929T044131294Z-86438a1d/scores/20260929T044203395Z-fbaebb95/P-013/evidence-artifact.json"
+    }
+  ],
+  "refused": []
+}

@@ -2,7 +2,7 @@
 title: 'Close seeded weaknesses through the gap loop'
 type: 'feature'
 created: '2026-09-28'
-status: 'in-progress'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '546f845bfe5d9488aab5ccf80baa0387a6cf029a'
@@ -56,8 +56,9 @@ context:
 **Execution:**
 
 - [x] `_bmad-output/planning-artifacts/evaluate/epics.md` and `test-design-epic-1.md`: clarify W2's exact interaction seed and separate W1 qualification failure from W2 score evidence.
-- [x] `test/fixtures/evaluate-gap-loop/`: create the blinded before fixture, run the maintainer session on an isolated copy, commit the repaired after fixture, source inventory, transcript, gap report and complete replay inputs.
-- [x] `test/test-evaluate-gap-loop.js`: reproduce before and after engine evidence byte for byte, verify hidden-input isolation, changed-file accountability, source binding and strong after votes.
+- [x] `src/workflows/testarch/bmad-testarch-evaluate/references/gaps.md` and `eval-quality-facts.md`: record the engine's contract-level `malformed-input` satisfaction requirement exposed by the blocked blind run.
+- [x] `test/fixtures/evaluate-gap-loop/`: create the blinded before fixture, run a fresh maintainer session with the corrected guide, preserve the blocked sessions, and capture the repaired after fixture, source inventory, transcript, gap report and complete replay inputs.
+- [x] `test/test-evaluate-gap-loop.js`: reproduce before and after engine evidence byte for byte, verify hidden-input isolation, changed-file accountability, source binding, guide regression and strong after votes.
 - [x] `package.json`, `CHANGELOG.md`, and `sprint-status.yaml`: wire the test into the full and CI-sharded gate, record the user-facing proof, and track the story.
 
 **Acceptance Criteria:**
@@ -69,11 +70,13 @@ context:
 
 ## Implementation Notes
 
-- The blind maintainer ran as Codex `gpt-6-sol` high in `/tmp/tea-gap-loop-blind-125`. Its initial files and hashes are committed in `blind-inputs.json`; the exact `gaps.md` it read is under `blind/`. The session read no `SEEDED.md` or held-out probe content. Its file reads and commands are recorded in `session-transcript.md`.
+- The first blind session was discarded during source review: copied Story 1.24 gap and adapter notes plus stale generated contract files exposed repair details and prior held-out outcomes. The historical notes were removed, the before contract's compiled and sealed files were regenerated, and each fresh Codex `gpt-6-sol` high session received 65 sealed inputs with no `SEEDED.md` or held-out probe content.
+- Session r2 repaired W1 and caught two new malformed probes but remained at a critical W2 gap. Session r3 received a generic rule description and still could not express the schema's tagged matcher. Their inventories, guide snapshots, reports, transcripts and scored blocker artifacts are preserved under `blind/r2-*` and `blind/r3-*`. The shipped guide now states the engine predicate and shows a generic matcher binding validated by `eval-quality compile`.
+- Session r4 used that guide to repair both weaknesses and scored all 12 development probes `PASS`. Its initial files and hashes are in `blind-inputs.json`; the exact guide and isolated corpus index are under `blind/`. After its blind diagnosis succeeded, a separate acceptance follow-up preserved the original raw malformed request and added a distinct typed step. The final blind development score again reported `PASS`, and the committed full-corpus after fixture subsequently scored both partitions.
 - The before full development run stopped at P-007 with exit 11 because the loosened O-003 accepted the mutation. A focused P-009 qualification then persisted the all-flagging response as `held` under O-003. The before held-out partition scored four probes and recorded a critical `malformed-input` gap and `CONCERNS` verdict. No scored before development verdict exists.
 - The blind repair tightened O-003 and restored a distinct type-violating `typed-file` interaction with O-004 direction and check pointers. The committed after evaluation scored all 12 development and four held-out probes. Every clean-control vote was `passed-clean-control`; every defect and gameability vote was `caught`; all score artifacts report `PASS` and zero coverage gaps.
-- `test:evaluate-gap-loop` replays direct eval-quality preflight and score calls without a target or model, regenerates P-009's qualification, checks the P-007 first stop, binds raw preflight legs, qualification and rollback evidence to authored inputs, and checks all recorded file hashes. The `npm test` chain includes it, and CI's chain shards discover the added script. `README.md` now states the resulting count of ninety-six scripts.
-- Revert checks used temporary fixture copies. Reverting the after contract made replay fail at the authored-contract source binding. Adding an unexplained authored file made the gap report accountability check fail. The committed fixture was restored after each check.
+- `test:evaluate-gap-loop` replays direct eval-quality preflight and score calls without a target or model, regenerates P-009's qualification, checks the P-007 first stop, binds raw preflight legs, qualification and rollback evidence to authored inputs, and checks all recorded file hashes. It recompiles and reseals both authored contracts, compares those bytes to authored generated files and each scored replay, and scans every supplied blind text file for seed-specific repair hints and historical held-out outcomes. The `npm test` chain includes it, and CI's chain shards discover the added script. `README.md` now states the resulting count of ninety-six scripts.
+- Revert checks used temporary fixture copies. Reverting the after contract made replay fail at the authored-contract source binding. Adding an unexplained authored file made the gap report accountability check fail. A tampered before compiled contract with updated inventory hashes failed regeneration. Substituting the r3 guide snapshot failed the generic example assertion. The committed fixture was restored after each check.
 - The owner-approved frozen matrix is wrapped in Prettier ignore comments so its bytes stay unchanged while the story file remains inside the repository formatting gate.
 
 ## Spec Change Log
@@ -86,13 +89,21 @@ context:
 
 W1 intentionally fails development gameability qualification before a development score exists. Partition filtering permits a before held-out run that scores through eval-quality and records W2's coverage gap. Keep its probe files and observations out of the blind session; give that session only a rule summary from the engine evidence. The after state retains full direct preflight and score replay for both partitions.
 
+The second blind session demonstrated that caught malformed-input probes can leave this contract rule unsatisfied. Installed eval-quality requires a planned `type-violating` input binding and an oracle check addressing that step for every operation declaring a request key. The third session could state that requirement but authored a numeric literal. The fourth session received a schema-valid generic JSON example and closed the gap without historical solution files. Its first `PASS` artifact is preserved separately from the final distinct-interaction development run.
+
+## Outcome
+
+The fresh blind repair closed W1 and W2. The committed after fixture retains separate raw and typed malformed interactions. Its 12 development and four held-out score artifacts all report `PASS`, with zero unsatisfied gaps, 30 caught trial votes and 18 passed-clean-control votes. The deterministic replay reproduces the before failures and both after partitions from committed evidence. Coordinator review and the final combined `npm test` remain pending.
+
 ## Verification
 
 **Commands:**
 
-- `npm run test:evaluate-gap-loop`: passed after the strengthened source-binding checks.
+- `npm run test:evaluate-gap-loop`: passed on the final fixture, including direct preflight and score replay, generated contract binding, historical blocker evidence, blind input scanning, distinct malformed steps and 3/3 votes.
+- `npm run test:evaluate-guidance`: passed with the revised Stage 11 guide.
 - `npm run test:release-metadata`: passed; package metadata is synchronized.
 - `node --input-type=module -e "const m = await import('eval-quality'); if (typeof m.evaluateTarget !== 'function') process.exit(1)"`: passed.
 - `npm run test:doc-counts`, `npm run test:doc-claims`, and `npm run docs:validate-links`: passed after the README count update.
-- `npm run lint:md`, `npm run format:check`, and `npm run test:bmad-output-gated`: passed with the frozen matrix preserved.
-- `npm test`: first run reached `test:doc-counts` and exposed the stale README count. After that fix, the coordinator stopped the rerun while it was passing `test:evaluate-check` so the branch can be reconciled with newly merged main. The coordinator will run the final full gate on the combined tree.
+- `npm run lint`, `npm run lint:md`, `npm run format:check`, `npm run docs:validate-links`, and `npm run test:bmad-output-gated`: passed. The first focused `lint` attempt found a switch-case style error in the new test; it was fixed and lint passed on the final tree.
+- `npm run docs:build`: passed on the rebased branch in the coordinator session, including link validation and the 45-page Starlight build.
+- `npm test`: the earlier run exposed a stale README count, which was corrected. The coordinator stopped a later combined run after the blind input leak was found. The final full gate is pending on the reconciled tree.

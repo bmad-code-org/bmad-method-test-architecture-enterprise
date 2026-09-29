@@ -350,11 +350,11 @@
     {
       "id": "O-003",
       "polarity": "expects-hold",
-      "commentary": "All three recognized active assertion forms return exactly clean with empty findings.",
+      "commentary": "Recognized strict equality, match, and toBe assertions each return the exact clean review.",
       "direction": {
         "polarity": "expects-hold",
         "relation": "all",
-        "scope": "Parsed JSON stdout and exit code for strict, match, toBe; each must be clean.",
+        "scope": "Parsed JSON stdout and exit code for strict, match, toBe.",
         "negativeDomain": "A wrong or absent finding, a false positive, an inconsistent status, a wrong file path, an accepted invalid request, or a nonzero exit.",
         "evidenceTargets": [
           "/interactions/strict/exit-code",
@@ -467,11 +467,11 @@
     {
       "id": "O-004",
       "polarity": "expects-hold",
-      "commentary": "Absent input, invalid JSON, malformed request shapes, explicit type-violating file input, and an unreadable file return the documented errors.",
+      "commentary": "Absent input, invalid JSON, malformed request shapes, and an unreadable file return the documented errors.",
       "direction": {
         "polarity": "expects-hold",
         "relation": "all",
-        "scope": "Parsed JSON stdout and exit code for empty, invalid-json, wrong-file-type, typed-file, extra, missing-action, wrong-action, missing-file, unreadable.",
+        "scope": "Parsed JSON stdout and exit code for empty, invalidJson, wrongFileType, typedFile, extra, missingAction, wrongAction, missingFile, unreadable.",
         "negativeDomain": "A wrong or absent finding, a false positive, an inconsistent status, a wrong file path, an accepted invalid request, or a nonzero exit.",
         "evidenceTargets": [
           "/interactions/empty/exit-code",

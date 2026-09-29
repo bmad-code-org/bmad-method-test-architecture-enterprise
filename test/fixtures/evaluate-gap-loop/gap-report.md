@@ -1,37 +1,28 @@
-# Blind development gap repair
+# Development gap report
 
-## Engine-backed diagnosis
+## Diagnosis and before evidence
 
-- The supplied gameability qualification for P-009 ended `disciplined-oracle-rejected`. The `match` observation reported `status: findings` and `findings: ["missing-assertion"]`, yet O-003 resolved `true`. The contract's O-003 check explicitly accepted that false positive through an `any` branch. This conflicted with confirmed B-003, which requires `assert.match` to remain clean.
-- The supplied P-007 development qualification stopped at `mutated-fail`: M-003 produced the same false positive, while O-003 still resolved `true` and the mutation was not distinguished. The first unsatisfied rule was the oracle's permissive match branch.
-- The redacted coverage diagnostic reported `malformed-input` unsatisfied at critical severity. The authored malformed requests used raw stdin text, so the engine lacked a distinct typed violation binding. The confirmed B-004 behavior already required a structured error for a numeric `file`.
+The supplied development run stopped during P-007 qualification. `evidence/development-first-stop.json` records the mutated `assert.match` case returning `{"status":"findings","findings":["missing-assertion"]}` while O-003 resolved `true` and held. O-003 admitted that erroneous whole stdout alongside the clean stdout for the same valid assertion. The earlier invocation ID was not supplied.
 
-## Repairs
+`evidence/w1-gameability.json` shows the same oracle holding for P-009's always-flag response. The provided diagnostic marks its disciplined-oracle-rejected phase as held. `evidence/w2-coverage.json` identifies `malformed-input` as the first unsatisfied critical coverage rule. The original contract used a literal raw string for the wrong-file-type step, so its plan lacked a `type-violating` binding on a declared request key.
 
-1. O-003 now requires the full `match` response to equal `{ "file": "cases/clean-assert-match.test.js", "status": "clean", "findings": [] }`. It still checks exit code zero and the other recognized assertions. This rejects both the seeded P-007 false positive and P-009's always-flag response.
-2. Added a distinct `typed-file` interaction with `file: { "matcher": "type-violating" }`. O-004 now cites and checks its exit code and documented error. The existing raw `wrong-file-type` case remains. Both gameability response corpora include the new step so qualification exercises the complete plan.
-3. Regenerated the corpus index, compiled contract, and sealed brief with the installed tools. The target and confirmed requirements were untouched.
+## Repair
 
-## Development verification
+In `evaluation/contract.json`, O-003 now requires the exact clean stdout for the valid `assert.match` case. The original `wrong-file-type` step keeps its raw JSON stdin. A distinct `typed-file` step binds the declared `file` request key with the `type-violating` matcher and a literal `action`. O-004 now checks the error response and exit code for both steps. Both gameability response maps include the typed step. I regenerated `corpus-index.json`, `compiled-contract.json`, and `sealed-brief.json`.
 
-The first repaired run was `20260929T030757966Z-173f8f33`, scored as `20260929T030836863Z-959f48e2`. It qualified P-007, P-009, and P-017; all 12 scored artifacts reported `PASS` with zero coverage gaps. A second iteration added the distinct `typed-file` step to satisfy the authored artifact requirement.
+## After development outcome
 
-The final development run was `20260929T031007374Z-b5039b3f`, scored as `20260929T031044002Z-e932199e`. Preflight `passed: true`. P-005 through P-008, P-009, and P-017 each had three `caught` votes in three valid trials. P-001 through P-004, P-014, and P-016 each had three `passed-clean-control` votes. Every probe's contract verdict was `PASS`, with zero coverage gaps. The recorded `trial-1-typed-file` call sent numeric `file: 42` and received the documented error JSON with exit code zero. P-007's first material error citation points to `trial-1-strict`, sequence 4, for the grouped O-003 outcome finding; the actual failing match observation is included in that oracle's selected observations.
+An intermediate development invocation, `20260929T043419685Z-5d865dcf`, and score invocation, `20260929T043457320Z-94f603cf`, exited 0. After the separate typed step was added, final development invocation `20260929T043819597Z-66d1b7ae` completed with exit 0. All 12 probes qualified, including P-007 and P-009. Final score invocation `20260929T043858881Z-20778eea` exited 0. Every probe's evidence artifact reports `contractVerdict: PASS` and `coverageGaps: []`; the preflight checks are satisfied.
 
-Commands and results: `digest` indexed 38 files and exited 0; `check` found no authoring defects and exited 0; `eval-quality compile` and `seal` exited 0; the final development `run` and `score` exited 0. The engine ran `eval-quality score` once per probe. Each scored defect or gameability artifact reports its own class component at 1 caught of 1 exercised; no run-wide class catch rate was emitted. Six zero-action clean controls were exercised, and each passed all three trials. The per-probe strength vector has no rate for zero-action clean controls; their outcomes and trial votes prove passing. A run-wide `evaluation.json.strengthFloor` gate is unavailable in this engine version. No held-out partition was opened.
+P-007 and P-009 each caught 3 of 3 valid trials. Their individual defect and gameability components, respectively, are `caught: 1`, `exercised: 1`, `rate: 1`. P-005, P-006, P-008, and P-017 also caught 3 of 3. P-001 through P-004, P-014, and P-016 passed as clean controls in all three trials. The first material error recorded for P-007 and P-009 is F-001 at sequence 4, `review` outcome phase. That citation is the first observation in O-003's grouped check; the decisive mismatch is the `match` stdout at sequence 5.
 
-## Blind session changed files
+The final clean trial records the raw `wrong-file-type` request as text `{"action":"review","file":42}` and the `typed-file` request as parsed JSON with `action: "review"` and numeric `file: 42`. Both receive the documented error. The score artifacts report no remaining coverage gaps, including the previously unsatisfied malformed-input rule. These are per-probe scores; the run provides no class-wide strength rate. Only the development partition was run and scored. Target files and `target/intake-answers.md` remained frozen.
 
-- `evaluation/contract.json`
-- `evaluation/corpus/gameability/P-009.json`
-- `evaluation/corpus/gameability/P-017.json`
-- `evaluation/corpus-index.json`, generated by `tea-evaluate digest`
-- `evaluation/compiled-contract.json`, generated by `eval-quality compile`
-- `evaluation/sealed-brief.json`, generated by `eval-quality seal`
-- `evaluation/runs/20260929T030757966Z-173f8f33/`, generated first development evidence tree
-- `evaluation/runs/20260929T031007374Z-b5039b3f/`, generated final development evidence tree
-- `gap-report.md`
-- `session-transcript.md`
+## Files changed
+
+Authored: `evaluation/contract.json`, `evaluation/corpus/gameability/P-009.json`, `evaluation/corpus/gameability/P-017.json`, `gap-report.md`, `session-transcript.md`.
+
+Generated: `evaluation/corpus-index.json`, `evaluation/compiled-contract.json`, `evaluation/sealed-brief.json`, and the retained `evaluation/runs/20260929T043419685Z-5d865dcf/` and `evaluation/runs/20260929T043819597Z-66d1b7ae/` trees. Each tree contains 153 generated files.
 
 ## Changed files
 
@@ -41,5 +32,3 @@ Commands and results: `digest` indexed 38 files and exited 0; `check` found no a
 - `evaluation/corpus/gameability/P-009.json`
 - `evaluation/corpus/gameability/P-017.json`
 - `evaluation/sealed-brief.json`
-
-The committed after fixture restores the held-out inventory after the blind session. Its final corpus index covers all 42 authored corpus, mutation, and probe files. The integration run scored both partitions from that restored evaluation.

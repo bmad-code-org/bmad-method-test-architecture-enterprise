@@ -20,6 +20,8 @@ const ROOT = path.resolve(__dirname, '..');
 const FIXTURE = process.env.TEA_EVALUATE_GAP_LOOP_FIXTURE ?? path.join(__dirname, 'fixtures/evaluate-gap-loop');
 const SOURCE = path.join(__dirname, 'fixtures/evaluate-authoring/test-review');
 const ENGINE = path.join(ROOT, 'node_modules/.bin/eval-quality');
+const GUIDE =
+  process.env.TEA_EVALUATE_GAP_LOOP_GUIDE ?? path.join(ROOT, 'src/workflows/testarch/bmad-testarch-evaluate/references/gaps.md');
 const EXCLUDED = new Set(['replay', 'runs', 'node_modules']);
 
 function readJson(file) {
@@ -142,28 +144,162 @@ function checkBlindInputs() {
     .map((file) => `evaluation/${file}`);
   const evidenceFiles = ['gaps.md', 'evidence/w1-gameability.json', 'evidence/development-first-stop.json', 'evidence/w2-coverage.json'];
   assert.deepEqual(Object.keys(blind.initialFiles).sort(), [...targetFiles, ...evaluationFiles, ...evidenceFiles].sort());
+  assert.ok(!('evaluation/gap-report.md' in blind.initialFiles), 'historical gap report reached the blind session');
+  assert.ok(!('evaluation/adapter/README.md' in blind.initialFiles), 'historical adapter hint reached the blind session');
   for (const [file, hash] of Object.entries(blind.initialFiles)) {
     assert.doesNotMatch(file, /SEEDED\.md|held-out|P-01[0-3]\.probe\.json/);
     let bytes;
-    if (file === 'evaluation/evaluation.json') {
-      const manifest = readJson(path.join(before, file));
-      manifest.heldOutProbes = [];
-      bytes = Buffer.from(JSON.stringify(manifest, null, 2) + '\n');
-    } else if (file === 'gaps.md') {
-      bytes = fs.readFileSync(path.join(FIXTURE, 'blind/gaps.md'));
-    } else if (file === 'evidence/w1-gameability.json') {
-      bytes = fs.readFileSync(
-        path.join(before, 'evaluation/replay/gameability-diagnostic/qualification/P-009/disciplined-oracle-rejected.json'),
-      );
-    } else if (file === 'evidence/development-first-stop.json') {
-      bytes = fs.readFileSync(path.join(before, 'evaluation/replay/development-stopped/qualification/P-007/mutated-fail.json'));
-    } else if (file === 'evidence/w2-coverage.json') {
-      bytes = fs.readFileSync(path.join(before, 'evaluation/replay/coverage-diagnostic.json'));
-    } else {
-      bytes = fs.readFileSync(path.join(before, file));
+    switch (file) {
+      case 'evaluation/evaluation.json': {
+        const manifest = readJson(path.join(before, file));
+        manifest.heldOutProbes = [];
+        bytes = Buffer.from(JSON.stringify(manifest, null, 2) + '\n');
+        break;
+      }
+      case 'gaps.md': {
+        bytes = fs.readFileSync(path.join(FIXTURE, 'blind/gaps.md'));
+        break;
+      }
+      case 'evaluation/corpus-index.json': {
+        bytes = fs.readFileSync(path.join(FIXTURE, 'blind/corpus-index.json'));
+        break;
+      }
+      case 'evidence/w1-gameability.json': {
+        bytes = fs.readFileSync(
+          path.join(before, 'evaluation/replay/gameability-diagnostic/qualification/P-009/disciplined-oracle-rejected.json'),
+        );
+        break;
+      }
+      case 'evidence/development-first-stop.json': {
+        bytes = fs.readFileSync(path.join(before, 'evaluation/replay/development-stopped/qualification/P-007/mutated-fail.json'));
+        break;
+      }
+      case 'evidence/w2-coverage.json': {
+        bytes = fs.readFileSync(path.join(before, 'evaluation/replay/coverage-diagnostic.json'));
+        break;
+      }
+      default: {
+        bytes = fs.readFileSync(path.join(before, file));
+      }
     }
     assert.equal(crypto.createHash('sha256').update(bytes).digest('hex'), hash, `${file} blind input changed`);
+    const suppliedText = bytes.toString('utf8');
+    const leakPattern =
+      file === 'gaps.md'
+        ? /typed-file|pre-seed|\bW[12]\b|O-003|test-review|historical held-out|held-out scores|all \d+ scored|2026092[89]T\d{9}Z|held-out.{0,100}(?:3\/3|three of three|zero coverage gaps)/i
+        : /type-violating|typed-file|pre-seed|\bW[12]\b|historical held-out|held-out scores|all \d+ scored|2026092[89]T\d{9}Z|held-out.{0,100}(?:3\/3|three of three|zero coverage gaps)/i;
+    assert.doesNotMatch(suppliedText, leakPattern, `${file} exposes a repair hint or historical held-out outcome`);
   }
+}
+
+function checkGuide() {
+  for (const file of [path.join(FIXTURE, 'blind/gaps.md'), GUIDE]) {
+    const guide = fs.readFileSync(file, 'utf8');
+    const row = guide.split('\n').find((line) => /^\| `malformed-input`\s+\|/.test(line));
+    assert.ok(row, `${file} lacks malformed-input guidance`);
+    assert.match(row, /each operation declaring a request key/);
+    assert.match(row, /type-violating/);
+    assert.match(row, /oracle check/);
+    assert.match(guide, /"requestKey":\s*\{\s*"matcher":\s*"type-violating"\s*\}/);
+  }
+}
+
+function checkBlockedBlindSessions() {
+  const finalInputs = readJson(path.join(FIXTURE, 'blind-inputs.json')).initialFiles;
+  const sessions = [
+    [
+      'r2',
+      '20260929T041030384Z-f42b06f1',
+      '20260929T041118138Z-95557dd4',
+      'cddeb8df160bc0aa1dfa4deecd830b4c83f56314025ef0bd41239e526f1a4b4f',
+    ],
+    [
+      'r3',
+      '20260929T042912394Z-58dfda95',
+      '20260929T042952889Z-e93cfbe1',
+      '6992635fbb71fea20341633b8c63f301c12afacfa090637948aa2cca6b4d77e5',
+    ],
+  ];
+  for (const [name, runId, scoreId, artifactHash] of sessions) {
+    const inputs = readJson(path.join(FIXTURE, 'blind', `${name}-inputs.json`));
+    assert.deepEqual(Object.keys(inputs.initialFiles).sort(), Object.keys(finalInputs).sort(), `${name} input set drifted`);
+    for (const [file, hash] of Object.entries(inputs.initialFiles)) {
+      if (file !== 'gaps.md') assert.equal(hash, finalInputs[file], `${name} ${file} differs from the final seeded input`);
+    }
+    assert.equal(sha256(path.join(FIXTURE, 'blind', `${name}-gaps.md`)), inputs.initialFiles['gaps.md']);
+    assert.ok(!('evaluation/gap-report.md' in inputs.initialFiles));
+    assert.ok(!('evaluation/adapter/README.md' in inputs.initialFiles));
+    const transcript = fs.readFileSync(path.join(FIXTURE, 'blind', `${name}-session-transcript.md`), 'utf8');
+    const report = fs.readFileSync(path.join(FIXTURE, 'blind', `${name}-gap-report.md`), 'utf8');
+    assert.ok(transcript.includes(runId) && transcript.includes(scoreId), `${name} blocker run is unattributed`);
+    assert.ok(report.includes(runId) && report.includes(scoreId), `${name} blocker report is unattributed`);
+    assert.match(report, /malformed-input/);
+    const file = path.join(FIXTURE, 'blind', `${name}-blocker-score.json`);
+    assert.equal(sha256(file), artifactHash);
+    const scored = readJson(file);
+    assert.equal(scored.runId, `${runId}-P-018`);
+    assert.equal(scored.contractVerdict, 'CONCERNS');
+    assert.deepEqual(
+      scored.coverageGaps.filter((gap) => !gap.satisfied).map((gap) => [gap.rule, gap.severity]),
+      [['malformed-input', 'critical']],
+    );
+    assert.deepEqual(
+      scored.reducedProbeOutcomes[0].trialVotes.map((vote) => vote.state),
+      ['caught', 'caught', 'caught'],
+    );
+  }
+}
+
+function checkBlindDiscovery() {
+  const file = path.join(FIXTURE, 'blind/r4-discovery-score.json');
+  assert.equal(sha256(file), 'b7b4c84e7cc88195ad212651f706743c99f66f93dedef81cd394403890ba4a58');
+  const scored = readJson(file);
+  assert.equal(scored.runId, '20260929T043419685Z-5d865dcf-P-009');
+  assert.equal(scored.contractVerdict, 'PASS');
+  assert.deepEqual(
+    scored.coverageGaps.filter((gap) => !gap.satisfied),
+    [],
+  );
+  assert.deepEqual(
+    scored.reducedProbeOutcomes[0].trialVotes.map((vote) => vote.state),
+    ['caught', 'caught', 'caught'],
+  );
+  const report = fs.readFileSync(path.join(FIXTURE, 'gap-report.md'), 'utf8');
+  const transcript = fs.readFileSync(path.join(FIXTURE, 'session-transcript.md'), 'utf8');
+  for (const id of ['20260929T043419685Z-5d865dcf', '20260929T043457320Z-94f603cf']) {
+    assert.ok(report.includes(id) && transcript.includes(id), `blind discovery score ${id} is unattributed`);
+  }
+}
+
+function checkIntermediateDevelopment() {
+  const artifact = path.join(FIXTURE, 'blind/intermediate-development-score.json');
+  assert.equal(sha256(artifact), '1826019ede41e901faf2a197f89ac1c425171abee8f61477a22775c4515fcbfa');
+  const scored = readJson(artifact);
+  assert.equal(scored.runId, '20260929T035801825Z-b5cb51ff-P-009');
+  assert.equal(scored.scoredProbeId, 'P-009');
+  assert.equal(scored.contractVerdict, 'CONCERNS');
+  assert.deepEqual(
+    scored.coverageGaps.filter((gap) => !gap.satisfied).map((gap) => [gap.rule, gap.severity]),
+    [['malformed-input', 'critical']],
+  );
+  assert.deepEqual(
+    scored.reducedProbeOutcomes[0].trialVotes.map((vote) => vote.state),
+    ['caught', 'caught', 'caught'],
+  );
+  const transcript = fs.readFileSync(path.join(FIXTURE, 'blind/r2-session-transcript.md'), 'utf8');
+  assert.match(transcript, /20260929T035801825Z-b5cb51ff/);
+  assert.match(transcript, /20260929T035839151Z-e5c0085e/);
+}
+
+function checkGenerated(folder, out) {
+  const phase = path.basename(path.dirname(folder));
+  const compiled = path.join(out, `${phase}-compiled-contract.json`);
+  const sealed = path.join(out, `${phase}-sealed-brief.json`);
+  run(ENGINE, ['compile', '--in', path.join(folder, 'contract.json'), '--out', compiled]);
+  run(ENGINE, ['seal', '--in', path.join(folder, 'contract.json'), '--out', sealed]);
+  sameBytes(compiled, path.join(folder, 'compiled-contract.json'), `${phase} authored compile`);
+  sameBytes(sealed, path.join(folder, 'sealed-brief.json'), `${phase} authored seal`);
+  return { compiled, sealed };
 }
 
 async function checkBeforeDiagnostics() {
@@ -390,9 +526,44 @@ function checkHeldOutInputIsolation(folder) {
   );
 }
 
-async function replayRun(folder, runName, out, expectedVerdict) {
+function checkDistinctMalformedSteps(folder) {
+  const contract = readJson(path.join(folder, 'contract.json'));
+  const byStep = new Map(contract.interactionPlan.map((step) => [step.stepId, step]));
+  const raw = byStep.get('wrong-file-type');
+  const typed = byStep.get('typed-file');
+  assert.ok(raw && typed, 'the raw and typed malformed interactions must both exist');
+  assert.equal(
+    raw.inputBinding.stdin.raw.literal,
+    fs.readFileSync(path.join(folder, 'corpus/requests/wrongFileType.stdin'), 'utf8').trim(),
+  );
+  assert.equal(typed.operationId, raw.operationId);
+  assert.deepEqual(typed.inputBinding.stdin.file, { matcher: 'type-violating' });
+  const oracle = contract.oracles.find((candidate) => candidate.id === 'O-004');
+  const checks = JSON.stringify(oracle.check);
+  for (const stepId of ['wrong-file-type', 'typed-file']) {
+    assert.ok(oracle.direction.evidenceTargets.some((pointer) => pointer.startsWith(`/interactions/${stepId}/`)));
+    assert.ok(checks.includes(`/interactions/${stepId}/stdout/error`));
+  }
+  for (const id of ['P-009', 'P-017']) {
+    const response = readJson(path.join(folder, 'corpus/gameability', `${id}.json`));
+    assert.ok(response.steps['typed-file'], `${id} lacks the typed malformed response`);
+  }
+  const clean = readJson(path.join(folder, 'replay/development/trials/clean/trial-1.json'));
+  const steps = new Map(clean.steps.map((step) => [step.stepId, step]));
+  assert.deepEqual(steps.get('wrong-file-type').request.channels.stdin, {
+    kind: 'text',
+    value: raw.inputBinding.stdin.raw.literal,
+  });
+  assert.equal(steps.get('typed-file').request.channels.stdin.kind, 'json');
+  assert.equal(typeof steps.get('typed-file').request.channels.stdin.value.file, 'number');
+  assert.deepEqual(steps.get('wrong-file-type').observation.stdout, steps.get('typed-file').observation.stdout);
+}
+
+async function replayRun(folder, runName, out, expectedVerdict, generated) {
   const replay = path.join(folder, 'replay', runName);
   sameBytes(path.join(folder, 'contract.json'), path.join(replay, 'contract.json'), `${runName} authored contract`);
+  sameBytes(generated.compiled, path.join(replay, 'eval-contract.json'), `${runName} generated compile`);
+  sameBytes(generated.sealed, path.join(replay, 'sealed-evaluator-brief.json'), `${runName} generated seal`);
   const runRecord = readJson(path.join(replay, 'run.json'));
   assert.equal(runRecord.workspace.treeDigest, treeDigest(path.join(path.dirname(folder), 'target')));
   const verdictFile = path.join(out, `${path.basename(path.dirname(folder))}-${runName}-preflight.json`);
@@ -511,16 +682,23 @@ async function main() {
   checkInventory();
   checkGapReport();
   checkBlindInputs();
+  checkGuide();
+  checkBlockedBlindSessions();
+  checkBlindDiscovery();
+  checkIntermediateDevelopment();
   const before = path.join(FIXTURE, 'before/evaluation');
   const after = path.join(FIXTURE, 'after/evaluation');
+  checkDistinctMalformedSteps(after);
   checkHeldOutInputIsolation(after);
   checkReplayManifest(before, ['held-out']);
   checkReplayManifest(after, ['development', 'held-out']);
   await checkBeforeDiagnostics();
   const out = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-evaluate-gap-loop-'));
   try {
-    await replayRun(before, 'held-out', out, 'CONCERNS');
-    for (const runName of ['development', 'held-out']) await replayRun(after, runName, out, 'PASS');
+    const beforeGenerated = checkGenerated(before, out);
+    const afterGenerated = checkGenerated(after, out);
+    await replayRun(before, 'held-out', out, 'CONCERNS', beforeGenerated);
+    for (const runName of ['development', 'held-out']) await replayRun(after, runName, out, 'PASS', afterGenerated);
   } finally {
     fs.rmSync(out, { recursive: true, force: true });
   }

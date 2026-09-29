@@ -41,15 +41,31 @@ Use the exact `OUTCOME_STATES` vocabulary from the installed eval-quality packag
 
 The discipline keys come from installed `DISCIPLINE_RULES`. The preflight keys come from the installed `preflight-verdict.schema.json`; a failed check invalidates the run.
 
-| Discipline rule                | Concrete repair                                                                                      |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| `success-indicator-separation` | Add a probe and oracle that read independent success evidence, not the target's success claim alone. |
-| `whole-body`                   | Add an oracle check on the full response body and a mutation outside the expected keyword.           |
-| `malformed-input`              | Add malformed-input probes and an oracle for rejection before side effects.                          |
-| `per-record`                   | Add a multi-record probe and per-record oracle evidence pointers.                                    |
-| `sibling-cross-check`          | Add a probe whose sibling fields disagree and an oracle that compares them.                          |
-| `omission-and-completeness`    | Add a missing-item probe and an oracle that checks the complete required set.                        |
-| `state-change-read-back`       | Add a state mutation probe plus a read-back control and oracle.                                      |
+| Discipline rule                | Concrete repair                                                                                                                                                  |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `success-indicator-separation` | Add a probe and oracle that read independent success evidence, not the target's success claim alone.                                                             |
+| `whole-body`                   | Add an oracle check on the full response body and a mutation outside the expected keyword.                                                                       |
+| `malformed-input`              | For each operation declaring a request key, bind `type-violating` on a step input and address that step with an oracle check; qualify a malformed request probe. |
+| `per-record`                   | Add a multi-record probe and per-record oracle evidence pointers.                                                                                                |
+| `sibling-cross-check`          | Add a probe whose sibling fields disagree and an oracle that compares them.                                                                                      |
+| `omission-and-completeness`    | Add a missing-item probe and an oracle that checks the complete required set.                                                                                    |
+| `state-change-read-back`       | Add a state mutation probe plus a read-back control and oracle.                                                                                                  |
+
+The engine reads `malformed-input` coverage from the contract. A caught malformed-input probe alone leaves the rule unsatisfied until the planned input binding and addressed check exist for every relevant operation.
+
+For example, an operation can declare a generic `requestKey` in `requestShape.stdin`:
+
+```json
+{ "requiredKeys": [], "permittedKeys": ["requestKey"], "types": { "requestKey": "string" } }
+```
+
+A step invoking that operation can bind the key in `inputBinding.stdin`:
+
+```json
+{ "requestKey": { "matcher": "type-violating" } }
+```
+
+An oracle check must address that step. These excerpts were validated in their respective contract locations with `eval-quality compile`.
 
 | Preflight check        | Concrete repair                                                                        |
 | ---------------------- | -------------------------------------------------------------------------------------- |
