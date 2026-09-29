@@ -65,7 +65,7 @@ development_status:
   1-27-tell-a-documented-guard-from-an-invented-risk-in-the-test-d: done
   1-28-recover-from-a-killed-run: done
   1-29-record-what-a-live-run-spends: done
-  1-30-send-principal-and-matcher-bindings: review
+  1-30-send-principal-and-matcher-bindings: done
   1-31-sandbox-the-targets-file-system: backlog
   1-32-qualify-a-historical-probe-against-two-addressable-deployments: done
   1-33-record-eval-qualitys-denial-reason-for-every-denied-call: backlog
