@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "mutationId": "M-005",
+  "mutationSource": "Adopter-owned B-001 rule change",
+  "targetArtifact": "rules/review.json",
+  "operator": {
+    "kind": "replace-exact",
+    "find": "\"assert.strictEqual(\"",
+    "replace": "\"test(\"",
+    "occurrences": 1
+  },
+  "expectedObservableFailure": "stdout reports the assertion-free test clean because its test call is treated as an assertion"
+}

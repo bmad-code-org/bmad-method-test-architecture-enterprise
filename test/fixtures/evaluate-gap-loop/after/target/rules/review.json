@@ -1,0 +1,4 @@
+{
+  "assertions": ["assert.strictEqual(", "assert.match(", ".toBe("],
+  "disabled": ["test.skip(", "it.skip("]
+}

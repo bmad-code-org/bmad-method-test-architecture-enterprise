@@ -1,0 +1,141 @@
+{
+  "schemaVersion": 5,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "probeId": "P-012",
+  "probeClass": "defect",
+  "behaviorId": "B-003",
+  "systemId": "test-review-json-stdin",
+  "implementationDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
+  "artifactDigest": "sha256:f1c323ac0453a1db6835f3f2b7ba670e61da2bcbef79dce9cba717b0286472fe",
+  "commitDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
+  "rationale": "[held-out] A universal assertion matcher falsely flags the same valid match test.",
+  "qualification": {
+    "route": "controlled-mutation",
+    "mutationSource": "Adopter-owned B-003 rule change",
+    "mutationOperator": "replace-exact: \"rules.assertions.some((token) => source.includes(token))\" -> \"rules.assertions.every((token) => source.includes(token))\" (occurrences 1)",
+    "targetArtifact": {
+      "storage": "public",
+      "path": "bin/review.mjs",
+      "privateRef": null,
+      "digest": "sha256:f1c323ac0453a1db6835f3f2b7ba670e61da2bcbef79dce9cba717b0286472fe"
+    },
+    "expectedObservableFailure": "stdout falsely reports missing-assertion for assert.match",
+    "baselinePassEvidence": {
+      "storage": "public",
+      "path": "runs/20260929T031515742Z-130bd85c/qualification/P-012/baseline-pass.json",
+      "privateRef": null,
+      "digest": "sha256:a01438ccb5538f363cbbfbe9291c14cfaceaafbb757072aa8c21029fa8ae66c6"
+    },
+    "mutatedFailEvidence": {
+      "storage": "public",
+      "path": "runs/20260929T031515742Z-130bd85c/qualification/P-012/mutated-fail.json",
+      "privateRef": null,
+      "digest": "sha256:b600c4fc890af2c6b46f3cedb81f4b29e81cdb358aa7bf1f5495693016c8572e"
+    },
+    "rollbackVerified": true
+  },
+  "expectedClean": false,
+  "defects": [
+    {
+      "defectId": "D-012",
+      "behaviorId": "B-003",
+      "summary": "A universal assertion matcher falsely flags the same valid match test.",
+      "severity": "material",
+      "oracleEvidence": [
+        {
+          "storage": "public",
+          "path": "runs/20260929T031515742Z-130bd85c/qualification/P-012/mutated-fail.json",
+          "privateRef": null,
+          "digest": "sha256:b600c4fc890af2c6b46f3cedb81f4b29e81cdb358aa7bf1f5495693016c8572e"
+        }
+      ],
+      "source": "controlled-mutation",
+      "manifestationWitness": {
+        "legId": "manifest-p-012",
+        "interfaceId": "review-cli",
+        "operationId": "review",
+        "inputs": {
+          "argument": {},
+          "option": {},
+          "environment": {},
+          "stdin": {
+            "kind": "json",
+            "value": {
+              "action": "review",
+              "file": "cases/clean-assert-match.test.js"
+            }
+          }
+        },
+        "relation": {
+          "op": "all",
+          "operands": [
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/manifest-p-012/stdout/file"
+                },
+                {
+                  "literal": "cases/clean-assert-match.test.js"
+                }
+              ]
+            },
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/manifest-p-012/stdout/status"
+                },
+                {
+                  "literal": "findings"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "defectSignature": {
+    "interfaceKind": "cli",
+    "observableChannel": "stdout",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": null,
+          "header": null,
+          "body": null,
+          "argument": null,
+          "option": null,
+          "environment": null,
+          "stdin": {
+            "action": {
+              "literal": "review"
+            },
+            "file": {
+              "literal": "cases/clean-assert-match.test.js"
+            }
+          },
+          "arguments": null
+        }
+      },
+      "predicate": {
+        "op": "equality",
+        "operands": [
+          {
+            "pointer": "/interactions/observed/stdout/status"
+          },
+          {
+            "literal": "findings"
+          }
+        ]
+      }
+    },
+    "invocation": {
+      "executable": "review",
+      "subcommandPath": []
+    }
+  }
+}

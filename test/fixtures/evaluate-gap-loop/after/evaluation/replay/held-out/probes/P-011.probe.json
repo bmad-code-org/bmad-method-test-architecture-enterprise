@@ -1,0 +1,141 @@
+{
+  "schemaVersion": 5,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "probeId": "P-011",
+  "probeClass": "defect",
+  "behaviorId": "B-002",
+  "systemId": "test-review-json-stdin",
+  "implementationDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
+  "artifactDigest": "sha256:f1c323ac0453a1db6835f3f2b7ba670e61da2bcbef79dce9cba717b0286472fe",
+  "commitDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
+  "rationale": "[held-out] A disabled-test guard bypass misses the same skipped test.",
+  "qualification": {
+    "route": "controlled-mutation",
+    "mutationSource": "Adopter-owned B-002 rule change",
+    "mutationOperator": "replace-exact: \"if (rules.disabled.some((token) => source.includes(token)))\" -> \"if (false && rules.disabled.some((token) => source.includes(token)))\" (occurrences 1)",
+    "targetArtifact": {
+      "storage": "public",
+      "path": "bin/review.mjs",
+      "privateRef": null,
+      "digest": "sha256:f1c323ac0453a1db6835f3f2b7ba670e61da2bcbef79dce9cba717b0286472fe"
+    },
+    "expectedObservableFailure": "stdout omits disabled-test for test.skip",
+    "baselinePassEvidence": {
+      "storage": "public",
+      "path": "runs/20260929T031515742Z-130bd85c/qualification/P-011/baseline-pass.json",
+      "privateRef": null,
+      "digest": "sha256:4731a5380b18d612adaa00359e8bd1ac9746b496c08a38a01dfa5e2c9790df13"
+    },
+    "mutatedFailEvidence": {
+      "storage": "public",
+      "path": "runs/20260929T031515742Z-130bd85c/qualification/P-011/mutated-fail.json",
+      "privateRef": null,
+      "digest": "sha256:da00f5087e974e45f19cd2da7a259a74ac9b6849e9aa0016df36692c93a42d6c"
+    },
+    "rollbackVerified": true
+  },
+  "expectedClean": false,
+  "defects": [
+    {
+      "defectId": "D-011",
+      "behaviorId": "B-002",
+      "summary": "A disabled-test guard bypass misses the same skipped test.",
+      "severity": "material",
+      "oracleEvidence": [
+        {
+          "storage": "public",
+          "path": "runs/20260929T031515742Z-130bd85c/qualification/P-011/mutated-fail.json",
+          "privateRef": null,
+          "digest": "sha256:da00f5087e974e45f19cd2da7a259a74ac9b6849e9aa0016df36692c93a42d6c"
+        }
+      ],
+      "source": "controlled-mutation",
+      "manifestationWitness": {
+        "legId": "manifest-p-011",
+        "interfaceId": "review-cli",
+        "operationId": "review",
+        "inputs": {
+          "argument": {},
+          "option": {},
+          "environment": {},
+          "stdin": {
+            "kind": "json",
+            "value": {
+              "action": "review",
+              "file": "cases/disabled-test.test.js"
+            }
+          }
+        },
+        "relation": {
+          "op": "all",
+          "operands": [
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/manifest-p-011/stdout/file"
+                },
+                {
+                  "literal": "cases/disabled-test.test.js"
+                }
+              ]
+            },
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/manifest-p-011/stdout/status"
+                },
+                {
+                  "literal": "clean"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "defectSignature": {
+    "interfaceKind": "cli",
+    "observableChannel": "stdout",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": null,
+          "header": null,
+          "body": null,
+          "argument": null,
+          "option": null,
+          "environment": null,
+          "stdin": {
+            "action": {
+              "literal": "review"
+            },
+            "file": {
+              "literal": "cases/disabled-test.test.js"
+            }
+          },
+          "arguments": null
+        }
+      },
+      "predicate": {
+        "op": "equality",
+        "operands": [
+          {
+            "pointer": "/interactions/observed/stdout/status"
+          },
+          {
+            "literal": "clean"
+          }
+        ]
+      }
+    },
+    "invocation": {
+      "executable": "review",
+      "subcommandPath": []
+    }
+  }
+}

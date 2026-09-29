@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "mutationId": "M-002",
+  "mutationSource": "Adopter-owned B-002 rule change",
+  "targetArtifact": "rules/review.json",
+  "operator": {
+    "kind": "replace-exact",
+    "find": "\"test.skip(\"",
+    "replace": "\"test.only(\"",
+    "occurrences": 1
+  },
+  "expectedObservableFailure": "stdout lacks disabled-test and reports the skipped test clean"
+}

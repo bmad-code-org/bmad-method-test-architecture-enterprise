@@ -1,0 +1,32 @@
+{
+  "invocationId": "20260929T030358594Z-a1a767f0",
+  "command": "run",
+  "teaVersion": "1.27.2",
+  "evalQualityVersion": "4.3.0",
+  "commit": null,
+  "dirty": true,
+  "evaluationFolder": {
+    "dirty": true
+  },
+  "workspace": {
+    "kind": "copy",
+    "commit": null,
+    "tree": null,
+    "treeDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
+    "dirty": true
+  },
+  "workspaces": {
+    "pristine": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-pristine-jE47Cw/target"
+  },
+  "adopterTree": {
+    "repository": "/Users/murat/opensource/bmad-method-test-architecture-enterprise",
+    "unchanged": null
+  },
+  "refused": [],
+  "outcome": {
+    "stage": "qualification",
+    "exitCode": 11,
+    "message": "probes/P-009.probe.json: over the degenerate response corpus/gameability/P-009.json, the disciplined oracle O-003 of B-003 is held where it must be violated, so the probe does not show the response games the naive oracle; the evidence is in runs/20260929T030358594Z-a1a767f0/qualification/P-009/disciplined-oracle-rejected.json"
+  },
+  "completed": false
+}

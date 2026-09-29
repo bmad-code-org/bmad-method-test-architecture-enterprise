@@ -1,0 +1,11 @@
+{
+  "probeId": "P-007",
+  "mutationId": "M-003",
+  "targetArtifact": "rules/review.json",
+  "preDigest": "sha256:e48e800f1826004bf1b55d586cd20c99a1e98adf55cd0a1010ddbfe8c4c9805b",
+  "mutatedDigest": "sha256:3d36eb7410fc2ae1b18f2d253844ea954e79e5763c090a4639fdf4c34b1e613f",
+  "restoredDigest": "sha256:e48e800f1826004bf1b55d586cd20c99a1e98adf55cd0a1010ddbfe8c4c9805b",
+  "reExecutionCap": 2,
+  "rePasses": [],
+  "rollbackVerified": false
+}

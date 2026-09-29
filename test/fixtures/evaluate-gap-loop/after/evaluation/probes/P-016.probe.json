@@ -1,0 +1,12 @@
+{
+  "probeId": "P-016",
+  "probeClass": "zero-action",
+  "behaviorId": "B-004",
+  "expectedClean": true,
+  "rationale": "[malformed] Raw empty bytes and invalid JSON exercise the parser before request validation.",
+  "defects": [],
+  "qualification": {
+    "route": "clean-control",
+    "noKnownDefectStatement": "No known defect at this revision."
+  }
+}

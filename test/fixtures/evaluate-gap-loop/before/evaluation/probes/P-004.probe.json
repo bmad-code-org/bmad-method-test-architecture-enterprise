@@ -1,0 +1,12 @@
+{
+  "probeId": "P-004",
+  "probeClass": "zero-action",
+  "behaviorId": "B-004",
+  "expectedClean": true,
+  "rationale": "[malformed] Raw empty and invalid JSON stdin, invalid request shapes, and unreadable file return structured errors.",
+  "defects": [],
+  "qualification": {
+    "route": "clean-control",
+    "noKnownDefectStatement": "No known defect at this revision."
+  }
+}

@@ -60,7 +60,7 @@ development_status:
   1-15-float-the-engine-pin-and-admit-evaluate-authored-suites: done
   1-16-evaluate-authors-its-own-suite-run-live-and-recorded: done
   1-24-evaluate-authors-strong-suites-for-two-more-target-kinds: done
-  1-25-close-seeded-weaknesses-through-the-gap-loop: backlog
+  1-25-close-seeded-weaknesses-through-the-gap-loop: in-progress
   1-26-learn-an-unfamiliar-evaluation-framework-on-the-go: backlog
   1-27-tell-a-documented-guard-from-an-invented-risk-in-the-test-d: done
   1-28-recover-from-a-killed-run: done

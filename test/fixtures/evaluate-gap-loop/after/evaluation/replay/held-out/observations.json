@@ -1,0 +1,170 @@
+[
+  {
+    "probeId": "witness-missing",
+    "interfaceId": "review-cli",
+    "operationId": "review",
+    "kind": "cli",
+    "exitCode": 0,
+    "stdout": {
+      "kind": "json",
+      "value": {
+        "file": "cases/missing-assertion.test.js",
+        "status": "findings",
+        "findings": [
+          "missing-assertion"
+        ]
+      }
+    },
+    "stderr": {
+      "kind": "text",
+      "value": ""
+    },
+    "artifacts": {}
+  },
+  {
+    "probeId": "witness-clean",
+    "interfaceId": "review-cli",
+    "operationId": "review",
+    "kind": "cli",
+    "exitCode": 0,
+    "stdout": {
+      "kind": "json",
+      "value": {
+        "file": "cases/expect-to-be.test.js",
+        "status": "clean",
+        "findings": []
+      }
+    },
+    "stderr": {
+      "kind": "text",
+      "value": ""
+    },
+    "artifacts": {}
+  },
+  {
+    "probeId": "preflight-control-observe",
+    "interfaceId": "review-cli",
+    "operationId": "review",
+    "kind": "cli",
+    "exitCode": 0,
+    "stdout": {
+      "kind": "json",
+      "value": {
+        "file": "cases/missing-assertion.test.js",
+        "status": "findings",
+        "findings": [
+          "missing-assertion"
+        ]
+      }
+    },
+    "stderr": {
+      "kind": "text",
+      "value": ""
+    },
+    "artifacts": {}
+  },
+  {
+    "probeId": "preflight-control-observe-2",
+    "interfaceId": "review-cli",
+    "operationId": "review",
+    "kind": "cli",
+    "exitCode": 0,
+    "stdout": {
+      "kind": "json",
+      "value": {
+        "file": "cases/missing-assertion.test.js",
+        "status": "findings",
+        "findings": [
+          "missing-assertion"
+        ]
+      }
+    },
+    "stderr": {
+      "kind": "text",
+      "value": ""
+    },
+    "artifacts": {}
+  },
+  {
+    "probeId": "manifest-p-010",
+    "interfaceId": "review-cli",
+    "operationId": "review",
+    "kind": "cli",
+    "exitCode": 0,
+    "stdout": {
+      "kind": "json",
+      "value": {
+        "file": "cases/missing-assertion.test.js",
+        "status": "clean",
+        "findings": []
+      }
+    },
+    "stderr": {
+      "kind": "text",
+      "value": ""
+    },
+    "artifacts": {}
+  },
+  {
+    "probeId": "manifest-p-011",
+    "interfaceId": "review-cli",
+    "operationId": "review",
+    "kind": "cli",
+    "exitCode": 0,
+    "stdout": {
+      "kind": "json",
+      "value": {
+        "file": "cases/disabled-test.test.js",
+        "status": "clean",
+        "findings": []
+      }
+    },
+    "stderr": {
+      "kind": "text",
+      "value": ""
+    },
+    "artifacts": {}
+  },
+  {
+    "probeId": "manifest-p-012",
+    "interfaceId": "review-cli",
+    "operationId": "review",
+    "kind": "cli",
+    "exitCode": 0,
+    "stdout": {
+      "kind": "json",
+      "value": {
+        "file": "cases/clean-assert-match.test.js",
+        "status": "findings",
+        "findings": [
+          "missing-assertion"
+        ]
+      }
+    },
+    "stderr": {
+      "kind": "text",
+      "value": ""
+    },
+    "artifacts": {}
+  },
+  {
+    "probeId": "manifest-p-013",
+    "interfaceId": "review-cli",
+    "operationId": "review",
+    "kind": "cli",
+    "exitCode": 0,
+    "stdout": {
+      "kind": "json",
+      "value": {
+        "file": "cases/clean-strict-equal.test.js",
+        "status": "clean",
+        "findings": []
+      }
+    },
+    "stderr": {
+      "kind": "text",
+      "value": ""
+    },
+    "artifacts": {}
+  }
+]

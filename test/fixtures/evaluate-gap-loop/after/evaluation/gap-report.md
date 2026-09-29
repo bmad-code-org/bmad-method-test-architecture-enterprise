@@ -1,0 +1,35 @@
+# Test review evaluation repair record
+
+## Imported authoring defects
+
+- Initial `node cli/evaluate.js check --evaluation test/fixtures/evaluate-authoring/test-review/evaluation` exited 10 with 104 authoring defects. The first diagnostics identified a slash-bearing CLI subcommand, camel-case step IDs that made oracle pointers invalid, a missing operation phase, and slash-bearing defect-signature invocations. These are suite wiring errors. The target and intake remain frozen.
+- Repair plan: invoke the executable adopter command directly, normalize step IDs and their references to the engine's kebab-case grammar, declare the review operation's outcome phase, and align signatures with the same CLI invocation. Preserve raw JSON stdin requests, including empty and invalid JSON bytes. Re-run digest and check after the edits.
+- Repaired the CLI registry, contract invocation, and defect signatures to use the executable `review` with an empty subcommand path. Added `operationPhases.review: outcome`; normalized camel-case step IDs in the plan, oracle pointers, and gameability responses; renamed `evaluator/SELECTION.md` to `evaluator/selection.md`. `digest` indexed 43 files and `check` exited 0 with no authoring defects.
+- First compile exited 4: oracle directions cited whole stdout channels while checks read individual fields. Set each direction's evidence targets to the exact check pointers. Compile and seal then exited 0.
+- First preflight (`20260928T225401227Z-dd83ca17`) exited 11 at P-007. The baseline observations for three valid tests were clean, but an equality check against the empty `findings` array resolved `insufficient-evidence` under eval-quality's empty-collection rule. Replaced those checks with equality against each whole, nonempty JSON stdout object. Compile, seal, and check exited 0 afterward.
+- Second preflight (`20260928T225457177Z-22d33be5`) qualified all eight mutation probes with successful baseline, manifestation, restored digest, and baseline rerun. It exited 12 at its final whole-repository integrity check because git status or shared worktree state changed during qualification. A steady-worktree rerun is required before scoring.
+
+## Preflight and development gap repair
+
+- Preflight `20260928T225549639Z-8a54b106` exited 3 after qualifying eight mutations and two gameability responses. Its verdict named `seeded-faults-scoped` failures for D-005 through D-013 because status-only manifestation witnesses also fired on clean sensitivity legs. Each witness now requires the expected reviewed file and status. The clean sensitivity leg uses a separate valid fixture. Preflight `20260928T225709871Z-13ae0fbf` passed all checks.
+- Development run `20260928T225742911Z-a03484c3` and score `20260928T225819540Z-a6498be9` caught P-005 through P-008 and P-009/P-017 at 3/3. The engine marked each contract verdict `CONCERNS` with four critical coverage gaps: `success-indicator-separation`, `malformed-input`, `per-record`, and `omission-and-completeness`.
+- Declared `/status` as the review success indicator and `/findings` and `/error` as payload roles. Declared an explicitly empty record-collection list because `findings` is a list of codes; the exact stdout checks cover its complete contents. This closed `per-record` and `omission-and-completeness`. The two remaining rules covered success-indicator separation and malformed-input across two CLI aliases.
+- Tested a typed JSON stdin step with a numeric `file`. Live development run `20260928T230300682Z-9261d3ee` recorded `{ "action": "review", "file": 42 }` in the target request and the documented error with exit 0. Score `20260928T230348279Z-47280ca6` caught all development defects and gameability probes at 3/3, with two coverage gaps still present. Held-out run `20260928T230422891Z-ed03bd32` and score `20260928T230454450Z-ed6588de` also completed for P-010 through P-013.
+- Reworked the contract to use one CLI operation with optional `action`, `file`, `raw`, and `extra` stdin bindings. Valid reviews bind `action` and `file` as JSON. The typed malformed step binds `file` with the engine's `type-violating` matcher, which sends numeric 42. Parser and request-shape failures bind one `raw` string so their bytes reach stdin unchanged. The sensitivity and mutation witnesses use JSON stdin objects. This gives the engine one operation whose own checked steps prove status versus findings and the type-violating file. A single-operation compile experiment passed before the authored contract changed.
+- The first single-operation preflight (`20260928T230615339Z-d1d9d796`) exited 4 because text mutation witnesses could not fill an optional stdin key. Converting witnesses to JSON objects exposed one undeclared `extra` input in the next preflight (`20260928T230704169Z-87cbeb49`, exit 4). Declaring optional boolean `extra` resolved that authoring defect. Final `digest`, `check`, compile, and seal succeeded; preflight `20260928T230759709Z-f6493371` exited 0.
+
+## Final live evidence
+
+- Development run `20260928T230839868Z-4d00f346`, score `20260928T230924332Z-d0065037`: all 12 scored probes have `PASS` and zero coverage gaps. P-005 through P-008 and gameability P-009/P-017 were each caught in three of three trials. The six clean controls passed their three trials.
+- Held-out run `20260928T230939180Z-7dcac3a6`, score `20260928T231012894Z-d0352c76`: P-010 through P-013 each have `PASS`, zero coverage gaps, and three caught votes in three trials. Their contents remained outside development gap repair.
+- No unsatisfied coverage gap remains at the policy severity floor. The scored artifacts and isolation evidence stay under ignored `runs/`. No replay bundle was built.
+
+## 2026-09-28: Review repair and refreshed proof
+
+The PR review found that P-005 through P-008 used `[development]` rather than the approved corpus section tags. I corrected them to `[negative]` or `[malformed]`, regenerated `corpus-index.json` with `tea-evaluate digest`, and passed `check`. The frozen target and intake did not change. The replay now includes the primary qualification and rollback files, with digest and target-tree checks in `test:evaluate-authoring`.
+
+With the proposed scoring policy still awaiting adopter confirmation, development run `20260929T013519187Z-9e9381ce` and score `20260929T013558463Z-ae8d217a` exited 0 for twelve probes. Held-out run `20260929T013608696Z-4571b7ff` and score `20260929T013645779Z-83e3a563` exited 0 for four probes. The two replay bundles retain sealed records, evidence, and qualification files for independent checking. These are technical proof runs under the proposed policy; final policy acceptance remains pending.
+
+## 2026-09-28: Confirmed policy
+
+The adopter confirmed `severityFloor: low`, `catchThreshold: 0.9`, three trials and policy ID `test-review-material-v1`. The decision is recorded in `policy/decision.md`. Its policy bytes match the development and held-out bundles above, so those runs remain the final test-review proof. `test:evaluate-authoring` passed against both confirmed-policy test-review bundles and the refreshed AI bundles.

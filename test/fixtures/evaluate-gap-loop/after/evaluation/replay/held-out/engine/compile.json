@@ -1,0 +1,17 @@
+{
+  "stage": "compile",
+  "cli": "/Users/murat/opensource/bmad-method-test-architecture-enterprise/node_modules/eval-quality/dist/cli/main.js",
+  "substituted": false,
+  "argv": [
+    "compile",
+    "--in",
+    "/Users/murat/opensource/bmad-method-test-architecture-enterprise/test/fixtures/evaluate-gap-loop/after/evaluation/runs/20260929T031515742Z-130bd85c/contract.json",
+    "--out",
+    "/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-engine-EzKAx3/eval-contract.json"
+  ],
+  "exitCode": 0,
+  "signal": null,
+  "error": null,
+  "stdout": "",
+  "stderr": ""
+}
