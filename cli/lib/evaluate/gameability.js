@@ -148,7 +148,7 @@ function syntheticPort({ label, steps, registry }) {
  * a scored trial.
  */
 function degenerateArm({ contract, registry, steps, label, provenance, signal }) {
-  return runArm({ contract, port: syntheticPort({ label, steps, registry }), registry, label, provenance, signal });
+  return runArm({ contract, port: syntheticPort({ label, steps, registry }), registry, label, provenance, countUsage: false, signal });
 }
 
 /**

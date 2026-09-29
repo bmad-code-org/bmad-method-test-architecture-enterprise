@@ -93,6 +93,7 @@ const { importRecords } = require('./records-evaluator');
 const { evaluatorConfiguration, isolationManifest, sealedRunRecord } = require('./records');
 const { bridgeTools } = require('./bridge');
 const { bridgeRouter, runSealedBriefAgent } = require('./sealed-brief-agent');
+const { ZERO, addUsage } = require('./usage-report');
 
 const POLICY_PATH = 'policy/scoring-policy.json';
 const CONDITIONS_PATH = 'policy/evaluator-conditions.json';
@@ -598,6 +599,8 @@ async function concludeTrial(context, facts) {
     elapsedMs,
     mounts,
     toolCalls,
+    resourceUse: executed.resourceUse ?? ZERO,
+    unreportedSteps: executed.unreportedSteps ?? [],
   };
 }
 
@@ -715,6 +718,12 @@ async function concludeWithRows(context, facts) {
   const bridged = (port === null ? [] : (router?.calls ?? []))
     .filter((call) => call.observation !== undefined)
     .map((call) => callLabel(call.request));
+  let resourceUse;
+  try {
+    resourceUse = addUsage(executed.resourceUse ?? ZERO, router?.resourceUse() ?? ZERO);
+  } catch (error) {
+    throw stop({ stage: 'trial', exitCode: 12, message: `${label} yields no record: ${error.message}` });
+  }
   return {
     trialIndex,
     evidenceFile,
@@ -730,6 +739,8 @@ async function concludeWithRows(context, facts) {
     elapsedMs,
     mounts,
     toolCalls: [...toolCalls, ...bridged],
+    resourceUse,
+    unreportedSteps: [...(executed.unreportedSteps ?? []), ...(router?.unreportedSteps ?? [])],
   };
 }
 
@@ -1022,13 +1033,25 @@ async function runTrialSets(given) {
   const trialSets = [];
   const recordDigests = {};
   const manifestDigests = {};
+  const unreportedResourceUse = [];
   for (const arm of arms) {
+    for (const trial of arm.trials) {
+      if (trial.unreportedSteps.length > 0) {
+        unreportedResourceUse.push({ conditionArm: arm.conditionArm, trialIndex: trial.trialIndex, stepIds: trial.unreportedSteps });
+      }
+    }
     for (const probe of arm.probes) {
       const recommendation = convertsRows(kind)
         ? setRecommendationOf(arm.trials.map((trial) => trial.recommendations[probe.probeId]))
         : setRecommendation(arm.trials.map((trial) => trial.judgments[probe.probeId]));
       const directory = `trial-sets/${probe.probeId}`;
       const runId = `${invocationId}-${probe.probeId}`;
+      let setUse = ZERO;
+      try {
+        for (const trial of arm.trials) setUse = addUsage(setUse, trial.resourceUse);
+      } catch (error) {
+        throw stop({ stage: 'trial', exitCode: 12, message: `${runId}: ${error.message}` });
+      }
       const manifest = isolationManifest({
         runId,
         contractId: contract.contractId,
@@ -1052,10 +1075,10 @@ async function runTrialSets(given) {
         },
         actualResourceUse: {
           toolCalls: arm.trials.reduce((total, trial) => total + (trial.callCount ?? trial.toolCalls.length), 0),
-          inputTokens: 0,
-          outputTokens: 0,
+          inputTokens: setUse.inputTokens,
+          outputTokens: setUse.outputTokens,
           wallClockSeconds: arm.trials.reduce((total, trial) => total + trial.elapsedMs, 0) / 1000,
-          costUsd: '0',
+          costUsd: setUse.costUsd,
         },
         forbiddenInputNote: FORBIDDEN_INPUT_NOTE,
       });
@@ -1082,10 +1105,10 @@ async function runTrialSets(given) {
           isolationManifestArtifact: referenceTo(folder, writer, manifestFile, engine.digestBytes),
           resourceUse: {
             toolCalls: trial.callCount ?? trial.toolCalls.length,
-            inputTokens: 0,
-            outputTokens: 0,
+            inputTokens: trial.resourceUse.inputTokens,
+            outputTokens: trial.resourceUse.outputTokens,
             wallClockSeconds: trial.elapsedMs / 1000,
-            costUsd: '0',
+            costUsd: trial.resourceUse.costUsd,
           },
         });
         failures('SealedRunRecord', await validate('sealed-run-record', record));
@@ -1112,6 +1135,7 @@ async function runTrialSets(given) {
     manifestDigests,
     configurationDigest,
     trialCount,
+    unreportedResourceUse,
     evaluatorRecord: {
       kind,
       identity: configuration.evaluatorIdentity,
@@ -1214,7 +1238,18 @@ async function concludeImportedRecords(context) {
  */
 async function completeRun(
   context,
-  { arms, trialSets, recordDigests, manifestDigests, configurationDigest, trialCount, evaluatorRecord, model, judge },
+  {
+    arms,
+    trialSets,
+    recordDigests,
+    manifestDigests,
+    configurationDigest,
+    trialCount,
+    unreportedResourceUse,
+    evaluatorRecord,
+    model,
+    judge,
+  },
 ) {
   const {
     invocationId,
@@ -1289,6 +1324,7 @@ async function completeRun(
       arms: trialCount === null ? [...new Set(trialSets.map((set) => set.conditionArm))] : arms.map((arm) => arm.conditionArm),
     },
     trialCount,
+    ...(trialCount === null ? {} : { unreportedResourceUse }),
     startedAt: new Date(startedAt).toISOString(),
     durationMs: Date.now() - startedAt,
     completed: true,

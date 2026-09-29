@@ -111,6 +111,7 @@ function agentInvocation(
     envPass = [],
     spawnPrefix = [],
     capabilities = DEFAULT_CAPABILITIES,
+    usageReport = false,
     bridge,
     sourceEnv = process.env,
   } = {},
@@ -152,7 +153,9 @@ function agentInvocation(
   const resolvedModel = resolveModel(agent, model, agentArgs);
   let agentArgv =
     bridge === undefined
-      ? adapter.buildArgv(agentArgs, resolvedModel, capabilities)
+      ? usageReport && typeof adapter.buildUsageArgv === 'function'
+        ? adapter.buildUsageArgv(agentArgs, resolvedModel, capabilities)
+        : adapter.buildArgv(agentArgs, resolvedModel, capabilities)
       : adapter.buildBridgedArgv(agentArgs, resolvedModel, bridge);
   let input = prompt;
   if (adapter.promptViaArgv) {

@@ -101,6 +101,8 @@ const { recordObservation, createArtifactValidator } = require('../cli/lib/evalu
 const { RunDirectory, RunDirectoryError } = require('../cli/lib/evaluate/run-directory');
 const { setRecommendation } = require('../cli/lib/evaluate/run');
 const { combinedExit } = require('../cli/lib/evaluate/score');
+const { agentReplyAndUsage } = require('../cli/lib/agent-adapters');
+const { parseUsageReport } = require('../cli/lib/evaluate/usage-report');
 const { scratchDirectories } = require('./lib/scratch-directories');
 
 const Ajv = AjvModule.default ?? AjvModule;
@@ -872,6 +874,167 @@ async function checkRunAndScore() {
   const shimEnv = checkShimmedScore({ folder, env, runDirectory, index });
   checkRefusedArtifacts({ engine, folder, runDirectory, shimEnv });
   checkFailAndInvalid({ engine, folder, env, runDirectory });
+}
+
+/** Target reports survive trial boundaries, exact sums, and the distinction between zero and absent telemetry. */
+function checkTargetUsageReports() {
+  const runner = spawnSync(
+    process.execPath,
+    [
+      path.join(PROJECT_ROOT, 'cli', 'skill-runner.js'),
+      '--skill-root',
+      'test/fixtures/evaluate/stub-agent/skill',
+      '--agent',
+      'custom',
+      '--agent-cmd',
+      process.execPath,
+      '--agent-arg',
+      path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'stub-agent', 'agent.js'),
+    ],
+    {
+      cwd: PROJECT_ROOT,
+      encoding: 'utf8',
+      input: 'STUB-USAGE {"inputTokens":2,"outputTokens":3,"costUsd":"0.01"}',
+      timeout: 30_000,
+    },
+  );
+  check(
+    runner.status === 0 && /skill: stub-skill/.test(runner.stdout) && /TEA_EVALUATE_USAGE_JSON:\{"inputTokens":2/.test(runner.stderr),
+    `skill runner did not preserve answer and emit usage: ${runner.status} ${runner.stdout} ${runner.stderr}`,
+  );
+  for (const [name, report] of [
+    ['fractional tokens', '{"inputTokens":1.5,"outputTokens":2,"costUsd":"0"}'],
+    ['overflowing tokens', '{"inputTokens":9007199254740992,"outputTokens":2,"costUsd":"0"}'],
+    ['malformed JSON', '{'],
+    ['negative cost', '{"inputTokens":1,"outputTokens":2,"costUsd":"-1"}'],
+    ['overflowing cost', '{"inputTokens":1,"outputTokens":2,"costUsd":"9007199254740992"}'],
+  ]) {
+    let refusal = null;
+    try {
+      parseUsageReport(`TEA_EVALUATE_USAGE_JSON:${report}\n`, name);
+    } catch (error) {
+      refusal = error;
+    }
+    check(refusal instanceof Error && /target usage report/.test(refusal.message), `${name} was not rejected as an invalid report`);
+  }
+  const claude = agentReplyAndUsage(
+    'claude',
+    JSON.stringify({ result: 'answer', usage: { input_tokens: 2, cache_read_input_tokens: 3, output_tokens: 4 }, total_cost_usd: 7e-7 }),
+    '',
+  );
+  check(
+    claude.stdout === 'answer' &&
+      claude.usage?.inputTokens === 5 &&
+      claude.usage?.outputTokens === 4 &&
+      claude.usage?.costUsd === '0.0000007',
+    `claude adapter translated ${JSON.stringify(claude)}`,
+  );
+  const codex = agentReplyAndUsage(
+    'codex',
+    [
+      JSON.stringify({ type: 'item.completed', item: { type: 'agent_message', text: 'reply' } }),
+      JSON.stringify({ type: 'turn.completed', usage: { input_tokens: 8, output_tokens: 9 } }),
+    ].join('\n'),
+    '',
+  );
+  check(codex.stdout === 'reply' && codex.usage === null, 'codex token-only report was claimed as a complete cost report');
+  const known = { inputTokens: 7, outputTokens: 11, costUsd: '0.00125' };
+  const reported = makeProject('usage-reported', {
+    edit: ({ folder }) => {
+      const file = path.join(folder, 'contract.json');
+      const contract = readJson(file);
+      contract.interactionPlan.push({ ...contract.interactionPlan[0], stepId: 'judge-again', after: 'judge-run' });
+      fs.writeFileSync(file, `${JSON.stringify(contract, null, 2)}\n`);
+    },
+  });
+  const measured = evaluate(['run', '--evaluation', reported.folder], {
+    ...reported.env,
+    VERDICT_USAGE: JSON.stringify(known),
+  });
+  check(measured.status === 0, `reported usage run exited ${measured.status}: ${measured.output}`);
+  const measuredDirectory = runDirectoryOf(reported.folder);
+  check(measuredDirectory !== null, 'reported usage run did not write a run directory');
+  if (measuredDirectory !== null) {
+    const run = readJson(path.join(measuredDirectory, 'run.json'));
+    const firstEvidence = readJson(path.join(measuredDirectory, 'trials', 'clean', 'trial-1.json'));
+    check(
+      run.unreportedResourceUse?.length === 0,
+      `reported usage was marked unreported: ${JSON.stringify(run.unreportedResourceUse)}; first stderr: ${JSON.stringify(firstEvidence.steps?.[0]?.observation?.stderr)}; environment: ${JSON.stringify(firstEvidence.steps?.[0]?.request?.channels?.environment)}`,
+    );
+    const index = readJson(path.join(measuredDirectory, 'trial-sets.json'));
+    for (const set of index.trialSets) {
+      const manifest = readJson(path.join(measuredDirectory, set.isolationManifest));
+      check(
+        manifest.actualResourceUse?.inputTokens === 42 &&
+          manifest.actualResourceUse?.outputTokens === 66 &&
+          manifest.actualResourceUse?.costUsd === '0.0075',
+        `${set.probeId} usage sum is ${JSON.stringify(manifest.actualResourceUse)}`,
+      );
+      for (const file of set.records) {
+        const record = readJson(path.join(measuredDirectory, file));
+        check(
+          record.resourceUse?.inputTokens === 14 && record.resourceUse?.outputTokens === 22 && record.resourceUse?.costUsd === '0.0025',
+          `${file} usage is ${JSON.stringify(record.resourceUse)}`,
+        );
+      }
+    }
+  }
+
+  for (const [name, report, missing] of [
+    ['usage-unreported', undefined, true],
+    ['usage-zero', JSON.stringify({ inputTokens: 0, outputTokens: 0, costUsd: '0' }), false],
+  ]) {
+    const made = makeProject(name);
+    const outcome = evaluate(['run', '--evaluation', made.folder], {
+      ...made.env,
+      ...(report === undefined ? {} : { VERDICT_USAGE: report }),
+    });
+    check(outcome.status === 0, `${name} exited ${outcome.status}: ${outcome.output}`);
+    const directory = runDirectoryOf(made.folder);
+    check(directory !== null, `${name} did not write a run directory`);
+    if (directory === null) continue;
+    const run = readJson(path.join(directory, 'run.json'));
+    check(
+      run.unreportedResourceUse.every(
+        (entry) =>
+          typeof entry.conditionArm === 'string' &&
+          Number.isInteger(entry.trialIndex) &&
+          entry.trialIndex > 0 &&
+          Array.isArray(entry.stepIds) &&
+          entry.stepIds.length > 0 &&
+          entry.stepIds.every((stepId) => typeof stepId === 'string'),
+      ),
+      `${name} unreported marker has an invalid shape: ${JSON.stringify(run.unreportedResourceUse)}`,
+    );
+    check(
+      missing ? run.unreportedResourceUse?.length === 6 : run.unreportedResourceUse?.length === 0,
+      `${name} unreported marker is ${JSON.stringify(run.unreportedResourceUse)}`,
+    );
+  }
+
+  const invalid = makeProject('usage-invalid');
+  const failed = evaluate(['run', '--evaluation', invalid.folder], {
+    ...invalid.env,
+    VERDICT_USAGE: JSON.stringify(known),
+    VERDICT_WHEN: 'trial-clean-1',
+    VERDICT_USAGE_BAD: '{"inputTokens":-1,"outputTokens":2,"costUsd":"0"}',
+  });
+  check(
+    failed.status === 12 && /target usage report.*inputTokens/.test(failed.output),
+    `invalid usage ended ${failed.status}: ${failed.output}`,
+  );
+  const failedDirectory = runDirectoryOf(invalid.folder);
+  if (failedDirectory !== null) {
+    check(!fs.existsSync(path.join(failedDirectory, 'trial-sets.json')), 'invalid usage sealed a trial set');
+    check(!fs.existsSync(path.join(failedDirectory, 'trial-sets')), 'invalid usage sealed measured-zero records');
+  }
+
+  const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
+  const runSection = reference.split(/^## run\s*$/m)[1]?.split(/^## /m)[0] ?? '';
+  check(
+    /TEA_EVALUATE_USAGE_JSON/.test(runSection) && /unreportedResourceUse/.test(runSection) && /stderr/.test(runSection),
+    'the exact ## run section must explain the target report source and unreported marker',
+  );
 }
 
 /** A trial that exits an infrastructure code yields no record, and the run exits 12; so does a target writing into the project mid-trial. */
@@ -1815,15 +1978,20 @@ async function runCase(name, body) {
 
 async function main() {
   try {
-    await runCase('the units', checkUnits);
-    await runCase('the run directory writer', checkRunDirectoryWriter);
-    await runCase('the templates and ignores', checkTemplatesAndIgnores);
-    await runCase('the run and its scores', checkRunAndScore);
-    await runCase('the stopped runs', checkStoppedRuns);
-    await runCase('the refusals', checkRefusals);
-    await runCase('the conditions and the set recommendation', checkConditionsAndSetRecommendation);
-    await runCase('the clean-only runs', checkCleanOnlyAndNewest);
-    await runCase('the subdirectory digest', checkSubdirectoryDigest);
+    if (process.argv.includes('--usage-only')) {
+      await runCase('target usage reports', checkTargetUsageReports);
+    } else {
+      await runCase('the units', checkUnits);
+      await runCase('the run directory writer', checkRunDirectoryWriter);
+      await runCase('the templates and ignores', checkTemplatesAndIgnores);
+      await runCase('the run and its scores', checkRunAndScore);
+      await runCase('target usage reports', checkTargetUsageReports);
+      await runCase('the stopped runs', checkStoppedRuns);
+      await runCase('the refusals', checkRefusals);
+      await runCase('the conditions and the set recommendation', checkConditionsAndSetRecommendation);
+      await runCase('the clean-only runs', checkCleanOnlyAndNewest);
+      await runCase('the subdirectory digest', checkSubdirectoryDigest);
+    }
     for (const { label, directory } of runtimeTemps) {
       const left = fs.readdirSync(directory);
       check(left.length === 0, `the ${label} project's runs left ${JSON.stringify(left)} in their temp directory`);

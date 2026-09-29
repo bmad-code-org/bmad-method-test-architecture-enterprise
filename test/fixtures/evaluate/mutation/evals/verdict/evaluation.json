@@ -19,6 +19,8 @@
         "VERDICT_PID",
         "VERDICT_SECRET",
         "VERDICT_TOUCH",
+        "VERDICT_USAGE",
+        "VERDICT_USAGE_BAD",
         "VERDICT_WHEN"
       ],
       "maxElapsedMs": 30000,

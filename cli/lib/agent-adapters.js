@@ -70,6 +70,7 @@ const RUNNER_CAPABILITIES = ['read-only', 'scoped-artifact-writes', 'command-exe
 
 /** What a caller gets when it declares nothing: the tier the review CLI has always run at. */
 const DEFAULT_CAPABILITIES = ['scoped-artifact-writes'];
+const { decimalNumber, parseUsageReport, validateUsage } = require('./evaluate/usage-report');
 
 const WRITE_TOOLS = ['Write', 'Edit'];
 const COMMAND_TOOLS = ['Bash'];
@@ -254,6 +255,18 @@ const AGENT_ADAPTERS = {
       ...modelArgv(AGENT_ADAPTERS.claude.modelFlags, model, extra),
       ...extra,
     ],
+    buildUsageArgv: (extra = [], model, capabilities = DEFAULT_CAPABILITIES) => [
+      '-p',
+      '--output-format',
+      'json',
+      '--tools',
+      claudeTools(capabilities),
+      '--allowedTools',
+      claudeTools(capabilities),
+      '--safe-mode',
+      ...modelArgv(AGENT_ADAPTERS.claude.modelFlags, model, extra),
+      ...extra,
+    ],
     // A run whose only tools are one MCP server's (tea-evaluate's sealed-brief evaluator and its
     // bridge, AD-21), the server named in the configuration file `bridge.configFile`. Verified live
     // against claude 2.1.282 (2026-09-25): `--tools ""` leaves no built-in tool (asked to read a
@@ -357,6 +370,17 @@ const AGENT_ADAPTERS = {
       ...modelArgv(AGENT_ADAPTERS.codex.modelFlags, model, extra),
       ...extra,
     ],
+    buildUsageArgv: (extra = [], model, capabilities = DEFAULT_CAPABILITIES) => [
+      'exec',
+      '--json',
+      '--skip-git-repo-check',
+      '--sandbox',
+      codexSandbox(capabilities),
+      '--color',
+      'never',
+      ...modelArgv(AGENT_ADAPTERS.codex.modelFlags, model, extra),
+      ...extra,
+    ],
     envNames: ['OPENAI_API_KEY'],
   },
   custom: {
@@ -402,6 +426,65 @@ const AGENT_ADAPTERS = {
     envNames: [],
   },
 };
+
+/** Turn a built-in CLI's structured answer into its reply and a complete usage report, when available. */
+function agentReplyAndUsage(agent, stdout, stderr) {
+  if (agent === 'claude') {
+    let result;
+    try {
+      result = JSON.parse(stdout);
+    } catch {
+      throw new Error('claude returned malformed JSON while usage reporting was enabled');
+    }
+    if (typeof result?.result !== 'string') throw new Error('claude JSON report has no answer text');
+    const usage = result.usage;
+    const cost = result.total_cost_usd;
+    if (usage === undefined && cost === undefined) return { stdout: result.result, usage: null };
+    if (usage === undefined || cost === undefined) throw new Error('claude JSON report has incomplete token or cost usage');
+    const inputTokens = usage.input_tokens + (usage.cache_creation_input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0);
+    const outputTokens = usage.output_tokens;
+    return {
+      stdout: result.result,
+      usage: validateUsage(
+        {
+          inputTokens,
+          outputTokens,
+          costUsd: typeof cost === 'number' ? decimalNumber(cost, 'claude usage report costUsd') : String(cost),
+        },
+        'claude usage report',
+      ),
+    };
+  }
+  if (agent === 'codex') {
+    let answer = '';
+    let usage = null;
+    for (const line of stdout.split(/\r?\n/).filter(Boolean)) {
+      let event;
+      try {
+        event = JSON.parse(line);
+      } catch {
+        throw new Error('codex returned malformed JSONL while usage reporting was enabled');
+      }
+      if (event.type === 'item.completed' && event.item?.type === 'agent_message') answer = event.item.text ?? answer;
+      if (event.type === 'turn.completed') {
+        const reported = event.usage;
+        if (reported?.input_tokens !== undefined || reported?.output_tokens !== undefined || event.cost_usd !== undefined) {
+          if (reported?.input_tokens === undefined || reported?.output_tokens === undefined || event.cost_usd === undefined) {
+            // Current codex CLI reports tokens but no cost. A partial report has no neutral meaning.
+            usage = null;
+          } else {
+            usage = validateUsage(
+              { inputTokens: reported.input_tokens, outputTokens: reported.output_tokens, costUsd: String(event.cost_usd) },
+              'codex usage report',
+            );
+          }
+        }
+      }
+    }
+    return { stdout: answer, usage };
+  }
+  return { stdout, usage: parseUsageReport(stderr, `${agent} agent`) };
+}
 
 /**
  * The model a run will actually use: one passthrough declaration, the explicit
@@ -455,6 +538,7 @@ function bridgedArgsRefused(agent, extra = []) {
 
 module.exports = {
   AGENT_ADAPTERS,
+  agentReplyAndUsage,
   bridgedArgsRefused,
   DEFAULT_CAPABILITIES,
   RUNNER_CAPABILITIES,

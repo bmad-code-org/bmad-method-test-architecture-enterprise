@@ -169,6 +169,8 @@ process.stdout.write(
     '',
   ].join('\n'),
 );
+const usageReport = here && process.env.VERDICT_USAGE_BAD !== undefined ? process.env.VERDICT_USAGE_BAD : process.env.VERDICT_USAGE;
+if (usageReport !== undefined) process.stderr.write(`TEA_EVALUATE_USAGE_JSON:${usageReport}\n`);
 
 if (verdict === 'rejected') fs.writeFileSync('residue.txt', 'left behind by a lenient run\n');
 if (text.includes('sabotage: adopter') && process.env.VERDICT_TOUCH) {
