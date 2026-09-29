@@ -2,7 +2,7 @@
 title: 'Evaluate authors strong suites for two more target kinds'
 type: 'feature'
 created: '2026-09-28'
-status: 'review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 1
 baseline_commit: '83f7b6b664d9ae2ee14c5f8919348c2c9cf291ae'
@@ -63,4 +63,4 @@ The changed Evaluate skill asset was edited directly under the documented Codex 
 
 ## Review triage and merge
 
-Three independent `gpt-6-sol` high reviewers passed the repaired proof after earlier findings were fixed: source-to-replay binding, primary qualification and rollback files, canonical rationale tags, development input privacy, raw manifestation traces, gameability evidence and policy confirmation. PR #257 exceeds CodeRabbit's 100-file review limit, so it cannot receive a CodeRabbit review. Final-head CI and merge are pending.
+Three independent `gpt-6-sol` high reviewers passed the repaired proof after earlier findings were fixed: source-to-replay binding, primary qualification and rollback files, canonical rationale tags, development input privacy, raw manifestation traces, gameability evidence and policy confirmation. PR #257 exceeds CodeRabbit's 100-file review limit, so it cannot receive a CodeRabbit review. All source-head CI checks on `f9cb3dbc`, including five test shards and coverage, passed. The completion-only status commit is subject to a fresh final-head CI pass before merge.
