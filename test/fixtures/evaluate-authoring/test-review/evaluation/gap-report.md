@@ -23,3 +23,13 @@
 - Development run `20260928T230839868Z-4d00f346`, score `20260928T230924332Z-d0065037`: all 12 scored probes have `PASS` and zero coverage gaps. P-005 through P-008 and gameability P-009/P-017 were each caught in three of three trials. The six clean controls passed their three trials.
 - Held-out run `20260928T230939180Z-7dcac3a6`, score `20260928T231012894Z-d0352c76`: P-010 through P-013 each have `PASS`, zero coverage gaps, and three caught votes in three trials. Their contents remained outside development gap repair.
 - No unsatisfied coverage gap remains at the policy severity floor. The scored artifacts and isolation evidence stay under ignored `runs/`. No replay bundle was built.
+
+## 2026-09-28: Review repair and refreshed proof
+
+The PR review found that P-005 through P-008 used `[development]` rather than the approved corpus section tags. I corrected them to `[negative]` or `[malformed]`, regenerated `corpus-index.json` with `tea-evaluate digest`, and passed `check`. The frozen target and intake did not change. The replay now includes the primary qualification and rollback files, with digest and target-tree checks in `test:evaluate-authoring`.
+
+With the proposed scoring policy still awaiting adopter confirmation, development run `20260929T013519187Z-9e9381ce` and score `20260929T013558463Z-ae8d217a` exited 0 for twelve probes. Held-out run `20260929T013608696Z-4571b7ff` and score `20260929T013645779Z-83e3a563` exited 0 for four probes. The two replay bundles retain sealed records, evidence, and qualification files for independent checking. These are technical proof runs under the proposed policy; final policy acceptance remains pending.
+
+## 2026-09-28: Confirmed policy
+
+The adopter confirmed `severityFloor: low`, `catchThreshold: 0.9`, three trials and policy ID `test-review-material-v1`. The decision is recorded in `policy/decision.md`. Its policy bytes match the development and held-out bundles above, so those runs remain the final test-review proof. `test:evaluate-authoring` passed against both confirmed-policy test-review bundles and the refreshed AI bundles.

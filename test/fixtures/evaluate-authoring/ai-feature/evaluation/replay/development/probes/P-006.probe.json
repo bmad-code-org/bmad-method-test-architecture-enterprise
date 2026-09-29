@@ -9,7 +9,7 @@
   "implementationDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
   "artifactDigest": "sha256:1645dc943ad0833cf1dd79ed3073864bffd24425d5b55c3fb028d7a8bcf2d71e",
   "commitDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
-  "rationale": "[development] Raising the minimum rejects an otherwise valid answer.",
+  "rationale": "[negative] Raising the minimum rejects an otherwise valid answer.",
   "qualification": {
     "route": "controlled-mutation",
     "mutationSource": "minimum raised in adopter policy",
@@ -23,15 +23,15 @@
     "expectedObservableFailure": "valid answer receives too-short in HTTP response body",
     "baselinePassEvidence": {
       "storage": "public",
-      "path": "runs/20260928T233657627Z-70ab2549/qualification/P-006/baseline-pass.json",
+      "path": "runs/20260929T015026071Z-cd62054f/qualification/P-006/baseline-pass.json",
       "privateRef": null,
-      "digest": "sha256:897db45a67f2de6ed125c52d963cad8dd6b8e7a5f7fe776d31625c04bf30faad"
+      "digest": "sha256:9e67747d29d66bcd54e39ebbf0b75797eb68f3aaa13c482f4527835f86211089"
     },
     "mutatedFailEvidence": {
       "storage": "public",
-      "path": "runs/20260928T233657627Z-70ab2549/qualification/P-006/mutated-fail.json",
+      "path": "runs/20260929T015026071Z-cd62054f/qualification/P-006/mutated-fail.json",
       "privateRef": null,
-      "digest": "sha256:9552c6ff2f7166b7b0c926f41a4a3c69f4a6d4b45d5288d421598d58405675bd"
+      "digest": "sha256:c65ecb56c3c6963c0daf819f2c89e73b8ef804bafb4297b1e7b0f631374897d9"
     },
     "rollbackVerified": true
   },
@@ -40,14 +40,14 @@
     {
       "defectId": "D-002",
       "behaviorId": "B-002",
-      "summary": "[development] Raising the minimum rejects an otherwise valid answer.",
+      "summary": "[negative] Raising the minimum rejects an otherwise valid answer.",
       "severity": "material",
       "oracleEvidence": [
         {
           "storage": "public",
-          "path": "runs/20260928T233657627Z-70ab2549/qualification/P-006/mutated-fail.json",
+          "path": "runs/20260929T015026071Z-cd62054f/qualification/P-006/mutated-fail.json",
           "privateRef": null,
-          "digest": "sha256:9552c6ff2f7166b7b0c926f41a4a3c69f4a6d4b45d5288d421598d58405675bd"
+          "digest": "sha256:c65ecb56c3c6963c0daf819f2c89e73b8ef804bafb4297b1e7b0f631374897d9"
         }
       ],
       "source": "controlled-mutation",

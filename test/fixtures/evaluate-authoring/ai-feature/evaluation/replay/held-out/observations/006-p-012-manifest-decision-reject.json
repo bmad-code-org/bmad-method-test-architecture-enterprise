@@ -1,0 +1,48 @@
+{
+  "legId": "p-012-manifest-decision-reject",
+  "sequence": 6,
+  "workspace": "mutated:M-006",
+  "cwd": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-006-yGP9CE/target",
+  "request": {
+    "probeId": "p-012-manifest-decision-reject",
+    "interfaceId": "answer-grade",
+    "operationId": "grade-answer",
+    "kind": "api",
+    "method": "POST",
+    "pathTemplate": "/grade",
+    "channels": {
+      "path": {},
+      "query": {
+        "strict": "1"
+      },
+      "header": {},
+      "body": {
+        "kind": "json",
+        "value": {
+          "answer": "abcdefghijklmnop"
+        }
+      }
+    }
+  },
+  "observation": {
+    "probeId": "p-012-manifest-decision-reject",
+    "interfaceId": "answer-grade",
+    "operationId": "grade-answer",
+    "kind": "api",
+    "status": 200,
+    "headers": {
+      "content-type": "application/json",
+      "date": "Tue, 29 Sep 2026 01:52:04 GMT",
+      "connection": "close",
+      "transfer-encoding": "chunked"
+    },
+    "body": {
+      "kind": "json",
+      "value": {
+        "decision": "reject",
+        "reason": "accepted",
+        "mode": "strict"
+      }
+    }
+  }
+}

@@ -10,7 +10,7 @@
     "implementationDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
     "artifactDigest": "sha256:f1c323ac0453a1db6835f3f2b7ba670e61da2bcbef79dce9cba717b0286472fe",
     "commitDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
-    "rationale": "[development] A bypassed assertion check misses a test without an assertion.",
+    "rationale": "[negative] A bypassed assertion check misses a test without an assertion.",
     "qualification": {
       "route": "controlled-mutation",
       "mutationSource": "Adopter-owned B-001 rule change",
@@ -24,13 +24,13 @@
       "expectedObservableFailure": "stdout lacks missing-assertion and reports the assertion-free test clean",
       "baselinePassEvidence": {
         "storage": "public",
-        "path": "runs/20260928T230839868Z-4d00f346/qualification/P-005/baseline-pass.json",
+        "path": "runs/20260929T013519187Z-9e9381ce/qualification/P-005/baseline-pass.json",
         "privateRef": null,
         "digest": "sha256:dd88cff796688b8b0f3c5088b2aee0f251f00d589c10481cbf082668fa53a573"
       },
       "mutatedFailEvidence": {
         "storage": "public",
-        "path": "runs/20260928T230839868Z-4d00f346/qualification/P-005/mutated-fail.json",
+        "path": "runs/20260929T013519187Z-9e9381ce/qualification/P-005/mutated-fail.json",
         "privateRef": null,
         "digest": "sha256:050547d1ecaf488d58cce65f8a8d966c4ae7e96cc8e9d00ef81c8457ba1d17f2"
       },
@@ -46,7 +46,7 @@
         "oracleEvidence": [
           {
             "storage": "public",
-            "path": "runs/20260928T230839868Z-4d00f346/qualification/P-005/mutated-fail.json",
+            "path": "runs/20260929T013519187Z-9e9381ce/qualification/P-005/mutated-fail.json",
             "privateRef": null,
             "digest": "sha256:050547d1ecaf488d58cce65f8a8d966c4ae7e96cc8e9d00ef81c8457ba1d17f2"
           }
@@ -151,7 +151,7 @@
     "implementationDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
     "artifactDigest": "sha256:e48e800f1826004bf1b55d586cd20c99a1e98adf55cd0a1010ddbfe8c4c9805b",
     "commitDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
-    "rationale": "[development] A removed test.skip marker misses a disabled test.",
+    "rationale": "[negative] A removed test.skip marker misses a disabled test.",
     "qualification": {
       "route": "controlled-mutation",
       "mutationSource": "Adopter-owned B-002 rule change",
@@ -165,13 +165,13 @@
       "expectedObservableFailure": "stdout lacks disabled-test and reports the skipped test clean",
       "baselinePassEvidence": {
         "storage": "public",
-        "path": "runs/20260928T230839868Z-4d00f346/qualification/P-006/baseline-pass.json",
+        "path": "runs/20260929T013519187Z-9e9381ce/qualification/P-006/baseline-pass.json",
         "privateRef": null,
         "digest": "sha256:ab6dcb8fae1355c09a898b22202a6007bd025eaf8aa4171176dd93cc80ee79c5"
       },
       "mutatedFailEvidence": {
         "storage": "public",
-        "path": "runs/20260928T230839868Z-4d00f346/qualification/P-006/mutated-fail.json",
+        "path": "runs/20260929T013519187Z-9e9381ce/qualification/P-006/mutated-fail.json",
         "privateRef": null,
         "digest": "sha256:9c883f7fd7d0fe4771886de26ddc25c8a073b35dd50d7109a833e965bdfbf223"
       },
@@ -187,7 +187,7 @@
         "oracleEvidence": [
           {
             "storage": "public",
-            "path": "runs/20260928T230839868Z-4d00f346/qualification/P-006/mutated-fail.json",
+            "path": "runs/20260929T013519187Z-9e9381ce/qualification/P-006/mutated-fail.json",
             "privateRef": null,
             "digest": "sha256:9c883f7fd7d0fe4771886de26ddc25c8a073b35dd50d7109a833e965bdfbf223"
           }
@@ -292,7 +292,7 @@
     "implementationDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
     "artifactDigest": "sha256:e48e800f1826004bf1b55d586cd20c99a1e98adf55cd0a1010ddbfe8c4c9805b",
     "commitDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
-    "rationale": "[development] A removed match assertion form falsely flags a valid test.",
+    "rationale": "[negative] A removed match assertion form falsely flags a valid test.",
     "qualification": {
       "route": "controlled-mutation",
       "mutationSource": "Adopter-owned B-003 rule change",
@@ -306,13 +306,13 @@
       "expectedObservableFailure": "stdout falsely reports missing-assertion for a valid assert.match test",
       "baselinePassEvidence": {
         "storage": "public",
-        "path": "runs/20260928T230839868Z-4d00f346/qualification/P-007/baseline-pass.json",
+        "path": "runs/20260929T013519187Z-9e9381ce/qualification/P-007/baseline-pass.json",
         "privateRef": null,
         "digest": "sha256:cca20620858d5aa6d79da9c561d740c69c1ef4d83733f0f48fb4c623fb803c5c"
       },
       "mutatedFailEvidence": {
         "storage": "public",
-        "path": "runs/20260928T230839868Z-4d00f346/qualification/P-007/mutated-fail.json",
+        "path": "runs/20260929T013519187Z-9e9381ce/qualification/P-007/mutated-fail.json",
         "privateRef": null,
         "digest": "sha256:c553507b51387bacf070e31f0a3d77f2cfee7552d657ce82afb5b70784e79504"
       },
@@ -328,7 +328,7 @@
         "oracleEvidence": [
           {
             "storage": "public",
-            "path": "runs/20260928T230839868Z-4d00f346/qualification/P-007/mutated-fail.json",
+            "path": "runs/20260929T013519187Z-9e9381ce/qualification/P-007/mutated-fail.json",
             "privateRef": null,
             "digest": "sha256:c553507b51387bacf070e31f0a3d77f2cfee7552d657ce82afb5b70784e79504"
           }
@@ -433,7 +433,7 @@
     "implementationDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
     "artifactDigest": "sha256:f1c323ac0453a1db6835f3f2b7ba670e61da2bcbef79dce9cba717b0286472fe",
     "commitDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
-    "rationale": "[development] A weakened request guard accepts an extra field.",
+    "rationale": "[malformed] A weakened request guard accepts an extra field.",
     "qualification": {
       "route": "controlled-mutation",
       "mutationSource": "Adopter-owned B-004 rule change",
@@ -447,13 +447,13 @@
       "expectedObservableFailure": "stdout accepts an extra-field request and returns a clean review",
       "baselinePassEvidence": {
         "storage": "public",
-        "path": "runs/20260928T230839868Z-4d00f346/qualification/P-008/baseline-pass.json",
+        "path": "runs/20260929T013519187Z-9e9381ce/qualification/P-008/baseline-pass.json",
         "privateRef": null,
         "digest": "sha256:01738773b5466f58510b94d5597c0ea37f2083ebbc76a59917bc305a37d95003"
       },
       "mutatedFailEvidence": {
         "storage": "public",
-        "path": "runs/20260928T230839868Z-4d00f346/qualification/P-008/mutated-fail.json",
+        "path": "runs/20260929T013519187Z-9e9381ce/qualification/P-008/mutated-fail.json",
         "privateRef": null,
         "digest": "sha256:22ef975c65aa4af1509d361d3c7d680fb87dbc2f11328a281a11a5d6c4074ac2"
       },
@@ -469,7 +469,7 @@
         "oracleEvidence": [
           {
             "storage": "public",
-            "path": "runs/20260928T230839868Z-4d00f346/qualification/P-008/mutated-fail.json",
+            "path": "runs/20260929T013519187Z-9e9381ce/qualification/P-008/mutated-fail.json",
             "privateRef": null,
             "digest": "sha256:22ef975c65aa4af1509d361d3c7d680fb87dbc2f11328a281a11a5d6c4074ac2"
           }

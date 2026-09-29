@@ -3,7 +3,7 @@
   "probeClass": "defect",
   "behaviorId": "B-003",
   "expectedClean": false,
-  "rationale": "[development] A removed match assertion form falsely flags a valid test.",
+  "rationale": "[negative] A removed match assertion form falsely flags a valid test.",
   "defects": [
     {
       "defectId": "D-007",

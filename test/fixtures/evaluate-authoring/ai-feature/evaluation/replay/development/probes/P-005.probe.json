@@ -9,7 +9,7 @@
   "implementationDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
   "artifactDigest": "sha256:1645dc943ad0833cf1dd79ed3073864bffd24425d5b55c3fb028d7a8bcf2d71e",
   "commitDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
-  "rationale": "[development] Removing private from policy causes a restricted answer to pass.",
+  "rationale": "[negative] Removing private from policy causes a restricted answer to pass.",
   "qualification": {
     "route": "controlled-mutation",
     "mutationSource": "restricted term removed from adopter policy",
@@ -23,15 +23,15 @@
     "expectedObservableFailure": "private answer passes in HTTP response body",
     "baselinePassEvidence": {
       "storage": "public",
-      "path": "runs/20260928T233657627Z-70ab2549/qualification/P-005/baseline-pass.json",
+      "path": "runs/20260929T015026071Z-cd62054f/qualification/P-005/baseline-pass.json",
       "privateRef": null,
-      "digest": "sha256:306ec8a4bfd1b4d3cb6db1e096badf8db37ae2331b34f22ffab8f64480de7334"
+      "digest": "sha256:fa40139ad7f7fc2d9fa95b7ff666c7ed7ec8f9eaabaf0dddf441812aba3d9e00"
     },
     "mutatedFailEvidence": {
       "storage": "public",
-      "path": "runs/20260928T233657627Z-70ab2549/qualification/P-005/mutated-fail.json",
+      "path": "runs/20260929T015026071Z-cd62054f/qualification/P-005/mutated-fail.json",
       "privateRef": null,
-      "digest": "sha256:40a9a71b8207382e416272ca7ae44474ffcbb0fb6ab0818360998869f40417db"
+      "digest": "sha256:00842a72562de2f23f48f2356cd64b64b8409dc27fd92084c957ed1f75690703"
     },
     "rollbackVerified": true
   },
@@ -40,14 +40,14 @@
     {
       "defectId": "D-001",
       "behaviorId": "B-001",
-      "summary": "[development] Removing private from policy causes a restricted answer to pass.",
+      "summary": "[negative] Removing private from policy causes a restricted answer to pass.",
       "severity": "critical",
       "oracleEvidence": [
         {
           "storage": "public",
-          "path": "runs/20260928T233657627Z-70ab2549/qualification/P-005/mutated-fail.json",
+          "path": "runs/20260929T015026071Z-cd62054f/qualification/P-005/mutated-fail.json",
           "privateRef": null,
-          "digest": "sha256:40a9a71b8207382e416272ca7ae44474ffcbb0fb6ab0818360998869f40417db"
+          "digest": "sha256:00842a72562de2f23f48f2356cd64b64b8409dc27fd92084c957ed1f75690703"
         }
       ],
       "source": "controlled-mutation",

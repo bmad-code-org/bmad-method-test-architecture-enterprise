@@ -886,6 +886,8 @@ So that the guidance is proven to produce corpora and contracts that compile, pr
 
 **Clarified 2026-09-28:** A zero-action clean control is expected to pass. The strong definition now states that outcome explicitly; defect and gameability probes are expected to be caught. This resolves contradictory outcomes in the original sentence without changing the required evidence.
 
+**Amended 2026-09-28:** The confirmed AI-feature intake includes malformed raw JSON, but eval-quality 4.3.0 admits only a JSON value or absent HTTP body in `ProbeRequestBody`. This story records the refused raw-body case and proves the remaining malformed JSON-value boundaries. Story 1.50 adds the raw-body route and its scored parser-defect proof. This limitation must appear in the Story 1.24 outcome and cannot be counted as a closed coverage gap.
+
 ### Story 1.25: Close seeded weaknesses through the gap loop
 
 As a TEA maintainer,

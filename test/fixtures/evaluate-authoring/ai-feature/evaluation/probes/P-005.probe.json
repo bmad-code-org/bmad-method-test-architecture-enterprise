@@ -3,12 +3,12 @@
   "probeClass": "defect",
   "behaviorId": "B-001",
   "expectedClean": false,
-  "rationale": "[development] Removing private from policy causes a restricted answer to pass.",
+  "rationale": "[negative] Removing private from policy causes a restricted answer to pass.",
   "defects": [
     {
       "defectId": "D-001",
       "behaviorId": "B-001",
-      "summary": "[development] Removing private from policy causes a restricted answer to pass.",
+      "summary": "[negative] Removing private from policy causes a restricted answer to pass.",
       "severity": "critical",
       "source": "controlled-mutation",
       "manifestationWitness": {

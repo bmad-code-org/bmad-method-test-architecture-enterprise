@@ -3,12 +3,12 @@
   "probeClass": "defect",
   "behaviorId": "B-001",
   "expectedClean": false,
-  "rationale": "[development] Alternate restricted answer tests that defect-signature selectors must match a planned request.",
+  "rationale": "[negative] Alternate restricted answer tests that defect-signature selectors must match a planned request.",
   "defects": [
     {
       "defectId": "D-008",
       "behaviorId": "B-001",
-      "summary": "[development] Alternate restricted answer tests that defect-signature selectors must match a planned request.",
+      "summary": "[negative] Alternate restricted answer tests that defect-signature selectors must match a planned request.",
       "severity": "critical",
       "source": "controlled-mutation",
       "manifestationWitness": {

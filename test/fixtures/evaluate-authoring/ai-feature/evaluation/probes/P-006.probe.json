@@ -3,12 +3,12 @@
   "probeClass": "defect",
   "behaviorId": "B-002",
   "expectedClean": false,
-  "rationale": "[development] Raising the minimum rejects an otherwise valid answer.",
+  "rationale": "[negative] Raising the minimum rejects an otherwise valid answer.",
   "defects": [
     {
       "defectId": "D-002",
       "behaviorId": "B-002",
-      "summary": "[development] Raising the minimum rejects an otherwise valid answer.",
+      "summary": "[negative] Raising the minimum rejects an otherwise valid answer.",
       "severity": "material",
       "source": "controlled-mutation",
       "manifestationWitness": {

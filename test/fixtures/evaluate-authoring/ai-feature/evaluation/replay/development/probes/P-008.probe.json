@@ -9,7 +9,7 @@
   "implementationDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
   "artifactDigest": "sha256:44003d0495db12a6b2f463ae6cfc395877ca83e4694cde3107902dde75f843b5",
   "commitDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
-  "rationale": "[development] Strict threshold regression passes an answer one character short.",
+  "rationale": "[negative] Strict threshold regression passes an answer one character short.",
   "qualification": {
     "route": "controlled-mutation",
     "mutationSource": "strict minimum reduced to normal minimum",
@@ -23,15 +23,15 @@
     "expectedObservableFailure": "strict answer below doubled minimum passes in HTTP response body",
     "baselinePassEvidence": {
       "storage": "public",
-      "path": "runs/20260928T233657627Z-70ab2549/qualification/P-008/baseline-pass.json",
+      "path": "runs/20260929T015026071Z-cd62054f/qualification/P-008/baseline-pass.json",
       "privateRef": null,
-      "digest": "sha256:707f412664bef0d223fbb39d1fe3e5462a105570bc98e948ee0bd886838b5dc8"
+      "digest": "sha256:41dd482e5ed266177b2ae57b66d25184d9d8eab70581adbb5abb6ccfb1e10881"
     },
     "mutatedFailEvidence": {
       "storage": "public",
-      "path": "runs/20260928T233657627Z-70ab2549/qualification/P-008/mutated-fail.json",
+      "path": "runs/20260929T015026071Z-cd62054f/qualification/P-008/mutated-fail.json",
       "privateRef": null,
-      "digest": "sha256:ba65e6f7d739271c584e6356c78a6305031417e99207f799f92afa271624bbb8"
+      "digest": "sha256:95a5b43aa2b4d5d3c02c7a4bee6730e41cbafb655abf9763c712f31e02856dae"
     },
     "rollbackVerified": true
   },
@@ -40,14 +40,14 @@
     {
       "defectId": "D-004",
       "behaviorId": "B-004",
-      "summary": "[development] Strict threshold regression passes an answer one character short.",
+      "summary": "[negative] Strict threshold regression passes an answer one character short.",
       "severity": "material",
       "oracleEvidence": [
         {
           "storage": "public",
-          "path": "runs/20260928T233657627Z-70ab2549/qualification/P-008/mutated-fail.json",
+          "path": "runs/20260929T015026071Z-cd62054f/qualification/P-008/mutated-fail.json",
           "privateRef": null,
-          "digest": "sha256:ba65e6f7d739271c584e6356c78a6305031417e99207f799f92afa271624bbb8"
+          "digest": "sha256:95a5b43aa2b4d5d3c02c7a4bee6730e41cbafb655abf9763c712f31e02856dae"
         }
       ],
       "source": "controlled-mutation",

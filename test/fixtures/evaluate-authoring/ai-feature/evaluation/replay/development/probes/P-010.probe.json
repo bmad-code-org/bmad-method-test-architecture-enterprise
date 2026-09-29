@@ -9,7 +9,7 @@
   "implementationDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
   "artifactDigest": "sha256:1645dc943ad0833cf1dd79ed3073864bffd24425d5b55c3fb028d7a8bcf2d71e",
   "commitDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
-  "rationale": "[development] Alternate restricted answer tests that defect-signature selectors must match a planned request.",
+  "rationale": "[negative] Alternate restricted answer tests that defect-signature selectors must match a planned request.",
   "qualification": {
     "route": "controlled-mutation",
     "mutationSource": "restricted term removed from adopter policy",
@@ -23,15 +23,15 @@
     "expectedObservableFailure": "private answer passes in HTTP response body",
     "baselinePassEvidence": {
       "storage": "public",
-      "path": "runs/20260928T233657627Z-70ab2549/qualification/P-010/baseline-pass.json",
+      "path": "runs/20260929T015026071Z-cd62054f/qualification/P-010/baseline-pass.json",
       "privateRef": null,
-      "digest": "sha256:a8d5cd38ff5f39be5e5b54fbe2e50da77a1c3b12fd08c5b9399ed013da6a3538"
+      "digest": "sha256:bcc98e3ab4a43fb72d07a0dcac07de05beb6b0231d5b1456fdcd95a5c19a340d"
     },
     "mutatedFailEvidence": {
       "storage": "public",
-      "path": "runs/20260928T233657627Z-70ab2549/qualification/P-010/mutated-fail.json",
+      "path": "runs/20260929T015026071Z-cd62054f/qualification/P-010/mutated-fail.json",
       "privateRef": null,
-      "digest": "sha256:8e17098c372624438adda73adf22d9cb13d6c00261801cb5901bb6e4d7340b9d"
+      "digest": "sha256:82173516d85c3d3b782e61129dede1a8b12a8302a5e806be124baeeb19736e43"
     },
     "rollbackVerified": true
   },
@@ -40,14 +40,14 @@
     {
       "defectId": "D-008",
       "behaviorId": "B-001",
-      "summary": "[development] Alternate restricted answer tests that defect-signature selectors must match a planned request.",
+      "summary": "[negative] Alternate restricted answer tests that defect-signature selectors must match a planned request.",
       "severity": "critical",
       "oracleEvidence": [
         {
           "storage": "public",
-          "path": "runs/20260928T233657627Z-70ab2549/qualification/P-010/mutated-fail.json",
+          "path": "runs/20260929T015026071Z-cd62054f/qualification/P-010/mutated-fail.json",
           "privateRef": null,
-          "digest": "sha256:8e17098c372624438adda73adf22d9cb13d6c00261801cb5901bb6e4d7340b9d"
+          "digest": "sha256:82173516d85c3d3b782e61129dede1a8b12a8302a5e806be124baeeb19736e43"
         }
       ],
       "source": "controlled-mutation",

@@ -3,12 +3,12 @@
   "probeClass": "defect",
   "behaviorId": "B-004",
   "expectedClean": false,
-  "rationale": "[development] Strict threshold regression passes an answer one character short.",
+  "rationale": "[negative] Strict threshold regression passes an answer one character short.",
   "defects": [
     {
       "defectId": "D-004",
       "behaviorId": "B-004",
-      "summary": "[development] Strict threshold regression passes an answer one character short.",
+      "summary": "[negative] Strict threshold regression passes an answer one character short.",
       "severity": "material",
       "source": "controlled-mutation",
       "manifestationWitness": {

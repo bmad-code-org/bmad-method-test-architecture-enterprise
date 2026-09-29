@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "invocationId": "20260928T233657627Z-70ab2549",
-  "corpusDigest": "sha256:d46fa6b386d3de5f622b2683f27f808e0dc818a1c92861ee39c09f935595127b",
+  "invocationId": "20260929T015026071Z-cd62054f",
+  "corpusDigest": "sha256:6393eae8fdfed9deac0c1fe8ede0223989a5512ddd90a83b415a7c6510551792",
   "contract": "eval-contract.json",
   "policy": "scoring-policy.json",
   "preflightVerdict": "preflight-verdict.json",
@@ -9,7 +9,7 @@
   "trialSets": [
     {
       "probeId": "P-001",
-      "runId": "20260928T233657627Z-70ab2549-P-001",
+      "runId": "20260929T015026071Z-cd62054f-P-001",
       "conditionArm": "clean",
       "probe": "probes/P-001.probe.json",
       "records": [
@@ -21,7 +21,7 @@
     },
     {
       "probeId": "P-002",
-      "runId": "20260928T233657627Z-70ab2549-P-002",
+      "runId": "20260929T015026071Z-cd62054f-P-002",
       "conditionArm": "clean",
       "probe": "probes/P-002.probe.json",
       "records": [
@@ -33,7 +33,7 @@
     },
     {
       "probeId": "P-003",
-      "runId": "20260928T233657627Z-70ab2549-P-003",
+      "runId": "20260929T015026071Z-cd62054f-P-003",
       "conditionArm": "clean",
       "probe": "probes/P-003.probe.json",
       "records": [
@@ -45,7 +45,7 @@
     },
     {
       "probeId": "P-004",
-      "runId": "20260928T233657627Z-70ab2549-P-004",
+      "runId": "20260929T015026071Z-cd62054f-P-004",
       "conditionArm": "clean",
       "probe": "probes/P-004.probe.json",
       "records": [
@@ -57,7 +57,7 @@
     },
     {
       "probeId": "P-005",
-      "runId": "20260928T233657627Z-70ab2549-P-005",
+      "runId": "20260929T015026071Z-cd62054f-P-005",
       "conditionArm": "mutated:M-001",
       "probe": "probes/P-005.probe.json",
       "records": [
@@ -69,7 +69,7 @@
     },
     {
       "probeId": "P-010",
-      "runId": "20260928T233657627Z-70ab2549-P-010",
+      "runId": "20260929T015026071Z-cd62054f-P-010",
       "conditionArm": "mutated:M-001",
       "probe": "probes/P-010.probe.json",
       "records": [
@@ -81,7 +81,7 @@
     },
     {
       "probeId": "P-006",
-      "runId": "20260928T233657627Z-70ab2549-P-006",
+      "runId": "20260929T015026071Z-cd62054f-P-006",
       "conditionArm": "mutated:M-002",
       "probe": "probes/P-006.probe.json",
       "records": [
@@ -93,7 +93,7 @@
     },
     {
       "probeId": "P-007",
-      "runId": "20260928T233657627Z-70ab2549-P-007",
+      "runId": "20260929T015026071Z-cd62054f-P-007",
       "conditionArm": "mutated:M-003",
       "probe": "probes/P-007.probe.json",
       "records": [
@@ -105,7 +105,7 @@
     },
     {
       "probeId": "P-008",
-      "runId": "20260928T233657627Z-70ab2549-P-008",
+      "runId": "20260929T015026071Z-cd62054f-P-008",
       "conditionArm": "mutated:M-004",
       "probe": "probes/P-008.probe.json",
       "records": [
@@ -117,7 +117,7 @@
     },
     {
       "probeId": "P-009",
-      "runId": "20260928T233657627Z-70ab2549-P-009",
+      "runId": "20260929T015026071Z-cd62054f-P-009",
       "conditionArm": "gameability:P-009",
       "probe": "probes/P-009.probe.json",
       "records": [

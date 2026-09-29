@@ -3,7 +3,7 @@
   "probeClass": "defect",
   "behaviorId": "B-002",
   "expectedClean": false,
-  "rationale": "[development] A removed test.skip marker misses a disabled test.",
+  "rationale": "[negative] A removed test.skip marker misses a disabled test.",
   "defects": [
     {
       "defectId": "D-006",

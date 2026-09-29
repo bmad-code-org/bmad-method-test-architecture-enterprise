@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "invocationId": "20260928T230939180Z-7dcac3a6",
-  "corpusDigest": "sha256:04f99ef5d1172e8c6520e7b02052f6b55e55bdd8865aa29e85ff48b469131667",
+  "invocationId": "20260929T013608696Z-4571b7ff",
+  "corpusDigest": "sha256:f65a177e55c374d2f0362f21f23d118daa1ed37c748e17b2b355826690e52706",
   "contract": "eval-contract.json",
   "policy": "scoring-policy.json",
   "preflightVerdict": "preflight-verdict.json",
@@ -9,7 +9,7 @@
   "trialSets": [
     {
       "probeId": "P-010",
-      "runId": "20260928T230939180Z-7dcac3a6-P-010",
+      "runId": "20260929T013608696Z-4571b7ff-P-010",
       "conditionArm": "mutated:M-005",
       "probe": "probes/P-010.probe.json",
       "records": [
@@ -21,7 +21,7 @@
     },
     {
       "probeId": "P-011",
-      "runId": "20260928T230939180Z-7dcac3a6-P-011",
+      "runId": "20260929T013608696Z-4571b7ff-P-011",
       "conditionArm": "mutated:M-006",
       "probe": "probes/P-011.probe.json",
       "records": [
@@ -33,7 +33,7 @@
     },
     {
       "probeId": "P-012",
-      "runId": "20260928T230939180Z-7dcac3a6-P-012",
+      "runId": "20260929T013608696Z-4571b7ff-P-012",
       "conditionArm": "mutated:M-007",
       "probe": "probes/P-012.probe.json",
       "records": [
@@ -45,7 +45,7 @@
     },
     {
       "probeId": "P-013",
-      "runId": "20260928T230939180Z-7dcac3a6-P-013",
+      "runId": "20260929T013608696Z-4571b7ff-P-013",
       "conditionArm": "mutated:M-008",
       "probe": "probes/P-013.probe.json",
       "records": [

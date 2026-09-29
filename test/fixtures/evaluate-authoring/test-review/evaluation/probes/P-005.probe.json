@@ -3,7 +3,7 @@
   "probeClass": "defect",
   "behaviorId": "B-001",
   "expectedClean": false,
-  "rationale": "[development] A bypassed assertion check misses a test without an assertion.",
+  "rationale": "[negative] A bypassed assertion check misses a test without an assertion.",
   "defects": [
     {
       "defectId": "D-005",

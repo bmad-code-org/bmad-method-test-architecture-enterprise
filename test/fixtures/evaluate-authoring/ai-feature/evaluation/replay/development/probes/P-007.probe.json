@@ -9,7 +9,7 @@
   "implementationDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
   "artifactDigest": "sha256:44003d0495db12a6b2f463ae6cfc395877ca83e4694cde3107902dde75f843b5",
   "commitDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
-  "rationale": "[development] Malformed answer receives success status despite error body.",
+  "rationale": "[malformed] Malformed answer receives success status despite error body.",
   "qualification": {
     "route": "controlled-mutation",
     "mutationSource": "malformed type error gets success status",
@@ -23,15 +23,15 @@
     "expectedObservableFailure": "malformed answer receives HTTP 200 and a grade-like response body",
     "baselinePassEvidence": {
       "storage": "public",
-      "path": "runs/20260928T233657627Z-70ab2549/qualification/P-007/baseline-pass.json",
+      "path": "runs/20260929T015026071Z-cd62054f/qualification/P-007/baseline-pass.json",
       "privateRef": null,
-      "digest": "sha256:5b031016904bd003229d3b6b19ff9552ac8ff47819ba4003c38d65a835b75c91"
+      "digest": "sha256:b1e6d20d299e6801b432a30f0e0f9a02c24f4e73882b15ef53de03228206cde1"
     },
     "mutatedFailEvidence": {
       "storage": "public",
-      "path": "runs/20260928T233657627Z-70ab2549/qualification/P-007/mutated-fail.json",
+      "path": "runs/20260929T015026071Z-cd62054f/qualification/P-007/mutated-fail.json",
       "privateRef": null,
-      "digest": "sha256:e392651a11ea4daaa367b28b8305d8b6e2103887543a7a7df41596c9f615808d"
+      "digest": "sha256:0c9938177d7165dcfd37de0f10dc54e5eaf822d0a10f9d592c4bd2e936f7c478"
     },
     "rollbackVerified": true
   },
@@ -40,14 +40,14 @@
     {
       "defectId": "D-003",
       "behaviorId": "B-003",
-      "summary": "[development] Malformed answer receives success status despite error body.",
+      "summary": "[malformed] Malformed answer receives success status despite error body.",
       "severity": "material",
       "oracleEvidence": [
         {
           "storage": "public",
-          "path": "runs/20260928T233657627Z-70ab2549/qualification/P-007/mutated-fail.json",
+          "path": "runs/20260929T015026071Z-cd62054f/qualification/P-007/mutated-fail.json",
           "privateRef": null,
-          "digest": "sha256:e392651a11ea4daaa367b28b8305d8b6e2103887543a7a7df41596c9f615808d"
+          "digest": "sha256:0c9938177d7165dcfd37de0f10dc54e5eaf822d0a10f9d592c4bd2e936f7c478"
         }
       ],
       "source": "controlled-mutation",

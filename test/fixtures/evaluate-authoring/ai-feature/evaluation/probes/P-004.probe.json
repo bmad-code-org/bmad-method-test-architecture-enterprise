@@ -3,7 +3,7 @@
   "probeClass": "zero-action",
   "behaviorId": "B-004",
   "expectedClean": true,
-  "rationale": "[boundary] Strict mode at the doubled threshold passes, while one shorter is rejected.",
+  "rationale": "[representative] Strict mode at the doubled threshold passes, while one shorter is rejected.",
   "defects": [],
   "qualification": {
     "route": "clean-control",

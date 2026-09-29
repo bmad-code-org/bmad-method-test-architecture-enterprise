@@ -3,12 +3,12 @@
   "probeClass": "defect",
   "behaviorId": "B-003",
   "expectedClean": false,
-  "rationale": "[development] Malformed answer receives success status despite error body.",
+  "rationale": "[malformed] Malformed answer receives success status despite error body.",
   "defects": [
     {
       "defectId": "D-003",
       "behaviorId": "B-003",
-      "summary": "[development] Malformed answer receives success status despite error body.",
+      "summary": "[malformed] Malformed answer receives success status despite error body.",
       "severity": "material",
       "source": "controlled-mutation",
       "manifestationWitness": {

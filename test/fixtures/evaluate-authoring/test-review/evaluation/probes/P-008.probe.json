@@ -3,7 +3,7 @@
   "probeClass": "defect",
   "behaviorId": "B-004",
   "expectedClean": false,
-  "rationale": "[development] A weakened request guard accepts an extra field.",
+  "rationale": "[malformed] A weakened request guard accepts an extra field.",
   "defects": [
     {
       "defectId": "D-008",

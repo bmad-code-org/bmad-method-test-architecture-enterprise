@@ -10,7 +10,7 @@
     "implementationDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
     "artifactDigest": "sha256:1645dc943ad0833cf1dd79ed3073864bffd24425d5b55c3fb028d7a8bcf2d71e",
     "commitDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
-    "rationale": "[development] Removing private from policy causes a restricted answer to pass.",
+    "rationale": "[negative] Removing private from policy causes a restricted answer to pass.",
     "qualification": {
       "route": "controlled-mutation",
       "mutationSource": "restricted term removed from adopter policy",
@@ -24,15 +24,15 @@
       "expectedObservableFailure": "private answer passes in HTTP response body",
       "baselinePassEvidence": {
         "storage": "public",
-        "path": "runs/20260928T233657627Z-70ab2549/qualification/P-005/baseline-pass.json",
+        "path": "runs/20260929T015026071Z-cd62054f/qualification/P-005/baseline-pass.json",
         "privateRef": null,
-        "digest": "sha256:306ec8a4bfd1b4d3cb6db1e096badf8db37ae2331b34f22ffab8f64480de7334"
+        "digest": "sha256:fa40139ad7f7fc2d9fa95b7ff666c7ed7ec8f9eaabaf0dddf441812aba3d9e00"
       },
       "mutatedFailEvidence": {
         "storage": "public",
-        "path": "runs/20260928T233657627Z-70ab2549/qualification/P-005/mutated-fail.json",
+        "path": "runs/20260929T015026071Z-cd62054f/qualification/P-005/mutated-fail.json",
         "privateRef": null,
-        "digest": "sha256:40a9a71b8207382e416272ca7ae44474ffcbb0fb6ab0818360998869f40417db"
+        "digest": "sha256:00842a72562de2f23f48f2356cd64b64b8409dc27fd92084c957ed1f75690703"
       },
       "rollbackVerified": true
     },
@@ -41,14 +41,14 @@
       {
         "defectId": "D-001",
         "behaviorId": "B-001",
-        "summary": "[development] Removing private from policy causes a restricted answer to pass.",
+        "summary": "[negative] Removing private from policy causes a restricted answer to pass.",
         "severity": "critical",
         "oracleEvidence": [
           {
             "storage": "public",
-            "path": "runs/20260928T233657627Z-70ab2549/qualification/P-005/mutated-fail.json",
+            "path": "runs/20260929T015026071Z-cd62054f/qualification/P-005/mutated-fail.json",
             "privateRef": null,
-            "digest": "sha256:40a9a71b8207382e416272ca7ae44474ffcbb0fb6ab0818360998869f40417db"
+            "digest": "sha256:00842a72562de2f23f48f2356cd64b64b8409dc27fd92084c957ed1f75690703"
           }
         ],
         "source": "controlled-mutation",
@@ -158,7 +158,7 @@
     "implementationDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
     "artifactDigest": "sha256:1645dc943ad0833cf1dd79ed3073864bffd24425d5b55c3fb028d7a8bcf2d71e",
     "commitDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
-    "rationale": "[development] Raising the minimum rejects an otherwise valid answer.",
+    "rationale": "[negative] Raising the minimum rejects an otherwise valid answer.",
     "qualification": {
       "route": "controlled-mutation",
       "mutationSource": "minimum raised in adopter policy",
@@ -172,15 +172,15 @@
       "expectedObservableFailure": "valid answer receives too-short in HTTP response body",
       "baselinePassEvidence": {
         "storage": "public",
-        "path": "runs/20260928T233657627Z-70ab2549/qualification/P-006/baseline-pass.json",
+        "path": "runs/20260929T015026071Z-cd62054f/qualification/P-006/baseline-pass.json",
         "privateRef": null,
-        "digest": "sha256:897db45a67f2de6ed125c52d963cad8dd6b8e7a5f7fe776d31625c04bf30faad"
+        "digest": "sha256:9e67747d29d66bcd54e39ebbf0b75797eb68f3aaa13c482f4527835f86211089"
       },
       "mutatedFailEvidence": {
         "storage": "public",
-        "path": "runs/20260928T233657627Z-70ab2549/qualification/P-006/mutated-fail.json",
+        "path": "runs/20260929T015026071Z-cd62054f/qualification/P-006/mutated-fail.json",
         "privateRef": null,
-        "digest": "sha256:9552c6ff2f7166b7b0c926f41a4a3c69f4a6d4b45d5288d421598d58405675bd"
+        "digest": "sha256:c65ecb56c3c6963c0daf819f2c89e73b8ef804bafb4297b1e7b0f631374897d9"
       },
       "rollbackVerified": true
     },
@@ -189,14 +189,14 @@
       {
         "defectId": "D-002",
         "behaviorId": "B-002",
-        "summary": "[development] Raising the minimum rejects an otherwise valid answer.",
+        "summary": "[negative] Raising the minimum rejects an otherwise valid answer.",
         "severity": "material",
         "oracleEvidence": [
           {
             "storage": "public",
-            "path": "runs/20260928T233657627Z-70ab2549/qualification/P-006/mutated-fail.json",
+            "path": "runs/20260929T015026071Z-cd62054f/qualification/P-006/mutated-fail.json",
             "privateRef": null,
-            "digest": "sha256:9552c6ff2f7166b7b0c926f41a4a3c69f4a6d4b45d5288d421598d58405675bd"
+            "digest": "sha256:c65ecb56c3c6963c0daf819f2c89e73b8ef804bafb4297b1e7b0f631374897d9"
           }
         ],
         "source": "controlled-mutation",
@@ -306,7 +306,7 @@
     "implementationDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
     "artifactDigest": "sha256:44003d0495db12a6b2f463ae6cfc395877ca83e4694cde3107902dde75f843b5",
     "commitDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
-    "rationale": "[development] Malformed answer receives success status despite error body.",
+    "rationale": "[malformed] Malformed answer receives success status despite error body.",
     "qualification": {
       "route": "controlled-mutation",
       "mutationSource": "malformed type error gets success status",
@@ -320,15 +320,15 @@
       "expectedObservableFailure": "malformed answer receives HTTP 200 and a grade-like response body",
       "baselinePassEvidence": {
         "storage": "public",
-        "path": "runs/20260928T233657627Z-70ab2549/qualification/P-007/baseline-pass.json",
+        "path": "runs/20260929T015026071Z-cd62054f/qualification/P-007/baseline-pass.json",
         "privateRef": null,
-        "digest": "sha256:5b031016904bd003229d3b6b19ff9552ac8ff47819ba4003c38d65a835b75c91"
+        "digest": "sha256:b1e6d20d299e6801b432a30f0e0f9a02c24f4e73882b15ef53de03228206cde1"
       },
       "mutatedFailEvidence": {
         "storage": "public",
-        "path": "runs/20260928T233657627Z-70ab2549/qualification/P-007/mutated-fail.json",
+        "path": "runs/20260929T015026071Z-cd62054f/qualification/P-007/mutated-fail.json",
         "privateRef": null,
-        "digest": "sha256:e392651a11ea4daaa367b28b8305d8b6e2103887543a7a7df41596c9f615808d"
+        "digest": "sha256:0c9938177d7165dcfd37de0f10dc54e5eaf822d0a10f9d592c4bd2e936f7c478"
       },
       "rollbackVerified": true
     },
@@ -337,14 +337,14 @@
       {
         "defectId": "D-003",
         "behaviorId": "B-003",
-        "summary": "[development] Malformed answer receives success status despite error body.",
+        "summary": "[malformed] Malformed answer receives success status despite error body.",
         "severity": "material",
         "oracleEvidence": [
           {
             "storage": "public",
-            "path": "runs/20260928T233657627Z-70ab2549/qualification/P-007/mutated-fail.json",
+            "path": "runs/20260929T015026071Z-cd62054f/qualification/P-007/mutated-fail.json",
             "privateRef": null,
-            "digest": "sha256:e392651a11ea4daaa367b28b8305d8b6e2103887543a7a7df41596c9f615808d"
+            "digest": "sha256:0c9938177d7165dcfd37de0f10dc54e5eaf822d0a10f9d592c4bd2e936f7c478"
           }
         ],
         "source": "controlled-mutation",
@@ -454,7 +454,7 @@
     "implementationDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
     "artifactDigest": "sha256:44003d0495db12a6b2f463ae6cfc395877ca83e4694cde3107902dde75f843b5",
     "commitDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
-    "rationale": "[development] Strict threshold regression passes an answer one character short.",
+    "rationale": "[negative] Strict threshold regression passes an answer one character short.",
     "qualification": {
       "route": "controlled-mutation",
       "mutationSource": "strict minimum reduced to normal minimum",
@@ -468,15 +468,15 @@
       "expectedObservableFailure": "strict answer below doubled minimum passes in HTTP response body",
       "baselinePassEvidence": {
         "storage": "public",
-        "path": "runs/20260928T233657627Z-70ab2549/qualification/P-008/baseline-pass.json",
+        "path": "runs/20260929T015026071Z-cd62054f/qualification/P-008/baseline-pass.json",
         "privateRef": null,
-        "digest": "sha256:707f412664bef0d223fbb39d1fe3e5462a105570bc98e948ee0bd886838b5dc8"
+        "digest": "sha256:41dd482e5ed266177b2ae57b66d25184d9d8eab70581adbb5abb6ccfb1e10881"
       },
       "mutatedFailEvidence": {
         "storage": "public",
-        "path": "runs/20260928T233657627Z-70ab2549/qualification/P-008/mutated-fail.json",
+        "path": "runs/20260929T015026071Z-cd62054f/qualification/P-008/mutated-fail.json",
         "privateRef": null,
-        "digest": "sha256:ba65e6f7d739271c584e6356c78a6305031417e99207f799f92afa271624bbb8"
+        "digest": "sha256:95a5b43aa2b4d5d3c02c7a4bee6730e41cbafb655abf9763c712f31e02856dae"
       },
       "rollbackVerified": true
     },
@@ -485,14 +485,14 @@
       {
         "defectId": "D-004",
         "behaviorId": "B-004",
-        "summary": "[development] Strict threshold regression passes an answer one character short.",
+        "summary": "[negative] Strict threshold regression passes an answer one character short.",
         "severity": "material",
         "oracleEvidence": [
           {
             "storage": "public",
-            "path": "runs/20260928T233657627Z-70ab2549/qualification/P-008/mutated-fail.json",
+            "path": "runs/20260929T015026071Z-cd62054f/qualification/P-008/mutated-fail.json",
             "privateRef": null,
-            "digest": "sha256:ba65e6f7d739271c584e6356c78a6305031417e99207f799f92afa271624bbb8"
+            "digest": "sha256:95a5b43aa2b4d5d3c02c7a4bee6730e41cbafb655abf9763c712f31e02856dae"
           }
         ],
         "source": "controlled-mutation",
@@ -610,7 +610,7 @@
     "implementationDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
     "artifactDigest": "sha256:1645dc943ad0833cf1dd79ed3073864bffd24425d5b55c3fb028d7a8bcf2d71e",
     "commitDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
-    "rationale": "[development] Alternate restricted answer tests that defect-signature selectors must match a planned request.",
+    "rationale": "[negative] Alternate restricted answer tests that defect-signature selectors must match a planned request.",
     "qualification": {
       "route": "controlled-mutation",
       "mutationSource": "restricted term removed from adopter policy",
@@ -624,15 +624,15 @@
       "expectedObservableFailure": "private answer passes in HTTP response body",
       "baselinePassEvidence": {
         "storage": "public",
-        "path": "runs/20260928T233657627Z-70ab2549/qualification/P-010/baseline-pass.json",
+        "path": "runs/20260929T015026071Z-cd62054f/qualification/P-010/baseline-pass.json",
         "privateRef": null,
-        "digest": "sha256:a8d5cd38ff5f39be5e5b54fbe2e50da77a1c3b12fd08c5b9399ed013da6a3538"
+        "digest": "sha256:bcc98e3ab4a43fb72d07a0dcac07de05beb6b0231d5b1456fdcd95a5c19a340d"
       },
       "mutatedFailEvidence": {
         "storage": "public",
-        "path": "runs/20260928T233657627Z-70ab2549/qualification/P-010/mutated-fail.json",
+        "path": "runs/20260929T015026071Z-cd62054f/qualification/P-010/mutated-fail.json",
         "privateRef": null,
-        "digest": "sha256:8e17098c372624438adda73adf22d9cb13d6c00261801cb5901bb6e4d7340b9d"
+        "digest": "sha256:82173516d85c3d3b782e61129dede1a8b12a8302a5e806be124baeeb19736e43"
       },
       "rollbackVerified": true
     },
@@ -641,14 +641,14 @@
       {
         "defectId": "D-008",
         "behaviorId": "B-001",
-        "summary": "[development] Alternate restricted answer tests that defect-signature selectors must match a planned request.",
+        "summary": "[negative] Alternate restricted answer tests that defect-signature selectors must match a planned request.",
         "severity": "critical",
         "oracleEvidence": [
           {
             "storage": "public",
-            "path": "runs/20260928T233657627Z-70ab2549/qualification/P-010/mutated-fail.json",
+            "path": "runs/20260929T015026071Z-cd62054f/qualification/P-010/mutated-fail.json",
             "privateRef": null,
-            "digest": "sha256:8e17098c372624438adda73adf22d9cb13d6c00261801cb5901bb6e4d7340b9d"
+            "digest": "sha256:82173516d85c3d3b782e61129dede1a8b12a8302a5e806be124baeeb19736e43"
           }
         ],
         "source": "controlled-mutation",
