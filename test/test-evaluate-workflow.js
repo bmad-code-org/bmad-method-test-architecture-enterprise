@@ -43,7 +43,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const { ENGINE_CLI_ENV, engineCliPath } = require('../cli/lib/evaluate/engine');
-const { ArmError, runArm } = require('../cli/lib/evaluate/arm');
+const { ArmError, hostEnvironmentPort, runArm } = require('../cli/lib/evaluate/arm');
 const { syntheticPort } = require('../cli/lib/evaluate/gameability');
 const { createRegistry } = require('../cli/lib/evaluate/registry');
 const { WorkspaceRefusal, createWorkspace, removeWorkspace } = require('../cli/lib/evaluate/workspace');
@@ -521,14 +521,124 @@ async function checkUnits() {
     `an identifier holding a NUL character recorded ${JSON.stringify(nul.arm.steps.at(-1))}`,
   );
 
-  // A binding the run cannot send stops the arm whatever the target printed, a skipped after step included.
-  for (const unsendable of [{ matcher: 'any' }, { principal: 'reviewer' }]) {
+  // An any matcher follows the declared string type and repeats its bytes for one seed.
+  const anyContract = {
+    ...readJson(path.join(FIXTURE, EVALUATION, 'contract.json')),
+    interactionPlan: [create, { ...readBack, after: 'create', option: { id: { matcher: 'any' } } }],
+  };
+  const anyFirst = await runArm({
+    contract: anyContract,
+    port: scriptedPort('any', { create: { id: 'rec-any' }, 'read-back': { ok: true } }),
+    registry: UNIT_REGISTRY,
+    label: 'any',
+    seed: 'story-1.30-seed',
+  });
+  const anySecond = await runArm({
+    contract: anyContract,
+    port: scriptedPort('any', { create: { id: 'rec-any' }, 'read-back': { ok: true } }),
+    registry: UNIT_REGISTRY,
+    label: 'any',
+    seed: 'story-1.30-seed',
+  });
+  check(
+    typeof anyFirst.steps[1].request.channels.option.id === 'string' &&
+      JSON.stringify(anyFirst.steps[1].request.channels.option) === JSON.stringify(anySecond.steps[1].request.channels.option),
+    `an any matcher sent ${JSON.stringify([anyFirst.steps[1], anySecond.steps[1]])}`,
+  );
+
+  // Two principals reach the target in plan order while the persisted request and record retain only opaque labels.
+  const principalContract = structuredClone({ ...readJson(path.join(FIXTURE, EVALUATION, 'contract.json')), interactionPlan: [create] });
+  principalContract.testData = { principals: { reviewer: { kind: 'human' }, operator: { kind: 'human' } } };
+  principalContract.permittedInterfaces[0].operations[0].requestShape.stdin.permittedKeys.push('identity');
+  principalContract.permittedInterfaces[0].operations[0].requestShape.stdin.types.identity = 'string';
+  principalContract.interactionPlan = [
+    {
+      ...create,
+      inputBinding: { ...create.inputBinding, stdin: { title: { literal: TITLE }, identity: { principal: 'reviewer' } } },
+    },
+    {
+      ...create,
+      stepId: 'create-operator',
+      inputBinding: { ...create.inputBinding, stdin: { title: { literal: TITLE }, identity: { principal: 'operator' } } },
+    },
+  ];
+  const principalSent = [];
+  const principalArm = await runArm({
+    contract: principalContract,
+    port: {
+      probe: async (request) => {
+        principalSent.push(request.channels.stdin.value.identity);
+        return {
+          request,
+          observation: {
+            kind: 'cli',
+            exitCode: 0,
+            stdout: { kind: 'text', value: '' },
+            stderr: { kind: 'text', value: '' },
+            artifacts: {},
+          },
+        };
+      },
+    },
+    registry: {
+      ...UNIT_REGISTRY,
+      principalValue: (principal) => (principal === 'reviewer' ? 'reviewer-secret' : 'operator-secret'),
+    },
+    label: 'principal',
+  });
+  check(
+    JSON.stringify(principalSent) === JSON.stringify(['reviewer-secret', 'operator-secret']) &&
+      principalArm.steps[0].observation.kind === 'cli' &&
+      principalArm.steps[0].request.channels.stdin.value.identity.principal === 'reviewer' &&
+      principalArm.stepObservations.create.principal === 'reviewer' &&
+      principalArm.stepObservations.create.callInputs.stdin.identity.principal === 'reviewer' &&
+      principalArm.stepObservations['create-operator'].principal === 'operator' &&
+      principalArm.stepObservations['create-operator'].callInputs.stdin.identity.principal === 'operator' &&
+      JSON.stringify(principalArm).includes('reviewer-secret') === false &&
+      JSON.stringify(principalArm).includes('operator-secret') === false,
+    `the principal credential leaked into the persisted arm: ${JSON.stringify(principalArm)}`,
+  );
+
+  // A target answer that echoes a mapped principal is scrubbed by the registry boundary too.
+  const principalSecret = 'workflow-principal-secret';
+  const previousPrincipalSecret = process.env.TEA_WORKFLOW_PRINCIPAL;
+  process.env.TEA_WORKFLOW_PRINCIPAL = principalSecret;
+  try {
+    const sourceEvaluation = readJson(path.join(FIXTURE, EVALUATION, 'evaluation.json'));
+    const sourceEntry = {
+      ...sourceEvaluation.registry[0],
+      environmentKeys: [...sourceEvaluation.registry[0].environmentKeys, 'TEA_WORKFLOW_PRINCIPAL'],
+    };
+    const scrubRegistry = createRegistry([sourceEntry], {
+      root: FIXTURE,
+      principalMappings: { reviewer: { interfaceId: sourceEntry.interfaceId, environmentKey: 'TEA_WORKFLOW_PRINCIPAL' } },
+    });
+    const scrubbed = await hostEnvironmentPort({
+      registry: scrubRegistry,
+      port: {
+        probe: async (request) => ({
+          request,
+          observation: { kind: 'cli', stdout: { kind: 'text', value: principalSecret }, stderr: { kind: 'text', value: '' } },
+        }),
+      },
+    }).probe({ probeId: 'principal-secret', interfaceId: sourceEntry.interfaceId, executable: sourceEntry.executable, kind: 'cli' });
+    check(
+      !JSON.stringify(scrubbed.observation).includes(principalSecret),
+      `the principal secret reached an observation: ${JSON.stringify(scrubbed.observation)}`,
+    );
+  } finally {
+    if (previousPrincipalSecret === undefined) delete process.env.TEA_WORKFLOW_PRINCIPAL;
+    else process.env.TEA_WORKFLOW_PRINCIPAL = previousPrincipalSecret;
+  }
+
+  // A binding the run cannot materialize stops the arm whatever the target printed, a skipped after step included.
+  for (const unsendable of [{ unsupported: 'binding' }]) {
     const refused = await armError(
       [readBack, create, planStep('after-read', 'read-back', { after: 'read-back', option: { id: unsendable } })],
       { create: { title: TITLE } },
     );
     check(
-      refused instanceof ArmError && refused.message.includes('literal, type-violating and captured bindings only'),
+      refused instanceof ArmError && refused.message.includes('literal, matcher, principal and captured bindings only'),
       `a step binding ${JSON.stringify(unsendable)} after a skipped step gave ${refused}`,
     );
   }
@@ -1137,8 +1247,11 @@ function checkReference() {
     check(bullet?.includes(sent) === true, `the reference's "### Binding kinds" does not state that a ${kind} binding is sent (${sent})`);
   }
   check(
-    kinds?.includes('- `matcher` and `principal`: not sent yet') === true && kinds.includes('exit 12'),
-    'the reference\'s "### Binding kinds" does not state that a matcher or principal binding stops the arm with exit 12',
+    kinds?.includes('- `matcher: any`: a deterministic value of the declared JSON type') === true &&
+      kinds.includes('- `matcher: type-violating`: a value whose JSON type differs') &&
+      kinds.includes('- `principal`: the runtime reads the host credential') &&
+      kinds.includes('opaque label'),
+    'the reference\'s "### Binding kinds" does not describe matcher selection, principal sourcing and opaque recording',
   );
   const order = sectionOf(plan ?? '', '### Step order');
   check(

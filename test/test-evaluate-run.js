@@ -272,6 +272,7 @@ async function checkRunShape({ engine, validate, repository, project, folder, ru
   // run.json (AD-7, AD-12).
   const run = written(path.join(runDirectory, 'run.json'), 'run.json') ?? {};
   check(run.command === 'run' && run.completed === true, `run.json records command ${run.command} and completed ${run.completed}`);
+  check(run.seed === 'story-1.30-seed', `run.json records matcher seed ${JSON.stringify(run.seed)}`);
   check(
     run.teaVersion === JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'package.json'), 'utf8')).version,
     `run.json records TeA ${run.teaVersion}`,
@@ -851,6 +852,76 @@ function checkFailAndInvalid({ engine, folder, env, runDirectory }) {
 }
 
 async function checkRunAndScore() {
+  // Two principal bindings reach the target in plan order, while sealed call inputs keep only labels.
+  const principalReceived = [];
+  const principalContract = {
+    permittedInterfaces: [
+      {
+        logicalId: 'principal-cli',
+        kind: 'cli',
+        operations: [
+          {
+            operationId: 'send-identity',
+            invocation: { executable: 'principal-cli', subcommandPath: [] },
+            requestShape: {
+              argument: { requiredKeys: [], permittedKeys: [], types: {} },
+              option: { requiredKeys: [], permittedKeys: [], types: {} },
+              environment: { requiredKeys: [], permittedKeys: [], types: {} },
+              stdin: { requiredKeys: ['identity'], permittedKeys: ['identity'], types: { identity: 'string' } },
+            },
+          },
+        ],
+      },
+    ],
+    interactionPlan: [
+      {
+        stepId: 'reviewer-step',
+        operationId: 'send-identity',
+        after: null,
+        cardinality: 'exactly-one',
+        inputBinding: { argument: null, option: null, environment: null, stdin: { identity: { principal: 'reviewer' } } },
+      },
+      {
+        stepId: 'operator-step',
+        operationId: 'send-identity',
+        after: null,
+        cardinality: 'exactly-one',
+        inputBinding: { argument: null, option: null, environment: null, stdin: { identity: { principal: 'operator' } } },
+      },
+    ],
+  };
+  const principalArm = await runArm({
+    contract: principalContract,
+    port: {
+      probe: async (request) => {
+        principalReceived.push(request.channels.stdin.value);
+        return {
+          request,
+          observation: {
+            kind: 'cli',
+            exitCode: 0,
+            stdout: { kind: 'text', value: '' },
+            stderr: { kind: 'text', value: '' },
+            artifacts: {},
+          },
+        };
+      },
+    },
+    registry: {
+      targetFor: () => ({ infrastructureExitCodes: [3] }),
+      principalValue: (principal) => (principal === 'reviewer' ? 'reviewer-secret' : 'operator-secret'),
+    },
+    label: 'principal-run',
+  });
+  check(
+    JSON.stringify(principalReceived) === JSON.stringify(['reviewer-secret', 'operator-secret']) &&
+      principalArm.stepObservations['reviewer-step'].principal === 'reviewer' &&
+      principalArm.stepObservations['operator-step'].principal === 'operator' &&
+      !JSON.stringify(principalArm).includes('reviewer-secret') &&
+      !JSON.stringify(principalArm).includes('operator-secret'),
+    `principal run received ${JSON.stringify(principalReceived)} and recorded ${JSON.stringify(principalArm)}`,
+  );
+
   const engine = await loadEngine();
   const validate = createArtifactValidator();
   // A second registry command the plan never calls, so the manifest's grants and observations differ.
@@ -863,7 +934,7 @@ async function checkRunAndScore() {
     },
   });
   const { folder, env } = made;
-  const ran = evaluate(['run', '--evaluation', folder], env);
+  const ran = evaluate(['run', '--evaluation', folder, '--seed', 'story-1.30-seed'], env);
   check(ran.status === 0, `run exited ${ran.status}; expected 0\n${ran.output}`);
   const runDirectory = runDirectoryOf(folder);
   if (runDirectory === null) return;

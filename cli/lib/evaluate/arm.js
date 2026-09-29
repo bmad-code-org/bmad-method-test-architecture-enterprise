@@ -10,8 +10,9 @@
  * operation's method and path template with its bound `path`, `query` and
  * `header` values and, when bound, its `body` values as one JSON object.
  *
- * A binding is a `literal`, sent as written, a `type-violating` matcher,
- * materialized as a stable value of another JSON type, or a `captured`
+ * A binding is a `literal`, an `any` or `type-violating` matcher,
+ * materialized from the declared JSON type, a `principal` resolved from the
+ * registry's host environment, or a `captured`
  * pointer (Story 1.18), sent as the value it resolves to on the named earlier step's
  * observation in this arm, read by eval-quality's own `makeResolveOperand`,
  * the reading its `score` gives the same pointer. A step runs after the step
@@ -22,9 +23,9 @@
  * not issued, or its observation lacks the value), is not issued: it gets no
  * observation, and `steps` records it as skipped with the reason, so
  * eval-quality reads the missing observation as it reads any evidence that
- * does not exist. A binding this release cannot send (an `any` matcher, a
- * `principal`) and an operation of another kind stop the arm with an
- * `ArmError` (exit 12): the run cannot send the request the contract means.
+ * does not exist. A binding this release cannot materialize and an operation
+ * of another kind stop the arm with an `ArmError` (exit 12): the run cannot
+ * send the request the contract means.
  * A cycle over the `after` and capture edges never reaches an arm, since
  * `eval-quality compile` refuses it (`binding-cycle`, `nested-temporal-clause`);
  * if one does, the arm stops with an `ArmError`.
@@ -56,6 +57,8 @@
  */
 
 'use strict';
+
+const crypto = require('node:crypto');
 
 const { loadEngine } = require('./engine');
 const { recordObservation } = require('./records');
@@ -231,6 +234,71 @@ function persistableRequest(request) {
   return { ...request, channels: { ...request.channels, environment: Object.keys(request.channels.environment).sort() } };
 }
 
+/** A marker persisted where a principal credential was used on the wire. */
+function principalMarker(principal) {
+  return { principal };
+}
+
+/** Replace one bound principal value in a structured call-input record. */
+function redactPrincipalCallInputs(callInputs, bindings) {
+  const redacted = structuredClone(callInputs);
+  for (const { channel, key, principal } of bindings) {
+    switch (channel) {
+      case 'stdin': {
+        if (redacted.stdin !== null && redacted.stdin !== undefined) redacted.stdin[key] = principalMarker(principal);
+        break;
+      }
+      case 'body': {
+        if (redacted.body !== null && redacted.body !== undefined) redacted.body[key] = principalMarker(principal);
+        break;
+      }
+      case 'arguments': {
+        redacted.arguments[key] = principalMarker(principal);
+        break;
+      }
+      default: {
+        if (redacted[channel] !== null && redacted[channel] !== undefined) redacted[channel][key] = principalMarker(principal);
+      }
+    }
+  }
+  return redacted;
+}
+
+/** Replace principal values in the request copy persisted under a step. */
+function redactPrincipalRequest(request, bindings) {
+  const redacted = structuredClone(persistableRequest(request));
+  for (const { channel, key, principal } of bindings) {
+    switch (channel) {
+      case 'stdin': {
+        const input = redacted.channels.stdin;
+        switch (input?.kind) {
+          case 'text': {
+            redacted.channels.stdin = { kind: 'json', value: { [key]: principalMarker(principal) } };
+            break;
+          }
+          case 'json': {
+            input.value[key] = principalMarker(principal);
+            break;
+          }
+        }
+        break;
+      }
+      case 'body': {
+        if (redacted.channels.body?.kind === 'json') redacted.channels.body.value[key] = principalMarker(principal);
+        break;
+      }
+      case 'arguments': {
+        redacted.channels.arguments[key] = principalMarker(principal);
+        break;
+      }
+      default: {
+        if (redacted.channels[channel] !== undefined) redacted.channels[channel][key] = principalMarker(principal);
+      }
+    }
+  }
+  return redacted;
+}
+
 /**
  * What a run records of an adapter fault: its code, the `reason` eval-quality
  * gives a policy denial (`tool-not-authorized`, `executable-not-authorized`,
@@ -293,8 +361,9 @@ function hostEnvironmentPort({ port, registry }) {
     async probe(request, signal) {
       const registered = request?.kind === 'cli' && registry.targetFor(request.interfaceId, request.executable) !== undefined;
       const injected = registered ? registry.hostEnvironment(request.interfaceId, [], request.executable) : {};
+      const channels = request?.channels ?? {};
       const augmented = registered
-        ? { ...request, channels: { ...request.channels, environment: { ...injected, ...request.channels.environment } } }
+        ? { ...request, channels: { ...channels, environment: { ...injected, ...channels.environment } } }
         : request;
       // A tool server starts with the host's values for its entry's keys, which its authorization carries.
       const server =
@@ -303,7 +372,8 @@ function hostEnvironmentPort({ port, registry }) {
           : {};
       // An HTTP call's server starts with the host's values for its entry's keys, and its auth header carries one.
       const carried = request?.kind === 'api' ? registry.apiSecrets(request.interfaceId) : [];
-      const values = [...Object.values(injected), ...Object.values(server), ...carried].filter(
+      const principalValues = typeof registry.principalSecrets === 'function' ? registry.principalSecrets() : [];
+      const values = [...Object.values(injected), ...Object.values(server), ...carried, ...principalValues].filter(
         (value) => value.length >= MIN_SCRUBBED_VALUE_LENGTH,
       );
       const secrets = secretForms(values);
@@ -380,6 +450,46 @@ function quotedValue(value) {
   return text.length > QUOTED_VALUE ? `${text.slice(0, QUOTED_VALUE)}...` : text;
 }
 
+/** A deterministic value for a matcher, derived from the run seed and binding location. */
+function matcherValue(type, seed, stepId, channel, key) {
+  const digest = crypto
+    .createHash('sha256')
+    .update(`${String(seed)}\u0000${stepId}\u0000${channel}\u0000${key}`)
+    .digest();
+  switch (type) {
+    case 'string': {
+      return `tea-any-${digest.toString('hex', 0, 12)}`;
+    }
+    case 'number': {
+      return digest.readUInt32BE(0) / 4_294_967_296;
+    }
+    case 'boolean': {
+      return (digest[0] & 1) === 1;
+    }
+    case 'object': {
+      return { value: digest.toString('hex', 0, 8) };
+    }
+    case 'array': {
+      return [digest.toString('hex', 0, 8)];
+    }
+    case 'null': {
+      return null;
+    }
+    case 'integer': {
+      return digest.readUInt32BE(0);
+    }
+    default: {
+      return null;
+    }
+  }
+}
+
+/** A JSON value whose type differs from the declared type. */
+function typeViolatingValue(type) {
+  if (type === 'string' || type === 'number' || type === 'integer' || type === 'boolean') return type === 'string' ? 42 : 'malformed';
+  if (type === 'object' || type === 'array' || type === 'null') return 42;
+}
+
 /**
  * The values one binding channel supplies, or null for an unbound channel: a
  * literal as written, a type-violating matcher from the declared key type,
@@ -395,7 +505,7 @@ function quotedValue(value) {
  * `{ binding, pointer }` with the reason for an unsendable one. A literal the
  * request cannot carry is the contract's own defect and stops the arm.
  */
-function boundValues(channel, stepId, name, resolve, shape) {
+function boundValues(channel, stepId, name, resolve, shape, { seed, interfaceId, principalValue, principalBindings }) {
   if (channel === null || channel === undefined) return { values: null, absent: [], unsendable: [] };
   const values = {};
   const absent = [];
@@ -420,12 +530,43 @@ function boundValues(channel, stepId, name, resolve, shape) {
       if (STRINGIFIED_CHANNELS.has(name)) {
         throw new ArmError(`interaction plan step ${stepId} cannot send a type-violating ${name}.${key}; the transport requires a string`);
       }
-      values[key] = declared === 'number' || declared === 'integer' ? 'malformed' : 42;
+      values[key] = typeViolatingValue(declared);
+      continue;
+    }
+    if (binding?.matcher === 'any') {
+      const declared = shape?.types?.[key];
+      if (declared === undefined || declared === null) {
+        throw new ArmError(`interaction plan step ${stepId} binds ${name}.${key} as any without a declared type`);
+      }
+      const value = matcherValue(declared, seed, stepId, name, key);
+      if (value === undefined) {
+        throw new ArmError(`interaction plan step ${stepId} binds ${name}.${key} as any with an unsupported declared type ${declared}`);
+      }
+      if (STRINGIFIED_CHANNELS.has(name) && declared !== 'string') {
+        throw new ArmError(`interaction plan step ${stepId} cannot send an any ${name}.${key}; the transport requires a string`);
+      }
+      values[key] = value;
+      continue;
+    }
+    if (binding?.principal !== undefined) {
+      if (typeof binding.principal !== 'string' || typeof principalValue !== 'function') {
+        throw new ArmError(`interaction plan step ${stepId} binds ${name}.${key} with an unusable principal`);
+      }
+      let value;
+      try {
+        value = principalValue(binding.principal, interfaceId);
+      } catch (error) {
+        throw new ArmError(
+          `interaction plan step ${stepId} cannot materialize ${name}.${key} principal ${JSON.stringify(binding.principal)}: ${error.message}`,
+        );
+      }
+      values[key] = value;
+      principalBindings.push({ channel: name, key, principal: binding.principal });
       continue;
     }
     if (!isCaptured(binding)) {
       throw new ArmError(
-        `interaction plan step ${stepId} binds ${name}.${key} with ${JSON.stringify(binding)}; this release sends literal, type-violating and captured bindings only`,
+        `interaction plan step ${stepId} binds ${name}.${key} with ${JSON.stringify(binding)}; this release sends literal, matcher, principal and captured bindings only`,
       );
     }
     const site = { binding: `${name}.${key}`, pointer: binding.captured };
@@ -538,7 +679,16 @@ function orderedSteps(plan) {
  *   observations by step
  * @throws {ArmError}
  */
-async function runArm({ contract, port, registry, label, provenance = 'baseline', countUsage = true, signal }) {
+async function runArm({
+  contract,
+  port,
+  registry,
+  label,
+  provenance = 'baseline',
+  countUsage = true,
+  signal,
+  seed = 'tea-evaluate-default-seed',
+}) {
   const operations = operationsById(contract);
   const plan = contract.interactionPlan ?? [];
   const declared = new Set(plan.map((step) => step.stepId));
@@ -566,8 +716,14 @@ async function runArm({ contract, port, registry, label, provenance = 'baseline'
     const binding = step.inputBinding ?? {};
     const absent = [];
     const unsendable = [];
+    const principalBindings = [];
     const bound = (channel, name) => {
-      const read = boundValues(channel, step.stepId, name, resolve, operation.requestShape?.[name]);
+      const read = boundValues(channel, step.stepId, name, resolve, operation.requestShape?.[name], {
+        seed,
+        interfaceId: iface.logicalId,
+        principalValue: registry?.principalValue,
+        principalBindings,
+      });
       absent.push(...read.absent);
       unsendable.push(...read.unsendable);
       return read.values;
@@ -645,7 +801,16 @@ async function runArm({ contract, port, registry, label, provenance = 'baseline'
     const { observation } = answered;
     sequence += 1;
     issued.add(step.stepId);
-    steps.push({ stepId: step.stepId, request: persistableRequest(answered.request), observation });
+    const principalLabels = [...new Set(principalBindings.map((entry) => entry.principal))];
+    if (principalLabels.length > 1) {
+      const error = new ArmError(
+        `interaction plan step ${step.stepId} binds multiple principals, so one observation cannot record a single principal label`,
+      );
+      error.steps = steps;
+      throw error;
+    }
+    const recordedCallInputs = redactPrincipalCallInputs(callInputs, principalBindings);
+    steps.push({ stepId: step.stepId, request: redactPrincipalRequest(answered.request, principalBindings), observation });
     if (observation?.kind !== request.kind) {
       const error = new ArmError(
         `the ${label} arm's step ${step.stepId} sent a ${request.kind} request and the port answered a ${JSON.stringify(observation?.kind ?? null)} observation`,
@@ -659,7 +824,8 @@ async function runArm({ contract, port, registry, label, provenance = 'baseline'
         observationId: request.probeId,
         sequence,
         operationId: operation.operationId,
-        callInputs,
+        callInputs: recordedCallInputs,
+        principal: principalLabels[0] ?? null,
         responseBody: bodyValue(observation.body),
         responseHeaders: observation.headers,
         responseStatus: observation.status,
@@ -672,7 +838,8 @@ async function runArm({ contract, port, registry, label, provenance = 'baseline'
         observationId: request.probeId,
         sequence,
         operationId: operation.operationId,
-        callInputs,
+        callInputs: recordedCallInputs,
+        principal: principalLabels[0] ?? null,
         responseBody: bodyValue(observation.result),
         // A tool call has no transport status, so the envelope's error flag is recorded here as 1 or 0 (McpProbeObservation).
         responseStatus: observation.isError ? 1 : 0,
@@ -707,7 +874,8 @@ async function runArm({ contract, port, registry, label, provenance = 'baseline'
       observationId: request.probeId,
       sequence,
       operationId: operation.operationId,
-      callInputs,
+      callInputs: recordedCallInputs,
+      principal: principalLabels[0] ?? null,
       stdout: observation.stdout,
       stderr: observation.stderr,
       exitCode: observation.exitCode,

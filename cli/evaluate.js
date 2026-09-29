@@ -162,7 +162,11 @@ function preflightCommand(options) {
 }
 
 function runCommand(options) {
-  return runDriven('run', runRunCommand, options, { fromWorkingTree: options.fromWorkingTree === true, partition: options.partition });
+  return runDriven('run', runRunCommand, options, {
+    fromWorkingTree: options.fromWorkingTree === true,
+    partition: options.partition,
+    seed: options.seed,
+  });
 }
 
 function scoreCommand(options) {
@@ -201,6 +205,7 @@ function buildProgram(run) {
     .option('--evaluation <path>', 'the evaluation folder, or its evaluation.json')
     .option('--from-working-tree', 'evaluate the working tree, uncommitted work included, in a temp copy recorded as dirty')
     .option('--partition <name>', 'development or held-out; omitted runs both')
+    .option('--seed <value>', 'seed matcher bindings and record it in run.json')
     .action((options) => run(runCommand, options));
   program
     .command('score')
