@@ -1616,7 +1616,7 @@ async function checkKilledCheckout() {
       try {
         process.kill(filterPid, 'SIGKILL');
       } catch (error) {
-        if (error.code !== 'ESRCH') throw error;
+        check(error.code === 'ESRCH', `could not stop the matched Git checkout filter: ${error.message}`);
       }
     }
     fs.rmSync(attributes, { force: true });
