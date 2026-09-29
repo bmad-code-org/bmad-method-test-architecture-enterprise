@@ -113,7 +113,14 @@ const { CALIBRATION_PATH, calibrationProblems, readCalibration } = require('./ca
 const { MANIFEST_NAME } = require('./folder');
 const { addFormats } = require('./formats');
 const { HTTP_PORT_MODULE, originTarget, sharedOrigin } = require('./http-target');
-const { apiRegistryProblems, kindOf, mcpRegistryProblems, repeatedPairs, sharedInterfaces } = require('./registry');
+const {
+  apiRegistryProblems,
+  kindOf,
+  mcpRegistryProblems,
+  principalMappingProblems,
+  repeatedPairs,
+  sharedInterfaces,
+} = require('./registry');
 const { AGENT_ADAPTERS, bridgedArgsRefused, resolveModel } = require('../agent-adapters');
 const { EVALUATOR_DIRECTORY, EvaluatorLayerError, evaluatorFiles, evaluatorOf, isKnownEvaluator } = require('./evaluators');
 const { answeredKind, degenerateResponsePath } = require('./gameability');
@@ -1616,6 +1623,65 @@ function checkRegistryKinds(report, evaluation, registry, contract) {
   }
 }
 
+/** Principal bindings must resolve to declared contract principals and the operation's registry interface. */
+function checkPrincipalMappings(report, evaluation, registry, contract) {
+  const mappings = evaluation?.principalMappings;
+  for (const problem of principalMappingProblems(mappings, registry)) report.add(MANIFEST_NAME, 'principal-mapping', problem);
+  if (!contract || typeof contract !== 'object') return;
+  const declaredPrincipals =
+    contract.testData?.principals !== null &&
+    typeof contract.testData?.principals === 'object' &&
+    !Array.isArray(contract.testData.principals)
+      ? new Set(Object.keys(contract.testData.principals))
+      : new Set();
+  for (const principal of Object.keys(mappings ?? {})) {
+    if (!declaredPrincipals.has(principal)) {
+      report.add(
+        MANIFEST_NAME,
+        'principal-mapping',
+        `principalMappings.${principal} names a principal the contract's testData.principals does not declare`,
+      );
+    }
+  }
+  const interfaces = Array.isArray(contract.permittedInterfaces) ? contract.permittedInterfaces : [];
+  const operations = new Map(
+    interfaces.flatMap((iface) =>
+      Array.isArray(iface?.operations) ? iface.operations.map((operation) => [operation.operationId, iface]) : [],
+    ),
+  );
+  for (const [stepIndex, step] of Array.isArray(contract.interactionPlan) ? contract.interactionPlan.entries() : []) {
+    const iface = operations.get(step?.operationId);
+    if (iface === undefined) continue;
+    for (const [channel, values] of Object.entries(step?.inputBinding ?? {})) {
+      if (values === null || typeof values !== 'object') continue;
+      for (const [key, binding] of Object.entries(values)) {
+        if (typeof binding?.principal !== 'string') continue;
+        const mapping = mappings?.[binding.principal];
+        if (mapping === undefined) {
+          report.add(
+            MANIFEST_NAME,
+            'principal-mapping',
+            `interactionPlan[${stepIndex}].inputBinding.${channel}.${key} names principal ${JSON.stringify(binding.principal)} with no principalMappings rule`,
+          );
+        } else if (mapping.interfaceId !== iface.logicalId) {
+          report.add(
+            MANIFEST_NAME,
+            'principal-mapping',
+            `interactionPlan[${stepIndex}].inputBinding.${channel}.${key} maps principal ${JSON.stringify(binding.principal)} to interface ${JSON.stringify(mapping.interfaceId)}, while operation ${JSON.stringify(step.operationId)} uses ${JSON.stringify(iface.logicalId)}`,
+          );
+        }
+        if (!declaredPrincipals.has(binding.principal)) {
+          report.add(
+            MANIFEST_NAME,
+            'principal-mapping',
+            `interactionPlan[${stepIndex}].inputBinding.${channel}.${key} names principal ${JSON.stringify(binding.principal)}, which testData.principals does not declare`,
+          );
+        }
+      }
+    }
+  }
+}
+
 /**
  * The evaluation's own HTTP port, which every `api` call goes through (AD-4):
  * when the registry declares an HTTP target, `adapter/http-probe-port.mjs`
@@ -1770,6 +1836,7 @@ async function checkEvaluation(folder) {
   context.contract = contractFor(folder);
   checkOperationPhases(report, evaluation, context.contract);
   checkRegistryKinds(report, evaluation, registry, context.contract);
+  checkPrincipalMappings(report, evaluation, registry, context.contract);
   checkHttpPort(report, folder, registry);
   const mutations = checkMutations(report, folder, context, provision, skillRoot);
   checkSkillRunner(report, evaluation, context.contract, provision);

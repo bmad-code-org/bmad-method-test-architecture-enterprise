@@ -81,6 +81,35 @@
         }
       }
     },
+    "principalMappings": {
+      "description": "The evaluation's mapping from contract principal names to host credentials. A mapping carries no credential value: the runtime reads environmentKey from the host, prefixes it, and sends it only in the bound request channel. The interfaceId selects one registry entry whose environment authorization includes that key.",
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["interfaceId", "environmentKey"],
+        "properties": {
+          "interfaceId": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "environmentKey": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+            "not": {
+              "pattern": "^[Pp][Aa][Tt][Hh]$"
+            }
+          },
+          "prefix": {
+            "type": "string"
+          }
+        }
+      }
+    },
     "launch": {
       "description": "Where the target lives, which every launch resolves against.",
       "type": "object",

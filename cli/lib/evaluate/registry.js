@@ -134,6 +134,42 @@ function registryProblems(entries) {
 }
 
 /**
+ * Principal mappings are evaluated-level wiring. They may name only a registry
+ * interface and an environment key that interface already authorizes, so a
+ * principal cannot widen the target's environment policy.
+ *
+ * @param {unknown} mappings
+ * @param {unknown[]} entries
+ * @returns {string[]}
+ */
+function principalMappingProblems(mappings, entries) {
+  if (mappings === undefined) return [];
+  if (mappings === null || typeof mappings !== 'object' || Array.isArray(mappings)) return ['principalMappings must be an object'];
+  if (!Array.isArray(entries)) return [];
+  const problems = [];
+  for (const [principal, mapping] of Object.entries(mappings)) {
+    const matches = entries.filter((entry) => entry?.interfaceId === mapping?.interfaceId);
+    if (matches.length !== 1) {
+      problems.push(
+        `principalMappings.${principal}.interfaceId ${JSON.stringify(mapping?.interfaceId)} does not select one registry entry`,
+      );
+      continue;
+    }
+    const [entry] = matches;
+    const permitted =
+      kindOf(entry) === 'api'
+        ? [...(entry.server?.environmentKeys ?? []), ...(entry.auth === undefined ? [] : [entry.auth.environmentKey])]
+        : (entry.environmentKeys ?? []);
+    if (!permitted.includes(mapping?.environmentKey)) {
+      problems.push(
+        `principalMappings.${principal}.environmentKey ${JSON.stringify(mapping?.environmentKey)} is not authorized by registry interface ${JSON.stringify(entry.interfaceId)}`,
+      );
+    }
+  }
+  return problems;
+}
+
+/**
  * Every `(interfaceId, executable)` pair a registry declares more than once, as
  * one line each. The schema cannot say this, so `check` reports it beside its
  * schema findings.
@@ -296,7 +332,7 @@ function isBareCommand(target) {
  * @returns {object}
  * @throws {Error} Naming every problem `registryProblems` finds.
  */
-function createRegistry(entries, { root, httpPort, scratch = [] } = {}) {
+function createRegistry(entries, { root, httpPort, scratch = [], principalMappings = {} } = {}) {
   if (typeof root !== 'string' || root.length === 0) {
     throw new Error('createRegistry requires a root: every relative target resolves against it');
   }
@@ -304,7 +340,7 @@ function createRegistry(entries, { root, httpPort, scratch = [] } = {}) {
   // directory is when a target is spawned, so it is fixed to an absolute path
   // once, here.
   const registryRoot = path.resolve(root);
-  const problems = registryProblems(entries);
+  const problems = [...registryProblems(entries), ...principalMappingProblems(principalMappings, entries)];
   if (problems.length > 0) throw new Error(`the execution-target registry is not valid:\n  ${problems.join('\n  ')}`);
   const registered = deepFreeze(structuredClone(entries));
   const commandEntries = registered.filter((entry) => kindOf(entry) === 'cli');
@@ -316,7 +352,7 @@ function createRegistry(entries, { root, httpPort, scratch = [] } = {}) {
     const keys = [...new Set([...own, ...extraNames])].sort();
     const pathKey = keys.find((key) => key.toUpperCase() === 'PATH');
     if (pathKey !== undefined) {
-      throw new Error(
+      throw new TypeError(
         `${interfaceId} cannot permit the environment key ${JSON.stringify(pathKey)}: target may name a bare command, so a declared PATH would choose which binary runs`,
       );
     }
@@ -330,6 +366,35 @@ function createRegistry(entries, { root, httpPort, scratch = [] } = {}) {
   /** The command entry for one `(interfaceId, executable)` pair. @returns {object|undefined} */
   function targetFor(interfaceId, executable) {
     return commandEntries.find((entry) => entry.interfaceId === interfaceId && entry.executable === executable);
+  }
+
+  /**
+   * Resolve a principal to a host credential for one authorized interface.
+   * The returned value is held in memory for the request only. The environment
+   * key must already be permitted by the selected registry entry, and the host
+   * environment may omit it when a live secret is unavailable.
+   */
+  function principalValue(principal, interfaceId) {
+    const mapping = principalMappings?.[principal];
+    if (mapping === undefined || mapping.interfaceId !== interfaceId) {
+      throw new Error(`principal ${JSON.stringify(principal)} has no mapping for registry interface ${JSON.stringify(interfaceId)}`);
+    }
+    const value = process.env[mapping.environmentKey];
+    if (typeof value !== 'string') {
+      throw new TypeError(
+        `principal ${JSON.stringify(principal)} maps to environment key ${JSON.stringify(mapping.environmentKey)}, which is not set on the host`,
+      );
+    }
+    return `${mapping.prefix ?? ''}${value}`;
+  }
+
+  /** The mapped host values that must be scrubbed from target answers and faults. */
+  function principalSecrets() {
+    return Object.values(principalMappings ?? {}).flatMap((mapping) => {
+      const value = process.env[mapping.environmentKey];
+      if (typeof value !== 'string') return [];
+      return mapping.prefix ? [`${mapping.prefix}${value}`, value] : [value];
+    });
   }
 
   /** The tool-server entry for one interface. @returns {object|undefined} */
@@ -727,6 +792,8 @@ function createRegistry(entries, { root, httpPort, scratch = [] } = {}) {
     hostEnvironment,
     mcpTargetPolicy,
     permittedEnvironmentKeys,
+    principalSecrets,
+    principalValue,
     serverEnvironment,
     serverFor,
     targetFor,
@@ -891,13 +958,14 @@ async function apiRegistryProblems(entries) {
  * @returns {object}
  */
 function registryFromEvaluation(evaluation, options) {
-  return createRegistry(evaluation?.registry, options);
+  return createRegistry(evaluation?.registry, { ...options, principalMappings: evaluation?.principalMappings });
 }
 
 module.exports = {
   API_REGISTRY_ENTRY_DEFINITION,
   MAX_OUTPUT_BYTES,
   MCP_REGISTRY_ENTRY_DEFINITION,
+  principalMappingProblems,
   REGISTRY_ENTRY_DEFINITION,
   cliObservation,
   createRegistry,

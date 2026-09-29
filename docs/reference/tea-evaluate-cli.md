@@ -320,7 +320,7 @@ Gitignored paths are not read.
 
 `runs/<invocationId>/run.json` records what was evaluated: the TeA and eval-quality versions, the commit (`null` for a copy), `dirty`, the workspace's kind, commit, tree and tree digest, the path of every workspace that ran legs, and whether your project was unchanged.
 It lists each probe the run refused, with its reason, under `refused` (see [Historical probes](#historical-probes)).
-A completed `run` adds the contract, corpus, sealed brief and evaluator configuration digests, the runner (each registry entry's interface, executable and target, or a tool server's interface, target, arguments and tools), the evaluator and the model, the rubric judge (`null` when the contract declares no rubric or the evaluator is not the deterministic one; otherwise its adapter, model, model snapshot, instruction digest and number of calls), the trial count, the start time and duration, and `completed: true`.
+A completed `run` adds the contract, corpus, sealed brief and evaluator configuration digests, the matcher `seed`, the runner (each registry entry's interface, executable and target, or a tool server's interface, target, arguments and tools), the evaluator and the model, the rubric judge (`null` when the contract declares no rubric or the evaluator is not the deterministic one; otherwise its adapter, model, model snapshot, instruction digest and number of calls), the trial count, the start time and duration, and `completed: true`.
 
 ## The interaction plan
 
@@ -332,7 +332,9 @@ Each key of a step's `inputBinding` channels is sent as its binding says:
 
 - `literal`: the value as written.
 - `captured`: the value its pointer (`/interactions/<stepId>/<channel>/<key>`) resolves to on the observation the named earlier step recorded in the same arm, read by eval-quality's own `makeResolveOperand`, the reading `eval-quality score` gives the pointer; a workflow binds a later step to an identifier an earlier step minted this way.
-- `matcher` and `principal`: not sent yet; a step binding either stops the arm with exit 12, since the run cannot send the request the contract means, whether or not the steps before it were issued.
+- `matcher: any`: a deterministic value of the declared JSON type. The value is derived from the run seed, step, channel and key. Pass `--seed <value>` to repeat the same bytes, and read the seed from `run.json`.
+- `matcher: type-violating`: a value whose JSON type differs from the declared type. String transports refuse this matcher because they cannot carry the differing type.
+- `principal`: the runtime reads the host credential named by `evaluation.json`'s `principalMappings.<name>.environmentKey`, applies its optional prefix, and sends it through the mapped registry interface. The contract carries the principal name only. Persisted requests and `callInputs` replace the credential with `{ "principal": "<name>" }`, and the observation records the same opaque label in `principal`.
 
 A step's observation records the values it was sent as its `callInputs`, so a captured value is the one the earlier observation carried, a JSON `null` and a number included.
 `eval-quality compile` holds a captured pointer to one key of the channel the named step's operation describes, whose declared type is a scalar equal to the bound parameter's, and refuses a pointer naming a step the plan does not declare (`unreachable-check-evidence`).

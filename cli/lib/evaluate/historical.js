@@ -136,10 +136,10 @@ function historicalRevisions({ pristine, fixCommit, git = runGit }) {
  * stops with exit 10, any other arm failure with exit 12, after its fault is
  * written with `where` the arm ran.
  */
-async function revisionArm({ contract, port, where, registry, oracleIds, policy, writer, directory, phase, file, stop, signal }) {
+async function revisionArm({ contract, port, where, registry, oracleIds, policy, writer, directory, phase, file, stop, seed, signal }) {
   let arm;
   try {
-    arm = await runArm({ contract, port: hostEnvironmentPort({ port, registry }), registry, label: phase, signal });
+    arm = await runArm({ contract, port: hostEnvironmentPort({ port, registry }), registry, label: phase, seed, signal });
   } catch (error) {
     writer.writeJson(`${directory}/fault.json`, {
       phase,
@@ -183,12 +183,41 @@ function historicalOracles({ contract, probe, file, stop }) {
  * the arm ran, and stops with exit 11 when an arm goes the other way; the
  * references to both evidence files.
  */
-async function qualifyingArms({ folder, contract, probe, file, oracleIds, registry, policy, engine, writer, stop, log, signal, phases }) {
+async function qualifyingArms({
+  folder,
+  contract,
+  probe,
+  file,
+  oracleIds,
+  registry,
+  policy,
+  engine,
+  writer,
+  stop,
+  log,
+  seed,
+  signal,
+  phases,
+}) {
   const directory = `qualification/${probe.probeId}`;
   const references = {};
   for (const { phase, expected, meaning, at, where, port } of phases) {
     log(`${file}: the ${phase} arm at ${at}`);
-    const result = await revisionArm({ contract, port, where, registry, oracleIds, policy, writer, directory, phase, file, stop, signal });
+    const result = await revisionArm({
+      contract,
+      port,
+      where,
+      registry,
+      oracleIds,
+      policy,
+      writer,
+      directory,
+      phase,
+      file,
+      stop,
+      seed,
+      signal,
+    });
     const evidenceFile = `${directory}/${phase}.json`;
     writer.writeJson(evidenceFile, {
       probeId: probe.probeId,
@@ -295,6 +324,7 @@ async function qualifyHistoricalProbe({
   writer,
   stop,
   log,
+  seed,
   signal,
 }) {
   const oracleIds = historicalOracles({ contract, probe, file, stop });
@@ -355,6 +385,7 @@ async function qualifyHistoricalProbe({
       writer,
       stop,
       log,
+      seed,
       signal,
       phases,
     });
@@ -491,6 +522,7 @@ async function qualifyDeploymentProbe({
   writer,
   stop,
   log,
+  seed,
   signal,
 }) {
   const oracleIds = historicalOracles({ contract, probe, file, stop });
@@ -539,6 +571,7 @@ async function qualifyDeploymentProbe({
     writer,
     stop,
     log,
+    seed,
     signal,
     phases,
   });

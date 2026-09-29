@@ -1060,7 +1060,7 @@ async function checkUnits() {
       `a type-violating ${channel} reached the command port: ${refused}`,
     );
   }
-  for (const binding of [{ matcher: 'any' }, { principal: 'reviewer' }]) {
+  for (const binding of [{ unsupported: 'binding' }]) {
     const unbound = { ...contract, interactionPlan: [{ ...step, inputBinding: { ...step.inputBinding, stdin: { prompt: binding } } }] };
     let refused = null;
     try {
@@ -1070,7 +1070,7 @@ async function checkUnits() {
     }
     check(
       refused instanceof ArmError,
-      `an arm binding stdin with ${JSON.stringify(binding)} ran; this release sends literal, type-violating and captured bindings only`,
+      `an arm binding stdin with ${JSON.stringify(binding)} ran; this release sends literal, matcher, principal and captured bindings only`,
     );
   }
 

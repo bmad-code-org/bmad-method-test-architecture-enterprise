@@ -212,7 +212,7 @@ function refusal({ folder, selectedProbeIds = null }) {
  * @param {(line: string) => void} [options.log]
  * @returns {Promise<PreflightOutcome>}
  */
-function runRunCommand(folder, { fromWorkingTree = false, partition, env = process.env, log = () => {} } = {}) {
+function runRunCommand(folder, { fromWorkingTree = false, partition, seed, env = process.env, log = () => {} } = {}) {
   if (partition !== undefined && !['development', 'held-out'].includes(partition))
     return Promise.resolve(
       new PreflightOutcome({
@@ -228,7 +228,7 @@ function runRunCommand(folder, { fromWorkingTree = false, partition, env = proce
     probes = committedProbes(folder);
   } catch {
     // The pipeline's check reports malformed source files with authoring findings.
-    return runPipeline(folder, { command: 'run', fromWorkingTree, env, log });
+    return runPipeline(folder, { command: 'run', fromWorkingTree, seed, env, log });
   }
   const selectedProbeIds =
     partition === undefined
@@ -244,6 +244,7 @@ function runRunCommand(folder, { fromWorkingTree = false, partition, env = proce
     command: 'run',
     selectedProbeIds,
     fromWorkingTree,
+    seed,
     env,
     log,
     prepare: async (context) => {
@@ -284,10 +285,10 @@ function runRunCommand(folder, { fromWorkingTree = false, partition, env = proce
 }
 
 /** One arm of the clean controls' qualification: the evidence, or a stop with the exit its failure maps to. */
-async function qualificationArm({ contract, registry, workspace, stop, writer, directory, log, signal }) {
+async function qualificationArm({ contract, registry, workspace, stop, writer, directory, log, seed, signal }) {
   const { port } = await registry.createProbePort({ cwd: workspace.root, projectRoot: workspace.root });
   try {
-    return await runArm({ contract, port: hostEnvironmentPort({ port, registry }), registry, label: 'baseline', signal });
+    return await runArm({ contract, port: hostEnvironmentPort({ port, registry }), registry, label: 'baseline', seed, signal });
   } catch (error) {
     writer.writeJson(`${directory}/fault.json`, {
       phase: 'baseline-pass',
@@ -323,6 +324,7 @@ async function qualifyCleanControls({
   writer,
   stop,
   log,
+  seed,
   signal,
   snapshot,
 }) {
@@ -342,6 +344,7 @@ async function qualifyCleanControls({
       writer,
       directory: 'qualification/clean',
       log,
+      seed,
       signal,
     });
   } finally {
@@ -419,7 +422,7 @@ async function qualifyCleanControls({
  * `trials/<arm>/trial-<n>.json`.
  */
 async function runTrial(context) {
-  const { arm, trialIndex, contract, registry, pristine, make, discard, engine, writer, stop, signal, snapshot } = context;
+  const { arm, trialIndex, contract, registry, pristine, make, discard, engine, writer, stop, signal, snapshot, run } = context;
   const label = `trial-${arm.slug}-${trialIndex}`;
   const evidenceFile = `trials/${arm.slug}/trial-${trialIndex}.json`;
   const provenance = snapshot.layer.evaluator.kind === 'sealed-brief-agent' ? 'baseline' : 'evaluator-chosen';
@@ -494,7 +497,7 @@ async function runTrial(context) {
     const began = Date.now();
     let executed;
     try {
-      executed = await runArm({ contract, port, registry, label: `trial-${trialIndex}`, provenance, signal });
+      executed = await runArm({ contract, port, registry, label: `trial-${trialIndex}`, provenance, seed: run?.seed, signal });
     } catch (error) {
       writer.writeJson(evidenceFile, {
         conditionArm: arm.conditionArm,
@@ -782,7 +785,7 @@ async function runTrialSets(given) {
   } = context;
   const { treeUnchanged, stop, log, snapshot } = context;
 
-  const cleanControls = await qualifyCleanControls(context);
+  const cleanControls = await qualifyCleanControls({ ...context, seed: run.seed });
   // The gameability probes the shared pipeline qualified before the verdict.
   const { gameability } = context;
   treeUnchanged('qualification');

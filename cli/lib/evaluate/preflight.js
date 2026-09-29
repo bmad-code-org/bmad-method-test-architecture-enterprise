@@ -407,6 +407,7 @@ function runPreflightCommand(folder, options = {}) {
  * @param {object} options
  * @param {'preflight'|'run'} options.command recorded in `run.json`
  * @param {boolean} [options.fromWorkingTree]
+ * @param {string} [options.seed] matcher seed recorded in run.json
  * @param {NodeJS.ProcessEnv} [options.env]
  * @param {(line: string) => void} [options.log]
  * @param {(context: object) => PreflightOutcome|null|Promise<PreflightOutcome|null>} [options.prepare]
@@ -468,6 +469,7 @@ async function pipeline(
     prepare = () => null,
     afterVerdict = null,
     selectedProbeIds = null,
+    seed,
   },
   state,
 ) {
@@ -546,6 +548,7 @@ async function pipeline(
     const readTree = () => adopterTreeState(root, { exclude: [runsDirectory] });
     const before = readTree();
     const invocationId = newInvocationId();
+    const runSeed = seed ?? invocationId;
     // Every workspace after the first reproduces it, so the run evaluates one
     // set of bytes whatever changes in the project meanwhile.
     const make = (label, basis = null, { commit = null } = {}) => {
@@ -599,6 +602,7 @@ async function pipeline(
       readTree,
       runsDirectory,
       invocationId,
+      seed: runSeed,
       retractOnSignal,
       scratch,
       state,
@@ -649,6 +653,7 @@ async function runInWorkspaces({
   readTree,
   runsDirectory,
   invocationId,
+  seed,
   retractOnSignal,
   scratch,
   state,
@@ -673,6 +678,7 @@ async function runInWorkspaces({
   const stop = (fields) => new RunStop(outcome(fields));
   const run = {
     invocationId,
+    seed,
     command,
     teaVersion: TEA_MANIFEST.version,
     evalQualityVersion: engineVersion(),
@@ -803,6 +809,7 @@ async function runInWorkspaces({
             writer,
             stop,
             log,
+            seed: run.seed,
             signal,
           });
           if (historical.refused === undefined) qualified.push(historical);
@@ -836,6 +843,7 @@ async function runInWorkspaces({
           writer,
           stop,
           log,
+          seed: run.seed,
           signal,
         });
         if (historical.refused === undefined) qualified.push(historical);
@@ -862,6 +870,7 @@ async function runInWorkspaces({
             writer,
             stop,
             log,
+            seed: run.seed,
             signal,
           }),
         );
@@ -1144,6 +1153,7 @@ async function qualifySeededProbe({
   writer,
   stop,
   log,
+  seed,
   signal,
 }) {
   const mutationId = probe.qualification.mutation;
@@ -1164,7 +1174,7 @@ async function qualifySeededProbe({
   const runArmFor = async (phase) => {
     let arm;
     try {
-      arm = await runArm({ contract, port: armPort, registry, label: phase, signal });
+      arm = await runArm({ contract, port: armPort, registry, label: phase, seed, signal });
     } catch (error) {
       // A request the registry refuses is an authoring defect, as a refused leg is.
       if (error?.code === DENIAL_FAULT) error.exitCode = 10;

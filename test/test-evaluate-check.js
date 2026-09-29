@@ -544,6 +544,27 @@ function checkRegistry() {
     `the fixture's registered target is missing or not executable: ${registry.targetProblems().join('; ')}`,
   );
 
+  // Principal mappings are authoring wiring. A valid mapping permits check,
+  // and removing it names the principal before a run can reach the target.
+  const principalFolder = copyValid();
+  editJson(principalFolder, 'contract.json', (value) => {
+    value.testData.principals = { operator: { kind: 'human' } };
+    value.interactionPlan[0].inputBinding.stdin.prompt = { principal: 'operator' };
+  });
+  editJson(principalFolder, 'evaluation.json', (value) => {
+    value.principalMappings = { operator: { interfaceId: 'tea-atdd-runner', environmentKey: 'HOME' } };
+  });
+  const principalAccepted = runCli(['check', '--evaluation', principalFolder]);
+  check(principalAccepted.status === 0, `a valid principal mapping exited ${principalAccepted.status}\n${principalAccepted.output}`);
+  editJson(principalFolder, 'evaluation.json', (value) => delete value.principalMappings);
+  const principalRejected = runCli(['check', '--evaluation', principalFolder]);
+  check(
+    principalRejected.status === 10 &&
+      principalRejected.output.includes('operator') &&
+      principalRejected.output.includes('principal-mapping'),
+    `an unmapped principal was not rejected with its mapping defect\n${principalRejected.output}`,
+  );
+
   // The builder reads the RegistryEntry schema: an entry it refuses never
   // becomes an authorization.
   const [entry] = evaluation.registry;
