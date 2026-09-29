@@ -2097,6 +2097,39 @@ function checkGapsGuidance(guide, engine, failures) {
   };
   checkKeys('## Map engine outcomes to repairs', ['Outcome state', 'Concrete repair'], [...engine.OUTCOME_STATES]);
   const allTables = headingBody(guide, '## Map discipline and preflight checks to repairs');
+  const requestShapes = taggedExamples(allTables, 'request-shape');
+  const inputBindings = taggedExamples(allTables, 'input-binding');
+  if (requestShapes.length !== 1 || inputBindings.length !== 1 || [...allTables.matchAll(/```json\n/g)].length !== 2) {
+    failures.push('gaps.md malformed-input examples need one tagged request shape and one tagged input binding');
+  } else {
+    const requestShape = requestShapes[0];
+    const inputBinding = inputBindings[0];
+    const contract = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/evaluate-gap-loop/after/evaluation/contract.json'), 'utf8'));
+    const operation = contract.permittedInterfaces.flatMap((entry) => entry.operations).find((entry) => entry.operationId === 'review');
+    const typedStep = contract.interactionPlan.find((step) => step.stepId === 'typed-file');
+    if (!operation || !typedStep) {
+      failures.push('gaps.md malformed-input example fixture is missing its review operation or typed step');
+    } else {
+      const key = Object.keys(inputBinding)[0];
+      if (
+        Object.keys(inputBinding).length !== 1 ||
+        inputBinding[key]?.matcher !== 'type-violating' ||
+        !requestShape.permittedKeys?.includes(key) ||
+        requestShape.types?.[key] !== 'string'
+      )
+        failures.push('gaps.md malformed-input examples must bind a declared string key with a type-violating matcher');
+      operation.requestShape.stdin.requiredKeys.push(...requestShape.requiredKeys);
+      operation.requestShape.stdin.permittedKeys.push(...requestShape.permittedKeys);
+      Object.assign(operation.requestShape.stdin.types, requestShape.types);
+      Object.assign(typedStep.inputBinding.stdin, inputBinding);
+      const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-gaps-example-'));
+      try {
+        assertEngineSuccess('compile', contract, tempRoot, 'gaps.md malformed-input examples', failures);
+      } finally {
+        fs.rmSync(tempRoot, { recursive: true, force: true });
+      }
+    }
+  }
   const discipline = allTables.split('\n\n| Preflight check')[0];
   const preflight = '| Preflight check' + (allTables.split('\n\n| Preflight check')[1] ?? '');
   const mappingRows = (content) =>
@@ -2415,6 +2448,18 @@ async function main() {
         'gaps',
         (text, found) => checkGapsGuidance(text, engine, found),
         (text) => text.replace(/^\| `whole-body`[^\n]*\n/m, ''),
+      ],
+      [
+        'gaps malformed-input example tag removal',
+        'gaps',
+        (text, found) => checkGapsGuidance(text, engine, found),
+        (text) => text.replace('<!-- example:input-binding -->', ''),
+      ],
+      [
+        'gaps malformed-input matcher corruption',
+        'gaps',
+        (text, found) => checkGapsGuidance(text, engine, found),
+        (text) => text.replace('"matcher": "type-violating"', '"literal": "valid"'),
       ],
       [
         'gaps preflight removal',

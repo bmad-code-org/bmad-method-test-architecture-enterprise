@@ -10,7 +10,7 @@ const path = require('node:path');
 const { isDeepStrictEqual } = require('node:util');
 const { armVerdict } = require('../cli/lib/evaluate/admission');
 const { corpusDigestOf } = require('../cli/lib/evaluate/corpus-index');
-const { evaluateOracles } = require('../cli/lib/evaluate/evaluator');
+const { evaluateOracles, oraclesOfBehaviors } = require('../cli/lib/evaluate/evaluator');
 const { degenerateArm } = require('../cli/lib/evaluate/gameability');
 const { loadEngine } = require('../cli/lib/evaluate/engine');
 const { registryFromEvaluation } = require('../cli/lib/evaluate/registry');
@@ -602,6 +602,20 @@ async function checkQualification(folder, replay, runId, probe, source) {
   const baseline = qualificationEvidence(replay, runId, probe, 'baselinePassEvidence');
   assert.equal(baseline.probeId, probe.probeId);
   assert.equal(baseline.verdict, 'held');
+  const contract = readJson(path.join(folder, 'contract.json'));
+  const policy = readJson(path.join(folder, 'policy/scoring-policy.json'));
+  const oracleIds = oraclesOfBehaviors(contract, [source.behaviorId]);
+  const checkSavedPhase = async (phase, label) => {
+    const oracles = await evaluateOracles({
+      contract,
+      stepObservations: observationsFromSteps(phase.steps),
+      oracleIds,
+      regexMatchStepBudget: policy.regexMatchStepBudget,
+    });
+    assert.deepEqual(oracles, phase.oracles, `${probe.probeId} ${label} oracle rows changed`);
+    assert.equal(armVerdict(oracles), phase.verdict, `${probe.probeId} ${label} verdict changed`);
+  };
+  await checkSavedPhase(baseline, 'baseline');
   if (route === 'clean-control') {
     assert.equal(probe.qualification.noKnownDefectStatement, source.qualification.noKnownDefectStatement);
     return;
@@ -629,6 +643,7 @@ async function checkQualification(folder, replay, runId, probe, source) {
   assert.equal(mutated.mutationId, mutationId);
   assert.equal(mutated.targetArtifactDigest, mutatedDigest);
   assert.equal(mutated.verdict, 'violated');
+  await checkSavedPhase(mutated, 'mutated');
   assert.deepEqual(
     probe.defects.flatMap((defect) => defect.oracleEvidence),
     [probe.qualification.mutatedFailEvidence],
@@ -645,6 +660,7 @@ async function checkQualification(folder, replay, runId, probe, source) {
   assert.ok(rollback.rePasses.length > 0);
   assert.ok(rollback.rePasses.length <= 1 + rollback.reExecutionCap);
   assert.equal(rollback.rePasses.at(-1).verdict, 'held');
+  for (const [index, rePass] of rollback.rePasses.entries()) await checkSavedPhase(rePass, `re-pass ${index + 1}`);
 }
 
 function normalizedStdin(value) {

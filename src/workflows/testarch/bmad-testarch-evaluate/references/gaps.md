@@ -55,11 +55,15 @@ The engine reads `malformed-input` coverage from the contract. A caught malforme
 
 For example, an operation can declare a generic `requestKey` in `requestShape.stdin`:
 
+<!-- example:request-shape -->
+
 ```json
 { "requiredKeys": [], "permittedKeys": ["requestKey"], "types": { "requestKey": "string" } }
 ```
 
 A step invoking that operation can bind the key in `inputBinding.stdin`:
+
+<!-- example:input-binding -->
 
 ```json
 { "requestKey": { "matcher": "type-violating" } }
