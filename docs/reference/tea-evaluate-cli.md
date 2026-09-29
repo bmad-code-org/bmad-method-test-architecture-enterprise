@@ -310,7 +310,7 @@ A mutation cannot target a file inside it (`provisioned-target`), and a provisio
 Every symbolic link under `launch.root` in the workspace resolves inside the workspace: a link into the project is re-pointed at the same place in the workspace, and a link that leads out of the project is refused with exit 12, as is a FIFO, a socket or a device, or a temp directory (`TMPDIR`) inside `launch.root`, or inside the repository holding it unless the repository ignores that directory.
 Each link is resolved as the system resolves it, so a `..` after a link climbs from the link's target.
 A workspace is removed when the command ends, a worktree's entry in your repository included, and also on `SIGINT`, `SIGTERM`, `SIGHUP` or `SIGQUIT`, which stop the running leg and then end the command by the same signal.
-A `SIGKILL` runs no handler: a worktree it leaves behind is listed by `git worktree list` until `git worktree prune`.
+Each workspace has a workspace marker and a sidecar ownership marker outside the target subtree, plus an ownership journal under the evaluation's ignored `runs/` directory. A killed run can leave a temporary copy or a detached worktree and its Git registration. The next preflight for the same evaluation checks the held journal, markers, project identity and owner process, then reports and reclaims verified scratch from a dead run before reading your project's state. The sidecar marker survives interrupted directory removal. A live or unverifiable owner's workspace remains in place. The journal records the original temporary directory, so recovery still works after `TMPDIR` changes.
 
 A worktree shares your repository's git directory (its refs, configuration, hooks, `info/` and objects), so a target running git in it can change them; the run detects such a change afterwards and exits 12.
 `preflight` reads your project before the workspaces are made and again after the qualification and after the legs: in a git repository, `git status` (tracked and untracked paths), the content of every path it names, every ref, and the common git directory without its object store, reflogs, worktree records, index and submodule or LFS stores; outside one, the tree digest of `launch.root` without the evaluation's `runs/`.
@@ -767,7 +767,7 @@ The other options are those of TeA's own runners: `--agent-cmd`, `--agent-arg`, 
 | 2    | usage: a missing or malformed option, an empty prompt or one that is not UTF-8, or a skill root outside the working directory                                                                                             |
 | 3    | configuration: an unknown agent, or a skill root that does not exist or holds no `SKILL.md`                                                                                                                               |
 | 4    | transport: the agent failed to start or exited non-zero, a process supervising it ended before the agent or without reporting, standard output closed before the reply was written, or the runner met an unexpected error |
-| 5    | timeout: the agent outlived `--timeout-ms`; its process group got `SIGTERM`, and the agent `SIGKILL` 2 s later if it was still running                                                                                    |
+| 5    | timeout: the agent outlived `--timeout-ms`; its process group got `SIGTERM`, then `SIGKILL` 2 s later if it was still running                                                                                             |
 | 6    | parser: reserved by the shared runner table                                                                                                                                                                               |
 
 A registry entry for the runner declares `infrastructureExitCodes` 3 to 6, and `check` holds it to that.
@@ -775,11 +775,11 @@ Its target is the bin name `tea-skill-runner`, which `npm exec` resolves from th
 The agent runs in its own process group.
 When the agent exits, every process left in that group receives `SIGKILL` at once.
 The group is also stopped when `--timeout-ms` runs out, when the runner's process group receives `SIGINT`, `SIGTERM`, `SIGHUP` or `SIGQUIT` (a terminal's Ctrl-C or `Ctrl-\` included), and when the runner or the supervisor process between it and the agent dies, by `SIGKILL` included.
-Stopping sends the group the signal received (`SIGTERM` for a timeout or a death), and the agent `SIGKILL` 2 s later if it is still running.
+Stopping sends the group the signal received (`SIGTERM` for a timeout or a death), and the group `SIGKILL` 2 s later if it is still running.
 An agent the `SIGKILL` ends is reported as killed by `SIGKILL` once it outlived the grace period after the signal that asked it to stop; a `SIGQUIT` can end that way wherever the system hands core files to a collector, since writing the core can take longer than the grace period.
 A Ctrl-Z suspends the runner, and the agent runs on, bounded by `--timeout-ms` and the runner's end.
 Once resumed, the runner reports how the agent ended, however long it was suspended.
-Two processes supervise the agent: one in the runner's process group, and a group leader in a session of its own, which starts the agent's group.
+Three processes supervise the agent: one in the runner's process group, a leader in a session of its own, and a guardian that leads the agent's process group. The guardian's lifeline closes even if the supervisor and leader receive `SIGKILL` together; it then stops its group. The runner reports a transport failure within the wall clock plus the 5 s backstop and 2 s grace period.
 The agent's standard input, output and error are pipes the group leader owns, and the leader copies the runner's input to the agent and the agent's output to the runner.
 Once the agent exits, the leader copies what those pipes still hold and closes each one when it reaches its end, stays empty for 100 ms, or has been read for 2 s of the time the runner keeps up with it; output any process writes after that is lost.
 A process that leaves the group, such as a daemon that starts its own session, keeps running, and the runner does not wait for it.

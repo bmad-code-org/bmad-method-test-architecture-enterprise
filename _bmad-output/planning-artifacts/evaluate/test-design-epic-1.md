@@ -38,7 +38,7 @@ inputDocuments:
 
 ## Executive Summary
 
-**Scope:** full epic-level test design for Stories 1.1 to 1.51 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.51. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
+**Scope:** full epic-level test design for Stories 1.1 to 1.54 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.54. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
 
 **Risk summary:**
 
@@ -546,7 +546,7 @@ Levels: integration. Files: the supervision tests for `cli/lib/agent-supervisor.
 
 | AC                                                                                                     | Test                                                                                                                                                            | Level       | P   | Revert check                                                    |
 | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | --- | --------------------------------------------------------------- |
-| Leader and supervisor killed together: the group stops and the runner returns in bounded time          | Kill both, assert no process of the group remains and the runner returns a transport failure                                                                    | Integration | P0  | Reverting the change makes the case time out                    |
+| Leader and supervisor killed together: the group stops and the runner returns in bounded time          | Kill both, assert no process of the group remains and the runner returns a transport failure                                                                    | Integration | P0  | Reverting the guardian leaves a group member alive              |
 | A dead run's workspaces and worktree registration reclaimed                                            | Kill a run during qualification, run `preflight` again, assert the temp directory and `git worktree list` are clean and the adopter's status and refs unchanged | Integration | P0  | Reverting the reclaim leaves the workspace and the registration |
 | A live run's workspace left alone                                                                      | A marker naming a live process survives the next run                                                                                                            | Integration | P1  | Reclaiming every marked workspace fails it                      |
 | The reference states what a killed run leaves and when it is reclaimed (added 2026-09-25 in Story 1.9) | Read the reference section by its exact heading; assert it names the workspace marker and the reclaim                                                           | Static      | P2  | Deleting the passage fails it                                   |
@@ -801,6 +801,36 @@ Added in Story 1.24. Levels: partition-specific execution, artifact isolation an
 | Each partition runs its request | Instrument two distinct requests and assert one launch per authorized partition in preflight and run                   | Runtime integration | P0  | Restoring shared-plan execution launches both         |
 | Development cannot leak canary  | Put a held-out canary in the private request and scan development observations, records, logs and replay for its bytes | Integrity fixture   | P0  | Removing the filter exposes the canary                |
 | Held-out score remains valid    | Run development first, then held-out; independently replay and score the latter                                        | Live and replay     | P1  | Missing held-out interaction fails preflight or score |
+
+### Story 1.52: Stop agent descendants on Windows
+
+Added in Story 1.28's second review. Levels: Windows process integration and reference assertion.
+
+| AC                                | Test                                                                                           | Level       | P   | Revert check                                     |
+| --------------------------------- | ---------------------------------------------------------------------------------------------- | ----------- | --- | ------------------------------------------------ |
+| Dual kill stops the process tree  | Kill leader and supervisor while agent and child run; assert both PIDs end in the stated bound | Integration | P0  | Removing the process-tree owner leaves the child |
+| Agent exit stops its descendants  | Let the direct agent exit with a child running; assert the child ends                          | Integration | P0  | Reverting descendant ownership leaves the child  |
+| Windows supervision is documented | Read the runner reference section by heading and assert it names the mechanism and time bound  | Static      | P2  | Removing the passage fails the assertion         |
+
+### Story 1.53: Bound an agent whose guardian is stopped
+
+Added in Story 1.28's second review. Levels: POSIX process integration and reference assertion.
+
+| AC                                | Test                                                                                                  | Level       | P   | Revert check                                           |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------- | ----------- | --- | ------------------------------------------------------ |
+| Stopped guardian cannot orphan it | Stop guardian, kill leader and supervisor, then assert guardian, agent and child end within the bound | Integration | P0  | Removing kernel-backed ownership leaves the group live |
+| Bound is documented               | Read the runner reference section by heading and assert it names the mechanism and bound              | Static      | P2  | Removing the passage fails the assertion               |
+
+### Story 1.54: Reclaim auxiliary scratch after a killed preflight
+
+Added in Story 1.28's second review. Levels: killed-process integration and reference assertion.
+
+| AC                                  | Test                                                                                                                        | Level       | P   | Revert check                                      |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ----------- | --- | ------------------------------------------------- |
+| Dead auxiliary scratch is reclaimed | Kill during command evaluation, change `TMPDIR`, rerun preflight and assert the owned scratch path was reported and removed | Integration | P1  | Disabling auxiliary recovery leaves the path      |
+| Live and unrelated scratch remains  | Keep another owner live and a separate project's scratch present; assert both survive recovery                              | Integration | P1  | Removing ownership validation deletes one of them |
+| Recovery preserves adopter state    | Compare Git status and refs or non-Git tree digest before and after recovery                                                | Integration | P1  | A destructive cleanup changes the snapshot        |
+| Auxiliary recovery is documented    | Read the workspace reference section by heading and assert it names auxiliary scratch                                       | Static      | P2  | Deleting the passage fails the assertion          |
 
 ## The Dogfood Proof (AD-15)
 

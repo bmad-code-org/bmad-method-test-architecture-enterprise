@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-22-2026 18:09
-last_updated: 09-28-2026 13:56
+last_updated: 09-28-2026 21:04
 project: "bmad-method-test-architecture-enterprise: Evaluate"
 project_key: NOKEY
 tracking_system: file-system
@@ -63,7 +63,7 @@ development_status:
   1-25-close-seeded-weaknesses-through-the-gap-loop: backlog
   1-26-learn-an-unfamiliar-evaluation-framework-on-the-go: backlog
   1-27-tell-a-documented-guard-from-an-invented-risk-in-the-test-d: done
-  1-28-recover-from-a-killed-run: backlog
+  1-28-recover-from-a-killed-run: done
   1-29-record-what-a-live-run-spends: backlog
   1-30-send-principal-and-matcher-bindings: backlog
   1-31-sandbox-the-targets-file-system: backlog
@@ -87,6 +87,9 @@ development_status:
   1-49-prove-test-design-mutation-rollback-before-claiming-it: backlog
   1-50-send-malformed-raw-http-bodies-through-an-api-probe: backlog
   1-51-isolate-interaction-plans-by-evaluation-partition: backlog
+  1-52-stop-agent-descendants-on-windows: backlog
+  1-53-bound-an-agent-whose-guardian-is-stopped: backlog
+  1-54-reclaim-auxiliary-scratch-after-a-killed-preflight: backlog
   epic-1-retrospective: optional
 
   epic-2: backlog

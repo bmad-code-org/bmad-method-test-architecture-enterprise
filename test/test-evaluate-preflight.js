@@ -483,22 +483,38 @@ async function checkSupervision() {
   const bothChild = await pidFrom(bothPid);
   const [bothSupervisor] = childrenOf(both.child.pid);
   const [bothLeader] = childrenOf(bothSupervisor ?? 0);
-  // The agent leads a group of its own, which no process is left to stop once both are gone.
-  const [bothAgent] = childrenOf(bothLeader ?? 0);
-  if (bothLeader !== undefined) process.kill(-bothLeader, 'SIGKILL');
-  if (bothSupervisor !== undefined) process.kill(bothSupervisor, 'SIGKILL');
-  const bothEnding = await both.closed;
-  check(
-    bothEnding.code === EXIT_CODES['environment-transport'] &&
-      bothEnding.stderr.includes('the agent supervisor was killed by signal SIGKILL without reporting'),
-    `a runner whose supervisor and group leader were killed together exited ${bothEnding.code}; expected ${EXIT_CODES['environment-transport']} naming the supervisor's end\n${bothEnding.stderr}`,
-  );
+  const [bothGuardian] = childrenOf(bothLeader ?? 0);
+  const [bothAgent] = childrenOf(bothGuardian ?? 0);
   try {
-    if (bothAgent !== undefined) process.kill(-bothAgent, 'SIGKILL');
-  } catch {
-    // Already gone.
+    check(
+      bothGuardian !== undefined && bothAgent !== undefined && bothChild !== null,
+      'the dual-kill case did not start guardian, agent and child',
+    );
+    if (bothLeader !== undefined) process.kill(-bothLeader, 'SIGKILL');
+    if (bothSupervisor !== undefined) process.kill(bothSupervisor, 'SIGKILL');
+    const bothEnding = await Promise.race([both.closed, delay(15_000).then(() => null)]);
+    check(
+      bothEnding !== null &&
+        bothEnding.code === EXIT_CODES['environment-transport'] &&
+        bothEnding.stderr.includes('the agent supervisor was killed by signal SIGKILL without reporting'),
+      `a runner whose supervisor and group leader were killed together ${bothEnding === null ? 'waited over 15 s' : `exited ${bothEnding.code}`}; expected a bounded transport failure`,
+    );
+    if (bothGuardian !== undefined) check(await processEnds(bothGuardian), `guardian group ${bothGuardian} survived the dual kill`);
+    if (bothAgent !== undefined) check(await processEnds(bothAgent), `agent ${bothAgent} survived the dual kill`);
+    if (bothChild !== null) check(await processEnds(bothChild), `agent child ${bothChild} survived the dual kill`);
+  } finally {
+    try {
+      if (bothGuardian !== undefined) process.kill(-bothGuardian, 'SIGKILL');
+    } catch {
+      /* Already gone. */
+    }
+    both.child.kill('SIGKILL');
+    await Promise.race([both.closed, delay(5000)]);
+    if (bothChild !== null) {
+      const listed = spawnSync('ps', ['-p', String(bothChild), '-o', 'command='], { encoding: 'utf8' });
+      if (listed.status === 0 && listed.stdout.includes('setTimeout(() => {}, 60000)')) reap(bothChild);
+    }
   }
-  reap(bothChild);
 
   // The supervisor stopped on its own: the leader reports its timeout to the runner and kills the stopped supervisor.
   const stoppedPid = path.join(tempDir('supervisor-stop'), 'pid');
@@ -809,7 +825,9 @@ function runPreflight(folder, options) {
 function runDirectoryOf(folder) {
   const runs = path.join(folder, 'runs');
   if (!fs.existsSync(runs)) return null;
-  const entries = fs.readdirSync(runs, { withFileTypes: true }).filter((entry) => entry.isDirectory());
+  const entries = fs
+    .readdirSync(runs, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && entry.name !== '.workspace-journal');
   return entries.length === 1 ? path.join(runs, entries[0].name) : null;
 }
 
@@ -1219,7 +1237,9 @@ function checkCopyContents() {
   const result = runPreflight(folder);
   check(result.status === 0, `preflight with the evaluation inside its target exited ${result.status}; expected 0\n${result.output}`);
   const runs = path.join(folder, 'runs');
-  const run = fs.readdirSync(runs, { withFileTypes: true }).find((entry) => entry.isDirectory() && entry.name !== 'earlier-run');
+  const run = fs
+    .readdirSync(runs, { withFileTypes: true })
+    .find((entry) => entry.isDirectory() && entry.name !== 'earlier-run' && entry.name !== '.workspace-journal');
   const listed = /list: (.*)/.exec(firstLegStdout(run === undefined ? null : path.join(runs, run.name)))?.[1];
   const entries = listed === undefined ? [] : JSON.parse(listed);
   check(entries.includes('agent.js'), `the leg's working directory is not a copy of the target: ${JSON.stringify(entries)}`);

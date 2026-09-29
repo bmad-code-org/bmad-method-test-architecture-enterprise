@@ -233,7 +233,7 @@ function livingSessions(project) {
 /** The newest run directory under `runs/`. */
 function runDirectoryOf(folder) {
   const runs = path.join(folder, 'runs');
-  const names = fs.existsSync(runs) ? fs.readdirSync(runs).filter((name) => name !== '.gitignore') : [];
+  const names = fs.existsSync(runs) ? fs.readdirSync(runs).filter((name) => name !== '.gitignore' && name !== '.workspace-journal') : [];
   return names.length === 0 ? null : path.join(runs, names.sort().at(-1));
 }
 

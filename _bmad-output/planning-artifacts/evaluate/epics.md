@@ -23,7 +23,7 @@ inputDocuments:
 
 ## Overview
 
-This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and fifty-seven stories, including H.1 (Stories 1.27 to 1.51 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
+This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and sixty stories, including H.1 (Stories 1.27 to 1.54 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
 
 Evaluate is fully stacked. The stack runs system under test, then the evaluation (the mechanism that runs the system, collects evidence and makes judgments), then the Behavioral Evaluation Contract (what behavior matters, what evidence counts, how success and failure resolve), then eval-quality (contract sanity, evidence support, and whether the evaluation catches defects). TeA owns every layer above eval-quality, including each concern eval-quality states it leaves to the caller, so an adopter can evaluate any target end to end. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3 onward, Epic 2 and H.1 to close the plan gap audit; the Traceability section maps each audit item to the story that closes it.
 
@@ -150,7 +150,7 @@ None. Evaluate has no graphical interface.
 ### Epic 1: The Evaluate authoring loop
 
 An adopter describes a target, answers Evaluate's questions, chooses or builds the evaluation layer and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches the seeded defect, with the gaps named and closed. The epic closes by running Evaluate on `bmad-testarch-evaluate` itself, then proving the guidance on two more target kinds, on seeded weaknesses and on an evaluation framework its guides never name.
-Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.51.
+Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.54.
 
 **FRs covered:** FR1 to FR10, FR13, FR14.
 
@@ -217,12 +217,15 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 49    | 1.49  | 1.27                         |
 | 50    | 1.50  | 1.11, 1.24                   |
 | 51    | 1.51  | 1.21, 1.24                   |
-| 52    | 2.1   | 1.16, 1.26, 1.45             |
-| 53    | 2.2   | 2.1                          |
-| 54    | 2.3   | 2.2                          |
-| 55    | 2.4   | 2.3                          |
-| 56    | 2.5   | 2.4                          |
-| 57    | H.1   | 2.5                          |
+| 52    | 1.52  | 1.28                         |
+| 53    | 1.53  | 1.28                         |
+| 54    | 1.54  | 1.28                         |
+| 55    | 2.1   | 1.16, 1.26, 1.45             |
+| 56    | 2.2   | 2.1                          |
+| 57    | 2.3   | 2.2                          |
+| 58    | 2.4   | 2.3                          |
+| 59    | 2.5   | 2.4                          |
+| 60    | H.1   | 2.5                          |
 
 ## Epic 1: The Evaluate authoring loop
 
@@ -957,9 +960,9 @@ So that a `SIGKILL` leaves no running agent, no temp copy and no worktree regist
 
 **Acceptance Criteria:**
 
-**Given** Story 1.6's supervision, where a `SIGKILL` to the group leader and the supervisor together leaves the agent's process group running and the runner waiting for good (`story-1.6.md`, round 4 execution probes)
+**Given** Story 1.6's supervision, where a `SIGKILL` to the group leader and the supervisor together leaves the agent's process group running (`story-1.6.md`, round 4 execution probes)
 **When** both are killed together
-**Then** the agent's group stops and the runner returns a transport failure within a bounded time the reference names, held by a case in the supervision tests; reverting the change makes that case time out
+**Then** the agent's group stops and the runner returns a transport failure within a bounded time the reference names, held by a case in the supervision tests; reverting the guard leaves a group member alive
 
 **Given** a `tea-evaluate preflight` killed by `SIGKILL` while its workspaces exist
 **When** the next `preflight` runs against the same project
@@ -1442,6 +1445,60 @@ So that development runs cannot reveal held-out-only inputs.
 
 **Dependencies:** 1.21, 1.24.
 **Gate:** partition isolation fixture, replay, `npm test`.
+
+### Story 1.52: Stop agent descendants on Windows
+
+Added in Story 1.28's second review. Windows has no POSIX process groups. The guardian can stop its direct agent after a simultaneous supervisor and leader kill, while a child started by that agent can remain alive.
+
+As an adopter running Evaluate on Windows,
+I want the agent and every process it starts owned through the end of its turn,
+So that a dual supervisor kill or an agent exit leaves no agent descendant running.
+
+**Acceptance Criteria:**
+
+**Given** a Windows agent with a child that stays alive after the agent exits or ignores a stopping signal
+**When** the guardian's lifeline closes after both other supervisors are killed, or the agent exits normally
+**Then** an operating-system process-tree owner stops the agent and its descendants, including after the direct agent has exited; a Windows integration case asserts each PID ends within the documented bound, and reverting the ownership leaves a child alive
+**And** the Windows runner reference names the ownership mechanism and bound, and its documentation assertion fails when that passage is removed.
+
+**Dependencies:** 1.28.
+**Gate:** Windows `test:evaluate-preflight`, `npm test`.
+
+### Story 1.53: Bound an agent whose guardian is stopped
+
+Added in Story 1.28's second review. A guardian suspended with `SIGSTOP` cannot respond when its leader and supervisor are killed together, so its agent group can remain alive.
+
+As an adopter whose process supervisor is stopped by the host,
+I want the agent group to end after the other supervisors die,
+So that a stopped guardian cannot leave the turn running indefinitely.
+
+**Acceptance Criteria:**
+
+**Given** a guardian and agent group running on a POSIX host
+**When** the guardian receives `SIGSTOP` and both the leader and supervisor receive `SIGKILL`
+**Then** a kernel-backed owner or equivalent independent mechanism stops the agent group within the runner's documented bound; a process-level case asserts the guardian, agent and child end, and reverting that mechanism leaves the group alive
+**And** the runner reference states the mechanism and bound, and the case reading that passage fails when it is removed.
+
+**Dependencies:** 1.28.
+**Gate:** POSIX `test:evaluate-preflight`, `npm test`.
+
+### Story 1.54: Reclaim auxiliary scratch after a killed preflight
+
+Added in Story 1.28's second review. Workspace recovery journals `createWorkspace` paths, while `makeScratchDirectory` also creates evaluator command and other auxiliary scratch that a `SIGKILL` can leave behind.
+
+As an adopter whose preflight is killed during qualification,
+I want its auxiliary scratch reclaimed with its workspaces,
+So that the next preflight leaves no owned temporary directory from the killed run.
+
+**Acceptance Criteria:**
+
+**Given** a preflight with an active evaluator command scratch directory
+**When** the preflight receives `SIGKILL` and another preflight starts for the same evaluation
+**Then** the next preflight verifies ownership, reports and removes the dead run's auxiliary directory, including after `TMPDIR` changes, while preserving live and unrelated scratch; an integration case asserts each path and its cleanup, and reverting the recovery leaves the owned directory
+**And** the adopter's status and refs remain unchanged, and the CLI workspace reference names the auxiliary recovery; deleting that passage fails its documentation assertion.
+
+**Dependencies:** 1.28.
+**Gate:** `test:evaluate-mutation`, `test:evaluate-evaluators`, `npm test`.
 
 ## Epic 2: Continuous proof in CI
 

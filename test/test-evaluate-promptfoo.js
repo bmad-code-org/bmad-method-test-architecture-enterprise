@@ -214,9 +214,13 @@ syncBuiltinESMExports();
     const capture = read(captureFile);
     check(capture.executable === process.execPath, `promptfoo child used ${capture.executable}`);
     const installed = read(path.join(ROOT, 'node_modules', 'promptfoo', 'package.json'));
+    const entrypoint = capture.args?.[0];
     check(
-      capture.args?.[0] === path.join(ROOT, 'node_modules', 'promptfoo', installed.bin.promptfoo),
-      `promptfoo child used ${capture.args?.[0]}`,
+      entrypoint !== undefined &&
+        fs.existsSync(entrypoint) &&
+        fs.realpathSync.native(entrypoint) ===
+          fs.realpathSync.native(path.join(ROOT, 'node_modules', 'promptfoo', installed.bin.promptfoo)),
+      `promptfoo child used ${entrypoint}`,
     );
     check(
       JSON.stringify(capture.args.slice(1)) ===
@@ -427,7 +431,7 @@ function latestRun(folder) {
   const runs = path.join(folder, 'runs');
   const name = fs
     .readdirSync(runs)
-    .filter((entry) => entry !== '.gitignore')
+    .filter((entry) => entry !== '.gitignore' && entry !== '.workspace-journal')
     .sort()
     .at(-1);
   return path.join(runs, name);

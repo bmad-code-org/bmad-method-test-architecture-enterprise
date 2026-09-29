@@ -15,8 +15,8 @@
  * - The child receives a minimal environment (PATH, HOME, locale, proxy, and
  *   the selected adapter's vendor variables only) plus names explicitly
  *   allowed with --env-pass.
- * - The agent runs in its own process group under agent-supervisor.js. A
- *   timeout sends the group SIGTERM and the agent SIGKILL after a grace
+ * - The agent runs in a guardian-led process group under agent-supervisor.js. A
+ *   timeout sends the group SIGTERM and then SIGKILL after a grace
  *   period; the group is also stopped when the runner or the supervisor dies,
  *   and killed when the agent exits, so no process left in the group outlives
  *   the turn. The agent's stdin, stdout and stderr are pipes the supervisor's
@@ -240,7 +240,7 @@ function agentAnswer({ outcome, stdout, stderr }, { command, timeout }) {
  * @param {string[]} [options.agentArgs] - Extra args appended after the adapter's own argv (--agent-arg passthrough).
  * @param {string} [options.model] - Model to pin for this run; defaults to the adapter's defaultModel.
  * @param {number} [options.timeout] - Wall-clock timeout in ms (default 1800000); on expiry the agent's
- *   process group receives SIGTERM, and the agent SIGKILL after the supervisor's grace period.
+ *   process group receives SIGTERM, then SIGKILL after the supervisor's grace period.
  * @param {string} [options.cwd] - Working directory for the agent.
  * @param {string[]} [options.envPass] - Extra env var names allowed through to the child.
  * @param {string[]} [options.spawnPrefix] - Isolation wrapper (e.g. sandbox-exec -f profile).
