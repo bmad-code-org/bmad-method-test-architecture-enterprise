@@ -2,7 +2,7 @@
 title: 'Learn an unfamiliar evaluation framework on the go'
 type: 'feature'
 created: '2026-09-29'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'ba13542c88f485655812ad415d948873310278a3'
@@ -118,5 +118,6 @@ The selected candidate is `autoevals` and its deterministic `ExactMatch` scorer.
 - The integrated `npm run test:evaluate-learned-framework` passed 117 checks, including live development and held-out replay through eval-quality, actual installed Autoevals calls, scorer-controlled judgments for both behaviors, changed result-shape rejection, malformed-output guards, broken mapping rejection and duplicate source-fact rejection.
 - `npm run docs:validate-links` found zero broken links; `npm run docs:build` exited 0.
 - `git diff --stat origin/main -- cli/` is empty. The published eval-quality export check passed at the start and end of the story.
+- Two independent reviewers passed `npm ci` and full `npm test` in separate clean clones at `cacdec7a`, then verified the source-fact repair. Two fresh bounded reviewers passed implementation head `9cfe0852`. Its PR CI passed every check, including all five chain shards and coverage.
 
 **Revert observations:** Seven isolated edits each failed its intended gate and was restored byte for byte. Adding `autoevals` to the skill failed `framework named in skill`; removing the LEARNED known-pass stdout failed its parse assertion; removing the before-mapping transcript marker failed the ordering assertion; renaming the mapping key failed `framework result mapping changed`; replacing the `ExactMatch` call with a constant result failed the framework-call guard; pinning the dependency failed the `latest` assertion; removing a licence exception failed `test:licences` with `approved Autoevals undeclared licence set changed`. The full focused gate passed again after restoration.
