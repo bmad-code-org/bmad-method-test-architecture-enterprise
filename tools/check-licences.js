@@ -55,6 +55,62 @@ const PROMPTFOO_UNDECLARED_LOCK = {
     licenseSha256: 'a5f35901ee8b2039a7431144c23dd10bd47c1d07bcee0cd3a536421d86412214',
   },
 };
+const AUTOEVALS_UNDECLARED = {
+  'compute-cosine-similarity': {
+    lockfiles: ['package-lock.json'],
+    prefix: 'compute-cosine-similarity',
+    readAs: 'MIT',
+    evidence:
+      'The installed compute-cosine-similarity 1.1.0 package includes a LICENSE with the MIT permission grant and a copyright notice; its package.json also declares MIT in the legacy licenses array.',
+    reason: 'Autoevals reaches compute-cosine-similarity, whose lockfile entry omits the licence field.',
+  },
+  'compute-dot': {
+    lockfiles: ['package-lock.json'],
+    prefix: 'compute-dot',
+    readAs: 'MIT',
+    evidence:
+      'The installed compute-dot 1.1.0 package includes a LICENSE with the MIT permission grant and a copyright notice; its package.json also declares MIT in the legacy licenses array.',
+    reason: 'Autoevals reaches compute-dot through compute-cosine-similarity, whose lockfile entry omits the licence field.',
+  },
+  'compute-l2norm': {
+    lockfiles: ['package-lock.json'],
+    prefix: 'compute-l2norm',
+    readAs: 'MIT',
+    evidence:
+      'The installed compute-l2norm 1.1.0 package includes a LICENSE with the MIT permission grant and a copyright notice; its package.json also declares MIT in the legacy licenses array.',
+    reason: 'Autoevals reaches compute-l2norm through compute-cosine-similarity, whose lockfile entry omits the licence field.',
+  },
+  'validate.io-function': {
+    lockfiles: ['package-lock.json'],
+    prefix: 'validate.io-function',
+    readAs: 'MIT',
+    evidence:
+      'The installed validate.io-function 1.0.2 package includes a LICENSE with the MIT permission grant and a copyright notice; its package.json also declares MIT in the legacy licenses array.',
+    reason: 'Autoevals reaches validate.io-function through compute-cosine-similarity, whose lockfile entry omits the licence field.',
+  },
+};
+const AUTOEVALS_UNDECLARED_LOCK = {
+  'compute-cosine-similarity': {
+    version: '1.1.0',
+    resolved: 'https://registry.npmjs.org/compute-cosine-similarity/-/compute-cosine-similarity-1.1.0.tgz',
+    licenseSha256: '08a90f92887f3d230c3f4648da995bc0eff58284674ea0651be35da5a36476c2',
+  },
+  'compute-dot': {
+    version: '1.1.0',
+    resolved: 'https://registry.npmjs.org/compute-dot/-/compute-dot-1.1.0.tgz',
+    licenseSha256: '1fb269e9661682c03c42247ccd9d5521c62f9dd25ffc5984d910b91a923930a5',
+  },
+  'compute-l2norm': {
+    version: '1.1.0',
+    resolved: 'https://registry.npmjs.org/compute-l2norm/-/compute-l2norm-1.1.0.tgz',
+    licenseSha256: '1fb269e9661682c03c42247ccd9d5521c62f9dd25ffc5984d910b91a923930a5',
+  },
+  'validate.io-function': {
+    version: '1.0.2',
+    resolved: 'https://registry.npmjs.org/validate.io-function/-/validate.io-function-1.0.2.tgz',
+    licenseSha256: '4fa26a349d96c6bf268296011d84a70d18a1e85dfbef9a3c3f785c97e28d1f5d',
+  },
+};
 
 function packageName(lockPath) {
   return lockPath.slice(lockPath.lastIndexOf('node_modules/') + 'node_modules/'.length);
@@ -111,6 +167,38 @@ function verifyPromptfooUndeclaredScope(lock, config, installedRoot = ROOT) {
     }
     const licenseFile = path.join(installedRoot, matches[0], approvedLock.licenseFile);
     if (!fs.existsSync(licenseFile)) throw new Error(`the installed ${prefix} is missing ${approvedLock.licenseFile}`);
+    const licenseDigest = createHash('sha256').update(fs.readFileSync(licenseFile)).digest('hex');
+    if (licenseDigest !== approvedLock.licenseSha256) {
+      throw new Error(`the installed ${prefix} licence file no longer matches the approved evidence`);
+    }
+  }
+}
+
+function verifyAutoevalsUndeclaredScope(lock, config, installedRoot = ROOT) {
+  const scoped = config.licences.undeclared.filter(
+    (entry) =>
+      Object.keys(AUTOEVALS_UNDECLARED).some((prefix) => entry.prefix?.startsWith(prefix)) ||
+      entry.reason?.startsWith('Autoevals reaches '),
+  );
+  if (scoped.length !== Object.keys(AUTOEVALS_UNDECLARED).length) {
+    throw new Error('the approved Autoevals undeclared licence set changed');
+  }
+  for (const [prefix, approved] of Object.entries(AUTOEVALS_UNDECLARED)) {
+    const entries = scoped.filter((entry) => entry.prefix === prefix);
+    if (entries.length !== 1 || !isDeepStrictEqual(entries[0], approved)) {
+      throw new Error(`Autoevals undeclared licence ${prefix} changed its approved tuple`);
+    }
+    const matches = Object.keys(lock.packages).filter((name) => packageName(name).startsWith(prefix));
+    if (matches.length !== 1 || matches[0] !== `node_modules/${prefix}`) {
+      throw new Error(`Autoevals undeclared licence ${prefix} matches an additional or missing lockfile package: ${matches.join(', ')}`);
+    }
+    const approvedLock = AUTOEVALS_UNDECLARED_LOCK[prefix];
+    const locked = lock.packages[matches[0]];
+    if (locked.version !== approvedLock.version || locked.resolved !== approvedLock.resolved) {
+      throw new Error(`Autoevals undeclared licence ${prefix} changed its approved locked version or registry tarball`);
+    }
+    const licenseFile = path.join(installedRoot, matches[0], 'LICENSE');
+    if (!fs.existsSync(licenseFile)) throw new Error(`the installed ${prefix} is missing LICENSE`);
     const licenseDigest = createHash('sha256').update(fs.readFileSync(licenseFile)).digest('hex');
     if (licenseDigest !== approvedLock.licenseSha256) {
       throw new Error(`the installed ${prefix} licence file no longer matches the approved evidence`);
@@ -184,6 +272,7 @@ function main() {
     const config = JSON.parse(fs.readFileSync(path.join(ROOT, 'eval-quality.config.json'), 'utf8'));
     verifyPromptfooToleranceScope(lock, config);
     verifyPromptfooUndeclaredScope(lock, config);
+    verifyAutoevalsUndeclaredScope(lock, config);
     const excluded = omitVerifiedOptionalSdk(lock);
     fs.writeFileSync(path.join(temporary, 'package-lock.json'), `${JSON.stringify(lock)}\n`);
     fs.copyFileSync(path.join(ROOT, 'package.json'), path.join(temporary, 'package.json'));
@@ -210,4 +299,4 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { omitVerifiedOptionalSdk, verifyPromptfooToleranceScope, verifyPromptfooUndeclaredScope };
+module.exports = { omitVerifiedOptionalSdk, verifyPromptfooToleranceScope, verifyPromptfooUndeclaredScope, verifyAutoevalsUndeclaredScope };

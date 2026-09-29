@@ -89,5 +89,6 @@
   "test:teach-me-testing-scoring": 0.5,
   "test:transcript-harness": 1.8,
   "test:trial-set-scoring": 1.2,
-  "validate:schemas": 0.2
+  "validate:schemas": 0.2,
+  "test:evaluate-learned-framework": 15
 }

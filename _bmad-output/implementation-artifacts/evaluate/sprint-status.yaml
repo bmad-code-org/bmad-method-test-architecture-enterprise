@@ -61,7 +61,7 @@ development_status:
   1-16-evaluate-authors-its-own-suite-run-live-and-recorded: done
   1-24-evaluate-authors-strong-suites-for-two-more-target-kinds: done
   1-25-close-seeded-weaknesses-through-the-gap-loop: done
-  1-26-learn-an-unfamiliar-evaluation-framework-on-the-go: backlog
+  1-26-learn-an-unfamiliar-evaluation-framework-on-the-go: in-progress
   1-27-tell-a-documented-guard-from-an-invented-risk-in-the-test-d: done
   1-28-recover-from-a-killed-run: done
   1-29-record-what-a-live-run-spends: backlog
@@ -90,6 +90,8 @@ development_status:
   1-52-stop-agent-descendants-on-windows: backlog
   1-53-bound-an-agent-whose-guardian-is-stopped: backlog
   1-54-reclaim-auxiliary-scratch-after-a-killed-preflight: backlog
+  1-55-recognize-process-and-answer-separation-for-scalar-cli: backlog
+  1-56-prove-malformed-cli-refusal-against-a-controlled-defect: backlog
   epic-1-retrospective: optional
 
   epic-2: backlog

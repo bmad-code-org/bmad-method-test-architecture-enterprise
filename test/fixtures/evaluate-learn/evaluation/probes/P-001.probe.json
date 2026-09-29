@@ -1,0 +1,9 @@
+{
+  "probeId": "P-001",
+  "probeClass": "zero-action",
+  "behaviorId": "B-001",
+  "expectedClean": true,
+  "rationale": "[representative] The confirmed clean pantry request must return the exact summary.",
+  "defects": [],
+  "qualification": { "route": "clean-control", "noKnownDefectStatement": "No known defect at this revision." }
+}

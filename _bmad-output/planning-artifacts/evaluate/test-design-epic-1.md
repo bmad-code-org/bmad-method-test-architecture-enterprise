@@ -38,7 +38,7 @@ inputDocuments:
 
 ## Executive Summary
 
-**Scope:** full epic-level test design for Stories 1.1 to 1.54 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.54. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
+**Scope:** full epic-level test design for Stories 1.1 to 1.56 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.56. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
 
 **Risk summary:**
 
@@ -833,6 +833,27 @@ Added in Story 1.28's second review. Levels: killed-process integration and refe
 | Live and unrelated scratch remains  | Keep another owner live and a separate project's scratch present; assert both survive recovery                              | Integration | P1  | Removing ownership validation deletes one of them |
 | Recovery preserves adopter state    | Compare Git status and refs or non-Git tree digest before and after recovery                                                | Integration | P1  | A destructive cleanup changes the snapshot        |
 | Auxiliary recovery is documented    | Read the workspace reference section by heading and assert it names auxiliary scratch                                       | Static      | P2  | Deleting the passage fails the assertion          |
+
+### Story 1.55: Recognize process and answer separation for scalar CLI output
+
+Added from Story 1.26's live proof. Levels: engine coverage fixtures and integration over the published eval-quality release. File: `test/test-evaluate-learned-framework.js` (`test:evaluate-learned-framework`).
+
+| AC                                                  | Test                                                                                                                                                    | Level                              | P   | Revert check                                                                 |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | --- | ---------------------------------------------------------------------------- |
+| Scalar exit code and exact stdout satisfy the rule  | Score a scalar CLI contract whose one oracle names and checks both pointers at the same step; assert `success-indicator-separation` satisfied           | Engine integration                 | P0  | Reverting the engine recognition restores the critical coverage gap          |
+| Partial or loose checks leave the rule unsatisfied  | Score paired contracts checking exit only, stdout only, a stdout token, or a pointer absent from direction; assert the gap remains in each              | Engine integration                 | P0  | Weakening a required observation makes a negative fixture pass incorrectly   |
+| Structured success and payload behavior is retained | Score a structured response with both fields checked, then one with success alone; assert satisfied and unsatisfied respectively                        | Engine regression                  | P1  | Replacing the structured rule with scalar handling flips one expected result |
+| Story 1.26 evidence reaches PASS                    | Declare the scalar collection list empty, replay clean and mutated arms on the published release, and assert byte-equal evidence with three trials each | Integration over real eval-quality | P0  | Restoring the null list or prior engine release restores a critical gap      |
+
+### Story 1.56: Prove the malformed CLI refusal against a controlled defect
+
+Added from Story 1.26's final review. Levels: preflight mutation qualification, real engine integration and focused replay. File: `test/test-evaluate-learned-framework.js` (`test:evaluate-learned-framework`).
+
+| AC                                       | Test                                                                                                                         | Level                              | P   | Revert check                                                       |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | --- | ------------------------------------------------------------------ |
+| Guard bypass is witnessed and restored   | Preflight a separate target guard mutation, compare pre, mutated and restored digests, and rerun the clean baseline          | Preflight integration              | P0  | Reverting mutation or restoration breaks the witnessed digest path |
+| Refusal oracle catches the defect        | Score development and held-out guard-bypass probes through Autoevals with three `caught` votes each; assert permitted quotes | Integration over real eval-quality | P0  | Hard-coded pass or missing channel check changes a vote            |
+| Clean and scored evidence remains strong | Replay P-004 at three `passed-clean-control` votes, compare both defect strengths, and assert engine `PASS` without a waiver | Integration over published engine  | P0  | Weakening a control or using the earlier engine breaks the verdict |
 
 ## The Dogfood Proof (AD-15)
 

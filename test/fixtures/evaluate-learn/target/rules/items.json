@@ -1,0 +1,4 @@
+{
+  "required": ["apples", "pears"],
+  "forbidden": ["shellfish"]
+}

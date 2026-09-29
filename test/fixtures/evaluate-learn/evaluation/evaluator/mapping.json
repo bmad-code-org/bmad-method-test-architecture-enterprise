@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "keys": {
+    "pantry-exact-summary": { "oracleId": "O-001", "behaviorId": "B-001" },
+    "malformed-request-refusal": { "oracleId": "O-002", "behaviorId": "B-002" }
+  }
+}

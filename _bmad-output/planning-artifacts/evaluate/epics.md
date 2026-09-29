@@ -23,7 +23,7 @@ inputDocuments:
 
 ## Overview
 
-This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and sixty stories, including H.1 (Stories 1.27 to 1.54 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
+This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and sixty-two stories, including H.1 (Stories 1.27 to 1.56 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
 
 Evaluate is fully stacked. The stack runs system under test, then the evaluation (the mechanism that runs the system, collects evidence and makes judgments), then the Behavioral Evaluation Contract (what behavior matters, what evidence counts, how success and failure resolve), then eval-quality (contract sanity, evidence support, and whether the evaluation catches defects). TeA owns every layer above eval-quality, including each concern eval-quality states it leaves to the caller, so an adopter can evaluate any target end to end. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3 onward, Epic 2 and H.1 to close the plan gap audit; the Traceability section maps each audit item to the story that closes it.
 
@@ -128,29 +128,29 @@ None. Evaluate has no graphical interface.
 
 ### FR Coverage Map
 
-| Requirement   | Stories                                     |
-| ------------- | ------------------------------------------- |
-| FR1 (CAP-1)   | 1.3, 1.12, 1.13, 1.24                       |
-| FR2 (CAP-2)   | 1.12, 1.24                                  |
-| FR3 (CAP-3)   | 1.4, 1.12, 1.16, 1.21, 1.24, 1.46           |
-| FR4 (CAP-4)   | 1.4, 1.13, 1.16, 1.24                       |
-| FR5 (CAP-5)   | 1.9, 1.13, 1.21, 1.24                       |
-| FR6 (CAP-6)   | 1.1, 1.5, 1.6, 1.10, 1.11, 1.13, 1.18, 1.19 |
-| FR7 (CAP-7)   | 1.7, 1.9, 1.14, 1.16                        |
-| FR8 (CAP-8)   | 1.8, 1.14                                   |
-| FR9 (CAP-9)   | 1.6, 1.8, 1.14, 1.16, 1.17, 1.45            |
-| FR10 (CAP-10) | 1.14, 1.16, 1.22, 1.25, 1.42, 1.45, 1.46    |
-| FR11 (CAP-11) | 2.2, 2.3, 2.4, 2.5, H.1                     |
-| FR12 (CAP-12) | 1.8, 2.1, 2.5, H.1                          |
-| FR13 (CAP-13) | 1.17, 1.19, 1.20, 1.23, 1.26, 1.43, 1.44    |
-| FR14 (CAP-14) | 1.21, 2.2                                   |
+| Requirement   | Stories                                        |
+| ------------- | ---------------------------------------------- |
+| FR1 (CAP-1)   | 1.3, 1.12, 1.13, 1.24                          |
+| FR2 (CAP-2)   | 1.12, 1.24                                     |
+| FR3 (CAP-3)   | 1.4, 1.12, 1.16, 1.21, 1.24, 1.46, 1.56        |
+| FR4 (CAP-4)   | 1.4, 1.13, 1.16, 1.24                          |
+| FR5 (CAP-5)   | 1.9, 1.13, 1.21, 1.24                          |
+| FR6 (CAP-6)   | 1.1, 1.5, 1.6, 1.10, 1.11, 1.13, 1.18, 1.19    |
+| FR7 (CAP-7)   | 1.7, 1.9, 1.14, 1.16, 1.56                     |
+| FR8 (CAP-8)   | 1.8, 1.14                                      |
+| FR9 (CAP-9)   | 1.6, 1.8, 1.14, 1.16, 1.17, 1.45, 1.56         |
+| FR10 (CAP-10) | 1.14, 1.16, 1.22, 1.25, 1.42, 1.45, 1.46, 1.55 |
+| FR11 (CAP-11) | 2.2, 2.3, 2.4, 2.5, H.1                        |
+| FR12 (CAP-12) | 1.8, 2.1, 2.5, H.1                             |
+| FR13 (CAP-13) | 1.17, 1.19, 1.20, 1.23, 1.26, 1.43, 1.44       |
+| FR14 (CAP-14) | 1.21, 2.2                                      |
 
 ## Epic List
 
 ### Epic 1: The Evaluate authoring loop
 
 An adopter describes a target, answers Evaluate's questions, chooses or builds the evaluation layer and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches the seeded defect, with the gaps named and closed. The epic closes by running Evaluate on `bmad-testarch-evaluate` itself, then proving the guidance on two more target kinds, on seeded weaknesses and on an evaluation framework its guides never name.
-Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.54.
+Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.56.
 
 **FRs covered:** FR1 to FR10, FR13, FR14.
 
@@ -220,12 +220,14 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 52    | 1.52  | 1.28                         |
 | 53    | 1.53  | 1.28                         |
 | 54    | 1.54  | 1.28                         |
-| 55    | 2.1   | 1.16, 1.26, 1.45             |
-| 56    | 2.2   | 2.1                          |
-| 57    | 2.3   | 2.2                          |
-| 58    | 2.4   | 2.3                          |
-| 59    | 2.5   | 2.4                          |
-| 60    | H.1   | 2.5                          |
+| 55    | 1.55  | 1.26                         |
+| 56    | 1.56  | 1.26, 1.55                   |
+| 57    | 2.1   | 1.16, 1.26, 1.45             |
+| 58    | 2.2   | 2.1                          |
+| 59    | 2.3   | 2.2                          |
+| 60    | 2.4   | 2.3                          |
+| 61    | 2.5   | 2.4                          |
+| 62    | H.1   | 2.5                          |
 
 ## Epic 1: The Evaluate authoring loop
 
@@ -1502,6 +1504,47 @@ So that the next preflight leaves no owned temporary directory from the killed r
 **Dependencies:** 1.28.
 **Gate:** `test:evaluate-mutation`, `test:evaluate-evaluators`, `npm test`.
 
+### Story 1.55: Recognize process and answer separation for scalar CLI output
+
+Added from Story 1.26's live proof. The pantry summary CLI prints one plain-text result and has no success field in stdout. Its oracle checks exit code 0 and the exact whole stdout, yet eval-quality reports `success-indicator-separation` unsatisfied because the response descriptor has no success indicator.
+
+As an adopter evaluating a scalar-output CLI,
+I want eval-quality to recognize an oracle that checks the process result and substantive answer independently,
+So that coverage evidence reflects the check the contract performs (CAP-10).
+
+**Acceptance Criteria:**
+
+**Given** a CLI operation with plain-text stdout, no success field in its response descriptor, and an oracle whose direction and check both address the same interaction's exit code and exact whole stdout
+**When** the published eval-quality release scores the contract
+**Then** `success-indicator-separation` is satisfied without inventing a success field or waiver
+**And** paired engine fixtures leave the rule unsatisfied when the oracle checks only exit code, only stdout, a token contained in stdout, or one of the two pointers only in its direction; reverting the engine change fails the positive fixture, and weakening any required observation fails a negative fixture
+**And** a structured response with a declared success indicator retains the existing rule, proved by a fixture whose separate success and payload checks satisfy it and whose success-only check leaves it unsatisfied
+**And** the Story 1.26 fixture truthfully declares `collectionLocations: []` for its scalar response; its re-scored clean and mutated arms still resolve `passed-clean-control` and `caught` at three trials, and every evidence artifact records `contractVerdict: PASS` with no critical coverage gap
+**And** the engine change ships in a published release before TeA updates its resolved dependency; `test:evaluate-learned-framework` replays both arms against that release and `npm test` passes.
+
+**Dependencies:** 1.26.
+**Gate:** published engine release and export check, `test:evaluate-learned-framework`, `npm test`, `npm run test:release-metadata` when dependency metadata changes.
+
+### Story 1.56: Prove the malformed CLI refusal against a controlled defect
+
+Added from Story 1.26's final review. The pantry fixture's P-004 clean control proves rejection of malformed input, while its one committed mutation targets the separate complete-summary behavior. An exploratory guard-bypass mutation in the live transcript exposed an unwitnessed failure before O-002 was repaired. The committed suite has yet to demonstrate that O-002 catches a defective target.
+
+As an adopter relying on a malformed-request refusal,
+I want a controlled guard-bypass defect scored through the authored evaluator,
+So that the refusal oracle has measured detection evidence (CAP-3, CAP-7, CAP-9).
+
+**Acceptance Criteria:**
+
+**Given** the Story 1.26 pantry fixture after Story 1.55's published engine update
+**When** a second, adopter-owned mutation bypasses the malformed-request guard in a disposable copy and a distinct defect probe runs in development and held-out partitions
+**Then** preflight witnesses the guard bypass, restores the original bytes, verifies the digest and reruns the clean baseline; reverting mutation application or rollback fails the corresponding check
+**And** the malformed-request oracle checks exit code, exact stderr and empty stdout, cites a permitted observed channel on failure, and resolves `caught` in all three trials of each defect partition; restoring a hard-coded pass or removing a required channel check fails the focused gate
+**And** P-004 still resolves `passed-clean-control` in all three trials; both defects retain comparable scored evidence and the contract reaches `PASS` without a waiver on the published engine
+**And** `test:evaluate-learned-framework` replays the added defect and verifies the run's evidence through eval-quality; `npm test` passes.
+
+**Dependencies:** 1.26, 1.55.
+**Gate:** published engine export check, `test:evaluate-learned-framework`, `npm test`.
+
 ## Epic 2: Continuous proof in CI
 
 The evaluation Epic 1 produced is proven on every pull request, with the evidence to audit it.
@@ -1667,22 +1710,22 @@ So that the `pr` replay of `bmad-testarch-evaluate` has an accepted baseline to 
 
 ## Traceability
 
-| Capability | Stories                                     | Proven by                                                                                                                        |
-| ---------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| CAP-1      | 1.3, 1.12, 1.13, 1.24                       | guidance test; 1.10, 1.11 and 1.16 contracts declare `mcp`, `api`, `cli`; 1.24 inspection records and vendor redirect            |
-| CAP-2      | 1.12, 1.24                                  | guidance test (six families, confirmation halt); 1.16 and 1.24 requirements statements                                           |
-| CAP-3      | 1.4, 1.12, 1.16, 1.21, 1.24                 | `test:evaluate-check`; tagged corpus examples; `test:evaluate-authoring` section coverage                                        |
-| CAP-4      | 1.4, 1.13, 1.16, 1.24                       | skeleton compile and seal test; tagged contract examples; 1.16 and 1.24 compile and seal exit 0                                  |
-| CAP-5      | 1.9, 1.13, 1.21, 1.24                       | `test:evaluate-arms`; `test:evaluate-calibration`; tagged oracle and rubric examples                                             |
-| CAP-6      | 1.1, 1.5, 1.6, 1.10, 1.11, 1.13, 1.18, 1.19 | `test:evaluate-preflight`, `-mcp`, `-api`, `-workflow`, `-tool-use`                                                              |
-| CAP-7      | 1.7, 1.9, 1.14, 1.16                        | `test:evaluate-mutation`; tagged mutation examples; 1.16 rollback evidence                                                       |
-| CAP-8      | 1.8, 1.14                                   | template schema validation; guidance test (risk table)                                                                           |
-| CAP-9      | 1.6, 1.8, 1.14, 1.16, 1.17, 1.45            | `test:evaluate-run`; `test:evaluate-evaluators`; 1.16 live verdicts; 1.45 engine-owned aggregate                                 |
-| CAP-10     | 1.14, 1.16, 1.22, 1.25, 1.45                | guidance test over exported vocabularies; `test:evaluate-interpret`; `test:evaluate-gap-loop`; 1.45 class-floor gate             |
-| CAP-11     | 2.2, 2.3, 2.4, 2.5, H.1                     | `test:evaluate-ci` (placement, gameability, freshness, agreement); rendering test; the `quality.yaml` `chain` matrix; H.1 step 4 |
-| CAP-12     | 1.8, 2.1, 2.5, H.1                          | `run.json`; `test:evaluate-compare`; H.1 step 3                                                                                  |
-| CAP-13     | 1.17, 1.19, 1.20, 1.23, 1.26                | `test:evaluate-evaluators`, `-tool-use`, `-promptfoo`, `-learned-framework`; template rendering in the guidance test             |
-| CAP-14     | 1.21, 2.2                                   | `test:evaluate-partitions`, `test:evaluate-calibration`; `scheduled` and `release` tier cases                                    |
+| Capability | Stories                                     | Proven by                                                                                                                                               |
+| ---------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CAP-1      | 1.3, 1.12, 1.13, 1.24                       | guidance test; 1.10, 1.11 and 1.16 contracts declare `mcp`, `api`, `cli`; 1.24 inspection records and vendor redirect                                   |
+| CAP-2      | 1.12, 1.24                                  | guidance test (six families, confirmation halt); 1.16 and 1.24 requirements statements                                                                  |
+| CAP-3      | 1.4, 1.12, 1.16, 1.21, 1.24, 1.56           | `test:evaluate-check`; tagged corpus examples; `test:evaluate-authoring` section coverage; 1.56 malformed refusal defect probe                          |
+| CAP-4      | 1.4, 1.13, 1.16, 1.24                       | skeleton compile and seal test; tagged contract examples; 1.16 and 1.24 compile and seal exit 0                                                         |
+| CAP-5      | 1.9, 1.13, 1.21, 1.24                       | `test:evaluate-arms`; `test:evaluate-calibration`; tagged oracle and rubric examples                                                                    |
+| CAP-6      | 1.1, 1.5, 1.6, 1.10, 1.11, 1.13, 1.18, 1.19 | `test:evaluate-preflight`, `-mcp`, `-api`, `-workflow`, `-tool-use`                                                                                     |
+| CAP-7      | 1.7, 1.9, 1.14, 1.16, 1.56                  | `test:evaluate-mutation`; tagged mutation examples; 1.16 rollback evidence; 1.56 guard-bypass rollback                                                  |
+| CAP-8      | 1.8, 1.14                                   | template schema validation; guidance test (risk table)                                                                                                  |
+| CAP-9      | 1.6, 1.8, 1.14, 1.16, 1.17, 1.45, 1.56      | `test:evaluate-run`; `test:evaluate-evaluators`; 1.16 live verdicts; 1.45 engine-owned aggregate; 1.56 malformed defect score                           |
+| CAP-10     | 1.14, 1.16, 1.22, 1.25, 1.45, 1.55          | guidance test over exported vocabularies; `test:evaluate-interpret`; `test:evaluate-gap-loop`; 1.45 class-floor gate; 1.55 scalar CLI coverage fixtures |
+| CAP-11     | 2.2, 2.3, 2.4, 2.5, H.1                     | `test:evaluate-ci` (placement, gameability, freshness, agreement); rendering test; the `quality.yaml` `chain` matrix; H.1 step 4                        |
+| CAP-12     | 1.8, 2.1, 2.5, H.1                          | `run.json`; `test:evaluate-compare`; H.1 step 3                                                                                                         |
+| CAP-13     | 1.17, 1.19, 1.20, 1.23, 1.26                | `test:evaluate-evaluators`, `-tool-use`, `-promptfoo`, `-learned-framework`; template rendering in the guidance test                                    |
+| CAP-14     | 1.21, 2.2                                   | `test:evaluate-partitions`, `test:evaluate-calibration`; `scheduled` and `release` tier cases                                                           |
 
 ### Plan gap audit closure
 
