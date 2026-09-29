@@ -1,0 +1,23 @@
+{
+  "stage": "preflight",
+  "cli": "/Users/murat/opensource/bmad-method-test-architecture-enterprise/node_modules/eval-quality/dist/cli/main.js",
+  "substituted": false,
+  "argv": [
+    "preflight",
+    "--contract",
+    "/Users/murat/opensource/bmad-method-test-architecture-enterprise/test/fixtures/evaluate-gap-loop/after/evaluation/runs/20260929T044048678Z-dd308a31/contract.json",
+    "--probes",
+    "/Users/murat/opensource/bmad-method-test-architecture-enterprise/test/fixtures/evaluate-gap-loop/after/evaluation/runs/20260929T044048678Z-dd308a31/probes.json",
+    "--observations",
+    "/Users/murat/opensource/bmad-method-test-architecture-enterprise/test/fixtures/evaluate-gap-loop/after/evaluation/runs/20260929T044048678Z-dd308a31/observations.json",
+    "--run-id",
+    "20260929T044048678Z-dd308a31",
+    "--out",
+    "/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-engine-IFcNtp/preflight-verdict.json"
+  ],
+  "exitCode": 0,
+  "signal": null,
+  "error": null,
+  "stdout": "",
+  "stderr": "eval-quality: preflight: 20260929T044048678Z-dd308a31: leg \"witness-missing\": planned\neval-quality: preflight: 20260929T044048678Z-dd308a31: leg \"witness-missing\": observed\neval-quality: preflight: 20260929T044048678Z-dd308a31: leg \"witness-clean\": planned\neval-quality: preflight: 20260929T044048678Z-dd308a31: leg \"witness-clean\": observed\neval-quality: preflight: 20260929T044048678Z-dd308a31: leg \"preflight-control-observe\": planned\neval-quality: preflight: 20260929T044048678Z-dd308a31: leg \"preflight-control-observe\": observed\neval-quality: preflight: 20260929T044048678Z-dd308a31: leg \"preflight-control-observe-2\": planned\neval-quality: preflight: 20260929T044048678Z-dd308a31: leg \"preflight-control-observe-2\": observed\neval-quality: preflight: 20260929T044048678Z-dd308a31: leg \"manifest-p-005\": planned\neval-quality: preflight: 20260929T044048678Z-dd308a31: leg \"manifest-p-005\": observed\neval-quality: preflight: 20260929T044048678Z-dd308a31: leg \"manifest-p-006\": planned\neval-quality: preflight: 20260929T044048678Z-dd308a31: leg \"manifest-p-006\": observed\neval-quality: preflight: 20260929T044048678Z-dd308a31: leg \"manifest-p-007\": planned\neval-quality: preflight: 20260929T044048678Z-dd308a31: leg \"manifest-p-007\": observed\neval-quality: preflight: 20260929T044048678Z-dd308a31: leg \"manifest-p-008\": planned\neval-quality: preflight: 20260929T044048678Z-dd308a31: leg \"manifest-p-008\": observed\neval-quality: preflight: 20260929T044048678Z-dd308a31: reduced 8 leg(s): passed\n"
+}

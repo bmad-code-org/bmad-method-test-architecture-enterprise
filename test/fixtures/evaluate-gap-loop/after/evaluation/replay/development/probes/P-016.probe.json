@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 5,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "probeId": "P-016",
+  "probeClass": "zero-action",
+  "behaviorId": "B-004",
+  "systemId": "test-review-json-stdin",
+  "implementationDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
+  "artifactDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
+  "commitDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
+  "rationale": "[malformed] Raw empty bytes and invalid JSON exercise the parser before request validation.",
+  "qualification": {
+    "route": "clean-control",
+    "baselinePassEvidence": {
+      "storage": "public",
+      "path": "runs/20260929T044048678Z-dd308a31/qualification/P-016/baseline-pass.json",
+      "privateRef": null,
+      "digest": "sha256:6b4fdfbaad99788175a682fe5f623465f84e76dff7f9aa705de1346f3edb6d69"
+    },
+    "revisionCommitDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
+    "noKnownDefectStatement": "No known defect at this revision."
+  },
+  "expectedClean": true,
+  "defects": []
+}

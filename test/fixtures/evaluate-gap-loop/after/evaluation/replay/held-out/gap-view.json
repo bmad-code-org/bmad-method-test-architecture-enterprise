@@ -1,0 +1,118 @@
+{
+  "scoreInvocationId": "20260929T044203395Z-fbaebb95",
+  "development": [],
+  "held-out": [
+    {
+      "probeId": "P-010",
+      "probeClass": "defect",
+      "outcome": {
+        "catchThreshold": 0.9,
+        "caught": true,
+        "caughtCount": 3,
+        "exercised": true,
+        "invalidatedAttempts": [],
+        "probeId": "P-010",
+        "severity": "critical",
+        "trialVotes": [
+          {
+            "state": "caught",
+            "trialIndex": 1
+          },
+          {
+            "state": "caught",
+            "trialIndex": 2
+          },
+          {
+            "state": "caught",
+            "trialIndex": 3
+          }
+        ],
+        "validCount": 3
+      }
+    },
+    {
+      "probeId": "P-011",
+      "probeClass": "defect",
+      "outcome": {
+        "catchThreshold": 0.9,
+        "caught": true,
+        "caughtCount": 3,
+        "exercised": true,
+        "invalidatedAttempts": [],
+        "probeId": "P-011",
+        "severity": "material",
+        "trialVotes": [
+          {
+            "state": "caught",
+            "trialIndex": 1
+          },
+          {
+            "state": "caught",
+            "trialIndex": 2
+          },
+          {
+            "state": "caught",
+            "trialIndex": 3
+          }
+        ],
+        "validCount": 3
+      }
+    },
+    {
+      "probeId": "P-012",
+      "probeClass": "defect",
+      "outcome": {
+        "catchThreshold": 0.9,
+        "caught": true,
+        "caughtCount": 3,
+        "exercised": true,
+        "invalidatedAttempts": [],
+        "probeId": "P-012",
+        "severity": "material",
+        "trialVotes": [
+          {
+            "state": "caught",
+            "trialIndex": 1
+          },
+          {
+            "state": "caught",
+            "trialIndex": 2
+          },
+          {
+            "state": "caught",
+            "trialIndex": 3
+          }
+        ],
+        "validCount": 3
+      }
+    },
+    {
+      "probeId": "P-013",
+      "probeClass": "defect",
+      "outcome": {
+        "catchThreshold": 0.9,
+        "caught": true,
+        "caughtCount": 3,
+        "exercised": true,
+        "invalidatedAttempts": [],
+        "probeId": "P-013",
+        "severity": "material",
+        "trialVotes": [
+          {
+            "state": "caught",
+            "trialIndex": 1
+          },
+          {
+            "state": "caught",
+            "trialIndex": 2
+          },
+          {
+            "state": "caught",
+            "trialIndex": 3
+          }
+        ],
+        "validCount": 3
+      }
+    }
+  ]
+}

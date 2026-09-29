@@ -1,0 +1,12 @@
+{
+  "probeId": "P-014",
+  "probeClass": "zero-action",
+  "behaviorId": "B-001",
+  "expectedClean": true,
+  "rationale": "[negative] A dangling expect call is not an assertion under the confirmed recognized forms.",
+  "defects": [],
+  "qualification": {
+    "route": "clean-control",
+    "noKnownDefectStatement": "No known defect at this revision."
+  }
+}

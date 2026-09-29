@@ -1,0 +1,646 @@
+{
+  "probeId": "P-006",
+  "mutationId": "M-002",
+  "targetArtifact": "rules/review.json",
+  "preDigest": "sha256:e48e800f1826004bf1b55d586cd20c99a1e98adf55cd0a1010ddbfe8c4c9805b",
+  "mutatedDigest": "sha256:9122ad1799e87127e6d6366c0a740aed5449eb3510d921236aa27018c5c18903",
+  "restoredDigest": "sha256:e48e800f1826004bf1b55d586cd20c99a1e98adf55cd0a1010ddbfe8c4c9805b",
+  "reExecutionCap": 2,
+  "rePasses": [
+    {
+      "phase": "re-pass-1",
+      "verdict": "held",
+      "oracles": [
+        {
+          "oracleId": "O-002",
+          "polarity": "expects-hold",
+          "resolution": "true",
+          "disposition": "held",
+          "observationIds": [
+            "re-pass-1-disabled",
+            "re-pass-1-it-skip"
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "stepId": "missing",
+          "request": {
+            "probeId": "re-pass-1-missing",
+            "interfaceId": "review-cli",
+            "operationId": "review",
+            "kind": "cli",
+            "executable": "review",
+            "subcommandPath": [],
+            "channels": {
+              "argument": {},
+              "option": {},
+              "environment": [],
+              "stdin": {
+                "kind": "json",
+                "value": {
+                  "action": "review",
+                  "file": "cases/missing-assertion.test.js"
+                }
+              }
+            }
+          },
+          "observation": {
+            "probeId": "re-pass-1-missing",
+            "interfaceId": "review-cli",
+            "operationId": "review",
+            "kind": "cli",
+            "exitCode": 0,
+            "stdout": {
+              "kind": "json",
+              "value": {
+                "file": "cases/missing-assertion.test.js",
+                "status": "findings",
+                "findings": [
+                  "missing-assertion"
+                ]
+              }
+            },
+            "stderr": {
+              "kind": "text",
+              "value": ""
+            },
+            "artifacts": {}
+          }
+        },
+        {
+          "stepId": "disabled",
+          "request": {
+            "probeId": "re-pass-1-disabled",
+            "interfaceId": "review-cli",
+            "operationId": "review",
+            "kind": "cli",
+            "executable": "review",
+            "subcommandPath": [],
+            "channels": {
+              "argument": {},
+              "option": {},
+              "environment": [],
+              "stdin": {
+                "kind": "json",
+                "value": {
+                  "action": "review",
+                  "file": "cases/disabled-test.test.js"
+                }
+              }
+            }
+          },
+          "observation": {
+            "probeId": "re-pass-1-disabled",
+            "interfaceId": "review-cli",
+            "operationId": "review",
+            "kind": "cli",
+            "exitCode": 0,
+            "stdout": {
+              "kind": "json",
+              "value": {
+                "file": "cases/disabled-test.test.js",
+                "status": "findings",
+                "findings": [
+                  "disabled-test"
+                ]
+              }
+            },
+            "stderr": {
+              "kind": "text",
+              "value": ""
+            },
+            "artifacts": {}
+          }
+        },
+        {
+          "stepId": "it-skip",
+          "request": {
+            "probeId": "re-pass-1-it-skip",
+            "interfaceId": "review-cli",
+            "operationId": "review",
+            "kind": "cli",
+            "executable": "review",
+            "subcommandPath": [],
+            "channels": {
+              "argument": {},
+              "option": {},
+              "environment": [],
+              "stdin": {
+                "kind": "json",
+                "value": {
+                  "action": "review",
+                  "file": "cases/it-skip.test.js"
+                }
+              }
+            }
+          },
+          "observation": {
+            "probeId": "re-pass-1-it-skip",
+            "interfaceId": "review-cli",
+            "operationId": "review",
+            "kind": "cli",
+            "exitCode": 0,
+            "stdout": {
+              "kind": "json",
+              "value": {
+                "file": "cases/it-skip.test.js",
+                "status": "findings",
+                "findings": [
+                  "disabled-test"
+                ]
+              }
+            },
+            "stderr": {
+              "kind": "text",
+              "value": ""
+            },
+            "artifacts": {}
+          }
+        },
+        {
+          "stepId": "strict",
+          "request": {
+            "probeId": "re-pass-1-strict",
+            "interfaceId": "review-cli",
+            "operationId": "review",
+            "kind": "cli",
+            "executable": "review",
+            "subcommandPath": [],
+            "channels": {
+              "argument": {},
+              "option": {},
+              "environment": [],
+              "stdin": {
+                "kind": "json",
+                "value": {
+                  "action": "review",
+                  "file": "cases/clean-strict-equal.test.js"
+                }
+              }
+            }
+          },
+          "observation": {
+            "probeId": "re-pass-1-strict",
+            "interfaceId": "review-cli",
+            "operationId": "review",
+            "kind": "cli",
+            "exitCode": 0,
+            "stdout": {
+              "kind": "json",
+              "value": {
+                "file": "cases/clean-strict-equal.test.js",
+                "status": "clean",
+                "findings": []
+              }
+            },
+            "stderr": {
+              "kind": "text",
+              "value": ""
+            },
+            "artifacts": {}
+          }
+        },
+        {
+          "stepId": "match",
+          "request": {
+            "probeId": "re-pass-1-match",
+            "interfaceId": "review-cli",
+            "operationId": "review",
+            "kind": "cli",
+            "executable": "review",
+            "subcommandPath": [],
+            "channels": {
+              "argument": {},
+              "option": {},
+              "environment": [],
+              "stdin": {
+                "kind": "json",
+                "value": {
+                  "action": "review",
+                  "file": "cases/clean-assert-match.test.js"
+                }
+              }
+            }
+          },
+          "observation": {
+            "probeId": "re-pass-1-match",
+            "interfaceId": "review-cli",
+            "operationId": "review",
+            "kind": "cli",
+            "exitCode": 0,
+            "stdout": {
+              "kind": "json",
+              "value": {
+                "file": "cases/clean-assert-match.test.js",
+                "status": "clean",
+                "findings": []
+              }
+            },
+            "stderr": {
+              "kind": "text",
+              "value": ""
+            },
+            "artifacts": {}
+          }
+        },
+        {
+          "stepId": "to-be",
+          "request": {
+            "probeId": "re-pass-1-to-be",
+            "interfaceId": "review-cli",
+            "operationId": "review",
+            "kind": "cli",
+            "executable": "review",
+            "subcommandPath": [],
+            "channels": {
+              "argument": {},
+              "option": {},
+              "environment": [],
+              "stdin": {
+                "kind": "json",
+                "value": {
+                  "action": "review",
+                  "file": "cases/expect-to-be.test.js"
+                }
+              }
+            }
+          },
+          "observation": {
+            "probeId": "re-pass-1-to-be",
+            "interfaceId": "review-cli",
+            "operationId": "review",
+            "kind": "cli",
+            "exitCode": 0,
+            "stdout": {
+              "kind": "json",
+              "value": {
+                "file": "cases/expect-to-be.test.js",
+                "status": "clean",
+                "findings": []
+              }
+            },
+            "stderr": {
+              "kind": "text",
+              "value": ""
+            },
+            "artifacts": {}
+          }
+        },
+        {
+          "stepId": "dangling",
+          "request": {
+            "probeId": "re-pass-1-dangling",
+            "interfaceId": "review-cli",
+            "operationId": "review",
+            "kind": "cli",
+            "executable": "review",
+            "subcommandPath": [],
+            "channels": {
+              "argument": {},
+              "option": {},
+              "environment": [],
+              "stdin": {
+                "kind": "json",
+                "value": {
+                  "action": "review",
+                  "file": "cases/dangling-expect.test.js"
+                }
+              }
+            }
+          },
+          "observation": {
+            "probeId": "re-pass-1-dangling",
+            "interfaceId": "review-cli",
+            "operationId": "review",
+            "kind": "cli",
+            "exitCode": 0,
+            "stdout": {
+              "kind": "json",
+              "value": {
+                "file": "cases/dangling-expect.test.js",
+                "status": "findings",
+                "findings": [
+                  "missing-assertion"
+                ]
+              }
+            },
+            "stderr": {
+              "kind": "text",
+              "value": ""
+            },
+            "artifacts": {}
+          }
+        },
+        {
+          "stepId": "empty",
+          "request": {
+            "probeId": "re-pass-1-empty",
+            "interfaceId": "review-cli",
+            "operationId": "review",
+            "kind": "cli",
+            "executable": "review",
+            "subcommandPath": [],
+            "channels": {
+              "argument": {},
+              "option": {},
+              "environment": [],
+              "stdin": {
+                "kind": "text",
+                "value": ""
+              }
+            }
+          },
+          "observation": {
+            "probeId": "re-pass-1-empty",
+            "interfaceId": "review-cli",
+            "operationId": "review",
+            "kind": "cli",
+            "exitCode": 0,
+            "stdout": {
+              "kind": "json",
+              "value": {
+                "error": "invalid JSON"
+              }
+            },
+            "stderr": {
+              "kind": "text",
+              "value": ""
+            },
+            "artifacts": {}
+          }
+        },
+        {
+          "stepId": "invalid-json",
+          "request": {
+            "probeId": "re-pass-1-invalid-json",
+            "interfaceId": "review-cli",
+            "operationId": "review",
+            "kind": "cli",
+            "executable": "review",
+            "subcommandPath": [],
+            "channels": {
+              "argument": {},
+              "option": {},
+              "environment": [],
+              "stdin": {
+                "kind": "text",
+                "value": "{"
+              }
+            }
+          },
+          "observation": {
+            "probeId": "re-pass-1-invalid-json",
+            "interfaceId": "review-cli",
+            "operationId": "review",
+            "kind": "cli",
+            "exitCode": 0,
+            "stdout": {
+              "kind": "json",
+              "value": {
+                "error": "invalid JSON"
+              }
+            },
+            "stderr": {
+              "kind": "text",
+              "value": ""
+            },
+            "artifacts": {}
+          }
+        },
+        {
+          "stepId": "wrong-file-type",
+          "request": {
+            "probeId": "re-pass-1-wrong-file-type",
+            "interfaceId": "review-cli",
+            "operationId": "review",
+            "kind": "cli",
+            "executable": "review",
+            "subcommandPath": [],
+            "channels": {
+              "argument": {},
+              "option": {},
+              "environment": [],
+              "stdin": {
+                "kind": "text",
+                "value": "{\"action\":\"review\",\"file\":42}"
+              }
+            }
+          },
+          "observation": {
+            "probeId": "re-pass-1-wrong-file-type",
+            "interfaceId": "review-cli",
+            "operationId": "review",
+            "kind": "cli",
+            "exitCode": 0,
+            "stdout": {
+              "kind": "json",
+              "value": {
+                "error": "provide a JSON object with action review and a file string"
+              }
+            },
+            "stderr": {
+              "kind": "text",
+              "value": ""
+            },
+            "artifacts": {}
+          }
+        },
+        {
+          "stepId": "extra",
+          "request": {
+            "probeId": "re-pass-1-extra",
+            "interfaceId": "review-cli",
+            "operationId": "review",
+            "kind": "cli",
+            "executable": "review",
+            "subcommandPath": [],
+            "channels": {
+              "argument": {},
+              "option": {},
+              "environment": [],
+              "stdin": {
+                "kind": "text",
+                "value": "{\"action\":\"review\",\"file\":\"cases/clean-strict-equal.test.js\",\"extra\":true}"
+              }
+            }
+          },
+          "observation": {
+            "probeId": "re-pass-1-extra",
+            "interfaceId": "review-cli",
+            "operationId": "review",
+            "kind": "cli",
+            "exitCode": 0,
+            "stdout": {
+              "kind": "json",
+              "value": {
+                "error": "provide a JSON object with action review and a file string"
+              }
+            },
+            "stderr": {
+              "kind": "text",
+              "value": ""
+            },
+            "artifacts": {}
+          }
+        },
+        {
+          "stepId": "missing-action",
+          "request": {
+            "probeId": "re-pass-1-missing-action",
+            "interfaceId": "review-cli",
+            "operationId": "review",
+            "kind": "cli",
+            "executable": "review",
+            "subcommandPath": [],
+            "channels": {
+              "argument": {},
+              "option": {},
+              "environment": [],
+              "stdin": {
+                "kind": "text",
+                "value": "{\"file\":\"cases/clean-strict-equal.test.js\"}"
+              }
+            }
+          },
+          "observation": {
+            "probeId": "re-pass-1-missing-action",
+            "interfaceId": "review-cli",
+            "operationId": "review",
+            "kind": "cli",
+            "exitCode": 0,
+            "stdout": {
+              "kind": "json",
+              "value": {
+                "error": "provide a JSON object with action review and a file string"
+              }
+            },
+            "stderr": {
+              "kind": "text",
+              "value": ""
+            },
+            "artifacts": {}
+          }
+        },
+        {
+          "stepId": "wrong-action",
+          "request": {
+            "probeId": "re-pass-1-wrong-action",
+            "interfaceId": "review-cli",
+            "operationId": "review",
+            "kind": "cli",
+            "executable": "review",
+            "subcommandPath": [],
+            "channels": {
+              "argument": {},
+              "option": {},
+              "environment": [],
+              "stdin": {
+                "kind": "text",
+                "value": "{\"action\":\"scan\",\"file\":\"cases/clean-strict-equal.test.js\"}"
+              }
+            }
+          },
+          "observation": {
+            "probeId": "re-pass-1-wrong-action",
+            "interfaceId": "review-cli",
+            "operationId": "review",
+            "kind": "cli",
+            "exitCode": 0,
+            "stdout": {
+              "kind": "json",
+              "value": {
+                "error": "provide a JSON object with action review and a file string"
+              }
+            },
+            "stderr": {
+              "kind": "text",
+              "value": ""
+            },
+            "artifacts": {}
+          }
+        },
+        {
+          "stepId": "missing-file",
+          "request": {
+            "probeId": "re-pass-1-missing-file",
+            "interfaceId": "review-cli",
+            "operationId": "review",
+            "kind": "cli",
+            "executable": "review",
+            "subcommandPath": [],
+            "channels": {
+              "argument": {},
+              "option": {},
+              "environment": [],
+              "stdin": {
+                "kind": "text",
+                "value": "{\"action\":\"review\"}"
+              }
+            }
+          },
+          "observation": {
+            "probeId": "re-pass-1-missing-file",
+            "interfaceId": "review-cli",
+            "operationId": "review",
+            "kind": "cli",
+            "exitCode": 0,
+            "stdout": {
+              "kind": "json",
+              "value": {
+                "error": "provide a JSON object with action review and a file string"
+              }
+            },
+            "stderr": {
+              "kind": "text",
+              "value": ""
+            },
+            "artifacts": {}
+          }
+        },
+        {
+          "stepId": "unreadable",
+          "request": {
+            "probeId": "re-pass-1-unreadable",
+            "interfaceId": "review-cli",
+            "operationId": "review",
+            "kind": "cli",
+            "executable": "review",
+            "subcommandPath": [],
+            "channels": {
+              "argument": {},
+              "option": {},
+              "environment": [],
+              "stdin": {
+                "kind": "json",
+                "value": {
+                  "action": "review",
+                  "file": "cases/no-such-file.test.js"
+                }
+              }
+            }
+          },
+          "observation": {
+            "probeId": "re-pass-1-unreadable",
+            "interfaceId": "review-cli",
+            "operationId": "review",
+            "kind": "cli",
+            "exitCode": 0,
+            "stdout": {
+              "kind": "json",
+              "value": {
+                "error": "cannot read test file"
+              }
+            },
+            "stderr": {
+              "kind": "text",
+              "value": ""
+            },
+            "artifacts": {}
+          }
+        }
+      ]
+    }
+  ],
+  "rollbackVerified": true
+}

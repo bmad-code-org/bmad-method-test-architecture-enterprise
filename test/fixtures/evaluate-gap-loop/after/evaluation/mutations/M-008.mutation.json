@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "mutationId": "M-008",
+  "mutationSource": "Adopter-owned B-004 rule change",
+  "targetArtifact": "bin/review.mjs",
+  "operator": {
+    "kind": "replace-exact",
+    "find": "Object.keys(request).length !== 2",
+    "replace": "Object.keys(request).length === 2",
+    "occurrences": 1
+  },
+  "expectedObservableFailure": "stdout accepts an extra-field request and returns a clean review"
+}

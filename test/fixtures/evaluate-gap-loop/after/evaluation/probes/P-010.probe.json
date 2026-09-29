@@ -1,0 +1,105 @@
+{
+  "probeId": "P-010",
+  "probeClass": "defect",
+  "behaviorId": "B-001",
+  "expectedClean": false,
+  "rationale": "[held-out] A broadened assertion rule misses the same assertion-free test.",
+  "defects": [
+    {
+      "defectId": "D-010",
+      "behaviorId": "B-001",
+      "summary": "A broadened assertion rule misses the same assertion-free test.",
+      "severity": "critical",
+      "source": "controlled-mutation",
+      "manifestationWitness": {
+        "legId": "manifest-p-010",
+        "interfaceId": "review-cli",
+        "operationId": "review",
+        "inputs": {
+          "argument": {},
+          "option": {},
+          "environment": {},
+          "stdin": {
+            "kind": "json",
+            "value": {
+              "action": "review",
+              "file": "cases/missing-assertion.test.js"
+            }
+          }
+        },
+        "relation": {
+          "op": "all",
+          "operands": [
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/manifest-p-010/stdout/file"
+                },
+                {
+                  "literal": "cases/missing-assertion.test.js"
+                }
+              ]
+            },
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/manifest-p-010/stdout/status"
+                },
+                {
+                  "literal": "clean"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "defectSignature": {
+    "interfaceKind": "cli",
+    "observableChannel": "stdout",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": null,
+          "header": null,
+          "body": null,
+          "argument": null,
+          "option": null,
+          "environment": null,
+          "stdin": {
+            "action": {
+              "literal": "review"
+            },
+            "file": {
+              "literal": "cases/missing-assertion.test.js"
+            }
+          },
+          "arguments": null
+        }
+      },
+      "predicate": {
+        "op": "equality",
+        "operands": [
+          {
+            "pointer": "/interactions/observed/stdout/status"
+          },
+          {
+            "literal": "clean"
+          }
+        ]
+      }
+    },
+    "invocation": {
+      "executable": "review",
+      "subcommandPath": []
+    }
+  },
+  "qualification": {
+    "route": "controlled-mutation",
+    "mutation": "M-005"
+  }
+}

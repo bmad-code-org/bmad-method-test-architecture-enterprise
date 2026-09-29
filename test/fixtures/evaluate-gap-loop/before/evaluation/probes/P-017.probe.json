@@ -1,0 +1,54 @@
+{
+  "probeId": "P-017",
+  "probeClass": "gameability",
+  "behaviorId": "B-001",
+  "expectedClean": false,
+  "rationale": "[gameability] Always-clean output satisfies the valid-assertion behavior on its fixture while missing the assertion-free test.",
+  "defects": [],
+  "qualification": {
+    "route": "gameability",
+    "degenerateResponse": "Report every test clean.",
+    "naiveOracle": "O-003"
+  },
+  "defectSignature": {
+    "interfaceKind": "cli",
+    "observableChannel": "stdout",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": null,
+          "header": null,
+          "body": null,
+          "argument": null,
+          "option": null,
+          "environment": null,
+          "stdin": {
+            "action": {
+              "literal": "review"
+            },
+            "file": {
+              "literal": "cases/missing-assertion.test.js"
+            }
+          },
+          "arguments": null
+        }
+      },
+      "predicate": {
+        "op": "equality",
+        "operands": [
+          {
+            "pointer": "/interactions/observed/stdout/status"
+          },
+          {
+            "literal": "clean"
+          }
+        ]
+      }
+    },
+    "invocation": {
+      "executable": "review",
+      "subcommandPath": []
+    }
+  }
+}

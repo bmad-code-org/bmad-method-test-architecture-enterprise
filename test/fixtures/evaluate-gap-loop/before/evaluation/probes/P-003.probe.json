@@ -1,0 +1,12 @@
+{
+  "probeId": "P-003",
+  "probeClass": "zero-action",
+  "behaviorId": "B-003",
+  "expectedClean": true,
+  "rationale": "[negative] Valid strictEqual, match, and toBe assertions remain clean.",
+  "defects": [],
+  "qualification": {
+    "route": "clean-control",
+    "noKnownDefectStatement": "No known defect at this revision."
+  }
+}

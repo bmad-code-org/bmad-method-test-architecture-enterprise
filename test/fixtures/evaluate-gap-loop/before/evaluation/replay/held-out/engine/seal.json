@@ -1,0 +1,17 @@
+{
+  "stage": "seal",
+  "cli": "/Users/murat/opensource/bmad-method-test-architecture-enterprise/node_modules/eval-quality/dist/cli/main.js",
+  "substituted": false,
+  "argv": [
+    "seal",
+    "--in",
+    "/Users/murat/opensource/bmad-method-test-architecture-enterprise/test/fixtures/evaluate-gap-loop/before/evaluation/runs/20260929T030250916Z-0f88894a/contract.json",
+    "--out",
+    "/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-engine-AZxO8o/sealed-evaluator-brief.json"
+  ],
+  "exitCode": 0,
+  "signal": null,
+  "error": null,
+  "stdout": "",
+  "stderr": ""
+}

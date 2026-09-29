@@ -1,0 +1,48 @@
+{
+  "legId": "preflight-control-observe-2",
+  "sequence": 4,
+  "workspace": "pristine",
+  "cwd": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-pristine-e1fa2e60-66f8-46f5-8f70-d4a5d8930515/target",
+  "request": {
+    "probeId": "preflight-control-observe-2",
+    "interfaceId": "review-cli",
+    "operationId": "review",
+    "kind": "cli",
+    "executable": "review",
+    "subcommandPath": [],
+    "channels": {
+      "argument": {},
+      "option": {},
+      "environment": [],
+      "stdin": {
+        "kind": "json",
+        "value": {
+          "action": "review",
+          "file": "cases/missing-assertion.test.js"
+        }
+      }
+    }
+  },
+  "observation": {
+    "probeId": "preflight-control-observe-2",
+    "interfaceId": "review-cli",
+    "operationId": "review",
+    "kind": "cli",
+    "exitCode": 0,
+    "stdout": {
+      "kind": "json",
+      "value": {
+        "file": "cases/missing-assertion.test.js",
+        "status": "findings",
+        "findings": [
+          "missing-assertion"
+        ]
+      }
+    },
+    "stderr": {
+      "kind": "text",
+      "value": ""
+    },
+    "artifacts": {}
+  }
+}

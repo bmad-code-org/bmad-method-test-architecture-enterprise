@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "evaluationId": "test-review-json-stdin",
+  "targetKind": "test-review-mechanism",
+  "interface": "cli",
+  "registry": [
+    {
+      "interfaceId": "review-cli",
+      "executable": "review",
+      "target": "bin/review.mjs",
+      "subcommandPaths": [
+        []
+      ],
+      "artifacts": {},
+      "environmentKeys": [],
+      "maxElapsedMs": 30000,
+      "infrastructureExitCodes": [
+        3,
+        4,
+        5,
+        6
+      ]
+    }
+  ],
+  "launch": {
+    "root": "../target"
+  },
+  "workspace": {
+    "kind": "copy",
+    "provision": []
+  },
+  "evaluator": {
+    "kind": "deterministic"
+  },
+  "arms": [
+    "clean",
+    "mutated",
+    "gameability"
+  ],
+  "trials": 3,
+  "tiers": [
+    "pr",
+    "scheduled"
+  ],
+  "strengthFloor": {
+    "defect": 1,
+    "zero-action": 1,
+    "gameability": 1
+  },
+  "heldOutProbes": [
+    "P-010",
+    "P-011",
+    "P-012",
+    "P-013"
+  ],
+  "requirements": {
+    "path": "requirements.md",
+    "digest": "sha256:de391b0a728e38c617617b5512b0f4dfb96f8f4e14d289fc8d5b22d2cfad58eb"
+  },
+  "operationPhases": {
+    "review": "outcome"
+  }
+}

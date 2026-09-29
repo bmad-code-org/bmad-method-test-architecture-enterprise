@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "mutationId": "M-003",
+  "mutationSource": "Adopter-owned B-003 rule change",
+  "targetArtifact": "rules/review.json",
+  "operator": {
+    "kind": "replace-exact",
+    "find": "\"assert.match(\"",
+    "replace": "\"assert.matches(\"",
+    "occurrences": 1
+  },
+  "expectedObservableFailure": "stdout falsely reports missing-assertion for a valid assert.match test"
+}

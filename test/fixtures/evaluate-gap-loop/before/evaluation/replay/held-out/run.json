@@ -1,0 +1,111 @@
+{
+  "invocationId": "20260929T030250916Z-0f88894a",
+  "command": "run",
+  "teaVersion": "1.27.2",
+  "evalQualityVersion": "4.3.0",
+  "commit": null,
+  "dirty": true,
+  "evaluationFolder": {
+    "dirty": true
+  },
+  "workspace": {
+    "kind": "copy",
+    "commit": null,
+    "tree": null,
+    "treeDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
+    "dirty": true
+  },
+  "workspaces": {
+    "pristine": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-pristine-0iimZg/target",
+    "mutated:M-005": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-005-djnr34/target",
+    "mutated:M-006": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-006-k19YXY/target",
+    "mutated:M-007": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-007-7zLfZ7/target",
+    "mutated:M-008": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-008-mxp3cN/target"
+  },
+  "adopterTree": {
+    "repository": "/Users/murat/opensource/bmad-method-test-architecture-enterprise",
+    "unchanged": true
+  },
+  "refused": [],
+  "artifacts": {
+    "contract": "sha256:9bd46876e67517cf1a45819ea225897d18be23f7c99b463b786120bb1b735ffc",
+    "operationPhases": "sha256:3cb94327f9a182c7af4568a9f68ec88352302b5a2a743ca18a58aca8b0e0781e",
+    "evaluatorConfiguration": "sha256:d1a8db8a4f1d03d93f26a9dd28edc787215dec2b9eb7bae7bdad745cca425acc",
+    "preflightVerdict": "sha256:3c6a6641de59f6e14ef3cf163e422832447483c17299f3c98160d16a4c4b17ae",
+    "probes": {
+      "P-010": "sha256:937ec0c9e6994eb8754e7264a55fc226382f29b1f3e397b9147515d42c76c927",
+      "P-011": "sha256:7c027f700927f95c33c271188b735161f07546e0edec0c2d7a014db3bfa62660",
+      "P-012": "sha256:ace3a7f15011d882a103c967b3c862997ae67d56d1d372b51942ac6edd5d74ae",
+      "P-013": "sha256:61aa110f062212274685a4fadcd95271a682474f241916e717a0218899cbd598"
+    },
+    "records": {
+      "trial-sets/P-010/record-1.json": "sha256:007914ab5d1ad379ef87074c2380df59a5e4b8c9066f6e0170ee136b50880d5b",
+      "trial-sets/P-010/record-2.json": "sha256:be8eee23643ef840ed2c809d38c2dc532772ec2b2ad1ee71b65c99a79d745636",
+      "trial-sets/P-010/record-3.json": "sha256:b3ab7bf4965a45ad640ae71956de49da746107b26f91be71c5d5428631d4aa9b",
+      "trial-sets/P-011/record-1.json": "sha256:0140b32193638c344f0e9a26b4abf117ad72453f4789fe7dd150e6ea90dac2bf",
+      "trial-sets/P-011/record-2.json": "sha256:2625fdb1bb9d4bc688781ccad411cb3d586019334241abb03d9b9f95de7f4bb9",
+      "trial-sets/P-011/record-3.json": "sha256:8dd2e0c8f5cc07bf48ef18b118ccb493e28f73ac110967260995fb3ceccd1e39",
+      "trial-sets/P-012/record-1.json": "sha256:31d0759961a79f44876fec15f9f56114f221f579cecee677829669fd3a101a06",
+      "trial-sets/P-012/record-2.json": "sha256:2d0b2acd21a9a1ecb6c587de60527ee57cbcac3c8233c6bb54d135c6add29be5",
+      "trial-sets/P-012/record-3.json": "sha256:32326bc9964fe0a815a13df637904a82cc294dc6160f05e3ab5b1d8f03ee385b",
+      "trial-sets/P-013/record-1.json": "sha256:8f894934775414d37d8ea33d2fa27e94acd17b2e0de641dbee152c3f88224c83",
+      "trial-sets/P-013/record-2.json": "sha256:c93a2bb0185f6fe281369ea2c998982f7b43a1bb1df091e81406ae2c1487558e",
+      "trial-sets/P-013/record-3.json": "sha256:b1c87adc2b58d8a23bdce73b238060702037ea99b26a9d1488d0a6159cc941ba"
+    },
+    "isolationManifests": {
+      "P-010": "sha256:58896ad999f1c1ab16ba31e6533e2b3689b1450282ef3b653f48bfbd886983c3",
+      "P-011": "sha256:6b48ec7f3e3ebc1e6aa9052c112b46b45aa73ed398085ba7a916bfa057a8676c",
+      "P-012": "sha256:44abb2b6794105374fd845cdd63f88c6609eaa5d3d570efd5a8bc53b9bb3116b",
+      "P-013": "sha256:ddc8949877d18561669348c58e5a4517de063e3bba8b2f8f23af15338d418802"
+    }
+  },
+  "contractDigest": "sha256:07b7e04bae6ed87902c6f446877f4560b95231a0e31fb14d0cd798e3c89d08c8",
+  "corpusDigest": "sha256:346329593c03486009899e605b83347d935e7cdc4b04717b508d0a3c100cb947",
+  "policyDigest": "sha256:3e6a40f97ee68a2f82473c8b98ab14f4e7ccc0b3eb4557325f11be67b92fed09",
+  "sealedBriefDigest": "sha256:5669195a7dfebc9e717163b3f1f6bee60dea46749062bf54d6c427683325f293",
+  "evaluatorConfigurationDigest": "sha256:588a848e9d477aea85bf736b855444275e2f8a4d0a7f19729d40047647046214",
+  "partition": "held-out",
+  "heldOutProbes": [
+    "P-010",
+    "P-011",
+    "P-012",
+    "P-013"
+  ],
+  "operationPhases": {
+    "review": "outcome"
+  },
+  "runner": [
+    {
+      "interfaceId": "review-cli",
+      "executable": "review",
+      "target": "bin/review.mjs"
+    }
+  ],
+  "evaluator": {
+    "kind": "deterministic",
+    "identity": "tea-evaluate deterministic evaluator"
+  },
+  "model": {
+    "modelSnapshot": "none",
+    "systemPromptDigest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "judge": null,
+  "trials": {
+    "perArm": 3,
+    "arms": [
+      "mutated:M-005",
+      "mutated:M-006",
+      "mutated:M-007",
+      "mutated:M-008"
+    ]
+  },
+  "trialCount": 3,
+  "startedAt": "2026-09-29T03:02:50.601Z",
+  "durationMs": 27377,
+  "completed": true,
+  "outcome": {
+    "stage": "trial",
+    "exitCode": 0,
+    "message": "4 trial set(s) of 3 trial(s) sealed over mutated:M-005, mutated:M-006, mutated:M-007, mutated:M-008; score them with tea-evaluate score --run 20260929T030250916Z-0f88894a"
+  }
+}

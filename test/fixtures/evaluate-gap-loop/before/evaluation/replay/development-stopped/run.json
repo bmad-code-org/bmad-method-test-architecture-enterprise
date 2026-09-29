@@ -1,0 +1,32 @@
+{
+  "invocationId": "20260929T030216307Z-f58af39e",
+  "command": "run",
+  "teaVersion": "1.27.2",
+  "evalQualityVersion": "4.3.0",
+  "commit": null,
+  "dirty": true,
+  "evaluationFolder": {
+    "dirty": true
+  },
+  "workspace": {
+    "kind": "copy",
+    "commit": null,
+    "tree": null,
+    "treeDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
+    "dirty": true
+  },
+  "workspaces": {
+    "pristine": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-pristine-0DBXmY/target"
+  },
+  "adopterTree": {
+    "repository": "/Users/murat/opensource/bmad-method-test-architecture-enterprise",
+    "unchanged": null
+  },
+  "refused": [],
+  "outcome": {
+    "stage": "qualification",
+    "exitCode": 11,
+    "message": "probes/P-007.probe.json: M-003: the mutated arm did not fail (held), so the probe's oracle does not catch this mutation"
+  },
+  "completed": false
+}

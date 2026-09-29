@@ -1,0 +1,92 @@
+{
+  "invocationId": "20260929T044125663Z-3fe6d94c",
+  "run": "20260929T044048678Z-dd308a31",
+  "exitCode": 0,
+  "scores": [
+    {
+      "probeId": "P-001",
+      "exitCode": 0,
+      "failure": null,
+      "record": "runs/20260929T044048678Z-dd308a31/scores/20260929T044125663Z-3fe6d94c/P-001/score.json",
+      "evidence": "runs/20260929T044048678Z-dd308a31/scores/20260929T044125663Z-3fe6d94c/P-001/evidence-artifact.json"
+    },
+    {
+      "probeId": "P-002",
+      "exitCode": 0,
+      "failure": null,
+      "record": "runs/20260929T044048678Z-dd308a31/scores/20260929T044125663Z-3fe6d94c/P-002/score.json",
+      "evidence": "runs/20260929T044048678Z-dd308a31/scores/20260929T044125663Z-3fe6d94c/P-002/evidence-artifact.json"
+    },
+    {
+      "probeId": "P-003",
+      "exitCode": 0,
+      "failure": null,
+      "record": "runs/20260929T044048678Z-dd308a31/scores/20260929T044125663Z-3fe6d94c/P-003/score.json",
+      "evidence": "runs/20260929T044048678Z-dd308a31/scores/20260929T044125663Z-3fe6d94c/P-003/evidence-artifact.json"
+    },
+    {
+      "probeId": "P-004",
+      "exitCode": 0,
+      "failure": null,
+      "record": "runs/20260929T044048678Z-dd308a31/scores/20260929T044125663Z-3fe6d94c/P-004/score.json",
+      "evidence": "runs/20260929T044048678Z-dd308a31/scores/20260929T044125663Z-3fe6d94c/P-004/evidence-artifact.json"
+    },
+    {
+      "probeId": "P-014",
+      "exitCode": 0,
+      "failure": null,
+      "record": "runs/20260929T044048678Z-dd308a31/scores/20260929T044125663Z-3fe6d94c/P-014/score.json",
+      "evidence": "runs/20260929T044048678Z-dd308a31/scores/20260929T044125663Z-3fe6d94c/P-014/evidence-artifact.json"
+    },
+    {
+      "probeId": "P-016",
+      "exitCode": 0,
+      "failure": null,
+      "record": "runs/20260929T044048678Z-dd308a31/scores/20260929T044125663Z-3fe6d94c/P-016/score.json",
+      "evidence": "runs/20260929T044048678Z-dd308a31/scores/20260929T044125663Z-3fe6d94c/P-016/evidence-artifact.json"
+    },
+    {
+      "probeId": "P-005",
+      "exitCode": 0,
+      "failure": null,
+      "record": "runs/20260929T044048678Z-dd308a31/scores/20260929T044125663Z-3fe6d94c/P-005/score.json",
+      "evidence": "runs/20260929T044048678Z-dd308a31/scores/20260929T044125663Z-3fe6d94c/P-005/evidence-artifact.json"
+    },
+    {
+      "probeId": "P-006",
+      "exitCode": 0,
+      "failure": null,
+      "record": "runs/20260929T044048678Z-dd308a31/scores/20260929T044125663Z-3fe6d94c/P-006/score.json",
+      "evidence": "runs/20260929T044048678Z-dd308a31/scores/20260929T044125663Z-3fe6d94c/P-006/evidence-artifact.json"
+    },
+    {
+      "probeId": "P-007",
+      "exitCode": 0,
+      "failure": null,
+      "record": "runs/20260929T044048678Z-dd308a31/scores/20260929T044125663Z-3fe6d94c/P-007/score.json",
+      "evidence": "runs/20260929T044048678Z-dd308a31/scores/20260929T044125663Z-3fe6d94c/P-007/evidence-artifact.json"
+    },
+    {
+      "probeId": "P-008",
+      "exitCode": 0,
+      "failure": null,
+      "record": "runs/20260929T044048678Z-dd308a31/scores/20260929T044125663Z-3fe6d94c/P-008/score.json",
+      "evidence": "runs/20260929T044048678Z-dd308a31/scores/20260929T044125663Z-3fe6d94c/P-008/evidence-artifact.json"
+    },
+    {
+      "probeId": "P-009",
+      "exitCode": 0,
+      "failure": null,
+      "record": "runs/20260929T044048678Z-dd308a31/scores/20260929T044125663Z-3fe6d94c/P-009/score.json",
+      "evidence": "runs/20260929T044048678Z-dd308a31/scores/20260929T044125663Z-3fe6d94c/P-009/evidence-artifact.json"
+    },
+    {
+      "probeId": "P-017",
+      "exitCode": 0,
+      "failure": null,
+      "record": "runs/20260929T044048678Z-dd308a31/scores/20260929T044125663Z-3fe6d94c/P-017/score.json",
+      "evidence": "runs/20260929T044048678Z-dd308a31/scores/20260929T044125663Z-3fe6d94c/P-017/evidence-artifact.json"
+    }
+  ],
+  "refused": []
+}

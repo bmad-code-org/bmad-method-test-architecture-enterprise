@@ -1,0 +1,9 @@
+[
+  {
+    "rule": "malformed-input",
+    "relevancePredicate": "malformed-input-relevance",
+    "satisfactionPredicate": "malformed-input-satisfaction",
+    "satisfied": false,
+    "severity": "critical"
+  }
+]

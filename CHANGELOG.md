@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Evaluate's gap stage now has a blind seeded-weakness proof: a loosened review oracle and a missing type-violating input are diagnosed from engine evidence, repaired, and replayed through `test:evaluate-gap-loop` across development and held-out partitions (Story 1.25).
 - Evaluate now has recorded, strong authoring proofs for an HTTP AI feature and a CLI test-review command. Their frozen target inputs, authored suites, controlled mutations, development and held-out evidence, and deterministic replay run in `test:evaluate-authoring` (Story 1.24).
 - Evaluate authored and ran the behavioral suite for its own skill, `bmad-testarch-evaluate`, live through the local Claude Code CLI (Story 1.16, AD-15). The committed evaluation at `test/evaluations/bmad-testarch-evaluate/` checks that Stage 11 names the AD-10 class of a failed `tea-evaluate` exit and that Stage 1 maps a web application to `api`, seeds a class swap in the gap guide's exit table with a held-out second swap, and holds each reply to one JSON object through the runner's `--agent-arg`. It replaces the manifest's last `deferred` entry as an `evaluate-authored` suite, and the proof run, its rollback digests and an independent `eval-quality score` replay are recorded in `epic-1-proof.md`. `.prettierignore` keeps the evaluation folder's digested bytes out of formatting.
 - Evaluate-authored suites can be registered alongside generator-owned suites, with manifest and evaluation policy checks before they enter the test inventory. `eval:all` records their IDs when it skips them (Story 1.15).
@@ -232,6 +233,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Evaluate's gap guide now states the engine's `malformed-input` contract requirement: every relevant operation needs a type-violating planned input and an oracle check addressing its step. A blind repair exposed that caught malformed probes alone left the coverage gap open (Story 1.25).
 - The pre-commit gate clears Git's hook-local repository selectors while running `npm test`, and the test-review CLI fixture clears inherited Git selectors before building its scratch repository. This keeps nested fixture checkouts from changing the contributor's branch (Story 1.24).
 - The Evaluate HTTP probe port enforces its elapsed cap across resolution, server preparation, sending and redirects, including large declared caps. Typed mutations reject string-only CLI and header bindings before launch (Story 1.24).
 - A guardian stops an agent's process group after a simultaneous supervisor and leader kill. Evaluate records each workspace in a held private journal, keeps an ownership marker through interrupted cleanup, supervises Git checkout and removal, and reclaims verified scratch and detached Git registrations from killed runs on the next preflight (Story 1.28).
