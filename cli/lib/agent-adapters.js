@@ -70,7 +70,7 @@ const RUNNER_CAPABILITIES = ['read-only', 'scoped-artifact-writes', 'command-exe
 
 /** What a caller gets when it declares nothing: the tier the review CLI has always run at. */
 const DEFAULT_CAPABILITIES = ['scoped-artifact-writes'];
-const { parseUsageReport, validateUsage } = require('./evaluate/usage-report');
+const { decimalNumber, parseUsageReport, validateUsage } = require('./evaluate/usage-report');
 
 const WRITE_TOOLS = ['Write', 'Edit'];
 const COMMAND_TOOLS = ['Bash'];
@@ -445,7 +445,14 @@ function agentReplyAndUsage(agent, stdout, stderr) {
     const outputTokens = usage.output_tokens;
     return {
       stdout: result.result,
-      usage: validateUsage({ inputTokens, outputTokens, costUsd: String(cost) }, 'claude usage report'),
+      usage: validateUsage(
+        {
+          inputTokens,
+          outputTokens,
+          costUsd: typeof cost === 'number' ? decimalNumber(cost, 'claude usage report costUsd') : String(cost),
+        },
+        'claude usage report',
+      ),
     };
   }
   if (agent === 'codex') {

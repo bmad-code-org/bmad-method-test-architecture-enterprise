@@ -89,6 +89,7 @@ context:
 
 - Manual audit covered the usage report parser, safe integer and decimal validation, raw stderr capture before scrubbing, scored-trial aggregation, API and MCP unreported markers, built-in adapter translation, and the `.prettierignore` exception. No verified product defect remains.
 - Independent final review subagents were attempted after the full local gate. The weekly Codex allowance refused or stalled those sessions, so the independent review gate was skipped and the manual audit is the recorded review evidence.
+- Manual follow-up repaired four concrete gaps: exponent-form Claude costs are normalized to decimal strings, synthetic gameability arms exclude usage accounting, the reference's stale zero-use sentence is corrected, and usage fixtures require run artifacts plus marker shapes.
 
 ## Verification
 

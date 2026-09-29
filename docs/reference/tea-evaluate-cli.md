@@ -717,7 +717,7 @@ It cannot be used with a rubric until the harness can provide a verifiable calib
 Take the brief from `eval-quality seal`, which is deterministic; nothing ties the records to the target's state at this run.
 
 **Fixed conditions.** `decodingParameters` carries `tea.evaluatorKind` for every kind (so deterministic digests differ once from the release before), and for the row-converting kinds `tea.evaluatorTreeDigest` over the layer's files, `tea.evaluatorWiring` (the `evaluation.json` block), and `tea.evaluatorExecutableDigest` and `tea.evaluatorModelSnapshot` for a command or `tea.evaluatorAgent` and `tea.evaluatorModel` for an agent: a changed file, argument, model or timeout changes the scoring version.
-The isolation manifest adds the evaluator's timeout and an agent's call budget to its ceilings and the agent's calls to its use; tokens and cost stay zero (Story 1.29).
+The isolation manifest adds the evaluator's timeout and an agent's call budget to its ceilings and the agent's calls to its use; target reported tokens and cost are included in actual resource use, while absent reports remain zero and are listed in `run.json.unreportedResourceUse`.
 
 ## score
 

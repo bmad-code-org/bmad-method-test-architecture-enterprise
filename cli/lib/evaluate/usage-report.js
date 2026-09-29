@@ -6,6 +6,22 @@ const PREFIX = 'TEA_EVALUATE_USAGE_JSON:';
 const ZERO = Object.freeze({ inputTokens: 0, outputTokens: 0, costUsd: '0' });
 const DECIMAL = /^(?:0|[1-9]\d*)(?:\.\d+)?$/;
 
+function decimalNumber(value, source = 'target usage report costUsd') {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    throw new Error(`${source} must be a finite nonnegative number`);
+  }
+  const rendered = String(value);
+  if (!/[eE]/.test(rendered)) return rendered;
+  const [coefficient, exponentText] = rendered.toLowerCase().split('e');
+  const exponent = Number.parseInt(exponentText, 10);
+  const [whole, fraction = ''] = coefficient.split('.');
+  const digits = `${whole}${fraction}`;
+  const point = whole.length + exponent;
+  if (point <= 0) return `0.${'0'.repeat(-point)}${digits}`;
+  if (point >= digits.length) return `${digits}${'0'.repeat(point - digits.length)}`;
+  return `${digits.slice(0, point)}.${digits.slice(point)}`;
+}
+
 function validateUsage(value, source = 'target usage report') {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) throw new Error(`${source} must be a JSON object`);
   const keys = Object.keys(value).sort();
@@ -59,4 +75,4 @@ function addUsage(left, right) {
   return validateUsage({ inputTokens, outputTokens, costUsd: addDecimal(left.costUsd, right.costUsd) }, 'target usage report sum');
 }
 
-module.exports = { PREFIX, ZERO, validateUsage, parseUsageReport, addUsage };
+module.exports = { PREFIX, ZERO, decimalNumber, validateUsage, parseUsageReport, addUsage };

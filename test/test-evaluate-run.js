@@ -919,11 +919,14 @@ function checkTargetUsageReports() {
   }
   const claude = agentReplyAndUsage(
     'claude',
-    JSON.stringify({ result: 'answer', usage: { input_tokens: 2, cache_read_input_tokens: 3, output_tokens: 4 }, total_cost_usd: 0.0007 }),
+    JSON.stringify({ result: 'answer', usage: { input_tokens: 2, cache_read_input_tokens: 3, output_tokens: 4 }, total_cost_usd: 7e-7 }),
     '',
   );
   check(
-    claude.stdout === 'answer' && claude.usage?.inputTokens === 5 && claude.usage?.outputTokens === 4 && claude.usage?.costUsd === '0.0007',
+    claude.stdout === 'answer' &&
+      claude.usage?.inputTokens === 5 &&
+      claude.usage?.outputTokens === 4 &&
+      claude.usage?.costUsd === '0.0000007',
     `claude adapter translated ${JSON.stringify(claude)}`,
   );
   const codex = agentReplyAndUsage(
@@ -950,6 +953,7 @@ function checkTargetUsageReports() {
   });
   check(measured.status === 0, `reported usage run exited ${measured.status}: ${measured.output}`);
   const measuredDirectory = runDirectoryOf(reported.folder);
+  check(measuredDirectory !== null, 'reported usage run did not write a run directory');
   if (measuredDirectory !== null) {
     const run = readJson(path.join(measuredDirectory, 'run.json'));
     const firstEvidence = readJson(path.join(measuredDirectory, 'trials', 'clean', 'trial-1.json'));
@@ -987,8 +991,21 @@ function checkTargetUsageReports() {
     });
     check(outcome.status === 0, `${name} exited ${outcome.status}: ${outcome.output}`);
     const directory = runDirectoryOf(made.folder);
+    check(directory !== null, `${name} did not write a run directory`);
     if (directory === null) continue;
     const run = readJson(path.join(directory, 'run.json'));
+    check(
+      run.unreportedResourceUse.every(
+        (entry) =>
+          typeof entry.conditionArm === 'string' &&
+          Number.isInteger(entry.trialIndex) &&
+          entry.trialIndex > 0 &&
+          Array.isArray(entry.stepIds) &&
+          entry.stepIds.length > 0 &&
+          entry.stepIds.every((stepId) => typeof stepId === 'string'),
+      ),
+      `${name} unreported marker has an invalid shape: ${JSON.stringify(run.unreportedResourceUse)}`,
+    );
     check(
       missing ? run.unreportedResourceUse?.length === 6 : run.unreportedResourceUse?.length === 0,
       `${name} unreported marker is ${JSON.stringify(run.unreportedResourceUse)}`,

@@ -538,7 +538,7 @@ function orderedSteps(plan) {
  *   observations by step
  * @throws {ArmError}
  */
-async function runArm({ contract, port, registry, label, provenance = 'baseline', signal }) {
+async function runArm({ contract, port, registry, label, provenance = 'baseline', countUsage = true, signal }) {
   const operations = operationsById(contract);
   const plan = contract.interactionPlan ?? [];
   const declared = new Set(plan.map((step) => step.stepId));
@@ -653,7 +653,7 @@ async function runArm({ contract, port, registry, label, provenance = 'baseline'
       error.steps = steps;
       throw error;
     }
-    if (request.kind !== 'cli') unreportedSteps.push(step.stepId);
+    if (countUsage && request.kind !== 'cli') unreportedSteps.push(step.stepId);
     if (request.kind === 'api') {
       stepObservations[step.stepId] = recordObservation({
         observationId: request.probeId,
@@ -692,14 +692,16 @@ async function runArm({ contract, port, registry, label, provenance = 'baseline'
       error.steps = steps;
       throw error;
     }
-    try {
-      const reported = parseUsageReport(answered.usageReportStderr ?? observation.stderr, `step ${step.stepId}`);
-      if (reported === null) unreportedSteps.push(step.stepId);
-      else resourceUse = addUsage(resourceUse, reported);
-    } catch (error_) {
-      const error = new ArmError(`the ${label} arm's ${error_.message}`);
-      error.steps = steps;
-      throw error;
+    if (countUsage) {
+      try {
+        const reported = parseUsageReport(answered.usageReportStderr ?? observation.stderr, `step ${step.stepId}`);
+        if (reported === null) unreportedSteps.push(step.stepId);
+        else resourceUse = addUsage(resourceUse, reported);
+      } catch (error_) {
+        const error = new ArmError(`the ${label} arm's ${error_.message}`);
+        error.steps = steps;
+        throw error;
+      }
     }
     stepObservations[step.stepId] = recordObservation({
       observationId: request.probeId,
