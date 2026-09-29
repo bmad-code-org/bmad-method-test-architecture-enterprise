@@ -699,7 +699,7 @@ async function checkPortUnits() {
       badLocation.observation?.status === 302 && badLocation.observation.headers.location === 'http://[::1' && badLocation.sends === 1,
       `a redirect with a malformed Location gave ${JSON.stringify(badLocation.observation ?? badLocation.error?.message)}`,
     );
-    // The transport's prepare step runs once per request, after the policy allowed its first hop and before its cap.
+    // The transport's prepare step runs once per request, after the policy allowed its first hop and within its cap.
     const prepared = [];
     const preparing = createHttpProbePort({
       policy: { authorizations: [{ ...authorization('127.0.0.1'), maxElapsedMs: 200 }] },
@@ -718,7 +718,7 @@ async function checkPortUnits() {
       .probe(request('POST', '/echo', { body: { kind: 'json', value: { answer: 'x'.repeat(100) } } }))
       .catch((error) => error);
     check(
-      slowPrepared?.status === 200 &&
+      slowPrepared?.code === 'budget-exhausted' &&
         prepared.length === 1 &&
         prepared[0].address === '127.0.0.1' &&
         prepared[0].port === service.port &&
@@ -1066,6 +1066,47 @@ async function checkUnits() {
         }),
     `an HTTP step's path, header and body are recorded as ${JSON.stringify(boundRecord?.callInputs)} from ${JSON.stringify(boundArm.steps[0]?.request)}`,
   );
+  const malformedBody = structuredClone(bound);
+  malformedBody.permittedInterfaces[0].operations[0].requestShape.body = {
+    requiredKeys: [],
+    permittedKeys: ['answer'],
+    types: { answer: 'string' },
+  };
+  malformedBody.interactionPlan[0].inputBinding.body = { answer: { matcher: 'type-violating' } };
+  const malformedBodyArm = await runArm({
+    contract: malformedBody,
+    port: answering({ kind: 'api', status: 400, headers: {}, body: { kind: 'json', value: { error: 'invalid answer' } } }),
+    registry: null,
+    label: 'malformed',
+  });
+  check(
+    malformedBodyArm.steps[0]?.request.channels.body.kind === 'json' &&
+      malformedBodyArm.steps[0].request.channels.body.value.answer === 42 &&
+      malformedBodyArm.stepObservations['grade-run'].callInputs.body.answer === 42,
+    `a type-violating HTTP body did not reach the port and record as a JSON number: ${JSON.stringify(malformedBodyArm.steps[0]?.request)}`,
+  );
+  const malformedHeader = structuredClone(bound);
+  malformedHeader.permittedInterfaces[0].operations[0].requestShape.header = {
+    requiredKeys: [],
+    permittedKeys: ['x-trace'],
+    types: { 'x-trace': 'string' },
+  };
+  malformedHeader.interactionPlan[0].inputBinding.header = { 'x-trace': { matcher: 'type-violating' } };
+  let malformedHeaderError = null;
+  try {
+    await runArm({
+      contract: malformedHeader,
+      port: answering({ kind: 'api', status: 200, headers: {}, body: { kind: 'absent' } }),
+      registry: null,
+      label: 'malformed',
+    });
+  } catch (error) {
+    malformedHeaderError = error;
+  }
+  check(
+    malformedHeaderError instanceof ArmError && malformedHeaderError.message.includes('type-violating header.x-trace'),
+    `a type-violating HTTP header was accepted: ${malformedHeaderError}`,
+  );
 
   // A trial whose step the registry denies records eval-quality's reason in its fault and names it as it exits 10. The
   // pipeline's qualification runs the same plan under the same policy first, so the trial is driven directly.
@@ -1364,6 +1405,8 @@ async function checkUnits() {
   const permissive = makeProject('port-allows-all', {
     edit: ({ folder }) => {
       const file = path.join(folder, HTTP_PORT_MODULE);
+      const oldPrepare = 'await prepare({ scheme, host, port, address: decision.canonicalAddress, method }, signal);';
+      const newPrepare = 'await whileActive(() => prepare({ scheme, host, port, address: decision.canonicalAddress, method }, exchange));';
       fs.writeFileSync(
         file,
         fs
@@ -1373,9 +1416,10 @@ async function checkUnits() {
             'const decision = { allowed: true, authorization: policy.authorizations[0], canonicalAddress: address };',
           )
           .replace(
-            'await prepare({ scheme, host, port, address: decision.canonicalAddress, method }, signal);',
-            "await prepare({ scheme, host, port, address: decision.canonicalAddress, method: 'GET' }, signal);",
-          ),
+            newPrepare,
+            "await whileActive(() => prepare({ scheme, host, port, address: decision.canonicalAddress, method: 'GET' }, exchange));",
+          )
+          .replace(oldPrepare, "await prepare({ scheme, host, port, address: decision.canonicalAddress, method: 'GET' }, signal);"),
       );
     },
   });
@@ -2135,7 +2179,7 @@ async function checkDenials() {
     return faults.length === 1 ? readJson(path.join(runDirectory, 'faults', faults[0])) : null;
   };
 
-  // A service slower to start than a request's cap still answers: the cap counts from the moment it accepts a connection.
+  // A service slower to start than a request's cap is stopped during preparation.
   const slow = makeProject('slow-start', {
     edit: (project) => {
       cleanOnly(project);
@@ -2146,9 +2190,10 @@ async function checkDenials() {
     },
   });
   const slowRan = evaluate(['preflight', '--evaluation', slow.folder], slow.env);
+  const slowFault = legFaultOf(slow);
   check(
-    slowRan.status === 0,
-    `a service slower to start than the request's cap: preflight exited ${slowRan.status}; expected 0\n${slowRan.output}`,
+    slowRan.status === 12 && slowFault?.code === 'budget-exhausted',
+    `a service slower to start than the request's cap: preflight exited ${slowRan.status} with fault ${JSON.stringify(slowFault)}; expected budget-exhausted\n${slowRan.output}`,
   );
 
   // A service that exits during a call is a target that could not run, its cause naming that it had accepted a connection.
@@ -2174,10 +2219,15 @@ async function checkDenials() {
     edit: (project) => {
       cleanOnly(project);
       portEdit((text) =>
-        text.replace(
-          'await prepare({ scheme, host, port, address: decision.canonicalAddress, method }, signal);',
-          "await prepare({ scheme, host, port, address: '127.0.0.2', method }, signal);",
-        ),
+        text
+          .replace(
+            'await whileActive(() => prepare({ scheme, host, port, address: decision.canonicalAddress, method }, exchange));',
+            "await whileActive(() => prepare({ scheme, host, port, address: '127.0.0.2', method }, exchange));",
+          )
+          .replace(
+            'await prepare({ scheme, host, port, address: decision.canonicalAddress, method }, signal);',
+            "await prepare({ scheme, host, port, address: '127.0.0.2', method }, signal);",
+          ),
       )(project);
     },
   });

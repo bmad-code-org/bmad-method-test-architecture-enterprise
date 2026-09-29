@@ -1,0 +1,118 @@
+{
+  "probeId": "P-013",
+  "probeClass": "defect",
+  "behaviorId": "B-003",
+  "expectedClean": false,
+  "rationale": "[held-out] A malformed array is spuriously accepted.",
+  "defects": [
+    {
+      "defectId": "D-007",
+      "behaviorId": "B-003",
+      "summary": "[held-out] A malformed array is spuriously accepted.",
+      "severity": "material",
+      "source": "controlled-mutation",
+      "manifestationWitness": {
+        "legId": "p-013-manifest-decision-pass",
+        "interfaceId": "answer-grade",
+        "operationId": "grade-answer",
+        "inputs": {
+          "path": {},
+          "query": {},
+          "header": {},
+          "body": {
+            "kind": "json",
+            "value": {
+              "answer": [
+                "valid",
+                "words"
+              ]
+            }
+          }
+        },
+        "relation": {
+          "op": "all",
+          "operands": [
+            {
+              "op": "deep-equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/p-013-manifest-decision-pass/call-inputs/body"
+                },
+                {
+                  "literal": {
+                    "answer": [
+                      "valid",
+                      "words"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "op": "deep-equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/p-013-manifest-decision-pass/call-inputs/query"
+                },
+                {
+                  "literal": {}
+                }
+              ]
+            },
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/p-013-manifest-decision-pass/response-body/decision"
+                },
+                {
+                  "literal": "pass"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "defectSignature": {
+    "interfaceKind": "api",
+    "observableChannel": "response-body",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": null,
+          "header": null,
+          "body": {
+            "answer": {
+              "matcher": "type-violating"
+            }
+          },
+          "argument": null,
+          "option": null,
+          "environment": null,
+          "stdin": null,
+          "arguments": null
+        }
+      },
+      "predicate": {
+        "op": "equality",
+        "operands": [
+          {
+            "pointer": "/interactions/observed/response-body/decision"
+          },
+          {
+            "literal": "pass"
+          }
+        ]
+      }
+    },
+    "method": "POST",
+    "pathTemplate": "/grade"
+  },
+  "qualification": {
+    "route": "controlled-mutation",
+    "mutation": "M-007"
+  }
+}

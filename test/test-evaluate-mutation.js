@@ -983,9 +983,11 @@ async function checkUnits() {
   const contract = readJson(path.join(FIXTURE, EVALUATION, 'contract.json'));
   const step = contract.interactionPlan[0];
   const sent = [];
+  const requests = [];
   const port = {
     probe: async (request) => {
       sent.push(request.probeId);
+      requests.push(request);
       return {
         request,
         observation: {
@@ -1012,8 +1014,41 @@ async function checkUnits() {
     JSON.stringify(sent) === JSON.stringify(['order-first', 'order-second']),
     `the arm ran its steps as ${JSON.stringify(sent)}; a step runs after the one its after clause names`,
   );
-  // A captured binding is sent (Story 1.18, test:evaluate-workflow); a matcher and a principal are not yet (Story 1.30).
-  for (const binding of [{ matcher: 'any' }, { matcher: 'type-violating' }, { principal: 'reviewer' }]) {
+  // A captured binding is sent (Story 1.18, test:evaluate-workflow). A type-violating matcher reaches JSON stdin with another type.
+  const malformedContract = structuredClone(contract);
+  malformedContract.permittedInterfaces[0].operations[0].requestShape.stdin.permittedKeys.push('action');
+  malformedContract.permittedInterfaces[0].operations[0].requestShape.stdin.types.action = 'string';
+  malformedContract.interactionPlan = [
+    {
+      ...step,
+      inputBinding: { ...step.inputBinding, stdin: { action: { literal: 'judge' }, prompt: { matcher: 'type-violating' } } },
+    },
+  ];
+  const malformedArm = await runArm({ contract: malformedContract, port, registry, label: 'malformed' });
+  check(
+    requests.at(-1)?.channels.stdin.kind === 'json' &&
+      requests.at(-1).channels.stdin.value.prompt === 42 &&
+      malformedArm.stepObservations[step.stepId].callInputs.stdin.prompt === 42,
+    'the type-violating matcher did not send and record a JSON number against the declared string prompt',
+  );
+  for (const channel of ['argument', 'option', 'environment']) {
+    const unbound = structuredClone(contract);
+    unbound.permittedInterfaces[0].operations[0].requestShape[channel].permittedKeys.push('value');
+    unbound.permittedInterfaces[0].operations[0].requestShape[channel].types.value = 'string';
+    unbound.interactionPlan[0].inputBinding[channel] = { value: { matcher: 'type-violating' } };
+    let refused = null;
+    const before = requests.length;
+    try {
+      await runArm({ contract: unbound, port, registry, label: 'binding' });
+    } catch (error) {
+      refused = error;
+    }
+    check(
+      refused instanceof ArmError && refused.message.includes(`type-violating ${channel}.value`) && requests.length === before,
+      `a type-violating ${channel} reached the command port: ${refused}`,
+    );
+  }
+  for (const binding of [{ matcher: 'any' }, { principal: 'reviewer' }]) {
     const unbound = { ...contract, interactionPlan: [{ ...step, inputBinding: { ...step.inputBinding, stdin: { prompt: binding } } }] };
     let refused = null;
     try {
@@ -1023,7 +1058,7 @@ async function checkUnits() {
     }
     check(
       refused instanceof ArmError,
-      `an arm binding stdin with ${JSON.stringify(binding)} ran; this release sends literal and captured bindings only`,
+      `an arm binding stdin with ${JSON.stringify(binding)} ran; this release sends literal, type-violating and captured bindings only`,
     );
   }
 

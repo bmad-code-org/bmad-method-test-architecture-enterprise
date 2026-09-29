@@ -1939,13 +1939,20 @@ function moveViolations(root) {
 }
 
 /**
- * What a move plant's temp root holds: the trees the named files load (so the
- * identity half can require them), the config, and a link to this
- * repository's `node_modules`.
+ * What a move plant's temp root holds: the runtime, top-level test modules,
+ * their local support modules, the config, and a link to this repository's
+ * `node_modules`. Fixture and replay trees are outside the move check.
  */
 const MOVE_TREES = ['cli', 'test', 'tools', 'package.json', CONFIG_FILE];
-/** What no named file loads and a live run may have filled: the live harness's own artifacts and leg cache. */
-const MOVE_TREE_SKIPS = new Set(['test/eval-artifacts']);
+const MOVE_TEST_SUBTREES = new Set(['test/lib', 'test/schema']);
+
+function moveCopyFilter(from) {
+  const relative = path.relative(PROJECT_ROOT, from).split(path.sep).join('/');
+  if (relative === 'test' || !relative.startsWith('test/')) return true;
+  const parts = relative.split('/');
+  if (parts.length === 2) return !fs.lstatSync(from).isDirectory() || MOVE_TEST_SUBTREES.has(relative);
+  return MOVE_TEST_SUBTREES.has(`test/${parts[1]}`);
+}
 
 /** Each plant undoes one part of the move in a temp copy and must be reported. */
 const MOVE_PLANTS = [
@@ -2235,7 +2242,7 @@ function proveMoveCheck() {
         fs.mkdirSync(path.dirname(path.join(root, relative)), { recursive: true });
         fs.cpSync(path.join(PROJECT_ROOT, relative), path.join(root, relative), {
           recursive: true,
-          filter: (from) => !MOVE_TREE_SKIPS.has(path.relative(PROJECT_ROOT, from).split(path.sep).join('/')),
+          filter: moveCopyFilter,
         });
       }
       fs.symlinkSync(path.join(PROJECT_ROOT, 'node_modules'), path.join(root, 'node_modules'), 'dir');

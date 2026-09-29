@@ -3,8 +3,14 @@
 # Auto-fix changed files and stage them
 npx --no-install lint-staged
 
-# Validate everything
-npm test
+# Validate everything without the hook's repository selectors. Tests create
+# disposable Git repositories and must resolve their own worktrees and indexes.
+(
+  for variable in $(git rev-parse --local-env-vars); do
+    unset "$variable"
+  done
+  npm test
+)
 
 # Validate docs links only when docs change
 if command -v rg >/dev/null 2>&1; then

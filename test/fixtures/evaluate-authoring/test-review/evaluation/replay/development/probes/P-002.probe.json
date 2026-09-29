@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 5,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "probeId": "P-002",
+  "probeClass": "zero-action",
+  "behaviorId": "B-002",
+  "systemId": "test-review-json-stdin",
+  "implementationDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
+  "artifactDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
+  "commitDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
+  "rationale": "[representative] Both disabled-test markers receive exactly disabled-test.",
+  "qualification": {
+    "route": "clean-control",
+    "baselinePassEvidence": {
+      "storage": "public",
+      "path": "runs/20260928T230839868Z-4d00f346/qualification/P-002/baseline-pass.json",
+      "privateRef": null,
+      "digest": "sha256:1c25e4bfe39d78c316ebdf07b1771e5f241d5ef0f6e9619e76bf3fe78f7622af"
+    },
+    "revisionCommitDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
+    "noKnownDefectStatement": "No known defect at this revision."
+  },
+  "expectedClean": true,
+  "defects": []
+}

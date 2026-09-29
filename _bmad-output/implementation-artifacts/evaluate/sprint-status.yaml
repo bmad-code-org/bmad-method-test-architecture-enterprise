@@ -59,7 +59,7 @@ development_status:
   1-14-drive-the-run-and-interpret-the-gaps: done
   1-15-float-the-engine-pin-and-admit-evaluate-authored-suites: done
   1-16-evaluate-authors-its-own-suite-run-live-and-recorded: done
-  1-24-evaluate-authors-strong-suites-for-two-more-target-kinds: backlog
+  1-24-evaluate-authors-strong-suites-for-two-more-target-kinds: in-progress
   1-25-close-seeded-weaknesses-through-the-gap-loop: backlog
   1-26-learn-an-unfamiliar-evaluation-framework-on-the-go: backlog
   1-27-tell-a-documented-guard-from-an-invented-risk-in-the-test-d: done
@@ -85,6 +85,8 @@ development_status:
   1-47-distinguish-reference-risk-tables-from-the-scored-register: backlog
   1-48-report-whole-document-coverage-for-a-structured-design-artifact: backlog
   1-49-prove-test-design-mutation-rollback-before-claiming-it: backlog
+  1-50-send-malformed-raw-http-bodies-through-an-api-probe: backlog
+  1-51-isolate-interaction-plans-by-evaluation-partition: backlog
   epic-1-retrospective: optional
 
   epic-2: backlog

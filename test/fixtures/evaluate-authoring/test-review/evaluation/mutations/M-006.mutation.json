@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "mutationId": "M-006",
+  "mutationSource": "Adopter-owned B-002 rule change",
+  "targetArtifact": "bin/review.mjs",
+  "operator": {
+    "kind": "replace-exact",
+    "find": "if (rules.disabled.some((token) => source.includes(token)))",
+    "replace": "if (false && rules.disabled.some((token) => source.includes(token)))",
+    "occurrences": 1
+  },
+  "expectedObservableFailure": "stdout omits disabled-test for test.skip"
+}

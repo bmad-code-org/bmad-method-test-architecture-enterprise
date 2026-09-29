@@ -23,7 +23,7 @@ inputDocuments:
 
 ## Overview
 
-This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and fifty-five stories, including H.1 (Stories 1.27 to 1.49 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
+This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and fifty-seven stories, including H.1 (Stories 1.27 to 1.51 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
 
 Evaluate is fully stacked. The stack runs system under test, then the evaluation (the mechanism that runs the system, collects evidence and makes judgments), then the Behavioral Evaluation Contract (what behavior matters, what evidence counts, how success and failure resolve), then eval-quality (contract sanity, evidence support, and whether the evaluation catches defects). TeA owns every layer above eval-quality, including each concern eval-quality states it leaves to the caller, so an adopter can evaluate any target end to end. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3 onward, Epic 2 and H.1 to close the plan gap audit; the Traceability section maps each audit item to the story that closes it.
 
@@ -150,7 +150,7 @@ None. Evaluate has no graphical interface.
 ### Epic 1: The Evaluate authoring loop
 
 An adopter describes a target, answers Evaluate's questions, chooses or builds the evaluation layer and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches the seeded defect, with the gaps named and closed. The epic closes by running Evaluate on `bmad-testarch-evaluate` itself, then proving the guidance on two more target kinds, on seeded weaknesses and on an evaluation framework its guides never name.
-Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.49.
+Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.51.
 
 **FRs covered:** FR1 to FR10, FR13, FR14.
 
@@ -215,12 +215,14 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 47    | 1.47  | 1.27                         |
 | 48    | 1.48  | 1.27                         |
 | 49    | 1.49  | 1.27                         |
-| 50    | 2.1   | 1.16, 1.26, 1.45             |
-| 51    | 2.2   | 2.1                          |
-| 52    | 2.3   | 2.2                          |
-| 53    | 2.4   | 2.3                          |
-| 54    | 2.5   | 2.4                          |
-| 55    | H.1   | 2.5                          |
+| 50    | 1.50  | 1.11, 1.24                   |
+| 51    | 1.51  | 1.21, 1.24                   |
+| 52    | 2.1   | 1.16, 1.26, 1.45             |
+| 53    | 2.2   | 2.1                          |
+| 54    | 2.3   | 2.2                          |
+| 55    | 2.4   | 2.3                          |
+| 56    | 2.5   | 2.4                          |
+| 57    | H.1   | 2.5                          |
 
 ## Epic 1: The Evaluate authoring loop
 
@@ -867,10 +869,10 @@ So that the guidance is proven to produce corpora and contracts that compile, pr
 **Acceptance Criteria:**
 
 **Given** two fixture targets with no evaluation folder: an AI feature over HTTP at `test/fixtures/evaluate-authoring/ai-feature/target/` (a loopback stub that answers from a rules file) and a test-review mechanism at `test/fixtures/evaluate-authoring/test-review/target/` (a `cli` stub that reviews a test file and reports smells), each with a `DESCRIPTION.md` and an `intake-answers.md`, and neither naming the defects the worker will seed
-**When** a maintainer session runs `EV` on each through the local Claude Code CLI, in a temporary folder holding only the installed skill, the target and its two files, answering intake from `intake-answers.md`
+**When** a maintainer session runs `EV` on each through an isolated local `gpt-6-sol` high-reasoning agent session, in a temporary folder holding only the installed skill, the target and its two files, answering intake from `intake-answers.md`
 **Then** each session writes `evaluation.json`, `contract.json`, probes (held-out probes among them), mutations, `corpus-index.json`, `policy/` and its evaluator choice with the selection-rubric reason, committed under `test/fixtures/evaluate-authoring/<kind>/evaluation/`, with the inspection record, the requirements statement and the session transcript committed beside it
 **And** `tea-evaluate check`, `eval-quality compile` and `eval-quality seal` exit 0, and preflight passes
-**And** each suite scores strong at `minimumTrialCount`, defined for this plan as: the clean control resolves `passed-clean-control`; every defect, zero-action and gameability probe, development and held-out, resolves `caught`; every exercised probe class has rate 1.0; the verdict is PASS with no coverage gap at or above `severityFloor`
+**And** each suite scores strong at `minimumTrialCount`, defined for this plan as: every zero-action clean control resolves `passed-clean-control`; every defect and gameability probe, development and held-out, resolves `caught`; every exercised defect and gameability class has rate 1.0; the verdict is PASS with no coverage gap at or above `severityFloor`
 **And** every probe `rationale` opens with its corpus section tag, and each suite covers all four corpus sections for its kind, which the test asserts
 **And** one of the two sessions also receives the request to evaluate whether the stub's underlying model is good at the task; its transcript shows the redirect to the adopter's use of the model with the model recorded as a fixed condition, and no committed mutation targets a model
 **And** a result short of strong is recorded as found and closed through the gap loop inside the story, each iteration in the transcript; the story ends only when both suites are strong
@@ -879,6 +881,10 @@ So that the guidance is proven to produce corpora and contracts that compile, pr
 
 **Dependencies:** 1.16.
 **Gate:** `npm test`.
+
+**Amended 2026-09-28:** The first local Claude Code CLI test-review session reached the subscription's weekly limit before completing its handoff. The owner directed that every agent team and peer session use `gpt-6-sol` with high reasoning effort. The final Story 1.24 authoring proof therefore uses fresh isolated sessions on that model. The incomplete Claude transcripts remain recorded as historical attempts; the final target input snapshots and full session transcripts are committed with the suites.
+
+**Clarified 2026-09-28:** A zero-action clean control is expected to pass. The strong definition now states that outcome explicitly; defect and gameability probes are expected to be caught. This resolves contradictory outcomes in the original sentence without changing the required evidence.
 
 ### Story 1.25: Close seeded weaknesses through the gap loop
 
@@ -1396,6 +1402,44 @@ So that a test-design probe cannot claim rollback based only on two stored files
 
 **Dependencies:** 1.27.
 **Gate:** `npm test`, suite-only staged preflight.
+
+### Story 1.50: Send malformed raw HTTP bodies through an API probe
+
+Added in Story 1.24's AI-feature proof. The published eval-quality `ProbeRequestBody` schema admits JSON or an absent body. TeA's HTTP port serializes the JSON value, so the malformed raw JSON boundary in the intake cannot be represented as a scored probe.
+
+As an adopter evaluating an HTTP API,
+I want to send exact request-body bytes, including malformed JSON,
+So that parser and content-type boundaries can be observed and scored.
+
+**Acceptance Criteria:**
+
+**Given** an API probe with a raw byte body and a declared content type
+**When** the published engine validates the probe and TeA sends it through the HTTP port
+**Then** the target receives exactly those bytes; valid JSON, malformed JSON, an empty body and an absent body remain distinct, and the recorded request digest binds the actual bytes
+**And** the AI-feature fixture has a malformed JSON probe whose target reports its documented error and whose scored oracle catches a controlled parser defect at `minimumTrialCount`; changing one raw byte or silently JSON-serializing the body fails the fixture
+**And** the engine schema change is released before TeA raises its resolved dependency; `check`, preflight, run, score and `npm test` pass on the published engine.
+
+**Dependencies:** 1.11, 1.24.
+**Gate:** published engine release and export check, API fixture replay, `npm test`.
+
+### Story 1.51: Isolate interaction plans by evaluation partition
+
+Added in Story 1.24's held-out integrity review. `run --partition` filters the scored probe set, but the shared contract interaction plan can still execute requests intended only for the other partition. Story 1.24 used shared requests and private mutations, which kept its own held-out inputs outside development records.
+
+As an adopter using held-out probes,
+I want each partition to execute only its authorized interactions,
+So that development runs cannot reveal held-out-only inputs.
+
+**Acceptance Criteria:**
+
+**Given** one development-only request and one held-out-only request in a contract
+**When** preflight and run execute each partition
+**Then** each partition launches only its own authorized request; its observations, trial records, logs and replay bundle contain no request bytes or derived response from the other partition
+**And** a fixture records a private held-out canary, runs development first, and fails if the canary reaches the target or any development artifact; removing the partition filter makes that check fail
+**And** the held-out run still scores after development without exposing its input to the authoring gap loop, and `npm test` passes.
+
+**Dependencies:** 1.21, 1.24.
+**Gate:** partition isolation fixture, replay, `npm test`.
 
 ## Epic 2: Continuous proof in CI
 

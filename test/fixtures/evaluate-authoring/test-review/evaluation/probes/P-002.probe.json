@@ -1,0 +1,12 @@
+{
+  "probeId": "P-002",
+  "probeClass": "zero-action",
+  "behaviorId": "B-002",
+  "expectedClean": true,
+  "rationale": "[representative] Both disabled-test markers receive exactly disabled-test.",
+  "defects": [],
+  "qualification": {
+    "route": "clean-control",
+    "noKnownDefectStatement": "No known defect at this revision."
+  }
+}

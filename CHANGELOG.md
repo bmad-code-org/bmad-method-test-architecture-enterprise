@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Evaluate now has recorded, strong authoring proofs for an HTTP AI feature and a CLI test-review command. Their frozen target inputs, authored suites, controlled mutations, development and held-out evidence, and deterministic replay run in `test:evaluate-authoring` (Story 1.24).
 - Evaluate authored and ran the behavioral suite for its own skill, `bmad-testarch-evaluate`, live through the local Claude Code CLI (Story 1.16, AD-15). The committed evaluation at `test/evaluations/bmad-testarch-evaluate/` checks that Stage 11 names the AD-10 class of a failed `tea-evaluate` exit and that Stage 1 maps a web application to `api`, seeds a class swap in the gap guide's exit table with a held-out second swap, and holds each reply to one JSON object through the runner's `--agent-arg`. It replaces the manifest's last `deferred` entry as an `evaluate-authored` suite, and the proof run, its rollback digests and an independent `eval-quality score` replay are recorded in `epic-1-proof.md`. `.prettierignore` keeps the evaluation folder's digested bytes out of formatting.
 - Evaluate-authored suites can be registered alongside generator-owned suites, with manifest and evaluation policy checks before they enter the test inventory. `eval:all` records their IDs when it skips them (Story 1.15).
 - Evaluate now guides mutation planning, adopter-set risk policy, the private run and score sequence, and evidence-led gap repair through Stage 11. The guidance gate validates tagged mutation files against the runtime schema and checks installed outcome, discipline, preflight and exit mappings. Run-wide class strength is tracked separately because the current engine emits per-probe evidence (Story 1.14).
@@ -231,6 +232,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The pre-commit gate clears Git's hook-local repository selectors while running `npm test`, and the test-review CLI fixture clears inherited Git selectors before building its scratch repository. This keeps nested fixture checkouts from changing the contributor's branch (Story 1.24).
+- The Evaluate HTTP probe port enforces its elapsed cap across resolution, server preparation, sending and redirects, including large declared caps. Typed mutations reject string-only CLI and header bindings before launch (Story 1.24).
 - The README's suite counts and `test:cli`'s `eval:all` invocation count read only the manifest suites a harness runs, so an `evaluate-authored` entry, which declares no runner capabilities and which `eval:all` skips, no longer crashes `test:doc-count-sources` or miscounts the live harnesses (Story 1.16).
 - The test-design evaluation treats ruled-out categories in risk rows scored 1–3 as documented guards. Rows scored above 3 trigger invented-risk oracles and probes. The runner derives a scored-risk view from the harness parser. Test-design risk tables now use the direct `markdown-it` dependency, so reordered columns, lists, fences and indented code resolve through Markdown tokens (Story 1.27).
 - The Evaluate interpretation fixture clears inherited Git repository variables before creating its scratch repository, so the full test gate can run safely inside a Git commit hook.

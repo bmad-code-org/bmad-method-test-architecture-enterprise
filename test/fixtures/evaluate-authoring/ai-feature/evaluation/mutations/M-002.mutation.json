@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "mutationId": "M-002",
+  "mutationSource": "minimum raised in adopter policy",
+  "targetArtifact": "rules/policy.json",
+  "operator": {
+    "kind": "replace-exact",
+    "find": "\"minimumLength\": 8",
+    "replace": "\"minimumLength\": 80",
+    "occurrences": 1
+  },
+  "expectedObservableFailure": "valid answer receives too-short in HTTP response body"
+}

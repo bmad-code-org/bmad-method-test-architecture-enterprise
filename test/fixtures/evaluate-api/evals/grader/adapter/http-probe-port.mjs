@@ -49,6 +49,8 @@ import { probeParsers } from 'eval-quality/conformance';
 
 /** The statuses that carry a `Location` this port follows. */
 const REDIRECTS = new Set([301, 302, 303, 307, 308]);
+// A one-day chunk stays within Node's timer range while keeping longer declared caps exact.
+const TIMER_CHUNK_MS = 24 * 60 * 60 * 1000;
 
 /** Thrown by `send` when an answer passes `maxResponseBytes`. */
 class ResponseTooLarge extends Error {}
@@ -216,8 +218,8 @@ function becomesGet(status, method) {
  * @param {Record<string, { scheme: string, host: string, port: number }>} options.targets where each interface is
  * @param {Record<string, Record<string, string>>} [options.auth] headers each interface's requests carry, by interface
  * @param {{ resolve?: Function, prepare?: Function, send?: Function, tls?: object }} [options.transport] how a request
- *   travels: `prepare`, when given, runs once the policy has allowed a request's first hop and before its elapsed cap
- *   starts, with the target it allowed (`tea-evaluate` starts a service there)
+ *   travels: `prepare`, when given, runs once the policy has allowed a request's first hop and within its elapsed cap,
+ *   with the target it allowed (`tea-evaluate` starts a service there)
  * @param {Function} [options.evaluateTarget] eval-quality's decision, injectable so a test can count its calls
  * @returns {{ probe: (request: unknown, signal: AbortSignal) => Promise<object> }}
  */
@@ -269,12 +271,67 @@ export default function createHttpProbePort({ policy, targets, auth = {}, transp
     const credentials = auth[request.interfaceId] ?? {};
     const originalOrigin = url.origin;
 
-    // One deadline over every hop; an abort of the caller's signal is told apart from the cap.
+    // Start one deadline before resolution. An interface can have several authorizations with different caps, so
+    // use the largest while resolving, then apply the selected authorization's cap to the original start time.
+    const authorizations = policy.authorizations.filter((entry) => entry.interfaceId === request.interfaceId);
+    if (authorizations.length === 0) {
+      const decision = evaluateTarget(policy, {
+        interfaceId: request.interfaceId,
+        scheme: url.protocol.slice(0, -1),
+        host: hostOfUrl(url),
+        port: portOfUrl(url),
+        address: '',
+        method,
+      });
+      throw new RuntimeFault('forbidden-target', 'ProbeRequest', decision.detail, { reason: decision.reason });
+    }
+    const startedAt = performance.now();
     const cap = new AbortController();
     const exchange = signal === undefined ? cap.signal : AbortSignal.any([signal, cap.signal]);
     let timer;
-    let deadline = null;
+    let initialAuthorization;
+    let currentMaxElapsedMs;
     const capped = (detail) => new RuntimeFault('budget-exhausted', 'ProbeObservation', detail);
+    const scheduleCap = () => {
+      const remaining = currentMaxElapsedMs - (performance.now() - startedAt);
+      if (remaining <= 0) cap.abort();
+      else timer = setTimeout(scheduleCap, Math.min(remaining, TIMER_CHUNK_MS));
+    };
+    const armCap = (maxElapsedMs) => {
+      currentMaxElapsedMs = maxElapsedMs;
+      clearTimeout(timer);
+      scheduleCap();
+    };
+    // Transport hooks may ignore AbortSignal. Race each phase against it so the port still settles at the cap.
+    const whileActive = async (operation) => {
+      let onAbort;
+      const aborted = new Promise((_, reject) => {
+        onAbort = () => reject(exchange.reason ?? new Error('the exchange was aborted'));
+        exchange.addEventListener('abort', onAbort, { once: true });
+        if (exchange.aborted) onAbort();
+      });
+      try {
+        const result = await Promise.race([
+          Promise.resolve().then(() => {
+            if (exchange.aborted) throw exchange.reason ?? new Error('the exchange was aborted');
+            return operation();
+          }),
+          aborted,
+        ]);
+        if (performance.now() - startedAt >= currentMaxElapsedMs) {
+          cap.abort();
+          throw cap.signal.reason;
+        }
+        return result;
+      } catch (error) {
+        if (performance.now() - startedAt >= currentMaxElapsedMs) cap.abort();
+        throw error;
+      } finally {
+        exchange.removeEventListener('abort', onAbort);
+      }
+    };
+    const initialMaxElapsedMs = Math.max(...authorizations.map((entry) => entry.maxElapsedMs));
+    armCap(initialMaxElapsedMs);
     try {
       for (let hop = 0; ; hop += 1) {
         const host = hostOfUrl(url);
@@ -283,9 +340,11 @@ export default function createHttpProbePort({ policy, targets, auth = {}, transp
         const hopTarget = { interfaceId: request.interfaceId, scheme, host, port, method };
         let address;
         try {
-          address = await resolve(host, exchange);
+          address = await whileActive(() => resolve(host, exchange));
         } catch (error) {
           if (signal?.aborted) throw new RuntimeFault('aborted', 'ProbeRequest', 'the request was aborted');
+          if (cap.signal.aborted)
+            throw capped(`the exchange passed maxElapsedMs (${initialAuthorization?.maxElapsedMs ?? initialMaxElapsedMs}ms)`);
           // A host that does not resolve is still the policy's to deny when its scheme, host or port is not allowed;
           // only a target the policy would reach at some address is one this port could not reach. eval-quality
           // reports the first denial among an interface's authorizations, so with one authorization per interface, as
@@ -303,43 +362,48 @@ export default function createHttpProbePort({ policy, targets, auth = {}, transp
           throw new RuntimeFault('forbidden-target', 'ProbeRequest', decision.detail, { reason: decision.reason });
         }
         const { authorization } = decision;
+        if (initialAuthorization === undefined) {
+          initialAuthorization = authorization;
+          armCap(initialAuthorization.maxElapsedMs);
+          if (signal?.aborted) throw new RuntimeFault('aborted', 'ProbeRequest', 'the request was aborted');
+          if (cap.signal.aborted) throw capped(`the exchange passed maxElapsedMs (${initialAuthorization.maxElapsedMs}ms)`);
+        }
         if (body !== undefined && body.byteLength > authorization.maxRequestBytes) {
           throw capped(`the request body of ${body.byteLength} bytes passes maxRequestBytes (${authorization.maxRequestBytes})`);
         }
-        if (deadline === null) {
-          if (prepare !== undefined) {
-            try {
-              await prepare({ scheme, host, port, address: decision.canonicalAddress, method }, signal);
-            } catch (error) {
-              if (signal?.aborted) throw new RuntimeFault('aborted', 'ProbeRequest', 'the request was aborted');
-              throw new RuntimeFault('port-failure', 'ProbeObservation', 'the target could not be prepared', { cause: error });
-            }
+        if (hop === 0 && prepare !== undefined) {
+          try {
+            await whileActive(() => prepare({ scheme, host, port, address: decision.canonicalAddress, method }, exchange));
+          } catch (error) {
+            if (signal?.aborted) throw new RuntimeFault('aborted', 'ProbeRequest', 'the request was aborted');
+            if (cap.signal.aborted) throw capped(`the exchange passed maxElapsedMs (${initialAuthorization.maxElapsedMs}ms)`);
+            throw new RuntimeFault('port-failure', 'ProbeObservation', 'the target could not be prepared', { cause: error });
           }
-          deadline = authorization.maxElapsedMs;
-          timer = setTimeout(() => cap.abort(), deadline);
         }
         // Credentials go to the origin they were configured for and to no origin a redirect names.
         const headers = { ...declaredHeaders, ...(url.origin === originalOrigin ? credentials : {}), host: url.host };
         let answer;
         try {
-          answer = await send(
-            {
-              scheme,
-              host,
-              port,
-              address: decision.canonicalAddress,
-              method,
-              path: `${url.pathname}${url.search}`,
-              headers,
-              body,
-              maxResponseBytes: authorization.maxResponseBytes,
-              tls,
-            },
-            exchange,
+          answer = await whileActive(() =>
+            send(
+              {
+                scheme,
+                host,
+                port,
+                address: decision.canonicalAddress,
+                method,
+                path: `${url.pathname}${url.search}`,
+                headers,
+                body,
+                maxResponseBytes: authorization.maxResponseBytes,
+                tls,
+              },
+              exchange,
+            ),
           );
         } catch (error) {
           if (signal?.aborted) throw new RuntimeFault('aborted', 'ProbeRequest', 'the request was aborted');
-          if (cap.signal.aborted) throw capped(`the exchange passed maxElapsedMs (${authorization.maxElapsedMs}ms)`);
+          if (cap.signal.aborted) throw capped(`the exchange passed maxElapsedMs (${initialAuthorization.maxElapsedMs}ms)`);
           if (error instanceof ResponseTooLarge) throw capped(error.message);
           throw new RuntimeFault('port-failure', 'ProbeObservation', 'the request reached no answer', { cause: error });
         }

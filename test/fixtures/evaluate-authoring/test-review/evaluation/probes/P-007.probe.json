@@ -1,0 +1,105 @@
+{
+  "probeId": "P-007",
+  "probeClass": "defect",
+  "behaviorId": "B-003",
+  "expectedClean": false,
+  "rationale": "[development] A removed match assertion form falsely flags a valid test.",
+  "defects": [
+    {
+      "defectId": "D-007",
+      "behaviorId": "B-003",
+      "summary": "A removed match assertion form falsely flags a valid test.",
+      "severity": "material",
+      "source": "controlled-mutation",
+      "manifestationWitness": {
+        "legId": "manifest-p-007",
+        "interfaceId": "review-cli",
+        "operationId": "review",
+        "inputs": {
+          "argument": {},
+          "option": {},
+          "environment": {},
+          "stdin": {
+            "kind": "json",
+            "value": {
+              "action": "review",
+              "file": "cases/clean-assert-match.test.js"
+            }
+          }
+        },
+        "relation": {
+          "op": "all",
+          "operands": [
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/manifest-p-007/stdout/file"
+                },
+                {
+                  "literal": "cases/clean-assert-match.test.js"
+                }
+              ]
+            },
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/manifest-p-007/stdout/status"
+                },
+                {
+                  "literal": "findings"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "defectSignature": {
+    "interfaceKind": "cli",
+    "observableChannel": "stdout",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": null,
+          "header": null,
+          "body": null,
+          "argument": null,
+          "option": null,
+          "environment": null,
+          "stdin": {
+            "action": {
+              "literal": "review"
+            },
+            "file": {
+              "literal": "cases/clean-assert-match.test.js"
+            }
+          },
+          "arguments": null
+        }
+      },
+      "predicate": {
+        "op": "equality",
+        "operands": [
+          {
+            "pointer": "/interactions/observed/stdout/status"
+          },
+          {
+            "literal": "findings"
+          }
+        ]
+      }
+    },
+    "invocation": {
+      "executable": "review",
+      "subcommandPath": []
+    }
+  },
+  "qualification": {
+    "route": "controlled-mutation",
+    "mutation": "M-003"
+  }
+}

@@ -47,6 +47,13 @@ const { spawn, spawnSync } = require('node:child_process');
 const vm = require('node:vm');
 const yaml = require('js-yaml');
 
+// Git hooks export repository-local GIT_* variables. Clear them before this
+// harness creates nested repositories or starts CLI children, so each git
+// command discovers the repository from its own cwd.
+for (const name of Object.keys(process.env)) {
+  if (name.startsWith('GIT_')) delete process.env[name];
+}
+
 const {
   parseReport,
   normalizeReportScore,
@@ -241,6 +248,33 @@ function git(args, cwd) {
     throw new Error(`git ${args.join(' ')} failed in ${cwd}: ${result.stderr || (result.error && result.error.message)}`);
   }
   return result.stdout.trim();
+}
+
+/** Exercise nested Git writes in a short child run with hook-style GIT_* input. */
+function runGitEnvironmentProbe() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-cli-git-env-probe-'));
+  try {
+    const repo = path.join(root, 'nested');
+    fs.mkdirSync(repo);
+    git(['init', '-b', 'main'], repo);
+    git(['config', 'user.email', 'tea-tests@example.com'], repo);
+    git(['config', 'user.name', 'TEA Tests'], repo);
+    git(['config', 'commit.gpgsign', 'false'], repo);
+    const file = path.join(repo, 'checkout.spec.ts');
+    fs.writeFileSync(file, "test('checkout', () => {});\n");
+    git(['add', '.'], repo);
+    git(['commit', '-m', 'initial'], repo);
+    git(['checkout', '-b', 'append-spec'], repo);
+    fs.appendFileSync(file, "test('new checkout case', () => {});\n");
+    git(['add', '.'], repo);
+    git(['commit', '-m', 'append spec'], repo);
+    git(['checkout', 'main'], repo);
+    if (fs.readFileSync(file, 'utf8') !== "test('checkout', () => {});\n") {
+      throw new Error('the nested repository did not restore its main branch file');
+    }
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 }
 
 /**
@@ -5054,6 +5088,36 @@ async function runTests() {
         JSON.stringify({ parsed: PARSED_VERDICT_KEYS, verdict: VERDICT_KEYS }),
       );
 
+      const sentinelRepo = path.join(tmpRoot, 'hook-env-sentinel');
+      fs.mkdirSync(sentinelRepo);
+      git(['init', '-b', 'main'], sentinelRepo);
+      git(['config', 'user.email', 'tea-tests@example.com'], sentinelRepo);
+      git(['config', 'user.name', 'TEA Tests'], sentinelRepo);
+      git(['config', 'commit.gpgsign', 'false'], sentinelRepo);
+      const sentinelFile = path.join(sentinelRepo, 'sentinel.txt');
+      fs.writeFileSync(sentinelFile, 'keep this repository unchanged\n');
+      git(['add', '.'], sentinelRepo);
+      git(['commit', '-m', 'sentinel'], sentinelRepo);
+      const sentinelHead = git(['rev-parse', 'HEAD'], sentinelRepo);
+      const hookProbe = spawnSync(process.execPath, [__filename], {
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          TEA_CLI_GIT_ENV_PROBE: '1',
+          GIT_DIR: path.join(sentinelRepo, '.git'),
+          GIT_WORK_TREE: sentinelRepo,
+          GIT_INDEX_FILE: path.join(sentinelRepo, '.git', 'index'),
+        },
+      });
+      assert(
+        hookProbe.status === 0 &&
+          git(['symbolic-ref', '--short', 'HEAD'], sentinelRepo) === 'main' &&
+          git(['rev-parse', 'HEAD'], sentinelRepo) === sentinelHead &&
+          fs.readFileSync(sentinelFile, 'utf8') === 'keep this repository unchanged\n',
+        'hook-style Git environment cannot redirect nested fixture commits into the calling repository',
+        `status=${hookProbe.status} stderr=${hookProbe.stderr}`,
+      );
+
       console.log('');
     } else {
       skip('Test Suite 8: real git fixture', 'excluded by TEA_CLI_TEST_SUITES');
@@ -6263,9 +6327,11 @@ async function runTests() {
   }
 }
 
-// Run tests
-runTests().catch((error) => {
-  console.error(`${colors.red}Test runner failed:${colors.reset}`, error.message);
-  console.error(error.stack);
-  process.exit(1);
-});
+// The child probe exercises nested Git writes without rerunning the full suite.
+Promise.resolve()
+  .then(process.env.TEA_CLI_GIT_ENV_PROBE === '1' ? runGitEnvironmentProbe : runTests)
+  .catch((error) => {
+    console.error(`${colors.red}Test runner failed:${colors.reset}`, error.message);
+    console.error(error.stack);
+    process.exit(1);
+  });

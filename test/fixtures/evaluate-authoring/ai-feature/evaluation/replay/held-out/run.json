@@ -1,0 +1,115 @@
+{
+  "invocationId": "20260928T233806427Z-5c534b20",
+  "command": "run",
+  "teaVersion": "1.27.2",
+  "evalQualityVersion": "4.3.0",
+  "commit": null,
+  "dirty": true,
+  "evaluationFolder": {
+    "dirty": true
+  },
+  "workspace": {
+    "kind": "copy",
+    "commit": null,
+    "tree": null,
+    "treeDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
+    "dirty": false
+  },
+  "workspaces": {
+    "pristine": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-pristine-KkCe3y/target",
+    "mutated:M-005": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-005-VsnI00/target",
+    "mutated:M-006": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-006-7zRBpS/target",
+    "mutated:M-007": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-007-936mz1/target"
+  },
+  "adopterTree": {
+    "repository": "/Users/murat/opensource/_wt/evaluate-1.24-rebuild",
+    "unchanged": true
+  },
+  "refused": [],
+  "artifacts": {
+    "contract": "sha256:8a3eee22973e0e86c9e1df0f7ba9691c9090e1daba2001eef537682da639c6e2",
+    "operationPhases": "sha256:a34aad44029827fec47e810a03b3103d26afc8968cd45da51c62bf7c615f7cbc",
+    "evaluatorConfiguration": "sha256:7bbfd49f1bff2c4fead78b5f4cdc46a709d9040a8c99f4d87128abc07f13ad38",
+    "preflightVerdict": "sha256:0fa88af40def13747fc16314534866639117c5b08a06653fc3baf99748d1fea4",
+    "probes": {
+      "P-011": "sha256:ccbabda60f4f95013f0135bfe3e984f7673db8a04c2cc0ec5f66ee87da25c0dc",
+      "P-012": "sha256:6cab8e8baa89850857e0b612e0ca8cf09a00dc1731ab0803f97ddcabd444f5ef",
+      "P-013": "sha256:40a38b95d6eae9b616161c7197c0e7440b33e29b16354a331dc6b6e04a58344c"
+    },
+    "records": {
+      "trial-sets/P-011/record-1.json": "sha256:0b47284b2c890818474faa330911d44563f4bb4bdd68005062e79641ab1771f3",
+      "trial-sets/P-011/record-2.json": "sha256:2624db8f213ef3a464c33faa5402e8bae4ee2351a49486d48c4821567f340538",
+      "trial-sets/P-011/record-3.json": "sha256:343308479a29407d7171c0741e53b2ec602c8e4795821a60df2b80f2486ac4b3",
+      "trial-sets/P-012/record-1.json": "sha256:a15dbd2e23b314ac7b671ee61817544970ced525d6bec631aa631b87f06d94d1",
+      "trial-sets/P-012/record-2.json": "sha256:308d5a0c06476555ec26180e7ffce68a40a48690af95dc6e2a72fa5dde4d43f0",
+      "trial-sets/P-012/record-3.json": "sha256:d5f92993a3b7e904412ed9b2a2daa50a2e5f226002aa7d58e6d799e1178ccf67",
+      "trial-sets/P-013/record-1.json": "sha256:68d545a3dc8c9b2ea84d648dca87933f123b12d99d58521c20a0c41e0e54dd7f",
+      "trial-sets/P-013/record-2.json": "sha256:3aabb910e36f409e0ab2cbc5c447897fd4e476d94dc0124c7dc0a4a6b7b745ec",
+      "trial-sets/P-013/record-3.json": "sha256:10c92ed8825af38656f9a3b426c4385a3259a74277bbb63c0b2f313d0a2bc9da"
+    },
+    "isolationManifests": {
+      "P-011": "sha256:fe05f66b06d9a9473d738eb20cb9a7188f1558fe09457547f12dae4e5c97bb03",
+      "P-012": "sha256:b1c74dbcd6d77dd82fa8404b74e9b72bbe1f847a7eb23e805aba0156fe7bb654",
+      "P-013": "sha256:47ad6f03fb8233622844759c004e22106c7df6451d4318473cb27c27c55ca060"
+    }
+  },
+  "contractDigest": "sha256:200fc055b03eec77a5af178dfe28e404c584d8fcad90d1663e6ace84e653bea8",
+  "corpusDigest": "sha256:d46fa6b386d3de5f622b2683f27f808e0dc818a1c92861ee39c09f935595127b",
+  "policyDigest": "sha256:0c18e55a18902cc18141c0a2566d8e7666e9981aa1593c24c84ce03960617226",
+  "sealedBriefDigest": "sha256:c107250c134db346907668047033820c1f1661429afa39656b6834c403929195",
+  "evaluatorConfigurationDigest": "sha256:757da61fb18fdd4d42665ae4f884c45dd0144f1e708c96a10a843274b097cc21",
+  "partition": "held-out",
+  "heldOutProbes": [
+    "P-011",
+    "P-012",
+    "P-013"
+  ],
+  "operationPhases": {
+    "grade-answer": "outcome"
+  },
+  "runner": [
+    {
+      "interfaceId": "answer-grade",
+      "kind": "api",
+      "scheme": "http",
+      "host": "127.0.0.1",
+      "addresses": [
+        "127.0.0.1"
+      ],
+      "methods": [
+        "POST"
+      ],
+      "server": {
+        "target": "server/grade.mjs",
+        "targetArgs": []
+      },
+      "httpProbePortDigest": "sha256:801ef17d0bc63b5cdfa692baf55f4c47a610121afc4289620bcb795037e9684c"
+    }
+  ],
+  "evaluator": {
+    "kind": "deterministic",
+    "identity": "tea-evaluate deterministic evaluator"
+  },
+  "model": {
+    "modelSnapshot": "fixture-model-1",
+    "systemPromptDigest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "judge": null,
+  "trials": {
+    "perArm": 3,
+    "arms": [
+      "mutated:M-005",
+      "mutated:M-006",
+      "mutated:M-007"
+    ]
+  },
+  "trialCount": 3,
+  "startedAt": "2026-09-28T23:38:05.976Z",
+  "durationMs": 28510,
+  "completed": true,
+  "outcome": {
+    "stage": "trial",
+    "exitCode": 0,
+    "message": "3 trial set(s) of 3 trial(s) sealed over mutated:M-005, mutated:M-006, mutated:M-007; score them with tea-evaluate score --run 20260928T233806427Z-5c534b20"
+  }
+}

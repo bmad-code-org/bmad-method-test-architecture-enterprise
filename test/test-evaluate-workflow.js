@@ -528,7 +528,7 @@ async function checkUnits() {
       { create: { title: TITLE } },
     );
     check(
-      refused instanceof ArmError && refused.message.includes('literal and captured bindings only'),
+      refused instanceof ArmError && refused.message.includes('literal, type-violating and captured bindings only'),
       `a step binding ${JSON.stringify(unsendable)} after a skipped step gave ${refused}`,
     );
   }

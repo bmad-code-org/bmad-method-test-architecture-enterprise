@@ -1,0 +1,131 @@
+{
+  "schemaVersion": 1,
+  "invocationId": "20260928T233657627Z-70ab2549",
+  "corpusDigest": "sha256:d46fa6b386d3de5f622b2683f27f808e0dc818a1c92861ee39c09f935595127b",
+  "contract": "eval-contract.json",
+  "policy": "scoring-policy.json",
+  "preflightVerdict": "preflight-verdict.json",
+  "evaluatorConfiguration": "evaluator-configuration.json",
+  "trialSets": [
+    {
+      "probeId": "P-001",
+      "runId": "20260928T233657627Z-70ab2549-P-001",
+      "conditionArm": "clean",
+      "probe": "probes/P-001.probe.json",
+      "records": [
+        "trial-sets/P-001/record-1.json",
+        "trial-sets/P-001/record-2.json",
+        "trial-sets/P-001/record-3.json"
+      ],
+      "isolationManifest": "trial-sets/P-001/isolation-manifest.json"
+    },
+    {
+      "probeId": "P-002",
+      "runId": "20260928T233657627Z-70ab2549-P-002",
+      "conditionArm": "clean",
+      "probe": "probes/P-002.probe.json",
+      "records": [
+        "trial-sets/P-002/record-1.json",
+        "trial-sets/P-002/record-2.json",
+        "trial-sets/P-002/record-3.json"
+      ],
+      "isolationManifest": "trial-sets/P-002/isolation-manifest.json"
+    },
+    {
+      "probeId": "P-003",
+      "runId": "20260928T233657627Z-70ab2549-P-003",
+      "conditionArm": "clean",
+      "probe": "probes/P-003.probe.json",
+      "records": [
+        "trial-sets/P-003/record-1.json",
+        "trial-sets/P-003/record-2.json",
+        "trial-sets/P-003/record-3.json"
+      ],
+      "isolationManifest": "trial-sets/P-003/isolation-manifest.json"
+    },
+    {
+      "probeId": "P-004",
+      "runId": "20260928T233657627Z-70ab2549-P-004",
+      "conditionArm": "clean",
+      "probe": "probes/P-004.probe.json",
+      "records": [
+        "trial-sets/P-004/record-1.json",
+        "trial-sets/P-004/record-2.json",
+        "trial-sets/P-004/record-3.json"
+      ],
+      "isolationManifest": "trial-sets/P-004/isolation-manifest.json"
+    },
+    {
+      "probeId": "P-005",
+      "runId": "20260928T233657627Z-70ab2549-P-005",
+      "conditionArm": "mutated:M-001",
+      "probe": "probes/P-005.probe.json",
+      "records": [
+        "trial-sets/P-005/record-1.json",
+        "trial-sets/P-005/record-2.json",
+        "trial-sets/P-005/record-3.json"
+      ],
+      "isolationManifest": "trial-sets/P-005/isolation-manifest.json"
+    },
+    {
+      "probeId": "P-010",
+      "runId": "20260928T233657627Z-70ab2549-P-010",
+      "conditionArm": "mutated:M-001",
+      "probe": "probes/P-010.probe.json",
+      "records": [
+        "trial-sets/P-010/record-1.json",
+        "trial-sets/P-010/record-2.json",
+        "trial-sets/P-010/record-3.json"
+      ],
+      "isolationManifest": "trial-sets/P-010/isolation-manifest.json"
+    },
+    {
+      "probeId": "P-006",
+      "runId": "20260928T233657627Z-70ab2549-P-006",
+      "conditionArm": "mutated:M-002",
+      "probe": "probes/P-006.probe.json",
+      "records": [
+        "trial-sets/P-006/record-1.json",
+        "trial-sets/P-006/record-2.json",
+        "trial-sets/P-006/record-3.json"
+      ],
+      "isolationManifest": "trial-sets/P-006/isolation-manifest.json"
+    },
+    {
+      "probeId": "P-007",
+      "runId": "20260928T233657627Z-70ab2549-P-007",
+      "conditionArm": "mutated:M-003",
+      "probe": "probes/P-007.probe.json",
+      "records": [
+        "trial-sets/P-007/record-1.json",
+        "trial-sets/P-007/record-2.json",
+        "trial-sets/P-007/record-3.json"
+      ],
+      "isolationManifest": "trial-sets/P-007/isolation-manifest.json"
+    },
+    {
+      "probeId": "P-008",
+      "runId": "20260928T233657627Z-70ab2549-P-008",
+      "conditionArm": "mutated:M-004",
+      "probe": "probes/P-008.probe.json",
+      "records": [
+        "trial-sets/P-008/record-1.json",
+        "trial-sets/P-008/record-2.json",
+        "trial-sets/P-008/record-3.json"
+      ],
+      "isolationManifest": "trial-sets/P-008/isolation-manifest.json"
+    },
+    {
+      "probeId": "P-009",
+      "runId": "20260928T233657627Z-70ab2549-P-009",
+      "conditionArm": "gameability:P-009",
+      "probe": "probes/P-009.probe.json",
+      "records": [
+        "trial-sets/P-009/record-1.json",
+        "trial-sets/P-009/record-2.json",
+        "trial-sets/P-009/record-3.json"
+      ],
+      "isolationManifest": "trial-sets/P-009/isolation-manifest.json"
+    }
+  ]
+}

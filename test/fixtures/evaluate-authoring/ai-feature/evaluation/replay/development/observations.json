@@ -1,0 +1,187 @@
+[
+  {
+    "probeId": "witness-normal",
+    "interfaceId": "answer-grade",
+    "operationId": "grade-answer",
+    "kind": "api",
+    "status": 200,
+    "headers": {
+      "content-type": "application/json",
+      "date": "Mon, 28 Sep 2026 23:37:18 GMT",
+      "connection": "close",
+      "transfer-encoding": "chunked"
+    },
+    "body": {
+      "kind": "json",
+      "value": {
+        "decision": "pass",
+        "reason": "accepted",
+        "mode": "normal"
+      }
+    }
+  },
+  {
+    "probeId": "witness-strict",
+    "interfaceId": "answer-grade",
+    "operationId": "grade-answer",
+    "kind": "api",
+    "status": 200,
+    "headers": {
+      "content-type": "application/json",
+      "date": "Mon, 28 Sep 2026 23:37:18 GMT",
+      "connection": "close",
+      "transfer-encoding": "chunked"
+    },
+    "body": {
+      "kind": "json",
+      "value": {
+        "decision": "reject",
+        "reason": "too-short",
+        "mode": "strict"
+      }
+    }
+  },
+  {
+    "probeId": "preflight-control-observe",
+    "interfaceId": "answer-grade",
+    "operationId": "grade-answer",
+    "kind": "api",
+    "status": 200,
+    "headers": {
+      "content-type": "application/json",
+      "date": "Mon, 28 Sep 2026 23:37:19 GMT",
+      "connection": "close",
+      "transfer-encoding": "chunked"
+    },
+    "body": {
+      "kind": "json",
+      "value": {
+        "decision": "pass",
+        "reason": "accepted",
+        "mode": "normal"
+      }
+    }
+  },
+  {
+    "probeId": "preflight-control-observe-2",
+    "interfaceId": "answer-grade",
+    "operationId": "grade-answer",
+    "kind": "api",
+    "status": 200,
+    "headers": {
+      "content-type": "application/json",
+      "date": "Mon, 28 Sep 2026 23:37:19 GMT",
+      "connection": "close",
+      "transfer-encoding": "chunked"
+    },
+    "body": {
+      "kind": "json",
+      "value": {
+        "decision": "pass",
+        "reason": "accepted",
+        "mode": "normal"
+      }
+    }
+  },
+  {
+    "probeId": "p-005-manifest-decision-pass",
+    "interfaceId": "answer-grade",
+    "operationId": "grade-answer",
+    "kind": "api",
+    "status": 200,
+    "headers": {
+      "content-type": "application/json",
+      "date": "Mon, 28 Sep 2026 23:37:19 GMT",
+      "connection": "close",
+      "transfer-encoding": "chunked"
+    },
+    "body": {
+      "kind": "json",
+      "value": {
+        "decision": "pass",
+        "reason": "accepted"
+      }
+    }
+  },
+  {
+    "probeId": "p-006-manifest-decision-reject",
+    "interfaceId": "answer-grade",
+    "operationId": "grade-answer",
+    "kind": "api",
+    "status": 200,
+    "headers": {
+      "content-type": "application/json",
+      "date": "Mon, 28 Sep 2026 23:37:19 GMT",
+      "connection": "close",
+      "transfer-encoding": "chunked"
+    },
+    "body": {
+      "kind": "json",
+      "value": {
+        "decision": "reject",
+        "reason": "too-short"
+      }
+    }
+  },
+  {
+    "probeId": "p-007-manifest-decision-reject",
+    "interfaceId": "answer-grade",
+    "operationId": "grade-answer",
+    "kind": "api",
+    "status": 200,
+    "headers": {
+      "content-type": "application/json",
+      "date": "Mon, 28 Sep 2026 23:37:19 GMT",
+      "connection": "close",
+      "transfer-encoding": "chunked"
+    },
+    "body": {
+      "kind": "json",
+      "value": {
+        "decision": "reject",
+        "reason": "invalid-type"
+      }
+    }
+  },
+  {
+    "probeId": "p-008-manifest-decision-pass",
+    "interfaceId": "answer-grade",
+    "operationId": "grade-answer",
+    "kind": "api",
+    "status": 200,
+    "headers": {
+      "content-type": "application/json",
+      "date": "Mon, 28 Sep 2026 23:37:20 GMT",
+      "connection": "close",
+      "transfer-encoding": "chunked"
+    },
+    "body": {
+      "kind": "json",
+      "value": {
+        "decision": "pass",
+        "reason": "accepted",
+        "mode": "strict"
+      }
+    }
+  },
+  {
+    "probeId": "p-010-manifest-decision-pass",
+    "interfaceId": "answer-grade",
+    "operationId": "grade-answer",
+    "kind": "api",
+    "status": 200,
+    "headers": {
+      "content-type": "application/json",
+      "date": "Mon, 28 Sep 2026 23:37:20 GMT",
+      "connection": "close",
+      "transfer-encoding": "chunked"
+    },
+    "body": {
+      "kind": "json",
+      "value": {
+        "decision": "pass",
+        "reason": "accepted"
+      }
+    }
+  }
+]

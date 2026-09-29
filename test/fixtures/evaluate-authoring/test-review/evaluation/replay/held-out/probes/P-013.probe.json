@@ -1,0 +1,139 @@
+{
+  "schemaVersion": 5,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "probeId": "P-013",
+  "probeClass": "defect",
+  "behaviorId": "B-004",
+  "systemId": "test-review-json-stdin",
+  "implementationDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
+  "artifactDigest": "sha256:f1c323ac0453a1db6835f3f2b7ba670e61da2bcbef79dce9cba717b0286472fe",
+  "commitDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
+  "rationale": "[held-out] An inverted request guard accepts the same extra-field request.",
+  "qualification": {
+    "route": "controlled-mutation",
+    "mutationSource": "Adopter-owned B-004 rule change",
+    "mutationOperator": "replace-exact: \"Object.keys(request).length !== 2\" -> \"Object.keys(request).length === 2\" (occurrences 1)",
+    "targetArtifact": {
+      "storage": "public",
+      "path": "bin/review.mjs",
+      "privateRef": null,
+      "digest": "sha256:f1c323ac0453a1db6835f3f2b7ba670e61da2bcbef79dce9cba717b0286472fe"
+    },
+    "expectedObservableFailure": "stdout accepts an extra-field request and returns a clean review",
+    "baselinePassEvidence": {
+      "storage": "public",
+      "path": "runs/20260928T230939180Z-7dcac3a6/qualification/P-013/baseline-pass.json",
+      "privateRef": null,
+      "digest": "sha256:6c8fe8a59e039d03f6d0e727a5c5aeb459eeb6bcdab91bccc968488df2087560"
+    },
+    "mutatedFailEvidence": {
+      "storage": "public",
+      "path": "runs/20260928T230939180Z-7dcac3a6/qualification/P-013/mutated-fail.json",
+      "privateRef": null,
+      "digest": "sha256:e125693fc72eff8dfd90568943ce3773e3be2de80a5ee560e7178afa1ae968ee"
+    },
+    "rollbackVerified": true
+  },
+  "expectedClean": false,
+  "defects": [
+    {
+      "defectId": "D-013",
+      "behaviorId": "B-004",
+      "summary": "An inverted request guard accepts the same extra-field request.",
+      "severity": "material",
+      "oracleEvidence": [
+        {
+          "storage": "public",
+          "path": "runs/20260928T230939180Z-7dcac3a6/qualification/P-013/mutated-fail.json",
+          "privateRef": null,
+          "digest": "sha256:e125693fc72eff8dfd90568943ce3773e3be2de80a5ee560e7178afa1ae968ee"
+        }
+      ],
+      "source": "controlled-mutation",
+      "manifestationWitness": {
+        "legId": "manifest-p-013",
+        "interfaceId": "review-cli",
+        "operationId": "review",
+        "inputs": {
+          "argument": {},
+          "option": {},
+          "environment": {},
+          "stdin": {
+            "kind": "json",
+            "value": {
+              "action": "review",
+              "file": "cases/clean-strict-equal.test.js",
+              "extra": true
+            }
+          }
+        },
+        "relation": {
+          "op": "all",
+          "operands": [
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/manifest-p-013/stdout/file"
+                },
+                {
+                  "literal": "cases/clean-strict-equal.test.js"
+                }
+              ]
+            },
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/manifest-p-013/stdout/status"
+                },
+                {
+                  "literal": "clean"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "defectSignature": {
+    "interfaceKind": "cli",
+    "observableChannel": "stdout",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": null,
+          "header": null,
+          "body": null,
+          "argument": null,
+          "option": null,
+          "environment": null,
+          "stdin": {
+            "raw": {
+              "literal": "{\"action\":\"review\",\"file\":\"cases/clean-strict-equal.test.js\",\"extra\":true}"
+            }
+          },
+          "arguments": null
+        }
+      },
+      "predicate": {
+        "op": "equality",
+        "operands": [
+          {
+            "pointer": "/interactions/observed/stdout/status"
+          },
+          {
+            "literal": "clean"
+          }
+        ]
+      }
+    },
+    "invocation": {
+      "executable": "review",
+      "subcommandPath": []
+    }
+  }
+}

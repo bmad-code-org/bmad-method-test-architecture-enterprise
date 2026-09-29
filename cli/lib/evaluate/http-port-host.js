@@ -114,8 +114,8 @@ function serveHttpProbePort(port, { input, output, env = process.env } = {}) {
     calling = true;
     let serverReady = null;
     let rebound = null;
-    // Called by the port once its policy has allowed the call's first hop, before its elapsed cap starts: the runtime
-    // starts the call's server where the port is about to send, and answers `ready` or `not-ready`.
+    // Called by the port after first-hop policy admission, within the call's elapsed cap. The runtime starts the
+    // server where the port is about to send and answers `ready` or `not-ready`.
     const startServer = (target) => {
       serverReady ??= new Promise((resolve, reject) => {
         waitingForServer = { resolve, reject };
