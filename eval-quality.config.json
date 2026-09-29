@@ -125,6 +125,34 @@
     "undeclared": [
       {
         "lockfiles": ["package-lock.json"],
+        "prefix": "compute-cosine-similarity",
+        "readAs": "MIT",
+        "evidence": "The installed compute-cosine-similarity 1.1.0 package includes a LICENSE with the MIT permission grant and a copyright notice; its package.json also declares MIT in the legacy licenses array.",
+        "reason": "Autoevals reaches compute-cosine-similarity, whose lockfile entry omits the licence field."
+      },
+      {
+        "lockfiles": ["package-lock.json"],
+        "prefix": "compute-dot",
+        "readAs": "MIT",
+        "evidence": "The installed compute-dot 1.1.0 package includes a LICENSE with the MIT permission grant and a copyright notice; its package.json also declares MIT in the legacy licenses array.",
+        "reason": "Autoevals reaches compute-dot through compute-cosine-similarity, whose lockfile entry omits the licence field."
+      },
+      {
+        "lockfiles": ["package-lock.json"],
+        "prefix": "compute-l2norm",
+        "readAs": "MIT",
+        "evidence": "The installed compute-l2norm 1.1.0 package includes a LICENSE with the MIT permission grant and a copyright notice; its package.json also declares MIT in the legacy licenses array.",
+        "reason": "Autoevals reaches compute-l2norm through compute-cosine-similarity, whose lockfile entry omits the licence field."
+      },
+      {
+        "lockfiles": ["package-lock.json"],
+        "prefix": "validate.io-function",
+        "readAs": "MIT",
+        "evidence": "The installed validate.io-function 1.0.2 package includes a LICENSE with the MIT permission grant and a copyright notice; its package.json also declares MIT in the legacy licenses array.",
+        "reason": "Autoevals reaches validate.io-function through compute-cosine-similarity, whose lockfile entry omits the licence field."
+      },
+      {
+        "lockfiles": ["package-lock.json"],
         "prefix": "agentevals",
         "readAs": "MIT",
         "evidence": "The installed agentevals 0.0.7 package omits the license field in package.json but includes LICENSE with the MIT permission grant and copyright notice. The npm tarball carries that LICENSE file beside the published evaluator code.",

@@ -1,0 +1,31 @@
+{
+  "probeId": "P-003",
+  "probeClass": "defect",
+  "behaviorId": "B-001",
+  "expectedClean": false,
+  "rationale": "[held-out] The same controlled rule loss must be detected in a separate qualified partition.",
+  "defects": [{
+    "defectId": "D-003",
+    "behaviorId": "B-001",
+    "summary": "The required pears item is omitted from stdout.",
+    "severity": "critical",
+    "source": "controlled-mutation",
+    "manifestationWitness": {
+      "legId": "manifest-held-out-missing-pears",
+      "interfaceId": "pantry-cli",
+      "operationId": "summarize",
+      "inputs": { "argument": {}, "option": {}, "environment": {}, "stdin": { "kind": "text", "value": "List pantry\n" } },
+      "relation": { "op": "equality", "operands": [{ "pointer": "/interactions/manifest-held-out-missing-pears/stdout" }, { "literal": "Summary for List pantry: apples\n" }] }
+    }
+  }],
+  "defectSignature": {
+    "interfaceKind": "cli",
+    "observableChannel": "stdout",
+    "condition": {
+      "selector": { "inputBinding": { "path": null, "query": null, "header": null, "body": null, "argument": null, "option": null, "environment": null, "stdin": { "prompt": { "literal": "List pantry\n" } }, "arguments": null } },
+      "predicate": { "op": "equality", "operands": [{ "pointer": "/interactions/observed/stdout" }, { "literal": "Summary for List pantry: apples\n" }] }
+    },
+    "invocation": { "executable": "node", "subcommandPath": [] }
+  },
+  "qualification": { "route": "controlled-mutation", "mutation": "M-001" }
+}

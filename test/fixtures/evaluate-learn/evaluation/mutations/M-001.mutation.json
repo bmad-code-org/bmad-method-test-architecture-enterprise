@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "mutationId": "M-001",
+  "mutationSource": "Remove pears from the adopter-owned required items rule for B-001.",
+  "targetArtifact": "target/rules/items.json",
+  "operator": { "kind": "replace-exact", "find": "\"required\": [\"apples\", \"pears\"]", "replace": "\"required\": [\"apples\"]", "occurrences": 1 },
+  "expectedObservableFailure": "stdout is Summary for List pantry: apples followed by a newline; the exact summary oracle fails."
+}

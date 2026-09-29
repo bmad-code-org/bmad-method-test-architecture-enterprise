@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 5,
+  "parentDigest": "sha256:1220189ac0c1e9284af95143f48d8831a9cf4f77aa20eb27490c6837287380dc",
+  "revisionCount": 4,
+  "contractId": "pantry-summary-contract",
+  "sourceSpecDigest": "sha256:c31b832a8d49d1c5d0ff590bf124e07062e13975de2976f235b00be1f87a299a",
+  "behaviors": [{
+    "id": "B-001",
+    "description": "The pantry summary CLI reads the request and required rule items, then prints the complete exact summary.",
+    "severity": "critical",
+    "observableSuccessCriterion": "List pantry produces Summary for List pantry: apples, pears followed by one newline and exit code 0.",
+    "requirementLinks": [{ "scheme": "adopter-confirmation", "id": "pantry-exact-summary" }],
+    "riskLinks": [{ "scheme": "adopter-confirmation", "id": "missing-pears" }],
+    "oracles": ["O-001"]
+  }, {
+    "id": "B-002",
+    "description": "The pantry summary CLI rejects a malformed request before producing a summary.",
+    "severity": "material",
+    "observableSuccessCriterion": "A type-violating request exits 2 and prints error: invalid list request on stderr.",
+    "requirementLinks": [{ "scheme": "adopter-confirmation", "id": "malformed-request-refusal" }],
+    "riskLinks": [{ "scheme": "adopter-confirmation", "id": "unsupported-request-accepted" }],
+    "oracles": ["O-002"]
+  }],
+  "oracles": [{
+    "id": "O-001",
+    "polarity": "expects-hold",
+    "commentary": "The CLI exits cleanly and prints the exact complete pantry summary with a final newline.",
+    "direction": {
+      "polarity": "expects-hold",
+      "relation": "all",
+      "scope": "Exit code and whole stdout of the summary step.",
+      "negativeDomain": "A failed process or any omitted, added, reordered or changed output byte, including the newline.",
+      "evidenceTargets": ["/interactions/summarize/exit-code", "/interactions/summarize/stdout"]
+    },
+    "check": { "op": "all", "operands": [
+      { "op": "equality", "operands": [{ "pointer": "/interactions/summarize/exit-code" }, { "literal": 0 }] },
+      { "op": "equality", "operands": [{ "pointer": "/interactions/summarize/stdout" }, { "literal": "Summary for List pantry: apples, pears\n" }] }
+    ] }
+  }, {
+    "id": "O-002",
+    "polarity": "expects-hold",
+    "commentary": "Malformed request text is rejected with exit code 2, the exact stderr diagnostic, and no summary on stdout.",
+    "direction": {
+      "polarity": "expects-hold",
+      "relation": "all",
+      "scope": "Exit code, whole stderr, and whole stdout of the malformed request step.",
+      "negativeDomain": "A malformed request receives a summary, a different error, or a different exit code.",
+      "evidenceTargets": ["/interactions/reject-malformed/exit-code", "/interactions/reject-malformed/stderr", "/interactions/reject-malformed/stdout"]
+    },
+    "check": { "op": "all", "operands": [
+      { "op": "equality", "operands": [{ "pointer": "/interactions/reject-malformed/exit-code" }, { "literal": 2 }] },
+      { "op": "equality", "operands": [{ "pointer": "/interactions/reject-malformed/stderr" }, { "literal": "error: invalid list request\n" }] },
+      { "op": "equality", "operands": [{ "pointer": "/interactions/reject-malformed/stdout" }, { "literal": "" }] }
+    ] }
+  }],
+  "rubrics": [],
+  "waivers": [],
+  "permittedInterfaces": [{
+    "logicalId": "pantry-cli",
+    "kind": "cli",
+    "operations": [{
+      "operationId": "summarize",
+      "invocation": { "executable": "node", "subcommandPath": [] },
+      "stateChangeMarker": false,
+      "requestShape": {
+        "argument": { "requiredKeys": [], "permittedKeys": [], "types": {} },
+        "option": { "requiredKeys": [], "permittedKeys": [], "types": {} },
+        "environment": { "requiredKeys": [], "permittedKeys": [], "types": {} },
+        "stdin": { "requiredKeys": ["prompt"], "permittedKeys": ["prompt"], "types": { "prompt": "string" } }
+      },
+      "artifacts": [],
+      "descriptorChannel": { "kind": "stream", "channel": "stdout" },
+      "responseDescriptor": { "requiredKeys": [], "permittedKeys": [], "types": {}, "successIndicator": null, "channelRoles": null, "collectionLocations": [] },
+      "volatilePointers": [],
+      "sensitivityWitness": {
+        "witnessId": "request-label-reaches-summary",
+        "channel": "stdin",
+        "legs": [
+          { "legId": "pantry-label", "inputs": { "argument": {}, "option": {}, "environment": {}, "stdin": { "kind": "text", "value": "List pantry\n" } } },
+          { "legId": "kitchen-label", "inputs": { "argument": {}, "option": {}, "environment": {}, "stdin": { "kind": "text", "value": "List kitchen\n" } } }
+        ],
+        "relation": { "op": "all", "operands": [
+          { "op": "equality", "operands": [{ "pointer": "/interactions/pantry-label/stdout" }, { "literal": "Summary for List pantry: apples, pears\n" }] },
+          { "op": "equality", "operands": [{ "pointer": "/interactions/kitchen-label/stdout" }, { "literal": "Summary for List kitchen: apples, pears\n" }] }
+        ] }
+      }
+    }]
+  }],
+  "referenceSets": {},
+  "siblingGroups": { "operations": [], "parameters": [] },
+  "interactionPlan": [{
+    "stepId": "summarize",
+    "operationId": "summarize",
+    "after": null,
+    "cardinality": "exactly-one",
+    "inputBinding": { "argument": null, "option": null, "environment": null, "stdin": { "prompt": { "literal": "List pantry\n" } } }
+  }, {
+    "stepId": "reject-malformed",
+    "operationId": "summarize",
+    "after": null,
+    "cardinality": "exactly-one",
+    "inputBinding": { "argument": null, "option": null, "environment": null, "stdin": { "prompt": { "matcher": "type-violating" } } }
+  }],
+  "scopedResources": null,
+  "forbiddenInputs": ["original-spec", "source-code", "repository", "builder-transcript", "implementation-logs", "comparator-results", "human-labels"],
+  "testData": { "setup": "The CLI and rule JSON are copied into a disposable workspace.", "cleanup": "The CLI writes no files.", "principals": null, "resources": null },
+  "budgets": { "maxToolCalls": 2, "maxWallClockMinutes": 1, "maxCostUsd": "0.00" },
+  "safetyLimits": ["Only the adopter-owned rule JSON may be mutated in the copied workspace."],
+  "requiredEvidence": ["The exit code and whole stdout of every summary invocation."],
+  "probeStepBound": 2,
+  "fixtureReset": null
+}

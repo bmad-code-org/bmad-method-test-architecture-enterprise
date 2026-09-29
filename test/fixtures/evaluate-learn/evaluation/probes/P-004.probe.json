@@ -1,0 +1,9 @@
+{
+  "probeId": "P-004",
+  "probeClass": "zero-action",
+  "behaviorId": "B-002",
+  "expectedClean": true,
+  "rationale": "[malformed] The clean command rejects the type-violating request in the contract plan.",
+  "defects": [],
+  "qualification": { "route": "clean-control", "noKnownDefectStatement": "No known defect at this revision." }
+}

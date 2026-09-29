@@ -58,7 +58,12 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { omitVerifiedOptionalSdk, verifyPromptfooToleranceScope, verifyPromptfooUndeclaredScope } = require('../tools/check-licences');
+const {
+  omitVerifiedOptionalSdk,
+  verifyPromptfooToleranceScope,
+  verifyPromptfooUndeclaredScope,
+  verifyAutoevalsUndeclaredScope,
+} = require('../tools/check-licences');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const CONFIG_PATH = path.join(PROJECT_ROOT, 'eval-quality.config.json');
@@ -466,6 +471,88 @@ function checkPromptfooLicenceScope(config) {
   }
 }
 
+function checkAutoevalsLicenceScope(config) {
+  const original = readJson(path.join(PROJECT_ROOT, 'package-lock.json'), 'package-lock.json');
+  const prefixes = ['compute-cosine-similarity', 'compute-dot', 'compute-l2norm', 'validate.io-function'];
+  verifyAutoevalsUndeclaredScope(original, config);
+  for (const prefix of prefixes) {
+    for (const [label, change] of [
+      ['prefix', (entry) => (entry.prefix += '-other')],
+      ['lockfile', (entry) => (entry.lockfiles = ['website/package-lock.json'])],
+      ['readAs', (entry) => (entry.readAs = 'Apache-2.0')],
+      ['evidence', (entry) => (entry.evidence = 'unverified')],
+      ['reason', (entry) => (entry.reason = 'unverified')],
+    ]) {
+      const changed = structuredClone(config);
+      change(changed.licences.undeclared.find((entry) => entry.prefix === prefix));
+      check(
+        rejectsAutoevals(original, changed, PROJECT_ROOT, `Autoevals undeclared licence ${prefix} changed its approved tuple`),
+        `Autoevals licence guard accepted changed ${prefix} ${label}`,
+      );
+    }
+    const changedVersion = structuredClone(original);
+    changedVersion.packages[`node_modules/${prefix}`].version = '99.0.0';
+    const result = runLicenceWrapper(changedVersion);
+    check(
+      result.status !== 0 && result.output.includes(`${prefix} changed its approved locked version or registry tarball`),
+      `Autoevals licence wrapper accepted changed ${prefix} version: ${result.output}`,
+    );
+    const changedTarball = structuredClone(original);
+    changedTarball.packages[`node_modules/${prefix}`].resolved = `https://registry.npmjs.org/${prefix}/-/${prefix}-99.0.0.tgz`;
+    check(
+      rejectsAutoevals(changedTarball, config, PROJECT_ROOT, `${prefix} changed its approved locked version or registry tarball`),
+      `Autoevals licence guard accepted changed ${prefix} tarball`,
+    );
+    const sidecar = structuredClone(original);
+    sidecar.packages[`node_modules/${prefix}-sidecar`] = { version: '1.0.0' };
+    check(
+      rejectsAutoevals(sidecar, config, PROJECT_ROOT, `${prefix} matches an additional or missing lockfile package`),
+      `Autoevals licence guard borrowed ${prefix} evidence for a sidecar`,
+    );
+  }
+  const extra = structuredClone(config);
+  const extraEntry = structuredClone(extra.licences.undeclared.find((entry) => entry.prefix === 'compute-dot'));
+  extraEntry.prefix = 'compute-dot-sidecar';
+  extra.licences.undeclared.push(extraEntry);
+  check(
+    rejectsAutoevals(original, extra, PROJECT_ROOT, 'approved Autoevals undeclared licence set changed'),
+    'Autoevals licence guard accepted an extra same-prefix undeclared reading',
+  );
+  const licenceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-autoevals-terms-'));
+  try {
+    for (const prefix of prefixes) {
+      const packageRoot = path.join(licenceRoot, 'node_modules', prefix);
+      fs.mkdirSync(packageRoot, { recursive: true });
+      fs.copyFileSync(path.join(PROJECT_ROOT, 'node_modules', prefix, 'LICENSE'), path.join(packageRoot, 'LICENSE'));
+    }
+    for (const prefix of prefixes) {
+      const file = path.join(licenceRoot, 'node_modules', prefix, 'LICENSE');
+      fs.appendFileSync(file, '\nchanged terms\n');
+      check(
+        rejectsAutoevals(original, config, licenceRoot, `${prefix} licence file no longer matches the approved evidence`),
+        `Autoevals licence guard accepted changed ${prefix} LICENSE text`,
+      );
+      fs.rmSync(file);
+      check(
+        rejectsAutoevals(original, config, licenceRoot, `the installed ${prefix} is missing LICENSE`),
+        `Autoevals licence guard accepted missing ${prefix} LICENSE`,
+      );
+      fs.copyFileSync(path.join(PROJECT_ROOT, 'node_modules', prefix, 'LICENSE'), file);
+    }
+  } finally {
+    fs.rmSync(licenceRoot, { recursive: true, force: true });
+  }
+}
+
+function rejectsAutoevals(lock, config, installedRoot, expectedMessage) {
+  try {
+    verifyAutoevalsUndeclaredScope(lock, config, installedRoot);
+    return false;
+  } catch (error) {
+    return error.message.includes(expectedMessage);
+  }
+}
+
 function checkLockfileAgeSeed(binary) {
   const fixture = path.join(FIXTURE_ROOT, 'lockfile-age-violation', 'eval-quality.config.json');
   const { status, output } = runGate(binary, 'lockfile-age', fixture);
@@ -514,6 +601,7 @@ function main() {
   checkWiring(config);
   checkLicencesSeed();
   checkPromptfooLicenceScope(config);
+  checkAutoevalsLicenceScope(config);
   checkLockfileAgeSeed(binary);
   checkAbsentSection(binary);
   checkResolutionFloor(config);
