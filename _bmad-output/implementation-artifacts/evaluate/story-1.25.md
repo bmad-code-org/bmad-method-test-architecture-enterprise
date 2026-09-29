@@ -85,6 +85,21 @@ context:
 
 ## Review Triage Log
 
+| Round | Finding | Verdict and evidence | Route |
+| --- | --- | --- | --- |
+| 1 | Blind hunter 1, unchanged baseline inputs | medium: the before fixture binds target and requirements to Story 1.24, while unchanged policy, probes, mutations and manifest can drift without a source comparison. | patch: compare the unaffected authored files to the Story 1.24 source. |
+| 1 | Blind hunter 2, probe inventory | medium: replay derives expected IDs from the fixture, so a removed probe and its records could reduce the proof unnoticed. | patch: pin both partition inventories and classes. |
+| 1 | Blind hunter 3, P-007 first stop | medium: the persisted P-007 verdict is checked without recomputing O-003 from its saved mutation observations. | patch: bind the mutation digest and reevaluate the recorded arm. |
+| 1 | Blind hunter 4, W2 seed | medium: the before score proves a gap, while the test does not assert the specific removed interaction and O-004 pointers. | patch: compare the intended seed against the Story 1.24 contract. |
+| 1 | Blind hunter 5, independent access trace | false: the criterion calls for the supplied-file inventory and the session transcript's file reads. Both are committed and checked. No hidden-file access was found; an operating-system access trace was outside the authorized session mechanism. | reject. |
+| 1 | Blind hunter 6, alternate leak wording | false: the final blind input inventory omits held-out probe files, strips the held-out manifest list, excludes historical repair notes, regenerates seeded outputs and hashes every supplied file. The proposed wording variations are not present in those files. | reject. |
+| 1 | Blind hunter 7, O-004 tautology | medium: a pointer substring can survive a check that no longer requires the typed request's documented error and exit code. | patch: prove the check rejects a changed typed response. |
+| 1 | Blind hunter 8, after gameability verdict | medium: response-map bytes are bound, while the recorded disciplined verdict is trusted. | patch: reevaluate O-003 on the recorded degenerate responses. |
+| 1 | Blind hunter 9, trial-record source | high: score replay uses records without checking their actions-artifact digests against the saved trials and run record digest map. | patch: bind both references before scoring. |
+| 1 | Blind hunter 10, all derived outputs | false: the amended acceptance criterion promises byte replay for preflight and scored artifacts. The test does that; run summaries, interpretation and gap views are immutable manifest snapshots outside that promise. | reject. |
+
+The edge-case and verification-gap lenses reported no additional findings. The first full gate on this review head was stopped during `test:evaluate-arms` so the seven replay assertions can be patched before a final complete run.
+
 ## Design Notes
 
 W1 intentionally fails development gameability qualification before a development score exists. Partition filtering permits a before held-out run that scores through eval-quality and records W2's coverage gap. Keep its probe files and observations out of the blind session; give that session only a rule summary from the engine evidence. The after state retains full direct preflight and score replay for both partitions.

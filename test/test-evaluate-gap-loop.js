@@ -14,6 +14,7 @@ const { evaluateOracles } = require('../cli/lib/evaluate/evaluator');
 const { degenerateArm } = require('../cli/lib/evaluate/gameability');
 const { loadEngine } = require('../cli/lib/evaluate/engine');
 const { registryFromEvaluation } = require('../cli/lib/evaluate/registry');
+const { recordObservation } = require('../cli/lib/evaluate/records');
 const { treeDigest } = require('../cli/lib/evaluate/workspace');
 
 const ROOT = path.resolve(__dirname, '..');
@@ -23,6 +24,26 @@ const ENGINE = path.join(ROOT, 'node_modules/.bin/eval-quality');
 const GUIDE =
   process.env.TEA_EVALUATE_GAP_LOOP_GUIDE ?? path.join(ROOT, 'src/workflows/testarch/bmad-testarch-evaluate/references/gaps.md');
 const EXCLUDED = new Set(['replay', 'runs', 'node_modules']);
+const PROBE_CLASSES = {
+  'P-001': 'zero-action',
+  'P-002': 'zero-action',
+  'P-003': 'zero-action',
+  'P-004': 'zero-action',
+  'P-005': 'defect',
+  'P-006': 'defect',
+  'P-007': 'defect',
+  'P-008': 'defect',
+  'P-009': 'gameability',
+  'P-010': 'defect',
+  'P-011': 'defect',
+  'P-012': 'defect',
+  'P-013': 'defect',
+  'P-014': 'zero-action',
+  'P-016': 'zero-action',
+  'P-017': 'gameability',
+};
+const HELD_OUT_IDS = ['P-010', 'P-011', 'P-012', 'P-013'];
+const DEVELOPMENT_IDS = Object.keys(PROBE_CLASSES).filter((id) => !HELD_OUT_IDS.includes(id));
 
 function readJson(file) {
   return JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -81,7 +102,48 @@ function checkInventory() {
       path.join(SOURCE, 'evaluation/requirements.md'),
       `${phase} confirmed requirements`,
     );
+    const folder = path.join(FIXTURE, phase, 'evaluation');
+    const evaluation = readJson(path.join(folder, 'evaluation.json'));
+    assert.deepEqual(evaluation.heldOutProbes, HELD_OUT_IDS, `${phase} held-out IDs changed`);
+    const probeFiles = filesUnder(path.join(folder, 'probes')).filter((file) => file.endsWith('.probe.json'));
+    assert.deepEqual(
+      probeFiles.map((file) => path.basename(file, '.probe.json')),
+      Object.keys(PROBE_CLASSES).sort(),
+      `${phase} probe inventory changed`,
+    );
+    for (const id of Object.keys(PROBE_CLASSES)) {
+      const probe = readJson(path.join(folder, 'probes', `${id}.probe.json`));
+      assert.equal(probe.probeId, id);
+      assert.equal(probe.probeClass, PROBE_CLASSES[id], `${phase} ${id} class changed`);
+      assert.equal(probe.expectedClean, PROBE_CLASSES[id] === 'zero-action', `${phase} ${id} clean status changed`);
+    }
   }
+  const before = path.join(FIXTURE, 'before/evaluation');
+  const original = path.join(SOURCE, 'evaluation');
+  const beforeFiles = new Set(filesUnder(before, EXCLUDED));
+  const originalFiles = new Set(filesUnder(original, EXCLUDED));
+  const omitted = [...originalFiles].filter((file) => !beforeFiles.has(file)).sort();
+  assert.deepEqual(omitted, ['adapter/README.md', 'gap-report.md'], 'before omitted an unexpected Story 1.24 source file');
+  assert.deepEqual(
+    [...beforeFiles].filter((file) => !originalFiles.has(file)),
+    [],
+    'before added an unexpected source file',
+  );
+  const changed = [...beforeFiles]
+    .filter((file) => !fs.readFileSync(path.join(before, file)).equals(fs.readFileSync(path.join(original, file))))
+    .sort();
+  assert.deepEqual(
+    changed,
+    [
+      'compiled-contract.json',
+      'contract.json',
+      'corpus-index.json',
+      'corpus/gameability/P-009.json',
+      'corpus/gameability/P-017.json',
+      'sealed-brief.json',
+    ],
+    'before differs from Story 1.24 outside the two seeds and generated files',
+  );
 }
 
 function checkReplayManifest(folder, expectedRuns) {
@@ -302,6 +364,93 @@ function checkGenerated(folder, out) {
   return { compiled, sealed };
 }
 
+function observationsFromSteps(steps) {
+  return Object.fromEntries(
+    steps
+      .filter((step) => step.observation)
+      .map((step, index) => [
+        step.stepId,
+        recordObservation({
+          observationId: step.observation.probeId,
+          sequence: index + 1,
+          operationId: step.observation.operationId,
+          callInputs: {},
+          stdout: step.observation.stdout,
+          stderr: step.observation.stderr,
+          exitCode: step.observation.exitCode,
+          artifacts: step.observation.artifacts,
+          provenance: 'baseline',
+        }),
+      ]),
+  );
+}
+
+function pointersIn(value) {
+  if (Array.isArray(value)) return value.flatMap(pointersIn);
+  if (value === null || typeof value !== 'object') return [];
+  return [...(typeof value.pointer === 'string' ? [value.pointer] : []), ...Object.values(value).flatMap(pointersIn)];
+}
+
+function checkSeedContract() {
+  const original = readJson(path.join(SOURCE, 'evaluation/contract.json'));
+  const before = readJson(path.join(FIXTURE, 'before/evaluation/contract.json'));
+  const after = readJson(path.join(FIXTURE, 'after/evaluation/contract.json'));
+  const typed = (contract) => contract.interactionPlan.filter((step) => step.stepId === 'typed-file');
+  assert.equal(typed(original).length, 1, 'Story 1.24 lacks the typed interaction');
+  assert.equal(typed(before).length, 0, 'W2 typed interaction survived the seed');
+  assert.equal(typed(after).length, 1, 'the repair lacks the typed interaction');
+  assert.deepEqual(typed(after)[0], typed(original)[0], 'the repaired typed interaction differs from Story 1.24');
+  const typedPointers = ['/interactions/typed-file/exit-code', '/interactions/typed-file/stdout/error'];
+  for (const [label, contract, expected] of [
+    ['Story 1.24', original, typedPointers],
+    ['before', before, []],
+    ['after', after, typedPointers],
+  ]) {
+    const oracle = contract.oracles.find((item) => item.id === 'O-004');
+    assert.deepEqual(
+      oracle.direction.evidenceTargets.filter((pointer) => pointer.startsWith('/interactions/typed-file/')),
+      expected,
+      `${label} O-004 direction typed pointers`,
+    );
+    assert.deepEqual(
+      pointersIn(oracle.check).filter((pointer) => pointer.startsWith('/interactions/typed-file/')),
+      expected,
+      `${label} O-004 check typed pointers`,
+    );
+  }
+  const expected = structuredClone(original);
+  const o003 = expected.oracles.find((oracle) => oracle.id === 'O-003');
+  o003.commentary = 'The active match assertion accepts clean or the missing-assertion finding.';
+  const match = o003.check.operands[1].operands[1];
+  assert.deepEqual(match.operands[0], { pointer: '/interactions/match/stdout' });
+  o003.check.operands[1].operands[1] = {
+    op: 'any',
+    operands: [
+      match,
+      {
+        op: 'equality',
+        operands: [
+          match.operands[0],
+          { literal: { file: 'cases/clean-assert-match.test.js', status: 'findings', findings: ['missing-assertion'] } },
+        ],
+      },
+    ],
+  };
+  const o004 = expected.oracles.find((oracle) => oracle.id === 'O-004');
+  o004.direction.evidenceTargets = o004.direction.evidenceTargets.filter((pointer) => !pointer.startsWith('/interactions/typed-file/'));
+  o004.check.operands = o004.check.operands.filter(
+    (operand) => !pointersIn(operand).some((pointer) => pointer.startsWith('/interactions/typed-file/')),
+  );
+  expected.interactionPlan = expected.interactionPlan.filter((step) => step.stepId !== 'typed-file');
+  assert.deepEqual(before, expected, 'before contract has a change beyond W1 and W2');
+  for (const id of ['P-009', 'P-017']) {
+    const sourceMap = readJson(path.join(SOURCE, 'evaluation/corpus/gameability', `${id}.json`));
+    const beforeMap = readJson(path.join(FIXTURE, 'before/evaluation/corpus/gameability', `${id}.json`));
+    delete sourceMap.steps['typed-file'];
+    assert.deepEqual(beforeMap, sourceMap, `${id} before response map has an extra change`);
+  }
+}
+
 async function checkBeforeDiagnostics() {
   const folder = path.join(FIXTURE, 'before/evaluation');
   const contract = readJson(path.join(folder, 'contract.json'));
@@ -324,6 +473,24 @@ async function checkBeforeDiagnostics() {
   assert.match(stopped.outcome.message, /P-007.*mutated arm did not fail/);
   assert.equal(firstStop.verdict, 'held');
   assert.equal(firstStop.oracles.find((oracle) => oracle.oracleId === 'O-003')?.disposition, 'held');
+  const mutation = readJson(path.join(folder, 'mutations/M-003.mutation.json'));
+  const p007 = readJson(path.join(folder, 'probes/P-007.probe.json'));
+  assert.equal(p007.qualification.mutation, 'M-003');
+  assert.equal(firstStop.mutationId, 'M-003');
+  assert.equal(firstStop.targetArtifact, mutation.targetArtifact);
+  const original = fs.readFileSync(path.join(FIXTURE, 'before/target', mutation.targetArtifact), 'utf8');
+  assert.equal(original.split(mutation.operator.find).length - 1, mutation.operator.occurrences);
+  const mutated = original.replace(mutation.operator.find, mutation.operator.replace);
+  assert.equal(firstStop.targetArtifactDigest, `sha256:${crypto.createHash('sha256').update(mutated).digest('hex')}`);
+  const policy = readJson(path.join(folder, 'policy/scoring-policy.json'));
+  const recomputed = await evaluateOracles({
+    contract,
+    stepObservations: observationsFromSteps(firstStop.steps),
+    oracleIds: ['O-003'],
+    regexMatchStepBudget: policy.regexMatchStepBudget,
+  });
+  assert.deepEqual(recomputed, firstStop.oracles, 'P-007 first-stop oracle changed from its saved observations');
+  assert.equal(armVerdict(recomputed), firstStop.verdict);
   sameBytes(path.join(folder, 'contract.json'), path.join(folder, 'replay/development-stopped/contract.json'), 'first-stop contract');
 
   const probe = readJson(path.join(folder, 'probes/P-009.probe.json'));
@@ -332,7 +499,6 @@ async function checkBeforeDiagnostics() {
   const evaluation = readJson(path.join(folder, 'evaluation.json'));
   const registry = registryFromEvaluation(evaluation, { root: path.join(FIXTURE, 'before/target') });
   const arm = await degenerateArm({ contract, registry, steps: response.steps, label: 'degenerate', provenance: 'baseline' });
-  const policy = readJson(path.join(folder, 'policy/scoring-policy.json'));
   const oracles = await evaluateOracles({
     contract,
     stepObservations: arm.stepObservations,
@@ -386,7 +552,7 @@ function qualificationEvidence(replay, runId, probe, field) {
   return readJson(file);
 }
 
-function checkQualification(folder, replay, runId, probe, source) {
+async function checkQualification(folder, replay, runId, probe, source) {
   const route = source.qualification.route;
   assert.equal(probe.qualification.route, route, `${probe.probeId} qualification route`);
   if (route === 'gameability') {
@@ -398,7 +564,13 @@ function checkQualification(folder, replay, runId, probe, source) {
       ['naiveOracleSatisfiedEvidence', 'naive-oracle-satisfied', 'held'],
       ['disciplinedOracleRejectedEvidence', 'disciplined-oracle-rejected', 'violated'],
     ];
-    for (const [field, phase, expected] of phases) {
+    const oracleIds = {
+      'P-009': ['O-001', 'O-003'],
+      'P-017': ['O-003', 'O-001'],
+    }[probe.probeId];
+    assert.ok(oracleIds, `${probe.probeId} is an unexpected gameability probe`);
+    const policy = readJson(path.join(folder, 'policy/scoring-policy.json'));
+    for (const [index, [field, phase, expected]] of phases.entries()) {
       const evidence = qualificationEvidence(replay, runId, probe, field);
       assert.equal(evidence.probeId, probe.probeId);
       assert.equal(evidence.phase, phase);
@@ -415,6 +587,14 @@ function checkQualification(folder, replay, runId, probe, source) {
         assert.deepEqual(step.observation.stdout.value, JSON.parse(answer.stdout));
         assert.equal(step.observation.stderr.value, answer.stderr);
       }
+      const oracles = await evaluateOracles({
+        contract: readJson(path.join(folder, 'contract.json')),
+        stepObservations: observationsFromSteps(evidence.steps),
+        oracleIds: [oracleIds[index]],
+        regexMatchStepBudget: policy.regexMatchStepBudget,
+      });
+      assert.deepEqual(oracles, evidence.oracles, `${probe.probeId} ${phase} oracle changed from its recorded response`);
+      assert.equal(armVerdict(oracles), evidence.verdict, `${probe.probeId} ${phase} verdict changed`);
     }
     return;
   }
@@ -526,7 +706,7 @@ function checkHeldOutInputIsolation(folder) {
   );
 }
 
-function checkDistinctMalformedSteps(folder) {
+async function checkDistinctMalformedSteps(folder) {
   const contract = readJson(path.join(folder, 'contract.json'));
   const byStep = new Map(contract.interactionPlan.map((step) => [step.stepId, step]));
   const raw = byStep.get('wrong-file-type');
@@ -539,10 +719,11 @@ function checkDistinctMalformedSteps(folder) {
   assert.equal(typed.operationId, raw.operationId);
   assert.deepEqual(typed.inputBinding.stdin.file, { matcher: 'type-violating' });
   const oracle = contract.oracles.find((candidate) => candidate.id === 'O-004');
-  const checks = JSON.stringify(oracle.check);
+  const checks = pointersIn(oracle.check);
   for (const stepId of ['wrong-file-type', 'typed-file']) {
     assert.ok(oracle.direction.evidenceTargets.some((pointer) => pointer.startsWith(`/interactions/${stepId}/`)));
     assert.ok(checks.includes(`/interactions/${stepId}/stdout/error`));
+    assert.ok(checks.includes(`/interactions/${stepId}/exit-code`));
   }
   for (const id of ['P-009', 'P-017']) {
     const response = readJson(path.join(folder, 'corpus/gameability', `${id}.json`));
@@ -557,6 +738,25 @@ function checkDistinctMalformedSteps(folder) {
   assert.equal(steps.get('typed-file').request.channels.stdin.kind, 'json');
   assert.equal(typeof steps.get('typed-file').request.channels.stdin.value.file, 'number');
   assert.deepEqual(steps.get('wrong-file-type').observation.stdout, steps.get('typed-file').observation.stdout);
+  const documented = 'provide a JSON object with action review and a file string';
+  assert.deepEqual(steps.get('typed-file').observation.stdout.value, { error: documented });
+  assert.equal(steps.get('typed-file').observation.exitCode, 0);
+  const policy = readJson(path.join(folder, 'policy/scoring-policy.json'));
+  const resolve = async (observations) =>
+    evaluateOracles({
+      contract,
+      stepObservations: observations,
+      oracleIds: ['O-004'],
+      regexMatchStepBudget: policy.regexMatchStepBudget,
+    });
+  const original = observationsFromSteps(clean.steps);
+  assert.equal((await resolve(original))[0].disposition, 'held');
+  const wrongError = structuredClone(original);
+  wrongError['typed-file'].stdout.value.error = 'unexpected error';
+  assert.equal((await resolve(wrongError))[0].disposition, 'violated', 'O-004 accepted a wrong typed-file error');
+  const wrongExit = structuredClone(original);
+  wrongExit['typed-file'].exitCode = 1;
+  assert.equal((await resolve(wrongExit))[0].disposition, 'violated', 'O-004 accepted a nonzero typed-file exit');
 }
 
 async function replayRun(folder, runName, out, expectedVerdict, generated) {
@@ -586,26 +786,25 @@ async function replayRun(folder, runName, out, expectedVerdict, generated) {
   sameBytes(path.join(folder, 'policy/scoring-policy.json'), path.join(replay, index.policy), `${runName} scoring policy`);
   const evaluation = readJson(path.join(folder, 'evaluation.json'));
   const heldOut = new Set(evaluation.heldOutProbes);
+  const expectedIds = runName === 'held-out' ? HELD_OUT_IDS : DEVELOPMENT_IDS;
   const authoredIds = fs
     .readdirSync(path.join(folder, 'probes'))
     .filter((name) => name.endsWith('.probe.json'))
     .map((name) => path.basename(name, '.probe.json'));
-  assert.deepEqual(
-    index.trialSets.map((set) => set.probeId).sort(),
-    authoredIds.filter((id) => (runName === 'held-out' ? heldOut.has(id) : !heldOut.has(id))).sort(),
-    `${runName} partition omitted a probe`,
-  );
+  assert.deepEqual(authoredIds.sort(), Object.keys(PROBE_CLASSES).sort(), `${runName} authored probe inventory changed`);
+  assert.deepEqual([...heldOut].sort(), HELD_OUT_IDS, `${runName} held-out IDs changed`);
+  assert.deepEqual(index.trialSets.map((set) => set.probeId).sort(), expectedIds.sort(), `${runName} partition omitted a probe`);
   const qualifiedProbes = filesUnder(path.join(replay, 'probes'))
     .filter((file) => file.endsWith('.probe.json'))
     .map((file) => readJson(path.join(replay, 'probes', file)));
-  assert.deepEqual(qualifiedProbes.map((probe) => probe.probeId).sort(), index.trialSets.map((set) => set.probeId).sort());
+  assert.deepEqual(qualifiedProbes.map((probe) => probe.probeId).sort(), expectedIds, `${runName} qualified probe inventory changed`);
   const targetDigest = treeDigest(path.join(path.dirname(folder), 'target'));
   for (const probe of qualifiedProbes) {
     const source = readJson(path.join(folder, 'probes', `${probe.probeId}.probe.json`));
     assert.deepEqual(authoredProbeFields(probe, Object.keys(source)), authoredProbeFields(source, Object.keys(source)));
     assert.equal(probe.implementationDigest, targetDigest);
     assert.equal(probe.commitDigest, targetDigest);
-    checkQualification(folder, replay, runRecord.invocationId, probe, source);
+    await checkQualification(folder, replay, runRecord.invocationId, probe, source);
   }
   const preflightProbes = readJson(path.join(replay, 'probes.json'));
   assert.deepEqual(
@@ -625,6 +824,11 @@ async function replayRun(folder, runName, out, expectedVerdict, generated) {
   const scoreId = fs.readdirSync(path.join(replay, 'scores')).sort().at(-1);
   assert.ok(scoreId);
   assert.ok(index.trialSets.length > 0);
+  assert.deepEqual(
+    Object.keys(runRecord.artifacts.records).sort(),
+    index.trialSets.flatMap((set) => set.records).sort(),
+    `${runName} run record digest map differs from sealed trial sets`,
+  );
   for (const set of index.trialSets) {
     const sourceProbe = readJson(path.join(folder, 'probes', `${set.probeId}.probe.json`));
     const scoredProbe = readJson(path.join(replay, set.probe));
@@ -634,6 +838,36 @@ async function replayRun(folder, runName, out, expectedVerdict, generated) {
       `${runName} ${set.probeId} source probe`,
     );
     assert.equal(set.records.length, 3, `${runName} ${set.probeId} trial count`);
+    for (const [trialIndex, recordPath] of set.records.entries()) {
+      assert.equal(recordPath, `trial-sets/${set.probeId}/record-${trialIndex + 1}.json`);
+      const recordFile = path.join(replay, recordPath);
+      assert.equal(digest(recordFile), runRecord.artifacts.records[recordPath], `${runName} ${set.probeId} record digest`);
+      const record = readJson(recordFile);
+      assert.equal(record.runId, set.runId);
+      assert.equal(record.conditionArm, set.conditionArm);
+      assert.equal(record.trialIndex, trialIndex + 1);
+      const actionPath = `trials/${set.conditionArm.replace(':', '-')}/trial-${trialIndex + 1}.json`;
+      const actionFile = path.join(replay, actionPath);
+      assert.deepEqual(record.actionsArtifact, {
+        path: `runs/${runRecord.invocationId}/${actionPath}`,
+        digest: digest(actionFile),
+        privateRef: null,
+        storage: 'public',
+      });
+      const actions = readJson(actionFile);
+      assert.equal(actions.conditionArm, set.conditionArm);
+      assert.equal(actions.trialIndex, trialIndex + 1);
+      const observedSteps = actions.steps.filter((step) => step.observation);
+      assert.equal(record.observations.length, observedSteps.length);
+      for (const [index, step] of observedSteps.entries()) {
+        const observation = record.observations[index];
+        assert.equal(observation.observationId, step.observation.probeId);
+        assert.equal(observation.operationId, step.observation.operationId);
+        assert.deepEqual(observation.stdout, step.observation.stdout);
+        assert.deepEqual(observation.stderr, step.observation.stderr);
+        assert.equal(observation.exitCode, step.observation.exitCode);
+      }
+    }
     const artifact = path.join(out, `${path.basename(path.dirname(folder))}-${runName}-${set.probeId}.json`);
     const args = ['score'];
     for (const record of set.records) args.push('--record', path.join(replay, record));
@@ -680,6 +914,7 @@ async function replayRun(folder, runName, out, expectedVerdict, generated) {
 
 async function main() {
   checkInventory();
+  checkSeedContract();
   checkGapReport();
   checkBlindInputs();
   checkGuide();
@@ -688,7 +923,7 @@ async function main() {
   checkIntermediateDevelopment();
   const before = path.join(FIXTURE, 'before/evaluation');
   const after = path.join(FIXTURE, 'after/evaluation');
-  checkDistinctMalformedSteps(after);
+  await checkDistinctMalformedSteps(after);
   checkHeldOutInputIsolation(after);
   checkReplayManifest(before, ['held-out']);
   checkReplayManifest(after, ['development', 'held-out']);
