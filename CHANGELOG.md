@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Live `tea-evaluate run` trials record validated CLI target token and cost reports in sealed records and isolation manifests, and identify unreported use in `run.json` (Story 1.29).
 - Evaluate now proves its learn-on-the-go procedure with a deterministic Autoevals `ExactMatch` fixture. Its record shows primary-source reads and pass/fail execution before mapping, and `test:evaluate-learned-framework` reruns clean and mutated arms through eval-quality (Story 1.26).
 - Evaluate's gap stage now has a blind seeded-weakness proof: a loosened review oracle and a missing type-violating input are diagnosed from engine evidence, repaired, and replayed through `test:evaluate-gap-loop` across development and held-out partitions (Story 1.25).
 - Evaluate now has recorded, strong authoring proofs for an HTTP AI feature and a CLI test-review command. Their frozen target inputs, authored suites, controlled mutations, development and held-out evidence, and deterministic replay run in `test:evaluate-authoring` (Story 1.24).

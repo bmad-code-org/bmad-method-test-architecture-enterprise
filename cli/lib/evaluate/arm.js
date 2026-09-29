@@ -59,6 +59,7 @@
 
 const { loadEngine } = require('./engine');
 const { recordObservation } = require('./records');
+const { ZERO, addUsage, parseUsageReport } = require('./usage-report');
 
 /** An injected environment value shorter than this is not scrubbed from output: it would match ordinary text. */
 const MIN_SCRUBBED_VALUE_LENGTH = 8;
@@ -307,7 +308,12 @@ function hostEnvironmentPort({ port, registry }) {
       );
       const secrets = secretForms(values);
       try {
-        return { request: augmented, observation: scrub(await port.probe(augmented, signal), secrets) };
+        const observation = await port.probe(augmented, signal);
+        return {
+          request: augmented,
+          observation: scrub(observation, secrets),
+          ...(request?.kind === 'cli' ? { usageReportStderr: observation.stderr } : {}),
+        };
       } catch (error) {
         error.request = augmented;
         // A fault's message and cause can quote what the target sent: a denial names the host a redirect gave, which a
@@ -538,6 +544,8 @@ async function runArm({ contract, port, registry, label, provenance = 'baseline'
   const declared = new Set(plan.map((step) => step.stepId));
   const steps = [];
   const stepObservations = {};
+  let resourceUse = ZERO;
+  const unreportedSteps = [];
   const issued = new Set();
   // A captured pointer is read as eval-quality's `score` reads it, over the observations this arm has recorded so far.
   const engine = plan.some((step) => capturedPointers(step).length > 0) ? await loadEngine() : null;
@@ -645,6 +653,7 @@ async function runArm({ contract, port, registry, label, provenance = 'baseline'
       error.steps = steps;
       throw error;
     }
+    if (request.kind !== 'cli') unreportedSteps.push(step.stepId);
     if (request.kind === 'api') {
       stepObservations[step.stepId] = recordObservation({
         observationId: request.probeId,
@@ -683,6 +692,15 @@ async function runArm({ contract, port, registry, label, provenance = 'baseline'
       error.steps = steps;
       throw error;
     }
+    try {
+      const reported = parseUsageReport(answered.usageReportStderr ?? observation.stderr, `step ${step.stepId}`);
+      if (reported === null) unreportedSteps.push(step.stepId);
+      else resourceUse = addUsage(resourceUse, reported);
+    } catch (error_) {
+      const error = new ArmError(`the ${label} arm's ${error_.message}`);
+      error.steps = steps;
+      throw error;
+    }
     stepObservations[step.stepId] = recordObservation({
       observationId: request.probeId,
       sequence,
@@ -695,7 +713,7 @@ async function runArm({ contract, port, registry, label, provenance = 'baseline'
       provenance,
     });
   }
-  return { steps, stepObservations };
+  return { steps, stepObservations, resourceUse, unreportedSteps };
 }
 
 module.exports = {

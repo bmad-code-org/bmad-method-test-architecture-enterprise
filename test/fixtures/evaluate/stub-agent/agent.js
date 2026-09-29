@@ -63,6 +63,8 @@ if (skillRoot === undefined) {
 const skill = fs.readFileSync(path.join(skillRoot, 'SKILL.md'), 'utf8');
 const name = /^name:\s*(\S+)/m.exec(skill)?.[1] ?? '(unnamed)';
 const request = prompt.slice(prompt.indexOf(REQUEST_MARKER) + REQUEST_MARKER.length).trim();
+const usage = /STUB-USAGE (\{[^\n]+\})/.exec(request);
+if (usage !== null) process.stderr.write(`TEA_EVALUATE_USAGE_JSON:${usage[1]}\n`);
 
 // Before any child starts, so a pid file written below means the handler is in place.
 const outlive = /STUB-OUTLIVE (SIG[A-Z]+)/.exec(request)?.[1];

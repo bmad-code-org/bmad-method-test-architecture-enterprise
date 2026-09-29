@@ -47,7 +47,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { Command } = require('commander');
 
-const { AGENT_ADAPTERS, DEFAULT_CAPABILITIES, RUNNER_CAPABILITIES } = require('./lib/agent-adapters');
+const { AGENT_ADAPTERS, DEFAULT_CAPABILITIES, RUNNER_CAPABILITIES, agentReplyAndUsage } = require('./lib/agent-adapters');
+const { PREFIX } = require('./lib/evaluate/usage-report');
 const { runAgent } = require('./lib/run-agent');
 const { EXIT_CODES, classOfAgentError } = require('./lib/runner-exit-codes');
 
@@ -222,8 +223,9 @@ function run(argv) {
   }
 
   let stdout;
+  let stderr;
   try {
-    ({ stdout } = runAgent(skillPrompt(skillRoot, prompt), {
+    ({ stdout, stderr } = runAgent(skillPrompt(skillRoot, prompt), {
       agent: options.agent,
       agentCommand: options.agentCmd,
       agentArgs: options.agentArg,
@@ -232,11 +234,20 @@ function run(argv) {
       timeout: Number.parseInt(options.timeoutMs, 10),
       cwd,
       capabilities: options.capability.length > 0 ? options.capability : DEFAULT_CAPABILITIES,
+      usageReport: true,
     }));
   } catch (error) {
     throw new RunnerExit(classOfAgentError(error), error.message);
   }
+  let reply;
+  try {
+    reply = agentReplyAndUsage(options.agent, stdout, stderr);
+  } catch (error) {
+    throw new RunnerExit('environment-parser', error.message);
+  }
+  stdout = reply.stdout;
   if (stdout.length > 0) process.stdout.write(stdout.endsWith('\n') ? stdout : `${stdout}\n`);
+  if (reply.usage !== null) process.stderr.write(`${PREFIX}${JSON.stringify(reply.usage)}\n`);
 }
 
 /**

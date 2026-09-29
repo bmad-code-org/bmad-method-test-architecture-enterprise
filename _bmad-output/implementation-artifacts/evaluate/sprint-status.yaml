@@ -64,7 +64,7 @@ development_status:
   1-26-learn-an-unfamiliar-evaluation-framework-on-the-go: done
   1-27-tell-a-documented-guard-from-an-invented-risk-in-the-test-d: done
   1-28-recover-from-a-killed-run: done
-  1-29-record-what-a-live-run-spends: backlog
+  1-29-record-what-a-live-run-spends: done
   1-30-send-principal-and-matcher-bindings: backlog
   1-31-sandbox-the-targets-file-system: backlog
   1-32-qualify-a-historical-probe-against-two-addressable-deployments: done

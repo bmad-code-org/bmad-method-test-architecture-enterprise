@@ -41,3 +41,6 @@ CODE_OF_CONDUCT.md
 # repository's own tracked planning artifacts and is gated like any other
 # markdown.
 _bmad/
+
+# Story 1.29's approved matrix is frozen and retains its approved spacing.
+_bmad-output/implementation-artifacts/evaluate/story-1.29.md

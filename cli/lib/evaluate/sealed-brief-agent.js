@@ -91,6 +91,7 @@ const { answerBlocks, unfenced } = require('./judge');
 const { EvaluatorError, isOracleBinding, readAnswer } = require('./judgment-rows');
 const { recordObservation } = require('./records');
 const { releaseScratchDirectory, makeScratchDirectory } = require('./workspace');
+const { ZERO, addUsage, parseUsageReport } = require('./usage-report');
 
 /** The instruction template every sealed-brief evaluator call carries; its digest is the configuration's `systemPromptDigest`. */
 const EVALUATOR_INSTRUCTIONS = [
@@ -434,6 +435,8 @@ function bridgeRouter({
   let counted = 0;
   let sequence = firstSequence - 1;
   let infrastructure = null;
+  let resourceUse = ZERO;
+  const unreportedSteps = [];
   // Aborted once the agent has ended, so no call it can no longer see runs or lands in the record.
   const ending = new AbortController();
   const callSignal = AbortSignal.any([signal, ending.signal]);
@@ -465,8 +468,8 @@ function bridgeRouter({
    */
   async function send(armPort, request, entry) {
     try {
-      const { observation } = await armPort.probe(request, callSignal);
-      return { observation };
+      const { observation, usageReportStderr } = await armPort.probe(request, callSignal);
+      return { observation, usageReportStderr };
     } catch (error) {
       const code = typeof error?.code === 'string' ? error.code : null;
       const detail = String(error?.message ?? error);
@@ -532,6 +535,14 @@ function bridgeRouter({
     const { exitCode } = observation;
     if (stoppedFromOutside(exitCode) || (registryEntry !== undefined && registryEntry.infrastructureExitCodes.includes(exitCode))) {
       infrastructure ??= `the evaluator's call ${probeId} ${stoppedFromOutside(exitCode) ? `was stopped from outside (exit code ${JSON.stringify(exitCode)})` : `exited ${exitCode}, which the ${call.executable} registry entry declares as an infrastructure exit code`}: the target could not run`;
+    } else if (degenerate === null) {
+      try {
+        const reported = parseUsageReport(sent.usageReportStderr ?? observation.stderr, `evaluator call ${probeId}`);
+        if (reported === null) unreportedSteps.push(probeId);
+        else resourceUse = addUsage(resourceUse, reported);
+      } catch (error) {
+        infrastructure ??= `the evaluator's call ${probeId} has invalid target usage: ${error.message}`;
+      }
     }
     if (call.operation === undefined) {
       // An unmatched call stays out of the record, so the agent is given no observation ID to cite.
@@ -586,6 +597,7 @@ function bridgeRouter({
     const sent = await send(await armPortFor('mcp', operationId), request, entry);
     if (sent.answer !== undefined) return sent.answer;
     const { observation } = sent;
+    if (degenerate === null) unreportedSteps.push(probeId);
     if (operation === undefined) {
       // A tool no operation declares stays out of the record, so the agent is given no observation ID to cite.
       calls.push({ ...entry, request, observation, unmatched: 'no operation of the evaluation calls this tool' });
@@ -643,6 +655,7 @@ function bridgeRouter({
     const sent = await send(await armPortFor('api', operationId), request, entry);
     if (sent.answer !== undefined) return sent.answer;
     const { observation } = sent;
+    if (degenerate === null) unreportedSteps.push(probeId);
     if (call.operation === undefined) {
       // A method and path no operation declares stays out of the record, so the agent is given no observation ID to cite.
       calls.push({ ...entry, request, observation, unmatched: 'no operation of the evaluation declares this method and path' });
@@ -689,7 +702,16 @@ function bridgeRouter({
     return handleApi(tool, input, entry);
   }
 
-  return { handle, stop: () => ending.abort(), calls, observations, counted: () => counted, infrastructure: () => infrastructure };
+  return {
+    handle,
+    stop: () => ending.abort(),
+    calls,
+    observations,
+    counted: () => counted,
+    infrastructure: () => infrastructure,
+    resourceUse: () => resourceUse,
+    unreportedSteps,
+  };
 }
 
 /**
