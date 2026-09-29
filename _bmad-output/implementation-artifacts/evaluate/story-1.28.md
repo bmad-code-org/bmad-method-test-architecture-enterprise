@@ -82,7 +82,9 @@ Round 2 review added coverage for intact and missing Git worktrees, journal reti
 
 After the round 2 patches, `npm test` passed with 236 preflight, 536 mutation, 389 run, 385 arms and 589 evaluator checks, followed by the repository lint, markdown lint and formatting gates. `npm run docs:validate-links`, `npm run docs:build` and the eval-quality engine export check passed. The Windows branch remains unexercised on this macOS host; Story 1.52 carries its descendant guarantee.
 
-The final review found that an unreadable Git metadata directory could retire a journal too early, the journal parent could be swapped, and a killed preflight could leave its Git checkout child running. It also found two partial-marker windows during workspace creation and removal, and two test assertions that could miss an adopter change or signal an unrelated reused PID. Recovery now holds and verifies the journal directory, retains ownership through a sidecar marker, preserves uncertain Git metadata, and supervises Git checkout and removal. End-to-end mutation regressions cover each failure window, the adopter-state baseline, and the journal-parent swap. The focused mutation suite passed 634 checks, and the promptfoo suite passed with canonical dependency paths. Story 1.24 merged first and owns follow-ups 1.50 and 1.51, so this story's three follow-ups became 1.52 to 1.54.
+The final review found that an unreadable Git metadata directory could retire a journal too early, the journal parent could be swapped, and a killed preflight could leave its Git checkout child running. It also found two partial-marker windows during workspace creation and removal, and two test assertions that could miss an adopter change or signal an unrelated reused PID. Recovery now holds and verifies the journal directory, retains ownership through a sidecar marker, preserves uncertain Git metadata, and supervises Git checkout and removal. End-to-end mutation regressions cover each failure window, the adopter-state baseline, and the journal-parent swap. The focused mutation suite passed 661 checks on the merged Story 1.24 base, and the promptfoo suite passed with canonical dependency paths. Story 1.24 merged first and owns follow-ups 1.50 and 1.51, so this story's three follow-ups became 1.52 to 1.54.
+
+The final-head review strengthened the killed-run assertion to compare adopter file digests, stash and Git configuration before any fixture edit. It also made the checkout-child assertion treat a failed `ps` lookup as uncertain until the kernel confirms the PID is gone. The first rebased full gate exposed a reference assertion tied to the words “workspace marker”; the reference now names both the workspace and sidecar markers while retaining that asserted phrase.
 
 ## Spec Change Log
 
@@ -126,6 +128,8 @@ The final review found that an unreadable Git metadata directory could retire a 
 - Final edge 2, interrupted teardown: **medium, patch**. Recursive removal could remove the inner marker first. Keep a verified sidecar marker beside the workspace until cleanup completes.
 - Final edge 3, adopter baseline: **medium, patch**. The killed-run test captured status and refs after changing the fixture. Compare against the original snapshot immediately after the kill.
 - Final edge 4, uncertain PID: **medium, patch**. A failed `ps` lookup could make test teardown signal an unrelated reused PID. Signal only a positively identified verdict process.
+- Final-head 1, adopter file baseline: **medium, patch**. Status and refs alone are null for non-Git fixtures. Compare file digests, stash and Git configuration to the pre-kill snapshot before editing the fixture.
+- Final-head 2, checkout filter PID: **medium, patch**. A failed `ps` lookup was treated as proof the filter exited. Confirm absence with the kernel when process identification is unavailable, and signal only a positively matched filter during teardown.
 
 ## Design Notes
 

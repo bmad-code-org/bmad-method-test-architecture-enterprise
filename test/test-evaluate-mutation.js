@@ -1206,15 +1206,19 @@ async function checkUnits() {
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
 /** A failed ps lookup cannot identify a reused PID, so it is uncertain until the kernel says the PID is gone. */
-function verdictProcessState(pid) {
+function commandProcessState(pid, command) {
   const listed = spawnSync('ps', ['-p', String(pid), '-o', 'command='], { encoding: 'utf8' });
-  if (listed.status === 0 && listed.stdout.trim()) return listed.stdout.includes('verdict.js') ? 'alive' : 'gone';
+  if (listed.status === 0 && listed.stdout.trim()) return listed.stdout.includes(command) ? 'alive' : 'gone';
   try {
     process.kill(pid, 0);
     return 'uncertain';
   } catch (error) {
     return error.code === 'ESRCH' ? 'gone' : 'uncertain';
   }
+}
+
+function verdictProcessState(pid) {
+  return commandProcessState(pid, 'verdict.js');
 }
 
 function stopMatchedVerdict(pid) {
@@ -1382,7 +1386,10 @@ async function checkKilledRun(
       );
     const stateAfterKill = adopterState(fixture.project, isGit);
     check(stateAfterKill.status === originalState.status, `${label}: the killed run changed the adopter's git status`);
+    check(stateAfterKill.files === originalState.files, `${label}: the killed run changed an adopter file`);
     check(stateAfterKill.refs === originalState.refs, `${label}: the killed run changed the adopter's refs`);
+    check(stateAfterKill.stash === originalState.stash, `${label}: the killed run changed the adopter's stash`);
+    check(stateAfterKill.config === originalState.config, `${label}: the killed run changed the adopter's Git configuration`);
     if (isGit && (partialGit || missingDirectory)) {
       const pointer = fs
         .readFileSync(path.join(abandoned.top, '.git'), 'utf8')
@@ -1585,8 +1592,7 @@ async function checkKilledCheckout() {
     check(ended?.signal === 'SIGKILL', 'preflight did not close after checkout was killed');
     let filterGone = false;
     for (let elapsed = 0; elapsed < 7000 && !filterGone; elapsed += 50) {
-      const listed = spawnSync('ps', ['-p', String(filterPid), '-o', 'command='], { encoding: 'utf8' });
-      filterGone = listed.status !== 0 || !listed.stdout.includes(script);
+      filterGone = commandProcessState(filterPid, script) === 'gone';
       if (!filterGone) await delay(50);
     }
     check(filterGone, `the Git checkout filter (pid ${filterPid}) survived the killed preflight`);
@@ -1606,6 +1612,13 @@ async function checkKilledCheckout() {
   } finally {
     child.kill('SIGKILL');
     await Promise.race([closed, delay(5000)]);
+    if (filterPid !== null && commandProcessState(filterPid, script) === 'alive') {
+      try {
+        process.kill(filterPid, 'SIGKILL');
+      } catch (error) {
+        if (error.code !== 'ESRCH') throw error;
+      }
+    }
     fs.rmSync(attributes, { force: true });
   }
 }
