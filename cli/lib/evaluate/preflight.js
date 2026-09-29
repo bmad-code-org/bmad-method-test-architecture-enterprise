@@ -843,6 +843,7 @@ async function runInWorkspaces({
           writer,
           stop,
           log,
+          seed: run.seed,
           signal,
         });
         if (historical.refused === undefined) qualified.push(historical);
@@ -869,6 +870,7 @@ async function runInWorkspaces({
             writer,
             stop,
             log,
+            seed: run.seed,
             signal,
           }),
         );

@@ -524,7 +524,14 @@ async function checkUnits() {
   // An any matcher follows the declared string type and repeats its bytes for one seed.
   const anyContract = {
     ...readJson(path.join(FIXTURE, EVALUATION, 'contract.json')),
-    interactionPlan: [create, { ...readBack, after: 'create', option: { id: { matcher: 'any' } } }],
+    interactionPlan: [
+      create,
+      {
+        ...readBack,
+        after: 'create',
+        inputBinding: { ...readBack.inputBinding, option: { id: { matcher: 'any' } } },
+      },
+    ],
   };
   const anyFirst = await runArm({
     contract: anyContract,
@@ -544,6 +551,48 @@ async function checkUnits() {
     typeof anyFirst.steps[1].request.channels.option.id === 'string' &&
       JSON.stringify(anyFirst.steps[1].request.channels.option) === JSON.stringify(anySecond.steps[1].request.channels.option),
     `an any matcher sent ${JSON.stringify([anyFirst.steps[1], anySecond.steps[1]])}`,
+  );
+
+  // Unsupported declared types for matchers throw an ArmError.
+  const unsupportedAnyContract = structuredClone(anyContract);
+  unsupportedAnyContract.permittedInterfaces[0].operations[1].requestShape.option.types.id = 'unsupported';
+  let unsupportedAnyError;
+  try {
+    await runArm({
+      contract: unsupportedAnyContract,
+      port: scriptedPort('any-unsupported', { create: { id: 'rec-any' }, 'read-back': { ok: true } }),
+      registry: UNIT_REGISTRY,
+      label: 'any-unsupported',
+    });
+  } catch (error) {
+    unsupportedAnyError = error;
+  }
+  check(
+    unsupportedAnyError instanceof ArmError && unsupportedAnyError.message.includes('unsupported declared type unsupported'),
+    `an any matcher with unsupported declared type gave ${unsupportedAnyError}`,
+  );
+
+  const unsupportedTypeViolatingContract = structuredClone(anyContract);
+  unsupportedTypeViolatingContract.permittedInterfaces[0].operations[0].requestShape.stdin.types.title = 'unsupported';
+  unsupportedTypeViolatingContract.interactionPlan[0] = {
+    ...create,
+    inputBinding: { ...create.inputBinding, stdin: { title: { matcher: 'type-violating' } } },
+  };
+  let unsupportedTypeViolatingError;
+  try {
+    await runArm({
+      contract: unsupportedTypeViolatingContract,
+      port: scriptedPort('type-violating-unsupported', { create: { id: 'rec-any' }, 'read-back': { ok: true } }),
+      registry: UNIT_REGISTRY,
+      label: 'type-violating-unsupported',
+    });
+  } catch (error) {
+    unsupportedTypeViolatingError = error;
+  }
+  check(
+    unsupportedTypeViolatingError instanceof ArmError &&
+      unsupportedTypeViolatingError.message.includes('unsupported declared type unsupported'),
+    `a type-violating matcher with unsupported declared type gave ${unsupportedTypeViolatingError}`,
   );
 
   // Two principals reach the target in plan order while the persisted request and record retain only opaque labels.
@@ -611,14 +660,20 @@ async function checkUnits() {
     };
     const scrubRegistry = createRegistry([sourceEntry], {
       root: FIXTURE,
-      principalMappings: { reviewer: { interfaceId: sourceEntry.interfaceId, environmentKey: 'TEA_WORKFLOW_PRINCIPAL' } },
+      principalMappings: {
+        reviewer: { interfaceId: sourceEntry.interfaceId, environmentKey: 'TEA_WORKFLOW_PRINCIPAL', prefix: 'Bearer ' },
+      },
     });
     const scrubbed = await hostEnvironmentPort({
       registry: scrubRegistry,
       port: {
         probe: async (request) => ({
           request,
-          observation: { kind: 'cli', stdout: { kind: 'text', value: principalSecret }, stderr: { kind: 'text', value: '' } },
+          observation: {
+            kind: 'cli',
+            stdout: { kind: 'text', value: `prefixed: Bearer ${principalSecret}, raw: ${principalSecret}` },
+            stderr: { kind: 'text', value: '' },
+          },
         }),
       },
     }).probe({ probeId: 'principal-secret', interfaceId: sourceEntry.interfaceId, executable: sourceEntry.executable, kind: 'cli' });

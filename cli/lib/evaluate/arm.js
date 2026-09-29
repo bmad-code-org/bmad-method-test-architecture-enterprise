@@ -479,7 +479,7 @@ function matcherValue(type, seed, stepId, channel, key) {
       return digest.readUInt32BE(0);
     }
     default: {
-      return null;
+      return;
     }
   }
 }
@@ -530,7 +530,13 @@ function boundValues(channel, stepId, name, resolve, shape, { seed, interfaceId,
       if (STRINGIFIED_CHANNELS.has(name)) {
         throw new ArmError(`interaction plan step ${stepId} cannot send a type-violating ${name}.${key}; the transport requires a string`);
       }
-      values[key] = typeViolatingValue(declared);
+      const violating = typeViolatingValue(declared);
+      if (violating === undefined) {
+        throw new ArmError(
+          `interaction plan step ${stepId} binds ${name}.${key} as type-violating with an unsupported declared type ${declared}`,
+        );
+      }
+      values[key] = violating;
       continue;
     }
     if (binding?.matcher === 'any') {

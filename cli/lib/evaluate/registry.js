@@ -390,12 +390,11 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
 
   /** The mapped host values that must be scrubbed from target answers and faults. */
   function principalSecrets() {
-    return Object.values(principalMappings ?? {})
-      .map((mapping) => {
-        const value = process.env[mapping.environmentKey];
-        return typeof value === 'string' ? `${mapping.prefix ?? ''}${value}` : null;
-      })
-      .filter((value) => value !== null);
+    return Object.values(principalMappings ?? {}).flatMap((mapping) => {
+      const value = process.env[mapping.environmentKey];
+      if (typeof value !== 'string') return [];
+      return mapping.prefix ? [`${mapping.prefix}${value}`, value] : [value];
+    });
   }
 
   /** The tool-server entry for one interface. @returns {object|undefined} */

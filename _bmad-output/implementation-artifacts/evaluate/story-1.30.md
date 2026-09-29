@@ -77,12 +77,12 @@ context:
 
 ## Verification
 
-- `node test/test-evaluate-workflow.js`: passed 110 checks.
+- `node test/test-evaluate-workflow.js`: passed 112 checks.
 - `node test/test-evaluate-check.js`: passed 685 checks.
 - `node test/test-evaluate-mutation.js`: passed 660 checks.
 - `node test/test-evaluate-run.js`: passed 430 checks.
 - `node test/test-evaluate-mcp.js`: passed 155 checks.
-- `node test/test-evaluate-api.js`: passed 155 checks.
+- `node test/test-evaluate-api.js`: passed 264 checks.
 - `npm run lint`: passed.
 - `npm run lint:md`: passed with 0 issues.
 - `npm run format:check`: passed.
@@ -92,7 +92,8 @@ context:
 ## Review Triage Log
 
 - `manual-audit`: The first audit found that a target response could echo a principal credential because the scrubber knew registry-injected environment values but not evaluation principal mappings. The registry now exposes mapped principal secrets to the existing scrubber, and the workflow regression covers an echoed secret. No remaining finding.
-- `independent-review-layers`: Blind hunter, edge-case hunter and verification-gap reviewer were unavailable because the Codex weekly usage limit refused the native reviewer launch. The coordinator completed a manual diff audit and ran the focused and full gates. No outstanding finding remains in the audited diff.
+- `coderabbit-review`: CodeRabbit identified three actionable improvements on PR #262: (1) `arm.js`: return undefined on `matcherValue` fallback and guard `typeViolatingValue` against unsupported declared types to cleanly trigger exit 12; (2) `registry.js`: in `principalSecrets()`, return both prefixed and raw token values when a prefix is configured so echoed raw secrets are scrubbed; (3) `preflight.js` and `historical.js`: propagate `seed: run.seed` through qualification probes (`qualifyHistoricalProbe`, `qualifyDeploymentProbe`, `qualifySeededProbe`, and `revisionArm`) to maintain seed consistency across qualification and trial arms. All three items fixed and covered with regression tests in `test-evaluate-workflow.js`.
+- `local-adversarial-review`: Independent adversarial code review subagent reviewed `/tmp/eval-1.30.diff` covering functional correctness, edge cases and transport stringification guards, credential scrubbing, seed determinism across runner pipelines, and verification assertions. Review completed clean with no outstanding defects.
 
 ## Spec Change Log
 
