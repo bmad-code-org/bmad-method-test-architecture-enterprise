@@ -2,7 +2,7 @@
 title: 'Close seeded weaknesses through the gap loop'
 type: 'feature'
 created: '2026-09-28'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '546f845bfe5d9488aab5ccf80baa0387a6cf029a'
@@ -116,7 +116,7 @@ The second blind session demonstrated that caught malformed-input probes can lea
 
 ## Outcome
 
-The fresh blind repair closed W1 and W2. The committed after fixture retains separate raw and typed malformed interactions. Its 12 development and four held-out score artifacts all report `PASS`, with zero unsatisfied gaps, 30 caught trial votes and 18 passed-clean-control votes. The deterministic replay reproduces the before failures and both after partitions from committed evidence. Coordinator review and the final combined `npm test` remain pending.
+The fresh blind repair closed W1 and W2. The committed after fixture retains separate raw and typed malformed interactions. Its 12 development and four held-out score artifacts all report `PASS`, with zero unsatisfied gaps, 30 caught trial votes and 18 passed-clean-control votes. The deterministic replay reproduces the before failures and both after partitions from committed evidence. Three initial independent reviewers found the recorded repairs; two fresh reviewers passed the repaired head. The source and an independent clean worktree each passed the complete `npm test`; the documentation build and all PR #259 CI checks, including coverage, passed.
 
 ## Verification
 
@@ -129,4 +129,6 @@ The fresh blind repair closed W1 and W2. The committed after fixture retains sep
 - `npm run test:doc-counts`, `npm run test:doc-claims`, and `npm run docs:validate-links`: passed after the README count update.
 - `npm run lint`, `npm run lint:md`, `npm run format:check`, `npm run docs:validate-links`, and `npm run test:bmad-output-gated`: passed. The first focused `lint` attempt found a switch-case style error in the new test; it was fixed and lint passed on the final tree.
 - `npm run docs:build`: passed on the rebased branch in the coordinator session, including link validation and the 45-page Starlight build.
-- `npm test`: the earlier run exposed a stale README count, which was corrected. The coordinator stopped a later combined run after the blind input leak was found. The final full gate is pending on the reconciled tree.
+- `npm test`: passed on the reconciled source tree at `35b797d5`, including all Evaluate suites, validation, lint, Markdown lint and formatting. Earlier interrupted or failed runs are described above; they are not the final gate.
+- Independent review: a separate clean worktree at `35b797d5` ran `npm ci` and the complete `npm test`, both exit 0, with no path-sensitive deviation; its static lens found no remaining compliance issue.
+- PR #259 CI on `35b797d5`: five test shards, coverage, docs, ESLint, Markdown lint, Prettier, layering and supply-chain all passed. The PR has 491 changed files, above CodeRabbit's known 100-file review limit; no CodeRabbit review or thread was posted.
