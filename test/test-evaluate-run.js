@@ -219,7 +219,7 @@ function makeProject(label, { edit = () => {}, below = null } = {}) {
 /** The newest run directory under `runs/`; with `expected`, how many there must be. */
 function runDirectoryOf(folder, expected = 1) {
   const runs = path.join(folder, 'runs');
-  const names = fs.existsSync(runs) ? fs.readdirSync(runs).filter((name) => name !== '.gitignore') : [];
+  const names = fs.existsSync(runs) ? fs.readdirSync(runs).filter((name) => name !== '.gitignore' && name !== '.workspace-journal') : [];
   check(names.length === expected, `expected ${expected} run directory(ies), found ${JSON.stringify(names)}`);
   return names.length === 0 ? null : path.join(runs, names.sort().at(-1));
 }
@@ -1428,7 +1428,7 @@ function checkSubdirectoryDigest() {
     const runs = path.join(folder, 'runs');
     const newest = fs
       .readdirSync(runs)
-      .filter((name) => name !== '.gitignore')
+      .filter((name) => name !== '.gitignore' && name !== '.workspace-journal')
       .sort()
       .at(-1);
     return written(path.join(runs, newest, 'probes', 'P-002.probe.json'), `the qualified probe (${label})`)?.implementationDigest;
@@ -1451,7 +1451,7 @@ function checkSubdirectoryDigest() {
   const inside = digestAfterPreflight('after a commit inside it');
   const preflightRun = fs
     .readdirSync(path.join(folder, 'runs'))
-    .filter((name) => name !== '.gitignore')
+    .filter((name) => name !== '.gitignore' && name !== '.workspace-journal')
     .sort()
     .at(-1);
   const notARun = evaluate(['score', '--evaluation', folder, '--run', preflightRun], env);

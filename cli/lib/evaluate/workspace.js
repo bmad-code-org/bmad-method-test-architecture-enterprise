@@ -46,14 +46,238 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { createHash } = require('node:crypto');
+const { createHash, randomUUID } = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 
 const { digest } = require('./digest');
 const { cliObservation } = require('./registry');
+const { RunDirectory } = require('./run-directory');
 
 /** How long one `git worktree add` may take: a checkout of a large repository is slow, and a hang still ends. */
 const GIT_CHECKOUT_TIMEOUT_MS = 10 * 60_000;
+const OWNER_MARKER = '.tea-evaluate-owner.json';
+const JOURNAL_DIRECTORY = '.workspace-journal';
+
+/** Kept beside the workspace while its contents are removed, so an interrupted cleanup still has ownership proof. */
+function ownerSidecarOf(workspace) {
+  return `${workspace.directory}${OWNER_MARKER}`;
+}
+
+/** POSIX ownership and mode bits are unavailable for a Windows ACL. */
+function privateToUser(stat) {
+  return !process.getuid || (stat.uid === process.getuid() && (stat.mode & 0o077) === 0);
+}
+
+/** A private record survives a killed process and a later change to TMPDIR. */
+function journalDirectory(runsDirectory) {
+  const directory = path.join(runsDirectory, JOURNAL_DIRECTORY);
+  const runs = new RunDirectory(runsDirectory);
+  let stat;
+  try {
+    const expectedRuns = path.join(fs.realpathSync.native(path.dirname(runsDirectory)), path.basename(runsDirectory));
+    if (runs.realRoot !== expectedRuns) throw new WorkspaceRefusal(`workspace journal parent ${runsDirectory} moved or became a link`);
+    runs.inDirectory('', () => {
+      try {
+        fs.mkdirSync(JOURNAL_DIRECTORY, { mode: 0o700 });
+      } catch (error) {
+        if (error.code !== 'EEXIST') throw error;
+      }
+      stat = fs.lstatSync(JOURNAL_DIRECTORY);
+      if (!stat.isDirectory() || stat.isSymbolicLink() || !privateToUser(stat)) {
+        throw new WorkspaceRefusal(`workspace journal ${directory} is not a private directory`);
+      }
+    });
+    const journal = new RunDirectory(directory);
+    const held = journal.directories.get('');
+    if (journal.realRoot !== path.join(runs.realRoot, JOURNAL_DIRECTORY) || held.dev !== stat.dev || held.ino !== stat.ino) {
+      journal.close();
+      throw new WorkspaceRefusal(`workspace journal ${directory} moved before it could be held`);
+    }
+    return journal;
+  } finally {
+    runs.close();
+  }
+}
+
+function writeWorkspaceJournal(workspace, ownership, temp) {
+  const folder = fs.realpathSync.native(ownership.folder);
+  const root = fs.realpathSync.native(ownership.root);
+  const repository = workspace.repository === null ? null : fs.realpathSync.native(workspace.repository);
+  const gitDirectory = workspace.gitDirectory === null ? null : fs.realpathSync.native(workspace.gitDirectory);
+  const entry = {
+    version: 1,
+    folder,
+    root,
+    runId: ownership.runId,
+    ownerPid: process.pid,
+    temp,
+    directory: workspace.directory,
+    kind: workspace.kind,
+    repository,
+    gitDirectory,
+    top: workspace.top,
+  };
+  const name = `${randomUUID()}.json`;
+  ownership.journal.inDirectory(
+    '',
+    () => {
+      const descriptor = fs.openSync(
+        name,
+        fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | (fs.constants.O_NOFOLLOW ?? 0),
+        0o600,
+      );
+      let complete = false;
+      try {
+        fs.writeSync(descriptor, `${JSON.stringify(entry)}\n`);
+        fs.fsyncSync(descriptor);
+        complete = true;
+      } finally {
+        fs.closeSync(descriptor);
+        if (!complete) fs.rmSync(name, { force: true });
+      }
+    },
+    { undo: () => fs.rmSync(name, { force: true }) },
+  );
+  return { name, directory: ownership.journal, entry };
+}
+
+function retireWorkspaceJournal(workspace) {
+  if (workspace.journal) workspace.journal.directory.inDirectory('', () => fs.rmSync(workspace.journal.name, { force: true }));
+}
+
+/** Reclaim only scratch corroborated by this evaluation's journal and its own marker. */
+function reclaimDeadWorkspaces({ folder, root, journal, log = () => {} }) {
+  let files;
+  try {
+    files = journal.inDirectory('', () => fs.readdirSync('.'));
+  } catch (error) {
+    throw new WorkspaceRefusal(`workspace journal ${journal.root} cannot be read: ${error.message}`);
+  }
+  const projectFolder = fs.realpathSync.native(folder);
+  const projectRoot = fs.realpathSync.native(root);
+  const projectRepository = repositoryOf(root);
+  for (const name of files) {
+    if (!/^[0-9a-f-]{36}\.json$/.test(name)) continue;
+    const file = path.join(journal.root, name);
+    let entry;
+    try {
+      const journalStat = journal.inDirectory('', () => fs.lstatSync(name));
+      if (!journalStat.isFile() || !privateToUser(journalStat)) continue;
+      entry = JSON.parse(journal.inDirectory('', () => fs.readFileSync(name, 'utf8')));
+      if (
+        entry.version !== 1 ||
+        entry.folder !== projectFolder ||
+        entry.root !== projectRoot ||
+        !Number.isSafeInteger(entry.ownerPid) ||
+        entry.ownerPid <= 0 ||
+        typeof entry.runId !== 'string' ||
+        !/^[a-zA-Z0-9_-]+$/.test(entry.runId) ||
+        !['copy', 'git-worktree'].includes(entry.kind) ||
+        typeof entry.temp !== 'string' ||
+        typeof entry.directory !== 'string' ||
+        path.dirname(entry.directory) !== entry.temp ||
+        !path.basename(entry.directory).startsWith('tea-evaluate-') ||
+        entry.top !== path.join(entry.directory, entry.kind === 'copy' ? 'target' : 'worktree') ||
+        entry.repository !== (projectRepository?.top ?? null) ||
+        entry.gitDirectory !== (projectRepository ? fs.realpathSync.native(projectRepository.gitDirectory) : null)
+      )
+        continue;
+      // A reused PID is treated as live. Uncertain liveness retains the scratch.
+      try {
+        process.kill(entry.ownerPid, 0);
+        continue;
+      } catch (error) {
+        if (error.code !== 'ESRCH') continue;
+      }
+      const sidecar = ownerSidecarOf(entry);
+      let sidecarStat = null;
+      try {
+        sidecarStat = fs.lstatSync(sidecar);
+      } catch (error) {
+        if (error.code !== 'ENOENT') continue;
+      }
+      if (
+        sidecarStat !== null &&
+        (!sidecarStat.isFile() ||
+          !privateToUser(sidecarStat) ||
+          JSON.stringify(JSON.parse(fs.readFileSync(sidecar, 'utf8'))) !== JSON.stringify(entry))
+      )
+        continue;
+      let stat;
+      try {
+        stat = fs.lstatSync(entry.directory);
+      } catch (error) {
+        if (error.code === 'ENOENT') {
+          if (entry.kind === 'git-worktree') {
+            const metadata = worktreeMetadataOf(entry, { requireReadable: true });
+            if (metadata !== null) {
+              if (fs.readFileSync(path.join(metadata, 'gitdir'), 'utf8').trim() !== path.join(entry.top, '.git')) continue;
+              fs.rmSync(metadata, { recursive: true, force: true });
+              log(`reclaimed Git worktree registration from killed run ${entry.runId}: ${metadata}`);
+            }
+          }
+          fs.rmSync(sidecar, { force: true });
+          journal.inDirectory('', () => fs.rmSync(name));
+          continue;
+        }
+        continue;
+      }
+      if (!stat.isDirectory() || stat.isSymbolicLink() || !privateToUser(stat)) continue;
+      if (fs.realpathSync.native(path.dirname(entry.directory)) !== entry.temp) continue;
+      const marker = path.join(entry.directory, OWNER_MARKER);
+      let markerStat = null;
+      try {
+        markerStat = fs.lstatSync(marker);
+      } catch (error) {
+        if (error.code !== 'ENOENT') continue;
+      }
+      if (markerStat === null) {
+        // The kill may have landed between mkdir and the marker. Only an empty directory is safe here.
+        // During teardown the sibling marker remains after this one is removed.
+        if (sidecarStat === null && fs.readdirSync(entry.directory).length > 0) continue;
+      } else {
+        if (!markerStat.isFile() || !privateToUser(markerStat)) continue;
+        const contents = fs.readFileSync(marker);
+        let matches = false;
+        try {
+          matches = JSON.stringify(JSON.parse(contents.toString('utf8'))) === JSON.stringify(entry);
+        } catch {
+          // SIGKILL may have interrupted the marker write after its exclusive create.
+        }
+        if (!matches) {
+          const expected = Buffer.from(`${JSON.stringify(entry)}\n`);
+          const interruptedWrite =
+            contents.length < expected.length &&
+            expected.subarray(0, contents.length).equals(contents) &&
+            fs.readdirSync(entry.directory).length === 1;
+          if (!interruptedWrite) continue;
+        }
+      }
+      const workspace = { ...entry, metadata: null, journal: { name, directory: journal, entry } };
+      if (entry.kind === 'git-worktree') {
+        workspace.metadata = worktreeMetadataOf(workspace, { requireReadable: true });
+        if (
+          workspace.metadata !== null &&
+          fs.readFileSync(path.join(workspace.metadata, 'gitdir'), 'utf8').trim() !== path.join(entry.top, '.git')
+        )
+          continue;
+        const gitFile = path.join(entry.top, '.git');
+        if (fs.existsSync(gitFile)) {
+          if (workspace.metadata === null || !fs.lstatSync(gitFile).isFile()) continue;
+          const pointer = fs
+            .readFileSync(gitFile, 'utf8')
+            .trim()
+            .replace(/^gitdir:\s*/, '');
+          if (path.resolve(entry.top, pointer) !== workspace.metadata) continue;
+        }
+      }
+      removeWorkspace(workspace);
+      log(`reclaimed workspace from killed run ${entry.runId}: ${entry.directory}`);
+    } catch (error) {
+      log(`could not verify or reclaim workspace journal ${file}: ${error.message}`);
+    }
+  }
+}
 
 /** A workspace the run cannot make faithfully and contained; `tea-evaluate` refuses it with exit 12. */
 class WorkspaceRefusal extends Error {
@@ -376,10 +600,37 @@ const GIT_OUTPUT_BYTES = 256 * 1024 * 1024;
  *
  * @returns {{ok: true, stdout: string}|{ok: false, status?: number, detail: string}}
  */
-function runGit(args, { timeoutMs = GIT_QUESTION_TIMEOUT_MS } = {}) {
+function runGit(args, { timeoutMs = GIT_QUESTION_TIMEOUT_MS, supervised = false } = {}) {
   const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('GIT_')));
-  const result = spawnSync('git', args, { encoding: 'utf8', env, timeout: timeoutMs, killSignal: 'SIGKILL', maxBuffer: GIT_OUTPUT_BYTES });
+  const result = supervised
+    ? spawnSync(
+        process.execPath,
+        [path.join(__dirname, '..', 'agent-supervisor.js'), String(process.pid), String(timeoutMs), 'git', ...args],
+        {
+          encoding: 'utf8',
+          env,
+          maxBuffer: GIT_OUTPUT_BYTES,
+          stdio: ['ignore', 'pipe', 'pipe', 'pipe'],
+        },
+      )
+    : spawnSync('git', args, { encoding: 'utf8', env, timeout: timeoutMs, killSignal: 'SIGKILL', maxBuffer: GIT_OUTPUT_BYTES });
   if (result.error) return { ok: false, detail: `git ${args.join(' ')} could not run: ${result.error.code ?? result.error.message}` };
+  if (supervised) {
+    let report;
+    try {
+      report = JSON.parse(result.output?.[3] ?? '');
+    } catch {
+      return { ok: false, detail: `git ${args.join(' ')} supervisor gave no report` };
+    }
+    if (report.timedOut || report.failure || report.spawnError || report.signal || report.status !== 0) {
+      return {
+        ok: false,
+        status: report.status ?? undefined,
+        detail: `git ${args.join(' ')} ${report.failure ?? report.spawnError?.message ?? (report.timedOut ? 'timed out' : `ended ${report.signal ?? report.status}: ${String(result.stderr).trim()}`)}`,
+      };
+    }
+    return { ok: true, stdout: result.stdout };
+  }
   if (result.signal !== null) return { ok: false, detail: `git ${args.join(' ')} was killed by ${result.signal}` };
   if (result.status !== 0) {
     return { ok: false, status: result.status, detail: `git ${args.join(' ')} exited ${result.status}: ${String(result.stderr).trim()}` };
@@ -526,7 +777,17 @@ function adopterTreeState(directory, { exclude = [] } = {}) {
  * @returns {object} the workspace: `root` is where `launch.root` lies in it
  * @throws {WorkspaceRefusal}
  */
-function createWorkspace({ root, kind, provision = [], exclude = [], fromWorkingTree = false, label, basis = null, commit = null }) {
+function createWorkspace({
+  root,
+  kind,
+  provision = [],
+  exclude = [],
+  fromWorkingTree = false,
+  label,
+  basis = null,
+  commit = null,
+  ownership = null,
+}) {
   if (!isDirectory(root)) throw new WorkspaceRefusal(`launch.root ${root} is not a directory`);
   const repository = basis === null ? repositoryOf(root) : null;
   const worktree = basis === null ? kind === 'git' && !fromWorkingTree && repository !== null : basis.kind === 'git-worktree';
@@ -548,6 +809,7 @@ function createWorkspace({ root, kind, provision = [], exclude = [], fromWorking
   let temp;
   try {
     temp = fs.realpathSync(os.tmpdir());
+    fs.readdirSync(temp);
   } catch (error) {
     throw new WorkspaceRefusal(`the temp directory ${os.tmpdir()} cannot be used: ${error.message}; point TMPDIR at an existing directory`);
   }
@@ -566,12 +828,7 @@ function createWorkspace({ root, kind, provision = [], exclude = [], fromWorking
       `the temp directory ${temp} is inside the repository ${repositoryTop} and not ignored by it, so the workspace would read as a change to the project it evaluates; point TMPDIR outside the evaluated project or at a directory the repository ignores`,
     );
   }
-  let directory;
-  try {
-    directory = fs.mkdtempSync(path.join(temp, `tea-evaluate-${label}-`));
-  } catch (error) {
-    throw new WorkspaceRefusal(`could not create a workspace under the temp directory ${temp}: ${error.message}`);
-  }
+  const directory = path.join(temp, `tea-evaluate-${label}-${randomUUID()}`);
   const workspace = {
     label,
     kind: worktree ? 'git-worktree' : 'copy',
@@ -591,6 +848,20 @@ function createWorkspace({ root, kind, provision = [], exclude = [], fromWorking
     provisionedDigests: {},
   };
   try {
+    if (ownership !== null) {
+      workspace.journal = writeWorkspaceJournal(workspace, ownership, temp);
+    }
+    try {
+      fs.mkdirSync(directory, { mode: 0o700 });
+      workspace.created = true;
+    } catch (error) {
+      throw new WorkspaceRefusal(`could not create a workspace under the temp directory ${temp}: ${error.message}`);
+    }
+    if (workspace.journal) {
+      const marker = path.join(directory, OWNER_MARKER);
+      fs.writeFileSync(marker, `${JSON.stringify(workspace.journal.entry)}\n`, { flag: 'wx', mode: 0o600 });
+      fs.linkSync(marker, ownerSidecarOf(workspace));
+    }
     const excluded = exclude.filter((entry) => entry !== root && isInside(root, entry));
     if (worktree) {
       const hooks = path.join(directory, 'no-hooks');
@@ -610,7 +881,7 @@ function createWorkspace({ root, kind, provision = [], exclude = [], fromWorking
           workspace.top,
           workspace.commit,
         ],
-        { timeoutMs: GIT_CHECKOUT_TIMEOUT_MS },
+        { timeoutMs: GIT_CHECKOUT_TIMEOUT_MS, supervised: true },
       );
       workspace.metadata = worktreeMetadataOf(workspace);
       if (!added.ok) throw new WorkspaceRefusal(`git worktree add could not check out ${workspace.commit}: ${added.detail}`);
@@ -710,7 +981,8 @@ function createWorkspace({ root, kind, provision = [], exclude = [], fromWorking
     return workspace;
   } catch (error) {
     try {
-      removeWorkspace(workspace);
+      if (workspace.created) removeWorkspace(workspace);
+      else retireWorkspaceJournal(workspace);
     } catch {
       // The refusal below is the outcome; a workspace left behind is in the temp directory.
     }
@@ -736,13 +1008,15 @@ function gitlinksUnder(workspace, root) {
  * the repository, so an entry `git worktree add` wrote before failing is
  * found too.
  */
-function worktreeMetadataOf(workspace) {
+function worktreeMetadataOf(workspace, { requireReadable = false } = {}) {
   if (workspace.gitDirectory === null) return null;
   const worktrees = path.join(workspace.gitDirectory, 'worktrees');
   let names;
   try {
     names = fs.readdirSync(worktrees);
-  } catch {
+  } catch (error) {
+    if (requireReadable && error.code !== 'ENOENT')
+      throw new WorkspaceRefusal(`cannot inspect Git worktree metadata ${worktrees}: ${error.message}`);
     return null;
   }
   const expected = path.join(workspace.top, '.git');
@@ -750,7 +1024,9 @@ function worktreeMetadataOf(workspace) {
     try {
       const pointer = fs.readFileSync(path.join(worktrees, name, 'gitdir'), 'utf8').trim();
       if (pointer === expected || realPathLoosely(pointer) === realPathLoosely(expected)) return path.join(worktrees, name);
-    } catch {
+    } catch (error) {
+      if (requireReadable && error.code !== 'ENOENT')
+        throw new WorkspaceRefusal(`cannot inspect Git worktree metadata ${path.join(worktrees, name)}: ${error.message}`);
       // An entry with no gitdir file is not this worktree's.
     }
   }
@@ -772,12 +1048,17 @@ function removeWorkspace(workspace) {
   } catch {
     // Gone already.
   }
-  if (workspace.kind === 'git-worktree' && workspace.repository !== null && !topIsLink && fs.existsSync(workspace.top)) {
-    runGit(['-C', workspace.repository, 'worktree', 'remove', '--force', '--force', workspace.top]);
+  if (workspace.kind === 'git-worktree' && workspace.repository !== null && !topIsLink && fs.existsSync(path.join(workspace.top, '.git'))) {
+    const removed = runGit(['-C', workspace.repository, 'worktree', 'remove', '--force', '--force', workspace.top], {
+      supervised: true,
+    });
+    if (!removed.ok) throw new WorkspaceRefusal(`could not remove Git worktree ${workspace.top}: ${removed.detail}`);
   }
   fs.rmSync(workspace.directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   const metadata = workspace.metadata ?? (workspace.kind === 'git-worktree' ? worktreeMetadataOf(workspace) : null);
   if (metadata !== null && fs.existsSync(metadata)) fs.rmSync(metadata, { recursive: true, force: true });
+  if (workspace.journal) fs.rmSync(ownerSidecarOf(workspace), { force: true });
+  retireWorkspaceJournal(workspace);
 }
 
 /**
@@ -1000,6 +1281,7 @@ module.exports = {
   createWorkspace,
   isDirectory,
   isInside,
+  journalDirectory,
   joinAsSpelled,
   makeReadOnly,
   makeScratchDirectory,
@@ -1007,6 +1289,7 @@ module.exports = {
   releaseScratchDirectory,
   removeScratchDirectory,
   removeWorkspace,
+  reclaimDeadWorkspaces,
   repositoryOf,
   requestKey,
   runGit,

@@ -59,7 +59,7 @@ const TITLE = 'Ship the workflow';
 const CAPTURE = '/interactions/create/stdout/id';
 /**
  * The workspaces of the mutated arm's trials, which the runtime labels by arm and trial: the store reads its label off
- * the temp directory holding its working directory (`tea-evaluate-<label>-XXXXXX`), as the verdict stub's
+ * the temp directory holding its working directory (`tea-evaluate-<label>-<uuid>`), as the verdict stub's
  * `VERDICT_WHEN` does. A runtime that named them otherwise would leave the identifier printed, and the missing-value case
  * fails on the read-back it then records.
  */
@@ -145,7 +145,7 @@ function logLines(project) {
 /** The newest run directory under `runs/`. */
 function runDirectoryOf(folder) {
   const runs = path.join(folder, 'runs');
-  const names = fs.existsSync(runs) ? fs.readdirSync(runs).filter((name) => name !== '.gitignore') : [];
+  const names = fs.existsSync(runs) ? fs.readdirSync(runs).filter((name) => name !== '.gitignore' && name !== '.workspace-journal') : [];
   return names.length === 0 ? null : path.join(runs, names.sort().at(-1));
 }
 

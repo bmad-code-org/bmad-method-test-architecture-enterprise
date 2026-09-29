@@ -67,7 +67,7 @@ function latestRun(folder) {
   const runs = path.join(folder, 'runs');
   const names = fs
     .readdirSync(runs)
-    .filter((name) => name !== '.gitignore')
+    .filter((name) => name !== '.gitignore' && name !== '.workspace-journal')
     .sort();
   return names.length > 0 ? path.join(runs, names.at(-1)) : null;
 }
@@ -205,7 +205,7 @@ function pipeline() {
   check(authorization.executable === 'calling-agent', `the registry authorized ${JSON.stringify(authorization)}`);
   const preflightRun = fs
     .readdirSync(path.join(folder, 'runs'))
-    .filter((name) => name !== '.gitignore' && name !== path.basename(run))
+    .filter((name) => name !== '.gitignore' && name !== '.workspace-journal' && name !== path.basename(run))
     .sort()
     .at(-1);
   const leg = read(path.join(folder, 'runs', preflightRun, 'observations', '001-request-alpha.json'));

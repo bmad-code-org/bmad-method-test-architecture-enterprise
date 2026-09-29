@@ -74,7 +74,15 @@ const { loadEngine } = require('../cli/lib/evaluate/engine');
 const { admissionRefusal, armVerdict } = require('../cli/lib/evaluate/preflight');
 const { dispositionOf } = require('../cli/lib/evaluate/evaluator');
 const { QualificationError, countOccurrences, qualifiedProbe, runMutationCycle } = require('../cli/lib/evaluate/mutation');
-const { cacheOnlyPort, cachingPort, requestKey, treeDigest } = require('../cli/lib/evaluate/workspace');
+const {
+  cacheOnlyPort,
+  cachingPort,
+  createWorkspace,
+  journalDirectory,
+  removeWorkspace,
+  requestKey,
+  treeDigest,
+} = require('../cli/lib/evaluate/workspace');
 const { createArtifactValidator } = require('../cli/lib/evaluate/records');
 const { scratchDirectories } = require('./lib/scratch-directories');
 
@@ -224,7 +232,9 @@ function runPreflight(fixture, args = []) {
 function runDirectoryOf(folder) {
   const runs = path.join(folder, 'runs');
   if (!fs.existsSync(runs)) return null;
-  const entries = fs.readdirSync(runs, { withFileTypes: true }).filter((entry) => entry.isDirectory());
+  const entries = fs
+    .readdirSync(runs, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && entry.name !== '.workspace-journal');
   check(entries.length <= 1, `one invocation wrote ${entries.length} run directories under ${runs}`);
   return entries.length === 1 ? path.join(runs, entries[0].name) : null;
 }
@@ -246,7 +256,7 @@ function armStdout(arm) {
 }
 
 /** The project and the temp directory after a run are what they were before it. */
-function checkUntouched(label, fixture, before, isGit = true) {
+function checkUntouched(label, fixture, before, isGit = true, { checkTemp = true } = {}) {
   const after = adopterState(fixture.project, isGit);
   check(after.status === before.status, `${label}: git status of the project changed:\n${before.status}---\n${after.status}`);
   check(after.files === before.files, `${label}: a file in the project changed`);
@@ -254,8 +264,10 @@ function checkUntouched(label, fixture, before, isGit = true) {
   check(after.refs === before.refs, `${label}: the project's refs changed:\n${before.refs}---\n${after.refs}`);
   check(after.stash === before.stash, `${label}: the project's stash changed`);
   check(after.config === before.config, `${label}: the project's .git/config changed`);
-  const left = fs.readdirSync(fixture.temp.directory);
-  check(left.length === 0, `${label}: the run left ${JSON.stringify(left)} in the temp directory`);
+  if (checkTemp) {
+    const left = fs.readdirSync(fixture.temp.directory);
+    check(left.length === 0, `${label}: the run left ${JSON.stringify(left)} in the temp directory`);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1193,6 +1205,27 @@ async function checkUnits() {
 
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
+/** A failed ps lookup cannot identify a reused PID, so it is uncertain until the kernel says the PID is gone. */
+function verdictProcessState(pid) {
+  const listed = spawnSync('ps', ['-p', String(pid), '-o', 'command='], { encoding: 'utf8' });
+  if (listed.status === 0 && listed.stdout.trim()) return listed.stdout.includes('verdict.js') ? 'alive' : 'gone';
+  try {
+    process.kill(pid, 0);
+    return 'uncertain';
+  } catch (error) {
+    return error.code === 'ESRCH' ? 'gone' : 'uncertain';
+  }
+}
+
+function stopMatchedVerdict(pid) {
+  if (verdictProcessState(pid) !== 'alive') return;
+  try {
+    process.kill(pid, 'SIGKILL');
+  } catch (error) {
+    if (error.code !== 'ESRCH') throw error;
+  }
+}
+
 /**
  * A run interrupted by `SIGTERM` while its mutated arm runs in a worktree ends
  * by that signal, and leaves no workspace, no worktree entry, no target
@@ -1234,20 +1267,356 @@ async function checkInterrupted() {
   }
   check(ended.signal === 'SIGTERM', `the interrupted run ended by ${ended.signal ?? `exit ${ended.code}`}; expected SIGTERM`);
   if (target !== null) {
-    // Alive means the pid still runs the verdict stub, so a reused pid cannot read as a survivor.
-    const runsStub = () => {
-      const listed = spawnSync('ps', ['-p', String(target), '-o', 'command='], { encoding: 'utf8' });
-      return listed.status === 0 && listed.stdout.includes('verdict.js');
-    };
-    let alive = runsStub();
-    for (let waited = 0; waited < 5000 && alive; waited += 50) {
+    let state = verdictProcessState(target);
+    for (let waited = 0; waited < 5000 && state !== 'gone'; waited += 50) {
       await delay(50);
-      alive = runsStub();
+      state = verdictProcessState(target);
     }
-    check(!alive, `the target the interrupted arm started (pid ${target}) outlived the run`);
-    if (alive) process.kill(target, 'SIGKILL');
+    check(state === 'gone', `the target the interrupted arm started (pid ${target}) outlived the run or could not be identified`);
+    if (state === 'alive') stopMatchedVerdict(target);
   }
   checkUntouched('the interrupted run', fixture, before);
+}
+
+/** A SIGKILL leaves a journaled workspace which the next preflight reclaims. */
+async function checkKilledRun(
+  label,
+  {
+    isGit = true,
+    liveOwner = false,
+    unmarked = false,
+    partialMarker = false,
+    partialTeardown = false,
+    uncertain = false,
+    partialGit = false,
+    missingDirectory = false,
+    metadataUnavailable = false,
+  } = {},
+) {
+  const fixture = makeProject(label, {
+    git: isGit,
+    edit: ({ folder }) => editMutation(folder, (operator) => (operator.replace = 'mode: lenient\nsleep: 30000')),
+  });
+  const originalState = adopterState(fixture.project, isGit);
+  const journal = path.join(fixture.folder, 'runs', '.workspace-journal');
+  const pidFile = path.join(tempDir(`${label}-pid`), 'pid');
+  const started = [];
+  const launch = (pid) => {
+    const child = spawn(process.execPath, [EVALUATE, 'preflight', '--evaluation', fixture.folder], {
+      cwd: PROJECT_ROOT,
+      env: { ...BASE_ENV, ...fixture.temp.env, VERDICT_PID: pid },
+      stdio: 'ignore',
+    });
+    const closed = new Promise((resolve) => child.once('close', (code, signal) => resolve({ code, signal })));
+    started.push({ child, closed });
+    return { child, closed };
+  };
+  const entries = () =>
+    fs.existsSync(journal)
+      ? fs
+          .readdirSync(journal)
+          .filter((name) => name.endsWith('.json'))
+          .map((name) => readJson(path.join(journal, name)))
+      : [];
+  const until = async (test, milliseconds = 20_000) => {
+    for (let elapsed = 0; elapsed < milliseconds; elapsed += 50) {
+      const found = test();
+      if (found) return found;
+      await delay(50);
+    }
+    return null;
+  };
+  const unlock = (directory) => {
+    fs.chmodSync(directory, 0o700);
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      if (entry.isDirectory()) unlock(path.join(directory, entry.name));
+    }
+  };
+  let abandoned = null;
+  let target = null;
+  let metadata = null;
+  try {
+    const first = launch(pidFile);
+    abandoned = await until(() =>
+      fs.existsSync(pidFile)
+        ? entries().find((entry) => fs.existsSync(entry.directory) && entry.kind === (isGit ? 'git-worktree' : 'copy'))
+        : null,
+    );
+    check(abandoned !== null, `${label}: the killed run never reached a workspace with a running target`);
+    if (abandoned === null) return;
+    check(fs.existsSync(path.join(abandoned.directory, '.tea-evaluate-owner.json')), `${label}: the workspace has no owner marker`);
+    check(fs.existsSync(`${abandoned.directory}.tea-evaluate-owner.json`), `${label}: the workspace has no surviving cleanup marker`);
+    if (isGit)
+      check(
+        git(fixture.project, ['worktree', 'list', '--porcelain']).includes(abandoned.top),
+        `${label}: the live worktree has no registration`,
+      );
+
+    if (liveOwner) {
+      const second = launch(path.join(tempDir(`${label}-second-pid`), 'pid'));
+      const secondEntry = await until(() => entries().find((entry) => entry.ownerPid === second.child.pid));
+      check(secondEntry !== null, `${label}: the second preflight never made its workspace`);
+      check(fs.existsSync(abandoned.directory), `${label}: the next preflight reclaimed a live owner's workspace`);
+      check(
+        git(fixture.project, ['worktree', 'list', '--porcelain']).includes(abandoned.top),
+        `${label}: the next preflight removed a live registration`,
+      );
+      second.child.kill('SIGKILL');
+      await Promise.race([second.closed, delay(5000)]);
+    }
+    first.child.kill('SIGKILL');
+    const ended = await Promise.race([first.closed, delay(5000).then(() => null)]);
+    check(ended?.signal === 'SIGKILL', `${label}: the killed preflight did not close within 5 s`);
+    target = Number(fs.readFileSync(pidFile, 'utf8'));
+    const targetEnded = await until(() => verdictProcessState(target) === 'gone', 5000);
+    check(targetEnded !== null, `${label}: the killed preflight left its target running`);
+    if (targetEnded === null) {
+      stopMatchedVerdict(target);
+      await delay(100);
+    }
+    check(fs.existsSync(abandoned.directory), `${label}: SIGKILL did not leave a workspace to recover`);
+    if (isGit)
+      check(
+        git(fixture.project, ['worktree', 'list', '--porcelain']).includes(abandoned.top),
+        `${label}: SIGKILL did not leave a worktree registration`,
+      );
+    const stateAfterKill = adopterState(fixture.project, isGit);
+    check(stateAfterKill.status === originalState.status, `${label}: the killed run changed the adopter's git status`);
+    check(stateAfterKill.refs === originalState.refs, `${label}: the killed run changed the adopter's refs`);
+    if (isGit && (partialGit || missingDirectory)) {
+      const pointer = fs
+        .readFileSync(path.join(abandoned.top, '.git'), 'utf8')
+        .trim()
+        .replace(/^gitdir:\s*/, '');
+      metadata = path.resolve(abandoned.top, pointer);
+      check(fs.existsSync(metadata), `${label}: the worktree has no Git metadata`);
+    }
+    if (partialGit) {
+      // Model a kill after Git registered the worktree but before checkout wrote its .git pointer.
+      fs.rmSync(path.join(abandoned.top, '.git'));
+      check(
+        git(fixture.project, ['worktree', 'list', '--porcelain']).includes(abandoned.top),
+        `${label}: the partial checkout lost its registration`,
+      );
+    } else if (missingDirectory) {
+      // Model a dead worktree whose directory disappeared while Git still records it.
+      unlock(abandoned.directory);
+      fs.rmSync(abandoned.directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      check(fs.existsSync(metadata), `${label}: the missing workspace lost its Git metadata`);
+      check(
+        git(fixture.project, ['worktree', 'list', '--porcelain']).includes(abandoned.top),
+        `${label}: the missing workspace lost its registration`,
+      );
+    } else {
+      if (!isGit) {
+        const other = makeProject(`${label}-unrelated`, { git: false });
+        const otherResult = runPreflight(other);
+        check(otherResult.status === 0, `${label}: the unrelated project did not complete its preflight`);
+        check(fs.existsSync(abandoned.directory), `${label}: another non-Git project reclaimed this project's copy`);
+      }
+      if (unmarked) {
+        // Model a kill after exclusive mkdir and before the marker write.
+        unlock(abandoned.directory);
+        fs.rmSync(abandoned.directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+        fs.mkdirSync(abandoned.directory, { mode: 0o700 });
+      } else if (partialMarker) {
+        // Model a kill during the marker write, before the target copy begins.
+        const marker = path.join(abandoned.directory, '.tea-evaluate-owner.json');
+        const prefix = fs.readFileSync(marker, 'utf8').slice(0, 24);
+        unlock(abandoned.directory);
+        fs.rmSync(abandoned.directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+        fs.mkdirSync(abandoned.directory, { mode: 0o700 });
+        fs.writeFileSync(marker, prefix, { mode: 0o600 });
+      } else if (partialTeardown) {
+        // Model a kill after recursive cleanup unlinked the inner marker but before it removed the target files.
+        fs.rmSync(path.join(abandoned.directory, '.tea-evaluate-owner.json'));
+      }
+    }
+
+    editMutation(fixture.folder, (operator) => (operator.replace = 'mode: lenient'));
+    const digested = evaluate(['digest', '--evaluation', fixture.folder]);
+    check(digested.status === 0, `${label}: could not re-digest the fixture after removing its sleep`);
+    if (uncertain) {
+      const marker = path.join(abandoned.directory, '.tea-evaluate-owner.json');
+      const originalMarker = fs.readFileSync(marker, 'utf8');
+      const journalFile = fs
+        .readdirSync(journal)
+        .filter((name) => name.endsWith('.json'))
+        .map((name) => path.join(journal, name))
+        .find((file) => readJson(file).directory === abandoned.directory);
+      check(journalFile !== undefined, `${label}: the abandoned copy has no journal entry`);
+      if (journalFile === undefined) return;
+      const originalJournal = fs.readFileSync(journalFile, 'utf8');
+      const live = { ...JSON.parse(originalJournal), ownerPid: process.pid };
+      fs.writeFileSync(journalFile, `${JSON.stringify(live)}\n`);
+      fs.writeFileSync(marker, `${JSON.stringify(live)}\n`);
+      const liveRun = evaluate(['preflight', '--evaluation', fixture.folder], fixture.temp.env);
+      check(liveRun.status === 0, `${label}: preflight with a live marker exited ${liveRun.status}`);
+      const preserved = fs.existsSync(abandoned.directory);
+      check(preserved, `${label}: preflight reclaimed a workspace whose marker named a live process`);
+      fs.writeFileSync(journalFile, originalJournal);
+      if (!preserved) return;
+      fs.writeFileSync(marker, originalMarker);
+      fs.writeFileSync(marker, `${JSON.stringify({ ...JSON.parse(originalMarker), ownerPid: process.pid })}\n`);
+      const refused = evaluate(['preflight', '--evaluation', fixture.folder], fixture.temp.env);
+      check(refused.status === 0, `${label}: preflight with an unverifiable owner exited ${refused.status}`);
+      check(fs.existsSync(abandoned.directory), `${label}: preflight reclaimed a workspace whose marker disagreed with its journal`);
+      fs.writeFileSync(marker, originalMarker);
+    }
+    const before = { ...adopterState(fixture.project, isGit), worktrees: originalState.worktrees };
+    const otherTemp = tempDir(`${label}-later-temp`);
+    if (metadataUnavailable) {
+      // Git metadata can be unreadable during one recovery attempt. Retain its journal until verification can resume.
+      const worktrees = path.join(fixture.project, '.git', 'worktrees');
+      const parked = path.join(fixture.project, '.git', 'worktrees-parked');
+      fs.renameSync(worktrees, parked);
+      fs.writeFileSync(worktrees, 'temporarily unavailable\n');
+      try {
+        evaluate(['preflight', '--evaluation', fixture.folder], { TMPDIR: otherTemp, TMP: otherTemp, TEMP: otherTemp });
+        check(
+          entries().some((entry) => entry.directory === abandoned.directory),
+          `${label}: unreadable metadata retired the journal`,
+        );
+      } finally {
+        fs.rmSync(worktrees);
+        fs.renameSync(parked, worktrees);
+      }
+      check(fs.existsSync(metadata), `${label}: Git metadata disappeared during the blocked recovery`);
+    }
+    const recovered = evaluate(['preflight', '--evaluation', fixture.folder], { TMPDIR: otherTemp, TMP: otherTemp, TEMP: otherTemp });
+    check(recovered.status === 0, `${label}: recovery preflight exited ${recovered.status}\n${recovered.output}`);
+    const reportedPath = missingDirectory ? metadata : abandoned.directory;
+    check(recovered.output.includes(reportedPath), `${label}: recovery output omitted ${reportedPath}`);
+    check(!fs.existsSync(abandoned.directory), `${label}: recovery left the killed workspace`);
+    check(!entries().some((entry) => entry.directory === abandoned.directory), `${label}: recovery left the workspace journal entry`);
+    check(entries().length === 0, `${label}: recovery left owned workspace journal entries`);
+    if (missingDirectory) check(!fs.existsSync(metadata), `${label}: recovery left the Git metadata`);
+    if (isGit)
+      check(
+        !git(fixture.project, ['worktree', 'list', '--porcelain']).includes(abandoned.top),
+        `${label}: recovery left the Git registration`,
+      );
+    checkUntouched(`${label} recovery`, fixture, before, isGit, { checkTemp: false });
+  } finally {
+    for (const { child, closed } of started) {
+      child.kill('SIGKILL');
+      await Promise.race([closed, delay(5000)]);
+    }
+    if (target === null && fs.existsSync(pidFile)) target = Number(fs.readFileSync(pidFile, 'utf8'));
+    if (target !== null) stopMatchedVerdict(target);
+  }
+}
+
+/** A target that swaps runs/ cannot redirect the next workspace journal write into the adopter tree. */
+function checkJournalParentSwap() {
+  const fixture = makeProject('journal-parent-swap', { git: false });
+  const runs = path.join(fixture.folder, 'runs');
+  const moved = `${runs}.moved`;
+  const sink = path.join(fixture.project, 'journal-sink');
+  fs.mkdirSync(runs);
+  fs.mkdirSync(sink);
+  fs.mkdirSync(path.join(sink, '.workspace-journal'), { mode: 0o700 });
+  const journal = journalDirectory(runs);
+  const options = {
+    root: fixture.project,
+    kind: 'copy',
+    exclude: [fixture.folder],
+    ownership: { folder: fixture.folder, root: fixture.project, journal, runId: 'journal-parent-swap' },
+  };
+  let first = null;
+  let next = null;
+  try {
+    first = createWorkspace({ ...options, label: 'pristine' });
+    fs.renameSync(runs, moved);
+    fs.symlinkSync(sink, runs);
+    let refusal = null;
+    try {
+      next = createWorkspace({ ...options, label: 'next' });
+    } catch (error) {
+      refusal = error;
+    }
+    check(refusal !== null, 'a swapped runs/ parent allowed a second workspace journal write');
+    check(
+      fs.readdirSync(path.join(sink, '.workspace-journal')).length === 0,
+      'a swapped runs/ parent redirected a journal file into the adopter tree',
+    );
+  } finally {
+    if (fs.lstatSync(runs).isSymbolicLink()) fs.rmSync(runs);
+    if (fs.existsSync(moved)) fs.renameSync(moved, runs);
+    if (next !== null) {
+      try {
+        removeWorkspace(next);
+      } catch {
+        fs.rmSync(next.directory, { recursive: true, force: true });
+      }
+    }
+    if (first !== null) removeWorkspace(first);
+    journal.close();
+  }
+}
+
+/** A killed preflight must stop Git's in-flight checkout before the next run reclaims its workspace. */
+async function checkKilledCheckout() {
+  if (process.platform === 'win32') return;
+  const fixture = makeProject('killed-checkout');
+  const originalWorktrees = git(fixture.project, ['worktree', 'list', '--porcelain']);
+  const pidFile = path.join(tempDir('killed-checkout-pid'), 'pid');
+  const script = path.join(tempDir('killed-checkout-filter'), 'hold.sh');
+  fs.writeFileSync(script, `#!/bin/sh\nprintf '%s\\n' "$$" > '${pidFile}'\nsleep 15\ncat\n`, { mode: 0o700 });
+  const attributes = path.join(fixture.project, '.git', 'info', 'attributes');
+  fs.writeFileSync(attributes, 'rules/policy.txt filter=tea-hold\n');
+  git(fixture.project, ['config', 'filter.tea-hold.smudge', `sh ${script}`]);
+  const child = spawn(process.execPath, [EVALUATE, 'preflight', '--evaluation', fixture.folder], {
+    cwd: PROJECT_ROOT,
+    env: { ...BASE_ENV, ...fixture.temp.env },
+    stdio: 'ignore',
+  });
+  const closed = new Promise((resolve) => child.once('close', (code, signal) => resolve({ code, signal })));
+  let filterPid = null;
+  try {
+    for (let elapsed = 0; elapsed < 20_000 && filterPid === null; elapsed += 50) {
+      if (fs.existsSync(pidFile)) filterPid = Number(fs.readFileSync(pidFile, 'utf8'));
+      else await delay(50);
+    }
+    check(filterPid !== null, 'Git checkout did not reach the blocking smudge filter');
+    if (filterPid === null) return;
+    child.kill('SIGKILL');
+    const ended = await Promise.race([closed, delay(5000).then(() => null)]);
+    check(ended?.signal === 'SIGKILL', 'preflight did not close after checkout was killed');
+    let filterGone = false;
+    for (let elapsed = 0; elapsed < 7000 && !filterGone; elapsed += 50) {
+      const listed = spawnSync('ps', ['-p', String(filterPid), '-o', 'command='], { encoding: 'utf8' });
+      filterGone = listed.status !== 0 || !listed.stdout.includes(script);
+      if (!filterGone) await delay(50);
+    }
+    check(filterGone, `the Git checkout filter (pid ${filterPid}) survived the killed preflight`);
+    const journal = path.join(fixture.folder, 'runs', '.workspace-journal');
+    const abandoned = fs
+      .readdirSync(journal)
+      .filter((name) => name.endsWith('.json'))
+      .map((name) => readJson(path.join(journal, name)));
+    check(abandoned.length > 0, 'the killed checkout left no journal for recovery');
+    fs.rmSync(attributes);
+    git(fixture.project, ['config', '--unset', 'filter.tea-hold.smudge']);
+    const recovered = runPreflight(fixture);
+    check(recovered.status === 0, `preflight after a killed Git checkout exited ${recovered.status}: ${recovered.output}`);
+    for (const entry of abandoned) check(!fs.existsSync(entry.directory), 'recovery left a killed checkout workspace');
+    check(fs.readdirSync(journal).filter((name) => name.endsWith('.json')).length === 0, 'recovery left a killed checkout journal');
+    check(git(fixture.project, ['worktree', 'list', '--porcelain']) === originalWorktrees, 'recovery left a killed checkout registration');
+  } finally {
+    child.kill('SIGKILL');
+    await Promise.race([closed, delay(5000)]);
+    fs.rmSync(attributes, { force: true });
+  }
+}
+
+function checkRecoveryDocumentation() {
+  const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
+  const section = reference.split('## The workspace\n')[1]?.split('\n## ')[0] ?? '';
+  check(
+    /workspace marker/.test(section) && /killed run/.test(section) && /next preflight/.test(section),
+    'the workspace reference does not explain the marker and next-preflight recovery of a killed run',
+  );
 }
 
 /**
@@ -1584,6 +1953,17 @@ async function main() {
     checkLockedLeftovers();
     checkRepositoryShape();
     await checkInterrupted();
+    await checkKilledRun('killed-git', { liveOwner: true });
+    await checkKilledRun('killed-git-partial', { partialGit: true });
+    await checkKilledRun('killed-git-missing', { missingDirectory: true });
+    await checkKilledRun('killed-git-unavailable-metadata', { missingDirectory: true, metadataUnavailable: true });
+    await checkKilledRun('killed-copy', { isGit: false, uncertain: true });
+    await checkKilledRun('unmarked-copy', { isGit: false, unmarked: true });
+    await checkKilledRun('partial-marker-copy', { isGit: false, partialMarker: true });
+    await checkKilledRun('partial-teardown-copy', { isGit: false, partialTeardown: true });
+    await checkKilledCheckout();
+    checkJournalParentSwap();
+    checkRecoveryDocumentation();
   } finally {
     scratch.removeAll();
   }

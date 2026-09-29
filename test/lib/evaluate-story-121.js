@@ -59,7 +59,7 @@ function suite(name) {
       runs,
       fs
         .readdirSync(runs)
-        .filter((name) => name !== '.gitignore')
+        .filter((name) => name !== '.gitignore' && name !== '.workspace-journal')
         .sort()
         .at(-1),
     );

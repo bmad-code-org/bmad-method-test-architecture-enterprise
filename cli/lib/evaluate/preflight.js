@@ -108,6 +108,8 @@ const {
   releaseScratchDirectory,
   removeScratchDirectory,
   removeWorkspace,
+  reclaimDeadWorkspaces,
+  journalDirectory,
   trackedTreeDigest,
   treeDigest,
 } = require('./workspace');
@@ -499,6 +501,7 @@ async function pipeline(
     }
   }
   const workspaces = [];
+  let journal = null;
   const controller = new AbortController();
   // Run-directory files an interrupting signal removes (the CLI's probe list
   // until its verdict), and the private directories the command makes for
@@ -538,8 +541,11 @@ async function pipeline(
 
     const root = realPathLoosely(joinAsSpelled(folder, evaluation.launch.root));
     const runsDirectory = ensureRunsDirectory(folder);
+    journal = journalDirectory(runsDirectory);
+    reclaimDeadWorkspaces({ folder, root, journal, log });
     const readTree = () => adopterTreeState(root, { exclude: [runsDirectory] });
     const before = readTree();
+    const invocationId = newInvocationId();
     // Every workspace after the first reproduces it, so the run evaluates one
     // set of bytes whatever changes in the project meanwhile.
     const make = (label, basis = null, { commit = null } = {}) => {
@@ -552,6 +558,7 @@ async function pipeline(
         label,
         basis,
         commit,
+        ownership: { folder, root, journal, runId: invocationId },
       });
       workspaces.push(workspace);
       return workspace;
@@ -591,6 +598,7 @@ async function pipeline(
       before,
       readTree,
       runsDirectory,
+      invocationId,
       retractOnSignal,
       scratch,
       state,
@@ -620,6 +628,7 @@ async function pipeline(
         log(`could not remove the ${workspace.label} workspace at ${workspace.directory}: ${error.message}`);
       }
     }
+    journal?.close();
   }
 }
 
@@ -639,6 +648,7 @@ async function runInWorkspaces({
   before,
   readTree,
   runsDirectory,
+  invocationId,
   retractOnSignal,
   scratch,
   state,
@@ -652,7 +662,6 @@ async function runInWorkspaces({
     return new PreflightOutcome({ stage: 'launch', exitCode: 12, message: `the registry cannot launch: ${problems.join('; ')}` });
   }
 
-  const invocationId = newInvocationId();
   // Every file below is written through the run directory's writer, which
   // refuses an entry it did not make and holds the digest of every file it
   // wrote (`run-directory.js`): a target can reach runs/ and plant a link there.

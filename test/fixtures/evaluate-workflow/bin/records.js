@@ -19,7 +19,7 @@
  *
  * When RECORDS_LOG names a file, every run first appends one JSON line to it:
  * the operation, the workspace it runs in by the runtime's label (trial-clean-2
- * for tea-evaluate-trial-clean-2-XXXXXX, null elsewhere) and the identifier a
+ * for tea-evaluate-trial-clean-2-<uuid>, null elsewhere) and the identifier a
  * read was given. When RECORDS_OMIT_ID names workspace labels, separated by
  * commas, `create` leaves the identifier out of what it prints in those
  * workspaces, as a target whose answer lacks the value a later step captures.
@@ -37,7 +37,7 @@ const IDENTIFIER = /^[A-Za-z0-9-]+$/;
 
 const [operation, ...rest] = process.argv.slice(2);
 const workspaceDirectory = path.basename(path.dirname(process.cwd()));
-const workspace = /^tea-evaluate-(.+)-[A-Za-z0-9]{6}$/.exec(workspaceDirectory)?.[1] ?? null;
+const workspace = /^tea-evaluate-(.+)-(?:[A-Za-z0-9]{6}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/.exec(workspaceDirectory)?.[1] ?? null;
 
 /** The value of the option `--name`, or null when it is not given. */
 function optionOf(name) {

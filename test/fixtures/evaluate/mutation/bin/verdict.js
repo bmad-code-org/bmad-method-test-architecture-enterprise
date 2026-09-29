@@ -27,7 +27,7 @@
  *
  * When VERDICT_MARKER names a file, every run first appends one JSON line to
  * it, the launch marker (Story 1.9): `workspace`, the runtime label of the
- * workspace it runs in (`trial-clean-2` for tea-evaluate-trial-clean-2-XXXXXX),
+ * workspace it runs in (`trial-clean-2` for tea-evaluate-trial-clean-2-<uuid>),
  * `head`, the commit its checkout holds (null outside git), and `request`. A
  * run that launches nothing leaves no line, and one routed to a revision
  * names that revision.
@@ -63,7 +63,7 @@
  * Two variables act in one workspace only, so one trial or qualification of a
  * run can differ while every other run of the command behaves: VERDICT_WHEN
  * names the workspace by its runtime label (for example trial-clean-2, the
- * directory tea-evaluate-trial-clean-2-XXXXXX that holds this working
+ * directory tea-evaluate-trial-clean-2-<uuid> that holds this working
  * directory), and VERDICT_DO says what the command does there:
  *
  *   infrastructure          answer nothing and exit 3
@@ -105,13 +105,13 @@ const POLICY = 'rules/policy.txt';
 const request = fs.readFileSync(0, 'utf8').trim();
 const policy = fs.readFileSync(POLICY);
 const text = policy.toString('utf8');
-/** Whether this run is in the workspace VERDICT_WHEN names: its directory is the label's temp directory, whose suffix holds no hyphen. */
+/** Whether this run is in the workspace VERDICT_WHEN names. */
 const workspaceDirectory = path.basename(path.dirname(process.cwd()));
-const prefix = `tea-evaluate-${process.env.VERDICT_WHEN}-`;
-const here = Boolean(process.env.VERDICT_WHEN) && workspaceDirectory.startsWith(prefix) && !workspaceDirectory.slice(prefix.length).includes('-');
+const workspaceMatch = /^tea-evaluate-(.+)-(?:[A-Za-z0-9]{6}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/.exec(workspaceDirectory);
+const here = Boolean(process.env.VERDICT_WHEN) && workspaceMatch?.[1] === process.env.VERDICT_WHEN;
 const act = here ? process.env.VERDICT_DO : undefined;
 if (process.env.VERDICT_MARKER) {
-  const label = /^tea-evaluate-(.+)-[A-Za-z0-9]{6}$/.exec(workspaceDirectory)?.[1] ?? null;
+  const label = workspaceMatch?.[1] ?? null;
   const head = spawnSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' });
   fs.appendFileSync(
     process.env.VERDICT_MARKER,
@@ -180,7 +180,7 @@ if (['plant', 'forge', 'link-trials', 'recreate-trials', 'move-trials'].includes
   const runs = path.join(path.dirname(common), 'evals', 'verdict', 'runs');
   const newest = fs
     .readdirSync(runs)
-    .filter((name) => name !== '.gitignore')
+    .filter((name) => name !== '.gitignore' && name !== '.workspace-journal')
     .sort()
     .at(-1);
   const run = path.join(runs, newest);

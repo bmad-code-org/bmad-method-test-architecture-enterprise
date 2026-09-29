@@ -78,8 +78,8 @@ const crashing = new Set([...policy.matchAll(/^crash: (\S+)$/gm)].map((match) =>
 const startDelayMs = Number(/^start: delay (\d+)$/m.exec(policy)?.[1] ?? 0);
 const portReport = /^port: (none|text|fifo|zero)$/m.exec(policy)?.[1] ?? null;
 
-/** The runtime label of the workspace a directory lies in (`trial-clean-2` for tea-evaluate-trial-clean-2-XXXXXX/target), or null. */
-const labelOf = (directory) => /^tea-evaluate-(.+)-[A-Za-z0-9]{6}$/.exec(path.basename(path.dirname(directory)))?.[1] ?? null;
+/** The runtime label of the workspace a directory lies in (`trial-clean-2` for tea-evaluate-trial-clean-2-<uuid>/target), or null. */
+const labelOf = (directory) => /^tea-evaluate-(.+)-(?:[A-Za-z0-9]{6}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/.exec(path.basename(path.dirname(directory)))?.[1] ?? null;
 const workspace = labelOf(process.cwd());
 /** The workspace this script was started from, which the registry resolves its target into. */
 const scriptWorkspace = labelOf(path.dirname(__dirname));

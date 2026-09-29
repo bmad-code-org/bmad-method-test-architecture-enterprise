@@ -1447,7 +1447,7 @@ function checkFrameworkTemplate(template, fixtureName, evaluationName, executabl
     const runs = path.join(evaluation, 'runs');
     const latest = fs
       .readdirSync(runs)
-      .filter((name) => name !== '.gitignore')
+      .filter((name) => name !== '.gitignore' && name !== '.workspace-journal')
       .sort()
       .at(-1);
     const scores = path.join(runs, latest, 'scores');
