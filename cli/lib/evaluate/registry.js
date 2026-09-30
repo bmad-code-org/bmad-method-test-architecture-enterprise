@@ -54,7 +54,15 @@ const AjvModule = require('ajv/dist/2020');
 
 const { confinedCommandMechanism, confinedMcpMechanism, confines, targetSandbox } = require('./confinement');
 const { loadAdapters, loadEngine } = require('./engine');
-const { createApiPort, degenerateApiPort, deploymentAccess, isApiEntry } = require('./http-target');
+const {
+  authorizationOf,
+  createApiPort,
+  defaultPortOf,
+  degenerateApiPort,
+  deploymentAccess,
+  deploymentAuthorizations,
+  isApiEntry,
+} = require('./http-target');
 
 const Ajv = AjvModule.default ?? AjvModule;
 
@@ -986,7 +994,11 @@ function portKeyProblems(index, server) {
  * where eval-quality's `staysOnHost` says a connection leaves the host, which would put the
  * credential on the network in clear text; such a target is served over
  * https, with `NODE_EXTRA_CA_CERTS` for a private authority; and a started
- * server's port keys the runtime could not set as written (`portKeyProblems`). `staysOnHost` is
+ * server's port keys the runtime could not set as written (`portKeyProblems`); and an authorization
+ * eval-quality's own `parseProbeTargetPolicy` refuses, read over what the entry becomes: the entry's own
+ * authorization (a started server's at the port the runtime first names for it, the scheme's default) and one
+ * per `deployments` origin, each exactly as the runtime builds it (`authorizationOf`, `deploymentAuthorizations`)
+ * and each alone, so a finding names the entry or the deployment it refuses and carries the parser's reason. `staysOnHost` is
  * narrower than `classifyAddress(address) === 'loopback'`: the NAT64
  * (`64:ff9b::7f00:1`) and IPv4-compatible (`::127.0.0.1`) spellings of a
  * loopback address class `loopback` and still leave the host.
@@ -1000,8 +1012,24 @@ async function apiRegistryProblems(entries) {
   if (!Array.isArray(entries)) return [];
   const problems = [];
   let staysOnHost;
+  let parseProbeTargetPolicy;
   for (const [index, entry] of entries.entries()) {
     if (!isApiEntry(entry) || !entryValidator(API_REGISTRY_ENTRY_DEFINITION)(entry)) continue;
+    parseProbeTargetPolicy ??= (await loadAdapters()).parseProbeTargetPolicy;
+    const authorizations = [
+      { where: `registry[${index}]`, authorization: authorizationOf(entry, entry.port ?? defaultPortOf(entry)) },
+      ...deploymentAuthorizations(entry).map((authorization, at) => ({ where: `registry[${index}].deployments[${at}]`, authorization })),
+    ];
+    for (const { where, authorization } of authorizations) {
+      try {
+        parseProbeTargetPolicy({ authorizations: [authorization] });
+      } catch (error) {
+        if (error?.name !== 'RuntimeFault') throw error;
+        problems.push(
+          `${where} becomes an authorization eval-quality's parseProbeTargetPolicy refuses (read as a policy of that authorization alone, so a pointer starts at /authorizations/0): ${error.message}`,
+        );
+      }
+    }
     // The entry's own origin and each deployment origin it authorizes meet the same two rules.
     const origins = [
       { where: `registry[${index}]`, scheme: entry.scheme, host: entry.host, addresses: entry.addresses },

@@ -566,7 +566,7 @@
       }
     },
     "ApiRegistryEntry": {
-      "description": "One HTTP target a run may reach (AD-4: an AI feature or any web application, whose interface is api). The runtime turns each into an authorization of eval-quality's default-deny ProbeTargetPolicy, in the shape eval-quality declares for it, and hands that policy, where each interface is and its auth headers to the evaluation's own HTTP port, adapter/http-probe-port.mjs, which asks eval-quality's evaluateTarget for every allow or deny decision. A deployed target names its port; a target the runtime starts names its server instead, which starts from the workspace for each call on a free port the runtime chooses. eval-quality's policy tries every authorization naming an interface in order, so one entry per interface keeps the denial it reports the one this entry describes.",
+      "description": "One HTTP target a run may reach (AD-4: an AI feature or any web application, whose interface is api). The runtime turns each into an authorization of eval-quality's default-deny ProbeTargetPolicy, in the shape eval-quality declares for it, and hands that policy, where each interface is and its auth headers to the evaluation's own HTTP port, adapter/http-probe-port.mjs, which asks eval-quality's evaluateTarget for every allow or deny decision. A deployed target names its port; a target the runtime starts names its server instead, which starts from the workspace for each call on a free port the runtime chooses. eval-quality's policy tries every authorization naming an interface in order, so one entry per interface keeps the denial it reports the one this entry describes. The authorization fields here carry their JSON types alone: eval-quality's parseProbeTargetPolicy decides every rule over them, which check applies to the policy each entry becomes and the runtime applies to each call's policy before any service starts.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -607,42 +607,35 @@
           "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
         },
         "scheme": {
-          "description": "The scheme requests use, http or https.",
-          "enum": ["http", "https"]
+          "description": "The scheme requests use, http or https. check hands the authorization to eval-quality's parseProbeTargetPolicy, which decides what a valid scheme is.",
+          "type": "string"
         },
         "host": {
           "description": "The host requests name, written as a URL spells it, letter case aside (an IPv4 address in dotted decimal, an IPv6 address compressed and unbracketed, a name in punycode), which check holds it to, since the port hands eval-quality's policy the hostname of the URL it sends to and the policy reads both hosts in lower case with one trailing dot dropped; the port resolves it once per request, to its first address, and sends to that address with this host in the Host header.",
-          "type": "string",
-          "minLength": 1
+          "type": "string"
         },
         "port": {
-          "description": "A deployed target's port. An entry names this or server, never both.",
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 65535
+          "description": "A deployed target's port. An entry names this or server, never both. eval-quality's parseProbeTargetPolicy decides what a valid port is.",
+          "type": "integer"
         },
         "deployments": {
           "description": "Other origins this interface is deployed at, which a historical probe on the deployment route reaches (its pre-fix or its post-fix deployment). Each is an authorization of this interface with the entry's methods, safeMethods, maxRedirects, ceilings and auth. Before a deployment arm runs, eval-quality's evaluateTarget decides which of these (and, for an entry naming its port, the entry's own) allows the origin the probe names, and that one authorization is the arm's whole policy for the interface, so a redirect to any other origin is denied; no other arm's policy holds a deployment.",
           "type": "array",
-          "uniqueItems": true,
           "items": {
             "type": "object",
             "additionalProperties": false,
             "required": ["scheme", "host", "port", "addresses"],
             "properties": {
-              "scheme": { "description": "The deployment's scheme, http or https.", "enum": ["http", "https"] },
+              "scheme": { "description": "The deployment's scheme, http or https.", "type": "string" },
               "host": {
                 "description": "The deployment's host, written as a URL spells it, as the entry's own host is (check holds it to that).",
-                "type": "string",
-                "minLength": 1
+                "type": "string"
               },
-              "port": { "description": "The deployment's port.", "type": "integer", "minimum": 1, "maximum": 65535 },
+              "port": { "description": "The deployment's port.", "type": "integer" },
               "addresses": {
                 "description": "The exact addresses eval-quality allows the deployment's host to resolve to, as for the entry's own addresses.",
                 "type": "array",
-                "minItems": 1,
-                "uniqueItems": true,
-                "items": { "type": "string", "minLength": 1 }
+                "items": { "type": "string" }
               }
             }
           }
@@ -650,50 +643,39 @@
         "addresses": {
           "description": "The exact addresses eval-quality allows the host to resolve to, compared after parsing: a loopback, private, link-local or metadata address is allowed only when named here. An address the host resolves to that no entry names is denied (address-not-authorized) before any request is sent or any server starts.",
           "type": "array",
-          "minItems": 1,
-          "uniqueItems": true,
           "items": {
-            "type": "string",
-            "minLength": 1
+            "type": "string"
           }
         },
         "methods": {
           "description": "The HTTP methods a request may use; any other is denied (method-not-authorized).",
           "type": "array",
-          "minItems": 1,
-          "uniqueItems": true,
           "items": {
-            "enum": ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+            "type": "string"
           }
         },
         "safeMethods": {
           "description": "The methods eval-quality's policy marks safe for a differential probe; empty means none.",
           "type": "array",
-          "uniqueItems": true,
           "items": {
-            "enum": ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+            "type": "string"
           }
         },
         "maxRedirects": {
           "description": "How many redirects one request may follow, each decided by eval-quality again; one more is a cap (budget-exhausted).",
-          "type": "integer",
-          "minimum": 0
+          "type": "integer"
         },
         "maxElapsedMs": {
-          "description": "Wall-clock ceiling for one request and its redirects, in milliseconds. At most 2147483647, the longest delay one timer holds.",
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 2147483647
+          "description": "Wall-clock ceiling for one request and its redirects, in milliseconds.",
+          "type": "integer"
         },
         "maxRequestBytes": {
           "description": "Ceiling on a request body's bytes; a larger body is a cap and is never sent.",
-          "type": "integer",
-          "minimum": 1
+          "type": "integer"
         },
         "maxResponseBytes": {
           "description": "Ceiling on an answer body's bytes; a larger answer is a cap.",
-          "type": "integer",
-          "minimum": 1
+          "type": "integer"
         },
         "server": {
           "description": "A target the runtime starts from the workspace for each call, as it starts a command or a tool server, so the code that answers is the workspace's, a mutation included: started through eval-quality's command mechanism in a process group of its own, with the host's PATH, the host's values for environmentKeys and its port handoff, reached once the address eval-quality allowed accepts a connection on its port, and ended with its group after the call. It starts only once eval-quality's policy has allowed the call. With portFileEnvironmentKey, the server receives 0 in portEnvironmentKey and a private file's path in portFileEnvironmentKey, binds a port the system chooses and writes its number to that file, and the call is sent to that port alone. Without it, the runtime chooses a free port, releases it and passes its number in portEnvironmentKey; another process can take the port between that release and the server's bind, and an answer it gives before the server's end is reported is not caught.",

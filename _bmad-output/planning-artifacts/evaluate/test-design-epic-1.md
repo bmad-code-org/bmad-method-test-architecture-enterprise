@@ -640,13 +640,20 @@ Amended 2026-09-30 in Story 1.35: the ended session is on the record's `exit-cod
 
 ### Story 1.36: Hold an HTTP entry to eval-quality's own target-policy parser
 
-Added 2026-09-25 in Story 1.11. Levels: contract, integration over real eval-quality. File: `test/test-evaluate-api.js` (`test:evaluate-api`).
+Added 2026-09-25 in Story 1.11. Levels: contract, integration over real eval-quality, static. File: `test/test-evaluate-api.js` (`test:evaluate-api`).
 
-| AC                                                          | Test                                                                                                         | Level                              | P   | Revert check                                                        |
-| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ---------------------------------- | --- | ------------------------------------------------------------------- |
-| `check` holds an HTTP entry to eval-quality's parser        | An entry whose authorization the parser refuses; exit 10 under `registry` naming the parser's reason         | Contract                           | P1  | Skipping the parser lets the case exit 0                            |
-| The runtime builds each call's policy through the parser    | A unit whose refused field makes the port's configuration throw the parser's fault before any service starts | Integration over real eval-quality | P1  | Building the policy by hand reaches the port with the refused field |
-| The runtime schema repeats none of the parser's field rules | Read `ApiRegistryEntry` and assert the authorization fields carry their JSON types alone                     | Static                             | P2  | Restoring a copied constraint fails the read                        |
+Amended 2026-09-30: the three cases live in `checkPolicyParser`, with the rows below added for the started server's placeholder port, the deployment origin, the trial that stops with exit 12 and the gameability arm's port.
+The eval-quality release is 4.5.0 (PR #170).
+
+| AC                                                              | Test                                                                                                                                       | Level                              | P   | Revert check                                                           |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------- | --- | ---------------------------------------------------------------------- |
+| `check` holds an HTTP entry to eval-quality's parser            | An entry whose authorization the parser refuses; exit 10 under `registry` naming the parser's reason                                       | Contract                           | P1  | Skipping the parser lets the case exit 0                               |
+| The runtime builds each call's policy through the parser        | A unit whose refused field makes the port's configuration throw the parser's fault before any service starts                               | Integration over real eval-quality | P1  | Building the policy by hand reaches the port with the refused field    |
+| The runtime schema repeats none of the parser's field rules     | Read `ApiRegistryEntry` and assert the authorization fields carry their JSON types alone                                                   | Static                             | P2  | Restoring a copied constraint fails the read                           |
+| A started server's entry is read at a placeholder port          | The fixture's started-server entry exits 0 with no `registry` finding; one with `maxRequestBytes` 0 gives one finding for that field alone | Contract                           | P1  | Reading a started server's entry with no port refuses every such entry |
+| A deployment origin is an authorization of its own              | `deployments[1]` over port 0 and no addresses; one `registry` finding naming `registry[0].deployments[1]`                                  | Contract                           | P1  | Leaving `deployments` out of the read lets the case exit 0             |
+| A registry built without `check` stops the trial                | A `runTrial` over an entry with `maxElapsedMs` 0 stops with exit 12 carrying the parser's pointer and starts no service                    | Integration over real eval-quality | P1  | Building the policy by hand sends the call on with a refused ceiling   |
+| The gameability arm's port builds its policy through the parser | `degenerateApiPort` over an empty method list throws the parser's fault, and a deployed entry's call over port 0 does too                  | Integration over real eval-quality | P2  | Building the policy by hand in either port lets the field through      |
 
 ### Story 1.37: Know a started HTTP server by the port it bound itself
 

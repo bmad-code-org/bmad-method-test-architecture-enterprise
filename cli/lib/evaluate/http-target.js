@@ -84,7 +84,7 @@ const path = require('node:path');
 const { StringDecoder } = require('node:string_decoder');
 
 const { quotedCapture } = require('./arm');
-const { canonicalAddress, loadConformance, loadEngine } = require('./engine');
+const { canonicalAddress, loadAdapters, loadConformance, loadEngine } = require('./engine');
 const { HOST_ENVIRONMENT_KEY, HTTP_PORT_PROTOCOL, PROTOCOL_FD, UnansweredRequest } = require('./http-port-host');
 
 /** Where the evaluation's HTTP port lives, relative to the evaluation folder. */
@@ -414,15 +414,17 @@ function authorizationOf(entry, port) {
  * entry's methods, redirects and ceilings.
  */
 function deploymentCandidates(entry) {
-  return [
-    ...(entry.server === undefined ? [authorizationOf(entry, entry.port)] : []),
-    ...(entry.deployments ?? []).map((deployment) => ({
-      ...authorizationOf(entry, deployment.port),
-      scheme: deployment.scheme,
-      host: deployment.host,
-      addresses: [...deployment.addresses],
-    })),
-  ];
+  return [...(entry.server === undefined ? [authorizationOf(entry, entry.port)] : []), ...deploymentAuthorizations(entry)];
+}
+
+/** One authorization per origin an entry's `deployments` list, each with the entry's methods, redirects and ceilings. */
+function deploymentAuthorizations(entry) {
+  return (entry.deployments ?? []).map((deployment) => ({
+    ...authorizationOf(entry, deployment.port),
+    scheme: deployment.scheme,
+    host: deployment.host,
+    addresses: [...deployment.addresses],
+  }));
 }
 
 /**
@@ -521,8 +523,14 @@ function sharedOrigin(preFix, fix) {
  * authorization stands in the policy in place of the entry's own, so every
  * hop of every request, a redirect included, is decided over the arm's origin
  * alone. An entry's `deployments` join no other call's policy.
+ *
+ * The policy is what eval-quality's `parseProbeTargetPolicy` (`parsePolicy`)
+ * returns for the authorizations above, so a field the parser refuses stops
+ * the call with the parser's fault before any service starts, and the port
+ * receives the parsed policy, never a hand-built one. TeA holds no rule of
+ * its own over an authorization's fields.
  */
-function portConfiguration({ entries, portOf, readEnvironment, interfaceId, deployment = null }) {
+function portConfiguration({ entries, portOf, parsePolicy, readEnvironment, interfaceId, deployment = null }) {
   const reached = entries.map((entry) => ({ entry, port: portOf(entry) })).filter(({ port }) => port !== null);
   const auth = {};
   for (const entry of entries) {
@@ -535,7 +543,7 @@ function portConfiguration({ entries, portOf, readEnvironment, interfaceId, depl
   const targets = Object.fromEntries(own.map(({ entry, port }) => [entry.interfaceId, { scheme: entry.scheme, host: entry.host, port }]));
   for (const id of Object.keys(deployed)) targets[id] = originTarget(deployment.origins[id]);
   return {
-    policy: { authorizations: [...own.map(({ entry, port }) => authorizationOf(entry, port)), ...Object.values(deployed)] },
+    policy: parsePolicy({ authorizations: [...own.map(({ entry, port }) => authorizationOf(entry, port)), ...Object.values(deployed)] }),
     targets,
     auth,
   };
@@ -1067,6 +1075,8 @@ function channelCeiling(entry) {
 function createApiPort({ entries, httpPort, cwd, targetOf, readEnvironment, mechanism, maxOutputBytes, scratch = [], deployment = null }) {
   return {
     async probe(request, signal) {
+      // Only the parser's load happens here; the refusal comes from `configurationAt` below, before any server starts.
+      const { parseProbeTargetPolicy } = await loadAdapters();
       const entry = entries.find((candidate) => candidate.interfaceId === request?.interfaceId);
       // On a deployment arm every HTTP interface answers at the deployment's origin, so no call starts a server.
       const launched = entry?.server === undefined || deployment !== null ? null : entry;
@@ -1082,6 +1092,7 @@ function createApiPort({ entries, httpPort, cwd, targetOf, readEnvironment, mech
           portConfiguration({
             entries,
             portOf: (candidate) => (candidate.server === undefined ? candidate.port : candidate === launched ? port : null),
+            parsePolicy: parseProbeTargetPolicy,
             readEnvironment,
             interfaceId: request?.interfaceId,
             deployment,
@@ -1157,10 +1168,12 @@ function degenerateApiPort({ entries, httpPort, answer, readEnvironment }) {
   const degenerateAddresses = Object.fromEntries(entries.map((entry) => [entry.interfaceId, entry.addresses[0]]));
   return {
     async probe(request, signal) {
+      const { parseProbeTargetPolicy } = await loadAdapters();
       const entry = entries.find((candidate) => candidate.interfaceId === request?.interfaceId);
       const configuration = portConfiguration({
         entries,
         portOf: (candidate) => candidate.port ?? defaultPortOf(candidate),
+        parsePolicy: parseProbeTargetPolicy,
         readEnvironment,
         interfaceId: request?.interfaceId,
       });
@@ -1190,7 +1203,9 @@ module.exports = {
   createApiPort,
   degenerateApiPort,
   DeploymentUnreachable,
+  defaultPortOf,
   deploymentAccess,
+  deploymentAuthorizations,
   httpPortFile,
   isApiEntry,
   missingCredentials,

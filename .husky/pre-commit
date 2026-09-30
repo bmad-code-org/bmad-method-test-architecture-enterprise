@@ -1,26 +1,31 @@
 #!/usr/bin/env sh
 
+# The pre-commit budget is 30 seconds. Everything slower runs in CI
+# (.github/workflows/quality.yaml runs the whole `npm test` chain in shards,
+# docs.yaml builds the site), and `npm test` stays available locally.
+
 # Auto-fix changed files and stage them
 npx --no-install lint-staged
 
-# Validate everything without the hook's repository selectors. Tests create
-# disposable Git repositories and must resolve their own worktrees and indexes.
+# Cheap whole-repository checks, each well under a second. They clear the
+# hook's repository selectors so a check that resolves its own worktree or
+# index is not steered to the one being committed.
 (
   for variable in $(git rev-parse --local-env-vars); do
     unset "$variable"
   done
-  npm test
+  npm run --silent test:conflict-markers
+  npm run --silent test:release-metadata
+  npm run --silent test:changelog
 )
 
 # Validate docs links only when docs change
 if command -v rg >/dev/null 2>&1; then
   if git diff --cached --name-only | rg -q '^docs/'; then
-    npm run docs:validate-links
-		npm run docs:build
+    npm run --silent docs:validate-links
   fi
 else
   if git diff --cached --name-only | grep -Eq '^docs/'; then
-    npm run docs:validate-links
-		npm run docs:build
+    npm run --silent docs:validate-links
   fi
 fi
