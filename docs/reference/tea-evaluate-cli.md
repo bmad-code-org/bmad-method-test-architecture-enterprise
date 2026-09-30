@@ -230,21 +230,21 @@ Address an exit code, stream or body only the defect produces.
 
 A denied call is recorded with eval-quality's `forbidden-target` fault and, from eval-quality 4.2.0, the `reason` its policy gave, for a command, a tool call and an HTTP request alike.
 The reason sits beside the fault's code and detail in a leg's `faults/` file, a qualification's or trial's fault and a sealed-brief agent's bridge calls, and `preflight` and `run` exit 10 and name it.
-A CI policy or a test reads the `reason` and never the detail text.
+A CI policy or a test keys on the `reason`.
 
-| Reason                           | The policy denied                                                    |
-| -------------------------------- | -------------------------------------------------------------------- |
-| `interface-not-authorized`       | a call to an interface the registry does not authorize for that kind |
-| `executable-not-authorized`      | a command whose executable is not listed                             |
-| `subcommand-not-authorized`      | a command whose subcommand is not listed                             |
-| `environment-key-not-authorized` | an environment key the entry does not list                           |
-| `tool-not-authorized`            | a tool the server's entry does not list, even when the server has it |
-| `scheme-not-authorized`          | an HTTP request whose scheme the entry does not admit                |
-| `host-not-authorized`            | an HTTP request whose host the entry does not admit                  |
-| `port-not-authorized`            | an HTTP request whose port the entry does not admit                  |
-| `address-not-authorized`         | an HTTP request whose resolved address the entry does not list       |
-| `address-unparseable`            | an HTTP request whose resolved address cannot be parsed              |
-| `method-not-authorized`          | an HTTP request whose method the entry does not list                 |
+| Reason                           | The policy denied                                                     |
+| -------------------------------- | --------------------------------------------------------------------- |
+| `interface-not-authorized`       | a call to an interface the registry does not authorize for that kind  |
+| `executable-not-authorized`      | a command whose executable is not listed                              |
+| `subcommand-not-authorized`      | a command whose subcommand is not listed                              |
+| `environment-key-not-authorized` | a command request carrying an environment key its entry does not list |
+| `tool-not-authorized`            | a tool the server's entry does not list, even when the server has it  |
+| `scheme-not-authorized`          | an HTTP request whose scheme the entry does not admit                 |
+| `host-not-authorized`            | an HTTP request whose host the entry does not admit                   |
+| `port-not-authorized`            | an HTTP request whose port the entry does not admit                   |
+| `address-not-authorized`         | an HTTP request whose resolved address the entry does not list        |
+| `address-unparseable`            | an HTTP request whose resolved address cannot be parsed               |
+| `method-not-authorized`          | an HTTP request whose method the entry does not list                  |
 
 ## The HTTP port
 

@@ -68,7 +68,7 @@ development_status:
   1-30-send-principal-and-matcher-bindings: done
   1-31-sandbox-the-targets-file-system: done
   1-32-qualify-a-historical-probe-against-two-addressable-deployments: done
-  1-33-record-eval-qualitys-denial-reason-for-every-denied-call: review
+  1-33-record-eval-qualitys-denial-reason-for-every-denied-call: done
   1-34-qualify-a-sealed-brief-agent-evaluator-before-its-verdicts-count: backlog
   1-35-judge-a-tool-server-that-crashes-mid-call: backlog
   1-36-hold-an-http-entry-to-eval-qualitys-own-target-policy-parser: backlog
