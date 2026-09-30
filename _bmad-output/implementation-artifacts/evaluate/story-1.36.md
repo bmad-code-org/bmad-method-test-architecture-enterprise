@@ -2,7 +2,7 @@
 title: 'Story 1.36: Hold an HTTP entry to eval-quality own target-policy parser'
 type: 'feature'
 created: '2026-09-30'
-status: 'review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '3479b88a'
