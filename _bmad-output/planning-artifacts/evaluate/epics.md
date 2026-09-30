@@ -1115,7 +1115,7 @@ As an adopter whose tool server can crash,
 I want a server that ends its session mid-call recorded as an observation my oracles judge,
 So that a crash mutation on an `mcp` interface is caught as a command crash is (AD-4, AD-7).
 
-**Engine consumption.** eval-quality ships a release whose MCP adapter answers a `tools/call` that ended the session after the handshake with an `mcp` observation carrying how it ended (the server's exit code or the signal that ended it), and keeps `port-failure` for a server that cannot start or refuses its handshake; TeA's devDependency and peer floor rise to it with the engine check at start and end, and the coordinator makes that change in eval-quality.
+**Engine consumption.** eval-quality ships a release whose MCP adapter answers a `tools/call` that ended the session after the handshake with an `mcp` observation carrying how it ended (the server's exit code or the signal that ended it), and keeps `port-failure` for a server that cannot start or refuses its handshake; TeA's devDependency and peer floor rise to it with the engine check at start and end, and the coordinator makes that change in eval-quality. (amended 2026-09-30 in Story 1.35: the engine carries one signed `exitCode` on the `mcp` observation, a signal's number made negative, and the record holds it on its `exit-code` channel; eval-quality 4.4.0 delivers the observation; under Bubblewrap the runtime reads the signal from the shim's status file, `128 + n` becoming `-n`, as it does for a command.)
 
 **Acceptance Criteria:**
 

@@ -645,9 +645,9 @@ function confinedMcpMechanism(base, sandbox, systemPathsOf = () => [], scratch =
         status = recordedStatus(wrapped.statusFile);
         if (typeof result.exitCode !== 'number') return result;
         if (!status.started) {
-          // Bubblewrap exited before its shim ran: the exit code is its own, not a behavior of the tool server.
+          // With no start mark the exit code may be Bubblewrap's own, so it says nothing about the tool server.
           throw new ConfinementError(
-            `${MECHANISM_NAMES.bubblewrap} could not start the tool server ${JSON.stringify(request.target)}, so its exit code ${result.exitCode} is Bubblewrap's own`,
+            `the status file of the confined tool server ${JSON.stringify(request.target)} holds no start mark, so its exit code ${result.exitCode} cannot be told from ${MECHANISM_NAMES.bubblewrap}'s own`,
           );
         }
         return status.signal === null ? result : { ...result, exitCode: -os.constants.signals[status.signal] };

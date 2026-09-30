@@ -41,6 +41,9 @@
  *   and a signal of the server's own and stop an `ArmError` on each signal
  *   from outside; the bridge units apply the same rule to the sealed-brief
  *   agent and carry the code in its tool result.
+ * - A server that cannot start (Story 1.35): the registry's `targetArgs` drop
+ *   `--policy=`, so the server exits before its handshake; `run` exits 12 with
+ *   eval-quality's "exited during initialize" and seals no trial set.
  * - The reference: its tool-server passage says how an ended session is
  *   recorded and which end stops the run, its run section's crash sentence
  *   covers a tool server beside a command, and Story 1.10's limit is gone.
@@ -1275,6 +1278,31 @@ async function checkCrashingServer() {
 }
 
 /**
+ * A server that cannot start (Story 1.35): the registry's `targetArgs` drop the `--policy=` argument, so the grader exits 2
+ * before it answers the handshake. eval-quality names the ended session, the run cannot measure the server and exits 12,
+ * and no trial set is sealed.
+ */
+async function checkServerThatCannotStart() {
+  const project = makeProject('cannot-start', {
+    edit: ({ folder }) =>
+      editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
+        evaluation.registry[0].targetArgs = ['--mode=unused'];
+      }),
+  });
+  const ran = evaluate(['run', '--evaluation', project.folder], project.env);
+  check(ran.status === 12, `a server that cannot start: run exited ${ran.status}; expected 12\n${ran.output}`);
+  check(
+    ran.output.includes('exited during initialize'),
+    `a server that cannot start: the output does not say it exited during initialize\n${ran.output}`,
+  );
+  const runDirectory = runDirectoryOf(project.folder);
+  check(
+    runDirectory === null || !fs.existsSync(path.join(runDirectory, 'trial-sets.json')),
+    'a server that cannot start sealed a trial set',
+  );
+}
+
+/**
  * The reference states how an ended session is recorded (Story 1.35): in the tool-server passage of the registry
  * section and in the run section's sentence on a step that crashes, and it no longer holds Story 1.10's limit.
  */
@@ -1873,6 +1901,7 @@ async function main() {
     await runCase("the confined tool server's reads", checkConfinedServerReads);
     await runCase('the denials', checkDenials);
     await runCase('a crashing server', checkCrashingServer);
+    await runCase('a server that cannot start', checkServerThatCannotStart);
     await runCase('the reference records an ended session', checkReferenceRecordsEndedSession);
     await runCase('the sealed-brief agent', checkSealedBriefAgent);
     await runCase('the gameability arm', checkGameability);

@@ -92,6 +92,7 @@ Each check is exercised once: undo the change locally, run the named script, res
 - AC 3, Story 1.10's limit sentence restored to the tool-server passage: `checkReferenceRecordsEndedSession` fails 2 of 217 (`the reference still holds Story 1.10's limit` for "never caught on an `mcp` interface" and "has no field for a session that ended mid-call"). The run section's crash sentence restored to "a tool server that crashes during a call is a target that could not run": 2 fail (`the run section's crash sentence does not cover a tool server beside a command` and the limit).
 - Review round 1, the confined mechanism drops the signal mapping (`return result`): `node test/test-evaluate-run.js` fails 2 of 543 (`a confined tool server ended by a signal of its own (SIGABRT) reads {"isError":true,"exitCode":134}; expected -6`, and SIGKILL 137 for -9).
 - Review round 1, the guide's sentence removed from `oracles.md`: `test:evaluate-guidance` fails 1 (`oracles.md` lacks the sentence's opening marker).
+- Final review round 1, a server that cannot start (the registry's `targetArgs` drop `--policy=`): a temporary wrapper in `registry.js` catching the mechanism's error and returning an ended session (`{ isError: true, exitCode: 2 }`) turns the new `checkServerThatCannotStart` case red (`run exited 11; expected 12` and the missing "exited during initialize"), with the handshake and hanging-server cases red beside it (9 of 226 fail). The engine owns the start-and-handshake boundary; TeA's only hold on it is that it lets the engine's error through, which the mutation breaks. The file was restored from a saved copy and `git diff` shows it unchanged.
 
 ## Gates
 
@@ -111,3 +112,18 @@ Fixed:
 Skipped, with reason:
 
 - High: the dev and peer floors to 4.4.0. The spec assigns it to the coordinator after the release; done by the coordinator once eval-quality 4.4.0 was published (see Gates).
+
+## Final review round 1
+
+Two Opus reviewers read the diff at 37435ac3. Every finding was verified against the code.
+
+Fixed:
+
+1. `confinedMcpMechanism` in `cli/lib/evaluate/confinement.js` blamed Bubblewrap for the exit code when the status file held no start mark. eval-quality 4.4.0 returns an `exitCode` only after a completed handshake, so the cause is unknown. The error now reads "the status file of the confined tool server <target> holds no start mark, so its exit code N cannot be told from ... Bubblewrap (bwrap)'s own", exit 12 stays, and the comment above it states only that the code may be Bubblewrap's own. The unit in `test/test-evaluate-run.js` is relabelled "a status file with no start mark" and asserts the message.
+2. The comment in `test/test-evaluate-run.js` about the status a signal left reads "A tool-server call answered: it has no exit, so the runtime only removes the status a signal left."
+3. `test/test-evaluate-mcp.js` gains `checkServerThatCannotStart`: a project whose registry `targetArgs` drop `--policy=` (the fixture's grader exits 2 before its handshake). It asserts `run` exits 12, the output holds "exited during initialize" and no `trial-sets.json` exists. The file's header lists the case. The revert observation is recorded above.
+4. `epics.md`, Story 1.35's "Engine consumption" paragraph, carries the amendment on the signed `exitCode`, eval-quality 4.4.0 and the Bubblewrap signal read.
+5. `test-design-epic-1.md`, Story 1.35: the Levels and Files line lists integration, unit and static and the three files; the cannot-start case joins the exit-12 row; rows for the outside-signal stop, the confined signal read and the `oracles.md` sentence are added.
+6. `ARCHITECTURE-SPINE.md` line 110 carries the dated note that an ended session also carries its signed `exitCode` on the `exit-code` channel.
+
+Skipped: none.
