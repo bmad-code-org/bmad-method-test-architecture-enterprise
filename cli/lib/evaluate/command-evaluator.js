@@ -22,7 +22,10 @@
  * private directory in the run's `scratch`, removed afterwards and however
  * the run ends, so it reads its own files relative to itself; its environment
  * is the base set agents get (PATH, HOME, USER, LOGNAME, locale and proxy
- * variables) and the `evaluator.environmentKeys` the adopter names.
+ * variables) and the `evaluator.environmentKeys` the adopter names. In a
+ * confined run it starts through the evaluation layer's confinement
+ * (`confinement.js` `layerPrefix`), so neither it nor any process it starts
+ * can write under `evaluator/` (Story 1.31).
  *
  * Its stdout is read as UTF-8 (a byte sequence that is not UTF-8 reads as
  * U+FFFD), and what it printed is kept as the bytes it wrote. One that cannot
@@ -51,18 +54,29 @@ const { releaseScratchDirectory, makeScratchDirectory } = require('./workspace')
  * @param {(value: unknown) => string[]} options.validate the mapping's row validator
  * @param {string[]} options.scratch the run's private directories, which its working directory joins while it runs
  * @param {NodeJS.ProcessEnv} [options.env] the environment the base variables and `environmentKeys` are read from
+ * @param {string[]} [options.spawnPrefix] the command the evaluator starts through; none by default
  * @returns {Promise<{ answer: object, stdout: string, stderr: string, stdoutBytes: Buffer, stderrBytes: Buffer, outcome: object }>}
  *   what it printed as text, which the answer is read from, and as the bytes it wrote
  * @throws {EvaluatorError}
  */
-async function runCommandEvaluator({ folder, evaluator, sealedBrief, observations, mapping, validate, scratch, env = process.env }) {
+async function runCommandEvaluator({
+  folder,
+  evaluator,
+  sealedBrief,
+  observations,
+  mapping,
+  validate,
+  scratch,
+  env = process.env,
+  spawnPrefix = [],
+}) {
   const executable = path.join(folder, ...evaluator.command.split('/'));
   const cwd = makeScratchDirectory(scratch, 'tea-evaluate-command-');
   let ended;
   try {
     ended = await runSupervised({
-      command: executable,
-      args: evaluator.args ?? [],
+      command: spawnPrefix.length === 0 ? executable : spawnPrefix[0],
+      args: [...spawnPrefix.slice(1), ...(spawnPrefix.length === 0 ? [] : [executable]), ...(evaluator.args ?? [])],
       input: `${JSON.stringify({ sealedBrief, observations })}\n`,
       cwd,
       env: buildMinimalEnv(evaluator.environmentKeys ?? [], env),

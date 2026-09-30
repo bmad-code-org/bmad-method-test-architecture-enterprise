@@ -43,7 +43,9 @@
  *   4. one trial set per probe under `trial-sets/<probeId>/`: a Sealed Run
  *      Record per trial (`trialIndex` 1..N, one `runId` for the set, `mode:
  *      contract-scoring`), and one isolation manifest from the workspaces and
- *      tools the trials were granted and the tool calls they made; one
+ *      tools the trials were granted, the tool calls they made and the paths
+ *      the confinement's audit saw them open outside what they were granted
+ *      (`confinement.js`, Story 1.31); one
  *      evaluator configuration for the run, carrying the seal's
  *      `sealedBriefDigest`; each validated against the schema eval-quality
  *      publishes before it is written;
@@ -94,6 +96,7 @@ const { evaluatorConfiguration, isolationManifest, sealedRunRecord } = require('
 const { bridgeTools } = require('./bridge');
 const { bridgeRouter, runSealedBriefAgent } = require('./sealed-brief-agent');
 const { ZERO, addUsage } = require('./usage-report');
+const { forbiddenInputNote, layerPrefix } = require('./confinement');
 
 const POLICY_PATH = 'policy/scoring-policy.json';
 const CONDITIONS_PATH = 'policy/evaluator-conditions.json';
@@ -117,16 +120,6 @@ const EVALUATOR_IDENTITY = IDENTITIES.deterministic;
  * so no ceiling is claimed that the runtime did not enforce.
  */
 const UNBOUNDED = Number.MAX_SAFE_INTEGER;
-
-/**
- * What the runtime does to withhold the forbidden inputs, and no more: it
- * hands the target a workspace without the evaluation folder and requests
- * that carry the plan's literals and the values the target itself printed
- * earlier in the trial, and it does not sandbox the target's file system
- * (Story 1.31).
- */
-const FORBIDDEN_INPUT_NOTE =
-  "Withheld from what the runtime hands the target: each trial runs in a disposable workspace that leaves out the evaluation folder, and every request carries only the interaction plan's literal bindings and the values its captured bindings read from the target's own earlier observations in the same trial. The runtime does not sandbox the target's file system, so a target that searches for the evaluation folder can reach it.";
 
 /**
  * What `run.json` says ran for one registry entry: a command's executable and
@@ -286,7 +279,7 @@ function runRunCommand(folder, { fromWorkingTree = false, partition, seed, env =
 
 /** One arm of the clean controls' qualification: the evidence, or a stop with the exit its failure maps to. */
 async function qualificationArm({ contract, registry, workspace, stop, writer, directory, log, seed, signal }) {
-  const { port } = await registry.createProbePort({ cwd: workspace.root, projectRoot: workspace.root });
+  const { port } = await registry.createProbePort({ cwd: workspace.root, projectRoot: workspace.root, workspace: workspace.top });
   try {
     return await runArm({ contract, port: hostEnvironmentPort({ port, registry }), registry, label: 'baseline', seed, signal });
   } catch (error) {
@@ -463,6 +456,7 @@ async function runTrial(context) {
       evidence: { workspace: null, degenerateResponse: arm.degenerate.response },
       port: null,
       mounts: [],
+      observedMounts: () => [],
       toolCalls: [],
     });
   }
@@ -488,10 +482,13 @@ async function runTrial(context) {
     const problems = registry.targetProblems(workspace.root);
     if (problems.length > 0)
       throw stop({ stage: 'trial', exitCode: 12, message: `${label}: the registry cannot launch: ${problems.join('; ')}` });
-    const { port: adapter } = await registry.createProbePort({
+    // The trial's port audits what its target processes open outside what they were granted (`confinement.js`).
+    const { port: adapter, observedMounts } = await registry.createProbePort({
       cwd: workspace.root,
       projectRoot: workspace.root,
+      workspace: workspace.top,
       deployment: arm.deployment ?? null,
+      audit: true,
     });
     const port = hostEnvironmentPort({ port: adapter, registry });
     const began = Date.now();
@@ -528,8 +525,9 @@ async function runTrial(context) {
         `${workspace.kind} ${label}`,
         ...workspace.provisioned.map((entry) => `read-only ${label}/${path.relative(workspace.root, entry).split(path.sep).join('/')}`),
       ],
-      // The commands and tool calls the runtime made for the plan, each an observed call; what the target itself opened or
-      // reached is not observed.
+      // What the confinement's audit saw the target open outside what it was granted, read once the trial's calls ended.
+      observedMounts,
+      // The commands and tool calls the runtime made for the plan, each an observed call.
       toolCalls: executed.steps.filter((step) => step.skipped === undefined).map((step) => callLabel(step.request)),
     });
   } finally {
@@ -551,7 +549,7 @@ async function runTrial(context) {
 async function concludeTrial(context, facts) {
   if (convertsRows(context.snapshot.layer.evaluator.kind)) return concludeWithRows(context, facts);
   const { arm, trialIndex, contract, evaluation, policy, writer, stop } = context;
-  const { label, evidenceFile, executed, began, evidence, mounts, toolCalls } = facts;
+  const { label, evidenceFile, executed, began, evidence, mounts, observedMounts, toolCalls } = facts;
   const elapsedMs = Date.now() - began;
   const judgments = {};
   for (const probe of arm.probes) {
@@ -579,6 +577,7 @@ async function concludeTrial(context, facts) {
       stepObservations: executed.stepObservations,
       judge: evaluation.judge,
       scratch: context.scratch,
+      spawnPrefix: layerPrefix(context.registry.confinement),
     });
   } catch (error) {
     if (!(error instanceof JudgeError)) throw error;
@@ -601,6 +600,7 @@ async function concludeTrial(context, facts) {
     judgeCalled: judged.called,
     elapsedMs,
     mounts,
+    observedMounts: observedMounts(),
     toolCalls,
     resourceUse: executed.resourceUse ?? ZERO,
     unreportedSteps: executed.unreportedSteps ?? [],
@@ -616,10 +616,12 @@ async function concludeTrial(context, facts) {
  */
 async function concludeWithRows(context, facts) {
   const { arm, trialIndex, contract, folder, writer, stop, signal, snapshot, sealedBrief, scratch, env } = context;
-  const { label, evidenceFile, executed, began, evidence, port, mounts, toolCalls } = facts;
+  const { label, evidenceFile, executed, began, evidence, port, mounts, observedMounts, toolCalls } = facts;
   const { evaluator, mapping, validate } = snapshot.layer;
   // The evaluator runs from the evaluation folder, so the run holds the layer's files to the bytes it digested
-  // before each launch and after each trial; the window between this read and the launch is Story 1.31's.
+  // before each launch and after each trial. In a confined run no process of the run can write `evaluator/`
+  // (`confinement.js`), which closes the window between this read and the launch; an opted-out run keeps the reads.
+  const spawnPrefix = layerPrefix(context.registry.confinement);
   const holdLayer = (when) => {
     const change = evaluatorLayerChange(folder, snapshot.layer.files);
     if (change !== null) throw new EvaluatorError(`the evaluation layer changed ${when}: ${change}`);
@@ -643,6 +645,7 @@ async function concludeWithRows(context, facts) {
         validate,
         scratch,
         env,
+        spawnPrefix,
       });
     } else {
       // Drawn after the plan ran and before the router exists, so neither a plan step's output nor any call can carry it.
@@ -659,7 +662,18 @@ async function concludeWithRows(context, facts) {
         nonce,
         signal,
       });
-      evaluated = await runSealedBriefAgent({ evaluator, sealedBrief, contract, mapping, validate, router, nonce, scratch, env });
+      evaluated = await runSealedBriefAgent({
+        evaluator,
+        sealedBrief,
+        contract,
+        mapping,
+        validate,
+        router,
+        nonce,
+        scratch,
+        env,
+        spawnPrefix,
+      });
     }
     holdLayer('while the evaluator ran');
     // The conversion refuses a row on a key of the other kind and a score off its levels, as the schema refuses a bad shape.
@@ -741,6 +755,8 @@ async function concludeWithRows(context, facts) {
     callCount: executed.steps.filter((step) => step.skipped === undefined).length + (router?.counted() ?? 0),
     elapsedMs,
     mounts,
+    // Read after the agent's own calls through the bridge, which ran in the trial's workspace too.
+    observedMounts: observedMounts(),
     toolCalls: [...toolCalls, ...bridged],
     resourceUse,
     unreportedSteps: [...(executed.unreportedSteps ?? []), ...(router?.unreportedSteps ?? [])],
@@ -869,6 +885,7 @@ async function runTrialSets(given) {
           judge: evaluation.judge,
           scratch: context.scratch,
           calibrationResponse: { rubricId: rubric.id, criterionId: criterion.id },
+          spawnPrefix: layerPrefix(registry.confinement),
         });
         treeUnchanged('calibration');
         return result.results.find((entry) => entry.rubricId === rubric.id && entry.criterionId === criterion.id)?.score ?? null;
@@ -889,6 +906,7 @@ async function runTrialSets(given) {
           validate: layer.validate,
           scratch: context.scratch,
           env: context.env,
+          spawnPrefix: layerPrefix(registry.confinement),
         });
         answer = result.answer;
       } else if (kind === 'sealed-brief-agent') {
@@ -927,6 +945,7 @@ async function runTrialSets(given) {
           scratch: context.scratch,
           env: context.env,
           calibrationObservation: calibrationView,
+          spawnPrefix: layerPrefix(registry.confinement),
         });
         answer = result.answer;
       } else throw new Error(`the ${kind} evaluator cannot calibrate a rubric`);
@@ -1065,8 +1084,8 @@ async function runTrialSets(given) {
         evaluatorConfigurationDigest: configurationDigest,
         workspaceIdentity: `${evaluation.evaluationId} ${arm.conditionArm}`,
         allowedMounts: arm.trials.flatMap((trial) => trial.mounts),
-        // The runtime observes no file-system access, so it records no observed mount (records.js).
-        observedMounts: [],
+        // What the confinement's audit saw the set's trials open outside what they were granted (records.js).
+        observedMounts: [...new Set(arm.trials.flatMap((trial) => trial.observedMounts))].sort(),
         toolAllowlist: tools,
         observedToolCalls: [...new Set(arm.trials.flatMap((trial) => trial.toolCalls))].sort(),
         resourceCeilings: {
@@ -1083,7 +1102,7 @@ async function runTrialSets(given) {
           wallClockSeconds: arm.trials.reduce((total, trial) => total + trial.elapsedMs, 0) / 1000,
           costUsd: setUse.costUsd,
         },
-        forbiddenInputNote: FORBIDDEN_INPUT_NOTE,
+        forbiddenInputNote: forbiddenInputNote(registry.confinement),
       });
       failures('IsolationManifest', await validate('isolation-manifest', manifest));
       const manifestFile = `${directory}/isolation-manifest.json`;
@@ -1340,7 +1359,6 @@ async function completeRun(
 
 module.exports = {
   EVALUATOR_IDENTITY,
-  FORBIDDEN_INPUT_NOTE,
   TRIAL_SETS_NAME,
   TRIAL_SETS_SCHEMA_VERSION,
   runRunCommand,

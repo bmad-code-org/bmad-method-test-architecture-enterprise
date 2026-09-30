@@ -28,6 +28,12 @@
  *                      leaves room for no second counted call; hang, which
  *                      lists the tools, appends its capture line and never
  *                      answers, for a case that interrupts the run mid-trial
+ *   --plant <file> --plant-log <log>
+ *                      first try to append a line to <file>, a path under the
+ *                      evaluation folder, and append `{ calibration, outcome }`
+ *                      to <log>: whether the prompt is a calibration call, and
+ *                      `allowed` or `refused <code>` (Story 1.31: a confined
+ *                      run's agent holds the evaluation folder read-only)
  */
 
 'use strict';
@@ -47,6 +53,17 @@ const config = configFile === null ? {} : JSON.parse(fs.readFileSync(configFile,
 const prompt = fs.readFileSync(0, 'utf8');
 const nonce = /<judge-answer nonce="([0-9a-f]+)">/.exec(prompt)?.[1];
 const [name, server] = Object.entries(config.mcpServers ?? {})[0] ?? [];
+const plant = flag('--plant', null);
+const plantLog = flag('--plant-log', null);
+if (plant !== null && plantLog !== null) {
+  let outcome = 'allowed';
+  try {
+    fs.appendFileSync(plant, 'planted by the sealed-brief agent\n');
+  } catch (error) {
+    outcome = `refused ${error.code ?? error.message}`;
+  }
+  fs.appendFileSync(plantLog, `${JSON.stringify({ calibration: prompt.includes('calibration example at level'), outcome })}\n`);
+}
 
 const child = spawn(server.command, server.args, { stdio: ['pipe', 'pipe', 'inherit'], env: { ...process.env, ...server.env } });
 const waiting = new Map();

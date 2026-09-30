@@ -1373,6 +1373,10 @@ async function checkInterrupted() {
   for (const [signal, toGroup] of cases) {
     const project = stubProject(`interrupt-${signal}`);
     const folder = copyFixture(PREFLIGHT_FIXTURE, project);
+    // The leg writes its orphan's pid outside its workspace, which a confined leg cannot, so this case opts out (Story 1.31).
+    editJson(folder, 'evaluation.json', (value) => {
+      value.confinement = false;
+    });
     const pidFile = path.join(tempDir(`interrupt-pid-${signal}`), 'pid');
     firstLegSays(folder, `STUB-ORPHAN ${pidFile} STUB-SLEEP 25000`);
     const temp = privateTemp(`interrupt-temp-${signal}`);

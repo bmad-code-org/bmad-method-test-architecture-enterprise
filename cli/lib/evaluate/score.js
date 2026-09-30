@@ -489,6 +489,12 @@ async function runScoreCommand(folder, { run: invocationId, env = process.env, l
     refused.length === 0
       ? ''
       : `; ${refused.length} probe(s) the run refused are not scored: ${refused.map((entry) => entry.probeId).join(', ')}`;
+  // A run that opted out of file-system confinement scores as any other, so its verdicts say its targets ran unconfined.
+  const optedOut = located.record?.confinement === 'opt-out';
+  const optedOutNote = optedOut
+    ? '; the run opted out of file-system confinement (run.json records confinement "opt-out"), so its targets ran unconfined and could reach the evaluation folder'
+    : '';
+  if (optedOut) log('the run opted out of file-system confinement: its targets ran unconfined and could reach the evaluation folder');
 
   const scoreInvocationId = newInvocationId();
   const scoresRoot = path.join(runDirectory, 'scores');
@@ -567,6 +573,7 @@ async function runScoreCommand(folder, { run: invocationId, env = process.env, l
       exitCode: stageFailed ? INFRASTRUCTURE : combinedExit(scores.map((entry) => entry.exitCode)),
       scores,
       refused,
+      confinement: located.record?.confinement ?? null,
     });
   }
   const exitCode = stageFailed ? INFRASTRUCTURE : combinedExit(scores.map((entry) => entry.exitCode));
@@ -593,7 +600,7 @@ async function runScoreCommand(folder, { run: invocationId, env = process.env, l
     scores,
     message: stageFailed
       ? `an eval-quality score call could not run or exited with a code the CLI does not document; every call's record is in ${path.relative(folder, scoreDirectory)}`
-      : `eval-quality score ran for ${scores.length} probe(s) of run ${index.invocationId}; each call's diagnostics and evidence are in ${path.relative(folder, scoreDirectory)}${refusedNote}`,
+      : `eval-quality score ran for ${scores.length} probe(s) of run ${index.invocationId}; each call's diagnostics and evidence are in ${path.relative(folder, scoreDirectory)}${refusedNote}${optedOutNote}`,
   });
 }
 

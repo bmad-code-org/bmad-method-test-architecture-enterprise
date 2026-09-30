@@ -359,7 +359,7 @@ async function qualifyHistoricalProbe({
     const phases = [];
     for (const { phase, revision, expected, meaning } of PHASES) {
       const workspace = workspaces[phase];
-      const { port } = await registry.createProbePort({ cwd: workspace.root, projectRoot: workspace.root });
+      const { port } = await registry.createProbePort({ cwd: workspace.root, projectRoot: workspace.root, workspace: workspace.top });
       phases.push({
         phase,
         expected,
@@ -549,7 +549,12 @@ async function qualifyDeploymentProbe({
   const phases = [];
   for (const { phase, revision, expected, meaning } of PHASES) {
     const deployment = reached[revision];
-    const { port } = await registry.createProbePort({ cwd: pristine.root, projectRoot: pristine.root, deployment });
+    const { port } = await registry.createProbePort({
+      cwd: pristine.root,
+      projectRoot: pristine.root,
+      workspace: pristine.top,
+      deployment,
+    });
     phases.push({
       phase,
       expected,
@@ -608,7 +613,7 @@ async function historicalRoute({ preFix, make, registry, stop, log }) {
       message: `the registry cannot launch in the pre-fix workspace at ${preFix}: ${problems.join('; ')}`,
     });
   }
-  const { port } = await registry.createProbePort({ cwd: workspace.root, projectRoot: workspace.root });
+  const { port } = await registry.createProbePort({ cwd: workspace.root, projectRoot: workspace.root, workspace: workspace.top });
   log(`pre-fix workspace at ${preFix}: ${workspace.root}`);
   return { label: `historical:${preFix}`, cwd: workspace.root, port, workspace, deployment: null };
 }
@@ -621,7 +626,7 @@ async function historicalRoute({ preFix, make, registry, stop, log }) {
  * call). The trials of its arm reach the same deployment.
  */
 async function deploymentRoute({ deployment, pristine, registry, log }) {
-  const { port } = await registry.createProbePort({ cwd: pristine.root, projectRoot: pristine.root, deployment });
+  const { port } = await registry.createProbePort({ cwd: pristine.root, projectRoot: pristine.root, workspace: pristine.top, deployment });
   log(`pre-fix deployment of ${deployment.release}: ${Object.values(deployment.origins).join(', ')}`);
   return { label: `historical:${deployment.release}`, cwd: pristine.root, port, workspace: null, deployment };
 }

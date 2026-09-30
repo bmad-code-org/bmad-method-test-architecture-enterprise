@@ -249,9 +249,12 @@ function commitAll(repository, folder, message) {
 
 /**
  * A temp git repository from the fixture, `edit` applied before the first
- * commit, with a private temp directory and a marker file for its runs.
+ * commit, with a private temp directory and a marker file for its runs. The
+ * marker is a file outside the workspace, which a confined target cannot
+ * write, so a marked project opts out of file-system confinement (Story
+ * 1.31); one made with `marker: false` runs confined.
  */
-function makeProject(label, { edit = () => {} } = {}) {
+function makeProject(label, { edit = () => {}, marker: marked = true } = {}) {
   const directory = scratch.make(label);
   const repository = path.join(directory, 'repository');
   fs.cpSync(FIXTURE, repository, { recursive: true, filter: (from) => path.basename(from) !== 'runs' });
@@ -260,7 +263,17 @@ function makeProject(label, { edit = () => {} } = {}) {
   const marker = path.join(directory, 'launches.jsonl');
   const temp = scratch.make(`${label}-temp`);
   runtimeTemps.push({ label, directory: temp });
-  const project = { repository, folder, marker, directory, env: { TMPDIR: temp, TMP: temp, TEMP: temp, VERDICT_MARKER: marker } };
+  const project = {
+    repository,
+    folder,
+    marker,
+    directory,
+    env: { TMPDIR: temp, TMP: temp, TEMP: temp, ...(marked ? { VERDICT_MARKER: marker } : {}) },
+  };
+  if (marked) {
+    const manifest = path.join(folder, 'evaluation.json');
+    fs.writeFileSync(manifest, `${JSON.stringify({ ...JSON.parse(fs.readFileSync(manifest, 'utf8')), confinement: false }, null, 2)}\n`);
+  }
   edit(project);
   git(repository, ['init', '--quiet', '--initial-branch', 'main']);
   project.commit = commitAll(repository, folder, 'the verdict project');
@@ -340,8 +353,9 @@ function recordsOf(runDirectory, probeId) {
 // ---------------------------------------------------------------- gameability
 
 /** A project whose one probe is the gameability probe P-003, its degenerate response printing `stdout`. */
-function makeGameabilityProject(label, stdout) {
+function makeGameabilityProject(label, stdout, { marker = true } = {}) {
   return makeProject(label, {
+    marker,
     edit: ({ folder }) => {
       addNaiveBehavior(folder);
       const signature = signatureFor(folder, 'verdict: pending');
@@ -490,9 +504,10 @@ async function checkGameability() {
  */
 function makeHistoricalProject(
   label,
-  { before = 'mode: lenient\n', fixFile = 'rules/policy.txt', keepMutation = false, fixCommitOf = ({ fix }) => fix } = {},
+  { before = 'mode: lenient\n', fixFile = 'rules/policy.txt', keepMutation = false, fixCommitOf = ({ fix }) => fix, marker = true } = {},
 ) {
   const project = makeProject(label, {
+    marker,
     edit: ({ repository, folder }) => {
       fs.writeFileSync(path.join(repository, 'rules', 'policy.txt'), before);
       if (!keepMutation) {
@@ -1023,9 +1038,12 @@ function sealedProbes(runDirectory) {
  * deployment route: its natural defect (the grader rejects an answer it must
  * accept) is present in the pre-fix deployment and fixed in the post-fix
  * one. `preFix` and `fix` give each deployment's origin, `authorized` the
- * registry's `deployments`.
+ * registry's `deployments`. The started service logs to a file outside its
+ * workspace, which a confined service cannot write, so the evaluation opts out
+ * of file-system confinement (Story 1.31); with `confined`, it runs confined
+ * and the started service logs nothing.
  */
-function makeDeploymentProject(label, { preFix, fix, authorized, edit = () => {} }) {
+function makeDeploymentProject(label, { preFix, fix, authorized, edit = () => {}, confined = false }) {
   const directory = scratch.make(label);
   const root = path.join(directory, 'project');
   fs.cpSync(API_FIXTURE, root, { recursive: true, filter: (from) => !['runs', 'node_modules'].includes(path.basename(from)) });
@@ -1039,6 +1057,7 @@ function makeDeploymentProject(label, { preFix, fix, authorized, edit = () => {}
   editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
     evaluation.arms = ['clean', 'historical'];
     evaluation.registry[0].deployments = authorized.map(authorizing);
+    if (!confined) evaluation.confinement = false;
   });
   const witness = structuredClone(seeded.defects[0].manifestationWitness);
   witness.legId = 'manifest-pre-fix';
@@ -1072,7 +1091,12 @@ function makeDeploymentProject(label, { preFix, fix, authorized, edit = () => {}
   const log = path.join(directory, 'started.jsonl');
   const temp = scratch.make(`${label}-temp`);
   runtimeTemps.push({ label, directory: temp });
-  const project = { root, folder, log, env: { TMPDIR: temp, TMP: temp, TEMP: temp, GRADER_LOG: log, GRADER_TOKEN } };
+  const project = {
+    root,
+    folder,
+    log,
+    env: { TMPDIR: temp, TMP: temp, TEMP: temp, ...(confined ? {} : { GRADER_LOG: log }), GRADER_TOKEN },
+  };
   const digested = evaluate(['digest', '--evaluation', folder], project.env);
   if (digested.status !== 0) throw new Error(`digest failed: ${digested.output}`);
   return project;
@@ -2409,6 +2433,96 @@ async function checkAdmissionGate(engine) {
   }
 }
 
+/**
+ * The gameability and historical arms in confined runs (Story 1.31): the
+ * historical qualification's worktrees at the fix commit and its parent, the
+ * pre-fix witness leg and the pre-fix trials run under the host's mechanism,
+ * a gameability arm, which launches nothing, seals as it does unconfined, and
+ * the deployment route qualifies and runs its trials against the two
+ * deployments with the started service confined.
+ */
+async function checkConfinedArms() {
+  const confinement = process.platform === 'darwin' ? 'seatbelt' : 'bubblewrap';
+  const historical = makeHistoricalProject('historical-confined', { marker: false });
+  const ran = evaluate(['run', '--evaluation', historical.folder], historical.env);
+  check(ran.status === 0, `a confined historical run exited ${ran.status}; expected 0\n${ran.output}`);
+  const runDirectory = runDirectoryOf(historical.folder);
+  if (runDirectory === null) check(false, 'the confined historical run wrote no run directory');
+  else {
+    const failBefore = written(path.join(runDirectory, 'qualification', 'P-004', 'fail-before.json'), 'the confined fail-before evidence');
+    const passAfter = written(path.join(runDirectory, 'qualification', 'P-004', 'pass-after.json'), 'the confined pass-after evidence');
+    check(
+      failBefore?.commit === historical.parent &&
+        failBefore?.verdict === 'violated' &&
+        passAfter?.commit === historical.fix &&
+        passAfter?.verdict === 'held',
+      `a confined historical qualification ran ${JSON.stringify([failBefore?.commit, failBefore?.verdict, passAfter?.commit, passAfter?.verdict])}`,
+    );
+    const record = readJson(path.join(runDirectory, 'run.json'));
+    check(
+      record.completed === true && record.confinement === confinement,
+      `a confined historical run records ${JSON.stringify({ completed: record.completed, confinement: record.confinement })}`,
+    );
+  }
+  const gameability = makeGameabilityProject('gameability-confined', 'request: Judge the request.\nverdict: pending\n', { marker: false });
+  const played = evaluate(['run', '--evaluation', gameability.folder], gameability.env);
+  check(played.status === 0, `a confined gameability run exited ${played.status}; expected 0\n${played.output}`);
+  const playedDirectory = runDirectoryOf(gameability.folder);
+  check(
+    playedDirectory !== null && fs.existsSync(path.join(playedDirectory, 'trial-sets.json')),
+    'the confined gameability run sealed no trial set',
+  );
+  try {
+    await checkConfinedDeploymentRoute(confinement);
+  } finally {
+    stopDeployments();
+  }
+}
+
+/** The deployment route in a confined run: each phase and trial reaches its deployment as it does unconfined. */
+async function checkConfinedDeploymentRoute(confinement) {
+  const pre = await startDeployment('confined-pre-fix', 'lenient');
+  const post = await startDeployment('confined-post-fix', 'strict');
+  const project = makeDeploymentProject('deployments-confined', {
+    preFix: pre.origin,
+    fix: post.origin,
+    authorized: [pre, post],
+    confined: true,
+  });
+  const ran = evaluate(['run', '--evaluation', project.folder], project.env);
+  check(ran.status === 0, `a confined deployment-routed run exited ${ran.status}; expected 0\n${ran.output}`);
+  const runDirectory = runDirectoryOf(project.folder);
+  if (runDirectory === null) {
+    check(false, 'the confined deployment-routed run wrote no run directory');
+    return;
+  }
+  const record = readJson(path.join(runDirectory, 'run.json'));
+  check(
+    record.completed === true && record.confinement === confinement,
+    `a confined deployment-routed run records ${JSON.stringify({ completed: record.completed, confinement: record.confinement })}`,
+  );
+  const failBefore = written(path.join(runDirectory, 'qualification', 'P-004', 'fail-before.json'), 'the confined fail-before evidence');
+  const passAfter = written(path.join(runDirectory, 'qualification', 'P-004', 'pass-after.json'), 'the confined pass-after evidence');
+  check(
+    failBefore?.origins?.grader === pre.origin &&
+      failBefore?.verdict === 'violated' &&
+      passAfter?.origins?.grader === post.origin &&
+      passAfter?.verdict === 'held',
+    `a confined deployment-routed qualification ran ${JSON.stringify([failBefore?.origins, failBefore?.verdict, passAfter?.origins, passAfter?.verdict])}`,
+  );
+  const planned = '/grade?answer=forty-two';
+  const expectedPre = [planned, '/grade?answer=witness-answer', ...Array.from({ length: TRIALS }, () => planned)];
+  check(
+    JSON.stringify(requestsTo(pre).map((request) => request.path)) === JSON.stringify(expectedPre),
+    `the confined run's pre-fix deployment received ${JSON.stringify(requestsTo(pre))}; expected ${JSON.stringify(expectedPre)}`,
+  );
+  const records = recordsOf(runDirectory, 'P-004');
+  check(
+    records.length === TRIALS && records.every((entry) => entry.conditionArm === `historical:${PRE_RELEASE}`),
+    `the confined run's P-004 records carry arms ${JSON.stringify(records.map((entry) => entry.conditionArm))}`,
+  );
+}
+
 /** Runs one case; an exception is a failed check, so the cases after it still run and every failure is reported. */
 async function runCase(name, body) {
   try {
@@ -2423,6 +2537,7 @@ async function main() {
     await runCase('the units', checkUnits);
     await runCase('the gameability arm', checkGameability);
     await runCase('the historical arm', checkHistorical);
+    await runCase('the confined arms', checkConfinedArms);
     await runCase('the one-commit refusal', checkOneCommit);
     await runCase('a mutation beside a historical probe', checkMutationBesideHistorical);
     await runCase('the historical refusals', checkHistoricalRefusals);

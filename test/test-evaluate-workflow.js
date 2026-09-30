@@ -115,8 +115,14 @@ function evaluate(args, env = {}) {
   return { status: result.status, output: `${result.stdout}${result.stderr}` };
 }
 
-/** A copy of the fixture outside git, `edit` applied and the corpus index digested again, with a private temp directory and the store's log. */
-function makeProject(label, { edit = () => {} } = {}) {
+/**
+ * A copy of the fixture outside git, `edit` applied and the corpus index
+ * digested again, with a private temp directory and the store's log. The log
+ * is a file outside the workspace, which a confined store cannot write, so a
+ * logged project opts out of file-system confinement (Story 1.31); one made
+ * with `log: false` runs confined.
+ */
+function makeProject(label, { edit = () => {}, log: logged = true } = {}) {
   const directory = scratch.make(label);
   const root = path.join(directory, 'project');
   fs.cpSync(FIXTURE, root, { recursive: true, filter: (from) => path.basename(from) !== 'runs' });
@@ -124,7 +130,11 @@ function makeProject(label, { edit = () => {} } = {}) {
   const log = path.join(directory, 'records.jsonl');
   const temp = scratch.make(`${label}-temp`);
   runtimeTemps.push({ label, directory: temp });
-  const project = { root, folder, log, directory, env: { TMPDIR: temp, TMP: temp, TEMP: temp, RECORDS_LOG: log } };
+  const project = { root, folder, log, directory, env: { TMPDIR: temp, TMP: temp, TEMP: temp, ...(logged ? { RECORDS_LOG: log } : {}) } };
+  if (logged) {
+    const manifest = path.join(folder, 'evaluation.json');
+    fs.writeFileSync(manifest, `${JSON.stringify({ ...JSON.parse(fs.readFileSync(manifest, 'utf8')), confinement: false }, null, 2)}\n`);
+  }
   edit(project);
   const digested = evaluate(['digest', '--evaluation', folder]);
   if (digested.status !== 0) throw new Error(`digest failed: ${digested.output}`);
@@ -1323,6 +1333,38 @@ function checkReference() {
   );
 }
 
+/**
+ * The pipeline in a confined run (Story 1.31): with no log to write outside
+ * its workspace, the target runs under the host's mechanism through check,
+ * run and score, and the audit finds nothing it opened outside what it was
+ * granted.
+ */
+async function checkConfinedPipeline() {
+  const project = makeProject('confined', { log: false });
+  const env = { ...project.env };
+  const ran = evaluate(['run', '--evaluation', project.folder], env);
+  check(ran.status === 0, `a confined run over the workflow fixture exited ${ran.status}; expected 0\n${ran.output}`);
+  const runDirectory = runDirectoryOf(project.folder);
+  if (runDirectory === null) {
+    check(false, 'the confined workflow run wrote no run directory');
+    return;
+  }
+  const record = readJson(path.join(runDirectory, 'run.json'));
+  const confinement = process.platform === 'darwin' ? 'seatbelt' : 'bubblewrap';
+  check(
+    record.completed === true && record.confinement === confinement,
+    `a confined workflow run records ${JSON.stringify({ completed: record.completed, confinement: record.confinement })}`,
+  );
+  for (const set of fs.existsSync(path.join(runDirectory, 'trial-sets.json'))
+    ? readJson(path.join(runDirectory, 'trial-sets.json')).trialSets
+    : []) {
+    const manifest = readJson(path.join(runDirectory, set.isolationManifest));
+    check(manifest.observedMounts.length === 0, `a confined workflow trial set observed mounts ${JSON.stringify(manifest.observedMounts)}`);
+  }
+  const scored = evaluate(['score', '--evaluation', project.folder], env);
+  check(scored.status === 0, `score over the confined workflow run exited ${scored.status}; expected 0\n${scored.output}`);
+}
+
 async function runCase(name, body) {
   try {
     await body();
@@ -1336,6 +1378,7 @@ async function main() {
     await runCase('the units', checkUnits);
     await runCase('the reference', checkReference);
     await runCase('the pipeline', checkPipeline);
+    await runCase('the confined pipeline', checkConfinedPipeline);
     await runCase('the missing captured value', checkMissingValue);
     await runCase('the missing captured value under a command evaluator', checkMissingValueUnderCommand);
     await runCase('the gameability arm', checkGameability);

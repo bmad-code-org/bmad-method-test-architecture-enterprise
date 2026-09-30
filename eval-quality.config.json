@@ -1208,6 +1208,14 @@
           "reason": "a Node.js or POSIX platform name, not a TEA declaration"
         },
         {
+          "token": "EPERM",
+          "reason": "a Node.js or POSIX platform name, not a TEA declaration"
+        },
+        {
+          "token": "EROFS",
+          "reason": "a Node.js or POSIX platform name, not a TEA declaration"
+        },
+        {
           "token": "ECONNREFUSED",
           "reason": "a Node.js or POSIX platform name, not a TEA declaration"
         },

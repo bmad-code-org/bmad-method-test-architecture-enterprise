@@ -195,7 +195,8 @@ jobs:
       # test:probe-targets, test:doc-invocations and test:cli need actionlint;
       # the atdd isolation proofs, test:framework-scaffold-install-isolation,
       # test:transcript-harness, test:probe-targets, test:eval-schemas,
-      # test:doc-invocations and test:cli need bubblewrap. test:cli needs both
+      # test:doc-invocations, test:cli and every test:evaluate-* suite that
+      # runs tea-evaluate preflight or run need bubblewrap. test:cli needs both
       # because its eval:all reconciliation cases preflight every manifest
       # suite, ci and atdd included. A shard missing either fails
       # those scripts on the missing dependency, and a new weight can move any
@@ -207,10 +208,12 @@ jobs:
           bash download-actionlint.bash
           sudo mv ./actionlint /usr/local/bin/
 
-      # bubblewrap is tea-atdd-red-check's linux isolation backend and is not
-      # preinstalled on this runner image. Installing it as its own step makes a
-      # failed install name itself before the shard starts.
-      - name: Install bubblewrap (tea-atdd-red-check's linux isolation backend)
+      # bubblewrap is tea-atdd-red-check's linux isolation backend and
+      # tea-evaluate's linux file-system confinement (Story 1.31: preflight and
+      # run exit 12 on a Linux host without it), and is not preinstalled on this
+      # runner image. Installing it as its own step makes a failed install name
+      # itself before the shard starts.
+      - name: Install bubblewrap (the linux isolation backend of tea-atdd-red-check and tea-evaluate)
         run: sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap
 
       # Ubuntu 24.04+ ships kernel.apparmor_restrict_unprivileged_userns=1, which
@@ -223,7 +226,8 @@ jobs:
       # Code's own sandboxed Bash tool, VS Code) does; it governs whether bwrap
       # can create the namespace at all, not what cli/lib/atdd-isolation.js does
       # once the namespace exists, which is everything the isolation suites
-      # actually test.
+      # actually test. tea-evaluate's confinement creates an unprivileged user
+      # namespace too (no network namespace), under the same restriction.
       - name: Allow bubblewrap to create its own network namespace
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 

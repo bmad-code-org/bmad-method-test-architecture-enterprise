@@ -35,6 +35,11 @@
  * set, `grade_answer` echoes it as `secret`, for a test that the runtime
  * scrubs a server's environment from what it records.
  *
+ * When GRADER_READ holds a JSON object of labels to absolute paths, the
+ * server reads each path once as it starts and a grade carries `reads`, one
+ * `<label>: allowed` or `<label>: refused <code>` per path, for Story 1.31's
+ * cases on what a confined server can read and what the audit reports.
+ *
  * It runs through its `#!/usr/bin/env node` line, so the host's PATH must
  * resolve `node`, as eval-quality starts a target with the host's PATH.
  *
@@ -80,6 +85,17 @@ const mode = /mode: (\w+)/.exec(policy)?.[1] ?? 'unknown';
 /** The runtime label of the workspace a directory lies in (`trial-clean-2` for tea-evaluate-trial-clean-2-<uuid>/target), or null. */
 const labelOf = (directory) => /^tea-evaluate-(.+)-(?:[A-Za-z0-9]{6}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/.exec(path.basename(path.dirname(directory)))?.[1] ?? null;
 const workspace = labelOf(process.cwd());
+/** Each path GRADER_READ names, read once as the server starts, and how the read ended. */
+const reads = process.env.GRADER_READ
+  ? Object.entries(JSON.parse(process.env.GRADER_READ)).map(([label, file]) => {
+      try {
+        fs.readFileSync(file);
+        return `${label}: allowed`;
+      } catch (error) {
+        return `${label}: refused ${error.code ?? error.message}`;
+      }
+    })
+  : null;
 /** The workspace this script was started from, which the registry resolves its target into. */
 const scriptWorkspace = labelOf(path.dirname(__dirname));
 
@@ -107,6 +123,7 @@ function callTool(name, args) {
       answer: args.answer,
       verdict,
       ...(process.env.GRADER_SECRET ? { secret: process.env.GRADER_SECRET } : {}),
+      ...(reads === null ? {} : { reads }),
     });
   }
   if (name === 'describe_policy') return result({ ok: true, mode });

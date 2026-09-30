@@ -11,12 +11,17 @@ const test = suite('tea-evaluate-partitions');
 const read = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
 
 try {
-  const project = test.project('partitions', ({ folder }) => {
-    const manifest = path.join(folder, 'evaluation.json');
-    const evaluation = read(manifest);
-    evaluation.heldOutProbes = ['P-002'];
-    fs.writeFileSync(manifest, `${JSON.stringify(evaluation, null, 2)}\n`);
-  });
+  // The partitions are held to which workspaces launched the target, which the launch marker records.
+  const project = test.project(
+    'partitions',
+    ({ folder }) => {
+      const manifest = path.join(folder, 'evaluation.json');
+      const evaluation = read(manifest);
+      evaluation.heldOutProbes = ['P-002'];
+      fs.writeFileSync(manifest, `${JSON.stringify(evaluation, null, 2)}\n`);
+    },
+    { marker: true },
+  );
   for (const [partition, expected] of [
     ['development', ['P-001']],
     ['held-out', ['P-002']],

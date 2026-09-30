@@ -35,15 +35,24 @@
  * those shapes and TeA's own harness declares its commands as `RegistryEntry`s,
  * so both run through this one builder. A logical name with no entry is denied
  * before a process starts or a request is sent.
+ *
+ * A registry built for a confined run (`confinement.js`, Story 1.31) starts
+ * every target through the run's mechanism: each port's command, tool-server
+ * and HTTP-server processes, and every process they start, write only the
+ * workspace the port was made for and can neither read nor write the
+ * evaluation folder; a port that audits also loads the confinement's audit
+ * into their Node processes and reads the paths it reported.
  */
 
 'use strict';
 
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 
 const AjvModule = require('ajv/dist/2020');
 
+const { confinedCommandMechanism, confinedMcpMechanism, confines, targetSandbox } = require('./confinement');
 const { loadAdapters, loadEngine } = require('./engine');
 const { createApiPort, degenerateApiPort, deploymentAccess, isApiEntry } = require('./http-target');
 
@@ -130,7 +139,38 @@ function registryProblems(entries) {
       );
     }
   }
-  return [...problems, ...repeatedPairs(entries), ...sharedInterfaces(entries)];
+  return [...problems, ...repeatedPairs(entries), ...sharedInterfaces(entries), ...sharedTargetSystemPaths(entries)];
+}
+
+/**
+ * Every entry that starts the same target as an earlier one with other
+ * `systemPaths`, as one line each. A confined run's audit grants a started
+ * process the system paths of the target it runs (`createProbePort`), since
+ * the request eval-quality hands the mechanism names the target and not the
+ * interface, so two entries over one target must declare the same paths or
+ * one would be granted the other's.
+ *
+ * @param {unknown[]} entries
+ * @returns {string[]}
+ */
+function sharedTargetSystemPaths(entries) {
+  const problems = [];
+  const declared = new Map();
+  for (const [index, entry] of entries.entries()) {
+    if (entry === null || typeof entry !== 'object') continue;
+    const target = kindOf(entry) === 'api' ? entry?.server?.target : entry?.target;
+    if (typeof target !== 'string' || target.length === 0) continue;
+    const key = path.posix.normalize(target);
+    const paths = JSON.stringify([...new Set(Array.isArray(entry.systemPaths) ? entry.systemPaths : [])].sort());
+    const earlier = declared.get(key);
+    if (earlier === undefined) declared.set(key, { index, paths });
+    else if (earlier.paths !== paths) {
+      problems.push(
+        `registry[${index}] starts the target ${JSON.stringify(target)} registry[${earlier.index}] starts with other systemPaths; a confined run grants a target's system paths to every entry that starts it, so declare the same paths on both`,
+      );
+    }
+  }
+  return problems;
 }
 
 /**
@@ -328,11 +368,13 @@ function isBareCommand(target) {
  * @param {string} options.root The directory each relative `target` resolves against; a relative one is resolved against the working directory once, here.
  * @param {object} [options.httpPort] the evaluation's HTTP port (`http-target.js` `probeHttpPort`), which an `api` call goes through
  * @param {string[]} [options.scratch] the run's private directories, which the directory a started HTTP server reports its
- *   port in joins while its call runs
+ *   port in joins while its call runs, as does each audit report's
+ * @param {object|null} [options.confinement] the run's confinement (`confinement.js` `selectConfinement`); a registry
+ *   built without one, or for a run that opted out, starts its targets unconfined
  * @returns {object}
  * @throws {Error} Naming every problem `registryProblems` finds.
  */
-function createRegistry(entries, { root, httpPort, scratch = [], principalMappings = {} } = {}) {
+function createRegistry(entries, { root, httpPort, scratch = [], principalMappings = {}, confinement = null } = {}) {
   if (typeof root !== 'string' || root.length === 0) {
     throw new Error('createRegistry requires a root: every relative target resolves against it');
   }
@@ -628,14 +670,54 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
    * call goes with no server started, decided over the authorization
    * eval-quality allowed there.
    *
-   * @returns {Promise<{port: {probe: Function}, policy: object, mcpPolicy: object}>}
+   * In a confined run every process the port starts runs through the run's
+   * mechanism, writing only `options.workspace` (the workspace's checkout,
+   * which a confined run requires); with `options.audit` the port's Node
+   * processes also report the paths they open outside what was granted, which
+   * `observedMounts()` reads, and which is empty otherwise.
+   *
+   * @returns {Promise<{port: {probe: Function}, policy: object, mcpPolicy: object, observedMounts: () => string[]}>}
    */
   async function createProbePort(options) {
     const policy = commandTargetPolicy(options);
     const adapters = await loadAdapters();
     const mcpPolicy = adapters.parseMcpTargetPolicy(mcpTargetPolicy(options));
-    const commandAdapter = adapters.createCommandLineAdapter(policy);
-    const mcpAdapter = adapters.createMcpAdapter(mcpPolicy);
+    const serverTarget = (entry) =>
+      targetPath({ ...entry.server, interfaceId: entry.interfaceId, kind: 'api' }, options.projectRoot ?? registryRoot);
+    let commandMechanism = adapters.nodeCommandMechanism;
+    let mcpMechanism = adapters.nodeStdioMcpMechanism;
+    let sandbox = null;
+    if (confines(confinement)) {
+      let report = null;
+      if (options.audit === true) {
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-evaluate-confinement-'));
+        scratch.push(directory);
+        report = path.join(directory, 'report.jsonl');
+        // The one file the target may write of its audit, so it cannot delete, replace or link it.
+        fs.writeFileSync(report, '', { mode: 0o600 });
+      }
+      // Bubblewrap forks the command it confines, so a private directory carries the signal that ended a target.
+      let status = null;
+      if (confinement.mode === 'bubblewrap') {
+        status = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-evaluate-status-'));
+        scratch.push(status);
+      }
+      sandbox = targetSandbox({ confinement, workspace: options.workspace, report, status });
+      // Each started target's own declared system paths, which its audit grants.
+      const declared = new Map();
+      const declare = (target, entry) => {
+        const systemPaths = entry.systemPaths ?? [];
+        declared.set(target, [...(declared.get(target) ?? []), ...systemPaths]);
+      };
+      for (const entry of commandEntries) declare(targetPath(entry, options.projectRoot ?? registryRoot), entry);
+      for (const entry of serverEntries) declare(targetPath(entry, options.projectRoot ?? registryRoot), entry);
+      for (const entry of apiEntries) if (entry.server !== undefined) declare(serverTarget(entry), entry);
+      const systemPathsOf = (target) => declared.get(target) ?? [];
+      commandMechanism = confinedCommandMechanism(commandMechanism, sandbox, systemPathsOf, scratch);
+      mcpMechanism = confinedMcpMechanism(mcpMechanism, sandbox, systemPathsOf, scratch);
+    }
+    const commandAdapter = adapters.createCommandLineAdapter(policy, commandMechanism);
+    const mcpAdapter = adapters.createMcpAdapter(mcpPolicy, mcpMechanism);
     const apiPort =
       apiEntries.length === 0
         ? commandAdapter
@@ -643,10 +725,9 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
             entries: apiEntries,
             httpPort: loadedHttpPort(),
             cwd: options.cwd,
-            targetOf: (entry) =>
-              targetPath({ ...entry.server, interfaceId: entry.interfaceId, kind: 'api' }, options.projectRoot ?? registryRoot),
+            targetOf: serverTarget,
             readEnvironment: (names) => readEnvironment(names),
-            mechanism: adapters.nodeCommandMechanism,
+            mechanism: commandMechanism,
             maxOutputBytes: MAX_OUTPUT_BYTES,
             scratch,
             deployment: options.deployment ?? null,
@@ -658,7 +739,7 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
         return commandAdapter.probe(request, signal);
       },
     };
-    return { port, policy, mcpPolicy };
+    return { port, policy, mcpPolicy, observedMounts: () => sandbox?.observedMounts() ?? [] };
   }
 
   /**
@@ -782,6 +863,7 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
     entries: registered,
     root: registryRoot,
     httpPort,
+    confinement,
     apiFor,
     apiSecrets,
     ceilingMs,
@@ -954,7 +1036,7 @@ async function apiRegistryProblems(entries) {
  * the evaluation's HTTP port when one was loaded.
  *
  * @param {{registry?: unknown}} evaluation The parsed manifest.
- * @param {{root: string, httpPort?: object, scratch?: string[]}} options
+ * @param {{root: string, httpPort?: object, scratch?: string[], confinement?: object|null}} options
  * @returns {object}
  */
 function registryFromEvaluation(evaluation, options) {
@@ -982,4 +1064,5 @@ module.exports = {
   registryProblems,
   repeatedPairs,
   sharedInterfaces,
+  sharedTargetSystemPaths,
 };

@@ -23,7 +23,13 @@ function suite(name) {
     if (run.error) throw run.error;
     return { status: run.status, output: `${run.stdout}${run.stderr}` };
   }
-  function project(label, edit = () => {}) {
+  /**
+   * A committed temp project from the verdict fixture, one trial per arm. With
+   * `marker`, every launch of the target appends a line to a file outside its
+   * workspace, a write a confined run refuses, so the evaluation opts out of
+   * file-system confinement (Story 1.31); without it the project runs confined.
+   */
+  function project(label, edit = () => {}, { marker = false } = {}) {
     const directory = scratch.make(label);
     const repository = path.join(directory, 'repository');
     fs.cpSync(FIXTURE, repository, { recursive: true, filter: (file) => path.basename(file) !== 'runs' });
@@ -33,6 +39,7 @@ function suite(name) {
     const policy = path.join(folder, 'policy/scoring-policy.json');
     const evaluation = JSON.parse(fs.readFileSync(manifest, 'utf8'));
     evaluation.trials = 1;
+    if (marker) evaluation.confinement = false;
     fs.writeFileSync(manifest, `${JSON.stringify(evaluation, null, 2)}\n`);
     const scoring = JSON.parse(fs.readFileSync(policy, 'utf8'));
     scoring.minimumTrialCount = 1;
@@ -51,7 +58,7 @@ function suite(name) {
       });
       if (run.status !== 0) throw new Error(`${args.join(' ')}: ${run.stderr}`);
     }
-    return { folder, directory, repository, env: { VERDICT_MARKER: path.join(directory, 'launches.jsonl') } };
+    return { folder, directory, repository, env: marker ? { VERDICT_MARKER: path.join(directory, 'launches.jsonl') } : {} };
   }
   function latest(folder) {
     const runs = path.join(folder, 'runs');

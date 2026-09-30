@@ -152,6 +152,10 @@
         }
       }
     },
+    "confinement": {
+      "description": "Whether run and preflight confine every process they start (Story 1.31): each target, and every process it starts, may write only its workspace and can neither read nor write the evaluation folder, and no process of the run can write evaluator/. macOS confines through Seatbelt (sandbox-exec) and Linux through Bubblewrap (bwrap); on a host with neither the command exits 12. false opts out: the targets run unconfined, and run.json records confinement \"opt-out\". Omitted or true confines.",
+      "type": "boolean"
+    },
     "arms": {
       "description": "The condition arms a run executes: clean for the clean controls, mutated for the controlled-mutation probes (one arm per mutation), historical for the historical probes (one arm per pre-fix revision) and gameability for the gameability probes (one arm per probe, launching nothing).",
       "type": "array",
@@ -382,6 +386,15 @@
     }
   ],
   "$defs": {
+    "SystemPaths": {
+      "description": "Absolute host paths outside the workspace that this entry's processes read and a confined run does not report (Story 1.31): a toolchain or cache the target reads, such as a language installation. The confinement's audit lists every other path a target's Node process opens outside its workspace, the Node installation and the operating system's own directories as the isolation manifest's observedMounts, which eval-quality records as an isolation violation. Reads only: a confined target writes nothing outside its workspace, and nothing under the evaluation folder is readable whatever this lists.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^/[^\"\\\\\\u0000-\\u001f]*$"
+      }
+    },
     "RegistryEntry": {
       "description": "One command a run may spawn. interfaceId and executable key it the way eval-quality's command target policy keys an authorization; the pair is unique within the registry.",
       "type": "object",
@@ -473,7 +486,8 @@
             "minimum": 1,
             "maximum": 255
           }
-        }
+        },
+        "systemPaths": { "$ref": "#/$defs/SystemPaths" }
       }
     },
     "McpRegistryEntry": {
@@ -537,7 +551,8 @@
           "description": "Ceiling on the bytes the server writes on stdout and, separately, on stderr in one call, in bytes. Defaults to 8 MiB.",
           "type": "integer",
           "minimum": 1
-        }
+        },
+        "systemPaths": { "$ref": "#/$defs/SystemPaths" }
       }
     },
     "ApiRegistryEntry": {
@@ -753,7 +768,8 @@
               "type": "string"
             }
           }
-        }
+        },
+        "systemPaths": { "$ref": "#/$defs/SystemPaths" }
       }
     }
   }

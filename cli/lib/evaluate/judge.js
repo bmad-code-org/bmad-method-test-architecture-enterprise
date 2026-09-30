@@ -249,10 +249,12 @@ function judgeResultsFrom(contract, reply, nonce) {
  * @param {Record<string, object>} options.stepObservations the trial's record observations by plan step
  * @param {object} options.judge `evaluation.json`'s `judge`
  * @param {string[]} [options.scratch] the run's private directories, which the judge's working directory joins while it runs
+ * @param {string[]} [options.spawnPrefix] the command the judge starts through, the run's evaluation-layer confinement
+ *   (`confinement.js` `layerPrefix`); none by default
  * @returns {Promise<{ called: boolean, results: object[], nonce?: string, prompt: string|null, stdout: string, stderr: string }>}
  * @throws {JudgeError}
  */
-async function judgeRubrics({ contract, stepObservations, judge, scratch = [], calibrationResponse = null }) {
+async function judgeRubrics({ contract, stepObservations, judge, scratch = [], calibrationResponse = null, spawnPrefix = [] }) {
   if ((contract.rubrics ?? []).length === 0) return { called: false, results: [], prompt: null, stdout: '', stderr: '' };
   const judgedContract =
     calibrationResponse === null
@@ -283,6 +285,7 @@ async function judgeRubrics({ contract, stepObservations, judge, scratch = [], c
       timeout: judge.timeoutMs,
       cwd,
       capabilities: ['read-only'],
+      spawnPrefix,
     });
     written = fs.readdirSync(cwd);
   } catch (error) {

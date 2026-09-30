@@ -5,8 +5,12 @@
  * Every end-to-end case builds a temp git project from
  * `test/fixtures/evaluate/mutation/` (the verdict command, which judges its
  * request by `rules/policy.txt`; P-001 a clean control, P-002 seeded by M-001,
- * which relaxes the policy so the command rejects) with `VERDICT_MARKER` set,
- * so every launch of the target appends a marker line.
+ * which relaxes the policy so the command rejects). The cases that count the
+ * target's launches set `VERDICT_MARKER`, so every launch appends a marker
+ * line to a file outside its workspace, a write a confined run refuses, so
+ * those cases opt out of file-system confinement (Story 1.31); every other
+ * case runs confined, its evaluator, agent and judge processes with
+ * `evaluator/` read-only.
  *
  * - Command evaluator: the stub `test/fixtures/evaluate/evaluators/command/
  *   evaluator/rows.js`, copied into the evaluation folder's `evaluator/` with
@@ -197,7 +201,7 @@ function commitAll(repository, folder, message) {
 }
 
 /** A temp git repository from the fixture, `edit` applied before the first commit, with a private temp directory and a marker file. */
-function makeProject(label, { edit = () => {} } = {}) {
+function makeProject(label, { edit = () => {}, marker: marked = false, unconfined = marked } = {}) {
   const directory = scratch.make(label);
   const repository = path.join(directory, 'repository');
   fs.cpSync(FIXTURE, repository, { recursive: true, filter: (from) => path.basename(from) !== 'runs' });
@@ -206,7 +210,14 @@ function makeProject(label, { edit = () => {} } = {}) {
   const marker = path.join(directory, 'launches.jsonl');
   const temp = scratch.make(`${label}-temp`);
   runtimeTemps.push({ label, directory: temp });
-  const project = { repository, folder, marker, directory, env: { TMPDIR: temp, TMP: temp, TEMP: temp, VERDICT_MARKER: marker } };
+  const project = {
+    repository,
+    folder,
+    marker,
+    directory,
+    env: { TMPDIR: temp, TMP: temp, TEMP: temp, ...(marked ? { VERDICT_MARKER: marker } : {}) },
+  };
+  if (unconfined) editJson(path.join(folder, 'evaluation.json'), (evaluation) => (evaluation.confinement = false));
   edit(project);
   git(repository, ['init', '--quiet', '--initial-branch', 'main']);
   project.commit = commitAll(repository, folder, 'the verdict project');
@@ -833,16 +844,41 @@ function checkSetRecommendation() {
 
 /**
  * The command evaluator runs in place, from the evaluation folder's
- * evaluator/: a cache it writes there that git ignores leaves the run whole
- * and one git does not ignore stops it at the adopter-tree check; the tree
- * digest covers the files git tracks there, so a file git does not track
- * (ignored or not) moves no digest; `check` refuses an executable git does
- * not track and names a submodule there.
+ * evaluator/: in a run that opted out of confinement, a cache it writes there
+ * that git ignores leaves the run whole and one git does not ignore stops it
+ * at the adopter-tree check; in a confined run the write is refused (Story
+ * 1.31), so the evaluator that insists fails and the run stops with exit 12
+ * and nothing written beside it. The tree digest covers the files git tracks
+ * there, so a file git does not track (ignored or not) moves no digest;
+ * `check` refuses an executable git does not track and names a submodule
+ * there.
  */
 async function checkEvaluatorInPlace() {
   const engine = await loadEngine();
+  const confined = makeProject('command-in-place-confined', {
+    edit: ({ folder, repository }) => {
+      useCommandEvaluator(folder, { mode: 'write-beside' });
+      fs.appendFileSync(path.join(repository, '.gitignore'), '__pycache__/\n');
+    },
+  });
+  const refused = evaluate(['run', '--evaluation', confined.folder], confined.env);
+  const refusedDirectory = runDirectoryOf(confined.folder);
+  const refusedStderr = path.join(refusedDirectory ?? '', 'evaluator', 'clean', 'trial-1.stderr');
+  check(
+    refused.status === 12 &&
+      refused.output.includes('trial-clean-1 yields no record: the evaluator evaluator/rows.js exited 1') &&
+      fs.existsSync(refusedStderr) &&
+      // Seatbelt answers EPERM; under Bubblewrap's read-only bind, Node's recursive mkdir reports ENOENT.
+      /EPERM|EROFS|EACCES|ENOENT/.test(fs.readFileSync(refusedStderr, 'utf8')),
+    `a confined command evaluator writing beside itself: run exited ${refused.status}; expected 12 with its write refused\n${fs.existsSync(refusedStderr) ? fs.readFileSync(refusedStderr, 'utf8') : 'no stderr kept'}\n${refused.output}`,
+  );
+  check(
+    !fs.existsSync(path.join(confined.folder, 'evaluator', '__pycache__')),
+    'a confined command evaluator wrote a cache under evaluator/',
+  );
   const log = path.join(scratch.make('in-place-log'), 'evaluator.jsonl');
   const project = makeProject('command-in-place', {
+    unconfined: true,
     edit: ({ folder, repository }) => {
       useCommandEvaluator(folder, { mode: 'write-beside', args: ['--log', log] });
       fs.appendFileSync(path.join(repository, '.gitignore'), '*.pyc\n__pycache__/\n');
@@ -917,6 +953,7 @@ async function checkEvaluatorInPlace() {
 
   // A cache git does not ignore changes the adopter's tree, which stops the run.
   const unignored = makeProject('command-in-place-unignored', {
+    unconfined: true,
     edit: ({ folder }) => useCommandEvaluator(folder, { mode: 'write-beside' }),
   });
   const stopped = evaluate(['run', '--evaluation', unignored.folder], unignored.env);
@@ -931,14 +968,19 @@ async function checkEvaluatorInPlace() {
 }
 
 /**
- * The run holds the evaluation layer to the bytes it digested: an evaluator
- * that rewrites a tracked file of its own during trial 1, and a target that
- * writes into evaluator/ during the trial's plan, each stop the run at that
- * trial with exit 12 and no record; a module the evaluator loads from the
- * project's own node_modules resolves, since it runs in place.
+ * The run holds the evaluation layer to the bytes it digested: in a run that
+ * opted out of confinement, an evaluator that rewrites a tracked file of its
+ * own during trial 1, and a target that writes into evaluator/ during the
+ * trial's plan, each stop the run at that trial with exit 12 and no record (a
+ * confined run refuses both writes, which `test-evaluate-run.js` and the
+ * in-place case hold); a module the evaluator loads from the project's own
+ * node_modules resolves, since it runs in place.
  */
 function checkEvaluatorLayerHeld() {
-  const rewritten = makeProject('command-rewrite-self', { edit: ({ folder }) => useCommandEvaluator(folder, { mode: 'rewrite-self' }) });
+  const rewritten = makeProject('command-rewrite-self', {
+    unconfined: true,
+    edit: ({ folder }) => useCommandEvaluator(folder, { mode: 'rewrite-self' }),
+  });
   const ran = evaluate(['run', '--evaluation', rewritten.folder], rewritten.env);
   check(
     ran.status === 12 &&
@@ -949,7 +991,7 @@ function checkEvaluatorLayerHeld() {
   );
   check(recordFiles(runDirectoryOf(rewritten.folder)).length === 0, 'an evaluator rewriting its own file: the run wrote a record');
 
-  const touched = makeProject('command-target-touch', { edit: ({ folder }) => useCommandEvaluator(folder) });
+  const touched = makeProject('command-target-touch', { unconfined: true, edit: ({ folder }) => useCommandEvaluator(folder) });
   const mapping = path.join(touched.folder, 'evaluator', 'mapping.json');
   const beforeLaunch = evaluate(['run', '--evaluation', touched.folder], {
     ...touched.env,
@@ -1131,13 +1173,72 @@ async function checkEvaluatorTimeout() {
   check(recorded !== null, 'a hung evaluator: the stub wrote no pids');
   if (recorded !== null) {
     // A killed process may take a moment to be reaped once its parent is gone; wait up to 5 s for both.
+    // Under Bubblewrap the evaluator runs in a process-id namespace of its own, so the pids it wrote are not this side's:
+    // both processes carry the pids file's path on their command line, and are found by it.
+    const carrying = () =>
+      spawnSync('pgrep', ['-f', pids.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)], { encoding: 'utf8' }).stdout.trim() !== '';
+    const survives = process.platform === 'linux' ? carrying : () => alive(recorded.evaluator) || alive(recorded.child);
     const deadline = Date.now() + 5000;
-    while ((alive(recorded.evaluator) || alive(recorded.child)) && Date.now() < deadline)
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
-    check(
-      !alive(recorded.evaluator) && !alive(recorded.child),
-      `a hung evaluator: its process group outlived the timeout (${JSON.stringify(recorded)})`,
-    );
+    while (survives() && Date.now() < deadline) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+    check(!survives(), `a hung evaluator: its process group outlived the timeout (${JSON.stringify(recorded)})`);
+  }
+}
+
+/**
+ * The evaluation layer in a confined run (Story 1.31): a command evaluator and
+ * a sealed-brief agent, each calibrating R-101 and then judging every trial,
+ * try to write into the evaluation folder's runs/ at every launch. A confined
+ * run refuses every write, in calibration and in each trial, and nothing
+ * lands; in a run that opted out the same writes land, so the refusal is the
+ * confinement's and not a stub that never tried.
+ */
+async function checkLayerWritesRefused() {
+  for (const kind of ['command', 'sealed-brief-agent']) {
+    for (const confined of [true, false]) {
+      const label = `${kind}-layer-write${confined ? '' : '-open'}`;
+      const plantLog = path.join(scratch.make(`${label}-plants`), 'plants.jsonl');
+      const capture = path.join(scratch.make(`${label}-capture`), 'calls.jsonl');
+      let planted = null;
+      const project = makeProject(label, {
+        unconfined: !confined,
+        edit: ({ folder }) => {
+          planted = path.join(folder, 'runs', '.layer-planted');
+          const plant = ['--plant', planted, '--plant-log', plantLog];
+          if (kind === 'command') {
+            useCommandEvaluator(folder, { mode: 'score', args: plant });
+            addRubric(folder);
+          } else {
+            useSealedBriefAgent(folder, { capture, rubric: true });
+            editJson(path.join(folder, 'evaluation.json'), (evaluation) => evaluation.evaluator.agentArgs.push(...plant));
+          }
+        },
+      });
+      const ran = evaluate(['run', '--evaluation', project.folder], project.env);
+      check(ran.status === 0, `${label}: run exited ${ran.status}; expected 0\n${ran.output}`);
+      const attempts = captures(plantLog);
+      const phases = [
+        ['calibration', attempts.filter((attempt) => attempt.calibration)],
+        ['a trial', attempts.filter((attempt) => !attempt.calibration)],
+      ];
+      for (const [phase, made] of phases) {
+        check(made.length > 0, `${label}: the ${kind} tried no write during ${phase}, so the case proves nothing`);
+        if (confined) {
+          check(
+            made.every((attempt) => /^refused (EPERM|EACCES|EROFS|ENOENT)$/.test(attempt.outcome)),
+            `a confined run's ${kind} wrote into the evaluation folder during ${phase}: ${JSON.stringify(made)}`,
+          );
+        } else {
+          check(
+            made.every((attempt) => attempt.outcome === 'allowed'),
+            `the opted-out ${kind} could not write into the evaluation folder during ${phase}, so the confined case proves nothing: ${JSON.stringify(made)}`,
+          );
+        }
+      }
+      check(
+        fs.existsSync(planted) === !confined,
+        confined ? `a confined run's ${kind} planted ${planted}` : `the opted-out ${kind} left no ${planted}`,
+      );
+    }
   }
 }
 
@@ -1221,6 +1322,7 @@ async function checkSealedBriefAgent() {
   // The agent also scores R-101 (so its prompt carries the criterion and the configuration names it as the judge),
   // and the target names a model of its own, which the configuration keeps beside the agent's.
   const project = makeProject('sealed', {
+    marker: true,
     edit: ({ folder }) => useSealedBriefAgent(folder, { capture, rubric: true, targetModel: 'a-target-model' }),
   });
   const ran = evaluate(['run', '--evaluation', project.folder], project.env);
@@ -1332,7 +1434,10 @@ async function checkSealedBriefAgent() {
 async function checkSealedBriefAgentEdges() {
   // An executable the registry does not grant is denied by eval-quality's adapter and never launches.
   const capture = path.join(scratch.make('sealed-unlisted-capture'), 'captures.jsonl');
-  const unlisted = makeProject('sealed-unlisted', { edit: ({ folder }) => useSealedBriefAgent(folder, { capture, mode: 'unlisted' }) });
+  const unlisted = makeProject('sealed-unlisted', {
+    marker: true,
+    edit: ({ folder }) => useSealedBriefAgent(folder, { capture, mode: 'unlisted' }),
+  });
   const ran = evaluate(['run', '--evaluation', unlisted.folder], unlisted.env);
   check(ran.status === 0, `a sealed-brief run with a denied call exited ${ran.status}; expected 0\n${ran.output}`);
   const runDirectory = runDirectoryOf(unlisted.folder);
@@ -1406,6 +1511,7 @@ async function checkSealedBriefAgentEdges() {
   // next call still runs and the run completes.
   const leakCapture = path.join(scratch.make('sealed-leak-capture'), 'captures.jsonl');
   const leak = makeProject('sealed-leak', {
+    marker: true,
     edit: ({ folder }) => useSealedBriefAgent(folder, { capture: leakCapture, mode: 'leak-nonce', budget: 1 }),
   });
   const leakRan = evaluate(['run', '--evaluation', leak.folder], leak.env);
@@ -2300,6 +2406,11 @@ async function runCase(name, body) {
 
 async function main() {
   try {
+    // `--layer-only` runs the confined evaluation layer's case alone (Story 1.31's revert checks).
+    if (process.argv.includes('--layer-only')) {
+      await runCase('the evaluation layer confined', checkLayerWritesRefused);
+      return report();
+    }
     await runCase('the units', checkUnits);
     await runCase('the direction gate', checkDirectionGate);
     await runCase('the bridge', checkBridge);
@@ -2314,6 +2425,7 @@ async function main() {
     await runCase('a hung evaluator', checkEvaluatorTimeout);
     await runCase('the set recommendation', checkSetRecommendation);
     await runCase('the evaluator run in place', checkEvaluatorInPlace);
+    await runCase('the evaluation layer confined', checkLayerWritesRefused);
     await runCase('the evaluation layer held to its bytes', checkEvaluatorLayerHeld);
     await runCase('the scratch removal', checkScratchRemoval);
     await runCase('a signal mid-trial', checkSignalMidTrial);
@@ -2328,6 +2440,10 @@ async function main() {
   } finally {
     scratch.removeAll();
   }
+  return report();
+}
+
+function report() {
   if (failures.length > 0) {
     console.error(`${colors.red}${failures.length} of ${checks} tea-evaluate evaluator check(s) failed:${colors.reset}`);
     for (const failure of failures) console.error(`  - ${failure}`);

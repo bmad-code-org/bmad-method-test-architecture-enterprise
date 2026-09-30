@@ -289,7 +289,8 @@ In either handoff, an answer the port gives before the call's service is ready, 
 ## The workspace
 
 Every mutation and every arm and leg of a run happens in a disposable workspace, so the runtime itself writes nothing into your tree.
-A target that writes outside its workspace anyway (through an absolute path, or through the git state a worktree shares with your repository) is detected afterwards, and the run exits 12, as the end of this section describes.
+Every process a target starts runs confined to that workspace (see [File-system confinement](#file-system-confinement)), so a write outside it is refused.
+In a run that opted out of confinement, a target that writes outside its workspace anyway (through an absolute path, or through the git state a worktree shares with your repository) is detected afterwards, and the run exits 12, as the end of this section describes; a confined run keeps the same checks.
 `evaluation.json`'s `workspace` chooses the first one, the pristine workspace:
 
 - `kind: git`, with `launch.root` inside a git repository that has a commit: a detached worktree at `HEAD`, made with `git worktree add --detach` and your repository's hooks disabled.
@@ -304,7 +305,6 @@ Every other workspace of the run (one per seeded probe's qualification, one per 
 The pristine copy keeps that snapshot beside itself, without its provisioned directories, since the legs run in it and a target that writes (a workflow step that stores a record, say) changes it; a snapshot changed after it was made no longer matches, and the reproduction exits 12.
 A reproduction copies the provisioned directories the pristine copy held when it was made from its read-only copies, and no other; one planted in the snapshot, or a read-only copy moved out of the pristine copy, exits 12.
 The evaluation folder is left out of every workspace, so nothing the runtime hands a target holds the contract, the probes or which defect a mutation plants.
-The runtime does not sandbox the target's file system, though: a target that searches for the evaluation folder (a worktree names your repository's git directory, beside it) can reach it, which is why the run directory below is written and read as it is.
 Each `workspace.provision` directory (for example `node_modules`, which a worktree lacks) is copied into the workspace, as a copy-on-write clone where the file system offers one, and its write bits are removed, so a write under it fails unless the writer restores the bits first (root ignores them).
 A mutation cannot target a file inside it (`provisioned-target`), and a provisioned directory that is itself a symbolic link is refused with exit 12.
 Every symbolic link under `launch.root` in the workspace resolves inside the workspace: a link into the project is re-pointed at the same place in the workspace, and a link that leads out of the project is refused with exit 12, as is a FIFO, a socket or a device, or a temp directory (`TMPDIR`) inside `launch.root`, or inside the repository holding it unless the repository ignores that directory.
@@ -312,15 +312,77 @@ Each link is resolved as the system resolves it, so a `..` after a link climbs f
 A workspace is removed when the command ends, a worktree's entry in your repository included, and also on `SIGINT`, `SIGTERM`, `SIGHUP` or `SIGQUIT`, which stop the running leg and then end the command by the same signal.
 Each workspace has a workspace marker and a sidecar ownership marker outside the target subtree, plus an ownership journal under the evaluation's ignored `runs/` directory. A killed run can leave a temporary copy or a detached worktree and its Git registration. The next preflight for the same evaluation checks the held journal, markers, project identity and owner process, then reports and reclaims verified scratch from a dead run before reading your project's state. The sidecar marker survives interrupted directory removal. A live or unverifiable owner's workspace remains in place. The journal records the original temporary directory, so recovery still works after `TMPDIR` changes.
 
-A worktree shares your repository's git directory (its refs, configuration, hooks, `info/` and objects), so a target running git in it can change them; the run detects such a change afterwards and exits 12.
+A worktree shares your repository's git directory (its refs, configuration, hooks, `info/` and objects); a confined target can read it and cannot write it, and in a run that opted out a target running git in the worktree can change it, which the run detects afterwards and exits 12.
 `preflight` reads your project before the workspaces are made and again after the qualification and after the legs: in a git repository, `git status` (tracked and untracked paths), the content of every path it names, every ref, and the common git directory without its object store, reflogs, worktree records, index and submodule or LFS stores; outside one, the tree digest of `launch.root` without the evaluation's `runs/`.
 A change exits 12, no qualified probe is written and the probe list handed to the CLI is removed, so a target that writes into your tree, commits, tags or reconfigures the repository fails the run.
 The rollback cycle records the real directory that holds the `targetArtifact` when it plans the mutation, and writes and reads the target only from inside that directory, entered and confirmed to be the one it recorded, so a path swapped for a symbolic link, even by a process the target left running, cannot carry the runtime's own write out of the workspace; a swap or a hard-linked target it sees stops the cycle with exit 12, and the mutation and the restore each write a new file.
 Gitignored paths are not read.
 
-`runs/<invocationId>/run.json` records what was evaluated: the TeA and eval-quality versions, the commit (`null` for a copy), `dirty`, the workspace's kind, commit, tree and tree digest, the path of every workspace that ran legs, and whether your project was unchanged.
+`runs/<invocationId>/run.json` records what was evaluated: the TeA and eval-quality versions, the commit (`null` for a copy), `dirty`, the workspace's kind, commit, tree and tree digest, the path of every workspace that ran legs, the file-system confinement the targets ran under (`confinement`: `seatbelt`, `bubblewrap` or `opt-out`), and whether your project was unchanged.
 It lists each probe the run refused, with its reason, under `refused` (see [Historical probes](#historical-probes)).
 A completed `run` adds the contract, corpus, sealed brief and evaluator configuration digests, the matcher `seed`, the runner (each registry entry's interface, executable and target, or a tool server's interface, target, arguments and tools), the evaluator and the model, the rubric judge (`null` when the contract declares no rubric or the evaluator is not the deterministic one; otherwise its adapter, model, model snapshot, instruction digest and number of calls), the trial count, the start time and duration, and `completed: true`.
+
+### File-system confinement
+
+`preflight` and `run` confine every process they start, before any of them starts, through the mechanism the host provides:
+
+- macOS: Seatbelt, through `/usr/bin/sandbox-exec` and a profile the runtime generates for each call.
+- Linux: Bubblewrap, through `bwrap` on `PATH` (`apt-get install bubblewrap`), in an unprivileged user namespace with a read-only view of `/`, a process-id namespace and procfs of its own, and an empty `/run/user`.
+  What a target leaves running ends with it, and killing the `bwrap` the runtime started ends what that process forked.
+
+The runtime first confines a trivial process through the mechanism, since a host can carry the executable and still refuse it (a kernel that forbids unprivileged user namespaces).
+A host with neither mechanism, or one whose mechanism refuses, stops the command with exit 12 and names the reason.
+`sandbox-exec` cannot apply a profile inside a Seatbelt sandbox that restricts anything, so a `tea-evaluate` started from a sandboxed shell (an agent's tool, say) is refused on macOS; run it from an unsandboxed terminal.
+A temp directory (`TMPDIR`) inside the evaluation folder, or an evaluation folder or temp directory whose path holds a quote, a backslash or a line break, is refused the same way, since no profile can carry it.
+Set `"confinement": false` in `evaluation.json` to run the targets unconfined instead; `run.json` then records `"confinement": "opt-out"`, and a confined run records `"seatbelt"` or `"bubblewrap"`.
+
+Each target runs confined, and so does every process it starts, one still running after the target exits, one started with `setsid` and one left behind by a killed target included. A confined process:
+
+- writes its workspace's checkout and nothing else, apart from the private directories the runtime hands it (the file a started HTTP service reports its port in, the audit report below, and a temp directory of its own for each call, which `TMPDIR`, `TMP` and `TEMP` name and which is removed when the call ends);
+- can neither read nor write anything under the evaluation folder: `contract.json`, `probes/`, `mutations/`, `corpus/`, `evaluator/`, `runs/` and the rest; Seatbelt answers `EPERM`, and Bubblewrap covers the folder with an empty read-only file system, so a read answers `ENOENT` and a write `EROFS`;
+- reads the rest of the host, the project's git directory included, since Node, git and your toolchain read from the system.
+  That git directory holds every committed file of the evaluated commit, the evaluation folder's among them: the confinement withholds the evaluation folder's files on disk, and a target that runs `git show` against the commit still reads the committed contract;
+- cannot change its worktree's git state: `git add`, `git commit`, `git stash` and `git checkout -b` write the index, objects and refs in the project's git directory, outside the workspace, and fail; a target that must commit opts out;
+- cannot start a setuid program under Seatbelt (`ps` and `sudo` on macOS), which the system refuses to any sandboxed process; `pgrep` lists processes there;
+- cannot confine a process of its own through `sandbox-exec`, which applies no profile inside a restricting sandbox.
+
+Every other process the run starts to run your code or an agent (a `command` evaluator, a sealed-brief agent and the bridge relay it starts, the rubric judge, the evaluation's HTTP port) runs with the evaluation folder read-only, `evaluator/` and `runs/` included, so no process of the run can swap a file of the evaluation layer between the runtime's re-read of it and the evaluator's launch (see [The evaluation layer](#the-evaluation-layer)), or rewrite the run's evidence.
+An evaluator that writes a cache beside itself under `evaluator/` fails its write in a confined run; it may write its working directory, your home directory and the rest of the host.
+
+Each trial also audits what its targets open.
+Every Node process of the trial loads TeA's audit through `NODE_OPTIONS` (`--require` of `cli/lib/evaluate/confinement-guard.cjs`), which reports each path the process hands Node's `fs` functions to open, read, list or write outside what the trial was granted: its workspace, the Node installation it runs from, the operating system's own directories (`/System`, `/usr`, `/bin`, `/sbin`, `/dev`, `/etc`, `/lib` and their like), and the `systemPaths` of the target's registry entry.
+A path is judged and reported by its real path, so a link in the workspace that leads outside it reports the path it leads to.
+A read of a path that does not exist, and a metadata probe (`stat`, `access`), are not reported; a write outside the grants and every access to the evaluation folder are reported, refused or not, the evaluation folder even under a declared system path.
+The module loader's own lookups (`require` and `import` resolve paths through Node's internal bindings) are not seen.
+The trial set's isolation manifest lists the reported paths as `observedMounts`; none is an allowed mount, so `score` exits 3 (Invalid) with eval-quality's isolation violation, one `mount outside allowlist` reason per path.
+A registry entry names what its target legitimately reads outside the workspace as absolute `systemPaths`:
+
+```json
+{
+  "interfaceId": "verdict",
+  "executable": "verdict",
+  "target": "bin/verdict.js",
+  "subcommandPaths": [[]],
+  "artifacts": {},
+  "environmentKeys": [],
+  "maxElapsedMs": 20000,
+  "infrastructureExitCodes": [3],
+  "systemPaths": ["/opt/verdict-rules"]
+}
+```
+
+A tool-server entry and an HTTP entry (for its started service) take `systemPaths` the same way.
+The audit grants a process the system paths of the target it runs, so `check` refuses two entries that start the same target with different `systemPaths`.
+The audit is written by the target's own processes and covers Node processes alone; the mechanism is what refuses, whatever the process.
+The report file is the one file of the audit a target may write.
+The runtime reads the report when each confined call ends, and a report it cannot open or one cut shorter than an earlier read found it counts against the trial for the rest of the run.
+A Bubblewrap that fails before it starts the target (a refused bind, say) ends the call as an infrastructure error naming Bubblewrap's message, since no target ran.
+A report cut shorter than an earlier read found it, or padded past what the runtime reads, is listed as its own path in `observedMounts`; a target that rewrites the file to the same length can still hide a line from it.
+A Bubblewrap target shares the host's network namespace, so that a started HTTP service stays reachable, and with it any abstract Unix socket on the host, a desktop session's D-Bus among them.
+Story 1.63 moves the audit onto a channel the runtime holds and closes that route.
+
+A confined run's isolation manifests account for each forbidden input with a note naming the confinement that withheld it (`Withheld as well by macOS Seatbelt (sandbox-exec) file-system confinement: ...`, or `Linux Bubblewrap (bwrap)`); an opted-out run's note says the runtime does not sandbox the target's file system.
+`score` over an opted-out run says so in its summary line, and its `score.json` records the run's `confinement`, so an opted-out verdict is marked as one.
 
 ## The interaction plan
 
@@ -546,7 +608,9 @@ The records of one set share one `runId` (the invocation's identifier and the pr
 The isolation manifest records what the trials were granted and what the runtime observed: the workspace each trial ran in and its read-only provisioned directories as the allowed mounts, the registry's commands and tools as the tool allowlist (`<interface>/<executable>` or `<interface>/<tool>`), the commands and tool calls the runtime made for the plan as the observed tool calls, the tool-call and wall-clock ceilings the runtime enforces, and the largest safe integer (9007199254740991, the most the schema admits for a token ceiling) for the token and cost ceilings.
 For CLI targets, each issued step can report target use on one stderr line: `TEA_EVALUATE_USAGE_JSON:{"inputTokens":7,"outputTokens":11,"costUsd":"0.00125"}`. Token counts must be nonnegative safe integers and cost must be a nonnegative decimal string. `tea-skill-runner` translates supported agent CLI reports into this line while keeping the agent's answer on stdout. A malformed or repeated report stops the run with a target-report error. The sealed record stores the sum of that trial's issued step reports, and the isolation manifest stores the exact sum of its trials. Qualification and preflight calls do not count.
 When a target gives no complete report, the closed record and manifest schemas still hold zero for missing use. `run.json` lists the affected trial and step in `unreportedResourceUse`. An empty list means every issued target call reported use, including an explicit measured zero. API and MCP calls have no usage report contract and appear as unreported when issued.
-The runtime observes no file-system or network access, so the observed mounts, the network allowlist and the observed network targets are empty, and each forbidden input's note says what the runtime withholds and that it does not sandbox the target's file system.
+The observed mounts are the paths the confinement's audit saw the trials' targets open outside what they were granted (see [File-system confinement](#file-system-confinement)), none in a clean run and none in a run that opted out, which observes no file-system access.
+The runtime does not sandbox the network and observes no network access, so the network allowlist and the observed network targets are empty.
+Each forbidden input's note says what the runtime hands the target and names the confinement that withheld the rest, or, in a run that opted out, that the runtime does not sandbox the target's file system.
 The evaluator configuration carries the `sealedBriefDigest` of the run's sealed brief, and `decodingParameters["tea.evaluatorKind"]`, the evaluation layer's kind.
 Its `modelSnapshot` and `systemPromptDigest` come from `policy/evaluator-conditions.json`, which an evaluation whose target or evaluator uses a model commits (`check` requires it, naming a model other than `none`, once a registry entry runs `tea-skill-runner`, which always runs an agent); under a sealed-brief agent they are the agent's `evaluator.modelSnapshot` and the digest of the runtime's evaluator template (see [The evaluation layer](#the-evaluation-layer)):
 
@@ -688,12 +752,12 @@ Outside a repository it is every regular file under `evaluator/`, so a stray fil
 Either way a link, a special file or a path through a linked directory is refused, and `check` names a submodule under `evaluator/` as one, since its files are another repository's.
 `run` reads the layer's files once, before anything runs, and takes the digests and the mapping from those bytes.
 It reads them again before each launch of the evaluator and after each trial, and a file gone, changed or added to the layer stops the run there with exit 12 and no record, since the digests would name bytes that did not run.
-A process that swaps a file and restores it between that read and the launch goes unseen until Story 1.31 sandboxes the evaluator.
+In a confined run no process of the run can write under `evaluator/` at all (see [File-system confinement](#file-system-confinement)), so no file can be swapped between that read and the launch and restored unseen; in a run that opted out, such a swap goes unseen.
 
 **A command evaluator** runs under TeA's agent supervisor (its own process group, `SIGTERM` at `timeoutMs`, `SIGKILL` 2 s later, its group killed when it ends), with the agents' base environment and your `environmentKeys`, and receives `{ "sealedBrief", "observations" }` on stdin, the observations the record will carry (`evaluator-chosen`).
 The executable runs from its folder, `evaluator/`, so module resolution works as usual: a package in your project's `node_modules` or a sibling file it reads resolves as it does outside a run.
 Its working directory is an empty private directory the run removes however it ends, an interrupting signal included.
-A cache it writes beside itself (`__pycache__`, say) must be gitignored, or the adopter-tree check after the trial sees your tree change and stops the run with exit 12; outside a git repository it must write nothing under the project.
+In a confined run it cannot write under `evaluator/`, so a cache it writes beside itself fails there (Python skips its `__pycache__` quietly); in a run that opted out such a cache must be gitignored, or the adopter-tree check after the trial sees your tree change and stops the run with exit 12, and outside a git repository it must write nothing under the project.
 A model it calls is named as `policy/evaluator-conditions.json`'s `evaluator.modelSnapshot`.
 
 **A sealed-brief agent** gets the evaluator instructions, a nonce-tagged answer block (as the rubric judge does), the sealed brief and the mapping's keys (a rubric key with its criterion and levels); nothing else of the evaluation.
@@ -709,7 +773,7 @@ On a gameability arm a call goes through the same adapter or port and authorizat
 A call the target could not run exits 12, and the exit message names that call's fault, followed by the agent's own failure when the agent then failed.
 A plan step and an agent call with the same bindings both match the step, so declare cardinality `any` on a step an agent may repeat.
 The bridge admits one connection, presenting a token its process reads from its environment; its configuration reaches the adapter as a private file.
-Until Story 1.31 sandboxes the target, a target running as your user could read that token before the agent connects.
+A target running as your user can read that token before the agent connects: the confinement withholds the evaluation folder, and the bridge's private directory lies outside it.
 `claude` runs with no built-in tool, the bridge alone, no user or project settings and no saved transcript (`--tools ""`, `--mcp-config <file>`, `--strict-mcp-config`, `--setting-sources ""`, `--no-session-persistence`), and `check` refuses `agentArgs` that reopen any of them; `custom` receives `--mcp-config <file>`, and keeping to the bridge is its own contract; other adapters are refused.
 `evaluator.modelSnapshot` names the agent's model, recorded as the configuration's `modelSnapshot` beside the digest of the evaluator template (instructions, answer line, heading, tool descriptions and call shapes), and as `judgeConfiguration` when a rubric key is bound; a target model named at the top level is kept as `tea.targetModelSnapshot`.
 
@@ -736,7 +800,7 @@ Every input is read from the run directory, as a regular file opened without blo
 - each set against its run: the index names the probes the run sealed, each once, and each record once; each set's `runId` is the one the run derives from its invocation and the probe; each probe file names its probe; every record carries the set's `runId` and arm and the run's contract, sealed brief and evaluator configuration digests; each record's actions and isolation-manifest references are public, name files inside this run directory (the manifest reference its set's own manifest) and digest the files they name (a `records` run's records are your harness's own, so its run IDs, references and digests are left to eval-quality, and the index must name exactly the records the run copied); and the record count, the corpus digest, and the digests of the compiled contract, the policy, the preflight verdict, the evaluator configuration, each probe file, each record and each isolation manifest are the ones `run.json` recorded (under `artifacts` and `policyDigest`), so a file the run did not seal, or one rewritten or copied in from another run, is refused.
 - `operation-phases.json` as a regular file with the digest `run.json` recorded; its phase map must equal `run.json.operationPhases`. The run writes both from its checked `evaluation.json` before completion, so later edits to the source manifest do not relabel sealed observations.
 - every finding, including one from a `records` evaluator, must cite at least one observation in its sealed record and carry quoted evidence. A missing citation or quote exits 10 before eval-quality scores the run.
-  `score` holds each file to the digest `run.json` recorded; a process that can write the run directory after the run, a target's leftover process included, can rewrite both, and Story 1.31 closes that.
+  `score` holds each file to the digest `run.json` recorded; a process that can write the run directory after the run can rewrite both. In a confined run no target process can, a leftover one included (see [File-system confinement](#file-system-confinement)); in a run that opted out, a target's leftover process can.
 
 Any finding exits 10, names the file, and runs no `score` call.
 Each `eval-quality: invalid: <reason>` line a call writes to stderr is also printed, prefixed with its probe.

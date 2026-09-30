@@ -235,7 +235,10 @@ function exchangeWithPort({ httpPort, message, onMessage, timeoutMs, maxChannelB
   return new Promise((resolve, reject) => {
     const stdio = ['ignore', 'pipe', 'pipe'];
     stdio[PROTOCOL_FD] = 'pipe';
-    const child = spawn(process.execPath, [httpPort.file], {
+    // In a confined run the port starts through the evaluation layer's confinement (`confinement.js` `layerPrefix`).
+    const prefix = httpPort.spawnPrefix ?? [];
+    const command = prefix.length === 0 ? process.execPath : prefix[0];
+    const child = spawn(command, [...prefix.slice(1), ...(prefix.length === 0 ? [] : [process.execPath]), httpPort.file], {
       cwd: httpPort.folder,
       env: portEnvironment(),
       stdio,
@@ -332,12 +335,15 @@ function exchangeWithPort({ httpPort, message, onMessage, timeoutMs, maxChannelB
  * protocol it speaks, before a run starts anything.
  *
  * @param {string} folder the evaluation folder
- * @returns {Promise<{ file: string, folder: string, digest: string }>}
+ * @param {object} [options]
+ * @param {string[]} [options.spawnPrefix] the command every start of the port's process goes through, the run's
+ *   evaluation-layer confinement (`confinement.js` `layerPrefix`); none by default
+ * @returns {Promise<{ file: string, folder: string, digest: string, spawnPrefix: string[] }>}
  * @throws {HttpPortError} exit 10 for a port file that is absent, does not start TeA's host or speaks another
  *   protocol; exit 12 for one whose process cannot start or does not answer in time
  */
-async function probeHttpPort(folder) {
-  const httpPort = httpPortFile(folder);
+async function probeHttpPort(folder, { spawnPrefix = [] } = {}) {
+  const httpPort = { ...httpPortFile(folder), spawnPrefix: [...spawnPrefix] };
   let hello;
   try {
     hello = await exchangeWithPort({
@@ -821,6 +827,8 @@ function callServer({ entry, port: chosenPort = null, portFile = null, cwd, targ
           subcommandPath: [],
           argv: [...entry.server.targetArgs],
           env,
+          // The private file the server reports its port in, which a confined server may write (`confinement.js`).
+          portFile,
           stdin: { kind: 'absent' },
           cwd,
           maxElapsedMs: timerDelay(entry.server.readyTimeoutMs + entry.maxElapsedMs + SERVER_GRACE_MS),

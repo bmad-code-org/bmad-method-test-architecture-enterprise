@@ -55,7 +55,13 @@
  *   workspace, worktree entry or target process behind.
  * - A target that writes into the project from its mutated arm (through a
  *   path the host environment hands it) exits 12 on the runtime's own reading
- *   of the adopter's tree, with no qualified probe.
+ *   of the adopter's tree, with no qualified probe, in a run that opted out of
+ *   file-system confinement; a confined run refuses the write itself (Story
+ *   1.31), and `run.json` records the confinement.
+ * - The cases whose target writes outside its workspace on purpose (the
+ *   project, the shared git directory, a pid file, its workspace's parent) run
+ *   with `"confinement": false`, since they prove the runtime's own checks,
+ *   which an opted-out run relies on; a confined run refuses those writes.
  *
  * Usage: node test/test-evaluate-mutation.js
  */
@@ -163,13 +169,17 @@ function evaluate(args, env = {}) {
  * A temp project from the fixture. `edit` changes it before the index is
  * digested and, for a git project, before the commit.
  *
+ * With `unconfined`, the evaluation opts out of file-system confinement, for a
+ * case whose target writes outside its workspace on purpose.
+ *
  * @returns {{ project: string, folder: string, temp: {directory: string, env: object} }}
  */
-function makeProject(label, { git: isGit = true, edit = () => {} } = {}) {
+function makeProject(label, { git: isGit = true, edit = () => {}, unconfined = false } = {}) {
   const project = path.join(tempDir(label), 'project');
   fs.cpSync(FIXTURE, project, { recursive: true, filter: (from) => path.basename(from) !== 'runs' });
   fs.writeFileSync(path.join(project, '.gitignore'), 'vendor/\n');
   const folder = path.join(project, EVALUATION);
+  if (unconfined) editJson(path.join(folder, 'evaluation.json'), (evaluation) => (evaluation.confinement = false));
   edit({ project, folder });
   const digested = evaluate(['digest', '--evaluation', folder]);
   if (digested.status !== 0) throw new Error(`digest failed for ${label}: ${digested.output}`);
@@ -642,7 +652,27 @@ function checkFailures() {
  * probe.
  */
 function checkAdopterTreeGuard() {
+  // Confined (Story 1.31): the write is refused where it is made, so the project never changes and the probe qualifies.
+  const confined = makeProject('touch-confined', {
+    edit: ({ folder }) => editMutation(folder, (operator) => (operator.replace = 'mode: lenient\nsabotage: adopter')),
+  });
+  const confinedTouched = path.join(confined.project, 'notes.txt');
+  const confinedResult = evaluate(['preflight', '--evaluation', confined.folder], { ...confined.temp.env, VERDICT_TOUCH: confinedTouched });
+  check(
+    confinedResult.status === 0,
+    `a confined preflight whose target wrote into the project exited ${confinedResult.status}; expected 0\n${confinedResult.output}`,
+  );
+  check(!fs.existsSync(confinedTouched), 'a confined target wrote into the project');
+  const confinedRun = runDirectoryOf(confined.folder);
+  const confinedRecord = confinedRun === null ? {} : evidenceOf(path.join(confinedRun, 'run.json'));
+  check(
+    confinedRecord.confinement === (process.platform === 'darwin' ? 'seatbelt' : 'bubblewrap') &&
+      confinedRecord.adopterTree?.unchanged === true,
+    `a confined preflight's run.json records confinement ${confinedRecord.confinement} and the adopter tree ${JSON.stringify(confinedRecord.adopterTree)}`,
+  );
+
   const fixture = makeProject('touch', {
+    unconfined: true,
     edit: ({ folder }) => editMutation(folder, (operator) => (operator.replace = 'mode: lenient\nsabotage: adopter')),
   });
   const touched = path.join(fixture.project, 'notes.txt');
@@ -656,6 +686,10 @@ function checkAdopterTreeGuard() {
   check(
     runDirectory !== null && evidenceOf(path.join(runDirectory, 'run.json')).adopterTree.unchanged === false,
     'run.json does not record the adopter tree as changed',
+  );
+  check(
+    runDirectory !== null && evidenceOf(path.join(runDirectory, 'run.json')).confinement === 'opt-out',
+    'run.json does not record the opted-out run as confinement "opt-out"',
   );
   check(git(fixture.project, ['worktree', 'list', '--porcelain']) === worktrees, 'the run left a worktree behind');
   check(fs.readdirSync(fixture.temp.directory).length === 0, 'the run left a workspace in the temp directory');
@@ -1237,6 +1271,7 @@ function stopMatchedVerdict(pid) {
  */
 async function checkInterrupted() {
   const fixture = makeProject('interrupt', {
+    unconfined: true,
     edit: ({ folder }) => editMutation(folder, (operator) => (operator.replace = 'mode: lenient\nsleep: 30000')),
   });
   const before = adopterState(fixture.project);
@@ -1299,6 +1334,7 @@ async function checkKilledRun(
 ) {
   const fixture = makeProject(label, {
     git: isGit,
+    unconfined: true,
     edit: ({ folder }) => editMutation(folder, (operator) => (operator.replace = 'mode: lenient\nsleep: 30000')),
   });
   const originalState = adopterState(fixture.project, isGit);
@@ -1677,6 +1713,7 @@ function checkHookEnvironment() {
  */
 function checkSharedRepository() {
   const tagged = makeProject('refs', {
+    unconfined: true,
     edit: ({ folder }) => editMutation(folder, (operator) => (operator.replace = 'mode: lenient\nsabotage: refs')),
   });
   const refsBefore = git(tagged.project, ['for-each-ref']);
@@ -1689,6 +1726,7 @@ function checkSharedRepository() {
 
   // info/exclude sits in the git directory the worktree shares, beside the refs and the configuration.
   const excluded = makeProject('exclude', {
+    unconfined: true,
     edit: ({ folder }) => editMutation(folder, (operator) => (operator.replace = 'mode: lenient\nsabotage: exclude')),
   });
   const excludeFile = path.join(excluded.project, '.git', 'info', 'exclude');
@@ -1706,6 +1744,7 @@ function checkSharedRepository() {
   // A leg of a seeded evaluation that writes into the project stops the run
   // after the legs, and nothing the run wrote reads as a qualified pass.
   const legWrites = makeProject('leg-writes', {
+    unconfined: true,
     edit: ({ project }) => fs.writeFileSync(path.join(project, POLICY), 'mode: strict\nsabotage: leg-writes\n'),
   });
   const legTouched = path.join(legWrites.project, 'notes.txt');
@@ -1726,6 +1765,7 @@ function checkSharedRepository() {
   check(qualifiedProbes(legRun).length === 0, 'a run stopped after its legs wrote a qualified probe');
 
   const legs = makeProject('legs', {
+    unconfined: true,
     edit: ({ project, folder }) => {
       fs.writeFileSync(path.join(project, POLICY), 'mode: strict\nsabotage: adopter\n');
       fs.rmSync(path.join(folder, 'probes', 'P-002.probe.json'));
@@ -1884,6 +1924,7 @@ function checkRepositoryShape() {
  */
 function checkRound2() {
   const swapped = makeProject('swap-root', {
+    unconfined: true,
     edit: ({ folder }) => editMutation(folder, (operator) => (operator.replace = 'mode: lenient\nsabotage: swap-root')),
   });
   // An uncommitted edit the restore would overwrite with the committed bytes if it followed the link.
