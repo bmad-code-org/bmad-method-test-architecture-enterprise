@@ -1415,7 +1415,7 @@ async function qualifyEvaluator(context) {
       log(`${arm.conditionArm}: evaluator attempt ${attempt} of ${attempts}`);
       const trial = await runTrial({ ...context, arm, trialIndex: 1, attempt });
       // Read after every attempt, so a target that writes into the project stops the run at once.
-      treeUnchanged('trials');
+      treeUnchanged('qualification attempts');
       // The engine reads the run directory next: it must hold what the runtime wrote, and nothing else.
       writer.verify('before an evaluator attempt was scored');
       for (const [index, probe] of arm.probes.entries()) {

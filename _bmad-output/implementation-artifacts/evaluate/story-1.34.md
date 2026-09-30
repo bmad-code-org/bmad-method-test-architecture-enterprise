@@ -99,6 +99,11 @@ Each check is exercised once: undo the change locally, run the named script, res
 - The decoding parameters (`if (false)` around the two `tea.evaluatorQualification*` keys in `configurationFields`): the unit and the reference case fail, "the configuration carries []; expected the qualification's two keys".
 - The guide (`evaluator.md` paragraph removed): `test:evaluate-guidance` fails 6 markers under `## Emit judgment rows or sealed records`. The reference (`### Qualifying a sealed-brief agent` renamed): the reference case fails, "the reference holds ... exactly once".
 
+- Final review round 1, an attempt eval-quality scores whose state is not the expected one (stub `--mode always-pass --counter <file> --mode-from 4`, the second mutated attempt answers `pass` whatever the stdout says, so eval-quality reduces it to `missed`): with `outcome: scored.outcome === null ? null : expected` in place of the copied state, `node test/test-evaluate-evaluators.js --qualification-only` fails 3 of 63 checks: the report departs from its evidence (`outcome "caught", the artifact holds ["missed"]`), the outcome is not the artifact's vote byte for byte, and the outcome of a passed defect is `caught`. Restored.
+- Final review round 1, an arm's agreement is its lowest probe (`Math.max` in place of `Math.min`): 4 of 63 fail, among them the run exiting 0 where 11 is expected, `mutated:M-001: agreement is not its lowest probe's` and `the mutated arm's agreement is 1; expected the lower probe's 0.5`. Restored.
+- Final review round 1, historical and gameability arms are not qualified (`expectedOutcome` returning `caught` for every arm): 4 of 63 fail, among them the run exiting 12 where 0 is expected, the report qualifying `gameability:P-004` and `evaluator-qualification/` holding `gameability-P-004`. Restored.
+- Final review round 1, the tree-changed stop names the qualification (`treeUnchanged('trials')` in place of `treeUnchanged('qualification attempts')`): 4 of 71 fail, among them `a project change during a qualification attempt is reported as a change during the trials`. Restored.
+
 ## Gates
 
 - `npm test` green (second full run, after the `doc-claims` entries; the first full run reached `test:doc-claims` and stopped there, with every Evaluate suite before it green). Focused suites in the last state of the tree: `test:evaluate-evaluators` 756 checks (43 in `--qualification-only`), `test:evaluate-check` 713, `test:evaluate-mcp` 173, `test:evaluate-api` 284, `test:evaluate-guidance`, `test:evaluate-run`, `test:evaluate-arms`, `test:evaluate-calibration`, `test:evaluate-workflow`, `test:evaluate-partitions`, `test:evaluate-boundaries` 306, `test:direction`.
@@ -122,5 +127,22 @@ Skipped, with reasons:
 - A run-level total of the attempts' model use: the reference states that qualification calls do not count toward the trials, and each attempt's manifest holds its own use.
 - A ceiling on `attempts`: the value is the adopter's, as `trials` is.
 - The Analyze suggestion to record the agreed values in `evaluator/LEARNED.md`: that file records installed versions. The suggestion to widen the sealed-brief row's cost cell was taken ("Model calls on each trial and qualification attempt").
-- The unrelated `epic-1-context.md` rewrite in the working tree belongs to the coordinator's planning update, not to this story.
+- The PR carries the epic context that `bmad-build` recompiled at story start (`epic-1-context.md`, Stories 1.33 to 1.63 listed).
 - A test for the exit-12 guard on an unexpected score exit: the engine shim replaces `compile`, `seal` and `preflight` too, so a sealed-brief run cannot reach the qualification under it.
+
+## Final review round 1
+
+Each finding was verified against the code before it was acted on. All ten were correct.
+
+1. Fixed. The exit table in `docs/reference/tea-evaluate-cli.md` and the header of `cli/evaluate.js` add to exit 12 a sealed-brief agent attempt `eval-quality score` cannot score (a call that cannot run, an exit other than 0, 2 or 3, no evidence artifact, or no single trial vote). The 3-5 and 64 rows say the qualification's `score` exit 3 is recorded and any exit other than 0, 2 or 3 stops the run with 12. `### Qualifying a sealed-brief agent` states the stop.
+2. Fixed. The reference now says an exit 0 or 2 carries an evidence artifact (one record below a `minimumTrialCount` above 1 reads as CONCERNS), so the artifact exists for every attempt eval-quality can read. No file under `references/` makes the earlier claim.
+3. Fixed. The Review section states that the PR carries the epic context `bmad-build` recompiled at story start.
+4. Fixed. The CHANGELOG entry reads "declares no `evaluatorQualification` and when another kind declares one, so an existing sealed-brief-agent evaluation adds the block before `check` passes".
+5. Fixed. `preflight.js` maps `'qualification attempts'` to the `trial` stage with the "no trial set is written" tail, and `qualifyEvaluator` passes it. `checkQualificationHoldsAdopterTree` runs a target that writes into the project during `attempt-clean-1` and asserts exit 12 and the message "changed during the qualification attempts, so no trial set is written".
+6. Fixed. `checkQualificationUnexpectedState` with the stub's new `always-pass` mode; the revert observation is above.
+7. Fixed. `checkQualificationLowestProbe` adds P-003 to mutation M-001 (its signature selects on no standard input; each probe's witness names its own request so eval-quality's scoping check passes) and asserts probe agreements P-002 at 0.5 and P-003 at 1, arm agreement 0.5, exit 11.
+8. Fixed. `checkQualificationSkipsOtherArms` runs an evaluation with a gameability arm (P-004), asserts exit 0, a report listing only `clean` and `mutated:M-001`, no `gameability-P-004` directory under `evaluator-qualification/` and a sealed gameability trial set. A historical arm is not exercised: it needs a fix commit with a parent, and the arm loop treats both non-qualified kinds through the one `expectedOutcome` null.
+9. Fixed. The reference case also asserts `/^\| 11 .*judgeCalibration\.minimumAgreement/m`.
+10. Fixed. The Story 1.33 doc comment sits directly above `checkReferenceNamesDenialReasons`, and the Story 1.34 function has its own.
+
+Gates run on the tree after these changes: `test:evaluate-evaluators`, `test:evaluate-check`, `test:evaluate-guidance`, `test:evaluate-boundaries`, `test:direction`, `docs:validate-links`, `lint:md`, `format:check` and `lint`.

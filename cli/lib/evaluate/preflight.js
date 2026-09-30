@@ -770,9 +770,16 @@ async function runInWorkspaces({
     if (record || !unchanged) writeRun();
     if (!unchanged) {
       throw stop({
-        stage: { qualification: 'qualification', legs: 'leg', calibration: 'trial', trials: 'trial', sealing: 'trial' }[when],
+        stage: {
+          qualification: 'qualification',
+          legs: 'leg',
+          calibration: 'trial',
+          'qualification attempts': 'trial',
+          trials: 'trial',
+          sealing: 'trial',
+        }[when],
         exitCode: 12,
-        message: `the adopter's ${before.repository === null ? 'project (launch.root)' : `tree at ${before.repository} (its git status, file contents or shared git state)`} changed during the ${when === 'sealing' ? 'sealing of the trial sets' : when}, so ${['calibration', 'trials', 'sealing'].includes(when) ? 'no trial set is written' : 'no rollback is proved and no qualified probe is written'}; if you edited files meanwhile, run again`,
+        message: `the adopter's ${before.repository === null ? 'project (launch.root)' : `tree at ${before.repository} (its git status, file contents or shared git state)`} changed during the ${when === 'sealing' ? 'sealing of the trial sets' : when}, so ${['calibration', 'qualification attempts', 'trials', 'sealing'].includes(when) ? 'no trial set is written' : 'no rollback is proved and no qualified probe is written'}; if you edited files meanwhile, run again`,
       });
     }
   };

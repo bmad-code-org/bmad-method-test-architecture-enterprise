@@ -22,7 +22,8 @@
  * Exit codes (AD-10):
  *   0   success
  *   2-5 preflight, run and score: an eval-quality stage's own exit, passed through verbatim (2, FAIL, from
- *       score alone; score passes on the most severe of its per-probe exits)
+ *       score alone; score passes on the most severe of its per-probe exits); a sealed-brief agent
+ *       qualification records its score exit 3 and stops the run with 12 on any exit other than 0, 2 or 3
  *   10  authoring defect: every finding is printed, one per line (digest: an indexed entry it cannot digest;
  *       preflight: a leg the registry does not authorize, or a mutation whose find text does not occur
  *       exactly once)
@@ -41,12 +42,13 @@
  *       change to the adopter's project during the run, or an engine stage that could not run; run: also a
  *       trial that cannot run, exits an infrastructure code or is stopped by a signal from outside, which yields no record,
  *       a mutated trial whose digest differs from the qualification's, a rubric judge that cannot answer, or
- *       a run whose every probe was refused; preflight and run: a run directory holding an
+ *       a run whose every probe was refused, or a sealed-brief agent attempt eval-quality score cannot score (a call
+ *       that cannot run, an exit other than 0, 2 or 3, no evidence artifact, or no single trial vote); preflight and run: a run directory holding an
  *       entry the runtime did not write or a file whose bytes differ from the ones it wrote; score: a score call that could not
  *       run or exited with a code the CLI does not document
  *   64  wiring defect: no --evaluation resolves, or the command line is malformed (preflight, run and score: or
  *       eval-quality's own 64; score: no run to score, a --run naming no run or a preflight, or a run that did
- *       not complete)
+ *       not complete; a sealed-brief agent qualification's score call that exits 64 stops the run with 12)
  */
 
 'use strict';

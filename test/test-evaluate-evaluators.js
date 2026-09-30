@@ -1741,6 +1741,232 @@ async function checkEvaluatorQualification() {
   }
 }
 
+/** A sealed-brief agent project whose stub runs with `--counter` outside the project, the qualification declared as given. */
+function makeQualifiedProject(label, { edit = () => {}, mode, modeFrom = null, qualification = QUALIFICATION }) {
+  const counter = path.join(scratch.make(`${label}-counter`), 'runs.txt');
+  const capture = path.join(scratch.make(`${label}-capture`), 'calls.jsonl');
+  const project = makeProject(label, {
+    marker: true,
+    edit: (made) => {
+      useSealedBriefAgent(made.folder, { capture, mode, counter, modeFrom, qualification });
+      edit(made);
+    },
+  });
+  return { ...project, counter };
+}
+
+/**
+ * Story 1.34: an attempt eval-quality scores (exit 0 or 2, an artifact) whose state is not the one the arm expects. The
+ * stub answers `pass` whatever the call's stdout says from the fourth run on, which is the second attempt on the mutated
+ * arm, so eval-quality reduces that attempt to `missed`. The report carries that state as the artifact holds it.
+ */
+async function checkQualificationUnexpectedState() {
+  const project = makeQualifiedProject('qualify-missed', { mode: 'always-pass', modeFrom: 4 });
+  const ran = evaluate(['run', '--evaluation', project.folder], project.env);
+  check(ran.status === 11, `an agent that passes a defect on one mutated attempt exited ${ran.status}; expected 11\n${ran.output}`);
+  const directory = runDirectoryOf(project.folder);
+  check(directory !== null, 'the run that failed its qualification kept no run directory');
+  if (directory === null) return;
+  const report = readJson(path.join(directory, 'evaluator-qualification.json'));
+  check(
+    qualificationMismatches(directory, report).length === 0,
+    `the report departs from its evidence: ${qualificationMismatches(directory, report)}`,
+  );
+  const mutated = report.arms.find((arm) => arm.conditionArm === 'mutated:M-001');
+  const [first, second] = mutated?.probes[0].attempts ?? [];
+  check(
+    first?.outcome === 'caught' && first.agrees === true,
+    `the mutated arm's first attempt is ${JSON.stringify(first)}; expected caught`,
+  );
+  check(
+    second !== undefined && [0, 2].includes(second.exitCode) && second.evidence !== null,
+    `the second attempt is ${JSON.stringify(second)}; expected a scored attempt with an artifact`,
+  );
+  if (second === undefined || second.evidence === null) return;
+  const artifact = readJson(path.join(directory, second.evidence));
+  const votes = artifact.reducedProbeOutcomes.find((reduced) => reduced.probeId === 'P-002').trialVotes;
+  check(
+    votes.length === 1 && Buffer.from(second.outcome).equals(Buffer.from(votes[0].state)),
+    `the outcome ${JSON.stringify(second.outcome)} is not the artifact's vote ${JSON.stringify(votes.map((vote) => vote.state))} byte for byte`,
+  );
+  check(
+    second.outcome !== 'caught' && second.outcome !== null,
+    `the outcome of a passed defect is ${JSON.stringify(second.outcome)}; expected a state other than caught`,
+  );
+  check(second.agrees === false, 'an attempt whose state is not the expected one agrees');
+  check(mutated.agreement === 0.5, `the mutated arm's agreement is ${mutated.agreement}; expected 0.5`);
+}
+
+/**
+ * Story 1.34: an arm's agreement is the lowest among its probes. P-003 is a second probe of mutation M-001 whose
+ * signature selects on no standard input, so the stub that omits stdin on every even run still trips it; P-002 selects on
+ * standard input and reads as Invalid on the second attempt. The arm reports P-002's 0.5, not P-003's 1.
+ */
+async function checkQualificationLowestProbe() {
+  const project = makeQualifiedProject('qualify-lowest-probe', {
+    mode: 'alternating-stdin',
+    edit: ({ folder }) => {
+      // Each probe's witness names the request of its own leg, so neither fires on the other's leg (eval-quality scopes them).
+      const witnessing = (probe, request) => {
+        const witness = probe.defects[0].manifestationWitness;
+        witness.inputs.stdin.value = request;
+        witness.relation = {
+          op: 'all',
+          operands: [
+            { op: 'containment', operands: [{ pointer: `/interactions/${witness.legId}/stdout` }, { literal: 'verdict: rejected' }] },
+            { op: 'containment', operands: [{ pointer: `/interactions/${witness.legId}/stdout` }, { literal: `request: ${request}` }] },
+          ],
+        };
+      };
+      const first = readJson(path.join(folder, 'probes', 'P-002.probe.json'));
+      const second = structuredClone(first);
+      second.probeId = 'P-003';
+      second.defects[0].defectId = 'D-002';
+      second.defects[0].manifestationWitness.legId = 'manifest-lenient-3';
+      second.defectSignature.condition.selector.inputBinding.stdin = null;
+      witnessing(first, 'Judge the request.');
+      witnessing(second, 'Judge the second request.');
+      writeJson(path.join(folder, 'probes', 'P-002.probe.json'), first);
+      writeJson(path.join(folder, 'probes', 'P-003.probe.json'), second);
+    },
+  });
+  const ran = evaluate(['run', '--evaluation', project.folder], project.env);
+  check(ran.status === 11, `an arm with a probe at 0.5 exited ${ran.status}; expected 11\n${ran.output}`);
+  const directory = runDirectoryOf(project.folder);
+  check(directory !== null, 'the run that failed its qualification kept no run directory');
+  if (directory === null) return;
+  const report = readJson(path.join(directory, 'evaluator-qualification.json'));
+  check(
+    qualificationMismatches(directory, report).length === 0,
+    `the report departs from its evidence: ${qualificationMismatches(directory, report)}`,
+  );
+  const mutated = report.arms.find((arm) => arm.conditionArm === 'mutated:M-001');
+  const agreements = Object.fromEntries((mutated?.probes ?? []).map((probe) => [probe.probeId, probe.agreement]));
+  check(
+    JSON.stringify(agreements) === '{"P-002":0.5,"P-003":1}',
+    `the mutated arm's probe agreements are ${JSON.stringify(agreements)}; expected P-002 at 0.5 and P-003 at 1`,
+  );
+  check(mutated?.agreement === 0.5, `the mutated arm's agreement is ${mutated?.agreement}; expected the lower probe's 0.5`);
+  check(ran.output.includes('mutated:M-001 (0.5)'), `the stop does not report the lowest agreement:\n${ran.output}`);
+}
+
+/** B-002 and its naive oracle O-002, and the gameability probe P-004 whose degenerate response prints a pending verdict. */
+function addGameabilityProbe(folder) {
+  editJson(path.join(folder, 'contract.json'), (contract) => {
+    contract.behaviors.push({
+      id: 'B-002',
+      description: 'The verdict command answers every request with a verdict line and exits 0.',
+      severity: 'low',
+      observableSuccessCriterion: 'The run prints a verdict: line on stdout and exits 0.',
+      requirementLinks: [{ scheme: 'tea-evaluate-fixture', id: 'answers-with-a-verdict' }],
+      riskLinks: [{ scheme: 'tea-evaluate-fixture', id: 'silent-verdict' }],
+      oracles: ['O-002'],
+    });
+    contract.oracles.push({
+      id: 'O-002',
+      polarity: 'expects-hold',
+      commentary: 'The verdict command printed a verdict line, whichever verdict it names, and exited 0.',
+      direction: {
+        polarity: 'expects-hold',
+        relation: 'all',
+        scope: 'The exit code and stdout of the judge run.',
+        negativeDomain: 'A run that exited non-zero, or whose stdout carries no verdict: line.',
+        evidenceTargets: ['/interactions/judge-run/exit-code', '/interactions/judge-run/stdout'],
+      },
+      check: {
+        op: 'all',
+        operands: [
+          { op: 'equality', operands: [{ pointer: '/interactions/judge-run/exit-code' }, { literal: 0 }] },
+          { op: 'containment', operands: [{ pointer: '/interactions/judge-run/stdout' }, { literal: 'verdict:' }] },
+        ],
+      },
+    });
+  });
+  const signature = readJson(path.join(folder, 'probes', 'P-002.probe.json')).defectSignature;
+  signature.condition.predicate = {
+    op: 'containment',
+    operands: [{ pointer: '/interactions/observed/stdout' }, { literal: 'verdict: pending' }],
+  };
+  writeJson(path.join(folder, 'probes', 'P-004.probe.json'), {
+    probeId: 'P-004',
+    probeClass: 'gameability',
+    behaviorId: 'B-001',
+    expectedClean: false,
+    rationale: 'Gameability: a shortcut answer prints a verdict line without judging the request.',
+    defects: [],
+    defectSignature: signature,
+    qualification: {
+      route: 'gameability',
+      degenerateResponse: 'Prints a verdict line that names no real verdict (verdict: pending) and exits 0, without judging the request.',
+      naiveOracle: 'O-002',
+    },
+  });
+  writeJson(path.join(folder, 'corpus', 'gameability', 'P-004.json'), {
+    schemaVersion: 1,
+    steps: { 'judge-run': { stdout: 'request: Judge the request.\nverdict: pending\n', stderr: '', exitCode: 0 } },
+  });
+  editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
+    evaluation.arms = ['clean', 'mutated', 'gameability'];
+  });
+}
+
+/**
+ * Story 1.34: historical and gameability arms are not qualified. The evaluation holds a gameability arm beside the clean
+ * and the mutated one, and the agent runs on the two arms it qualifies only.
+ */
+async function checkQualificationSkipsOtherArms() {
+  const project = makeQualifiedProject('qualify-other-arms', {
+    mode: 'normal',
+    edit: ({ folder }) => addGameabilityProbe(folder),
+  });
+  const ran = evaluate(['run', '--evaluation', project.folder], project.env);
+  check(ran.status === 0, `a run over a gameability arm beside the qualified arms exited ${ran.status}; expected 0\n${ran.output}`);
+  const directory = runDirectoryOf(project.folder);
+  check(directory !== null, 'the run kept no run directory');
+  if (directory === null) return;
+  const report = readJson(path.join(directory, 'evaluator-qualification.json'));
+  const armNames = report.arms.map((arm) => arm.conditionArm);
+  check(
+    JSON.stringify(armNames) === '["clean","mutated:M-001"]',
+    `the report qualifies ${JSON.stringify(armNames)}; expected the clean and the mutated arm only`,
+  );
+  const kept = fs.readdirSync(path.join(directory, 'evaluator-qualification')).sort();
+  check(
+    JSON.stringify(kept) === '["clean","mutated-M-001"]',
+    `evaluator-qualification/ holds ${JSON.stringify(kept)}; expected no attempt on the gameability arm`,
+  );
+  const trialSets = readJson(path.join(directory, 'trial-sets.json')).trialSets.map((set) => set.conditionArm);
+  check(trialSets.includes('gameability:P-004'), `the run sealed ${JSON.stringify(trialSets)}; expected a gameability trial set`);
+}
+
+/**
+ * Story 1.34: a target that writes into the adopter's project during a qualification attempt stops the run with exit 12,
+ * and the stop names the qualification attempts where it writes no trial set.
+ */
+async function checkQualificationHoldsAdopterTree() {
+  const project = makeQualifiedProject('qualify-project-write', { mode: 'normal' });
+  const ran = evaluate(['run', '--evaluation', project.folder], {
+    ...project.env,
+    VERDICT_WHEN: 'attempt-clean-1',
+    VERDICT_DO: 'touch',
+    VERDICT_TOUCH: path.join(project.repository, 'attempt-touch.txt'),
+  });
+  check(
+    ran.status === 12 && ran.output.includes('changed during the qualification attempts, so no trial set is written'),
+    `a target writing into the project during a qualification attempt: run exited ${ran.status}; expected 12 naming the qualification attempts\n${ran.output}`,
+  );
+  check(
+    !ran.output.includes('changed during the trials'),
+    'a project change during a qualification attempt is reported as a change during the trials',
+  );
+  const directory = runDirectoryOf(project.folder);
+  check(
+    directory !== null && !fs.existsSync(path.join(directory, 'trial-sets.json')),
+    'a run stopped in its qualification wrote trial sets',
+  );
+  check(directory !== null && recordFiles(directory).length === 0, 'a run stopped in its qualification wrote a trial record');
+}
+
 async function checkSealedBriefAgentEdges() {
   // An executable the registry does not grant is denied by eval-quality's adapter and never launches.
   const capture = path.join(scratch.make('sealed-unlisted-capture'), 'captures.jsonl');
@@ -2749,7 +2975,6 @@ function checkDirectionGate() {
 
 // ---------------------------------------------------------------- the reference's denial reasons
 
-/** The reference names every reason code eval-quality's target policies decide, under its own heading (Story 1.33). */
 /**
  * The reference's `### Qualifying a sealed-brief agent` section (Story 1.34), read by its exact heading under `## run`,
  * names the block, the report and its attempt fields as the runtime's schema holds them, the Invalid attempt's record,
@@ -2801,11 +3026,14 @@ async function checkReferenceQualifiesSealedBriefAgent() {
   }
   // The exit table and the check rule name the qualification beside their existing causes.
   check(
-    /^\| 11 .*evaluatorQualification\.minimumAgreement/m.test(prose) && /^\| `evaluator` .*evaluatorQualification/m.test(prose),
-    "the reference's exit 11 row or its evaluator rule does not name the qualification",
+    /^\| 11 .*judgeCalibration\.minimumAgreement/m.test(prose) &&
+      /^\| 11 .*evaluatorQualification\.minimumAgreement/m.test(prose) &&
+      /^\| `evaluator` .*evaluatorQualification/m.test(prose),
+    "the reference's exit 11 row or its evaluator rule does not name the calibration and the qualification",
   );
 }
 
+/** The reference names every reason code eval-quality's target policies decide, under its own heading (Story 1.33). */
 async function checkReferenceNamesDenialReasons() {
   const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
   // The engine's own list, so a reason a later release decides fails the case until the reference names it.
@@ -2890,6 +3118,11 @@ async function main() {
     // `--qualification-only` runs Story 1.34's cases alone (its revert checks).
     if (process.argv.includes('--qualification-only')) {
       await runCase('the sealed-brief agent qualified', checkEvaluatorQualification);
+      await runCase('a qualification attempt in an unexpected state', checkQualificationUnexpectedState);
+      await runCase('an arm agrees as its lowest probe', checkQualificationLowestProbe);
+      await runCase('the other arms are not qualified', checkQualificationSkipsOtherArms);
+      await runCase('a qualification attempt holds the adopter tree', checkQualificationHoldsAdopterTree);
+      await runCase('a qualification attempt holds the adopter tree', checkQualificationHoldsAdopterTree);
       return report();
     }
     await runCase('the units', checkUnits);
@@ -2916,6 +3149,9 @@ async function main() {
     await runCase('an oracle two behaviors declare', checkSharedOracle);
     await runCase('the sealed-brief agent', checkSealedBriefAgent);
     await runCase('the sealed-brief agent qualified', checkEvaluatorQualification);
+    await runCase('a qualification attempt in an unexpected state', checkQualificationUnexpectedState);
+    await runCase('an arm agrees as its lowest probe', checkQualificationLowestProbe);
+    await runCase('the other arms are not qualified', checkQualificationSkipsOtherArms);
     await runCase('the sealed-brief agent edges', checkSealedBriefAgentEdges);
     await runCase('the records evaluator', checkRecordsEvaluator);
     for (const { label, directory } of runtimeTemps) {

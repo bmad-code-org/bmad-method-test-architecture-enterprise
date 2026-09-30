@@ -27,7 +27,10 @@
  *                      target on stdin, where the fixture's budget of one
  *                      leaves room for no second counted call; hang, which
  *                      lists the tools, appends its capture line, writes
- *                      <capture>.hung and never answers, for a case that interrupts the run mid-trial
+ *                      <capture>.hung and never answers, for a case that interrupts the run mid-trial;
+ *                      always-pass, which answers `pass` for the verdict key whatever the
+ *                      call's stdout says (Story 1.34), so a run of it on a mutated arm reads as a defect
+ *                      the agent missed
  *   --counter <file> --mode-from <n>
  *                      numbers the runs that judge a trial from 1 (Story 1.34)
  *                      and behaves as `normal` before run <n>, so a fault mode
@@ -160,7 +163,7 @@ async function main() {
     process.exit(3);
   }
   const observation = JSON.parse(answered.result.content[0].text);
-  const accepted = String(observation.stdout).includes('verdict: accepted');
+  const accepted = mode === 'always-pass' || String(observation.stdout).includes('verdict: accepted');
   const row = accepted
     ? { key: 'verdict-accepted', outcome: 'pass', observationIds: [observation.observationId], comment: 'It accepted.' }
     : {
