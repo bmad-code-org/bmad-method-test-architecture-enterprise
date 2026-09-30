@@ -2712,24 +2712,6 @@ async function checkGameability() {
 
 // ---------------------------------------------------------------- eval-quality's policy parser (Story 1.36)
 
-/** The keywords a JSON Schema constrains a value's content with, none of which an authorization field carries of its own. */
-const CONTENT_KEYWORDS = new Set([
-  'const',
-  'enum',
-  'exclusiveMaximum',
-  'exclusiveMinimum',
-  'format',
-  'maxItems',
-  'maxLength',
-  'maximum',
-  'minItems',
-  'minLength',
-  'minimum',
-  'multipleOf',
-  'pattern',
-  'uniqueItems',
-]);
-
 /** The JSON type of each field of an HTTP entry that becomes a field of eval-quality's authorization. */
 const AUTHORIZATION_TYPES = {
   scheme: 'string',
@@ -2853,6 +2835,53 @@ async function checkPolicyParser() {
         (line) => line.includes('parseProbeTargetPolicy refuses') && line.includes('/authorizations/0/addresses/1'),
       ),
     `an address that is a host name: check exited ${namedChecked.status}; expected 10 and a registry finding at /authorizations/0/addresses/1\n${namedChecked.output}`,
+  );
+
+  // A second HTTP entry serves a second interface of the contract. The parser refuses one field of that entry alone, so the
+  // finding must name `registry[1]`: every other case edits `registry[0]`, which a finding hard-coded to it would still name.
+  const siblingFields = { scheme: 'http', host: '127.0.0.1', addresses: ['127.0.0.1'], methods: ['GET'], safeMethods: ['GET'] };
+  const withSibling = (label, refuse) =>
+    makeProject(label, {
+      edit: ({ folder }) => {
+        editJson(path.join(folder, 'contract.json'), (contract) => {
+          const second = { ...structuredClone(contract.permittedInterfaces[0]), logicalId: 'grader-second' };
+          for (const operation of second.operations) operation.operationId = `${operation.operationId}-second`;
+          contract.permittedInterfaces.push(second);
+        });
+        editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
+          evaluation.operationPhases['grade-answer-second'] = evaluation.operationPhases['grade-answer'];
+          const { kind, maxRedirects, maxElapsedMs, maxRequestBytes, maxResponseBytes } = evaluation.registry[0];
+          evaluation.registry.push({
+            kind,
+            interfaceId: 'grader-second',
+            ...siblingFields,
+            port: 41_002,
+            maxRedirects,
+            maxElapsedMs,
+            maxRequestBytes,
+            maxResponseBytes,
+            ...refuse,
+          });
+        });
+      },
+    });
+  const siblingValid = withSibling('policy-parser-sibling-valid', {});
+  const siblingValidChecked = evaluate(['check', '--evaluation', siblingValid.folder], siblingValid.env);
+  check(
+    siblingValidChecked.status === 0 && findingsOf(siblingValidChecked.output, 'registry').length === 0,
+    `a registry of two valid HTTP entries: check exited ${siblingValidChecked.status}; expected 0 and no registry finding\n${siblingValidChecked.output}`,
+  );
+  const siblingRefused = withSibling('policy-parser-sibling-refused', { maxResponseBytes: 0 });
+  const siblingRefusedChecked = evaluate(['check', '--evaluation', siblingRefused.folder], siblingRefused.env);
+  const siblingFindings = findingsOf(siblingRefusedChecked.output, 'registry');
+  check(
+    siblingRefusedChecked.status === 10 &&
+      siblingFindings.length === 1 &&
+      siblingFindings[0].includes("registry[1] becomes an authorization eval-quality's parseProbeTargetPolicy refuses") &&
+      siblingFindings[0].includes('/authorizations/0/maxResponseBytes') &&
+      !siblingFindings[0].includes('registry[0]') &&
+      findingsOf(siblingRefusedChecked.output, 'schema').length === 0,
+    `a second HTTP entry whose maxResponseBytes the parser refuses: check exited ${siblingRefusedChecked.status} with ${siblingFindings.length} registry finding(s); expected 10 and one naming registry[1] and not registry[0]\n${siblingRefusedChecked.output}`,
   );
 
   // A deployment origin is an authorization of its own: the finding names the deployment the parser refused.
@@ -2982,13 +3011,52 @@ async function checkPolicyParser() {
     `the gameability arm's port over an empty method list gave ${degenerateFault?.code ?? degenerateFault}: ${degenerateFault?.message}; expected the parser's fault for /authorizations/0/methods`,
   );
 
+  // The called entry is valid and a deployed sibling's field is refused. `portConfiguration` parses every authorization
+  // it reaches, a deployed entry's included, so the sibling's refusal stops the call with the parser's fault (pointer
+  // `/authorizations/1/...`, the sibling's place in the policy) and no service starts.
+  // The runtime holds one policy per call, so this outcome is the intended one: a sibling the parser refuses is a registry `check` already refuses.
+  const siblingEntry = { ...entry, interfaceId: 'grader-second', port: 41_002, methods: [] };
+  delete siblingEntry.server;
+  let siblingRuns = 0;
+  const siblingListed = [];
+  const siblingFault = await createApiPort({
+    entries: [entry, siblingEntry],
+    httpPort: unused,
+    cwd: FIXTURE,
+    targetOf: () => path.join(FIXTURE, 'server', 'grader.js'),
+    readEnvironment: () => ({}),
+    mechanism: {
+      run: async () => {
+        siblingRuns += 1;
+        return { exitCode: 0, stdout: '', stderr: '' };
+      },
+    },
+    maxOutputBytes: 1024,
+    scratch: siblingListed,
+  })
+    .probe(request)
+    .catch((error) => error);
+  check(
+    siblingFault?.name === 'RuntimeFault' &&
+      siblingFault.code === 'schema-parse-failure' &&
+      siblingFault.message.includes('/authorizations/1/methods') &&
+      !siblingFault.message.includes('/authorizations/0') &&
+      siblingRuns === 0 &&
+      siblingListed.length === 0,
+    `a valid called entry beside a deployed sibling with no methods gave ${siblingFault?.code ?? siblingFault}: ${siblingFault?.message}; expected the parser's fault for /authorizations/1/methods alone, with no service started (${siblingRuns} run) and no directory left (${JSON.stringify(siblingListed)})`,
+  );
+
   // The schema: each authorization field carries its JSON type alone, and the rules that are TeA's own stay.
   const schema = readJson(path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate', 'schemas', 'evaluation.schema.json'));
   const apiEntry = schema.$defs.ApiRegistryEntry;
   const deploymentItem = apiEntry.properties.deployments.items;
+  // An allow-list: a field's own keys are `type`, `description` and `items`, and an array's `items` carries `type` and
+  // `description`. A content keyword, a `$ref` or a combinator (`allOf`, `anyOf`, `oneOf`, `not`, `if`) cannot bring a copied rule back.
+  const FIELD_KEYS = new Set(['type', 'description', 'items']);
+  const ITEM_KEYS = new Set(['type', 'description']);
   const holdsTypeAlone = (where, field, type, definition) => {
-    const extras = Object.keys(definition ?? {}).filter((keyword) => CONTENT_KEYWORDS.has(keyword));
-    const nested = type === 'array' ? Object.keys(definition?.items ?? {}).filter((keyword) => CONTENT_KEYWORDS.has(keyword)) : [];
+    const extras = Object.keys(definition ?? {}).filter((keyword) => !FIELD_KEYS.has(keyword));
+    const nested = type === 'array' ? Object.keys(definition?.items ?? {}).filter((keyword) => !ITEM_KEYS.has(keyword)) : [];
     check(
       definition?.type === type && extras.length === 0 && nested.length === 0 && (type !== 'array' || definition.items?.type === 'string'),
       `${where}.${field} is ${JSON.stringify(definition)}; expected the JSON type ${type} alone, with no ${[...extras, ...nested].join(', ') || 'rule'} of its own`,

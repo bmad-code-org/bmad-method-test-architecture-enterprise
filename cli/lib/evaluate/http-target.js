@@ -1075,7 +1075,7 @@ function channelCeiling(entry) {
 function createApiPort({ entries, httpPort, cwd, targetOf, readEnvironment, mechanism, maxOutputBytes, scratch = [], deployment = null }) {
   return {
     async probe(request, signal) {
-      // The parser loads before anything else of the call starts: a refused field stops the call here.
+      // Only the parser's load happens here; the refusal comes from `configurationAt` below, before any server starts.
       const { parseProbeTargetPolicy } = await loadAdapters();
       const entry = entries.find((candidate) => candidate.interfaceId === request?.interfaceId);
       // On a deployment arm every HTTP interface answers at the deployment's origin, so no call starts a server.

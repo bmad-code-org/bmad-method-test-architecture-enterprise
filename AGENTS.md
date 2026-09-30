@@ -9,7 +9,7 @@
 
 ## Common Commands
 
-- `npm test`: full quality gate used before release.
+- `npm test`: full quality gate used before release. CI runs it in shards; the pre-commit hook does not, because the hook's budget is 30 seconds and anything slower belongs in CI.
 - `npm run format:check`: Prettier check.
 - `npm run lint`: ESLint check.
 - `npm run lint:md`: markdownlint check.

@@ -202,6 +202,7 @@ An HTTP entry (`kind: "api"`) serves an `api` interface of the contract, through
 
 - `scheme`, `host`, `addresses`, `methods`, `safeMethods`, `maxRedirects` and the three ceilings: the fields of one authorization of eval-quality's HTTP target policy, which its `evaluateTarget` reads for every request and every redirect.
   The schema holds each at its JSON type alone, and eval-quality's own `parseProbeTargetPolicy` decides every rule over it (the schemes, the port range, the methods, the non-empty address and method lists, an address being an IP literal, the ceilings' minimums), so a rule eval-quality adds or changes reaches `check` with no copy in TeA.
+  A duplicate address, method, safe method or `deployments` origin passes: the parser accepts duplicates and `evaluateTarget` takes the first authorization that matches.
   `check` hands the parser the policy each entry becomes, exactly as the runtime builds it: the entry's own authorization (a started server's at a placeholder port, since its real one is chosen at the call) and one authorization per `deployments` origin, each read alone.
   An authorization the parser refuses is a `registry` finding that names the entry or the deployment and carries the parser's reason, with its pointers read from `/authorizations/0`.
   The runtime builds each call's policy through the same parser before any service starts, so a registry built without `check` over a field the parser refuses stops the call with the parser's fault (exit 12).
@@ -211,6 +212,7 @@ An HTTP entry (`kind: "api"`) serves an `api` interface of the contract, through
 - `port`: a deployed target's port, reached as it is.
 - `deployments`: other origins the interface is deployed at, each `{ "scheme", "host", "port", "addresses" }`, which a historical probe on the deployment route reaches (see [Historical probes](#historical-probes)).
   Each is an authorization of the interface with the entry's methods, redirects, ceilings and auth; `check` holds its `host` and, under `auth` over `http`, its addresses to the rules of the entry's own, and hands the parser each one as an authorization of its own.
+  An origin listed twice passes, as a duplicate address does.
   A deployment joins the policy of its own deployment arm alone: every other call of the run, a redirect included, is decided over the entry's own authorization.
 - `server`, in place of `port`: a service the runtime starts from the workspace for each call, as it starts a command or a tool server, so the code that answers is the workspace's, a mutation included.
   `target` and `targetArgs` follow a tool server's rules, `environmentKeys` names the keys whose host values it starts with, and `portEnvironmentKey` and the optional `portFileEnvironmentKey` the keys its port handoff uses (see [A started service's port](#a-started-services-port)).
