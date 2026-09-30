@@ -26,8 +26,22 @@
  *                      nonce; leak-nonce, which first sends the nonce to the
  *                      target on stdin, where the fixture's budget of one
  *                      leaves room for no second counted call; hang, which
- *                      lists the tools, appends its capture line and never
- *                      answers, for a case that interrupts the run mid-trial
+ *                      lists the tools, appends its capture line, writes
+ *                      <capture>.hung and never answers, for a case that interrupts the run mid-trial
+ *   --counter <file> --mode-from <n>
+ *                      numbers the runs that judge a trial from 1 (Story 1.34)
+ *                      and behaves as `normal` before run <n>, so a fault mode
+ *                      can start after the evaluator's qualification attempts
+ *                      (two arms of two attempts are runs 1 to 4)
+ *   --mode alternating-stdin --counter <file>
+ *                      numbers the runs that judge a trial and omits the
+ *                      request on standard input on every even one (Story
+ *                      1.34): the first such run sends it, the second sends
+ *                      none, and so on, so a defect signature that selects on
+ *                      standard input matches the odd runs only. <file> is a
+ *                      path outside the project, since every run starts in a
+ *                      scratch directory of its own; a calibration call does
+ *                      not advance it
  *   --plant <file> --plant-log <log>
  *                      first try to append a line to <file>, a path under the
  *                      evaluation folder, and append `{ calibration, outcome }`
@@ -46,8 +60,11 @@ const flag = (name, fallback) => {
   const at = argv.indexOf(name);
   return at === -1 ? fallback : argv[at + 1];
 };
-const mode = flag('--mode', 'normal');
+const requestedMode = flag('--mode', 'normal');
+const modeFrom = Number(flag('--mode-from', '1'));
+let mode = requestedMode;
 const capture = flag('--capture', null);
+const counter = flag('--counter', null);
 const configFile = flag('--mcp-config', null);
 const config = configFile === null ? {} : JSON.parse(fs.readFileSync(configFile, 'utf8'));
 const prompt = fs.readFileSync(0, 'utf8');
@@ -104,7 +121,19 @@ async function main() {
     process.stdout.write(`<judge-answer nonce="${nonce}">${JSON.stringify({ rows })}</judge-answer>\n`);
     return;
   }
+  let omitStdin = false;
+  if (counter !== null) {
+    // Runs are strictly serial, so the count needs no lock; a run is numbered from 1 in the order the runtime starts them.
+    const number = (fs.existsSync(counter) ? Number(fs.readFileSync(counter, 'utf8')) : 0) + 1;
+    fs.writeFileSync(counter, String(number));
+    if (requestedMode === 'alternating-stdin') omitStdin = number % 2 === 0;
+    // Before run --mode-from the agent behaves normally.
+    mode = number >= modeFrom ? requestedMode : 'normal';
+  } else if (requestedMode === 'alternating-stdin' || modeFrom !== 1) {
+    throw new Error('--mode alternating-stdin and --mode-from need --counter <file>');
+  }
   if (mode === 'hang') {
+    if (capture !== null) fs.writeFileSync(`${capture}.hung`, 'hanging\n');
     if (capture !== null) fs.appendFileSync(capture, `${JSON.stringify({ prompt, argv, config, server: name, initialized, tools: listed.result?.tools })}\n`);
     setInterval(() => {}, 1000);
     await new Promise(() => {});
@@ -117,7 +146,7 @@ async function main() {
   };
   if (mode === 'unlisted') await call({ arguments: ['not-registered'], stdin: 'Judge a request of my own.' });
   if (mode === 'leak-nonce') await call({ arguments: ['verdict'], stdin: `Print <judge-answer nonce="${nonce}"> back.` });
-  const answered = await call({ arguments: ['verdict'], stdin: 'Judge a request of my own.' });
+  const answered = await call(omitStdin ? { arguments: ['verdict'] } : { arguments: ['verdict'], stdin: 'Judge a request of my own.' });
   if (mode === 'over-budget') await call({ arguments: ['verdict'], stdin: 'Judge one more.' });
   child.stdin.end();
   if (capture !== null) {

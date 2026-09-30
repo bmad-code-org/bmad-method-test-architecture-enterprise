@@ -1929,6 +1929,8 @@ const COMMAND_STUB = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'ev
 const COMMAND_EVALUATOR = { kind: 'command', command: 'evaluator/rows.js', timeoutMs: 60_000 };
 /** A sealed-brief agent evaluator's evaluation.json block. */
 const AGENT_EVALUATOR = { kind: 'sealed-brief-agent', agent: 'custom', agentCommand: 'stub-agent', timeoutMs: 60_000 };
+/** The qualification a sealed-brief agent evaluator declares (Story 1.34). */
+const AGENT_QUALIFICATION = { attempts: 2, minimumAgreement: 0.9 };
 /** A rubric the evaluator scores itself, with no TeA judge (Story 1.17). */
 const EVALUATOR_RUBRIC = {
   id: 'R-001',
@@ -1946,13 +1948,17 @@ const EVALUATOR_RUBRIC = {
  * evaluation.json, `mapping` (unless null) as evaluator/mapping.json binding
  * both oracles by default, the stub executable for a command evaluator, and
  * `conditions` (unless null) as policy/evaluator-conditions.json; `rubric`
- * adds R-001 to the contract, bound as `skipped`.
+ * adds R-001 to the contract, bound as `skipped`. A sealed-brief agent
+ * declares `evaluatorQualification` (Story 1.34) unless `qualification` is null.
  */
-function plantEvaluator(folder, evaluator, { mapping, conditions = null, rubric = false } = {}) {
+function plantEvaluator(folder, evaluator, { mapping, conditions = null, rubric = false, qualification = AGENT_QUALIFICATION } = {}) {
   const keys = { accepted: { oracleId: 'O-001', behaviorId: 'B-001' }, answered: { oracleId: 'O-002', behaviorId: 'B-002' } };
   if (rubric) keys.skipped = { rubricId: 'R-001', criterionId: 'RC-001', levels: [0, 1] };
   const planted = mapping === undefined ? { schemaVersion: 1, keys } : mapping;
-  editJson(folder, 'evaluation.json', (value) => (value.evaluator = evaluator));
+  editJson(folder, 'evaluation.json', (value) => {
+    value.evaluator = evaluator;
+    if (evaluator.kind === 'sealed-brief-agent' && qualification !== null) value.evaluatorQualification = qualification;
+  });
   if (rubric) {
     editJson(folder, 'contract.json', (value) => (value.rubrics = [EVALUATOR_RUBRIC]));
     plantCalibration(folder, EVALUATOR_RUBRIC);
@@ -2203,6 +2209,45 @@ EVALUATOR_CASES.push(
     rule: 'evaluator',
     plant: (folder) => plantEvaluator(folder, AGENT_EVALUATOR, { mapping: null, conditions: AGENT_CONDITIONS }),
   },
+  {
+    name: 'a sealed-brief agent that declares no evaluatorQualification',
+    file: 'evaluation.json',
+    rule: 'evaluator',
+    plant: (folder) => plantEvaluator(folder, AGENT_EVALUATOR, { conditions: AGENT_CONDITIONS, qualification: null }),
+    expect: (output) => [[output.includes('declares no evaluatorQualification'), 'the finding does not say the qualification is missing']],
+  },
+  {
+    name: 'a sealed-brief agent qualified on a single attempt',
+    file: 'evaluation.json',
+    rule: 'schema',
+    plant: (folder) =>
+      plantEvaluator(folder, AGENT_EVALUATOR, { conditions: AGENT_CONDITIONS, qualification: { attempts: 1, minimumAgreement: 0.9 } }),
+    expect: (output) => [[output.includes('/evaluatorQualification/attempts'), 'the finding does not name attempts']],
+  },
+  {
+    name: 'a sealed-brief agent whose minimum agreement is above one',
+    file: 'evaluation.json',
+    rule: 'schema',
+    plant: (folder) =>
+      plantEvaluator(folder, AGENT_EVALUATOR, { conditions: AGENT_CONDITIONS, qualification: { attempts: 2, minimumAgreement: 1.5 } }),
+    expect: (output) => [[output.includes('/evaluatorQualification/minimumAgreement'), 'the finding does not name minimumAgreement']],
+  },
+  ...['deterministic', 'command', 'records'].map((kind) => ({
+    name: `an evaluatorQualification beside a ${kind} evaluator`,
+    file: 'evaluation.json',
+    rule: 'evaluator',
+    plant: (folder) => {
+      if (kind === 'command') plantEvaluator(folder, COMMAND_EVALUATOR);
+      else if (kind === 'records') {
+        plantEvaluator(folder, { kind: 'records', records: 'harness-records' }, { mapping: null });
+        fs.mkdirSync(path.join(folder, 'harness-records'));
+      }
+      editJson(folder, 'evaluation.json', (value) => (value.evaluatorQualification = AGENT_QUALIFICATION));
+    },
+    expect: (output) => [
+      [output.includes(`is ${kind}, and only a sealed-brief agent is qualified`), 'the finding does not say the block is unused'],
+    ],
+  })),
   {
     name: 'a sealed-brief agent with no timeoutMs',
     file: 'evaluation.json',

@@ -2364,6 +2364,8 @@ function useStubAgent(folder, capture) {
       agentArgs: [STUB_AGENT, '--capture', capture],
       timeoutMs: 60_000,
     };
+    // The agent chooses its own calls, so a run qualifies it before its first trial (Story 1.34).
+    evaluation.evaluatorQualification = { attempts: 2, minimumAgreement: 0.9 };
   });
   editJson(path.join(folder, 'contract.json'), (contract) => {
     contract.budgets.maxToolCalls = 4;

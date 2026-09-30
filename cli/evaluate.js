@@ -32,7 +32,9 @@
  *   11  preflight and run: an evaluation weakness, a seeded probe whose baseline does not pass or whose mutated
  *       arm does not fail, a historical probe that does not fail before its fix or pass after it, a clean
  *       control whose baseline does not pass, or a gameability probe whose degenerate response the naive
- *       oracle rejects or the disciplined oracle accepts
+ *       oracle rejects or the disciplined oracle accepts; run: a rubric judge whose calibration agreement is
+ *       below judgeCalibration.minimumAgreement, or a sealed-brief agent whose agreement on an arm is below
+ *       evaluatorQualification.minimumAgreement
  *   12  infrastructure: the optional eval-quality peer is not installed; preflight: a workspace that cannot
  *       be made, a target that cannot launch, a qualification arm step that exits an infrastructure code,
  *       a restore that fails, a restored workspace that does not pass again, a leg that could not run, a

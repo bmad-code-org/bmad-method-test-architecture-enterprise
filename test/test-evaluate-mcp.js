@@ -1004,6 +1004,8 @@ function useStubAgent(folder, capture) {
       agentArgs: [STUB_AGENT, '--capture', capture],
       timeoutMs: 60_000,
     };
+    // The agent chooses its own calls, so a run qualifies it before its first trial (Story 1.34).
+    evaluation.evaluatorQualification = { attempts: 2, minimumAgreement: 0.9 };
   });
   editJson(path.join(folder, 'contract.json'), (contract) => {
     contract.budgets.maxToolCalls = 4;
@@ -1119,10 +1121,10 @@ async function checkSealedBriefAgent() {
   const hung = evaluate(['run', '--evaluation', hanging.folder], hanging.env);
   check(
     hung.status === 12 &&
-      hung.output.includes("trial-clean-1 yields no record: the evaluator's call trial-1-call-2 could not run: budget-exhausted") &&
+      hung.output.includes("attempt-clean-1 yields no record: the evaluator's call attempt-1-call-2 could not run: budget-exhausted") &&
       /could not run: budget-exhausted[^\n]*; the agent then failed: Agent [^\n]* exited with code 1/.test(hung.output) &&
       !hung.output.includes('could not answer'),
-    `a bridge call to a hanging server: run exited ${hung.status}; expected 12 naming the call's budget-exhausted fault\n${hung.output}`,
+    `a bridge call to a hanging server: run exited ${hung.status}; expected 12 naming the call's budget-exhausted fault in the first evaluator attempt\n${hung.output}`,
   );
   check(livingSessions(hanging).length === 0, `a hung server's processes outlived the run: ${JSON.stringify(livingSessions(hanging))}`);
 }

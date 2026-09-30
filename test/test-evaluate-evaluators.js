@@ -1123,8 +1123,32 @@ async function checkSignalMidTrial() {
   const socket = captures(capture)[0]?.config?.mcpServers?.[captures(capture)[0]?.server]?.args?.at(-1);
   check(
     typeof socket === 'string' && !fs.existsSync(path.dirname(socket)),
-    `a run ended by SIGINT mid-trial left the bridge's socket directory ${socket === undefined ? '(unknown)' : path.dirname(socket)}`,
+    `a run ended by SIGINT mid-attempt left the bridge's socket directory ${socket === undefined ? '(unknown)' : path.dirname(socket)}`,
   );
+
+  // The same agent hanging in the fifth run, the clean arm's first trial, once the qualification's four attempts agreed.
+  const trialCapture = path.join(scratch.make('signal-agent-trial-capture'), 'capture.jsonl');
+  const trialAgent = makeProject('sealed-brief-signal-trial', {
+    edit: ({ folder }) =>
+      useSealedBriefAgent(folder, {
+        capture: trialCapture,
+        mode: 'hang',
+        counter: path.join(scratch.make('signal-agent-trial-counter'), 'runs.txt'),
+        modeFrom: 2 * QUALIFICATION.attempts + 1,
+      }),
+  });
+  await interrupt(trialAgent, {
+    ready: `${trialCapture}.hung`,
+    signal: 'SIGINT',
+    expected: ['tea-evaluate-evaluator-', 'tea-evaluate-bridge-config-'],
+  });
+  const hung = captures(trialCapture).at(-1);
+  const trialSocket = hung?.config?.mcpServers?.[hung?.server]?.args?.at(-1);
+  check(
+    typeof trialSocket === 'string' && !fs.existsSync(path.dirname(trialSocket)),
+    `a run ended by SIGINT mid-trial left the bridge's socket directory ${trialSocket === undefined ? '(unknown)' : path.dirname(trialSocket)}`,
+  );
+  check(captures(trialCapture).length === 2 * QUALIFICATION.attempts + 1, 'the hanging agent did not start in the fifth run');
 }
 
 /** Whether the process `pid` still runs. */
@@ -1245,8 +1269,23 @@ async function checkLayerWritesRefused() {
 
 // -------------------------------------------------------------- sealed-brief agent
 
+/** The qualification the adopter declares for a sealed-brief agent: two attempts per arm, and near-total agreement (Story 1.34). */
+const QUALIFICATION = { attempts: 2, minimumAgreement: 0.9 };
+
 /** The sealed-brief agent wired into `folder`: the stub through the `custom` adapter, its mapping, and its model snapshot. */
-function useSealedBriefAgent(folder, { capture, mode = 'normal', budget = 3, rubric = false, targetModel = null }) {
+function useSealedBriefAgent(
+  folder,
+  {
+    capture,
+    mode = 'normal',
+    budget = 3,
+    rubric = false,
+    targetModel = null,
+    qualification = QUALIFICATION,
+    counter = null,
+    modeFrom = null,
+  },
+) {
   fs.mkdirSync(path.join(folder, 'evaluator'), { recursive: true });
   fs.copyFileSync(path.join(COMMAND_EVALUATOR, 'mapping.json'), path.join(folder, 'evaluator', 'mapping.json'));
   editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
@@ -1254,9 +1293,18 @@ function useSealedBriefAgent(folder, { capture, mode = 'normal', budget = 3, rub
       kind: 'sealed-brief-agent',
       agent: 'custom',
       agentCommand: process.execPath,
-      agentArgs: [STUB_AGENT, '--capture', capture, '--mode', mode],
+      agentArgs: [
+        STUB_AGENT,
+        '--capture',
+        capture,
+        '--mode',
+        mode,
+        ...(counter === null ? [] : ['--counter', counter]),
+        ...(modeFrom === null ? [] : ['--mode-from', String(modeFrom)]),
+      ],
       timeoutMs: 60_000,
     };
+    if (qualification !== null) evaluation.evaluatorQualification = qualification;
   });
   editJson(path.join(folder, 'contract.json'), (contract) => {
     contract.budgets.maxToolCalls = budget;
@@ -1333,7 +1381,12 @@ async function checkSealedBriefAgent() {
   const brief = readJson(path.join(runDirectory, 'sealed-evaluator-brief.json'));
   const contract = readJson(path.join(project.folder, 'contract.json'));
   const calls = captures(capture);
-  check(calls.length === 2 * TRIALS + 3, `the stub agent ran ${calls.length} time(s); expected calibration and trials`);
+  // Three calibration calls, each arm's qualification attempts, and each arm's trials.
+  const expectedRuns = 3 + 2 * QUALIFICATION.attempts + 2 * TRIALS;
+  check(
+    calls.length === expectedRuns,
+    `the stub agent ran ${calls.length} time(s); expected ${expectedRuns}: calibration, qualification and trials`,
+  );
   // Every trial's prompt names a fresh nonce of its own.
   const nonces = calls.map((call) => /<judge-answer nonce="([0-9a-f]{32})">/.exec(call.prompt)?.[1]);
   check(
@@ -1410,6 +1463,8 @@ async function checkSealedBriefAgent() {
       parameters['tea.targetModelSnapshot'] === 'a-target-model' &&
       parameters['tea.targetSystemPromptDigest'] === TARGET_PROMPT_DIGEST &&
       parameters['tea.evaluatorTreeDigest'].startsWith('sha256:') &&
+      parameters['tea.evaluatorQualificationAttempts'] === QUALIFICATION.attempts &&
+      parameters['tea.evaluatorQualificationMinimumAgreement'] === QUALIFICATION.minimumAgreement &&
       configuration.toolInventory.includes('bridge:verdict'),
     `the sealed-brief configuration is ${JSON.stringify(configuration)}`,
   );
@@ -1427,9 +1482,263 @@ async function checkSealedBriefAgent() {
     manifest.resourceCeilings.maxToolCalls === (1 + 3) * TRIALS && manifest.actualResourceUse.toolCalls === 2 * TRIALS,
     `the sealed-brief manifest's tool calls are ${manifest.resourceCeilings.maxToolCalls} allowed and ${manifest.actualResourceUse.toolCalls} used`,
   );
+  // A steady agent agrees with itself: every attempt of the qualification agrees, and its outcomes are the artifacts' own.
+  const qualification = checkQualificationReport('the sealed-brief agent run', runDirectory, QUALIFICATION);
+  check(
+    qualification !== null &&
+      qualification.arms.every(
+        (arm) => arm.agreement === 1 && arm.probes.every((probe) => probe.attempts.every((attempt) => attempt.agrees)),
+      ),
+    `the steady agent's qualification is ${JSON.stringify(qualification?.arms.map((arm) => [arm.conditionArm, arm.agreement]))}; expected agreement 1`,
+  );
   const { evidence } = scoreRun(project, 'the sealed-brief agent run');
   checkVotes('the sealed-brief agent run', evidence, 'P-001', 'passed-clean-control');
   checkVotes('the sealed-brief agent run', evidence, 'P-002', 'caught');
+}
+
+/**
+ * Every attempt's outcome in `evaluator-qualification.json` equals the state its evidence artifact holds, byte for byte,
+ * an Invalid attempt (no artifact) holds none, and each agreement is the fraction of attempts that equal the state the arm
+ * expects (AD-1: the runtime computes no outcome). Returns what differs.
+ */
+function qualificationMismatches(runDirectory, report) {
+  const mismatches = [];
+  for (const arm of report.arms) {
+    const slug = arm.conditionArm.replace(':', '-');
+    for (const probe of arm.probes) {
+      const at = `${arm.conditionArm}/${probe.probeId}`;
+      if (probe.attempts.length !== report.attempts || probe.attempts.some((attempt, index) => attempt.attempt !== index + 1))
+        mismatches.push(
+          `${at}: holds attempts ${JSON.stringify(probe.attempts.map((attempt) => attempt.attempt))}, not 1 to ${report.attempts}`,
+        );
+      for (const attempt of probe.attempts) {
+        const label = `${at}/attempt ${attempt.attempt}`;
+        const artifact = `evaluator-qualification/${slug}/attempt-${attempt.attempt}/${probe.probeId}/evidence-artifact.json`;
+        if (attempt.evidence === null) {
+          // An Invalid attempt: the engine's exit, its invalid lines, no outcome, and no artifact on disk.
+          if (
+            attempt.outcome !== null ||
+            attempt.exitCode !== 3 ||
+            attempt.invalid.length === 0 ||
+            fs.existsSync(path.join(runDirectory, artifact))
+          )
+            mismatches.push(`${label}: an attempt with no artifact holds an outcome, an exit other than 3, no invalid line or an artifact`);
+          continue;
+        }
+        if (
+          attempt.evidence !== artifact ||
+          typeof attempt.outcome !== 'string' ||
+          ![0, 2].includes(attempt.exitCode) ||
+          attempt.invalid.length > 0
+        ) {
+          mismatches.push(
+            `${label}: cites ${attempt.evidence} with exit ${attempt.exitCode} and outcome ${JSON.stringify(attempt.outcome)}`,
+          );
+          continue;
+        }
+        const votes = readJson(path.join(runDirectory, attempt.evidence)).reducedProbeOutcomes.find(
+          (reduced) => reduced.probeId === probe.probeId,
+        ).trialVotes;
+        if (votes.length !== 1 || !Buffer.from(attempt.outcome).equals(Buffer.from(votes[0].state)))
+          mismatches.push(
+            `${label}: outcome ${JSON.stringify(attempt.outcome)}, the artifact holds ${JSON.stringify(votes.map((vote) => vote.state))}`,
+          );
+      }
+      const agreeing = probe.attempts.filter((attempt) => attempt.outcome === probe.expectedOutcome).length;
+      if (
+        probe.agreement !== agreeing / report.attempts ||
+        probe.attempts.some((attempt) => attempt.agrees !== (attempt.outcome === probe.expectedOutcome))
+      )
+        mismatches.push(`${at}: agreement ${probe.agreement} does not follow its attempts`);
+    }
+    if (arm.agreement !== Math.min(...arm.probes.map((probe) => probe.agreement)))
+      mismatches.push(`${arm.conditionArm}: agreement is not its lowest probe's`);
+  }
+  return mismatches;
+}
+
+/** The report a run wrote, held to the runtime's own schema, its attempts to their evidence artifacts and its files to the run directory's layout. */
+function checkQualificationReport(what, runDirectory, { attempts, minimumAgreement }) {
+  const file = path.join(runDirectory, 'evaluator-qualification.json');
+  if (!fs.existsSync(file)) {
+    check(false, `${what}: the run wrote no evaluator-qualification.json`);
+    return null;
+  }
+  const report = readJson(file);
+  const schema = readJson(path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate', 'schemas', 'evaluator-qualification.schema.json'));
+  const validateReport = qualificationSchema(schema);
+  check(validateReport(report), `${what}: evaluator-qualification.json fails its schema: ${JSON.stringify(validateReport.errors)}`);
+  check(
+    report.attempts === attempts && report.minimumAgreement === minimumAgreement,
+    `${what}: the report declares ${report.attempts} attempt(s) at ${report.minimumAgreement}; expected ${attempts} at ${minimumAgreement}`,
+  );
+  check(
+    JSON.stringify(report.arms.map((arm) => arm.conditionArm)) === '["clean","mutated:M-001"]',
+    `${what}: the report qualifies ${JSON.stringify(report.arms.map((arm) => arm.conditionArm))}; expected the clean and the mutated arm`,
+  );
+  check(
+    JSON.stringify(report.arms.map((arm) => arm.probes.map((probe) => [probe.probeId, probe.expectedOutcome]))) ===
+      '[[["P-001","passed-clean-control"]],[["P-002","caught"]]]',
+    `${what}: the report expects ${JSON.stringify(report.arms.map((arm) => arm.probes))}`,
+  );
+  for (const mismatch of qualificationMismatches(runDirectory, report)) check(false, `${what}: ${mismatch}`);
+  // Nothing an attempt wrote lands where a trial's does, and every attempt has files of its own.
+  for (const slug of ['clean', 'mutated-M-001']) {
+    const kept = fs.readdirSync(path.join(runDirectory, 'evaluator-qualification', slug)).sort();
+    check(
+      JSON.stringify(kept) === JSON.stringify(Array.from({ length: attempts }, (_, index) => `attempt-${index + 1}`)),
+      `${what}: ${slug} kept ${JSON.stringify(kept)} of its attempts`,
+    );
+    // The trials keep exactly their own files: an attempt's evidence or streams leaking there would add or overwrite one.
+    for (const [directory, pattern] of [
+      ['trials', 'json'],
+      ['evaluator', null],
+    ]) {
+      const where = path.join(runDirectory, directory, slug);
+      if (!fs.existsSync(where)) continue;
+      const expected = Array.from({ length: TRIALS }, (_, index) => `trial-${index + 1}`);
+      const names = fs.readdirSync(where).sort();
+      const wanted = (pattern === null ? ['json', 'stderr', 'stdout'] : [pattern]).flatMap((extension) =>
+        expected.map((name) => `${name}.${extension}`),
+      );
+      check(
+        JSON.stringify(names) === JSON.stringify(wanted.sort()),
+        `${what}: ${directory}/${slug} holds ${JSON.stringify(names)}; expected only the ${TRIALS} trial(s)' own files`,
+      );
+    }
+  }
+  return report;
+}
+
+/** A compiled validator for a runtime-owned schema. */
+function qualificationSchema(schema) {
+  const AjvModule = require('ajv/dist/2020');
+  const Ajv = AjvModule.default ?? AjvModule;
+  return new Ajv({ strict: false, allErrors: true }).compile(schema);
+}
+
+/**
+ * Story 1.34: a sealed-brief agent is qualified before any trial. The stub agent in its alternating mode
+ * (`--counter` outside the project) sends the request on standard input on odd runs and omits it on even ones, so
+ * of two attempts on an arm one matches the defect signature's stdin selector and the other does not.
+ */
+async function checkEvaluatorQualification() {
+  // Agreement 0.5 against 0.9: the mutated arm's second attempt is Invalid, the run exits 11 and seals nothing.
+  const counter = path.join(scratch.make('qualify-counter'), 'runs.txt');
+  const capture = path.join(scratch.make('qualify-capture'), 'calls.jsonl');
+  const weak = makeProject('qualify-disagreement', {
+    marker: true,
+    edit: ({ folder }) => useSealedBriefAgent(folder, { capture, mode: 'alternating-stdin', counter }),
+  });
+  const ran = evaluate(['run', '--evaluation', weak.folder], weak.env);
+  check(ran.status === 11, `an agent that omits stdin on one attempt of two exited ${ran.status}; expected 11\n${ran.output}`);
+  check(
+    ran.output.includes('mutated:M-001 (0.5)') && ran.output.includes('evaluator-qualification.json'),
+    `the stop does not name the arm and the report:\n${ran.output}`,
+  );
+  const directory = runDirectoryOf(weak.folder);
+  check(directory !== null, 'a run that failed its qualification kept no run directory');
+  if (directory !== null) {
+    const report = checkQualificationReport('the disagreeing agent', directory, QUALIFICATION);
+    if (report === null) return;
+    const [clean, mutated] = report.arms;
+    check(
+      clean.agreement === 1,
+      `the clean arm's agreement is ${clean.agreement}; the omitted stdin does not change what a clean control passes`,
+    );
+    check(mutated.agreement === 0.5, `the mutated arm's agreement is ${mutated.agreement}; expected 0.5`);
+    const [first, second] = mutated.probes[0].attempts;
+    check(
+      first.outcome === 'caught' && first.exitCode !== 3 && first.evidence !== null && first.agrees,
+      `the mutated arm's first attempt is ${JSON.stringify(first)}`,
+    );
+    check(
+      second.exitCode === 3 &&
+        second.evidence === null &&
+        second.outcome === null &&
+        !second.agrees &&
+        second.invalid.length > 0 &&
+        second.invalid.every((line) => line.startsWith('eval-quality: invalid:')),
+      `the mutated arm's second attempt is ${JSON.stringify(second)}; expected the engine's Invalid exit with its invalid lines`,
+    );
+    check(!fs.existsSync(path.join(directory, 'trial-sets.json')), 'a run that failed its qualification wrote trial sets');
+    check(recordFiles(directory).length === 0, 'a run that failed its qualification wrote trial records');
+    check(!fs.existsSync(path.join(directory, 'trials')), 'a run that failed its qualification ran trials');
+    check(!fs.existsSync(path.join(directory, 'evaluator')), 'a run that failed its qualification kept a trial evaluator stream');
+    check(readJson(path.join(directory, 'run.json')).completed !== true, 'a run that failed its qualification says it completed');
+  }
+  // Two arms of two attempts each; the counter is outside the project, so every run advanced it.
+  check(fs.readFileSync(counter, 'utf8') === '4', `the agent ran ${fs.readFileSync(counter, 'utf8')} time(s); expected 4 attempts`);
+  // An attempt launches the target in a workspace whose label does not start with `trial-`, and no trial ran: the
+  // launches are the preflight's, the qualifications' and the attempts' (two per attempt: the plan's step and the agent's call).
+  const workspaces = launches(weak).map((line) => line.workspace);
+  const attemptLaunches = workspaces.filter((workspace) => workspace?.startsWith('attempt-'));
+  check(
+    workspaces.every((workspace) => !workspace?.startsWith('trial-')) &&
+      attemptLaunches.length === 8 &&
+      attemptLaunches.some((workspace) => workspace.startsWith('attempt-clean-')) &&
+      attemptLaunches.some((workspace) => workspace.startsWith('attempt-mutated-M-001-')),
+    `the run launched the target in ${JSON.stringify(workspaces)}; expected eight launches in attempt- workspaces and none in a trial-`,
+  );
+  // An evaluation that declares no qualification never reaches the agent: `run` refuses it with the authoring exit.
+  const undeclared = makeProject('qualify-undeclared', {
+    edit: ({ folder }) =>
+      useSealedBriefAgent(folder, {
+        capture: path.join(scratch.make('qualify-undeclared-capture'), 'calls.jsonl'),
+        qualification: null,
+      }),
+  });
+  const refused = evaluate(['run', '--evaluation', undeclared.folder], undeclared.env);
+  check(
+    refused.status === 10 && refused.output.includes('declares no evaluatorQualification'),
+    `a sealed-brief run with no evaluatorQualification exited ${refused.status}; expected 10 naming the missing block\n${refused.output}`,
+  );
+  // The gate is the adopter's minimum: 0.5 agrees at 0.5, so the same agent seals a run.
+  const lenientCounter = path.join(scratch.make('qualify-lenient-counter'), 'runs.txt');
+  const lenient = makeProject('qualify-lenient', {
+    edit: ({ folder }) =>
+      useSealedBriefAgent(folder, {
+        capture: path.join(scratch.make('qualify-lenient-capture'), 'calls.jsonl'),
+        mode: 'alternating-stdin',
+        counter: lenientCounter,
+        qualification: { attempts: 2, minimumAgreement: 0.5 },
+      }),
+  });
+  const passed = evaluate(['run', '--evaluation', lenient.folder], lenient.env);
+  check(passed.status === 0, `an agent at exactly the minimum agreement exited ${passed.status}; expected 0\n${passed.output}`);
+  const passedDirectory = runDirectoryOf(lenient.folder);
+  check(passedDirectory !== null, 'the run at the minimum agreement kept no run directory');
+  if (passedDirectory !== null) {
+    checkQualificationReport('the agent at the minimum', passedDirectory, { attempts: 2, minimumAgreement: 0.5 });
+    check(fs.existsSync(path.join(passedDirectory, 'trial-sets.json')), 'a run that passed its qualification sealed no trial set');
+    // What the gate protects against: the agent's trials 8 and 10 omit stdin, so the sealed mutated set reads as Invalid.
+    const { evidence } = scoreRun(lenient, 'the run sealed at the minimum agreement', 3);
+    check(evidence['P-002'] === null, 'the mutated set of an agent that omits stdin on some trials did not read as Invalid');
+  }
+  // The comparison can fail: each departure from the evidence artifacts and from the agreement arithmetic is a mismatch.
+  const weakDirectory = runDirectoryOf(weak.folder);
+  const source = readJson(path.join(weakDirectory ?? '', 'evaluator-qualification.json'));
+  check(qualificationMismatches(weakDirectory, source).length === 0, 'the disagreeing report has mismatches before any forgery');
+  const forgeries = [
+    ['an outcome the artifact does not hold', (report) => (report.arms[1].probes[0].attempts[0].outcome = 'missed'), 'outcome "missed"'],
+    [
+      'an evidence path of another attempt',
+      (report) => (report.arms[0].probes[0].attempts[1].evidence = report.arms[0].probes[0].attempts[0].evidence),
+      'cites',
+    ],
+    ['an outcome on an Invalid attempt', (report) => (report.arms[1].probes[0].attempts[1].outcome = 'caught'), 'no artifact'],
+    ['a probe agreement of 1', (report) => (report.arms[1].probes[0].agreement = 1), 'agreement 1 does not follow'],
+    ['an arm agreement of 1', (report) => (report.arms[1].agreement = 1), 'not its lowest probe'],
+    ['a missing attempt', (report) => report.arms[0].probes[0].attempts.pop(), 'holds attempts'],
+  ];
+  for (const [name, forge, says] of forgeries) {
+    const forged = structuredClone(source);
+    forge(forged);
+    check(
+      qualificationMismatches(weakDirectory, forged).some((mismatch) => mismatch.includes(says)),
+      `the comparison did not refuse ${name}`,
+    );
+  }
 }
 
 async function checkSealedBriefAgentEdges() {
@@ -1491,22 +1800,36 @@ async function checkSealedBriefAgentEdges() {
     forged: "carries no answer block with this call's nonce",
     'two-blocks': "carries 2 answer blocks with this call's nonce",
   };
-  for (const [mode, says] of Object.entries(faults)) {
-    const failCapture = path.join(scratch.make(`sealed-${mode}-capture`), 'captures.jsonl');
-    const project = makeProject(`sealed-${mode}`, { edit: ({ folder }) => useSealedBriefAgent(folder, { capture: failCapture, mode }) });
-    const failed = evaluate(['run', '--evaluation', project.folder], project.env);
-    check(failed.status === 12, `a sealed-brief agent in mode ${mode}: run exited ${failed.status}; expected 12\n${failed.output}`);
-    const directory = runDirectoryOf(project.folder);
-    check(recordFiles(directory).length === 0, `a sealed-brief agent in mode ${mode} wrote a record`);
-    check(
-      directory !== null && fs.existsSync(path.join(directory, 'evaluator', 'clean', 'trial-1.stdout')),
-      `a sealed-brief agent in mode ${mode}: its streams are not persisted`,
-    );
-    const fault = path.join(directory ?? '', 'evaluator', 'clean', 'trial-1.json');
-    check(
-      fs.existsSync(fault) && String(readJson(fault).fault).includes(says),
-      `a sealed-brief agent in mode ${mode}: the persisted fault does not say "${says}"`,
-    );
+  // The qualification's first attempt exercises the agent before any trial, so a fault there keeps its streams under the
+  // attempt; the same fault from the fifth run on (after two arms of two attempts) lands in the clean arm's first trial.
+  for (const phase of ['an evaluator attempt', 'a trial']) {
+    for (const [mode, says] of Object.entries(faults)) {
+      const what = `a sealed-brief agent in mode ${mode} during ${phase}`;
+      const failCapture = path.join(scratch.make(`sealed-${mode}-capture`), 'captures.jsonl');
+      const options =
+        phase === 'a trial'
+          ? { counter: path.join(scratch.make(`sealed-${mode}-counter`), 'runs.txt'), modeFrom: 2 * QUALIFICATION.attempts + 1 }
+          : {};
+      const project = makeProject(`sealed-${mode}-${phase === 'a trial' ? 'trial' : 'attempt'}`, {
+        edit: ({ folder }) => useSealedBriefAgent(folder, { capture: failCapture, mode, ...options }),
+      });
+      const failed = evaluate(['run', '--evaluation', project.folder], project.env);
+      check(failed.status === 12, `${what}: run exited ${failed.status}; expected 12\n${failed.output}`);
+      const directory = runDirectoryOf(project.folder);
+      check(recordFiles(directory).length === 0, `${what} wrote a record`);
+      const streams =
+        phase === 'a trial'
+          ? path.join(directory ?? '', 'evaluator', 'clean', 'trial-1')
+          : path.join(directory ?? '', 'evaluator-qualification', 'clean', 'attempt-1', 'evaluator');
+      check(directory !== null && fs.existsSync(`${streams}.stdout`), `${what}: its streams are not persisted`);
+      const fault = `${streams}.json`;
+      check(fs.existsSync(fault) && String(readJson(fault).fault).includes(says), `${what}: the persisted fault does not say "${says}"`);
+      // A fault in a trial follows a qualification that agreed, so the report is there; a fault in an attempt writes none.
+      check(
+        fs.existsSync(path.join(directory ?? '', 'evaluator-qualification.json')) === (phase === 'a trial'),
+        `${what}: the qualification report ${phase === 'a trial' ? 'is missing' : 'exists'}`,
+      );
+    }
   }
   // A call carrying the trial's answer nonce is refused unsent and not counted: under a budget of one, the agent's
   // next call still runs and the run completes.
@@ -2315,6 +2638,34 @@ async function checkUnits() {
     'the evaluator configuration does not carry the kind, the wiring and the command model',
   );
 
+  // Story 1.34: a sealed-brief agent's qualification is a condition of its verdicts, so it moves the scoring version.
+  const agentFields = (qualification) =>
+    configurationFields({
+      layer: {
+        evaluator: { kind: 'sealed-brief-agent', agent: 'custom', agentCommand: 'stub', timeoutMs: 1 },
+        treeDigest: 't',
+        mapping: { keys: {} },
+      },
+      conditions: { schemaVersion: 1, modelSnapshot: 'none', systemPromptDigest: 'd', evaluator: { modelSnapshot: 'an-agent' } },
+      judgeConfiguration: null,
+      digestBytes: engine.digestBytes,
+      qualification,
+    }).decodingParameters;
+  const qualified = agentFields({ attempts: 2, minimumAgreement: 0.9 });
+  check(
+    qualified['tea.evaluatorQualificationAttempts'] === 2 &&
+      qualified['tea.evaluatorQualificationMinimumAgreement'] === 0.9 &&
+      JSON.stringify(qualified) !== JSON.stringify(agentFields({ attempts: 3, minimumAgreement: 0.9 })) &&
+      JSON.stringify(qualified) !== JSON.stringify(agentFields({ attempts: 2, minimumAgreement: 0.5 })),
+    'the evaluator configuration does not carry the qualification, or it does not change with it',
+  );
+  check(
+    [...Object.keys(deterministic.decodingParameters), ...Object.keys(commandFields([]))].every(
+      (key) => !key.startsWith('tea.evaluatorQualification'),
+    ),
+    'a deterministic or command configuration carries a qualification',
+  );
+
   // Output past the cap ends the command, and what is kept is a faithful prefix of the stream, never more.
   const flooded = await runSupervised({
     command: process.execPath,
@@ -2399,6 +2750,62 @@ function checkDirectionGate() {
 // ---------------------------------------------------------------- the reference's denial reasons
 
 /** The reference names every reason code eval-quality's target policies decide, under its own heading (Story 1.33). */
+/**
+ * The reference's `### Qualifying a sealed-brief agent` section (Story 1.34), read by its exact heading under `## run`,
+ * names the block, the report and its attempt fields as the runtime's schema holds them, the Invalid attempt's record,
+ * the exit and the decoding parameters the configuration really carries.
+ */
+async function checkReferenceQualifiesSealedBriefAgent() {
+  const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
+  const prose = reference.replaceAll(/^```[^\n]*\n[\s\S]*?^```[^\n]*$/gm, (fence) => fence.replaceAll(/[^\n]/g, ' '));
+  const heading = '### Qualifying a sealed-brief agent';
+  const start = prose.indexOf(`\n${heading}\n`);
+  check(start !== -1 && !prose.includes(`\n${heading}\n`, start + 1), `the reference holds ${JSON.stringify(heading)} exactly once`);
+  if (start === -1) return;
+  const parent = (prose.slice(0, start).match(/^## .*$/gm) ?? []).pop();
+  check(parent === '## run', `the reference's section ${JSON.stringify(heading)} sits under ${JSON.stringify(parent)}, not ## run`);
+  const section = prose.slice(start + heading.length + 2).split(/\n#{1,3} /)[0];
+  const schema = readJson(path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate', 'schemas', 'evaluator-qualification.schema.json'));
+  const attemptFields = Object.keys(schema.properties.arms.items.properties.probes.items.properties.attempts.items.properties);
+  const decodingKeys = Object.keys(
+    configurationFields({
+      layer: {
+        evaluator: { kind: 'sealed-brief-agent', agent: 'custom', agentCommand: 'stub', timeoutMs: 1 },
+        treeDigest: 't',
+        mapping: { keys: {} },
+      },
+      conditions: { schemaVersion: 1, modelSnapshot: 'none', systemPromptDigest: 'd', evaluator: { modelSnapshot: 'an-agent' } },
+      judgeConfiguration: null,
+      digestBytes: (await loadEngine()).digestBytes,
+      qualification: { attempts: 2, minimumAgreement: 0.9 },
+    }).decodingParameters,
+  ).filter((key) => key.startsWith('tea.evaluatorQualification'));
+  check(decodingKeys.length === 2, `the configuration carries ${JSON.stringify(decodingKeys)}; expected the qualification's two keys`);
+  for (const term of [
+    'evaluatorQualification',
+    'attempts',
+    'minimumAgreement',
+    'evaluator-qualification.json',
+    'exitCode: 3',
+    'evidence: null',
+    'outcome: null',
+    '`invalid:`',
+    'exits 11',
+    'no trial record',
+    'lowest agreement among its probes',
+    'Historical and gameability arms are not qualified',
+    ...attemptFields.filter((field) => field !== 'attempt').map((field) => `\`${field}\``),
+    ...decodingKeys.map((key) => `\`${key}\``),
+  ]) {
+    check(section.includes(term), `the reference's section ${JSON.stringify(heading)} omits ${JSON.stringify(term)}`);
+  }
+  // The exit table and the check rule name the qualification beside their existing causes.
+  check(
+    /^\| 11 .*evaluatorQualification\.minimumAgreement/m.test(prose) && /^\| `evaluator` .*evaluatorQualification/m.test(prose),
+    "the reference's exit 11 row or its evaluator rule does not name the qualification",
+  );
+}
+
 async function checkReferenceNamesDenialReasons() {
   const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
   // The engine's own list, so a reason a later release decides fails the case until the reference names it.
@@ -2480,9 +2887,15 @@ async function main() {
       await runCase('the evaluation layer confined', checkLayerWritesRefused);
       return report();
     }
+    // `--qualification-only` runs Story 1.34's cases alone (its revert checks).
+    if (process.argv.includes('--qualification-only')) {
+      await runCase('the sealed-brief agent qualified', checkEvaluatorQualification);
+      return report();
+    }
     await runCase('the units', checkUnits);
     await runCase('the direction gate', checkDirectionGate);
     await runCase('the reference names the denial reasons', checkReferenceNamesDenialReasons);
+    await runCase('the reference qualifies the sealed-brief agent', checkReferenceQualifiesSealedBriefAgent);
     await runCase('a denied command trial step', checkCommandTrialDenial);
     await runCase('the bridge', checkBridge);
     await runCase('the command evaluator row shapes', checkCommandRowShapes);
@@ -2502,6 +2915,7 @@ async function main() {
     await runCase('a signal mid-trial', checkSignalMidTrial);
     await runCase('an oracle two behaviors declare', checkSharedOracle);
     await runCase('the sealed-brief agent', checkSealedBriefAgent);
+    await runCase('the sealed-brief agent qualified', checkEvaluatorQualification);
     await runCase('the sealed-brief agent edges', checkSealedBriefAgentEdges);
     await runCase('the records evaluator', checkRecordsEvaluator);
     for (const { label, directory } of runtimeTemps) {

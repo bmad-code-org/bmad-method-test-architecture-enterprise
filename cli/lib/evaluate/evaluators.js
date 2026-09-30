@@ -307,6 +307,7 @@ function evaluatorLayerChange(folder, files) {
  * @param {object|null} options.conditions `policy/evaluator-conditions.json`, or null
  * @param {object|null} options.judgeConfiguration the rubric judge's, under the deterministic kind
  * @param {(bytes: Uint8Array) => string} options.digestBytes
+ * @param {{ attempts: number, minimumAgreement: number }|null} [options.qualification] a sealed-brief agent's `evaluatorQualification`
  * @returns {{ evaluatorIdentity: string, modelSnapshot: string, systemPromptDigest: string, decodingParameters: object, judgeConfiguration: object|null }}
  */
 function configurationFields({
@@ -316,6 +317,7 @@ function configurationFields({
   digestBytes,
   calibrationDigest = null,
   calibrationMinimumAgreement = null,
+  qualification = null,
 }) {
   const { evaluator } = layer;
   const noPrompt = digestBytes(new Uint8Array(0));
@@ -341,6 +343,11 @@ function configurationFields({
   // A sealed-brief agent is the model this configuration describes; the target's own model, when it runs one, stays recorded.
   decodingParameters['tea.evaluatorAgent'] = evaluator.agent;
   decodingParameters['tea.evaluatorModel'] = recordedEvaluatorModel(evaluator);
+  // The qualification is a condition of the verdicts the agent's records carry: changing it changes the scoring version.
+  if (qualification !== null) {
+    decodingParameters['tea.evaluatorQualificationAttempts'] = qualification.attempts;
+    decodingParameters['tea.evaluatorQualificationMinimumAgreement'] = qualification.minimumAgreement;
+  }
   if (target.modelSnapshot !== 'none') {
     decodingParameters['tea.targetModelSnapshot'] = target.modelSnapshot;
     decodingParameters['tea.targetSystemPromptDigest'] = target.systemPromptDigest;
