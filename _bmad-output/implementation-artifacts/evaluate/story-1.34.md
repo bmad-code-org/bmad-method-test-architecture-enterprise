@@ -2,7 +2,7 @@
 title: 'Story 1.34: Qualify a sealed-brief agent evaluator before its verdicts count'
 type: 'feature'
 created: '2026-09-30'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'aa20cdc2'
