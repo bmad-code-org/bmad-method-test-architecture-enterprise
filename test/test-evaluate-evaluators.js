@@ -3122,7 +3122,6 @@ async function main() {
       await runCase('an arm agrees as its lowest probe', checkQualificationLowestProbe);
       await runCase('the other arms are not qualified', checkQualificationSkipsOtherArms);
       await runCase('a qualification attempt holds the adopter tree', checkQualificationHoldsAdopterTree);
-      await runCase('a qualification attempt holds the adopter tree', checkQualificationHoldsAdopterTree);
       return report();
     }
     await runCase('the units', checkUnits);
@@ -3152,6 +3151,7 @@ async function main() {
     await runCase('a qualification attempt in an unexpected state', checkQualificationUnexpectedState);
     await runCase('an arm agrees as its lowest probe', checkQualificationLowestProbe);
     await runCase('the other arms are not qualified', checkQualificationSkipsOtherArms);
+    await runCase('a qualification attempt holds the adopter tree', checkQualificationHoldsAdopterTree);
     await runCase('the sealed-brief agent edges', checkSealedBriefAgentEdges);
     await runCase('the records evaluator', checkRecordsEvaluator);
     for (const { label, directory } of runtimeTemps) {
