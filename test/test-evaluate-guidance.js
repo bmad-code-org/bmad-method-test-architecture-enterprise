@@ -1679,7 +1679,21 @@ function checkEvaluatorGuidance(guide, failures) {
     ],
     [
       '## Emit judgment rows or sealed records',
-      ['{ "rows":', 'observationIds', 'quoteChannel', 'confidence', 'anchored integer', 'SealedRunRecord'],
+      [
+        '{ "rows":',
+        'observationIds',
+        'quoteChannel',
+        'confidence',
+        'anchored integer',
+        'SealedRunRecord',
+        // Story 1.34: a sealed-brief agent is qualified before its verdicts count.
+        'evaluatorQualification',
+        'attempts',
+        'minimumAgreement',
+        'evaluator-qualification.json',
+        'exits 11',
+        'exits 10 under `evaluator`',
+      ],
     ],
   ]) {
     const body = headingBody(guide, heading);

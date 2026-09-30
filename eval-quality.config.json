@@ -808,6 +808,14 @@
           "reason": "an eval-quality scoring-policy field, not a TEA declaration"
         },
         {
+          "token": "evaluatorQualification",
+          "reason": "an evaluation.json field the runtime's JSON schema declares (cli/lib/evaluate/schemas/evaluation.schema.json), which this gate does not scan"
+        },
+        {
+          "token": "minimumAgreement",
+          "reason": "a field of evaluation.json's judgeCalibration and evaluatorQualification blocks, declared by the runtime's JSON schema, which this gate does not scan"
+        },
+        {
           "token": "digestComposite",
           "reason": "an eval-quality package export, not a TEA declaration"
         },

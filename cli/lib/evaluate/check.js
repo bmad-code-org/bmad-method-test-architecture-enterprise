@@ -62,6 +62,9 @@
  *   does not have, one that cannot run read-only, the `custom` adapter with no `agentCommand`, or a `model`
  *   its adapter refuses. Story 1.17 narrows it to the `deterministic` evaluator: under any other kind the
  *   evaluator scores the rubric, so neither file may carry a `judge` block.
+ * - `evaluator` (Story 1.34): a `sealed-brief-agent` evaluator whose `evaluation.json` has no
+ *   `evaluatorQualification` (`attempts`, `minimumAgreement`), which `run` needs to qualify the agent
+ *   before its verdicts count; and an `evaluatorQualification` beside any other kind, where nothing would use it.
  * - `evaluator` (Story 1.17, AD-21): a `command` or `sealed-brief-agent` evaluator has no
  *   `evaluator/mapping.json`, or one binding an oracle, behavior or rubric criterion the contract does not
  *   declare, an oracle to a behavior that does not declare it, levels other than the criterion's anchored
@@ -1190,6 +1193,21 @@ function checkEvaluator(report, folder, evaluation, contract, conditions) {
   const evaluator = evaluatorOf(evaluation);
   if (!isKnownEvaluator(evaluator)) return;
   const { kind } = evaluator;
+  // Only an agent that chooses its own calls varies between attempts, so only it is qualified (Story 1.34).
+  if (kind === 'sealed-brief-agent' && evaluation.evaluatorQualification === undefined) {
+    report.add(
+      MANIFEST_NAME,
+      'evaluator',
+      "evaluation.json's evaluator is a sealed-brief agent, which chooses its own calls, and the file declares no evaluatorQualification (attempts and minimumAgreement); run qualifies the agent on each arm before its verdicts count",
+    );
+  }
+  if (kind !== 'sealed-brief-agent' && evaluation.evaluatorQualification !== undefined) {
+    report.add(
+      MANIFEST_NAME,
+      'evaluator',
+      `declares evaluatorQualification: evaluation.json's evaluator is ${kind}, and only a sealed-brief agent is qualified before its verdicts count; remove it`,
+    );
+  }
   if (
     (kind === 'deterministic' || kind === 'records') &&
     conditions !== null &&

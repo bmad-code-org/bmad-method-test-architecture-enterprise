@@ -615,6 +615,8 @@ Added 2026-09-25 in Story 1.17. Levels: integration over real eval-quality, stat
 
 Added 2026-09-25 in Story 1.17. Levels: integration over real eval-quality, contract. Files: `test/test-evaluate-evaluators.js` (`test:evaluate-evaluators`), `test/test-evaluate-check.js` (`test:evaluate-check`).
 
+Amended 2026-09-30 in Story 1.34: an attempt eval-quality reads as Invalid has no artifact, so the disagreeing case asserts `exitCode: 3`, `evidence: null` and the engine's `invalid:` lines for the omitted-stdin attempt; an arm's agreement is the lowest agreement among its probes; historical and gameability arms are not qualified; `check` also refuses the block beside another evaluator kind, and the stub agent's alternating mode counts runs through `--counter`, a path outside the project.
+
 | AC                                                                                     | Test                                                                           | Level                              | P   | Revert check                                                           |
 | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ---------------------------------- | --- | ---------------------------------------------------------------------- |
 | The agent is qualified on each arm before the trials, below `minimumAgreement` exit 11 | A stub agent that omits stdin on one attempt of two; agreement 0.5 against 0.9 | Integration over real eval-quality | P0  | Dropping the qualification seals records eval-quality reads as Invalid |

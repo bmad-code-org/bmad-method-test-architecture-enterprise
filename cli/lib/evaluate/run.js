@@ -14,6 +14,11 @@
  *      its committed degenerate response satisfies its naive oracle and
  *      violates the disciplined one, exit 11 otherwise) and materialized as
  *      eval-quality's `gameability` probe;
+ *   1b. a sealed-brief agent evaluator qualified before any trial (Story 1.34): the agent runs
+ *      `evaluatorQualification.attempts` times on the clean arm and on each mutated arm, each attempt in a
+ *      workspace of its own that writes under `evaluator-qualification/` alone, its record scored by
+ *      `eval-quality score`, and `evaluator-qualification.json` reports each attempt's outcome, copied from the
+ *      evidence artifact, and each arm's agreement (exit 11 below `minimumAgreement`, with no trial set);
  *   2. every arm a probe needs, `evaluation.json`'s `trials` times: the clean
  *      arm (`conditionArm: clean`) for the clean controls, one mutated arm per
  *      mutation (`mutated:<mutationId>`) for the probes it seeds, one
@@ -70,6 +75,8 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
+const AjvModule = require('ajv/dist/2020');
+
 const { admissionRefusal, armVerdict, referenceTo } = require('./admission');
 const { callLabel, causeNote, faultRecord, hostEnvironmentPort, persistableRequest, reasonNote, runArm } = require('./arm');
 const { runCommandEvaluator } = require('./command-evaluator');
@@ -97,6 +104,10 @@ const { bridgeTools } = require('./bridge');
 const { bridgeRouter, runSealedBriefAgent } = require('./sealed-brief-agent');
 const { ZERO, addUsage } = require('./usage-report');
 const { forbiddenInputNote, layerPrefix } = require('./confinement');
+const { EngineStageError, runEngineStage } = require('./engine-cli');
+const { makeScratchDirectory, releaseScratchDirectory } = require('./workspace');
+
+const Ajv = AjvModule.default ?? AjvModule;
 
 const POLICY_PATH = 'policy/scoring-policy.json';
 const CONDITIONS_PATH = 'policy/evaluator-conditions.json';
@@ -104,6 +115,12 @@ const INDEX_PATH = 'corpus-index.json';
 const PROBE_FILE = /\.probe\.json$/;
 const RUNNABLE_ROUTES = ['clean-control', 'controlled-mutation', 'historical', 'gameability'];
 const DENIAL_FAULT = 'forbidden-target';
+/** Where the scoring policy sits in the run directory. */
+const POLICY_FILE = 'scoring-policy.json';
+/** The runtime-owned schema of `evaluator-qualification.json`. */
+const QUALIFICATION_SCHEMA = path.join(__dirname, 'schemas', 'evaluator-qualification.schema.json');
+/** The prefix of the lines eval-quality prints for an Invalid result, as `score` reports them. */
+const INVALID_LINE = 'eval-quality: invalid:';
 
 /** The index `tea-evaluate score` reads; its absence says the run did not complete. */
 const TRIAL_SETS_NAME = 'trial-sets.json';
@@ -401,6 +418,38 @@ async function qualifyCleanControls({
   return materialized;
 }
 
+/** The directory under the run directory that holds an evaluator attempt's files (Story 1.34). */
+const QUALIFICATION_DIRECTORY = 'evaluator-qualification';
+/** The report `run` writes once the attempts are scored. */
+const QUALIFICATION_REPORT = 'evaluator-qualification.json';
+
+/**
+ * What a trial is called and where it writes. A trial of the arm's trial set
+ * keeps its evidence under `trials/<arm>/` and what its evaluator printed under
+ * `evaluator/<arm>/`. An evaluator attempt (`context.attempt`, Story 1.34) runs
+ * the same trial once, in a workspace whose label does not start with
+ * `trial-`, and writes everything under
+ * `evaluator-qualification/<arm>/attempt-<n>/`, so it leaves nothing where the
+ * trial sets look.
+ */
+function trialNames({ arm, trialIndex, attempt }) {
+  if (attempt === undefined) {
+    return {
+      label: `trial-${arm.slug}-${trialIndex}`,
+      observationLabel: `trial-${trialIndex}`,
+      evidenceFile: `trials/${arm.slug}/trial-${trialIndex}.json`,
+      streams: `evaluator/${arm.slug}/trial-${trialIndex}`,
+    };
+  }
+  const directory = `${QUALIFICATION_DIRECTORY}/${arm.slug}/attempt-${attempt}`;
+  return {
+    label: `attempt-${arm.slug}-${attempt}`,
+    observationLabel: `attempt-${attempt}`,
+    evidenceFile: `${directory}/actions.json`,
+    streams: `${directory}/evaluator`,
+  };
+}
+
 /**
  * One trial of one arm: on a mutated or historical arm, in a workspace of its
  * own reproducing the pristine or the pre-fix one (the mutated arm's mutation
@@ -412,12 +461,12 @@ async function qualifyCleanControls({
  * a sealed-brief agent, whose own calls are the evaluation's and the plan a
  * harness baseline it never sees (`baseline`). Every probe on the arm is
  * judged, and so is every rubric. Its evidence goes to
- * `trials/<arm>/trial-<n>.json`.
+ * `trials/<arm>/trial-<n>.json`, or, for an evaluator attempt, under
+ * `evaluator-qualification/` (`trialNames`).
  */
 async function runTrial(context) {
   const { arm, trialIndex, contract, registry, pristine, make, discard, engine, writer, stop, signal, snapshot, run } = context;
-  const label = `trial-${arm.slug}-${trialIndex}`;
-  const evidenceFile = `trials/${arm.slug}/trial-${trialIndex}.json`;
+  const { label, observationLabel, evidenceFile } = trialNames(context);
   const provenance = snapshot.layer.evaluator.kind === 'sealed-brief-agent' ? 'baseline' : 'evaluator-chosen';
   if (arm.degenerate !== undefined) {
     const began = Date.now();
@@ -427,7 +476,7 @@ async function runTrial(context) {
         contract,
         registry,
         steps: arm.degenerate.steps,
-        label: `trial-${trialIndex}`,
+        label: observationLabel,
         provenance,
         signal,
       });
@@ -494,7 +543,7 @@ async function runTrial(context) {
     const began = Date.now();
     let executed;
     try {
-      executed = await runArm({ contract, port, registry, label: `trial-${trialIndex}`, provenance, seed: run?.seed, signal });
+      executed = await runArm({ contract, port, registry, label: observationLabel, provenance, seed: run?.seed, signal });
     } catch (error) {
       writer.writeJson(evidenceFile, {
         conditionArm: arm.conditionArm,
@@ -627,7 +676,7 @@ async function concludeWithRows(context, facts) {
     if (change !== null) throw new EvaluatorError(`the evaluation layer changed ${when}: ${change}`);
   };
   const baseline = Object.values(executed.stepObservations).sort((a, b) => a.sequence - b.sequence);
-  const streams = `evaluator/${arm.slug}/trial-${trialIndex}`;
+  const { observationLabel, streams } = trialNames(context);
   const written = { conditionArm: arm.conditionArm, trialIndex, ...evidence, steps: executed.steps };
   let router = null;
   let evaluated;
@@ -655,7 +704,7 @@ async function concludeWithRows(context, facts) {
         registry: context.registry,
         port,
         degenerate: arm.degenerate?.steps ?? null,
-        label: `trial-${trialIndex}`,
+        label: observationLabel,
         taken: new Set(baseline.map((observation) => observation.observationId)),
         firstSequence: baseline.length + 1,
         budget: contract.budgets?.maxToolCalls ?? 0,
@@ -969,6 +1018,82 @@ async function runTrialSets(given) {
   }
 
   const trialCount = evaluation.trials;
+  if (sealed === null) throw noStages();
+  const { contractDigest, sealedBriefDigest } = sealed;
+  const { conditions, layer } = snapshot;
+
+  const failures = (artifactKind, problems) => {
+    if (problems.length > 0) {
+      throw stop({
+        stage: 'trial',
+        exitCode: 12,
+        message: `the runtime built a ${artifactKind} that does not meet eval-quality's published schema: ${problems.join('; ')}`,
+      });
+    }
+  };
+
+  const tools = registry.toolInventory();
+  // Only the deterministic kind calls TeA's rubric judge; every other kind scores the rubric itself.
+  const judgeConfiguration =
+    kind === 'deterministic' ? judgeConfigurationFor({ contract, conditions, digestBytes: engine.digestBytes }) : null;
+  const fields = configurationFields({
+    layer,
+    conditions,
+    judgeConfiguration,
+    digestBytes: engine.digestBytes,
+    calibrationDigest,
+    calibrationMinimumAgreement: evaluation.judgeCalibration?.minimumAgreement ?? null,
+    qualification: kind === 'sealed-brief-agent' ? (evaluation.evaluatorQualification ?? null) : null,
+  });
+  // The tools a sealed-brief agent had: one per interface the bridge exposed.
+  const bridged =
+    kind === 'sealed-brief-agent' ? bridgeTools(context.sealedBrief.permittedInterfaces ?? []).map((tool) => `bridge:${tool.name}`) : [];
+  const configuration = evaluatorConfiguration({
+    evaluatorIdentity: fields.evaluatorIdentity,
+    modelSnapshot: fields.modelSnapshot,
+    sealedBriefDigest,
+    systemPromptDigest: fields.systemPromptDigest,
+    toolInventory: [...tools, ...bridged],
+    permissionInventory: [],
+    decodingParameters: fields.decodingParameters,
+    budgets: contract.budgets,
+    seed: null,
+    judgeConfiguration: fields.judgeConfiguration,
+  });
+  failures('EvaluatorConfiguration', await validate('evaluator-configuration', configuration));
+  const configurationDigest = engine.digestArtifact(configuration, 'EvaluatorConfiguration');
+  // Written ahead of the trials, since the records an evaluator qualification scores name its digest.
+  writeArtifact(engine, writer, 'evaluator-configuration.json', configuration, 'EvaluatorConfiguration');
+
+  const stepCeilingMs = (contract.interactionPlan ?? []).reduce((total, step) => {
+    const operation = (contract.permittedInterfaces ?? [])
+      .flatMap((iface) => iface.operations ?? [])
+      .find((candidate) => candidate.operationId === step.operationId);
+    const interfaceId = (contract.permittedInterfaces ?? []).find((iface) => (iface.operations ?? []).includes(operation))?.logicalId;
+    return total + registry.ceilingMs(interfaceId, operation);
+  }, 0);
+  // A sealed-brief agent's own calls count against the contract's budget in each trial, beside the plan's steps.
+  const callsPerTrial =
+    (contract.interactionPlan ?? []).length + (kind === 'sealed-brief-agent' ? (contract.budgets?.maxToolCalls ?? 0) : 0);
+  // The evaluator's wall clock counts toward a trial's ceiling beside the plan's.
+  const trialCeilingMs = stepCeilingMs + (convertsRows(kind) ? layer.evaluator.timeoutMs : 0);
+  // The digest of the bytes the runtime wrote to a run-directory file, which `score` holds each file to.
+  const bytesDigest = (file) => engine.digestBytes(writer.read(file));
+  const sealing = {
+    configuration,
+    configurationDigest,
+    contractDigest,
+    sealedBriefDigest,
+    tools,
+    callsPerTrial,
+    trialCeilingMs,
+    failures,
+    bytesDigest,
+  };
+
+  // A sealed-brief agent chooses its own calls, so its verdicts count only once it agrees with itself on the arms it will judge.
+  if (kind === 'sealed-brief-agent') await qualifyEvaluator({ ...context, arms, sealing });
+
   for (const arm of arms) {
     arm.trials = [];
     for (let trialIndex = 1; trialIndex <= trialCount; trialIndex += 1) {
@@ -993,65 +1118,6 @@ async function runTrialSets(given) {
   // wrote, and the run directory nothing else, before any trial set is written.
   writer.verify('after the trials');
 
-  const failures = (artifactKind, problems) => {
-    if (problems.length > 0) {
-      throw stop({
-        stage: 'trial',
-        exitCode: 12,
-        message: `the runtime built a ${artifactKind} that does not meet eval-quality's published schema: ${problems.join('; ')}`,
-      });
-    }
-  };
-
-  if (sealed === null) throw noStages();
-  const { contractDigest, sealedBriefDigest } = sealed;
-  const { conditions, layer } = snapshot;
-  const tools = registry.toolInventory();
-  // Only the deterministic kind calls TeA's rubric judge; every other kind scores the rubric itself.
-  const judgeConfiguration =
-    kind === 'deterministic' ? judgeConfigurationFor({ contract, conditions, digestBytes: engine.digestBytes }) : null;
-  const fields = configurationFields({
-    layer,
-    conditions,
-    judgeConfiguration,
-    digestBytes: engine.digestBytes,
-    calibrationDigest,
-    calibrationMinimumAgreement: evaluation.judgeCalibration?.minimumAgreement ?? null,
-  });
-  // The tools a sealed-brief agent had: one per interface the bridge exposed.
-  const bridged =
-    kind === 'sealed-brief-agent' ? bridgeTools(context.sealedBrief.permittedInterfaces ?? []).map((tool) => `bridge:${tool.name}`) : [];
-  const configuration = evaluatorConfiguration({
-    evaluatorIdentity: fields.evaluatorIdentity,
-    modelSnapshot: fields.modelSnapshot,
-    sealedBriefDigest,
-    systemPromptDigest: fields.systemPromptDigest,
-    toolInventory: [...tools, ...bridged],
-    permissionInventory: [],
-    decodingParameters: fields.decodingParameters,
-    budgets: contract.budgets,
-    seed: null,
-    judgeConfiguration: fields.judgeConfiguration,
-  });
-  failures('EvaluatorConfiguration', await validate('evaluator-configuration', configuration));
-  const configurationDigest = engine.digestArtifact(configuration, 'EvaluatorConfiguration');
-  writeArtifact(engine, writer, 'evaluator-configuration.json', configuration, 'EvaluatorConfiguration');
-
-  const stepCeilingMs = (contract.interactionPlan ?? []).reduce((total, step) => {
-    const operation = (contract.permittedInterfaces ?? [])
-      .flatMap((iface) => iface.operations ?? [])
-      .find((candidate) => candidate.operationId === step.operationId);
-    const interfaceId = (contract.permittedInterfaces ?? []).find((iface) => (iface.operations ?? []).includes(operation))?.logicalId;
-    return total + registry.ceilingMs(interfaceId, operation);
-  }, 0);
-  // A sealed-brief agent's own calls count against the contract's budget in each trial, beside the plan's steps.
-  const callsPerTrial =
-    (contract.interactionPlan ?? []).length + (kind === 'sealed-brief-agent' ? (contract.budgets?.maxToolCalls ?? 0) : 0);
-  // The evaluator's wall clock counts toward a trial's ceiling beside the plan's.
-  const trialCeilingMs = stepCeilingMs + (convertsRows(kind) ? layer.evaluator.timeoutMs : 0);
-  // The digest of the bytes the runtime wrote to a run-directory file, which `score` holds each file to.
-  const bytesDigest = (file) => engine.digestBytes(writer.read(file));
-
   const trialSets = [];
   const recordDigests = {};
   const manifestDigests = {};
@@ -1063,89 +1129,24 @@ async function runTrialSets(given) {
       }
     }
     for (const probe of arm.probes) {
-      const recommendation = convertsRows(kind)
-        ? setRecommendationOf(arm.trials.map((trial) => trial.recommendations[probe.probeId]))
-        : setRecommendation(arm.trials.map((trial) => trial.judgments[probe.probeId]));
       const directory = `trial-sets/${probe.probeId}`;
       const runId = `${invocationId}-${probe.probeId}`;
-      let setUse = ZERO;
-      try {
-        for (const trial of arm.trials) setUse = addUsage(setUse, trial.resourceUse);
-      } catch (error) {
-        throw stop({ stage: 'trial', exitCode: 12, message: `${runId}: ${error.message}` });
-      }
-      const manifest = isolationManifest({
-        runId,
-        contractId: contract.contractId,
+      const set = await sealProbeTrials(context, sealing, {
         conditionArm: arm.conditionArm,
-        modelSnapshot: configuration.modelSnapshot,
-        systemPromptDigest: configuration.systemPromptDigest,
-        contractDigest,
-        evaluatorConfigurationDigest: configurationDigest,
-        workspaceIdentity: `${evaluation.evaluationId} ${arm.conditionArm}`,
-        allowedMounts: arm.trials.flatMap((trial) => trial.mounts),
-        // What the confinement's audit saw the set's trials open outside what they were granted (records.js).
-        observedMounts: [...new Set(arm.trials.flatMap((trial) => trial.observedMounts))].sort(),
-        toolAllowlist: tools,
-        observedToolCalls: [...new Set(arm.trials.flatMap((trial) => trial.toolCalls))].sort(),
-        resourceCeilings: {
-          maxToolCalls: Math.max(1, callsPerTrial * trialCount),
-          maxInputTokens: UNBOUNDED,
-          maxOutputTokens: UNBOUNDED,
-          maxWallClockMinutes: Math.max(trialCeilingMs * trialCount, 1) / 60_000,
-          maxCostUsd: String(UNBOUNDED),
-        },
-        actualResourceUse: {
-          toolCalls: arm.trials.reduce((total, trial) => total + (trial.callCount ?? trial.toolCalls.length), 0),
-          inputTokens: setUse.inputTokens,
-          outputTokens: setUse.outputTokens,
-          wallClockSeconds: arm.trials.reduce((total, trial) => total + trial.elapsedMs, 0) / 1000,
-          costUsd: setUse.costUsd,
-        },
-        forbiddenInputNote: forbiddenInputNote(registry.confinement),
+        probe,
+        trials: arm.trials,
+        directory,
+        runId,
       });
-      failures('IsolationManifest', await validate('isolation-manifest', manifest));
-      const manifestFile = `${directory}/isolation-manifest.json`;
-      writeArtifact(engine, writer, manifestFile, manifest, 'IsolationManifest');
-      manifestDigests[probe.probeId] = bytesDigest(manifestFile);
-      const records = [];
-      for (const trial of arm.trials) {
-        const judgment = trial.judgments[probe.probeId];
-        const record = sealedRunRecord({
-          runId,
-          conditionArm: arm.conditionArm,
-          trialIndex: trial.trialIndex,
-          contractDigest,
-          sealedBriefDigest,
-          evaluatorConfigurationDigest: configurationDigest,
-          evaluatorRecommendation: recommendation,
-          oracleDispositions: judgment.oracleDispositions,
-          findings: judgment.findings,
-          observations: trial.observations,
-          judgeResults: trial.judgeResults,
-          actionsArtifact: referenceTo(folder, writer, trial.evidenceFile, engine.digestBytes),
-          isolationManifestArtifact: referenceTo(folder, writer, manifestFile, engine.digestBytes),
-          resourceUse: {
-            toolCalls: trial.callCount ?? trial.toolCalls.length,
-            inputTokens: trial.resourceUse.inputTokens,
-            outputTokens: trial.resourceUse.outputTokens,
-            wallClockSeconds: trial.elapsedMs / 1000,
-            costUsd: trial.resourceUse.costUsd,
-          },
-        });
-        failures('SealedRunRecord', await validate('sealed-run-record', record));
-        const recordFile = `${directory}/record-${trial.trialIndex}.json`;
-        writeArtifact(engine, writer, recordFile, record, 'SealedRunRecord');
-        recordDigests[recordFile] = bytesDigest(recordFile);
-        records.push(recordFile);
-      }
+      manifestDigests[probe.probeId] = set.manifestDigest;
+      Object.assign(recordDigests, set.recordDigests);
       trialSets.push({
         probeId: probe.probeId,
         runId,
         conditionArm: arm.conditionArm,
         probe: writeQualifiedProbe({ writer, stop }, probe),
-        records,
-        isolationManifest: manifestFile,
+        records: set.records,
+        isolationManifest: set.manifestFile,
       });
     }
   }
@@ -1176,6 +1177,293 @@ async function runTrialSets(given) {
             calls: arms.reduce((total, arm) => total + arm.trials.filter((trial) => trial.judgeCalled).length, 0),
           },
   });
+}
+
+/** What the evaluator recommends for one probe over `trials`, by the evaluator kind the run reads. */
+function recommendationFor(kind, trials, probeId) {
+  return convertsRows(kind)
+    ? setRecommendationOf(trials.map((trial) => trial.recommendations[probeId]))
+    : setRecommendation(trials.map((trial) => trial.judgments[probeId]));
+}
+
+/**
+ * One probe's isolation manifest and Sealed Run Records for the trials of one
+ * arm, each validated against the schema eval-quality publishes and written
+ * under `directory`: `isolation-manifest.json` and `record-<trialIndex>.json`.
+ * The trial sets and the evaluator qualification's attempts (one trial each)
+ * seal through here, so the two build one shape.
+ *
+ * @returns {Promise<{ manifestFile: string, manifestDigest: string, records: string[], recordDigests: Record<string, string> }>}
+ */
+async function sealProbeTrials(context, sealing, { conditionArm, probe, trials, directory, runId }) {
+  const { folder, evaluation, contract, registry, validate, engine, writer, stop } = context;
+  const {
+    configuration,
+    configurationDigest,
+    contractDigest,
+    sealedBriefDigest,
+    tools,
+    callsPerTrial,
+    trialCeilingMs,
+    failures,
+    bytesDigest,
+  } = sealing;
+  const kind = context.snapshot.layer.evaluator.kind;
+  const trialCount = trials.length;
+  const recommendation = recommendationFor(kind, trials, probe.probeId);
+  let setUse = ZERO;
+  try {
+    for (const trial of trials) setUse = addUsage(setUse, trial.resourceUse);
+  } catch (error) {
+    throw stop({ stage: 'trial', exitCode: 12, message: `${runId}: ${error.message}` });
+  }
+  const manifest = isolationManifest({
+    runId,
+    contractId: contract.contractId,
+    conditionArm,
+    modelSnapshot: configuration.modelSnapshot,
+    systemPromptDigest: configuration.systemPromptDigest,
+    contractDigest,
+    evaluatorConfigurationDigest: configurationDigest,
+    workspaceIdentity: `${evaluation.evaluationId} ${conditionArm}`,
+    allowedMounts: trials.flatMap((trial) => trial.mounts),
+    // What the confinement's audit saw the set's trials open outside what they were granted (records.js).
+    observedMounts: [...new Set(trials.flatMap((trial) => trial.observedMounts))].sort(),
+    toolAllowlist: tools,
+    observedToolCalls: [...new Set(trials.flatMap((trial) => trial.toolCalls))].sort(),
+    resourceCeilings: {
+      maxToolCalls: Math.max(1, callsPerTrial * trialCount),
+      maxInputTokens: UNBOUNDED,
+      maxOutputTokens: UNBOUNDED,
+      maxWallClockMinutes: Math.max(trialCeilingMs * trialCount, 1) / 60_000,
+      maxCostUsd: String(UNBOUNDED),
+    },
+    actualResourceUse: {
+      toolCalls: trials.reduce((total, trial) => total + (trial.callCount ?? trial.toolCalls.length), 0),
+      inputTokens: setUse.inputTokens,
+      outputTokens: setUse.outputTokens,
+      wallClockSeconds: trials.reduce((total, trial) => total + trial.elapsedMs, 0) / 1000,
+      costUsd: setUse.costUsd,
+    },
+    forbiddenInputNote: forbiddenInputNote(registry.confinement),
+  });
+  failures('IsolationManifest', await validate('isolation-manifest', manifest));
+  const manifestFile = `${directory}/isolation-manifest.json`;
+  writeArtifact(engine, writer, manifestFile, manifest, 'IsolationManifest');
+  const records = [];
+  const recordDigests = {};
+  for (const trial of trials) {
+    const judgment = trial.judgments[probe.probeId];
+    const record = sealedRunRecord({
+      runId,
+      conditionArm,
+      trialIndex: trial.trialIndex,
+      contractDigest,
+      sealedBriefDigest,
+      evaluatorConfigurationDigest: configurationDigest,
+      evaluatorRecommendation: recommendation,
+      oracleDispositions: judgment.oracleDispositions,
+      findings: judgment.findings,
+      observations: trial.observations,
+      judgeResults: trial.judgeResults,
+      actionsArtifact: referenceTo(folder, writer, trial.evidenceFile, engine.digestBytes),
+      isolationManifestArtifact: referenceTo(folder, writer, manifestFile, engine.digestBytes),
+      resourceUse: {
+        toolCalls: trial.callCount ?? trial.toolCalls.length,
+        inputTokens: trial.resourceUse.inputTokens,
+        outputTokens: trial.resourceUse.outputTokens,
+        wallClockSeconds: trial.elapsedMs / 1000,
+        costUsd: trial.resourceUse.costUsd,
+      },
+    });
+    failures('SealedRunRecord', await validate('sealed-run-record', record));
+    const recordFile = `${directory}/record-${trial.trialIndex}.json`;
+    writeArtifact(engine, writer, recordFile, record, 'SealedRunRecord');
+    recordDigests[recordFile] = bytesDigest(recordFile);
+    records.push(recordFile);
+  }
+  return { manifestFile, manifestDigest: bytesDigest(manifestFile), records, recordDigests };
+}
+
+/**
+ * The state eval-quality reduces an attempt to when the agent behaved as the arm's probes expect: a clean control passes
+ * (`passed-clean-control`) and a seeded defect is caught (`caught`). A historical or gameability arm is not qualified (null).
+ */
+function expectedOutcome(arm) {
+  if (arm.conditionArm === 'clean') return 'passed-clean-control';
+  return arm.conditionArm.startsWith('mutated:') ? 'caught' : null;
+}
+
+/**
+ * One attempt's sealed record through `eval-quality score`, alone: the
+ * outcome is the state the engine's evidence artifact reduced the attempt to,
+ * copied unchanged, and an attempt the engine reads as Invalid has no
+ * artifact, so it is kept with the engine's exit code and its `invalid:`
+ * lines. Any other exit is an engine that could not score (exit 12).
+ */
+function scoreAttempt(context, { probe, directory, set, corpusDigest }) {
+  const { writer, runDirectory, env, log, scratch, stop } = context;
+  const contractFile = 'eval-contract.json';
+  const staging = makeScratchDirectory(scratch, 'tea-evaluate-qualification-');
+  try {
+    const produced = path.join(staging, 'evidence-artifact.json');
+    const args = [
+      '--record',
+      writer.pathOf(set.records[0]),
+      '--contract',
+      writer.pathOf(contractFile),
+      '--probe',
+      writer.pathOf(`probes/${probe.probeId}.probe.json`),
+      '--preflight-verdict',
+      writer.pathOf('preflight-verdict.json'),
+      '--policy',
+      writer.pathOf(POLICY_FILE),
+      '--corpus-digest',
+      corpusDigest,
+      '--isolation-manifest',
+      writer.pathOf(set.manifestFile),
+      '--evaluator-configuration',
+      writer.pathOf('evaluator-configuration.json'),
+      '--out',
+      produced,
+    ];
+    let result;
+    try {
+      result = runEngineStage('score', args, { runDirectory, recordPath: `${directory}/score.json`, writer, env, log });
+    } catch (error) {
+      if (!(error instanceof EngineStageError)) throw error;
+      throw stop({ stage: 'trial', exitCode: 12, message: `${probe.probeId}: an evaluator attempt could not be scored: ${error.message}` });
+    }
+    if (result.exitCode === 3) {
+      return {
+        exitCode: 3,
+        evidence: null,
+        outcome: null,
+        invalid: result.stderr.split('\n').filter((line) => line.startsWith(INVALID_LINE)),
+      };
+    }
+    // Only a PASS, CONCERNS or FAIL result (exit 0 or 2) carries an evidence artifact worth reading.
+    if (result.exitCode !== 0 && result.exitCode !== 2) {
+      throw stop({
+        stage: 'trial',
+        exitCode: 12,
+        message: `${probe.probeId}: eval-quality score exited ${result.exitCode} for an evaluator attempt, which is no result to read; its call record is ${directory}/score.json`,
+      });
+    }
+    const evidence = `${directory}/evidence-artifact.json`;
+    if (!fs.existsSync(produced)) {
+      throw stop({
+        stage: 'trial',
+        exitCode: 12,
+        message: `${probe.probeId}: eval-quality score exited ${result.exitCode} for an evaluator attempt and wrote no evidence artifact`,
+      });
+    }
+    let votes = [];
+    try {
+      const artifact = JSON.parse(writer.copyIn(evidence, produced).toString('utf8'));
+      votes = artifact.reducedProbeOutcomes.find((reduced) => reduced.probeId === probe.probeId).trialVotes;
+    } catch {
+      // Read as no vote below, with the artifact kept in the run directory for the reader.
+    }
+    if (!Array.isArray(votes) || votes.length !== 1 || typeof votes[0]?.state !== 'string') {
+      throw stop({
+        stage: 'trial',
+        exitCode: 12,
+        message: `${probe.probeId}: the evidence artifact of an evaluator attempt (${evidence}) holds no single trial vote for the probe`,
+      });
+    }
+    return { exitCode: result.exitCode, evidence, outcome: votes[0].state, invalid: [] };
+  } finally {
+    releaseScratchDirectory(scratch, staging);
+  }
+}
+
+/**
+ * Qualifies a sealed-brief agent before any of its verdicts counts (Story
+ * 1.34). The agent chooses its own calls, so two runs over one seeded defect
+ * can differ, and a run's verdict would depend on which calls it happened to
+ * make. Before the first trial the agent runs `evaluatorQualification.attempts`
+ * times on the clean arm and on each mutated arm, each attempt in a workspace of
+ * its own that writes nothing under `trials/`; every probe of the arm is judged
+ * on the attempt, sealed as a record of one trial and scored alone by
+ * `eval-quality score`. A probe's agreement is the fraction of attempts whose
+ * reduced state is the one the arm expects (`passed-clean-control` on the clean
+ * arm, `caught` on a mutated one), an arm's agreement is the lowest of its
+ * probes', and an arm below `minimumAgreement` stops the run with exit 11 after
+ * `evaluator-qualification.json` is written. Historical and gameability arms are
+ * not qualified.
+ */
+async function qualifyEvaluator(context) {
+  const { evaluation, arms, sealing, snapshot, invocationId, writer, log, stop, treeUnchanged } = context;
+  if (evaluation.evaluatorQualification === undefined) {
+    throw stop({
+      stage: 'check',
+      exitCode: 10,
+      message: 'a sealed-brief agent evaluator needs evaluation.json to declare evaluatorQualification',
+    });
+  }
+  const { attempts, minimumAgreement } = evaluation.evaluatorQualification;
+  const corpusDigest = await corpusDigestOf(snapshot.index);
+  // The policy an attempt is scored with is the one the trial sets carry, so it is in the run directory before the first score.
+  if (!writer.has(POLICY_FILE)) writer.write(POLICY_FILE, snapshot.policyBytes);
+  const report = { attempts, minimumAgreement, arms: [] };
+  for (const arm of arms) {
+    const expected = expectedOutcome(arm);
+    if (expected === null) continue;
+    const probes = arm.probes.map((probe) => ({ probeId: probe.probeId, expectedOutcome: expected, agreement: 0, attempts: [] }));
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      log(`${arm.conditionArm}: evaluator attempt ${attempt} of ${attempts}`);
+      const trial = await runTrial({ ...context, arm, trialIndex: 1, attempt });
+      // Read after every attempt, so a target that writes into the project stops the run at once.
+      treeUnchanged('qualification attempts');
+      // The engine reads the run directory next: it must hold what the runtime wrote, and nothing else.
+      writer.verify('before an evaluator attempt was scored');
+      for (const [index, probe] of arm.probes.entries()) {
+        const directory = `${QUALIFICATION_DIRECTORY}/${arm.slug}/attempt-${attempt}/${probe.probeId}`;
+        const set = await sealProbeTrials(context, sealing, {
+          conditionArm: arm.conditionArm,
+          probe,
+          trials: [trial],
+          directory,
+          runId: `${invocationId}-${probe.probeId}-attempt-${attempt}`,
+        });
+        writeQualifiedProbe({ writer, stop }, probe);
+        const scored = scoreAttempt(context, { probe, directory, set, corpusDigest });
+        probes[index].attempts.push({ attempt, ...scored, agrees: scored.outcome === expected });
+      }
+    }
+    for (const probe of probes) probe.agreement = probe.attempts.filter((entry) => entry.agrees).length / attempts;
+    report.arms.push({
+      conditionArm: arm.conditionArm,
+      agreement: Math.min(...probes.map((probe) => probe.agreement)),
+      probes,
+    });
+  }
+  // Written before it is checked, so the attempts the run paid for stay readable whatever the check says.
+  writer.writeJson(QUALIFICATION_REPORT, report);
+  const problems = await qualificationProblems(report);
+  if (problems.length > 0) {
+    throw stop({
+      stage: 'trial',
+      exitCode: 12,
+      message: `the runtime built an ${QUALIFICATION_REPORT} that does not meet its schema: ${problems.join('; ')}`,
+    });
+  }
+  const below = report.arms.filter((entry) => entry.agreement < minimumAgreement);
+  if (below.length > 0) {
+    throw stop({
+      stage: 'trial',
+      exitCode: 11,
+      message: `evaluator qualification agreement fell below ${minimumAgreement} on ${below.map((entry) => `${entry.conditionArm} (${entry.agreement})`).join(', ')}; see ${QUALIFICATION_REPORT}`,
+    });
+  }
+}
+
+/** The ways `report` departs from the runtime-owned schema of `evaluator-qualification.json`. */
+async function qualificationProblems(report) {
+  const ajv = new Ajv({ strict: false, allErrors: true });
+  const validate = ajv.compile(readJson(QUALIFICATION_SCHEMA));
+  return validate(report) ? [] : (validate.errors ?? []).map((error) => `${error.instancePath || '/'} ${error.message}`);
 }
 
 /** A probe the run qualified, written as the trial set's probe file; a seeded probe's file is the preflight's own, which it must equal. */
@@ -1288,7 +1576,8 @@ async function completeRun(
     outcome,
   } = context;
   const startedAt = context.started;
-  writer.write('scoring-policy.json', snapshot.policyBytes);
+  // A sealed-brief agent's qualification wrote the policy already, to score its attempts with the bytes the trial sets carry.
+  if (!writer.has(POLICY_FILE)) writer.write(POLICY_FILE, snapshot.policyBytes);
   writer.writeJson('operation-phases.json', snapshot.operationPhases);
   const corpusDigest = await corpusDigestOf(snapshot.index);
   const bytesDigest = (file) => engine.digestBytes(writer.read(file));
