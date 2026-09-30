@@ -2,7 +2,7 @@
 title: 'Story 1.35: Judge a tool server that crashes mid-call'
 type: 'feature'
 created: '2026-09-30'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '3b136ab2'
@@ -127,3 +127,7 @@ Fixed:
 6. `ARCHITECTURE-SPINE.md` line 110 carries the dated note that an ended session also carries its signed `exitCode` on the `exit-code` channel.
 
 Skipped: none.
+
+## Final review round 2
+
+One Opus regression pass over the round-1 fixes found one defect and no regression: the test-design section filed the `oracles.md` check under `Static` where Epic 1 files `test:evaluate-guidance` under `Guidance`. Fixed in the Levels line and the row. The new `checkServerThatCannotStart` case was re-run (226 checks, three runs, no leftover processes or temp directories) and its revert reproduced. The eval-quality side (PR bmad-eval-quality#169, released as 4.4.0) had two Opus rounds and a fix commit before its merge.
