@@ -92,7 +92,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
 
-const { ENGINE_CLI_ENV, loadEngine } = require('../cli/lib/evaluate/engine');
+const { ENGINE_CLI_ENV, loadAdapters, loadEngine } = require('../cli/lib/evaluate/engine');
 const { AGENT_ADAPTERS } = require('../cli/lib/agent-adapters');
 const { qualifyGameabilityProbes, syntheticPort } = require('../cli/lib/evaluate/gameability');
 const { deploymentPair, historicalRevisions, qualifyHistoricalProbe, routeIdentity } = require('../cli/lib/evaluate/historical');
@@ -1381,6 +1381,7 @@ function checkHistoricalReference() {
 
 /** `originTarget`, the policy of a deployment arm, `deploymentAccess`, `deploymentPair` and `routeIdentity`, as units. */
 async function checkDeploymentUnits() {
+  const { parseProbeTargetPolicy } = await loadAdapters();
   const cases = [
     ['http://127.0.0.1:8080', { scheme: 'http', host: '127.0.0.1', port: 8080 }],
     ['https://grader.example.test/', { scheme: 'https', host: 'grader.example.test', port: 443 }],
@@ -1439,6 +1440,7 @@ async function checkDeploymentUnits() {
   const plain = portConfiguration({
     entries: [entry],
     portOf: (candidate) => candidate.port,
+    parsePolicy: parseProbeTargetPolicy,
     readEnvironment: () => ({}),
     interfaceId: 'grader',
   });
@@ -1450,6 +1452,7 @@ async function checkDeploymentUnits() {
   const inherited = portConfiguration({
     entries: [{ ...entry, interfaceId: 'constructor', deployments: [] }],
     portOf: (candidate) => candidate.port,
+    parsePolicy: parseProbeTargetPolicy,
     readEnvironment: () => ({}),
     interfaceId: 'constructor',
   });
@@ -1470,6 +1473,7 @@ async function checkDeploymentUnits() {
   const armed = portConfiguration({
     entries: [entry],
     portOf: (candidate) => candidate.port,
+    parsePolicy: parseProbeTargetPolicy,
     readEnvironment: () => ({}),
     interfaceId: 'grader',
     deployment: access,

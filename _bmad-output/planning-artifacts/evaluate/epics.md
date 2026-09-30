@@ -1136,7 +1136,7 @@ As an adopter with an HTTP target,
 I want my registry's HTTP entries held to eval-quality's own reading of an HTTP authorization,
 So that `check` refuses exactly what the engine's policy refuses, with no copy of its rules to drift (AD-1).
 
-**Engine consumption.** eval-quality ships a release exporting a `ProbeTargetPolicy` parser, as it exports `parseMcpTargetPolicy`, and TeA's devDependency and peer floor rise to it with the engine check at start and end; the coordinator makes that change in eval-quality.
+**Engine consumption.** eval-quality ships a release exporting a `ProbeTargetPolicy` parser, as it exports `parseMcpTargetPolicy`, and TeA's devDependency and peer floor rise to it with the engine check at start and end; the coordinator makes that change in eval-quality. (amended 2026-09-30 in Story 1.36: eval-quality PR #170 adds `parseProbeTargetPolicy` to `eval-quality/adapters`, released as 4.5.0, and TeA's peer floor rises to `>=4.5.0`.)
 
 **Acceptance Criteria:**
 
@@ -1145,6 +1145,8 @@ So that `check` refuses exactly what the engine's policy refuses, with no copy o
 **Then** the entries become the policy the runtime builds, a started server's entry at a placeholder port, and eval-quality's parser reads it; an entry the parser refuses is a `registry` finding naming the parser's reason, a `test:evaluate-api` case; skipping the parser lets the case exit 0, which the case catches
 **And** the runtime builds each call's policy through the same parser before any service starts, so a policy the parser refuses stops the call with the parser's fault, a `test:evaluate-api` unit; building the policy by hand lets the refused field reach the port, which the unit catches
 **And** `ApiRegistryEntry` keeps the authorization fields at their JSON types and leaves their rules to the parser, and a `test:evaluate-api` case reads the schema and fails when one of those fields carries a rule of its own; restoring a copied rule fails the case
+
+**And** (amended 2026-09-30 in Story 1.36) the policy handed to the parser has the shape `authorizationOf` and `deploymentCandidates` build: each `deployments` origin is an authorization of its own, read and reported alone (`registry[n].deployments[m]`), so a finding names what the parser refused; the placeholder port of a started server's entry is its scheme's default port; the `maxElapsedMs` ceiling of 2147483647 leaves the schema with the other copied rules, since eval-quality's HTTP policy sets none and the runtime's timers already hold a larger value; `uniqueItems` on `addresses`, `methods`, `safeMethods` and `deployments` leaves with them; a `test:evaluate-api` trial unit shows a registry built without `check` over a refused field stopping with exit 12
 
 **Dependencies:** 1.11.
 **Gate:** `npm test`, `npm run test:release-metadata`, engine check.
