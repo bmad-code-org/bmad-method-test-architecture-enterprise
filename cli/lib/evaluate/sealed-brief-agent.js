@@ -60,10 +60,11 @@
  *   starts, so no call the agent cannot see reaches the record.
  *
  * A call whose target exits one of its registry entry's
- * `infrastructureExitCodes`, is stopped by a signal from outside, or cannot
- * be sent (an adapter fault other than a denial or a request eval-quality
- * cannot parse, a tool server that cannot start or answer included) is a
- * target that could not run: the trial yields no record and the run exits 12
+ * `infrastructureExitCodes`, is stopped by a signal from outside (a tool
+ * server's session that a signal from outside ended included), or cannot be
+ * sent (an adapter fault other than a denial or a request eval-quality cannot
+ * parse, a tool server that cannot start, refuses its handshake or writes a
+ * line that is no JSON-RPC message included) is a target that could not run: the trial yields no record and the run exits 12
  * once the agent has ended.
  *
  * The agent answers inside `<judge-answer nonce="...">` with a fresh 128-bit
@@ -312,6 +313,8 @@ function callResult({ observationId, request, observation }) {
       sent: { tool: request.toolName, arguments: request.channels.arguments },
       isError: observation.isError,
       result: channel(observation.result),
+      // Present only when the server's process ended the session before it answered.
+      ...(typeof observation.exitCode === 'number' ? { exitCode: observation.exitCode } : {}),
     });
   }
   if (request.kind === 'api') {
@@ -597,7 +600,13 @@ function bridgeRouter({
     const sent = await send(await armPortFor('mcp', operationId), request, entry);
     if (sent.answer !== undefined) return sent.answer;
     const { observation } = sent;
-    if (degenerate === null) unreportedSteps.push(probeId);
+    // A signal from outside that ended the server's session stops the run as it does a command call; any other code is
+    // the target's behavior, recorded below and shown to the agent in the tool result.
+    if (typeof observation.exitCode === 'number' && stoppedFromOutside(observation.exitCode)) {
+      infrastructure ??= `the evaluator's call ${probeId} ended the tool server's session with a signal from outside it (exit code ${JSON.stringify(observation.exitCode)}): the target could not run`;
+    } else if (degenerate === null) {
+      unreportedSteps.push(probeId);
+    }
     if (operation === undefined) {
       // A tool no operation declares stays out of the record, so the agent is given no observation ID to cite.
       calls.push({ ...entry, request, observation, unmatched: 'no operation of the evaluation calls this tool' });
@@ -611,6 +620,7 @@ function bridgeRouter({
       callInputs: { arguments: toolArguments },
       responseBody: bodyValue(observation.result),
       responseStatus: observation.isError ? 1 : 0,
+      exitCode: observation.exitCode ?? null,
       provenance: 'evaluator-chosen',
     });
     observations.push(recorded);

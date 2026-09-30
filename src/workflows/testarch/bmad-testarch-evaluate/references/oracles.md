@@ -43,7 +43,7 @@ The workflow fixture provides a complete oracle for this relation. Adapt the ste
 
 ## Exact checks and evidence pointers
 
-Name the channel and pointer every check reads. Command evidence can live at `/interactions/<step>/stdout/<field>`, `/interactions/<step>/exit-code`, or `/interactions/<step>/artifact/<id>`; MCP and HTTP use `response-body` and `response-status`. Read the adapter projection before choosing a pointer. An impossible pointer fails compilation with `unreachable-check-evidence`. The valid fixture declares both channels below.
+Name the channel and pointer every check reads. Command evidence can live at `/interactions/<step>/stdout/<field>`, `/interactions/<step>/exit-code`, or `/interactions/<step>/artifact/<id>`; MCP and HTTP use `response-body` and `response-status`. An MCP step's `/interactions/<step>/exit-code` holds the signed exit code when the server's process ended the session before it answered and is `null` on an answered call, so a crash mutation on a tool server is caught through that channel. Read the adapter projection before choosing a pointer. An impossible pointer fails compilation with `unreachable-check-evidence`. The valid fixture declares both channels below.
 
 <!-- example:oracle -->
 

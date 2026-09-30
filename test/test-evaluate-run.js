@@ -2832,7 +2832,7 @@ async function checkConfinementUnits() {
     );
   }
 
-  // A tool-server call: the adapter reports no exit for a server, so a status a signal left is removed, not read.
+  // A tool-server call answered: it has no exit, so the runtime only removes the status a signal left.
   const statusFile = path.join(tempDir('confinement-units-mcp'), 'status-1.json');
   fs.writeFileSync(statusFile, '{"signal":"SIGTERM"}\n');
   let seen = null;
@@ -2859,6 +2859,36 @@ async function checkConfinementUnits() {
       !fs.existsSync(statusFile),
     `a confined tool-server call's temp directory and status: ${JSON.stringify({ seen, statusLeft: fs.existsSync(statusFile) })}`,
   );
+
+  // A session the tool server's process ended before it answered reports the exit of the process Bubblewrap ran: a
+  // signal the shim recorded is the signal's number negated, as a command's is; a plain exit keeps its code; a status
+  // without a start mark leaves the exit code unattributable, so it is a confinement error.
+  for (const [what, status, engineExit, expected] of [
+    ['a signal of its own (SIGABRT)', '{"started":true,"signal":"SIGABRT"}\n', 134, -6],
+    ['a signal from outside (SIGKILL)', '{"started":true,"signal":"SIGKILL"}\n', 137, -9],
+    ['a plain exit', '{"started":true}\n', 3, 3],
+    ['a status file with no start mark', '', 1, 'ConfinementError'],
+  ]) {
+    const endedStatus = path.join(tempDir('confinement-units-mcp-ended'), 'status-1.json');
+    fs.writeFileSync(endedStatus, status);
+    let outcome;
+    try {
+      outcome = await confinedMcpMechanism(
+        { callTool: async () => ({ isError: true, exitCode: engineExit }) },
+        { wrap: (target, args) => ({ target, args, statusFile: endedStatus }), environment: (env) => env, settle: () => {} },
+      ).callTool({ target: '/bin/true', targetArgs: [], env: {} }, new AbortController().signal);
+    } catch (error) {
+      outcome = error;
+    }
+    check(
+      (expected === 'ConfinementError'
+        ? outcome?.name === expected &&
+          outcome.message.includes('holds no start mark') &&
+          outcome.message.includes('exit code 1 cannot be told from')
+        : outcome?.exitCode === expected && outcome.isError === true) && !fs.existsSync(endedStatus),
+      `a confined tool server ended by ${what} reads ${JSON.stringify(outcome?.message ?? outcome)}; expected ${expected}`,
+    );
+  }
 }
 
 /** The reference names each platform's mechanism under its exact heading, and what an opted-out run records (Story 1.31). */
