@@ -1204,6 +1204,13 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
       'A loose oracle that checks only a clean exit accepts this degenerate response',
     ])
       requireText(oracleGuide, lesson, 'oracles.md lesson', failures);
+    // An MCP step's ended session lives on its `exit-code` channel (Story 1.35), which a crash mutation's oracle reads.
+    requireText(
+      headingBody(oracleGuide, '## Exact checks and evidence pointers'),
+      "An MCP step's `/interactions/<step>/exit-code`",
+      'oracles.md',
+      failures,
+    );
     const calibrationLesson = headingBody(oracleGuide, '## Judge calibration design');
     for (const marker of ['`judge.modelSnapshot`', '`policy/evaluator-conditions.json`', 'runtime digests its fixed judge instructions'])
       requireText(calibrationLesson, marker, 'oracles.md judge calibration', failures);

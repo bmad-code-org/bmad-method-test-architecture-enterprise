@@ -46,8 +46,12 @@
  * or that a signal from outside stopped (`stoppedFromOutside`), is a target
  * that could not run, so it also stops the arm (AD-7). A step that crashed by
  * a signal of its own is an observation like any other, as is a tool call the
- * server answered with its error flag set and an HTTP answer at any status; a
- * server that could not start or answer throws from the adapter or the port.
+ * server answered with its error flag set, a tool call whose session the
+ * server's own process ended before it answered (recorded with `responseStatus`
+ * 1, an absent body and the signed `exitCode`, which a signal from outside stops
+ * the arm on as it does a command step) and an HTTP answer at any status; a
+ * server that could not start, refused its handshake or wrote a line that is no
+ * JSON-RPC message throws from the adapter or the port.
  *
  * `hostEnvironmentPort` is the port every leg and arm goes through: it adds the
  * host's values for the keys a command entry permits beneath the request's
@@ -840,6 +844,17 @@ async function runArm({
       continue;
     }
     if (request.kind === 'mcp') {
+      // The observation carries an exit code only when the server's process ended the session after the handshake and
+      // before it answered (McpProbeObservation.exitCode). A signal from outside stops the arm as it does a command
+      // step; any other code, a plain exit or a signal of the server's own, is the target's behavior and is recorded.
+      const endedSession = typeof observation.exitCode === 'number';
+      if (endedSession && stoppedFromOutside(observation.exitCode)) {
+        const error = new ArmError(
+          `the ${label} arm's step ${step.stepId} ended the tool server's session with a signal from outside it (exit code ${JSON.stringify(observation.exitCode)}): the target could not run`,
+        );
+        error.steps = steps;
+        throw error;
+      }
       stepObservations[step.stepId] = recordObservation({
         observationId: request.probeId,
         sequence,
@@ -849,6 +864,7 @@ async function runArm({
         responseBody: bodyValue(observation.result),
         // A tool call has no transport status, so the envelope's error flag is recorded here as 1 or 0 (McpProbeObservation).
         responseStatus: observation.isError ? 1 : 0,
+        exitCode: observation.exitCode ?? null,
         provenance,
       });
       continue;

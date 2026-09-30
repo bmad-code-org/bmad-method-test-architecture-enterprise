@@ -29,6 +29,21 @@
  *   secret its refusal quotes JSON-escaped scrubbed from every file and the
  *   output; one that hangs mid-call is torn down at its ceiling
  *   (`budget-exhausted`, exit 12) with every process it started ended.
+ * - A crashing server (Story 1.35): a variant whose mutation M-001 makes
+ *   `grade_answer` end its session before it answers (`crash:` exits 3, the
+ *   server's own abort under `crash-signal:` is SIGABRT) moves the oracle,
+ *   the defect signature and the manifestation witness onto the `exit-code`
+ *   channel; preflight exits 0, the mutated records carry the ended session
+ *   (`responseStatus` 1, no body, the signed `exitCode`), the server's log
+ *   shows each call and the arms resolve `passed-clean-control` and `caught`. A
+ *   server ended by a signal from outside (`crash-signal: grade_answer
+ *   SIGKILL`) stops the run with exit 12. The arm units record a plain exit
+ *   and a signal of the server's own and stop an `ArmError` on each signal
+ *   from outside; the bridge units apply the same rule to the sealed-brief
+ *   agent and carry the code in its tool result.
+ * - The reference: its tool-server passage says how an ended session is
+ *   recorded and which end stops the run, its run section's crash sentence
+ *   covers a tool server beside a command, and Story 1.10's limit is gone.
  * - A sealed-brief agent through the bridge: a listed and declared tool is
  *   recorded `evaluator-chosen` with the operation its tool name matches, a
  *   listed tool no operation declares runs and stays unrecorded, and a tool
@@ -580,6 +595,112 @@ async function checkUnits() {
     `a tool call answered by a command's observation gave ${crossed}`,
   );
 
+  // A tool server whose process ended the session before it answered (an observation with `exitCode`, isError true and an
+  // absent result) is recorded with the signed code; a signal from outside it stops the arm, as it stops a command step.
+  const ended = (exitCode) => ({ kind: 'mcp', isError: true, result: { kind: 'absent' }, exitCode });
+  const armEnded = (exitCode) =>
+    runArm({ contract, port: answering(ended(exitCode)), registry: null, label: 'trial-1', provenance: 'evaluator-chosen' });
+  for (const [what, exitCode] of [
+    ['a plain exit', 3],
+    ['an exit code of zero', 0],
+    ['its own abort (SIGABRT)', -6],
+    ['its own segmentation fault (SIGSEGV)', -11],
+  ]) {
+    let stopped = null;
+    let arm = null;
+    try {
+      arm = await armEnded(exitCode);
+    } catch (error) {
+      stopped = error;
+    }
+    const step = arm?.stepObservations['grade-run'];
+    check(
+      stopped === null &&
+        step?.exitCode === exitCode &&
+        step.responseStatus === 1 &&
+        step.responseBody === null &&
+        step.stdout.kind === 'absent' &&
+        JSON.stringify(step.callInputs.arguments) === JSON.stringify({ answer: 'forty-two' }),
+      `a tool server ended by ${what} ${stopped === null ? `was recorded as ${JSON.stringify(step)}` : `stopped the arm: ${stopped.message}`}; expected exitCode ${exitCode}, responseStatus 1 and no body`,
+    );
+  }
+  for (const [what, exitCode] of [
+    ['SIGHUP', -1],
+    ['SIGINT', -2],
+    ['SIGQUIT', -3],
+    ['SIGKILL', -9],
+    ['SIGTERM', -15],
+  ]) {
+    let stopped = null;
+    try {
+      await armEnded(exitCode);
+    } catch (error) {
+      stopped = error;
+    }
+    check(
+      stopped instanceof ArmError &&
+        stopped.message.includes('trial-1 arm') &&
+        stopped.message.includes('step grade-run') &&
+        stopped.message.includes(`(exit code ${exitCode})`) &&
+        stopped.message.includes('the target could not run') &&
+        stopped.steps?.length === 1,
+      `a tool server ended by ${what} from outside gave ${stopped?.name}: ${stopped?.message}; expected an ArmError naming the step and the code`,
+    );
+  }
+
+  // The sealed-brief agent's bridge applies the same rule, and its tool result carries the code for an ended session.
+  const bridgeCall = async (observation) => {
+    const bridge = bridgeRouter({
+      contract,
+      registry: createRegistry(evaluation.registry, { root: FIXTURE }),
+      port: answering(observation),
+      degenerate: null,
+      label: 'trial-1',
+      taken: new Set(),
+      firstSequence: 1,
+      budget: 2,
+      nonce: crypto.randomBytes(16).toString('hex'),
+    });
+    const answer = await bridge.handle({ name: 'grader', kind: 'mcp' }, { tool: 'grade_answer', arguments: { answer: 'x' } });
+    return { bridge, answer, result: JSON.parse(answer.text) };
+  };
+  for (const [what, exitCode] of [
+    ['a plain exit', 3],
+    ['its own abort (SIGABRT)', -6],
+  ]) {
+    const { bridge, result } = await bridgeCall(ended(exitCode));
+    const [step] = bridge.observations;
+    check(
+      bridge.infrastructure() === null &&
+        result.recorded === true &&
+        result.isError === true &&
+        result.result === null &&
+        result.exitCode === exitCode &&
+        step?.exitCode === exitCode &&
+        step.responseStatus === 1 &&
+        step.responseBody === null,
+      `a bridge call to a server ended by ${what} gave ${JSON.stringify(result)}, the stop ${bridge.infrastructure()} and ${JSON.stringify(step)}; expected it recorded with exitCode ${exitCode}`,
+    );
+  }
+  for (const [what, exitCode] of [
+    ['SIGKILL', -9],
+    ['SIGTERM', -15],
+  ]) {
+    const { bridge } = await bridgeCall(ended(exitCode));
+    check(
+      /^the evaluator's call trial-1-call-1 ended the tool server's session with a signal from outside it \(exit code -\d+\): the target could not run$/.test(
+        String(bridge.infrastructure()),
+      ) && String(bridge.infrastructure()).includes(`(exit code ${exitCode})`),
+      `a bridge call to a server ended by ${what} from outside left the stop ${bridge.infrastructure()}; expected the target could not run`,
+    );
+  }
+  // An answered call carries no exitCode in the tool result and records none.
+  const answeredCall = await bridgeCall({ kind: 'mcp', isError: false, result: { kind: 'json', value: { ok: true } } });
+  check(
+    !Object.hasOwn(answeredCall.result, 'exitCode') && answeredCall.bridge.observations[0]?.exitCode === null,
+    `an answered bridge call gave ${JSON.stringify(answeredCall.result)} and ${JSON.stringify(answeredCall.bridge.observations[0])}`,
+  );
+
   // A plan literal carrying an own __proto__ key, which eval-quality's parser drops, stops the arm before anything is sent.
   const polluted = structuredClone(contract);
   polluted.interactionPlan[0].inputBinding.arguments.answer = { literal: JSON.parse('{"a":{"__proto__":{"x":1}}}') };
@@ -986,6 +1107,218 @@ async function checkDenials() {
     held.status === 11 && held.output.includes('the mutated arm did not fail'),
     `a server that accepts every answer: preflight exited ${held.status}; expected 11\n${held.output}`,
   );
+}
+
+// ---------------------------------------------------------------- a crashing server
+
+/**
+ * Plants a mutation that makes the server's process end its session before it answers `grade_answer`
+ * (`policyLine` is the grader's policy line, `crash: grade_answer` or `crash-signal: grade_answer`), and moves the
+ * fixture's oracle, defect signature and manifestation witness onto the `exit-code` channel, the only channel an ended
+ * session fills: the record's body is absent and its status is 1, whatever the crash. The oracle reads that the server
+ * ended no session, so the clean arm resolves `passed-clean-control` and the mutated arm `caught`.
+ */
+function useCrashMutation(folder, policyLine, exitCode) {
+  editJson(path.join(folder, 'mutations', 'M-001.mutation.json'), (mutation) => {
+    mutation.mutationSource = `rules/policy.txt: the server made to end its session before it answers (${policyLine})`;
+    mutation.operator.replace = `mode: strict\n${policyLine}`;
+    mutation.expectedObservableFailure = `The server's process ends its session before it answers, so the call records exit code ${exitCode}.`;
+  });
+  editJson(path.join(folder, 'contract.json'), (contract) => {
+    const [behavior] = contract.behaviors;
+    behavior.description = 'The grader answers the grade call, and under the committed strict policy it accepts the answer.';
+    behavior.observableSuccessCriterion = 'The grade_answer call is answered: its session ended with no exit code.';
+    const [oracle] = contract.oracles;
+    oracle.commentary = 'The grader answered the call, so no exit code ended its session.';
+    oracle.direction.scope = 'The exit code that ended the grade call, when a code did.';
+    oracle.direction.negativeDomain = 'A call whose session the server ended before it answered.';
+    oracle.direction.relation = 'equality';
+    oracle.direction.evidenceTargets = ['/interactions/grade-run/exit-code'];
+    oracle.check = { op: 'equality', operands: [{ pointer: '/interactions/grade-run/exit-code' }, { literal: null }] };
+  });
+  editJson(path.join(folder, 'probes', 'P-002.probe.json'), (probe) => {
+    probe.rationale = 'Seeded defect: M-001 makes the server end its session before it answers, and the call records its exit code.';
+    const [defect] = probe.defects;
+    defect.summary = 'The server ends its session before it answers the grade call.';
+    defect.manifestationWitness.legId = 'manifest-crash';
+    defect.manifestationWitness.relation = {
+      op: 'equality',
+      operands: [{ pointer: '/interactions/manifest-crash/exit-code' }, { literal: exitCode }],
+    };
+    probe.defectSignature.observableChannel = 'exit-code';
+    probe.defectSignature.condition.predicate = {
+      op: 'equality',
+      operands: [{ pointer: '/interactions/observed/exit-code' }, { literal: exitCode }],
+    };
+  });
+}
+
+/** A project whose mutation M-001 makes the server end its session mid-call, logging every session unless `log` is false (then the server runs confined). */
+function makeCrashProject(label, policyLine, exitCode, { log = true } = {}) {
+  return makeProject(label, { log, edit: ({ folder }) => useCrashMutation(folder, policyLine, exitCode) });
+}
+
+async function checkCrashingServer() {
+  // The server exits 3 before it answers: the ended session is an observation the oracle judges (AC 1).
+  const project = makeCrashProject('crash-exit', 'crash: grade_answer', 3);
+  const checked = evaluate(['check', '--evaluation', project.folder], project.env);
+  check(checked.status === 0, `check over the crashing server's evaluation exited ${checked.status}; expected 0\n${checked.output}`);
+  const preflight = evaluate(['preflight', '--evaluation', project.folder], project.env);
+  check(preflight.status === 0, `preflight over a server that exits mid-call exited ${preflight.status}; expected 0\n${preflight.output}`);
+  const preflightRun = runDirectoryOf(project.folder);
+  const legs =
+    preflightRun !== null && fs.existsSync(path.join(preflightRun, 'observations'))
+      ? fs.readdirSync(path.join(preflightRun, 'observations')).map((name) => readJson(path.join(preflightRun, 'observations', name)))
+      : [];
+  const manifest = legs.find((leg) => leg.legId === 'manifest-crash');
+  check(
+    manifest?.workspace === 'mutated:M-001' &&
+      manifest.observation.kind === 'mcp' &&
+      manifest.observation.isError === true &&
+      manifest.observation.result.kind === 'absent' &&
+      manifest.observation.exitCode === 3,
+    `the manifestation witness recorded ${JSON.stringify(manifest)}; expected an mcp observation with isError true, an absent result and exitCode 3`,
+  );
+
+  fs.rmSync(project.log, { force: true });
+  const ran = evaluate(['run', '--evaluation', project.folder], project.env);
+  check(ran.status === 0, `run over a server that exits mid-call exited ${ran.status}; expected 0\n${ran.output}`);
+  const runDirectory = runDirectoryOf(project.folder);
+  if (runDirectory === null || !fs.existsSync(path.join(runDirectory, 'trial-sets.json'))) {
+    check(false, 'the crashing-server run sealed no trial set');
+    return;
+  }
+  for (const record of recordsOf(runDirectory, 'P-002')) {
+    const [observation] = record.observations;
+    check(
+      record.observations.length === 1 &&
+        observation.provenance === 'evaluator-chosen' &&
+        observation.operationId === 'grade-answer' &&
+        JSON.stringify(observation.callInputs.arguments) === JSON.stringify({ answer: 'forty-two' }) &&
+        observation.responseStatus === 1 &&
+        observation.responseBody === null &&
+        observation.exitCode === 3 &&
+        observation.stdout.kind === 'absent',
+      `P-002 trial ${record.trialIndex} records ${JSON.stringify(record.observations)}; expected the ended session (responseStatus 1, no body, exitCode 3)`,
+    );
+    check(
+      record.findings.map((finding) => finding.oracleId).join(',') === 'O-001',
+      `P-002 trial ${record.trialIndex} files ${JSON.stringify(record.findings)}; expected a finding of O-001`,
+    );
+  }
+  for (const record of recordsOf(runDirectory, 'P-001')) {
+    const [observation] = record.observations;
+    check(
+      observation?.responseStatus === 0 && observation.exitCode === null && record.findings.length === 0,
+      `P-001 trial ${record.trialIndex} records ${JSON.stringify(record.observations)} and files ${JSON.stringify(record.findings)}; expected a clean answered call`,
+    );
+  }
+  // The server took the mutated arm's calls and ended each session: one call in each mutated trial.
+  const mutatedCalls = sessions(project).filter((line) => line.event === 'call' && line.tool === 'grade_answer');
+  check(
+    mutatedCalls.filter((line) => line.workspace?.startsWith('trial-mutated')).length === TRIALS,
+    `the server logged ${JSON.stringify(mutatedCalls.map((line) => line.workspace))}; expected ${TRIALS} call(s) in the mutated trials`,
+  );
+  const evidence = scoreRun(project, 'the crashing-server run');
+  checkVotes('the crashing-server run', evidence, 'P-001', 'passed-clean-control');
+  checkVotes('the crashing-server run', evidence, 'P-002', 'caught');
+
+  // A server that aborts, a signal of its own, is recorded the same way with the signed code (SIGABRT is signal 6).
+  const aborting = makeCrashProject('crash-abort', 'crash-signal: grade_answer', -6);
+  const aborted = evaluate(['run', '--evaluation', aborting.folder], aborting.env);
+  check(aborted.status === 0, `run over a server that aborts mid-call exited ${aborted.status}; expected 0\n${aborted.output}`);
+  const abortedRun = runDirectoryOf(aborting.folder);
+  const abortedRecords =
+    abortedRun !== null && fs.existsSync(path.join(abortedRun, 'trial-sets.json')) ? recordsOf(abortedRun, 'P-002') : [];
+  check(
+    abortedRecords.length === TRIALS &&
+      abortedRecords.every((record) => record.observations[0]?.exitCode === -6 && record.observations[0].responseStatus === 1),
+    `a server that aborts recorded ${JSON.stringify(abortedRecords.map((record) => record.observations))}; expected exitCode -6 in each of ${TRIALS} trials`,
+  );
+
+  // The same two ends under file-system confinement, which reads the code a Bubblewrap shim recorded (Bubblewrap reports
+  // 128 plus the signal's number for a signal): an abort is recorded as -6 and a kill from outside stops the run.
+  const confinedAbort = makeCrashProject('crash-abort-confined', 'crash-signal: grade_answer', -6, { log: false });
+  const confinedAborted = evaluate(['run', '--evaluation', confinedAbort.folder], confinedAbort.env);
+  check(
+    confinedAborted.status === 0,
+    `a confined server that aborts mid-call: run exited ${confinedAborted.status}; expected 0\n${confinedAborted.output}`,
+  );
+  const confinedAbortRun = runDirectoryOf(confinedAbort.folder);
+  const confinedRecords =
+    confinedAbortRun !== null && fs.existsSync(path.join(confinedAbortRun, 'trial-sets.json')) ? recordsOf(confinedAbortRun, 'P-002') : [];
+  check(
+    confinedRecords.length === TRIALS &&
+      confinedRecords.every((record) => record.observations[0]?.exitCode === -6 && record.observations[0].responseStatus === 1),
+    `a confined server that aborts recorded ${JSON.stringify(confinedRecords.map((record) => record.observations))}; expected exitCode -6 in each of ${TRIALS} trials`,
+  );
+  const confinedKill = makeCrashProject('crash-killed-confined', 'crash-signal: grade_answer SIGKILL', -9, { log: false });
+  const confinedStopped = evaluate(['run', '--evaluation', confinedKill.folder], confinedKill.env);
+  check(
+    confinedStopped.status === 12 && confinedStopped.output.includes('signal from outside it (exit code -9)'),
+    `a confined server killed from outside: run exited ${confinedStopped.status}; expected 12 naming the signal\n${confinedStopped.output}`,
+  );
+
+  // A signal from outside stops the run: the target could not run, exit 12, naming the step and the code.
+  const killed = makeCrashProject('crash-killed', 'crash-signal: grade_answer SIGKILL', -9);
+  const stopped = evaluate(['run', '--evaluation', killed.folder], killed.env);
+  check(
+    stopped.status === 12 &&
+      stopped.output.includes('signal from outside it (exit code -9)') &&
+      stopped.output.includes('the target could not run'),
+    `a server killed from outside: run exited ${stopped.status}; expected 12 naming the signal\n${stopped.output}`,
+  );
+  check(
+    sessions(killed).some((line) => line.event === 'call' && line.tool === 'grade_answer'),
+    'a server killed from outside logged no call, so the case never reached the crash',
+  );
+}
+
+/**
+ * The reference states how an ended session is recorded (Story 1.35): in the tool-server passage of the registry
+ * section and in the run section's sentence on a step that crashes, and it no longer holds Story 1.10's limit.
+ */
+function checkReferenceRecordsEndedSession() {
+  const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
+  const lines = reference.split('\n');
+  const passage = lines.find((line) => line.startsWith('A server whose process ends the session after the handshake')) ?? '';
+  const outside = lines.find((line) => line.startsWith("The exit code follows a command's convention")) ?? '';
+  for (const [what, text, wanted] of [
+    [
+      'the tool-server passage',
+      passage,
+      [
+        '`exitCode`',
+        '`isError` true',
+        'absent result',
+        '`responseStatus` 1',
+        'absent `responseBody`',
+        '`exit-code` channel',
+        '`observableChannel`',
+      ],
+    ],
+    ['the tool-server passage on a signal', outside, ['from outside', 'exit 12', 'is recorded', 'abort']],
+  ]) {
+    const missing = wanted.filter((marker) => !text.includes(marker));
+    check(
+      text !== '' && missing.length === 0,
+      `the reference's ${what} ${text === '' ? 'is missing' : `omits ${JSON.stringify(missing)}`}`,
+    );
+  }
+  const crash = lines.find((line) => line.includes('A command step that crashes by a signal of its own')) ?? '';
+  check(
+    crash.includes('a tool server whose process ends the session during a call') &&
+      crash.includes('`exit-code` channel') &&
+      crash.includes('exit 12'),
+    `the run section's crash sentence does not cover a tool server beside a command: ${JSON.stringify(crash)}`,
+  );
+  for (const limit of [
+    'never caught on an `mcp` interface',
+    'has no field for a session that ended mid-call',
+    'a tool server that crashes during a call is a target that could not run',
+  ]) {
+    check(!reference.includes(limit), `the reference still holds Story 1.10's limit: ${JSON.stringify(limit)}`);
+  }
 }
 
 // ---------------------------------------------------------------- the bridge
@@ -1539,6 +1872,8 @@ async function main() {
     await runCase('the confined pipeline', checkConfinedPipeline);
     await runCase("the confined tool server's reads", checkConfinedServerReads);
     await runCase('the denials', checkDenials);
+    await runCase('a crashing server', checkCrashingServer);
+    await runCase('the reference records an ended session', checkReferenceRecordsEndedSession);
     await runCase('the sealed-brief agent', checkSealedBriefAgent);
     await runCase('the gameability arm', checkGameability);
     await runCase('the check rules', checkCheckRules);

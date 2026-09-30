@@ -237,8 +237,9 @@ function isolationManifest({
  * artifact are the tagged bodies `createCommandLineAdapter` returns, so an
  * observation built here and one read off the port have one shape. A tool
  * call (Story 1.10) carries its `arguments`, its structured result as
- * `responseBody` and its error flag as `responseStatus`, with no stream, exit
- * code or artifact; an HTTP call (Story 1.11) carries its `path`, `query`,
+ * `responseBody` and its error flag as `responseStatus`, with no stream or
+ * artifact, and an exit code only when the server's process ended the session
+ * before it answered (Story 1.35); an HTTP call (Story 1.11) carries its `path`, `query`,
  * `header` and `body` inputs and the answer's body, headers and status.
  *
  * `provenance` defaults to `evaluator-chosen`, because eval-quality's probe

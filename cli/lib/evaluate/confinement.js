@@ -615,17 +615,21 @@ function confinedCommandMechanism(base, sandbox, systemPathsOf = () => [], scrat
 
 /**
  * eval-quality's stdio MCP mechanism with the tool server started confined,
- * with a private temp directory as a command's. The adapter reports no exit
- * for a tool server, so the status a signal left is only removed.
+ * with a private temp directory as a command's. A session the server's process
+ * ended before it answered reports that process's exit, which under Bubblewrap
+ * is `128 + n` for a signal `n`, so it is read from the status file the shim
+ * left and recorded as the signal's number negated, as a command's is; an
+ * answered call has no exit, and the status a signal left is only removed.
  */
 function confinedMcpMechanism(base, sandbox, systemPathsOf = () => [], scratch = []) {
   return {
     async callTool(request, signal) {
       const temporary = callTemporary(scratch);
       let wrapped = null;
+      let status = null;
       try {
         wrapped = sandbox.wrap(request.target, request.targetArgs, [temporary]);
-        return await base.callTool(
+        const result = await base.callTool(
           {
             ...request,
             target: wrapped.target,
@@ -638,8 +642,17 @@ function confinedMcpMechanism(base, sandbox, systemPathsOf = () => [], scratch =
           },
           signal,
         );
+        status = recordedStatus(wrapped.statusFile);
+        if (typeof result.exitCode !== 'number') return result;
+        if (!status.started) {
+          // Bubblewrap exited before its shim ran: the exit code is its own, not a behavior of the tool server.
+          throw new ConfinementError(
+            `${MECHANISM_NAMES.bubblewrap} could not start the tool server ${JSON.stringify(request.target)}, so its exit code ${result.exitCode} is Bubblewrap's own`,
+          );
+        }
+        return status.signal === null ? result : { ...result, exitCode: -os.constants.signals[status.signal] };
       } finally {
-        if (wrapped !== null) recordedStatus(wrapped.statusFile);
+        if (wrapped !== null && status === null) recordedStatus(wrapped.statusFile);
         sandbox.settle();
         releaseTemporary(scratch, temporary);
       }

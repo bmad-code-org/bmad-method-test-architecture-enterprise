@@ -14,7 +14,7 @@ TeA also ships `tea-skill-runner`, the command an evaluation registers to run a 
 ## Prerequisites
 
 - Node.js 22.20 or later, with TeA installed (`npm install --save-dev bmad-method-test-architecture-enterprise`), which provides the `tea-evaluate` bin.
-- `eval-quality` 4.3.0 or later, installed beside TeA in the project that runs Evaluate (`npm install --save-dev eval-quality`).
+- `eval-quality` 4.4.0 or later, installed beside TeA in the project that runs Evaluate (`npm install --save-dev eval-quality`).
   TeA declares it as an optional peer dependency, so a project that installs TeA only for its other workflows never receives it.
   Without it, `tea-evaluate` exits 12 and names the missing package.
 
@@ -166,8 +166,10 @@ A tool-server entry (`kind: "mcp"`) serves an `mcp` interface of the contract:
 Each tool-server entry becomes one of eval-quality's `McpTargetAuthorization`s, checked by its own `parseMcpTargetPolicy` (at `check`, and again before any server starts), and every call goes through eval-quality's `createMcpAdapter`: one session per call over stdio, protocol `2025-06-18`, the server's process group torn down after it.
 A leg of an `mcp` operation sends its literal `arguments`, and a plan step its bound ones (see [The interaction plan](#the-interaction-plan)), and the run records the call's arguments as `callInputs.arguments`, the tool's structured result as `responseBody` and its error flag as `responseStatus` (1 or 0), so an oracle reads `/interactions/<step>/response-body/...`.
 A tool that answers with its error flag set is an observation.
-A server that cannot start, refuses its handshake, crosses a ceiling, or exits, crashes or writes a line that is no JSON-RPC message during a call is a target that could not run (exit 12), and its fault keeps the adapter's cause, scrubbed, a value the cause cuts short included.
-eval-quality's `mcp` observation has no field for a session that ended mid-call, so a mutation that crashes the server is never caught on an `mcp` interface: its arm stops with exit 12 (Story 1.35 records such a session as an observation).
+A server whose process ends the session after the handshake and before it answers a call, by exiting or by a signal, is an observation too: eval-quality's `mcp` observation carries a signed `exitCode` beside `isError` true and an absent result, and the run records it with `responseStatus` 1, an absent `responseBody` and the `exitCode`, on the record's `exit-code` channel (`null` on every answered call), so an oracle reads `/interactions/<step>/exit-code` and a defect signature may name `exit-code` as its `observableChannel`.
+A mutation that crashes a tool server is caught through that observation as a command that crashes is.
+The exit code follows a command's convention: a signal is its number made negative, and the runtime applies a command's rule to it, so an end by a signal from outside (hang-up, interrupt, quit, kill or terminate) stops the run with exit 12 and any other code, a plain exit or a signal of the server's own such as an abort or a segmentation fault, is recorded.
+A server that cannot start, refuses its handshake, ends or errors before or during the handshake, crosses a ceiling, or writes a line that is no JSON-RPC message is a target that could not run (exit 12), and its fault keeps the adapter's cause, scrubbed, a value the cause cuts short included.
 The record reads the tool's `structuredContent`: a tool that answers with text `content` alone is recorded with an absent body, so an oracle has nothing to read (eval-quality's `mcp` kind describes a structured result).
 `evaluation.json`'s `interface` must be a kind the contract declares (`check` rule `reference`).
 
@@ -604,7 +606,7 @@ The steps run in order in one invocation, each stopping the run with its own exi
    The evaluation layer judges the trial (see [The evaluation layer](#the-evaluation-layer)); under the default deterministic evaluator, when the contract declares a rubric, the rubric judge scores the trial once (see [The rubric judge](#the-rubric-judge)).
    Its requests, observations, oracle resolutions or judgment rows, and any judge reply go to `trials/<arm>/trial-<n>.json`.
    A trial step that exits one of its registry entry's `infrastructureExitCodes`, or that a signal from outside stops (hang-up, interrupt, quit, kill or terminate), is a target that could not run: the trial yields no record and the run exits 12 (a qualification arm step stops its cycle the same way).
-   A command step that crashes by a signal of its own (an abort, a segmentation fault) is an observation its oracles judge, and its record keeps the negative exit code; a tool server that crashes during a call is a target that could not run (see [The registry](#the-registry)).
+   A command step that crashes by a signal of its own (an abort, a segmentation fault) is an observation its oracles judge, and its record keeps the negative exit code; a tool server whose process ends the session during a call is an observation the same way, recorded with its exit code on the `exit-code` channel; a signal from outside stops either kind of step with exit 12 (see [The registry](#the-registry)).
    Your project is read again after every trial and every evaluator attempt (exit 12 on any change, with no trial set written).
 5. Every selected probe has its trial set, or the run exits 12, and the run directory holds exactly what the runtime wrote (see [The run directory](#the-run-directory)).
 6. One trial set per probe under `trial-sets/<probeId>/`: `record-<n>.json` per trial and `isolation-manifest.json`, with `evaluator-configuration.json` for the whole run, each checked against the schema eval-quality publishes before it is written, and each written as eval-quality's canonical serialization; the contract and sealed-brief digests they carry were taken when `compile` and `seal` wrote those files, before any target ran.

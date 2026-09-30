@@ -52,6 +52,13 @@
  *   verdict: accept     answer accepted whatever the mode says
  *   hang: <tool>        log a call of that tool and never answer it, a
  *                       server that hangs mid-call
+ *   crash: <tool>       log a call of that tool, then exit 3 before answering
+ *                       it, a server whose process ends its session mid-call
+ *   crash-signal: <tool> [SIGNAL]
+ *                       log a call of that tool, then kill itself with SIGNAL
+ *                       (SIGABRT when none is named, a signal of its own) before
+ *                       answering it; a SIGKILL or SIGTERM is a signal from
+ *                       outside, which stops the run
  */
 
 'use strict';
@@ -81,6 +88,8 @@ if (policyFile === undefined) {
 }
 const policy = fs.existsSync(policyFile) ? fs.readFileSync(policyFile, 'utf8') : '';
 const hanging = new Set([...policy.matchAll(/^hang: (\S+)$/gm)].map((match) => match[1]));
+const crashing = new Set([...policy.matchAll(/^crash: (\S+)$/gm)].map((match) => match[1]));
+const signalling = new Map([...policy.matchAll(/^crash-signal: (\S+)(?: (SIG[A-Z0-9]+))?$/gm)].map((match) => [match[1], match[2] ?? 'SIGABRT']));
 const mode = /mode: (\w+)/.exec(policy)?.[1] ?? 'unknown';
 /** The runtime label of the workspace a directory lies in (`trial-clean-2` for tea-evaluate-trial-clean-2-<uuid>/target), or null. */
 const labelOf = (directory) => /^tea-evaluate-(.+)-(?:[A-Za-z0-9]{6}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/.exec(path.basename(path.dirname(directory)))?.[1] ?? null;
@@ -166,6 +175,9 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
     const args = params?.arguments ?? {};
     log({ event: 'call', tool: params?.name ?? null, arguments: args });
     if (hanging.has(params?.name)) return;
+    // The call is logged (synchronously) before the process ends, so a test reads from the log that the server took it.
+    if (crashing.has(params?.name)) process.exit(3);
+    if (signalling.has(params?.name)) process.kill(process.pid, signalling.get(params.name));
     const answered = callTool(params?.name, args);
     if (answered === null) send({ id, error: { code: -32_602, message: `unknown tool ${params?.name}` } });
     else send({ id, result: answered });
