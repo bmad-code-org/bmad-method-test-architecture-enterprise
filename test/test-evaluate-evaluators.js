@@ -118,6 +118,20 @@ const COMMAND_EVALUATOR = path.join(EVALUATORS, 'command', 'evaluator');
 const STUB_AGENT = path.join(EVALUATORS, 'stub-evaluator-agent.js');
 const ENGINE_SHIM = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'engine-shim.js');
 const EVALUATION = path.join('evals', 'verdict');
+// Every reason a target policy of eval-quality decides, which a denied call's `forbidden-target` fault carries.
+const DENIAL_REASONS = [
+  'interface-not-authorized',
+  'executable-not-authorized',
+  'subcommand-not-authorized',
+  'environment-key-not-authorized',
+  'tool-not-authorized',
+  'scheme-not-authorized',
+  'host-not-authorized',
+  'port-not-authorized',
+  'address-not-authorized',
+  'address-unparseable',
+  'method-not-authorized',
+];
 const TRIALS = 3;
 const AGENT_SNAPSHOT = 'stub-evaluator-2026-09';
 
@@ -2395,6 +2409,26 @@ function checkDirectionGate() {
   );
 }
 
+// ---------------------------------------------------------------- the reference's denial reasons
+
+/** The reference names every reason code eval-quality's target policies decide, under its own heading (Story 1.33). */
+function checkReferenceNamesDenialReasons() {
+  const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
+  const heading = '### Denial reasons';
+  const start = reference.indexOf(`\n${heading}\n`);
+  check(start !== -1 && !reference.includes(`\n${heading}\n`, start + 1), `the reference holds ${JSON.stringify(heading)} exactly once`);
+  const section = start === -1 ? '' : reference.slice(start + heading.length + 2).split(/\n#{1,3} /)[0];
+  for (const code of DENIAL_REASONS) {
+    check(section.includes(`\`${code}\``), `the reference's section ${JSON.stringify(heading)} does not name ${code}`);
+  }
+  const named = [...section.matchAll(/`([a-z]+(?:-[a-z]+)*-(?:not-authorized|unparseable))`/g)].map((match) => match[1]);
+  const unknown = named.filter((code) => !DENIAL_REASONS.includes(code));
+  check(
+    unknown.length === 0,
+    `the reference's section ${JSON.stringify(heading)} names ${JSON.stringify(unknown)}, which eval-quality's policies do not decide`,
+  );
+}
+
 /** Runs one case; an exception is a failed check, so the cases after it still run and every failure is reported. */
 async function runCase(name, body) {
   try {
@@ -2413,6 +2447,7 @@ async function main() {
     }
     await runCase('the units', checkUnits);
     await runCase('the direction gate', checkDirectionGate);
+    await runCase('the reference names the denial reasons', checkReferenceNamesDenialReasons);
     await runCase('the bridge', checkBridge);
     await runCase('the command evaluator row shapes', checkCommandRowShapes);
     await runCase('command and agent calibration disagreement', checkCalibrationDisagreementAcrossEvaluators);

@@ -221,12 +221,30 @@ A service that exits before it accepts a connection, does not accept one within 
 A service not accepting within `readyTimeoutMs` is reported with the last connection attempt's error code: `ECONNREFUSED` while nothing listens on the port, and `EADDRNOTAVAIL` when the host has no local port left to connect from.
 A path value that reads as `.` or `..` is refused before anything is sent, since a URL would resolve it into another path than the one the call records.
 
-A denied call is recorded with eval-quality's `forbidden-target` fault and, from eval-quality 4.2.0, the `reason` its policy gave (`interface-not-authorized`, `tool-not-authorized`, `executable-not-authorized`, `subcommand-not-authorized`, `environment-key-not-authorized`, and for an HTTP request `scheme-not-authorized`, `host-not-authorized`, `port-not-authorized`, `address-not-authorized`, `address-unparseable` and `method-not-authorized`), in a leg's `faults/` file, a qualification's or trial's fault and a sealed-brief agent's bridge calls alike; `preflight` and `run` exit 10 and name the reason.
-
 An infrastructure exit code says the target could not run, so it cannot be evidence of a behavior.
 `check` resolves each defect signature and each manifestation witness through eval-quality's own `resolveCheck` over an observation that carries one of those codes and no output, with the contract's reference sets in scope, and refuses the probe when the expression could hold (`true` or `insufficient-evidence`) or cannot be resolved at all.
 `exit-code != 0` against a runner that exits 3 when its agent is missing would read every broken installation as a caught defect.
 Address an exit code, stream or body only the defect produces.
+
+### Denial reasons
+
+A denied call is recorded with eval-quality's `forbidden-target` fault and, from eval-quality 4.2.0, the `reason` its policy gave, for a command, a tool call and an HTTP request alike.
+The reason sits beside the fault's code and detail in a leg's `faults/` file, a qualification's or trial's fault and a sealed-brief agent's bridge calls, and `preflight` and `run` exit 10 and name it.
+A CI policy or a test reads the `reason` and never the detail text.
+
+| Reason                           | The policy denied                                                    |
+| -------------------------------- | -------------------------------------------------------------------- |
+| `interface-not-authorized`       | a call to an interface the registry does not authorize for that kind |
+| `executable-not-authorized`      | a command whose executable is not listed                             |
+| `subcommand-not-authorized`      | a command whose subcommand is not listed                             |
+| `environment-key-not-authorized` | an environment key the entry does not list                           |
+| `tool-not-authorized`            | a tool the server's entry does not list, even when the server has it |
+| `scheme-not-authorized`          | an HTTP request whose scheme the entry does not admit                |
+| `host-not-authorized`            | an HTTP request whose host the entry does not admit                  |
+| `port-not-authorized`            | an HTTP request whose port the entry does not admit                  |
+| `address-not-authorized`         | an HTTP request whose resolved address the entry does not list       |
+| `address-unparseable`            | an HTTP request whose resolved address cannot be parsed              |
+| `method-not-authorized`          | an HTTP request whose method the entry does not list                 |
 
 ## The HTTP port
 
