@@ -375,6 +375,8 @@ A tool-server entry and an HTTP entry (for its started service) take `systemPath
 The audit grants a process the system paths of the target it runs, so `check` refuses two entries that start the same target with different `systemPaths`.
 The audit is written by the target's own processes and covers Node processes alone; the mechanism is what refuses, whatever the process.
 The report file is the one file of the audit a target may write.
+The runtime reads the report when each confined call ends, and a report it cannot open or one cut shorter than an earlier read found it counts against the trial for the rest of the run.
+A Bubblewrap that fails before it starts the target (a refused bind, say) ends the call as an infrastructure error naming Bubblewrap's message, since no target ran.
 A report cut shorter than an earlier read found it, or padded past what the runtime reads, is listed as its own path in `observedMounts`; a target that rewrites the file to the same length can still hide a line from it.
 A Bubblewrap target shares the host's network namespace, so that a started HTTP service stays reachable, and with it any abstract Unix socket on the host, a desktop session's D-Bus among them.
 Story 1.63 moves the audit onto a channel the runtime holds and closes that route.

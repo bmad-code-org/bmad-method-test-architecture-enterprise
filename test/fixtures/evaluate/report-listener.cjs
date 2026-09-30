@@ -26,4 +26,8 @@ const server = net.createServer((socket) => {
   socket.on('end', () => fs.appendFileSync(lines, text));
   socket.on('error', () => {});
 });
-server.listen(0, '127.0.0.1', () => fs.writeFileSync(portFile, String(server.address().port)));
+server.listen(0, '127.0.0.1', () => {
+  // Renamed into place, so a reader that sees the file sees the whole port.
+  fs.writeFileSync(`${portFile}.part`, String(server.address().port));
+  fs.renameSync(`${portFile}.part`, portFile);
+});

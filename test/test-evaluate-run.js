@@ -115,7 +115,13 @@ const { judgeTrial } = require('../cli/lib/evaluate/evaluator');
 const { recordObservation, createArtifactValidator } = require('../cli/lib/evaluate/records');
 const { RunDirectory, RunDirectoryError } = require('../cli/lib/evaluate/run-directory');
 const { setRecommendation } = require('../cli/lib/evaluate/run');
-const { MECHANISM_NAMES, PLATFORM_ENV, confinedMcpMechanism, targetSandbox } = require('../cli/lib/evaluate/confinement');
+const {
+  MECHANISM_NAMES,
+  PLATFORM_ENV,
+  confinedCommandMechanism,
+  confinedMcpMechanism,
+  targetSandbox,
+} = require('../cli/lib/evaluate/confinement');
 const { combinedExit } = require('../cli/lib/evaluate/score');
 const { agentReplyAndUsage } = require('../cli/lib/agent-adapters');
 const { parseUsageReport } = require('../cli/lib/evaluate/usage-report');
@@ -2640,7 +2646,7 @@ async function checkConfinementUnits() {
     // Node dies of SIGTERM; it ignores SIGPIPE, so the shim then exits 128 + 13 as a shell reports the child.
     const endedAs = signal === 'SIGPIPE' ? ended.status === 128 + number : ended.signal === signal;
     check(
-      recorded === signal && endedAs,
+      recorded === signal && endedAs && readJson(statusFile).started === true,
       `the status shim over a target ${signal} ended recorded ${JSON.stringify(recorded)} and ended ${JSON.stringify({ status: ended.status, signal: ended.signal })}`,
     );
   }
@@ -2762,6 +2768,70 @@ async function checkConfinementUnits() {
     `the audit report's tampering reads ${JSON.stringify({ first, cut, flooded })}; expected the report's own path once it is cut or flooded`,
   );
 
+  // A report cut back during a call is seen when that call ends, against what an earlier call left, and stays seen;
+  // a report replaced by a directory, or removed, is tampering too.
+  const settleReport = path.join(unitRoot, 'audit', 'settle.jsonl');
+  fs.writeFileSync(settleReport, '');
+  const settling = targetSandbox({
+    confinement: { mode: 'bubblewrap', executable: '/usr/bin/bwrap', evaluationFolder: folder },
+    workspace: unitWorkspace,
+    report: settleReport,
+    status: unitStatus,
+  });
+  fs.writeFileSync(settleReport, `${JSON.stringify({ path: '/etc/hostname' })}\n`);
+  settling.settle();
+  fs.writeFileSync(settleReport, '');
+  settling.settle();
+  fs.writeFileSync(settleReport, `${JSON.stringify({ path: '/etc/os-release-and-a-name-longer-than-the-first' })}\n`);
+  check(
+    settling.observedMounts().includes(settleReport),
+    `a report cut back in one call and refilled before the trial's end is not held against the trial: ${JSON.stringify(settling.observedMounts())}`,
+  );
+  fs.rmSync(settleReport);
+  fs.mkdirSync(settleReport);
+  check(
+    targetSandbox({
+      confinement: { mode: 'bubblewrap', executable: '/usr/bin/bwrap', evaluationFolder: folder },
+      workspace: unitWorkspace,
+      report: settleReport,
+      status: unitStatus,
+    })
+      .observedMounts()
+      .includes(settleReport),
+    'a report replaced by a directory is not held against the trial',
+  );
+  fs.rmSync(settleReport, { recursive: true });
+  check(
+    targetSandbox({
+      confinement: { mode: 'bubblewrap', executable: '/usr/bin/bwrap', evaluationFolder: folder },
+      workspace: unitWorkspace,
+      report: settleReport,
+      status: unitStatus,
+    })
+      .observedMounts()
+      .includes(settleReport),
+    'a report removed by the target is not held against the trial',
+  );
+
+  // A Bubblewrap that fails before its shim runs is not a target that exited with Bubblewrap's code; one whose shim ran is.
+  for (const started of [false, true]) {
+    const statusOfCall = path.join(unitStatus, `started-${started}.json`);
+    fs.writeFileSync(statusOfCall, started ? '{"started":true}\n' : '');
+    let outcome;
+    try {
+      outcome = await confinedCommandMechanism(
+        { run: async () => ({ exitCode: 1, stderr: { kind: 'text', value: 'bwrap: cannot bind\n' } }) },
+        { wrap: (target, args) => ({ target, args, statusFile: statusOfCall }), environment: (env) => env, settle: () => {} },
+      ).run({ target: '/bin/true', subcommandPath: [], argv: [], env: {} }, new AbortController().signal);
+    } catch (error) {
+      outcome = error;
+    }
+    check(
+      started ? outcome?.exitCode === 1 : outcome?.name === 'ConfinementError' && outcome.message.includes('bwrap: cannot bind'),
+      `a Bubblewrap call whose shim ${started ? 'ran' : 'never ran'} reads ${JSON.stringify(outcome?.message ?? outcome)}`,
+    );
+  }
+
   // A tool-server call: the adapter reports no exit for a server, so a status a signal left is removed, not read.
   const statusFile = path.join(tempDir('confinement-units-mcp'), 'status-1.json');
   fs.writeFileSync(statusFile, '{"signal":"SIGTERM"}\n');
@@ -2773,7 +2843,11 @@ async function checkConfinementUnits() {
         return { isError: false, structuredResult: {} };
       },
     },
-    { wrap: (target, args, writable) => ({ target, args: [...args, ...writable], statusFile }), environment: (env) => env },
+    {
+      wrap: (target, args, writable) => ({ target, args: [...args, ...writable], statusFile }),
+      environment: (env) => env,
+      settle: () => {},
+    },
   );
   await mechanism.callTool({ target: '/bin/true', targetArgs: [], env: {} }, new AbortController().signal);
   check(

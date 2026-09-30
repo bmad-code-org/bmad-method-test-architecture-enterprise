@@ -1173,13 +1173,14 @@ async function checkEvaluatorTimeout() {
   check(recorded !== null, 'a hung evaluator: the stub wrote no pids');
   if (recorded !== null) {
     // A killed process may take a moment to be reaped once its parent is gone; wait up to 5 s for both.
+    // Under Bubblewrap the evaluator runs in a process-id namespace of its own, so the pids it wrote are not this side's:
+    // both processes carry the pids file's path on their command line, and are found by it.
+    const carrying = () =>
+      spawnSync('pgrep', ['-f', pids.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)], { encoding: 'utf8' }).stdout.trim() !== '';
+    const survives = process.platform === 'linux' ? carrying : () => alive(recorded.evaluator) || alive(recorded.child);
     const deadline = Date.now() + 5000;
-    while ((alive(recorded.evaluator) || alive(recorded.child)) && Date.now() < deadline)
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
-    check(
-      !alive(recorded.evaluator) && !alive(recorded.child),
-      `a hung evaluator: its process group outlived the timeout (${JSON.stringify(recorded)})`,
-    );
+    while (survives() && Date.now() < deadline) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+    check(!survives(), `a hung evaluator: its process group outlived the timeout (${JSON.stringify(recorded)})`);
   }
 }
 

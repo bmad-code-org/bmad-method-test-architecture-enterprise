@@ -190,12 +190,14 @@ function seatbeltTargetProfile({ workspace, writable, evaluationFolder }) {
  * cannot reach the runtime's mount namespace through `/proc/<pid>/root`, and
  * every process it leaves running ends with it; `--die-with-parent`, so
  * killing the Bubblewrap process the runtime started (a timed-out HTTP port)
- * ends what it forked; a session of its own; and an empty `/run/user`, so no
+ * ends what it forked; a session of its own; no `NODE_V8_COVERAGE`, since a
+ * process that cannot write its coverage files says so on standard error; and
+ * an empty `/run/user`, so no
  * process can ask the user's service manager to start an unconfined job.
  */
 function bubblewrapIsolation() {
   const runUser = fs.existsSync('/run/user') ? ['--tmpfs', '/run/user'] : [];
-  return ['--unshare-pid', '--proc', '/proc', '--die-with-parent', '--new-session', ...runUser];
+  return ['--unshare-pid', '--proc', '/proc', '--die-with-parent', '--new-session', '--unsetenv', 'NODE_V8_COVERAGE', ...runUser];
 }
 
 /**
@@ -390,13 +392,14 @@ function targetSandbox({ confinement, workspace, report = null, status = null })
   }
   let calls = 0;
   let reportSize = 0;
+  let tampered = false;
   return {
     mode: confinement.mode,
     /**
      * The command that runs `target args` confined, `writable` naming the
      * private directories this call's processes may write besides the
      * workspace; under Bubblewrap, with the file the status shim writes a
-     * signal to, which `recordedSignal` reads.
+     * signal to, which `recordedStatus` reads.
      */
     wrap(target, args, writable = []) {
       const grants = [...writable, ...(report === null ? [] : [report])];
@@ -434,11 +437,23 @@ function targetSandbox({ confinement, workspace, report = null, status = null })
       };
     },
     /** The absolute paths the audit reported, each once, sorted; empty for a port that does not audit. */
+    /**
+     * Reads the report once a confined call has ended, so a report cut back
+     * during that call is seen against what an earlier call left, and not
+     * only against the read `observedMounts` makes at the trial's end.
+     */
+    settle() {
+      if (report === null) return;
+      const read = readConfinementReport(report, reportSize);
+      if (read.paths.includes(path.resolve(report))) tampered = true;
+      reportSize = Math.max(reportSize, read.size);
+    },
     observedMounts() {
       if (report === null) return [];
       const read = readConfinementReport(report, reportSize);
-      reportSize = read.size;
-      return read.paths;
+      reportSize = Math.max(reportSize, read.size);
+      const paths = tampered && !read.paths.includes(path.resolve(report)) ? [...read.paths, path.resolve(report)].sort() : read.paths;
+      return paths;
     },
   };
 }
@@ -467,7 +482,8 @@ function readConfinementReport(report, previousSize = 0) {
       fs.closeSync(descriptor);
     }
   } catch {
-    return { paths: [], size };
+    // The runtime made the report before any process ran; one it cannot open now was replaced or removed.
+    return { paths: [path.resolve(report)], size: previousSize };
   }
   const observed = new Set();
   // A report the target's own processes made longer than the runtime reads, or shorter than a read already showed,
@@ -486,24 +502,25 @@ function readConfinementReport(report, previousSize = 0) {
 }
 
 /**
- * The signal the status shim recorded for a call's target, removed once read,
- * or `null`: a status file that is absent, unreadable or names no signal
- * Node knows leaves Bubblewrap's own exit as the call's.
+ * What the status shim recorded for a call's target, the file removed once
+ * read: whether the shim started the target at all (a Bubblewrap that could
+ * not set up its namespace ran nothing) and the signal that ended it, if a
+ * signal did. A call with no status file (Seatbelt) counts as started.
  */
-function recordedSignal(statusFile) {
-  if (statusFile === null) return null;
+function recordedStatus(statusFile) {
+  if (statusFile === null) return { started: true, signal: null };
   let text;
   try {
     text = fs.readFileSync(statusFile, 'utf8');
   } catch {
-    return null;
+    return { started: false, signal: null };
   }
   fs.rmSync(statusFile, { force: true });
   try {
-    const { signal } = JSON.parse(text);
-    return typeof signal === 'string' && os.constants.signals[signal] !== undefined ? signal : null;
+    const { started, signal } = JSON.parse(text);
+    return { started: started === true, signal: typeof signal === 'string' && os.constants.signals[signal] !== undefined ? signal : null };
   } catch {
-    return null;
+    return { started: false, signal: null };
   }
 }
 
@@ -529,6 +546,11 @@ function releaseTemporary(scratch, directory) {
   }
   const at = scratch.indexOf(directory);
   if (at !== -1) scratch.splice(at, 1);
+}
+
+/** The call's own status file, which the shim writes and the audit therefore grants; nothing under Seatbelt. */
+function statusGrant(wrapped) {
+  return wrapped?.statusFile ? [wrapped.statusFile] : [];
 }
 
 /** `env` with the temp-directory variables naming the call's own directory. */
@@ -558,12 +580,29 @@ function confinedCommandMechanism(base, sandbox, systemPathsOf = () => [], scrat
             target: wrapped.target,
             subcommandPath: [],
             argv: wrapped.args,
-            env: sandbox.environment(withTemporary(request.env, temporary), [...systemPathsOf(request.target), ...writable, temporary]),
+            env: sandbox.environment(withTemporary(request.env, temporary), [
+              ...systemPathsOf(request.target),
+              ...writable,
+              temporary,
+              ...statusGrant(wrapped),
+            ]),
           },
           signal,
         );
-        const ended = recordedSignal(wrapped.statusFile);
-        return ended === null ? result : { ...result, exitCode: -os.constants.signals[ended] };
+        const status = recordedStatus(wrapped.statusFile);
+        sandbox.settle();
+        if (!status.started) {
+          // Bubblewrap exited before its shim ran: the exit code is its own, not a behavior of the target.
+          const said = String(result?.stderr?.value ?? result?.stderr ?? '')
+            .trim()
+            .split('\n')
+            .slice(-2)
+            .join(' | ');
+          throw new ConfinementError(
+            `${MECHANISM_NAMES.bubblewrap} could not start the target ${JSON.stringify(request.target)}${said ? `: ${said}` : ''}`,
+          );
+        }
+        return status.signal === null ? result : { ...result, exitCode: -os.constants.signals[status.signal] };
       } finally {
         releaseTemporary(scratch, temporary);
       }
@@ -591,12 +630,17 @@ function confinedMcpMechanism(base, sandbox, systemPathsOf = () => [], scratch =
             ...request,
             target: wrapped.target,
             targetArgs: wrapped.args,
-            env: sandbox.environment(withTemporary(request.env, temporary), [...systemPathsOf(request.target), temporary]),
+            env: sandbox.environment(withTemporary(request.env, temporary), [
+              ...systemPathsOf(request.target),
+              temporary,
+              ...statusGrant(wrapped),
+            ]),
           },
           signal,
         );
       } finally {
-        if (wrapped !== null) recordedSignal(wrapped.statusFile);
+        if (wrapped !== null) recordedStatus(wrapped.statusFile);
+        sandbox.settle();
         releaseTemporary(scratch, temporary);
       }
     },

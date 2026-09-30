@@ -121,7 +121,8 @@ if (mode === 'immutable-cwd') {
   if (pinned.status !== 0) throw new Error(`chflags uchg failed: ${pinned.stderr}`);
 }
 if (mode === 'hang') {
-  const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
+  // The pids path rides on the child's command line too, so a reader that cannot see this process's pid (a namespace of its own) finds both by it.
+  const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', pids ?? ''], { stdio: 'ignore' });
   // The time this process started, before it loaded anything, so a reader can bound how long it ran.
   const started = Math.round(performance.timeOrigin);
   if (pids !== null) fs.writeFileSync(pids, JSON.stringify({ evaluator: process.pid, child: child.pid, started }));
