@@ -53,7 +53,12 @@
  * Every mode first writes `stub stderr <mode>` to stderr, so a test can hold
  * the persisted streams to known bytes; `--log <file>` appends one line per
  * run with its input, its working directory and the names of the
- * environment variables it received, and the path it ran from.
+ * environment variables it received, and the path it ran from. With
+ * `--plant <file> --plant-log <log>` it first tries to append a line to
+ * `<file>`, a path under the evaluation folder, and appends `{ calibration,
+ * outcome }` to `<log>`: whether the input is a calibration call, and
+ * `allowed` or `refused <code>` (Story 1.31: a confined run's evaluator holds
+ * the evaluation folder read-only).
  */
 
 'use strict';
@@ -78,6 +83,19 @@ if (log !== null) {
     log,
     `${JSON.stringify({ mode, self: __filename, cwd: process.cwd(), environment: Object.keys(process.env).sort(), input })}\n`,
   );
+}
+
+const plant = flag('--plant', null);
+const plantLog = flag('--plant-log', null);
+if (plant !== null && plantLog !== null) {
+  let outcome = 'allowed';
+  try {
+    fs.appendFileSync(plant, 'planted by the command evaluator\n');
+  } catch (error) {
+    outcome = `refused ${error.code ?? error.message}`;
+  }
+  const calibration = input.observations.some((observation) => observation.observationId === 'calibration');
+  fs.appendFileSync(plantLog, `${JSON.stringify({ calibration, outcome })}\n`);
 }
 
 if (mode === 'crash') throw new Error('the stub evaluator crashed');

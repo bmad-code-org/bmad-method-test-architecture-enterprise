@@ -1797,6 +1797,30 @@ const HARDENING_CASES = [
     rule: 'schema',
     plant: (folder) => editJson(folder, 'evaluation.json', (value) => (value.registry[0].target = '../outside/runner.js')),
   },
+  {
+    name: 'a registry entry declaring a relative system path',
+    file: 'evaluation.json',
+    rule: 'schema',
+    plant: (folder) => editJson(folder, 'evaluation.json', (value) => (value.registry[0].systemPaths = ['opt/verdict-rules'])),
+    expect: (output) => [[output.includes('/registry/0/systemPaths/0'), 'the finding does not name the relative system path']],
+  },
+  {
+    name: 'a registry entry declaring a system path no confinement profile can carry',
+    file: 'evaluation.json',
+    rule: 'schema',
+    plant: (folder) => editJson(folder, 'evaluation.json', (value) => (value.registry[0].systemPaths = ['/opt/verdict"rules'])),
+    expect: (output) => [[output.includes('/registry/0/systemPaths/0'), 'the finding does not name the quoted system path']],
+  },
+  {
+    name: 'two entries starting one target with different system paths',
+    file: 'evaluation.json',
+    rule: 'registry',
+    plant: (folder) =>
+      editJson(folder, 'evaluation.json', (value) =>
+        value.registry.push({ ...value.registry[0], executable: 'tea-atdd-report', systemPaths: ['/opt/verdict-rules'] }),
+      ),
+    expect: (output) => [[output.includes('with other systemPaths'), 'the finding does not name the differing system paths']],
+  },
   ...UNPRINTABLE_PATH_CHARACTERS.flatMap(([label, character]) => [
     {
       name: `a registry target holding ${label}`,
@@ -2321,6 +2345,14 @@ const CLEAN_CASES = [
     name: 'two entries sharing an interface with different executables',
     plant: (folder) =>
       editJson(folder, 'evaluation.json', (value) => value.registry.push({ ...value.registry[0], executable: 'tea-atdd-report' })),
+  },
+  {
+    name: 'two entries starting one target with the same system paths',
+    plant: (folder) =>
+      editJson(folder, 'evaluation.json', (value) => {
+        value.registry[0].systemPaths = ['/opt/verdict-rules'];
+        value.registry.push({ ...value.registry[0], executable: 'tea-atdd-report' });
+      }),
   },
   {
     name: 'a signature whose call-input clause sits beside an exit code only the defect produces',

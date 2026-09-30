@@ -66,7 +66,7 @@ development_status:
   1-28-recover-from-a-killed-run: done
   1-29-record-what-a-live-run-spends: done
   1-30-send-principal-and-matcher-bindings: done
-  1-31-sandbox-the-targets-file-system: backlog
+  1-31-sandbox-the-targets-file-system: done
   1-32-qualify-a-historical-probe-against-two-addressable-deployments: done
   1-33-record-eval-qualitys-denial-reason-for-every-denied-call: backlog
   1-34-qualify-a-sealed-brief-agent-evaluator-before-its-verdicts-count: backlog
@@ -92,6 +92,13 @@ development_status:
   1-54-reclaim-auxiliary-scratch-after-a-killed-preflight: backlog
   1-55-recognize-process-and-answer-separation-for-scalar-cli: backlog
   1-56-prove-malformed-cli-refusal-against-a-controlled-defect: backlog
+  1-57-withhold-the-committed-evaluation-folder-from-a-confined-ta: backlog
+  1-58-keep-the-bridges-admission-token-and-the-runs-private-direc: backlog
+  1-59-let-a-confined-agent-target-keep-the-state-its-cli-writes: backlog
+  1-60-observe-every-confined-processs-file-access-beyond-node: backlog
+  1-61-teach-file-system-confinement-in-the-evaluate-skill: backlog
+  1-62-share-one-sandbox-primitive-layer-across-teas-isolation-mod: backlog
+  1-63-carry-the-audit-over-a-channel-the-target-cannot-write: backlog
   epic-1-retrospective: optional
 
   epic-2: backlog

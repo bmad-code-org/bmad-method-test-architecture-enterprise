@@ -38,7 +38,7 @@ inputDocuments:
 
 ## Executive Summary
 
-**Scope:** full epic-level test design for Stories 1.1 to 1.56 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.56. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
+**Scope:** full epic-level test design for Stories 1.1 to 1.63 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.63. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
 
 **Risk summary:**
 
@@ -577,16 +577,16 @@ Levels: integration. File: `test/test-evaluate-run.js` (`test:evaluate-run`), `t
 
 ### Story 1.31: Sandbox the target's file system
 
-Levels: integration over real eval-quality. File: `test/test-evaluate-run.js` (`test:evaluate-run`).
+Levels: integration over real eval-quality, unit. File: `test/test-evaluate-run.js` (`test:evaluate-run`); amended 2026-09-29 in Story 1.31: the tool-server, HTTP-service and HTTP-port cases sit in `test/test-evaluate-mcp.js` and `test/test-evaluate-api.js`, the evaluation layer's in `test/test-evaluate-evaluators.js` and `test/test-evaluate-calibration.js`, the deployment route's in `test/test-evaluate-arms.js`, the `systemPaths` rules in `test/test-evaluate-check.js`, and the audit, status shim and workspace refusal run as units in `test/test-evaluate-run.js`.
 
-| AC                                                                                                           | Test                                                                                                                                                                                                                                | Level                              | P   | Revert check                                                                                          |
-| ------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | --- | ----------------------------------------------------------------------------------------------------- |
-| The target reaches its workspace and nothing else                                                            | A stub target tries to read the evaluation folder's `contract.json` and to write into `runs/`; both are refused and the run's artifacts are unchanged                                                                               | Integration                        | P0  | Reverting the confinement lets the stub read the contract                                             |
-| `observedMounts` comes from the confinement's report                                                         | A stub reads a path it was not granted; the path appears in `observedMounts` and eval-quality records the isolation violation                                                                                                       | Integration over real eval-quality | P0  | Reverting the report leaves `observedMounts` empty                                                    |
-| A platform without confinement refuses unless the evaluation opts out                                        | One case asserts the refusal exits 12, another the opt-out recorded in `run.json`                                                                                                                                                   | Integration                        | P1  | Dropping the refusal runs unconfined silently                                                         |
-| The confinement covers processes the target leaves running                                                   | A stub leaves a process running that, after `run` exits, rewrites a sealed record and the digest `run.json` recorded for it; `score` refuses the run                                                                                | Integration over real eval-quality | P0  | Reverting the confinement for leftover processes lets `score` pass the rewritten record to the engine |
-| Forbidden-input notes and the reference name the confinement (added 2026-09-25 in Story 1.9)                 | Assert each forbidden input's note names the confinement, and read the reference section by its exact heading for each platform's mechanism                                                                                         | Contract                           | P2  | Restoring Story 1.8's note or deleting a platform from the passage fails it                           |
-| No process of the run can write the evaluation layer (added 2026-09-25 in Story 1.17's final review round 2) | A stub target leaves a process that swaps a tracked `evaluator/` file after the layer's re-read and restores it once the evaluator has launched; the write is refused and the run's records carry the digests of the bytes that ran | Integration over real eval-quality | P1  | Reverting the confinement for `evaluator/` lets the swapped bytes run under the original digests      |
+| AC                                                                                                                                               | Test                                                                                                                                                                                                                                | Level                              | P   | Revert check                                                                                          |
+| ------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | --- | ----------------------------------------------------------------------------------------------------- |
+| The target reaches its workspace and nothing else (amended 2026-09-29 in Story 1.31: writes and the evaluation folder; other reads are reported) | A stub target tries to read the evaluation folder's `contract.json` and to write into `runs/`; both are refused and the run's artifacts are unchanged; the same attempts by a tool server and a started HTTP service                | Integration                        | P0  | Reverting the confinement lets the stub read the contract                                             |
+| `observedMounts` comes from the confinement's report                                                                                             | A stub reads a path it was not granted; the path appears in `observedMounts` and eval-quality records the isolation violation                                                                                                       | Integration over real eval-quality | P0  | Reverting the report leaves `observedMounts` empty                                                    |
+| A platform without confinement refuses unless the evaluation opts out                                                                            | One case asserts the refusal exits 12, another the opt-out recorded in `run.json`; `preflight`, a failing mechanism probe, a temp directory inside the folder and an uncarriable path refuse too; `score` names an opted-out run    | Integration                        | P1  | Dropping the refusal runs unconfined silently                                                         |
+| The confinement covers processes the target leaves running                                                                                       | A stub leaves a process running that, after `run` exits, rewrites a sealed record and the digest `run.json` recorded for it; `score` refuses the run                                                                                | Integration over real eval-quality | P0  | Reverting the confinement for leftover processes lets `score` pass the rewritten record to the engine |
+| Forbidden-input notes and the reference name the confinement (added 2026-09-25 in Story 1.9)                                                     | Assert each forbidden input's note names the confinement, and read the reference section by its exact heading for each platform's mechanism                                                                                         | Contract                           | P2  | Restoring Story 1.8's note or deleting a platform from the passage fails it                           |
+| No process of the run can write the evaluation layer (added 2026-09-25 in Story 1.17's final review round 2)                                     | A stub target leaves a process that swaps a tracked `evaluator/` file after the layer's re-read and restores it once the evaluator has launched; the write is refused and the run's records carry the digests of the bytes that ran | Integration over real eval-quality | P1  | Reverting the confinement for `evaluator/` lets the swapped bytes run under the original digests      |
 
 ### Story 1.32: Qualify a historical probe against two addressable deployments
 
@@ -854,6 +854,72 @@ Added from Story 1.26's final review. Levels: preflight mutation qualification, 
 | Guard bypass is witnessed and restored   | Preflight a separate target guard mutation, compare pre, mutated and restored digests, and rerun the clean baseline          | Preflight integration              | P0  | Reverting mutation or restoration breaks the witnessed digest path |
 | Refusal oracle catches the defect        | Score development and held-out guard-bypass probes through Autoevals with three `caught` votes each; assert permitted quotes | Integration over real eval-quality | P0  | Hard-coded pass or missing channel check changes a vote            |
 | Clean and scored evidence remains strong | Replay P-004 at three `passed-clean-control` votes, compare both defect strengths, and assert engine `PASS` without a waiver | Integration over published engine  | P0  | Weakening a control or using the earlier engine breaks the verdict |
+
+### Story 1.57: Withhold the committed evaluation folder from a confined target's git history
+
+Added in Story 1.31. Levels: integration over real eval-quality, static. File: `test/test-evaluate-run.js` (`test:evaluate-run`).
+
+| AC                                               | Test                                                                                                                      | Level       | P   | Revert check                                          |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- | ----------- | --- | ----------------------------------------------------- |
+| No evaluation-folder object reaches the target   | A stub target runs `git show` and `git cat-file` for the committed contract at the evaluated commit and every ref         | Integration | P0  | Reverting the change lets the stub print the contract |
+| The target's own git operations still work       | The same stub runs `git status`, `git log` and `git diff` against the commit; assert each exits 0 with the evaluated tree | Integration | P1  | A workspace that breaks git fails the assertion       |
+| The reference drops the readable-history passage | Read `### File-system confinement` by its exact heading                                                                   | Static      | P2  | Leaving the passage fails the case                    |
+
+### Story 1.58: Keep the bridge's admission token and the run's private directories from a confined target
+
+Added in Story 1.31. Levels: integration over real eval-quality, static. Files: `test/test-evaluate-evaluators.js` (`test:evaluate-evaluators`), `test/test-evaluate-run.js`.
+
+| AC                                             | Test                                                                                                                                | Level       | P   | Revert check                                       |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ----------- | --- | -------------------------------------------------- |
+| The bridge's token and the layer's directories | A stub target and its leftover process read the bridge configuration, list the evaluator's and judge's directories, dial the socket | Integration | P0  | Reverting the change lets the stub print the token |
+| The reference states the withholding           | Read the bridge passage under its exact heading                                                                                     | Static      | P2  | The old sentence fails the case                    |
+
+### Story 1.59: Let a confined agent target keep the state its CLI writes
+
+Added in Story 1.31. Levels: integration. Files: `test/test-evaluate-preflight.js` (`test:evaluate-preflight`), `test/test-evaluate-run.js`.
+
+| AC                                   | Test                                                                                                      | Level       | P   | Revert check                                     |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------- | ----------- | --- | ------------------------------------------------ |
+| An agent target's state is writable  | A confined run of `tea-skill-runner` over a stub agent that writes under `HOME`; assert the run completes | Integration | P0  | Reverting the change fails the first state write |
+| The evaluation folder stays withheld | The same stub reads the contract and writes into `runs/`; assert both refused                             | Integration | P0  | Widening the grant lets one attempt land         |
+
+### Story 1.60: Observe every confined process's file access, beyond Node
+
+Added in Story 1.31. Levels: integration over real eval-quality. File: `test/test-evaluate-run.js` (`test:evaluate-run`).
+
+| AC                                          | Test                                                                                                    | Level                              | P   | Revert check                                         |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ---------------------------------- | --- | ---------------------------------------------------- |
+| A non-Node target's ungranted read reported | A shell target reads a file outside its workspace; assert `observedMounts` lists it and `score` exits 3 | Integration over real eval-quality | P0  | The Node preload alone leaves `observedMounts` empty |
+| A clean shell target reports nothing        | A shell target that stays in its workspace; assert empty `observedMounts`                               | Integration                        | P1  | A noisy audit fails the assertion                    |
+
+### Story 1.61: Teach file-system confinement in the Evaluate skill
+
+Added in Story 1.31. Levels: guidance. File: `test/test-evaluate-guidance.js` (`test:evaluate-guidance`).
+
+| AC                                        | Test                                                                                             | Level    | P   | Revert check                         |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------ | -------- | --- | ------------------------------------ |
+| The harness guide teaches `systemPaths`   | Validate its tagged `evaluation.json` fragment against the runtime schema                        | Guidance | P1  | Deleting the fragment fails the test |
+| The run and gaps guides teach confinement | Read the passages naming each mechanism, the exit-12 refusal, the opt-out and the observed mount | Guidance | P1  | Deleting a passage fails the test    |
+
+### Story 1.62: Share one sandbox primitive layer across TeA's isolation modules
+
+Added in Story 1.31 from its local review. Levels: unit, static. Files: a new static test (`test:isolation-primitives`), `test/test-test-review-cli.js` (`test:cli`), `test/test-atdd-isolation.js` (`test:atdd-isolation`), `test/test-evaluate-run.js` (`test:evaluate-run`).
+
+| AC                                                  | Test                                                                                                              | Level  | P   | Revert check                                                   |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------ | --- | -------------------------------------------------------------- |
+| Each module generates what it generates today       | For fixed inputs, compare each module's Seatbelt profile and Bubblewrap argument vector before and after the move | Unit   | P0  | A changed rule or argument fails the comparison                |
+| No module keeps its own copy of a shared primitive  | The static test scans the three modules for a local executable lookup, profile-path check, containment or probe   | Static | P1  | Restoring a local copy in any one module fails the gate        |
+| One refusal of unsafe path characters for all three | Each module refuses each quote, backslash, line-break and control character a profile cannot carry                | Unit   | P1  | Reverting one caller to its own check lets a character through |
+
+### Story 1.63: Carry the audit over a channel the target cannot write
+
+Added in Story 1.31 from its local review. Levels: integration. Files: `test/test-evaluate-run.js` (`test:evaluate-run`), `test/test-evaluate-api.js` (`test:evaluate-api`), the verdict fixture.
+
+| AC                                                       | Test                                                                                                                          | Level       | P   | Revert check                                            |
+| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ----------- | --- | ------------------------------------------------------- |
+| A rewritten report hides nothing                         | A confined target reads an ungranted path, then rewrites, truncates and pads the report file; `observedMounts` still lists it | Integration | P0  | Reading the file in place of the channel drops the path |
+| No route to a service manager through an abstract socket | On Linux, a listener on an abstract address is unreachable from the target while a started HTTP service answers the runtime   | Integration | P1  | Removing the isolation lets the connection through      |
+| The reference claims only what it can back               | The reference's confinement section is compared with the mechanism's behavior in the cases above                              | Static      | P2  | A claim the cases do not back fails the comparison      |
 
 ## The Dogfood Proof (AD-15)
 

@@ -15,7 +15,8 @@
  *   `trialIndex` 1..3, `mode: contract-scoring`, `conditionArm` `clean` or
  *   `mutated:M-001`, `evaluator-chosen` observations whose request is the
  *   interaction plan's bound literal, as the target's own stdout shows), one
- *   isolation manifest (each trial's workspace granted, no mount observed, the
+ *   isolation manifest (each trial's workspace granted, no mount observed by
+ *   the confinement's audit, the
  *   one command the plan ran observed out of a two-command registry, one
  *   call per plan step and trial), and one evaluator configuration for the
  *   run whose `sealedBriefDigest` is the digest of the persisted sealed
@@ -80,6 +81,20 @@
  * - The skill's policy templates carry no threshold values and validate once
  *   filled; the evaluation-folder `.gitignore` template and TeA's root
  *   `.gitignore` ignore `runs/`.
+ * - File-system confinement (Story 1.31), on this host's real mechanism: every
+ *   run above is confined unless it opts out (the cases whose target writes
+ *   into the project or the run directory on purpose, which prove the
+ *   runtime's own checks an opted-out run relies on); `run.json` records the
+ *   mechanism and each forbidden input's note names it; a target is refused
+ *   the contract and a write into `runs/`, a process it leaves running is
+ *   refused the rewrite of a sealed record and its digest after `run` exits,
+ *   and one that swaps a tracked `evaluator/` file as the evaluator launches is
+ *   refused, each beside an opted-out control where the same attempt lands; a
+ *   path it opens outside what it was granted is an observed mount eval-quality
+ *   records as an isolation violation, unless its registry entry declares it
+ *   in `systemPaths`; a platform with no mechanism exits 12 unless the
+ *   evaluation opts out, which `run.json` records; the reference names each
+ *   platform's mechanism under its exact heading.
  *
  * Usage: node test/test-evaluate-run.js
  */
@@ -89,7 +104,7 @@
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
+const { spawn, spawnSync } = require('node:child_process');
 
 const AjvModule = require('ajv/dist/2020');
 
@@ -100,6 +115,7 @@ const { judgeTrial } = require('../cli/lib/evaluate/evaluator');
 const { recordObservation, createArtifactValidator } = require('../cli/lib/evaluate/records');
 const { RunDirectory, RunDirectoryError } = require('../cli/lib/evaluate/run-directory');
 const { setRecommendation } = require('../cli/lib/evaluate/run');
+const { MECHANISM_NAMES, PLATFORM_ENV, confinedMcpMechanism, targetSandbox } = require('../cli/lib/evaluate/confinement');
 const { combinedExit } = require('../cli/lib/evaluate/score');
 const { agentReplyAndUsage } = require('../cli/lib/agent-adapters');
 const { parseUsageReport } = require('../cli/lib/evaluate/usage-report');
@@ -114,8 +130,13 @@ const FIXTURE = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'mutatio
 const ASSETS = path.join(PROJECT_ROOT, 'src', 'workflows', 'testarch', 'bmad-testarch-evaluate', 'assets');
 const CONDITIONS_SCHEMA = path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate', 'schemas', 'evaluator-conditions.schema.json');
 const WRAP_RUN_DIRECTORY = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'wrap-run-directory.cjs');
+const REPORT_LISTENER = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'report-listener.cjs');
+const CONFINEMENT_GUARD = path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate', 'confinement-guard.cjs');
+const CONFINEMENT_STATUS = path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate', 'confinement-status.cjs');
 const EVALUATION = path.join('evals', 'verdict');
 const TRIALS = 3;
+/** The confinement this host runs targets under (Story 1.31); the suite runs where one exists, as TeA's CI does. */
+const CONFINEMENT = process.platform === 'darwin' ? 'seatbelt' : 'bubblewrap';
 
 const BASE_ENV = Object.fromEntries(Object.entries(process.env).filter(([name]) => name !== ENGINE_CLI_ENV && !name.startsWith('GIT_')));
 const GIT_IDENTITY = ['-c', 'user.name=TeA test', '-c', 'user.email=tea-test@example.test', '-c', 'core.hooksPath=/dev/null'];
@@ -143,6 +164,12 @@ function tempDir(label) {
 
 function readJson(file) {
   return JSON.parse(fs.readFileSync(file, 'utf8'));
+}
+
+function editJson(file, edit) {
+  const value = readJson(file);
+  edit(value);
+  fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
 }
 
 /** A file a run or score should have written, parsed; a missing one is a failed check and reads as `null`. */
@@ -196,8 +223,11 @@ function evaluate(args, env = {}, node = [], { timeout = SPAWN_TIMEOUT_MS } = {}
  * A committed temp project from the fixture; `edit` changes it before the
  * index is digested and the commit made. With `below`, the project sits in
  * that directory of a larger repository whose top holds `other/` beside it.
+ * With `unconfined`, the evaluation opts out of file-system confinement, for
+ * a case that proves the runtime's own checks against a target that writes
+ * where it must not, which a confined run refuses (Story 1.31).
  */
-function makeProject(label, { edit = () => {}, below = null } = {}) {
+function makeProject(label, { edit = () => {}, below = null, unconfined = false } = {}) {
   const repository = path.join(tempDir(label), 'repository');
   const project = below === null ? repository : path.join(repository, below);
   fs.cpSync(FIXTURE, project, { recursive: true, filter: (from) => path.basename(from) !== 'runs' });
@@ -207,6 +237,7 @@ function makeProject(label, { edit = () => {}, below = null } = {}) {
     fs.writeFileSync(path.join(repository, 'other', 'notes.txt'), 'beside the project\n');
   }
   const folder = path.join(project, EVALUATION);
+  if (unconfined) editJson(path.join(folder, 'evaluation.json'), (evaluation) => (evaluation.confinement = false));
   edit({ project, folder });
   const digested = evaluate(['digest', '--evaluation', folder]);
   if (digested.status !== 0) throw new Error(`digest failed for ${label}: ${digested.output}`);
@@ -309,6 +340,7 @@ async function checkRunShape({ engine, validate, repository, project, folder, ru
     run.model?.modelSnapshot === 'none' && run.model?.systemPromptDigest === sha256(Buffer.alloc(0)),
     `run.json records model ${JSON.stringify(run.model)}`,
   );
+  check(run.confinement === CONFINEMENT, `run.json records confinement ${JSON.stringify(run.confinement)}; expected ${CONFINEMENT}`);
 
   // The evaluator configuration (AD-7, NFR8): the seal's digest, and a no-model run's two fields.
   const configuration = written(path.join(runDirectory, 'evaluator-configuration.json'), 'the evaluator configuration') ?? {};
@@ -391,10 +423,17 @@ async function checkRunShape({ engine, validate, repository, project, folder, ru
         JSON.stringify([1, 2, 3].map((trial) => `git-worktree trial-${set.conditionArm.replace(':', '-')}-${trial}`)),
       `${set.probeId}'s isolation manifest does not name the workspace of each trial: ${JSON.stringify(manifest.allowedMounts)}`,
     );
-    // The runtime observes no file-system access, so it claims no observed mount.
+    // A clean target opens nothing outside what it was granted, so the confinement's audit reports no mount.
     check(
       JSON.stringify(manifest.observedMounts) === '[]',
       `${set.probeId}'s isolation manifest claims observed mounts ${JSON.stringify(manifest.observedMounts)}`,
+    );
+    // Each forbidden input's note names the confinement that withheld it (Story 1.31).
+    const notes = Object.values(manifest.forbiddenInputAccounting ?? {}).map((entry) => entry.note);
+    check(
+      notes.length === 7 &&
+        notes.every((note) => note.includes(`Withheld as well by ${MECHANISM_NAMES[CONFINEMENT]} file-system confinement`)),
+      `${set.probeId}'s forbidden-input notes do not name ${MECHANISM_NAMES[CONFINEMENT]}: ${JSON.stringify(notes)}`,
     );
     // Two registry commands granted, the one the plan calls observed, once per plan step and trial.
     check(
@@ -1165,7 +1204,7 @@ function checkStoppedRuns() {
   const failingRun = runDirectoryOf(failing.folder);
   check(failingRun === null || !fs.existsSync(path.join(failingRun, 'trials')), 'a run whose preflight verdict failed ran trials');
 
-  const touched = makeProject('touch');
+  const touched = makeProject('touch', { unconfined: true });
   const touch = path.join(touched.project, 'rules', 'touched.txt');
   const wrote = evaluate(['run', '--evaluation', touched.folder], {
     ...touched.env,
@@ -1188,7 +1227,7 @@ function checkStoppedRuns() {
   // A target that plants a link in the run directory where a record would go:
   // the run stops before any trial set is written, and the adopter's tree,
   // where the link points, is never written.
-  const planted = makeProject('plant');
+  const planted = makeProject('plant', { unconfined: true });
   const policyFile = path.join(planted.project, 'rules', 'policy.txt');
   const policyBytes = fs.readFileSync(policyFile);
   const plantedRun = evaluate(['run', '--evaluation', planted.folder], {
@@ -1220,7 +1259,7 @@ function checkStoppedRuns() {
   }
 
   // A target that rewrites the compiled contract in the run directory: the run stops before any trial set names it.
-  const forged = makeProject('forge');
+  const forged = makeProject('forge', { unconfined: true });
   const forgedRun = evaluate(['run', '--evaluation', forged.folder], { ...forged.env, VERDICT_WHEN: 'trial-clean-1', VERDICT_DO: 'forge' });
   check(
     forgedRun.status === 12 && /eval-contract\.json no longer holds the bytes the runtime wrote/.test(forgedRun.output),
@@ -1344,7 +1383,7 @@ function checkStoppedRuns() {
   // A target that swaps trials/clean for a link into the project, replaces it
   // with a directory of its own, or moves trials/ into the project and leaves
   // a link: the next trial's evidence is refused (exit 12) and lands nowhere.
-  const linked = makeProject('link-trials');
+  const linked = makeProject('link-trials', { unconfined: true });
   const rulesBefore = fs.readdirSync(path.join(linked.project, 'rules')).sort();
   const linkedRun = evaluate(['run', '--evaluation', linked.folder], {
     ...linked.env,
@@ -1365,7 +1404,7 @@ function checkStoppedRuns() {
     `the adopter's tree changed under a linked trials/clean: ${git(linked.repository, ['status', '--porcelain'])}`,
   );
 
-  const recreated = makeProject('recreate-trials');
+  const recreated = makeProject('recreate-trials', { unconfined: true });
   const recreatedRun = evaluate(['run', '--evaluation', recreated.folder], {
     ...recreated.env,
     VERDICT_WHEN: 'trial-clean-2',
@@ -1382,7 +1421,7 @@ function checkStoppedRuns() {
     'a run wrote trial evidence into a trials/clean the target made',
   );
 
-  const moved = makeProject('move-trials');
+  const moved = makeProject('move-trials', { unconfined: true });
   const movedTrialsRun = evaluate(['run', '--evaluation', moved.folder], {
     ...moved.env,
     VERDICT_WHEN: 'trial-clean-2',
@@ -2038,6 +2077,747 @@ try {
   );
 }
 
+/** What the first plan step of a trial printed on stdout, from its evidence file. */
+function trialStdout(runDirectory, arm, trialIndex) {
+  const evidence =
+    runDirectory === null
+      ? null
+      : written(path.join(runDirectory, 'trials', arm, `trial-${trialIndex}.json`), `${arm} trial ${trialIndex}`);
+  const stdout = evidence?.steps?.[0]?.observation?.stdout;
+  return typeof stdout === 'string' ? stdout : String(stdout?.value ?? '');
+}
+
+/** Blocks the event loop for `ms`: the cases around it run the CLI synchronously. */
+function pause(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+/**
+ * A listener on 127.0.0.1 (`fixtures/evaluate/report-listener.cjs`) that a
+ * stub's leftover process reports its attempt to, since a confined process
+ * can write nothing a test could read: `port` to hand the stub, `line(pattern)`
+ * waiting ten seconds at most for a reported line that matches, and `close()`.
+ */
+function reportListener(label) {
+  const directory = tempDir(`${label}-listener`);
+  const lines = path.join(directory, 'lines.txt');
+  const portFile = path.join(directory, 'port');
+  const child = spawn(process.execPath, [REPORT_LISTENER, lines, portFile], { stdio: 'ignore' });
+  const deadline = Date.now() + 10_000;
+  while (!fs.existsSync(portFile) && Date.now() < deadline) pause(20);
+  const port = fs.existsSync(portFile) ? fs.readFileSync(portFile, 'utf8').trim() : '';
+  const read = () => (fs.existsSync(lines) ? fs.readFileSync(lines, 'utf8') : '');
+  return {
+    port,
+    line(pattern) {
+      const until = Date.now() + 10_000;
+      for (;;) {
+        const found = read()
+          .split('\n')
+          .find((line) => pattern.test(line));
+        if (found !== undefined || Date.now() > until) return found ?? null;
+        pause(50);
+      }
+    },
+    lines: read,
+    close: () => child.kill('SIGKILL'),
+  };
+}
+
+/** Whether a process whose command line carries `marker` is running now. */
+function running(marker) {
+  const listed = spawnSync('ps', ['-A', '-o', 'args='], { encoding: 'utf8' });
+  return String(listed.stdout)
+    .split('\n')
+    .some((line) => line.includes(marker));
+}
+
+/** Waits, a minute at most, until no process whose command line carries `marker` is running; whether none is. */
+function waitUntilGone(marker) {
+  const deadline = Date.now() + 60_000;
+  while (running(marker)) {
+    if (Date.now() > deadline) return false;
+    pause(100);
+  }
+  return true;
+}
+
+/** The observed mounts of one probe's trial set in a run directory. */
+function observedMountsOf(runDirectory, probeId) {
+  return runDirectory === null ? null : readJson(path.join(runDirectory, 'trial-sets', probeId, 'isolation-manifest.json')).observedMounts;
+}
+
+/**
+ * A command evaluator for the verdict fixture that starts through a wrapper
+ * waiting a second before it runs `evaluator/impl.js`: the window Story
+ * 1.31's case swaps `impl.js` in, after the run's last read of the layer.
+ */
+function useWrappedEvaluator(folder) {
+  const evaluator = path.join(folder, 'evaluator');
+  fs.mkdirSync(evaluator, { recursive: true });
+  fs.cpSync(
+    path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'evaluators', 'command', 'evaluator', 'mapping.json'),
+    path.join(evaluator, 'mapping.json'),
+  );
+  fs.writeFileSync(
+    path.join(evaluator, 'judge.sh'),
+    '#!/bin/sh\n# Waits a second, then runs the evaluator beside it.\nsleep 1\nexec node "$(dirname "$0")/impl.js"\n',
+    {
+      mode: 0o755,
+    },
+  );
+  fs.writeFileSync(
+    path.join(evaluator, 'impl.js'),
+    [
+      '#!/usr/bin/env node',
+      "'use strict';",
+      "const fs = require('node:fs');",
+      "const input = JSON.parse(fs.readFileSync(0, 'utf8'));",
+      "const text = (observation) => String(observation.stdout?.value ?? '');",
+      "const judged = input.observations.find((observation) => text(observation).includes('verdict:')) ?? input.observations[0];",
+      'const cite = [judged.observationId];',
+      "const row = text(judged).includes('verdict: accepted')",
+      "  ? { key: 'verdict-accepted', outcome: 'pass', observationIds: cite, comment: 'original bytes ran' }",
+      "  : { key: 'verdict-accepted', outcome: 'fail', observationIds: cite, quote: 'verdict: rejected', quoteChannel: 'stdout', confidence: 0.9, comment: 'original bytes ran' };",
+      'process.stdout.write(`${JSON.stringify({ rows: [row] })}\\n`);',
+      '',
+    ].join('\n'),
+    { mode: 0o755 },
+  );
+  editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
+    evaluation.evaluator = { kind: 'command', command: 'evaluator/judge.sh', timeoutMs: 60_000 };
+  });
+}
+
+/**
+ * File-system confinement (Story 1.31), in the six cases below, each against this host's real
+ * mechanism (Seatbelt on macOS, Bubblewrap on Linux) and the real
+ * eval-quality, with the same stub in a run that opted out as the control
+ * showing the stub's attempt succeeds when nothing confines it:
+ *
+ * - a target that reads the evaluation folder's contract.json and writes into
+ *   runs/ is refused both, the run completes, the contract is unchanged, and
+ *   the audit reports both paths, which score reads as an isolation violation;
+ * - a target that reads a file outside its workspace has it listed as an
+ *   observed mount, which eval-quality records as an isolation violation; the
+ *   same read under a registry entry declaring the file's directory in
+ *   systemPaths is not reported;
+ * - a platform with no mechanism refuses run with exit 12, and an evaluation
+ *   that opts out runs there and records "opt-out", its note saying so;
+ * - a process the target leaves running, which rewrites a sealed record and
+ *   its digest in run.json once run has exited, is refused, and score passes;
+ * - a process the target leaves running, which swaps a tracked evaluator/ file
+ *   while the evaluator launches and has it put itself back, is refused, and
+ *   the trial is judged by the bytes the run digested;
+ * - the reference's section, read under its exact heading, names each
+ *   platform's mechanism and what an opted-out run records.
+ */
+async function checkConfinedEvaluationFolder() {
+  const refusal = /^refused (EPERM|EACCES|ENOENT|EROFS)$/;
+  const probed = makeProject('confinement-probe');
+  const contractBytes = fs.readFileSync(path.join(probed.folder, 'contract.json'));
+  const probedRun = evaluate(['run', '--evaluation', probed.folder], {
+    ...probed.env,
+    VERDICT_WHEN: 'trial-clean-1',
+    VERDICT_DO: 'probe-confinement',
+  });
+  check(
+    probedRun.status === 0,
+    `a confined run whose target probed the evaluation folder exited ${probedRun.status}; expected 0\n${probedRun.output}`,
+  );
+  const probedDirectory = runDirectoryOf(probed.folder);
+  const probedOut = trialStdout(probedDirectory, 'clean', 1);
+  const contractRead = /contract-read: (.*)/.exec(probedOut)?.[1];
+  const runsWrite = /runs-write: (.*)/.exec(probedOut)?.[1];
+  check(
+    refusal.test(contractRead ?? ''),
+    `a confined target's read of contract.json ended ${JSON.stringify(contractRead)}; expected a refusal\n${probedOut}`,
+  );
+  check(
+    refusal.test(runsWrite ?? ''),
+    `a confined target's write into runs/ ended ${JSON.stringify(runsWrite)}; expected a refusal\n${probedOut}`,
+  );
+  check(!fs.existsSync(path.join(probed.folder, 'runs', 'tamper.txt')), 'a confined target wrote runs/tamper.txt');
+  check(fs.readFileSync(path.join(probed.folder, 'contract.json')).equals(contractBytes), 'a confined target changed contract.json');
+  const probedRecord = probedDirectory === null ? {} : readJson(path.join(probedDirectory, 'run.json'));
+  check(
+    probedRecord.completed === true && probedRecord.confinement === CONFINEMENT,
+    `the probed run records ${JSON.stringify({ completed: probedRecord.completed, confinement: probedRecord.confinement })}`,
+  );
+  // Each forbidden input's note names the confinement that withheld it.
+  const probedNotes =
+    probedDirectory === null
+      ? []
+      : Object.values(readJson(path.join(probedDirectory, 'trial-sets', 'P-001', 'isolation-manifest.json')).forbiddenInputAccounting).map(
+          (entry) => entry.note,
+        );
+  check(
+    probedNotes.length === 7 &&
+      probedNotes.every((note) => note.includes(`Withheld as well by ${MECHANISM_NAMES[CONFINEMENT]} file-system confinement`)),
+    `a confined run's forbidden-input notes do not name ${MECHANISM_NAMES[CONFINEMENT]}: ${JSON.stringify(probedNotes)}`,
+  );
+  const realFolder = fs.realpathSync(probed.folder);
+  const probedMounts = observedMountsOf(probedDirectory, 'P-001') ?? [];
+  check(
+    [path.join(realFolder, 'contract.json'), path.join(realFolder, 'runs', 'tamper.txt')].every((entry) => probedMounts.includes(entry)),
+    `the audit did not report the evaluation folder's paths the target reached for: ${JSON.stringify(probedMounts)}`,
+  );
+  const probedScore = evaluate(['score', '--evaluation', probed.folder], probed.env);
+  check(
+    probedScore.status === 3 && probedScore.output.includes(`mount outside allowlist: ${path.join(realFolder, 'contract.json')}`),
+    `score over a target that reached for the contract exited ${probedScore.status}; expected 3 with the isolation violation\n${probedScore.output}`,
+  );
+  check(
+    !probedScore.output.includes('opted out of file-system confinement'),
+    `score over a confined run says it opted out\n${probedScore.output}`,
+  );
+  // The control: with the confinement off, the same stub reads the contract and writes into runs/.
+  const probedOpen = makeProject('confinement-probe-open', { unconfined: true });
+  const probedOpenRun = evaluate(['run', '--evaluation', probedOpen.folder], {
+    ...probedOpen.env,
+    VERDICT_WHEN: 'trial-clean-1',
+    VERDICT_DO: 'probe-confinement',
+  });
+  const tamper = path.join(probedOpen.folder, 'runs', 'tamper.txt');
+  const tampered = fs.existsSync(tamper);
+  fs.rmSync(tamper, { force: true });
+  const probedOpenOut = trialStdout(runDirectoryOf(probedOpen.folder), 'clean', 1);
+  check(
+    probedOpenRun.status === 0 && tampered && /contract-read: allowed/.test(probedOpenOut) && /runs-write: allowed/.test(probedOpenOut),
+    `the unconfined control did not read the contract and write into runs/ (exit ${probedOpenRun.status}):\n${probedOpenOut}\n${probedOpenRun.output}`,
+  );
+}
+
+/** A path outside the workspace, reported as an observed mount unless the registry entry declares it (Story 1.31). */
+async function checkObservedMounts() {
+  const outside = path.join(tempDir('confinement-outside'), 'host-notes.txt');
+  fs.writeFileSync(outside, 'a file no trial was granted\n');
+  const realOutside = fs.realpathSync(outside);
+  const observed = makeProject('confinement-observed');
+  const observedRun = evaluate(['run', '--evaluation', observed.folder], {
+    ...observed.env,
+    VERDICT_WHEN: 'trial-clean-1',
+    VERDICT_DO: 'read-ungranted',
+    VERDICT_TOUCH: outside,
+  });
+  check(
+    observedRun.status === 0,
+    `a confined run whose target read an ungranted file exited ${observedRun.status}; expected 0\n${observedRun.output}`,
+  );
+  const observedDirectory = runDirectoryOf(observed.folder);
+  check(
+    /ungranted-read: allowed/.test(trialStdout(observedDirectory, 'clean', 1)),
+    'the target could not read the ungranted file, so the case proves nothing',
+  );
+  const observedMounts = observedMountsOf(observedDirectory, 'P-001');
+  check(
+    JSON.stringify(observedMounts) === JSON.stringify([realOutside]),
+    `P-001's observed mounts are ${JSON.stringify(observedMounts)}; expected [${realOutside}]`,
+  );
+  const otherMounts = observedMountsOf(observedDirectory, 'P-002');
+  check(
+    JSON.stringify(otherMounts) === '[]',
+    `P-002's trials read nothing ungranted, yet its manifest lists ${JSON.stringify(otherMounts)}`,
+  );
+  const observedScore = evaluate(['score', '--evaluation', observed.folder], observed.env);
+  check(
+    observedScore.status === 3 && observedScore.output.includes(`mount outside allowlist: ${realOutside}`),
+    `score over an observed ungranted mount exited ${observedScore.status}; expected 3 with eval-quality's isolation violation\n${observedScore.output}`,
+  );
+  const declared = makeProject('confinement-declared', {
+    edit: ({ folder }) =>
+      editJson(path.join(folder, 'evaluation.json'), (evaluation) => (evaluation.registry[0].systemPaths = [path.dirname(realOutside)])),
+  });
+  const declaredRun = evaluate(['run', '--evaluation', declared.folder], {
+    ...declared.env,
+    VERDICT_WHEN: 'trial-clean-1',
+    VERDICT_DO: 'read-ungranted',
+    VERDICT_TOUCH: outside,
+  });
+  const declaredMounts = observedMountsOf(runDirectoryOf(declared.folder), 'P-001');
+  check(
+    declaredRun.status === 0 && JSON.stringify(declaredMounts) === '[]',
+    `a read under a declared system path was reported (exit ${declaredRun.status}, observed ${JSON.stringify(declaredMounts)})\n${declaredRun.output}`,
+  );
+}
+
+/** A platform with no mechanism: refused, unless the evaluation opts out, which run.json and the notes record (Story 1.31). */
+async function checkPlatformRefusal() {
+  const platformless = makeProject('confinement-platformless');
+  const refused = evaluate(['run', '--evaluation', platformless.folder], { ...platformless.env, [PLATFORM_ENV]: 'plan9' });
+  check(
+    refused.status === 12 &&
+      refused.output.includes('file-system confinement has no mechanism on plan9') &&
+      refused.output.includes('"confinement": false'),
+    `run on a platform with no confinement exited ${refused.status}; expected 12 naming the platform and the opt-out\n${refused.output}`,
+  );
+  check(runDirectoryOf(platformless.folder, 0) === null, 'a refused run on a platform with no confinement wrote a run directory');
+  // preflight decides the confinement in the same pipeline, so it refuses the same way.
+  const refusedPreflight = evaluate(['preflight', '--evaluation', platformless.folder], { ...platformless.env, [PLATFORM_ENV]: 'plan9' });
+  check(
+    refusedPreflight.status === 12 && refusedPreflight.output.includes('file-system confinement has no mechanism on plan9'),
+    `preflight on a platform with no confinement exited ${refusedPreflight.status}; expected 12 naming the platform\n${refusedPreflight.output}`,
+  );
+  const optedOut = makeProject('confinement-opted-out', { unconfined: true });
+  const optedOutRun = evaluate(['run', '--evaluation', optedOut.folder], { ...optedOut.env, [PLATFORM_ENV]: 'plan9' });
+  check(
+    optedOutRun.status === 0,
+    `an opted-out run on a platform with no confinement exited ${optedOutRun.status}; expected 0\n${optedOutRun.output}`,
+  );
+  const optedOutDirectory = runDirectoryOf(optedOut.folder);
+  const optedOutRecord = optedOutDirectory === null ? {} : readJson(path.join(optedOutDirectory, 'run.json'));
+  check(
+    optedOutRecord.confinement === 'opt-out',
+    `an opted-out run records confinement ${JSON.stringify(optedOutRecord.confinement)}; expected "opt-out"`,
+  );
+  const optedOutNotes =
+    optedOutDirectory === null
+      ? []
+      : Object.values(
+          readJson(path.join(optedOutDirectory, 'trial-sets', 'P-001', 'isolation-manifest.json')).forbiddenInputAccounting,
+        ).map((entry) => entry.note);
+  check(
+    optedOutNotes.length === 7 &&
+      optedOutNotes.every((note) => note.includes('opted out of file-system confinement') && !note.includes('Withheld as well by')),
+    `an opted-out run's forbidden-input notes claim a confinement: ${JSON.stringify(optedOutNotes)}`,
+  );
+  // score says an opted-out run's targets ran unconfined, in its summary and its score.json.
+  const optedOutScore = evaluate(['score', '--evaluation', optedOut.folder], optedOut.env);
+  const optedOutScores = optedOutDirectory === null ? null : latestScoreDirectory(optedOutDirectory);
+  check(
+    optedOutScore.status === 0 &&
+      optedOutScore.output.includes('the run opted out of file-system confinement') &&
+      optedOutScores !== null &&
+      readJson(path.join(optedOutScores, 'score.json')).confinement === 'opt-out',
+    `score over an opted-out run did not say its targets ran unconfined (exit ${optedOutScore.status})\n${optedOutScore.output}`,
+  );
+}
+
+/** A leftover process that rewrites a sealed record and its digest in run.json once run has exited (Story 1.31). */
+async function checkLeftoverProcess() {
+  for (const confined of [true, false]) {
+    const label = confined ? 'confinement-leftover' : 'confinement-leftover-open';
+    const project = makeProject(label, { unconfined: !confined });
+    const marker = path.join(tempDir(`${label}-marker`), 'leftover');
+    const listener = reportListener(label);
+    let reported;
+    let ran;
+    try {
+      ran = evaluate(['run', '--evaluation', project.folder], {
+        ...project.env,
+        VERDICT_WHEN: 'trial-clean-1',
+        VERDICT_DO: 'leftover-tamper',
+        VERDICT_TOUCH: marker,
+        VERDICT_REPORT: listener.port,
+      });
+      check(waitUntilGone(marker), `${label}: the leftover process was still running a minute after run exited`);
+      reported = listener.line(/^tamper: /);
+    } finally {
+      listener.close();
+    }
+    check(ran.status === 0, `${label}: run exited ${ran.status}; expected 0\n${ran.output}`);
+    // The leftover process's own report, sent once the runtime had exited: proof that it ran and attempted the rewrite.
+    // Under Bubblewrap the target's process ids are a namespace of their own: what it leaves running ends with it, and
+    // it cannot see the runtime at all, so the case holds only that no rewrite ever lands.
+    const namespaced = confined && process.platform === 'linux';
+    check(
+      confined
+        ? /^tamper: refused (EPERM|EACCES|ENOENT|EROFS)$/.test(reported ?? '') || (namespaced && reported === null)
+        : reported === 'tamper: allowed',
+      `${label}: the leftover process reported ${JSON.stringify(reported)}; expected ${confined ? 'its rewrite refused' : 'its rewrite allowed'}`,
+    );
+    const runDirectory = runDirectoryOf(project.folder);
+    check(
+      namespaced || /leftover-runtime: \d+/.test(trialStdout(runDirectory, 'clean', 1)),
+      `${label}: the stub found no runtime for its leftover process to outlive: ${trialStdout(runDirectory, 'clean', 1)}`,
+    );
+    const record = runDirectory === null ? {} : readJson(path.join(runDirectory, 'trial-sets', 'P-001', 'record-1.json'));
+    const scored = evaluate(['score', '--evaluation', project.folder], project.env);
+    if (confined) {
+      check(
+        record.evaluatorRecommendation === 'PASS',
+        `a confined leftover process rewrote record-1.json: ${record.evaluatorRecommendation}`,
+      );
+      check(scored.status === 0, `score after a confined leftover process exited ${scored.status}; expected 0\n${scored.output}`);
+    } else {
+      // The control: unconfined, the rewrite lands with its digest, so score hands it to the engine, which refuses the set.
+      const why = fs.existsSync(`${marker}.error`) ? fs.readFileSync(`${marker}.error`, 'utf8') : 'no error noted';
+      check(
+        record.evaluatorRecommendation === 'FAIL',
+        `the unconfined control never rewrote record-1.json, so the case proves nothing: ${why}`,
+      );
+      check(
+        scored.status === 3 && !scored.output.includes('record-1.json'),
+        `score over the unconfined control's rewritten record exited ${scored.status}; expected the engine's 3 with no finding of its own\n${scored.output}`,
+      );
+    }
+  }
+}
+
+/** A leftover process that swaps a tracked evaluator/ file while the evaluator launches, and has it put itself back (Story 1.31). */
+async function checkEvaluatorSwap() {
+  for (const confined of [true, false]) {
+    const label = confined ? 'confinement-swap' : 'confinement-swap-open';
+    const project = makeProject(label, { unconfined: !confined, edit: ({ folder }) => useWrappedEvaluator(folder) });
+    const implBytes = fs.readFileSync(path.join(project.folder, 'evaluator', 'impl.js'));
+    const marker = path.join(tempDir(`${label}-marker`), 'swapper');
+    const listener = reportListener(label);
+    let reported;
+    let ran;
+    try {
+      ran = evaluate(['run', '--evaluation', project.folder], {
+        ...project.env,
+        VERDICT_WHEN: 'trial-clean-1',
+        VERDICT_DO: 'swap-evaluator',
+        VERDICT_TOUCH: marker,
+        VERDICT_REPORT: listener.port,
+      });
+      check(waitUntilGone(marker), `${label}: the swapping process was still running a minute after run exited`);
+      reported = listener.line(/^swap/);
+    } finally {
+      listener.close();
+    }
+    check(ran.status === 0, `${label}: run exited ${ran.status}; expected 0\n${ran.output}`);
+    // The swapping process's own report: it saw the evaluator start, then attempted the swap.
+    // Under Bubblewrap the swapper ends with the target's process namespace, before the evaluator launches.
+    const namespaced = confined && process.platform === 'linux';
+    check(
+      confined
+        ? /^swap: refused (EPERM|EACCES|ENOENT|EROFS)$/.test(reported ?? '') || (namespaced && reported === null)
+        : reported === 'swap: allowed',
+      `${label}: the swapping process reported ${JSON.stringify(reported)}; expected ${confined ? 'its swap refused once the evaluator started' : 'its swap allowed'}`,
+    );
+    const runDirectory = runDirectoryOf(project.folder);
+    const answered =
+      runDirectory === null ? null : readJson(path.join(runDirectory, 'trials', 'clean', 'trial-1.json')).evaluator?.answer?.rows?.[0];
+    const record = runDirectory === null ? {} : readJson(path.join(runDirectory, 'trial-sets', 'P-001', 'record-1.json'));
+    check(
+      fs.readFileSync(path.join(project.folder, 'evaluator', 'impl.js')).equals(implBytes),
+      `${label}: evaluator/impl.js does not hold the committed bytes after the run`,
+    );
+    if (confined) {
+      check(
+        answered?.comment === 'original bytes ran',
+        `a confined run's trial-clean-1 was judged by other bytes than the ones it digested: ${JSON.stringify(answered)}`,
+      );
+      check(record.findings?.length === 0, `a confined run's clean control carries findings: ${JSON.stringify(record.findings)}`);
+      // The row-converting evaluator's trials carry the audit's observed mounts too: the refused swap is one.
+      const swapped = path.join(fs.realpathSync(project.folder), 'evaluator', 'impl.js');
+      const mounts = observedMountsOf(runDirectory, 'P-001') ?? [];
+      check(
+        namespaced || mounts.includes(swapped),
+        `a confined run's P-001 does not list the swap it refused as an observed mount: ${JSON.stringify(mounts)}`,
+      );
+    } else {
+      // The control: unconfined, the swapped bytes run and put the original back, so the layer reads the same afterwards.
+      check(
+        answered?.comment === 'swapped bytes ran',
+        `the unconfined control never ran swapped bytes, so the case proves nothing: ${JSON.stringify(answered)}`,
+      );
+    }
+  }
+}
+
+/**
+ * What stops a confined command before anything starts, each with exit 12 and
+ * no run directory (Story 1.31): a mechanism present on PATH that cannot
+ * confine a trivial process (a stub bwrap failing as a kernel without
+ * unprivileged user namespaces makes it fail, on a host named Linux), a temp
+ * directory inside the evaluation folder, and an evaluation folder or temp
+ * directory whose path no profile can carry.
+ */
+async function checkConfinementRefusals() {
+  const refusedWith = (label, result, expected) => {
+    check(
+      result.status === 12 && expected.every((text) => result.output.includes(text)),
+      `${label}: run exited ${result.status}; expected 12 naming ${JSON.stringify(expected)}\n${result.output}`,
+    );
+  };
+  const probed = makeProject('confinement-probe-refused');
+  const stubs = tempDir('confinement-stub-bwrap');
+  fs.writeFileSync(path.join(stubs, 'bwrap'), '#!/bin/sh\necho "bwrap: setting up uid map: Permission denied" >&2\nexit 1\n', {
+    mode: 0o755,
+  });
+  const probeRefused = evaluate(['run', '--evaluation', probed.folder], {
+    ...probed.env,
+    [PLATFORM_ENV]: 'linux',
+    PATH: `${stubs}${path.delimiter}${process.env.PATH}`,
+  });
+  refusedWith('a mechanism whose probe fails', probeRefused, [
+    `${MECHANISM_NAMES.bubblewrap} cannot confine a process on this host`,
+    'bwrap: setting up uid map: Permission denied',
+    'unprivileged user namespaces',
+    '"confinement": false',
+  ]);
+  check(runDirectoryOf(probed.folder, 0) === null, 'a run whose mechanism failed its probe wrote a run directory');
+
+  // A temp directory under the evaluation folder's ignored runs/, so the folder stays clean for the checks before it.
+  const inside = makeProject('confinement-temp-inside');
+  const insideTemp = path.join(inside.folder, 'runs', 'tmp');
+  fs.mkdirSync(insideTemp, { recursive: true });
+  const insideRefused = evaluate(['run', '--evaluation', inside.folder], { TMPDIR: insideTemp, TMP: insideTemp, TEMP: insideTemp });
+  refusedWith('a temp directory inside the evaluation folder', insideRefused, ['is inside the evaluation folder', 'point TMPDIR outside']);
+
+  const quoted = makeProject('confinement-quoted-folder', { below: 'quo"ted' });
+  refusedWith('an evaluation folder whose path holds a quote', evaluate(['run', '--evaluation', quoted.folder], quoted.env), [
+    "the evaluation folder's path",
+    'holds a quote, a backslash or a line break',
+  ]);
+  check(runDirectoryOf(quoted.folder, 0) === null, 'a run whose evaluation folder no profile can carry wrote a run directory');
+
+  const quotedTemp = makeProject('confinement-quoted-temp');
+  const unsafeTemp = path.join(tempDir('confinement-quoted-temp-parent'), 'te"mp');
+  fs.mkdirSync(unsafeTemp);
+  refusedWith(
+    'a temp directory whose path holds a quote',
+    evaluate(['run', '--evaluation', quotedTemp.folder], { TMPDIR: unsafeTemp, TMP: unsafeTemp, TEMP: unsafeTemp }),
+    ['the temp directory', 'holds a quote, a backslash or a line break', 'point TMPDIR elsewhere'],
+  );
+  check(runDirectoryOf(quotedTemp.folder, 0) === null, 'a run whose temp directory no profile can carry wrote a run directory');
+}
+
+/** A confined target writes the private temp directory each call hands it, which the audit does not report (Story 1.31). */
+async function checkTargetTemp() {
+  const project = makeProject('confinement-temp');
+  const ran = evaluate(['run', '--evaluation', project.folder], {
+    ...project.env,
+    VERDICT_WHEN: 'trial-clean-1',
+    VERDICT_DO: 'write-temp',
+  });
+  check(ran.status === 0, `a confined run whose target wrote its temp directory exited ${ran.status}; expected 0\n${ran.output}`);
+  const runDirectory = runDirectoryOf(project.folder);
+  const out = trialStdout(runDirectory, 'clean', 1);
+  const temp = /temp-dir: (.*)/.exec(out)?.[1] ?? '';
+  check(/temp-write: allowed/.test(out), `a confined target could not write the temp directory it was handed:\n${out}`);
+  check(
+    temp !== '' && path.dirname(temp) === fs.realpathSync(project.env.TMPDIR) && !fs.existsSync(temp),
+    `a confined call's temp directory ${JSON.stringify(temp)} is not a private directory under the run's temp directory, removed after the call`,
+  );
+  check(
+    JSON.stringify(observedMountsOf(runDirectory, 'P-001')) === '[]',
+    `a write into the call's own temp directory was reported: ${JSON.stringify(observedMountsOf(runDirectory, 'P-001'))}`,
+  );
+}
+
+/**
+ * The confinement's parts on their own (Story 1.31): a workspace inside the
+ * evaluation folder is refused, the status shim records the signal that ended
+ * its target and ends as a signalled child even for a signal Node ignores, the
+ * audit judges a path by its real path and reports anything under the
+ * evaluation folder whatever grant covers it, and the Node installation it
+ * grants is never the file system's root; a confined tool-server call gets a
+ * private temp directory, removed with the status a signal left once it ends.
+ */
+async function checkConfinementUnits() {
+  const folder = path.join(tempDir('confinement-units'), 'evals', 'verdict');
+  fs.mkdirSync(folder, { recursive: true });
+  let refused = null;
+  try {
+    targetSandbox({
+      confinement: { mode: CONFINEMENT, executable: '/bin/true', evaluationFolder: folder },
+      workspace: path.join(folder, 'ws'),
+      status: folder,
+    });
+  } catch (error) {
+    refused = error;
+  }
+  check(
+    refused?.name === 'ConfinementError' && refused.message.includes('is inside the evaluation folder'),
+    `a workspace inside the evaluation folder was not refused: ${refused}`,
+  );
+
+  const statusDirectory = tempDir('confinement-units-status');
+  for (const [signal, number] of [
+    ['SIGTERM', 15],
+    ['SIGPIPE', 13],
+  ]) {
+    const statusFile = path.join(statusDirectory, `${signal}.json`);
+    const ended = spawnSync(process.execPath, [CONFINEMENT_STATUS, statusFile, '/bin/sh', '-c', `kill -${signal.slice(3)} $$`], {
+      encoding: 'utf8',
+      timeout: SPAWN_TIMEOUT_MS,
+    });
+    const recorded = fs.existsSync(statusFile) ? readJson(statusFile).signal : null;
+    // Node dies of SIGTERM; it ignores SIGPIPE, so the shim then exits 128 + 13 as a shell reports the child.
+    const endedAs = signal === 'SIGPIPE' ? ended.status === 128 + number : ended.signal === signal;
+    check(
+      recorded === signal && endedAs,
+      `the status shim over a target ${signal} ended recorded ${JSON.stringify(recorded)} and ended ${JSON.stringify({ status: ended.status, signal: ended.signal })}`,
+    );
+  }
+
+  const root = fs.realpathSync(tempDir('confinement-units-guard'));
+  const workspace = path.join(root, 'workspace');
+  const project = path.join(root, 'project');
+  const withheld = path.join(project, 'evals', 'verdict');
+  fs.mkdirSync(workspace);
+  fs.mkdirSync(withheld, { recursive: true });
+  fs.mkdirSync(path.join(root, 'outside'));
+  fs.writeFileSync(path.join(root, 'outside', 'secret.txt'), 'outside every grant\n');
+  fs.writeFileSync(path.join(root, 'outside', 'touched.txt'), 'its times changed through a link-level call\n');
+  fs.writeFileSync(path.join(withheld, 'contract.json'), '{}\n');
+  fs.writeFileSync(path.join(workspace, 'own.txt'), 'the workspace\n');
+  fs.symlinkSync(path.join(root, 'outside', 'secret.txt'), path.join(workspace, 'link.txt'));
+  const report = path.join(root, 'report', 'report.jsonl');
+  fs.mkdirSync(path.dirname(report));
+  const audited = spawnSync(
+    process.execPath,
+    [
+      '--require',
+      CONFINEMENT_GUARD,
+      '-e',
+      `const fs = require('node:fs'); const [touched, ...read] = process.argv.slice(1); for (const file of read) fs.readFileSync(file); fs.lutimesSync(touched, new Date(), new Date());`,
+      path.join(root, 'outside', 'touched.txt'),
+      path.join(workspace, 'own.txt'),
+      path.join(workspace, 'link.txt'),
+      path.join(withheld, 'contract.json'),
+    ],
+    {
+      encoding: 'utf8',
+      timeout: SPAWN_TIMEOUT_MS,
+      env: {
+        ...BASE_ENV,
+        // The project is granted, as a system path declared over it would be; the evaluation folder inside it is withheld.
+        TEA_EVALUATE_CONFINEMENT_AUDIT: JSON.stringify({
+          report,
+          granted: [workspace, path.dirname(report), project],
+          withheld: [withheld],
+        }),
+      },
+    },
+  );
+  const reported = fs.existsSync(report)
+    ? fs
+        .readFileSync(report, 'utf8')
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line).path)
+        .sort()
+    : [];
+  check(
+    audited.status === 0 &&
+      JSON.stringify(reported) ===
+        JSON.stringify(
+          [
+            path.join(root, 'outside', 'secret.txt'),
+            path.join(root, 'outside', 'touched.txt'),
+            path.join(withheld, 'contract.json'),
+          ].sort(),
+        ),
+    `the audit reported ${JSON.stringify(reported)}; expected the link's real target, the file lutimes wrote and the withheld contract under a granted project\n${audited.stderr}`,
+  );
+  // The preload's one pure helper, read in a process of its own, since this file loads no .cjs module (test:direction).
+  const installRoots = spawnSync(
+    process.execPath,
+    [
+      '-e',
+      `const { nodeInstallRoot } = require(${JSON.stringify(CONFINEMENT_GUARD)}); process.stdout.write(JSON.stringify(['/bin/node', '/usr/local/bin/node'].map(nodeInstallRoot)));`,
+    ],
+    { encoding: 'utf8', timeout: SPAWN_TIMEOUT_MS },
+  ).stdout;
+  check(
+    installRoots === JSON.stringify(['/bin', '/usr/local']),
+    `the audit's Node installations for /bin/node and /usr/local/bin/node are ${installRoots}; expected ["/bin","/usr/local"]`,
+  );
+
+  // The Bubblewrap vector: a process-id namespace of its own with its own procfs (no `/proc/<pid>/root` into the runtime's
+  // mounts), ending with its parent, and no user service manager; only the report file and this call's own status file
+  // are writable, not the directories they sit in, and the target's status file name cannot be guessed.
+  const unitRoot = fs.realpathSync(tempDir('confinement-units-bwrap'));
+  const unitWorkspace = path.join(unitRoot, 'workspace');
+  const unitReport = path.join(unitRoot, 'audit', 'report.jsonl');
+  const unitStatus = path.join(unitRoot, 'status');
+  fs.mkdirSync(unitWorkspace);
+  fs.mkdirSync(path.dirname(unitReport));
+  fs.mkdirSync(unitStatus);
+  fs.writeFileSync(unitReport, '');
+  const unitSandbox = targetSandbox({
+    confinement: { mode: 'bubblewrap', executable: '/usr/bin/bwrap', evaluationFolder: folder },
+    workspace: unitWorkspace,
+    report: unitReport,
+    status: unitStatus,
+  });
+  const wrapped = unitSandbox.wrap('/bin/true', []);
+  const bound = wrapped.args.flatMap((argument, index) => (argument === '--bind' ? [wrapped.args[index + 1]] : []));
+  check(
+    ['--unshare-pid', '--proc', '--die-with-parent', '--new-session'].every((flag) => wrapped.args.includes(flag)),
+    `the Bubblewrap vector lacks its process namespace, procfs, die-with-parent or session: ${wrapped.args.join(' ')}`,
+  );
+  check(
+    bound.includes(unitReport) &&
+      bound.includes(wrapped.statusFile) &&
+      !bound.includes(path.dirname(unitReport)) &&
+      !bound.includes(unitStatus) &&
+      /^status-1-[0-9a-f]{16}\.json$/.test(path.basename(wrapped.statusFile)),
+    `the Bubblewrap vector binds ${JSON.stringify(bound)}; expected the workspace, the report file and the status file of the call, no directory of either`,
+  );
+  // A report flooded past what the runtime reads, or cut shorter than an earlier read found it, names itself as the mount.
+  fs.writeFileSync(unitReport, `${JSON.stringify({ path: '/etc/hostname' })}\n`);
+  const first = unitSandbox.observedMounts();
+  fs.writeFileSync(unitReport, '');
+  const cut = unitSandbox.observedMounts();
+  fs.writeFileSync(unitReport, Buffer.alloc(5 * 1024 * 1024, 0x20));
+  const flooded = unitSandbox.observedMounts();
+  check(
+    first.includes('/etc/hostname') && !first.includes(unitReport) && cut.includes(unitReport) && flooded.includes(unitReport),
+    `the audit report's tampering reads ${JSON.stringify({ first, cut, flooded })}; expected the report's own path once it is cut or flooded`,
+  );
+
+  // A tool-server call: the adapter reports no exit for a server, so a status a signal left is removed, not read.
+  const statusFile = path.join(tempDir('confinement-units-mcp'), 'status-1.json');
+  fs.writeFileSync(statusFile, '{"signal":"SIGTERM"}\n');
+  let seen = null;
+  const mechanism = confinedMcpMechanism(
+    {
+      callTool: async (request) => {
+        seen = { env: request.env, existed: fs.existsSync(request.env.TMPDIR) };
+        return { isError: false, structuredResult: {} };
+      },
+    },
+    { wrap: (target, args, writable) => ({ target, args: [...args, ...writable], statusFile }), environment: (env) => env },
+  );
+  await mechanism.callTool({ target: '/bin/true', targetArgs: [], env: {} }, new AbortController().signal);
+  check(
+    seen !== null &&
+      seen.existed &&
+      seen.env.TMP === seen.env.TMPDIR &&
+      seen.env.TEMP === seen.env.TMPDIR &&
+      !fs.existsSync(seen.env.TMPDIR) &&
+      !fs.existsSync(statusFile),
+    `a confined tool-server call's temp directory and status: ${JSON.stringify({ seen, statusLeft: fs.existsSync(statusFile) })}`,
+  );
+}
+
+/** The reference names each platform's mechanism under its exact heading, and what an opted-out run records (Story 1.31). */
+function checkConfinementReference() {
+  const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
+  const heading = '### File-system confinement\n';
+  const start = reference.indexOf(heading);
+  const section = start === -1 ? '' : reference.slice(start + heading.length, reference.indexOf('\n## ', start));
+  check(start !== -1, 'the reference has no "### File-system confinement" section');
+  check(
+    /^- macOS: Seatbelt, through `\/usr\/bin\/sandbox-exec`/m.test(section),
+    "the reference's confinement section does not name macOS's mechanism, Seatbelt through sandbox-exec",
+  );
+  check(
+    /^- Linux: Bubblewrap, through `bwrap`/m.test(section),
+    "the reference's confinement section does not name Linux's mechanism, Bubblewrap through bwrap",
+  );
+  check(section.includes('"confinement": "opt-out"'), "the reference's confinement section does not say what an opted-out run records");
+}
+
+/** Story 1.31's cases, each on its own, so one that cannot finish leaves the others to report. */
+async function runConfinementCases() {
+  await runCase('the confined evaluation folder', checkConfinedEvaluationFolder);
+  await runCase('the observed mounts', checkObservedMounts);
+  await runCase('the platform refusal', checkPlatformRefusal);
+  await runCase('the leftover process', checkLeftoverProcess);
+  await runCase('the evaluator swap', checkEvaluatorSwap);
+  await runCase('the confinement refusals', checkConfinementRefusals);
+  await runCase("a confined target's temp directory", checkTargetTemp);
+  await runCase('the confinement units', checkConfinementUnits);
+  await runCase('the confinement reference', checkConfinementReference);
+}
+
 /** Runs one case; an exception is a failed check, so the cases after it still run and every failure is reported. */
 async function runCase(name, body) {
   try {
@@ -2051,6 +2831,8 @@ async function main() {
   try {
     if (process.argv.includes('--usage-only')) {
       await runCase('target usage reports', checkTargetUsageReports);
+    } else if (process.argv.includes('--confinement-only')) {
+      await runConfinementCases();
     } else {
       await runCase('the units', checkUnits);
       await runCase('the run directory writer', checkRunDirectoryWriter);
@@ -2062,6 +2844,7 @@ async function main() {
       await runCase('the conditions and the set recommendation', checkConditionsAndSetRecommendation);
       await runCase('the clean-only runs', checkCleanOnlyAndNewest);
       await runCase('the subdirectory digest', checkSubdirectoryDigest);
+      await runConfinementCases();
     }
     for (const { label, directory } of runtimeTemps) {
       const left = fs.readdirSync(directory);

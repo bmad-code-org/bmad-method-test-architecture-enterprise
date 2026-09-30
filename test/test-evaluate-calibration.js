@@ -58,52 +58,57 @@ try {
   );
   assert.match(unreachable.join('; '), /response does not reach \/interactions\/judge-run\/stdout\/example/);
 
-  const project = test.project('judge', ({ folder, directory }) => {
-    const contractFile = path.join(folder, 'contract.json');
-    const contract = read(contractFile);
-    contract.rubrics = [
-      {
-        id: 'R-101',
-        scaleLevels: [
-          { level: 0, anchor: 'The response misses the verdict.' },
-          { level: 1, anchor: 'The response states the verdict.' },
-        ],
-        failureModePenalties: [{ name: 'missing-verdict', description: 'A missing verdict scores zero.' }],
-        maxLength: 200,
-        criteria: [
-          { id: 'RC-101', text: 'Does the response state the verdict?', evidence: '/interactions/judge-run/stdout' },
-          { id: 'RC-102', text: 'Does the response explain the verdict?', evidence: '/interactions/judge-run/stdout' },
-        ],
-      },
-    ];
-    write(contractFile, contract);
-    const manifestFile = path.join(folder, 'evaluation.json');
-    const evaluation = read(manifestFile);
-    evaluation.judge = {
-      agent: 'custom',
-      agentCommand: process.execPath,
-      agentArgs: [STUB, '--capture', path.join(directory, 'prompts.jsonl'), '--event-log', path.join(directory, 'launches.jsonl')],
-      timeoutMs: 60_000,
-    };
-    evaluation.judgeCalibration = { minimumAgreement: 0.9 };
-    write(manifestFile, evaluation);
-    write(path.join(folder, 'policy/evaluator-conditions.json'), {
-      schemaVersion: 1,
-      modelSnapshot: 'none',
-      systemPromptDigest: `sha256:${crypto.createHash('sha256').update('').digest('hex')}`,
-      judge: { modelSnapshot: 'stub-judge-2026-09' },
-    });
-    write(path.join(folder, 'policy/judge-calibration.json'), {
-      items: ['RC-101', 'RC-102'].flatMap((criterionId) =>
-        [0, 1].map((level) => ({
-          rubricId: 'R-101',
-          criterionId,
-          response: `calibration response ${level}`,
-          expectedLevel: level,
-        })),
-      ),
-    });
-  });
+  const project = test.project(
+    'judge',
+    ({ folder, directory }) => {
+      const contractFile = path.join(folder, 'contract.json');
+      const contract = read(contractFile);
+      contract.rubrics = [
+        {
+          id: 'R-101',
+          scaleLevels: [
+            { level: 0, anchor: 'The response misses the verdict.' },
+            { level: 1, anchor: 'The response states the verdict.' },
+          ],
+          failureModePenalties: [{ name: 'missing-verdict', description: 'A missing verdict scores zero.' }],
+          maxLength: 200,
+          criteria: [
+            { id: 'RC-101', text: 'Does the response state the verdict?', evidence: '/interactions/judge-run/stdout' },
+            { id: 'RC-102', text: 'Does the response explain the verdict?', evidence: '/interactions/judge-run/stdout' },
+          ],
+        },
+      ];
+      write(contractFile, contract);
+      const manifestFile = path.join(folder, 'evaluation.json');
+      const evaluation = read(manifestFile);
+      evaluation.judge = {
+        agent: 'custom',
+        agentCommand: process.execPath,
+        agentArgs: [STUB, '--capture', path.join(directory, 'prompts.jsonl'), '--event-log', path.join(directory, 'launches.jsonl')],
+        timeoutMs: 60_000,
+      };
+      evaluation.judgeCalibration = { minimumAgreement: 0.9 };
+      write(manifestFile, evaluation);
+      write(path.join(folder, 'policy/evaluator-conditions.json'), {
+        schemaVersion: 1,
+        modelSnapshot: 'none',
+        systemPromptDigest: `sha256:${crypto.createHash('sha256').update('').digest('hex')}`,
+        judge: { modelSnapshot: 'stub-judge-2026-09' },
+      });
+      write(path.join(folder, 'policy/judge-calibration.json'), {
+        items: ['RC-101', 'RC-102'].flatMap((criterionId) =>
+          [0, 1].map((level) => ({
+            rubricId: 'R-101',
+            criterionId,
+            response: `calibration response ${level}`,
+            expectedLevel: level,
+          })),
+        ),
+      });
+      // The ordering assertions read the target's launches beside the judge's events, from the launch marker.
+    },
+    { marker: true },
+  );
   const checked = test.cli(project.folder, 'check');
   assert.equal(checked.status, 0, checked.output);
   const failed = test.cli(project.folder, 'run', [], project.env);
@@ -227,6 +232,55 @@ try {
     assert.match(material.rubrics[0].criteria[0].evidence.example, /^calibration response [01]/);
     assert.equal(JSON.stringify(material).includes('expectedLevel'), false);
   }
+  // The judge in a confined run (Story 1.31): it starts through the evaluation layer's confinement and calibrates and
+  // scores as it does unconfined, with no launch marker for the target to write outside its workspace. At every launch,
+  // calibration and trial alike, it tries to write into the evaluation folder's runs/: the opted-out run first, where
+  // the writes land (so the confined refusal cannot pass for want of an attempt), then the confined run, which refuses
+  // every one.
+  const planted = path.join(project.folder, 'runs', '.layer-planted');
+  const plantLog = path.join(project.directory, 'plants.jsonl');
+  const plantedEvaluation = read(manifestFile);
+  plantedEvaluation.judge.agentArgs.push('--plant', planted, '--plant-log', plantLog);
+  write(manifestFile, plantedEvaluation);
+  const attempts = () => (fs.existsSync(plantLog) ? fs.readFileSync(plantLog, 'utf8').trim().split('\n').map(JSON.parse) : []);
+  const openRun = test.cli(project.folder, 'run', [], project.env);
+  assert.equal(openRun.status, 0, openRun.output);
+  const openAttempts = attempts();
+  assert.ok(
+    openAttempts.some((attempt) => attempt.calibration) && openAttempts.some((attempt) => !attempt.calibration),
+    `the opted-out judge did not try its write in calibration and in a trial: ${JSON.stringify(openAttempts)}`,
+  );
+  assert.ok(
+    openAttempts.every((attempt) => attempt.outcome === 'allowed') && fs.existsSync(planted),
+    `the opted-out judge could not write into the evaluation folder, so the confined case proves nothing: ${JSON.stringify(openAttempts)}`,
+  );
+  fs.rmSync(planted);
+  fs.rmSync(plantLog);
+  const confinedEvaluation = read(manifestFile);
+  delete confinedEvaluation.confinement;
+  write(manifestFile, confinedEvaluation);
+  const promptCount = () => fs.readFileSync(path.join(project.directory, 'prompts.jsonl'), 'utf8').trim().split('\n').length;
+  const beforeConfined = promptCount();
+  const confinedRun = test.cli(project.folder, 'run');
+  assert.equal(confinedRun.status, 0, confinedRun.output);
+  assert.equal(
+    read(path.join(test.latest(project.folder), 'run.json')).confinement,
+    process.platform === 'darwin' ? 'seatbelt' : 'bubblewrap',
+  );
+  assert.ok(promptCount() > beforeConfined + 4, 'the confined run did not calibrate and then judge its trials');
+  const confinedAttempts = attempts();
+  for (const [phase, calibrating] of [
+    ['calibration', true],
+    ['a trial', false],
+  ]) {
+    const made = confinedAttempts.filter((attempt) => attempt.calibration === calibrating);
+    assert.ok(made.length > 0, `the confined judge tried no write during ${phase}, so the case proves nothing`);
+    assert.ok(
+      made.every((attempt) => /^refused (EPERM|EACCES|EROFS|ENOENT)$/.test(attempt.outcome)),
+      `a confined run's judge wrote into the evaluation folder during ${phase}: ${JSON.stringify(made)}`,
+    );
+  }
+  assert.equal(fs.existsSync(planted), false, `a confined run's judge planted ${planted}`);
   process.stdout.write('Evaluate rubric calibration and scoring version checks passed.\n');
 } finally {
   test.cleanup();

@@ -120,6 +120,7 @@ const {
   principalMappingProblems,
   repeatedPairs,
   sharedInterfaces,
+  sharedTargetSystemPaths,
 } = require('./registry');
 const { AGENT_ADAPTERS, bridgedArgsRefused, resolveModel } = require('../agent-adapters');
 const { EVALUATOR_DIRECTORY, EvaluatorLayerError, evaluatorFiles, evaluatorOf, isKnownEvaluator } = require('./evaluators');
@@ -1820,7 +1821,9 @@ async function checkEvaluation(folder) {
   validateInto(report, MANIFEST_NAME, 'schema', context.validate.evaluation, evaluation);
   checkRequirements(report, folder, evaluation, context.engine);
   const registry = Array.isArray(evaluation.registry) ? evaluation.registry : undefined;
-  for (const problem of registry === undefined ? [] : [...repeatedPairs(registry), ...sharedInterfaces(registry)]) {
+  for (const problem of registry === undefined
+    ? []
+    : [...repeatedPairs(registry), ...sharedInterfaces(registry), ...sharedTargetSystemPaths(registry)]) {
     report.add(MANIFEST_NAME, 'registry', problem);
   }
   for (const problem of await mcpRegistryProblems(registry)) report.add(MANIFEST_NAME, 'registry', problem);

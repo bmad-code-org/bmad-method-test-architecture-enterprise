@@ -23,7 +23,7 @@ inputDocuments:
 
 ## Overview
 
-This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and sixty-two stories, including H.1 (Stories 1.27 to 1.56 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
+This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and sixty-nine stories, including H.1 (Stories 1.27 to 1.63 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
 
 Evaluate is fully stacked. The stack runs system under test, then the evaluation (the mechanism that runs the system, collects evidence and makes judgments), then the Behavioral Evaluation Contract (what behavior matters, what evidence counts, how success and failure resolve), then eval-quality (contract sanity, evidence support, and whether the evaluation catches defects). TeA owns every layer above eval-quality, including each concern eval-quality states it leaves to the caller, so an adopter can evaluate any target end to end. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3 onward, Epic 2 and H.1 to close the plan gap audit; the Traceability section maps each audit item to the story that closes it.
 
@@ -150,7 +150,7 @@ None. Evaluate has no graphical interface.
 ### Epic 1: The Evaluate authoring loop
 
 An adopter describes a target, answers Evaluate's questions, chooses or builds the evaluation layer and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches the seeded defect, with the gaps named and closed. The epic closes by running Evaluate on `bmad-testarch-evaluate` itself, then proving the guidance on two more target kinds, on seeded weaknesses and on an evaluation framework its guides never name.
-Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.56.
+Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.63.
 
 **FRs covered:** FR1 to FR10, FR13, FR14.
 
@@ -222,12 +222,19 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 54    | 1.54  | 1.28                         |
 | 55    | 1.55  | 1.26                         |
 | 56    | 1.56  | 1.26, 1.55                   |
-| 57    | 2.1   | 1.16, 1.26, 1.45             |
-| 58    | 2.2   | 2.1                          |
-| 59    | 2.3   | 2.2                          |
-| 60    | 2.4   | 2.3                          |
-| 61    | 2.5   | 2.4                          |
-| 62    | H.1   | 2.5                          |
+| 57    | 1.57  | 1.31                         |
+| 58    | 1.58  | 1.31                         |
+| 59    | 1.59  | 1.31                         |
+| 60    | 1.60  | 1.31                         |
+| 61    | 1.61  | 1.31                         |
+| 62    | 1.62  | 1.31                         |
+| 63    | 1.63  | 1.31                         |
+| 64    | 2.1   | 1.16, 1.26, 1.45             |
+| 65    | 2.2   | 2.1                          |
+| 66    | 2.3   | 2.2                          |
+| 67    | 2.4   | 2.3                          |
+| 68    | 2.5   | 2.4                          |
+| 69    | H.1   | 2.5                          |
 
 ## Epic 1: The Evaluate authoring loop
 
@@ -1029,11 +1036,11 @@ So that a target cannot read what the evaluation withholds or write where the ru
 
 **Given** Story 1.8's runtime, which leaves the evaluation folder out of every workspace but does not sandbox the target's file system, so a target that follows the worktree's git directory reaches the evaluation folder and its `runs/` (the round 1 review of Story 1.8 planted a link there and rewrote the compiled contract), and whose isolation manifest records no observed mount
 **When** a trial runs its interaction plan
-**Then** the target runs under a file-system confinement that lets it read and write its workspace, read its provisioned directories and the system paths its registry entry declares, and reach nothing else, through a mechanism each supported platform provides (the reference names each, and a platform without one refuses the run with exit 12 unless the evaluation opts out in `evaluation.json`, which `run.json` records), and a case asserts the refusal and the recorded opt-out; removing the refusal lets an unconfined run proceed silently, which the case catches
+**Then** the target runs under a file-system confinement that lets it read and write its workspace, read its provisioned directories and the system paths its registry entry declares, and reach nothing else, through a mechanism each supported platform provides (the reference names each, and a platform without one refuses the run with exit 12 unless the evaluation opts out in `evaluation.json`, which `run.json` records), and a case asserts the refusal and the recorded opt-out; removing the refusal lets an unconfined run proceed silently, which the case catches (amended 2026-09-29 in Story 1.31: the mechanism refuses every read and write of the evaluation folder and every write outside the workspace and the private directories the runtime hands the target (a started server's port-file directory, the audit report's directory, a per-call temp directory that `TMPDIR`, `TMP` and `TEMP` name, and Bubblewrap's status directory); reads elsewhere on the host are allowed and reported by the audit, since Node, git and a target's toolchain read the system and the project's git directory, so "reach nothing else" holds for writes and for the evaluation folder, and an ungranted read is recorded as the I/O matrix's "Ungranted path read" row says; `preflight` confines and refuses as `run` does, since the decision sits in the shared pipeline; a probe of the mechanism with a trivial process, a temp directory inside the evaluation folder, and an evaluation folder or temp directory whose path no profile can carry also refuse with exit 12, each asserted in `test/test-evaluate-run.js`)
 **And** the confinement covers every process the target starts, those still running after the target exits included, until they end or the run ends: eval-quality releases its watchdog once the target exits on its own, and a `setsid` child escapes any process-group kill, so Story 1.8's round 2 review had a leftover process rewrite P-002's records and `run.json`'s `artifacts.records` after `run` exited and `score` exited 2 with no integrity finding; a case whose stub leaves a process running that, after `run` exits, rewrites a sealed record and the digest `run.json` recorded for it finds `score` refusing the run (the confinement refused the writes, or `score` holds the record to an anchor the leftover process could not reach); reverting the confinement for leftover processes lets `score` pass the rewritten record through to the engine, which the case catches (added 2026-09-24 in Story 1.8's final review round 2)
 **And** a case in `test/test-evaluate-run.js` whose stub target tries to read the evaluation folder's `contract.json` and to write into `runs/` records both attempts refused and the run's artifacts unchanged; reverting the confinement makes the stub read the contract, which the case catches
-**And** the isolation manifest's `observedMounts` lists the paths the confinement saw the target open outside its workspace, from the confinement's own report, and a case whose stub reads a path it was not granted asserts that path appears there and eval-quality records the isolation violation; reverting the report leaves `observedMounts` empty, which the case catches
-**And** the confinement covers the evaluation layer's processes and every process of the run it starts: none can write under the evaluation folder's `evaluator/`, which closes the window Story 1.17 leaves between its re-read of the layer's files and the evaluator's launch, where a process that swaps a file and restores it goes unseen; a case whose stub target leaves a process that swaps a tracked `evaluator/` file after the re-read and restores it once the evaluator has launched finds the write refused and the records carrying the digests of the bytes that ran; reverting the confinement for `evaluator/` lets the swapped bytes run under the original digests, which the case catches (added 2026-09-25 in Story 1.17's final review round 2)
+**And** the isolation manifest's `observedMounts` lists the paths the confinement saw the target open outside its workspace, from the confinement's own report, and a case whose stub reads a path it was not granted asserts that path appears there and eval-quality records the isolation violation; reverting the report leaves `observedMounts` empty, which the case catches (amended 2026-09-29 in Story 1.31: the report comes from an audit preloaded into every Node process of the trial (`confinement-guard.cjs`), which judges and reports a path by its real path and reports anything under the evaluation folder even under a declared system path; a process that is not Node is refused by the mechanism and not reported, which Story 1.60 closes; command, tool-server and HTTP targets are each asserted, and `check` refuses two registry entries that start one target with different `systemPaths`)
+**And** the confinement covers the evaluation layer's processes and every process of the run it starts: none can write under the evaluation folder's `evaluator/`, which closes the window Story 1.17 leaves between its re-read of the layer's files and the evaluator's launch, where a process that swaps a file and restores it goes unseen; a case whose stub target leaves a process that swaps a tracked `evaluator/` file after the re-read and restores it once the evaluator has launched finds the write refused and the records carrying the digests of the bytes that ran; reverting the confinement for `evaluator/` lets the swapped bytes run under the original digests, which the case catches (added 2026-09-25 in Story 1.17's final review round 2; amended 2026-09-29 in Story 1.31: the evaluation layer's processes, the command evaluator, the sealed-brief agent, the rubric judge and the HTTP port, hold the whole evaluation folder read-only, `runs/` included, and each is observed refusing a write there beside an opted-out control where it lands; the leftover and swapping processes report their attempt to a listener the case runs, so neither confined case passes without the attempt having been made)
 **And** each forbidden input's note in the manifest states the confinement that withheld it, and `docs/reference/tea-evaluate-cli.md` states what is confined, on which platforms, and what an opted-out run records; a case asserts each forbidden input's note names the confinement and the reference's section, read under its exact heading, names each platform's mechanism, and restoring Story 1.8's note or deleting a platform from the passage fails the case (amended 2026-09-25 in Story 1.9: the criterion named no revert check)
 
 **Dependencies:** 1.8, 1.17.
@@ -1544,6 +1551,135 @@ So that the refusal oracle has measured detection evidence (CAP-3, CAP-7, CAP-9)
 
 **Dependencies:** 1.26, 1.55.
 **Gate:** published engine export check, `test:evaluate-learned-framework`, `npm test`.
+
+### Story 1.57: Withhold the committed evaluation folder from a confined target's git history
+
+Added in Story 1.31. A git workspace is a worktree of the evaluated commit, which shares the adopter's object store, and the evaluation folder is committed there. The confinement withholds the folder's files on disk, while a confined target that runs `git show <commit>:<evaluation folder>/contract.json` in its worktree still reads the committed contract.
+
+As an adopter whose evaluation folder is committed beside the project it evaluates,
+I want no object of the evaluation folder reachable from a target's workspace,
+So that a target cannot read the contract, the probes or which defect a mutation plants through git (AD-7, AD-8).
+
+**Acceptance Criteria:**
+
+**Given** a confined run over a git workspace
+**When** a stub target runs `git show` and `git cat-file` for the evaluation folder's committed files at the evaluated commit and at every ref it can name
+**Then** each read finds no object, while the target's own git operations over the evaluated tree (`git status`, `git log`, `git diff` against the commit) work as they do today; a case in `test/test-evaluate-run.js` asserts both, and reverting the change lets the stub print the committed contract
+**And** the probe digests AD-7 names (`commitDigest`, `implementationDigest`, a historical probe's revisions) are unchanged, which the existing digest cases hold
+**And** `docs/reference/tea-evaluate-cli.md`'s `### File-system confinement` drops the passage saying the git history stays readable; a case reading that section fails while the passage remains.
+
+**Dependencies:** 1.31.
+**Gate:** `test:evaluate-run`, `test:evaluate-mutation`, `test:evaluate-arms`, `npm test`.
+
+### Story 1.58: Keep the bridge's admission token and the run's private directories from a confined target
+
+Added in Story 1.31. A sealed-brief agent's bridge configuration, which carries its admission token, and its socket sit in private directories under the temp directory, outside the evaluation folder, so a confined target running as the adopter's user can still read the token before the agent connects (the reference says so).
+
+As an adopter running a sealed-brief agent evaluator,
+I want every private directory the run makes for the evaluation layer withheld from the target,
+So that no target can take the bridge's one admission or read an evaluator's or judge's working files (AD-21).
+
+**Acceptance Criteria:**
+
+**Given** a confined run with a sealed-brief agent evaluator
+**When** a stub target, and a process it leaves running, try to read the bridge's configuration file, list the evaluator's and the judge's working directories and connect to the bridge's socket
+**Then** each attempt is refused on both mechanisms, the agent's own connection is admitted, and the trial's evidence and records are unchanged; reverting the change lets the stub print the token, which the case catches
+**And** `docs/reference/tea-evaluate-cli.md`'s passage on the bridge token states the withholding; a case reading it under its exact heading fails while the old sentence remains.
+
+**Dependencies:** 1.31.
+**Gate:** `test:evaluate-evaluators`, `test:evaluate-run`, `npm test`.
+
+### Story 1.59: Let a confined agent target keep the state its CLI writes
+
+Added in Story 1.31. A skill or agent target runs an agent CLI (through `tea-skill-runner` or its own command) that writes its session and settings state under the user's home directory; the target confinement refuses every write outside the workspace, so a live skill evaluation must opt out of confinement to run at all.
+
+As an adopter evaluating a skill or an agent live,
+I want the agent's own state writable under confinement without widening what the target can reach,
+So that the targets Evaluate was built for run confined (CAP-6, AD-4).
+
+**Acceptance Criteria:**
+
+**Given** a confined run whose registry entry runs `tea-skill-runner` over the stub agent that writes its state under `HOME`
+**When** the trial runs
+**Then** the agent's writes land in a per-trial private home the runtime provides and removes (or in paths the registry entry declares writable, validated by `check` against the evaluation folder and the project), the run completes, and the evaluation folder and the project stay unreadable and unwritable; reverting the change makes the agent fail its first state write, which the case catches
+**And** the reference documents the writable state and the skill's harness guide shows it in a validated tagged example.
+
+**Dependencies:** 1.31.
+**Gate:** `test:evaluate-preflight`, `test:evaluate-run`, `npm test`.
+
+### Story 1.60: Observe every confined process's file access, beyond Node
+
+Added in Story 1.31. The trial's audit is an in-process Node preload, so a target written in another language, or a Node process started with a cleared environment, opens paths outside its grants unreported; the mechanism refuses what it refuses (the evaluation folder, every write outside the workspace) whatever the process.
+
+As an adopter whose target is not a Node program,
+I want the isolation manifest's `observedMounts` to come from an audit that sees every confined process,
+So that an ungranted read by any process of the target becomes the isolation violation eval-quality records (AD-7).
+
+**Acceptance Criteria:**
+
+**Given** a confined run whose target is a shell script that reads a file outside its workspace, not declared in `systemPaths`
+**When** the trial completes
+**Then** that path appears in the trial set's `observedMounts` and `score` exits 3 with eval-quality's `mount outside allowlist` reason, on macOS and on Linux; reverting to the Node preload leaves `observedMounts` empty, which the case catches
+**And** a clean shell target reports nothing, so its manifest's `observedMounts` is empty.
+
+**Dependencies:** 1.31.
+**Gate:** `test:evaluate-run`, `npm test`.
+
+### Story 1.61: Teach file-system confinement in the Evaluate skill
+
+Added in Story 1.31. The skill's harness and run guides name neither `confinement`, `systemPaths` nor the exit-12 refusal of a host with no mechanism, so an authored `evaluation.json` cannot declare what its target legitimately reads outside the workspace, and the gap stage cannot read an isolation violation from an observed mount.
+
+As an adopter authoring an evaluation with the skill,
+I want the harness, run and gaps guides to teach confinement,
+So that the authored evaluation runs confined on the first try and an observed mount is diagnosed (CAP-8, CAP-10).
+
+**Acceptance Criteria:**
+
+**Given** the skill's `references/harness.md`, `references/run.md` and `references/gaps.md`
+**When** `test:evaluate-guidance` reads them
+**Then** the harness guide teaches `systemPaths` with a tagged `evaluation.json` fragment the guidance test validates against the runtime schema, the run guide names each platform's mechanism, the exit-12 refusal and the `"confinement": false` opt-out with what `run.json` records, and the gaps guide maps an isolation violation from `observedMounts` to its repair; deleting any passage fails the test
+**And** the change goes through `bmad-workflow-builder` with a clean Analyze gate (AD-16, AD-18).
+
+**Dependencies:** 1.31.
+**Gate:** builder Analyze, `test:evaluate-guidance`, `npm test`.
+
+### Story 1.62: Share one sandbox primitive layer across TeA's isolation modules
+
+Added in Story 1.31 from its local review. `cli/lib/evaluate/confinement.js` is the third module that selects and probes a Seatbelt or Bubblewrap mechanism beside `cli/lib/isolate.js` (the review CLI's write isolation) and `cli/lib/atdd-isolation.js` (the atdd red-phase sandbox), and each carries its own copy of the same primitives: the executable lookup on `PATH`, the check that a path can be carried into a profile or an argument vector, the containment test, and the probe of a trivial process. A fix to one copy (a path character a profile cannot carry, a probe that hangs) does not reach the other two.
+
+As a maintainer of TeA's sandboxes,
+I want one module to own the mechanism primitives the three isolation modules share,
+So that a sandbox defect is fixed once and every caller gets the fix (AD-5, AD-7).
+
+**Acceptance Criteria:**
+
+**Given** `cli/lib/isolate.js`, `cli/lib/atdd-isolation.js` and `cli/lib/evaluate/confinement.js`
+**When** the shared primitives move into one module they all import
+**Then** each module's own suites pass unchanged (`test:cli`, `test:atdd-isolation`, `test:atdd-net-guard`, `test:framework-scaffold-install-isolation`, `test:evaluate-run`, `test:evaluate-mcp`, `test:evaluate-api`), and the profiles and argument vectors each module generates are byte-identical to today's, which a case comparing each module's output for fixed inputs before and after asserts
+**And** a static case, a new `test:isolation-primitives` script in the `npm test` chain, fails when any of the three modules defines its own executable lookup, profile-path check, containment test or mechanism probe again; restoring a local copy in any one of them fails the case
+**And** the shared module rejects the same unsafe path characters for all three callers, so a path one module refuses today and another accepts is refused by both, which a case asserts for each character; reverting a caller to its own check lets the path through, which the case catches.
+
+**Dependencies:** 1.31.
+**Gate:** `test:isolation-primitives`, `test:cli`, `test:atdd-isolation`, `test:evaluate-run`, `npm test`.
+
+### Story 1.63: Carry the audit over a channel the target cannot write
+
+Added in Story 1.31 from its local review. The audit's report is a file the target's own processes append to, so a target that means to hide an ungranted read can rewrite the file to the same length or longer after it has run (Story 1.31 reads a file cut shorter than an earlier read, or longer than the runtime reads, as a violation naming the report, and grants only the report file, never its directory). Under Bubblewrap the target also shares the host's network namespace, which an HTTP service needs to be reachable, so a process it starts can connect to an abstract Unix socket such as a desktop session's D-Bus and ask the user's service manager to start a job outside the sandbox; Story 1.31 hides `/run/user`, which closes the path-based socket only.
+
+As an adopter reading `observedMounts`,
+I want the audit's lines to reach the runtime over a channel the target cannot rewrite,
+So that an empty `observedMounts` is evidence and not something the target could have arranged (AD-8).
+
+**Acceptance Criteria:**
+
+**Given** a confined trial whose target reads an ungranted path
+**When** the audit reports it
+**Then** the runtime holds each line the moment it is sent (an inherited descriptor or a listener the runtime owns) and a target that rewrites, truncates or floods the report file changes nothing the runtime read; a run whose target rewrites the file to hide the line still lists the path in `observedMounts`, and reading the file again in place of the channel fails that case
+**And** a Bubblewrap target cannot reach a service manager through an abstract socket: the mechanism gives the target no route to the host's abstract sockets while a started HTTP service stays reachable from the runtime, which a case on a Linux runner asserts by starting a listener on an abstract address and attempting the connection from the target; removing the isolation lets the connection through and fails the case
+**And** the reference names what the audit and the sandbox still do not see, with no claim the mechanism cannot back.
+
+**Dependencies:** 1.31.
+**Gate:** `test:evaluate-run`, `test:evaluate-api`, `npm test`, and the Linux CI job.
 
 ## Epic 2: Continuous proof in CI
 

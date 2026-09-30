@@ -91,6 +91,35 @@
  *   move-trials             answer as usual, then move that run directory's
  *                           trials/ into the adopter's project as stolen/ and
  *                           leave a symbolic link to it in its place
+ *   probe-confinement       answer as usual, then try to read the evaluation
+ *                           folder's contract.json and to write runs/tamper.txt
+ *                           (found through the git directory the worktree
+ *                           shares), printing `contract-read: <how>` and
+ *                           `runs-write: <how>` after the verdict, each
+ *                           `allowed` or `refused <code>` (Story 1.31)
+ *   read-ungranted          answer as usual, then read the file VERDICT_TOUCH
+ *                           names, outside the workspace, printing
+ *                           `ungranted-read: <how>` after the verdict
+ *   write-temp              answer as usual, then write a file in the temp
+ *                           directory TMPDIR names, printing `temp-dir: <path>`
+ *                           and `temp-write: <how>` after the verdict
+ *   leftover-tamper         answer as usual, and leave a process running,
+ *                           outside this process group, whose argument vector
+ *                           carries VERDICT_TOUCH as a marker: once the
+ *                           runtime that started this command has exited, it
+ *                           rewrites the newest run's first P-001 record (its
+ *                           recommendation set to FAIL) and the digest
+ *                           run.json recorded for it, then exits
+ *   swap-evaluator          answer as usual, and leave a process running,
+ *                           marked the same way, that waits for the run's
+ *                           command evaluator (evaluator/judge.sh) to start,
+ *                           then moves evaluator/impl.js aside and writes a
+ *                           replacement that puts it back and answers a fail
+ *                           row commented `swapped bytes ran`, so the bytes
+ *                           that run are not the ones the run digested and
+ *                           the layer reads the same again after the trial
+ *   With VERDICT_REPORT naming a port on 127.0.0.1, the process either mode
+ *   leaves reports there how its attempt ended (`verdict-leftover.js`).
  */
 
 'use strict';
@@ -98,7 +127,7 @@
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
+const { spawn, spawnSync } = require('node:child_process');
 
 const POLICY = 'rules/policy.txt';
 
@@ -207,6 +236,56 @@ if (['plant', 'forge', 'link-trials', 'recreate-trials', 'move-trials'].includes
     fs.renameSync(trials, stolen);
     fs.symlinkSync(stolen, trials);
   }
+}
+/** How an attempt on a path ended: allowed, or refused with the error code. */
+const attempt = (action) => {
+  try {
+    action();
+    return 'allowed';
+  } catch (error) {
+    return `refused ${error.code ?? error.message}`;
+  }
+};
+/** The adopter's evaluation folder, found through the git directory the worktree shares with its repository. */
+const evaluationFolder = () => {
+  const common = spawnSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { encoding: 'utf8' }).stdout.trim();
+  return path.join(path.dirname(common), 'evals', 'verdict');
+};
+if (act === 'probe-confinement') {
+  const folder = evaluationFolder();
+  const read = attempt(() => fs.readFileSync(path.join(folder, 'contract.json')));
+  const write = attempt(() => fs.writeFileSync(path.join(folder, 'runs', 'tamper.txt'), 'written by the verdict stub\n'));
+  process.stdout.write(`contract-read: ${read}\nruns-write: ${write}\n`);
+}
+if (act === 'read-ungranted' && process.env.VERDICT_TOUCH) {
+  process.stdout.write(`ungranted-read: ${attempt(() => fs.readFileSync(process.env.VERDICT_TOUCH))}\n`);
+}
+if (act === 'write-temp') {
+  const temp = process.env.TMPDIR ?? '';
+  process.stdout.write(`temp-dir: ${temp}\ntemp-write: ${attempt(() => fs.writeFileSync(path.join(temp, 'verdict-temp.txt'), 'x\n'))}\n`);
+}
+if ((act === 'leftover-tamper' || act === 'swap-evaluator') && process.env.VERDICT_TOUCH) {
+  // The runtime's pid, found by its command line: `pgrep`, since a sandboxed process cannot start the setuid `ps` on macOS.
+  const folder = evaluationFolder();
+  // git names the folder by its real path, and the runtime's command line as the case spelled it (macOS's /var is /private/var).
+  const spelled = folder.replace(/^\/private(?=\/)/, '').replaceAll(/[.*+?^${}()|[\]\\]/g, (character) => `\\${character}`);
+  const pattern = `evaluate\\.js run --evaluation (/private)?${spelled}`;
+  // BSD pgrep leaves out its own ancestors, the runtime among them, unless asked with -a; procps pgrep reads -a otherwise.
+  const found = spawnSync('pgrep', [...(process.platform === 'darwin' ? ['-a'] : []), '-f', pattern], { encoding: 'utf8' });
+  const runtimes = String(found.stdout ?? '')
+    .trim()
+    .split(/\s+/)
+    .filter((pid) => /^\d+$/.test(pid));
+  const none = `none (${found.error?.code ?? found.status}: ${String(found.stderr ?? '').trim()})`;
+  process.stdout.write(`leftover-runtime: ${runtimes.length > 0 ? runtimes.join(',') : none}\n`);
+  const leftover = path.join(__dirname, 'verdict-leftover.js');
+  const reportPort = process.env.VERDICT_REPORT ?? '';
+  const child = spawn(process.execPath, [leftover, act, folder, runtimes.join(','), process.env.VERDICT_TOUCH, reportPort], {
+    cwd: '/',
+    detached: true,
+    stdio: 'ignore',
+  });
+  child.unref();
 }
 if (text.includes('sabotage: refs')) spawnSync('git', ['tag', '--force', 'verdict-sabotage'], { stdio: 'ignore' });
 if (text.includes('sabotage: leg-writes') && request === 'Judge alpha.' && process.env.VERDICT_TOUCH) {

@@ -2,7 +2,9 @@
  * A run directory, `runs/<invocationId>/`, whose every write and read the runtime guards
  * (AD-7, AD-12).
  *
- * The runtime does not sandbox the target's file system, so a target can find
+ * A confined run (`confinement.js`, Story 1.31) denies every target process
+ * each read and write of the evaluation folder, `runs/` included; a run that
+ * opted out does not sandbox the target's file system, so a target can find
  * the run directory (a worktree names its repository's git directory, which
  * lies beside the evaluation folder) and plant an entry in it: a symbolic link
  * where the runtime is about to write, say, which would carry that write into

@@ -78,6 +78,7 @@ const path = require('node:path');
 const { admissionRefusal, armVerdict, referenceTo } = require('./admission');
 const { causeNote, faultRecord, hostEnvironmentPort, persistableRequest, reasonNote, runArm } = require('./arm');
 const { TEA_MANIFEST, checkEvaluation } = require('./check');
+const { layerPrefix, selectConfinement } = require('./confinement');
 const { MANIFEST_NAME } = require('./folder');
 const { engineVersion, loadEngine } = require('./engine');
 const { runEngineStage } = require('./engine-cli');
@@ -488,6 +489,10 @@ async function pipeline(
       message: `${unqualifiable.map(({ file, probe }) => `${file} (route ${probe.qualification?.route})`).join(', ')} seed a defect on a route this release does not qualify; it qualifies seeded probes on the ${QUALIFIED_ROUTES.join(' and ')} routes only, so a retry cannot pass`,
     });
   }
+  // How every process the command starts is confined (Story 1.31), decided before anything starts: a host with no
+  // mechanism refuses the command unless the evaluation opted out.
+  const confinement = selectConfinement({ evaluation, folder, env });
+  if (confinement.refusal !== undefined) return new PreflightOutcome({ stage: 'launch', exitCode: 12, message: confinement.refusal });
   // The evaluation's HTTP port, asked for its protocol once, before any workspace is made, so a port that does not serve
   // stops the run as an authoring defect (a port that could not run at all, as infrastructure) with nothing started; and
   // every auth header's value present, since a call with none would read its refusal as the target's behavior.
@@ -496,7 +501,7 @@ async function pipeline(
     const missing = missingCredentials(evaluation.registry);
     if (missing.length > 0) return new PreflightOutcome({ stage: 'check', exitCode: 10, message: missing.join('; ') });
     try {
-      httpPort = await probeHttpPort(folder);
+      httpPort = await probeHttpPort(folder, { spawnPrefix: layerPrefix(confinement) });
     } catch (error) {
       if (!(error instanceof HttpPortError)) throw error;
       return new PreflightOutcome({ stage: error.exitCode === 12 ? 'launch' : 'check', exitCode: error.exitCode, message: error.message });
@@ -588,6 +593,7 @@ async function pipeline(
     return await runInWorkspaces({
       command,
       httpPort,
+      confinement,
       evaluationDirty,
       afterVerdict,
       folder,
@@ -639,6 +645,7 @@ async function pipeline(
 async function runInWorkspaces({
   command,
   httpPort,
+  confinement,
   evaluationDirty,
   afterVerdict,
   folder,
@@ -661,7 +668,7 @@ async function runInWorkspaces({
   log,
   signal,
 }) {
-  const registry = registryFromEvaluation(evaluation, { root: pristine.root, httpPort, scratch });
+  const registry = registryFromEvaluation(evaluation, { root: pristine.root, httpPort, scratch, confinement });
   const problems = registry.targetProblems(pristine.root);
   if (problems.length > 0) {
     return new PreflightOutcome({ stage: 'launch', exitCode: 12, message: `the registry cannot launch: ${problems.join('; ')}` });
@@ -693,6 +700,8 @@ async function runInWorkspaces({
       dirty: pristine.dirty,
     },
     workspaces: { pristine: pristine.root },
+    // seatbelt, bubblewrap or opt-out (Story 1.31).
+    confinement: confinement.mode,
     adopterTree: { repository: before.repository, unchanged: null },
     refused: [],
   };
@@ -748,7 +757,11 @@ async function runInWorkspaces({
       sealedBriefDigest: engine.digestArtifact(sealedBrief, 'SealedEvaluatorBrief'),
     };
   }
-  const { port: pristineAdapter } = await registry.createProbePort({ cwd: pristine.root, projectRoot: pristine.root });
+  const { port: pristineAdapter } = await registry.createProbePort({
+    cwd: pristine.root,
+    projectRoot: pristine.root,
+    workspace: pristine.top,
+  });
   // The adopter's tree, read again after the qualification and after the
   // legs: a change stops the run with no qualified probe written (AD-8).
   const treeUnchanged = (when, { record = true } = {}) => {
@@ -1125,7 +1138,7 @@ async function mutatedRoute({ entry, pristine, make, registry, engine, stop, log
       message: `the registry cannot launch in the mutated workspace: ${targetProblems.join('; ')}`,
     });
   }
-  const { port } = await registry.createProbePort({ cwd: workspace.root, projectRoot: workspace.root });
+  const { port } = await registry.createProbePort({ cwd: workspace.root, projectRoot: workspace.root, workspace: workspace.top });
   log(`mutated workspace for ${mutation.mutationId}: ${workspace.root}`);
   return { label: `mutated:${mutation.mutationId}`, cwd: workspace.root, port };
 }
@@ -1169,7 +1182,7 @@ async function qualifySeededProbe({
   }
   const directory = `qualification/${probe.probeId}`;
   log(`${file}: qualifying through ${mutationId} in ${workspace.root}`);
-  const { port: adapter } = await registry.createProbePort({ cwd: workspace.root, projectRoot: workspace.root });
+  const { port: adapter } = await registry.createProbePort({ cwd: workspace.root, projectRoot: workspace.root, workspace: workspace.top });
   const armPort = hostEnvironmentPort({ port: adapter, registry });
   const runArmFor = async (phase) => {
     let arm;

@@ -17,6 +17,7 @@
         "VERDICT_LINK",
         "VERDICT_MARKER",
         "VERDICT_PID",
+        "VERDICT_REPORT",
         "VERDICT_SECRET",
         "VERDICT_TOUCH",
         "VERDICT_USAGE",

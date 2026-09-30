@@ -2894,6 +2894,29 @@ async function runTests() {
           `${error.code}: ${error.message}`,
         );
       }
+      // Under an isolation wrapper (sandbox-exec, bwrap) the wrapper's own exec is what fails, so the missing agent is
+      // named before anything starts, and a failing agent by its own command.
+      const wrapper = ['/bin/sh', '-c', 'exec "$0" "$@"'];
+      try {
+        runAgent('prompt', { agentCommand: '/nonexistent/tea-test-review-agent-xyz', spawnPrefix: wrapper });
+        assert(false, 'nonexistent agent executable under a spawn prefix throws');
+      } catch (error) {
+        assert(
+          error.code === 'AGENT_NOT_FOUND' && error.message === 'agent executable not found: /nonexistent/tea-test-review-agent-xyz',
+          'nonexistent agent under a spawn prefix throws AGENT_NOT_FOUND naming the agent',
+          `${error.code}: ${error.message}`,
+        );
+      }
+      try {
+        runAgent('prompt', { agent: 'custom', agentCommand: 'false', spawnPrefix: wrapper });
+        assert(false, 'a failing agent under a spawn prefix throws');
+      } catch (error) {
+        assert(
+          error.code === 'AGENT_FAILED' && error.message === 'Agent "false" exited with code 1.',
+          'a failing agent under a spawn prefix is named by its own command',
+          `${error.code}: ${error.message}`,
+        );
+      }
 
       try {
         runAgent('prompt', { agent: 'not-a-real-vendor' });

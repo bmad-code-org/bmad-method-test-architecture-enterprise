@@ -170,14 +170,20 @@ function evaluatorConfiguration({
  * observed. `allowedMounts` names the workspaces the target was given (by
  * default the one `workspaceIdentity` names; a trial set whose trials each ran
  * in a workspace of their own lists each, with its read-only provisioned
- * directories). The runtime does not sandbox the target's file system or
- * network and observes no access to either, so `observedMounts`,
- * `networkAllowlist` and `observedNetworkTargets` are empty: the published
- * schema's only honest shape for "nothing observed", since a list of the
- * grants would claim an observation never made. `toolAllowlist` and
- * `observedToolCalls` are the registry's commands and the ones the runtime
- * ran for the plan, which it does observe. Each forbidden input is accounted
- * for as withheld, with the caller's note saying where the boundary is drawn.
+ * directories). `observedMounts` is the paths the file-system confinement's
+ * audit saw the target open outside what it was granted (`confinement.js`,
+ * Story 1.31), none of which is an allowed mount, so eval-quality records each
+ * as an isolation violation; a run that opted out of confinement observes no
+ * file-system access and records none. The runtime does not sandbox the
+ * target's network and observes no network access, so `networkAllowlist` and
+ * `observedNetworkTargets` are empty: the published schema's only honest shape
+ * for "nothing observed", since a list of the grants would claim an
+ * observation never made. `toolAllowlist` and `observedToolCalls` are the
+ * registry's commands and the ones the runtime ran for the plan, which it does
+ * observe. Each forbidden input is accounted for as withheld, with the
+ * caller's note saying where the boundary is drawn (`confinement.js`
+ * `forbiddenInputNote`: the workspace and requests the target is handed, and
+ * the confinement that withheld the rest).
  */
 function isolationManifest({
   runId,

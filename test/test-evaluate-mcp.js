@@ -181,9 +181,12 @@ function evaluate(args, env = {}) {
 
 /**
  * A copy of the fixture outside git, `edit` applied and the corpus index
- * digested again, with a private temp directory and the server's log.
+ * digested again, with a private temp directory and the server's log. The log
+ * is a file outside the workspace, which a confined server cannot write, so a
+ * logged project opts out of file-system confinement (Story 1.31); one made
+ * with `log: false` runs confined.
  */
-function makeProject(label, { edit = () => {} } = {}) {
+function makeProject(label, { edit = () => {}, log: logged = true } = {}) {
   const directory = scratch.make(label);
   const root = path.join(directory, 'project');
   fs.cpSync(FIXTURE, root, { recursive: true, filter: (from) => path.basename(from) !== 'runs' });
@@ -191,7 +194,11 @@ function makeProject(label, { edit = () => {} } = {}) {
   const log = path.join(directory, 'grader.jsonl');
   const temp = scratch.make(`${label}-temp`);
   runtimeTemps.push({ label, directory: temp });
-  const project = { root, folder, log, directory, env: { TMPDIR: temp, TMP: temp, TEMP: temp, GRADER_LOG: log } };
+  const project = { root, folder, log, directory, env: { TMPDIR: temp, TMP: temp, TEMP: temp, ...(logged ? { GRADER_LOG: log } : {}) } };
+  if (logged) {
+    const manifest = path.join(folder, 'evaluation.json');
+    fs.writeFileSync(manifest, `${JSON.stringify({ ...JSON.parse(fs.readFileSync(manifest, 'utf8')), confinement: false }, null, 2)}\n`);
+  }
   edit(project);
   const digested = evaluate(['digest', '--evaluation', folder]);
   if (digested.status !== 0) throw new Error(`digest failed: ${digested.output}`);
@@ -1418,6 +1425,102 @@ async function checkCheckRules() {
   }
 }
 
+/**
+ * The pipeline in a confined run (Story 1.31): with no log to write outside
+ * its workspace, the target runs under the host's mechanism through check,
+ * run and score, and the audit finds nothing it opened outside what it was
+ * granted.
+ */
+async function checkConfinedPipeline() {
+  const project = makeProject('confined', { log: false });
+  const env = { ...project.env };
+  const ran = evaluate(['run', '--evaluation', project.folder], env);
+  check(ran.status === 0, `a confined run over the MCP fixture exited ${ran.status}; expected 0\n${ran.output}`);
+  const runDirectory = runDirectoryOf(project.folder);
+  if (runDirectory === null) {
+    check(false, 'the confined MCP run wrote no run directory');
+    return;
+  }
+  const record = readJson(path.join(runDirectory, 'run.json'));
+  const confinement = process.platform === 'darwin' ? 'seatbelt' : 'bubblewrap';
+  check(
+    record.completed === true && record.confinement === confinement,
+    `a confined MCP run records ${JSON.stringify({ completed: record.completed, confinement: record.confinement })}`,
+  );
+  for (const set of fs.existsSync(path.join(runDirectory, 'trial-sets.json'))
+    ? readJson(path.join(runDirectory, 'trial-sets.json')).trialSets
+    : []) {
+    const manifest = readJson(path.join(runDirectory, set.isolationManifest));
+    check(manifest.observedMounts.length === 0, `a confined MCP trial set observed mounts ${JSON.stringify(manifest.observedMounts)}`);
+  }
+  const scored = evaluate(['score', '--evaluation', project.folder], env);
+  check(scored.status === 0, `score over the confined MCP run exited ${scored.status}; expected 0\n${scored.output}`);
+}
+
+/**
+ * The confined tool server's reads (Story 1.31): a server that reads the
+ * evaluation folder's contract.json is refused, and one that reads a file
+ * outside its workspace is let through; the audit lists both paths, by their
+ * real paths, as the trial set's observed mounts, and the file drops out once
+ * the entry declares its directory in `systemPaths`. An opted-out control,
+ * where the same server reads the contract, shows the attempt is made.
+ */
+async function checkConfinedServerReads() {
+  const outside = path.join(scratch.make('confined-outside'), 'host-notes.txt');
+  fs.writeFileSync(outside, 'a file no trial was granted\n');
+  const realOutside = fs.realpathSync(outside);
+  const reading = ({ declared = false, optOut = false } = {}) => ({
+    log: false,
+    edit: ({ folder }) =>
+      editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
+        evaluation.registry[0].environmentKeys.push('GRADER_READ');
+        if (declared) evaluation.registry[0].systemPaths = [path.dirname(realOutside)];
+        if (optOut) evaluation.confinement = false;
+      }),
+  });
+  const runReading = (label, options) => {
+    const project = makeProject(label, reading(options));
+    const contract = path.join(fs.realpathSync(project.folder), 'contract.json');
+    const ran = evaluate(['run', '--evaluation', project.folder], {
+      ...project.env,
+      GRADER_READ: JSON.stringify({ contract, outside }),
+    });
+    check(ran.status === 0, `${label}: run exited ${ran.status}; expected 0\n${ran.output}`);
+    const runDirectory = runDirectoryOf(project.folder);
+    const trial = runDirectory === null ? null : path.join(runDirectory, 'trials', 'clean', 'trial-1.json');
+    const evidence = trial !== null && fs.existsSync(trial) ? fs.readFileSync(trial, 'utf8') : '';
+    const manifest =
+      runDirectory === null ? null : readIfPresent(path.join(runDirectory, 'trial-sets', 'P-001', 'isolation-manifest.json'));
+    return { contract, evidence, observed: manifest?.observedMounts ?? null };
+  };
+  const refusal = /contract: refused (EPERM|EACCES|ENOENT|EROFS)/;
+
+  const confined = runReading('confined-reads');
+  check(refusal.test(confined.evidence), `a confined tool server's read of contract.json was not refused: ${confined.evidence}`);
+  check(
+    /outside: allowed/.test(confined.evidence),
+    `a confined tool server could not read the ungranted file, so the case proves nothing: ${confined.evidence}`,
+  );
+  check(
+    JSON.stringify(confined.observed) === JSON.stringify([confined.contract, realOutside].sort()),
+    `a confined tool server's trial set observed ${JSON.stringify(confined.observed)}; expected the contract and ${realOutside}`,
+  );
+
+  const declared = runReading('confined-reads-declared', { declared: true });
+  check(
+    refusal.test(declared.evidence) && /outside: allowed/.test(declared.evidence),
+    `a tool server under a declared system path read: ${declared.evidence}`,
+  );
+  check(
+    JSON.stringify(declared.observed) === JSON.stringify([declared.contract]),
+    `a read under a declared system path was reported: ${JSON.stringify(declared.observed)}; expected the contract alone`,
+  );
+
+  // The control: with the confinement off, the same server reads the contract.
+  const open = runReading('confined-reads-open', { optOut: true });
+  check(/contract: allowed/.test(open.evidence), `the unconfined control could not read contract.json: ${open.evidence}`);
+}
+
 /** Runs one case; an exception is a failed check, so the cases after it still run and every failure is reported. */
 async function runCase(name, body) {
   try {
@@ -1431,6 +1534,8 @@ async function main() {
   try {
     await runCase('the units', checkUnits);
     await runCase('the pipeline', checkPipeline);
+    await runCase('the confined pipeline', checkConfinedPipeline);
+    await runCase("the confined tool server's reads", checkConfinedServerReads);
     await runCase('the denials', checkDenials);
     await runCase('the sealed-brief agent', checkSealedBriefAgent);
     await runCase('the gameability arm', checkGameability);

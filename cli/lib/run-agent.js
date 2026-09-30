@@ -31,6 +31,7 @@
  *   capabilities decide how wide that scope is; the default is the review CLI's.
  */
 
+const fs = require('node:fs');
 const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
 const { AGENT_ADAPTERS, DEFAULT_CAPABILITIES, RUNNER_CAPABILITIES, bridgedArgsRefused, resolveModel } = require('./agent-adapters');
@@ -97,7 +98,8 @@ function supervisedOutcome(result) {
  * AD-21). An adapter with no bridged argv refuses it.
  *
  * @returns {{ command: string, supervisorArgs: string[], input: string|undefined, env: object, cwd: string, timeout: number }}
- * @throws {Error} AGENT_UNKNOWN, CAPABILITY_UNKNOWN, AGENT_COMMAND_REQUIRED, AGENT_BRIDGE_UNSUPPORTED
+ * @throws {Error} AGENT_UNKNOWN, CAPABILITY_UNKNOWN, AGENT_COMMAND_REQUIRED, AGENT_BRIDGE_UNSUPPORTED, and AGENT_NOT_FOUND
+ *   for an agent command that names no executable when it starts through `spawnPrefix`
  */
 function agentInvocation(
   prompt,
@@ -165,14 +167,41 @@ function agentInvocation(
   const isolated = spawnPrefix.length > 0;
   const command = isolated ? spawnPrefix[0] : resolvedCommand;
   const args = isolated ? [...spawnPrefix.slice(1), resolvedCommand, ...agentArgv] : agentArgv;
+  const env = buildMinimalEnv(envPass, sourceEnv, adapter.envNames);
+  // Under a wrapper the spawn that fails is the wrapper's own exec of the agent, which reports as the wrapper's exit,
+  // so a missing agent is named before anything starts, as an unwrapped spawn's ENOENT is.
+  if (isolated && !executableFound(resolvedCommand, env.PATH, cwd)) {
+    const error = new Error(`agent executable not found: ${resolvedCommand}`);
+    error.code = 'AGENT_NOT_FOUND';
+    throw error;
+  }
   return {
     command,
+    agentCommand: resolvedCommand,
     supervisorArgs: [SUPERVISOR, String(process.pid), String(timeout), command, ...args],
     input,
-    env: buildMinimalEnv(envPass, sourceEnv, adapter.envNames),
+    env,
     cwd,
     timeout,
   };
+}
+
+/** Whether `command` names an executable file: a path resolved against `cwd`, or a bare name looked up on `searchPath`. */
+function executableFound(command, searchPath, cwd) {
+  const candidates = command.includes('/')
+    ? [path.resolve(cwd, command)]
+    : String(searchPath ?? '')
+        .split(path.delimiter)
+        .filter(Boolean)
+        .map((directory) => path.resolve(cwd, directory, command));
+  return candidates.some((candidate) => {
+    try {
+      fs.accessSync(candidate, fs.constants.X_OK);
+      return fs.statSync(candidate).isFile();
+    } catch {
+      return false;
+    }
+  });
 }
 
 /**
@@ -183,7 +212,9 @@ function agentInvocation(
  * @param {{ command: string, timeout: number }} invocation
  * @returns {{ stdout: string, stderr: string }}
  */
-function agentAnswer({ outcome, stdout, stderr }, { command, timeout }) {
+function agentAnswer({ outcome, stdout, stderr }, { command: spawned, agentCommand, timeout }) {
+  // The agent by its own command; `spawned` is the isolation wrapper when it started through one.
+  const command = agentCommand ?? spawned;
   if (outcome.spawnError) {
     if (outcome.spawnError.code === 'ENOENT') {
       const error = new Error(`agent executable not found: ${command}`);

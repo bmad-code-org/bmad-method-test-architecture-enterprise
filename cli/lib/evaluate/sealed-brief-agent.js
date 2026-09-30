@@ -730,6 +730,8 @@ function bridgeRouter({
  * @param {string[]} options.scratch the run's private directories, which the agent's working directory, the bridge's
  *   configuration directory and its socket's directory join while it runs
  * @param {NodeJS.ProcessEnv} [options.env] the environment the agent's base variables and `environmentKeys` are read from
+ * @param {string[]} [options.spawnPrefix] the command the agent starts through, the run's evaluation-layer confinement
+ *   (`confinement.js` `layerPrefix`), which the bridge relay it starts inherits; none by default
  * @returns {Promise<{ answer: object, prompt: string, nonce: string, stdout: string, stderr: string, stdoutBytes: Buffer, stderrBytes: Buffer }>}
  * @throws {EvaluatorError} an agent that cannot answer, a call the target could not run, or an answer outside the import contract
  */
@@ -744,6 +746,7 @@ async function runSealedBriefAgent({
   scratch,
   env = process.env,
   calibrationObservation = null,
+  spawnPrefix = [],
 }) {
   const prompt = evaluatorPrompt({ sealedBrief, contract, mapping, nonce, calibrationObservation });
   // The agent runs in an empty directory of its own, which holds nothing of the evaluation; the bridge's
@@ -772,6 +775,7 @@ async function runSealedBriefAgent({
       envPass: evaluator.environmentKeys ?? [],
       sourceEnv: env,
       bridge: { name, configFile },
+      spawnPrefix,
     });
   } catch (error) {
     failure = error;

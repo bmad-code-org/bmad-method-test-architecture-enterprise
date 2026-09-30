@@ -27,6 +27,12 @@
  *   sleep       write its pid to the file `--pid` names (a temp file renamed
  *               into place, so a reader never sees it empty), wait 5 s, then
  *               answer (a case that signals the run while the judge runs)
+ *
+ * With `--plant <file> --plant-log <log>` it first tries to append a line to
+ * `<file>`, a path under the evaluation folder, and appends `{ calibration,
+ * outcome }` to `<log>`: whether the prompt is a calibration call, and
+ * `allowed` or `refused <code>` (Story 1.31: a confined run's judge holds the
+ * evaluation folder read-only).
  */
 
 'use strict';
@@ -49,6 +55,15 @@ if (option('--event-log') !== undefined)
   fs.appendFileSync(option('--event-log'), `${JSON.stringify({ judge: true, calibration: prompt.includes('calibration response') })}\n`);
 if (option('--cwd-log') !== undefined) {
   fs.appendFileSync(option('--cwd-log'), `${JSON.stringify({ cwd: process.cwd(), entries: fs.readdirSync('.') })}\n`);
+}
+if (option('--plant') !== undefined && option('--plant-log') !== undefined) {
+  let outcome = 'allowed';
+  try {
+    fs.appendFileSync(option('--plant'), 'planted by the rubric judge\n');
+  } catch (error) {
+    outcome = `refused ${error.code ?? error.message}`;
+  }
+  fs.appendFileSync(option('--plant-log'), `${JSON.stringify({ calibration: prompt.includes('calibration response'), outcome })}\n`);
 }
 const mode = option('--mode') ?? 'score';
 if (mode === 'fail') {
