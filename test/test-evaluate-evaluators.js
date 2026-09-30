@@ -87,6 +87,7 @@ const { ENGINE_CLI_ENV, engineCliPath, loadEngine } = require('../cli/lib/evalua
 const { createArtifactValidator } = require('../cli/lib/evaluate/records');
 const { runCalibration } = require('../cli/lib/evaluate/calibration');
 const { registryFromEvaluation } = require('../cli/lib/evaluate/registry');
+const { runTrial } = require('../cli/lib/evaluate/run');
 const { hostEnvironmentPort } = require('../cli/lib/evaluate/arm');
 const { AGENT_ADAPTERS, bridgedArgsRefused } = require('../cli/lib/agent-adapters');
 const { runSupervised } = require('../cli/lib/run-agent');
@@ -2395,6 +2396,74 @@ function checkDirectionGate() {
   );
 }
 
+// ---------------------------------------------------------------- the reference's denial reasons
+
+/** The reference names every reason code eval-quality's target policies decide, under its own heading (Story 1.33). */
+async function checkReferenceNamesDenialReasons() {
+  const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
+  // The engine's own list, so a reason a later release decides fails the case until the reference names it.
+  const denialReasons = (await loadEngine()).FORBIDDEN_TARGET_REASONS;
+  check(Array.isArray(denialReasons) && denialReasons.length > 0, 'eval-quality exports no FORBIDDEN_TARGET_REASONS');
+  // Headings inside a fenced block are examples, so they neither open nor end the section.
+  const prose = reference.replaceAll(/^```[^\n]*\n[\s\S]*?^```[^\n]*$/gm, (fence) => fence.replaceAll(/[^\n]/g, ' '));
+  const heading = '### Denial reasons';
+  const start = prose.indexOf(`\n${heading}\n`);
+  check(start !== -1 && !prose.includes(`\n${heading}\n`, start + 1), `the reference holds ${JSON.stringify(heading)} exactly once`);
+  const section = start === -1 ? '' : prose.slice(start + heading.length + 2).split(/\n#{1,3} /)[0];
+  const parent = start === -1 ? '' : (prose.slice(0, start).match(/^## .*$/gm) ?? []).pop();
+  check(
+    parent === '## The registry',
+    `the reference's section ${JSON.stringify(heading)} sits under ${JSON.stringify(parent)}, not ## The registry`,
+  );
+  // The table's first column is the section's list of reasons; it equals the engine's, in both directions.
+  const named = [...section.matchAll(/^\| `([^`]+)`/gm)].map((match) => match[1]);
+  const missing = denialReasons.filter((code) => !named.includes(code));
+  const unknown = named.filter((code) => !denialReasons.includes(code));
+  check(
+    missing.length === 0 && unknown.length === 0 && new Set(named).size === named.length,
+    `the reference's section ${JSON.stringify(heading)} omits ${JSON.stringify(missing)}, names ${JSON.stringify(unknown)} which eval-quality's policies do not decide, or repeats a row`,
+  );
+}
+
+/** A trial step the registry denies for a command records eval-quality's reason and names it as the run exits 10 (Story 1.33). */
+async function checkCommandTrialDenial() {
+  const contract = readJson(path.join(FIXTURE, EVALUATION, 'contract.json'));
+  const evaluation = readJson(path.join(FIXTURE, EVALUATION, 'evaluation.json'));
+  // The entry grants no subcommand path the plan's step uses, so the denial comes before anything launches.
+  const registry = registryFromEvaluation(
+    { ...evaluation, registry: [{ ...evaluation.registry[0], subcommandPaths: [['other']] }] },
+    { root: FIXTURE },
+  );
+  const written = {};
+  let stop = null;
+  try {
+    await runTrial({
+      arm: { conditionArm: 'clean', slug: 'clean', mutation: null, mutatedDigest: null, probes: [] },
+      trialIndex: 1,
+      contract,
+      registry,
+      pristine: null,
+      make: () => ({ kind: 'copy', root: FIXTURE, directory: FIXTURE, provisioned: [] }),
+      discard: () => {},
+      engine: null,
+      writer: { writeJson: (file, value) => (written[file] = value) },
+      stop: (fields) => Object.assign(new Error(fields.message), fields),
+      signal: new AbortController().signal,
+      snapshot: { layer: { evaluator: { kind: 'deterministic' } } },
+    });
+  } catch (error) {
+    stop = error;
+  }
+  const fault = written['trials/clean/trial-1.json']?.fault;
+  check(
+    fault?.code === 'forbidden-target' &&
+      fault.reason === 'subcommand-not-authorized' &&
+      stop?.exitCode === 10 &&
+      stop.message.startsWith('trial-clean-1 was denied by the registry (subcommand-not-authorized): '),
+    `a denied command trial step recorded ${JSON.stringify(fault)} and stopped with ${stop?.exitCode}: ${stop?.message}`,
+  );
+}
+
 /** Runs one case; an exception is a failed check, so the cases after it still run and every failure is reported. */
 async function runCase(name, body) {
   try {
@@ -2413,6 +2482,8 @@ async function main() {
     }
     await runCase('the units', checkUnits);
     await runCase('the direction gate', checkDirectionGate);
+    await runCase('the reference names the denial reasons', checkReferenceNamesDenialReasons);
+    await runCase('a denied command trial step', checkCommandTrialDenial);
     await runCase('the bridge', checkBridge);
     await runCase('the command evaluator row shapes', checkCommandRowShapes);
     await runCase('command and agent calibration disagreement', checkCalibrationDisagreementAcrossEvaluators);
