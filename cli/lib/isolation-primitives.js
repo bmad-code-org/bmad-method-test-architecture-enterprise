@@ -15,7 +15,7 @@
  *
  * Every caller keeps its own error class and message text: the checks here
  * answer, and the caller builds the error it has always thrown.
- * `test/test-isolation-primitives.js` fails when a caller defines one of these
+ * The `test:isolation-primitives` script fails when a caller defines one of these
  * again.
  */
 

@@ -423,7 +423,7 @@ function reachedPrimitives() {
   const counts = {};
   let current = null;
   try {
-    const spied = require(sharedFile);
+    const spied = require('../cli/lib/isolation-primitives');
     for (const name of names) {
       const original = spied[name];
       spied[name] = (...args) => {
@@ -432,9 +432,9 @@ function reachedPrimitives() {
         return original(...args);
       };
     }
-    const freshIsolate = require(MODULES[0].file);
-    const freshAtdd = require(MODULES[1].file);
-    const freshConfinement = require(MODULES[2].file);
+    const freshIsolate = require('../cli/lib/isolate');
+    const freshAtdd = require('../cli/lib/atdd-isolation');
+    const freshConfinement = require('../cli/lib/evaluate/confinement');
     const project = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-isolation-reach-'));
     withStubMechanism((bin) => {
       current = MODULES[0].name;
