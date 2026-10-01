@@ -63,9 +63,9 @@ context:
 
 **Execution:**
 
-- [ ] eval-quality: the `launch-too-large` `portFailureReason`, its tests with revert observations, docs, CHANGELOG; two Opus review rounds; merge; minor release; `npm view eval-quality version` -- AC 1, 2
-- [ ] `arm.js` and the port wrapper: read the reason, skip a captured-bound command step, rethrow a literal-only one -- AC 1, 2
-- [ ] fixture, `test-evaluate-workflow.js` cases, reference sentence and its reading case, CHANGELOG, plan amendments, peer floor and lockfile -- AC 1, 2, 3
+- [x] eval-quality: the `launch-too-large` `portFailureReason`, its tests with revert observations, docs, CHANGELOG; two Opus review rounds; merge; minor release; `npm view eval-quality version` -- AC 1, 2 (bmad-eval-quality PR #171 merged c773783, released as 4.6.0 b4b7a6c)
+- [x] `arm.js` and the port wrapper: read the reason, skip a captured-bound command step, rethrow a literal-only one -- AC 1, 2
+- [x] fixture, `test-evaluate-workflow.js` cases, reference sentence and its reading case, CHANGELOG, plan amendments, peer floor and lockfile -- AC 1, 2, 3
 
 **Acceptance Criteria:**
 
@@ -86,20 +86,20 @@ context:
 
 ## Implementation Notes
 
-- Built directly from the spec by the build worker. The engine is eval-quality 4.5.0 as published plus the engine branch's tarball (eval-quality PR #171), installed with `npm install --no-save`; `package.json` and `package-lock.json` are untouched and the coordinator raises the peer floor and the lockfile after the release.
+- Built directly from the spec by the build worker. The engine is eval-quality 4.6.0 from the registry (`npm view eval-quality version` is 4.6.0; eval-quality PR #171 merged c773783 and released b4b7a6c after two Opus review rounds). The build ran first against the engine branch's tarball installed with `npm install --no-save`; the commit moves the optional peer's floor in `package.json`, `package-lock.json`, the install hint in `cli/lib/evaluate/engine.js` and the reference's prerequisite to 4.6.0, and round 1 moves the floor of `tools/guard-publish.js` and `test/test-release-metadata.js` to 4.6.0 as well.
 - Engine carriage, as the coordinator's mid-build message set it: the adapter throws `RuntimeFault` code `port-failure` with `portFailureReason: 'launch-too-large'` and the spawn error as `cause`; `RuntimeFault.reason` keeps its type.
   `hostEnvironmentPort` mutates and rethrows the same fault object (message and `scrubbedCause` only), so the field passes through unchanged; no wrapper in the command path rebuilds a fault (`registry.createProbePort` returns the adapter's `probe` directly, and `http-port-host.js` and `http-target.js` serve `api` steps only).
-- `cli/lib/evaluate/arm.js`: `boundValues` returns a `captured` list of every captured binding of its channel in the existing site shape `{ binding, pointer }`, and `runArm` gathers it per step (`capturedSites`).
+- `cli/lib/evaluate/arm.js`: `boundValues` returns a `captured` list of every captured binding of its channel in the existing site shape `{ binding, pointer }`, and `runArm` gathers it per step (`capturedSites`), from the `argument`, `option` and `environment` channels alone, since a captured stdin value is written to a pipe after the spawn and cannot make a launch too large.
   The `port.probe` call sits in a `try`; a fault where `isLaunchTooLarge(error)` (code `port-failure` and `error.portFailureReason === 'launch-too-large'`, read off the fault and nowhere else) on a `cli` step with at least one captured binding is recorded as `{ stepId, operationId, skipped: { reason: 'captured-value-unsendable', bindings } }` and the loop continues.
   Each binding carries `binding`, `pointer` and a `reason` text that names `launch-too-large`.
   Every other fault is rethrown unchanged, so a literal-only step, a `port-failure` with no such reason, another code, and an HTTP or tool-call step still stop the run (`run.js` exits 12).
   The step never reaches `issued`, `sequence`, `stepObservations` or `steps` as an issued entry, so `run.js` counts no call and writes no observation; a later step naming it in `after` skips as `after-step-not-issued` through the existing check, and one capturing from it skips as `captured-value-absent`.
   `faultRecord` records `portFailureReason` beside `reason` when the fault carries it, so a stopped run's evidence keeps it.
 - `eval-quality.config.json` `doc-claims` `symbols.foreign` gains `portFailureReason` (a field of an eval-quality `RuntimeFault`), since the reference now spells it.
-- Fixture: `test/fixtures/evaluate-workflow/bin/records.js` prints a 2 MiB identifier from `create` in the workspaces `RECORDS_OVERSIZE_ID` names (the record is still stored under the short identifier), and `evaluation.json` permits that variable as an environment key.
+- Fixture: `test/fixtures/evaluate-workflow/bin/records.js` prints a 2 MiB identifier from `create` in the workspaces `RECORDS_OVERSIZE_ID` names (the record is still stored under the short identifier), and the two integration cases add that variable to the registry of their own project copy (`permitOversizeKey`), since the skill's `adapters.md` embeds the fixture's committed registry and `test:evaluate-guidance` holds the two equal.
   The channel is `read-back`'s `option.id`, which reaches the launch as `--id <value>`; 2 MiB is past macOS's 1 MiB limit for the whole vector and Linux's 128 KiB limit for one argument.
   The fixture's two label checks now go through one `names` helper that matches no workspace for an unlabelled run (the old `split(',').includes(workspace ?? '')` matched `''` when the variable was unset).
-- Tests, `test/test-evaluate-workflow.js` (148 checks): `checkOversizedValue` (real eval-quality, `run` exit 0, each mutated trial's evidence ending in the skipped `read-back` with no `request` or `observation`, binding `option.id`, pointer, reason naming `launch-too-large`, records holding the `create` observation alone, tool-call counts in records and manifests, the store logging no read, no `caught` vote and the clean control passing after `score`) and `checkLaunchTooLarge` (skip and chained `after-step-not-issued`; every captured binding named across two channels beside a literal; literal-only step throws; a `port-failure` with no reason, another port-failure reason, the reason under another code and `reason` alone throw; the wrapper keeps the field and `scrubbedCause`; `faultRecord`; HTTP and tool-call steps throw; the real command-line adapter refuses a 2 MiB literal through the registry's port with the field).
+- Tests, `test/test-evaluate-workflow.js` (165 checks): `checkOversizedValue` and `checkOversizedValueConfined`, one function over a project with the store logging and one over a confined project (real eval-quality, `run` exit 0, each mutated trial's last step equal, byte for byte, to the whole skip entry (`launchRefusedEntry`, with the exact reason text `LAUNCH_REFUSED_REASON`, so a record that carried the refused value fails), the confined run's `run.json` naming `seatbelt` or `bubblewrap`, records holding the `create` observation alone, tool-call counts in records and manifests, the store logging no read in the logged run, no `caught` vote and the clean control passing after `score`) and `checkLaunchTooLarge` (skip and chained `after-step-not-issued`; every captured binding named across two channels beside a literal, each binding holding exactly `binding`, `pointer` and `reason`; a captured stdin binding beside a refused literal throws; literal-only step throws; a `port-failure` with no reason, another port-failure reason, the reason under another code and `reason` alone throw; the wrapper keeps the field and `scrubbedCause`; `faultRecord`; HTTP and tool-call steps throw; the real command-line adapter refuses a 2 MiB literal through the registry's port with the field).
   The header comment lists both cases, and `checkReference` gains the size-limit assertion.
 - Docs: `docs/reference/tea-evaluate-cli.md` `### Steps not issued` gains the size-limit sentences; `CHANGELOG.md` `### Added`.
 - Skill gate: grep of `src/workflows/testarch/bmad-testarch-evaluate/` for `captured-value-unsendable`, `unsendable`, `not issued` and `captured-value` finds one line, `references/contract.md` line 412, which says "A missing or unsendable capture leaves the dependent step unissued and must appear in preflight".
@@ -108,18 +108,29 @@ context:
 
 ### Departures from the plan text
 
-- The plan and the frozen section name `reason` as the carrier; the engine review moved the value to `portFailureReason`, so the arm reads and records that field. Amended in place, dated 2026-10-01, in `epics.md` (Story 1.39's engine consumption paragraph) and `test-design-epic-1.md` (Story 1.39's section). The frozen Decisions still say `reason`; the coordinator amends them.
+- The plan named `reason` as the carrier; the engine review moved the value to `portFailureReason`, so the arm reads and records that field. Amended in place, dated 2026-10-01, in `epics.md` (Story 1.39's engine consumption paragraph) and `test-design-epic-1.md` (Story 1.39's section).
+- `ARCHITECTURE-SPINE.md` AD-5's Packaging bullet, the AD-20 rule and the dependency table name the floor `>=4.6.0` with a dated 2026-10-01 note (they still said `>=4.3.0`).
 - The fault record gains `portFailureReason`, which the plan does not mention; the coordinator's message asked for it.
 - The unit set is wider than the plan's two units: it also holds the other fault shapes, the wrapper, the record and the non-command kinds.
 - The integration case uses a 2 MiB identifier, not the 4 MiB the brief suggests, which exceeds both limits and keeps the run artifacts smaller.
 
 ## Review Triage Log
 
-(none yet; the coordinator runs the reviews)
+### Round 1 (PR #270: adversarial and test-quality lenses on opus, and CI)
+
+| Finding                                              | Verdict | Evidence and disposition                                                                                                                                                                                    |
+| ---------------------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Stdin captured binding made a literal-only step skip | fixed   | adversarial: `capturedSites` now reads the `argument`, `option` and `environment` channels only; a unit holds a 2 MiB literal option beside a captured stdin value, which rethrows                          |
+| Publish guard floors stale at 4.3.0                  | fixed   | adversarial and test lens: `tools/guard-publish.js` and `test/test-release-metadata.js` hold 4.6.0, the guard header names what 4.4.0, 4.5.0 and 4.6.0 add, refusals for `>=4.3.0`, `>=4.4.0` and `>=4.5.0` |
+| CHANGELOG named the floor without its value          | fixed   | the entry now says the peer's floor moves to `>=4.6.0`, the first release whose command-line adapter carries `portFailureReason`                                                                            |
+| Story record stale                                   | fixed   | restated against the shipped state (registry 4.6.0, floors, tasks checked off)                                                                                                                              |
+| Skip shape pinned only by `includes`                 | fixed   | test lens: the whole entry is compared with `JSON.stringify` against the exact reason text at the integration case, and each binding's keys are asserted in both units; a record leaking the value fails    |
+| No confined integration run                          | fixed   | test lens: `checkOversizedValueConfined` runs the same case with confinement on and the store log off, and reads `run.json`'s `confinement`                                                                 |
+| Guidance fixture registry differs (CI, shard 3)      | fixed   | `RECORDS_OVERSIZE_ID` left the committed fixture registry, which the skill's `adapters.md` embeds; each oversized case adds it to its own project copy                                                      |
 
 ## Revert observations
 
-Each check exercised once: undo the change locally in `cli/lib/evaluate/arm.js` or the reference, run `npm run test:evaluate-workflow` (148 checks when green), restore from a saved copy (`cmp` confirmed each restore byte for byte). Counts are of the final build on the reworked engine (`portFailureReason`); a first pass on the earlier `reason` carriage gave the same shapes.
+Each check exercised once: undo the change locally in `cli/lib/evaluate/arm.js` or the reference, run `npm run test:evaluate-workflow` (148 checks when green in the first pass, 165 after round 1), restore from a saved copy (`cmp` confirmed each restore byte for byte). Counts are of the final build on the reworked engine (`portFailureReason`); a first pass on the earlier `reason` carriage gave the same shapes.
 
 - AC 1, stopping on the fault as before (the catch made unreachable): 5 of 135 fail, among them "a run whose mutated trials print an oversized identifier exited 12; expected 0" and the three arm units; the case catches the exit 12 as the spec says.
 - AC 1, the arm reading `error.reason` instead of `error.portFailureReason`: 6 of 135 fail (the same as above plus "the reason field alone after a captured binding").
@@ -130,17 +141,22 @@ Each check exercised once: undo the change locally in `cli/lib/evaluate/arm.js` 
 - AC 1, every kind skipped (the `cli` test dropped): 2 of 148 fail (the HTTP request and the tool call).
 - AC 1, `faultRecord` not recording `portFailureReason`: 1 of 148 fails ("the fault record of a refused literal-only step is ...").
 - AC 2, a literal-only step skipped as well (the captured-binding test dropped): 4 of 148 fail ("a literal-only step the system refuses for size gave [{\"reason\":\"captured-value-unsendable\",\"bindings\":[]}]", the wrapper unit, the fault-record unit and the real-adapter unit).
+- Round 1, the skip binding leaking the value (`value: request.channels.option?.id` in the catch): 8 of 165 fail (the single-binding unit, the mixed unit, and the three mutated trials of each of the logged and confined integration runs).
+- Round 1, stdin captured read too (the channel condition dropped from `capturedSites`): 1 of 165 fails ("a captured stdin binding beside a refused literal gave ...").
+- Round 1, stopping on the fault: 7 of 139 fail; the logged and the confined integration runs each exit 12 and seal no trial set.
+- Round 1, `permitOversizeKey` made a no-op (the target cannot read the variable): 13 of 165 fail across both integration runs (the read-back is issued, the entry is a request and an observation).
+- Round 1, the guard's `ENGINE_FLOOR` set back to 4.3.0: 3 of 41 `test:guard-publish` checks fail (the refusals for peer floors 4.3.0, 4.4.0 and 4.5.0).
 - AC 3, the size-limit sentences removed from `### Steps not issued`: 1 of 148 fails (the reference case); removing only the literal-only sentence fails the same case.
 
 ## Gates
 
-- Engine check (`evaluateTarget` is a function) exit 0 at the start and at the end; `PORT_FAILURE_REASONS` exports `launch-too-large` from the installed tarball; `git diff -- package.json package-lock.json` shows no change and no `file:` or `.tgz` spec.
-- Green on the last state of the tree: `test:evaluate-workflow` 148 checks, `test:evaluate-arms` 536, `test:evaluate-boundaries` 306, `test:direction`, `lint`, `lint:md`, `format:check`, `docs:validate-links`, `test:release-metadata`, `test:doc-claims`, `test:doc-counts`, `test:ci-coverage`, `test:shards`, `test:changelog`.
+- Engine check (`evaluateTarget` is a function) exit 0 at the start and at the end of the build and of round 1, on eval-quality 4.6.0 from the registry; `PORT_FAILURE_REASONS` exports `launch-too-large`.
+- Green on the last state of the tree: `test:evaluate-workflow` 165 checks, `test:evaluate-arms`, `test:evaluate-boundaries`, `test:evaluate-guidance`, `test:evaluate-api`, `test:evaluate-run`, `test:evaluate-preflight`, `test:guard-publish` 41, `test:release-metadata`, `test:doc-claims`, `test:doc-counts`, `test:changelog`, `test:direction`, `lint`, `lint:md`, `format:check`, `docs:validate-links`, `test:ci-coverage`, `test:shards`.
 - Formatting: Prettier realigned the frozen section's I/O matrix table in this file (whitespace only), since `lint:md` and `format:check` read the record.
-- Unrun: the full `npm test` (CI shards) and `docs:build`. Until eval-quality ships the release, the registry's 4.5.0 lacks the field and the new integration and real-adapter checks fail against it; the coordinator raises the peer floor and the lockfile after the release.
+- Unrun: the full `npm test` (CI shards) and `docs:build`.
 
 ## Left undone, reported
 
 - The MCP adapter's spawn of a tool server has no size reason; the plan scopes that to a story of its own if a target needs it.
 - `http-port-host.js` and `http-target.js` carry `reason` on the faults they rebuild and not `portFailureReason`; their `port-failure` faults come from process failures that name no such reason, so nothing reads it there.
-- The confined command mechanism (Seatbelt, Bubblewrap) wraps the spawn; the new checks run the real adapter unconfined and the integration case runs with `confinement` off (the fixture's log opts out), so a confined launch's `E2BIG` reaching the adapter as the same fault is unproved here.
+- The confined launch is proved by `checkOversizedValueConfined`: under Seatbelt or Bubblewrap the refused spawn reaches the adapter as the same fault. The real-adapter unit still runs unconfined.

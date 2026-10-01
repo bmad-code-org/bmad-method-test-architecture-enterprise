@@ -59,7 +59,7 @@
   "test:evaluate-promptfoo": 18.5,
   "test:evaluate-run": 111.2,
   "test:evaluate-tool-use": 40,
-  "test:evaluate-workflow": 25,
+  "test:evaluate-workflow": 27,
   "test:file-system-conformance": 0.3,
   "test:file-system-port": 17.9,
   "test:framework-scaffold": 0.2,

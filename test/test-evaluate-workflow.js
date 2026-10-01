@@ -27,7 +27,9 @@
  *   with eval-quality's port-failure reason `launch-too-large`; the step is never issued, the
  *   trial's evidence lists it as `captured-value-unsendable` naming the binding
  *   and that reason, the run exits 0 and the seeded probe's outcome is not
- *   `caught` (Story 1.39).
+ *   `caught`, in a run with the store logging and again in a confined run
+ *   (Story 1.39). The skip's whole entry is held byte for byte, so a record that
+ *   carried the refused value fails.
  * - A cycle: a contract whose capture and `after` edges form one stops
  *   `preflight` and `run` with `eval-quality compile`'s exit 4 and its
  *   `binding-cycle` message, byte for byte what the engine prints over the
@@ -38,7 +40,9 @@
  *   refusals.
  * - The refused launch (Story 1.39): a command step with a captured binding
  *   whose launch the fault's `portFailureReason` `launch-too-large` names is skipped, naming
- *   every captured binding of the step, and a step after it is skipped as
+ *   every captured binding of its argument, option and environment channels (a
+ *   captured stdin value is written after the launch, so it is not one), and a
+ *   step after it is skipped as
  *   `after-step-not-issued`; a step of literal bindings alone, a `port-failure`
  *   with no such reason or another code, an HTTP step and a tool call rethrow the
  *   fault; the host-environment wrapper and the fault record carry the reason, and
@@ -395,6 +399,20 @@ async function checkOtherKinds() {
 
 /** The `portFailureReason` eval-quality's command-line adapter gives a launch the system refused for size. */
 const LAUNCH_TOO_LARGE = 'launch-too-large';
+/** The reason text the arm gives each captured binding of a step whose launch the system refused for size, byte for byte. */
+const LAUNCH_REFUSED_REASON = `the system refused to launch the command for the size of its arguments and environment (${LAUNCH_TOO_LARGE}), and the refusal does not say which captured value made it too large`;
+
+/** The record of a `read-back` step skipped for a launch too large, whole: no field carries the value the launch refused. */
+function launchRefusedEntry(bindings) {
+  return {
+    stepId: 'read-back',
+    operationId: 'read-back',
+    skipped: {
+      reason: 'captured-value-unsendable',
+      bindings: bindings.map(({ binding, pointer }) => ({ binding, pointer, reason: LAUNCH_REFUSED_REASON })),
+    },
+  };
+}
 /** A literal past the system's argument limit on macOS (1 MiB for the whole vector) and Linux (128 KiB for one argument). */
 const OVERSIZE_LITERAL = `rec-${'x'.repeat(2 * 1024 * 1024)}`;
 
@@ -458,9 +476,8 @@ async function checkLaunchTooLarge() {
       JSON.stringify(Object.keys(entry ?? {})) === JSON.stringify(['stepId', 'operationId', 'skipped']) &&
       entry.skipped.reason === 'captured-value-unsendable' &&
       entry.skipped.bindings.length === 1 &&
-      entry.skipped.bindings[0].binding === 'option.id' &&
-      entry.skipped.bindings[0].pointer === CAPTURE &&
-      entry.skipped.bindings[0].reason.includes(LAUNCH_TOO_LARGE) &&
+      entry.skipped.bindings.every((site) => JSON.stringify(Object.keys(site)) === JSON.stringify(['binding', 'pointer', 'reason'])) &&
+      JSON.stringify(entry) === JSON.stringify(launchRefusedEntry([{ binding: 'option.id', pointer: CAPTURE }])) &&
       !Object.hasOwn(skipped.arm.stepObservations, 'read-back') &&
       JSON.stringify(skipped.arm.steps.map((step) => step.skipped?.reason ?? 'issued')) ===
         JSON.stringify(['issued', 'captured-value-unsendable', 'after-step-not-issued']),
@@ -487,8 +504,28 @@ async function checkLaunchTooLarge() {
           { binding: 'option.id', pointer: CAPTURE },
           { binding: 'environment.RECORDS_LOG', pointer: '/interactions/create/stdout/title' },
         ]) &&
-      bindings.every((site) => site.reason.includes(LAUNCH_TOO_LARGE)),
+      bindings.every((site) => JSON.stringify(Object.keys(site)) === JSON.stringify(['binding', 'pointer', 'reason'])) &&
+      JSON.stringify(named.arm.steps.at(-1)) ===
+        JSON.stringify(
+          launchRefusedEntry([
+            { binding: 'option.id', pointer: CAPTURE },
+            { binding: 'environment.RECORDS_LOG', pointer: '/interactions/create/stdout/title' },
+          ]),
+        ),
     `a step with captured and literal bindings recorded ${JSON.stringify(named.arm?.steps.at(-1) ?? String(named.error))}`,
+  );
+
+  // A captured stdin value is written to a pipe once the process runs, so it cannot make a launch too large: with the
+  // literal that did, the step is a contract the run cannot send, and the fault stops the arm.
+  const stdinCaptured = planStep('read-back', 'read-back', {
+    after: 'create',
+    option: { id: { literal: OVERSIZE_LITERAL } },
+    stdin: { title: { captured: '/interactions/create/stdout/title' } },
+  });
+  const viaStdin = await runRefusedArm([stdinCaptured, create], answers, ['read-back'], tooLarge());
+  check(
+    viaStdin.error?.portFailureReason === LAUNCH_TOO_LARGE && viaStdin.arm === undefined,
+    `a captured stdin binding beside a refused literal gave ${viaStdin.error ?? JSON.stringify(viaStdin.arm?.steps.map((step) => step.skipped))}; expected the fault to stop the arm`,
   );
 
   // A step of literals alone is a contract the run cannot send: the arm throws the fault, and `run` exits 12 on it.
@@ -1099,20 +1136,34 @@ async function checkMissingValue() {
   );
 }
 
+/** `evaluation.json`'s registry lets the store read `RECORDS_OVERSIZE_ID`, which the skill's committed registry does not name. */
+function permitOversizeKey({ folder }) {
+  editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
+    evaluation.registry[0].environmentKeys.push('RECORDS_OVERSIZE_ID');
+  });
+}
+
 /**
  * An identifier past the system's argument limit (Story 1.39): the launch of `read-back` is refused for its size with
- * eval-quality's reason, the step is skipped, and the run goes on.
+ * eval-quality's reason, the step is skipped, and the run goes on. `confined` runs the target under the host's
+ * mechanism (no store log, which a confined store cannot write), as `checkConfinedPipeline` does.
  */
-async function checkOversizedValue() {
-  const project = makeProject('oversized-value');
+async function checkOversizedRun(label, { confined }) {
+  const what = `${confined ? 'a confined ' : 'a '}run whose mutated trials print an oversized identifier`;
+  const project = makeProject(label, { edit: permitOversizeKey, log: !confined });
   const ran = evaluate(['run', '--evaluation', project.folder], { ...project.env, RECORDS_OVERSIZE_ID: MUTATED_TRIALS.join(',') });
-  check(ran.status === 0, `a run whose mutated trials print an oversized identifier exited ${ran.status}; expected 0\n${ran.output}`);
+  check(ran.status === 0, `${what} exited ${ran.status}; expected 0\n${ran.output}`);
   const runDirectory = runDirectoryOf(project.folder);
   if (runDirectory === null || !fs.existsSync(path.join(runDirectory, 'trial-sets.json'))) {
-    check(false, 'the run whose mutated trials print an oversized identifier sealed no trial set');
+    check(false, `${what} sealed no trial set`);
     return;
   }
-  checkCapturedRecords('a run whose mutated trials print an oversized identifier', runDirectory, 'P-001');
+  if (confined) {
+    const record = readJson(path.join(runDirectory, 'run.json'));
+    const confinement = process.platform === 'darwin' ? 'seatbelt' : 'bubblewrap';
+    check(record.confinement === confinement, `${what} records confinement ${JSON.stringify(record.confinement)}; expected ${confinement}`);
+  }
+  checkCapturedRecords(what, runDirectory, 'P-001');
   const records = recordsOf(runDirectory, 'P-002');
   check(
     records.length === TRIALS &&
@@ -1124,40 +1175,40 @@ async function checkOversizedValue() {
       ),
     `P-002's records hold ${JSON.stringify(records.map((record) => record.observations.map((observation) => observation.observationId)))}; expected create alone, printing an oversized identifier`,
   );
+  const expected = JSON.stringify(launchRefusedEntry([{ binding: 'option.id', pointer: CAPTURE }]));
   for (let trialIndex = 1; trialIndex <= TRIALS; trialIndex += 1) {
     const file = path.join(runDirectory, 'trials', 'mutated-M-001', `trial-${trialIndex}.json`);
     const last = (fs.existsSync(file) ? readJson(file).steps : []).at(-1);
     check(
-      JSON.stringify(Object.keys(last ?? {})) === JSON.stringify(['stepId', 'operationId', 'skipped']) &&
-        last.stepId === 'read-back' &&
-        last.skipped?.reason === 'captured-value-unsendable' &&
-        last.skipped.bindings?.length === 1 &&
-        last.skipped.bindings[0].binding === 'option.id' &&
-        last.skipped.bindings[0].pointer === CAPTURE &&
-        last.skipped.bindings[0].reason?.includes(LAUNCH_TOO_LARGE) === true,
-      `mutated trial ${trialIndex}'s evidence lists its last step as ${JSON.stringify(last)}`,
+      JSON.stringify(last) === expected,
+      `${what}: mutated trial ${trialIndex}'s evidence lists its last step as ${JSON.stringify(last)?.slice(0, 600)}; expected ${expected}`,
     );
   }
   // The refused launch is no call: the records and the isolation manifests count the create alone.
-  checkToolCalls('a run whose mutated trials print an oversized identifier', runDirectory);
-  const mutatedLines = logLines(project).filter((line) => MUTATED_TRIALS.includes(line.workspace));
-  check(
-    mutatedLines.length === TRIALS && mutatedLines.every((line) => line.operation === 'create'),
-    `the store ran ${JSON.stringify(mutatedLines)} in the mutated trials; expected one create each and no read`,
-  );
+  checkToolCalls(what, runDirectory);
+  if (!confined) {
+    const mutatedLines = logLines(project).filter((line) => MUTATED_TRIALS.includes(line.workspace));
+    check(
+      mutatedLines.length === TRIALS && mutatedLines.every((line) => line.operation === 'create'),
+      `the store ran ${JSON.stringify(mutatedLines)} in the mutated trials; expected one create each and no read`,
+    );
+  }
 
-  const evidence = scoreRun(project, 'a run whose mutated trials print an oversized identifier');
+  const evidence = scoreRun(project, what);
   const votes = votesOf(evidence, 'P-002');
   check(
     votes.length === TRIALS && votes.every((vote) => vote !== 'caught') && evidence['P-002']?.reducedProbeOutcomes?.[0]?.caught === false,
-    `P-002's trial votes are ${JSON.stringify(votes)} with caught ${evidence['P-002']?.reducedProbeOutcomes?.[0]?.caught}; a step never issued must not read as caught`,
+    `${what}: P-002's trial votes are ${JSON.stringify(votes)} with caught ${evidence['P-002']?.reducedProbeOutcomes?.[0]?.caught}; a step never issued must not read as caught`,
   );
   const clean = votesOf(evidence, 'P-001');
   check(
     clean.length === TRIALS && clean.every((vote) => vote === 'passed-clean-control'),
-    `P-001's trial votes are ${JSON.stringify(clean)}`,
+    `${what}: P-001's trial votes are ${JSON.stringify(clean)}`,
   );
 }
+
+const checkOversizedValue = () => checkOversizedRun('oversized-value', { confined: false });
+const checkOversizedValueConfined = () => checkOversizedRun('oversized-value-confined', { confined: true });
 
 /** A gameability probe's degenerate response for both steps: create prints an identifier, the read-back another title. */
 const DEGENERATE_ID = 'rec-degenerate';
@@ -1697,6 +1748,7 @@ async function main() {
     await runCase('the missing captured value', checkMissingValue);
     await runCase('the missing captured value under a command evaluator', checkMissingValueUnderCommand);
     await runCase('the oversized captured value', checkOversizedValue);
+    await runCase('the oversized captured value in a confined run', checkOversizedValueConfined);
     await runCase('the gameability arm', checkGameability);
     await runCase('a gameability step the registry denies', checkGameabilityDenial);
     await runCase('the plans compile refuses', checkRefusedPlans);

@@ -756,7 +756,8 @@ async function runArm({
       });
       absent.push(...read.absent);
       unsendable.push(...read.unsendable);
-      capturedSites.push(...read.captured);
+      // Only what a spawn carries can make a launch too large: a stdin value is written to a pipe after the process starts.
+      if (PROCESS_CHANNELS.has(name)) capturedSites.push(...read.captured);
       return read.values;
     };
     let request;
