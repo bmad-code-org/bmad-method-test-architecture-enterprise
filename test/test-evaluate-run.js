@@ -140,6 +140,7 @@ const {
   releaseTargetHome,
   selectConfinement,
   targetSandbox,
+  chmodDirectoryNoFollow,
   unlockDirectories,
 } = require('../cli/lib/evaluate/confinement');
 const {
@@ -4428,7 +4429,29 @@ async function checkHomeReach({ made, sibling, parent, root, folder, workspace }
  * outside, while the runtime opens the home up to remove it, cannot have the outside directory's mode changed. A child
  * swaps the two names in a loop; the outside directory is mode 700, which following the link would raise to the link's 755.
  */
-function checkNoFollowUnlock(parent) {
+function checkNoFollowUnlock(parent, closedMode = null) {
+  if (closedMode !== null) {
+    // The route that opens a closed directory sets exactly 700 on a real directory and leaves what a link names alone.
+    const closed = fs.mkdtempSync(path.join(parent, 'closed-'));
+    const target = tempDir('closed-outside');
+    fs.chmodSync(target, 0o755);
+    const link = path.join(closed, 'lnk');
+    fs.symlinkSync(target, link);
+    const real = path.join(closed, 'dir');
+    fs.mkdirSync(real);
+    fs.chmodSync(real, closedMode);
+    try {
+      chmodDirectoryNoFollow(link, fs.lstatSync(link));
+    } catch {
+      // A link is refused outright where the system opens it with `O_NOFOLLOW`.
+    }
+    chmodDirectoryNoFollow(real, fs.lstatSync(real));
+    check(
+      (fs.statSync(target).mode & 0o777) === 0o755 && (fs.statSync(real).mode & 0o777) === 0o700,
+      `the no-follow chmod left ${(fs.statSync(target).mode & 0o777).toString(8)} on what a link names (expected 755) and ${(fs.statSync(real).mode & 0o777).toString(8)} on a closed directory (expected 700)`,
+    );
+    fs.rmSync(closed, { recursive: true, force: true });
+  }
   const base = fs.mkdtempSync(path.join(parent, 'flip-'));
   const outside = tempDir('flip-outside');
   fs.mkdirSync(path.join(outside, 'inner'));
@@ -4442,8 +4465,10 @@ function checkNoFollowUnlock(parent) {
     [
       '-e',
       `const fs = require('node:fs'); const [base] = process.argv.slice(1);
-       for (;;) { try { fs.renameSync(base + '/dir', base + '/hold'); fs.renameSync(base + '/lnk', base + '/dir'); fs.renameSync(base + '/hold', base + '/lnk'); } catch {} }`,
+       const closed = process.argv[2] === '' ? null : Number(process.argv[2]);
+       for (;;) { try { fs.renameSync(base + '/dir', base + '/hold'); if (closed !== null && fs.lstatSync(base + '/hold').isDirectory()) fs.chmodSync(base + '/hold', closed); fs.renameSync(base + '/lnk', base + '/dir'); fs.renameSync(base + '/hold', base + '/lnk'); } catch {} }`,
       base,
+      closedMode === null ? '' : String(closedMode),
     ],
     { stdio: 'ignore' },
   );
@@ -4457,10 +4482,11 @@ function checkNoFollowUnlock(parent) {
     const modes = [outside, path.join(outside, 'inner')].map((directory) => fs.statSync(directory).mode & 0o777);
     check(
       modes.every((mode) => mode === 0o700) && rounds > 20,
-      `opening up a directory a process swapped for a link changed the outside directories' modes to ${modes.map((mode) => mode.toString(8))} after ${rounds} rounds`,
+      `opening up a directory a process swapped for a link${closedMode === null ? '' : ` while keeping its own mode ${closedMode.toString(8)}`} changed the outside directories' modes to ${modes.map((mode) => mode.toString(8))} after ${rounds} rounds`,
     );
   } finally {
     flipper.kill('SIGKILL');
+    unlockDirectories(base);
     fs.rmSync(base, { recursive: true, force: true });
   }
 }
@@ -4591,6 +4617,8 @@ async function checkTargetHomeUnits() {
       `a release of a home holding a read-only directory left ${JSON.stringify(fs.readdirSync(parent))} beneath the parent and ${JSON.stringify(scratch)} in scratch`,
     );
     checkNoFollowUnlock(parent);
+    // A directory the agent keeps closed (no owner bits) cannot be opened, so the mode is set by another route that follows no link.
+    checkNoFollowUnlock(parent, 0o077);
 
     // A sandbox pointed at another home grants that one and sets its variables from then on, and no longer names the old one.
     const [first, second] = [path.join(parent, 'switch-a'), path.join(parent, 'switch-b')];

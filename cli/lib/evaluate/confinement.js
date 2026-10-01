@@ -77,6 +77,7 @@
 'use strict';
 
 const crypto = require('node:crypto');
+const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -686,6 +687,28 @@ function callTemporary(scratch) {
 const HOME_XDG_DIRECTORIES = { XDG_CONFIG_HOME: '.config', XDG_CACHE_HOME: '.cache', XDG_DATA_HOME: path.join('.local', 'share') };
 
 /**
+ * Sets a real directory's mode to exactly 700 without following a link, for a directory whose own mode bits leave the owner
+ * no way to open it. A link swapped in for the directory is never followed: `chmod -h` on macOS, and on Linux a `chmod`
+ * through the descriptor of an `O_PATH | O_NOFOLLOW` open whose identity is the one `lstat` saw. The mode is never copied
+ * from the entry, since what an agent left there names what a path `chmod` would give an outside directory.
+ */
+function chmodDirectoryNoFollow(directory, before) {
+  if (process.platform === 'darwin') {
+    execFileSync('/bin/chmod', ['-h', '700', directory], { stdio: 'ignore' });
+    return;
+  }
+  const O_PATH = 0o1000_0000;
+  const descriptor = fs.openSync(directory, O_PATH | fs.constants.O_NOFOLLOW | fs.constants.O_DIRECTORY);
+  try {
+    const opened = fs.fstatSync(descriptor);
+    if (opened.dev !== before.dev || opened.ino !== before.ino) throw new Error('replaced');
+    fs.chmodSync(`/proc/self/fd/${descriptor}`, 0o700);
+  } finally {
+    fs.closeSync(descriptor);
+  }
+}
+
+/**
  * Gives the owner full access to `directory` and every directory under it, so
  * it can be removed: each directory is opened up before it is read, and one
  * that still cannot be read is skipped, so a single unreadable directory a
@@ -706,9 +729,9 @@ function unlockDirectories(directory) {
       descriptor = open();
     } catch (error) {
       if (error.code !== 'EACCES') throw error;
-      // A directory with no read bit cannot be opened, so it is opened up by path (`lchmod` cannot change a directory) and
-      // opened again; only a real directory `lstat` just saw reaches this, and the descriptor's identity is checked below.
-      fs.chmodSync(directory, (before.mode & 0o7777) | 0o700);
+      // A directory with no read bit cannot be opened, so it is opened up to exactly 700 without following a link and
+      // opened again; the descriptor's identity is checked below.
+      chmodDirectoryNoFollow(directory, before);
       descriptor = open();
     }
     const opened = fs.fstatSync(descriptor);
@@ -941,6 +964,7 @@ module.exports = {
   confines,
   forbiddenInputNote,
   layerPrefix,
+  chmodDirectoryNoFollow,
   makeTargetHome,
   releaseTargetHome,
   releaseTemporary,
