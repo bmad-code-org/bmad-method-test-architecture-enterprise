@@ -171,6 +171,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The Evaluate plan now runs its remaining stories in three parallel lanes (run integrity and scoring, confinement and process lifecycle, engine releases with Epic 2). `epics.md` lists each lane's order and the rules the lanes share, and `sprint-status.yaml` carries the same lists under `parallel_lanes`.
 - The `test:evaluate-evaluators` suite splits into `test:evaluate-evaluators` and `test:evaluate-records`, two groups of `test/test-evaluate-evaluators.js`, both chained into `npm test`, and the shard weights are refreshed from CI timings so no chain shard nears its 15 minute timeout.
 - The pre-commit hook stays under 30 seconds.
   It runs `lint-staged` on the staged files, `test:conflict-markers`, `test:release-metadata` and `test:changelog`, and `docs:validate-links` when `docs/` is staged.
