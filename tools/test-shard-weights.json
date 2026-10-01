@@ -66,7 +66,7 @@
   "test:evaluate-mutation": 183.5,
   "test:evaluate-partitions": 80,
   "test:evaluate-preflight": 98.7,
-  "test:evaluate-promptfoo": 44,
+  "test:evaluate-promptfoo": 71,
   "test:evaluate-records": 120.8,
   "test:evaluate-run": 240,
   "test:evaluate-tool-use": 40.2,

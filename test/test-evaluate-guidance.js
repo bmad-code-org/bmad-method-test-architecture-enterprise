@@ -1649,7 +1649,116 @@ function checkPromptfooTemplateIdentity(destination, evaluation, env) {
     JSON.parse(missingContent.stdout).rows.map((row) => [row.quote, row.quoteChannel, row.observationIds]),
     [['0', 'exit-code', ['empty']]],
   );
+  checkPromptfooFailureBoundary(run, selected);
 }
+
+// An ungraded framework row stops the evaluation; a graded row keeps its meaning (Story 1.43).
+function checkPromptfooFailureBoundary(run, selected) {
+  const guide = headingBody(fs.readFileSync(REFERENCE('evaluator'), 'utf8'), FAILURE_BOUNDARY);
+  const [ungradedExample] = taggedExamples(guide, 'promptfoo-ungraded');
+  const [gradedExample] = taggedExamples(guide, 'promptfoo-graded-fail');
+  assert.ok(ungradedExample && gradedExample, 'the failure boundary section lost its runnable examples');
+  const refuse = (payload, label, ...mentions) => {
+    const result = run(['--map-results'], payload);
+    assert.notStrictEqual(result.status, 0, `promptfoo template accepted ${label}`);
+    assert.match(result.stderr, /ungraded framework error|incomplete multi-assertion grade|unique expected assertion|boolean pass/, label);
+    for (const mention of mentions) assert.match(result.stderr, mention, `${label} lost its diagnostic`);
+    assert.ok(!result.stdout.includes('"rows"'), `promptfoo template printed rows for ${label}`);
+  };
+  const rowsOf = (payload) => {
+    const result = run(['--map-results'], payload);
+    assert.strictEqual(result.status, 0, `promptfoo template refused graded input: ${result.stderr}`);
+    return JSON.parse(result.stdout).rows;
+  };
+
+  // The guide's runnable examples.
+  refuse(ungradedExample, 'the guide ungraded example', /ungraded framework error/, /promptfoo could not grade this output/);
+  const guideRows = rowsOf(gradedExample);
+  assert.deepStrictEqual(
+    guideRows.map((row) => [row.key, row.outcome, row.quote, row.quoteChannel, row.observationIds]),
+    [['required-pears', 'fail', 'Summary for List pantry: apples\n', 'stdout', ['trial-1-summarize']]],
+  );
+
+  // An ungraded row, with an error, without one, with a null grade and with several assertions.
+  const pears = { metric: 'required-pears', type: 'contains', value: 'pears' };
+  const apples = { metric: 'required-apples', type: 'contains', value: 'apples' };
+  const shellfish = { metric: 'forbidden-shellfish', type: 'not-contains', value: 'shellfish' };
+  const output = selected.stdout.value.slice(0, -1);
+  const result = (assertions, extra = {}) => ({ response: { output }, testCase: { assert: assertions }, ...extra });
+  const grade = (assertion, pass, reason) => ({ assertion, pass, ...(reason === undefined ? {} : { reason }) });
+  const ungraded = (extra) => ({ observation: selected, results: [result([pears, apples, shellfish], extra)] });
+  refuse(
+    ungraded({ error: 'framework could not grade' }),
+    'an ungraded multi-assertion row with an error',
+    /ungraded framework error/,
+    /framework could not grade/,
+  );
+  refuse(ungraded({}), 'an ungraded row without an error', /ungraded framework error/, /no error reported/);
+  refuse(ungraded({ gradingResult: null }), 'a null grade', /ungraded framework error/);
+  refuse(ungraded({ gradingResult: null, error: '  ' }), 'a blank error', /ungraded framework error/);
+  refuse(
+    {
+      observation: selected,
+      results: [result([pears], { gradingResult: { pass: true, componentResults: [grade(pears, true)] } }), result([pears])],
+    },
+    'an ungraded row after a graded one',
+    /ungraded framework error/,
+  );
+
+  // A graded pass and a graded fail keep their meaning, with and without a reason.
+  const graded = (passes, reasons = []) => ({
+    observation: selected,
+    results: [
+      result([pears, apples, shellfish], {
+        gradingResult: {
+          pass: passes.every(Boolean),
+          componentResults: [
+            grade(pears, passes[0], reasons[0]),
+            grade(apples, passes[1], reasons[1]),
+            grade(shellfish, passes[2], reasons[2]),
+          ],
+        },
+      }),
+    ],
+  });
+  const passRows = rowsOf(graded([true, true, true]));
+  assert.deepStrictEqual(
+    passRows.map((row) => [row.key, row.outcome, row.quote]),
+    [
+      ['required-pears', 'pass', undefined],
+      ['required-apples', 'pass', undefined],
+      ['forbidden-shellfish', 'pass', undefined],
+    ],
+  );
+  const failRows = rowsOf(graded([true, false, true], [undefined, 'Expected output to contain "apples"']));
+  assert.deepStrictEqual(
+    failRows.map((row) => [row.key, row.outcome, row.quote, row.quoteChannel, row.comment]),
+    [
+      ['required-pears', 'pass', undefined, undefined, 'Assertion passed.'],
+      ['required-apples', 'fail', selected.stdout.value, 'stdout', 'Expected output to contain "apples"'],
+      ['forbidden-shellfish', 'pass', undefined, undefined, 'Assertion passed.'],
+    ],
+  );
+  const reasonless = rowsOf(graded([true, true, false]));
+  assert.strictEqual(reasonless[2].comment, 'Assertion failed.', 'a graded fail without a reason carried stale text');
+
+  // An incomplete, repeated or malformed grade set stops the trial even when another assertion graded.
+  const withComponents = (components) => ({
+    observation: selected,
+    results: [result([pears, apples, shellfish], { gradingResult: { pass: false, componentResults: components } })],
+  });
+  refuse(withComponents([grade(pears, true)]), 'a partial grade set', /incomplete multi-assertion grade/);
+  refuse(withComponents([grade(pears, true), grade(apples, true)]), 'two of three grades', /incomplete multi-assertion grade/);
+  refuse(withComponents([grade(pears, true), grade(pears, true), grade(shellfish, true)]), 'a repeated grade', /unique expected assertion/);
+  refuse(
+    withComponents([grade(pears, true), grade(apples, 'yes'), grade(shellfish, true)]),
+    'a grade without a boolean pass',
+    /boolean pass/,
+  );
+  refuse(withComponents([grade(pears, true), { assertion: apples }, grade(shellfish, true)]), 'a grade with no pass', /boolean pass/);
+}
+
+const FAILURE_BOUNDARY = '## Separate ungraded framework errors from graded target failures';
 
 function checkEvaluatorGuidance(guide, failures) {
   for (const heading of [
@@ -1659,6 +1768,7 @@ function checkEvaluatorGuidance(guide, failures) {
     '## Emit judgment rows or sealed records',
     '## Selection rubric',
     '## Framework landscape',
+    FAILURE_BOUNDARY,
     '## Learn an unfamiliar framework',
     '## Vendor rule',
   ])
@@ -1768,14 +1878,35 @@ function checkEvaluatorGuidance(guide, failures) {
     'evaluate-promptfoo',
   ])
     requireText(landscape, marker, 'evaluator.md Framework landscape', failures);
+  const boundary = headingBody(guide, FAILURE_BOUNDARY);
+  for (const marker of [
+    'only when the framework graded the output',
+    'graded assertion with `pass: false` becomes a `fail` row',
+    'graded `pass: true` becomes a `pass` row',
+    'ungraded framework error',
+    'evaluator infrastructure failure (exit 12)',
+    'seals no record',
+    'each exactly once',
+    'even when another assertion graded',
+  ])
+    requireText(boundary, marker, `evaluator.md ${FAILURE_BOUNDARY}`, failures);
+  const ungradedExamples = taggedExamples(boundary, 'promptfoo-ungraded');
+  const gradedExamples = taggedExamples(boundary, 'promptfoo-graded-fail');
+  if (ungradedExamples.length !== 1 || gradedExamples.length !== 1)
+    failures.push(`evaluator.md ${FAILURE_BOUNDARY} needs one promptfoo-ungraded and one promptfoo-graded-fail example`);
+  else if (
+    ungradedExamples[0].results?.some((result) => result.gradingResult !== undefined) ||
+    gradedExamples[0].results?.some((result) => result.gradingResult?.pass !== false)
+  )
+    failures.push(`evaluator.md ${FAILURE_BOUNDARY} examples no longer separate the ungraded row from the graded failure`);
   const learning = headingBody(guide, '## Learn an unfamiliar framework');
   for (const [index, markers] of [
     ['primary sources only', 'documentation', 'repository', 'API reference', 'examples', 'changelog', 'secondary summary'],
     ['takes inputs', 'judges', 'returns results', 'model', 'credentials'],
     ['Install the version the adopter uses', 'installed version'],
-    ['Execute a minimal example', 'known pass', 'known fail', 'stdout', 'stderr', 'contradicts'],
+    ['Execute a minimal example', 'known pass', 'known fail', 'stdout', 'stderr', 'contradicts', 'framework cannot grade'],
     ['evaluator/LEARNED.md', 'primary source', 'contradictions'],
-    ['evaluator/mapping.json', 'judgment', 'passed-clean-control', 'caught'],
+    ['evaluator/mapping.json', 'judgment', 'passed-clean-control', 'caught', 'exit non-zero on a result the framework did not grade'],
   ].entries()) {
     const step = learning.match(new RegExp(`^${index + 1}\\. (.+)$`, 'm'))?.[1] ?? '';
     for (const marker of markers) requireText(step, marker, `evaluator.md learning step ${index + 1}`, failures);
@@ -2247,6 +2378,7 @@ function checkGapsGuidance(guide, engine, failures) {
   )
     failures.push('gaps.md AD-10 exit mapping changed');
   requireText(guide, 'planned Stage 12 PR replay', 'gaps.md exit 13', failures);
+  requireText(guide, 'a framework result with no grade; see `evaluator.md`', 'gaps.md exit 12', failures);
   for (const marker of [
     'score` exit 3',
     'For a development `score` exit 3',
@@ -2588,6 +2720,24 @@ async function main() {
         (text, found) => checkGapsGuidance(text, engine, found),
         (text) =>
           text.replace('tea-evaluate digest --evaluation <evaluation-folder>', 'tea-evaluate check --evaluation <evaluation-folder>'),
+      ],
+      [
+        'evaluator failure boundary heading removal',
+        'evaluator',
+        (text, found) => checkEvaluatorGuidance(text, found),
+        (text) => text.replace(FAILURE_BOUNDARY, '## Framework errors'),
+      ],
+      [
+        'evaluator failure boundary example removal',
+        'evaluator',
+        (text, found) => checkEvaluatorGuidance(text, found),
+        (text) => text.replace('<!-- example:promptfoo-ungraded -->', ''),
+      ],
+      [
+        'evaluator failure boundary exit removal',
+        'evaluator',
+        (text, found) => checkEvaluatorGuidance(text, found),
+        (text) => text.replace('evaluator infrastructure failure (exit 12)', 'a finding'),
       ],
       ['gaps loop removal', 'gaps', (text, found) => checkGapsGuidance(text, engine, found), (text) => text.replace(/^4\. Rerun.*\n/m, '')],
     ];

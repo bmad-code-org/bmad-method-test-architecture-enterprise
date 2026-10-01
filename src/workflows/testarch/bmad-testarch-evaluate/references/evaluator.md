@@ -51,14 +51,69 @@ The list is illustrative. Any framework is admissible through the import contrac
 
 For AgentEvals, copy a regular, tracked reference trajectory to `evaluator/reference/trajectory.json`, or set `evaluator.args` to `--reference=reference/<name>.json` for another tracked file under that directory. The template rejects paths or links outside the digested reference tree. The target's stdout must carry the JSON trajectory after `trajectory:` and one space; set `--prefix=<text>` if its prefix differs. Bind the `trajectory_strict_match` row key to the trajectory oracle in `evaluator/mapping.json`. For promptfoo, put the assertions in `evaluator/asserts.yaml` and give each assertion a distinct `metric` that exactly matches its key in `evaluator/mapping.json`. Assertion order can change without changing the mapping. A trial must judge every mapped assertion exactly once. The wrapper runs promptfoo over the captured stdout in a temporary directory; `--stdout-prefix=<text>` selects an observation when the trial has several stdout channels. Each prefix must identify exactly one observation, or the template stops with an ambiguity error. This installed promptfoo CLI removes one final line feed from model outputs; use another evaluator for an oracle that judges that byte. Install the chosen framework as a dependency of the adopter's evaluation folder and check its installed version.
 
+## Separate ungraded framework errors from graded target failures
+
+A framework result is target evidence only when the framework graded the output. A graded assertion with `pass: false` becomes a `fail` row that quotes the observed channel; a graded `pass: true` becomes a `pass` row. For promptfoo the grade is the result's `gradingResult`, with one `componentResults` entry per assertion when several ran.
+
+A result with no grade, with or without an `error` string, says only that the framework could not judge the output. It establishes nothing about the target, so the wrapper writes no row for it: it exits non-zero with a diagnostic naming the ungraded framework error. `tea-evaluate run` then ends as evaluator infrastructure failure (exit 12) and seals no record for the trial. The evaluator's stderr in the run directory (`evaluator/<arm>/trial-<n>.stderr`) holds the diagnostic, which carries only the first line of the framework's error. Reproduce the result by running the installed framework directly over the captured stdout, as in step 4 of the procedure below, read the full error, fix the assertions or the framework setup, and run again.
+
+The grade set must be complete. The imported result carries one grade for every mapped assertion, each exactly once. A missing grade, a repeated grade or a grade without a boolean `pass` stops the trial with no record, even when another assertion graded, because a partial set would let a pass stand for an assertion nobody judged.
+
+The two inputs below are payloads for `node promptfoo-assertions.mjs --map-results`, read from stdin by the starter copied into an `evaluator/` folder whose `mapping.json` defines the key `required-pears`. The first has no grade and the wrapper refuses it:
+
+<!-- example:promptfoo-ungraded -->
+
+```json
+{
+  "observation": {
+    "observationId": "trial-1-summarize",
+    "stdout": { "kind": "text", "value": "Summary for List pantry: apples, pears\n" }
+  },
+  "results": [
+    {
+      "error": "promptfoo could not grade this output",
+      "response": { "output": "Summary for List pantry: apples, pears" },
+      "testCase": { "assert": [{ "type": "contains", "value": "pears", "metric": "required-pears" }] }
+    }
+  ]
+}
+```
+
+The second carries a graded failure, which the wrapper maps to a `fail` row quoting the observed stdout:
+
+<!-- example:promptfoo-graded-fail -->
+
+```json
+{
+  "observation": { "observationId": "trial-1-summarize", "stdout": { "kind": "text", "value": "Summary for List pantry: apples\n" } },
+  "results": [
+    {
+      "response": { "output": "Summary for List pantry: apples" },
+      "testCase": { "assert": [{ "type": "contains", "value": "pears", "metric": "required-pears" }] },
+      "gradingResult": {
+        "pass": false,
+        "reason": "Expected output to contain \"pears\"",
+        "componentResults": [
+          {
+            "pass": false,
+            "reason": "Expected output to contain \"pears\"",
+            "assertion": { "type": "contains", "value": "pears", "metric": "required-pears" }
+          }
+        ]
+      }
+    }
+  ]
+}
+```
+
 ## Learn an unfamiliar framework
 
 1. Read primary sources only: the framework's documentation, repository, API reference, examples and changelog. Record URLs or commit references for every API or behavior you use. Do not adopt a claim from a secondary summary.
 2. Find how the framework takes inputs, invokes or observes the target, judges, returns results, and whether it needs a model or credentials. Check whether it exposes every process and output channel the oracles need.
 3. Install the version the adopter uses. Record the package name, installed version, runtime and licence. Read that installed version's API and release notes before writing the adapter.
-4. Execute a minimal example against a known pass and a known fail with that installed version. Save the command, input, stdout, stderr, exit status and framework result for both. A documented API claim that execution contradicts remains unadopted until resolved.
+4. Execute a minimal example against a known pass and a known fail with that installed version. Save the command, input, stdout, stderr, exit status and framework result for both. Add a third case the framework cannot grade (a broken assertion, a missing credential, a timeout) and record how its result arrives. A documented API claim that execution contradicts remains unadopted until resolved.
 5. Fill `evaluator/LEARNED.md` from `assets/evaluators/LEARNED.md`: framework and installed version, each fact used with its primary source, executed pass and fail output, and contradictions. Keep the file with the evaluator so its digest captures the learned conditions.
-6. Map each framework result to a stable judgment key in `evaluator/mapping.json`. Write a `command` wrapper under `evaluator/` that reads `{ sealedBrief, observations }` from stdin and prints `{ rows, recommendation? }`. Make failures quote the actual observation. Run `tea-evaluate check` and `preflight` now. After the mutation and run stages have supplied their artifacts, run and score a clean control and a seeded defect. Accept the full pipeline only when eval-quality resolves `passed-clean-control` and `caught`.
+6. Map each framework result to a stable judgment key in `evaluator/mapping.json`. Write a `command` wrapper under `evaluator/` that reads `{ sealedBrief, observations }` from stdin and prints `{ rows, recommendation? }`. Make failures quote the actual observation, and make the wrapper exit non-zero on a result the framework did not grade. Run `tea-evaluate check` and `preflight` now. After the mutation and run stages have supplied their artifacts, run and score a clean control and a seeded defect. Accept the full pipeline only when eval-quality resolves `passed-clean-control` and `caught`.
 
 ## Vendor rule
 

@@ -15,6 +15,7 @@ const EVALUATION = path.join('evals', 'summary');
 const EVALUATOR = path.join(FIXTURE, EVALUATION, 'evaluator');
 const CLI = path.join(ROOT, 'cli', 'evaluate.js');
 const failures = [];
+const UNGRADED = 'ungraded framework error';
 const projects = [];
 let checks = 0;
 const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== ENGINE_CLI_ENV && !key.startsWith('GIT_')));
@@ -299,11 +300,17 @@ function mapResults(results, observation) {
   return result.status === 0 ? JSON.parse(result.stdout).rows : [];
 }
 
-function refuseResults(results, observation, expectedMessage, status) {
+function refuseResults(results, observation, expected, status, omitted) {
   const result = command(path.join(EVALUATOR, 'promptfoo.mjs'), ['--map-results'], {
     input: JSON.stringify({ results, observation, status }),
   });
-  check(result.status !== 0 && result.output.includes(expectedMessage), `promptfoo accepted invalid results: ${result.output}`);
+  const required = Array.isArray(expected) ? expected : [expected];
+  check(
+    result.status !== 0 && required.every((message) => result.output.includes(message)),
+    `promptfoo accepted invalid results or lost ${required.join(' and ')}: ${result.output}`,
+  );
+  check(!result.stdout.includes('"rows"'), `a refused result printed judgment rows: ${result.stdout}`);
+  if (omitted !== undefined) check(!result.output.includes(omitted), `the refusal printed ${omitted}: ${result.output}`);
 }
 
 function resultShapes() {
@@ -332,22 +339,31 @@ function resultShapes() {
     const conflictingMetric = structuredClone(multi);
     conflictingMetric.testCase.assert[0].metric = 'required-pears';
     refuseResults([conflictingMetric], observation, 'metric conflicts with its type and value');
+    check(
+      rows.map((row) => row.outcome).join(',') === 'pass,pass,pass' && rows.every((row) => row.quote === undefined),
+      `graded passes lost their meaning: ${JSON.stringify(rows)}`,
+    );
     const ungradedMulti = structuredClone(multi);
     delete ungradedMulti.gradingResult;
-    refuseResults([ungradedMulti], observation, 'neither a grade nor a concrete error');
+    refuseResults([ungradedMulti], observation, UNGRADED);
+    ungradedMulti.gradingResult = null;
+    refuseResults([ungradedMulti], observation, UNGRADED);
     ungradedMulti.error = 'deliberate multi-assertion evaluation error';
-    const ungradedRows = mapResults([ungradedMulti], observation);
-    check(
-      ungradedRows.length === 3 &&
-        ungradedRows.map((row) => row.key).join(',') === 'required-apples,required-pears,forbidden-shellfish' &&
-        ungradedRows.every((row) => row.outcome === 'fail' && row.quote === stdout && row.quoteChannel === 'stdout'),
-      `ungraded multi-assertion result lost cited failures: ${JSON.stringify(ungradedRows)}`,
-    );
+    refuseResults([ungradedMulti], observation, [UNGRADED, 'deliberate multi-assertion evaluation error']);
+    ungradedMulti.error = 'first line\nsecond line of a stack';
+    refuseResults([ungradedMulti], observation, [UNGRADED, 'first line'], undefined, 'second line of a stack');
+    refuseResults([multi, ungradedMulti], observation, UNGRADED);
     ungradedMulti.response.output = 'different stdout';
     refuseResults([ungradedMulti], observation, 'output differs from the cited stdout');
     ungradedMulti.error = '  ';
     ungradedMulti.response.output = stdout;
-    refuseResults([ungradedMulti], observation, 'neither a grade nor a concrete error');
+    refuseResults([ungradedMulti], observation, UNGRADED);
+    const onlyOneGraded = structuredClone(multi);
+    onlyOneGraded.gradingResult.componentResults.splice(1);
+    refuseResults([onlyOneGraded], observation, 'incomplete multi-assertion grade');
+    const gradedWithError = structuredClone(multi);
+    gradedWithError.error = 'promptfoo reports its failure reason here as well';
+    check(mapResults([gradedWithError], observation).length === 3, 'an error string beside a complete grade set lost the graded rows');
     const noOutput = structuredClone(multi);
     delete noOutput.response.output;
     refuseResults([noOutput], observation, 'graded output other than the cited stdout');
@@ -361,6 +377,27 @@ function resultShapes() {
     failed?.gradingResult?.componentResults?.some((component) => component.pass === false),
     'installed promptfoo did not fail the omitted-item assertion',
   );
+  if (failed) {
+    const failedStdout = 'Summary for List pantry: apples\n';
+    const failedRows = mapResults([failed], observed(failedStdout));
+    check(
+      failedRows.map((row) => `${row.key}:${row.outcome}`).join(',') ===
+        'required-apples:pass,required-pears:fail,forbidden-shellfish:pass',
+      `a graded fail changed meaning: ${JSON.stringify(failedRows)}`,
+    );
+    const failedRow = failedRows.find((row) => row.outcome === 'fail');
+    check(
+      failedRow?.quote === failedStdout && failedRow?.quoteChannel === 'stdout' && failedRow?.observationIds[0] === 'trial-1-summarize',
+      `a graded fail did not cite the observed stdout: ${JSON.stringify(failedRow)}`,
+    );
+    const withoutReason = structuredClone(failed);
+    for (const grade of withoutReason.gradingResult.componentResults) delete grade.reason;
+    const reasonless = mapResults([withoutReason], observed(failedStdout));
+    check(
+      reasonless.find((row) => row.outcome === 'fail')?.comment === 'Assertion failed.' && !JSON.stringify(reasonless).includes('ungraded'),
+      `a graded fail without a reason carried stale text: ${JSON.stringify(reasonless)}`,
+    );
+  }
   const single = promptfooResult('asserts-single.yaml', stdout);
   check(single?.gradingResult?.componentResults?.length === 1, 'installed promptfoo did not emit its single componentResult');
   if (single) {
@@ -382,29 +419,37 @@ function resultShapes() {
   check(typeof errored?.error === 'string', 'installed promptfoo did not emit the deterministic assertion error');
   if (errored) {
     check(errored.testCase?.assert?.[0]?.metric === 'required-pears', 'the error assertion lost its oracle identity');
-    const withoutGrade = structuredClone(errored);
-    delete withoutGrade.gradingResult;
-    delete withoutGrade.response;
-    const rows = mapResults([withoutGrade], observation);
-    check(rows.length === 1 && rows[0].outcome === 'fail' && rows[0].key === 'required-pears', 'ungraded error lost its failure row');
-    check(rows[0]?.quote === stdout && rows[0]?.quoteChannel === 'stdout', 'ungraded error did not cite observed stdout');
+    // The installed promptfoo grades a thrown assertion as a failing component, so this result is graded.
+    const gradedRows = mapResults([errored], observation);
+    check(
+      gradedRows.length === 1 && gradedRows[0].outcome === 'fail' && gradedRows[0].key === 'required-pears',
+      `a graded failing component lost its failure row: ${JSON.stringify(gradedRows)}`,
+    );
+    check(gradedRows[0]?.quote === stdout && gradedRows[0]?.quoteChannel === 'stdout', 'a graded failure did not cite observed stdout');
     const judgment = judgmentFromRows({
       contract: read(path.join(FIXTURE, EVALUATION, 'contract.json')),
       mapping: read(path.join(EVALUATOR, 'mapping.json')),
-      answer: { rows },
+      answer: { rows: gradedRows },
       probeId: 'P-002',
       behaviorIds: ['B-002'],
     });
     check(
       judgment.findings.length === 1 && judgment.findings[0].oracleId === 'O-002',
-      'ungraded promptfoo error did not become a scored defect finding',
+      'a graded failing component did not become a scored defect finding',
     );
+    const withoutGrade = structuredClone(errored);
+    delete withoutGrade.gradingResult;
+    delete withoutGrade.response;
+    refuseResults([withoutGrade], observation, [UNGRADED, 'Custom function threw error']);
     const unidentified = structuredClone(withoutGrade);
     delete unidentified.testCase.assert[0].metric;
     refuseResults([unidentified], observation, 'unknown, or repeated assertion metadata');
     const unknownType = structuredClone(withoutGrade);
     unknownType.testCase.assert[0].type = 'equals';
     refuseResults([unknownType], observation, 'metric conflicts with its type and value');
+    const noError = structuredClone(withoutGrade);
+    delete noError.error;
+    refuseResults([noError], observation, [UNGRADED, 'no error reported']);
   }
 }
 
@@ -452,6 +497,7 @@ function pipeline() {
     if (result.status !== 0) return;
   }
   const run = latestRun(folder);
+  check(sealedRecords(run).length > 0, 'a clean run left no sealed trial records for the refusal cases to compare against');
   const clean = votes(run, 'P-001');
   const mutated = votes(run, 'P-002');
   check(clean.length === 3 && clean.every((state) => state === 'passed-clean-control'), `clean votes: ${clean}`);
@@ -472,6 +518,50 @@ function pipeline() {
     .readdirSync(path.dirname(folder), { recursive: true })
     .filter((name) => /(?:outputs\.json|results\.jsonl)$/.test(name));
   check(frameworkFiles.length === 0, `promptfoo wrote result files into the adopter tree: ${frameworkFiles.join(', ')}`);
+}
+
+function sealedRecords(run) {
+  return fs.readdirSync(run, { recursive: true }).filter((name) => name === 'trial-sets.json' || name.split(path.sep)[0] === 'trial-sets');
+}
+
+function ungradedRuns() {
+  const hook = 'const rows = rowsFromResults(results, observation);';
+  for (const [label, grading, message] of [
+    [
+      'an ungraded row with an error',
+      "for (const result of results) { result.error = 'framework could not grade'; delete result.gradingResult; }",
+      UNGRADED,
+    ],
+    [
+      'a partial grade set',
+      'for (const result of results) result.gradingResult.componentResults.splice(1);',
+      'incomplete multi-assertion grade',
+    ],
+    [
+      'a grade without a boolean pass',
+      'for (const result of results) delete result.gradingResult.componentResults[1].pass;',
+      'without a boolean pass',
+    ],
+  ]) {
+    const folder = project((evaluation) => {
+      const file = path.join(evaluation, 'evaluator', 'promptfoo.mjs');
+      const source = fs.readFileSync(file, 'utf8');
+      check(source.includes(hook), 'the fixture evaluator lost the hook the ungraded-run cases rewrite');
+      fs.writeFileSync(file, source.replace(hook, `${grading}\n    ${hook}`));
+    });
+    for (const subcommand of ['preflight']) {
+      const prepared = command(process.execPath, [CLI, subcommand, '--evaluation', folder]);
+      check(prepared.status === 0, `${label}: ${subcommand} exited ${prepared.status}: ${prepared.output}`);
+    }
+    const ran = command(process.execPath, [CLI, 'run', '--evaluation', folder]);
+    check(ran.status === 12, `${label}: run exited ${ran.status}, expected evaluator infrastructure failure 12: ${ran.output}`);
+    const run = latestRun(folder);
+    const diagnostic = path.join(run, 'evaluator', 'clean', 'trial-1.stderr');
+    const stderr = fs.existsSync(diagnostic) ? fs.readFileSync(diagnostic, 'utf8') : '';
+    check(stderr.includes(message), `${label}: the evaluator diagnostic did not name ${message}: ${stderr}`);
+    const records = sealedRecords(run);
+    check(records.length === 0, `${label}: run sealed trial records ${records.join(', ')}`);
+  }
 }
 
 function degenerate() {
@@ -499,6 +589,7 @@ function degenerate() {
     childInvocation();
     resultShapes();
     pipeline();
+    ungradedRuns();
     degenerate();
     process.stdout.write(`promptfoo ${installed.version}: ${checks} checks, ${failures.length} failures\n`);
   } catch (error) {
