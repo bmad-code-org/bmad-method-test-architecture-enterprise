@@ -96,7 +96,7 @@ context:
   Both share `holdEntry(directory, parent, adopt)` with `ensureDirectory`, so the creation, the `lstat`-versus-`fstat` identity check, the before and after confirmation and the undo are one code path.
   A link or any other entry at `scores`, and any entry at an invocation or probe directory, is a `RunDirectoryError`.
 - `cli/lib/evaluate/score.js`: `runScoreCommand` attaches, adopts `scores`, creates `scores/<id>` and returns exit 12 with `score output cannot be created inside the run directory: <reason>` when the writer refuses (the old `scores is a link or a non-directory entry` wording is kept inside the reason).
-  The probe loop moved to `scoreProbes` and `scoreProbe`: the probe directory is made exclusively before the engine call, `--out` is a file in a `makeScratchDirectory('tea-evaluate-score-')` staging directory released after each call, `runEngineStage` writes `score.json` through the writer with the argv that ran, and the staged artifact is read without following a link, checked (`artifactProblems`: parses, meets the published `evidence-artifact` schema, names the run's corpus digest, holds an outcome for the probe), written through the writer, read back through the held directory and parsed from the read-back bytes.
+  The probe loop moved to `scoreProbes` and `scoreProbe`: the probe directory is made exclusively before the engine call, `--out` is a file in a `makeScratchDirectory('tea-evaluate-score-')` staging directory released after each call, `runEngineStage` writes `score.json` through the writer with the argv that ran, and the staged artifact is read without following a link, checked (`artifactProblems`: parses, meets the published `evidence-artifact` schema, names the run's corpus digest, holds an outcome for the probe; it cannot tell a well-formed substitute from the engine's artifact), written through the writer, read back through the held directory and parsed from the read-back bytes.
   A staged artifact that fails is not copied, its reason is the probe's `failure`, and the command exits 12.
   A `RunDirectoryError` anywhere stops the loop, the invocation's `score.json` is still written when the writer allows it, the views are skipped, and the command exits 12 with `score output was refused to keep it inside the run directory: <reason>`.
   Staging directories that could not be removed are retried once at the end.
@@ -120,8 +120,9 @@ context:
   The invocation identifier is drawn when `score` starts and carries four random bytes, so no process can plant at it before it exists.
   The end-to-end fixture swaps it after it is made and plants at the next probe directory and at each file path, and the writer's unit cases plant a link, a file and a directory at the invocation directory.
   Amended in `epics.md` and `test-design-epic-1.md`, dated 2026-10-01.
-- The third criterion's "unverified copy" is made concrete: the staged artifact is copied only after it meets the published schema and names the probe and the run's corpus digest, and the copy is read back through the held directory.
-  A forged, foreign, garbled or linked artifact exits 12 with no evidence copied.
+- The third criterion's "unverified copy" is made concrete: the staged artifact is copied only after it meets the published schema, names the run's corpus digest and carries an outcome for the probe, and the copy is read back through the held directory.
+  A malformed, foreign-corpus, wrong-probe, garbled or linked artifact exits 12 with no evidence copied.
+  A well-formed substitute from a process that can write the staging directory passes the check, which Story 1.68 closes.
   Same amendment.
 - The views take the evidence the writer read back and read no score directory, so the `evidence` link case of `test-evaluate-interpret.js` has nothing to attack and was removed.
 
@@ -154,3 +155,41 @@ Each exercised once by undoing the change in a scratch copy of the tree (the wor
 
 - Story 1.68 (new, end of Epic 1): `score` verifies each input against its digest and then hands the engine the paths, so in a run that opted out of confinement a process writing the run directory between the check and the engine's read can change what is scored; the reference already states the limit.
   Added to `epics.md`, `test-design-epic-1.md`, the Epic Dependencies table (the Epic 2 and H.1 rows renumbered 69 to 74) and `sprint-status.yaml` as `backlog`; the story-count sentences read seventy-four stories and Stories 1.27 to 1.68 (and the test design's scope sentence 1.1 to 1.68).
+
+## Review round 1
+
+Two review lenses (adversarial, test quality) raised four findings, each reproduced.
+All four were valid and are fixed.
+
+### Fixed
+
+- A1: `RunDirectory.attach` followed a link at `runs/`, which `run` refuses.
+  With `runs` moved aside and a link to a copy of it inside the adopter's tree, `score` exited 0 and wrote scores, `partitions.json`, `gap-view.json` and `interpretation.json` there.
+  `attach` now requires `path.dirname(runDirectory)` to `lstat` as a real directory and `realpathSync.native(runDirectory)` to equal the real parent's path joined with the run's name; either failure is a `RunDirectoryError` that names `runs`.
+  `runDirectoryFor` resolves the run through the link first, and the refusal comes at `attach`, before any engine call.
+  `test-evaluate-partitions.js` plants the `runs` link beside the `scores-link` case and asserts exit 12, the message, no engine call, and an unchanged repository listing and git status.
+  The reference and the CHANGELOG name the `runs/` link.
+- A2: the wording overstated what the copy check proves.
+  `artifactProblems` checks the published schema, the run's corpus digest and an outcome for the probe, so a well-formed artifact with altered outcomes from a process that can write the private staging directory passes.
+  The exit 12 row of the reference, the `score.js` header and messages (`fails the copy check: ...`), the test messages and comments, the CHANGELOG entry and the dated 2026-10-01 amendments in `epics.md` and `test-design-epic-1.md` now say what the code checks.
+  The `Score output integrity` section states the limit: a process that can write the private staging directory can substitute an artifact that passes the copy check.
+  Story 1.68 gains an acceptance criterion (the copied artifact is checked against the engine's own digest or an in-process re-score; substituting altered outcomes in the staged artifact exits 12, a `test:evaluate-run` case) and a matching row in the test design.
+  `checkScoreOutputReference` now asserts the limit sentence, what the copy check covers, the `runs/` link and the exit 12 row's wording.
+- T1: dropping the confirmation at the `scores` parent failed no test.
+  `checkAttachedWriter` now swaps `scores` for a link to an outside directory after `adoptDirectory('scores')`, asserts `ensureDirectory('scores/<id>')` is refused with `no longer the directory the runtime made`, and asserts a recursive listing of the outside directory, directories included, is unchanged.
+- T2: dropping the published-schema check on the staged artifact failed no test, since every forged case was caught by another check.
+  `race-engine.js` gains a `forge-schema` mode that keeps the corpus digest and the probe's outcome, drops the required `strength` and adds a forbidden property, and `checkUnverifiedEvidence` runs it with the expectation `fails its published schema`.
+
+### Revert observations
+
+Each exercised once in a scratch copy of the tree; counts exclude three `.gitignore` checks that fail in a scratch copy with no `.git`.
+
+- A1, the `runs` checks removed from `attach`: `test:evaluate-partitions` fails at the planted `runs` link case (`score` exits 0 where 12 is expected and writes through the link, so the first assertion stops the file).
+- A2, the limit sentence removed from the reference: 1 of 644 `test:evaluate-run` checks fails (the section does not name the limit).
+- T1, `if (/^scores$/.test(directory)) return;` at the top of `confirm`: 3 of 644 `test:evaluate-run` checks fail (the swapped parent ends without a refusal, an invocation directory is made in the outside directory, the attached writer wrote through a link); before the fix 0 of 625 failed.
+- T2, the schema branch of `artifactProblems` changed to `if (false)`: 9 of 644 `test:evaluate-run` checks fail (`forge-schema` is copied and `score` exits 0 where 12 is expected, for both probes, their evidence files and their interpretations); before the fix 0 of 625 failed.
+
+### Gates
+
+Green on the last state of the tree: engine check, `test:evaluate-partitions`, `test:evaluate-run` 644 checks, `test:evaluate-interpret`, `test:evaluate-check`, `test:doc-claims`, `test:doc-counts`, `test:changelog`, `test:direction`, `test:shards`, `lint`, `lint:md`, `format:check`, `docs:validate-links`.
+`tools/test-shard-weights.json` is adjusted from local growth: `test:evaluate-partitions` 38 to 42 (23.5 to 25.9 seconds) and `test:evaluate-run` 275 to 300 (158 to 184 seconds).

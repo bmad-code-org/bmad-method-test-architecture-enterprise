@@ -123,8 +123,8 @@ class RunDirectory {
 
   /**
    * Holds an existing run directory, which an earlier process made, for
-   * writing: the root must be a real directory (a link is refused), and the
-   * descriptor that holds it is confirmed to be the directory the path named.
+   * writing: the root and its `runs` parent must be real directories (a link
+   * at either is refused), and the descriptor that holds it is confirmed to be the directory the path named.
    * Nothing in it is trusted yet; `adoptDirectory` and `ensureDirectory` make
    * the directories the caller writes into.
    *
@@ -139,6 +139,22 @@ class RunDirectory {
       throw new RunDirectoryError(`the run directory ${runDirectory} cannot be read: ${error.message}`);
     }
     if (!stats.isDirectory()) throw new RunDirectoryError(`${runDirectory} is a link or a non-directory entry, so it is no run directory`);
+    // `create` refuses a link at `runs/`; so does attaching, since the run directory's own checks would hold a copy in the adopter's tree.
+    const runs = path.dirname(runDirectory);
+    let runsStats;
+    try {
+      runsStats = fs.lstatSync(runs);
+    } catch (error) {
+      throw new RunDirectoryError(`the runs directory ${runs} cannot be read: ${error.message}`);
+    }
+    if (!runsStats.isDirectory()) {
+      throw new RunDirectoryError(`${runs} is a link or a non-directory entry, so runs is no directory the runtime can score a run from`);
+    }
+    if (fs.realpathSync.native(runDirectory) !== path.join(fs.realpathSync.native(runs), path.basename(runDirectory))) {
+      throw new RunDirectoryError(
+        `${runDirectory} does not lie directly in the real runs directory ${runs}, so the runtime will not write scores into it`,
+      );
+    }
     const attached = new RunDirectory(runDirectory);
     const root = attached.directories.get('');
     if (root.dev !== stats.dev || root.ino !== stats.ino) {

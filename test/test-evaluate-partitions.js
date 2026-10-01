@@ -196,6 +196,26 @@ try {
   assert.equal(afterPlant.status, 0, afterPlant.output);
   assert.equal(fs.lstatSync(path.join(unsafeRun, 'scores')).isDirectory(), true);
 
+  // A link at `runs/`, which `run` refuses, is refused by `score` too: with `runs` moved aside and a link to a copy of
+  // it inside the adopter's tree, no engine call is made and nothing is written there.
+  const unsafeRuns = path.join(unsafe.folder, 'runs');
+  const runsCopy = path.join(unsafe.repository, 'runs-copy');
+  fs.cpSync(unsafeRuns, runsCopy, { recursive: true });
+  fs.renameSync(unsafeRuns, `${unsafeRuns}.moved`);
+  fs.symlinkSync(runsCopy, unsafeRuns, 'dir');
+  const repositoryListing = () => filesUnder(unsafe.repository).filter((line) => !line.startsWith('evals/verdict/runs.moved/'));
+  const listingBeforeRunsLink = repositoryListing();
+  const statusBeforeRunsLink = status();
+  const callsBeforeRunsLink = loggedCalls(unsafeLog).length;
+  const runsLinked = test.cli(unsafe.folder, 'score', ['--run', path.basename(unsafeRun)], counting);
+  assert.equal(runsLinked.status, 12, runsLinked.output);
+  assert.match(runsLinked.output, /runs is a link or a non-directory entry/);
+  assert.equal(loggedCalls(unsafeLog).length, callsBeforeRunsLink, 'a planted runs link was refused only after an engine call');
+  assert.deepEqual(repositoryListing(), listingBeforeRunsLink, 'a planted runs link was followed into the adopter repository');
+  assert.equal(status(), statusBeforeRunsLink, 'a planted runs link changed the adopter repository');
+  fs.unlinkSync(unsafeRuns);
+  fs.renameSync(`${unsafeRuns}.moved`, unsafeRuns);
+
   // A repeated score keeps both invocations: the first is untouched by the second, and each holds its own evidence.
   const repeated = test.latest(project.folder);
   const invocations = () => fs.readdirSync(path.join(repeated, 'scores')).sort();

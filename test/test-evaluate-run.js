@@ -2154,6 +2154,23 @@ function checkAttachedWriter(base) {
     }
   }
 
+  // A `scores` directory swapped for a link right after it was adopted: creating the invocation directory is refused
+  // and nothing is made in the directory the link leads to, directories included.
+  const parentSwap = attach('parent-swap', () => {});
+  try {
+    parentSwap.adoptDirectory('scores');
+    const listing = () => JSON.stringify(fs.readdirSync(outside, { recursive: true }).sort());
+    const outsideListing = listing();
+    fs.renameSync(path.join(parentSwap.root, 'scores'), path.join(parentSwap.root, 'scores.moved'));
+    fs.symlinkSync(outside, path.join(parentSwap.root, 'scores'), 'dir');
+    refused('an invocation directory made below a scores directory swapped for a link', /no longer the directory the runtime made/, () =>
+      parentSwap.ensureDirectory('scores/new-invocation'),
+    );
+    check(listing() === outsideListing, 'an invocation directory was made in the directory the swapped scores link leads to');
+  } finally {
+    parentSwap.close();
+  }
+
   const adopting = attach('adopting', (root) => {
     fs.mkdirSync(path.join(root, 'scores', 'earlier'), { recursive: true });
     fs.writeFileSync(path.join(root, 'scores', 'earlier', 'score.json'), 'an earlier score\n');
@@ -2216,8 +2233,9 @@ function checkAttachedWriter(base) {
 }
 
 /**
- * A score whose staged evidence artifact is not the one the call produced: another corpus's, bytes that are no
- * artifact, another probe's, or a link to a valid artifact. None is copied into the run directory (exit 12, no
+ * A score whose staged evidence artifact fails the copy check (the published schema, the run's corpus digest, an
+ * outcome for the probe) or is no regular file: another corpus's, one off the schema, bytes that are no artifact,
+ * another probe's, or a link to a valid artifact. A well-formed substitute passes the check (Story 1.68). None is copied into the run directory (exit 12, no
  * evidence for the call), the call's own record keeps the argv that ran, and nothing the artifact held reaches the
  * score directory (Story 1.41).
  */
@@ -2231,6 +2249,7 @@ function checkUnverifiedEvidence() {
   const probes = index.trialSets.map((set) => set.probeId);
   const cases = [
     ['forge-corpus', [], /names corpus sha256:0{64}/],
+    ['forge-schema', [], /fails its published schema/],
     ['garbage', [], /is not JSON/],
     ['forge-probe', ['P-001'], /holds no outcome for P-002/],
     ['stage-link', [], /is a link or a non-file entry/],
@@ -2250,7 +2269,7 @@ function checkUnverifiedEvidence() {
     });
     check(
       scored.status === 12,
-      `${mode}: a score whose staged artifact is not the call's output exited ${scored.status}; expected 12\n${scored.output}`,
+      `${mode}: a score whose staged artifact fails the copy check exited ${scored.status}; expected 12\n${scored.output}`,
     );
     const scoreDirectory = latestScoreDirectory(runDirectory);
     const calls = loggedCalls(log);
@@ -2275,9 +2294,7 @@ function checkUnverifiedEvidence() {
       check(
         expectCopied
           ? entry?.evidence !== null && entry?.failure === null
-          : entry?.evidence === null &&
-              reason.test(entry?.failure ?? '') &&
-              /not what this call produced|staged evidence artifact/.test(entry?.failure ?? ''),
+          : entry?.evidence === null && reason.test(entry?.failure ?? '') && /staged evidence artifact/.test(entry?.failure ?? ''),
         `${mode}, ${probeId}: the summary entry is ${JSON.stringify(entry)}`,
       );
     }
@@ -2329,9 +2346,22 @@ function checkScoreOutputReference() {
     [/staging file/, 'the staged engine output'],
     [/`--out`/, 'the `--out` argument that names the staging file'],
     [/link/, 'the planted or swapped link it refuses'],
+    [/link at `runs\/`/, 'the link at `runs/` it refuses'],
+    [
+      /can substitute an artifact that passes it/,
+      'the limit: a process that can write the staging directory can substitute a well-formed artifact',
+    ],
+    [/carries an outcome for the probe/, 'what the copy check covers'],
   ]) {
     check(pattern.test(section), `the reference's score output integrity section does not name ${what}`);
   }
+  const exitRow = reference.split('\n').find((line) => /^\| 12\s+\| infrastructure:/.test(line)) ?? '';
+  check(
+    exitRow.includes(
+      "a staged evidence artifact that fails eval-quality's published schema, names another corpus or carries no outcome for its probe",
+    ),
+    "the reference's exit 12 row does not name the staged-artifact refusal as the copy check decides it",
+  );
 }
 
 /** What the first plan step of a trial printed on stdout, from its evidence file. */

@@ -20,8 +20,10 @@
  * - `plant-record`, `plant-evidence`, `plant-summary`: a link to the sentinel is
  *   planted where the probe's `score.json`, its evidence artifact or the
  *   invocation's `score.json` will be written.
- * - `forge-corpus`, `garbage`, `forge-probe`, `stage-link`: the staged evidence
- *   artifact (`--out`) is replaced with the artifact of another corpus, with
+ * - `forge-corpus`, `forge-schema`, `garbage`, `forge-probe`, `stage-link`: the
+ *   staged evidence artifact (`--out`) is replaced with the artifact of another
+ *   corpus, with one that keeps its corpus digest and its probe's outcome but
+ *   loses a required field and gains a forbidden one, with
  *   bytes that are no artifact, with the artifact of the previous probe
  *   (`TEA_RACE_STASH` keeps it between calls), or with a link to a valid artifact.
  */
@@ -84,6 +86,11 @@ if (mode === 'swap-scores') {
 } else if (mode === 'forge-corpus') {
   const artifact = JSON.parse(fs.readFileSync(out, 'utf8'));
   artifact.scoringVersionInputs.corpusDigest = `sha256:${'0'.repeat(64)}`;
+  fs.writeFileSync(out, JSON.stringify(artifact));
+} else if (mode === 'forge-schema') {
+  const artifact = JSON.parse(fs.readFileSync(out, 'utf8'));
+  delete artifact.strength;
+  artifact.unexpectedField = true;
   fs.writeFileSync(out, JSON.stringify(artifact));
 } else if (mode === 'garbage') {
   fs.writeFileSync(out, 'not an evidence artifact\n');

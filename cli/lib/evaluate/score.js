@@ -50,9 +50,12 @@
  * written to `scores/<scoreInvocationId>/<probeId>/score.json` in the run
  * directory whether or not an evidence artifact was emitted, since AD-10
  * classifies a `score` exit 3 from those diagnostics and AD-12 lists them in
- * the bundle. A staged artifact that meets its published schema and names this
- * probe and the run's corpus is copied in as `evidence-artifact.json` and read
- * back; one that does not is not copied, and the command exits 12.
+ * the bundle. A staged artifact that meets its published schema, names the run's
+ * corpus digest and carries an outcome for this probe is copied in as
+ * `evidence-artifact.json` and read back; one that fails that copy check is not
+ * copied, and the command exits 12. The check cannot tell the engine's artifact
+ * from a well-formed one a process with access to the private staging directory
+ * substituted (Story 1.68).
  * A call that cannot run, is killed or exits with a code the CLI does not
  * document is recorded and the others still run; the command then exits 12.
  *
@@ -621,9 +624,8 @@ async function scoreProbe({ folder, runDirectory, set, index, validate, env, log
       const problems = await artifactProblems({ bytes: staged.bytes, set, index, validate });
       if (problems.length > 0) {
         stageFailed = true;
-        failure =
-          failure === null ? `${set.probeId}: the staged evidence artifact is not what this call produced: ${problems[0]}` : failure;
-        log(`${set.probeId}: the staged evidence artifact is not what this call produced (${problems.join('; ')}); it is not copied`);
+        failure = failure === null ? `${set.probeId}: the staged evidence artifact fails the copy check: ${problems[0]}` : failure;
+        log(`${set.probeId}: the staged evidence artifact fails the copy check (${problems.join('; ')}); it is not copied`);
       } else {
         // Copied through the held directory and read back from it: the parsed artifact is the one that was written.
         writer.write(evidenceRelative, staged.bytes);
@@ -666,7 +668,7 @@ function stagedArtifact(file) {
   }
 }
 
-/** Why a staged artifact is not the evidence of this probe's call; empty when it is. */
+/** Why a staged artifact fails the copy check (published schema, the run's corpus digest, an outcome for the probe); empty when it passes. */
 async function artifactProblems({ bytes, set, index, validate }) {
   let artifact;
   try {
@@ -763,7 +765,7 @@ async function scoreProbes({
     runDirectory,
     scores,
     message: stageFailed
-      ? `an eval-quality score call could not run, exited with a code the CLI does not document, or staged an artifact that is not its evidence; every call's record is in ${path.relative(folder, writer.pathOf(scoreRelative))}`
+      ? `an eval-quality score call could not run, exited with a code the CLI does not document, or staged an artifact that fails the copy check; every call's record is in ${path.relative(folder, writer.pathOf(scoreRelative))}`
       : `eval-quality score ran for ${scores.length} probe(s) of run ${index.invocationId}; each call's diagnostics and evidence are in ${path.relative(folder, writer.pathOf(scoreRelative))}${refusedNote}${optedOutNote}`,
   });
 }
