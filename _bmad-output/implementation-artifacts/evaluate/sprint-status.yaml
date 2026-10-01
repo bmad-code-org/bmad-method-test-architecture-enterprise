@@ -106,6 +106,9 @@ development_status:
   1-68-hold-a-runs-score-inputs-between-verification-and-the-engine-read: done
   1-69-hold-the-inputs-of-an-evaluator-attempts-score-call: backlog
   1-70-refuse-promptfoo-assertions-that-run-adopter-code-or-call-a-model: backlog
+  1-71-bound-a-framework-version-probe-with-its-own-timeout: backlog
+  1-72-observe-the-sealed-brief-agent-evaluators-installed-adapter-version: backlog
+  1-73-bind-the-declared-frameworks-install-state-not-only-their-versions: backlog
   1-80-bring-a-partial-clone-project-its-tags-and-a-very-large-history-into-the-withheld-repository: backlog
   1-90-verify-the-baseline-manifests-file-digests: backlog
   1-91-keep-machine-paths-out-of-a-committed-baseline: backlog
@@ -132,6 +135,9 @@ parallel_lanes:
     - 1-64-hold-the-release-across-the-witness-legs-and-the-trials
     - 1-69-hold-the-inputs-of-an-evaluator-attempts-score-call
     - 1-70-refuse-promptfoo-assertions-that-run-adopter-code-or-call-a-model
+    - 1-71-bound-a-framework-version-probe-with-its-own-timeout
+    - 1-72-observe-the-sealed-brief-agent-evaluators-installed-adapter-version
+    - 1-73-bind-the-declared-frameworks-install-state-not-only-their-versions
   lane-2-confinement-and-process-lifecycle:
     - 1-62-share-one-sandbox-primitive-layer-across-teas-isolation-mod
     - 1-57-withhold-the-committed-evaluation-folder-from-a-confined-ta

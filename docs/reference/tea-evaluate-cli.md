@@ -43,7 +43,7 @@ Nothing defaults to the working directory.
   .gitignore                    # ignores runs/ (the skill's assets/evaluation-folder.gitignore)
 ```
 
-The runtime owns the schemas of `evaluation.json`, the committed probe, the mutation file, the degenerate response, `policy/evaluator-conditions.json`, `evaluator/mapping.json`, the judgment rows an evaluator answers and the report a sealed-brief agent's qualification writes (`evaluator-qualification.json`); they ship under `cli/lib/evaluate/schemas/` in the TeA package.
+The runtime owns the schemas of `evaluation.json`, the committed probe, the mutation file, the degenerate response, `policy/evaluator-conditions.json`, `evaluator/mapping.json`, `evaluator/frameworks.json`, the judgment rows an evaluator answers, `framework-versions.json` and the report a sealed-brief agent's qualification writes (`evaluator-qualification.json`); they ship under `cli/lib/evaluate/schemas/` in the TeA package.
 `contract.json` and `policy/scoring-policy.json` meet the schemas eval-quality publishes.
 
 For a held-out set, put committed probe IDs in `evaluation.json` as `"heldOutProbes": ["P-002"]`. Each ID must name a committed probe, cannot name a clean control, and must leave a development probe for every affected behavior. Omit the field when every probe belongs to development.

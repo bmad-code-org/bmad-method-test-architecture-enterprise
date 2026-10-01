@@ -26,10 +26,21 @@
 
 'use strict';
 
+const fs = require('node:fs');
+const path = require('node:path');
+
+/** The runtime-owned schemas of the declaration and the run artifact; their versions are read from them so the code and the schemas cannot disagree. */
+const FRAMEWORKS_SCHEMA = JSON.parse(fs.readFileSync(path.join(__dirname, 'schemas', 'evaluator-frameworks.schema.json'), 'utf8'));
+const VERSIONS_SCHEMA = JSON.parse(fs.readFileSync(path.join(__dirname, 'schemas', 'framework-versions.schema.json'), 'utf8'));
+const FRAMEWORKS_SCHEMA_VERSION = FRAMEWORKS_SCHEMA.properties.schemaVersion.const;
+const VERSIONS_SCHEMA_VERSION = VERSIONS_SCHEMA.properties.schemaVersion.const;
+
 const FRAMEWORKS_PATH = 'evaluator/frameworks.json';
 const LEARNED_PATH = 'evaluator/LEARNED.md';
 /** The `LEARNED.md` section whose `` `package@version` `` tokens record the installed versions. */
 const LEARNED_SECTION = '## Framework and installed version';
+/** The heading as a whole line: a longer heading (`### ...`) or the words inside a sentence are no section. */
+const SECTION_HEADING = /^## Framework and installed version[ \t]*$/;
 
 const PACKAGE_PATTERN = /^(?:@[A-Za-z0-9][\w.~-]*\/)?[A-Za-z0-9][\w.~-]*$/;
 /** A version is one digit-led token: a tag (`latest`), a range, a wildcard, a space or a backtick would stop it naming one installed version. */
@@ -60,12 +71,13 @@ function isEvaluatorPath(command) {
  * @returns {string[]}
  */
 function declarationProblems(declaration) {
-  if (!isObject(declaration)) return ['the declaration must be a JSON object { "schemaVersion": 1, "frameworks": [...] }'];
+  if (!isObject(declaration))
+    return [`the declaration must be a JSON object { "schemaVersion": ${FRAMEWORKS_SCHEMA_VERSION}, "frameworks": [...] }`];
   const problems = [];
   for (const key of Object.keys(declaration)) {
     if (key !== 'schemaVersion' && key !== 'frameworks') problems.push(`unknown property ${JSON.stringify(key)}`);
   }
-  if (declaration.schemaVersion !== 1) problems.push('schemaVersion must be 1');
+  if (declaration.schemaVersion !== FRAMEWORKS_SCHEMA_VERSION) problems.push(`schemaVersion must be ${FRAMEWORKS_SCHEMA_VERSION}`);
   if (!Array.isArray(declaration.frameworks)) {
     problems.push('frameworks must be a list, empty for an evaluator with no installed framework dependency');
     return problems;
@@ -139,10 +151,21 @@ function learnedProblems(frameworks, learned) {
           `${LEARNED_PATH} is not a file the layer holds; it records the installed version of ${frameworks.map((entry) => entry.package).join(', ')} the declaration names (the vendor rule)`,
         ];
   }
-  // A file edited on Windows ends its lines with CRLF; the section is found the same way.
-  const parts = learned.replaceAll('\r\n', '\n').split(`${LEARNED_SECTION}\n`);
-  if (parts.length > 2) return [`${LEARNED_PATH} has more than one "${LEARNED_SECTION}" section; keep one`];
-  const section = parts[1]?.split('\n## ')[0] ?? null;
+  // A file edited on Windows ends its lines with CRLF; text inside a fenced code block is no heading and no record.
+  const lines = [];
+  let fenced = false;
+  for (const line of learned.replaceAll('\r\n', '\n').split('\n')) {
+    if (/^\s*(?:```|~~~)/.test(line)) fenced = !fenced;
+    else if (!fenced) lines.push(line);
+  }
+  const headings = lines.flatMap((line, index) => (SECTION_HEADING.test(line) ? [index] : []));
+  if (headings.length > 1) return [`${LEARNED_PATH} has more than one "${LEARNED_SECTION}" section; keep one`];
+  let section = null;
+  if (headings.length === 1) {
+    const rest = lines.slice(headings[0] + 1);
+    const end = rest.findIndex((line) => line.startsWith('## '));
+    section = (end === -1 ? rest : rest.slice(0, end)).join('\n');
+  }
   if (section === null) {
     return frameworks.length === 0 ? [] : [`${LEARNED_PATH} has no "${LEARNED_SECTION}" section recording the installed versions`];
   }
@@ -261,7 +284,7 @@ function head(text) {
  */
 function versionsRecord(frameworks, entries, problems) {
   return {
-    schemaVersion: 1,
+    schemaVersion: VERSIONS_SCHEMA_VERSION,
     frameworks: frameworks.map((framework) => {
       const entry = entries.find((candidate) => candidate.package === framework.package);
       return {

@@ -1971,6 +1971,9 @@ function checkEvaluatorGuidance(guide, failures) {
     '`npm install --save-exact <package>@<version>`',
     '`importlib.metadata.version`',
     'exactly as `frameworks.json` declares it',
+    'letters, digits, `.`, `_`, `-`, `~` and an optional `@scope/`',
+    'The version starts with a digit, so a probe for an ecosystem that reports `v1.2.3` prints `1.2.3`.',
+    '`framework-versions.json` in the run directory keeps the declared and observed versions, and the output of any probe that failed.',
     'every backticked `package@version` there is read as a record',
     'before the first trial, before each launch of the evaluator and after each trial',
     'missing, installed at a version other than the declared one, or changed during the run ends the run with exit 12 and seals no record for the affected trial',
@@ -2074,6 +2077,19 @@ function checkEvaluatorGuidance(guide, failures) {
     )
       failures.push(`assets/evaluators/${name} does not declare ${packageName} through the shipped probe with a version to fill`);
   }
+  // Each starter's header says where its declaration and probe come from.
+  for (const [template, header] of [
+    ['command-evaluator.mjs', 'Keep evaluator/frameworks.json beside it: an empty list while judge() uses no installed framework'],
+    ['agentevals-trajectory.mjs', 'Declare the installed agentevals with agentevals-frameworks.json and installed-version.mjs'],
+    ['promptfoo-assertions.mjs', 'Declare the installed promptfoo with promptfoo-frameworks.json and installed-version.mjs'],
+    ['installed-version.mjs', 'Version probe for a Node framework dependency'],
+  ])
+    requireText(
+      fs.readFileSync(ASSET(path.join('evaluators', template)), 'utf8').split('\nimport ')[0],
+      header,
+      `assets/evaluators/${template} header`,
+      failures,
+    );
   const mapping = JSON.parse(fs.readFileSync(ASSET(path.join('evaluators', 'mapping.json')), 'utf8'));
   const validateMapping = new Ajv({ strict: false, allErrors: true }).compile(
     JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'cli', 'lib', 'evaluate', 'schemas', 'evaluator-mapping.schema.json'), 'utf8')),
@@ -2918,6 +2934,22 @@ async function main() {
         'evaluator',
         (text, found) => checkEvaluatorGuidance(text, found),
         (text) => text.replace('a different version, a missing one or a package the declaration omits is a finding', 'nothing is read'),
+      ],
+      [
+        'evaluator framework versions digit-start sentence removal',
+        'evaluator',
+        (text, found) => checkEvaluatorGuidance(text, found),
+        (text) => text.replace('The version starts with a digit, so a probe for an ecosystem that reports `v1.2.3` prints `1.2.3`.', ''),
+      ],
+      [
+        'evaluator framework versions artifact wording reverted',
+        'evaluator',
+        (text, found) => checkEvaluatorGuidance(text, found),
+        (text) =>
+          text.replace(
+            'keeps the declared and observed versions, and the output of any probe that failed',
+            'keeps what each probe printed',
+          ),
       ],
       ['gaps loop removal', 'gaps', (text, found) => checkGapsGuidance(text, engine, found), (text) => text.replace(/^4\. Rerun.*\n/m, '')],
     ];

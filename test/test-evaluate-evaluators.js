@@ -114,8 +114,10 @@ const { runTrial } = require('../cli/lib/evaluate/run');
 const { hostEnvironmentPort } = require('../cli/lib/evaluate/arm');
 const { AGENT_ADAPTERS, bridgedArgsRefused } = require('../cli/lib/agent-adapters');
 const { runSupervised } = require('../cli/lib/run-agent');
-const { configurationFields } = require('../cli/lib/evaluate/evaluators');
+const { EvaluatorLayerError, configurationFields, readEvaluatorLayer } = require('../cli/lib/evaluate/evaluators');
 const { observeFrameworks } = require('../cli/lib/evaluate/command-evaluator');
+const { declarationProblems, versionsRecord } = require('../cli/lib/evaluate/frameworks');
+const AjvModule = require('ajv/dist/2020');
 const { MAX_SOCKET_PATH, bridgeTools, openBridge } = require('../cli/lib/evaluate/bridge');
 const { makePrivateParent, makeScratchDirectory, privateRootIn, removeScratchDirectory } = require('../cli/lib/evaluate/workspace');
 const {
@@ -4043,6 +4045,15 @@ function frameworkProject(
   });
 }
 
+/** The runtime-owned schema `name` (under cli/lib/evaluate/schemas/) compiled; it returns the problems a value has against it. */
+function schemaProblems(name) {
+  const Ajv = AjvModule.default ?? AjvModule;
+  const validate = new Ajv({ strict: false, allErrors: true }).compile(
+    readJson(path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate', 'schemas', `${name}.schema.json`)),
+  );
+  return (value) => (validate(value) ? [] : (validate.errors ?? []).map((error) => `${error.instancePath || '/'} ${error.message}`));
+}
+
 /** A stopped run's directory holds no sealed trial record and no trial index. */
 function checkNoSealedRecord(what, runDirectory) {
   check(
@@ -4071,6 +4082,11 @@ async function checkInstalledFrameworks() {
     canonical(readJson(path.join(firstRun, 'framework-versions.json'))) ===
       canonical({ schemaVersion: 1, frameworks: [{ package: FRAMEWORK, declaredVersion: '1.0.0', observed: observed[0] }] }),
     `framework-versions.json is ${fs.readFileSync(path.join(firstRun, 'framework-versions.json'), 'utf8')}`,
+  );
+  const versionsProblems = schemaProblems('framework-versions');
+  check(
+    versionsProblems(readJson(path.join(firstRun, 'framework-versions.json'))).length === 0,
+    "the run's framework-versions.json is off its runtime schema",
   );
   const configuration = readJson(path.join(firstRun, 'evaluator-configuration.json'));
   check(
@@ -4119,6 +4135,7 @@ async function checkInstalledFrameworks() {
   );
   checkNoSealedRecord('an upgraded package under the old declaration', upgradedRun);
   const upgradedArtifact = upgradedRun === null ? null : readJson(path.join(upgradedRun, 'framework-versions.json'));
+  check(versionsProblems(upgradedArtifact).length === 0, "a refused run's framework-versions.json is off its runtime schema");
   check(
     upgradedArtifact?.frameworks[0]?.observed?.version === '2.0.0' &&
       upgradedArtifact.frameworks[0].declaredVersion === '1.0.0' &&
@@ -4172,6 +4189,7 @@ async function checkInstalledFrameworks() {
   );
   checkNoSealedRecord('a package that is not installed', missingRun);
   const missingArtifact = missingRun === null ? null : readJson(path.join(missingRun, 'framework-versions.json'));
+  check(versionsProblems(missingArtifact).length === 0, "a missing package's framework-versions.json is off its runtime schema");
   check(
     missingArtifact?.frameworks[0]?.observed === null &&
       missingArtifact.frameworks[0].stderr.includes('probe-fw is not installed') &&
@@ -4229,41 +4247,55 @@ function checkInstalledFrameworksMidRun() {
     'a package changed between two trials: the evaluator did not judge trial 1 and stop before trial 2',
   );
 
-  // The probe is launched as the evaluator is: its environment, its private working directory, once per read.
-  const directory = scratch.make('framework-probe-logs');
-  const evaluatorLog = path.join(directory, 'evaluator.jsonl');
-  const probeLog = path.join(directory, 'probe.jsonl');
-  const launched = frameworkProject('framework-probe-launch', {
-    environmentKeys: ['TEA_FRAMEWORK_SENTINEL'],
-    args: ['--log', evaluatorLog],
-    probe: { command: 'evaluator/probe.js', args: ['--package', FRAMEWORK, '--log', probeLog] },
-  });
-  const ran = evaluate(['run', '--evaluation', launched.folder], {
-    ...launched.env,
-    TEA_FRAMEWORK_SENTINEL: 'set',
-    TEA_FRAMEWORK_OTHER: 'unlisted',
-  });
-  check(ran.status === 0, `a run with a logging probe exited ${ran.status}\n${ran.output}`);
-  if (ran.status !== 0) return;
-  const probes = captures(probeLog);
-  const evaluators = captures(evaluatorLog);
-  const trials = 2 * TRIALS;
-  check(
-    evaluators.length === trials && probes.length === 1 + 2 * trials,
-    `the probe ran ${probes.length} time(s) beside ${evaluators.length} evaluator launch(es); expected one read at the start and two per trial (${1 + 2 * trials})`,
-  );
-  const names = (line) => JSON.stringify(line.environment);
-  check(
-    probes.every((line) => names(line) === names(evaluators[0])) &&
-      evaluators[0].environment.includes('TEA_FRAMEWORK_SENTINEL') &&
-      !evaluators[0].environment.includes('TEA_FRAMEWORK_OTHER'),
-    "the probe's environment is not the evaluator's (the base set and evaluator.environmentKeys)",
-  );
-  const parents = new Set([...probes, ...evaluators].map((line) => path.dirname(line.cwd)));
-  check(
-    parents.size === 1 && inPrivateRoot([...parents][0]) && probes.every((line) => !evaluators.some((other) => other.cwd === line.cwd)),
-    "the probe's working directory is not a private directory of its own in the run's private parent",
-  );
+  // The probe is launched as the evaluator is: its environment, its private working directory, once per read, and, in a
+  // confined run, under the confinement that makes `evaluator/` read-only (its attempt to write beside itself is refused).
+  // The same attempt in a run that opted out succeeds, which is the positive control.
+  for (const unconfined of [false, true]) {
+    const label = unconfined ? 'opted out' : 'confined';
+    const directory = scratch.make(`framework-probe-logs-${label.replace(' ', '-')}`);
+    const evaluatorLog = path.join(directory, 'evaluator.jsonl');
+    const probeLog = path.join(directory, 'probe.jsonl');
+    const launched = frameworkProject(`framework-probe-launch-${label.replace(' ', '-')}`, {
+      unconfined,
+      environmentKeys: ['TEA_FRAMEWORK_SENTINEL'],
+      args: ['--log', evaluatorLog],
+      probe: { command: 'evaluator/probe.js', args: ['--package', FRAMEWORK, '--log', probeLog, '--try-write'] },
+      extra: ({ repository }) => fs.appendFileSync(path.join(repository, '.gitignore'), '__pycache__/\n'),
+    });
+    const ran = evaluate(['run', '--evaluation', launched.folder], {
+      ...launched.env,
+      TEA_FRAMEWORK_SENTINEL: 'set',
+      TEA_FRAMEWORK_OTHER: 'unlisted',
+    });
+    check(ran.status === 0, `a ${label} run with a logging probe exited ${ran.status}\n${ran.output}`);
+    if (ran.status !== 0) continue;
+    const probes = captures(probeLog);
+    const evaluators = captures(evaluatorLog);
+    const trials = 2 * TRIALS;
+    check(
+      evaluators.length === trials && probes.length === 1 + 2 * trials,
+      `${label}: the probe ran ${probes.length} time(s) beside ${evaluators.length} evaluator launch(es); expected one read at the start and two per trial (${1 + 2 * trials})`,
+    );
+    const names = (line) => JSON.stringify(line.environment);
+    check(
+      probes.every((line) => names(line) === names(evaluators[0])) &&
+        evaluators[0].environment.includes('TEA_FRAMEWORK_SENTINEL') &&
+        !evaluators[0].environment.includes('TEA_FRAMEWORK_OTHER'),
+      `${label}: the probe's environment is not the evaluator's (the base set and evaluator.environmentKeys)`,
+    );
+    const parents = new Set([...probes, ...evaluators].map((line) => path.dirname(line.cwd)));
+    check(
+      parents.size === 1 && inPrivateRoot([...parents][0]) && probes.every((line) => !evaluators.some((other) => other.cwd === line.cwd)),
+      `${label}: the probe's working directory is not a private directory of its own in the run's private parent`,
+    );
+    const writes = probes.map((line) => line.write);
+    check(
+      unconfined
+        ? writes.every((write) => write === 'allowed')
+        : writes.every((write) => typeof write === 'string' && write.startsWith('refused')),
+      `${label}: the probe's write beside itself under evaluator/ was ${JSON.stringify([...new Set(writes)])} in each read; expected ${unconfined ? 'allowed' : 'refused'}`,
+    );
+  }
 }
 
 /**
@@ -4296,6 +4328,108 @@ function checkInstalledFrameworksCalibration() {
       `a package changed at the probe read ${flipAt} of a calibrating run: run exited ${ran.status}; expected 12 saying ${says}\n${ran.output}`,
     );
     checkNoSealedRecord(`a package changed at the probe read ${flipAt} of a calibrating run`, runDirectoryOf(project.folder));
+  }
+}
+
+/**
+ * `run` reads the declaration from the layer's own bytes (`readFrameworks`), and
+ * refuses what `check` refuses (Story 1.44): an absent or malformed
+ * declaration, and a probe the layer lacks or cannot execute, each as an
+ * `EvaluatorLayerError` (`run` exit 10).
+ */
+async function checkFrameworkDeclarationRefusedByRun() {
+  const engine = await loadEngine();
+  const contract = readJson(path.join(FIXTURE, EVALUATION, 'contract.json'));
+  const root = scratch.make('framework-declaration-unit');
+  fs.cpSync(COMMAND_EVALUATOR, path.join(root, 'evaluator'), { recursive: true });
+  const declaration = path.join(root, 'evaluator', 'frameworks.json');
+  const layer = () =>
+    readEvaluatorLayer({
+      folder: root,
+      evaluation: { evaluator: { kind: 'command', command: 'evaluator/rows.js', timeoutMs: 1 } },
+      contract,
+      engine,
+    });
+  const refusal = (edit) => {
+    const original = fs.readFileSync(declaration);
+    try {
+      edit();
+      layer();
+      return null;
+    } catch (error) {
+      return error instanceof EvaluatorLayerError ? error.message : `${error.name}: ${error.message}`;
+    } finally {
+      fs.writeFileSync(declaration, original);
+      fs.chmodSync(path.join(root, 'evaluator', 'probe.js'), 0o755);
+      fs.writeFileSync(path.join(root, 'evaluator', 'probe.js'), fs.readFileSync(path.join(COMMAND_EVALUATOR, 'probe.js')));
+    }
+  };
+  check(canonical(layer().frameworks) === '[]', 'an empty declaration was not read as no framework');
+  for (const [what, edit, says] of [
+    ['an absent declaration', () => fs.rmSync(declaration), 'evaluator/frameworks.json cannot be read'],
+    ['a declaration that is no JSON', () => fs.writeFileSync(declaration, 'not json'), 'evaluator/frameworks.json cannot be read'],
+    [
+      'a version range',
+      () =>
+        writeJson(declaration, {
+          schemaVersion: 1,
+          frameworks: [{ package: FRAMEWORK, version: '^1.0.0', probe: { command: 'evaluator/probe.js' } }],
+        }),
+      'frameworks[0].version must be the one exact version expected',
+    ],
+    [
+      'a probe the layer lacks',
+      () => {
+        declareFramework(root, { version: '1.0.0', probe: { command: 'evaluator/absent.js' } });
+      },
+      'evaluator/absent.js is not a regular file',
+    ],
+    [
+      'a probe that is not executable',
+      () => {
+        declareFramework(root, { version: '1.0.0', probe: { command: 'evaluator/probe.js' } });
+        fs.chmodSync(path.join(root, 'evaluator', 'probe.js'), 0o644);
+      },
+      'evaluator/probe.js is not executable',
+    ],
+  ]) {
+    const said = refusal(edit);
+    check(
+      said !== null && said.includes(says),
+      `${what}: readEvaluatorLayer said ${JSON.stringify(said)}; expected a refusal saying ${says}`,
+    );
+  }
+
+  // The same three variants committed in a project: `run` exits 10 with `check`'s finding and seals nothing.
+  const project = frameworkProject('framework-declaration-run');
+  const frameworksFile = path.join(project.folder, 'evaluator', 'frameworks.json');
+  for (const [what, edit, says] of [
+    ['frameworks.json removed', () => fs.rmSync(frameworksFile), 'evaluator/frameworks.json: [evaluator]'],
+    [
+      'a version range',
+      () => declareFramework(project.folder, { version: '^1.0.0', learned: '1.0.0' }),
+      'frameworks[0].version must be the one exact version expected',
+    ],
+    [
+      'the probe file deleted',
+      () => fs.rmSync(path.join(project.folder, 'evaluator', 'installed-version.mjs')),
+      'which is not a regular file',
+    ],
+  ]) {
+    edit();
+    commitAll(project.repository, project.folder, what);
+    const refused = evaluate(['run', '--evaluation', project.folder], project.env);
+    check(
+      refused.status === 10 && refused.output.includes(says),
+      `${what}: run exited ${refused.status}; expected 10 saying ${says}\n${refused.output}`,
+    );
+    // A run refused at `check` may leave no run directory at all; one it left holds no record.
+    const left = runDirectoryOf(project.folder);
+    if (left !== null) checkNoSealedRecord(what, left);
+    fs.copyFileSync(VERSION_PROBE, path.join(project.folder, 'evaluator', 'installed-version.mjs'));
+    fs.chmodSync(path.join(project.folder, 'evaluator', 'installed-version.mjs'), 0o755);
+    declareFramework(project.folder, { version: '1.0.0' });
+    commitAll(project.repository, project.folder, `restore after ${what}`);
   }
 }
 
@@ -4333,8 +4467,37 @@ async function checkFrameworkProbeShapes() {
       `a probe run with ${args.join(' ')}: the entry is ${JSON.stringify(entry)}; expected a fault saying ${says}`,
     );
   }
+  // The declaration's runtime schema and the rules `check` applies agree on the shapes below.
+  const declarationSchema = schemaProblems('evaluator-frameworks');
+  const entry = { package: 'acme-evals', version: '1.2.3', probe: { command: 'evaluator/installed-version.mjs', args: ['acme-evals'] } };
+  for (const [what, declaration, valid] of [
+    ['the empty list', { schemaVersion: 1, frameworks: [] }, true],
+    ['one framework', { schemaVersion: 1, frameworks: [entry] }, true],
+    ['a scoped package', { schemaVersion: 1, frameworks: [{ ...entry, package: '@acme/evals' }] }, true],
+    ['another schema version', { schemaVersion: 2, frameworks: [] }, false],
+    ['a wildcard version', { schemaVersion: 1, frameworks: [{ ...entry, version: '1.x' }] }, false],
+    ['a tag for a version', { schemaVersion: 1, frameworks: [{ ...entry, version: 'latest' }] }, false],
+    ['a probe outside evaluator/', { schemaVersion: 1, frameworks: [{ ...entry, probe: { command: 'node' } }] }, false],
+    ['an unknown property', { schemaVersion: 1, frameworks: [], note: 'x' }, false],
+  ]) {
+    check(
+      (declarationSchema(declaration).length === 0) === valid && (declarationProblems(declaration).length === 0) === valid,
+      `${what}: the declaration schema and declarationProblems disagree (expected ${valid ? 'valid' : 'refused'})`,
+    );
+  }
   const none = await observeFrameworks({ folder: root, evaluator, frameworks: [], scratch: [] });
   check(none.length === 0, 'a dependency-free declaration launched a probe');
+
+  // A failed probe's output is kept whole in the entry and cut to 2000 characters in the run artifact.
+  const noisy = await read(['--mode', 'noisy']);
+  const recorded = versionsRecord([{ package: FRAMEWORK, version: '1.0.0' }], [noisy], ['a problem']).frameworks[0];
+  check(
+    noisy.stdout.length === 5000 &&
+      noisy.stderr.length === 5000 &&
+      recorded.stdout === 'x'.repeat(2000) &&
+      recorded.stderr === 'y'.repeat(2000),
+    `a probe printing 5000 characters: the entry holds ${noisy.stdout.length} and ${noisy.stderr.length}, the artifact ${recorded.stdout?.length} and ${recorded.stderr?.length}; expected 5000 and 2000`,
+  );
 
   // A probe that never exits is stopped at the evaluator's timeout, one that is absent or not executable cannot start.
   const hung = await observeFrameworks({
@@ -4348,7 +4511,10 @@ async function checkFrameworkProbeShapes() {
     `a probe that never exits: the entry is ${JSON.stringify(hung[0])}`,
   );
   fs.writeFileSync(path.join(root, 'evaluator', 'not-executable.js'), '#!/usr/bin/env node\n');
-  for (const command of ['evaluator/absent.js', 'evaluator/not-executable.js']) {
+  for (const [command, code] of [
+    ['evaluator/absent.js', 'ENOENT'],
+    ['evaluator/not-executable.js', 'EACCES'],
+  ]) {
     const [entry] = await observeFrameworks({
       folder: root,
       evaluator,
@@ -4356,7 +4522,9 @@ async function checkFrameworkProbeShapes() {
       scratch: [],
     });
     check(
-      entry.observed === null && /^the version probe of probe-fw \(.+\) /.test(entry.fault ?? ''),
+      entry.observed === null &&
+        (entry.fault ?? '').startsWith(`the version probe of probe-fw (${command}) could not start: spawn `) &&
+        entry.fault.endsWith(code),
       `a probe that cannot start (${command}): ${JSON.stringify(entry)}`,
     );
   }
@@ -4396,6 +4564,7 @@ async function checkFrameworkProbeShapes() {
 const CASES = [
   { name: 'the units', body: checkUnits, group: 'evaluators' },
   { name: 'a framework probe reads one observation or a fault', body: checkFrameworkProbeShapes, group: 'evaluators' },
+  { name: 'run refuses a bad framework declaration', body: checkFrameworkDeclarationRefusedByRun, group: 'agents' },
   { name: 'the installed framework versions bind the configuration', body: checkInstalledFrameworks, group: 'agents' },
   { name: 'the installed framework versions held during the run', body: checkInstalledFrameworksMidRun, group: 'agents' },
   { name: 'the installed framework versions held around calibration', body: checkInstalledFrameworksCalibration, group: 'agents' },
@@ -4479,6 +4648,7 @@ async function main() {
     if (process.argv.includes('--frameworks-only')) {
       await runCase('the units', checkUnits);
       await runCase('a framework probe reads one observation or a fault', checkFrameworkProbeShapes);
+      await runCase('run refuses a bad framework declaration', checkFrameworkDeclarationRefusedByRun);
       await runCase('the installed framework versions bind the configuration', checkInstalledFrameworks);
       await runCase('the installed framework versions held during the run', checkInstalledFrameworksMidRun);
       await runCase('the installed framework versions held around calibration', checkInstalledFrameworksCalibration);

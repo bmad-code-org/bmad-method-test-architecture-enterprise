@@ -2356,6 +2356,31 @@ const FRAMEWORK_CASES = [
       { frameworks: [{ ...FRAMEWORK_ENTRY, version: '1.x' }] },
       'frameworks[0].version must be the one exact version expected',
     ],
+    [
+      'a package name with a space',
+      { frameworks: [{ ...FRAMEWORK_ENTRY, package: 'bad name' }] },
+      'frameworks[0].package must name a package',
+    ],
+    [
+      'a probe with a property the declaration does not define',
+      { frameworks: [{ ...FRAMEWORK_ENTRY, probe: { command: 'evaluator/probe.js', extra: true } }] },
+      'frameworks[0].probe has the unknown property "extra"',
+    ],
+    [
+      'a backslash in the probe path',
+      { frameworks: [{ ...FRAMEWORK_ENTRY, probe: { command: String.raw`evaluator/sub\probe.js` } }] },
+      'frameworks[0].probe.command must be a path of an executable under evaluator/',
+    ],
+    [
+      'an empty segment in the probe path',
+      { frameworks: [{ ...FRAMEWORK_ENTRY, probe: { command: 'evaluator//probe.js' } }] },
+      'frameworks[0].probe.command must be a path of an executable under evaluator/',
+    ],
+    [
+      'a dot segment in the probe path',
+      { frameworks: [{ ...FRAMEWORK_ENTRY, probe: { command: 'evaluator/./probe.js' } }] },
+      'frameworks[0].probe.command must be a path of an executable under evaluator/',
+    ],
     ['a framework named twice', { frameworks: [FRAMEWORK_ENTRY, FRAMEWORK_ENTRY] }, 'frameworks[1].package repeats acme-evals'],
     [
       'a framework with a property the declaration does not define',
@@ -2446,6 +2471,18 @@ const FRAMEWORK_CASES = [
     plant: (folder) => plantFrameworks(folder, { learned: `${learnedRecord('acme-evals@1.2.3')}\n${learnedRecord('acme-evals@1.2.3')}` }),
     expect: (output) => [
       [output.includes('has more than one "## Framework and installed version" section'), 'the finding does not name the repeated section'],
+    ],
+  },
+  {
+    name: 'a LEARNED.md whose only heading is a deeper one',
+    file: 'evaluator/LEARNED.md',
+    rule: 'evaluator',
+    plant: (folder) =>
+      plantFrameworks(folder, {
+        learned: '# Learned evaluation framework\n\n### Framework and installed version\n\n- `acme-evals@1.2.3`\n',
+      }),
+    expect: (output) => [
+      [output.includes('has no "## Framework and installed version" section'), 'a ### heading was read as the installed-version section'],
     ],
   },
   {
@@ -2917,6 +2954,20 @@ const EVALUATOR_CLEAN_CASES = [
   {
     name: 'a command evaluator with an empty declaration and a LEARNED.md that records no framework',
     plant: (folder) => plantFrameworks(folder, { frameworks: [], learned: learnedRecord() }),
+  },
+  {
+    name: 'a LEARNED.md that quotes the section heading inside a fenced block',
+    plant: (folder) =>
+      plantFrameworks(folder, {
+        learned: `${learnedRecord('acme-evals@1.2.3')}\n\`\`\`md\n## Framework and installed version\n- \`other-evals@9.9.9\`\n\`\`\`\n`,
+      }),
+  },
+  {
+    name: 'a LEARNED.md whose section heading has trailing spaces',
+    plant: (folder) =>
+      plantFrameworks(folder, {
+        learned: learnedRecord('acme-evals@1.2.3').replace('## Framework and installed version', '## Framework and installed version \t '),
+      }),
   },
   {
     name: 'a LEARNED.md with CRLF line endings',

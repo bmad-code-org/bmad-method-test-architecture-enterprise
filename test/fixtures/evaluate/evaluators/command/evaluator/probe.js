@@ -13,6 +13,7 @@
  *   empty-version  the package with an empty version
  *   exit-1         nothing, exit 1
  *   hang           never exits
+ *   noisy          5000 characters on each of stdout and stderr, then exit 1
  *
  * `--flip-at <n> --counter <file>` makes the n-th launch and every later one
  * print version 9.9.9, as an installed package that changes at an exact
@@ -20,7 +21,9 @@
  *
  * `--log <file>` appends one line with the names of the environment variables
  * it received and its working directory, so a test can hold the probe to the
- * evaluator's own environment and working-directory rules.
+ * evaluator's own environment and working-directory rules. With `--try-write`
+ * the line also says whether a write beside this file, under `evaluator/`,
+ * was `allowed` or `refused <code>`, which only a confined launch refuses.
  */
 
 'use strict';
@@ -36,9 +39,27 @@ const flag = (name, fallback) => {
 const name = flag('--package', 'probe-fw');
 const mode = flag('--mode', 'exact');
 const log = flag('--log', null);
-if (log !== null) fs.appendFileSync(log, `${JSON.stringify({ environment: Object.keys(process.env).sort(), cwd: process.cwd() })}\n`);
+let write = null;
+if (argv.includes('--try-write')) {
+  // A gitignored cache name, as an interpreter would write beside itself.
+  try {
+    fs.mkdirSync(path.join(__dirname, '__pycache__'), { recursive: true });
+    fs.writeFileSync(path.join(__dirname, '__pycache__', 'probe.bin'), 'written by the probe\n');
+    write = 'allowed';
+  } catch (error) {
+    write = `refused ${error.code ?? error.message}`;
+  }
+}
+if (log !== null) {
+  fs.appendFileSync(log, `${JSON.stringify({ environment: Object.keys(process.env).sort(), cwd: process.cwd(), write })}\n`);
+}
 
 if (mode === 'exit-1') process.exit(1);
+if (mode === 'noisy') {
+  process.stdout.write('x'.repeat(5000));
+  process.stderr.write('y'.repeat(5000));
+  process.exit(1);
+}
 if (mode === 'hang') setInterval(() => {}, 1000);
 const flipAt = Number(flag('--flip-at', 0));
 let launch = 0;

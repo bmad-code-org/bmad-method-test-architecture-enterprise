@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:tea:evaluate:schema:evaluator-frameworks",
+  "title": "evaluator/frameworks.json",
+  "description": "The installed frameworks a command evaluator depends on (Story 1.44, AD-21): per framework its package, the one exact version expected and a version probe, a tracked executable under evaluator/ that prints { package, version } for the installed package. An evaluator with no installed framework dependency declares an empty list. tea-evaluate check refuses a declaration off this schema and run observes each installed version through its probe. The tea-evaluate runtime owns this schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "frameworks"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "frameworks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["package", "version", "probe"],
+        "properties": {
+          "package": { "type": "string", "pattern": "^(?:@[A-Za-z0-9][\\w.~-]*/)?[A-Za-z0-9][\\w.~-]*$" },
+          "version": {
+            "description": "One exact version starting with a digit: no tag, range, wildcard segment, space or backtick.",
+            "type": "string",
+            "pattern": "^(?!.*\\.[xX](?:\\.|$))[0-9][\\w.+!~-]*$"
+          },
+          "probe": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["command"],
+            "properties": {
+              "command": { "type": "string", "pattern": "^evaluator/(?:(?!\\.{1,2}/)[^/\\\\]+/)*(?!\\.{1,2}$)[^/\\\\]+$" },
+              "args": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        }
+      }
+    }
+  }
+}
