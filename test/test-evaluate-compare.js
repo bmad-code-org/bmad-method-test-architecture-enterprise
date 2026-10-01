@@ -310,6 +310,7 @@ async function main() {
     {
       const { compareDominance } = engine;
       const floor = read(path.join(second, 'scoring-policy.json')).severityFloor;
+      const treeBefore = treeOf(baseline);
       result = test.cli(project.folder, 'compare', ['--run', secondId]);
       assert.equal(result.status, 0, result.output);
       assert.match(result.output, /compared: 2 probe\(s\)/);
@@ -323,7 +324,7 @@ async function main() {
         );
       }
       // The command compares and writes nothing: what the killed accept left is still there.
-      assert.deepEqual(treeOf(baseline), treeOf(path.join(project.folder, 'baseline')));
+      assert.deepEqual(treeOf(baseline), treeBefore);
       assert.ok(leftovers(project.folder).length > 0, 'a plain compare deleted what the killed accept left');
       // The killed accept's lock stays: the next accept refuses and gives the remedy, then succeeds once the directory is
       // deleted, and it deletes the stale staging directory.
