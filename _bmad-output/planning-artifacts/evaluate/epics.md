@@ -240,6 +240,23 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 72    | 2.5   | 2.4                          |
 | 73    | H.1   | 2.5                          |
 
+### Parallel lanes (from 2026-10-01)
+
+The table above gives every story's dependencies. Since Story 1.40 merged, the stories not yet built run in three parallel lanes, each a serial relay: a story's coordinator hands off to the next story in its lane, and the lanes merge into `main` independently. A lane groups stories that share modules or a dependency chain, so two lanes rarely edit the same file. Stories keep their numbers and rows above; the lane gives the order to run them in. `sprint-status.yaml` carries the same lists under `parallel_lanes`.
+
+**Lane 1: run integrity, scoring and evaluators** (main checkout): 1.41, 1.68, 1.43, 1.44, 1.67, 1.64, 1.65, 1.66.
+
+**Lane 2: confinement and process lifecycle** (own worktree): 1.62, 1.57, 1.58, 1.59, 1.60, 1.63, 1.61, 1.52, 1.53, 1.54. Story 1.62 goes first because it extracts the shared sandbox primitives the confinement stories build on. Stories 1.52 to 1.54 touch the preflight and workspace modules the confinement stories also edit, so they run after them.
+
+**Lane 3: engine releases, dogfood and Epic 2** (own worktree): 1.45, 2.1, 2.2, 2.3, 2.4, 2.5, 1.42, 1.48, 1.50, 1.55, 1.56, 1.46, 1.47, 1.49, 1.51. Story 1.45 starts the longest serial chain (1.45, 2.1 to 2.5, then H.1), so it runs first. Lane 3 owns every eval-quality release, because 1.42, 1.45, 1.48, 1.50 and 1.55 each need a published engine and one publisher keeps the dependency pin and `package-lock.json` ordered.
+
+Rules the lanes share:
+
+- Rebase onto the latest `origin/main` immediately before merging. In `CHANGELOG.md`, `sprint-status.yaml`, `epics.md`, `test-design-epic-1.md`, `docs/reference/tea-evaluate-cli.md`, the `package.json` test chain and `quality.yaml`, keep both sides, then rerun the suites the story touches.
+- A finding that becomes a new story takes the next free number in its lane's range: lane 1 from 1.69, lane 2 from 1.80, lane 3 from 1.90. The story joins the end of its own lane, and its row, `epics.md` section and `test-design-epic-1.md` section follow the rule in the relay protocol.
+- A lane that needs an eval-quality change it does not own asks the coordinator, who routes it to lane 3's publisher.
+- Story H.1 runs once every lane has drained.
+
 ## Epic 1: The Evaluate authoring loop
 
 An adopter gets a running, scored evaluation of their own target without hand-building the runner, the adapter, the corpus or the evaluation layer.
