@@ -1652,7 +1652,7 @@ So that the targets Evaluate was built for run confined (CAP-6, AD-4).
 
 **Given** a confined run whose registry entry runs `tea-skill-runner` over the stub agent that writes its state under `HOME`
 **When** the trial runs
-**Then** the agent's writes land in a per-trial private home the runtime provides and removes (or in paths the registry entry declares writable, validated by `check` against the evaluation folder and the project), the run completes, and the evaluation folder and the project stay unreadable and unwritable; reverting the change makes the agent fail its first state write, which the case catches
+**Then** the agent's writes land in a private home the runtime provides beneath the run's private parent and removes (the registry declares no writable path), the run completes, the evaluation folder stays unreadable and unwritable, the project's git directory stays unreadable apart from the worktree's own entry, and the rest of the project stays unwritable; the target reaches no other home, and each independent arm or leg of a sandbox starts with an empty home; reverting the change makes the agent fail its first state write, which the case catches
 **And** the reference documents the writable state and the skill's harness guide shows it in a validated tagged example.
 
 **Dependencies:** 1.31.

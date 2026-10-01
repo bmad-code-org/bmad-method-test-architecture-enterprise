@@ -194,6 +194,19 @@ function checkPaths() {
       refused: confinementRefused,
     },
     {
+      name: 'confinement.targetSandbox (seatbelt) private home',
+      call: (candidate) => confinement.targetSandbox({ confinement: seatbelt, workspace: '/proj/w', home: candidate }).wrap('node', []),
+      refused: confinementRefused,
+    },
+    {
+      name: 'confinement.targetSandbox (bubblewrap) private home',
+      call: (candidate) =>
+        withStatusDirectory((status) =>
+          confinement.targetSandbox({ confinement: confined, workspace: '/proj/w', home: candidate, status }).wrap('node', []),
+        ),
+      refused: confinementRefused,
+    },
+    {
       name: 'confinement.selectConfinement evaluation folder',
       call: (candidate) =>
         withStubMechanism((bin) =>
