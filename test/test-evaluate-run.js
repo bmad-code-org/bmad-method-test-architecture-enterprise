@@ -32,7 +32,19 @@
  *   gives the same exit and byte-identical evidence, on that passing run and
  *   on a FAIL (trial 2 of P-002 rewritten as an evaluator that saw nothing).
  * - A score with the isolation manifest removed: exit 3, the probe's persisted
- *   `score` stderr non-empty, and no evidence artifact.
+ *   `score` stderr non-empty, and no evidence artifact, and so no aggregate
+ *   call: the invocation's summary records the aggregate absent with its reason.
+ * - The run-wide strength aggregate (Story 1.45), over the real engine: five
+ *   qualified defect probes beside a clean control, four caught, produce one
+ *   copied `strength-aggregate.json` whose bytes equal the engine's (a direct
+ *   rerun of the recorded argv with a fresh `--out`) and whose input digests
+ *   equal the persisted evidence's; the same evidence meets a `0.75` floor and
+ *   does not meet `0.9` with the exit unchanged; an absent class is `null`, a
+ *   class with no exercised probe has `rate: null`, a trial set below the
+ *   policy's minimum is not comparable, and the clean control stays outside the
+ *   denominator; a probe with no evidence, an engine refusal (exit 4 and 5), a
+ *   tampered evidence file and a forged aggregate (digest, probe set, engine
+ *   version, schema, bytes, a link) each copy nothing and are recorded.
  * - A score through a logging shim at `TEA_EVALUATE_ENGINE_CLI`: one `score`
  *   call per probe carrying every trial's `--record` and the set's manifest;
  *   each call's stdout and stderr (several lines each) and exit code
@@ -299,6 +311,71 @@ function checkDirectRerun(label, scoreDirectory) {
   }
 }
 
+/** `eval-quality aggregate-strength` run directly on the argv a `tea-evaluate score` invocation persisted, with its own `--out`. */
+function directAggregate(record, out) {
+  const argv = [...record.argv];
+  argv[argv.indexOf('--out') + 1] = out;
+  const cli = engineCliPath(BASE_ENV);
+  const result = spawnSync(process.execPath, [cli, ...argv], { encoding: 'utf8', timeout: SPAWN_TIMEOUT_MS, killSignal: 'SIGKILL' });
+  return { status: result.status, bytes: fs.existsSync(out) ? fs.readFileSync(out) : null };
+}
+
+/**
+ * An invocation's aggregate against the engine: the copy equals what a direct rerun of the recorded argv writes byte for
+ * byte, the argv names the persisted evidence, the floors copy and the run's own policy, and each input digest equals the
+ * digest of the evidence file the invocation persisted, computed here from the file (`digestArtifact` over its parse).
+ */
+function checkAggregateRerun(label, { engine, runDirectory, scoreDirectory, probeIds }) {
+  const call = written(path.join(scoreDirectory, 'aggregate-strength.json'), `${label}'s aggregate call`);
+  const copied = path.join(scoreDirectory, 'strength-aggregate.json');
+  if (call === null || !fs.existsSync(copied)) {
+    check(false, `${label}: the invocation copied no strength aggregate`);
+    return null;
+  }
+  const direct = directAggregate(call, path.join(tempDir(`${label.replaceAll(' ', '-')}-aggregate`), 'strength-aggregate.json'));
+  check(direct.status === 0 && direct.bytes !== null, `${label}: eval-quality aggregate-strength run directly exited ${direct.status}`);
+  const bytes = fs.readFileSync(copied);
+  check(
+    direct.bytes?.equals(bytes) === true,
+    `${label}: the copied aggregate is not byte-identical to a direct eval-quality aggregate-strength`,
+  );
+  const value = (flag) => call.argv[call.argv.indexOf(flag) + 1];
+  const evidenceFlags = call.argv.flatMap((argument, at) => (argument === '--evidence' ? [call.argv[at + 1]] : []));
+  check(
+    JSON.stringify(evidenceFlags) ===
+      JSON.stringify(probeIds.map((probeId) => path.join(scoreDirectory, probeId, 'evidence-artifact.json'))) &&
+      value('--floors') === path.join(scoreDirectory, 'strength-floors.json') &&
+      value('--policy') === path.join(runDirectory, 'scoring-policy.json') &&
+      call.argv[0] === 'aggregate-strength',
+    `${label}: the aggregate call carried ${JSON.stringify(call.argv)}`,
+  );
+  const out = value('--out');
+  check(
+    typeof out === 'string' &&
+      path.basename(out) === 'strength-aggregate.json' &&
+      path.basename(path.dirname(out)).startsWith('tea-evaluate-aggregate-') &&
+      !fs.existsSync(path.dirname(out)),
+    `${label}: the aggregate call names --out ${out}, which is not a removed staging file`,
+  );
+  const aggregate = JSON.parse(bytes.toString('utf8'));
+  for (const input of aggregate.inputs) {
+    const persisted = engine.digestArtifact(
+      JSON.parse(fs.readFileSync(path.join(scoreDirectory, input.probeId, 'evidence-artifact.json'), 'utf8')),
+      'EvidenceArtifact',
+    );
+    check(
+      input.artifactDigest === persisted,
+      `${label}: ${input.probeId}'s recorded digest ${input.artifactDigest} is not its persisted evidence's ${persisted}`,
+    );
+  }
+  check(
+    JSON.stringify(aggregate.inputs.map((input) => input.probeId)) === JSON.stringify([...probeIds].sort()) &&
+      aggregate.engineVersion === engine.VERSION,
+    `${label}: the aggregate covers ${JSON.stringify(aggregate.inputs.map((input) => input.probeId))} under engine ${aggregate.engineVersion}`,
+  );
+  return aggregate;
+}
+
 /** The run's own files: run.json, the trial sets, the manifests, the configuration and the probes' AD-7 digests. */
 async function checkRunShape({ engine, validate, repository, project, folder, runDirectory }) {
   const commit = git(repository, ['rev-parse', 'HEAD']).toString().trim();
@@ -502,7 +579,7 @@ async function checkRunShape({ engine, validate, repository, project, folder, ru
 }
 
 /** The real engine's score of the run: every vote, the reduction, a comparable strength vector, and the calls' inputs. */
-async function checkRealScore({ validate, folder, env, runDirectory, index, policy, run }) {
+async function checkRealScore({ engine, validate, folder, env, runDirectory, index, policy, run }) {
   const scored = evaluate(['score', '--evaluation', folder], env);
   check(scored.status === 0, `score exited ${scored.status}; expected 0\n${scored.output}`);
   const scoreDirectory = latestScoreDirectory(runDirectory);
@@ -562,6 +639,40 @@ async function checkRealScore({ validate, folder, env, runDirectory, index, poli
     );
   }
   checkDirectRerun('the passing run', scoreDirectory);
+  const aggregate = checkAggregateRerun('the passing run', {
+    engine,
+    runDirectory,
+    scoreDirectory,
+    probeIds: index.trialSets.map((set) => set.probeId),
+  });
+  if (aggregate !== null) {
+    for (const problem of await validate('strength-aggregate', aggregate))
+      check(false, `the passing run's aggregate fails its published schema: ${problem}`);
+    check(
+      aggregate.classes.defect?.eligible === 1 &&
+        aggregate.classes.defect.rate === 1 &&
+        aggregate.classes['zero-action'] === null &&
+        aggregate.inputs.find((input) => input.probeId === 'P-001')?.probeClass === null,
+      `the passing run's aggregate counts ${JSON.stringify(aggregate.classes)}, with its clean control in a class`,
+    );
+    const summary = written(path.join(scoreDirectory, 'score.json'), "the passing run's score summary")?.strengthAggregate;
+    const digestOf = (relative) => engine.digestBytes(fs.readFileSync(path.join(folder, relative)));
+    check(
+      summary?.status === 'copied' &&
+        summary.exitCode === 0 &&
+        summary.reason === null &&
+        digestOf(summary.aggregate) === summary.aggregateDigest &&
+        digestOf(summary.floors) === summary.floorsDigest &&
+        JSON.stringify(summary.evidenceDigests) ===
+          JSON.stringify(Object.fromEntries(aggregate.inputs.map((input) => [input.probeId, input.artifactDigest]))),
+      `the passing run's summary records ${JSON.stringify(summary)}`,
+    );
+    check(
+      JSON.stringify(readJson(path.join(scoreDirectory, 'strength-floors.json'))) ===
+        JSON.stringify(readJson(path.join(folder, 'evaluation.json')).strengthFloor),
+      "the floors copy is not evaluation.json's strengthFloor",
+    );
+  }
 }
 
 /** The score through a logging shim: one call per probe, the streams and codes kept per probe, the most severe exit passed through. */
@@ -890,6 +1001,8 @@ function checkFailAndInvalid({ engine, folder, env, runDirectory }) {
     `the FAIL run's votes are ${JSON.stringify(failVotes)}`,
   );
   checkDirectRerun('the FAIL run', failDirectory);
+  // A FAIL leaves every probe's evidence, so the aggregate is copied and the exit stays the probe's own.
+  checkAggregateRerun('the FAIL run', { engine, runDirectory, scoreDirectory: failDirectory, probeIds: ['P-001', 'P-002'] });
 
   // The isolation manifest omitted: Invalid, with the diagnostics kept (AD-10).
   fs.rmSync(path.join(runDirectory, 'trial-sets', 'P-002', 'isolation-manifest.json'));
@@ -913,6 +1026,17 @@ function checkFailAndInvalid({ engine, folder, env, runDirectory }) {
     `the persisted P-002 score stderr does not name the absent manifest: ${JSON.stringify(invalidCall.stderr)}`,
   );
   check(!fs.existsSync(path.join(invalidDirectory, 'P-002', 'evidence-artifact.json')), 'an Invalid score left an evidence artifact');
+  // No evidence for a probe: no aggregate call, nothing written for one, and the summary says why.
+  const invalidSummary = written(path.join(invalidDirectory, 'score.json'), "the Invalid run's score summary");
+  check(
+    invalidSummary?.strengthAggregate?.status === 'absent' &&
+      /P-002/.test(invalidSummary.strengthAggregate.reason ?? '') &&
+      invalidSummary.strengthAggregate.aggregate === null &&
+      invalidSummary.strengthAggregate.call === null,
+    `the Invalid run's summary records the aggregate as ${JSON.stringify(invalidSummary?.strengthAggregate)}`,
+  );
+  for (const name of ['strength-aggregate.json', 'strength-floors.json', 'aggregate-strength.json'])
+    check(!fs.existsSync(path.join(invalidDirectory, name)), `an Invalid score left ${name}`);
 }
 
 async function checkRunAndScore() {
@@ -1005,10 +1129,369 @@ async function checkRunAndScore() {
   const policy = readJson(path.join(folder, 'policy', 'scoring-policy.json'));
   const { index, run } = await checkRunShape({ engine, validate, ...made, runDirectory });
   if (!Array.isArray(index.trialSets)) return;
-  await checkRealScore({ validate, folder, env, runDirectory, index, policy, run });
+  await checkRealScore({ engine, validate, folder, env, runDirectory, index, policy, run });
   const shimEnv = checkShimmedScore({ folder, env, runDirectory, index });
   checkRefusedArtifacts({ engine, folder, runDirectory, shimEnv });
   checkFailAndInvalid({ engine, folder, env, runDirectory });
+}
+
+/** Rewrites one probe's three records and anchors the rewrite in run.json, as the FAIL fixture does; returns the undo. */
+function rewriteRecords({ engine, runDirectory, probeId, edit }) {
+  const runFile = path.join(runDirectory, 'run.json');
+  const originalRun = fs.readFileSync(runFile);
+  const originals = new Map();
+  const run = JSON.parse(originalRun.toString('utf8'));
+  for (const trial of [1, 2, 3]) {
+    const relative = `trial-sets/${probeId}/record-${trial}.json`;
+    const file = path.join(runDirectory, relative);
+    originals.set(file, fs.readFileSync(file));
+    const record = readJson(file);
+    edit(record);
+    const bytes = Buffer.from(engine.serializeArtifact(record, 'SealedRunRecord'));
+    fs.writeFileSync(file, bytes);
+    run.artifacts.records[relative] = engine.digestBytes(bytes);
+  }
+  fs.writeFileSync(runFile, `${JSON.stringify(run, null, 2)}\n`);
+  return () => {
+    for (const [file, bytes] of originals) fs.writeFileSync(file, bytes);
+    fs.writeFileSync(runFile, originalRun);
+  };
+}
+
+/** Rewrites the run's scoring policy copy and anchors it in run.json; returns the undo. */
+function rewritePolicy({ engine, runDirectory, edit }) {
+  const runFile = path.join(runDirectory, 'run.json');
+  const policyFile = path.join(runDirectory, 'scoring-policy.json');
+  const originalRun = fs.readFileSync(runFile);
+  const originalPolicy = fs.readFileSync(policyFile);
+  const policy = JSON.parse(originalPolicy.toString('utf8'));
+  edit(policy);
+  const bytes = Buffer.from(engine.serializeArtifact(policy, 'ScoringPolicy'));
+  fs.writeFileSync(policyFile, bytes);
+  const run = JSON.parse(originalRun.toString('utf8'));
+  run.policyDigest = engine.digestBytes(bytes);
+  fs.writeFileSync(runFile, `${JSON.stringify(run, null, 2)}\n`);
+  return () => {
+    fs.writeFileSync(policyFile, originalPolicy);
+    fs.writeFileSync(runFile, originalRun);
+  };
+}
+
+/**
+ * Four more seeded defect probes beside the fixture's P-002 and clean control P-001: P-003 to P-006, each its own
+ * mutation (M-002 to M-005 relax `gate-2` to `gate-5` in the policy) and its own witness, which the verdict command's
+ * `relaxed: gate-<n>` line tells apart. The floor starts at 0.75.
+ */
+function addDefectProbes({ project, folder }) {
+  fs.writeFileSync(
+    path.join(project, 'rules', 'policy.txt'),
+    `mode: strict\n${[2, 3, 4, 5].map((gate) => `gate-${gate}: strict\n`).join('')}`,
+  );
+  const base = JSON.stringify(readJson(path.join(folder, 'probes', 'P-002.probe.json')));
+  const mutation = readJson(path.join(folder, 'mutations', 'M-001.mutation.json'));
+  for (const gate of [2, 3, 4, 5]) {
+    const number = String(gate + 1).padStart(3, '0');
+    const mutationId = `M-${String(gate).padStart(3, '0')}`;
+    const probe = JSON.parse(
+      base.replaceAll('manifest-lenient', `manifest-lenient-${gate}`).replaceAll('verdict: rejected', `relaxed: gate-${gate}`),
+    );
+    probe.probeId = `P-${number}`;
+    probe.defects[0].defectId = `D-${number}`;
+    probe.qualification.mutation = mutationId;
+    probe.rationale = `Seeded defect: ${mutationId} relaxes gate-${gate}, and the verdict command then reports it.`;
+    fs.writeFileSync(path.join(folder, 'probes', `${probe.probeId}.probe.json`), `${JSON.stringify(probe, null, 2)}\n`);
+    fs.writeFileSync(
+      path.join(folder, 'mutations', `${mutationId}.mutation.json`),
+      `${JSON.stringify(
+        {
+          ...mutation,
+          mutationId,
+          mutationSource: `rules/policy.txt: gate-${gate} relaxed to lenient`,
+          operator: { ...mutation.operator, find: `gate-${gate}: strict`, replace: `gate-${gate}: lenient` },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+  }
+  editJson(path.join(folder, 'evaluation.json'), (evaluation) => (evaluation.strengthFloor = { defect: 0.75 }));
+}
+
+/** The decision and basis the aggregate states for each class, as `class:decision/basis`. */
+function decisionsOf(aggregate) {
+  return Object.entries(aggregate.floorDecisions).map(([name, { decision, basis }]) => `${name}:${decision}/${basis}`);
+}
+
+/**
+ * The run-wide strength aggregate (Story 1.45), over the real engine. Five qualified defect probes beside a clean
+ * control, P-006 left uncaught in every trial; every number asserted here is the engine's, and TeA only copied it.
+ */
+async function checkStrengthAggregate() {
+  const engine = await loadEngine();
+  const validate = createArtifactValidator();
+  const made = makeProject('strength', { edit: addDefectProbes });
+  const { folder, env } = made;
+  const uncaught = ['trial-mutated-M-005-1', 'trial-mutated-M-005-2', 'trial-mutated-M-005-3'].join(',');
+  const ran = evaluate(['run', '--evaluation', folder, '--seed', 'story-1.45'], { ...env, VERDICT_WHEN: uncaught, VERDICT_DO: 'accept' });
+  check(ran.status === 0, `the five-probe run exited ${ran.status}; expected 0\n${ran.output}`);
+  const runDirectory = runDirectoryOf(folder);
+  if (runDirectory === null) return;
+  const probeIds = ['P-001', 'P-002', 'P-003', 'P-004', 'P-005', 'P-006'];
+  const floors = (value) => editJson(path.join(folder, 'evaluation.json'), (evaluation) => (evaluation.strengthFloor = value));
+  const score = (extra = {}, expected = 2) => {
+    const result = evaluate(['score', '--evaluation', folder], { ...env, ...extra });
+    check(result.status === expected, `score exited ${result.status}; expected ${expected}\n${result.output}`);
+    const scoreDirectory = latestScoreDirectory(runDirectory);
+    return { result, scoreDirectory, summary: written(path.join(scoreDirectory, 'score.json'), 'the score summary')?.strengthAggregate };
+  };
+
+  // Four of five caught meets the 0.75 floor; the exit is the uncaught probe's own FAIL, and the floor never moves it.
+  const first = score();
+  const aggregate = checkAggregateRerun('the 0.75 floor', { engine, runDirectory, scoreDirectory: first.scoreDirectory, probeIds });
+  if (aggregate === null) return;
+  for (const problem of await validate('strength-aggregate', aggregate))
+    check(false, `the aggregate fails its published schema: ${problem}`);
+  check(
+    JSON.stringify(aggregate.classes.defect) === JSON.stringify({ caught: 4, comparable: true, eligible: 5, exercised: 5, rate: 0.8 }) &&
+      aggregate.classes.gameability === null &&
+      aggregate.classes['zero-action'] === null,
+    `the aggregate counts ${JSON.stringify(aggregate.classes)}`,
+  );
+  check(
+    JSON.stringify(aggregate.floorDecisions.defect) === JSON.stringify({ basis: 'rate-meets-floor', decision: 'meets', floor: 0.75 }),
+    `four of five against a 0.75 floor reads ${JSON.stringify(aggregate.floorDecisions.defect)}`,
+  );
+  check(
+    aggregate.inputs.map((input) => `${input.probeId}:${input.probeClass}`).join(',') ===
+      'P-001:null,P-002:defect,P-003:defect,P-004:defect,P-005:defect,P-006:defect',
+    `the aggregate's inputs are ${JSON.stringify(aggregate.inputs)}; the clean control must stay outside every class`,
+  );
+  check(
+    first.summary?.status === 'copied' && first.summary.exitCode === 0 && first.summary.partition === 'both',
+    `the summary records ${JSON.stringify(first.summary)}`,
+  );
+  const pointers = ['partitions.json', 'interpretation.json'].map((name) => readJson(path.join(runDirectory, name)).strengthAggregate);
+  check(
+    pointers.every(
+      (pointer) =>
+        pointer.status === 'copied' && pointer.digest === first.summary.aggregateDigest && pointer.path === first.summary.aggregate,
+    ),
+    `the views point at ${JSON.stringify(pointers)}, not at the copied aggregate`,
+  );
+
+  // The same evidence at 0.9 does not meet it. The counts and every input digest stay, the decision flips, the exit holds.
+  floors({ defect: 0.9 });
+  const second = score();
+  const stricter = checkAggregateRerun('the 0.9 floor', { engine, runDirectory, scoreDirectory: second.scoreDirectory, probeIds });
+  if (stricter !== null) {
+    check(
+      JSON.stringify(stricter.floorDecisions.defect) ===
+        JSON.stringify({ basis: 'rate-below-floor', decision: 'does-not-meet', floor: 0.9 }),
+      `four of five against a 0.9 floor reads ${JSON.stringify(stricter.floorDecisions.defect)}`,
+    );
+    check(
+      JSON.stringify(stricter.classes) === JSON.stringify(aggregate.classes) &&
+        JSON.stringify(stricter.inputs.map((input) => input.artifactDigest)) ===
+          JSON.stringify(aggregate.inputs.map((input) => input.artifactDigest)),
+      'the 0.9 floor changed the counts or the evidence digests of the same evidence',
+    );
+  }
+
+  // Declared floors read per class: no floor is undeclared, a floor with no eligible probe does not meet. The clean control
+  // declares class zero-action and still counts for none.
+  floors({ 'zero-action': 1 });
+  const absentClass = score();
+  const classes = checkAggregateRerun('the zero-action floor', {
+    engine,
+    runDirectory,
+    scoreDirectory: absentClass.scoreDirectory,
+    probeIds,
+  });
+  check(
+    classes !== null &&
+      classes.classes['zero-action'] === null &&
+      decisionsOf(classes).join(',') ===
+        'defect:undeclared/no-floor-declared,gameability:undeclared/no-floor-declared,zero-action:does-not-meet/no-eligible-probe',
+    `a floor on a class with no eligible probe reads ${JSON.stringify(classes?.floorDecisions)}`,
+  );
+  floors({});
+  const noFloors = score();
+  const undeclared = checkAggregateRerun('no floors', { engine, runDirectory, scoreDirectory: noFloors.scoreDirectory, probeIds });
+  check(
+    undeclared !== null && decisionsOf(undeclared).every((decision) => decision.endsWith('undeclared/no-floor-declared')),
+    `declaring no floor reads ${JSON.stringify(undeclared?.floorDecisions)}`,
+  );
+  floors({ defect: 0.75 });
+
+  // Some, not all, eligible probes unexercised: the floor is not met whatever the rate over the others.
+  const restoreUnexercised = rewriteRecords({
+    engine,
+    runDirectory,
+    probeId: 'P-004',
+    edit: (record) => {
+      // The evaluator saw nothing and attempted no oracle: the step never ran.
+      record.observations = [];
+      record.findings = [];
+      record.oracleDispositions = [{ oracleId: 'O-001', disposition: 'not-attempted', observationIds: [], note: 'the step never ran' }];
+    },
+  });
+  const partial = score();
+  const unexercised = checkAggregateRerun('one unexercised probe', {
+    engine,
+    runDirectory,
+    scoreDirectory: partial.scoreDirectory,
+    probeIds,
+  });
+  check(
+    unexercised !== null &&
+      JSON.stringify(unexercised.classes.defect) ===
+        JSON.stringify({ caught: 3, comparable: true, eligible: 5, exercised: 4, rate: 0.75 }) &&
+      unexercised.floorDecisions.defect.basis === 'unexercised-probe' &&
+      unexercised.floorDecisions.defect.decision === 'does-not-meet',
+    `an unexercised probe reads ${JSON.stringify(unexercised?.classes.defect)} and ${JSON.stringify(unexercised?.floorDecisions.defect)}`,
+  );
+  restoreUnexercised();
+
+  // A probe with no evidence artifact: its score is Invalid, no aggregate call is made and the summary says why.
+  const manifest = path.join(runDirectory, 'trial-sets', 'P-004', 'isolation-manifest.json');
+  const manifestBytes = fs.readFileSync(manifest);
+  fs.rmSync(manifest);
+  const scoreLog = path.join(tempDir('strength-absent'), 'score.log');
+  const aggregateLog = path.join(path.dirname(scoreLog), 'aggregate.log');
+  const raced = (mode, extra = {}) => ({
+    [ENGINE_CLI_ENV]: RACE_ENGINE,
+    TEA_RACE_LOG: scoreLog,
+    TEA_RACE_AGGREGATE_LOG: aggregateLog,
+    TEA_RACE_MODE: '',
+    TEA_RACE_AGGREGATE: mode,
+    TEA_RACE_TARGET: path.dirname(scoreLog),
+    ...extra,
+  });
+  const absent = score(raced(''), 3);
+  fs.writeFileSync(manifest, manifestBytes);
+  check(
+    loggedCalls(scoreLog).length === probeIds.length && loggedCalls(aggregateLog).length === 0,
+    `a probe with no evidence made ${loggedCalls(scoreLog).length} score call(s) and ${loggedCalls(aggregateLog).length} aggregate call(s); expected ${probeIds.length} and 0`,
+  );
+  check(
+    absent.summary?.status === 'absent' &&
+      /P-004/.test(absent.summary.reason ?? '') &&
+      absent.summary.aggregate === null &&
+      absent.summary.floors === null &&
+      readJson(path.join(runDirectory, 'partitions.json')).strengthAggregate.status === 'absent',
+    `an absent aggregate is recorded as ${JSON.stringify(absent.summary)}`,
+  );
+  for (const name of ['strength-aggregate.json', 'strength-floors.json', 'aggregate-strength.json'])
+    check(!fs.existsSync(path.join(absent.scoreDirectory, name)), `a score with a probe lacking evidence left ${name}`);
+
+  // The engine refuses the set: exit 5 for a floor outside the classes it admits, exit 4 for an evidence file that
+  // contradicts itself. Nothing is copied and the exit joins the most severe combination (5 and 4 beat the FAIL's 2).
+  floors({ canary: 1 });
+  const canary = score({}, 5);
+  floors({ defect: 0.75 });
+  check(
+    canary.summary?.status === 'refused' &&
+      canary.summary.exitCode === 5 &&
+      !fs.existsSync(path.join(canary.scoreDirectory, 'strength-aggregate.json')),
+    `a canary floor the engine refuses is recorded as ${JSON.stringify(canary.summary)}`,
+  );
+  const contradicted = score(raced('inconsistent-evidence'), 4);
+  check(
+    contradicted.summary?.status === 'refused' &&
+      contradicted.summary.exitCode === 4 &&
+      /strength-input-inconsistent/.test(contradicted.summary.reason ?? '') &&
+      !fs.existsSync(path.join(contradicted.scoreDirectory, 'strength-aggregate.json')),
+    `an evidence file contradicting itself is recorded as ${JSON.stringify(contradicted.summary)}`,
+  );
+
+  // A persisted evidence file that changed, or an aggregate that does not match what was persisted, is copied nowhere and exits 12.
+  for (const [mode, pattern, status] of [
+    ['tamper-evidence', /records evidence digest .* for P-001/, 'mismatch'],
+    ['forge-digest', /records evidence digest sha256:0{64} for P-001/, 'mismatch'],
+    ['forge-probes', /covers probes .*, and this invocation scored/, 'mismatch'],
+    ['forge-engine', /names engine 0\.0\.1, not the .* run\.json recorded/, 'mismatch'],
+    ['forge-schema', /fails its published schema/, 'mismatch'],
+    ['garbage', /is not JSON/, 'mismatch'],
+    ['stage-link', /link or a non-file entry/, 'failed'],
+  ]) {
+    const forged = score(raced(mode), 12);
+    check(
+      forged.summary?.status === status &&
+        pattern.test(forged.summary.reason ?? '') &&
+        forged.summary.aggregate === null &&
+        !fs.existsSync(path.join(forged.scoreDirectory, 'strength-aggregate.json')) &&
+        /strength aggregate: /.test(forged.result.output),
+      `${mode}: the summary records ${JSON.stringify(forged.summary)}`,
+    );
+  }
+  check(
+    fs.readdirSync(env.TMPDIR).length === 0,
+    `the aggregate runs left ${JSON.stringify(fs.readdirSync(env.TMPDIR))} in the run's temp directory`,
+  );
+}
+
+/**
+ * The null and non-comparable readings, each from one engine call over the fixture's clean control and one defect probe:
+ * a class with no eligible probe is `null`, an admitted class with no exercised probe has `rate: null`, and a trial set
+ * below the policy's `minimumTrialCount` is not comparable, each distinct from the others.
+ */
+async function checkAggregateStates() {
+  const engine = await loadEngine();
+  const { folder, env } = makeProject('states');
+  const ran = evaluate(['run', '--evaluation', folder, '--seed', 'story-1.45-states'], env);
+  check(ran.status === 0, `the states run exited ${ran.status}; expected 0\n${ran.output}`);
+  const runDirectory = runDirectoryOf(folder);
+  if (runDirectory === null) return;
+  const probeIds = ['P-001', 'P-002'];
+  const read = (label) => {
+    const scored = evaluate(['score', '--evaluation', folder], env);
+    check(scored.status === 0, `${label}: score exited ${scored.status}; expected 0\n${scored.output}`);
+    return checkAggregateRerun(label, { engine, runDirectory, scoreDirectory: latestScoreDirectory(runDirectory), probeIds });
+  };
+  const shape = (aggregate) => ({
+    defect: JSON.stringify(aggregate?.classes.defect),
+    zeroAction: JSON.stringify(aggregate?.classes['zero-action']),
+    decisions: aggregate === null ? '' : decisionsOf(aggregate).join(','),
+  });
+
+  const measured = shape(read('a measured class'));
+  check(
+    measured.defect === JSON.stringify({ caught: 1, comparable: true, eligible: 1, exercised: 1, rate: 1 }) &&
+      measured.zeroAction === 'null' &&
+      measured.decisions ===
+        'defect:meets/rate-meets-floor,gameability:undeclared/no-floor-declared,zero-action:does-not-meet/no-eligible-probe',
+    `a measured class and a class with no eligible probe read ${JSON.stringify(measured)}`,
+  );
+
+  // The policy asks for more trials than the set holds: the class stays measured and stops being comparable.
+  const restorePolicy = rewritePolicy({ engine, runDirectory, edit: (policy) => (policy.minimumTrialCount = 4) });
+  const short = shape(read('a trial set below the minimum'));
+  restorePolicy();
+  check(
+    short.defect === JSON.stringify({ caught: 1, comparable: false, eligible: 1, exercised: 1, rate: 1 }) &&
+      short.decisions.startsWith('defect:does-not-meet/not-comparable,'),
+    `a trial set below minimumTrialCount reads ${JSON.stringify(short)}`,
+  );
+
+  // The only defect probe is never exercised: the class exists with rate null, which is not the null of a class with no probe.
+  const restoreRecords = rewriteRecords({
+    engine,
+    runDirectory,
+    probeId: 'P-002',
+    edit: (record) => {
+      // The evaluator saw nothing and attempted no oracle: the step never ran.
+      record.observations = [];
+      record.findings = [];
+      record.oracleDispositions = [{ oracleId: 'O-001', disposition: 'not-attempted', observationIds: [], note: 'the step never ran' }];
+    },
+  });
+  const idle = shape(read('an admitted class with no exercised probe'));
+  restoreRecords();
+  check(
+    idle.defect === JSON.stringify({ caught: 0, comparable: true, eligible: 1, exercised: 0, rate: null }) &&
+      idle.decisions.startsWith('defect:does-not-meet/no-exercised-probe,'),
+    `an admitted class with no exercised probe reads ${JSON.stringify(idle)}`,
+  );
 }
 
 /** Target reports survive trial boundaries, exact sums, and the distinction between zero and absent telemetry. */
@@ -3223,6 +3706,8 @@ async function main() {
       await runCase('the run directory writer', checkRunDirectoryWriter);
       await runCase('the templates and ignores', checkTemplatesAndIgnores);
       await runCase('the run and its scores', checkRunAndScore);
+      await runCase('the strength aggregate', checkStrengthAggregate);
+      await runCase('the aggregate states', checkAggregateStates);
       await runCase('the unverified evidence copies', checkUnverifiedEvidence);
       await runCase('the score output reference', checkScoreOutputReference);
       await runCase('target usage reports', checkTargetUsageReports);

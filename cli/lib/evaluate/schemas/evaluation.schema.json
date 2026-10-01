@@ -372,10 +372,10 @@
       }
     },
     "strengthFloor": {
-      "description": "Minimum catch rate per probe class, from 0 to 1.",
+      "description": "Minimum catch rate per probe class, from 0 to 1. eval-quality aggregate-strength admits defect, gameability and zero-action; canaries stay outside every class denominator, so a canary floor is refused.",
       "type": "object",
       "propertyNames": {
-        "enum": ["defect", "gameability", "zero-action", "canary"]
+        "enum": ["defect", "gameability", "zero-action"]
       },
       "additionalProperties": {
         "type": "number",

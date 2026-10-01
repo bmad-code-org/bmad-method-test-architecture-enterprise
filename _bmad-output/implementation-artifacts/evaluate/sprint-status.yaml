@@ -80,7 +80,7 @@ development_status:
   1-42-attribute-reused-operation-ids-to-their-interfaces: backlog
   1-43-keep-ungraded-framework-errors-out-of-target-findings: backlog
   1-44-record-installed-framework-versions-in-evaluator-provenance: backlog
-  1-45-aggregate-development-strength-through-eval-quality: backlog
+  1-45-aggregate-development-strength-through-eval-quality: in-progress
   1-46-close-the-dogfood-suites-coverage-gaps: backlog
   1-47-distinguish-reference-risk-tables-from-the-scored-register: backlog
   1-48-report-whole-document-coverage-for-a-structured-design-artifact: backlog

@@ -412,6 +412,9 @@ async function checkRequirementsStatement() {
     ['digest object with shadowed toString', (value) => (value.requirements.digest = { toString: 'x' }), '/requirements/digest'],
     ['parent path', (value) => (value.requirements.path = '../requirements.md'), '/requirements/path'],
     ['absolute path', (value) => (value.requirements.path = '/tmp/requirements.md'), '/requirements/path'],
+    // eval-quality aggregate-strength admits defect, gameability and zero-action; a canary stays outside every denominator (Story 1.45).
+    ['canary floor', (value) => (value.strengthFloor.canary = 1), '/strengthFloor'],
+    ['floor above one', (value) => (value.strengthFloor.defect = 1.5), '/strengthFloor/defect'],
   ]) {
     const folder = withStatement();
     editJson(folder, 'evaluation.json', edit);

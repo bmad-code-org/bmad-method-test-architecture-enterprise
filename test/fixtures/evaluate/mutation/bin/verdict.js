@@ -24,6 +24,9 @@
  *   verdict: accepted | rejected | unknown
  *                               accepted under `mode: strict`, rejected under
  *                               `mode: lenient`
+ *   relaxed: gate-<n>           one line for each `gate-<n>: lenient` line the policy
+ *                               holds, so a corpus of several seeded defects tells
+ *                               which of its mutations a leg ran under (Story 1.45)
  *
  * When VERDICT_MARKER names a file, every run first appends one JSON line to
  * it, the launch marker (Story 1.9): `workspace`, the runtime label of the
@@ -62,7 +65,8 @@
  *
  * Two variables act in one workspace only, so one trial or qualification of a
  * run can differ while every other run of the command behaves: VERDICT_WHEN
- * names the workspace by its runtime label (for example trial-clean-2, the
+ * names the workspace by its runtime label, or several labels separated by
+ * commas (for example trial-clean-2, the
  * directory tea-evaluate-trial-clean-2-<uuid> that holds this working
  * directory), and VERDICT_DO says what the command does there:
  *
@@ -137,7 +141,7 @@ const text = policy.toString('utf8');
 /** Whether this run is in the workspace VERDICT_WHEN names. */
 const workspaceDirectory = path.basename(path.dirname(process.cwd()));
 const workspaceMatch = /^tea-evaluate-(.+)-(?:[A-Za-z0-9]{6}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/.exec(workspaceDirectory);
-const here = Boolean(process.env.VERDICT_WHEN) && workspaceMatch?.[1] === process.env.VERDICT_WHEN;
+const here = Boolean(process.env.VERDICT_WHEN) && process.env.VERDICT_WHEN.split(',').includes(workspaceMatch?.[1]);
 const act = here ? process.env.VERDICT_DO : undefined;
 if (process.env.VERDICT_MARKER) {
   const label = workspaceMatch?.[1] ?? null;
@@ -180,7 +184,7 @@ const residue = fs.existsSync('residue.txt') ? 'yes' : 'no';
 
 let verdict = 'unknown';
 if (text.includes('mode: strict')) verdict = 'accepted';
-else if (text.includes('mode: lenient')) verdict = 'rejected';
+if (text.includes(': lenient')) verdict = 'rejected';
 if (act === 'accept') verdict = 'accepted';
 if (act === 'reject') verdict = 'rejected';
 
@@ -195,6 +199,7 @@ process.stdout.write(
     `residue: ${residue}`,
     ...(process.env.VERDICT_SECRET ? [`secret: ${process.env.VERDICT_SECRET}`] : []),
     `verdict: ${verdict}`,
+    ...[...text.matchAll(/^(gate-\d+): lenient$/gm)].map((relaxed) => `relaxed: ${relaxed[1]}`),
     '',
   ].join('\n'),
 );
