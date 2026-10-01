@@ -1695,6 +1695,18 @@ function checkPromptfooFailureBoundary(run, selected) {
   );
   refuse(ungraded({}), 'an ungraded row without an error', /ungraded framework error/, /no error reported/);
   refuse(ungraded({ gradingResult: null }), 'a null grade', /ungraded framework error/);
+  // The diagnostic holds the first line of the framework's error, cut at 200 characters, and nothing after.
+  const diagnosticOf = (error) => {
+    const refused = run(['--map-results'], ungraded({ error }));
+    assert.notStrictEqual(refused.status, 0, 'promptfoo template accepted an ungraded row with a long error');
+    return refused.stderr;
+  };
+  const multiLine = diagnosticOf('first line\nsecond line of a stack');
+  assert.ok(multiLine.includes('(first line)'), 'the diagnostic lost the first line of the framework error');
+  assert.ok(!multiLine.includes('second line of a stack'), 'the diagnostic carried a later line of the framework error');
+  const long = diagnosticOf('x'.repeat(500));
+  assert.ok(long.includes(`(${'x'.repeat(200)})`), 'the diagnostic did not hold the first 200 characters of a long error');
+  assert.ok(!long.includes('x'.repeat(201)), 'the diagnostic held more than 200 characters of a long error');
   refuse(ungraded({ gradingResult: null, error: '  ' }), 'a blank error', /ungraded framework error/);
   refuse(
     {
@@ -1888,6 +1900,7 @@ function checkEvaluatorGuidance(guide, failures) {
     'seals no record',
     'each exactly once',
     'even when another assertion graded',
+    "With promptfoo 0.123.1 a thrown `javascript` assertion or a crashing code file arrives graded `pass: false` and still becomes a target `fail` row until Story 1.70; an ungraded row arises when promptfoo cannot grade at all, for example when an assertion's `transform` fails.",
   ])
     requireText(boundary, marker, `evaluator.md ${FAILURE_BOUNDARY}`, failures);
   const ungradedExamples = taggedExamples(boundary, 'promptfoo-ungraded');
@@ -1904,7 +1917,16 @@ function checkEvaluatorGuidance(guide, failures) {
     ['primary sources only', 'documentation', 'repository', 'API reference', 'examples', 'changelog', 'secondary summary'],
     ['takes inputs', 'judges', 'returns results', 'model', 'credentials'],
     ['Install the version the adopter uses', 'installed version'],
-    ['Execute a minimal example', 'known pass', 'known fail', 'stdout', 'stderr', 'contradicts', 'framework cannot grade'],
+    [
+      'Execute a minimal example',
+      'known pass',
+      'known fail',
+      'stdout',
+      'stderr',
+      'contradicts',
+      'framework cannot grade',
+      'a thrown assertion may arrive as an ordinary failing grade',
+    ],
     ['evaluator/LEARNED.md', 'primary source', 'contradictions'],
     ['evaluator/mapping.json', 'judgment', 'passed-clean-control', 'caught', 'exit non-zero on a result the framework did not grade'],
   ].entries()) {

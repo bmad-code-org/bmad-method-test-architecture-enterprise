@@ -99,13 +99,13 @@ context:
   Edited there: `assets/evaluators/promptfoo-assertions.mjs`, `references/evaluator.md` (new `## Separate ungraded framework errors from graded target failures` between the framework landscape and the learn procedure, with the two tagged examples `promptfoo-ungraded` and `promptfoo-graded-fail`, the stderr path of the diagnostic and the invocation of `--map-results`; step 4 of the learn procedure asks for a third executed case the framework cannot grade, step 6 asks the wrapper to exit non-zero on it) and `references/gaps.md` (the `tea-evaluate 12` repair names a framework result with no grade).
   The memlog (`.memlog.md`, gitignored) carries the direction and the analyze event.
 - `test/test-evaluate-promptfoo.js`: `resultShapes` flips the old ungraded-row assertions to refusals (absent and null `gradingResult`, with an error, with a multi-line error, with a blank error, without one, next to a graded result, no judgment rows printed) and adds the graded pass rows, a graded fail with its observed quote, a graded fail with no reason (`Assertion failed.`), one-of-three and two-of-three grade sets, a complete grade set beside an `error` string, and the real crashed JavaScript assertion mapped as a graded fail.
-  `ungradedRuns` runs `tea-evaluate preflight` and `run` over three projects whose evaluator is rewritten after promptfoo returns (an ungraded row with an error, a one-of-three grade set, a grade without a boolean `pass`): exit 12, the diagnostic in `evaluator/clean/trial-1.stderr`, and no `trial-sets.json` or `trial-sets/` in the run directory; `pipeline` gained the positive control that a clean run does have them.
+  `ungradedRuns` runs `tea-evaluate preflight` and `run` over three projects: one with the evaluator untouched and `evaluator.args` set to `--ungraded` (real promptfoo output for a failing transform, Review round 1) and two whose evaluator is rewritten after promptfoo returns (a one-of-three grade set, a grade without a boolean `pass`): exit 12, the diagnostic in `evaluator/clean/trial-1.stderr`, and no `trial-sets.json` or `trial-sets/` in the run directory; `pipeline` gained the positive control that a clean run does have them.
   A repeated grade and an ungraded row without an error are covered by the `--map-results` units alone, which keeps the suite light.
 - `test/test-evaluate-guidance.js`: `FAILURE_BOUNDARY` heading, eight markers and the two tagged examples asserted in `checkEvaluatorGuidance`, with three negative cases (heading removed, example tag removed, exit 12 sentence removed).
   `checkPromptfooFailureBoundary` runs the guide's own two examples through the rendered starter and adds the ungraded rows (error, none, null, blank, multi-assertion, after a graded result), a graded pass, a graded fail with and without a reason, and the partial, two-of-three, repeated, non-boolean and missing-`pass` grade sets, each expecting a non-zero exit with the named diagnostic and no `rows` on stdout.
   The gaps exit 12 pointer and the two learn-procedure sentences are pinned too.
 - `tools/test-shard-weights.json`: `test:evaluate-promptfoo` 44 to 71, from the local wall time 20.0 to 32.4 seconds scaled by the 44-second CI measure (about 2.2 times local).
-  `test:evaluate-guidance` stays 52.2 (local 30.2 seconds before and after).
+  `test:evaluate-guidance` 52.2 to 68 in Review round 1 (CI measures of 57 to 68 seconds).
   No timeout was raised and no script was added.
 - Plan text: the Story 1.20 error-row clauses in `epics.md` (a superseded line after the Story 1.20 acceptance criteria) and in `test-design-epic-1.md` (the section note and the first table row) are marked, dated 2026-10-01; the Story 1.20 and 1.23 records are untouched.
   `evaluation-framework-facts.md` still said the importer handled an error row with a fail row "so that failure remains visible"; it carries an amendment dated 2026-10-01 (a stale statement of the superseded rule, fixed on the way).
@@ -116,12 +116,12 @@ context:
 
 ### Departures from the plan text
 
-- The installed promptfoo (0.123.1) grades a thrown JavaScript assertion as a failing component, with `gradingResult.pass: false`, `componentResults[0].pass: false` and the crash text as `reason` (and an `error` field, which it also sets on every ordinary failed assertion; `failureReason` is 1 in both cases).
+- The installed promptfoo (0.123.1) grades a thrown JavaScript assertion (and a `file://` Python or Ruby value that raises) as a failing component, with `gradingResult.pass: false`, `componentResults[0].pass: false` and the crash text as `reason` (and an `error` field, which it also sets on every ordinary failed assertion; `failureReason` is 1 in both cases).
   Such a result is graded, so it still maps to a cited target `fail` row, as the intent says a graded `pass: false` must.
   The existing `errored` case deleted `gradingResult` to build an ungraded row; it now maps the real crashed result as a graded fail and builds the ungraded row from it by deletion.
-  The ungraded shape is reachable from the installed version only through the rows the intent names (absent or null `gradingResult`), which no test can make promptfoo emit for a deterministic assertion; the end-to-end refusal cases rewrite the result in the evaluator after promptfoo returns, so they exercise the real `run` path over a rewritten result.
-  Reported to the coordinator as a finding (see Left undone).
-- The guide does not claim an assertion crash arrives ungraded; its example says "promptfoo could not grade this output".
+  A real promptfoo run does return an ungraded row (`gradingResult: null`, `error` beginning `Error: Transform failed`) for an assertion whose inline `transform` throws, and for a `file://` JavaScript value that throws at load; the end-to-end case uses the transform (Review round 1).
+  Reported to the coordinator as a finding; it became Story 1.70 (see Left undone).
+- The guide does not claim an assertion crash arrives ungraded; it states that a thrown `javascript` assertion or a crashing code file arrives graded until Story 1.70 (Review round 1).
 - Of the five end-to-end shapes the matrix could give (`run` per scenario), three run through `tea-evaluate run`; the other two (an ungraded row without an error, a repeated grade) stay in the `--map-results` units, since each `run` case costs about 4.5 seconds local and the refusal path is the same function.
 - The refusal diagnostic carries the first line of the framework's error, at most 200 characters: a promptfoo error text is a full stack trace and the evaluator's stderr file would otherwise hold pages of it.
 
@@ -170,5 +170,42 @@ Builder Analyze (delta, five lenses) found 0 critical, 0 high, 7 medium and 6 lo
 
 ## Left undone, reported
 
-- Story 1.70 (new, end of lane 1): with the installed promptfoo a thrown JavaScript assertion is a graded failing component (see Departures), and promptfoo sets `error` on every failed assertion, so neither `error` nor the result shape tells a crash from a violated oracle. The starter and its guide will admit only deterministic built-in assertion types that run no adopter code and call no model, and the wrapper will refuse any other type with exit 12 naming it. Added to `epics.md` (the section, the Epic Dependencies row with the later rows renumbered 71 to 77, the lane 1 list, the story-count sentences, seventy-seven stories and Stories 1.27 to 1.70, and a pointer from Story 1.43), `test-design-epic-1.md` and `sprint-status.yaml` (`backlog`, and the end of `lane-1`).
+- Story 1.70, "Refuse promptfoo assertions that run adopter code or call a model" (new, end of lane 1): with the installed promptfoo a thrown JavaScript assertion is a graded failing component (see Departures), and promptfoo sets `error` on every failed assertion, so neither `error` nor the result shape tells a crash from a violated oracle. The starter and its guide will admit only deterministic built-in assertion types that run no adopter code and call no model, and the wrapper will refuse any other type with exit 12 naming it. Added to `epics.md` (the section, the Epic Dependencies row with the later rows renumbered 71 to 77, the lane 1 list, the story-count sentences, seventy-seven stories and Stories 1.27 to 1.70, and a pointer from Story 1.43), `test-design-epic-1.md` and `sprint-status.yaml` (`backlog`, and the end of `lane-1`).
 - The pre-existing medium findings above (SKILL.md Stage 6, `corpus.md` size, the hand-run requirements digest).
+
+## Review round 1
+
+Two reviewers on PR #283 raised seven valid items, each checked against the code and reproduced; all are fixed.
+Each revert was exercised once in a scratch copy of the tree (`.git` included, the working tree left as built).
+The unmodified scratch copy passes: `test:evaluate-promptfoo` 165 checks, `test:evaluate-guidance` green.
+
+### Fixed
+
+- 1: the sprint row for `1-43` read `in-progress`; it is `review`.
+- 2: the diagnostic cap was untested.
+  `resultShapes` refuses a real ungraded result whose error is 500 characters on one line and asserts the diagnostic holds exactly the first 200 and nothing after, and a two-line error whose second line must not appear; `checkPromptfooFailureBoundary` does the same through the rendered starter.
+  Reverts: `.slice(0, 200)` dropped from the fixture: 2 of 165 `test:evaluate-promptfoo` checks fail; `.split('\n')[0]` dropped from the fixture: 3 of 165; each dropped from the starter: 1 `test:evaluate-guidance` failure (the 200-character case and the first-line case respectively).
+- 3: `tools/test-shard-weights.json` `test:evaluate-guidance` 52.2 to 68 (CI measures of 57 to 68 seconds); `test:evaluate-promptfoo` stays 71.
+- 4: the end-to-end case no longer rewrites the evaluator.
+  The fixture gains `evaluator/asserts-ungraded.yaml` (a `contains` assertion with `transform: "output.notAFunction()"` and the metric of the error file) selected by `--ungraded`; `ungradedRuns` sets `evaluator.args` to it and the evaluator source stays untouched.
+  `resultShapes` asserts the real result (`gradingResult` null, an `error` containing `Transform failed`) and refuses it through `--map-results`.
+  Re-verified live on promptfoo 0.123.1 before writing: that shape is ungraded; a thrown `javascript` assertion arrives graded.
+  The false Departures claim is corrected, and `evaluation-framework-facts.md` records the transform shape (dated 2026-10-01).
+  Revert: the fail-row conversion restored in the fixture: 26 of 165 fail, among them the real ungraded `run` case (`run exited 0`, records sealed).
+- 5: the guide and the CHANGELOG state that with promptfoo 0.123.1 a thrown `javascript` assertion or a crashing code file arrives graded `pass: false` and still becomes a target `fail` row until Story 1.70, and that an ungraded row arises when promptfoo cannot grade at all (a failing `transform`).
+  Learn step 4 now says "a failing input transform" and that a thrown assertion may arrive as an ordinary failing grade.
+  `checkEvaluatorGuidance` pins the guide sentence by exact text and step 4 by marker.
+  Reverts: the guide sentence removed: 1 `test:evaluate-guidance` failure; the step 4 qualification removed: 1.
+- 6: Story 1.70 in `epics.md` and `test-design-epic-1.md` covers code-running values and `transform`, and is retitled "Refuse promptfoo assertions that run adopter code or call a model" (sprint key, lane list and test-design heading follow).
+  Verified live on 0.123.1: `contains` with `file://boom.py` and with `file://boom.rb` (each raising) returns a graded `pass: false`; with `file://boom.js` (throwing) it returns no grade; a `transform` that rewrites the output makes `contains: pears` grade the rewritten text (a graded `pass: false` for an output that holds the value).
+  The plan text names those facts, the value guard, the `transform` guard and the revert-checked live `file://boom.py` case that Story 1.70 builds.
+  The `package:` form is listed for the builder to verify against the installed version, since it was not run here.
+- 7: lane 3's note in `epics.md` lists Story 1.70 among the skill-guide stories Story 1.46 follows.
+
+### Skipped
+
+None: every valid item is fixed.
+
+### Gates
+
+Green on the last state of the tree: `test:evaluate-promptfoo` 165 checks, `test:evaluate-guidance`, `test:evaluate-learned-framework`, `test:evaluate-check`, `test:shards`, `test:ci-coverage`, `test:doc-counts`, `test:doc-claims`, `test:changelog`, `lint`, `lint:md`, `format:check` (recorded after the run below).

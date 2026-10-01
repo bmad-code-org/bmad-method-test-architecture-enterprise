@@ -59,7 +59,7 @@
   "test:evaluate-confinement": 196,
   "test:evaluate-evaluators": 262,
   "test:evaluate-gap-loop": 6.4,
-  "test:evaluate-guidance": 52.2,
+  "test:evaluate-guidance": 68,
   "test:evaluate-held-inputs": 75,
   "test:evaluate-interpret": 23.8,
   "test:evaluate-learned-framework": 21.7,

@@ -451,6 +451,25 @@ function resultShapes() {
     delete noError.error;
     refuseResults([noError], observation, [UNGRADED, 'no error reported']);
   }
+  // promptfoo returns no grade at all when an assertion's transform throws: the shape Story 1.43 refuses.
+  const ungradedReal = promptfooResult('asserts-ungraded.yaml', stdout, 100);
+  check(
+    ungradedReal !== null &&
+      (ungradedReal.gradingResult === undefined || ungradedReal.gradingResult === null) &&
+      typeof ungradedReal.error === 'string' &&
+      ungradedReal.error.includes('Transform failed'),
+    `installed promptfoo did not return an ungraded row for a failing transform: ${JSON.stringify(ungradedReal)?.slice(0, 300)}`,
+  );
+  if (ungradedReal) {
+    check(ungradedReal.testCase?.assert?.[0]?.metric === 'required-pears', 'the ungraded assertion lost its oracle identity');
+    refuseResults([ungradedReal], observation, [UNGRADED, 'Transform failed']);
+    // The diagnostic carries the first 200 characters of the first line and nothing after them.
+    const long = structuredClone(ungradedReal);
+    long.error = 'x'.repeat(500);
+    refuseResults([long], observation, [UNGRADED, `(${'x'.repeat(200)})`], undefined, 'x'.repeat(201));
+    long.error = `first line\n${'y'.repeat(50)}`;
+    refuseResults([long], observation, [UNGRADED, '(first line)'], undefined, 'y'.repeat(50));
+  }
 }
 
 function project(edit = () => {}) {
@@ -526,12 +545,9 @@ function sealedRecords(run) {
 
 function ungradedRuns() {
   const hook = 'const rows = rowsFromResults(results, observation);';
+  // The first case needs no rewrite: promptfoo itself returns no grade for an assertion whose transform throws.
   for (const [label, grading, message] of [
-    [
-      'an ungraded row with an error',
-      "for (const result of results) { result.error = 'framework could not grade'; delete result.gradingResult; }",
-      UNGRADED,
-    ],
+    ['an ungraded row with an error (a failing transform)', null, UNGRADED],
     [
       'a partial grade set',
       'for (const result of results) result.gradingResult.componentResults.splice(1);',
@@ -544,6 +560,13 @@ function ungradedRuns() {
     ],
   ]) {
     const folder = project((evaluation) => {
+      if (grading === null) {
+        const manifest = path.join(evaluation, 'evaluation.json');
+        const evaluationJson = read(manifest);
+        evaluationJson.evaluator.args = ['--ungraded'];
+        fs.writeFileSync(manifest, `${JSON.stringify(evaluationJson, null, 2)}\n`);
+        return;
+      }
       const file = path.join(evaluation, 'evaluator', 'promptfoo.mjs');
       const source = fs.readFileSync(file, 'utf8');
       check(source.includes(hook), 'the fixture evaluator lost the hook the ungraded-run cases rewrite');
@@ -559,6 +582,7 @@ function ungradedRuns() {
     const diagnostic = path.join(run, 'evaluator', 'clean', 'trial-1.stderr');
     const stderr = fs.existsSync(diagnostic) ? fs.readFileSync(diagnostic, 'utf8') : '';
     check(stderr.includes(message), `${label}: the evaluator diagnostic did not name ${message}: ${stderr}`);
+    if (grading === null) check(stderr.includes('Transform failed'), `${label}: the diagnostic lost the framework error: ${stderr}`);
     const records = sealedRecords(run);
     check(records.length === 0, `${label}: run sealed trial records ${records.join(', ')}`);
   }

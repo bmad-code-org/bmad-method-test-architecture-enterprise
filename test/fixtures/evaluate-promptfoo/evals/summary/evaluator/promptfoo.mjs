@@ -115,7 +115,11 @@ function main() {
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-promptfoo-'));
   try {
     fs.writeFileSync(path.join(temporary, 'outputs.json'), JSON.stringify([observation.stdout.value]));
-    const assertions = process.argv.includes('--single') ? 'asserts-single.yaml' : 'asserts.yaml';
+    const assertions = process.argv.includes('--single')
+      ? 'asserts-single.yaml'
+      : process.argv.includes('--ungraded')
+        ? 'asserts-ungraded.yaml'
+        : 'asserts.yaml';
     fs.copyFileSync(path.join(directory, assertions), path.join(temporary, 'asserts.yaml'));
     const command = spawnSync(
       process.execPath,
