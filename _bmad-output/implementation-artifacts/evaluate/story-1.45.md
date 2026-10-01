@@ -2,7 +2,7 @@
 title: 'Story 1.45: Aggregate development strength through eval-quality'
 type: 'feature'
 created: '2026-10-01'
-status: 'in-progress'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'b4bcff02'
@@ -84,6 +84,14 @@ context:
 - `references/run.md` and `references/gaps.md` read the aggregate to enforce class floors before held-out execution; the guidance test fails if the source, the decision and basis, or the null and non-comparable readings are removed.
 
 ## Implementation Notes
+
+- Engine first: eval-quality PR #172 (`aggregate-strength`, `StrengthAggregate`, `scanJson` export) merged at `e32b37b` and released as 4.7.0 (minor: no schema version, export or exit code changed for existing consumers). Its own round 2 had three Opus lenses with no logic defect; the docs, comment and one-test findings were fixed in `231bda8`.
+- TeA side, built by a Sonnet worker and reviewed by Opus in three lenses plus a regression round (PR #279). The aggregate step runs after the probe loop in `score.js`, only when every probe copied evidence. The floors are read once from `evaluation.json.strengthFloor`, staged, copied to `strength-floors.json` and read back after the engine call. The engine's output is copied as `strength-aggregate.json` only when it passes the published schema, the evidence digests TeA persisted (`digestScannedJson`, since the files end in a newline), the scored probe set, the engine version `run.json` recorded and the declared floors. A disagreement exits 12.
+- Round 1 findings, all fixed: the floors were the one aggregate input with no binding (a rewritten floors file produced `meets` at a floor of 0.1 while `evaluation.json` declared 0.9); a held-writer refusal inside the step recorded a false `absent` summary; the duplicate-key guard, the missing `strengthFloor` case and the run guide's gate sentences had no test that failed on revert; the guides stated decision bases that hold only under a declared floor; and two sentences broke the writing rules. Round 2 passed with no regression.
+- Decisions: the library import is forbidden under `cli/` (the stage runs through `runEngineStage`); `canary` leaves the `strengthFloor` schema; the aggregate covers the partition the invocation scored, so a `partition: both` run mixes both in one aggregate and a held-out floor stays out of scope; a canary cannot be driven through `tea-evaluate run`, so the denominator boundary for canaries is held by the engine's suite and TeA checks that an engine-refused canary floor exits 5.
+- Story 1.68 (lane 1) was unmerged at build time, so 1.45 landed first. The aggregate call's inputs (the copied evidence, the staged floors copy and the run's policy) are the files 1.68's held read should cover; the floors copy read-back after the call is already in place.
+- Shard weights: `test:evaluate-run` runs about 327 seconds in CI and every shard stays under 15 minutes, so `tools/test-shard-weights.json` is unchanged.
+- The missing-`strengthFloor` case exits 2 (the fixture's uncaught probe), not 0, with the aggregate recorded absent.
 
 ## Spec Change Log
 
