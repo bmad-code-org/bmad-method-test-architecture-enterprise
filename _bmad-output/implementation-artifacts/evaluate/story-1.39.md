@@ -2,7 +2,7 @@
 title: 'Story 1.39: Tell a captured value too large to launch from a target that cannot run'
 type: 'feature'
 created: '2026-10-01'
-status: 'in-progress'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'f15bc83b'
