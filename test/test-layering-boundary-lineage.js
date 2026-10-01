@@ -62,6 +62,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const { packedPaths } = require('./lib/pack-listing');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const CONFIG_PATH = path.join(PROJECT_ROOT, 'eval-quality.config.json');
@@ -160,7 +161,7 @@ function checkWiring(config) {
   });
   check(packed.status === 0, `npm pack could not list published files: ${packed.stderr}`);
   if (packed.status === 0) {
-    const published = JSON.parse(packed.stdout)[0].files.map((entry) => entry.path);
+    const published = packedPaths(packed.stdout);
     const declared = config['package-boundary'].paths.map((entry) => entry.path);
     for (const file of published.filter((path) => path.startsWith('src/'))) {
       check(
