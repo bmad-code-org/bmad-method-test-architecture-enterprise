@@ -23,7 +23,7 @@ inputDocuments:
 
 ## Overview
 
-This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and seventy-three stories, including H.1 (Stories 1.27 to 1.67 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
+This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and seventy-four stories, including H.1 (Stories 1.27 to 1.68 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
 
 Evaluate is fully stacked. The stack runs system under test, then the evaluation (the mechanism that runs the system, collects evidence and makes judgments), then the Behavioral Evaluation Contract (what behavior matters, what evidence counts, how success and failure resolve), then eval-quality (contract sanity, evidence support, and whether the evaluation catches defects). TeA owns every layer above eval-quality, including each concern eval-quality states it leaves to the caller, so an adopter can evaluate any target end to end. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3 onward, Epic 2 and H.1 to close the plan gap audit; the Traceability section maps each audit item to the story that closes it.
 
@@ -150,7 +150,7 @@ None. Evaluate has no graphical interface.
 ### Epic 1: The Evaluate authoring loop
 
 An adopter describes a target, answers Evaluate's questions, chooses or builds the evaluation layer and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches the seeded defect, with the gaps named and closed. The epic closes by running Evaluate on `bmad-testarch-evaluate` itself, then proving the guidance on two more target kinds, on seeded weaknesses and on an evaluation framework its guides never name.
-Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.67.
+Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.68.
 
 **FRs covered:** FR1 to FR10, FR13, FR14.
 
@@ -233,12 +233,13 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 65    | 1.65  | 1.38                         |
 | 66    | 1.66  | 1.11, 1.38                   |
 | 67    | 1.67  | 1.40                         |
-| 68    | 2.1   | 1.16, 1.26, 1.45             |
-| 69    | 2.2   | 2.1                          |
-| 70    | 2.3   | 2.2                          |
-| 71    | 2.4   | 2.3                          |
-| 72    | 2.5   | 2.4                          |
-| 73    | H.1   | 2.5                          |
+| 68    | 1.68  | 1.41                         |
+| 69    | 2.1   | 1.16, 1.26, 1.45             |
+| 70    | 2.2   | 2.1                          |
+| 71    | 2.3   | 2.2                          |
+| 72    | 2.4   | 2.3                          |
+| 73    | 2.5   | 2.4                          |
+| 74    | H.1   | 2.5                          |
 
 ### Parallel lanes (from 2026-10-01)
 
@@ -1284,6 +1285,8 @@ So that a target process cannot redirect a score write into my working tree (AD-
 **Dependencies:** 1.8, 1.21.
 **Gate:** `npm test`, `npm run docs:validate-links`, `npm run docs:build`, engine check.
 
+(Amended 2026-10-01 in Story 1.41: the invocation identifier is drawn when `score` starts, so a process cannot plant an entry at its directory before it exists; the end-to-end fixture plants links at the next probe directory and at each path a score file will be written, swaps the scores parent, the invocation directory and the probe directory, and the writer's own unit cases plant a link, a file and a directory at `scores`, an invocation directory, a probe directory and a score file. The refusal of a staged artifact is stated in the third criterion's terms: the staged `--out` artifact is copied in only when it meets eval-quality's published schema, names the run's corpus digest and carries an outcome for the probe, and the copy is read back through the held directory, so a malformed, foreign-corpus, wrong-probe or linked artifact exits 12 with no evidence copied. The check cannot tell the engine's artifact from a well-formed one a process with access to the private staging directory substituted; Story 1.68 closes that. The score views take the parsed evidence the writer read back, so they read nothing from a score directory.)
+
 ### Story 1.42: Attribute reused operation IDs to their interfaces
 
 Added 2026-09-26 in Story 1.22. Eval-quality permits the same `operationId` on two interfaces, while a sealed observation records only `operationId`. Story 1.22 refuses that contract during `check` so a scored finding cannot be assigned the wrong phase. Supporting this valid contract shape requires interface identity in the sealed observation and an interface-qualified phase map.
@@ -1789,6 +1792,26 @@ So that my judgments file verifies the first time (AD-21, AD-22).
 
 **Dependencies:** 1.40.
 **Gate:** `test:evaluate-evaluators`, `test:evaluate-guidance`, `npm test`.
+
+### Story 1.68: Hold a run's score inputs between verification and the engine's read
+
+Added 2026-10-01 in Story 1.41. `score` checks every input of a run (the records, the compiled contract, each probe, the preflight verdict, the policy, the evaluator configuration and the isolation manifests) against the digests `run.json` recorded, then hands the engine their paths. In a run that opted out of file-system confinement, a leftover target process can rewrite one of those files after the check and before or during the engine's read, so the engine would judge bytes the check never saw. The CLI reference states the limit; Story 1.41 held the outputs only and checks a staged artifact against the published schema, the corpus digest and the presence of an outcome for the probe, which a well-formed substitute passes.
+
+As an adopter scoring a run that opted out of confinement,
+I want the bytes the engine reads to be the bytes the digest check accepted,
+So that a process writing the run directory during scoring cannot change what is scored (AD-7, AD-12).
+
+**Acceptance Criteria:**
+
+**Given** a sealed run that opted out of confinement
+**When** a process rewrites a record, the compiled contract, the policy, a probe or an isolation manifest after the input check and before or during an eval-quality call (the Story 1.41 engine shim, over real eval-quality)
+**Then** `score` exits 12 naming the changed file and copies no evidence for that call, so no persisted evidence reflects the rewritten bytes; removing the check after each call lets the rewritten bytes be scored and the evidence differs from a clean score, a `test:evaluate-partitions` case
+**And** the artifact copied in is checked against the engine's own digest or an in-process re-score, so a well-formed staged artifact with altered outcomes substituted by a process that can write the private staging directory fails; substituting altered outcomes in the staged artifact exits 12 with no evidence copied, a `test:evaluate-run` case, and removing the check lets the substitute through
+**And** a normal score and a repeated score are unchanged, and re-running the recorded argv with a fresh `--out` still reproduces the persisted evidence byte for byte, a `test:evaluate-run` case
+**And** the reference replaces its sentence that a process able to write the run directory can rewrite a file and its digest with the check, and a static test fails if that section is removed.
+
+**Dependencies:** 1.41.
+**Gate:** `npm test`, `npm run docs:validate-links`, `npm run docs:build`, engine check.
 
 ## Epic 2: Continuous proof in CI
 

@@ -132,6 +132,8 @@ const Ajv = AjvModule.default ?? AjvModule;
 const PROJECT_ROOT = path.join(__dirname, '..');
 const EVALUATE = path.join(PROJECT_ROOT, 'cli', 'evaluate.js');
 const SHIM = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'engine-shim.js');
+const RACE_ENGINE = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'race-engine.js');
+const WRAP_SCORE_WRITER = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'wrap-score-writer.cjs');
 const FIXTURE = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'mutation');
 const ASSETS = path.join(PROJECT_ROOT, 'src', 'workflows', 'testarch', 'bmad-testarch-evaluate', 'assets');
 const CONDITIONS_SCHEMA = path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate', 'schemas', 'evaluator-conditions.schema.json');
@@ -546,6 +548,18 @@ async function checkRealScore({ validate, folder, env, runDirectory, index, poli
         value('--probe') === path.join(runDirectory, set.probe),
       `${probeId}'s score call carried ${JSON.stringify(call.argv)}`,
     );
+    // `--out` is the private staging file the call really used: outside the evaluation folder, under the run's own temp
+    // directory, and gone once the call was copied in.
+    const out = value('--out');
+    check(
+      typeof out === 'string' &&
+        path.basename(out) === 'evidence-artifact.json' &&
+        path.basename(path.dirname(out)).startsWith('tea-evaluate-score-') &&
+        [env.TMPDIR, fs.realpathSync(env.TMPDIR)].includes(path.dirname(path.dirname(out))) &&
+        !out.startsWith(`${folder}${path.sep}`) &&
+        !fs.existsSync(path.dirname(out)),
+      `${probeId}'s score call names --out ${out}, which is not a removed staging file in the run's temp directory`,
+    );
   }
   checkDirectRerun('the passing run', scoreDirectory);
 }
@@ -585,6 +599,11 @@ function checkShimmedScore({ folder, env, runDirectory, index }) {
     );
     const call = written(path.join(scoreDirectory, set.probeId, 'score.json'), `${set.probeId}'s shimmed score call`);
     if (call === null) continue;
+    // The recorded argv is the argv that ran, the staging path in `--out` included.
+    check(
+      JSON.stringify(call.argv) === JSON.stringify(argv),
+      `${set.probeId}'s persisted argv ${JSON.stringify(call.argv)} is not the argv the engine was called with, ${JSON.stringify(argv)}`,
+    );
     const probeFile = `${set.probeId}.probe.json`;
     const code = set.probeId === 'P-001' ? 4 : 2;
     const stream = (name) => `known-bytes ${name} ${probeFile}\nknown-bytes ${name} 2 ${probeFile}\nknown-bytes ${name} 3 ${probeFile}`;
@@ -2061,6 +2080,8 @@ function checkRunDirectoryWriter() {
     `the removal of a file replaced with a directory ended ${retraction === null ? 'without a refusal' : `with ${retraction.name}: ${retraction.message}`}`,
   );
 
+  checkAttachedWriter(base);
+
   const script = `
 const fs = require('node:fs');
 const path = require('node:path');
@@ -2080,6 +2101,266 @@ try {
   check(
     fifo.status === 0 && /eval-contract\.json is no longer a file/.test(fifo.stdout),
     `a read of a file swapped for a FIFO ${fifo.error ? `did not return: ${fifo.error.message}` : `exited ${fifo.status} saying ${JSON.stringify(fifo.stdout)}`}`,
+  );
+}
+
+/**
+ * `RunDirectory.attach`, the writer `score` holds a run directory an earlier process made with (Story 1.41): a link
+ * or file where `scores` goes is refused, a real `scores` is adopted and written through, an entry already at an
+ * invocation or probe directory is refused whatever it is, and a directory swapped for a link after it was made stops
+ * the next write with nothing landing where the link leads.
+ */
+function checkAttachedWriter(base) {
+  const runs = path.join(base, 'attached-runs');
+  fs.mkdirSync(runs);
+  const outside = path.join(base, 'attached-outside');
+  fs.mkdirSync(path.join(outside, 'inv', 'P-001'), { recursive: true });
+  fs.writeFileSync(path.join(outside, 'sentinel.txt'), 'outside\n');
+  const outsideBefore = JSON.stringify(fs.readdirSync(outside, { recursive: true }).sort());
+  const refused = (label, pattern, body) => {
+    let outcome = null;
+    try {
+      body();
+    } catch (error) {
+      outcome = error;
+    }
+    check(
+      outcome instanceof RunDirectoryError && pattern.test(outcome.message),
+      `${label} ended ${outcome === null ? 'without a refusal' : `with ${outcome.name}: ${outcome.message}`}`,
+    );
+  };
+  const attach = (name, prepare) => {
+    const root = path.join(runs, name);
+    fs.mkdirSync(root);
+    fs.writeFileSync(path.join(root, 'run.json'), '{}\n');
+    prepare(root);
+    return RunDirectory.attach(root);
+  };
+
+  refused('an attach to a run directory that is a link', /link or a non-directory entry/, () => {
+    fs.symlinkSync(outside, path.join(runs, 'linked-root'), 'dir');
+    RunDirectory.attach(path.join(runs, 'linked-root'));
+  });
+  refused('an attach to a missing run directory', /cannot be read/, () => RunDirectory.attach(path.join(runs, 'absent')));
+  for (const [what, plant, pattern] of [
+    ['a link at scores', (root) => fs.symlinkSync(outside, path.join(root, 'scores'), 'dir'), /scores is a link or a non-directory entry/],
+    ['a file at scores', (root) => fs.writeFileSync(path.join(root, 'scores'), 'file\n'), /scores is a link or a non-directory entry/],
+  ]) {
+    const writer = attach(`planted-${what.replaceAll(' ', '-')}`, plant);
+    try {
+      refused(`adopting ${what}`, pattern, () => writer.adoptDirectory('scores'));
+    } finally {
+      writer.close();
+    }
+  }
+
+  // A `scores` directory swapped for a link right after it was adopted: creating the invocation directory is refused
+  // and nothing is made in the directory the link leads to, directories included.
+  const parentSwap = attach('parent-swap', () => {});
+  try {
+    parentSwap.adoptDirectory('scores');
+    const listing = () => JSON.stringify(fs.readdirSync(outside, { recursive: true }).sort());
+    const outsideListing = listing();
+    fs.renameSync(path.join(parentSwap.root, 'scores'), path.join(parentSwap.root, 'scores.moved'));
+    fs.symlinkSync(outside, path.join(parentSwap.root, 'scores'), 'dir');
+    refused('an invocation directory made below a scores directory swapped for a link', /no longer the directory the runtime made/, () =>
+      parentSwap.ensureDirectory('scores/new-invocation'),
+    );
+    check(listing() === outsideListing, 'an invocation directory was made in the directory the swapped scores link leads to');
+  } finally {
+    parentSwap.close();
+  }
+
+  const adopting = attach('adopting', (root) => {
+    fs.mkdirSync(path.join(root, 'scores', 'earlier'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'scores', 'earlier', 'score.json'), 'an earlier score\n');
+  });
+  try {
+    adopting.adoptDirectory('scores');
+    adopting.ensureDirectory('scores/new');
+    adopting.ensureDirectory('scores/new/P-001');
+    adopting.writeJson('scores/new/P-001/score.json', { exitCode: 0 });
+    check(
+      JSON.stringify(adopting.readJson('scores/new/P-001/score.json')) === '{"exitCode":0}' &&
+        fs.readFileSync(path.join(adopting.root, 'scores', 'earlier', 'score.json'), 'utf8') === 'an earlier score\n',
+      'a real scores directory was not adopted with its earlier invocation left as it was',
+    );
+    refused('an invocation directory that already exists', /already holds scores\/earlier, which the runtime did not make/, () =>
+      adopting.ensureDirectory('scores/earlier'),
+    );
+    // Adopting a directory already held is a no-op, and the writer stays usable.
+    adopting.adoptDirectory('scores');
+
+    // A directory swapped for a link after it was made: the next write is refused and nothing lands outside.
+    fs.renameSync(path.join(adopting.root, 'scores', 'new'), path.join(adopting.root, 'scores', 'new.moved'));
+    fs.symlinkSync(path.join(outside, 'inv'), path.join(adopting.root, 'scores', 'new'), 'dir');
+    refused('a write below an invocation directory swapped for a link', /no longer the directory the runtime made/, () =>
+      adopting.writeJson('scores/new/P-001/evidence-artifact.json', { late: true }),
+    );
+  } finally {
+    adopting.close();
+  }
+  for (const [what, plant] of [
+    ['a link', (target) => fs.symlinkSync(outside, target, 'dir')],
+    ['a file', (target) => fs.writeFileSync(target, 'file\n')],
+    ['a directory', (target) => fs.mkdirSync(target)],
+  ]) {
+    const writer = attach(`planted-invocation-${what.replace('a ', '')}`, () => {});
+    try {
+      writer.adoptDirectory('scores');
+      plant(path.join(writer.root, 'scores', 'inv'));
+      refused(`${what} planted at the invocation directory`, /already holds scores\/inv, which the runtime did not make/, () =>
+        writer.ensureDirectory('scores/inv'),
+      );
+      writer.ensureDirectory('scores/other');
+      plant(path.join(writer.root, 'scores', 'other', 'P-001'));
+      refused(`${what} planted at a probe directory`, /already holds scores\/other\/P-001, which the runtime did not make/, () =>
+        writer.ensureDirectory('scores/other/P-001'),
+      );
+      plant(path.join(writer.root, 'scores', 'other', 'score.json'));
+      refused(`${what} planted where a score file goes`, /already holds scores\/other\/score\.json, which the runtime did not write/, () =>
+        writer.writeJson('scores/other/score.json', {}),
+      );
+    } finally {
+      writer.close();
+    }
+  }
+  check(
+    JSON.stringify(fs.readdirSync(outside, { recursive: true }).sort()) === outsideBefore &&
+      fs.readFileSync(path.join(outside, 'sentinel.txt'), 'utf8') === 'outside\n',
+    'an attached writer wrote through a link, into the directory it led to',
+  );
+}
+
+/**
+ * A score whose staged evidence artifact fails the copy check (the published schema, the run's corpus digest, an
+ * outcome for the probe) or is no regular file: another corpus's, one off the schema, bytes that are no artifact,
+ * another probe's, or a link to a valid artifact. A well-formed substitute passes the check (Story 1.68). None is copied into the run directory (exit 12, no
+ * evidence for the call), the call's own record keeps the argv that ran, and nothing the artifact held reaches the
+ * score directory (Story 1.41).
+ */
+function checkUnverifiedEvidence() {
+  const made = makeProject('unverified-copy');
+  const ran = evaluate(['run', '--evaluation', made.folder], made.env);
+  check(ran.status === 0, `the run for the unverified-copy cases exited ${ran.status}: ${ran.output}`);
+  const runDirectory = runDirectoryOf(made.folder);
+  if (runDirectory === null) return;
+  const index = readJson(path.join(runDirectory, 'trial-sets.json'));
+  const probes = index.trialSets.map((set) => set.probeId);
+  const cases = [
+    ['forge-corpus', [], /names corpus sha256:0{64}/],
+    ['forge-schema', [], /fails its published schema/],
+    ['garbage', [], /is not JSON/],
+    ['forge-probe', ['P-001'], /holds no outcome for P-002/],
+    ['stage-link', [], /is a link or a non-file entry/],
+  ];
+  for (const [mode, kept, reason] of cases) {
+    const directory = tempDir(`unverified-${mode}`);
+    const log = path.join(directory, 'argv.log');
+    const target = path.join(directory, 'target');
+    fs.mkdirSync(target);
+    const scored = evaluate(['score', '--evaluation', made.folder, '--run', path.basename(runDirectory)], {
+      ...made.env,
+      [ENGINE_CLI_ENV]: RACE_ENGINE,
+      TEA_RACE_LOG: log,
+      TEA_RACE_MODE: mode,
+      TEA_RACE_TARGET: target,
+      TEA_RACE_STASH: path.join(directory, 'stash.json'),
+    });
+    check(
+      scored.status === 12,
+      `${mode}: a score whose staged artifact fails the copy check exited ${scored.status}; expected 12\n${scored.output}`,
+    );
+    const scoreDirectory = latestScoreDirectory(runDirectory);
+    const calls = loggedCalls(log);
+    check(calls.length === probes.length, `${mode}: the engine was called ${calls.length} time(s) for ${probes.length} probe(s)`);
+    const summary = scoreDirectory === null ? null : written(path.join(scoreDirectory, 'score.json'), `${mode}'s score summary`);
+    for (const probeId of probes) {
+      const call =
+        scoreDirectory === null ? null : written(path.join(scoreDirectory, probeId, 'score.json'), `${mode}, ${probeId}'s score call`);
+      if (call === null) continue;
+      const logged = calls.find((argv) => argv[argv.indexOf('--probe') + 1]?.endsWith(`${probeId}.probe.json`));
+      check(
+        JSON.stringify(call.argv) === JSON.stringify(logged),
+        `${mode}, ${probeId}: the persisted argv ${JSON.stringify(call.argv)} is not the argv the engine ran with, ${JSON.stringify(logged)}`,
+      );
+      const entry = summary?.scores?.find((candidate) => candidate.probeId === probeId);
+      const copied = fs.existsSync(path.join(scoreDirectory, probeId, 'evidence-artifact.json'));
+      const expectCopied = kept.includes(probeId);
+      check(
+        copied === expectCopied,
+        `${mode}, ${probeId}: evidence ${copied ? 'was' : 'was not'} copied; expected ${expectCopied ? 'a copy' : 'none'}`,
+      );
+      check(
+        expectCopied
+          ? entry?.evidence !== null && entry?.failure === null
+          : entry?.evidence === null && reason.test(entry?.failure ?? '') && /staged evidence artifact/.test(entry?.failure ?? ''),
+        `${mode}, ${probeId}: the summary entry is ${JSON.stringify(entry)}`,
+      );
+    }
+    const planted = scoreDirectory === null ? '' : fs.readdirSync(scoreDirectory, { recursive: true }).join('\n');
+    check(!planted.includes('valid-artifact'), `${mode}: the score directory holds the artifact a link led to`);
+    for (const probeId of probes.filter((probeId) => !kept.includes(probeId))) {
+      check(
+        scoreDirectory !== null && !fs.existsSync(path.join(scoreDirectory, probeId, 'evidence-artifact.json')),
+        `${mode}: ${probeId} left an evidence artifact`,
+      );
+    }
+    // The views of that invocation hold nothing from a refused artifact.
+    const interpretation = written(path.join(runDirectory, 'interpretation.json'), `${mode}'s interpretation`);
+    for (const probe of interpretation?.probes ?? []) {
+      if (kept.includes(probe.probeId)) continue;
+      check(
+        probe.engine === null && probe.evidence === null,
+        `${mode}: ${probe.probeId}'s interpretation holds ${JSON.stringify(probe.engine)}`,
+      );
+    }
+  }
+  // The copy is read back through the held directory: a probe directory a process swaps for a link right after the
+  // evidence artifact is written stops the score with exit 12, since that evidence cannot be read back.
+  const readBackTarget = tempDir('read-back-target');
+  const readBack = evaluate(
+    ['score', '--evaluation', made.folder, '--run', path.basename(runDirectory)],
+    { ...made.env, TEA_SCORE_SWAP_AFTER: 'evidence-artifact.json', TEA_SCORE_SWAP_TARGET: readBackTarget },
+    ['--require', WRAP_SCORE_WRITER],
+  );
+  check(
+    readBack.status === 12 && /no longer the directory the runtime made/.test(readBack.output),
+    `a probe directory swapped for a link right after its evidence was written exited ${readBack.status}; expected 12 naming the directory\n${readBack.output}`,
+  );
+  check(fs.readdirSync(readBackTarget).length === 0, 'a score wrote through the link a probe directory was swapped for');
+}
+
+/** The reference describes the score-output integrity refusal: its section, the exit and the safe location (Story 1.41). */
+function checkScoreOutputReference() {
+  const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
+  const heading = '### Score output integrity\n';
+  const start = reference.indexOf(heading);
+  check(start !== -1, 'the reference has no "### Score output integrity" section');
+  if (start === -1) return;
+  const next = reference.slice(start + heading.length).search(/^#{1,3} /m);
+  const section = reference.slice(start + heading.length, next === -1 ? undefined : start + heading.length + next);
+  for (const [pattern, what] of [
+    [/exits 12/, 'the exit, 12'],
+    [/inside the run directory/, 'the safe location, inside the run directory'],
+    [/staging file/, 'the staged engine output'],
+    [/`--out`/, 'the `--out` argument that names the staging file'],
+    [/link/, 'the planted or swapped link it refuses'],
+    [/link at `runs\/`/, 'the link at `runs/` it refuses'],
+    [
+      /can substitute an artifact that passes it/,
+      'the limit: a process that can write the staging directory can substitute a well-formed artifact',
+    ],
+    [/carries an outcome for the probe/, 'what the copy check covers'],
+  ]) {
+    check(pattern.test(section), `the reference's score output integrity section does not name ${what}`);
+  }
+  const exitRow = reference.split('\n').find((line) => /^\| 12\s+\| infrastructure:/.test(line)) ?? '';
+  check(
+    exitRow.includes(
+      "a staged evidence artifact that fails eval-quality's published schema, names another corpus or carries no outcome for its probe",
+    ),
+    "the reference's exit 12 row does not name the staged-artifact refusal as the copy check decides it",
   );
 }
 
@@ -2942,6 +3223,8 @@ async function main() {
       await runCase('the run directory writer', checkRunDirectoryWriter);
       await runCase('the templates and ignores', checkTemplatesAndIgnores);
       await runCase('the run and its scores', checkRunAndScore);
+      await runCase('the unverified evidence copies', checkUnverifiedEvidence);
+      await runCase('the score output reference', checkScoreOutputReference);
       await runCase('target usage reports', checkTargetUsageReports);
       await runCase('the stopped runs', checkStoppedRuns);
       await runCase('the refusals', checkRefusals);

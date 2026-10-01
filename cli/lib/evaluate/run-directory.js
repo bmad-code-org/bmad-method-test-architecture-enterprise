@@ -36,6 +36,14 @@
  *     entry the runtime did not write, every entry it wrote that is gone or
  *     changed kind, and every file whose bytes differ from the ones written.
  *
+ * `score` writes into a run directory an earlier process made, so it attaches
+ * to it (`RunDirectory.attach`): the existing root is held open and recorded
+ * like a created one, and `adoptDirectory` holds an existing real `scores`
+ * directory (a link or another kind of entry there is refused) or creates it
+ * exclusively. Only what the runtime creates or adopts afterwards is written
+ * and read through the writer; the files an earlier process wrote are read by
+ * the callers' own regular-file readers, since no digest of them is held here.
+ *
  * A problem is a `RunDirectoryError`, which the commands report as exit 12.
  */
 
@@ -111,6 +119,49 @@ class RunDirectory {
       throw new RunDirectoryError(`the run directory ${root} cannot be created: ${error.message}`);
     }
     return new RunDirectory(root);
+  }
+
+  /**
+   * Holds an existing run directory, which an earlier process made, for
+   * writing: the root and its `runs` parent must be real directories (a link
+   * at either is refused), and the descriptor that holds it is confirmed to be the directory the path named.
+   * Nothing in it is trusted yet; `adoptDirectory` and `ensureDirectory` make
+   * the directories the caller writes into.
+   *
+   * @param {string} runDirectory
+   * @returns {RunDirectory}
+   */
+  static attach(runDirectory) {
+    let stats;
+    try {
+      stats = fs.lstatSync(runDirectory);
+    } catch (error) {
+      throw new RunDirectoryError(`the run directory ${runDirectory} cannot be read: ${error.message}`);
+    }
+    if (!stats.isDirectory()) throw new RunDirectoryError(`${runDirectory} is a link or a non-directory entry, so it is no run directory`);
+    // `create` refuses a link at `runs/`; so does attaching, since the run directory's own checks would hold a copy in the adopter's tree.
+    const runs = path.dirname(runDirectory);
+    let runsStats;
+    try {
+      runsStats = fs.lstatSync(runs);
+    } catch (error) {
+      throw new RunDirectoryError(`the runs directory ${runs} cannot be read: ${error.message}`);
+    }
+    if (!runsStats.isDirectory()) {
+      throw new RunDirectoryError(`${runs} is a link or a non-directory entry, so runs is no directory the runtime can score a run from`);
+    }
+    if (fs.realpathSync.native(runDirectory) !== path.join(fs.realpathSync.native(runs), path.basename(runDirectory))) {
+      throw new RunDirectoryError(
+        `${runDirectory} does not lie directly in the real runs directory ${runs}, so the runtime will not write scores into it`,
+      );
+    }
+    const attached = new RunDirectory(runDirectory);
+    const root = attached.directories.get('');
+    if (root.dev !== stats.dev || root.ino !== stats.ino) {
+      attached.close();
+      throw new RunDirectoryError(`${runDirectory} changed while the runtime attached to it`);
+    }
+    return attached;
   }
 
   constructor(root) {
@@ -224,30 +275,75 @@ class RunDirectory {
     if (this.directories.has(directory)) return;
     const parent = path.posix.dirname(directory) === '.' ? '' : path.posix.dirname(directory);
     this.ensureDirectory(parent);
+    this.holdEntry(directory, parent, false);
+  }
+
+  /**
+   * Holds `directory`, an entry of the already held directory `parent`: one
+   * that is not there is created exclusively, and with `adopt` an existing
+   * entry that is a real directory is held as it is. A link, another kind of
+   * entry, or (without `adopt`) any entry already there is refused. The
+   * entry is opened without following a link and its descriptor must be the
+   * directory `lstat` saw, so a swap between the two is refused as well.
+   */
+  holdEntry(directory, parent, adopt) {
     const name = path.posix.basename(directory);
     let held = null;
+    let created = false;
     this.inDirectory(
       parent,
       () => {
-        try {
-          fs.mkdirSync(name);
-        } catch (error) {
-          throw new RunDirectoryError(
-            error.code === 'EEXIST'
-              ? `the run directory already holds ${directory}, which the runtime did not make (the target may have planted it)`
-              : `${directory} cannot be created in the run directory: ${error.message}`,
-          );
+        let existing = null;
+        if (adopt) {
+          try {
+            existing = fs.lstatSync(name);
+          } catch (error) {
+            if (error.code !== 'ENOENT') {
+              throw new RunDirectoryError(`${directory} cannot be examined in the run directory: ${error.message}`);
+            }
+          }
+          if (existing !== null && !existing.isDirectory()) {
+            throw new RunDirectoryError(`${directory} is a link or a non-directory entry, so the runtime will not write through it`);
+          }
+        }
+        if (existing === null) {
+          try {
+            fs.mkdirSync(name);
+            created = true;
+          } catch (error) {
+            throw new RunDirectoryError(
+              error.code === 'EEXIST'
+                ? `the run directory already holds ${directory}, which the runtime did not make (the target may have planted it)`
+                : `${directory} cannot be created in the run directory: ${error.message}`,
+            );
+          }
         }
         held = holdDirectory(name, directory);
+        if (existing !== null && (held.dev !== existing.dev || held.ino !== existing.ino)) {
+          fs.closeSync(held.descriptor);
+          throw new RunDirectoryError(`${directory} was replaced while the runtime opened it (the target may have swapped it)`);
+        }
       },
       {
         undo: () => {
           fs.closeSync(held.descriptor);
-          fs.rmdirSync(name);
+          if (created) fs.rmdirSync(name);
         },
       },
     );
     this.directories.set(directory, held);
+  }
+
+  /**
+   * Holds a directory of the run an earlier process may have made, `scores`
+   * when a run was scored before: a real directory is held as it is, a missing
+   * one is created exclusively, and a link or another kind of entry exits 12.
+   */
+  adoptDirectory(directory) {
+    if (this.directories.has(directory)) return;
+    const parent = path.posix.dirname(directory) === '.' ? '' : path.posix.dirname(directory);
+    this.ensureDirectory(parent);
+    this.holdEntry(directory, parent, true);
   }
 
   /**

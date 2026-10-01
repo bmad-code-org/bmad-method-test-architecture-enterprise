@@ -38,7 +38,7 @@ inputDocuments:
 
 ## Executive Summary
 
-**Scope:** full epic-level test design for Stories 1.1 to 1.67 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.67. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
+**Scope:** full epic-level test design for Stories 1.1 to 1.68 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.68. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
 
 **Risk summary:**
 
@@ -721,6 +721,10 @@ Added 2026-09-26 in Story 1.21. Levels: end-to-end over real eval-quality, integ
 | Stage provenance and evidence remain replayable     | Compare recorded argv and stream bytes with the actual stage call; direct eval-quality re-score reproduces the persisted evidence digest                                    | Integration                       | P0  | A false argv or unverified copy fails provenance or digest equality |
 | The reference explains integrity refusal            | Read the score-output section and check the named exit and safe location                                                                                                    | Static                            | P2  | Removing the section fails the read                                 |
 
+Amended 2026-10-01 in Story 1.41: the first row's end-to-end fixture swaps the scores parent, the invocation directory and the probe directory through a shim over real eval-quality and plants links at the next probe directory and at each score file's path; an entry at the invocation directory, which the runtime names when `score` starts, is a writer-level case beside the planted `scores` link and file.
+The third row's revert check adds that a staged artifact failing the published schema, naming another corpus or carrying no outcome for its probe, bytes that are no artifact and a linked artifact each exit 12 with no evidence copied. A well-formed substituted artifact passes that check; Story 1.68 closes the limit.
+The fourth row is `checkScoreOutputReference` in `test:evaluate-run`.
+
 ### Story 1.42: Attribute reused operation IDs to their interfaces
 
 Added 2026-09-26 in Story 1.22. Levels: contract, integration over real eval-quality. Files: `test/test-evaluate-check.js` (`test:evaluate-check`) and `test/test-evaluate-interpret.js` (`test:evaluate-interpret`).
@@ -987,6 +991,17 @@ Added 2026-10-01 in Story 1.40. Levels: integration over real eval-quality, guid
 | A harness built from the emitted inputs verifies | A harness fixture writes its judgments file from the emitted inputs and digests alone; `check` exits 0 and `run` imports and scores | Integration over real eval-quality | P0  | Emitting an input the verification does not derive fails `check` |
 | The emitted inputs carry no label                | Search the output for `expectedLevel`                                                                                               | Integration                        | P1  | Adding the label to the output fails the search                  |
 | The guide says to copy the emitted values        | Assert the evaluator guide's sentence under its exact heading                                                                       | Guidance                           | P2  | Removing the sentence fails the guidance assertion               |
+
+### Story 1.68: Hold a run's score inputs between verification and the engine's read
+
+Added 2026-10-01 in Story 1.41. Levels: end-to-end over real eval-quality, integration, static. Files: `test/test-evaluate-partitions.js` (`test:evaluate-partitions`) and `test/test-evaluate-run.js` (`test:evaluate-run`).
+
+| AC                                              | Test                                                                                                                                                                                   | Level                             | P   | Revert check                                                          |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- | --- | --------------------------------------------------------------------- |
+| An input rewritten during scoring is not scored | A shim over real eval-quality rewrites a record, the contract, the policy, a probe and a manifest in turn after the input check; assert exit 12, the file named and no evidence copied | End-to-end over real eval-quality | P0  | Removing the check after each call persists evidence of the new bytes |
+| A substituted well-formed artifact is refused   | A shim over real eval-quality replaces the staged artifact with a well-formed one whose outcomes are altered; assert exit 12 and no evidence copied                                    | End-to-end over real eval-quality | P0  | Removing the digest or re-score check copies the altered outcomes     |
+| A normal and a repeated score are unchanged     | Score twice; re-run the recorded argv with a fresh `--out` and compare the evidence byte for byte                                                                                      | Integration                       | P1  | A check that refuses a clean score fails the case                     |
+| The reference states the check                  | Read the score section and fail when the rewriting-limit sentence is back or the new section is gone                                                                                   | Static                            | P2  | Restoring the sentence or removing the section fails the read         |
 
 ## The Dogfood Proof (AD-15)
 
