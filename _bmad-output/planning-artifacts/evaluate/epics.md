@@ -23,7 +23,7 @@ inputDocuments:
 
 ## Overview
 
-This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and seventy-eight stories, including H.1 (Stories 1.27 to 1.69, 1.80, 1.90 and 1.91 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
+This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and seventy-nine stories, including H.1 (Stories 1.27 to 1.70, 1.80, 1.90 and 1.91 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
 
 Evaluate is fully stacked. The stack runs system under test, then the evaluation (the mechanism that runs the system, collects evidence and makes judgments), then the Behavioral Evaluation Contract (what behavior matters, what evidence counts, how success and failure resolve), then eval-quality (contract sanity, evidence support, and whether the evaluation catches defects). TeA owns every layer above eval-quality, including each concern eval-quality states it leaves to the caller, so an adopter can evaluate any target end to end. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3 onward, Epic 2 and H.1 to close the plan gap audit; the Traceability section maps each audit item to the story that closes it.
 
@@ -150,7 +150,7 @@ None. Evaluate has no graphical interface.
 ### Epic 1: The Evaluate authoring loop
 
 An adopter describes a target, answers Evaluate's questions, chooses or builds the evaluation layer and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches the seeded defect, with the gaps named and closed. The epic closes by running Evaluate on `bmad-testarch-evaluate` itself, then proving the guidance on two more target kinds, on seeded weaknesses and on an evaluation framework its guides never name.
-Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.69, 1.80, 1.90 and 1.91.
+Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.70, 1.80, 1.90 and 1.91.
 
 **FRs covered:** FR1 to FR10, FR13, FR14.
 
@@ -235,25 +235,26 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 67    | 1.67  | 1.40                         |
 | 68    | 1.68  | 1.41                         |
 | 69    | 1.69  | 1.68                         |
-| 70    | 1.80  | 1.57                         |
-| 71    | 1.90  | 2.1                          |
-| 72    | 1.91  | 2.1                          |
-| 73    | 2.1   | 1.16, 1.26, 1.45             |
-| 74    | 2.2   | 2.1                          |
-| 75    | 2.3   | 2.2                          |
-| 76    | 2.4   | 2.3                          |
-| 77    | 2.5   | 2.4                          |
-| 78    | H.1   | 2.5                          |
+| 70    | 1.70  | 1.43                         |
+| 71    | 1.80  | 1.57                         |
+| 72    | 1.90  | 2.1                          |
+| 73    | 1.91  | 2.1                          |
+| 74    | 2.1   | 1.16, 1.26, 1.45             |
+| 75    | 2.2   | 2.1                          |
+| 76    | 2.3   | 2.2                          |
+| 77    | 2.4   | 2.3                          |
+| 78    | 2.5   | 2.4                          |
+| 79    | H.1   | 2.5                          |
 
 ### Parallel lanes (from 2026-10-01)
 
 The table above gives every story's dependencies. Since Story 1.40 merged, the stories not yet built run in three parallel lanes, each a serial relay: a story's coordinator hands off to the next story in its lane, and the lanes merge into `main` independently. A lane groups stories that share modules or a dependency chain, so two lanes rarely edit the same file. Stories keep their numbers and rows above; the lane gives the order to run them in. `sprint-status.yaml` carries the same lists under `parallel_lanes`.
 
-**Lane 1: run integrity, scoring and evaluators** (main checkout): 1.41, 1.68, 1.43, 1.44, 1.67, 1.66, 1.65, 1.64, 1.69. Story 1.68 reads the files 1.41 changes, so it follows directly. Story 1.65 turns the single release report into a per-interface report and 1.64 adds call sites that 1.65 would otherwise rewrite, so 1.66, 1.65, 1.64 run in that order. Story 1.44 rewrites the `evaluate-learn` fixture's evaluator, which lane 3's 1.55 and 1.56 own, so those two wait for it. Story 1.69 reuses the module Story 1.68 builds and edits `run.js`, which 1.64 and 1.65 also edit, so it runs last.
+**Lane 1: run integrity, scoring and evaluators** (main checkout): 1.41, 1.68, 1.43, 1.44, 1.67, 1.66, 1.65, 1.64, 1.69, 1.70. Story 1.68 reads the files 1.41 changes, so it follows directly. Story 1.65 turns the single release report into a per-interface report and 1.64 adds call sites that 1.65 would otherwise rewrite, so 1.66, 1.65, 1.64 run in that order. Story 1.44 rewrites the `evaluate-learn` fixture's evaluator, which lane 3's 1.55 and 1.56 own, so those two wait for it. Story 1.69 reuses the module Story 1.68 builds and edits `run.js`, which 1.64 and 1.65 also edit, so it runs after them. Story 1.70 edits the promptfoo starter, fixture evaluator and guide section that Story 1.43 writes and no file the other lane 1 stories edit, so it joins the end.
 
 **Lane 2: confinement and process lifecycle** (own worktree): 1.62, 1.57, 1.58, 1.59, 1.60, 1.63, 1.61, 1.52, 1.53, 1.54, 1.80. Story 1.62 goes first because it extracts the shared sandbox primitives the confinement stories build on. Story 1.60 may remove 1.63's premise, so 1.63 is re-read after it. Story 1.58 precedes 1.54, since both track the run's private scratch directories. Stories 1.52 to 1.54 touch the preflight and workspace modules the confinement stories also edit, so they run after them.
 
-**Lane 3: engine releases, dogfood and Epic 2** (own worktree): 1.45, 2.1, 2.2, 2.3, 2.4, 1.47, 1.49, 1.48, 1.42, 1.50, 1.55, 1.56, 1.51, 1.46, 2.5, 1.90, 1.91. Story 1.45 starts the longest serial chain (1.45, 2.1 to 2.5, then H.1), so it runs first, and 2.5 runs last because it baselines every fixture and so waits for each story that changes committed evidence bytes (1.42, 1.44, 1.50, 1.51, 1.55, 1.56). Stories 1.47, 1.49 and 1.48 regenerate the test-design probes, so they run together with 1.48 last. Stories 1.42 and 1.50 both change the HTTP probe port and run back to back. Story 1.46 records live runs of the Evaluate skill, so it follows the skill-guide stories in other lanes (1.43, 1.44, 1.61, 1.67). Lane 3 owns every eval-quality release, because 1.42, 1.45, 1.48, 1.50 and 1.55 each need a published engine and one publisher keeps the dependency pin and `package-lock.json` ordered. Stories 1.90 and 1.91 follow 2.5: 1.90 edits the baseline `check` and `compare` read, and 1.91 re-accepts the fixture baselines Stories 2.2 to 2.5 commit, so it waits for every one of them.
+**Lane 3: engine releases, dogfood and Epic 2** (own worktree): 1.45, 2.1, 2.2, 2.3, 2.4, 1.47, 1.49, 1.48, 1.42, 1.50, 1.55, 1.56, 1.51, 1.46, 2.5, 1.90, 1.91. Story 1.45 starts the longest serial chain (1.45, 2.1 to 2.5, then H.1), so it runs first, and 2.5 runs last because it baselines every fixture and so waits for each story that changes committed evidence bytes (1.42, 1.44, 1.50, 1.51, 1.55, 1.56). Stories 1.47, 1.49 and 1.48 regenerate the test-design probes, so they run together with 1.48 last. Stories 1.42 and 1.50 both change the HTTP probe port and run back to back. Story 1.46 records live runs of the Evaluate skill, so it follows the skill-guide stories in other lanes (1.43, 1.44, 1.61, 1.67, 1.70). Lane 3 owns every eval-quality release, because 1.42, 1.45, 1.48, 1.50 and 1.55 each need a published engine and one publisher keeps the dependency pin and `package-lock.json` ordered. Stories 1.90 and 1.91 follow 2.5: 1.90 edits the baseline `check` and `compare` read, and 1.91 re-accepts the fixture baselines Stories 2.2 to 2.5 commit, so it waits for every one of them.
 
 Rules the lanes share:
 
@@ -671,6 +672,7 @@ So that the import contract is proven framework-neutral with no runtime change (
 **When** `run` evaluates both arms
 **Then** the evaluator writes the cited observations' stdout to a temporary `outputs.json`, runs `promptfoo eval --assertions <asserts.yaml> --model-outputs <outputs.json> --output <results.jsonl> --no-cache` from TeA's devDependency with `PROMPTFOO_DISABLE_TELEMETRY=1` and `PROMPTFOO_DISABLE_UPDATE=1`, reads the JSONL rows the installed version actually wrote, and prints one judgment row per assertion from each row's `gradingResult.componentResults`, falling back to the row's `gradingResult` itself when `componentResults` is absent (a single top-level assertion) and printing a `fail` row citing the observation when `gradingResult` is absent (an error row)
 **And** the test covers a multi-assertion row, a single-assertion row with no `componentResults`, and an error row with no `gradingResult`
+**And** (superseded 2026-10-01 by Story 1.43) the clauses above that print a `fail` row for a result with no `gradingResult`, and the error-row case, no longer hold: an ungraded framework result is an evaluator infrastructure failure (exit 12, no sealed trial record), and only a graded `pass: false` becomes a cited `fail` row
 **And** the clean arm resolves `passed-clean-control` and the mutated arm `caught`
 **And** `git diff --stat -- cli/` between the story's first and last commit is empty, recorded in the completion notes, which shows a framework joined with no runtime change; `test:evaluate-boundaries` holds the rule afterwards
 **And** `promptfoo` joins TeA's devDependencies at the `latest` spec; its `engines.node` floor is met by the Node major in `.nvmrc`, which the test asserts before spawning promptfoo and reports by name when unmet; `test:licences`, `test:lockfile-age` and `test:supply-chain` pass
@@ -1333,6 +1335,8 @@ So that an assertion crash cannot appear as a caught target defect (CAP-13, AD-1
 **Dependencies:** 1.20, 1.23.
 **Gate:** skill gates, `npm test`, engine check.
 
+The installed promptfoo grades a thrown assertion as a failing component, so a thrown `javascript` assertion or a crashing code file stays a target `fail` row here; Story 1.70 closes it (added 2026-10-01).
+
 ### Story 1.44: Record installed framework versions in evaluator provenance
 
 Added 2026-09-27 in Story 1.23's final review. The command evaluator digests tracked `evaluator/` files and wiring, including `LEARNED.md`, but an installed dependency outside that tree can change while those bytes stay fixed. Its new behavior can produce judgments under the same evaluator configuration digest.
@@ -1844,6 +1848,27 @@ So that a process writing the run directory during qualification cannot move the
 
 **Dependencies:** 1.68.
 **Gate:** `npm test`, engine check.
+
+### Story 1.70: Refuse promptfoo assertions that run adopter code or call a model
+
+Added 2026-10-01 in Story 1.43. Story 1.43 refuses a promptfoo result with no `gradingResult`. The installed promptfoo (0.123.1) does not leave a crashed assertion ungraded: a `javascript` assertion that throws, and an allow-listed type such as `contains` whose `value` is a `file://` reference to a Python or Ruby file that raises, yield a graded failing component, with `gradingResult.pass: false`, the crash text as its `reason`, and an `error` field that promptfoo also sets on every ordinary failed assertion (`Expected output to contain ...`), so neither `error` nor the result shape tells a crash from a violated oracle. The result still scores as a caught target defect. Matching promptfoo's reason text would encode vendor wording, so the starter admits only assertions that cannot run adopter code or call a model. Verified live on 0.123.1, 2026-10-01: `type: contains` with `value: file://boom.py` and with `value: file://boom.rb` (each raising) returns a graded `pass: false`; with `value: file://boom.js` (throwing) it returns no grade, which Story 1.43 already stops; a `transform: "output.replace('pears','figs')"` on `contains: pears` returns a graded `pass: false` (`Expected output to contain "pears"`) for an output that holds the value, so the assertion graded text the target never produced.
+
+As an adopter using promptfoo's assertions,
+I want an assertion that runs adopter code or calls a model to stop the evaluation,
+So that code that throws, or that rewrites the output it grades, cannot appear as a caught target defect (CAP-13, AD-10, AD-21).
+
+**Acceptance Criteria:**
+
+**Given** an `asserts.yaml` entry whose `type` (after any `not-` prefix) is outside the allow-list, such as `javascript`, `python`, `ruby`, `webhook` or a model-graded kind (`llm-rubric`, `g-eval`, `factuality` and the like)
+**When** the Story 1.20 fixture evaluator or the Story 1.23 starter template imports a result whose `testCase.assert` holds it
+**Then** the wrapper refuses the result with a diagnostic that names the assertion type, `tea-evaluate run` exits 12 as evaluator infrastructure failure and seals no trial record; reverting the allow-list lets a crashing `javascript` assertion (`asserts-error.yaml`) become a target `fail` row, a `test:evaluate-promptfoo` case
+**And** the allow-list is the deterministic built-in types that execute no adopter code and call no model, with their `not-` forms: `contains`, `icontains`, `contains-all`, `contains-any`, `icontains-all`, `icontains-any`, `equals`, `starts-with`, `regex` and `is-json`, each verified against the installed version's assertion types before it is listed; a graded `pass: false` or `pass: true` from these types maps to a cited `fail` row and a `pass` row as before in the fixture and the rendered starter, and a test that refuses an allow-listed type fails
+**And** the wrapper also refuses an allow-listed assertion whose `value`, or an element of an array `value`, is a `file://` reference to a `.js`, `.mjs`, `.cjs`, `.py` or `.rb` file or a `package:` reference (the installed version's other code-loading forms are verified before the list is final), and one that carries `transform`, with a diagnostic naming the type and the reason; a live case runs `contains` with `value: file://boom.py` (raising) through promptfoo and the rendered starter, and reverting the value guard makes it a `fail` row, a `test:evaluate-promptfoo` and `test:evaluate-guidance` case
+**And** the evaluator guide names the allow-list, the code-running values, `transform` and the reason (an assertion that runs adopter code, or grades text the target did not produce, belongs in a `command` evaluator the adopter owns, where a crash exits non-zero) in its `## Separate ungraded framework errors from graded target failures` section, and `test:evaluate-guidance` fails when the allow-list, a refused type, the value guard, `transform` or the reason is removed
+**And** `test:evaluate-promptfoo` and `test:evaluate-guidance`, both in `npm test`, exercise the fixture and rendered starter against an allow-listed pass and fail, a `javascript` crash, a code-file value, a `transform` and a model-graded type, and the completion notes record each revert check.
+
+**Dependencies:** 1.43.
+**Gate:** skill gates, `npm test`, engine check.
 
 ### Story 1.80: Bring a partial-clone project, its tags and a very large history into the withheld repository
 

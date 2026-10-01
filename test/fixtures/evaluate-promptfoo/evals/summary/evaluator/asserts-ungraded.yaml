@@ -1,0 +1,4 @@
+- type: contains
+  value: pears
+  metric: required-pears
+  transform: "output.notAFunction()"

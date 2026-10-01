@@ -65,21 +65,11 @@ export function rowsFromResults(results, observation) {
       throw new Error('promptfoo returned an empty or invalid componentResults list');
     }
     if (!graded) {
-      if (typeof result.error !== 'string' || result.error.trim().length === 0) {
-        throw new Error('promptfoo returned neither a grade nor a concrete error');
-      }
-      for (const key of expected) {
-        rows.push({
-          key,
-          outcome: 'fail',
-          observationIds: [observation.observationId],
-          quote: stdout,
-          quoteChannel: 'stdout',
-          confidence: 1,
-          comment: `promptfoo returned an ungraded error for observed stdout: ${result.error ?? 'no gradingResult'}`,
-        });
-      }
-      continue;
+      // No gradingResult means promptfoo could not grade this output, which says nothing about the target.
+      // The trial stops here without a judgment row.
+      const frameworkError =
+        (typeof result.error === 'string' ? result.error.trim().split('\n')[0].slice(0, 200) : '') || 'no error reported';
+      throw new Error(`promptfoo returned an ungraded framework error (${frameworkError}); the evaluation stops without a judgment`);
     }
     if (expected.length > 1 && (!Array.isArray(components) || components.length !== expected.length)) {
       throw new Error('promptfoo returned an incomplete multi-assertion grade');
@@ -107,7 +97,7 @@ export function rowsFromResults(results, observation) {
               quote: stdout,
               quoteChannel: 'stdout',
               confidence: 1,
-              comment: grade?.reason ?? `promptfoo returned an ungraded error for observed stdout: ${result.error ?? 'no gradingResult'}`,
+              comment: grade?.reason ?? 'Assertion failed.',
             },
       );
     }
@@ -125,7 +115,11 @@ function main() {
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-promptfoo-'));
   try {
     fs.writeFileSync(path.join(temporary, 'outputs.json'), JSON.stringify([observation.stdout.value]));
-    const assertions = process.argv.includes('--single') ? 'asserts-single.yaml' : 'asserts.yaml';
+    const assertions = process.argv.includes('--single')
+      ? 'asserts-single.yaml'
+      : process.argv.includes('--ungraded')
+        ? 'asserts-ungraded.yaml'
+        : 'asserts.yaml';
     fs.copyFileSync(path.join(directory, assertions), path.join(temporary, 'asserts.yaml'));
     const command = spawnSync(
       process.execPath,
