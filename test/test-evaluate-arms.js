@@ -1392,8 +1392,8 @@ function runReport(label, { command = 'run', preFix, fix, authorized, edit }) {
  * release other than the declared one, a denied request or an answer with no
  * string at the pointer refuses the probe; a deployment that cannot answer
  * stops the run with exit 12. The cases run over a pair of deployments of
- * their own, and each asserts the change in the request logs it caused, read
- * against a baseline taken before its run.
+ * their own, and each case that reads a request log asserts the change it
+ * caused, read against a baseline taken before its run.
  */
 async function checkReportedReleases() {
   const pre = await startDeployment('report-pre-fix', 'lenient', PRE_RELEASE);
