@@ -4719,6 +4719,9 @@ function checkPrivateDirectorySources() {
     'http-target.js': 1,
     // The bridge's directory (socket and token file) beneath the run's private parent, on Windows, and the fallback of a bridge opened with no parent.
     'bridge.js': 3,
+    // `compare --accept` stages the new baseline under `runs/.compare-staging/` in the evaluation folder (already withheld from every
+    // target, and on the file system `baseline/` is on so each rename stays atomic); the command starts no process of the layer.
+    'compare.js': 1,
   };
   const found = {};
   for (const name of fs.readdirSync(directory).filter((entry) => entry.endsWith('.js'))) {
