@@ -26,6 +26,31 @@ function alive(pid) {
   }
 }
 
+/**
+ * Removes the private parents (`/tmp/tea-evaluate-p<uid>/run-<pid>-<random>`, `workspace.js`) of runtimes that are gone: a
+ * run killed with SIGKILL leaves its parent until Story 1.54 reclaims it, and the root is shared by every run of the user, so
+ * a suite reaps by the process id in the name and leaves a live run's parent alone.
+ */
+function removeDeadPrivateParents() {
+  if (process.platform === 'win32') return;
+  const root = path.join('/tmp', `tea-evaluate-p${process.getuid()}`);
+  let names = [];
+  try {
+    names = fs.readdirSync(root);
+  } catch {
+    return;
+  }
+  for (const name of names) {
+    const match = /^run-(\d+)-/.exec(name);
+    if (match === null || alive(Number(match[1]))) continue;
+    try {
+      removeTree(path.join(root, name));
+    } catch {
+      // The next suite tries again.
+    }
+  }
+}
+
 /** Removes `directory` and everything in it, write permission restored first where a test took it away. */
 function removeTree(directory) {
   const unlock = (current) => {
@@ -44,13 +69,10 @@ function removeTree(directory) {
 
 /**
  * @param {string} prefix the suite's name prefix, `tea-evaluate-run` say
- * @param {object} [options]
- * @param {string} [options.base] where the parent is made instead of the system temp directory; a short path such as
- *   `/tmp` for a case whose runs need a temp directory short enough for a socket path beneath it
  * @returns {{ make: (label: string) => string, removeAll: () => void }}
  */
-function scratchDirectories(prefix, { base = os.tmpdir() } = {}) {
-  const temp = fs.realpathSync(base);
+function scratchDirectories(prefix) {
+  const temp = fs.realpathSync(os.tmpdir());
   if (!/^[a-z][a-z-]*$/.test(prefix))
     throw new Error(`the scratch prefix ${JSON.stringify(prefix)} must be lowercase words joined by hyphens`);
   const owned = new RegExp(String.raw`^${prefix}-(\d+)-[A-Za-z0-9]{6}$`);
@@ -64,10 +86,14 @@ function scratchDirectories(prefix, { base = os.tmpdir() } = {}) {
       }
     }
   }
+  removeDeadPrivateParents();
   const parent = fs.mkdtempSync(path.join(temp, `${prefix}-${process.pid}-`));
   return {
     make: (label) => fs.mkdtempSync(path.join(parent, `${label}-`)),
-    removeAll: () => removeTree(parent),
+    removeAll: () => {
+      removeTree(parent);
+      removeDeadPrivateParents();
+    },
   };
 }
 

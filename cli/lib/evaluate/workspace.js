@@ -49,7 +49,6 @@ const path = require('node:path');
 const { createHash, randomUUID } = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 
-const { MAX_SOCKET_PATH, SOCKET_DIRECTORY_PREFIX } = require('./bridge');
 const { digest } = require('./digest');
 const { cliObservation } = require('./registry');
 const { RunDirectory } = require('./run-directory');
@@ -472,18 +471,24 @@ function unlockDirectories(directory) {
 /** The name prefix of the run's private parent, and of the per-user root every run's parent sits beneath. */
 const PRIVATE_PARENT_PREFIX = 'run-';
 const PRIVATE_ROOT_PREFIX = 'tea-evaluate-p';
-/** The name `mkdtemp` appends to a prefix: six characters. */
-const MKDTEMP_SUFFIX = 'XXXXXX';
 
-/** The per-user root's name: `tea-evaluate-p<uid>`, one for every run of the user on this temp directory. */
+/** The per-user root's name: `tea-evaluate-p<uid>`, the one root of every run of the user. */
 function privateRootName() {
   return `${PRIVATE_ROOT_PREFIX}${typeof process.getuid === 'function' ? process.getuid() : 'w'}`;
 }
 
 /**
- * `base`'s per-user private root, made when absent (mode 0700) and held to be a real
- * directory (no link) the user owns, with no access for anyone else; `null` when it is not,
- * so a planted link or a directory another user made is never used.
+ * Where the user's private root sits: `/tmp` on POSIX, whatever each run's `TMPDIR` is, so every run of the user, with any
+ * temp directory, shares one root path that one sandbox can withhold (`/tmp/tea-evaluate-p<uid>`, which is also always
+ * within the bridge's 100 byte socket path budget); Windows has no confinement and keeps the system temp directory.
+ */
+function privateRootBase() {
+  return process.platform === 'win32' ? os.tmpdir() : '/tmp';
+}
+
+/**
+ * The user's private root, made when absent (mode 0700) and held to be a real directory (no link) the user owns, with no
+ * access for anyone else; `null` when it is not, so a planted link or a directory another user made is never used.
  */
 function privateRootIn(base) {
   const root = path.join(base, privateRootName());
@@ -506,54 +511,40 @@ function privateRootIn(base) {
 /**
  * The run's private parent directory, beneath the user's one private root.
  *
- * Every run of the user makes its parent beneath the same root
- * (`<temp directory or /tmp>/tea-evaluate-p<uid>`, mode 0700; no run removes
- * it, since another run may be using it), and the target confinement
- * (`confinement.js`) withholds the root, so a sandbox built for
- * one run also covers the parent of a run that starts later and of a
- * run another process is making now, so a process left running by an earlier
- * run or a target of a concurrent run cannot reach this run's bridge token or
- * socket. The parent is registered in `scratch` (listed first, so the run's
- * end removes it with every directory beneath it) and recorded as
- * `scratch.privateParent`, its root as `scratch.privateRoot`. Every private
- * directory the evaluation layer makes for the run (the engine's, the
- * qualification's, an evaluator's, a judge's, the bridge's configuration,
- * token and socket, the score's) is made beneath the parent by
- * `makeScratchDirectory`. A directory the target is deliberately granted (its
- * temp directory, the audit report, the status and port directories, the
- * workspace) stays beside the root in the temp directory.
- *
- * The root is made where the bridge's longest socket path still fits beneath
- * it: the system temp directory, then `/tmp`.
+ * Every run of the user makes its parent beneath the same root,
+ * `/tmp/tea-evaluate-p<uid>` (mode 0700; no run removes it, since another run
+ * may be using it), whatever the run's `TMPDIR` is, and the target
+ * confinement (`confinement.js`) withholds the root. A sandbox built for one
+ * run therefore also covers the parent of a run that starts later, of a run
+ * another process is making now and of a run with another temp directory, so
+ * a process left running by an earlier run or a target of a concurrent run
+ * cannot reach this run's bridge token or socket. The parent is registered in
+ * `scratch` (listed first, so the run's end removes it with every directory
+ * beneath it) and recorded as `scratch.privateParent`, its root as
+ * `scratch.privateRoot`; its name carries the run's process id (`run-<pid>-<random>`), so a parent a killed run leaves is
+ * known to be dead. Every private directory the evaluation layer makes
+ * for the run (the engine's, the qualification's, an evaluator's, a judge's,
+ * the bridge's configuration, token and socket, the score's) is made beneath
+ * the parent by `makeScratchDirectory`. A directory the target is deliberately
+ * granted (its temp directory, the audit report, the status and port
+ * directories, the workspace) stays in the run's temp directory.
  *
  * @param {string[]} scratch
  * @returns {string} the parent
  */
 function makePrivateParent(scratch) {
   if (typeof scratch.privateParent === 'string') return scratch.privateParent;
-  const socketPath = (base) =>
-    path.join(
-      base,
-      privateRootName(),
-      `${PRIVATE_PARENT_PREFIX}${MKDTEMP_SUFFIX}`,
-      `${SOCKET_DIRECTORY_PREFIX}${MKDTEMP_SUFFIX}`,
-      'bridge.sock',
+  const root = privateRootIn(privateRootBase());
+  if (root === null) {
+    throw new WorkspaceRefusal(
+      `no private directory for the run can be made: ${path.join(privateRootBase(), privateRootName())} must be a directory you own that is not a link; remove what is there`,
     );
-  const bases = [os.tmpdir(), '/tmp'];
-  const fitting =
-    process.platform === 'win32' ? bases : bases.filter((candidate) => Buffer.byteLength(socketPath(candidate)) <= MAX_SOCKET_PATH);
-  for (const base of fitting.length > 0 ? fitting : bases) {
-    const root = privateRootIn(base);
-    if (root === null) continue;
-    const directory = fs.mkdtempSync(path.join(root, PRIVATE_PARENT_PREFIX));
-    scratch.unshift(directory);
-    Object.defineProperty(scratch, 'privateParent', { value: directory, enumerable: false, configurable: true, writable: true });
-    Object.defineProperty(scratch, 'privateRoot', { value: root, enumerable: false, configurable: true, writable: true });
-    return directory;
   }
-  throw new WorkspaceRefusal(
-    `no private directory for the run can be made: ${bases.map((base) => path.join(base, privateRootName())).join(' and ')} must each be a directory you own that is not a link; remove what is there or point TMPDIR elsewhere`,
-  );
+  const directory = fs.mkdtempSync(path.join(root, `${PRIVATE_PARENT_PREFIX}${process.pid}-`));
+  scratch.unshift(directory);
+  Object.defineProperty(scratch, 'privateParent', { value: directory, enumerable: false, configurable: true, writable: true });
+  Object.defineProperty(scratch, 'privateRoot', { value: root, enumerable: false, configurable: true, writable: true });
+  return directory;
 }
 
 /**
@@ -1733,6 +1724,7 @@ module.exports = {
   makeReadOnly,
   makePrivateParent,
   makeScratchDirectory,
+  privateRootIn,
   realPathLoosely,
   releaseScratchDirectory,
   removeScratchDirectory,

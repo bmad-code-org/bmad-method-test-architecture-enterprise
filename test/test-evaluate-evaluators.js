@@ -89,7 +89,6 @@
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const net = require('node:net');
-const os = require('node:os');
 const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
 
@@ -103,7 +102,7 @@ const { AGENT_ADAPTERS, bridgedArgsRefused } = require('../cli/lib/agent-adapter
 const { runSupervised } = require('../cli/lib/run-agent');
 const { configurationFields } = require('../cli/lib/evaluate/evaluators');
 const { MAX_SOCKET_PATH, bridgeTools, openBridge } = require('../cli/lib/evaluate/bridge');
-const { makePrivateParent, makeScratchDirectory, removeScratchDirectory } = require('../cli/lib/evaluate/workspace');
+const { makePrivateParent, makeScratchDirectory, privateRootIn, removeScratchDirectory } = require('../cli/lib/evaluate/workspace');
 const {
   EVALUATOR_INSTRUCTIONS,
   bridgeRouter,
@@ -132,8 +131,18 @@ const ENGINE_SHIM = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'eng
 const RACE_ENGINE = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'race-engine.js');
 const EVALUATION = path.join('evals', 'verdict');
 const TRIALS = 3;
-/** The name of the user's private root directory (`workspace.js`), which stays in a temp directory, empty, once runs end. */
-const PRIVATE_ROOT = /^tea-evaluate-p\w+$/;
+/** The user's private root directory (`workspace.js`), shared by every run of the user whatever its `TMPDIR`. */
+const PRIVATE_ROOT = path.join('/tmp', `tea-evaluate-p${process.getuid?.() ?? 'w'}`);
+/** Whether `directory` is in the private root, spelled as `/tmp` or as the real path a process reports (`/private/tmp` on macOS). */
+function inPrivateRoot(directory) {
+  let real = PRIVATE_ROOT;
+  try {
+    real = fs.realpathSync(PRIVATE_ROOT);
+  } catch {
+    // An absent root holds nothing.
+  }
+  return [PRIVATE_ROOT, real].includes(path.dirname(directory));
+}
 const AGENT_SNAPSHOT = 'stub-evaluator-2026-09';
 
 const BASE_ENV = Object.fromEntries(Object.entries(process.env).filter(([name]) => name !== ENGINE_CLI_ENV && !name.startsWith('GIT_')));
@@ -148,8 +157,6 @@ const colors = { reset: '\u001B[0m', red: '\u001B[31m', green: '\u001B[32m' };
 const failures = [];
 let checks = 0;
 const scratch = scratchDirectories('tea-evaluate-evaluators');
-/** Where projects' own temp directories are made (`shortTemp`): `/tmp`, so a private parent fits in them. */
-const shortScratch = scratchDirectories('tea-ev', { base: process.platform === 'win32' ? os.tmpdir() : '/tmp' });
 /** Each project's private temp directory, which every run and score must leave empty. */
 const runtimeTemps = [];
 
@@ -218,24 +225,25 @@ function commitAll(repository, folder, message) {
 }
 
 /**
- * A project's own temp directory, which every run and score must leave empty. It is short (directly under `/tmp`), since a
- * run's private parent is made in the temp directory only where the bridge's longest socket path still fits there, and
- * under a long path it falls back to `/tmp` (`workspace.js` `makePrivateParent`), out of this case's sight.
+ * The private parents a case's runs made, from the working directories its command evaluator logged (`--log`, one JSON line
+ * per call with its `cwd`, which sits in the parent) or from the socket paths the sealed-brief stub captured. A run's parent is
+ * in the user's private root (`/tmp/tea-evaluate-p<uid>`), shared with every other run of the user, so a case names its own
+ * parents by what its runs wrote and never by listing the root.
  */
-function shortTemp() {
-  return process.platform === 'win32' ? scratch.make('temp') : shortScratch.make('t');
+function parentsOfLog(log) {
+  const cwds = captures(log).map((line) => line.cwd);
+  return [...new Set(cwds.map((cwd) => path.dirname(cwd)))];
 }
 
-/**
- * What `directory` holds once the user's private root is looked into: the root itself stays (it is shared by every run of the
- * user, and no run removes it), so what counts is a run's parent in it, listed as `<root>/<parent>`.
- */
-function residueOf(directory) {
-  return fs
-    .readdirSync(directory)
-    .flatMap((entry) =>
-      PRIVATE_ROOT.test(entry) ? fs.readdirSync(path.join(directory, entry)).map((parent) => `${entry}/${parent}`) : [entry],
-    );
+function parentsOfCapture(capture) {
+  return [
+    ...new Set(
+      captures(capture)
+        .map((call) => call.config?.mcpServers?.[call.server]?.args?.at(-1))
+        .filter((socket) => typeof socket === 'string')
+        .map((socket) => path.dirname(path.dirname(socket))),
+    ),
+  ];
 }
 
 /** A temp git repository from the fixture, `edit` applied before the first commit, with a private temp directory and a marker file. */
@@ -246,7 +254,7 @@ function makeProject(label, { edit = () => {}, marker: marked = false, unconfine
   fs.writeFileSync(path.join(repository, '.gitignore'), 'vendor/\n');
   const folder = path.join(repository, EVALUATION);
   const marker = path.join(directory, 'launches.jsonl');
-  const temp = shortTemp();
+  const temp = scratch.make(`${label}-temp`);
   runtimeTemps.push({ label, directory: temp });
   const project = {
     repository,
@@ -1084,40 +1092,53 @@ function checkEvaluatorLayerHeld() {
  */
 function checkScratchRemoval() {
   if (process.platform === 'win32') return;
-  const locked = makeProject('command-lock-cwd', { edit: ({ folder }) => useCommandEvaluator(folder, { mode: 'lock-cwd' }) });
+  const lockedLog = path.join(scratch.make('command-lock-log'), 'calls.jsonl');
+  const locked = makeProject('command-lock-cwd', {
+    edit: ({ folder }) => useCommandEvaluator(folder, { mode: 'lock-cwd', args: ['--log', lockedLog] }),
+  });
   const temp = locked.env.TMPDIR;
   const ran = evaluate(['run', '--evaluation', locked.folder], locked.env);
   check(ran.status === 0, `an evaluator leaving a read-only directory: run exited ${ran.status}; expected 0\n${ran.output}`);
   check(
-    residueOf(temp).length === 0,
-    `an evaluator leaving a read-only directory: the run left ${JSON.stringify(residueOf(temp))} in its temp directory`,
+    fs.readdirSync(temp).length === 0,
+    `an evaluator leaving a read-only directory: the run left ${JSON.stringify(fs.readdirSync(temp))} in its temp directory`,
+  );
+  // Each trial's working directory sat in the run's private parent, which the run removed with it.
+  const lockedParents = parentsOfLog(lockedLog);
+  check(
+    lockedParents.length === 1 && inPrivateRoot(lockedParents[0]) && !fs.existsSync(lockedParents[0]),
+    `an evaluator leaving a read-only directory: its working directories sat in ${JSON.stringify(lockedParents)}; expected one parent in ${PRIVATE_ROOT}, removed`,
   );
   if (process.platform !== 'darwin') return;
-  const pinned = makeProject('command-immutable-cwd', { edit: ({ folder }) => useCommandEvaluator(folder, { mode: 'immutable-cwd' }) });
-  const pinnedTemp = pinned.env.TMPDIR;
-  // This project's temp directory keeps the pinned file by design, so the suite's closing check leaves it out.
-  runtimeTemps.splice(
-    runtimeTemps.findIndex((entry) => entry.directory === pinnedTemp),
-    1,
-  );
+  const pinnedLog = path.join(scratch.make('command-immutable-log'), 'calls.jsonl');
+  const pinned = makeProject('command-immutable-cwd', {
+    edit: ({ folder }) => useCommandEvaluator(folder, { mode: 'immutable-cwd', args: ['--log', pinnedLog] }),
+  });
+  const pinnedParents = [];
   try {
     const kept = evaluate(['run', '--evaluation', pinned.folder], pinned.env);
-    const left = residueOf(pinnedTemp);
+    pinnedParents.push(...parentsOfLog(pinnedLog));
     check(
       kept.status === 0 && /could not remove the private directory \S*tea-evaluate-command-/.test(kept.output),
       `an evaluator leaving an immutable file: run exited ${kept.status}; expected 0 naming the directory it could not remove\n${kept.output}`,
     );
-    // Every private directory sits beneath the run's one private parent in the user's private root, so what stays is that parent and each trial's working directory in it.
-    const inside = left.length === 1 ? fs.readdirSync(path.join(pinnedTemp, left[0])) : [];
+    // Every private directory sits beneath the run's one private parent in the user's private root, so what stays is that
+    // parent and each trial's working directory in it, and the run's temp directory holds nothing.
+    const inside = pinnedParents.length === 1 && fs.existsSync(pinnedParents[0]) ? fs.readdirSync(pinnedParents[0]) : [];
     check(
-      left.length === 1 &&
-        PRIVATE_ROOT.test(left[0].split('/')[0]) &&
+      pinnedParents.length === 1 &&
+        inPrivateRoot(pinnedParents[0]) &&
         inside.length === 2 * TRIALS &&
-        inside.every((entry) => entry.startsWith('tea-evaluate-command-')),
-      `an evaluator leaving an immutable file: the run left ${JSON.stringify(left)} holding ${JSON.stringify(inside)} in its temp directory; expected the private parent holding each trial's working directory alone, every workspace removed`,
+        inside.every((entry) => entry.startsWith('tea-evaluate-command-')) &&
+        fs.readdirSync(pinned.env.TMPDIR).length === 0,
+      `an evaluator leaving an immutable file: the run left ${JSON.stringify(pinnedParents)} holding ${JSON.stringify(inside)} and ${JSON.stringify(fs.readdirSync(pinned.env.TMPDIR))} in its temp directory; expected the private parent holding each trial's working directory alone, every workspace removed`,
     );
   } finally {
-    spawnSync('chflags', ['-R', 'nouchg', pinnedTemp]);
+    // The parent is in the shared root, so this case removes what the run could not.
+    for (const parent of pinnedParents) {
+      spawnSync('chflags', ['-R', 'nouchg', parent]);
+      fs.rmSync(parent, { recursive: true, force: true });
+    }
   }
 }
 
@@ -1129,7 +1150,7 @@ function checkScratchRemoval() {
  */
 async function checkSignalMidTrial() {
   if (process.platform === 'win32') return;
-  const interrupt = async (project, { ready, signal, expected }) => {
+  const interrupt = async (project, { ready, signal, expected, parents }) => {
     const child = spawn(process.execPath, [EVALUATE, 'run', '--evaluation', project.folder], {
       cwd: PROJECT_ROOT,
       env: { ...BASE_ENV, ...project.env },
@@ -1142,17 +1163,13 @@ async function checkSignalMidTrial() {
     const deadline = Date.now() + SPAWN_TIMEOUT_MS;
     while (!fs.existsSync(ready) && Date.now() < deadline && child.exitCode === null)
       await new Promise((resolve) => setTimeout(resolve, 100));
-    const top = fs.readdirSync(project.env.TMPDIR).filter((entry) => !PRIVATE_ROOT.test(entry));
+    const top = fs.readdirSync(project.env.TMPDIR);
     // Every private directory of the run sits beneath its one private parent, in the user's private root (Story 1.58).
-    const during = [
-      ...top,
-      ...residueOf(project.env.TMPDIR)
-        .filter((entry) => entry.includes('/'))
-        .flatMap((entry) => fs.readdirSync(path.join(project.env.TMPDIR, entry))),
-    ];
+    const made = parents();
+    const during = [...top, ...made.flatMap((parent) => (fs.existsSync(parent) ? fs.readdirSync(parent) : []))];
     child.kill(signal);
     const { code, name } = await ended;
-    const after = residueOf(project.env.TMPDIR);
+    const after = fs.readdirSync(project.env.TMPDIR);
     check(name === signal, `${expected.join(', ')} under ${signal}: the run ended with code ${code} and signal ${name}\n${output}`);
     for (const prefix of expected) {
       check(
@@ -1165,18 +1182,33 @@ async function checkSignalMidTrial() {
       );
     }
     check(after.length === 0, `a run ended by ${signal} mid-trial left ${JSON.stringify(after)} in its temp directory`);
+    check(
+      made.length === 1 && inPrivateRoot(made[0]) && !fs.existsSync(made[0]),
+      `a run ended by ${signal} mid-trial made the private parent(s) ${JSON.stringify(made)}; expected one in ${PRIVATE_ROOT}, removed`,
+    );
     return ready;
   };
 
   const pids = path.join(scratch.make('signal-command-pids'), 'pids.json');
+  const commandLog = path.join(scratch.make('signal-command-log'), 'calls.jsonl');
   const command = makeProject('command-signal', {
-    edit: ({ folder }) => useCommandEvaluator(folder, { mode: 'hang', args: ['--pids', pids], timeoutMs: 120_000 }),
+    edit: ({ folder }) => useCommandEvaluator(folder, { mode: 'hang', args: ['--pids', pids, '--log', commandLog], timeoutMs: 120_000 }),
   });
-  await interrupt(command, { ready: pids, signal: 'SIGTERM', expected: ['tea-evaluate-command-'] });
+  await interrupt(command, {
+    ready: pids,
+    signal: 'SIGTERM',
+    expected: ['tea-evaluate-command-'],
+    parents: () => parentsOfLog(commandLog),
+  });
 
   const capture = path.join(scratch.make('signal-agent-capture'), 'capture.jsonl');
   const agent = makeProject('sealed-brief-signal', { edit: ({ folder }) => useSealedBriefAgent(folder, { capture, mode: 'hang' }) });
-  await interrupt(agent, { ready: capture, signal: 'SIGINT', expected: ['tea-evaluate-evaluator-', 'tea-evaluate-bridge-config-'] });
+  await interrupt(agent, {
+    ready: capture,
+    signal: 'SIGINT',
+    expected: ['tea-evaluate-evaluator-', 'tea-evaluate-bridge-config-'],
+    parents: () => parentsOfCapture(capture),
+  });
   const socket = captures(capture)[0]?.config?.mcpServers?.[captures(capture)[0]?.server]?.args?.at(-1);
   check(
     typeof socket === 'string' && !fs.existsSync(path.dirname(socket)),
@@ -1198,6 +1230,7 @@ async function checkSignalMidTrial() {
     ready: `${trialCapture}.hung`,
     signal: 'SIGINT',
     expected: ['tea-evaluate-evaluator-', 'tea-evaluate-bridge-config-'],
+    parents: () => parentsOfCapture(trialCapture),
   });
   const hung = captures(trialCapture).at(-1);
   const trialSocket = hung?.config?.mcpServers?.[hung?.server]?.args?.at(-1);
@@ -1556,24 +1589,19 @@ async function checkSealedBriefAgent() {
 }
 
 /**
- * Story 1.58: the run's private parent is made once, beneath the user's one private root (mode 700, a real directory the user
- * owns, and no run removes it), listed first in the run's scratch list, and every scratch directory is made beneath it; the root is
- * made in the temp directory where the bridge's longest socket path still fits there, and in `/tmp` where it does not (or
- * where the root there is a link), and the bridge's socket directory, which holds the token file, goes beneath the parent.
- * The token is in that file alone.
+ * Story 1.58: the run's private parent is made once, beneath the user's one private root, `/tmp/tea-evaluate-p<uid>`
+ * whatever the run's `TMPDIR` is (mode 700, a real directory the user owns, which no run removes), listed first in the run's
+ * scratch list, and every scratch directory is made beneath it; the bridge's socket directory, which holds the token file,
+ * goes beneath the parent. The token is in that file alone. A root that is a link, or that another user owns, is not used.
  */
 async function checkPrivateParent() {
   if (process.platform === 'win32') return;
   const previous = process.env.TMPDIR;
   const made = [];
-  const linked = shortTemp();
-  const linkTarget = shortTemp();
-  fs.symlinkSync(linkTarget, path.join(linked, `tea-evaluate-p${process.getuid()}`));
   try {
-    for (const [what, temp, expectedBase] of [
-      ['a short temp directory', shortTemp(), null],
-      ['a temp directory too long for a socket', fs.mkdtempSync(path.join(scratch.make('long'), `${'a'.repeat(60)}-`)), '/tmp'],
-      ['a temp directory whose private root is a link', linked, '/tmp'],
+    for (const [what, temp] of [
+      ['a short temp directory', scratch.make('t')],
+      ['a temp directory too long for a socket', fs.mkdtempSync(path.join(scratch.make('long'), `${'a'.repeat(60)}-`))],
     ]) {
       process.env.TMPDIR = temp;
       const list = [];
@@ -1585,10 +1613,7 @@ async function checkPrivateParent() {
         `${what}: the private parent is not the first and only entry of the scratch list once`,
       );
       check(list.privateRoot === root, `${what}: the scratch list names the private root ${list.privateRoot}; expected ${root}`);
-      check(
-        path.dirname(root) === (expectedBase ?? temp) && PRIVATE_ROOT.test(path.basename(root)),
-        `${what}: the private root is ${root}; expected a tea-evaluate-p<uid> directory in ${expectedBase ?? temp}`,
-      );
+      check(root === PRIVATE_ROOT, `${what}: the private root is ${root}; expected ${PRIVATE_ROOT}, whatever the temp directory is`);
       const rootStat = fs.lstatSync(root);
       check(
         rootStat.isDirectory() && rootStat.uid === process.getuid() && (rootStat.mode & 0o777) === 0o700,
@@ -1640,7 +1665,20 @@ async function checkPrivateParent() {
         `${what}: the bridge left a directory in the private parent`,
       );
     }
-    check(fs.readdirSync(linkTarget).length === 0, 'a run made a directory through the linked private root');
+    // A root that is a link, or one whose mode is open, is not taken as it is: a link is refused, an open mode is closed.
+    const base = scratch.make('root-base');
+    const target = scratch.make('root-target');
+    fs.symlinkSync(target, path.join(base, path.basename(PRIVATE_ROOT)));
+    check(privateRootIn(base) === null, 'a private root that is a link was used');
+    check(fs.readdirSync(target).length === 0, 'a run made a directory through a linked private root');
+    const open = scratch.make('root-open');
+    fs.mkdirSync(path.join(open, path.basename(PRIVATE_ROOT)), { mode: 0o777 });
+    fs.chmodSync(path.join(open, path.basename(PRIVATE_ROOT)), 0o777);
+    check(
+      privateRootIn(open) === path.join(open, path.basename(PRIVATE_ROOT)) &&
+        (fs.statSync(path.join(open, path.basename(PRIVATE_ROOT))).mode & 0o777) === 0o700,
+      'a private root with an open mode was not closed to mode 700',
+    );
   } finally {
     if (previous === undefined) delete process.env.TMPDIR;
     else process.env.TMPDIR = previous;
@@ -3956,11 +3994,10 @@ async function main() {
       if (group === null || caseGroup === group) await runCase(name, body);
     }
     for (const { label, directory } of runtimeTemps) {
-      const left = residueOf(directory);
+      const left = fs.readdirSync(directory);
       check(left.length === 0, `the ${label} project's runs left ${JSON.stringify(left)} in their temp directory`);
     }
   } finally {
-    shortScratch.removeAll();
     scratch.removeAll();
   }
   return report();

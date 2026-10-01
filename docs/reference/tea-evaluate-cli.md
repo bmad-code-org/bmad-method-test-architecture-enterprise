@@ -889,11 +889,12 @@ The bridge admits one connection, presenting a token its relay process reads fro
 The token exists in that file alone: the relay's environment and argument list carry the file's path, since another process of your user can read a process's environment.
 The token file, the configuration file that names it and the bridge's socket are private files and sit with the other private directories of the evaluation layer: the working directories of a sealed-brief agent, a `command` evaluator and the rubric judge, and the staging directories of the engine, the qualification and `score`.
 A run makes one private parent directory when it starts, before any target runs, and makes each of those beneath it.
-Every run of your user makes its parent beneath one private root, `tea-evaluate-p<uid>` (mode 700, a directory you own that is not a link), in the temp directory, or in `/tmp` where the temp directory's path would leave the socket's path too long for the system to accept.
+Every run of your user makes its parent beneath one private root, `/tmp/tea-evaluate-p<uid>` (mode 700, a directory you own that is not a link), whatever the run's `TMPDIR` is; a root that is a link or belongs to another user stops the run with exit 12.
+On Windows, which has no confinement, the root is in the temp directory.
 A run removes its own parent when it ends, an interrupting signal included; the root stays, since another run may be using it, and a run killed with SIGKILL leaves its parent in place until Story 1.54 reclaims it.
 
 The confinement withholds the run's private directories from every target and every process a target leaves running, those started before a directory was made included, so the token is unreadable to a confined target, which can neither take the bridge's one admission nor read an evaluator's or a judge's working files.
-It withholds the root, so a process left running by an earlier run, or a target of a run in progress elsewhere, cannot reach the parent of a run made after its sandbox was built.
+It withholds the root, so a process left running by an earlier run, or a target of a run in progress elsewhere, cannot reach the parent of a run made after its sandbox was built, whatever temp directory either run uses.
 Seatbelt denies each read and write under the root and each connection to a unix socket under it (`EPERM`), Bubblewrap covers it with an empty read-only file system, and the audit reports a Node process that opens it.
 The agent's own connection and every process of the evaluation layer keep their access, since those processes are not confined as a target is.
 The directories a target is granted (its workspace, its temp directory, the audit report, the status and port files) are not under the root.

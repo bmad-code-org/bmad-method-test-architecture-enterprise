@@ -641,7 +641,7 @@ async function checkRealScore({ engine, validate, folder, env, runDirectory, ind
       `${probeId}'s score call carried ${JSON.stringify(call.argv)}`,
     );
     // `--out` is the private staging file the call really used: outside the evaluation folder, under the run's private
-    // parent beneath the user's private root, in its own temp directory or in `/tmp` where that path is too long for a socket (Story 1.58), and gone once the call was copied in.
+    // parent beneath the user's private root in `/tmp`, whatever the run's temp directory is (Story 1.58), and gone once the call was copied in.
     const out = value('--out');
     check(
       typeof out === 'string' &&
@@ -649,13 +649,11 @@ async function checkRealScore({ engine, validate, folder, env, runDirectory, ind
         path.basename(path.dirname(out)).startsWith('tea-evaluate-score-') &&
         path.basename(path.dirname(path.dirname(out))).startsWith('run-') &&
         /^tea-evaluate-p\w+$/.test(path.basename(path.dirname(path.dirname(path.dirname(out))))) &&
-        [env.TMPDIR, fs.realpathSync(env.TMPDIR), '/tmp', fs.realpathSync('/tmp')].includes(
-          path.dirname(path.dirname(path.dirname(path.dirname(out)))),
-        ) &&
+        ['/tmp', fs.realpathSync('/tmp')].includes(path.dirname(path.dirname(path.dirname(path.dirname(out))))) &&
         !fs.existsSync(path.dirname(path.dirname(out))) &&
         !out.startsWith(`${folder}${path.sep}`) &&
         !fs.existsSync(path.dirname(out)),
-      `${probeId}'s score call names --out ${out}, which is not a removed staging file in the run's temp directory`,
+      `${probeId}'s score call names --out ${out}, which is not a removed staging file in the private root`,
     );
   }
   checkDirectRerun('the passing run', scoreDirectory);
@@ -4734,8 +4732,8 @@ function checkPrivateDirectorySources() {
 }
 
 /**
- * Story 1.58: a sandbox is built over the user's private root, so a run's parent made after it, by another run, is refused as
- * well: the second run's token file and socket are out of the first sandbox's reach. The control builds the sandbox over the
+ * Story 1.58: a sandbox is built over the user's private root, `/tmp/tea-evaluate-p<uid>` whatever each run's `TMPDIR` is, so a
+ * run's parent made after it, by another run with any temp directory, is refused as well: the second run's token file and socket are out of the first sandbox's reach. The control builds the sandbox over the
  * first run's parent alone (the per-run design), which the second run's files are readable through.
  */
 async function checkPrivateRootAcrossRuns() {
@@ -4745,8 +4743,6 @@ async function checkPrivateRootAcrossRuns() {
   if (confinement.refusal !== undefined) throw new Error(confinement.refusal);
   const workspace = tempDir('root-workspace');
   const status = confinement.mode === 'bubblewrap' ? tempDir('root-status') : null;
-  const first = [];
-  const firstParent = makePrivateParent(first);
   const probe = `
     const fs = require('node:fs');
     const net = require('node:net');
@@ -4757,59 +4753,88 @@ async function checkPrivateRootAcrossRuns() {
     client.on('connect', () => { console.log('token: ' + token + '\\nsocket: allowed'); client.destroy(); });
     client.on('error', (error) => console.log('token: ' + token + '\\nsocket: refused ' + error.code));
   `;
-  const second = [];
+  const withheld = process.platform === 'linux' ? /^refused (EPERM|EACCES|ENOENT|ECONNREFUSED)$/ : /^refused EPERM$/;
+  const previous = process.env.TMPDIR;
+  const parents = [];
+  /** `makePrivateParent` for a run whose `TMPDIR` is `temp` (the suite's own when `null`). */
+  const parentFor = (list, temp) => {
+    if (temp === null) delete process.env.TMPDIR;
+    else process.env.TMPDIR = temp;
+    try {
+      const parent = makePrivateParent(list);
+      parents.push(parent);
+      return parent;
+    } finally {
+      if (previous === undefined) delete process.env.TMPDIR;
+      else process.env.TMPDIR = previous;
+    }
+  };
+  const long = fs.mkdtempSync(path.join(tempDir('root-long'), `${'a'.repeat(60)}-`));
+  const short = tempDir('root-short');
   let server = null;
   try {
-    // The sandbox is built for the first run, and the second run's parent is made after it.
-    const sandboxes = {
-      root: targetSandbox({ confinement, workspace, privateRoot: first.privateRoot, status }),
-      parentOnly: targetSandbox({ confinement, workspace, privateRoot: firstParent, status }),
-    };
-    const secondParent = makePrivateParent(second);
-    const directory = fs.mkdtempSync(path.join(secondParent, 's-'));
-    const tokenFile = path.join(directory, 'token');
-    fs.writeFileSync(tokenFile, 'second-run-token', { mode: 0o600 });
-    const socket = path.join(directory, 'b.sock');
-    server = net.createServer((connection) => connection.end());
-    await new Promise((resolve) => server.listen(socket, resolve));
-    check(
-      path.dirname(secondParent) === first.privateRoot && secondParent !== firstParent,
-      "the second run's parent is not beneath the first run's root",
-    );
-    const attempt = (sandbox) => {
-      const wrapped = sandbox.wrap(process.execPath, ['-e', probe, tokenFile, socket], []);
-      const result = spawnSync(wrapped.target, wrapped.args, {
-        cwd: workspace,
-        encoding: 'utf8',
-        timeout: SPAWN_TIMEOUT_MS,
-        killSignal: 'SIGKILL',
-      });
-      return Object.fromEntries(
-        result.stdout
-          .split('\n')
-          .filter((line) => line.includes(': '))
-          .map((line) => line.split(': ')),
+    // Each pair is two runs of one user whose temp directories differ: the first run's sandbox is built, and the second run's
+    // parent is made after it, with a token file and a socket in it.
+    for (const [what, firstTemp, secondTemp] of [
+      ['two runs with the suite temp directory', null, null],
+      ['a second run with a long temp directory', null, long],
+      ['a second run with another short temp directory', null, short],
+      ['a first run with a long temp directory and a second with a short one', long, short],
+    ]) {
+      const first = [];
+      const firstParent = parentFor(first, firstTemp);
+      const sandboxes = {
+        root: targetSandbox({ confinement, workspace, privateRoot: first.privateRoot, status }),
+        parentOnly: targetSandbox({ confinement, workspace, privateRoot: firstParent, status }),
+      };
+      const second = [];
+      const secondParent = parentFor(second, secondTemp);
+      const directory = fs.mkdtempSync(path.join(secondParent, 's-'));
+      const tokenFile = path.join(directory, 'token');
+      fs.writeFileSync(tokenFile, 'second-run-token', { mode: 0o600 });
+      const socket = path.join(directory, 'b.sock');
+      server = net.createServer((connection) => connection.end());
+      await new Promise((resolve) => server.listen(socket, resolve));
+      check(
+        path.dirname(secondParent) === first.privateRoot && secondParent !== firstParent,
+        `${what}: the second run's parent is not beneath the first run's root`,
       );
-    };
-    const withheld = process.platform === 'linux' ? /^refused (EPERM|EACCES|ENOENT|ECONNREFUSED)$/ : /^refused EPERM$/;
-    const seen = attempt(sandboxes.root);
-    check(
-      withheld.test(seen.token ?? ''),
-      `a sandbox built for one run read the token file of a run made after it: ${JSON.stringify(seen.token)}; expected a refusal`,
-    );
-    check(
-      withheld.test(seen.socket ?? ''),
-      `a sandbox built for one run connected to the socket of a run made after it: ${JSON.stringify(seen.socket)}; expected a refusal`,
-    );
-    // The control: a sandbox over the first run's parent alone reaches the second run's files, so the case sees what the root withholds.
-    const narrow = attempt(sandboxes.parentOnly);
-    check(
-      narrow.token === 'token' && narrow.socket === 'allowed',
-      `a sandbox over one run's parent alone ended ${JSON.stringify(narrow)} on a later run's files; expected the token read and the socket connected`,
-    );
+      const attempt = (sandbox) => {
+        const wrapped = sandbox.wrap(process.execPath, ['-e', probe, tokenFile, socket], []);
+        const result = spawnSync(wrapped.target, wrapped.args, {
+          cwd: workspace,
+          encoding: 'utf8',
+          timeout: SPAWN_TIMEOUT_MS,
+          killSignal: 'SIGKILL',
+        });
+        return Object.fromEntries(
+          result.stdout
+            .split('\n')
+            .filter((line) => line.includes(': '))
+            .map((line) => line.split(': ')),
+        );
+      };
+      const seen = attempt(sandboxes.root);
+      check(
+        withheld.test(seen.token ?? ''),
+        `${what}: a sandbox built for one run read the token file of another run: ${JSON.stringify(seen.token)}; expected a refusal`,
+      );
+      check(
+        withheld.test(seen.socket ?? ''),
+        `${what}: a sandbox built for one run connected to the socket of another run: ${JSON.stringify(seen.socket)}; expected a refusal`,
+      );
+      // The control: a sandbox over the first run's parent alone reaches the second run's files, so the case sees what the root withholds.
+      const narrow = attempt(sandboxes.parentOnly);
+      check(
+        narrow.token === 'token' && narrow.socket === 'allowed',
+        `${what}: a sandbox over one run's parent alone ended ${JSON.stringify(narrow)} on another run's files; expected the token read and the socket connected`,
+      );
+      await new Promise((resolve) => server.close(() => resolve()));
+      server = null;
+    }
   } finally {
     if (server !== null) await new Promise((resolve) => server.close(() => resolve()));
-    for (const parent of [firstParent, second.privateParent].filter(Boolean)) fs.rmSync(parent, { recursive: true, force: true });
+    for (const parent of parents) fs.rmSync(parent, { recursive: true, force: true });
   }
 }
 

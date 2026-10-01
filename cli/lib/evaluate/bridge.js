@@ -58,11 +58,10 @@ const SERVER_INFO = { name: 'tea-evaluate-bridge', version: '1' };
 const DEFAULT_PROTOCOL_VERSION = '2025-06-18';
 /**
  * The longest socket path the platforms Node supports all accept (macOS's
- * `sun_path` holds 104 bytes), which decides where the run's private parent is
- * made (`workspace.js` `makePrivateParent`).
+ * `sun_path` holds 104 bytes), which the bridge's socket path must fit.
  */
 const MAX_SOCKET_PATH = 100;
-/** The name prefix of the directory beneath the run's private parent that holds the socket and the token file; short, since the socket path is. */
+/** The name prefix of the directory beneath the run's private parent that holds the socket and the token file. */
 const SOCKET_DIRECTORY_PREFIX = 's-';
 /** The environment variable naming the file the relay reads the admission token from; the token itself is in no environment or argument list. */
 const TOKEN_FILE_VARIABLE = 'TEA_EVALUATE_BRIDGE_TOKEN_FILE';
@@ -132,7 +131,7 @@ function bridgeTools(interfaces) {
 
 /**
  * Where the bridge's directory goes: it holds the socket and the token file, and sits beneath the run's private parent
- * (`workspace.js` `makePrivateParent`, made where a socket path fits), which a confined target cannot reach. A caller with
+ * (`workspace.js` `makePrivateParent`, under `/tmp/tea-evaluate-p<uid>`, so a socket path fits), which a confined target cannot reach. A caller with
  * no parent (a bridge opened outside a run) gets one under the system temp directory unless that path is too long for a
  * socket. A Windows pipe has no path, so its directory holds the token file alone.
  */
