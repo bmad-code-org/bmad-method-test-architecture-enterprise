@@ -1,0 +1,55 @@
+{
+  "conditionArm": "clean",
+  "trialIndex": 3,
+  "workspace": "trial-clean-3",
+  "elapsedMs": 132,
+  "oracles": [
+    {
+      "oracleId": "O-001",
+      "polarity": "expects-hold",
+      "resolution": "true",
+      "disposition": "held",
+      "observationIds": [
+        "trial-3-judge-run"
+      ]
+    }
+  ],
+  "steps": [
+    {
+      "stepId": "judge-run",
+      "request": {
+        "probeId": "trial-3-judge-run",
+        "interfaceId": "verdict",
+        "operationId": "judge-request",
+        "kind": "cli",
+        "executable": "verdict",
+        "subcommandPath": [],
+        "channels": {
+          "argument": {},
+          "option": {},
+          "environment": [],
+          "stdin": {
+            "kind": "text",
+            "value": "Judge the request."
+          }
+        }
+      },
+      "observation": {
+        "probeId": "trial-3-judge-run",
+        "interfaceId": "verdict",
+        "operationId": "judge-request",
+        "kind": "cli",
+        "exitCode": 0,
+        "stdout": {
+          "kind": "text",
+          "value": "request: Judge the request.\ndigest: sha256:2a7782e752bb92cbe4c7e2039710d647fccd5e79d023d121c650d664cfdf1d7d\nworkspace: plain\nevaluation: present\nvendor: provisioned\nvendor-write: denied\nresidue: no\nverdict: accepted\n"
+        },
+        "stderr": {
+          "kind": "text",
+          "value": ""
+        },
+        "artifacts": {}
+      }
+    }
+  ]
+}

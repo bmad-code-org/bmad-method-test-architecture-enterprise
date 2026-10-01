@@ -462,9 +462,13 @@ async function inputFindings({ folder, runDirectory, index, record, engine, held
  * @param {string} [options.run] the invocation identifier of the run to score
  * @param {NodeJS.ProcessEnv} [options.env] the environment the engine CLI runs under
  * @param {(line: string) => void} [options.log]
+ * @param {string} [options.stagingRoot] the existing directory the call's private staging directories are made in, for a
+ *   caller that removes that directory itself however it ends (`tea-evaluate ci`'s replay, whose directory sits beneath its
+ *   own private parent); the call then makes no private parent of its own. A call without one makes its parent beneath the
+ *   user's private root (`workspace.js` `makePrivateParent`) and removes it at its end
  * @returns {Promise<ScoreOutcome>}
  */
-async function runScoreCommand(folder, { run: invocationId, env = process.env, log = () => {} } = {}) {
+async function runScoreCommand(folder, { run: invocationId, env = process.env, log = () => {}, stagingRoot } = {}) {
   const located = runDirectoryFor(folder, invocationId);
   if (located.wiring !== undefined)
     return new ScoreOutcome({ exitCode: WIRING, message: located.wiring, runDirectory: located.directory ?? null });
@@ -554,7 +558,7 @@ async function runScoreCommand(folder, { run: invocationId, env = process.env, l
   const scratch = [];
   try {
     try {
-      makePrivateParent(scratch);
+      if (stagingRoot === undefined) makePrivateParent(scratch);
     } catch (error) {
       if (!(error instanceof WorkspaceRefusal)) throw error;
       return new ScoreOutcome({ exitCode: INFRASTRUCTURE, runDirectory, message: error.message });
@@ -570,6 +574,7 @@ async function runScoreCommand(folder, { run: invocationId, env = process.env, l
       log,
       writer,
       scratch,
+      stagingRoot,
       scoreInvocationId,
       scoreRelative,
       refused,
@@ -590,13 +595,13 @@ async function runScoreCommand(folder, { run: invocationId, env = process.env, l
 }
 
 /** One probe's `eval-quality score` call, staged and copied in; the entry `score.json` and the views summarize it. */
-async function scoreProbe({ folder, runDirectory, set, index, held, validate, env, log, writer, scratch, scoreRelative }) {
+async function scoreProbe({ folder, runDirectory, set, index, held, validate, env, log, writer, scratch, stagingRoot, scoreRelative }) {
   const relative = `${scoreRelative}/${set.probeId}`;
   const recordRelative = `${relative}/score.json`;
   const evidenceRelative = `${relative}/evidence-artifact.json`;
   // The probe's directory is made, exclusively, before the engine runs, so an entry planted at it stops the probe unscored.
   writer.ensureDirectory(relative);
-  const staging = makeScratchDirectory(scratch, 'tea-evaluate-score-');
+  const staging = makeScratchDirectory(scratch, 'tea-evaluate-score-', stagingRoot);
   try {
     const produced = path.join(staging, 'evidence-artifact.json');
     const args = [];
@@ -903,6 +908,7 @@ async function strengthAggregateStep({
   log,
   writer,
   scratch,
+  stagingRoot,
   scoreRelative,
 }) {
   const missing = index.trialSets.map((set) => set.probeId).filter((probeId) => !evidenceDigests.has(probeId));
@@ -925,7 +931,7 @@ async function strengthAggregateStep({
   const floorsRelative = `${scoreRelative}/${FLOORS_NAME}`;
   const aggregateRelative = `${scoreRelative}/${AGGREGATE_NAME}`;
   const callRelative = `${scoreRelative}/${AGGREGATE_CALL_NAME}`;
-  const staging = makeScratchDirectory(scratch, 'tea-evaluate-aggregate-');
+  const staging = makeScratchDirectory(scratch, 'tea-evaluate-aggregate-', stagingRoot);
   // Filled in as each file is written, so a refusal from the held writer records how far the step got.
   const summary = {
     status: 'failed',
@@ -1056,6 +1062,7 @@ async function scoreProbes({
   log,
   writer,
   scratch,
+  stagingRoot,
   scoreInvocationId,
   scoreRelative,
   refused,
@@ -1074,7 +1081,20 @@ async function scoreProbes({
   let aggregateExit = null;
   try {
     for (const set of index.trialSets) {
-      const probe = await scoreProbe({ folder, runDirectory, set, index, held, validate, env, log, writer, scratch, scoreRelative });
+      const probe = await scoreProbe({
+        folder,
+        runDirectory,
+        set,
+        index,
+        held,
+        validate,
+        env,
+        log,
+        writer,
+        scratch,
+        stagingRoot,
+        scoreRelative,
+      });
       stageFailed ||= probe.stageFailed;
       scores.push(probe.entry);
       if (probe.artifact !== null) evidence.set(set.probeId, probe.artifact);
@@ -1095,6 +1115,7 @@ async function scoreProbes({
       log,
       writer,
       scratch,
+      stagingRoot,
       scoreRelative,
     });
     strengthAggregate = step.summary;

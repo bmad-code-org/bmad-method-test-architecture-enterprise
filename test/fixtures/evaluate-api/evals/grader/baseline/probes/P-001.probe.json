@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 5,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "probeId": "P-001",
+  "probeClass": "zero-action",
+  "behaviorId": "B-001",
+  "systemId": "grader-http-service",
+  "implementationDigest": "sha256:c189aaaff39c70b7a324390c4dc644bacd0de1189a54369d6df25dc47444dd26",
+  "artifactDigest": "sha256:c189aaaff39c70b7a324390c4dc644bacd0de1189a54369d6df25dc47444dd26",
+  "commitDigest": "sha256:c189aaaff39c70b7a324390c4dc644bacd0de1189a54369d6df25dc47444dd26",
+  "rationale": "Clean control: under the committed strict policy the grader accepts the answer.",
+  "qualification": {
+    "route": "clean-control",
+    "baselinePassEvidence": {
+      "storage": "public",
+      "path": "runs/20261001T171731277Z-10ab5418/qualification/P-001/baseline-pass.json",
+      "privateRef": null,
+      "digest": "sha256:3b6802cc17f035ee6df1b03bd920f6afd3fdaf984fa706d74c385a0c9985e0a5"
+    },
+    "revisionCommitDigest": "sha256:c189aaaff39c70b7a324390c4dc644bacd0de1189a54369d6df25dc47444dd26",
+    "noKnownDefectStatement": "The strict policy has no known defect."
+  },
+  "expectedClean": true,
+  "defects": []
+}

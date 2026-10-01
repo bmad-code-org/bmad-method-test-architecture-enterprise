@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 5,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "probeId": "P-002",
+  "probeClass": "defect",
+  "behaviorId": "B-001",
+  "systemId": "grader-tool-server",
+  "implementationDigest": "sha256:1ab37ae347e02e5f63f6361380a39bd3186c68dba859fbc87afd023ca6787c96",
+  "artifactDigest": "sha256:2a7782e752bb92cbe4c7e2039710d647fccd5e79d023d121c650d664cfdf1d7d",
+  "commitDigest": "sha256:1ab37ae347e02e5f63f6361380a39bd3186c68dba859fbc87afd023ca6787c96",
+  "rationale": "Seeded defect: M-001 relaxes the policy to lenient, and the grader then rejects the answer.",
+  "qualification": {
+    "route": "controlled-mutation",
+    "mutationSource": "rules/policy.txt: the strict mode relaxed to lenient",
+    "mutationOperator": "replace-exact: \"mode: strict\" -> \"mode: lenient\" (occurrences 1)",
+    "targetArtifact": {
+      "storage": "public",
+      "path": "rules/policy.txt",
+      "privateRef": null,
+      "digest": "sha256:2a7782e752bb92cbe4c7e2039710d647fccd5e79d023d121c650d664cfdf1d7d"
+    },
+    "expectedObservableFailure": "The grader rejects the answer, so its result says verdict rejected.",
+    "baselinePassEvidence": {
+      "storage": "public",
+      "path": "runs/20261001T155752286Z-e92b3669/qualification/P-002/baseline-pass.json",
+      "privateRef": null,
+      "digest": "sha256:c07c8c77d836b62f887ed75f858ee8fc3d8597346f7067124753a618eb858c3c"
+    },
+    "mutatedFailEvidence": {
+      "storage": "public",
+      "path": "runs/20261001T155752286Z-e92b3669/qualification/P-002/mutated-fail.json",
+      "privateRef": null,
+      "digest": "sha256:908cfcd2a9d9a9c618a8c5bd6307687e935d34ad750c553c478f368554db016d"
+    },
+    "rollbackVerified": true
+  },
+  "expectedClean": false,
+  "defects": [
+    {
+      "defectId": "D-001",
+      "behaviorId": "B-001",
+      "summary": "The relaxed policy makes the grader reject an answer it must accept.",
+      "severity": "critical",
+      "oracleEvidence": [
+        {
+          "storage": "public",
+          "path": "runs/20261001T155752286Z-e92b3669/qualification/P-002/mutated-fail.json",
+          "privateRef": null,
+          "digest": "sha256:908cfcd2a9d9a9c618a8c5bd6307687e935d34ad750c553c478f368554db016d"
+        }
+      ],
+      "source": "controlled-mutation",
+      "manifestationWitness": {
+        "legId": "manifest-lenient",
+        "interfaceId": "grader",
+        "operationId": "grade-answer",
+        "inputs": {
+          "arguments": {
+            "answer": "forty-two"
+          }
+        },
+        "relation": {
+          "op": "equality",
+          "operands": [
+            {
+              "pointer": "/interactions/manifest-lenient/response-body/verdict"
+            },
+            {
+              "literal": "rejected"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "defectSignature": {
+    "interfaceKind": "mcp",
+    "toolName": "grade_answer",
+    "observableChannel": "response-body",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": null,
+          "header": null,
+          "body": null,
+          "argument": null,
+          "option": null,
+          "environment": null,
+          "stdin": null,
+          "arguments": {
+            "answer": {
+              "matcher": "any"
+            }
+          }
+        }
+      },
+      "predicate": {
+        "op": "equality",
+        "operands": [
+          {
+            "pointer": "/interactions/observed/response-body/verdict"
+          },
+          {
+            "literal": "rejected"
+          }
+        ]
+      }
+    }
+  }
+}

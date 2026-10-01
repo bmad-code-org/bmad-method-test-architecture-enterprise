@@ -2535,7 +2535,8 @@ function checkGapsGuidance(guide, engine, failures) {
     })
   )
     failures.push('gaps.md AD-10 exit mapping changed');
-  requireText(guide, 'planned Stage 12 PR replay', 'gaps.md exit 13', failures);
+  requireText(guide, '`ci --tier pr` exits 13 on drift', 'gaps.md exit 13', failures);
+  requireText(guide, 'run `tea-evaluate compare --accept` once the adopter confirms', 'gaps.md exit 13 accept', failures);
   requireText(guide, 'a framework result with no grade; see `evaluator.md`', 'gaps.md exit 12', failures);
   // Story 1.44: an installed framework that is missing, different or changed is the same class, with its two recoveries.
   requireText(

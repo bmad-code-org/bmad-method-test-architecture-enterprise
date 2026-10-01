@@ -1,6 +1,10 @@
 {
   "schemaVersion": 1,
   "evaluationId": "atdd-red-phase",
+  "requirements": {
+    "path": "requirements.md",
+    "digest": "sha256:00915b7cd0d39a70760c657b7a23422da750a4a6bc0902ad32d08b16892572b6"
+  },
   "targetKind": "skill",
   "interface": "cli",
   "registry": [

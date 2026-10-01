@@ -1,0 +1,33 @@
+{
+  "legId": "manifest-lenient",
+  "sequence": 5,
+  "workspace": "mutated:M-001",
+  "cwd": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-001-c6376213-7558-467b-a44d-c9ae8e4d2778/target",
+  "request": {
+    "probeId": "manifest-lenient",
+    "interfaceId": "grader",
+    "operationId": "grade-answer",
+    "kind": "mcp",
+    "toolName": "grade_answer",
+    "channels": {
+      "arguments": {
+        "answer": "forty-two"
+      }
+    }
+  },
+  "observation": {
+    "probeId": "manifest-lenient",
+    "interfaceId": "grader",
+    "operationId": "grade-answer",
+    "kind": "mcp",
+    "isError": false,
+    "result": {
+      "kind": "json",
+      "value": {
+        "ok": true,
+        "answer": "forty-two",
+        "verdict": "rejected"
+      }
+    }
+  }
+}

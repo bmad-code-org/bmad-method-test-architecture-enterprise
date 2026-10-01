@@ -29,7 +29,7 @@
       "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
     },
     "requirements": {
-      "description": "The confirmed requirements statement committed in this evaluation folder. Its digest is eval-quality's digestBytes over the exact requirements.md bytes. Story 2.2 checks the contract's sourceSpecDigest against this statement.",
+      "description": "The confirmed requirements statement committed in this evaluation folder. Its digest is eval-quality's digestBytes over the exact requirements.md bytes. tea-evaluate check holds the contract's sourceSpecDigest to this statement (Story 2.2): the contract's sourceSpecDigest is the same digest, and an evaluation that declares none fails check.",
       "type": "object",
       "additionalProperties": false,
       "required": ["path", "digest"],

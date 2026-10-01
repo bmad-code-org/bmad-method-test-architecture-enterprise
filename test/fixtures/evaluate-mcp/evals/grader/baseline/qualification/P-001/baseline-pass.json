@@ -1,0 +1,49 @@
+{
+  "probeId": "P-001",
+  "phase": "baseline-pass",
+  "workspace": "qualify-clean",
+  "verdict": "held",
+  "oracles": [
+    {
+      "oracleId": "O-001",
+      "polarity": "expects-hold",
+      "resolution": "true",
+      "disposition": "held",
+      "observationIds": [
+        "baseline-grade-run"
+      ]
+    }
+  ],
+  "steps": [
+    {
+      "stepId": "grade-run",
+      "request": {
+        "probeId": "baseline-grade-run",
+        "interfaceId": "grader",
+        "operationId": "grade-answer",
+        "kind": "mcp",
+        "toolName": "grade_answer",
+        "channels": {
+          "arguments": {
+            "answer": "forty-two"
+          }
+        }
+      },
+      "observation": {
+        "probeId": "baseline-grade-run",
+        "interfaceId": "grader",
+        "operationId": "grade-answer",
+        "kind": "mcp",
+        "isError": false,
+        "result": {
+          "kind": "json",
+          "value": {
+            "ok": true,
+            "answer": "forty-two",
+            "verdict": "accepted"
+          }
+        }
+      }
+    }
+  ]
+}

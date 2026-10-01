@@ -1,0 +1,107 @@
+[
+  {
+    "probeId": "witness-alpha",
+    "interfaceId": "grader",
+    "operationId": "grade-answer",
+    "kind": "api",
+    "status": 200,
+    "headers": {
+      "content-type": "application/json",
+      "date": "Thu, 01 Oct 2026 17:17:32 GMT",
+      "connection": "close",
+      "transfer-encoding": "chunked"
+    },
+    "body": {
+      "kind": "json",
+      "value": {
+        "ok": true,
+        "answer": "alpha",
+        "verdict": "accepted"
+      }
+    }
+  },
+  {
+    "probeId": "witness-beta",
+    "interfaceId": "grader",
+    "operationId": "grade-answer",
+    "kind": "api",
+    "status": 200,
+    "headers": {
+      "content-type": "application/json",
+      "date": "Thu, 01 Oct 2026 17:17:32 GMT",
+      "connection": "close",
+      "transfer-encoding": "chunked"
+    },
+    "body": {
+      "kind": "json",
+      "value": {
+        "ok": true,
+        "answer": "beta",
+        "verdict": "accepted"
+      }
+    }
+  },
+  {
+    "probeId": "preflight-control-observe",
+    "interfaceId": "grader",
+    "operationId": "grade-answer",
+    "kind": "api",
+    "status": 200,
+    "headers": {
+      "content-type": "application/json",
+      "date": "Thu, 01 Oct 2026 17:17:32 GMT",
+      "connection": "close",
+      "transfer-encoding": "chunked"
+    },
+    "body": {
+      "kind": "json",
+      "value": {
+        "ok": true,
+        "answer": "alpha",
+        "verdict": "accepted"
+      }
+    }
+  },
+  {
+    "probeId": "preflight-control-observe-2",
+    "interfaceId": "grader",
+    "operationId": "grade-answer",
+    "kind": "api",
+    "status": 200,
+    "headers": {
+      "content-type": "application/json",
+      "date": "Thu, 01 Oct 2026 17:17:32 GMT",
+      "connection": "close",
+      "transfer-encoding": "chunked"
+    },
+    "body": {
+      "kind": "json",
+      "value": {
+        "ok": true,
+        "answer": "alpha",
+        "verdict": "accepted"
+      }
+    }
+  },
+  {
+    "probeId": "manifest-lenient",
+    "interfaceId": "grader",
+    "operationId": "grade-answer",
+    "kind": "api",
+    "status": 200,
+    "headers": {
+      "content-type": "application/json",
+      "date": "Thu, 01 Oct 2026 17:17:33 GMT",
+      "connection": "close",
+      "transfer-encoding": "chunked"
+    },
+    "body": {
+      "kind": "json",
+      "value": {
+        "ok": true,
+        "answer": "forty-two",
+        "verdict": "rejected"
+      }
+    }
+  }
+]

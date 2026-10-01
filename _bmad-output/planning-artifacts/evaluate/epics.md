@@ -23,7 +23,7 @@ inputDocuments:
 
 ## Overview
 
-This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and eighty-two stories, including H.1 (Stories 1.27 to 1.73, 1.80, 1.90 and 1.91 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
+This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and eighty-three stories, including H.1 (Stories 1.27 to 1.73, 1.80, 1.90 to 1.92 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
 
 Evaluate is fully stacked. The stack runs system under test, then the evaluation (the mechanism that runs the system, collects evidence and makes judgments), then the Behavioral Evaluation Contract (what behavior matters, what evidence counts, how success and failure resolve), then eval-quality (contract sanity, evidence support, and whether the evaluation catches defects). TeA owns every layer above eval-quality, including each concern eval-quality states it leaves to the caller, so an adopter can evaluate any target end to end. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3 onward, Epic 2 and H.1 to close the plan gap audit; the Traceability section maps each audit item to the story that closes it.
 
@@ -150,7 +150,7 @@ None. Evaluate has no graphical interface.
 ### Epic 1: The Evaluate authoring loop
 
 An adopter describes a target, answers Evaluate's questions, chooses or builds the evaluation layer and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches the seeded defect, with the gaps named and closed. The epic closes by running Evaluate on `bmad-testarch-evaluate` itself, then proving the guidance on two more target kinds, on seeded weaknesses and on an evaluation framework its guides never name.
-Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.73, 1.80, 1.90 and 1.91.
+Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.73, 1.80, 1.90 to 1.92.
 
 **FRs covered:** FR1 to FR10, FR13, FR14.
 
@@ -242,12 +242,13 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 74    | 1.80  | 1.57                         |
 | 75    | 1.90  | 2.1                          |
 | 76    | 1.91  | 2.1                          |
-| 77    | 2.1   | 1.16, 1.26, 1.45             |
-| 78    | 2.2   | 2.1                          |
-| 79    | 2.3   | 2.2                          |
-| 80    | 2.4   | 2.3                          |
-| 81    | 2.5   | 2.4                          |
-| 82    | H.1   | 2.5                          |
+| 77    | 1.92  | 2.2                          |
+| 78    | 2.1   | 1.16, 1.26, 1.45             |
+| 79    | 2.2   | 2.1                          |
+| 80    | 2.3   | 2.2                          |
+| 81    | 2.4   | 2.3                          |
+| 82    | 2.5   | 2.4                          |
+| 83    | H.1   | 2.5                          |
 
 ### Parallel lanes (from 2026-10-01)
 
@@ -257,7 +258,7 @@ The table above gives every story's dependencies. Since Story 1.40 merged, the s
 
 **Lane 2: confinement and process lifecycle** (own worktree): 1.62, 1.57, 1.58, 1.59, 1.60, 1.63, 1.61, 1.52, 1.53, 1.54, 1.80. Story 1.62 goes first because it extracts the shared sandbox primitives the confinement stories build on. Story 1.60 may remove 1.63's premise, so 1.63 is re-read after it. Story 1.58 precedes 1.54, since both track the run's private scratch directories. Stories 1.52 to 1.54 touch the preflight and workspace modules the confinement stories also edit, so they run after them.
 
-**Lane 3: engine releases, dogfood and Epic 2** (own worktree): 1.45, 2.1, 2.2, 2.3, 2.4, 1.47, 1.49, 1.48, 1.42, 1.50, 1.55, 1.56, 1.51, 1.46, 2.5, 1.90, 1.91. Story 1.45 starts the longest serial chain (1.45, 2.1 to 2.5, then H.1), so it runs first, and 2.5 runs last because it baselines every fixture and so waits for each story that changes committed evidence bytes (1.42, 1.44, 1.50, 1.51, 1.55, 1.56). Stories 1.47, 1.49 and 1.48 regenerate the test-design probes, so they run together with 1.48 last. Stories 1.42 and 1.50 both change the HTTP probe port and run back to back. Story 1.46 records live runs of the Evaluate skill, so it follows the skill-guide stories in other lanes (1.43, 1.44, 1.61, 1.67, 1.70). Lane 3 owns every eval-quality release, because 1.42, 1.45, 1.48, 1.50 and 1.55 each need a published engine and one publisher keeps the dependency pin and `package-lock.json` ordered. Stories 1.90 and 1.91 follow 2.5: 1.90 edits the baseline `check` and `compare` read, and 1.91 re-accepts the fixture baselines Stories 2.2 to 2.5 commit, so it waits for every one of them.
+**Lane 3: engine releases, dogfood and Epic 2** (own worktree): 1.45, 2.1, 2.2, 2.3, 2.4, 1.47, 1.49, 1.48, 1.42, 1.50, 1.55, 1.56, 1.51, 1.46, 2.5, 1.90, 1.91, 1.92. Story 1.45 starts the longest serial chain (1.45, 2.1 to 2.5, then H.1), so it runs first, and 2.5 runs last because it baselines every fixture and so waits for each story that changes committed evidence bytes (1.42, 1.44, 1.50, 1.51, 1.55, 1.56). Stories 1.47, 1.49 and 1.48 regenerate the test-design probes, so they run together with 1.48 last. Stories 1.42 and 1.50 both change the HTTP probe port and run back to back. Story 1.46 records live runs of the Evaluate skill, so it follows the skill-guide stories in other lanes (1.43, 1.44, 1.61, 1.67, 1.70). Lane 3 owns every eval-quality release, because 1.42, 1.45, 1.48, 1.50 and 1.55 each need a published engine and one publisher keeps the dependency pin and `package-lock.json` ordered. Stories 1.90 and 1.91 follow 2.5: 1.90 edits the baseline `check` and `compare` read, and 1.91 re-accepts the fixture baselines Stories 2.2 to 2.5 commit, so it waits for every one of them.
 
 Rules the lanes share:
 
@@ -1995,12 +1996,33 @@ So that a public baseline reveals no machine (AD-12).
 **Then** it records neutral, run-relative or placeholder path forms in them; the build chooses between recording relative paths at the source and a documented neutral substitution at accept time that keeps each digest anchor valid, and records the choice and why, because rewriting a digest-anchored file moves its digest; restoring an absolute path makes the scan in the next criterion fail
 **And** a `test:evaluate-compare` case runs an accept over a project under a distinctive absolute path and a distinctive temporary directory, then scans every file under `baseline/` byte for byte and asserts that none contains that path, the home directory or the temporary root
 **And** the replay placement still works: a copy of the baseline at `runs/<acceptedRun>/` in a scratch folder scores to the accepted evidence bytes, a `test:evaluate-compare` case
-**And** the fixture baselines committed by Stories 2.2 to 2.5 pass the same scan, which runs over every committed `baseline/` under `test/fixtures/` and `test/evaluations/`.
+**And** the fixture baselines committed by Stories 2.2 to 2.5 pass the same scan, which runs over every committed `baseline/` under `test/fixtures/` and `test/evaluations/`
+**And** once the machine paths are gone from `score.json` and `aggregate-strength.json`, the `pr` replay's comparison set (Story 2.2 leaves those call records out because they hold private staging paths and the invocation id) also covers both files; a `test:evaluate-ci` case flips one byte of each and exits 13, and leaving either out of the comparison passes it.
 
 Stories 2.2 to 2.5 commit fixture baselines before this story runs, so this story re-accepts them in its own pull request.
 
 **Dependencies:** 2.1.
 **Gate:** `npm test`, `npm run docs:validate-links`, `npm run docs:build`, engine check.
+
+### Story 1.92: Stop `tea-evaluate ci` at once on a signal while an engine stage runs
+
+Added 2026-10-01 in Story 2.2's review. `runEngineStage` (`engine-cli.js`) runs each eval-quality stage with `spawnSync`, so a SIGINT or SIGTERM that reaches `tea-evaluate ci` while the replay's `preflight` or `score`, `compile`, `seal` or the stale-baseline compile is running waits for the stage to end before the handler removes the scratch directory and the process dies. A stage that hangs holds `ci` and its scratch directory until something kills the stage. Story 2.2 made the gate child and the conformance run asynchronous and ends their process group on a signal; the engine stages, and the in-process `run`, `score` and `preflight` a live check drives, keep the synchronous call. A `ci` killed with SIGKILL also leaves a running gate in its own process group, since no portable parent-death signal exists; the reference states that limit.
+
+As a pipeline owner whose job is cancelled,
+I want a signal to end `ci`, the engine stage it runs and its scratch directory at once,
+So that a cancelled run holds no runner and leaves nothing behind (AD-10, AD-12).
+
+**Acceptance Criteria:**
+
+**Given** a `ci` run whose replay's engine stage hangs (the `test:evaluate-ci` kill shim with `KILL_HOW=hang`, which the test does not kill)
+**When** SIGINT or SIGTERM reaches `ci`
+**Then** `ci` ends by that signal within a bounded time, the stage's process is gone and neither the temporary directory nor the user's private root (`run-<ci pid>-*`) holds an entry of the run; reverting `runEngineStage` to `spawnSync` leaves the stage running and fails the case on its timeout
+**And** the same case over `compile` and `seal`, and over the stale-baseline compile that runs after the checks
+**And** every stage exit still passes through verbatim: the case that compares each stage's exit and streams with the direct CLI run over the same inputs (`checkEngineStageExits`) passes unchanged, and the shim-log cases show the same argv
+**And** `test:evaluate-boundaries` keeps `ci.js` reaching eval-quality only through `engine.js` and `runEngineStage`, with string stage names.
+
+**Dependencies:** 2.2.
+**Gate:** `test:evaluate-ci`, `test:evaluate-boundaries`, `npm test`.
 
 ## Epic 2: Continuous proof in CI
 
@@ -2045,7 +2067,7 @@ So that the pipeline enforces eval-quality's verdicts without a second taxonomy 
 **And** it passes stage exits through verbatim, never passes `--strict`, and reads CONCERNS from the evidence artifact as warn
 **And** it applies the strength floor per probe class (warn on `scheduled`, block on `release`) and the stale-baseline rule (warn on `pr`, block on `release`)
 **And** it claims none of `evidence-over-truncated`, `evidence-unavailable` or `evidence-internally-inconsistent`
-**And** it persists each check's exit code, stdout and stderr under `runs/<invocationId>/`, so a `gate` check the adopter's plan adopts leaves its output in the evidence bundle (AD-12); a `test:evaluate-ci` case runs a stub `gate` check that prints distinct known bytes to each stream and exits 1, asserts byte equality per stream and the recorded code, and fails when the capture is dropped
+**And** it persists each check's exit code, stdout and stderr under `runs/<invocationId>/`, so a `gate` check the adopter's plan adopts leaves its output in the evidence bundle (AD-12); a `test:evaluate-ci` case runs a stub `gate` check that prints distinct known bytes to each stream and exits 1, asserts byte equality per stream and the recorded code, and fails when the capture is dropped (amended 2026-10-01 in Story 2.2: `ci.js` runs an `evaluate` check by its id from a closed set of twelve, one per AD-10 default-tier member, and its `command` is the `tea-evaluate` argv a pipeline renders; `enforcement` records AD-10's class, `block`, or `warn` only where AD-10 says warn (a strength regression on the comparison, the floor on `scheduled`), and the action always comes from AD-10's table, so a plan cannot demote a blocking exit; a tier holds only the checks placed on it, so a merge pipeline runs the `pr` tier as well; the final exit is the most severe blocking result in the order 64, 12, 5, 4, 3, 13, 11, 10, 2, 1, recorded in AD-10; a `gate` check and every `pr` default are deterministic checks that stay on `pr`, and a live check sits off `pr`; `check` reports the same plan findings)
 
 **Given** a plan whose placements differ from AD-10's defaults
 **When** `tea-evaluate ci` validates it
@@ -2058,14 +2080,14 @@ So that the pipeline enforces eval-quality's verdicts without a second taxonomy 
 **And** this story adds a `requirements.md`, its `requirements` entry and the matching `sourceSpecDigest` to every fixture evaluation `check` runs over that was built before Story 1.12: the base fixture `test/fixtures/evaluate/` (Story 1.4, which `test:evaluate-check`, `-preflight`, `-run`, `-mutation`, `-arms`, `-evaluators`, `-partitions`, `-calibration`, `-interpret` and `-ci` all run `check` over), `test/fixtures/evaluate-mcp/` (1.10), `test/fixtures/evaluate-api/` (1.11), `test/fixtures/evaluate-workflow/` (1.18), `test/fixtures/evaluate-tool-use-agent/` (1.19) and `test/fixtures/evaluate-promptfoo/` (1.20); evaluations authored from Story 1.12 on (1.16, 1.24 to 1.26 and the copies 1.25 and 2.4 make of them) carry one already
 **And** a `test:evaluate-check` case walks every `evaluation.json` under `test/fixtures/` and `test/evaluations/` and asserts each names a `requirements.md` whose digest matches its contract, and deleting one fixture's `requirements.md` makes `check` exit 10, which the case observes; negative `check` cases (Story 1.4's failure fixtures and any later ones) are built in temporary folders at test time and never committed as folders holding an `evaluation.json`, so the walk sees only evaluations meant to pass
 **And** it runs oracle-versus-scorer agreement over the committed baseline by reading the `corroboration` eval-quality recorded on each oracle outcome in the baseline evidence (`agrees`, `disagrees` or `not-evaluable`, the engine's own comparison of the evaluator's disposition with the evidence); any `disagrees`, or a required oracle whose corroboration is `not-evaluable` or whose outcome is `unreached`, exits 11 as evaluation weakness; TeA holds no table of its own; flipping one disposition in a fixture baseline record and re-scoring makes eval-quality report `disagrees`, and the case exits 11
-**And** the `scheduled` and `release` tiers run the held-out partition (Story 1.21) with the strength floor applied to it separately (warn on `scheduled`, block on `release`), and judge calibration whenever the contract declares a rubric, whose exit 11 blocks on both tiers
+**And** the `scheduled` and `release` tiers run the held-out partition (Story 1.21) with the strength floor applied to it separately (warn on `scheduled`, block on `release`), and judge calibration whenever the contract declares a rubric, whose exit 11 blocks on both tiers (amended 2026-10-01 in Story 2.2: the twin run covers the partition the baseline recorded at the scoring policy's `minimumTrialCount` trials per arm, so the comparison measures the same probe set (a baseline of `both` is a run of everything, held-out probes included, because a development run against it would be a `refused` comparison; the held-out check applies the floor to that partition on its own); the strength floor is read from the engine's floor decisions in each run's strength aggregate; judge calibration is read from the report a run writes before its first trial)
 
 **Given** `test/test-evaluate-ci.js`, chained into `npm test` as `test:evaluate-ci`, which the `chain` matrix runs (amended 2026-09-25 in Story 1.9: CI runs the `npm test` chain in shards, so a chained script needs no step of its own)
-**When** it runs over fixture plans and a fixture evaluation with a committed test baseline under `test/fixtures/evaluate/`
+**When** it runs over fixture plans and a fixture evaluation with a committed test baseline under `test/fixtures/evaluate/` (amended 2026-10-01 in Story 2.2: that evaluation is `test/fixtures/evaluate/mutation/evals/verdict-ci`, a copy-workspace clone of the verdict fixture, so the tests that copy `verdict` keep their first-run behavior)
 **Then** it asserts the AD-10 enforcement table row by row, the outcome-state mapping, the tier membership and a replay that reproduces the fixture evidence
 **And** replay reads baseline bytes only from `baseline/`: it places them at `runs/<acceptedRun>/` inside a scratch copy of the evaluation folder, because the sealed records name their artifacts under that path and `score` refuses a reference outside the run directory it scores (amended 2026-10-01 in Story 2.1), and it writes produced evidence only to a fresh `runs/<invocationId>/replay/` directory; produced evidence that differs from the baseline exits 13, class evaluation evidence drift, action block (an AD-10 row)
 **And** mutating one committed baseline evidence byte exits 13, which catches a replay that compares a file with itself
-**And** mutating the clean-control leg's `exitCode` in one committed baseline observation exits 13 while eval-quality's own exits stay as recorded, and with `TEA_EVALUATE_ENGINE_CLI` pointed at a logging shim the argv log shows `preflight` and `score` invoked, which together catch a replay that copies baseline evidence forward without re-scoring
+**And** mutating the clean-control leg's `exitCode` in one committed baseline observation exits 13 while eval-quality's own exits stay as recorded, and with `TEA_EVALUATE_ENGINE_CLI` pointed at a logging shim the argv log shows `preflight` and `score` invoked, which together catch a replay that copies baseline evidence forward without re-scoring (amended 2026-10-01 in Story 2.2: the fixture's control legs are what eval-quality's clean-control check reads, so a changed control leg makes the engine's own preflight exit 3, which passes through verbatim; exit 13 is the exit of an observation edit that leaves the engine at its recorded exits, a witness leg's `exitCode`, which moves the verdict's `fixtureDigest`; `test:evaluate-ci` asserts both and the shim log in each; the compared files are the produced verdict, each probe's `evidence-artifact.json`, `strength-aggregate.json` and `strength-floors.json`, and the call records of `score` are left out because they hold private staging paths and the invocation id; the replay scores under the floors the baseline's own score recorded, so a floors edit since the accept is a stale baseline, and the stale-baseline rule applies once per tier whenever `baseline/` exists)
 **And** a baseline tree whose `policy/` digest differs from the baseline's recorded policy is a stale baseline under AD-10
 **And** `test/fixtures/evaluate-mcp/` and `test/fixtures/evaluate-api/` each gain a `ci/evaluation-ci-plan.json` and a fixture baseline, validated against the runtime schema
 

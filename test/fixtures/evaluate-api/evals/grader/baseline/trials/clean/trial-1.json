@@ -1,0 +1,61 @@
+{
+  "conditionArm": "clean",
+  "trialIndex": 1,
+  "workspace": "trial-clean-1",
+  "elapsedMs": 230,
+  "oracles": [
+    {
+      "oracleId": "O-001",
+      "polarity": "expects-hold",
+      "resolution": "true",
+      "disposition": "held",
+      "observationIds": [
+        "trial-1-grade-run"
+      ]
+    }
+  ],
+  "steps": [
+    {
+      "stepId": "grade-run",
+      "request": {
+        "probeId": "trial-1-grade-run",
+        "interfaceId": "grader",
+        "operationId": "grade-answer",
+        "kind": "api",
+        "method": "GET",
+        "pathTemplate": "/grade",
+        "channels": {
+          "path": {},
+          "query": {
+            "answer": "forty-two"
+          },
+          "header": {},
+          "body": {
+            "kind": "absent"
+          }
+        }
+      },
+      "observation": {
+        "probeId": "trial-1-grade-run",
+        "interfaceId": "grader",
+        "operationId": "grade-answer",
+        "kind": "api",
+        "status": 200,
+        "headers": {
+          "content-type": "application/json",
+          "date": "Thu, 01 Oct 2026 17:17:33 GMT",
+          "connection": "close",
+          "transfer-encoding": "chunked"
+        },
+        "body": {
+          "kind": "json",
+          "value": {
+            "ok": true,
+            "answer": "forty-two",
+            "verdict": "accepted"
+          }
+        }
+      }
+    }
+  ]
+}

@@ -11,8 +11,10 @@
  *
  * - `stale-index`: `corpus-index.json` does not match the folder's bytes.
  * - `schema-version`: `evaluation.json` carries a version this runtime does not know.
- * - `requirements`: a declared requirements statement is absent, is not a regular file held by
- *   the evaluation folder, or its committed bytes disagree with the recorded digest.
+ * - `requirements`: `evaluation.json` declares no requirements statement, the statement is absent, is not a
+ *   regular file held by the evaluation folder, its committed bytes disagree with the recorded digest, or
+ *   they digest to something other than the contract's `sourceSpecDigest` (contract-source freshness, Story
+ *   2.2: a requirements change the contract has not absorbed blocks the pull request).
  * - `runtime-owned-field`: a committed probe carries a field the runtime writes.
  * - `mutation-operator`: a mutation is not `replace-exact` with exactly one occurrence.
  * - `provisioned-target`: a mutation's `targetArtifact` sits inside a provisioned directory, which every
@@ -87,6 +89,11 @@
  *   `adapter/http-probe-port.mjs`, the port every `api` call goes through, is absent or is not a regular
  *   file in a real `adapter/` directory.
  *
+ * - `ci-plan` family (Story 2.2): when `ci/evaluation-ci-plan.json` exists it must parse (`json`), meet the
+ *   runtime-owned plan schema, an unknown `evaluate` check id included (`schema`), and keep the placement rules
+ *   `tea-evaluate ci` enforces (`tier`, `duplicate`, `command`, `placement-default`, `placement-reason`,
+ *   `deterministic-off-pr`, `live-on-pr`; `ci-plan.js`). An absent plan is no defect here; `tea-evaluate ci` exits 64.
+ *
  * Beside them, `contract.json` must exist (`missing-file`), as must
  * `policy/scoring-policy.json` when a probe takes the `controlled-mutation`,
  * `historical` or `gameability` route, since its `reExecutionCap` bounds the rollback proof and its
@@ -121,6 +128,7 @@ const AjvModule = require('ajv/dist/2020');
 const { engineSchemaPath, loadEngine, schemaVersionProblems } = require('./engine');
 const { CALIBRATION_PATH, calibrationProblems, readCalibration } = require('./calibration');
 const { verifyRecordsCalibration } = require('./records-calibration');
+const { readPlan } = require('./ci-plan');
 const { MANIFEST_NAME } = require('./folder');
 const { addFormats } = require('./formats');
 const { HTTP_PORT_MODULE, originTarget, sharedOrigin } = require('./http-target');
@@ -1867,6 +1875,13 @@ function checkHttpPort(report, folder, registry) {
   }
 }
 
+/** `ci/evaluation-ci-plan.json`, when the evaluation has one, held to the plan schema and its placement rules (Story 2.2). */
+function checkCiPlan(report, folder) {
+  const read = readPlan(folder);
+  if (read.absent) return;
+  for (const found of read.findings) report.add(found.file, found.rule, found.message);
+}
+
 function schemaVersionMessage(version) {
   return (
     `evaluation.json schemaVersion ${JSON.stringify(version ?? null)} is not known to the installed TeA ` +
@@ -1875,10 +1890,21 @@ function schemaVersionMessage(version) {
   );
 }
 
-/** The declared statement must be the committed file whose exact bytes the manifest digests. */
-function checkRequirements(report, folder, evaluation, engine) {
+/**
+ * The declared statement must be the committed file whose exact bytes the manifest digests, and the contract's
+ * `sourceSpecDigest` (stamped by the contract stage) must be that same digest: contract-source freshness
+ * (Story 2.2). Every evaluation carries a statement, so a missing declaration is a finding too.
+ */
+function checkRequirements(report, folder, evaluation, contract, engine) {
   const statement = evaluation.requirements;
-  if (statement === undefined) return;
+  if (statement === undefined) {
+    report.add(
+      MANIFEST_NAME,
+      'requirements',
+      "evaluation.json declares no requirements statement; commit requirements.md and record it as requirements: { path, digest }, so the contract's sourceSpecDigest has a statement to be held to",
+    );
+    return;
+  }
   // The schema reports malformed values. Never resolve a path it has not accepted.
   if (statement?.path !== 'requirements.md' || typeof statement.digest !== 'string' || !/^sha256:[0-9a-f]{64}$/.test(statement.digest))
     return;
@@ -1913,6 +1939,15 @@ function checkRequirements(report, folder, evaluation, engine) {
       statement.path,
       'requirements',
       `evaluation.json records digest ${statement.digest}; ${statement.path} digests to ${actual}`,
+    );
+  }
+  // A contract that failed to parse is reported where the contract is checked; one that parses and carries no
+  // `sourceSpecDigest`, or a null one, is held to the statement like any other value.
+  if (contract !== undefined && contract.sourceSpecDigest !== actual) {
+    report.add(
+      CONTRACT_NAME,
+      'requirements',
+      `sourceSpecDigest ${JSON.stringify(contract.sourceSpecDigest ?? null)} is not the digest of ${statement.path}, ${actual}: the requirements changed after the contract was authored, so author the contract against the committed statement again`,
     );
   }
 }
@@ -1969,7 +2004,6 @@ async function checkEvaluation(folder) {
 
   const context = await buildContext();
   validateInto(report, MANIFEST_NAME, 'schema', context.validate.evaluation, evaluation);
-  checkRequirements(report, folder, evaluation, context.engine);
   const registry = Array.isArray(evaluation.registry) ? evaluation.registry : undefined;
   for (const problem of registry === undefined
     ? []
@@ -1987,6 +2021,7 @@ async function checkEvaluation(folder) {
 
   const behaviors = checkContract(report, folder, context);
   context.contract = contractFor(folder);
+  checkRequirements(report, folder, evaluation, context.contract, context.engine);
   checkOperationPhases(report, evaluation, context.contract);
   checkRegistryKinds(report, evaluation, registry, context.contract);
   checkPrincipalMappings(report, evaluation, registry, context.contract);
@@ -2008,6 +2043,7 @@ async function checkEvaluation(folder) {
   checkJudge(report, evaluation, context.contract, conditions);
   checkEvaluator(report, folder, evaluation, context.contract, conditions, context.engine);
   checkQualificationEvidence(report, folder, context);
+  checkCiPlan(report, folder);
 
   try {
     const stale = await corpusIndexProblem(folder);

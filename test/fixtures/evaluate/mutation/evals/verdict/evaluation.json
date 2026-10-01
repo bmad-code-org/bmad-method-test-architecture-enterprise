@@ -1,6 +1,10 @@
 {
   "schemaVersion": 1,
   "evaluationId": "verdict-mutation",
+  "requirements": {
+    "path": "requirements.md",
+    "digest": "sha256:6a8deb39d750349a764f8be8c056107cd3a575ebc4140287a703016b886c5e01"
+  },
   "targetKind": "agent",
   "interface": "cli",
   "registry": [

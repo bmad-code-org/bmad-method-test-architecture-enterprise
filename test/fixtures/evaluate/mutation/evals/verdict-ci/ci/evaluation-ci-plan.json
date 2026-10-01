@@ -1,0 +1,326 @@
+{
+  "schemaVersion": 1,
+  "checks": [
+    {
+      "id": "check",
+      "tier": "pr",
+      "trigger": [
+        "pull-request"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "check",
+        "--evaluation",
+        "test/fixtures/evaluate/mutation/evals/verdict-ci"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/checks/check/stdout"
+      ],
+      "placement": {
+        "tier": "pr",
+        "defaultTier": "pr",
+        "reason": "AD-10 default: a deterministic check that needs no secret runs on every pull request (CAP-11)."
+      }
+    },
+    {
+      "id": "compile",
+      "tier": "pr",
+      "trigger": [
+        "pull-request"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "test/fixtures/evaluate/mutation/evals/verdict-ci",
+        "--tier",
+        "pr"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/checks/compile/eval-contract.json"
+      ],
+      "placement": {
+        "tier": "pr",
+        "defaultTier": "pr",
+        "reason": "AD-10 default: a deterministic check that needs no secret runs on every pull request (CAP-11)."
+      }
+    },
+    {
+      "id": "seal",
+      "tier": "pr",
+      "trigger": [
+        "pull-request"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "test/fixtures/evaluate/mutation/evals/verdict-ci",
+        "--tier",
+        "pr"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/checks/seal/sealed-evaluator-brief.json"
+      ],
+      "placement": {
+        "tier": "pr",
+        "defaultTier": "pr",
+        "reason": "AD-10 default: a deterministic check that needs no secret runs on every pull request (CAP-11)."
+      }
+    },
+    {
+      "id": "gameability",
+      "tier": "pr",
+      "trigger": [
+        "pull-request"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "test/fixtures/evaluate/mutation/evals/verdict-ci",
+        "--tier",
+        "pr"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/replay/scores"
+      ],
+      "placement": {
+        "tier": "pr",
+        "defaultTier": "pr",
+        "reason": "AD-10 default: a deterministic check that needs no secret runs on every pull request (CAP-11)."
+      }
+    },
+    {
+      "id": "oracle-agreement",
+      "tier": "pr",
+      "trigger": [
+        "pull-request"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "test/fixtures/evaluate/mutation/evals/verdict-ci",
+        "--tier",
+        "pr"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "baseline/scores"
+      ],
+      "placement": {
+        "tier": "pr",
+        "defaultTier": "pr",
+        "reason": "AD-10 default: a deterministic check that needs no secret runs on every pull request (CAP-11)."
+      }
+    },
+    {
+      "id": "replay",
+      "tier": "pr",
+      "trigger": [
+        "pull-request"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "test/fixtures/evaluate/mutation/evals/verdict-ci",
+        "--tier",
+        "pr"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/replay/preflight-verdict.json",
+        "runs/<invocationId>/replay/scores"
+      ],
+      "placement": {
+        "tier": "pr",
+        "defaultTier": "pr",
+        "reason": "AD-10 default: a deterministic check that needs no secret runs on every pull request (CAP-11)."
+      }
+    },
+    {
+      "id": "preflight-live",
+      "tier": "merge",
+      "trigger": [
+        "merge"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "preflight",
+        "--evaluation",
+        "test/fixtures/evaluate/mutation/evals/verdict-ci"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/checks/preflight-live/stdout"
+      ],
+      "placement": {
+        "tier": "merge",
+        "defaultTier": "merge",
+        "reason": "The fixture target is a local stub command that needs no secret, so its live preflight runs when a pull request merges."
+      }
+    },
+    {
+      "id": "preflight-live",
+      "tier": "scheduled",
+      "trigger": [
+        "schedule",
+        "manual-dispatch"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "preflight",
+        "--evaluation",
+        "test/fixtures/evaluate/mutation/evals/verdict-ci"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/checks/preflight-live/stdout"
+      ],
+      "placement": {
+        "tier": "scheduled",
+        "defaultTier": "scheduled",
+        "reason": "AD-10 default: the scheduled tier opens with a live preflight."
+      }
+    },
+    {
+      "id": "twin-run",
+      "tier": "scheduled",
+      "trigger": [
+        "schedule",
+        "manual-dispatch"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "test/fixtures/evaluate/mutation/evals/verdict-ci",
+        "--tier",
+        "scheduled"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/checks/twin-run/stdout"
+      ],
+      "placement": {
+        "tier": "scheduled",
+        "defaultTier": "scheduled",
+        "reason": "AD-10 default: the clean and mutated arms repeat at the scoring policy's minimum trial count."
+      }
+    },
+    {
+      "id": "strength-comparison",
+      "tier": "scheduled",
+      "trigger": [
+        "schedule",
+        "manual-dispatch"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "test/fixtures/evaluate/mutation/evals/verdict-ci",
+        "--tier",
+        "scheduled"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/checks/strength-comparison/stdout"
+      ],
+      "placement": {
+        "tier": "scheduled",
+        "defaultTier": "scheduled",
+        "reason": "AD-10 default: the scheduled run is compared with the committed baseline."
+      }
+    },
+    {
+      "id": "preflight-live",
+      "tier": "release",
+      "trigger": [
+        "release"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "preflight",
+        "--evaluation",
+        "test/fixtures/evaluate/mutation/evals/verdict-ci"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/checks/preflight-live/stdout"
+      ],
+      "placement": {
+        "tier": "release",
+        "defaultTier": "release",
+        "reason": "AD-10 default: the release tier is the scheduled set as a gate."
+      }
+    },
+    {
+      "id": "twin-run",
+      "tier": "release",
+      "trigger": [
+        "release"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "test/fixtures/evaluate/mutation/evals/verdict-ci",
+        "--tier",
+        "release"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/checks/twin-run/stdout"
+      ],
+      "placement": {
+        "tier": "release",
+        "defaultTier": "release",
+        "reason": "AD-10 default: the release tier is the scheduled set as a gate."
+      }
+    },
+    {
+      "id": "strength-comparison",
+      "tier": "release",
+      "trigger": [
+        "release"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "test/fixtures/evaluate/mutation/evals/verdict-ci",
+        "--tier",
+        "release"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/checks/strength-comparison/stdout"
+      ],
+      "placement": {
+        "tier": "release",
+        "defaultTier": "release",
+        "reason": "AD-10 default: the release tier is the scheduled set as a gate."
+      }
+    }
+  ]
+}
