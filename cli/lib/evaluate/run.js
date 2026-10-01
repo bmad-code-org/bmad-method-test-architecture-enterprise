@@ -314,7 +314,7 @@ function runRunCommand(folder, { fromWorkingTree = false, partition, trials, see
 
 /** One arm of the clean controls' qualification: the evidence, or a stop with the exit its failure maps to. */
 async function qualificationArm({ contract, registry, workspace, stop, writer, directory, log, seed, signal }) {
-  const { port } = await registry.createProbePort({
+  const { port, releaseHome } = await registry.createProbePort({
     cwd: workspace.root,
     projectRoot: workspace.root,
     workspace: workspace.top,
@@ -336,6 +336,8 @@ async function qualificationArm({ contract, registry, workspace, stop, writer, d
       exitCode: error?.code === DENIAL_FAULT ? 10 : 12,
       message: `the clean controls' baseline arm ${error?.code === DENIAL_FAULT ? `was denied by the registry${reasonNote(error)}` : 'could not run'}: ${error?.message ?? error}${causeNote(error)}`,
     });
+  } finally {
+    releaseHome();
   }
 }
 
@@ -536,6 +538,8 @@ async function runTrial(context) {
     });
   }
   const workspace = make(label, arm.basis ?? pristine);
+  // The trial's private home goes with the trial, so no later trial can reach an earlier one's state.
+  let releaseHome = () => {};
   try {
     if (arm.mutation !== null) {
       let applied;
@@ -558,7 +562,7 @@ async function runTrial(context) {
     if (problems.length > 0)
       throw stop({ stage: 'trial', exitCode: 12, message: `${label}: the registry cannot launch: ${problems.join('; ')}` });
     // The trial's port audits what its target processes open outside what they were granted (`confinement.js`).
-    const { port: adapter, observedMounts } = await registry.createProbePort({
+    const probePort = await registry.createProbePort({
       cwd: workspace.root,
       projectRoot: workspace.root,
       workspace: workspace.top,
@@ -567,6 +571,8 @@ async function runTrial(context) {
       deployment: arm.deployment ?? null,
       audit: true,
     });
+    const { port: adapter, observedMounts } = probePort;
+    releaseHome = probePort.releaseHome;
     const port = hostEnvironmentPort({ port: adapter, registry });
     const began = Date.now();
     let executed;
@@ -608,6 +614,7 @@ async function runTrial(context) {
       toolCalls: executed.steps.filter((step) => step.skipped === undefined).map((step) => callLabel(step.request)),
     });
   } finally {
+    releaseHome();
     discard(workspace);
   }
 }

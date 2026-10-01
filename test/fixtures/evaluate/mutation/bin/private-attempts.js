@@ -22,6 +22,15 @@ function listAttempt(directory) {
   }
 }
 
+/** The names a directory lists, as JSON, or the refusal's code: what a listing that answers `listed <entries>` shows. */
+function namesAttempt(directory) {
+  try {
+    return JSON.stringify(fs.readdirSync(directory).sort());
+  } catch (error) {
+    return `refused ${error.code ?? error.message}`;
+  }
+}
+
 /** The announcements in `file`, one per sealed-brief agent run, oldest first. */
 function privateAnnouncements(file) {
   try {
@@ -61,6 +70,9 @@ function privateAttempts(announced) {
     `private-evaluator-list: ${listAttempt(announced.cwd)}`,
     `private-parent-list: ${listAttempt(path.dirname(announced.cwd))}`,
     `private-root-list: ${listAttempt(path.dirname(path.dirname(announced.cwd)))}`,
+    // Under Bubblewrap the empty file system over the root holds the path to the target's own home (Story 1.59), nothing else.
+    `private-parent-names: ${namesAttempt(path.dirname(announced.cwd))}`,
+    `private-root-names: ${namesAttempt(path.dirname(path.dirname(announced.cwd)))}`,
     `private-socket-connect: ${connectAttempt(announced.socket)}`,
   ];
 }

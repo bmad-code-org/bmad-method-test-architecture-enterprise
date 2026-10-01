@@ -171,7 +171,7 @@ function seatbeltLayerProfile(evaluationFolder) {
  * to a unix socket under it (a denied read does not stop a connection), after
  * every allowance.
  */
-function seatbeltTargetProfile({ workspace, writable, evaluationFolder, git = null, privateRoot = null }) {
+function seatbeltTargetProfile({ workspace, writable, evaluationFolder, git = null, privateRoot = null, rootHome = null }) {
   const allowed = [workspace, ...writable]
     .flatMap(spellings)
     .map((entry) => `(subpath "${assertProfileSafePath(entry, refuseUnsafePath)}")`);
@@ -201,6 +201,29 @@ function seatbeltTargetProfile({ workspace, writable, evaluationFolder, git = nu
             .map((entry) => `(remote unix-socket (subpath "${assertProfileSafePath(entry, refuseUnsafePath)}"))`)
             .join('\n  ')})`,
         ];
+  // The target's own home sits beneath the private root, so it is allowed again after the root's denial (the last
+  // matching rule wins); a sibling home, another run's parent and the root's listing stay denied.
+  // Resolving the home's path asks the root and each directory down to the home's parent for their metadata (an `lstat`
+  // while a module loads, `realpath`, `mkdir -p`, `cd`), so those directories answer a metadata request, which tells nothing
+  // a path does not already say; listing them stays denied, since a directory's entries are file data.
+  const homeAncestors = [];
+  if (rootHome !== null) {
+    for (
+      let ancestor = path.dirname(rootHome);
+      ancestor.length > 1 && ancestor !== path.dirname(ancestor);
+      ancestor = path.dirname(ancestor)
+    ) {
+      if (spellings(privateRoot).some((held) => isInside(held, ancestor))) homeAncestors.push(ancestor);
+      else break;
+    }
+  }
+  const homeRules =
+    rootHome === null
+      ? []
+      : [
+          `(allow file-read* file-write*\n  ${subpaths(rootHome).join('\n  ')})`,
+          `(allow file-read-metadata\n  ${homeAncestors.flatMap(literals).join('\n  ')})`,
+        ];
   return [
     '(version 1)',
     '(allow default)',
@@ -208,6 +231,7 @@ function seatbeltTargetProfile({ workspace, writable, evaluationFolder, git = nu
     `(allow file-write*\n  ${[...allowed, ...SEATBELT_DEVICE_WRITES].join('\n  ')})`,
     ...gitRules,
     ...privateRules,
+    ...homeRules,
     `(deny file-read* file-write*\n  ${withheld.join('\n  ')})`,
     '',
   ].join('\n');
@@ -240,7 +264,7 @@ function bubblewrapIsolation() {
  * system, so nothing under it can be read or written. No new network
  * namespace: a started HTTP server listens where the runtime reaches it.
  */
-function bubblewrapTargetArguments({ executable, workspace, writable, evaluationFolder, git = null, privateRoot = null }) {
+function bubblewrapTargetArguments({ executable, workspace, writable, evaluationFolder, git = null, privateRoot = null, rootHome = null }) {
   const binds = [workspace, ...writable].flatMap((entry) => {
     const real = assertProfileSafePath(spellings(entry).at(-1), refuseUnsafePath);
     return ['--bind', real, real];
@@ -259,7 +283,18 @@ function bubblewrapTargetArguments({ executable, workspace, writable, evaluation
           '--remount-ro',
           realOf(git.directory),
         ];
-  const privateArguments = privateRoot === null ? [] : ['--tmpfs', realOf(privateRoot), '--remount-ro', realOf(privateRoot)];
+  // The target's own home beneath the root is bound into the empty file system before it is remounted read-only; the
+  // remount touches the root's mount alone, so the home stays writable and nothing else of the root is visible.
+  const privateArguments =
+    privateRoot === null
+      ? []
+      : [
+          '--tmpfs',
+          realOf(privateRoot),
+          ...(rootHome === null ? [] : ['--bind', realOf(rootHome), realOf(rootHome)]),
+          '--remount-ro',
+          realOf(privateRoot),
+        ];
   const withheld = realOf(evaluationFolder);
   return [
     executable,
@@ -411,11 +446,24 @@ function layerPrefix(confinement) {
  *   (`view`) its git reads; `null` for a workspace in no repository
  * @param {string|null} [options.privateRoot] the user's private root directory, the one every run's private parent sits beneath (`workspace.js` `makePrivateParent`),
  *   which the target can neither read, write nor connect a socket under; `null` where the run made none
+ * @param {string|null} [options.home] the sandbox's private home directory (`makeTargetHome` makes it beneath the run's private
+ *   parent, which is beneath `privateRoot`), which every call may read and write and which `HOME` and the XDG base directories
+ *   name (`withTemporary`); beneath `privateRoot` it is the one directory of the root the target reaches (re-allowed after the
+ *   root's denial in Seatbelt, bound into the root's empty file system in Bubblewrap, excepted from the audit's withholding),
+ *   so no other home is reachable; refused inside the workspace or the evaluation folder; `null` where the run made none
  * @param {string|null} [options.report] the audit report's path, `null` for a port that does not audit
  * @param {string|null} [options.status] under Bubblewrap, a private directory where the status of a target a signal
  *   ended is written (`confinement-status.cjs`)
  */
-function targetSandbox({ confinement, workspace, git: gitAccess = null, privateRoot = null, report = null, status = null }) {
+function targetSandbox({
+  confinement,
+  workspace,
+  git: gitAccess = null,
+  privateRoot = null,
+  home: initialHome = null,
+  report = null,
+  status = null,
+}) {
   const git = gitAccess === null ? null : { metadata: null, view: null, alternates: [], ...gitAccess };
   if (typeof workspace !== 'string' || workspace.length === 0) {
     throw new ConfinementError('a confined target needs the workspace it may write');
@@ -439,6 +487,27 @@ function targetSandbox({ confinement, workspace, git: gitAccess = null, privateR
       throw new ConfinementError(`the workspace ${workspace} is inside ${privateRoot}, which the confinement withholds from the target`);
     }
   }
+  // The sandbox's current home: `setHome` replaces it, and every wrap, audit and environment reads it when it is called.
+  let home = null;
+  // A home beneath the private root (the run's own parent holds it) is the one directory of the root the target may reach.
+  let rootHome = null;
+  const adoptHome = (candidate) => {
+    if (typeof candidate !== 'string' || candidate.length === 0) {
+      throw new ConfinementError('the private home directory must be a path');
+    }
+    const inside = (container) => spellings(candidate).some((entry) => spellings(container).some((held) => isInside(held, entry)));
+    for (const [name, container] of [
+      ['the evaluation folder', evaluationFolder],
+      ['the workspace', workspace],
+    ]) {
+      if (inside(container)) {
+        throw new ConfinementError(`the private home ${candidate} is inside ${name}, which a target cannot be granted write access to`);
+      }
+    }
+    home = candidate;
+    rootHome = privateRoot !== null && inside(privateRoot) ? candidate : null;
+  };
+  if (initialHome !== null) adoptHome(initialHome);
   if (confinement.mode === 'bubblewrap' && (typeof status !== 'string' || status.length === 0)) {
     throw new ConfinementError('a target confined by Bubblewrap needs a status directory');
   }
@@ -447,6 +516,12 @@ function targetSandbox({ confinement, workspace, git: gitAccess = null, privateR
   let tampered = false;
   return {
     mode: confinement.mode,
+    /** The sandbox's current private home directory, which `HOME` and the XDG base directories name; `null` where there is none. */
+    get home() {
+      return home;
+    },
+    /** Points the sandbox at another home (after a reset made a new one); the calls made after it are confined to that one. */
+    setHome: adoptHome,
     /**
      * The command that runs `target args` confined, `writable` naming the
      * private directories this call's processes may write besides the
@@ -454,9 +529,9 @@ function targetSandbox({ confinement, workspace, git: gitAccess = null, privateR
      * signal to, which `recordedStatus` reads.
      */
     wrap(target, args, writable = []) {
-      const grants = [...writable, ...(report === null ? [] : [report])];
+      const grants = [...writable, ...(home === null || rootHome !== null ? [] : [home]), ...(report === null ? [] : [report])];
       if (confinement.mode === 'seatbelt') {
-        const profile = seatbeltTargetProfile({ workspace, writable: grants, evaluationFolder, git, privateRoot });
+        const profile = seatbeltTargetProfile({ workspace, writable: grants, evaluationFolder, git, privateRoot, rootHome });
         return { target: confinement.executable, args: ['-p', profile, target, ...args], statusFile: null };
       }
       calls += 1;
@@ -471,6 +546,7 @@ function targetSandbox({ confinement, workspace, git: gitAccess = null, privateR
         evaluationFolder,
         git,
         privateRoot,
+        rootHome,
       });
       return { target: vector[0], args: [...vector.slice(1), process.execPath, STATUS_SHIM, statusFile, target, ...args], statusFile };
     },
@@ -485,7 +561,9 @@ function targetSandbox({ confinement, workspace, git: gitAccess = null, privateR
       if (report === null) return env;
       // The worktree's own entry in the git directory and the private repository it reads are the target's to open.
       const own = git === null ? [] : [git.metadata, git.view].filter((entry) => typeof entry === 'string');
-      const grants = [workspace, ...(report === null ? [] : [report]), ...granted, ...own].flatMap(spellings);
+      const grants = [workspace, ...(report === null ? [] : [report]), ...(home === null ? [] : [home]), ...granted, ...own].flatMap(
+        spellings,
+      );
       return {
         ...env,
         NODE_OPTIONS: [env?.NODE_OPTIONS, `--require ${JSON.stringify(GUARD_PATH)}`].filter(Boolean).join(' '),
@@ -497,7 +575,9 @@ function targetSandbox({ confinement, workspace, git: gitAccess = null, privateR
             ...(git === null ? [] : [git.directory, ...git.alternates].flatMap(spellings)),
             ...(privateRoot === null ? [] : spellings(privateRoot)),
           ],
-          ...(git?.metadata ? { withheldExcept: spellings(git.metadata) } : {}),
+          ...(git?.metadata || rootHome !== null
+            ? { withheldExcept: [...(git?.metadata ? spellings(git.metadata) : []), ...(rootHome === null ? [] : spellings(rootHome))] }
+            : {}),
         }),
       };
     },
@@ -602,9 +682,117 @@ function callTemporary(scratch) {
   return directory;
 }
 
-/** Removes a call's temp directory; one a process left unremovable stays in `scratch` for the run's own cleanup. */
+/** The XDG base directories of a private home, relative to it, each made with the home. */
+const HOME_XDG_DIRECTORIES = { XDG_CONFIG_HOME: '.config', XDG_CACHE_HOME: '.cache', XDG_DATA_HOME: path.join('.local', 'share') };
+
+/**
+ * Gives the owner full access to `directory` and every directory under it, so
+ * it can be removed: each directory is opened up before it is read, and one
+ * that still cannot be read is skipped, so a single unreadable directory a
+ * process left behind cannot keep the rest locked. It follows no link: an
+ * entry is opened up only when it is a real directory (`O_NOFOLLOW`, and the
+ * descriptor's identity is the one `lstat` saw), the mode is set through the
+ * descriptor, and the directory is read only while its path still names that
+ * directory, so a process that swaps an entry for a link to a directory outside
+ * cannot have the outside directory's mode changed or its tree walked.
+ */
+function unlockDirectories(directory) {
+  let descriptor;
+  try {
+    const before = fs.lstatSync(directory);
+    if (!before.isDirectory()) return;
+    const open = () => fs.openSync(directory, fs.constants.O_RDONLY | fs.constants.O_DIRECTORY | fs.constants.O_NOFOLLOW);
+    try {
+      descriptor = open();
+    } catch (error) {
+      if (error.code !== 'EACCES') throw error;
+      // A directory with no read bit cannot be opened, so it is opened up by path (`lchmod` cannot change a directory) and
+      // opened again; only a real directory `lstat` just saw reaches this, and the descriptor's identity is checked below.
+      fs.chmodSync(directory, (before.mode & 0o7777) | 0o700);
+      descriptor = open();
+    }
+    const opened = fs.fstatSync(descriptor);
+    if (opened.dev !== before.dev || opened.ino !== before.ino) throw new Error('replaced');
+    fs.fchmodSync(descriptor, (opened.mode & 0o7777) | 0o700);
+  } catch {
+    if (descriptor !== undefined) fs.closeSync(descriptor);
+    return;
+  }
+  try {
+    const opened = fs.fstatSync(descriptor);
+    const same = () => {
+      try {
+        const now = fs.lstatSync(directory);
+        return now.isDirectory() && now.dev === opened.dev && now.ino === opened.ino;
+      } catch {
+        return false;
+      }
+    };
+    if (!same()) return;
+    let entries;
+    try {
+      entries = fs.readdirSync(directory, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    // The listing came from the path, so it counts only while the path still names the directory that was opened.
+    if (!same()) return;
+    for (const entry of entries) {
+      if (entry.isDirectory() && same()) unlockDirectories(path.join(directory, entry.name));
+    }
+  } finally {
+    fs.closeSync(descriptor);
+  }
+}
+
+/** The XDG base directories of a home, made inside it. */
+function makeHomeLayout(home) {
+  for (const relative of Object.values(HOME_XDG_DIRECTORIES)) fs.mkdirSync(path.join(home, relative), { recursive: true });
+}
+
+/**
+ * The private home of one confined sandbox, joined to the run's `scratch` so
+ * the run removes it however it ends: an agent CLI keeps its session and
+ * settings state under `HOME` and the XDG base directories, which the confined
+ * target could otherwise not write. It sits beneath the run's private parent
+ * (`scratch.privateParent`, which `workspace.js` `makePrivateParent` makes and
+ * the run removes), where the sandbox withholds everything but its own home,
+ * so no other home (a stage's, another trial's, another run's) is reachable
+ * from it; a list with no parent keeps the home in the system temp directory.
+ * Its real path, so both mechanisms name it one way, with the XDG base
+ * directories made inside it.
+ */
+function makeTargetHome(scratch) {
+  const directory = fs.realpathSync.native(fs.mkdtempSync(path.join(scratch.privateParent ?? os.tmpdir(), 'tea-evaluate-target-home-')));
+  scratch.push(directory);
+  makeHomeLayout(directory);
+  return directory;
+}
+
+/**
+ * Removes a private home the sandbox no longer uses (after a reset made a new
+ * one, or when its trial ended). The home is renamed out of the way first, to a
+ * name no sandbox grants, so a process an earlier arm left running, whose
+ * profile names the old path, cannot reach the directory while it is opened up
+ * and removed; where the rename fails the home is removed in place.
+ */
+function releaseTargetHome(scratch, home) {
+  let retired = home;
+  try {
+    retired = path.join(path.dirname(home), `tea-evaluate-target-retired-${crypto.randomBytes(6).toString('hex')}`);
+    fs.renameSync(home, retired);
+    const at = scratch.indexOf(home);
+    if (at !== -1) scratch[at] = retired;
+  } catch {
+    retired = home;
+  }
+  releaseTemporary(scratch, retired);
+}
+
+/** Removes a call's temp directory or a private home, write bits restored first; one a process left unremovable stays in `scratch` for the run's own cleanup. */
 function releaseTemporary(scratch, directory) {
   try {
+    unlockDirectories(directory);
     fs.rmSync(directory, { recursive: true, force: true });
   } catch {
     return;
@@ -618,9 +806,16 @@ function statusGrant(wrapped) {
   return wrapped?.statusFile ? [wrapped.statusFile] : [];
 }
 
-/** `env` with the temp-directory variables naming the call's own directory. */
-function withTemporary(env, directory) {
-  return { ...env, TMPDIR: directory, TMP: directory, TEMP: directory };
+/**
+ * `env` with the temp-directory variables naming the call's own directory and,
+ * for a sandbox with a private home, `HOME` naming it and the XDG base
+ * directories naming their directories inside it, whatever the host or the registry entry's `environmentKeys` hold.
+ */
+function withTemporary(env, directory, home = null) {
+  const confined = { ...env, TMPDIR: directory, TMP: directory, TEMP: directory };
+  if (home === null) return confined;
+  const xdg = Object.fromEntries(Object.entries(HOME_XDG_DIRECTORIES).map(([name, relative]) => [name, path.join(home, relative)]));
+  return { ...confined, HOME: home, ...xdg };
 }
 
 /**
@@ -645,7 +840,7 @@ function confinedCommandMechanism(base, sandbox, systemPathsOf = () => [], scrat
             target: wrapped.target,
             subcommandPath: [],
             argv: wrapped.args,
-            env: sandbox.environment(withTemporary(request.env, temporary), [
+            env: sandbox.environment(withTemporary(request.env, temporary, sandbox.home ?? null), [
               ...systemPathsOf(request.target),
               ...writable,
               temporary,
@@ -695,7 +890,7 @@ function confinedMcpMechanism(base, sandbox, systemPathsOf = () => [], scratch =
             ...request,
             target: wrapped.target,
             targetArgs: wrapped.args,
-            env: sandbox.environment(withTemporary(request.env, temporary), [
+            env: sandbox.environment(withTemporary(request.env, temporary, sandbox.home ?? null), [
               ...systemPathsOf(request.target),
               temporary,
               ...statusGrant(wrapped),
@@ -746,6 +941,10 @@ module.exports = {
   confines,
   forbiddenInputNote,
   layerPrefix,
+  makeTargetHome,
+  releaseTargetHome,
+  releaseTemporary,
+  unlockDirectories,
   selectConfinement,
   targetSandbox,
 };

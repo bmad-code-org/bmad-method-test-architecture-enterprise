@@ -1867,8 +1867,20 @@ async function checkBridgePrivateDirectories() {
   refused("a confined target's read of the bridge's configuration", report['config-read']);
   refused("a confined target's read of the bridge's token file", report['token-read']);
   refused("a confined target's listing of the agent's working directory", report['evaluator-list']);
-  refused("a confined target's listing of the run's private parent", report['parent-list']);
-  refused("a confined target's listing of the private root", report['root-list']);
+  // Bubblewrap's empty file system over the root holds the path to the target's own home (Story 1.59) and nothing else: the
+  // parent lists that home alone, and the root lists the run's own parent alone.
+  const onlyPathTo = (what, how, names, prefix) =>
+    refused(
+      what,
+      process.platform === 'linux' && how === 'listed 1' && new RegExp(`^\\["${prefix}[^"]*"\\]$`).test(names ?? '') ? 'listed 0' : how,
+    );
+  onlyPathTo(
+    "a confined target's listing of the run's private parent",
+    report['parent-list'],
+    report['parent-names'],
+    'tea-evaluate-target-home-',
+  );
+  onlyPathTo("a confined target's listing of the private root", report['root-list'], report['root-names'], 'run-');
   refused("a confined target's connection to the bridge's socket", report['socket-connect'], WITHHELD_SOCKET);
   check(
     report['temp-write'] === 'allowed',

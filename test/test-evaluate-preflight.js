@@ -1187,6 +1187,113 @@ function checkEnvironmentValuesStayOut() {
   );
 }
 
+/** Every observation a preflight recorded, in call order, with its stdout. */
+function observedStdouts(runDirectory) {
+  return filesUnder(path.join(runDirectory ?? '', 'observations'))
+    .filter((file) => file.endsWith('.json'))
+    .sort()
+    .map((file) => readJson(file).observation?.stdout?.value ?? '');
+}
+
+/**
+ * A confined skill target keeps the state its agent CLI writes (Story 1.59): the runner's agent finds `HOME` in a private
+ * home beside the call temp directory, writes its state there, finds it again on the next call of the same trial, and
+ * writes nothing in the host's home, the directory the private home sits in, the evaluation folder or its `runs/`; the
+ * run removes the home. A registry entry that passes `HOME` still sees the private one, and an opt-out run sees the host's.
+ */
+function checkPrivateHome() {
+  const hostHome = fs.realpathSync(tempDir('home-host'));
+  const temp = privateTemp('home-temp');
+  const run = (confinement, keys) => {
+    const folder = copyFixture(PREFLIGHT_FIXTURE, stubProject(`home-${confinement}-${keys.length}`));
+    editJson(folder, 'evaluation.json', (value) => {
+      value.registry[0].environmentKeys = keys;
+      if (!confinement) value.confinement = false;
+    });
+    editJson(folder, 'contract.json', (contract) => {
+      const operation = contract.permittedInterfaces[0].operations[0];
+      for (const key of keys) {
+        operation.requestShape.environment.permittedKeys.push(key);
+        operation.requestShape.environment.types[key] = 'string';
+      }
+      // Every leg is independent of the legs before it, so each starts with an empty home; the second leg alone prints what
+      // it found, since preflight holds a repeated call to an equal output.
+      for (const [index, leg] of operation.sensitivityWitness.legs.entries()) {
+        leg.inputs.stdin.value = [
+          leg.inputs.stdin.value,
+          index === 1 ? 'STUB-HOME STUB-HOME-SEEN STUB-ENV HOME' : 'STUB-HOME STUB-ENV HOME',
+          `STUB-TRY-WRITE ${path.join(hostHome, 'real-home.txt')}`,
+          `STUB-TRY-WRITE ${path.join(temp.directory, 'beside-home.txt')}`,
+          `STUB-TRY-READ ${path.join(folder, 'contract.json')}`,
+          `STUB-TRY-WRITE ${path.join(folder, 'runs', 'planted.txt')}`,
+        ].join(' ');
+      }
+    });
+    const result = runPreflight(folder, { env: { ...temp.env, HOME: hostHome } });
+    check(
+      result.status === 0,
+      `preflight whose agent keeps state under HOME (confinement ${confinement}, environmentKeys ${JSON.stringify(keys)}) exited ${result.status}; expected 0\n${result.output}`,
+    );
+    return observedStdouts(runDirectoryOf(folder));
+  };
+  const field = (stdout, name) => new RegExp(`^${name}: (.*)$`, 'm').exec(stdout)?.[1];
+
+  // The documented entry passes no environment key, and an entry that passes HOME still gets the private one.
+  for (const keys of [[], ['HOME']]) {
+    const confined = run(true, keys);
+    const label = `a confined preflight with environmentKeys ${JSON.stringify(keys)}`;
+    check(confined.length >= 2, `${label} observed ${confined.length} call(s); expected the witness legs and the controls`);
+    for (const [index, stdout] of confined.entries()) {
+      const home = field(stdout, 'home') ?? '';
+      check(
+        path.basename(path.dirname(home)).startsWith('run-') &&
+          path.dirname(path.dirname(home)) === fs.realpathSync(path.join('/tmp', `tea-evaluate-p${process.getuid()}`)) &&
+          path.basename(home).startsWith('tea-evaluate-target-home-') &&
+          field(stdout, 'env') === home,
+        `${label}: call ${index + 1} found HOME ${JSON.stringify(home)} (the agent's environment holds ${JSON.stringify(field(stdout, 'env'))}); expected one private home beneath the run's private parent`,
+      );
+      check(
+        field(stdout, 'home-write') === 'allowed',
+        `${label}: call ${index + 1} could not write its state under HOME: ${field(stdout, 'home-write')}`,
+      );
+      for (const what of ['real-home.txt', 'beside-home.txt', 'runs/planted.txt']) {
+        check(
+          // Bubblewrap covers the evaluation folder with an empty file system, so a write into its runs/ answers ENOENT there.
+          new RegExp(`^try-write: \\S*${what} refused (EPERM|EACCES|EROFS${what.startsWith('runs/') ? '|ENOENT' : ''})$`, 'm').test(stdout),
+          `${label}: call ${index + 1} wrote ${what}\n${stdout}`,
+        );
+      }
+      check(
+        /^try-read: \S*contract\.json refused (EPERM|EACCES|ENOENT)$/m.test(stdout),
+        `${label}: call ${index + 1} read the evaluation folder's contract\n${stdout}`,
+      );
+    }
+    check(
+      field(confined[1], 'home-before') === '[]' && field(confined[1], 'home-calls') === '1',
+      `${label}: the second leg found ${field(confined[1], 'home-before')} in its home after ${Number(field(confined[1], 'home-calls')) - 1} earlier write(s); each leg starts with an empty home`,
+    );
+    check(
+      new Set(confined.map((stdout) => field(stdout, 'home'))).size === confined.length,
+      `${label}: the legs did not each get a home of their own: ${JSON.stringify(confined.map((stdout) => field(stdout, 'home')))}`,
+    );
+    check(
+      confined.every((stdout) => !fs.existsSync(field(stdout, 'home') ?? '')),
+      `${label} left a private home behind after the preflight`,
+    );
+    check(!fs.existsSync(path.join(hostHome, 'real-home.txt')), "a confined agent wrote a file in the host's real home");
+    check(
+      fs.readdirSync(temp.directory).length === 0,
+      `${label} left a directory in the temp directory: ${fs.readdirSync(temp.directory)}`,
+    );
+  }
+
+  const open = run(false, ['HOME']);
+  check(
+    open.length > 0 && open.every((stdout) => field(stdout, 'env') === '[redacted]' && field(stdout, 'home') === '[redacted]'),
+    `an unconfined agent did not see the host's HOME: ${JSON.stringify(open.map((stdout) => field(stdout, 'home')))}`,
+  );
+}
+
 /** Appends `text` to the first witness leg's prompt. */
 function firstLegSays(folder, text) {
   editJson(folder, 'contract.json', (contract) => {
@@ -1572,6 +1679,7 @@ async function main() {
     checkFailingControl();
     checkRefusals();
     checkEnvironmentValuesStayOut();
+    checkPrivateHome();
     checkCopyAndRunsIgnore();
     checkCopyContents();
     checkLinks();

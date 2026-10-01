@@ -93,8 +93,8 @@ development_status:
   1-55-recognize-process-and-answer-separation-for-scalar-cli: backlog
   1-56-prove-malformed-cli-refusal-against-a-controlled-defect: backlog
   1-57-withhold-the-committed-evaluation-folder-from-a-confined-ta: done
-  1-58-keep-the-bridges-admission-token-and-the-runs-private-direc: review
-  1-59-let-a-confined-agent-target-keep-the-state-its-cli-writes: backlog
+  1-58-keep-the-bridges-admission-token-and-the-runs-private-direc: done
+  1-59-let-a-confined-agent-target-keep-the-state-its-cli-writes: review
   1-60-observe-every-confined-processs-file-access-beyond-node: backlog
   1-61-teach-file-system-confinement-in-the-evaluate-skill: backlog
   1-62-share-one-sandbox-primitive-layer-across-teas-isolation-mod: done

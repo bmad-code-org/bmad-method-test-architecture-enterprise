@@ -41,6 +41,17 @@
  *   STUB-READ <path> also print the contents of that file, relative to the
  *                    working directory
  *   STUB-BIG <n>     print n bytes of filler after the reply
+ *   STUB-HOME        keep session state under HOME the way an agent CLI does
+ *                    and print HOME and whether the write was allowed
+ *   STUB-HOME-SEEN   with STUB-HOME, also print every file under HOME before
+ *                    this call wrote its own state and how many calls have
+ *                    written it (a case that asserts a confined target keeps
+ *                    its state between the calls of a trial; a call whose
+ *                    output depends on that state cannot be one of a repeated
+ *                    pair, which preflight holds to equal outputs)
+ *   STUB-TRY-WRITE <file>  also try to write that absolute path and print
+ *                    whether the write was allowed or refused, with its code
+ *   STUB-TRY-READ <file>   the same for a read of that absolute path
  *   STUB-LIST        also print every path under the working directory, as
  *                    JSON, a symbolic link marked with a trailing `@` and not
  *                    followed
@@ -119,9 +130,41 @@ function listing(directory, prefix = '') {
     return [relative];
   });
 }
+let home = '';
+if (request.includes('STUB-HOME')) {
+  const root = process.env.HOME ?? '';
+  const state = path.join(root, '.stub-state', 'calls.log');
+  const before = fs.existsSync(root) ? listing(root).filter((entry) => !fs.statSync(path.join(root, entry)).isDirectory()) : [];
+  let wrote = 'allowed';
+  try {
+    fs.mkdirSync(path.dirname(state), { recursive: true });
+    fs.appendFileSync(state, 'call\n');
+  } catch (error) {
+    wrote = `refused ${error.code}`;
+  }
+  const calls = wrote === 'allowed' ? fs.readFileSync(state, 'utf8').split('\n').filter(Boolean).length : 0;
+  home = `home: ${root}\nhome-write: ${wrote}\n${
+    request.includes('STUB-HOME-SEEN') ? `home-before: ${JSON.stringify(before.sort())}\nhome-calls: ${calls}\n` : ''
+  }`;
+}
+const attempts = [];
+for (const [marker, attempt] of [
+  ['STUB-TRY-WRITE', (file) => fs.writeFileSync(file, 'written by the stub agent\n')],
+  ['STUB-TRY-READ', (file) => fs.readFileSync(file)],
+]) {
+  for (const match of request.matchAll(new RegExp(`${marker} (\\S+)`, 'g'))) {
+    let outcome = 'allowed';
+    try {
+      attempt(match[1]);
+    } catch (error) {
+      outcome = `refused ${error.code}`;
+    }
+    attempts.push(`${marker.slice(5).toLowerCase()}: ${match[1]} ${outcome}\n`);
+  }
+}
 const read = /STUB-READ (\S+)/.exec(request);
 const readBack = read === null ? '' : `read: ${fs.readFileSync(read[1], 'utf8').trim()}\n`;
 const listed = request.includes('STUB-LIST') ? `list: ${JSON.stringify(listing('.').sort())}\n` : '';
 const big = /STUB-BIG (\d+)/.exec(request);
 const filler = big === null ? '' : `${'x'.repeat(Number(big[1]))}\n`;
-process.stdout.write(`skill: ${name}\nrequest: ${request}\n${echoed}${readBack}${listed}${filler}`);
+process.stdout.write(`skill: ${name}\nrequest: ${request}\n${echoed}${home}${attempts.join('')}${readBack}${listed}${filler}`);
