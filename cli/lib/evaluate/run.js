@@ -1590,6 +1590,7 @@ async function concludeImportedRecords(context) {
       probes: arms.flatMap((arm) => arm.probes.map((probe) => ({ probeId: probe.probeId, conditionArm: arm.conditionArm }))),
       sealedBriefDigest: sealed.sealedBriefDigest,
       validate,
+      engine,
       writer,
       // An imported rubric score is gated on the harness's calibration judgments, over the labelled file this run took (exit 11 below the minimum).
       calibration: (contract.rubrics ?? []).length > 0 ? { labelled: snapshot.calibration, evaluation, contract, engine, stop } : null,
@@ -1623,7 +1624,7 @@ async function concludeImportedRecords(context) {
     trialSets,
     recordDigests,
     manifestDigests,
-    configurationDigest: engine.digestArtifact(imported.configuration, 'EvaluatorConfiguration'),
+    configurationDigest: imported.configurationDigest,
     trialCount: null,
     evaluatorRecord: { kind: 'records', identity: imported.configuration.evaluatorIdentity, records: snapshot.layer.evaluator.records },
     model: { modelSnapshot: imported.configuration.modelSnapshot, systemPromptDigest: imported.configuration.systemPromptDigest },

@@ -3253,6 +3253,8 @@ async function checkImportedRubricCalibration() {
   const ran = evaluate(['run', '--evaluation', project.folder], project.env);
   check(ran.status === 0, `a records run over verified calibration judgments exited ${ran.status}; expected 0\n${ran.output}`);
   const runDirectory = runDirectoryOf(project.folder);
+  if (ran.status === 0 && (runDirectory === null || runDirectory === project.harnessRun))
+    check(false, 'the records run exited 0 and left no run directory of its own');
   if (ran.status !== 0 || runDirectory === null || runDirectory === project.harnessRun) return;
   const reportFile = path.join(runDirectory, 'judge-calibration.json');
   check(fs.existsSync(reportFile), 'a calibrated records run wrote no judge-calibration.json');
@@ -3557,6 +3559,60 @@ function withBytes(file, edit, body) {
   }
 }
 
+/**
+ * The harness binds its calibration after it asks, so a record or isolation manifest sealed against the configuration as it
+ * stood names another `evaluatorConfigurationDigest` than the one `run` computes, and `score` refuses it (exit 3) after `check`
+ * and `run` exited 0. `run` holds each imported file to the imported configuration's digest instead (exit 10, nothing copied).
+ */
+async function checkImportedFilesSealedAgainstTheConfiguration() {
+  const project = await harnessProject('records-sealed-against');
+  if (project === null) return;
+  const records = path.join(project.folder, 'records');
+  const configurationFile = path.join(records, 'evaluator-configuration.json');
+  const engine = await loadEngine();
+  // The binding changes after the records were sealed: the minimum moves with evaluation.json, so check and calibration still hold.
+  useRecords(project, { minimum: 0.5 });
+  const checked = evaluate(['check', '--evaluation', project.folder], project.env);
+  check(
+    checked.status === 0,
+    `check over records sealed against another configuration exited ${checked.status}; expected 0\n${checked.output}`,
+  );
+  const sealedAgainst = readJson(path.join(records, 'P-001', 'record-1.json')).evaluatorConfigurationDigest;
+  const finalDigest = engine.digestArtifact(readJson(configurationFile), 'EvaluatorConfiguration');
+  check(sealedAgainst !== finalDigest, 'the rebound configuration digests to the one the records name');
+  const files = ['P-001', 'P-002'].flatMap((probeId) =>
+    fs
+      .readdirSync(path.join(records, probeId))
+      .filter((name) => name.endsWith('.json'))
+      .map((name) => path.join(records, probeId, name)),
+  );
+  checkImportRefused(project, 'records sealed against an earlier configuration', 10, [
+    'evaluatorConfigurationDigest',
+    sealedAgainst,
+    finalDigest,
+    'sealed against another configuration',
+    'records/P-001/record-1.json carries evaluatorConfigurationDigest',
+  ]);
+  // Records rewritten to the final digest leave the isolation manifests behind: the manifests are held too.
+  for (const file of files.filter((candidate) => !candidate.endsWith('isolation-manifest.json')))
+    editJson(file, (record) => (record.evaluatorConfigurationDigest = finalDigest));
+  checkImportRefused(project, 'an isolation manifest sealed against an earlier configuration', 10, [
+    'isolation-manifest.json carries evaluatorConfigurationDigest',
+    sealedAgainst,
+    finalDigest,
+  ]);
+  // Every file sealed against the final configuration imports, and score accepts it.
+  for (const file of files.filter((candidate) => candidate.endsWith('isolation-manifest.json')))
+    editJson(file, (manifest) => (manifest.evaluatorConfigurationDigest = finalDigest));
+  commitAll(project.repository, project.folder, 'the records sealed against the final configuration');
+  const ran = evaluate(['run', '--evaluation', project.folder], project.env);
+  check(ran.status === 0, `run over records sealed against the final configuration exited ${ran.status}\n${ran.output}`);
+  if (ran.status !== 0) return;
+  const { evidence } = scoreRun(project, 'records sealed against the final configuration');
+  checkVotes('records sealed against the final configuration', evidence, 'P-001', 'passed-clean-control');
+  checkVotes('records sealed against the final configuration', evidence, 'P-002', 'caught');
+}
+
 /** The reference, the CLI header and the command's own help all describe the option, so the page cannot drop it unseen. */
 function checkCalibrationInputsDocumented() {
   const page = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
@@ -3666,6 +3722,8 @@ async function checkCalibrationInputs() {
   const ran = evaluate(['run', '--evaluation', project.folder], project.env);
   check(ran.status === 0, `run over judgments built from the emitted inputs exited ${ran.status}\n${ran.output}`);
   const runDirectory = runDirectoryOf(project.folder);
+  if (ran.status === 0 && (runDirectory === null || runDirectory === project.harnessRun))
+    check(false, 'the records run exited 0 and left no run directory of its own');
   if (ran.status !== 0 || runDirectory === null || runDirectory === project.harnessRun) return;
   check(fs.existsSync(path.join(runDirectory, 'judge-calibration.json')), 'the run wrote no judge-calibration.json');
   const { evidence } = scoreRun(project, 'a records run over the emitted inputs');
@@ -3735,6 +3793,19 @@ function checkInputsRefusals(project) {
     );
   fs.rmSync(path.join(project.folder, 'linked-records'));
   fs.rmSync(path.join(project.folder, 'nested'), { recursive: true });
+  // The evaluation schema's rule: no empty, "." or ".." segment, so a path out of the folder (or the folder itself) is no records directory.
+  for (const [what, named] of [
+    ['a records directory outside the folder', '../../../outside-records'],
+    ['a records directory spelled with a parent segment', 'records/../records'],
+    ['a records directory spelled empty', ''],
+    ['a records directory spelled as the folder', '.'],
+    ['a records directory with an empty segment', 'records//'],
+  ])
+    withBytes(
+      evaluationFile,
+      () => editJson(evaluationFile, (evaluation) => (evaluation.evaluator = { kind: 'records', records: named })),
+      () => checkInputsRefused(project, what, 'evaluation.json', ['reached through no link']),
+    );
   withBytes(
     evaluationFile,
     () => fs.writeFileSync(evaluationFile, '[]'),
@@ -3786,6 +3857,31 @@ function checkInputsRefusals(project) {
     () => editJson(labelledFile, (labelled) => (labelled.items[0].expectedLevel = 9)),
     () => checkInputsRefused(project, 'a label off the scale', 'policy/judge-calibration.json', ['expectedLevel 9']),
   );
+  withBytes(
+    labelledFile,
+    () =>
+      editJson(labelledFile, (labelled) => {
+        labelled.items.pop();
+        labelled.items[0].expectedLevel = 9;
+      }),
+    () =>
+      checkInputsRefused(project, 'a labelled file with two faults', 'policy/judge-calibration.json', [
+        'expectedLevel 9',
+        'R-101/RC-101 has no calibration item labelled at anchored level 3',
+      ]),
+  );
+  const labelledTarget = path.join(project.folder, 'linked-labelled.json');
+  fs.copyFileSync(labelledFile, labelledTarget);
+  withBytes(
+    labelledFile,
+    () => {
+      fs.rmSync(labelledFile);
+      fs.symlinkSync(labelledTarget, labelledFile);
+    },
+    () =>
+      checkInputsRefused(project, 'a labelled file reached through a link', 'policy/judge-calibration.json', ['regular in-folder file']),
+  );
+  fs.rmSync(labelledTarget);
 
   // The configuration is read as `check` reads it: a regular file, no link, JSON, an EvaluatorConfiguration.
   withBytes(
@@ -3830,50 +3926,76 @@ function checkInputsRefusals(project) {
   );
 }
 
-/** Two rubrics and three criteria, the labelled items interleaved: the answer follows the labelled file's order, item for item. */
+/** Two rubrics, two interaction steps, a criterion id both rubrics use and a json item, the labelled file in compact bytes. */
 function checkInputsKeepTheLabelledOrder(project) {
   const second = {
     ...RUBRIC,
     id: 'R-102',
     scaleLevels: RUBRIC.scaleLevels.slice(0, 2),
     criteria: [
-      { id: 'RC-201', text: 'Is the first reading right?', evidence: '/interactions/judge-run/stdout' },
-      { id: 'RC-202', text: 'Is the second reading right?', evidence: '/interactions/judge-run/stderr' },
+      { id: 'RC-101', text: 'Is the first reading right?', evidence: '/interactions/judge-run/stderr' },
+      { id: 'RC-202', text: 'Is the review reading right?', evidence: '/interactions/review-run/stdout' },
     ],
   };
-  const item = (rubricId, criterionId, expectedLevel, response) => ({ rubricId, criterionId, response, expectedLevel });
+  const item = (rubricId, criterionId, expectedLevel, response, responseKind) => ({
+    rubricId,
+    criterionId,
+    response,
+    ...(responseKind === undefined ? {} : { responseKind }),
+    expectedLevel,
+  });
   const order = [
-    item('R-102', 'RC-202', 2, 'second two'),
+    item('R-102', 'RC-202', 2, '{"reading":2}', 'json'),
     item('R-101', 'RC-101', 3, 'first three'),
-    item('R-102', 'RC-201', 1, 'third one'),
+    item('R-102', 'RC-101', 1, 'third one'),
     item('R-101', 'RC-101', 1, 'fourth one'),
     item('R-102', 'RC-202', 1, 'fifth one'),
-    item('R-102', 'RC-201', 2, 'sixth two'),
+    item('R-102', 'RC-101', 2, 'sixth two'),
     item('R-101', 'RC-101', 2, 'seventh two'),
   ];
+  const expected = (labelled) => {
+    if (labelled.rubricId === 'R-101') return literalObservation('stdout', labelled.response);
+    if (labelled.criterionId === 'RC-101') return literalObservation('stderr', labelled.response);
+    const observation = literalObservation('stdout', labelled.response, 'review-request');
+    if (labelled.responseKind === 'json') observation.stdout = { kind: 'json', value: JSON.parse(labelled.response) };
+    return observation;
+  };
   const contractFile = path.join(project.folder, 'contract.json');
   const labelledFile = path.join(project.folder, 'policy', 'judge-calibration.json');
   withBytes(
     contractFile,
-    () => editJson(contractFile, (contract) => contract.rubrics.push(second)),
+    () =>
+      editJson(contractFile, (contract) => {
+        contract.rubrics.push(second);
+        contract.interactionPlan.push({
+          ...contract.interactionPlan[0],
+          stepId: 'review-run',
+          operationId: 'review-request',
+          after: 'judge-run',
+        });
+      }),
     () =>
       withBytes(
         labelledFile,
-        () => writeJson(labelledFile, { items: order }),
+        () => fs.writeFileSync(labelledFile, JSON.stringify({ items: order })),
         () => {
           const asked = askForInputs(project);
           check(asked.status === 0 && asked.inputs !== undefined, `the ask over two rubrics exited ${asked.status}\n${asked.output}`);
           if (asked.inputs === undefined) return;
+          check(
+            asked.inputs.calibrationDigest === sha256(fs.readFileSync(labelledFile)),
+            'calibrationDigest over compact labelled bytes is not the digest of those bytes',
+          );
           check(
             canonical(asked.inputs.items) ===
               canonical(
                 order.map((labelled) => ({
                   rubricId: labelled.rubricId,
                   criterionId: labelled.criterionId,
-                  scorerInput: literalObservation(labelled.criterionId === 'RC-202' ? 'stderr' : 'stdout', labelled.response),
+                  scorerInput: expected(labelled),
                 })),
               ),
-            `the items are ${asked.inputs.items.map((entry) => `${entry.rubricId}/${entry.criterionId}`)}; expected ${order.map((entry) => `${entry.rubricId}/${entry.criterionId}`)}, each with its response on its channel`,
+            `the items are ${JSON.stringify(asked.inputs.items)}`,
           );
         },
       ),
@@ -5062,6 +5184,11 @@ const CASES = [
   { name: 'the reference names the scorer input', body: checkImportedCalibrationReferenceExample, group: 'records' },
   { name: 'the emitted calibration inputs feed a harness', body: checkCalibrationInputs, group: 'records' },
   { name: 'the calibration inputs are documented', body: checkCalibrationInputsDocumented, group: 'records' },
+  {
+    name: 'imported files sealed against the final configuration',
+    body: checkImportedFilesSealedAgainstTheConfiguration,
+    group: 'records',
+  },
 ];
 const GROUPS = new Set(CASES.map(({ group }) => group));
 
@@ -5122,12 +5249,14 @@ async function main() {
       await runCase('imported calibration changes the scoring version', checkImportedCalibrationChangesScoringVersion);
       await runCase('the emitted calibration inputs feed a harness', checkCalibrationInputs);
       await runCase('the calibration inputs are documented', checkCalibrationInputsDocumented);
+      await runCase('imported files sealed against the final configuration', checkImportedFilesSealedAgainstTheConfiguration);
       return report();
     }
     // `--calibration-inputs-only` runs Story 1.67's case alone (its revert checks).
     if (process.argv.includes('--calibration-inputs-only')) {
       await runCase('the emitted calibration inputs feed a harness', checkCalibrationInputs);
       await runCase('the calibration inputs are documented', checkCalibrationInputsDocumented);
+      await runCase('imported files sealed against the final configuration', checkImportedFilesSealedAgainstTheConfiguration);
       return report();
     }
     for (const { name, body, group: caseGroup } of CASES) {

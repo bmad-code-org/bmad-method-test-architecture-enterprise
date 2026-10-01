@@ -67,12 +67,13 @@ function regularBytes(file, spelled) {
  * @param {Array<{ probeId: string, conditionArm: string }>} options.probes the probes the run qualified, each needing a trial set, with the arm it runs on
  * @param {string} options.sealedBriefDigest the brief this run sealed
  * @param {Function} options.validate eval-quality's schema validator (`createArtifactValidator`)
+ * @param {object} options.engine
  * @param {object} options.writer the run directory's writer
  * @param {{ labelled: object, evaluation: object, contract: object, engine: object, stop: Function }|null} [options.calibration] the labelled items and what the gate needs, when the contract declares a rubric
- * @returns {Promise<{ configuration: object, sets: Array<{ probeId: string, runId: string, conditionArm: string, records: string[], manifest: string|null }> }>}
+ * @returns {Promise<{ configuration: object, configurationDigest: string, sets: Array<{ probeId: string, runId: string, conditionArm: string, records: string[], manifest: string|null }> }>}
  * @throws {EvaluatorLayerError}
  */
-async function importRecords({ folder, evaluator, probes, sealedBriefDigest, validate, writer, calibration = null }) {
+async function importRecords({ folder, evaluator, probes, sealedBriefDigest, validate, engine, writer, calibration = null }) {
   const root = path.join(folder, ...evaluator.records.split('/'));
   let real;
   try {
@@ -106,6 +107,16 @@ async function importRecords({ folder, evaluator, probes, sealedBriefDigest, val
     );
   }
 
+  // Each record and manifest names the digest of this configuration, bindings included, and `score` holds them to it.
+  const configurationDigest = engine.digestArtifact(configuration, 'EvaluatorConfiguration');
+  const sealedAgainst = (value, spelled) => {
+    if (value.evaluatorConfigurationDigest !== configurationDigest) {
+      throw new EvaluatorLayerError(
+        `${spelled} carries evaluatorConfigurationDigest ${value.evaluatorConfigurationDigest}; ${spell(CONFIGURATION_NAME)} digests to ${configurationDigest}, so it was sealed against another configuration`,
+      );
+    }
+  };
+
   // The imported rubric scores count only once their calibration holds, so no record is read before it does.
   if (calibration !== null) await calibrateImported({ ...calibration, records: evaluator.records, root, configuration, writer });
 
@@ -133,6 +144,7 @@ async function importRecords({ folder, evaluator, probes, sealedBriefDigest, val
       const bytes = regularBytes(path.join(directory, name), spell(probeId, name));
       const record = parsed(bytes, spell(probeId, name));
       await held('sealed-run-record', record, spell(probeId, name));
+      sealedAgainst(record, spell(probeId, name));
       if (record.sealedBriefDigest !== sealedBriefDigest) {
         throw new EvaluatorLayerError(
           `${spell(probeId, name)} carries sealedBriefDigest ${record.sealedBriefDigest}, not the ${sealedBriefDigest} of the brief this run sealed, so it was not produced from this contract's brief`,
@@ -150,7 +162,9 @@ async function importRecords({ folder, evaluator, probes, sealedBriefDigest, val
     let manifest = null;
     if (names.includes(MANIFEST_NAME)) {
       const bytes = regularBytes(path.join(directory, MANIFEST_NAME), spell(probeId, MANIFEST_NAME));
-      await held('isolation-manifest', parsed(bytes, spell(probeId, MANIFEST_NAME)), spell(probeId, MANIFEST_NAME));
+      const manifestValue = parsed(bytes, spell(probeId, MANIFEST_NAME));
+      await held('isolation-manifest', manifestValue, spell(probeId, MANIFEST_NAME));
+      sealedAgainst(manifestValue, spell(probeId, MANIFEST_NAME));
       copies.push([`trial-sets/${probeId}/${MANIFEST_NAME}`, bytes]);
       manifest = `trial-sets/${probeId}/${MANIFEST_NAME}`;
     }
@@ -158,7 +172,7 @@ async function importRecords({ folder, evaluator, probes, sealedBriefDigest, val
   }
   // Nothing is written until every file has passed, so a refused directory leaves no partial copy.
   for (const [file, bytes] of copies) writer.write(file, bytes);
-  return { configuration, sets };
+  return { configuration, configurationDigest, sets };
 }
 
 module.exports = { importRecords };

@@ -44,6 +44,7 @@ const {
   calibrationObservation,
   calibrationOperationId,
   calibrationProblems,
+  labelledDigest,
   readCalibration,
   runCalibration,
 } = require('./calibration');
@@ -125,6 +126,8 @@ function readConfiguration(root) {
 
 /** The real path of the records directory `evaluator.records` names, or null when it is not a directory the folder holds, reached through no link. */
 function recordsDirectory(folder, records) {
+  // The evaluation schema's rule: a POSIX path with no empty, "." or ".." segment.
+  if (records.split('/').some((segment) => ['', '.', '..'].includes(segment))) return null;
   const spelled = path.join(fs.realpathSync(folder), ...records.split('/'));
   let real;
   try {
@@ -156,7 +159,7 @@ function bindingProblems(configuration, spelled, labelled, evaluation, engine) {
   const parameters = isObject(configuration?.decodingParameters) ? configuration.decodingParameters : {};
   const problems = [];
   for (const [key, expected, what] of [
-    [DIGEST_KEY, engine.digestBytes(labelled.bytes), 'the digest of policy/judge-calibration.json'],
+    [DIGEST_KEY, labelledDigest(labelled, engine), 'the digest of policy/judge-calibration.json'],
     [MINIMUM_KEY, evaluation.judgeCalibration.minimumAgreement, "evaluation.json's judgeCalibration.minimumAgreement"],
   ]) {
     if (!Object.hasOwn(parameters, key))
@@ -345,7 +348,7 @@ async function calibrationInputs({ folder, evaluation, contract, engine }) {
   return {
     problems: [],
     inputs: {
-      calibrationDigest: engine.digestBytes(labelled.bytes),
+      calibrationDigest: labelledDigest(labelled, engine),
       scorerConfigurationDigest: scorerConfigurationDigest(configuration, engine),
       items: labelled.value.items.map((item) => ({
         rubricId: item.rubricId,

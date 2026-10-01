@@ -124,7 +124,7 @@ The unmodified copy passes: `--calibration-inputs-only` 135 checks, `test:evalua
 The counts are failed checks of `--calibration-inputs-only` (13 to 98 checks run before the case stops; 135 when it passes) unless named otherwise; the driver and its log are in the session scratchpad.
 
 - AC 1, an input the verification does not derive (the emitter adds a member to `scorerInput`): 4 fail (the emitted items, the hand-derived inputs, `check` exits 10 over judgments built from the output).
-  The shared observation derivation changed (the operation id): 3 fail; output and verification moved together, so `check` still agreed, and the hand-written literal and the fixture's hand-built copy failed.
+  The shared observation derivation changed (the operation id): 3 fail; output and verification moved together, so `check` still agreed, and only the hand-written literal failed (the fixture's hand-built copy imports the runtime's `calibrationObservation` and `calibrationOperationId`, so it follows a change in `calibration.js`; it fails the copy only for a change inside `scorerInputFor`).
   The shared digest rule changed (the bindings kept in the digest): 3 fail.
   The emitter digesting the configuration with its bindings: 1 fail (asking with the bindings present).
   `calibrationDigest` left out: 4 fail.
@@ -146,6 +146,12 @@ The counts are failed checks of `--calibration-inputs-only` (13 to 98 checks run
   `test:evaluate-guidance` gains one assertion and `test:evaluate-check` no case; their weights stay.
   The weights file is the coordinator's to update; this change did not touch it.
 - Unrun: the full `npm test` (CI shards).
+
+### Gates after review round 1
+
+Green on the final tree: `test:evaluate-records` 321, `test:evaluate-evaluators` 486, `test:evaluate-agents` 330, `test:evaluate-check` 987, `test:evaluate-run` 571, `test:evaluate-workflow` 165, `test:evaluate-ci`, `test:evaluate-interpret`, `test:evaluate-guidance`, `test:evaluate-boundaries` 427, `test:schema-versions`, `test:schemas`, `test:boundary`, `test:direction`, `test:doc-counts`, `test:shards` 117, `test:ci-coverage`, `test:changelog`, `lint`, `lint:md`, `format:check`, `docs:validate-links`; engine check exit 0; `git diff -- package.json package-lock.json` empty.
+Measured weight, same machine in the same hour: `test:evaluate-records` 119.9 seconds against 88.0 at `35a02492`, +31.9 seconds locally (round 0 added 14.7; the sealed-against case, one more harness run, adds about 17); at the 1.9 local-to-CI ratio about +60 seconds, so `tools/test-shard-weights.json`'s `test:evaluate-records` 120.2 becomes about 181.
+No other weight changed.
 
 ## Build review
 
@@ -187,6 +193,37 @@ Builder Analyze (delta, five lenses) found 0 critical, 0 high, 6 medium and 4 lo
 
 - The command runs no `check`; the evaluation's other rules (a records directory spelled `.`, the contract schema) stay `check`'s.
 - No Python or other-language sample harness: the guide and the reference teach the sequence; a harness in any language spawns the command and parses stdout.
+
+## Review round 1
+
+Two Opus lenses reported on PR #289 (adversarial and test quality).
+
+### A1: records sealed against an earlier configuration (medium, fixed here)
+
+Reproduced first, on a copy of the tree before the fix: records sealed by the harness's own run, then the minimum moved from 1 to 0.5 in `evaluation.json` and in the configuration's binding (the ask-then-bind sequence): `check` exit 0, `run` exit 0, `score` exit 3 (`evaluator configuration digest mismatch` from eval-quality).
+Root cause, pre-existing: each imported record and isolation manifest names `evaluatorConfigurationDigest`, the digest of the full configuration with its bindings; `score` skips its recorded-digest comparison for imported records (`if (sealed === null || imported) continue;`), and neither `check` nor `run` held an imported file to the imported configuration's digest.
+Fix, small and local: `importRecords` (`cli/lib/evaluate/records-evaluator.js`) takes the engine, computes `engine.digestArtifact(configuration, 'EvaluatorConfiguration')` once, requires every record's and every isolation manifest's `evaluatorConfigurationDigest` to equal it (`EvaluatorLayerError`, so `run` exits 10 with nothing copied, the finding naming the file and both digests), and returns it as `configurationDigest`; `run.js` records that value instead of computing the digest a second time (two lines: `engine` passed in, `imported.configurationDigest` out).
+`check` reads no imported record or manifest, so it does not repeat the comparison and stays as it was.
+Docs: the reference lists the check among what `run` verifies, the exit 10 row names it, and states the bind-before-seal sentence; the evaluator guide says the same in the records layout paragraph (every records evaluation) and in the calibration paragraph (the ordering), with `digestArtifact` of the whole file named so the harness does not seal against the printed `scorerConfigurationDigest`; CHANGELOG has a Fixed entry; `epics.md` and `test-design-epic-1.md` carry round-1 amendments.
+Suites that import records or plant a records evaluator ran against the fix (see Gates); none relied on the gap.
+Test: `checkImportedFilesSealedAgainstTheConfiguration` (group `records`): `check` 0 and `run` 10 for records sealed against the earlier configuration (naming `records/P-001/record-1.json`, both digests, nothing copied), then 10 for an isolation manifest left behind, then `run` 0 and `score` 0 once every file names the final digest.
+Reverts: the whole comparison removed, 12 of 191 `--calibration-inputs-only` checks fail (the sealed-against-old-configuration run exits 0, which is what leads to `score` exit 3); the manifest comparison removed, 5 fail; the record comparison removed, 1 fails (the refusal no longer names the record).
+
+### A2 to A5
+
+- A2, A3: the guide says the printed values hold for the contract, the configuration and the labelled file ("any of them"), and that any other `judge-calibration` finding "says what to fix".
+- A4: `recordsDirectory` returns null for a records path with an empty, `.` or `..` segment (the evaluation schema's rule); `check` shares the helper and `test:evaluate-check` still passes (987). New refusal cases: a path out of the folder, `records/../records`, an empty path, `.` and `records//`.
+  Revert (the segment rule removed): 16 of 191 fail.
+- A5: `labelledDigest(labelled, engine)` in `calibration.js` is the one digest of the labelled file's bytes; `bindingProblems`, `calibrationInputs` and `runCalibration` call it.
+
+### Test-quality lens (T1 to T5), cases ported from the prototype
+
+- T1: the order case writes the labelled file as compact bytes and asserts `calibrationDigest` is the digest of those bytes. Revert (digest of the re-serialized value): 1 fails.
+- T2: the order case adds a second interaction step with its own operation, a `json` item and a criterion on that step. Reverts: `responseKind` dropped, 1 fails; `calibrationOperationId` returning the first step's operation, 1 fails.
+- T3: two rubrics share the criterion id `RC-101` on different channels. Revert (lookup by criterion id alone): 14 of 23 checks fail (the ask exits 1).
+- T4: a linked labelled file is refused (`regular in-folder file`) and a labelled file with two faults prints both messages. Reverts: the link followed, 4 fail; only the first problem printed, 1 fails. The missing `judgeCalibration.minimumAgreement` case (optional) was not added.
+- T5: `checkImportedRubricCalibration` and the new case now fail when `run` exits 0 without a run directory of its own; the guard has no separate revert, since no fixture makes `run` exit 0 with no new directory.
+- T6: the AC 1 note above is corrected.
 
 ## Verification
 
