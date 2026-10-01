@@ -148,6 +148,7 @@ const ENGINE_MODULE = path.join('lib', 'evaluate', 'engine.js');
  */
 const REPRODUCTION_MODULE = path.join('lib', 'evaluate', 'score-inputs.js');
 const REPRODUCTION_STAGE = 'runScore';
+const REPRODUCTION_METHOD = 'reproduce';
 const REPRODUCTION_RESULT = new Set(['artifact', 'ladder', 'qualification']);
 const REPRODUCTION_READS = new Map([
   ['ladder', new Set(['exitCode', 'verdict', 'basis'])],
@@ -575,6 +576,14 @@ function fileViolations({ source, ast, isEngine, isReproduction, isSkillRunner, 
   const objectRebound = values.has('Object');
   const isGlobalObject = (node) => !objectRebound && isIdentifier(node, 'Object');
   const parentOf = new Map();
+  let exemptCalls = 0;
+  /** The name of the class method `node` sits in, or null. */
+  const enclosingMethod = (node) => {
+    for (let at = parentOf.get(node); at !== undefined; at = parentOf.get(at)) {
+      if (at.type === 'MethodDefinition') return at.key.name ?? null;
+    }
+    return null;
+  };
   /**
    * `this.#engine.runScore(...)` awaited into a declaration that destructures exactly the result's `artifact`,
    * `ladder` and `qualification` by their own names, the one spelling the re-score module may use.
@@ -594,10 +603,12 @@ function fileViolations({ source, ast, isEngine, isReproduction, isSkillRunner, 
     ) {
       return false;
     }
+    // One call site, inside the module's `reproduce` method, so the result has one place to go.
+    if (enclosingMethod(node) !== REPRODUCTION_METHOD || exemptCalls > 0) return false;
     const call = parentOf.get(parent);
     const awaited = call?.type === 'CallExpression' && call.callee === parent ? parentOf.get(call) : undefined;
     const declarator = awaited?.type === 'AwaitExpression' ? parentOf.get(awaited) : undefined;
-    return (
+    const exempt =
       declarator?.type === 'VariableDeclarator' &&
       declarator.init === awaited &&
       declarator.id.type === 'ObjectPattern' &&
@@ -608,8 +619,9 @@ function fileViolations({ source, ast, isEngine, isReproduction, isSkillRunner, 
           !property.computed &&
           property.key.type === 'Identifier' &&
           REPRODUCTION_RESULT.has(property.key.name),
-      )
-    );
+      );
+    if (exempt) exemptCalls += 1;
+    return exempt;
   };
   let engineImports = 0;
   const isAjvReceiver = (node) => node !== null && node !== undefined && node.type === 'Identifier' && instances.has(node.name);
@@ -691,6 +703,30 @@ function fileViolations({ source, ast, isEngine, isReproduction, isSkillRunner, 
           'engine-stage',
           `uses "${node.name}" of a score result beyond ${[...reads].join(', ')}; the re-score module compares and never decides`,
         );
+      }
+      // The verdict only as an operand of `=== null` (is there an Invalid result), the exit only as a value of the object
+      // `reproduce` returns: neither is handed anywhere else.
+      if (readField) {
+        const field = parent.property.name;
+        const comparison = parentOf.get(parent);
+        const verdictTest =
+          comparison?.type === 'BinaryExpression' &&
+          comparison.operator === '===' &&
+          (comparison.left === parent ? comparison.right : comparison.left).type === 'Literal' &&
+          (comparison.left === parent ? comparison.right : comparison.left).value === null;
+        const returned =
+          comparison?.type === 'Property' && comparison.value === parent && parentOf.get(comparison)?.type === 'ObjectExpression';
+        const handedBack =
+          returned && parentOf.get(parentOf.get(comparison))?.type === 'ReturnStatement' && enclosingMethod(parent) === REPRODUCTION_METHOD;
+        if ((field === 'verdict' && !verdictTest) || (field === 'exitCode' && !handedBack)) {
+          report(
+            parent,
+            'engine-stage',
+            field === 'verdict'
+              ? 'uses the ladder verdict beyond comparing it with null'
+              : 'hands the ladder exit anywhere but a value of the object reproduce returns',
+          );
+        }
       }
     }
     if (!isReproduction && node.type === 'MemberExpression' && memberKey(node) === 'ladder') {
@@ -1049,21 +1085,21 @@ const PLANTS = [
     rule: 'engine-stage',
     file: 'lib/evaluate/score-inputs.js',
     source:
-      'class Held {\n  #engine;\n\n  score(options) {\n    const { runScore } = this.#engine;\n    return runScore(options);\n  }\n}\nmodule.exports = { Held };\n',
+      'class Held {\n  #engine;\n\n  reproduce(options) {\n    const { runScore } = this.#engine;\n    return runScore(options);\n  }\n}\nmodule.exports = { Held };\n',
   },
   {
     name: 'a verdict read from a score result in the re-score module',
     rule: 'engine-stage',
     file: 'lib/evaluate/score-inputs.js',
     source:
-      'class Held {\n  #engine;\n\n  async exit(options) {\n    const result = await this.#engine.runScore(options);\n    return result.ladder.exitCode;\n  }\n}\nmodule.exports = { Held };\n',
+      'class Held {\n  #engine;\n\n  async reproduce(options) {\n    const result = await this.#engine.runScore(options);\n    return result.ladder.exitCode;\n  }\n}\nmodule.exports = { Held };\n',
   },
   {
     name: 'a verdict destructured from a score result in the re-score module',
     rule: 'engine-stage',
     file: 'lib/evaluate/score-inputs.js',
     source:
-      'class Held {\n  #engine;\n\n  async basis(options) {\n    const { ladder } = await this.#engine.runScore(options);\n    return ladder;\n  }\n}\nmodule.exports = { Held };\n',
+      'class Held {\n  #engine;\n\n  async reproduce(options) {\n    const { ladder } = await this.#engine.runScore(options);\n    return ladder;\n  }\n}\nmodule.exports = { Held };\n',
   },
   {
     name: 'the exact re-score spelling in a file of the same base name elsewhere',
@@ -1083,35 +1119,35 @@ const PLANTS = [
     rule: 'engine-stage',
     file: 'lib/evaluate/score-inputs.js',
     source:
-      'class Held {\n  #engine;\n\n  async whole(options) {\n    const { artifact, ...rest } = await this.#engine.runScore(options);\n    return rest;\n  }\n}\nmodule.exports = { Held };\n',
+      'class Held {\n  #engine;\n\n  async reproduce(options) {\n    const { artifact, ...rest } = await this.#engine.runScore(options);\n    return rest;\n  }\n}\nmodule.exports = { Held };\n',
   },
   {
     name: 'a renamed key over a score result in the re-score module',
     rule: 'engine-stage',
     file: 'lib/evaluate/score-inputs.js',
     source:
-      'class Held {\n  #engine;\n\n  async basis(options) {\n    const { ladder: l } = await this.#engine.runScore(options);\n    return l.exitCode;\n  }\n}\nmodule.exports = { Held };\n',
+      'class Held {\n  #engine;\n\n  async reproduce(options) {\n    const { ladder: l } = await this.#engine.runScore(options);\n    return l.exitCode;\n  }\n}\nmodule.exports = { Held };\n',
   },
   {
     name: 'a ladder field the re-score module does not compare',
     rule: 'engine-stage',
     file: 'lib/evaluate/score-inputs.js',
     source:
-      'class Held {\n  #engine;\n\n  async promotable(options) {\n    const { ladder } = await this.#engine.runScore(options);\n    return ladder.strictPromotable;\n  }\n}\nmodule.exports = { Held };\n',
+      'class Held {\n  #engine;\n\n  async reproduce(options) {\n    const { ladder } = await this.#engine.runScore(options);\n    return ladder.strictPromotable;\n  }\n}\nmodule.exports = { Held };\n',
   },
   {
     name: 'a qualification field the re-score module does not compare',
     rule: 'engine-stage',
     file: 'lib/evaluate/score-inputs.js',
     source:
-      'class Held {\n  #engine;\n\n  async qualified(options) {\n    const { qualification } = await this.#engine.runScore(options);\n    return qualification.qualified;\n  }\n}\nmodule.exports = { Held };\n',
+      'class Held {\n  #engine;\n\n  async reproduce(options) {\n    const { qualification } = await this.#engine.runScore(options);\n    return qualification.qualified;\n  }\n}\nmodule.exports = { Held };\n',
   },
   {
     name: 'a runScore call that is not awaited into a destructuring',
     rule: 'engine-stage',
     file: 'lib/evaluate/score-inputs.js',
     source:
-      'class Held {\n  #engine;\n\n  async pending(options) {\n    const { artifact } = this.#engine.runScore(options);\n    return artifact;\n  }\n}\nmodule.exports = { Held };\n',
+      'class Held {\n  #engine;\n\n  async reproduce(options) {\n    const { artifact } = this.#engine.runScore(options);\n    return artifact;\n  }\n}\nmodule.exports = { Held };\n',
   },
   {
     name: 'a ladder read through member access in another file',
@@ -1124,6 +1160,62 @@ const PLANTS = [
     rule: 'engine-stage',
     file: 'lib/evaluate/leak-pattern.js',
     source: 'module.exports = { basisOf: ({ ladder }) => ladder.basis };\n',
+  },
+  {
+    name: 'a verdict handed out by a second method of the re-score module',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  async verdictOf(options) {\n    const { artifact, ladder, qualification } = await this.#engine.runScore(options);\n    return ladder.verdict;\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'an exit handed out by a second method of the re-score module',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  async exitOf(options) {\n    const { ladder } = await this.#engine.runScore(options);\n    return ladder.exitCode;\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'a second runScore call site inside reproduce',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  async reproduce(options) {\n    const { artifact, ladder, qualification } = await this.#engine.runScore(options);\n    const again = await this.#engine.runScore(options);\n    return { artifact, exitCode: ladder.exitCode, lines: [] };\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'a second destructured runScore call inside reproduce',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  async reproduce(options) {\n    const { artifact } = await this.#engine.runScore(options);\n    const { ladder } = await this.#engine.runScore(options);\n    return { artifact, exitCode: ladder.exitCode, lines: [] };\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'the ladder verdict used beyond a null test in reproduce',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  async reproduce(options) {\n    const { artifact, ladder } = await this.#engine.runScore(options);\n    return { artifact, exitCode: ladder.exitCode, verdict: ladder.verdict };\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'the ladder exit stored outside the returned object in reproduce',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  async reproduce(options) {\n    const { artifact, ladder } = await this.#engine.runScore(options);\n    this.last = ladder.exitCode;\n    return { artifact };\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'the ladder exit returned bare from reproduce',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  async reproduce(options) {\n    const { ladder } = await this.#engine.runScore(options);\n    return ladder.exitCode;\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'a lone runScore call in a method other than reproduce',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  async other(options) {\n    const { artifact } = await this.#engine.runScore(options);\n    return artifact;\n  }\n}\nmodule.exports = { Held };\n',
   },
   {
     name: 'seal in the re-score module',

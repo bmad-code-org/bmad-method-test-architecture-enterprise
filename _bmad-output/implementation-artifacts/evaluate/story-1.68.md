@@ -109,7 +109,7 @@ context:
 - `test/test-evaluate-run.js`: `checkHeldInputs` (the enumeration, a normal and a repeated score with byte-equal evidence and the recorded argv naming the run directory's own files, `checkDirectRerun` on both, the module's units over a real run, ten restore, forge and reformat attacks, `stage-stashed`, two exit attacks (restore with the artifact restaged over an exit 3, restore with the artifact removed from an Invalid run) and one reason attack, a planted manifest, a dangling link at a manifest path, an index naming one path as two inputs) and `checkScoreInputReference`; `checkScoreOutputReference` now asserts the link to the input check and that the old limit sentence is gone; `checkShimmedScore` runs the real CLI under the shim with P-002's manifest left out (P-001 exit 0, P-002 exit 3, command exit 3).
   `test/test-evaluate-interpret.js` and `test/test-evaluate-evaluators.js` follow the `readInput` signature and the race engine's pass-through logging.
 - Docs: `### Score input integrity` in `docs/reference/tea-evaluate-cli.md` replaces the sentence that a process able to write the run directory can rewrite a file and its digest, states what the protection starts at (a file rewritten together with its digest before `score` starts verifies as the run's own; only confinement prevents that), and the exit 12 and exit 3-5 rows name the new refusals; `CHANGELOG.md` `### Fixed`; AD-6 and AD-7 amended in `ARCHITECTURE-SPINE.md`, dated 2026-10-01.
-- `tools/test-shard-weights.json`: `test:evaluate-partitions` 42 to 68 and `test:evaluate-run` 300 to 325, the CI measures under coverage of this pull request (68.0 and 323.9 seconds; locally 26.5 to 32 seconds and 179 to 185 seconds).
+- `tools/test-shard-weights.json`: `test:evaluate-partitions` 42 to 75 and `test:evaluate-run` 300 to 215 after the split of round 2 (see Review round 2), from the CI measures under coverage of this pull request.
   Neither is near 400 seconds under coverage.
 - Matrix audit: a record, the contract, the policy, a probe and a manifest rewritten and kept (`rewrite-<kind>` in `test:evaluate-partitions`, and the preflight verdict and the evaluator configuration with them); rewritten for the engine's read and restored (`restore-<kind>` in `test:evaluate-run`); a manifest absent at the check and planted before the call returns (`plant-manifest`); a well-formed staged artifact with altered outcomes (`forge-outcomes`); a normal and a repeated score and the recorded argv with a fresh `--out` (`checkHeldInputs` and `checkDirectRerun`); a records run, a run without a manifest and a run with several records per probe (`test:evaluate-records`, `checkFailAndInvalid`, and the three-trial project of `checkHeldInputs`).
   Each ran and passed in the verification output.
@@ -134,22 +134,25 @@ context:
 
 ## Revert observations
 
-Each exercised once, after the review fixes of round 1, by undoing the change in a scratch copy of the tree, `.git` included, with the working tree left as built.
-The unmodified scratch copy passes: `test:evaluate-partitions`, `test:evaluate-run` 796 checks, `test:evaluate-boundaries` 342.
+Each exercised once, after the review fixes of round 2, by undoing the change in a scratch copy of the tree, `.git` included, with the working tree left as built.
+The unmodified scratch copy passes: `test:evaluate-partitions`, `test:evaluate-held-inputs` 166 checks, `test:evaluate-run` 537, `test:evaluate-boundaries` 358.
+Since round 2 the held-input cases run as `test:evaluate-held-inputs`; the counts below are of that script unless another is named.
 
-- AC 1, the `changedSince` call removed from the check after each call: `test:evaluate-partitions` fails for all seven rewrite kinds (the in-process comparison still refuses each, but no failure names the file); `test:evaluate-run` fails 2 of 796 (the planted manifest exits 3, since nothing reproduces it).
-- AC 1 and 2, the check after each call and the in-process comparison both removed: `test:evaluate-partitions` fails for all seven kinds, the rewritten bytes are scored and copied (the record and policy rewrites copy both probes' evidence, the probe rewrite copies P-002's), and 53 of 796 `test:evaluate-run` checks fail.
-- AC 1, a probe left out of the enumeration: `test:evaluate-partitions` stops at its first score (`probes/P-001.probe.json is not a score input of this run`), and 44 of 508 `test:evaluate-run` checks fail.
-- AC 1, the views read from the run directory again: `test:evaluate-partitions` fails the `probe` and `record` kinds; `test:evaluate-run` passes, since the views are asserted in the partitions file.
-- AC 2, the artifact and exit comparison removed with `changedSince` kept: 51 of 796 `test:evaluate-run` checks fail; `test:evaluate-partitions` passes, as the kept rewrites are still named by `changedSince`.
-- AC 2, the branch refusing a call that staged nothing where the held bytes give an artifact removed: 19 of 796; the branch refusing an artifact where the held bytes give none removed: 3 of 796; byte equality replaced by a non-empty test: 18 of 796.
-- AC 3, the re-score serialized with a trailing newline (a check that refuses a clean score): `test:evaluate-partitions` fails at its first score, and 37 of 688 `test:evaluate-run` checks fail before `checkHeldInputs` can finish.
-- AC 3, the recorded `--contract` argument naming a path outside the run directory: 53 of 688.
-- AC 4, the old limit sentence back in the reference: 2 of 796; the `### Score input integrity` heading renamed: 16 of 796; the byte-for-byte sentence reworded: 1 of 796; the exit-comparison sentence reworded: 1 of 796.
-- The boundaries exemption pointed at another file name: 3 of 344 `test:evaluate-boundaries` checks fail.
-- `O_NOFOLLOW` dropped from the read: 3 of 796.
-- The alias findings removed: 2 of 796 (an index naming the contract as the policy passes the input check, since the file is held once under its first role, and the engine faults with exit 5 where 10 is expected).
-- The in-process score reading the run directory instead of the held bytes: 1 of 796.
+- AC 1, the `changedSince` call removed from the check after each call: `test:evaluate-partitions` fails for all seven rewrite kinds (the in-process comparison still refuses each, but no failure names the file); 2 of 166 fail (the planted manifest exits 3, since nothing reproduces it).
+- AC 1 and 2, the check after each call and the in-process comparison both removed: `test:evaluate-partitions` fails for all seven kinds, the rewritten bytes are scored and copied (the record and policy rewrites copy both probes' evidence, the probe rewrite copies P-002's), and 53 of 166 fail.
+- AC 1, a probe left out of the enumeration: `test:evaluate-partitions` stops at its first score (`probes/P-001.probe.json is not a score input of this run`), and 13 of 47 fail.
+- AC 1, the views read from the run directory again: `test:evaluate-partitions` fails the `probe` and `record` kinds.
+- AC 2, the artifact and exit comparison removed with `changedSince` kept: 51 of 166 fail; `test:evaluate-partitions` passes, as the kept rewrites are still named by `changedSince`.
+- AC 2, the branch refusing a call that staged nothing where the held bytes give an artifact removed: 19 of 166; the branch refusing an artifact where the held bytes give none removed: 3 of 166; byte equality replaced by a non-empty test: 18 of 166.
+- AC 3, the re-score serialized with a trailing newline (a check that refuses a clean score): `test:evaluate-partitions` fails at its first score, and 13 of 67 fail before `checkHeldInputs` can finish.
+- AC 3, the recorded `--contract` argument naming a path outside the run directory: 19 of 67.
+- AC 4, the old limit sentence back in the reference: 2 of 166; the `### Score input integrity` heading renamed: 17 of 166; the byte-for-byte sentence reworded: 1 of 166; the exit-comparison sentence reworded: 1 of 166.
+- The boundaries exemption pointed at another file name: 3 of 360 `test:evaluate-boundaries` checks fail.
+- `O_NOFOLLOW` dropped from the read: 3 of 166; `test:evaluate-run` passes.
+- The alias findings removed: 2 of 166 (an index naming the contract as the policy passes the input check, since the file is held once under its first role, and the engine faults with exit 5 where 10 is expected).
+- The in-process score reading the run directory instead of the held bytes: 1 of 166.
+- The exit comparison removed: 4 of 166; the diagnostic-lines comparison removed: 3 of 166; the byte comparison replaced by a parsed one: 8 of 166.
+- Presence taken from `fs.existsSync` instead of the open (the dangling link): 2 of 166.
 
 ## Gates
 
@@ -226,6 +229,51 @@ Counts are in the Revert observations above (taken on the code after these fixes
 ### Gates
 
 Green on the last state of the tree: engine check, `test:evaluate-partitions`, `test:evaluate-run` 796 checks, `test:evaluate-check` 807, `test:evaluate-guidance`, `test:evaluate-interpret`, `test:evaluate-boundaries` 342, `test:evaluate-records` 127, `test:evaluate-evaluators` 746, `test:evaluate-arms` 536, `test:evaluate-calibration`, `test:evaluate-workflow` 165, `test:evaluate-preflight` 236, `test:evaluate-mutation` 665, `test:evaluate-mcp` 226, `test:evaluate-api` 322, `test:evaluate-tool-use`, `test:evaluate-promptfoo`, `test:evaluate-learned-framework`, `test:evaluate-authoring`, `test:evaluate-gap-loop`, `test:direction`, `test:shards`, `test:ci-coverage`, `test:doc-counts`, `test:changelog`, `test:release-metadata`, `lint`, `lint:md`, `format:check`, `docs:validate-links`, `docs:build`.
+Unrun: the full `npm test` (CI shards).
+
+## Review round 2
+
+Round 2 raised seven findings on PR #278 (head `2702c181`), each checked against the code; all were valid and are fixed.
+
+### Fixed
+
+- 1: a newline inside a diagnostic falsely refused a clean score.
+  `reproduce()` gives one string per qualification failure or Invalid reason and the CLI writes each with a trailing newline, keeping a newline inside it (a mount path from the confinement audit reaches the basis as `isolation manifest violation: mount outside allowlist: <path>`), so splitting stderr on `\n` lost the rest of the reason on the printed side only; a run the CLI scored Invalid (exit 3) left `score` at exit 12.
+  Both sides now go through the same split (`diagnosticLines`), and the reason log keeps the whole reason (`diagnosticBlocks`).
+  `checkHeldDiagnostics` seals P-002's manifest with an observed mount carrying a newline (and a control without) and expects exit 3 for both with the call at exit 3, and a re-score line that carries the newline.
+  The inputBinding-key spelling of the same problem is not reachable from a sealed run, so no case seals one.
+- 2: the AD-6 amendment in `ARCHITECTURE-SPINE.md` names the exit and diagnostic comparison, the exit-only comparison of a library refusal, and what is not compared.
+- 3: the library-refusal branch of `reproduce()` had no test.
+  `checkHeldDiagnostics` holds the run with an engine whose `runScore` throws a structural failure (exit 4), a runtime fault and a plain error (exit 5, each with no artifact and no lines), and with a private-storage manifest reference in a held record (exit 64); `checkScoreInputReference` pins the mapping sentence.
+- 4: the qualification-failure line format was untested.
+  A probe sealed with `probeClass: defect` makes the engine print a `qualification-route-incompatible` line and an Invalid basis; a clean score exits the engine's 3 rather than 12, and `reproduce(set).lines` equal the `eval-quality:` lines of the recorded call.
+- 5: the boundaries exemption allowed a second call site and a verdict hand-out.
+  The exempt `runScore` must sit inside `reproduce` and appear once; `ladder.verdict` is allowed only as an operand of `=== null`; `ladder.exitCode` only as a value of the object `reproduce` returns.
+  Plants: both reviewer shapes (a verdict and an exit returned by another method), a second call inside `reproduce` (bare and destructured), the verdict beyond a null test, the exit stored or returned bare, and a lone call in another method; the existing plants moved into `reproduce` so each isolates its own rule.
+- 6: the reference's exit 3-5 row and exit 12 row were unpinned and the exit 12 row omitted the exit and diagnostic mismatches.
+  The exit 12 row names `a call whose staged artifact, exit or eval-quality: diagnostic lines the held inputs do not reproduce`, and `checkScoreInputReference` pins both rows.
+- 7: suite sizes.
+  CI under coverage measured `test:evaluate-run` at 359.6 seconds (a sibling run 407.8), `test:evaluate-partitions` at 74.4 and `test:evaluate-evaluators` at 480.5 (confirmed in the CI log of run 36858812925, an old defect of the Story 1.40 split).
+  `test/test-evaluate-run.js` takes `--group=run`, `--group=confinement` and `--group=held-inputs` (no group runs all), and `package.json` gains `test:evaluate-confinement` and `test:evaluate-held-inputs` beside `test:evaluate-run`; `test/test-evaluate-evaluators.js` takes `--group=agents` (the sealed-brief agent cases, the oracle two behaviors declare, the evaluator run in place and the layer held to its bytes) and `package.json` gains `test:evaluate-agents`.
+  The chain is 101 steps; the README sentence is written in digits and `eval-quality.config.json` reads it as digits (`rendering: digits`).
+  Weights from the local CPU times scaled to the CI ratio: `test:evaluate-run` 325 to 215, `test:evaluate-confinement` 95, `test:evaluate-held-inputs` 55, `test:evaluate-evaluators` 411.7 to 262, `test:evaluate-agents` 218, `test:evaluate-partitions` 68 to 75 (the CI measure).
+  No timeout was raised.
+  The check counts add up: 537 + 110 + 166 = 813 for the run file (796 plus 17 new), 482 + 264 = 746 for the evaluators file.
+
+A plan-consistency test for the Story 1.69 row stays unadded, as in round 1.
+
+### Revert observations
+
+- 1, the reason split reverted to the one-sided split: 1 of 166 `test:evaluate-held-inputs` checks fail (the newline mount exits 12).
+- 3, a structural failure mapped to 5: 1 of 166; a fault mapped to 4: 2 of 166; the private-storage usage exit changed to 0: 1 of 166; the mapping sentence reworded in the reference: 1 of 166.
+- 4, the qualification line without its artifact path: 2 of 166.
+- 5, the call-site count dropped: 1 of 358 `test:evaluate-boundaries` checks fail; the `reproduce` restriction dropped: 1; both: 2; the verdict rule dropped: 1; the exit rule dropped: 2; the call and destructuring shape dropped: 5; the `ladder`-elsewhere rule dropped: 1; the field restriction dropped: 3.
+- 6, the exit 3-5 row reworded to `is what`: 1 of 166; the exit 12 row's new clause removed: 1 of 166.
+- 7, `test:evaluate-held-inputs` left out of the chain: `test:ci-coverage` fails; the README count back to ninety-eight: `test:doc-counts` fails.
+
+### Gates
+
+Green on the last state of the tree: engine check, `test:evaluate-partitions`, `test:evaluate-run` 537, `test:evaluate-confinement` 110, `test:evaluate-held-inputs` 166, `test:evaluate-boundaries` 358, `test:evaluate-evaluators` 482, `test:evaluate-agents` 264, `test:evaluate-records` 127, `test:evaluate-check` 807, `test:evaluate-guidance`, `test:evaluate-interpret`, `test:evaluate-arms` 536, `test:evaluate-calibration`, `test:evaluate-workflow` 165, `test:evaluate-preflight` 236, `test:evaluate-mutation` 665, `test:evaluate-mcp` 226, `test:evaluate-api` 322, `test:evaluate-tool-use`, `test:evaluate-promptfoo`, `test:evaluate-learned-framework`, `test:evaluate-authoring`, `test:evaluate-gap-loop`, `test:direction`, `test:shards`, `test:ci-coverage` (101 steps), `test:doc-counts`, `test:doc-count-sources`, `test:changelog`, `test:release-metadata`, `lint`, `lint:md`, `format:check`, `docs:validate-links`, `docs:build`.
 Unrun: the full `npm test` (CI shards).
 
 ## Left undone, reported

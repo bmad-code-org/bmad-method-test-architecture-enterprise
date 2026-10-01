@@ -588,8 +588,8 @@ async function scoreProbe({ folder, runDirectory, set, index, held, validate, en
       ({ exitCode, stderr } = result);
       log(`${set.probeId}: eval-quality score exited ${exitCode}`);
       // An Invalid result emits no artifact; its reasons are the stage's own stderr lines.
-      for (const line of result.stderr.split('\n').filter((text) => text.startsWith('eval-quality: invalid:')))
-        log(`${set.probeId}: ${line}`);
+      for (const reason of diagnosticBlocks(result.stderr).filter((text) => text.startsWith('eval-quality: invalid:')))
+        log(`${set.probeId}: ${reason}`);
     } catch (error) {
       if (!(error instanceof EngineStageError)) throw error;
       stageFailed = true;
@@ -644,6 +644,21 @@ async function scoreProbe({ folder, runDirectory, set, index, held, validate, en
   }
 }
 
+/** The lines of `text` that start an `eval-quality: ` diagnostic. */
+function diagnosticLines(text) {
+  return text.split('\n').filter((line) => line.startsWith(DIAGNOSTIC_PREFIX));
+}
+
+/** `text` as one string per `eval-quality: ` diagnostic, the lines that follow one (a newline inside its reason) kept with it. */
+function diagnosticBlocks(text) {
+  const blocks = [];
+  for (const line of text.split('\n')) {
+    if (line.startsWith(DIAGNOSTIC_PREFIX)) blocks.push(line);
+    else if (blocks.length > 0) blocks[blocks.length - 1] += `\n${line}`;
+  }
+  return blocks.map((block) => block.trimEnd());
+}
+
 /**
  * Why a call's result is not the one the held inputs stand behind, or null (Story 1.68): an input changed or appeared
  * since the check (named first), or the call is not what the CLI does with the held bytes. That is the staged artifact
@@ -667,8 +682,10 @@ async function heldRefusal({ held, set, staged, exitCode, stderr }) {
     return `the call exited ${exitCode} where the verified inputs give ${expected.exitCode} (an in-process score of the held bytes)`;
   }
   if (expected.lines !== null && exitCode !== null) {
-    const printed = stderr.split('\n').filter((line) => line.startsWith(DIAGNOSTIC_PREFIX));
-    if (JSON.stringify(printed) !== JSON.stringify(expected.lines)) {
+    // The CLI writes each line plus a newline and keeps any newline inside it (a mount path or a key can carry one), so
+    // both sides go through the same split before the prefixed pieces are compared.
+    const printed = diagnosticLines(stderr);
+    if (JSON.stringify(printed) !== JSON.stringify(diagnosticLines(expected.lines.map((line) => `${line}\n`).join('')))) {
       return "the call's eval-quality diagnostics differ from those the verified inputs give (an in-process score of the held bytes)";
     }
   }

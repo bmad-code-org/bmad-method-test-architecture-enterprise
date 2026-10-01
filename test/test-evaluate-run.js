@@ -96,7 +96,9 @@
  *   evaluation opts out, which `run.json` records; the reference names each
  *   platform's mechanism under its exact heading.
  *
- * Usage: node test/test-evaluate-run.js
+ * Usage: node test/test-evaluate-run.js [--group=run|confinement|held-inputs]
+ * CI runs the three groups as `test:evaluate-run`, `test:evaluate-confinement` and `test:evaluate-held-inputs`; with no
+ * `--group` every case runs.
  */
 
 'use strict';
@@ -2410,6 +2412,10 @@ function checkScoreInputReference() {
     [/The call's exit must be the one the held bytes give/, "that the call's exit is compared with the held bytes'"],
     [/`eval-quality:` lines on the call's stderr must be the ones the result would print/, 'that the diagnostic lines are compared'],
     [/only the exit is compared/, 'that a refused library call is compared by its exit alone'],
+    [
+      /4 for a structural failure, 5 for a runtime fault, 64 for a private-storage manifest reference/,
+      'the exits the held bytes give a refused or unusable call',
+    ],
     [/the call's stdout and its other stderr text are recorded as they came and are not compared/, 'what the comparison leaves out'],
   ]) {
     check(pattern.test(section), `the reference's score input integrity section does not name ${what}`);
@@ -2425,13 +2431,14 @@ function checkScoreInputReference() {
   }
   const passedRow = reference.split('\n').find((line) => /^\| 3-5\s+\|/.test(line)) ?? '';
   check(
-    /Score input integrity/.test(passedRow),
-    "the reference's exit 3-5 row does not say a stage's exit is passed through only while the held inputs agree with the call",
+    /Score input integrity/.test(passedRow) && /exit and reason lines are what the held inputs produce/.test(passedRow),
+    "the reference's exit 3-5 row does not say a stage's exit is passed through only while the call's artifact, exit and reason lines are what the held inputs produce",
   );
   const exitRow = reference.split('\n').find((line) => /^\| 12\s+\| infrastructure:/.test(line)) ?? '';
   check(
-    /an input that changed or appeared while a call ran/.test(exitRow) && /not reproduce/.test(exitRow),
-    "the reference's exit 12 row does not name an input that changed during a call or an artifact the held inputs do not reproduce",
+    /an input that changed or appeared while a call ran/.test(exitRow) &&
+      /a call whose staged artifact, exit or `eval-quality:` diagnostic lines the held inputs do not reproduce/.test(exitRow),
+    "the reference's exit 12 row does not name an input that changed during a call, or a call whose artifact, exit or diagnostic lines the held inputs do not reproduce",
   );
 }
 
@@ -2784,6 +2791,152 @@ async function checkHeldInputs() {
       fs.rmSync(file, { force: true });
       fs.writeFileSync(file, bytes);
     }
+  }
+}
+
+/**
+ * What the re-score returns when the library refuses the held bytes or the CLI would refuse them before scoring, what a
+ * diagnostic line looks like when the held bytes give a qualification failure, and a newline inside a diagnostic
+ * (Story 1.68). Each case works on a snapshot of the run directory, put back afterwards.
+ */
+async function checkHeldDiagnostics() {
+  const engine = await loadEngine();
+  const { holdScoreInputs } = require('../cli/lib/evaluate/score-inputs');
+  const made = makeProject('held-diagnostics', { unconfined: true });
+  const ran = evaluate(['run', '--evaluation', made.folder], made.env);
+  check(ran.status === 0, `the run for the held-diagnostic cases exited ${ran.status}: ${ran.output}`);
+  const runDirectory = runDirectoryOf(made.folder);
+  if (runDirectory === null) return;
+  const scoreArgs = ['score', '--evaluation', made.folder, '--run', path.basename(runDirectory)];
+  const index = readJson(path.join(runDirectory, 'trial-sets.json'));
+  const record = () => readJson(path.join(runDirectory, 'run.json'));
+  const [firstSet, secondSet] = index.trialSets;
+  const snapshot = path.join(tempDir('held-diagnostics-snapshot'), 'run');
+  fs.cpSync(runDirectory, snapshot, { recursive: true });
+  const restore = () => {
+    fs.rmSync(runDirectory, { recursive: true });
+    fs.cpSync(snapshot, runDirectory, { recursive: true });
+  };
+  /** Rewrites a JSON file of the run and restamps the digests that name it, the way a run that sealed it would hold them. */
+  const reseal = (relative, edit, restamp) => {
+    const file = path.join(runDirectory, relative);
+    editJson(file, edit);
+    const digest = engine.digestBytes(fs.readFileSync(file));
+    editJson(path.join(runDirectory, 'run.json'), (value) => restamp(value, digest));
+    return digest;
+  };
+  /** The `eval-quality:` pieces of a stderr text, split the way the CLI's lines are. */
+  const diagnosticsOf = (text) => text.split('\n').filter((line) => line.startsWith('eval-quality: '));
+  try {
+    // The library refuses the held bytes with a structural failure (exit 4), a runtime fault or any other error (exit 5),
+    // and a private-storage manifest reference is a usage error (exit 64) the CLI raises before it scores.
+    const held = holdScoreInputs({ runDirectory, index, record: record(), engine });
+    const refusing = (error) =>
+      holdScoreInputs({
+        runDirectory,
+        index,
+        record: record(),
+        engine: {
+          ...engine,
+          runScore: async () => {
+            throw error;
+          },
+        },
+      });
+    for (const [label, error, exitCode] of [
+      ['a structural failure', new engine.StructuralFailure('binding-cycle', 'EvalContract', 'refused'), 4],
+      ['a runtime fault', new engine.RuntimeFault('schema-parse-failure', 'Probe', 'refused'), 5],
+      ['an error of neither class', new Error('a defect'), 5],
+    ]) {
+      const refused = await refusing(error).reproduce(firstSet);
+      check(
+        refused.artifact === null && refused.exitCode === exitCode && refused.lines === null,
+        `the re-score of ${label} is ${JSON.stringify(refused)}; expected no artifact, exit ${exitCode} and no lines`,
+      );
+    }
+    const privateRecord = path.join(runDirectory, firstSet.records[0]);
+    editJson(privateRecord, (value) => (value.isolationManifestArtifact.storage = 'private'));
+    const usage = await holdScoreInputs({ runDirectory, index, record: record(), engine }).reproduce(firstSet);
+    check(
+      usage.artifact === null && usage.exitCode === 64 && usage.lines === null,
+      `the re-score of a private-storage manifest reference is ${JSON.stringify(usage)}; expected no artifact, exit 64 and no lines`,
+    );
+    restore();
+    check((await held.reproduce(firstSet)).exitCode === 0, 'the re-score of an unchanged run is not exit 0');
+
+    // A probe the engine rejects: the held bytes give a qualification failure line and an Invalid basis. A clean score
+    // passes the engine's exit 3 through, and the lines the re-score gives are the ones the CLI printed.
+    reseal(
+      firstSet.probe,
+      (value) => (value.probeClass = 'defect'),
+      (value, digest) => (value.artifacts.probes[firstSet.probeId] = digest),
+    );
+    const rejected = evaluate(scoreArgs, made.env);
+    check(
+      rejected.status === 3,
+      `a score over a probe the engine rejects exited ${rejected.status}; expected the engine's 3\n${rejected.output}`,
+    );
+    const rejectedDirectory = latestScoreDirectory(runDirectory);
+    const rejectedCall =
+      rejectedDirectory === null ? null : written(path.join(rejectedDirectory, firstSet.probeId, 'score.json'), 'the rejected probe call');
+    const printed = diagnosticsOf(rejectedCall?.stderr ?? '');
+    check(
+      printed.some((line) => line.startsWith('eval-quality: qualification-route-incompatible: ')) &&
+        printed.some((line) => line.startsWith('eval-quality: invalid: ')),
+      `the rejected probe's call printed ${JSON.stringify(printed)}; expected a qualification failure line and an Invalid basis line`,
+    );
+    const rejectedRun = holdScoreInputs({ runDirectory, index, record: record(), engine });
+    const reproduced = await rejectedRun.reproduce(firstSet);
+    check(
+      reproduced.exitCode === 3 &&
+        reproduced.artifact === null &&
+        JSON.stringify(reproduced.lines.flatMap((line) => diagnosticsOf(line))) === JSON.stringify(printed),
+      `the re-score of the rejected probe is ${JSON.stringify(reproduced)}; the CLI printed ${JSON.stringify(printed)}`,
+    );
+    restore();
+
+    // A newline inside a diagnostic (a mount path the confinement audit reported): the CLI writes it as it is, and an
+    // untampered run it scores Invalid is not refused. The control without the newline scores the same way.
+    const sealMount = (mount) => {
+      const digest = reseal(
+        secondSet.isolationManifest,
+        (value) => (value.observedMounts = [mount]),
+        (value, sealed) => (value.artifacts.isolationManifests[secondSet.probeId] = sealed),
+      );
+      for (const relative of secondSet.records) {
+        editJson(path.join(runDirectory, relative), (value) => (value.isolationManifestArtifact.digest = digest));
+        editJson(path.join(runDirectory, 'run.json'), (value) => {
+          value.artifacts.records[relative] = engine.digestBytes(fs.readFileSync(path.join(runDirectory, relative)));
+        });
+      }
+    };
+    for (const [label, mount] of [
+      ['without a newline', '/tmp/evilname'],
+      ['with a newline', '/tmp/evil\nname'],
+    ]) {
+      restore();
+      sealMount(mount);
+      const scored = evaluate(scoreArgs, made.env);
+      const directory = latestScoreDirectory(runDirectory);
+      const call = directory === null ? null : written(path.join(directory, secondSet.probeId, 'score.json'), `the mount ${label}`);
+      check(
+        scored.status === 3 && call?.exitCode === 3,
+        `a score over an observed mount ${label} exited ${scored.status} with the call at ${call?.exitCode}; expected 3 for both\n${scored.output}`,
+      );
+      check(
+        /mount outside allowlist/.test(call?.stderr ?? ''),
+        `the call over a mount ${label} did not name the mount: ${JSON.stringify(call?.stderr)}`,
+      );
+      if (mount.includes('\n')) {
+        const given = await holdScoreInputs({ runDirectory, index, record: record(), engine }).reproduce(secondSet);
+        check(
+          given.lines.some((line) => line.includes('\n')),
+          `the re-score of a mount with a newline gave ${JSON.stringify(given.lines)}; expected a line that carries it`,
+        );
+      }
+    }
+  } finally {
+    restore();
   }
 }
 
@@ -3635,11 +3788,34 @@ async function runCase(name, body) {
   }
 }
 
+/** The held-input cases (Story 1.68), which `test:evaluate-held-inputs` runs on their own so no one script carries the whole file's wall time. */
+async function runHeldInputCases() {
+  await runCase('the held score inputs', checkHeldInputs);
+  await runCase('the held score diagnostics', checkHeldDiagnostics);
+  await runCase('the score input reference', checkScoreInputReference);
+}
+
+/** The `--group=<name>` argument (`run`, `confinement` or `held-inputs`); `null` when absent, which runs every case. */
+function requestedGroup() {
+  const argument = process.argv.find((value) => value.startsWith('--group='));
+  if (argument === undefined) return null;
+  const name = argument.slice('--group='.length);
+  if (!['run', 'confinement', 'held-inputs'].includes(name)) {
+    throw new Error(`unknown --group ${JSON.stringify(name)}: expected --group=run, --group=confinement or --group=held-inputs`);
+  }
+  return name;
+}
+
 async function main() {
+  const group = requestedGroup();
   try {
     if (process.argv.includes('--usage-only')) {
       await runCase('target usage reports', checkTargetUsageReports);
     } else if (process.argv.includes('--confinement-only')) {
+      await runConfinementCases();
+    } else if (group === 'held-inputs') {
+      await runHeldInputCases();
+    } else if (group === 'confinement') {
       await runConfinementCases();
     } else {
       await runCase('the units', checkUnits);
@@ -3647,16 +3823,19 @@ async function main() {
       await runCase('the templates and ignores', checkTemplatesAndIgnores);
       await runCase('the run and its scores', checkRunAndScore);
       await runCase('the unverified evidence copies', checkUnverifiedEvidence);
-      await runCase('the held score inputs', checkHeldInputs);
       await runCase('the score output reference', checkScoreOutputReference);
-      await runCase('the score input reference', checkScoreInputReference);
       await runCase('target usage reports', checkTargetUsageReports);
       await runCase('the stopped runs', checkStoppedRuns);
       await runCase('the refusals', checkRefusals);
       await runCase('the conditions and the set recommendation', checkConditionsAndSetRecommendation);
       await runCase('the clean-only runs', checkCleanOnlyAndNewest);
       await runCase('the subdirectory digest', checkSubdirectoryDigest);
-      await runConfinementCases();
+      // `--group=run` leaves the confinement and held-input cases to their own scripts (`test:evaluate-confinement` and
+      // `test:evaluate-held-inputs`) so no one script carries the whole file's wall time; no group runs all three.
+      if (group === null) {
+        await runConfinementCases();
+        await runHeldInputCases();
+      }
     }
     for (const { label, directory } of runtimeTemps) {
       const left = fs.readdirSync(directory);
