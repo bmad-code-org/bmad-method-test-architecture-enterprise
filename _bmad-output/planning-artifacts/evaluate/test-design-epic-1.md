@@ -38,7 +38,7 @@ inputDocuments:
 
 ## Executive Summary
 
-**Scope:** full epic-level test design for Stories 1.1 to 1.66 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.66. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
+**Scope:** full epic-level test design for Stories 1.1 to 1.67 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.67. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
 
 **Risk summary:**
 
@@ -702,8 +702,11 @@ Added 2026-09-26 in Story 1.21. Levels: integration over real eval-quality, cont
 | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | --- | --------------------------------------------------------------- |
 | Imported rubric scores carry verifiable calibration    | A harness supplies label-free judgments and provenance for the same scorer configuration used in trial records               | Integration over real eval-quality | P0  | A mismatched scorer or leaked label fails provenance validation |
 | Low agreement stops before records are imported        | Two labelled items yield agreement 0.5 under a 0.9 minimum; inspect the report, exit 11, and absence of copied trial records | Integration                        | P0  | Removing the gate writes a trial record                         |
-| Calibration inputs change the imported scoring version | Change one item and then the minimum agreement; assert both change `EvaluatorConfiguration` and its scoring version          | Integration over real eval-quality | P1  | Omitting either binding leaves the version unchanged            |
+| Calibration inputs change the imported scoring version | Change one item and then the minimum agreement; assert both change `EvaluatorConfiguration` and its scoring version          | Integration over real eval-quality | P1  | Dropping either binding check admits a configuration without it |
 | Uncalibrated rubric records are refused                | `check` exits 10 for absent or unverifiable provenance; a non-rubric `records` evaluation still passes its import path       | Contract                           | P1  | Bypassing the refusal accepts an uncalibrated rubric            |
+
+Amended 2026-10-01 in Story 1.40: the binding row's Level is Integration over real eval-quality, where the plan named Contract, because the scoring version moves only when a harness over real eval-quality records another configuration.
+Its revert check is that dropping either binding check admits a configuration without it, and the missing or wrong binding case exits 0.
 
 ### Story 1.41: Confine score output during concurrent run-directory changes
 

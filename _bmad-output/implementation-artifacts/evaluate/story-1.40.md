@@ -145,3 +145,45 @@ Each check exercised once in a scratch copy of `cli/` and `test/` (the working t
 
 - Story 1.67 (new, end of Epic 1): the runtime emits the label-free scorer inputs and the digests a harness copies, so a harness in any language need not derive them by hand. Added to `epics.md`, `test-design-epic-1.md`, the Epic Dependencies table (the later rows renumbered) and `sprint-status.yaml` as `backlog`.
 - The judgments file is read and verified when `run` imports; a harness that rewrites it between `check` and `run` is verified again at import, so no stale verification is used.
+
+## Review round 1
+
+Two review lenses (adversarial, test quality) raised eleven findings.
+Each was verified against the tree before it was fixed.
+All eleven were valid; none was skipped.
+
+### Fixed
+
+- A1: `calibrationOperationId` read `contract.interactionPlan` unguarded, so `tea-evaluate check` crashed with a raw `TypeError` on `"interactionPlan": {}` and on a plan holding `null`, both reproduced.
+  It now reads the plan only when it is an array and skips any step that is not an object, so the contract's own `engine-schema` finding is what `check` reports (exit 10).
+  Two cases in `test/test-evaluate-check.js` pin the non-array plan and the null step.
+- A2: `references/evaluator.md`, the CLI reference and the CHANGELOG entry read as if `check` gates agreement.
+  Each now says `check` and `run` verify the judgments and bindings with one function (exit 10, rule `judge-calibration`) and that `run` alone computes agreement, writes `judge-calibration.json` and exits 11.
+  The `records-calibration.js` docblock says the same.
+  The guide edit went through `/bmad-workflow-builder` Edit on that path only, then Analyze: integrity pre-pass pass, path and script scans clean, no content added, still 0 critical and 0 high.
+- T1: new cases pin the judgments file read through a link (evaluators suite and check suite), a symlinked `evaluator-configuration.json` (check suite), and a top-level `expectedLevel` field (both suites).
+- T2: the reference's worked `scorerInput` now shows `"operationId": "judge-request"`, the operation the plan gives step `judge-run`.
+  The pinning test derives the id with `calibrationOperationId` over the verdict fixture's `contract.json` and asserts it is `judge-request`.
+- T3: `epics.md` reads seventy-three stories and Stories 1.27 to 1.67, and `test-design-epic-1.md` reads Stories 1.1 to 1.67 and 1.27 to 1.67; a grep of both files and the other planning files found no other count sentence.
+- T4: the AC3 revert text in `epics.md` and `test-design-epic-1.md` now reads "dropping either binding check admits a configuration without it, and the missing or wrong binding case exits 0".
+  `test-design-epic-1.md` gains an "Amended 2026-10-01 in Story 1.40" note under the Story 1.40 table naming the Level (Contract to Integration over real eval-quality) and the revert change.
+- T5: both `judge-calibration.json` reads are guarded with a `check(fs.existsSync(...))` and a return, so a removed gate reports its assertions.
+- T6: `checkImportedCalibrationChangesScoringVersion` builds its own base run as the first variant; the module-level `calibratedBase` is gone.
+- T7: the CHANGELOG entry lost "The runtime does not run that scorer." and "no longer fails `check`"; the `records-calibration.js` docblock lost the same split.
+
+### Revert observations
+
+Each exercised once by undoing the change in the working tree and restoring it (a scratch copy of the test file for T6 and T2).
+
+- A1, `calibrationOperationId` restored to the unguarded read: 7 of 797 `test:evaluate-check` checks fail (both new cases: exit 1 instead of 10, no `engine-schema` finding, the raw `TypeError` in the output).
+- T1, `lstatSync` swapped for `statSync` on the judgments file: 3 of 119 `--imported-calibration-only` checks fail (run exits 0, no "is not a regular file", the refused run copied files) and 3 of 807 `test:evaluate-check` fail.
+- T1, top-level field check disabled: 3 of 119 evaluators checks fail ("a label beside the items") and 3 of 807 check checks fail.
+- T1, `statSync` on `evaluator-configuration.json` in `check.js`: 4 of 807 check checks fail (exit 0 where 10 is expected; neither finding text appears).
+- T2, the reference example reverted to `"operationId": "calibration"`: 1 check fails (the reference's scorer input differs from the derived one).
+- T5, the `calibrateImported` call dropped from `importRecords`: 3 of 65 checks fail and each names its cause ("a calibrated records run wrote no judge-calibration.json", "exited 0; expected 11", "the run below the minimum wrote no judge-calibration.json"); the earlier build crashed with ENOENT there and skipped the rest.
+- T6, the version case plus the reference example run alone through a scratch copy of the runner: 19 of 19 pass, so the case no longer depends on the rubric case running first.
+
+### Gates
+
+Green on the last state of the tree: `test:evaluate-evaluators` 873 checks, `test:evaluate-check` 807, `test:evaluate-run` 543, `test:evaluate-guidance`, `test:evaluate-calibration`, `test:direction`, `test:shards`, `lint`, `lint:md`, `format:check`, `docs:validate-links`, `docs:build`.
+`tools/test-shard-weights.json` is unchanged: the added cases are one more harness run and a handful of refusals in `test:evaluate-evaluators`, a change of a few percent.

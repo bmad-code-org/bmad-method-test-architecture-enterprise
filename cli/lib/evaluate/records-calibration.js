@@ -10,14 +10,12 @@
  *     "scorerConfigurationDigest": "sha256:...",
  *     "items": [{ "rubricId", "criterionId", "scorerInput", "answer" }] }
  *
- * one item per labelled item, in the labelled file's order. The runtime does
- * not run the harness's scorer. It verifies what only it can: every item's
- * `scorerInput` is exactly the label-free observation the runtime derives
- * from the labelled item (so `expectedLevel` never reached the scorer), the
- * judgments name the scorer configuration the imported
- * `EvaluatorConfiguration` describes, and that configuration binds the
- * labelled file's digest and `judgeCalibration.minimumAgreement`. It then
- * computes agreement itself through the gate Story 1.21 built.
+ * one item per labelled item, in the labelled file's order.
+ * The runtime verifies what only it can.
+ * Every item's `scorerInput` is exactly the label-free observation the runtime derives from the labelled item (so `expectedLevel` never reached the scorer).
+ * The judgments name the scorer configuration the imported `EvaluatorConfiguration` describes.
+ * That configuration binds the labelled file's digest and `judgeCalibration.minimumAgreement`.
+ * `run` then computes agreement itself through the gate Story 1.21 built.
  *
  * `scorerConfigurationDigest` is `digestArtifact` over the imported
  * configuration with its two `tea.judgeCalibration*` keys removed from
@@ -26,7 +24,8 @@
  *
  * `verifyRecordsCalibration` is the one verification; `check` and `run` both
  * call it, so they cannot disagree. A provenance defect is an authoring
- * defect (`EvaluatorLayerError`, exit 10). Low agreement is exit 11.
+ * defect (`EvaluatorLayerError`, exit 10). Low agreement is exit 11, and only
+ * `run` computes agreement.
  */
 
 'use strict';

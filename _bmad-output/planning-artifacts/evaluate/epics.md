@@ -23,7 +23,7 @@ inputDocuments:
 
 ## Overview
 
-This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and seventy-two stories, including H.1 (Stories 1.27 to 1.66 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
+This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and seventy-three stories, including H.1 (Stories 1.27 to 1.67 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
 
 Evaluate is fully stacked. The stack runs system under test, then the evaluation (the mechanism that runs the system, collects evidence and makes judgments), then the Behavioral Evaluation Contract (what behavior matters, what evidence counts, how success and failure resolve), then eval-quality (contract sanity, evidence support, and whether the evaluation catches defects). TeA owns every layer above eval-quality, including each concern eval-quality states it leaves to the caller, so an adopter can evaluate any target end to end. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3 onward, Epic 2 and H.1 to close the plan gap audit; the Traceability section maps each audit item to the story that closes it.
 
@@ -150,7 +150,7 @@ None. Evaluate has no graphical interface.
 ### Epic 1: The Evaluate authoring loop
 
 An adopter describes a target, answers Evaluate's questions, chooses or builds the evaluation layer and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches the seeded defect, with the gaps named and closed. The epic closes by running Evaluate on `bmad-testarch-evaluate` itself, then proving the guidance on two more target kinds, on seeded weaknesses and on an evaluation framework its guides never name.
-Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.66.
+Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.67.
 
 **FRs covered:** FR1 to FR10, FR13, FR14.
 
@@ -1237,7 +1237,7 @@ So that its sealed records count only after its rubric judgments meet the agreem
 **When** `tea-evaluate run` prepares to import trial records
 **Then** the harness supplies verifiable calibration judgments produced by the same scorer configuration and path that produced its trial scores, without sending `expectedLevel` to that scorer; the runtime validates the provenance and reports exact agreement and largest level distance per criterion in `runs/<invocationId>/judge-calibration.json`, a `test:evaluate-evaluators` integration case; accepting a report with a different scorer configuration or with labels in scorer input fails the case
 **And** agreement below `judgeCalibration.minimumAgreement` exits 11 before any imported trial record is copied or scored, a `test:evaluate-evaluators` case; removing the gate lets the case write a record
-**And** the calibration file digest and minimum agreement are bound to the imported `EvaluatorConfiguration` and scoring version, a `test:evaluate-evaluators` case; omitting either binding leaves the scoring version unchanged and fails the case
+**And** the calibration file digest and minimum agreement are bound to the imported `EvaluatorConfiguration` and scoring version, a `test:evaluate-evaluators` case; dropping either binding check admits a configuration without it, and the missing or wrong binding case exits 0
 **And** a `records` evaluator without a rubric still imports and scores through its existing path, while `check` refuses rubric records whose calibration provenance is absent or unverifiable, a `test:evaluate-check` case; bypassing the refusal accepts an uncalibrated rubric
 
 **Dependencies:** 1.17, 1.21.

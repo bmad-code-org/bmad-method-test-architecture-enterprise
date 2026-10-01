@@ -90,7 +90,8 @@ function calibrationObservation({ criterion, response, responseKind, operationId
 /** The operation id the contract's interaction plan gives the step a criterion reads, else `calibration`. */
 function calibrationOperationId(contract, criterion) {
   const stepId = /^\/interactions\/([^/]+)/.exec(criterion.evidence)?.[1];
-  return contract.interactionPlan?.find((step) => step.stepId === stepId)?.operationId ?? 'calibration';
+  const plan = Array.isArray(contract?.interactionPlan) ? contract.interactionPlan : [];
+  return plan.find((step) => step !== null && typeof step === 'object' && step.stepId === stepId)?.operationId ?? 'calibration';
 }
 
 function calibrationProblems(evaluation, contract, calibration, engine) {

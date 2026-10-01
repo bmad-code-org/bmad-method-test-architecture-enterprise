@@ -2426,6 +2426,52 @@ const EVALUATOR_CASES = [
     plant: (folder) => plantRecordsRubric(folder, options),
     expect: (output) => says.map((text) => [output.includes(text), `the finding does not say ${JSON.stringify(text)}`]),
   })),
+  ...[
+    ['a non-array interactionPlan', () => ({})],
+    ['an interactionPlan with a null step', (plan) => [null, ...plan]],
+  ].map(([what, shape]) => ({
+    name: `a records evaluator with a rubric and ${what} in the contract`,
+    file: 'contract.json',
+    rule: 'engine-schema',
+    plant: async (folder) => {
+      await plantRecordsRubric(folder);
+      editJson(folder, 'contract.json', (value) => (value.interactionPlan = shape(value.interactionPlan)));
+    },
+    expect: (output) => [
+      [!output.includes('TypeError'), 'check crashed with a raw TypeError instead of reporting the contract'],
+      [!output.includes('Cannot read properties'), 'check crashed on the contract shape'],
+    ],
+  })),
+  ...[
+    ['calibration-judgments.json', ['harness-records/calibration-judgments.json is not a regular file']],
+    ['evaluator-configuration.json', ['harness-records/evaluator-configuration.json cannot be read as JSON', 'it is not a regular file']],
+  ].map(([name, says]) => ({
+    name: `a records evaluator with a rubric and ${name} reached through a link`,
+    file: `harness-records/${name}`,
+    rule: 'judge-calibration',
+    plant: async (folder) => {
+      await plantRecordsRubric(folder);
+      // The link points at a valid copy, so only the link itself can be what check refuses.
+      const file = path.join(folder, 'harness-records', name);
+      const copy = path.join(folder, `linked-${name}`);
+      fs.copyFileSync(file, copy);
+      fs.rmSync(file);
+      fs.symlinkSync(copy, file);
+    },
+    expect: (output) => says.map((text) => [output.includes(text), `the finding does not say ${JSON.stringify(text)}`]),
+  })),
+  {
+    name: 'a records evaluator with a rubric and judgments carrying a top-level label',
+    file: 'harness-records/calibration-judgments.json',
+    rule: 'judge-calibration',
+    plant: (folder) => plantRecordsRubric(folder, { judgments: (value) => (value.expectedLevel = 1) }),
+    expect: (output) => [
+      [
+        output.includes('harness-records/calibration-judgments.json has an unknown field "expectedLevel"'),
+        'the finding does not name the field',
+      ],
+    ],
+  },
   {
     name: 'a sealed-brief agent with no evaluator model in the evaluator conditions',
     file: 'policy/evaluator-conditions.json',

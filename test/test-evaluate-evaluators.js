@@ -2782,9 +2782,7 @@ function checkImportRefused(project, what, exitCode, says) {
   return ran;
 }
 
-/** The first calibrated records run's configuration digest, scoring version and bindings, which the scoring-version case compares the variants with. */
-let calibratedBase = null;
-
+/** What the scoring-version case compares across calibrated records runs: the configuration digest, the scoring version and the two bindings. */
 function scoredCalibration(runDirectory, evidence) {
   const configuration = readJson(path.join(runDirectory, 'evaluator-configuration.json'));
   return {
@@ -2814,7 +2812,10 @@ async function checkImportedRubricCalibration() {
   check(ran.status === 0, `a records run over verified calibration judgments exited ${ran.status}; expected 0\n${ran.output}`);
   const runDirectory = runDirectoryOf(project.folder);
   if (ran.status !== 0 || runDirectory === null || runDirectory === project.harnessRun) return;
-  const report = readJson(path.join(runDirectory, 'judge-calibration.json'));
+  const reportFile = path.join(runDirectory, 'judge-calibration.json');
+  check(fs.existsSync(reportFile), 'a calibrated records run wrote no judge-calibration.json');
+  if (!fs.existsSync(reportFile)) return;
+  const report = readJson(reportFile);
   check(
     report.minimumAgreement === 1 &&
       report.criteria.length === 1 &&
@@ -2837,7 +2838,6 @@ async function checkImportedRubricCalibration() {
     }
   }
   const { evidence } = scoreRun(project, 'a calibrated records run');
-  calibratedBase = scoredCalibration(runDirectory, evidence);
   checkVotes('a calibrated records run', evidence, 'P-001', 'passed-clean-control');
   checkVotes('a calibrated records run', evidence, 'P-002', 'caught');
 
@@ -2862,6 +2862,9 @@ async function checkImportedRubricCalibration() {
   restore();
   restore = editHarnessFile(project, JUDGMENTS_NAME, (value) => (value.items[0].expectedLevel = 1));
   checkImportRefused(project, 'a label beside the scorer input', 10, ['items[0] has an unknown field "expectedLevel"']);
+  restore();
+  restore = editHarnessFile(project, JUDGMENTS_NAME, (value) => (value.expectedLevel = 1));
+  checkImportRefused(project, 'a label beside the items', 10, [`records/${JUDGMENTS_NAME} has an unknown field "expectedLevel"`]);
   restore();
 
   // The configuration binds the labelled file and the minimum: absent or another value is refused.
@@ -2903,6 +2906,14 @@ async function checkImportedRubricCalibration() {
   checkImportRefused(project, 'no judgments file', 10, [`records/${JUDGMENTS_NAME} is not there`]);
   fs.writeFileSync(judgmentsFile, 'not json');
   checkImportRefused(project, 'judgments that are not JSON', 10, [`records/${JUDGMENTS_NAME} is not JSON`]);
+  // A link to a valid copy of the file is refused, as the records are: the judgments are read through no link.
+  fs.rmSync(judgmentsFile);
+  const linked = path.join(project.folder, 'linked-judgments.json');
+  fs.writeFileSync(linked, bytes);
+  fs.symlinkSync(linked, judgmentsFile);
+  checkImportRefused(project, 'judgments reached through a link', 10, [`records/${JUDGMENTS_NAME} is not a regular file`]);
+  fs.rmSync(judgmentsFile);
+  fs.rmSync(linked);
   fs.writeFileSync(judgmentsFile, bytes);
 
   // After every refusal the original bytes verify again.
@@ -2916,11 +2927,14 @@ function checkImportedCalibrationReferenceExample() {
   const [, example] = /the response `Response at level 1` is the observation `(\{.*?\})`\./s.exec(page) ?? [];
   check(example !== undefined, 'the reference has no worked scorer input for a stdout criterion');
   if (example === undefined) return;
+  const criterion = { evidence: '/interactions/judge-run/stdout' };
+  const contract = readJson(path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'mutation', 'evals', 'verdict', 'contract.json'));
   const derived = calibrationObservation({
-    criterion: { evidence: '/interactions/judge-run/stdout' },
+    criterion,
     response: 'Response at level 1',
-    operationId: 'calibration',
+    operationId: calibrationOperationId(contract, criterion),
   });
+  check(derived.operationId === 'judge-request', `the verdict contract's plan gives step judge-run the operation ${derived.operationId}`);
   check(
     canonical(JSON.parse(example)) === canonical(derived),
     `the reference's scorer input is ${example}; the runtime derives ${JSON.stringify(derived)}`,
@@ -2939,7 +2953,10 @@ async function checkImportedCalibrationBelowMinimum() {
   check(created.length === 1, `the run below the minimum left ${created.length} run directories; expected 1`);
   if (created.length !== 1) return;
   const directory = path.join(project.folder, 'runs', created[0]);
-  const report = readJson(path.join(directory, 'judge-calibration.json'));
+  const reportFile = path.join(directory, 'judge-calibration.json');
+  check(fs.existsSync(reportFile), 'the run below the minimum wrote no judge-calibration.json');
+  if (!fs.existsSync(reportFile)) return;
+  const report = readJson(reportFile);
   check(
     report.minimumAgreement === 0.9 &&
       report.criteria[0].agreement === 0.5 &&
@@ -2960,6 +2977,7 @@ async function checkImportedCalibrationBelowMinimum() {
 async function checkImportedCalibrationChangesScoringVersion() {
   // A changed labelled item and a changed minimum each give the harness another configuration, and score under another version.
   const variants = [
+    { label: 'base', edit: () => {} },
     {
       label: 'item',
       edit: (folder) =>
@@ -2974,9 +2992,7 @@ async function checkImportedCalibrationChangesScoringVersion() {
         editJson(path.join(folder, 'evaluation.json'), (evaluation) => (evaluation.judgeCalibration.minimumAgreement = 0.8)),
     },
   ];
-  check(calibratedBase !== null, 'the calibrated records case left no base run to compare the variants with');
-  if (calibratedBase === null) return;
-  const seen = [{ label: 'base', ...calibratedBase }];
+  const seen = [];
   for (const { label, edit } of variants) {
     const project = await harnessProject(`records-version-${label}`, { edit });
     if (project === null) return;
