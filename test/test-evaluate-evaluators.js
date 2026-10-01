@@ -119,7 +119,7 @@ const {
   setRecommendationOf,
   trialRecommendation,
 } = require('../cli/lib/evaluate/judgment-rows');
-const { scratchDirectories } = require('./lib/scratch-directories');
+const { removeDeadPrivateParents, scratchDirectories } = require('./lib/scratch-directories');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const EVALUATE = path.join(PROJECT_ROOT, 'cli', 'evaluate.js');
@@ -1678,6 +1678,27 @@ async function checkPrivateParent() {
       privateRootIn(open) === path.join(open, path.basename(PRIVATE_ROOT)) &&
         (fs.statSync(path.join(open, path.basename(PRIVATE_ROOT))).mode & 0o777) === 0o700,
       'a private root with an open mode was not closed to mode 700',
+    );
+    // The suites reap the parents killed runs left (a dead pid in the name) and never follow a planted link: the reaper holds
+    // the root to the production check before it lists it.
+    const dead = spawnSync(process.execPath, ['-e', '']).pid;
+    const rootName = path.basename(PRIVATE_ROOT);
+    const reapBase = scratch.make('reap-base');
+    const reapTarget = scratch.make('reap-target');
+    fs.mkdirSync(path.join(reapTarget, `run-${dead}-abcdef`));
+    fs.symlinkSync(reapTarget, path.join(reapBase, rootName));
+    removeDeadPrivateParents(reapBase);
+    check(
+      fs.existsSync(path.join(reapTarget, `run-${dead}-abcdef`)),
+      "the suites' reaper followed a planted link and removed what it found there",
+    );
+    fs.rmSync(path.join(reapBase, rootName));
+    fs.mkdirSync(path.join(reapBase, rootName), { mode: 0o700 });
+    for (const name of [`run-${dead}-abcdef`, `run-${process.pid}-abcdef`, 'other']) fs.mkdirSync(path.join(reapBase, rootName, name));
+    removeDeadPrivateParents(reapBase);
+    check(
+      JSON.stringify(fs.readdirSync(path.join(reapBase, rootName)).sort()) === JSON.stringify(['other', `run-${process.pid}-abcdef`]),
+      `the reaper left ${JSON.stringify(fs.readdirSync(path.join(reapBase, rootName)))}; expected the dead pid's parent removed and a live pid's and an unrelated entry kept`,
     );
   } finally {
     if (previous === undefined) delete process.env.TMPDIR;
@@ -3900,9 +3921,10 @@ async function checkCommandTrialDenial() {
 }
 
 /**
- * Every case in run order with the group it belongs to. CI runs the groups as three scripts (`--group=evaluators`,
- * `--group=agents` and `--group=records`) so no one runner carries the whole file's wall time; with no `--group` every
- * case runs.
+ * Every case in run order with the group it belongs to. CI runs the groups as four scripts (`--group=evaluators`,
+ * `--group=agents`, `--group=private`, the cases that run confined sealed-brief agents and signal-ended runs over the run's
+ * private directories (Story 1.58), and `--group=records`) so no one runner carries the whole file's wall time; with no
+ * `--group` every case runs.
  */
 const CASES = [
   { name: 'the units', body: checkUnits, group: 'evaluators' },
@@ -3911,8 +3933,8 @@ const CASES = [
   { name: 'the reference qualifies the sealed-brief agent', body: checkReferenceQualifiesSealedBriefAgent, group: 'evaluators' },
   { name: 'a denied command trial step', body: checkCommandTrialDenial, group: 'evaluators' },
   { name: 'the bridge', body: checkBridge, group: 'evaluators' },
-  { name: "the run's private parent", body: checkPrivateParent, group: 'evaluators' },
-  { name: "the bridge and the run's private directories withheld from a target", body: checkBridgePrivateDirectories, group: 'evaluators' },
+  { name: "the run's private parent", body: checkPrivateParent, group: 'private' },
+  { name: "the bridge and the run's private directories withheld from a target", body: checkBridgePrivateDirectories, group: 'private' },
   { name: 'the command evaluator row shapes', body: checkCommandRowShapes, group: 'evaluators' },
   { name: 'command and agent calibration disagreement', body: checkCalibrationDisagreementAcrossEvaluators, group: 'evaluators' },
   { name: 'calibration follows its evidence channel', body: checkCalibrationFollowsEvidenceChannel, group: 'evaluators' },
@@ -3926,8 +3948,8 @@ const CASES = [
   { name: 'the evaluator run in place', body: checkEvaluatorInPlace, group: 'agents' },
   { name: 'the evaluation layer confined', body: checkLayerWritesRefused, group: 'evaluators' },
   { name: 'the evaluation layer held to its bytes', body: checkEvaluatorLayerHeld, group: 'agents' },
-  { name: 'the scratch removal', body: checkScratchRemoval, group: 'evaluators' },
-  { name: 'a signal mid-trial', body: checkSignalMidTrial, group: 'evaluators' },
+  { name: 'the scratch removal', body: checkScratchRemoval, group: 'private' },
+  { name: 'a signal mid-trial', body: checkSignalMidTrial, group: 'private' },
   { name: 'an oracle two behaviors declare', body: checkSharedOracle, group: 'agents' },
   { name: 'the sealed-brief agent', body: checkSealedBriefAgent, group: 'agents' },
   { name: 'the sealed-brief agent qualified', body: checkEvaluatorQualification, group: 'agents' },

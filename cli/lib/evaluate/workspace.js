@@ -497,6 +497,14 @@ function privateRootIn(base) {
   } catch (error) {
     if (error.code !== 'EEXIST') return null;
   }
+  return heldPrivateRoot(root);
+}
+
+/**
+ * `root` when it is a real directory (no link) the user owns, its mode closed to 0700; `null` otherwise. It makes
+ * nothing, so a tool that only reads the root (a test suite reaping what killed runs left) shares the check.
+ */
+function heldPrivateRoot(root) {
   try {
     const stat = fs.lstatSync(root);
     if (!stat.isDirectory() || stat.isSymbolicLink()) return null;
@@ -1724,6 +1732,7 @@ module.exports = {
   makeReadOnly,
   makePrivateParent,
   makeScratchDirectory,
+  heldPrivateRoot,
   privateRootIn,
   realPathLoosely,
   releaseScratchDirectory,

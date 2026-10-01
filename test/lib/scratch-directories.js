@@ -16,6 +16,8 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
+const { heldPrivateRoot } = require('../../cli/lib/evaluate/workspace');
+
 /** Whether the process `pid` still runs. */
 function alive(pid) {
   try {
@@ -31,9 +33,12 @@ function alive(pid) {
  * run killed with SIGKILL leaves its parent until Story 1.54 reclaims it, and the root is shared by every run of the user, so
  * a suite reaps by the process id in the name and leaves a live run's parent alone.
  */
-function removeDeadPrivateParents() {
+function removeDeadPrivateParents(base = '/tmp') {
   if (process.platform === 'win32') return;
-  const root = path.join('/tmp', `tea-evaluate-p${process.getuid()}`);
+  // The root must be a real directory the user owns (the production check, `workspace.js` `heldPrivateRoot`): a link planted
+  // in a shared temp directory is never followed into its target.
+  const root = heldPrivateRoot(path.join(base, `tea-evaluate-p${process.getuid()}`));
+  if (root === null) return;
   let names = [];
   try {
     names = fs.readdirSync(root);
@@ -97,4 +102,4 @@ function scratchDirectories(prefix) {
   };
 }
 
-module.exports = { scratchDirectories };
+module.exports = { removeDeadPrivateParents, scratchDirectories };

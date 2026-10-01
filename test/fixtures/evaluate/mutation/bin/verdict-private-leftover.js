@@ -34,6 +34,8 @@ const later = announced.length > seen ? announced.at(-1) : null;
 const lines = later === null ? ['private-leftover: none'] : privateAttempts(later).map((line) => line.replace('private-', 'private-leftover-'));
 const port = Number(reportPort);
 if (Number.isInteger(port) && port > 0) {
-  const socket = net.connect(port, '127.0.0.1', () => socket.end(`${lines.join('\n')}\n`));
+  // The listener is in a test process that is blocked in `spawnSync` until the run ends and has not accepted yet, so this process
+  // does not wait for the peer to close: it ends once its line is written.
+  const socket = net.connect(port, '127.0.0.1', () => socket.end(`${lines.join('\n')}\n`, () => socket.destroy()));
   socket.on('error', () => {});
 }

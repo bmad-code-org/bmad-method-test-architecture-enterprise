@@ -1625,7 +1625,7 @@ So that no target can take the bridge's one admission or read an evaluator's or 
 **And** `docs/reference/tea-evaluate-cli.md`'s passage on the bridge token states the withholding; a case reading it under its exact heading fails while the old sentence remains.
 
 **Dependencies:** 1.31.
-**Gate:** `test:evaluate-evaluators`, `test:evaluate-run`, `npm test`.
+**Gate:** `test:evaluate-private` (the confined sealed-brief, signal and removal cases, split from `test:evaluate-evaluators`), `test:evaluate-evaluators`, `test:evaluate-confinement`, `test:evaluate-run`, `npm test`.
 
 ### Story 1.59: Let a confined agent target keep the state its CLI writes
 
