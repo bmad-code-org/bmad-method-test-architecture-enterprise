@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+// Declare the installed agentevals with agentevals-frameworks.json and installed-version.mjs (see references/evaluator.md).
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';

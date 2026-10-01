@@ -77,6 +77,10 @@
  *   reject                  answer rejected whatever the policy says
  *   touch                   answer as usual, then append a line to the file
  *                           VERDICT_TOUCH names, outside the workspace
+ *   bump                    answer as usual, then rewrite the package.json
+ *                           VERDICT_TOUCH names so its `version` is 9.9.9, as
+ *                           an installed dependency upgraded while the run
+ *                           went on (Story 1.44)
  *   plant                   answer as usual, then find the newest run
  *                           directory of the adopter's evaluation folder
  *                           (through the git directory the worktree shares)
@@ -238,6 +242,10 @@ if (text.includes('sabotage: adopter') && process.env.VERDICT_TOUCH) {
   fs.appendFileSync(process.env.VERDICT_TOUCH, 'written by the verdict stub outside its workspace\n');
 }
 if (act === 'touch' && process.env.VERDICT_TOUCH) fs.appendFileSync(process.env.VERDICT_TOUCH, `written by the verdict stub in ${workspaceDirectory}\n`);
+if (act === 'bump' && process.env.VERDICT_TOUCH) {
+  const manifest = JSON.parse(fs.readFileSync(process.env.VERDICT_TOUCH, 'utf8'));
+  fs.writeFileSync(process.env.VERDICT_TOUCH, `${JSON.stringify({ ...manifest, version: '9.9.9' }, null, 2)}\n`);
+}
 if (['plant', 'forge', 'link-trials', 'recreate-trials', 'move-trials'].includes(act)) {
   const common = spawnSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { encoding: 'utf8' }).stdout.trim();
   const runs = path.join(path.dirname(common), 'evals', 'verdict', 'runs');

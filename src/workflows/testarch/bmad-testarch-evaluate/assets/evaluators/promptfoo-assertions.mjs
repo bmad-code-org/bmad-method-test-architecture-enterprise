@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+// Declare the installed promptfoo with promptfoo-frameworks.json and installed-version.mjs (see references/evaluator.md).
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';

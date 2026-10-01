@@ -23,7 +23,7 @@ inputDocuments:
 
 ## Overview
 
-This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and eighty stories, including H.1 (Stories 1.27 to 1.70, 1.80, 1.90 to 1.92 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
+This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and eighty-three stories, including H.1 (Stories 1.27 to 1.73, 1.80, 1.90 to 1.92 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
 
 Evaluate is fully stacked. The stack runs system under test, then the evaluation (the mechanism that runs the system, collects evidence and makes judgments), then the Behavioral Evaluation Contract (what behavior matters, what evidence counts, how success and failure resolve), then eval-quality (contract sanity, evidence support, and whether the evaluation catches defects). TeA owns every layer above eval-quality, including each concern eval-quality states it leaves to the caller, so an adopter can evaluate any target end to end. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3 onward, Epic 2 and H.1 to close the plan gap audit; the Traceability section maps each audit item to the story that closes it.
 
@@ -150,7 +150,7 @@ None. Evaluate has no graphical interface.
 ### Epic 1: The Evaluate authoring loop
 
 An adopter describes a target, answers Evaluate's questions, chooses or builds the evaluation layer and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches the seeded defect, with the gaps named and closed. The epic closes by running Evaluate on `bmad-testarch-evaluate` itself, then proving the guidance on two more target kinds, on seeded weaknesses and on an evaluation framework its guides never name.
-Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.70, 1.80, 1.90 to 1.92.
+Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.73, 1.80, 1.90 to 1.92.
 
 **FRs covered:** FR1 to FR10, FR13, FR14.
 
@@ -236,22 +236,25 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 68    | 1.68  | 1.41                         |
 | 69    | 1.69  | 1.68                         |
 | 70    | 1.70  | 1.43                         |
-| 71    | 1.80  | 1.57                         |
-| 72    | 1.90  | 2.1                          |
-| 73    | 1.91  | 2.1                          |
-| 74    | 1.92  | 2.2                          |
-| 75    | 2.1   | 1.16, 1.26, 1.45             |
-| 76    | 2.2   | 2.1                          |
-| 77    | 2.3   | 2.2                          |
-| 78    | 2.4   | 2.3                          |
-| 79    | 2.5   | 2.4                          |
-| 80    | H.1   | 2.5                          |
+| 71    | 1.71  | 1.44                         |
+| 72    | 1.72  | 1.34, 1.44                   |
+| 73    | 1.73  | 1.44, 1.71                   |
+| 74    | 1.80  | 1.57                         |
+| 75    | 1.90  | 2.1                          |
+| 76    | 1.91  | 2.1                          |
+| 77    | 1.92  | 2.2                          |
+| 78    | 2.1   | 1.16, 1.26, 1.45             |
+| 79    | 2.2   | 2.1                          |
+| 80    | 2.3   | 2.2                          |
+| 81    | 2.4   | 2.3                          |
+| 82    | 2.5   | 2.4                          |
+| 83    | H.1   | 2.5                          |
 
 ### Parallel lanes (from 2026-10-01)
 
 The table above gives every story's dependencies. Since Story 1.40 merged, the stories not yet built run in three parallel lanes, each a serial relay: a story's coordinator hands off to the next story in its lane, and the lanes merge into `main` independently. A lane groups stories that share modules or a dependency chain, so two lanes rarely edit the same file. Stories keep their numbers and rows above; the lane gives the order to run them in. `sprint-status.yaml` carries the same lists under `parallel_lanes`.
 
-**Lane 1: run integrity, scoring and evaluators** (main checkout): 1.41, 1.68, 1.43, 1.44, 1.67, 1.66, 1.65, 1.64, 1.69, 1.70. Story 1.68 reads the files 1.41 changes, so it follows directly. Story 1.65 turns the single release report into a per-interface report and 1.64 adds call sites that 1.65 would otherwise rewrite, so 1.66, 1.65, 1.64 run in that order. Story 1.44 rewrites the `evaluate-learn` fixture's evaluator, which lane 3's 1.55 and 1.56 own, so those two wait for it. Story 1.69 reuses the module Story 1.68 builds and edits `run.js`, which 1.64 and 1.65 also edit, so it runs after them. Story 1.70 edits the promptfoo starter, fixture evaluator and guide section that Story 1.43 writes and no file the other lane 1 stories edit, so it joins the end.
+**Lane 1: run integrity, scoring and evaluators** (main checkout): 1.41, 1.68, 1.43, 1.44, 1.67, 1.66, 1.65, 1.64, 1.69, 1.70, 1.71, 1.72, 1.73. Story 1.68 reads the files 1.41 changes, so it follows directly. Story 1.65 turns the single release report into a per-interface report and 1.64 adds call sites that 1.65 would otherwise rewrite, so 1.66, 1.65, 1.64 run in that order. Story 1.44 rewrites the `evaluate-learn` fixture's evaluator, which lane 3's 1.55 and 1.56 own, so those two wait for it. Story 1.69 reuses the module Story 1.68 builds and edits `run.js`, which 1.64 and 1.65 also edit, so it runs after them. Story 1.70 edits the promptfoo starter, fixture evaluator and guide section that Story 1.43 writes and no file the other lane 1 stories edit, so it joins the end. Stories 1.71 to 1.73 were appended from Story 1.44's final review and sit last: 1.71 edits `command-evaluator.js`, `frameworks.js`, the starters and the evaluator guide that Story 1.44 writes, 1.72 edits `agent-adapters.js`, `evaluators.js`, `run.js` and `sealed-brief-agent.js` and so runs after the other `run.js` editors (1.64, 1.65, 1.69), and 1.73 extends the probe and declaration that 1.71 bounds, so it follows 1.71.
 
 **Lane 2: confinement and process lifecycle** (own worktree): 1.62, 1.57, 1.58, 1.59, 1.60, 1.63, 1.61, 1.52, 1.53, 1.54, 1.80. Story 1.62 goes first because it extracts the shared sandbox primitives the confinement stories build on. Story 1.60 may remove 1.63's premise, so 1.63 is re-read after it. Story 1.58 precedes 1.54, since both track the run's private scratch directories. Stories 1.52 to 1.54 touch the preflight and workspace modules the confinement stories also edit, so they run after them.
 
@@ -1357,6 +1360,8 @@ So that a package upgrade cannot silently reuse the old scoring configuration (C
 **And** the AgentEvals and promptfoo starter templates demonstrate the declaration and version observation, and `references/evaluator.md` teaches the same step for an unfamiliar framework without adding a framework import to `cli/`; `test:direction` and `test:evaluate-boundaries` hold framework neutrality
 **And** `test:evaluate-evaluators` and `test:evaluate-guidance`, both in `npm test`, use isolated installed-package fixtures to prove stale documentation, missing package, package upgrade and mid-run change behavior, with each named revert check recorded in completion notes.
 
+Amended 2026-10-01 in the Story 1.44 build. No eval-quality change: the observed versions travel in the caller-owned `decodingParameters["tea.evaluatorFrameworks"]`, a list of `{ package, version }` sorted by package, present on every `command` evaluator's configuration (an empty list for a dependency-free one) and absent from every other kind. The declaration is `evaluator/frameworks.json` (`schemaVersion` 1; per framework `package`, the exact `version` expected, and `probe` as `{ command, args }` where `command` is a tracked regular executable under `evaluator/`, so the probe's own bytes are in the tree digest). The probe prints exactly `{ "package", "version" }` and exits non-zero when the package is missing. It is launched through the evaluator's own launch path (`command-evaluator.js`: the base environment and `environmentKeys`, an empty private working directory, the run's confinement, `timeoutMs`), and the skill ships `installed-version.mjs` for Node packages. `check` reads the files, runs no probe, and cross-checks `evaluator/LEARNED.md`: its `## Framework and installed version` section must hold one backticked `package@version` per declared package, no other version of it and no package the declaration omits, and a nonempty declaration needs a `LEARNED.md`. `run` observes before calibration and the first trial, again before each launch of the evaluator and after each trial (calibration launches included), compares every read with the declaration, and exits 12 with no sealed record on a missing, different or changed package; `framework-versions.json` in the run directory keeps the declared and observed versions and a failed probe's output, and `run.json`'s `evaluator.frameworks` repeats the observed list. `score` and replay read the recorded `evaluator-configuration.json`, so a recorded run scores byte for byte after the package moves. Sealed-brief agents and the other kinds declare nothing here.
+
 **Dependencies:** 1.17, 1.23.
 **Gate:** skill gates, `npm test`, engine check.
 
@@ -1869,6 +1874,70 @@ So that code that throws, or that rewrites the output it grades, cannot appear a
 **And** `test:evaluate-promptfoo` and `test:evaluate-guidance`, both in `npm test`, exercise the fixture and rendered starter against an allow-listed pass and fail, a `javascript` crash, a code-file value, a `transform` and a model-graded type, and the completion notes record each revert check.
 
 **Dependencies:** 1.43.
+**Gate:** skill gates, `npm test`, engine check.
+
+### Story 1.71: Bound a framework version probe with its own timeout
+
+Added 2026-10-01 in Story 1.44's final review. Story 1.44's version probe runs through the evaluator's own launch path (`launchExecutable` in `cli/lib/evaluate/command-evaluator.js`), so it inherits `evaluator.timeoutMs`. A probe that hangs costs that whole timeout at every read: one at the start of the run, two per trial (before each launch and after each trial) and two per calibration launch. The probe prints a package identity and a version, so a bound far below an evaluator's timeout is enough for it.
+
+As an adopter whose evaluator declares framework dependencies,
+I want the version probe to carry its own short timeout,
+So that a hanging probe stops the run within a stated bound (CAP-13, AD-21).
+
+**Acceptance Criteria:**
+
+**Given** an `evaluator/frameworks.json` declaration, or the `evaluation.json` block that wires the evaluator (the build picks the place beside which the probe's other settings sit and records why)
+**When** it carries a probe timeout, `probeTimeoutMs`, or leaves it out
+**Then** an absent value takes a default of 10 seconds, a value above the hard maximum of 60 seconds, zero or a non-integer is refused by `check` with exit 10 under the `evaluator` rule, and the probe's effective timeout is the smaller of the probe timeout and `evaluator.timeoutMs`; a declaration written under Story 1.44 stays valid; accepting a value above the maximum makes the `test:evaluate-check` case fail
+**And** a probe that outlives the effective timeout (a stub probe that sleeps past it) is reported as an unreadable dependency: `run` exits 12 with no sealed trial record within that timeout plus a stated grace, and `framework-versions.json` records the timeout that applied; launching the probe under `evaluator.timeoutMs` again lets the hanging probe run past the bound, so the `test:evaluate-evaluators` case that times the exit fails
+**And** the bound holds at every read: a probe that hangs at the first read, at the recheck before a launch, at the recheck after a trial and at a calibration launch each exit 12 within the bound with no sealed record for the affected trial; reverting the dedicated timeout for any one of those reads makes its case exceed the bound
+**And** a healthy probe is unchanged: it runs under the same launch path, base environment and confinement as before, and a run with a declaration and no probe timeout records the same configuration digest as under Story 1.44
+**And** `references/evaluator.md` states the default, the maximum and the probe's total cost in a run (one read at the start, two per trial, two per calibration launch, so a hang costs one probe timeout because the run stops at the first unreadable read), the AgentEvals and promptfoo starters' declaration templates show the field, and `test:evaluate-guidance` fails when the default, the maximum or the cost statement is removed.
+
+**Dependencies:** 1.44.
+**Gate:** skill gates, `npm test`, engine check.
+
+### Story 1.72: Observe the sealed-brief agent evaluator's installed adapter version
+
+Added 2026-10-01 in Story 1.44's final review. Story 1.44 binds a `command` evaluator to the framework versions that executed. A `sealed-brief-agent` evaluator declares no framework, and the installed version of its agent CLI (the adapter in `cli/lib/agent-adapters.js`) appears in no provenance field; `LEARNED.md` may mention it and nothing checks it. An agent CLI upgrade changes the judging model's behavior under the same `EvaluatorConfiguration` digest, the gap Story 1.44 closes for command evaluators. The adapter is already named by `evaluation.json`, so the version needs no tracked declaration.
+
+As an adopter whose evaluator is a sealed-brief agent,
+I want each run bound to the agent CLI version that actually judged,
+So that an agent CLI upgrade cannot silently reuse the old scoring configuration (CAP-13, AD-21, AD-22).
+
+**Acceptance Criteria:**
+
+**Given** a `sealed-brief-agent` evaluator
+**When** `tea-evaluate run` prepares it
+**Then** `run` reads the installed adapter version through `cli/lib/agent-adapters.js`, the one file that knows how each agent CLI reports its version, and records it in `EvaluatorConfiguration.decodingParameters["tea.evaluatorAgentVersion"]` and in the run artifact (`run.json`'s `evaluator`); no other file names a vendor flag or output format, and a static `test:evaluate-evaluators` case fails when `run.js`, `evaluators.js` or `sealed-brief-agent.js` does; reverting the read leaves the key absent, so a direct configuration test that changes only the stub agent's reported version finds the digest unchanged and fails
+**And** an adapter version `run` cannot read (the CLI absent, a non-zero exit, output that holds no version, or a read that outlives its own bounded timeout, never `evaluator.timeoutMs`) exits 12 as evaluator infrastructure failure before qualification (Story 1.34), with no qualification attempt and no sealed trial record; removing the refusal lets qualification and trials run over an unobserved CLI, which the case catches
+**And** the run rechecks the version before each launch of the agent (qualification attempts included) and after each trial; a change exits 12 without sealing the affected trial's record and records no vote for an affected attempt; reverting the pre-launch recheck or the post-trial recheck lets a stub that changes its reported version mid-run judge under the earlier digest, one case each
+**And** an upgrade changes the configuration digest and the scoring version: two runs that differ only in the stub agent's reported version record different digests, and a direct configuration test with an unchanged wiring and a changed observed version proves the same; omitting the version from the configuration leaves both equal
+**And** `score` and replay read the recorded `evaluator-configuration.json` and launch no agent CLI, so a recorded run scores byte for byte after the CLI moves; reading the version again in `score` makes the case, which removes the stub, fail
+**And** the evaluator guide's sealed-brief section states that the run records the installed adapter version, that an upgrade changes the digest and calls for a fresh qualification and a `LEARNED.md` update, and `test:evaluate-guidance` fails when the statement is removed.
+
+**Dependencies:** 1.34, 1.44.
+**Gate:** skill gates, `npm test`, engine check.
+
+### Story 1.73: Bind the declared frameworks' install state, not only their versions
+
+Added 2026-10-01 in Story 1.44's final review. Story 1.44's probe observes one package's version. A plugin, a transitive package or a local patch inside an installed package changes behavior under the same observed version, so a run can judge differently under the same `tea.evaluatorFrameworks` list. A digest over the install state reads more of the disk than a version does, which is why the story follows Story 1.71's probe timeout.
+
+As an adopter whose evaluator relies on a framework with plugins, transitive packages or local patches,
+I want the run bound to the framework's install state as well as its version,
+So that a changed dependency under an unchanged version cannot reuse the old scoring configuration (CAP-13, AD-21).
+
+**Acceptance Criteria:**
+
+**Given** an `evaluator/frameworks.json` entry that names an install-state source, `installState` with a `source` of `lockfile` (the package's entry in the project's lockfile) or `tree` (the package's installed files, digested in sorted path order)
+**When** `check` reads the declaration and `run` observes the packages
+**Then** `check` refuses an unknown source or a malformed `installState` with exit 10 under the `evaluator` rule, and an entry without `installState` keeps Story 1.44's shape and records the same configuration digest as before; the probe reports an `installDigest` beside the package and version, and `run` exits 12 with no sealed trial record when a declared digest is missing or malformed in the probe's output; the declaration pins no digest, since the run records what it observed and a changed digest shows as a changed configuration digest; accepting an entry whose probe omits the digest makes the case fail
+**And** `run` records the observed `installDigest` beside the version in `decodingParameters["tea.evaluatorFrameworks"]`, in `framework-versions.json` and in `run.json`'s `evaluator.frameworks`; a direct configuration test that holds the evaluator tree and the version fixed and changes only the observed digest finds a different configuration digest and scoring version; omitting the digest from the configuration leaves them equal
+**And** a changed digest with an unchanged version is a changed dependency: between runs (a file patched inside the isolated fixture package, or its lockfile entry edited) the next run records a different configuration digest and scoring version, and mid-run (before a launch and after a trial) it exits 12 without sealing the affected trial's record; comparing versions alone at either recheck lets the patched package judge under the earlier digest, one case each
+**And** the shipped `installed-version.mjs` computes both sources for a Node package, and a `test:evaluate-evaluators` case that patches one file inside the fixture package leaves its version fixed and finds a different `tree` digest; a probe that reports the version alone fails that case
+**And** `references/evaluator.md` teaches when to declare `installState` (a framework with plugins or transitive packages that change judgments, a locally patched package, a dependency range that can resolve to different trees under one top-level version) and when the version alone suffices, and `test:evaluate-guidance` fails when either teaching or the two sources are removed.
+
+**Dependencies:** 1.44, 1.71.
 **Gate:** skill gates, `npm test`, engine check.
 
 ### Story 1.80: Bring a partial-clone project, its tags and a very large history into the withheld repository

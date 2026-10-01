@@ -3,7 +3,8 @@
 ## Framework and installed version
 
 - Framework and package:
-- Installed version and runtime:
+- Installed package and version: one backticked `<package>@<version>` for each package `evaluator/frameworks.json` declares
+- Runtime, in plain prose:
 - Licence and source:
 - Model and credentials needed:
 

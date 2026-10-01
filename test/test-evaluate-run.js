@@ -3701,6 +3701,10 @@ function useWrappedEvaluator(folder) {
     path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'evaluators', 'command', 'evaluator', 'mapping.json'),
     path.join(evaluator, 'mapping.json'),
   );
+  fs.cpSync(
+    path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'evaluators', 'command', 'evaluator', 'frameworks.json'),
+    path.join(evaluator, 'frameworks.json'),
+  );
   fs.writeFileSync(
     path.join(evaluator, 'judge.sh'),
     '#!/bin/sh\n# Waits a second, then runs the evaluator beside it.\nsleep 1\nexec node "$(dirname "$0")/impl.js"\n',

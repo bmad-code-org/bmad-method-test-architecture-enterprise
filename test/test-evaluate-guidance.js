@@ -17,6 +17,7 @@ const AjvModule = require('ajv/dist/2020');
 const YAML = require('yaml');
 const { ENGINE_CLI_ENV, engineCliPath, engineSchemaPath, loadEngine } = require('../cli/lib/evaluate/engine');
 const { calibrationProblems } = require('../cli/lib/evaluate/calibration');
+const { declarationProblems } = require('../cli/lib/evaluate/frameworks');
 
 const Ajv = AjvModule.default ?? AjvModule;
 
@@ -1432,6 +1433,22 @@ function checkFrameworkTemplate(template, fixtureName, evaluationName, executabl
       );
       fs.writeFileSync(assertionsFile, YAML.stringify(assertions));
     }
+    // The framework's declaration, its probe and the learned record, rendered from the skill's assets as an adopter copies them.
+    const packageName = template === 'agentevals-trajectory.mjs' ? 'agentevals' : 'promptfoo';
+    const installed = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'node_modules', packageName, 'package.json'), 'utf8')).version;
+    const probe = path.join(evaluation, 'evaluator', 'installed-version.mjs');
+    fs.copyFileSync(ASSET(path.join('evaluators', 'installed-version.mjs')), probe);
+    fs.chmodSync(probe, 0o755);
+    const declarationFile = path.join(evaluation, 'evaluator', 'frameworks.json');
+    fs.copyFileSync(ASSET(path.join('evaluators', `${packageName}-frameworks.json`)), declarationFile);
+    const placeholder =
+      '- Installed package and version: one backticked `<package>@<version>` for each package `evaluator/frameworks.json` declares';
+    const learnedTemplate = fs.readFileSync(ASSET(path.join('evaluators', 'LEARNED.md')), 'utf8');
+    assert.ok(learnedTemplate.includes(placeholder), 'the LEARNED.md template lost its installed package and version line');
+    fs.writeFileSync(
+      path.join(evaluation, 'evaluator', 'LEARNED.md'),
+      learnedTemplate.replace(placeholder, `- Installed package and version: \`${packageName}@${installed}\``),
+    );
     for (const [bin, args, cwd] of [
       [process.execPath, [path.join(__dirname, '..', 'cli', 'evaluate.js'), 'digest', '--evaluation', evaluation]],
       ['git', ['init', '--quiet', '--initial-branch', 'main'], root],
@@ -1444,6 +1461,22 @@ function checkFrameworkTemplate(template, fixtureName, evaluationName, executabl
         return;
       }
     }
+    // The template's version is a placeholder: check refuses it until the adopter fills the installed version.
+    const unfilled = run(process.execPath, [path.join(__dirname, '..', 'cli', 'evaluate.js'), 'check', '--evaluation', evaluation]);
+    if (unfilled.status !== 10 || !unfilled.stdout.includes('frameworks[0].version must be the one exact version expected'))
+      failures.push(`${template} declaration template passed check unfilled (exit ${unfilled.status}): ${unfilled.stdout}`);
+    const filled = JSON.parse(fs.readFileSync(declarationFile, 'utf8'));
+    filled.frameworks[0].version = installed;
+    fs.writeFileSync(declarationFile, `${JSON.stringify(filled, null, 2)}\n`);
+    const filledDigest = run(process.execPath, [path.join(__dirname, '..', 'cli', 'evaluate.js'), 'digest', '--evaluation', evaluation]);
+    const staged = run('git', ['add', '--all'], root);
+    const committed = run(
+      'git',
+      ['-c', 'user.name=TeA test', '-c', 'user.email=tea-test@example.test', 'commit', '--quiet', '-m', 'declare the installed version'],
+      root,
+    );
+    if (filledDigest.status !== 0 || staged.status !== 0 || committed.status !== 0)
+      failures.push(`${template} declaration setup failed: ${filledDigest.stderr}${staged.stderr}${committed.stderr}`);
     for (const subcommand of ['check', 'preflight', 'run', 'score']) {
       const result = run(process.execPath, [path.join(__dirname, '..', 'cli', 'evaluate.js'), subcommand, '--evaluation', evaluation]);
       if (result.status !== 0) {
@@ -1457,6 +1490,16 @@ function checkFrameworkTemplate(template, fixtureName, evaluationName, executabl
       .filter((name) => name !== '.gitignore' && name !== '.workspace-journal')
       .sort()
       .at(-1);
+    // The run observed the installed version through the rendered probe and bound it to the evaluator configuration.
+    const observed = JSON.parse(fs.readFileSync(path.join(runs, latest, 'framework-versions.json'), 'utf8'));
+    const configured = JSON.parse(fs.readFileSync(path.join(runs, latest, 'evaluator-configuration.json'), 'utf8'));
+    if (
+      observed.frameworks?.[0]?.observed?.package !== packageName ||
+      observed.frameworks[0].observed.version !== installed ||
+      JSON.stringify(configured.decodingParameters['tea.evaluatorFrameworks']) !==
+        JSON.stringify([{ package: packageName, version: installed }])
+    )
+      failures.push(`${template} run did not record the installed ${packageName} ${installed}: ${JSON.stringify(observed)}`);
     const scores = path.join(runs, latest, 'scores');
     const score = fs.readdirSync(scores).sort().at(-1);
     for (const [probeId, expected] of [
@@ -1771,6 +1814,7 @@ function checkPromptfooFailureBoundary(run, selected) {
 }
 
 const FAILURE_BOUNDARY = '## Separate ungraded framework errors from graded target failures';
+const FRAMEWORK_VERSIONS = '## Declare the installed framework versions';
 
 function checkEvaluatorGuidance(guide, failures) {
   for (const heading of [
@@ -1781,6 +1825,7 @@ function checkEvaluatorGuidance(guide, failures) {
     '## Selection rubric',
     '## Framework landscape',
     FAILURE_BOUNDARY,
+    FRAMEWORK_VERSIONS,
     '## Learn an unfamiliar framework',
     '## Vendor rule',
   ])
@@ -1912,11 +1957,49 @@ function checkEvaluatorGuidance(guide, failures) {
     gradedExamples[0].results?.some((result) => result.gradingResult?.pass !== false)
   )
     failures.push(`evaluator.md ${FAILURE_BOUNDARY} examples no longer separate the ungraded row from the graded failure`);
+  const versions = headingBody(guide, FRAMEWORK_VERSIONS);
+  for (const marker of [
+    '`evaluator/frameworks.json`',
+    'outside that tree',
+    'one exact version expected',
+    'version probe',
+    'exits non-zero when the package is not installed',
+    '`assets/evaluators/installed-version.mjs`',
+    '"frameworks": []',
+    "only the base environment and the evaluator's `environmentKeys`",
+    'node evaluator/installed-version.mjs <package>',
+    '`npm install --save-exact <package>@<version>`',
+    '`importlib.metadata.version`',
+    'exactly as `frameworks.json` declares it',
+    'letters, digits, `.`, `_`, `-`, `~` and an optional `@scope/`',
+    'The version starts with a digit, so a probe for an ecosystem that reports `v1.2.3` prints `1.2.3`.',
+    '`framework-versions.json` in the run directory keeps the declared and observed versions, and the output of any probe that failed.',
+    'every backticked `package@version` there is read as a record',
+    'before the first trial, before each launch of the evaluator and after each trial',
+    'missing, installed at a version other than the declared one, or changed during the run ends the run with exit 12 and seals no record for the affected trial',
+    '`framework-versions.json`',
+    'scoring version',
+    '`tea-evaluate check` runs no probe',
+    'a different version, a missing one or a package the declaration omits is a finding',
+    '`package@version`',
+    'update `LEARNED.md` and `frameworks.json` together',
+  ])
+    requireText(versions, marker, `evaluator.md ${FRAMEWORK_VERSIONS}`, failures);
+  // The declaration the guide teaches meets the runtime's own rules, and the probe it names ships.
+  const declarationExamples = taggedExamples(versions, 'frameworks');
+  if (declarationExamples.length === 1) {
+    const problems = declarationProblems(declarationExamples[0]);
+    if (problems.length > 0 || declarationExamples[0].frameworks.length !== 1)
+      failures.push(`evaluator.md ${FRAMEWORK_VERSIONS} example is not a valid declaration: ${problems.join('; ')}`);
+    const [probe] = declarationExamples[0].frameworks.map((entry) => entry.probe);
+    if (probe?.command !== 'evaluator/installed-version.mjs' || !fs.existsSync(ASSET(path.join('evaluators', 'installed-version.mjs'))))
+      failures.push(`evaluator.md ${FRAMEWORK_VERSIONS} example names a probe the assets do not ship`);
+  } else failures.push(`evaluator.md ${FRAMEWORK_VERSIONS} needs one frameworks example`);
   const learning = headingBody(guide, '## Learn an unfamiliar framework');
   for (const [index, markers] of [
     ['primary sources only', 'documentation', 'repository', 'API reference', 'examples', 'changelog', 'secondary summary'],
     ['takes inputs', 'judges', 'returns results', 'model', 'credentials'],
-    ['Install the version the adopter uses', 'installed version'],
+    ['Install the version the adopter uses', 'installed version', 'evaluator/frameworks.json', 'version probe'],
     [
       'Execute a minimal example',
       'known pass',
@@ -1927,14 +2010,22 @@ function checkEvaluatorGuidance(guide, failures) {
       'framework cannot grade',
       'a thrown assertion may arrive as an ordinary failing grade',
     ],
-    ['evaluator/LEARNED.md', 'primary source', 'contradictions'],
+    ['evaluator/LEARNED.md', 'primary source', 'contradictions', '`package@version`'],
     ['evaluator/mapping.json', 'judgment', 'passed-clean-control', 'caught', 'exit non-zero on a result the framework did not grade'],
   ].entries()) {
     const step = learning.match(new RegExp(`^${index + 1}\\. (.+)$`, 'm'))?.[1] ?? '';
     for (const marker of markers) requireText(step, marker, `evaluator.md learning step ${index + 1}`, failures);
   }
   const vendor = headingBody(guide, '## Vendor rule');
-  for (const marker of ['framework', 'judge model', 'fixed conditions', 'system under test', "adopter's use"])
+  for (const marker of [
+    'framework',
+    'judge model',
+    'fixed conditions',
+    'system under test',
+    "adopter's use",
+    '`evaluator/frameworks.json`',
+    'exit 12 on a package that differs',
+  ])
     requireText(vendor, marker, 'evaluator.md Vendor rule', failures);
 
   const learned = fs.readFileSync(ASSET(path.join('evaluators', 'LEARNED.md')), 'utf8');
@@ -1947,13 +2038,58 @@ function checkEvaluatorGuidance(guide, failures) {
     '## Mapping and pipeline result',
   ])
     requireHeading(learned, heading, 'assets/evaluators/LEARNED.md', failures);
-  for (const template of ['command-evaluator.mjs', 'mapping.json', 'agentevals-trajectory.mjs', 'promptfoo-assertions.mjs']) {
+  requireText(learned, 'Installed package and version', 'assets/evaluators/LEARNED.md', failures);
+  requireText(learned, '`<package>@<version>`', 'assets/evaluators/LEARNED.md', failures);
+  for (const template of [
+    'command-evaluator.mjs',
+    'mapping.json',
+    'frameworks.json',
+    'agentevals-trajectory.mjs',
+    'promptfoo-assertions.mjs',
+    'installed-version.mjs',
+    'agentevals-frameworks.json',
+    'promptfoo-frameworks.json',
+  ]) {
     const file = ASSET(path.join('evaluators', template));
     if (!fs.existsSync(file) || fs.readFileSync(file, 'utf8').trim().length === 0)
       failures.push(`assets/evaluators/${template} is missing or empty`);
     else if (template.endsWith('.mjs') && (fs.statSync(file).mode & 0o111) === 0)
       failures.push(`assets/evaluators/${template} is not executable`);
   }
+  // The empty declaration is valid as it ships; a framework's template is valid once its version is filled and not before.
+  const shipped = (name) => JSON.parse(fs.readFileSync(ASSET(path.join('evaluators', name)), 'utf8'));
+  if (declarationProblems(shipped('frameworks.json')).length > 0 || shipped('frameworks.json').frameworks.length > 0)
+    failures.push('assets/evaluators/frameworks.json is not the valid empty declaration');
+  for (const [name, packageName] of [
+    ['agentevals-frameworks.json', 'agentevals'],
+    ['promptfoo-frameworks.json', 'promptfoo'],
+  ]) {
+    const declaration = shipped(name);
+    const filled = structuredClone(declaration);
+    for (const entry of filled.frameworks) entry.version = '1.2.3';
+    if (
+      declaration.frameworks.length !== 1 ||
+      declaration.frameworks[0].package !== packageName ||
+      declaration.frameworks[0].probe.command !== 'evaluator/installed-version.mjs' ||
+      declaration.frameworks[0].probe.args.join(',') !== packageName ||
+      declarationProblems(declaration).length === 0 ||
+      declarationProblems(filled).length > 0
+    )
+      failures.push(`assets/evaluators/${name} does not declare ${packageName} through the shipped probe with a version to fill`);
+  }
+  // Each starter's header says where its declaration and probe come from.
+  for (const [template, header] of [
+    ['command-evaluator.mjs', 'Keep evaluator/frameworks.json beside it: an empty list while judge() uses no installed framework'],
+    ['agentevals-trajectory.mjs', 'Declare the installed agentevals with agentevals-frameworks.json and installed-version.mjs'],
+    ['promptfoo-assertions.mjs', 'Declare the installed promptfoo with promptfoo-frameworks.json and installed-version.mjs'],
+    ['installed-version.mjs', 'Version probe for a Node framework dependency'],
+  ])
+    requireText(
+      fs.readFileSync(ASSET(path.join('evaluators', template)), 'utf8').split('\nimport ')[0],
+      header,
+      `assets/evaluators/${template} header`,
+      failures,
+    );
   const mapping = JSON.parse(fs.readFileSync(ASSET(path.join('evaluators', 'mapping.json')), 'utf8'));
   const validateMapping = new Ajv({ strict: false, allErrors: true }).compile(
     JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'cli', 'lib', 'evaluate', 'schemas', 'evaluator-mapping.schema.json'), 'utf8')),
@@ -2402,6 +2538,14 @@ function checkGapsGuidance(guide, engine, failures) {
   requireText(guide, '`ci --tier pr` exits 13 on drift', 'gaps.md exit 13', failures);
   requireText(guide, 'run `tea-evaluate compare --accept` once the adopter confirms', 'gaps.md exit 13 accept', failures);
   requireText(guide, 'a framework result with no grade; see `evaluator.md`', 'gaps.md exit 12', failures);
+  // Story 1.44: an installed framework that is missing, different or changed is the same class, with its two recoveries.
+  requireText(
+    guide,
+    'an installed framework that is missing, differs from `evaluator/frameworks.json` or changes during the run',
+    'gaps.md exit 12',
+    failures,
+  );
+  requireText(guide, 'update `frameworks.json` and `LEARNED.md` together after a deliberate upgrade', 'gaps.md exit 12', failures);
   for (const marker of [
     'score` exit 3',
     'For a development `score` exit 3',
@@ -2762,6 +2906,52 @@ async function main() {
         (text, found) => checkEvaluatorGuidance(text, found),
         (text) => text.replace('evaluator infrastructure failure (exit 12)', 'a finding'),
       ],
+      [
+        'evaluator framework versions heading removal',
+        'evaluator',
+        (text, found) => checkEvaluatorGuidance(text, found),
+        (text) => text.replace(FRAMEWORK_VERSIONS, '## Framework versions'),
+      ],
+      [
+        'evaluator framework versions example removal',
+        'evaluator',
+        (text, found) => checkEvaluatorGuidance(text, found),
+        (text) => text.replace('<!-- example:frameworks -->', ''),
+      ],
+      [
+        'evaluator framework versions invalid example',
+        'evaluator',
+        (text, found) => checkEvaluatorGuidance(text, found),
+        (text) => text.replace('"version": "1.2.3"', '"version": "^1.2.3"'),
+      ],
+      [
+        'evaluator framework versions exit removal',
+        'evaluator',
+        (text, found) => checkEvaluatorGuidance(text, found),
+        (text) => text.replace('ends the run with exit 12 and seals no record for the affected trial', 'is noted'),
+      ],
+      [
+        'evaluator framework versions LEARNED agreement removal',
+        'evaluator',
+        (text, found) => checkEvaluatorGuidance(text, found),
+        (text) => text.replace('a different version, a missing one or a package the declaration omits is a finding', 'nothing is read'),
+      ],
+      [
+        'evaluator framework versions digit-start sentence removal',
+        'evaluator',
+        (text, found) => checkEvaluatorGuidance(text, found),
+        (text) => text.replace('The version starts with a digit, so a probe for an ecosystem that reports `v1.2.3` prints `1.2.3`.', ''),
+      ],
+      [
+        'evaluator framework versions artifact wording reverted',
+        'evaluator',
+        (text, found) => checkEvaluatorGuidance(text, found),
+        (text) =>
+          text.replace(
+            'keeps the declared and observed versions, and the output of any probe that failed',
+            'keeps what each probe printed',
+          ),
+      ],
       ['gaps loop removal', 'gaps', (text, found) => checkGapsGuidance(text, engine, found), (text) => text.replace(/^4\. Rerun.*\n/m, '')],
     ];
     for (const [label, file, check, corrupt] of negativeCases) {
@@ -2777,6 +2967,26 @@ async function main() {
     }
   } catch (error) {
     failures.push(`guidance negative checks: ${error.stack}`);
+  }
+  // The fixtures carry the shipped probe byte for byte, so what they prove is what adopters copy.
+  const shippedProbe = fs.readFileSync(ASSET(path.join('evaluators', 'installed-version.mjs')));
+  for (const fixture of ['evaluate-learn/evaluation', 'evaluate-promptfoo/evals/summary', 'evaluate-tool-use-agent/evals/tool-use']) {
+    const copy = path.join(__dirname, 'fixtures', fixture, 'evaluator', 'installed-version.mjs');
+    if (!fs.existsSync(copy) || !fs.readFileSync(copy).equals(shippedProbe))
+      failures.push(`${fixture} does not carry the shipped installed-version.mjs byte for byte`);
+  }
+  // A fixture declares the version its package had when its record was written; the floating dependency moving is a deliberate upgrade.
+  for (const [fixture, packageName] of [
+    ['evaluate-learn/evaluation', 'autoevals'],
+    ['evaluate-promptfoo/evals/summary', 'promptfoo'],
+    ['evaluate-tool-use-agent/evals/tool-use', 'agentevals'],
+  ]) {
+    const declared = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', fixture, 'evaluator', 'frameworks.json'), 'utf8'));
+    const installed = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'node_modules', packageName, 'package.json'), 'utf8')).version;
+    if (declared.frameworks[0]?.package !== packageName || declared.frameworks[0].version !== installed)
+      failures.push(
+        `${fixture} declares ${packageName}@${declared.frameworks[0]?.version}, and ${installed} is installed; a deliberate upgrade updates the fixture's evaluator/frameworks.json and evaluator/LEARNED.md together`,
+      );
   }
   checkFrameworkTemplate('agentevals-trajectory.mjs', 'evaluate-tool-use-agent', 'tool-use', 'trajectory.mjs', failures);
   checkFrameworkTemplate('promptfoo-assertions.mjs', 'evaluate-promptfoo', 'summary', 'promptfoo.mjs', failures);
