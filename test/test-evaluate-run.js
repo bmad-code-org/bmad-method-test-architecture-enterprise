@@ -1384,6 +1384,24 @@ async function checkStrengthAggregate() {
   for (const name of ['strength-aggregate.json', 'strength-floors.json', 'aggregate-strength.json'])
     check(!fs.existsSync(path.join(absent.scoreDirectory, name)), `a score with a probe lacking evidence left ${name}`);
 
+  // No strengthFloor in evaluation.json: the aggregate is absent with the reason, no floors copy or aggregate call is made, and the score exits as the probes alone.
+  editJson(path.join(folder, 'evaluation.json'), (evaluation) => delete evaluation.strengthFloor);
+  const undeclaredFloor = score(raced(''), 2);
+  floors({ defect: 0.75 });
+  check(
+    undeclaredFloor.summary?.status === 'absent' &&
+      /strengthFloor/.test(undeclaredFloor.summary.reason ?? '') &&
+      undeclaredFloor.summary.floors === null &&
+      undeclaredFloor.summary.aggregate === null,
+    `a score with no strengthFloor is recorded as ${JSON.stringify(undeclaredFloor.summary)}`,
+  );
+  for (const name of ['strength-aggregate.json', 'strength-floors.json', 'aggregate-strength.json'])
+    check(!fs.existsSync(path.join(undeclaredFloor.scoreDirectory, name)), `a score with no strengthFloor left ${name}`);
+  check(
+    loggedCalls(aggregateLog).length === 0,
+    `a score with no strengthFloor made ${loggedCalls(aggregateLog).length} aggregate call(s); expected 0`,
+  );
+
   // The engine refuses the set: exit 5 for a floor outside the classes it admits, exit 4 for an evidence file that
   // contradicts itself. Nothing is copied and the exit joins the most severe combination (5 and 4 beat the FAIL's 2).
   floors({ canary: 1 });
@@ -1410,6 +1428,9 @@ async function checkStrengthAggregate() {
     ['forge-digest', /records evidence digest sha256:0{64} for P-001/, 'mismatch'],
     ['forge-probes', /covers probes .*, and this invocation scored/, 'mismatch'],
     ['forge-engine', /names engine 0\.0\.1, not the .* run\.json recorded/, 'mismatch'],
+    ['forge-floor', /records floor 0\.5 for defect, and evaluation\.json declares 0\.75/, 'mismatch'],
+    ['swap-floors', /records floor 0\.1 for defect, and evaluation\.json declares 0\.75/, 'mismatch'],
+    ['tamper-floors', /strength-floors\.json no longer holds the bytes the runtime wrote/, 'failed'],
     ['forge-schema', /fails its published schema/, 'mismatch'],
     ['garbage', /is not JSON/, 'mismatch'],
     ['stage-link', /link or a non-file entry/, 'failed'],
@@ -1419,11 +1440,26 @@ async function checkStrengthAggregate() {
       forged.summary?.status === status &&
         pattern.test(forged.summary.reason ?? '') &&
         forged.summary.aggregate === null &&
+        forged.summary.floors !== null &&
+        forged.summary.call !== null &&
         !fs.existsSync(path.join(forged.scoreDirectory, 'strength-aggregate.json')) &&
         /strength aggregate: /.test(forged.result.output),
       `${mode}: the summary records ${JSON.stringify(forged.summary)}`,
     );
   }
+  // A file planted where the aggregate is copied is refused by the held writer: the summary keeps the call and the floors that were written.
+  const sentinel = path.join(tempDir('strength-plant'), 'sentinel.txt');
+  fs.writeFileSync(sentinel, 'outside\n');
+  const planted = score(raced('plant-aggregate', { TEA_RACE_SENTINEL: sentinel }), 12);
+  check(
+    planted.summary?.status === 'failed' &&
+      /strength-aggregate\.json, which the runtime did not write/.test(planted.summary.reason ?? '') &&
+      planted.summary.call !== null &&
+      planted.summary.floors !== null &&
+      planted.summary.aggregate === null &&
+      fs.readFileSync(sentinel, 'utf8') === 'outside\n',
+    `a planted aggregate is recorded as ${JSON.stringify(planted.summary)}`,
+  );
   check(
     fs.readdirSync(env.TMPDIR).length === 0,
     `the aggregate runs left ${JSON.stringify(fs.readdirSync(env.TMPDIR))} in the run's temp directory`,
@@ -2734,6 +2770,7 @@ function checkUnverifiedEvidence() {
     ['forge-corpus', [], /names corpus sha256:0{64}/],
     ['forge-schema', [], /fails its published schema/],
     ['garbage', [], /is not JSON/],
+    ['duplicate-key', [], /is not canonical JSON the engine reads/],
     ['forge-probe', ['P-001'], /holds no outcome for P-002/],
     ['stage-link', [], /is a link or a non-file entry/],
   ];

@@ -2032,8 +2032,15 @@ function checkRunGuidance(guide, failures) {
     'A class with `rate: null`',
     '`comparable: false`',
     '`not-comparable`',
+    'which must be `copied`',
+    'reads `undeclared` with basis `no-floor-declared`',
+    'the readings that follow apply under a declared floor',
+    'under a declared floor reads `does-not-meet` with basis `not-comparable`',
+    'None of the three is a pass',
     '`absent`, `refused`, `mismatch` or `failed`',
     'no aggregate stands, so the guide makes no class-wide claim',
+    'A `does-not-meet` class gets a development repair',
+    "the adopter's declined reason on record, before held-out",
   ])
     requireText(strength, marker, 'run.md run-wide strength reading', failures);
   const packages = taggedExamples(guide, 'package');
@@ -2100,6 +2107,8 @@ function checkGapsGuidance(guide, engine, failures) {
         '`no-exercised-probe`',
         '`not-comparable`',
         '`unexercised-probe`',
+        'A class with no declared floor reads `undeclared` with basis `no-floor-declared`',
+        'Under a declared floor the first match wins, in this order',
         'None of these is a pass',
         'no aggregate stands and no class-wide claim does either',
       ],

@@ -7,7 +7,7 @@ const { readRegularJson, strengthAggregatePointer } = require('./interpret');
 
 /**
  * Writes `partitions.json` and `gap-view.json` into the run directory through its held writer (`run-directory.js`).
- * `partitions.json` carries the pointer to the run's strength aggregate, never its contents (Story 1.45).
+ * `partitions.json` carries the pointer to the run's strength aggregate (Story 1.45); the counts, rates and decisions stay in `strength-aggregate.json`.
  * `evidence` maps each scored probe to the parsed evidence artifact the writer read back from the score directory
  * (`score.js`); a probe with none has `outcome: null`.
  */
