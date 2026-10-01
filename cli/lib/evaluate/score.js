@@ -112,6 +112,9 @@ const INFRASTRUCTURE = 12;
 const WIRING = 64;
 const AUTHORING = 10;
 
+/** Every diagnostic line of the eval-quality CLI starts with this. */
+const DIAGNOSTIC_PREFIX = 'eval-quality: ';
+
 const TRIAL_SETS_SCHEMA = path.join(__dirname, 'schemas', 'trial-sets.schema.json');
 
 /** The outcome of one `tea-evaluate score`. */
@@ -571,6 +574,7 @@ async function scoreProbe({ folder, runDirectory, set, index, held, validate, en
       );
     args.push('--evaluator-configuration', inRun(runDirectory, index.evaluatorConfiguration), '--out', produced);
     let exitCode = null;
+    let stderr = '';
     let failure = null;
     let stageFailed = false;
     try {
@@ -581,7 +585,7 @@ async function scoreProbe({ folder, runDirectory, set, index, held, validate, en
         env,
         log,
       });
-      ({ exitCode } = result);
+      ({ exitCode, stderr } = result);
       log(`${set.probeId}: eval-quality score exited ${exitCode}`);
       // An Invalid result emits no artifact; its reasons are the stage's own stderr lines.
       for (const line of result.stderr.split('\n').filter((text) => text.startsWith('eval-quality: invalid:')))
@@ -599,7 +603,10 @@ async function scoreProbe({ folder, runDirectory, set, index, held, validate, en
       const problems = staged.bytes === null ? [] : await artifactProblems({ bytes: staged.bytes, set, index, validate });
       // A call that could not run, was killed or exited undocumented already fails the command and has no staged file to
       // compare; every other call is held to the inputs the check accepted.
-      const refusal = problems.length > 0 || (failure !== null && staged.bytes === null) ? null : await heldRefusal({ held, set, staged });
+      const refusal =
+        problems.length > 0 || (failure !== null && staged.bytes === null)
+          ? null
+          : await heldRefusal({ held, set, staged, exitCode, stderr });
       if (problems.length > 0) {
         stageFailed = true;
         failure = failure === null ? `${set.probeId}: the staged evidence artifact fails the copy check: ${problems[0]}` : failure;
@@ -639,23 +646,33 @@ async function scoreProbe({ folder, runDirectory, set, index, held, validate, en
 
 /**
  * Why a call's result is not the one the held inputs stand behind, or null (Story 1.68): an input changed or appeared
- * since the check (named first), or the staged artifact is not the byte-for-byte result of scoring the held bytes in
- * process (an absent staged file must match a result with no artifact). The comparison only refuses; it never decides.
+ * since the check (named first), or the call is not what the CLI does with the held bytes. That is the staged artifact
+ * (byte for byte; an absent file must match a result with no artifact, whatever the call exited), then the call's exit,
+ * then the `eval-quality: ` lines on its stderr that explain an Invalid result (AD-10 classifies an exit 3 from them),
+ * when the library gives them. The comparison only refuses; it never decides.
  */
-async function heldRefusal({ held, set, staged }) {
+async function heldRefusal({ held, set, staged, exitCode, stderr }) {
   const changed = held.changedSince();
   if (changed !== null) return `${changed.relative} ${changed.message}`;
-  const reproduced = await held.reproduce(set);
-  if (reproduced === null) {
-    return staged.bytes === null
-      ? null
-      : 'the staged evidence artifact is not the result of the verified inputs, which produce no artifact';
+  const expected = await held.reproduce(set);
+  if (expected.artifact === null) {
+    if (staged.bytes !== null) return 'the staged evidence artifact is not the result of the verified inputs, which produce no artifact';
+  } else if (staged.bytes === null) {
+    return 'the call staged no evidence artifact, and the verified inputs produce one';
+  } else if (!expected.artifact.equals(staged.bytes)) {
+    return 'the staged evidence artifact differs from the one the verified inputs produce (an in-process score of the held bytes)';
   }
-  // Whatever the call exited, one that staged nothing while the verified inputs produce an artifact read other bytes.
-  if (staged.bytes === null) return 'the call staged no evidence artifact, and the verified inputs produce one';
-  return reproduced.equals(staged.bytes)
-    ? null
-    : 'the staged evidence artifact differs from the one the verified inputs produce (an in-process score of the held bytes)';
+  // A call that could not run or was killed has no exit of its own to compare.
+  if (exitCode !== null && exitCode !== expected.exitCode) {
+    return `the call exited ${exitCode} where the verified inputs give ${expected.exitCode} (an in-process score of the held bytes)`;
+  }
+  if (expected.lines !== null && exitCode !== null) {
+    const printed = stderr.split('\n').filter((line) => line.startsWith(DIAGNOSTIC_PREFIX));
+    if (JSON.stringify(printed) !== JSON.stringify(expected.lines)) {
+      return "the call's eval-quality diagnostics differ from those the verified inputs give (an in-process score of the held bytes)";
+    }
+  }
+  return null;
 }
 
 /** The staged artifact's bytes (null when the call wrote none), read as a regular file without following a link. */

@@ -42,6 +42,13 @@
  * - `forge-outcomes`: the staged evidence artifact is replaced with a
  *   schema-valid one that keeps its corpus digest and its probe's outcome and
  *   flips what the outcome says.
+ * - `restore-and-unstage`, `restore-and-restage`: the input `TEA_RACE_KIND`
+ *   names is rewritten for the real call and put back, and then the staged
+ *   artifact is removed, or an earlier clean score's artifact takes its place
+ *   (`TEA_RACE_STASH_DIR`), so the artifact bytes agree with the held inputs
+ *   and only the call's exit does not.
+ * - `reformat-artifact`, `duplicate-key-artifact`: the staged artifact is the
+ *   same parsed value in other bytes (indented, or with a repeated last key).
  * - `stage-stashed`: after the real call the evidence artifact an earlier
  *   score kept for the probe (`TEA_RACE_STASH_DIR/<probe>/evidence-artifact.json`)
  *   is copied to `--out`, whether or not the call staged one.
@@ -92,6 +99,8 @@ const INPUTS = {
   ],
   contract: ['--contract', (input) => (input.contractId = 'rewritten-contract')],
   preflight: ['--preflight-verdict', (input) => (input.passed = false)],
+  // The inverse, for a run whose preflight verdict was sealed as failed.
+  'preflight-pass': ['--preflight-verdict', (input) => (input.passed = true)],
   policy: ['--policy', (input) => (input.catchThreshold = 0.6)],
   configuration: ['--evaluator-configuration', (input) => (input.evaluatorIdentity = 'rewritten evaluator')],
   probe: ['--probe', (input) => (input.probeClass = input.probeClass === 'zero-action' ? 'defect' : 'zero-action')],
@@ -99,7 +108,9 @@ const INPUTS = {
   // The first record becomes bytes that are no JSON, which the engine refuses with a fault and no artifact.
   unreadable: ['--record', null],
 };
-const attack = /^(rewrite|restore)-(.+)$/.exec(mode);
+// `restore-and-unstage` and `restore-and-restage` rewrite the input `TEA_RACE_KIND` names, put it back after the call, and
+// then remove the staged artifact or put an earlier one in its place.
+const attack = /^restore-and-(?:unstage|restage)$/.test(mode) ? ['', 'restore', process.env.TEA_RACE_KIND] : /^(rewrite|restore)-(.+)$/.exec(mode);
 const inputKind = attack !== null && Object.hasOwn(INPUTS, attack[2]) ? attack[2] : null;
 const attacking = process.env.TEA_RACE_PROBE === undefined || process.env.TEA_RACE_PROBE === probe;
 let original = null;
@@ -159,9 +170,18 @@ if (mode === 'swap-scores') {
 } else if (mode === 'plant-manifest' && attacking) {
   const planted = path.join(runDirectory, 'trial-sets', probe, 'isolation-manifest.json');
   if (!fs.existsSync(planted)) fs.writeFileSync(planted, '{"planted":true}\n');
-} else if (mode === 'stage-stashed' && attacking) {
+} else if (mode === 'restore-and-unstage' && attacking) {
+  fs.rmSync(out, { force: true });
+} else if ((mode === 'restore-and-restage' || mode === 'stage-stashed') && attacking) {
   // The artifact of an earlier clean score of the same probe takes the place of whatever this call staged.
   fs.copyFileSync(path.join(process.env.TEA_RACE_STASH_DIR, probe, 'evidence-artifact.json'), out);
+} else if (mode === 'reformat-artifact' && attacking) {
+  // The same value in other bytes: the copy check and a parsed comparison cannot tell it from the engine's own.
+  fs.writeFileSync(out, `${JSON.stringify(JSON.parse(fs.readFileSync(out, 'utf8')), null, 4)}\n`);
+} else if (mode === 'duplicate-key-artifact' && attacking) {
+  // The last duplicate wins when parsed, so the value is the same and the bytes are not.
+  const text = fs.readFileSync(out, 'utf8').trimEnd();
+  fs.writeFileSync(out, `${text.slice(0, -1)},"schemaVersion":${JSON.parse(text).schemaVersion}}\n`);
 } else if (mode === 'forge-outcomes' && attacking) {
   const artifact = JSON.parse(fs.readFileSync(out, 'utf8'));
   artifact.reducedProbeOutcomes[0].caught = !artifact.reducedProbeOutcomes[0].caught;

@@ -17,11 +17,12 @@
  *     first one that changed, stopped being a regular file or appeared (a
  *     manifest absent at the check and present afterwards counts).
  *   - `reproduce` scores the held bytes in process, the way the CLI scores a
- *     probe, and returns the artifact bytes the CLI should have staged (null
- *     when the held bytes yield no artifact). The caller compares them with the
- *     staged file and can only refuse a mismatch: the CLI still decides every
- *     enforced verdict, and this result never becomes an exit code, a verdict
- *     or an artifact (AD-6, amended 2026-10-01).
+ *     probe, and returns what the CLI should have done with them: the artifact
+ *     bytes it stages (null when none), the exit it takes and the diagnostic
+ *     lines it prints. The caller compares them with the call and can only
+ *     refuse a mismatch: the CLI still decides every enforced verdict, and this
+ *     result never becomes an exit code, a verdict or an artifact (AD-6,
+ *     amended 2026-10-01).
  *
  * The enumeration lives here once, so a later engine call routes through the
  * same hold.
@@ -31,6 +32,12 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+
+/** The exits `eval-quality score` takes outside a verdict: a structural failure, a runtime fault and a usage error. */
+const STRUCTURAL_EXIT = 4;
+const FAULT_EXIT = 5;
+const USAGE_EXIT = 64;
+const DIAGNOSTIC_PREFIX = 'eval-quality: ';
 
 /** Opening for a read never waits on a FIFO and never follows a link. */
 const READ_REGULAR = fs.constants.O_RDONLY | (fs.constants.O_NONBLOCK ?? 0) | (fs.constants.O_NOFOLLOW ?? 0);
@@ -187,21 +194,25 @@ class HeldInputs {
   }
 
   /**
-   * The artifact bytes the held inputs produce for one trial set, scored in
-   * process the way the CLI scores a probe (`eval-quality score` with these
-   * inputs and no private manifest or corpus root); null when they produce no
-   * artifact. The held bytes are the only source: nothing is read from the run
-   * directory.
+   * What `eval-quality score` does with the held inputs of one trial set,
+   * scored in process the way the CLI scores a probe (no private manifest, no
+   * corpus root): the artifact bytes it would stage (null when none), the exit
+   * it would take, and the `eval-quality: ` diagnostic lines its result would
+   * print (null when the library refused the inputs, whose rendering is the
+   * CLI's own). The held bytes are the only source: nothing is read from the
+   * run directory. The caller compares and refuses; none of this becomes a
+   * verdict, an exit code or an artifact of `score`.
    *
-   * @returns {Promise<Buffer | null>}
+   * @returns {Promise<{ artifact: Buffer | null, exitCode: number, lines: string[] | null }>}
    */
   async reproduce(set) {
     const records = set.records.map((relative) => this.json(relative));
     // The CLI refuses a private-storage manifest reference without a corpus root before it scores (a usage error, no artifact).
-    if (records.some((sealed) => sealed?.isolationManifestArtifact?.storage === 'private')) return null;
-    let result;
+    if (records.some((sealed) => sealed?.isolationManifestArtifact?.storage === 'private')) {
+      return { artifact: null, exitCode: USAGE_EXIT, lines: null };
+    }
     try {
-      result = await this.#engine.runScore({
+      const { artifact, ladder, qualification } = await this.#engine.runScore({
         record: records,
         manifest: this.exists(set.isolationManifest) ? this.json(set.isolationManifest) : null,
         configuration: this.json(this.index.evaluatorConfiguration),
@@ -214,11 +225,19 @@ class HeldInputs {
         port: undefined,
         signal: new AbortController().signal,
       });
-    } catch {
-      // The library refused the held inputs as the CLI does (a structural failure or a fault): no artifact.
-      return null;
+      const lines = qualification.failures.map(
+        (failure) => `${DIAGNOSTIC_PREFIX}${failure.code}: ${failure.artifactPath}: ${failure.detail}`,
+      );
+      if (ladder.verdict === null) lines.push(...ladder.basis.map((reason) => `${DIAGNOSTIC_PREFIX}invalid: ${reason}`));
+      return {
+        artifact: artifact === null ? null : Buffer.from(this.#engine.serializeArtifact(artifact, 'EvidenceArtifact'), 'utf8'),
+        exitCode: ladder.exitCode,
+        lines,
+      };
+    } catch (error) {
+      // The library refused the held inputs as the CLI does: a structural failure is exit 4, a fault and a defect exit 5.
+      return { artifact: null, exitCode: error instanceof this.#engine.StructuralFailure ? STRUCTURAL_EXIT : FAULT_EXIT, lines: null };
     }
-    return result.artifact === null ? null : Buffer.from(this.#engine.serializeArtifact(result.artifact, 'EvidenceArtifact'), 'utf8');
   }
 }
 

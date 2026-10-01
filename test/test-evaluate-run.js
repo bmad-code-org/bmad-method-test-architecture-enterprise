@@ -621,7 +621,13 @@ function checkShimmedScore({ folder, env, runDirectory, index }) {
     const code = set.probeId === 'P-001' ? 0 : 3;
     const stream = (name) => `known-bytes ${name} ${probeFile}\nknown-bytes ${name} 2 ${probeFile}\nknown-bytes ${name} 3 ${probeFile}`;
     check(call.stdout === stream('stdout'), `${set.probeId}'s persisted stdout is ${JSON.stringify(call.stdout)}`);
-    check(call.stderr === stream('stderr'), `${set.probeId}'s persisted stderr is ${JSON.stringify(call.stderr)}`);
+    // The real CLI's own diagnostics lead the shim's known bytes (an Invalid result names its reason there).
+    check(call.stderr.endsWith(stream('stderr')), `${set.probeId}'s persisted stderr is ${JSON.stringify(call.stderr)}`);
+    const diagnostics = call.stderr.slice(0, call.stderr.length - stream('stderr').length);
+    check(
+      set.probeId === 'P-002' ? /^eval-quality: invalid: .*isolation manifest absent/m.test(diagnostics) : diagnostics === '',
+      `${set.probeId}'s persisted stderr leads with ${JSON.stringify(diagnostics)}`,
+    );
     check(
       call.exitCode === code && call.substituted === true,
       `${set.probeId}'s persisted call records exit ${call.exitCode}, substituted ${call.substituted}; expected ${code}`,
@@ -2392,12 +2398,19 @@ function checkScoreInputReference() {
     [/in memory/, 'the bytes held in memory'],
     [/changed|appeared/, 'the input that changed or appeared'],
     [/in process/, 'the in-process re-score'],
-    [/the staged artifact to equal it byte for byte/, 'the byte-for-byte comparison with the staged artifact'],
+    [
+      /The staged artifact must equal the result serialized with the library's `serializeArtifact` byte for byte/,
+      'the byte-for-byte comparison with the staged artifact',
+    ],
     [/compares and refuses/, 'that the re-score compares and refuses'],
     [/still decides every enforced verdict/, 'that the CLI decides every enforced verdict'],
     [/exit(?:s)? 12/, 'the exit, 12'],
     [/fresh `--out`/, 'the recorded argv re-run with a fresh `--out`'],
     [/whatever it exited/, 'that a call staging nothing is compared whatever it exited'],
+    [/The call's exit must be the one the held bytes give/, "that the call's exit is compared with the held bytes'"],
+    [/`eval-quality:` lines on the call's stderr must be the ones the result would print/, 'that the diagnostic lines are compared'],
+    [/only the exit is compared/, 'that a refused library call is compared by its exit alone'],
+    [/the call's stdout and its other stderr text are recorded as they came and are not compared/, 'what the comparison leaves out'],
   ]) {
     check(pattern.test(section), `the reference's score input integrity section does not name ${what}`);
   }
@@ -2503,7 +2516,9 @@ async function checkHeldInputs() {
   const recordFile = path.join(runDirectory, firstSet.records[0]);
   const manifestFile = path.join(runDirectory, secondSet.isolationManifest);
   const indexFile = path.join(runDirectory, 'trial-sets.json');
-  const originals = [recordFile, manifestFile, indexFile].map((file) => [file, fs.readFileSync(file)]);
+  const preflightFile = path.join(runDirectory, index.preflightVerdict);
+  const runFile = path.join(runDirectory, 'run.json');
+  const originals = [recordFile, manifestFile, indexFile, preflightFile, runFile].map((file) => [file, fs.readFileSync(file)]);
   const [, manifestBytes] = originals[1];
   const [, recordBytes] = originals[0];
   const [, indexBytes] = originals[2];
@@ -2514,8 +2529,12 @@ async function checkHeldInputs() {
       const reproduced = await heldInputs.reproduce(set);
       const persisted = path.join(secondDirectory, set.probeId, 'evidence-artifact.json');
       check(
-        reproduced !== null && fs.existsSync(persisted) && reproduced.equals(fs.readFileSync(persisted)),
+        reproduced.artifact !== null && fs.existsSync(persisted) && reproduced.artifact.equals(fs.readFileSync(persisted)),
         `${set.probeId}: the in-process score of the held bytes is not byte-identical to the persisted evidence`,
+      );
+      check(
+        reproduced.exitCode === 0 && reproduced.lines.length === 0,
+        `${set.probeId}: the in-process score of the held bytes gives exit ${reproduced.exitCode} and lines ${JSON.stringify(reproduced.lines)}; the clean score exited 0 with none`,
       );
     }
     check(heldInputs.changedSince() === null, 'a freshly held run reports a changed input');
@@ -2526,7 +2545,8 @@ async function checkHeldInputs() {
     fs.writeFileSync(recordFile, `${JSON.stringify(flipped)}\n`);
     const fromHeld = await heldInputs.reproduce(firstSet);
     check(
-      fromHeld !== null && fromHeld.equals(fs.readFileSync(path.join(secondDirectory, firstSet.probeId, 'evidence-artifact.json'))),
+      fromHeld.artifact !== null &&
+        fromHeld.artifact.equals(fs.readFileSync(path.join(secondDirectory, firstSet.probeId, 'evidence-artifact.json'))),
       'the in-process score read a record from the run directory instead of the held bytes',
     );
     fs.writeFileSync(recordFile, recordBytes);
@@ -2560,7 +2580,13 @@ async function checkHeldInputs() {
     fs.rmSync(manifestFile);
     const withoutManifest = holdScoreInputs({ runDirectory, index, record, engine });
     check(withoutManifest.exists(secondSet.isolationManifest) === false, 'an absent manifest was held as present');
-    check((await withoutManifest.reproduce(secondSet)) === null, 'the held bytes of a set with no manifest reproduce an artifact');
+    const invalidWithout = await withoutManifest.reproduce(secondSet);
+    check(
+      invalidWithout.artifact === null &&
+        invalidWithout.exitCode === 3 &&
+        invalidWithout.lines.some((line) => /^eval-quality: invalid: .*isolation manifest absent/.test(line)),
+      `the held bytes of a set with no manifest give ${JSON.stringify(invalidWithout)}; expected no artifact, exit 3 and the absent-manifest reason`,
+    );
     check(withoutManifest.changedSince() === null, 'an absent manifest is reported as changed before anything appears');
     fs.writeFileSync(manifestFile, manifestBytes);
     const appeared = withoutManifest.changedSince();
@@ -2580,6 +2606,9 @@ async function checkHeldInputs() {
       // Bytes that are no JSON make the engine fault with no artifact (exit 4 or 5); the held bytes still produce one.
       ['restore-unreadable', /the call staged no evidence artifact, and the verified inputs produce one/, probes, [4, 5]],
       ['forge-outcomes', /differs from the one the verified inputs produce/, probes],
+      // The same value in other bytes: only a byte comparison tells it from the engine's own artifact.
+      ['reformat-artifact', /differs from the one the verified inputs produce/, probes],
+      ['duplicate-key-artifact', /differs from the one the verified inputs produce/, probes],
     ];
     for (const [mode, reason, refused, engineExits] of attacks) {
       const directory = tempDir(`held-${mode}`);
@@ -2647,12 +2676,8 @@ async function checkHeldInputs() {
     );
     fs.writeFileSync(manifestFile, manifestBytes);
 
-    // Presence is read from the one open that reads the bytes: bytes always mean present, and a link at a manifest path
-    // that points nowhere is a link to refuse (exit 10, no engine call), not an absent manifest.
-    check(
-      [...heldInputs.entries.values()].every((entry) => entry.bytes === null || entry.exists === true),
-      'a held entry has bytes and is marked absent',
-    );
+    // Presence is read from the one open that reads the bytes: a link at a manifest path that points nowhere is a link
+    // to refuse (exit 10, no engine call), not an absent manifest.
     const danglingLog = path.join(tempDir('held-dangling'), 'argv.log');
     fs.rmSync(manifestFile);
     fs.symlinkSync(path.join(runDirectory, 'nowhere.json'), manifestFile);
@@ -2675,6 +2700,54 @@ async function checkHeldInputs() {
     );
     check(loggedCalls(aliasLog).length === 0, 'score called the engine over an index naming one path as two inputs');
     fs.writeFileSync(indexFile, indexBytes);
+
+    // The call's exit is compared with the exit the held bytes give, so an artifact that agrees is not enough. A clean
+    // run: an input is rewritten so the engine exits 3, put back, and the earlier clean artifact is staged in its place.
+    const exitAttack = (label, mode, kind, reason) => {
+      const log = path.join(tempDir(`held-exit-${label}`), 'argv.log');
+      const attacked = evaluate(scoreArgs, {
+        ...made.env,
+        [ENGINE_CLI_ENV]: RACE_ENGINE,
+        TEA_RACE_LOG: log,
+        TEA_RACE_MODE: mode,
+        TEA_RACE_KIND: kind,
+        TEA_RACE_STASH_DIR: firstDirectory,
+      });
+      const directory = latestScoreDirectory(runDirectory);
+      const summary = directory === null ? null : written(path.join(directory, 'score.json'), `${label}'s score summary`);
+      check(attacked.status === 12, `${label}: exited ${attacked.status}; expected 12\n${attacked.output}`);
+      for (const probeId of probes) {
+        const entry = summary?.scores?.find((candidate) => candidate.probeId === probeId);
+        check(
+          entry?.evidence === null && reason.test(entry?.failure ?? ''),
+          `${label}, ${probeId}: the summary entry is ${JSON.stringify(entry)}; expected no evidence and ${reason}`,
+        );
+      }
+      check(evidenceIn(directory).length === 0, `${label}: evidence was copied: ${JSON.stringify(evidenceIn(directory))}`);
+    };
+    exitAttack('restage-over-an-exit-3', 'restore-and-restage', 'preflight', /the call exited 3 where the verified inputs give 0/);
+
+    // An Invalid run: the preflight verdict is sealed as failed (a clean score exits 3 with no artifact). It is rewritten
+    // as passed for the engine's read, put back, and the staged artifact removed: nothing is staged, exactly what the
+    // held bytes give, and only the exit (0) is not.
+    const sealedFailed = Buffer.from(`${JSON.stringify({ ...readJson(preflightFile), passed: false }, null, 2)}\n`, 'utf8');
+    fs.writeFileSync(preflightFile, sealedFailed);
+    editJson(runFile, (value) => (value.artifacts.preflightVerdict = engine.digestBytes(sealedFailed)));
+    const invalidScore = evaluate(scoreArgs, made.env);
+    check(
+      invalidScore.status === 3,
+      `a run sealed with a failed preflight verdict exited ${invalidScore.status}; expected 3\n${invalidScore.output}`,
+    );
+    exitAttack('unstage-an-exit-0', 'restore-and-unstage', 'preflight-pass', /the call exited 0 where the verified inputs give 3/);
+    // The same Invalid run, rewritten into another invalidating condition for the engine's read: both exit 3 with no
+    // artifact, and only the reasons on stderr differ from what the held bytes give.
+    exitAttack(
+      'another-reason-for-an-exit-3',
+      'restore-and-unstage',
+      'configuration',
+      /diagnostics differ from those the verified inputs give/,
+    );
+    for (const [file, bytes] of originals.slice(3)) fs.writeFileSync(file, bytes);
 
     // A manifest absent at the check and planted before the call returns is named as appeared since the check; the set
     // the shim leaves alone is still copied.
