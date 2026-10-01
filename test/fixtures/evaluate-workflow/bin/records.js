@@ -23,6 +23,10 @@
  * read was given. When RECORDS_OMIT_ID names workspace labels, separated by
  * commas, `create` leaves the identifier out of what it prints in those
  * workspaces, as a target whose answer lacks the value a later step captures.
+ * When RECORDS_OVERSIZE_ID names workspace labels the same way, `create` prints
+ * an identifier of 2 MiB (the record is still stored under the short one), as a
+ * target whose answer holds a value no process launch can carry: it is past
+ * macOS's 1 MiB argument limit and Linux's 128 KiB limit for one argument.
  */
 
 'use strict';
@@ -34,6 +38,8 @@ const path = require('node:path');
 const STORE = 'store';
 /** An identifier a read may name: letters, digits and hyphens, so no identifier leaves the store. */
 const IDENTIFIER = /^[A-Za-z0-9-]+$/;
+/** The length of the identifier `create` prints in a workspace RECORDS_OVERSIZE_ID names. */
+const OVERSIZE_IDENTIFIER_LENGTH = 2 * 1024 * 1024;
 
 const [operation, ...rest] = process.argv.slice(2);
 const workspaceDirectory = path.basename(path.dirname(process.cwd()));
@@ -43,6 +49,11 @@ const workspace = /^tea-evaluate-(.+)-(?:[A-Za-z0-9]{6}|[0-9a-f]{8}-[0-9a-f]{4}-
 function optionOf(name) {
   const at = rest.indexOf(`--${name}`);
   return at === -1 || at + 1 >= rest.length ? null : rest[at + 1];
+}
+
+/** Whether the workspace this run is in is one the comma-separated labels in the variable `variable` name. */
+function names(variable) {
+  return workspace !== null && (process.env[variable] ?? '').split(',').includes(workspace);
 }
 
 function log(entry) {
@@ -61,8 +72,10 @@ if (operation === 'create') {
   fs.mkdirSync(STORE, { recursive: true });
   fs.writeFileSync(file, `${JSON.stringify({ id: storedId, title })}\n`);
   log({ id });
-  const omitted = (process.env.RECORDS_OMIT_ID ?? '').split(',').includes(workspace ?? '');
-  answer(omitted ? { title, path: file } : { id, title, path: file });
+  const omitted = names('RECORDS_OMIT_ID');
+  const oversize = names('RECORDS_OVERSIZE_ID');
+  const printed = oversize ? id.padEnd(OVERSIZE_IDENTIFIER_LENGTH, 'x') : id;
+  answer(omitted ? { title, path: file } : { id: printed, title, path: file });
 } else if (operation === 'read') {
   const id = optionOf('id');
   log({ id });

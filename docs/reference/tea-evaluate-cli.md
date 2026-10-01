@@ -14,7 +14,7 @@ TeA also ships `tea-skill-runner`, the command an evaluation registers to run a 
 ## Prerequisites
 
 - Node.js 22.20 or later, with TeA installed (`npm install --save-dev bmad-method-test-architecture-enterprise`), which provides the `tea-evaluate` bin.
-- `eval-quality` 4.5.0 or later, installed beside TeA in the project that runs Evaluate (`npm install --save-dev eval-quality`).
+- `eval-quality` 4.6.0 or later, installed beside TeA in the project that runs Evaluate (`npm install --save-dev eval-quality`).
   TeA declares it as an optional peer dependency, so a project that installs TeA only for its other workflows never receives it.
   Without it, `tea-evaluate` exits 12 and names the missing package.
 
@@ -437,7 +437,10 @@ Each observation's `sequence` counts the steps in the order they were issued, wh
 
 A step is not issued when its `after` step was not issued, or when one of its captured bindings resolves to nothing: the step it reads was not issued, or that step's observation lacks the value (a field its output does not hold, or output that is not JSON).
 A step is not issued either when a captured value is one the request cannot carry as the target printed it: a value holding a `__proto__` key, which eval-quality's request parser drops, a header or environment value that is no string, a header value holding a control character or one past U+00FF, or a path value that is `.` or `..`, which the evaluation's HTTP port refuses, or a command argument, option or environment value holding a NUL character, which no process argument or variable can.
+A command step with a captured binding is not issued either when the value makes its launch too large for the system's argument and environment limit.
+The limit is the system's: eval-quality's launch decides it and reports the refusal as a `port-failure` whose `portFailureReason` is `launch-too-large`, the runtime computes no size, and the step is recorded as `captured-value-unsendable` naming each of its captured bindings, since a refused launch cannot say which value was too large.
 Such a step sends no request and records no observation, and the arm's evidence lists it in `steps` in its place as `{ "stepId", "operationId", "skipped" }`, whose `reason` is `after-step-not-issued` (naming the `after` step), `captured-value-absent` (naming each binding and its pointer) or `captured-value-unsendable` (naming each binding, its pointer and why).
+A command step with only literal bindings that the system refuses for its size still stops the run with exit 12, since the contract itself cannot be sent, and the fault it records carries the `portFailureReason`.
 The runtime computes no outcome from it: eval-quality reads the missing observation as it reads any evidence that does not exist, so an oracle over the step resolves over absent evidence, and a seeded probe whose defect signature names the step's operation is `not-applicable` in a trial that never issued it, which never counts toward `caught`.
 A qualification arm is judged over the same absent evidence, so a clean arm whose step was not issued does not pass when an oracle needs that step, and the run exits 11 as for any clean arm that does not pass.
 A trial's records and isolation manifest count only the calls it made.

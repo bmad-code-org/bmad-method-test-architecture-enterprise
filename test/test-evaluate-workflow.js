@@ -21,6 +21,13 @@
  *   workspaces, `create` prints no identifier there, `read-back` is never
  *   issued and has no observation, the trial's evidence lists it as skipped,
  *   and the seeded probe's outcome in the evidence artifact is not `caught`.
+ * - An oversized captured value: with `RECORDS_OVERSIZE_ID` naming the mutated
+ *   trials' workspaces, `create` prints a 2 MiB identifier, past the system's
+ *   argument limit on macOS and Linux, so the launch of `read-back` is refused
+ *   with eval-quality's port-failure reason `launch-too-large`; the step is never issued, the
+ *   trial's evidence lists it as `captured-value-unsendable` naming the binding
+ *   and that reason, the run exits 0 and the seeded probe's outcome is not
+ *   `caught` (Story 1.39).
  * - A cycle: a contract whose capture and `after` edges form one stops
  *   `preflight` and `run` with `eval-quality compile`'s exit 4 and its
  *   `binding-cycle` message, byte for byte what the engine prints over the
@@ -29,9 +36,17 @@
  *   value read from the earlier observation, a step skipped for a value its
  *   source lacks or a source that was skipped, a skipped `after` step, and the
  *   refusals.
+ * - The refused launch (Story 1.39): a command step with a captured binding
+ *   whose launch the fault's `portFailureReason` `launch-too-large` names is skipped, naming
+ *   every captured binding of the step, and a step after it is skipped as
+ *   `after-step-not-issued`; a step of literal bindings alone, a `port-failure`
+ *   with no such reason or another code, an HTTP step and a tool call rethrow the
+ *   fault; the host-environment wrapper and the fault record carry the reason, and
+ *   the real command-line adapter refuses a 2 MiB literal with it.
  * - The reference: `docs/reference/tea-evaluate-cli.md` names the binding
  *   kinds the runtime sends and the steps it does not issue, each passage read
- *   under its exact heading.
+ *   under its exact heading, the size limit among the values a request cannot
+ *   carry.
  *
  * Usage: node test/test-evaluate-workflow.js
  */
@@ -43,7 +58,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const { ENGINE_CLI_ENV, engineCliPath } = require('../cli/lib/evaluate/engine');
-const { ArmError, hostEnvironmentPort, runArm } = require('../cli/lib/evaluate/arm');
+const { ArmError, faultRecord, hostEnvironmentPort, runArm } = require('../cli/lib/evaluate/arm');
 const { syntheticPort } = require('../cli/lib/evaluate/gameability');
 const { createRegistry } = require('../cli/lib/evaluate/registry');
 const { WorkspaceRefusal, createWorkspace, removeWorkspace } = require('../cli/lib/evaluate/workspace');
@@ -376,6 +391,238 @@ async function checkOtherKinds() {
       `${what} recorded ${JSON.stringify(skipped.steps.at(-1))}`,
     );
   }
+}
+
+/** The `portFailureReason` eval-quality's command-line adapter gives a launch the system refused for size. */
+const LAUNCH_TOO_LARGE = 'launch-too-large';
+/** A literal past the system's argument limit on macOS (1 MiB for the whole vector) and Linux (128 KiB for one argument). */
+const OVERSIZE_LITERAL = `rec-${'x'.repeat(2 * 1024 * 1024)}`;
+
+/** A fault as eval-quality's adapters throw it: a code, an optional `reason` and `portFailureReason`, and the spawn's `E2BIG` as the cause. */
+function launchFault({ code = 'port-failure', reason, portFailureReason } = {}) {
+  return Object.assign(new Error('the operating system refused the launch'), {
+    code,
+    ...(reason === undefined ? {} : { reason }),
+    ...(portFailureReason === undefined ? {} : { portFailureReason }),
+    cause: Object.assign(new Error('spawn E2BIG'), { code: 'E2BIG' }),
+  });
+}
+
+/** A port that answers each step from `answers` and throws `fault` on the steps named in `refused`. */
+function refusingPort(label, answers, refused, fault) {
+  const answering = scriptedPort(label, answers);
+  return {
+    sent: answering.sent,
+    probe: async (request, signal) => {
+      if (refused.includes(request.probeId.slice(label.length + 1))) throw fault;
+      return answering.probe(request, signal);
+    },
+  };
+}
+
+/** The host-environment wrapper over an adapter that answers as `port` does, with the observation alone. */
+function adapterOver() {
+  return (port) =>
+    hostEnvironmentPort({
+      port: { probe: async (request, signal) => (await port.probe(request, signal)).observation },
+      registry: { ...UNIT_REGISTRY, hostEnvironment: () => ({}) },
+    });
+}
+
+async function runRefusedArm(plan, answers, refused, fault, { port: wrap = (port) => port } = {}) {
+  const contract = { ...readJson(path.join(FIXTURE, EVALUATION, 'contract.json')), interactionPlan: plan };
+  const port = refusingPort('refused', answers, refused, fault);
+  try {
+    return { arm: await runArm({ contract, port: wrap(port), registry: UNIT_REGISTRY, label: 'refused' }), sent: port.sent };
+  } catch (error) {
+    return { error, sent: port.sent };
+  }
+}
+
+/**
+ * A launch the system refuses for the size of its arguments and environment (Story 1.39): eval-quality's fault carries
+ * the reason `launch-too-large`, and the arm reads that and nothing else.
+ */
+async function checkLaunchTooLarge() {
+  const create = planStep('create', 'create', { stdin: { title: { literal: TITLE } } });
+  const readBack = planStep('read-back', 'read-back', { after: 'create', option: { id: { captured: CAPTURE } } });
+  const answers = { create: { id: 'rec-1', title: TITLE } };
+  const tooLarge = () => launchFault({ portFailureReason: LAUNCH_TOO_LARGE });
+
+  // A captured binding on the refused step: the step is not issued, and the arm goes on to the steps after it.
+  const afterRead = planStep('after-read', 'read-back', { after: 'read-back', option: { id: { literal: 'r-alpha' } } });
+  const skipped = await runRefusedArm([readBack, create, afterRead], answers, ['read-back'], tooLarge());
+  const entry = skipped.arm?.steps.find((candidate) => candidate.stepId === 'read-back');
+  check(
+    skipped.error === undefined &&
+      JSON.stringify(Object.keys(entry ?? {})) === JSON.stringify(['stepId', 'operationId', 'skipped']) &&
+      entry.skipped.reason === 'captured-value-unsendable' &&
+      entry.skipped.bindings.length === 1 &&
+      entry.skipped.bindings[0].binding === 'option.id' &&
+      entry.skipped.bindings[0].pointer === CAPTURE &&
+      entry.skipped.bindings[0].reason.includes(LAUNCH_TOO_LARGE) &&
+      !Object.hasOwn(skipped.arm.stepObservations, 'read-back') &&
+      JSON.stringify(skipped.arm.steps.map((step) => step.skipped?.reason ?? 'issued')) ===
+        JSON.stringify(['issued', 'captured-value-unsendable', 'after-step-not-issued']),
+    `a captured identifier too large to launch recorded ${JSON.stringify(skipped.arm?.steps.map((step) => step.skipped ?? step.stepId) ?? String(skipped.error))}`,
+  );
+
+  // Every captured binding of the step is named, since a refused launch cannot say which value made it too large; a
+  // literal beside them is not the cause the system can name.
+  const mixed = {
+    ...readBack,
+    inputBinding: {
+      ...readBack.inputBinding,
+      option: { id: { captured: CAPTURE }, other: { literal: 'x' } },
+      environment: { RECORDS_LOG: { captured: '/interactions/create/stdout/title' } },
+    },
+  };
+  const named = await runRefusedArm([mixed, create], answers, ['read-back'], tooLarge());
+  const bindings = named.arm?.steps.at(-1).skipped?.bindings ?? [];
+  check(
+    named.error === undefined &&
+      named.arm.steps.at(-1).skipped.reason === 'captured-value-unsendable' &&
+      JSON.stringify(bindings.map(({ binding, pointer }) => ({ binding, pointer }))) ===
+        JSON.stringify([
+          { binding: 'option.id', pointer: CAPTURE },
+          { binding: 'environment.RECORDS_LOG', pointer: '/interactions/create/stdout/title' },
+        ]) &&
+      bindings.every((site) => site.reason.includes(LAUNCH_TOO_LARGE)),
+    `a step with captured and literal bindings recorded ${JSON.stringify(named.arm?.steps.at(-1) ?? String(named.error))}`,
+  );
+
+  // A step of literals alone is a contract the run cannot send: the arm throws the fault, and `run` exits 12 on it.
+  const literal = planStep('read-back', 'read-back', { option: { id: { literal: OVERSIZE_LITERAL } } });
+  const literalOnly = await runRefusedArm([literal], {}, ['read-back'], tooLarge());
+  check(
+    literalOnly.error?.code === 'port-failure' && literalOnly.error.portFailureReason === LAUNCH_TOO_LARGE && literalOnly.arm === undefined,
+    `a literal-only step the system refuses for size gave ${literalOnly.error ?? JSON.stringify(literalOnly.arm?.steps.map((step) => step.skipped))}`,
+  );
+
+  // Only the reason on a port-failure decides: no reason, the spawn's E2BIG cause alone, or another code throws.
+  for (const [what, fault] of [
+    ['a port-failure with no reason', launchFault()],
+    ['a port-failure whose port-failure reason is another', launchFault({ portFailureReason: 'executable-not-found' })],
+    ['the port-failure reason under another code', launchFault({ code: 'forbidden-target', portFailureReason: LAUNCH_TOO_LARGE })],
+    ['the reason field alone', launchFault({ reason: LAUNCH_TOO_LARGE })],
+  ]) {
+    const refused = await runRefusedArm([readBack, create], answers, ['read-back'], fault);
+    check(
+      refused.error === fault && refused.arm === undefined,
+      `${what} after a captured binding gave ${refused.error ?? JSON.stringify(refused.arm?.steps)}; expected the fault to stop the arm`,
+    );
+  }
+
+  // The host-environment wrapper keeps the reason on the fault it scrubs and rethrows.
+  const wrapped = await runRefusedArm([readBack, create], answers, ['read-back'], tooLarge(), {
+    port: adapterOver(),
+  });
+  check(
+    wrapped.error === undefined && wrapped.arm.steps.at(-1).skipped?.reason === 'captured-value-unsendable',
+    `a refusal through the host-environment wrapper recorded ${JSON.stringify(wrapped.arm?.steps.at(-1) ?? String(wrapped.error))}`,
+  );
+  const carried = await runRefusedArm([literal], {}, ['read-back'], tooLarge(), {
+    port: adapterOver(),
+  });
+  check(
+    carried.error?.code === 'port-failure' &&
+      carried.error.portFailureReason === LAUNCH_TOO_LARGE &&
+      typeof carried.error.scrubbedCause === 'string' &&
+      carried.error.scrubbedCause.includes('E2BIG'),
+    `the host-environment wrapper left the fault as ${JSON.stringify({ code: carried.error?.code, portFailureReason: carried.error?.portFailureReason, cause: carried.error?.scrubbedCause })}`,
+  );
+  // The fault a stopped arm records carries the port-failure reason, beside the code and the scrubbed cause.
+  const recorded = carried.error === undefined ? null : faultRecord(carried.error);
+  check(
+    recorded?.code === 'port-failure' &&
+      recorded.portFailureReason === LAUNCH_TOO_LARGE &&
+      !Object.hasOwn(recorded, 'reason') &&
+      recorded.cause?.includes('E2BIG') === true,
+    `the fault record of a refused literal-only step is ${JSON.stringify(recorded)}`,
+  );
+
+  // An HTTP request and a tool call have no spawn limit in this adapter: the fault stops the arm.
+  const operation = (operationId, extra) => ({ operationId, ...extra });
+  const otherKinds = {
+    permittedInterfaces: [
+      { logicalId: 'items', kind: 'api', operations: [operation('post-item', { method: 'POST', pathTemplate: '/items' })] },
+      { logicalId: 'tools', kind: 'mcp', operations: [operation('describe', { toolName: 'describe' })] },
+    ],
+  };
+  const answering = {
+    probe: async (request) => {
+      if (request.probeId.endsWith('-first')) {
+        const correlation = { probeId: request.probeId, interfaceId: request.interfaceId, operationId: request.operationId };
+        return {
+          request,
+          observation: { ...correlation, kind: 'api', status: 200, headers: {}, body: { kind: 'json', value: { id: 'item-7' } } },
+        };
+      }
+      throw tooLarge();
+    },
+  };
+  const first = {
+    stepId: 'first',
+    operationId: 'post-item',
+    after: null,
+    cardinality: 'exactly-one',
+    inputBinding: { path: null, query: null, header: null, body: { name: { literal: 'seven' } } },
+  };
+  for (const [what, step] of [
+    [
+      'an HTTP request',
+      {
+        stepId: 'second',
+        operationId: 'post-item',
+        after: null,
+        cardinality: 'exactly-one',
+        inputBinding: { path: null, query: null, header: null, body: { id: { captured: '/interactions/first/response-body/id' } } },
+      },
+    ],
+    [
+      'a tool call',
+      {
+        stepId: 'second',
+        operationId: 'describe',
+        after: null,
+        cardinality: 'exactly-one',
+        inputBinding: { arguments: { id: { captured: '/interactions/first/response-body/id' } } },
+      },
+    ],
+  ]) {
+    let error = null;
+    try {
+      await runArm({
+        contract: { ...otherKinds, interactionPlan: [first, step] },
+        port: answering,
+        registry: UNIT_REGISTRY,
+        label: 'other',
+      });
+    } catch (error_) {
+      error = error_;
+    }
+    check(error?.portFailureReason === LAUNCH_TOO_LARGE, `${what} bound to a captured value did not stop the arm on the fault: ${error}`);
+  }
+
+  // The real command-line adapter reports the refusal with the reason, through the registry's own port.
+  const registry = createRegistry(readJson(path.join(FIXTURE, EVALUATION, 'evaluation.json')).registry, { root: FIXTURE });
+  const { port } = await registry.createProbePort({ cwd: FIXTURE, projectRoot: FIXTURE, workspace: FIXTURE });
+  let real = null;
+  try {
+    await runArm({
+      contract: { ...readJson(path.join(FIXTURE, EVALUATION, 'contract.json')), interactionPlan: [literal] },
+      port: hostEnvironmentPort({ port, registry }),
+      registry,
+      label: 'real',
+      signal: new AbortController().signal,
+    });
+  } catch (error) {
+    real = error;
+  }
+  check(
+    real?.code === 'port-failure' && real.portFailureReason === LAUNCH_TOO_LARGE,
+    `eval-quality's command-line adapter refused a 2 MiB argument with ${real === null ? 'no fault' : JSON.stringify({ code: real.code, reason: real.reason, portFailureReason: real.portFailureReason, message: real.message })}`,
+  );
 }
 
 async function checkUnits() {
@@ -840,6 +1087,66 @@ async function checkMissingValue() {
   );
 
   const evidence = scoreRun(project, 'a run whose mutated trials print no identifier');
+  const votes = votesOf(evidence, 'P-002');
+  check(
+    votes.length === TRIALS && votes.every((vote) => vote !== 'caught') && evidence['P-002']?.reducedProbeOutcomes?.[0]?.caught === false,
+    `P-002's trial votes are ${JSON.stringify(votes)} with caught ${evidence['P-002']?.reducedProbeOutcomes?.[0]?.caught}; a step never issued must not read as caught`,
+  );
+  const clean = votesOf(evidence, 'P-001');
+  check(
+    clean.length === TRIALS && clean.every((vote) => vote === 'passed-clean-control'),
+    `P-001's trial votes are ${JSON.stringify(clean)}`,
+  );
+}
+
+/**
+ * An identifier past the system's argument limit (Story 1.39): the launch of `read-back` is refused for its size with
+ * eval-quality's reason, the step is skipped, and the run goes on.
+ */
+async function checkOversizedValue() {
+  const project = makeProject('oversized-value');
+  const ran = evaluate(['run', '--evaluation', project.folder], { ...project.env, RECORDS_OVERSIZE_ID: MUTATED_TRIALS.join(',') });
+  check(ran.status === 0, `a run whose mutated trials print an oversized identifier exited ${ran.status}; expected 0\n${ran.output}`);
+  const runDirectory = runDirectoryOf(project.folder);
+  if (runDirectory === null || !fs.existsSync(path.join(runDirectory, 'trial-sets.json'))) {
+    check(false, 'the run whose mutated trials print an oversized identifier sealed no trial set');
+    return;
+  }
+  checkCapturedRecords('a run whose mutated trials print an oversized identifier', runDirectory, 'P-001');
+  const records = recordsOf(runDirectory, 'P-002');
+  check(
+    records.length === TRIALS &&
+      records.every(
+        (record) =>
+          record.observations.length === 1 &&
+          printedId(observationOf(record, 'create'))?.length > 1024 * 1024 &&
+          !observationOf(record, 'read-back'),
+      ),
+    `P-002's records hold ${JSON.stringify(records.map((record) => record.observations.map((observation) => observation.observationId)))}; expected create alone, printing an oversized identifier`,
+  );
+  for (let trialIndex = 1; trialIndex <= TRIALS; trialIndex += 1) {
+    const file = path.join(runDirectory, 'trials', 'mutated-M-001', `trial-${trialIndex}.json`);
+    const last = (fs.existsSync(file) ? readJson(file).steps : []).at(-1);
+    check(
+      JSON.stringify(Object.keys(last ?? {})) === JSON.stringify(['stepId', 'operationId', 'skipped']) &&
+        last.stepId === 'read-back' &&
+        last.skipped?.reason === 'captured-value-unsendable' &&
+        last.skipped.bindings?.length === 1 &&
+        last.skipped.bindings[0].binding === 'option.id' &&
+        last.skipped.bindings[0].pointer === CAPTURE &&
+        last.skipped.bindings[0].reason?.includes(LAUNCH_TOO_LARGE) === true,
+      `mutated trial ${trialIndex}'s evidence lists its last step as ${JSON.stringify(last)}`,
+    );
+  }
+  // The refused launch is no call: the records and the isolation manifests count the create alone.
+  checkToolCalls('a run whose mutated trials print an oversized identifier', runDirectory);
+  const mutatedLines = logLines(project).filter((line) => MUTATED_TRIALS.includes(line.workspace));
+  check(
+    mutatedLines.length === TRIALS && mutatedLines.every((line) => line.operation === 'create'),
+    `the store ran ${JSON.stringify(mutatedLines)} in the mutated trials; expected one create each and no read`,
+  );
+
+  const evidence = scoreRun(project, 'a run whose mutated trials print an oversized identifier');
   const votes = votesOf(evidence, 'P-002');
   check(
     votes.length === TRIALS && votes.every((vote) => vote !== 'caught') && evidence['P-002']?.reducedProbeOutcomes?.[0]?.caught === false,
@@ -1331,6 +1638,13 @@ function checkReference() {
       skipped.includes('`not-applicable`'),
     'the reference\'s "### Steps not issued" does not state that a step whose captured value is absent is not issued, how it is recorded, and how eval-quality reads it',
   );
+  check(
+    skipped?.includes("too large for the system's argument and environment limit") === true &&
+      skipped.includes('`launch-too-large`') &&
+      skipped.includes('naming each of its captured bindings') &&
+      skipped.includes('only literal bindings that the system refuses for its size still stops the run with exit 12'),
+    'the reference\'s "### Steps not issued" does not name the system\'s argument and environment limit among the values a request cannot carry, its port-failure reason `launch-too-large`, and that a step with only literal bindings still stops the run',
+  );
 }
 
 /**
@@ -1376,11 +1690,13 @@ async function runCase(name, body) {
 async function main() {
   try {
     await runCase('the units', checkUnits);
+    await runCase('the refused launch', checkLaunchTooLarge);
     await runCase('the reference', checkReference);
     await runCase('the pipeline', checkPipeline);
     await runCase('the confined pipeline', checkConfinedPipeline);
     await runCase('the missing captured value', checkMissingValue);
     await runCase('the missing captured value under a command evaluator', checkMissingValueUnderCommand);
+    await runCase('the oversized captured value', checkOversizedValue);
     await runCase('the gameability arm', checkGameability);
     await runCase('a gameability step the registry denies', checkGameabilityDenial);
     await runCase('the plans compile refuses', checkRefusedPlans);

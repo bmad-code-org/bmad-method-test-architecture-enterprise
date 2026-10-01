@@ -19,7 +19,8 @@
       "artifacts": {},
       "environmentKeys": [
         "RECORDS_LOG",
-        "RECORDS_OMIT_ID"
+        "RECORDS_OMIT_ID",
+        "RECORDS_OVERSIZE_ID"
       ],
       "maxElapsedMs": 30000,
       "infrastructureExitCodes": [

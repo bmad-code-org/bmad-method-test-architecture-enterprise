@@ -686,6 +686,8 @@ Amended 2026-09-30 in Story 1.38: the cases run over `test/fixtures/evaluate-api
 
 Added 2026-09-26 in Story 1.18. Levels: integration over real eval-quality, unit, static. File: `test/test-evaluate-workflow.js` (`test:evaluate-workflow`).
 
+Amended 2026-10-01 in Story 1.39: the units also hold that only `portFailureReason` decides (a `port-failure` with no such reason, with `reason` alone, under another code, or on an HTTP request or a tool call, still stops the arm), that a skip names every captured binding of the step, and that the fault record carries `portFailureReason`; the integration case runs a 2 MiB identifier, past the argument limit on macOS and Linux.
+
 | AC                                                                    | Test                                                                                                                                  | Level                              | P   | Revert check                         |
 | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | --- | ------------------------------------ |
 | An oversized captured value skips the step with eval-quality's reason | The fixture's `create` prints an identifier past the argument limit in named workspaces; assert the skip, exit 0 and no `caught` vote | Integration over real eval-quality | P1  | Stopping on the fault exits 12       |
