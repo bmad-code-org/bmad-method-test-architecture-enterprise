@@ -217,7 +217,8 @@ The record and the sprint row are set to `done` in this pull request.
 
 ### Shard weights
 
-The first green CI run on the final tree put chain shard 1 at 773 seconds of the 900 second job cap (14m24) and shard 2 at 467 seconds.
-Nine weights in `tools/test-shard-weights.json` had drifted from the CI measures under coverage, so the partition was uneven: `test:doc-invocations` 179.5 to 126.3, `test:evaluate-boundaries` 34.6 to 43.2, `test:evaluate-calibration` 37.2 to 49.6, `test:evaluate-compare` 75 to 53.2, `test:evaluate-evaluators` 262 to 177.2, `test:evaluate-partitions` 80 to 46.8, `test:evaluate-records` 120.8 to 143, `test:evaluate-run` 240 to 198.5, `test:probe-targets` 44.7 to 28.8.
-Re-partitioning with those weights predicts shard totals of 680, 669, 695, 649 and 667 seconds from the same run's script timings (before: 773, 467, 740, 652, 729).
+The first green CI run on the final tree (`348241f7`) put chain shard 1 at 773 seconds of the 900 second job cap (14m24) and shard 2 at 467 seconds.
+A second run on `6bce0465`, after a first partial refresh of nine weights, timed out chain shard 1 at the cap (15m18); the log of a cancelled job carries no per-script times, so the slow script is unknown.
+The weights had drifted from the CI measures under coverage, and refreshing only the largest deviations left `test:evaluate-arms` (362 measured, 320 weighed) and `test:evaluate-records` (143 against 121) light.
+`tools/test-shard-weights.json` now takes the measured time of every script above 5 seconds from the `348241f7` run (27 weights changed, `test:evaluate-private` and `test:evaluate-confinement` keep the values lane 2 measured), which puts the five shards at 682 seconds each by the weights (measured shard totals in that run: 773, 467, 740, 652, 729).
 No timeout was raised.

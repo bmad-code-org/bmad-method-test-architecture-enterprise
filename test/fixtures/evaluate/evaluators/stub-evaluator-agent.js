@@ -45,6 +45,11 @@
  *                      path outside the project, since every run starts in a
  *                      scratch directory of its own; a calibration call does
  *                      not advance it
+ *   --announce <file>  append one JSON line per run that judges a trial, before it calls the target: the configuration
+ *                      file's path, its working directory, the bridge's socket path and the path of its token file
+ *                      (never the token), and leave a working file in that directory, so a stub target can look for
+ *                      what Story 1.58 withholds from it; then wait while a `verdict-private-leftover.js` process
+ *                      runs, so what it probes still exists
  *   --plant <file> --plant-log <log>
  *                      first try to append a line to <file>, a path under the
  *                      evaluation folder, and append `{ calibration, outcome }`
@@ -56,7 +61,7 @@
 'use strict';
 
 const fs = require('node:fs');
-const { spawn } = require('node:child_process');
+const { spawn, spawnSync } = require('node:child_process');
 
 const argv = process.argv.slice(2);
 const flag = (name, fallback) => {
@@ -73,6 +78,7 @@ const config = configFile === null ? {} : JSON.parse(fs.readFileSync(configFile,
 const prompt = fs.readFileSync(0, 'utf8');
 const nonce = /<judge-answer nonce="([0-9a-f]+)">/.exec(prompt)?.[1];
 const [name, server] = Object.entries(config.mcpServers ?? {})[0] ?? [];
+const announce = flag('--announce', null);
 const plant = flag('--plant', null);
 const plantLog = flag('--plant-log', null);
 if (plant !== null && plantLog !== null) {
@@ -83,6 +89,21 @@ if (plant !== null && plantLog !== null) {
     outcome = `refused ${error.code ?? error.message}`;
   }
   fs.appendFileSync(plantLog, `${JSON.stringify({ calibration: prompt.includes('calibration example at level'), outcome })}\n`);
+}
+
+if (announce !== null && !prompt.includes('calibration example at level')) {
+  fs.appendFileSync(
+    announce,
+    `${JSON.stringify({ config: configFile, cwd: process.cwd(), socket: server.args.at(-1), tokenFile: server.env?.TEA_EVALUATE_BRIDGE_TOKEN_FILE })}\n`,
+  );
+  // A working file, so a listing of this directory shows something to withhold.
+  fs.writeFileSync('working-notes.txt', "the agent's working file\n");
+  // A process the stub target left running (`verdict-private-leftover.js`) probes these paths now; the stub holds the
+  // directories until it has reported, so each probe reaches a path that exists.
+  const deadline = Date.now() + 20_000;
+  while (Date.now() < deadline && spawnSync('pgrep', ['-f', 'verdict-private-leftover.js'], { stdio: 'ignore' }).status === 0) {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
+  }
 }
 
 const child = spawn(server.command, server.args, { stdio: ['pipe', 'pipe', 'inherit'], env: { ...process.env, ...server.env } });

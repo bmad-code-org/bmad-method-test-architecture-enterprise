@@ -682,7 +682,10 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
    * mechanism, writing only `options.workspace` (the workspace's checkout,
    * which a confined run requires) and reading none of `options.git.directory`
    * (the project's git directory) but `options.git.metadata` (the worktree's
-   * own entry in it); with `options.audit` the port's Node
+   * own entry in it), and reading, writing or connecting to nothing under
+   * `options.privateRoot` (the user's private root directory, beneath which
+   * the run's private parent holds the evaluation layer's bridge token and
+   * socket and its working directories; `registry.privateRoot`); with `options.audit` the port's Node
    * processes also report the paths they open outside what was granted, which
    * `observedMounts()` reads, and which is empty otherwise.
    *
@@ -712,7 +715,14 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
         status = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-evaluate-status-'));
         scratch.push(status);
       }
-      sandbox = targetSandbox({ confinement, workspace: options.workspace, git: options.git ?? null, report, status });
+      sandbox = targetSandbox({
+        confinement,
+        workspace: options.workspace,
+        git: options.git ?? null,
+        privateRoot: options.privateRoot ?? null,
+        report,
+        status,
+      });
       // Each started target's own declared system paths, which its audit grants.
       const declared = new Map();
       const declare = (target, entry) => {
@@ -874,6 +884,10 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
     root: registryRoot,
     httpPort,
     confinement,
+    /** The user's private root directory the run's parent sits beneath (`workspace.js` `makePrivateParent`), or `null` where none was made. */
+    get privateRoot() {
+      return scratch.privateRoot ?? null;
+    },
     apiFor,
     apiSecrets,
     ceilingMs,
