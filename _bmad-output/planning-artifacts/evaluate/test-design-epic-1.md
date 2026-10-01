@@ -1011,6 +1011,8 @@ Added 2026-10-01 in Story 1.40. Levels: integration over real eval-quality, guid
 | The emitted inputs carry no label                | Search the output for `expectedLevel`                                                                                               | Integration                        | P1  | Adding the label to the output fails the search                  |
 | The guide says to copy the emitted values        | Assert the evaluator guide's sentence under its exact heading                                                                       | Guidance                           | P2  | Removing the sentence fails the guidance assertion               |
 
+Amended 2026-10-01 in Story 1.67's build: the option is `digest --calibration-inputs`. The first case also holds the emitted `scorerInput` to a hand-built literal (a changed derivation fails the literal while output and verification still agree), asks with a configuration carrying the two bindings and without them (the same digests), and runs `check`, `run` and `score` over the judgments built from the output alone. The refusal cases (an evaluator that is not `records`, no rubric, an unusable labelled file, a configuration absent, linked, not JSON or off its schema) each exit 10 and leave the folder byte-identical, and a contract of two rubrics and three criteria pins the labelled file's order. All run in the `records` group of `test/test-evaluate-evaluators.js`.
+
 ### Story 1.68: Hold a run's score inputs between verification and the engine's read
 
 Added 2026-10-01 in Story 1.41. Levels: end-to-end over real eval-quality, integration, static. Files: `test/test-evaluate-partitions.js` (`test:evaluate-partitions`) and `test/test-evaluate-run.js` (`test:evaluate-run`).

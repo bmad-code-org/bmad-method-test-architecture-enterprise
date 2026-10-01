@@ -1873,6 +1873,13 @@ function checkEvaluatorGuidance(guide, failures) {
     const body = headingBody(guide, heading);
     for (const marker of markers) requireText(body, marker, `evaluator.md ${heading}`, failures);
   }
+  // Story 1.67: a records harness copies the runtime's calibration inputs verbatim.
+  requireText(
+    headingBody(guide, '## Emit judgment rows or sealed records'),
+    "Write `evaluator-configuration.json` first (the two `tea.judgeCalibration*` bindings may be absent), then run `tea-evaluate digest --evaluation <folder> --calibration-inputs` and copy its `scorerConfigurationDigest` and each item's `rubricId`, `criterionId` and `scorerInput` into the judgments file verbatim, adding only `answer`; then bind `tea.judgeCalibrationDigest` to its `calibrationDigest`.",
+    'evaluator.md ## Emit judgment rows or sealed records calibration inputs',
+    failures,
+  );
 
   const rubric = headingBody(guide, '## Selection rubric');
   const lines = rubric.split('\n').filter((line) => line.startsWith('|'));
