@@ -29,8 +29,21 @@
  *   - `runScore`, `preflightFromObservations`, `aggregateStrength` and `seal` fail anywhere under
  *     `cli/`, `engine.js` included, as an identifier, a member property (dot,
  *     or a bracket string or static template), an object-pattern key, or an
- *     import or export specifier. `Object.seal` is the one exemption, and only
- *     in a file that binds no name `Object`.
+ *     import or export specifier. `Object.seal` is an exemption, and only
+ *     in a file that binds no name `Object`. `runScore` is the other, and only
+ *     as the callee of `const { artifact, ladder, qualification } = await
+ *     this.#engine.runScore(...)` in `cli/lib/evaluate/score-inputs.js`, the
+ *     in-process re-score that compares a call with the held inputs and never
+ *     decides a verdict (Story 1.68, AD-6 amended 2026-10-01). That file reads
+ *     the ladder's `exitCode`, `verdict` and `basis` and the qualification's
+ *     `failures` and no other field of either, and names the result's `artifact`
+ *     only to destructure it, test it against null and hand it to
+ *     `this.#engine.serializeArtifact`. `aggregateStrength` (Story 1.45) is the
+ *     other exemption: one call in the same file's `reproduceAggregate`, its
+ *     result bound to `aggregate`, which is only serialized. A returned or aliased
+ *     `runScore`, a rest element or a renamed key over the result, and a
+ *     `ladder` anywhere else under `cli/` fail. `preflightFromObservations`
+ *     and `seal` fail there too.
  *   - `compile` as a member property or an object-pattern key fails everywhere
  *     under `cli/` unless its receiver is an identifier every binding of which
  *     is a `new X(...)` of Ajv (`X` bound to `require('ajv')` or
@@ -131,6 +144,25 @@ const acorn = require('acorn');
 const PROJECT_ROOT = path.join(__dirname, '..');
 const CLI_ROOT = path.join(PROJECT_ROOT, 'cli');
 const ENGINE_MODULE = path.join('lib', 'evaluate', 'engine.js');
+/**
+ * The one file that may name `runScore`, and only as the callee of `const { artifact, ladder, qualification } = await
+ * this.#engine.runScore(...)`: the in-process re-score that compares a call with the held inputs and never decides
+ * (Story 1.68, AD-6). Of the ladder it reads `exitCode`, `verdict` and `basis`, of the qualification `failures`, and
+ * nothing else; every other file under `cli/` may not read a `ladder` at all.
+ */
+const REPRODUCTION_MODULE = path.join('lib', 'evaluate', 'score-inputs.js');
+const SCORE_MODULE = path.join('lib', 'evaluate', 'score.js');
+const REPRODUCTION_STAGE = 'runScore';
+const REPRODUCTION_METHOD = 'reproduce';
+const AGGREGATION_STAGE = 'aggregateStrength';
+const AGGREGATION_METHOD = 'reproduceAggregate';
+const REPRODUCTION_CALLERS = { reproduce: 'heldRefusal', reproduceAggregate: 'heldAggregateRefusal' };
+const REPRODUCTION_RESULT = new Set(['artifact', 'ladder', 'qualification']);
+// `artifact` is guarded as well (see the rule in `fileViolations`); only `ladder` and `qualification` have readable fields.
+const REPRODUCTION_READS = new Map([
+  ['ladder', new Set(['exitCode', 'verdict', 'basis'])],
+  ['qualification', new Set(['failures'])],
+]);
 const RUNTIME_DIRECTORY = path.join('lib', 'evaluate');
 const SOURCE_EXTENSIONS = new Set(['.js', '.cjs', '.mjs']);
 const DATA_EXTENSIONS = new Set(['.json', '.md', '.yml', '.yaml']);
@@ -540,7 +572,7 @@ function skillRunnerViolations(node, value, report) {
 }
 
 /** Every boundary violation in one parsed file. */
-function fileViolations({ source, ast, isEngine, isSkillRunner, file, projectRoot }) {
+function fileViolations({ source, ast, isEngine, isReproduction, isScoreModule, isSkillRunner, file, projectRoot }) {
   const found = [];
   const report = (node, rule, message) => found.push({ line: node.loc.start.line, rule, message });
   const excerpt = (node) => {
@@ -553,6 +585,114 @@ function fileViolations({ source, ast, isEngine, isSkillRunner, file, projectRoo
   const objectRebound = values.has('Object');
   const isGlobalObject = (node) => !objectRebound && isIdentifier(node, 'Object');
   const parentOf = new Map();
+  let exemptCalls = 0;
+  let exemptAggregations = 0;
+  const reproductionCalls = { reproduce: 0, reproduceAggregate: 0 };
+  /**
+   * The name of the class method whose own function `node` sits in, or null: an arrow, an inner function or a function
+   * declaration between the two (a closure that could be published) gives null.
+   */
+  const enclosingMethod = (node) => {
+    for (let at = parentOf.get(node); at !== undefined; at = parentOf.get(at)) {
+      if (at.type === 'FunctionExpression' || at.type === 'ArrowFunctionExpression' || at.type === 'FunctionDeclaration') {
+        const method = parentOf.get(at);
+        return at.type === 'FunctionExpression' && method?.type === 'MethodDefinition' && method.value === at
+          ? (method.key.name ?? null)
+          : null;
+      }
+    }
+    return null;
+  };
+  /** The nearest enclosing function declaration's name, or null. */
+  const enclosingFunctionName = (node) => {
+    for (let at = parentOf.get(node); at !== undefined; at = parentOf.get(at)) {
+      if (at.type === 'FunctionDeclaration') return at.id?.name ?? null;
+      if (at.type === 'FunctionExpression' || at.type === 'ArrowFunctionExpression') return null;
+    }
+    return null;
+  };
+  /**
+   * Whether the `serializeArtifact(...)` call is the direct argument of `Buffer.from`, which is (or is the alternative of a
+   * conditional that is) the `artifact` or `aggregate` value of an object the method returns: the bytes leave as bytes,
+   * and a parse of the serialization cannot be built.
+   */
+  const returnedAsBytes = (call) => {
+    const buffer = parentOf.get(call);
+    if (
+      buffer?.type !== 'CallExpression' ||
+      buffer.arguments[0] !== call ||
+      buffer.callee.type !== 'MemberExpression' ||
+      buffer.callee.computed ||
+      buffer.callee.object.name !== 'Buffer' ||
+      buffer.callee.property.name !== 'from'
+    ) {
+      return false;
+    }
+    const conditional = parentOf.get(buffer);
+    const value = conditional?.type === 'ConditionalExpression' && conditional.alternate === buffer ? conditional : buffer;
+    const property = parentOf.get(value);
+    return (
+      property?.type === 'Property' &&
+      property.value === value &&
+      !property.computed &&
+      (property.key.name === 'artifact' || property.key.name === 'aggregate') &&
+      parentOf.get(property)?.type === 'ObjectExpression' &&
+      parentOf.get(parentOf.get(property))?.type === 'ReturnStatement'
+    );
+  };
+  /**
+   * `this.#engine.runScore(...)` awaited into a declaration that destructures exactly the result's `artifact`,
+   * `ladder` and `qualification` by their own names, the one spelling the re-score module may use.
+   */
+  const isReproductionCall = (node, parent) => {
+    if (
+      !isReproduction ||
+      (node.name !== REPRODUCTION_STAGE && node.name !== AGGREGATION_STAGE) ||
+      parent?.type !== 'MemberExpression' ||
+      parent.property !== node ||
+      parent.computed ||
+      parent.object.type !== 'MemberExpression' ||
+      parent.object.object.type !== 'ThisExpression' ||
+      parent.object.computed ||
+      parent.object.property.type !== 'PrivateIdentifier' ||
+      parent.object.property.name !== 'engine'
+    ) {
+      return false;
+    }
+    const call = parentOf.get(parent);
+    if (node.name === AGGREGATION_STAGE) {
+      // The aggregate (Story 1.45): one call site, inside `reproduceAggregate`, its result bound to `aggregate`, which is
+      // only serialized.
+      const declaration = call?.type === 'CallExpression' && call.callee === parent ? parentOf.get(call) : undefined;
+      const aggregateExempt =
+        enclosingMethod(node) === AGGREGATION_METHOD &&
+        exemptAggregations === 0 &&
+        declaration?.type === 'VariableDeclarator' &&
+        declaration.init === call &&
+        declaration.id.type === 'Identifier' &&
+        declaration.id.name === 'aggregate';
+      if (aggregateExempt) exemptAggregations += 1;
+      return aggregateExempt;
+    }
+    // One call site, inside the module's `reproduce` method, so the result has one place to go.
+    if (enclosingMethod(node) !== REPRODUCTION_METHOD || exemptCalls > 0) return false;
+    const awaited = call?.type === 'CallExpression' && call.callee === parent ? parentOf.get(call) : undefined;
+    const declarator = awaited?.type === 'AwaitExpression' ? parentOf.get(awaited) : undefined;
+    const exempt =
+      declarator?.type === 'VariableDeclarator' &&
+      declarator.init === awaited &&
+      declarator.id.type === 'ObjectPattern' &&
+      declarator.id.properties.every(
+        (property) =>
+          property.type === 'Property' &&
+          property.shorthand &&
+          !property.computed &&
+          property.key.type === 'Identifier' &&
+          REPRODUCTION_RESULT.has(property.key.name),
+      );
+    if (exempt) exemptCalls += 1;
+    return exempt;
+  };
   let engineImports = 0;
   const isAjvReceiver = (node) => node !== null && node !== undefined && node.type === 'Identifier' && instances.has(node.name);
 
@@ -595,7 +735,11 @@ function fileViolations({ source, ast, isEngine, isSkillRunner, file, projectRoo
     }
 
     // engine-stage: the always-forbidden names.
-    if ((node.type === 'Identifier' || node.type === 'PrivateIdentifier') && ALWAYS_FORBIDDEN.has(node.name)) {
+    if (
+      (node.type === 'Identifier' || node.type === 'PrivateIdentifier') &&
+      ALWAYS_FORBIDDEN.has(node.name) &&
+      !isReproductionCall(node, parent)
+    ) {
       const onObject = parent?.type === 'MemberExpression' && parent.property === node && isGlobalObject(parent.object);
       if (!onObject) report(node, 'engine-stage', `names "${node.name}"`);
     }
@@ -614,6 +758,150 @@ function fileViolations({ source, ast, isEngine, isSkillRunner, file, projectRoo
       for (const side of [node.imported, node.local, node.exported]) {
         if (side?.type === 'Literal' && ALWAYS_FORBIDDEN.has(specifierName(side))) report(node, 'engine-stage', `names "${side.value}"`);
       }
+    }
+
+    // engine-stage: the re-score and the re-aggregation are asked for from one place each, `score.js`'s `heldRefusal` and
+    // `heldAggregateRefusal`, and the answer's artifact or aggregate is only compared there.
+    if (
+      !isReproduction &&
+      node.type === 'CallExpression' &&
+      node.callee.type === 'MemberExpression' &&
+      !node.callee.computed &&
+      Object.hasOwn(REPRODUCTION_CALLERS, node.callee.property.name)
+    ) {
+      const name = node.callee.property.name;
+      const allowed = isScoreModule && enclosingFunctionName(node) === REPRODUCTION_CALLERS[name] && reproductionCalls[name] === 0;
+      if (allowed) reproductionCalls[name] += 1;
+      else report(node, 'engine-stage', `calls ${name} outside the one place score.js asks for it (${REPRODUCTION_CALLERS[name]})`);
+    }
+    if (
+      isScoreModule &&
+      node.type === 'Identifier' &&
+      node.name === 'expected' &&
+      ['heldRefusal', 'heldAggregateRefusal'].includes(enclosingFunctionName(node))
+    ) {
+      const declared = parent?.type === 'VariableDeclarator' && parent.id === node;
+      const field = parent?.type === 'MemberExpression' && parent.object === node && !parent.computed ? parent.property.name : null;
+      const use = field === null ? null : parentOf.get(parent);
+      const compared =
+        use?.type === 'BinaryExpression' &&
+        use.operator === '===' &&
+        (use.left === parent ? use.right : use.left).type === 'Literal' &&
+        (use.left === parent ? use.right : use.left).value === null;
+      const equalsCall =
+        use?.type === 'MemberExpression' &&
+        use.object === parent &&
+        !use.computed &&
+        use.property.name === 'equals' &&
+        parentOf.get(use)?.type === 'CallExpression';
+      const fine =
+        field === 'exitCode' || field === 'lines' || ((field === 'artifact' || field === 'aggregate') && (compared || equalsCall));
+      if (!declared && !fine) {
+        report(node, 'engine-stage', 'uses the answer of the re-score beyond its exit, its lines, a null test and a byte comparison');
+      }
+    }
+
+    // engine-stage: the aggregate the library returns carries its floor decisions, so the re-score module names it only
+    // to declare it and to hand it to `this.#engine.serializeArtifact`.
+    if (isReproduction && node.type === 'Identifier' && node.name === 'aggregate') {
+      const declared = parent?.type === 'VariableDeclarator' && parent.id === node;
+      const key = parent?.type === 'Property' && parent.key === node && !parent.shorthand && !parent.computed;
+      const otherObjectsField = parent?.type === 'MemberExpression' && parent.property === node && !parent.computed;
+      const serialized =
+        parent?.type === 'CallExpression' &&
+        parent.arguments[0] === node &&
+        parent.callee.type === 'MemberExpression' &&
+        !parent.callee.computed &&
+        parent.callee.property.name === 'serializeArtifact' &&
+        parent.callee.object.type === 'MemberExpression' &&
+        parent.callee.object.object.type === 'ThisExpression' &&
+        parent.callee.object.property.type === 'PrivateIdentifier' &&
+        parent.callee.object.property.name === 'engine' &&
+        returnedAsBytes(parent);
+      if (!declared && !key && !otherObjectsField && !serialized) {
+        report(
+          node,
+          'engine-stage',
+          "uses the aggregate the library returns beyond serializing it; its floor decisions are the library's to make",
+        );
+      }
+    }
+
+    // engine-stage: the artifact of a score result already carries the library's verdict, exit and basis, so the
+    // re-score module names it only to destructure it, to test it against null, and to serialize it.
+    if (isReproduction && node.type === 'Identifier' && node.name === 'artifact') {
+      const declared = parent?.type === 'Property' && parentOf.get(parent)?.type === 'ObjectPattern';
+      const key = parent?.type === 'Property' && parent.key === node && !parent.shorthand && !parent.computed;
+      const otherObjectsField = parent?.type === 'MemberExpression' && parent.property === node && !parent.computed;
+      const nullTest =
+        parent?.type === 'BinaryExpression' &&
+        parent.operator === '===' &&
+        (parent.left === node ? parent.right : parent.left).type === 'Literal' &&
+        (parent.left === node ? parent.right : parent.left).value === null;
+      const serialized =
+        parent?.type === 'CallExpression' &&
+        parent.arguments[0] === node &&
+        parent.callee.type === 'MemberExpression' &&
+        !parent.callee.computed &&
+        parent.callee.property.name === 'serializeArtifact' &&
+        parent.callee.object.type === 'MemberExpression' &&
+        parent.callee.object.object.type === 'ThisExpression' &&
+        parent.callee.object.property.type === 'PrivateIdentifier' &&
+        parent.callee.object.property.name === 'engine' &&
+        returnedAsBytes(parent);
+      if (!declared && !key && !otherObjectsField && !nullTest && !serialized) {
+        report(
+          node,
+          'engine-stage',
+          "uses the artifact of a score result beyond testing it against null and serializing it; its verdict, exit and basis are the library's to decide",
+        );
+      }
+    }
+
+    // engine-stage: the re-score module reads a score result through the three names it destructures and, of the
+    // ladder and the qualification, only the fields it compares; no other file reads a ladder.
+    if (isReproduction && node.type === 'Identifier' && REPRODUCTION_READS.has(node.name)) {
+      const reads = REPRODUCTION_READS.get(node.name);
+      const declared = parent?.type === 'Property' && parentOf.get(parent)?.type === 'ObjectPattern';
+      const readField =
+        parent?.type === 'MemberExpression' && parent.object === node && !parent.computed && reads.has(parent.property.name);
+      if (!declared && !readField) {
+        report(
+          node,
+          'engine-stage',
+          `uses "${node.name}" of a score result beyond ${[...reads].join(', ')}; the re-score module compares and never decides`,
+        );
+      }
+      // The verdict only as an operand of `=== null` (is there an Invalid result), the exit only as a value of the object
+      // `reproduce` returns: neither is handed anywhere else.
+      if (readField) {
+        const field = parent.property.name;
+        const comparison = parentOf.get(parent);
+        const verdictTest =
+          comparison?.type === 'BinaryExpression' &&
+          comparison.operator === '===' &&
+          (comparison.left === parent ? comparison.right : comparison.left).type === 'Literal' &&
+          (comparison.left === parent ? comparison.right : comparison.left).value === null;
+        const returned =
+          comparison?.type === 'Property' && comparison.value === parent && parentOf.get(comparison)?.type === 'ObjectExpression';
+        const handedBack =
+          returned && parentOf.get(parentOf.get(comparison))?.type === 'ReturnStatement' && enclosingMethod(parent) === REPRODUCTION_METHOD;
+        if ((field === 'verdict' && !verdictTest) || (field === 'exitCode' && !handedBack)) {
+          report(
+            parent,
+            'engine-stage',
+            field === 'verdict'
+              ? 'uses the ladder verdict beyond comparing it with null'
+              : 'hands the ladder exit anywhere but a value of the object reproduce returns',
+          );
+        }
+      }
+    }
+    if (!isReproduction && node.type === 'MemberExpression' && memberKey(node) === 'ladder') {
+      report(node, 'engine-stage', 'reads "ladder" of a score result; only the re-score module reads one');
+    }
+    if (!isReproduction && node.type === 'Property' && parent?.type === 'ObjectPattern' && propertyKey(node) === 'ladder') {
+      report(node, 'engine-stage', 'destructures "ladder" of a score result; only the re-score module reads one');
     }
 
     // rollback-literal: `rollbackVerified` is computed, never written true.
@@ -744,6 +1032,8 @@ function scanCli(cliRoot) {
       source,
       ast,
       isEngine: file === engineFile,
+      isReproduction: file === path.join(cliRoot, REPRODUCTION_MODULE),
+      isScoreModule: file === path.join(cliRoot, SCORE_MODULE),
       isSkillRunner: file === path.join(cliRoot, SKILL_RUNNER),
       file,
       projectRoot: path.dirname(cliRoot),
@@ -937,6 +1227,334 @@ const PLANTS = [
     name: 'runScore on the engine module',
     rule: 'engine-stage',
     file: 'lib/evaluate/score.js',
+    source: "const engine = require('./engine');\nengine.runScore({});\n",
+  },
+  {
+    name: 'preflightFromObservations in the re-score module',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source: "const engine = require('./engine');\nengine.preflightFromObservations({});\n",
+  },
+  {
+    name: 'runScore through a local alias in the re-score module',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      "const engine = require('./engine');\nasync function f(options) {\n  const library = await engine.loadEngine();\n  return library.runScore(options);\n}\nmodule.exports = { f };\n",
+  },
+  {
+    name: 'runScore through a public engine property in the re-score module',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  constructor(engine) {\n    this.engine = engine;\n  }\n\n  score(options) {\n    return this.engine.runScore(options);\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'runScore destructured in the re-score module',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  reproduce(options) {\n    const { runScore } = this.#engine;\n    return runScore(options);\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'a verdict read from a score result in the re-score module',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  async reproduce(options) {\n    const result = await this.#engine.runScore(options);\n    return result.ladder.exitCode;\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'a verdict destructured from a score result in the re-score module',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  async reproduce(options) {\n    const { ladder } = await this.#engine.runScore(options);\n    return ladder;\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'the exact re-score spelling in a file of the same base name elsewhere',
+    rule: 'engine-stage',
+    file: 'lib/other/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  async reproduce(options) {\n    return (await this.#engine.runScore(options)).artifact;\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'a runScore reference returned from the re-score module',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source: 'class Held {\n  #engine;\n\n  scorer() {\n    return this.#engine.runScore;\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'a rest element over a score result in the re-score module',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  async reproduce(options) {\n    const { artifact, ...rest } = await this.#engine.runScore(options);\n    return rest;\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'a renamed key over a score result in the re-score module',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  async reproduce(options) {\n    const { ladder: l } = await this.#engine.runScore(options);\n    return l.exitCode;\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'a ladder field the re-score module does not compare',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  async reproduce(options) {\n    const { ladder } = await this.#engine.runScore(options);\n    return ladder.strictPromotable;\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'a qualification field the re-score module does not compare',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  async reproduce(options) {\n    const { qualification } = await this.#engine.runScore(options);\n    return qualification.qualified;\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'a runScore call that is not awaited into a destructuring',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  async reproduce(options) {\n    const { artifact } = this.#engine.runScore(options);\n    return artifact;\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'a ladder read through member access in another file',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/leak-user.js',
+    source: 'module.exports = { exitOf: (scored) => scored.ladder.exitCode };\n',
+  },
+  {
+    name: 'a ladder destructured in another file',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/leak-pattern.js',
+    source: 'module.exports = { basisOf: ({ ladder }) => ladder.basis };\n',
+  },
+  {
+    name: 'a verdict handed out by a second method of the re-score module',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  async verdictOf(options) {\n    const { artifact, ladder, qualification } = await this.#engine.runScore(options);\n    return ladder.verdict;\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'an exit handed out by a second method of the re-score module',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  async exitOf(options) {\n    const { ladder } = await this.#engine.runScore(options);\n    return ladder.exitCode;\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'a second runScore call site inside reproduce',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  async reproduce(options) {\n    const { artifact, ladder, qualification } = await this.#engine.runScore(options);\n    const again = await this.#engine.runScore(options);\n    return { artifact, exitCode: ladder.exitCode, lines: [] };\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'a second destructured runScore call inside reproduce',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  async reproduce(options) {\n    const { artifact } = await this.#engine.runScore(options);\n    const { ladder } = await this.#engine.runScore(options);\n    return { artifact, exitCode: ladder.exitCode, lines: [] };\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'the ladder verdict used beyond a null test in reproduce',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  async reproduce(options) {\n    const { artifact, ladder } = await this.#engine.runScore(options);\n    return { artifact, exitCode: ladder.exitCode, verdict: ladder.verdict };\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'the ladder exit stored outside the returned object in reproduce',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  async reproduce(options) {\n    const { artifact, ladder } = await this.#engine.runScore(options);\n    this.last = ladder.exitCode;\n    return { artifact };\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'the ladder exit returned bare from reproduce',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  async reproduce(options) {\n    const { ladder } = await this.#engine.runScore(options);\n    return ladder.exitCode;\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'a lone runScore call in a method other than reproduce',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  async other(options) {\n    const { artifact } = await this.#engine.runScore(options);\n    return artifact;\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'the production verdict returned from reproduce',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  async reproduce(options) {\n    const { artifact, ladder } = await this.#engine.runScore(options);\n    return { artifact, exitCode: ladder.exitCode, verdict: artifact === null ? null : artifact.productionVerdict };\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'the contract verdict returned from reproduce',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  async reproduce(options) {\n    const { artifact, ladder } = await this.#engine.runScore(options);\n    return { artifact, exitCode: ladder.exitCode, verdict: artifact === null ? null : artifact.contractVerdict };\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'the artifact exit returned from reproduce',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  async reproduce(options) {\n    const { artifact, ladder } = await this.#engine.runScore(options);\n    return { artifact, exitCode: ladder.exitCode, engineExit: artifact === null ? null : artifact.exitCode };\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'the artifact destructured into another variable that is read',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  async reproduce(options) {\n    const { artifact, ladder } = await this.#engine.runScore(options);\n    const { exitCode: engineExit } = artifact;\n    return { artifact: null, exitCode: engineExit };\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'the artifact handed to another call',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  async reproduce(options) {\n    const { artifact, ladder } = await this.#engine.runScore(options);\n    this.note(artifact);\n    return { artifact: null, exitCode: ladder.exitCode };\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'aggregateStrength called outside reproduceAggregate',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  reproduce(bytes) {\n    const aggregate = this.#engine.aggregateStrength(bytes);\n    return this.#engine.serializeArtifact(aggregate, "StrengthAggregate");\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'a second aggregateStrength call site in reproduceAggregate',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  reproduceAggregate(bytes) {\n    const aggregate = this.#engine.aggregateStrength(bytes);\n    const again = this.#engine.aggregateStrength(bytes);\n    return this.#engine.serializeArtifact(aggregate, "StrengthAggregate");\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'the aggregate result not bound to aggregate',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  reproduceAggregate(bytes) {\n    const result = this.#engine.aggregateStrength(bytes);\n    return this.#engine.serializeArtifact(result, "StrengthAggregate");\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'a floor decision read from the aggregate',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  reproduceAggregate(bytes) {\n    const aggregate = this.#engine.aggregateStrength(bytes);\n    return { aggregate: this.#engine.serializeArtifact(aggregate, "StrengthAggregate"), decisions: aggregate.floorDecisions };\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'the aggregate returned bare',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  reproduceAggregate(bytes) {\n    const aggregate = this.#engine.aggregateStrength(bytes);\n    return aggregate;\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'aggregateStrength reached through a local alias',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  reproduceAggregate(bytes) {\n    const library = this.#engine;\n    const aggregate = library.aggregateStrength(bytes);\n    return this.#engine.serializeArtifact(aggregate, "StrengthAggregate");\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'a second aggregateStrength call bound to aggregate in reproduceAggregate',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  reproduceAggregate(bytes) {\n    {\n      const aggregate = this.#engine.aggregateStrength(bytes);\n      this.#engine.serializeArtifact(aggregate, "StrengthAggregate");\n    }\n    {\n      const aggregate = this.#engine.aggregateStrength(bytes);\n      return this.#engine.serializeArtifact(aggregate, "StrengthAggregate");\n    }\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'a floor decision parsed from the serialized aggregate in reproduceAggregate',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  reproduceAggregate(bytes) {\n    const aggregate = this.#engine.aggregateStrength(bytes);\n    const text = this.#engine.serializeArtifact(aggregate, "StrengthAggregate");\n    return { aggregate: Buffer.from(text, "utf8"), exitCode: 0, floorDecisions: JSON.parse(text).floorDecisions };\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'a verdict parsed from the serialized artifact in reproduce',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  async reproduce(options) {\n    const { artifact, ladder } = await this.#engine.runScore(options);\n    return { artifact: null, exitCode: ladder.exitCode, verdict: JSON.parse(this.#engine.serializeArtifact(artifact, "EvidenceArtifact")).productionVerdict };\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'the serialization returned as text, not bytes, from reproduceAggregate',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  reproduceAggregate(bytes) {\n    const aggregate = this.#engine.aggregateStrength(bytes);\n    return { aggregate: this.#engine.serializeArtifact(aggregate, "StrengthAggregate"), exitCode: 0 };\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'a published closure holding the aggregateStrength call',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  reproduceAggregate(bytes) {\n    this.aggregateWith = (inputs) => {\n      const aggregate = this.#engine.aggregateStrength(inputs);\n      return { aggregate: Buffer.from(this.#engine.serializeArtifact(aggregate, "StrengthAggregate"), "utf8"), exitCode: 0 };\n    };\n    return { aggregate: null, exitCode: 0 };\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'a published closure holding the runScore call',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  async reproduce(options) {\n    this.scoreWith = async (inputs) => {\n      const { artifact, ladder } = await this.#engine.runScore(inputs);\n      return { artifact: Buffer.from(this.#engine.serializeArtifact(artifact, "EvidenceArtifact"), "utf8"), exitCode: ladder.exitCode };\n    };\n    return { artifact: null, exitCode: 0 };\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'an inner function expression holding the runScore call',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  async reproduce(options) {\n    const inner = async function (inputs) {\n      const { artifact, ladder } = await this.#engine.runScore(inputs);\n      return { artifact: Buffer.from(this.#engine.serializeArtifact(artifact, "EvidenceArtifact"), "utf8"), exitCode: ladder.exitCode };\n    };\n    return { artifact: null, exitCode: 0 };\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'reproduceAggregate asked for from another module',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/other.js',
+    source: 'function other(held, bytes) {\n  return held.reproduceAggregate(bytes);\n}\nmodule.exports = { other };\n',
+  },
+  {
+    name: 'reproduce asked for outside heldRefusal in score.js',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score.js',
+    source: 'async function elsewhere(held, set) {\n  return held.reproduce(set);\n}\nmodule.exports = { elsewhere };\n',
+  },
+  {
+    name: 'reproduce asked for twice in heldRefusal',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score.js',
+    source:
+      'async function heldRefusal(held, set) {\n  const expected = await held.reproduce(set);\n  const again = await held.reproduce(set);\n  return expected.exitCode + again.exitCode;\n}\nmodule.exports = { heldRefusal };\n',
+  },
+  {
+    name: 'the aggregate answer parsed in heldAggregateRefusal',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score.js',
+    source:
+      'function heldAggregateRefusal(held, bytes) {\n  const expected = held.reproduceAggregate(bytes);\n  return JSON.parse(expected.aggregate).floorDecisions;\n}\nmodule.exports = { heldAggregateRefusal };\n',
+  },
+  {
+    name: 'the whole answer returned from heldRefusal',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score.js',
+    source:
+      'async function heldRefusal(held, set) {\n  const expected = await held.reproduce(set);\n  return expected;\n}\nmodule.exports = { heldRefusal };\n',
+  },
+  {
+    name: 'seal in the re-score module',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source: "const engine = require('./engine');\nconst { seal } = engine;\nseal({});\n",
+  },
+  {
+    name: 'runScore in a sibling of the re-score module',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs-2.js',
     source: "const engine = require('./engine');\nengine.runScore({});\n",
   },
   {
@@ -1389,6 +2007,65 @@ const CLEAN_PLANTS = [
     file: SKILL_RUNNER,
     source:
       "// No ~/.claude/skills lookup, no os.homedir(), no default of claude or codex.\nconst adapters = require('./lib/agent-adapters');\nconst strategy = 'legacy';\nmodule.exports = { adapters, strategy };\n",
+  },
+  {
+    name: 'runScore awaited into artifact, ladder and qualification in the re-score module, comparing the fields it may',
+    file: 'lib/evaluate/score-inputs.js',
+    source: [
+      'class Held {',
+      '  #engine;',
+      '',
+      '  constructor(engine) {',
+      '    this.#engine = engine;',
+      '  }',
+      '',
+      '  async reproduce(options) {',
+      '    const { artifact, ladder, qualification } = await this.#engine.runScore(options);',
+      '    const lines = qualification.failures.map((failure) => failure.detail);',
+      '    if (ladder.verdict === null) lines.push(...ladder.basis);',
+      '    return { artifact: artifact === null ? null : Buffer.from(this.#engine.serializeArtifact(artifact, "EvidenceArtifact"), "utf8"), exitCode: ladder.exitCode, lines };',
+      '  }',
+      '}',
+      'module.exports = { Held };',
+      '',
+    ].join('\n'),
+  },
+  {
+    name: 'aggregateStrength bound to aggregate and serialized in reproduceAggregate',
+    file: 'lib/evaluate/score-inputs.js',
+    source: [
+      'class Held {',
+      '  #engine;',
+      '',
+      '  constructor(engine) {',
+      '    this.#engine = engine;',
+      '  }',
+      '',
+      '  reproduceAggregate(bytes) {',
+      '    const aggregate = this.#engine.aggregateStrength(bytes);',
+      '    return { aggregate: Buffer.from(this.#engine.serializeArtifact(aggregate, "StrengthAggregate"), "utf8"), exitCode: 0 };',
+      '  }',
+      '}',
+      'module.exports = { Held };',
+      '',
+    ].join('\n'),
+  },
+  {
+    name: 'score.js asking for the re-score and the re-aggregation once each and comparing them',
+    file: 'lib/evaluate/score.js',
+    source: [
+      'async function heldRefusal(held, set, staged) {',
+      '  const expected = await held.reproduce(set);',
+      '  if (expected.artifact === null) return staged === null ? null : "none";',
+      '  return expected.artifact.equals(staged) && expected.exitCode === 0 ? expected.lines : "differs";',
+      '}',
+      'function heldAggregateRefusal(held, bytes, staged) {',
+      '  const expected = held.reproduceAggregate(bytes);',
+      '  return expected.aggregate === null ? expected.exitCode : expected.aggregate.equals(staged);',
+      '}',
+      'module.exports = { heldRefusal, heldAggregateRefusal };',
+      '',
+    ].join('\n'),
   },
   {
     name: 'engine digests, Ajv compile, and stage names in comments and messages',

@@ -741,6 +741,10 @@
           "reason": "an eval-quality package export, not a TEA declaration"
         },
         {
+          "token": "aggregateStrength",
+          "reason": "an eval-quality package export, not a TEA declaration"
+        },
+        {
           "token": "parseAddress",
           "reason": "an eval-quality package export, not a TEA declaration"
         },

@@ -108,8 +108,9 @@
  *   evaluation opts out, which `run.json` records; the reference names each
  *   platform's mechanism under its exact heading.
  *
- * Usage: node test/test-evaluate-run.js [--group=run|--group=confinement]
- *   `test:evaluate-run` runs `--group=run` and `test:evaluate-confinement` runs `--group=confinement`; with no group every case runs.
+ * Usage: node test/test-evaluate-run.js [--group=run|confinement|aggregate|held-inputs]
+ * CI runs the four groups as `test:evaluate-run`, `test:evaluate-confinement`, `test:evaluate-aggregate` and
+ * `test:evaluate-held-inputs`; with no `--group` every case runs.
  */
 
 'use strict';
@@ -687,21 +688,32 @@ async function checkRealScore({ engine, validate, folder, env, runDirectory, ind
   }
 }
 
-/** The score through a logging shim: one call per probe, the streams and codes kept per probe, the most severe exit passed through. */
+/**
+ * The score through a logging shim that runs the real eval-quality CLI beneath known streams: one call per probe, the
+ * streams and codes kept per probe, the most severe exit passed through. P-002's manifest is left out, so P-001 exits 0
+ * and P-002 exits 3 (Invalid, no artifact), which the held bytes also give.
+ */
 function checkShimmedScore({ folder, env, runDirectory, index }) {
   const log = path.join(tempDir('shim'), 'argv.log');
   const shimEnv = {
     ...env,
     [ENGINE_CLI_ENV]: SHIM,
     TEA_EVALUATE_SHIM_LOG: log,
-    TEA_EVALUATE_SHIM_EXIT_SCORE_P_001: '4',
-    TEA_EVALUATE_SHIM_EXIT_SCORE_P_002: '2',
+    TEA_EVALUATE_SHIM_RUN_REAL: '1',
     TEA_EVALUATE_SHIM_STREAMS: 'known-bytes',
   };
-  const shimmed = evaluate(['score', '--evaluation', folder], shimEnv);
+  const manifestFile = path.join(runDirectory, index.trialSets.find((set) => set.probeId === 'P-002').isolationManifest);
+  const manifestBytes = fs.readFileSync(manifestFile);
+  fs.rmSync(manifestFile);
+  let shimmed;
+  try {
+    shimmed = evaluate(['score', '--evaluation', folder], shimEnv);
+  } finally {
+    fs.writeFileSync(manifestFile, manifestBytes);
+  }
   check(
-    shimmed.status === 4,
-    `score through a shim whose P-001 call exits 4 and P-002 call exits 2 exited ${shimmed.status}; expected 4\n${shimmed.output}`,
+    shimmed.status === 3,
+    `score through a shim whose P-001 call exits 0 and P-002 call exits 3 exited ${shimmed.status}; expected 3\n${shimmed.output}`,
   );
   const calls = loggedCalls(log);
   check(
@@ -717,8 +729,10 @@ function checkShimmedScore({ folder, env, runDirectory, index }) {
       `${set.probeId}'s score call carried records ${JSON.stringify(records)}`,
     );
     check(
-      argv[argv.indexOf('--isolation-manifest') + 1] === path.join(runDirectory, set.isolationManifest),
-      `${set.probeId}'s score call carried another isolation manifest`,
+      set.probeId === 'P-002'
+        ? !argv.includes('--isolation-manifest')
+        : argv[argv.indexOf('--isolation-manifest') + 1] === path.join(runDirectory, set.isolationManifest),
+      `${set.probeId}'s score call carried another isolation manifest, or one that is not there`,
     );
     const call = written(path.join(scoreDirectory, set.probeId, 'score.json'), `${set.probeId}'s shimmed score call`);
     if (call === null) continue;
@@ -728,10 +742,16 @@ function checkShimmedScore({ folder, env, runDirectory, index }) {
       `${set.probeId}'s persisted argv ${JSON.stringify(call.argv)} is not the argv the engine was called with, ${JSON.stringify(argv)}`,
     );
     const probeFile = `${set.probeId}.probe.json`;
-    const code = set.probeId === 'P-001' ? 4 : 2;
+    const code = set.probeId === 'P-001' ? 0 : 3;
     const stream = (name) => `known-bytes ${name} ${probeFile}\nknown-bytes ${name} 2 ${probeFile}\nknown-bytes ${name} 3 ${probeFile}`;
     check(call.stdout === stream('stdout'), `${set.probeId}'s persisted stdout is ${JSON.stringify(call.stdout)}`);
-    check(call.stderr === stream('stderr'), `${set.probeId}'s persisted stderr is ${JSON.stringify(call.stderr)}`);
+    // The real CLI's own diagnostics lead the shim's known bytes (an Invalid result names its reason there).
+    check(call.stderr.endsWith(stream('stderr')), `${set.probeId}'s persisted stderr is ${JSON.stringify(call.stderr)}`);
+    const diagnostics = call.stderr.slice(0, call.stderr.length - stream('stderr').length);
+    check(
+      set.probeId === 'P-002' ? /^eval-quality: invalid: .*isolation manifest absent/m.test(diagnostics) : diagnostics === '',
+      `${set.probeId}'s persisted stderr leads with ${JSON.stringify(diagnostics)}`,
+    );
     check(
       call.exitCode === code && call.substituted === true,
       `${set.probeId}'s persisted call records exit ${call.exitCode}, substituted ${call.substituted}; expected ${code}`,
@@ -1414,8 +1434,8 @@ async function checkStrengthAggregate() {
     `a score with no strengthFloor made ${loggedCalls(aggregateLog).length} aggregate call(s); expected 0`,
   );
 
-  // The engine refuses the set: exit 5 for a floor outside the classes it admits, exit 4 for an evidence file that
-  // contradicts itself. Nothing is copied and the exit joins the most severe combination (5 and 4 beat the FAIL's 2).
+  // The engine refuses the set: exit 5 for a floor outside the classes it admits. Nothing is copied and the exit joins the
+  // most severe combination (5 beats the FAIL's 2) because the held bytes give the same refusal.
   floors({ canary: 1 });
   const canary = score({}, 5);
   floors({ defect: 0.75 });
@@ -1425,13 +1445,14 @@ async function checkStrengthAggregate() {
       !fs.existsSync(path.join(canary.scoreDirectory, 'strength-aggregate.json')),
     `a canary floor the engine refuses is recorded as ${JSON.stringify(canary.summary)}`,
   );
-  const contradicted = score(raced('inconsistent-evidence'), 4);
+  // An evidence file that contradicts itself under the aggregate's read is a persisted file a process rewrote, not a set the
+  // engine refused: the held bytes give an aggregate, so the run exits 12 (Story 1.68) and copies none.
+  const contradicted = score(raced('inconsistent-evidence'), 12);
   check(
-    contradicted.summary?.status === 'refused' &&
-      contradicted.summary.exitCode === 4 &&
-      /strength-input-inconsistent/.test(contradicted.summary.reason ?? '') &&
+    contradicted.summary?.status === 'failed' &&
+      /no longer holds the bytes the runtime wrote/.test(contradicted.summary.reason ?? '') &&
       !fs.existsSync(path.join(contradicted.scoreDirectory, 'strength-aggregate.json')),
-    `an evidence file contradicting itself is recorded as ${JSON.stringify(contradicted.summary)}`,
+    `an evidence file rewritten under the aggregate is recorded as ${JSON.stringify(contradicted.summary)}`,
   );
 
   // A persisted evidence file that changed, or an aggregate that does not match what was persisted, is copied nowhere and exits 12.
@@ -2879,14 +2900,15 @@ function checkScoreOutputReference() {
     [/`--out`/, 'the `--out` argument that names the staging file'],
     [/link/, 'the planted or swapped link it refuses'],
     [/link at `runs\/`/, 'the link at `runs/` it refuses'],
-    [
-      /can substitute an artifact that passes it/,
-      'the limit: a process that can write the staging directory can substitute a well-formed artifact',
-    ],
+    [/\[Score input integrity\]\(#score-input-integrity\)/, 'the link to the check that decides whether the staged artifact is the engine'],
     [/carries an outcome for the probe/, 'what the copy check covers'],
   ]) {
     check(pattern.test(section), `the reference's score output integrity section does not name ${what}`);
   }
+  check(
+    !/can substitute an artifact that passes it/.test(reference),
+    'the reference still says a process that can write the staging directory can substitute an artifact that passes the copy check',
+  );
   const exitRow = reference.split('\n').find((line) => /^\| 12\s+\| infrastructure:/.test(line)) ?? '';
   check(
     exitRow.includes(
@@ -2894,6 +2916,702 @@ function checkScoreOutputReference() {
     ),
     "the reference's exit 12 row does not name the staged-artifact refusal as the copy check decides it",
   );
+}
+
+/** The reference states the score input check and no longer says a process that can write the run directory can rewrite a file and its digest (Story 1.68). */
+function checkScoreInputReference() {
+  const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
+  const heading = '### Score input integrity\n';
+  const start = reference.indexOf(heading);
+  check(start !== -1, 'the reference has no "### Score input integrity" section');
+  const next = start === -1 ? -1 : reference.slice(start + heading.length).search(/^#{1,3} /m);
+  const section = start === -1 ? '' : reference.slice(start + heading.length, next === -1 ? undefined : start + heading.length + next);
+  for (const [pattern, what] of [
+    [/once, as a regular file/, 'the single read of each input without following a link'],
+    [/digestBytes/, "the engine's digest the bytes are compared with run.json by"],
+    [/in memory/, 'the bytes held in memory'],
+    [/changed|appeared/, 'the input that changed or appeared'],
+    [/in process/, 'the in-process re-score'],
+    [
+      /The staged artifact must equal the result serialized with the library's `serializeArtifact` byte for byte/,
+      'the byte-for-byte comparison with the staged artifact',
+    ],
+    [/compares and refuses/, 'that the re-score compares and refuses'],
+    [/still decides every enforced verdict/, 'that the CLI decides every enforced verdict'],
+    [/exit(?:s)? 12/, 'the exit, 12'],
+    [/fresh `--out`/, 'the recorded argv re-run with a fresh `--out`'],
+    [/whatever it exited/, 'that a call staging nothing is compared whatever it exited'],
+    [/The aggregate call .* is held to the same inputs/, 'that the aggregate call is held to the same inputs'],
+    [/aggregates the held bytes in process with eval-quality's `aggregateStrength`/, 'the in-process aggregate of the held bytes'],
+    [
+      /The aggregate's diagnostic text is the CLI's own rendering of an error and is not compared/,
+      'what the aggregate comparison leaves out',
+    ],
+    [/The call's exit must be the one the held bytes give/, "that the call's exit is compared with the held bytes'"],
+    [/`eval-quality:` lines on the call's stderr must be the ones the result would print/, 'that the diagnostic lines are compared'],
+    [/only the exit is compared/, 'that a refused library call is compared by its exit alone'],
+    [
+      /4 for a structural failure, 5 for a runtime fault, 64 for a private-storage manifest reference/,
+      'the exits the held bytes give a refused or unusable call',
+    ],
+    [/the call's stdout and its other stderr text are recorded as they came and are not compared/, 'what the comparison leaves out'],
+  ]) {
+    check(pattern.test(section), `the reference's score input integrity section does not name ${what}`);
+  }
+  for (const [pattern, what] of [
+    [/can rewrite both/, 'the sentence that a process able to write the run directory can rewrite a file and its digest'],
+    [/a target's leftover process can\./, 'the sentence that a leftover process of an opted-out run can rewrite them'],
+    [/can substitute an artifact that passes/, 'the sentence that a staged artifact can be substituted'],
+    [/Story 1\.68/, 'a pointer to the story that has now closed the limit'],
+    [/unless it exits 4, 5 or 64/, 'the exemption of the exits that state no verdict'],
+  ]) {
+    check(!pattern.test(reference), `the reference still carries ${what}`);
+  }
+  const passedRow = reference.split('\n').find((line) => /^\| 3-5\s+\|/.test(line)) ?? '';
+  check(
+    /Score input integrity/.test(passedRow) && /exit and reason lines are what the held inputs produce/.test(passedRow),
+    "the reference's exit 3-5 row does not say a stage's exit is passed through only while the call's artifact, exit and reason lines are what the held inputs produce",
+  );
+  const exitRow = reference.split('\n').find((line) => /^\| 12\s+\| infrastructure:/.test(line)) ?? '';
+  check(
+    /an input that changed or appeared while a call ran/.test(exitRow) &&
+      /a call whose staged artifact, exit or `eval-quality:` diagnostic lines the held inputs do not reproduce/.test(exitRow),
+    "the reference's exit 12 row does not name an input that changed during a call, or a call whose artifact, exit or diagnostic lines the held inputs do not reproduce",
+  );
+}
+
+/** Every score input path of a run, as the enumeration should list them. */
+function expectedScoreInputs(index) {
+  return [
+    index.contract,
+    index.preflightVerdict,
+    index.evaluatorConfiguration,
+    index.policy,
+    ...index.trialSets.flatMap((set) => [set.probe, ...set.records, set.isolationManifest]),
+  ].sort();
+}
+
+/**
+ * The inputs `score` held between the check and the engine's read (Story 1.68, AD-6, AD-7, AD-12): the module's own
+ * units over a real run, a normal and a repeated score, the recorded argv, and a process that rewrites an input for
+ * the engine's read and restores it, plants a manifest or substitutes a well-formed artifact with altered outcomes.
+ */
+async function checkHeldInputs() {
+  const engine = await loadEngine();
+  const { holdScoreInputs, scoreInputList } = require('../cli/lib/evaluate/score-inputs');
+  const made = makeProject('held-inputs', { unconfined: true });
+  const ran = evaluate(['run', '--evaluation', made.folder], made.env);
+  check(ran.status === 0, `the run for the held-input cases exited ${ran.status}: ${ran.output}`);
+  const runDirectory = runDirectoryOf(made.folder);
+  if (runDirectory === null) return;
+  const runName = path.basename(runDirectory);
+  const index = readJson(path.join(runDirectory, 'trial-sets.json'));
+  const record = readJson(path.join(runDirectory, 'run.json'));
+  const probes = index.trialSets.map((set) => set.probeId);
+  const scoreArgs = ['score', '--evaluation', made.folder, '--run', runName];
+  const evidenceIn = (directory) =>
+    directory === null ? [] : fs.readdirSync(directory, { recursive: true }).filter((entry) => entry.endsWith('evidence-artifact.json'));
+
+  // The enumeration lists every file the engine reads once, and holds none twice.
+  const inputs = scoreInputList({ runDirectory, index, record });
+  check(
+    JSON.stringify(inputs.map((input) => input.relative).sort()) === JSON.stringify(expectedScoreInputs(index)),
+    `the score inputs are ${JSON.stringify(inputs.map((input) => input.relative))}; the run's trial-sets.json names ${JSON.stringify(expectedScoreInputs(index))}`,
+  );
+  check(
+    inputs.every((input) => typeof input.expected === 'string' && input.what.length > 0),
+    'a score input has no recorded digest or no name',
+  );
+
+  // A normal score and a repeated score are unchanged: both hold evidence, the two agree byte for byte, and a direct
+  // eval-quality score on the recorded argv with a fresh `--out` reproduces each.
+  const firstScore = evaluate(scoreArgs, made.env);
+  const secondScore = evaluate(scoreArgs, made.env);
+  check(
+    firstScore.status === 0 && secondScore.status === 0,
+    `a normal and a repeated score exited ${firstScore.status} and ${secondScore.status}`,
+  );
+  const invocations = fs.readdirSync(path.join(runDirectory, 'scores')).sort();
+  check(invocations.length === 2, `two scores left ${JSON.stringify(invocations)}`);
+  const [firstDirectory, secondDirectory] = invocations.map((name) => path.join(runDirectory, 'scores', name));
+  for (const probeId of probes) {
+    const files = [firstDirectory, secondDirectory].map((directory) => path.join(directory, probeId, 'evidence-artifact.json'));
+    check(
+      files.every((file) => fs.existsSync(file)) && fs.readFileSync(files[0]).equals(fs.readFileSync(files[1])),
+      `${probeId}: the repeated score did not hold the same evidence as the first`,
+    );
+    const call = written(path.join(secondDirectory, probeId, 'score.json'), `${probeId}'s repeated score call`);
+    if (call === null) continue;
+    // The recorded argv names the run directory's own files; only `--out` names the private staging file.
+    const named = call.argv.filter((argument, position) =>
+      /^--(record|contract|probe|preflight-verdict|policy|isolation-manifest|evaluator-configuration)$/.test(call.argv[position - 1] ?? ''),
+    );
+    check(
+      named.length >= 7 && named.every((file) => file.startsWith(`${runDirectory}${path.sep}`)),
+      `${probeId}: the recorded argv names a path outside the run directory: ${JSON.stringify(named)}`,
+    );
+    const out = call.argv[call.argv.indexOf('--out') + 1];
+    check(!out.startsWith(runDirectory) && path.basename(out) === 'evidence-artifact.json', `${probeId}: the recorded --out is ${out}`);
+  }
+  checkDirectRerun('the normal score', firstDirectory);
+  checkDirectRerun('the repeated score', secondDirectory);
+
+  // Files the cases below rewrite, link or remove; they are put back whatever a case throws.
+  const [firstSet, secondSet] = index.trialSets;
+  const recordFile = path.join(runDirectory, firstSet.records[0]);
+  const manifestFile = path.join(runDirectory, secondSet.isolationManifest);
+  const indexFile = path.join(runDirectory, 'trial-sets.json');
+  const preflightFile = path.join(runDirectory, index.preflightVerdict);
+  const runFile = path.join(runDirectory, 'run.json');
+  const originals = [recordFile, manifestFile, indexFile, preflightFile, runFile].map((file) => [file, fs.readFileSync(file)]);
+  const [, manifestBytes] = originals[1];
+  const [, recordBytes] = originals[0];
+  const [, indexBytes] = originals[2];
+  try {
+    // The module over the real run: what is held reproduces each persisted artifact, and the check finds a change.
+    const heldInputs = holdScoreInputs({ runDirectory, index, record, engine });
+    for (const set of index.trialSets) {
+      const reproduced = await heldInputs.reproduce(set);
+      const persisted = path.join(secondDirectory, set.probeId, 'evidence-artifact.json');
+      check(
+        reproduced.artifact !== null && fs.existsSync(persisted) && reproduced.artifact.equals(fs.readFileSync(persisted)),
+        `${set.probeId}: the in-process score of the held bytes is not byte-identical to the persisted evidence`,
+      );
+      check(
+        reproduced.exitCode === 0 && reproduced.lines.length === 0,
+        `${set.probeId}: the in-process score of the held bytes gives exit ${reproduced.exitCode} and lines ${JSON.stringify(reproduced.lines)}; the clean score exited 0 with none`,
+      );
+    }
+    check(heldInputs.changedSince() === null, 'a freshly held run reports a changed input');
+    // The re-score reads the held bytes and nothing from the run directory: a record rewritten on disk since the hold
+    // does not change what it returns.
+    const flipped = JSON.parse(recordBytes.toString('utf8'));
+    flipped.evaluatorRecommendation = flipped.evaluatorRecommendation === 'FAIL' ? 'PASS' : 'FAIL';
+    fs.writeFileSync(recordFile, `${JSON.stringify(flipped)}\n`);
+    const fromHeld = await heldInputs.reproduce(firstSet);
+    check(
+      fromHeld.artifact !== null &&
+        fromHeld.artifact.equals(fs.readFileSync(path.join(secondDirectory, firstSet.probeId, 'evidence-artifact.json'))),
+      'the in-process score read a record from the run directory instead of the held bytes',
+    );
+    fs.writeFileSync(recordFile, recordBytes);
+    fs.writeFileSync(recordFile, `${recordBytes.toString('utf8')} `);
+    const rewritten = heldInputs.changedSince();
+    check(
+      rewritten?.relative === firstSet.records[0] && /changed after the input check/.test(rewritten.message),
+      `a rewritten record was reported as ${JSON.stringify(rewritten)}`,
+    );
+    fs.rmSync(recordFile);
+    fs.symlinkSync(path.join(runDirectory, firstSet.probe), recordFile);
+    const linked = heldInputs.changedSince();
+    check(
+      linked?.relative === firstSet.records[0] && /symbolic link/.test(linked.message),
+      `a record swapped for a link was reported as ${JSON.stringify(linked)}`,
+    );
+    fs.rmSync(recordFile);
+    fs.writeFileSync(recordFile, recordBytes);
+    check(heldInputs.changedSince() === null, 'the restored record is still reported as changed');
+    check(heldInputs.anchorFinding(firstSet.records[0]) === null, 'a record the run sealed has an anchoring finding');
+    let unknown = null;
+    try {
+      heldInputs.entry('eval-contract-other.json');
+    } catch (error) {
+      unknown = error.message;
+    }
+    check(/not a score input/.test(unknown ?? ''), `a path that is no score input was held: ${unknown}`);
+
+    // A manifest absent at the check holds as absent: no file is handed to the engine, the held bytes give no artifact,
+    // and a file that appears afterwards is named.
+    fs.rmSync(manifestFile);
+    const withoutManifest = holdScoreInputs({ runDirectory, index, record, engine });
+    check(withoutManifest.exists(secondSet.isolationManifest) === false, 'an absent manifest was held as present');
+    const invalidWithout = await withoutManifest.reproduce(secondSet);
+    check(
+      invalidWithout.artifact === null &&
+        invalidWithout.exitCode === 3 &&
+        invalidWithout.lines.some((line) => /^eval-quality: invalid: .*isolation manifest absent/.test(line)),
+      `the held bytes of a set with no manifest give ${JSON.stringify(invalidWithout)}; expected no artifact, exit 3 and the absent-manifest reason`,
+    );
+    check(withoutManifest.changedSince() === null, 'an absent manifest is reported as changed before anything appears');
+    fs.writeFileSync(manifestFile, manifestBytes);
+    const appeared = withoutManifest.changedSince();
+    check(
+      appeared?.relative === secondSet.isolationManifest && /appeared after the input check/.test(appeared.message),
+      `a manifest that appeared was reported as ${JSON.stringify(appeared)}`,
+    );
+
+    // A process rewrites an input for the engine's read and restores it before the call returns, or substitutes a
+    // well-formed artifact with altered outcomes: the staged artifact is not the one the held bytes produce.
+    const attacks = [
+      ...['record', 'contract', 'preflight', 'policy', 'configuration', 'probe', 'manifest'].map((kind) => [
+        `restore-${kind}`,
+        /verified inputs/,
+        probes,
+      ]),
+      // Bytes that are no JSON make the engine fault with no artifact (exit 4 or 5); the held bytes still produce one.
+      ['restore-unreadable', /the call staged no evidence artifact, and the verified inputs produce one/, probes, [4, 5]],
+      ['forge-outcomes', /differs from the one the verified inputs produce/, probes],
+      // The same value in other bytes: only a byte comparison tells it from the engine's own artifact.
+      ['reformat-artifact', /differs from the one the verified inputs produce/, probes],
+      ['reorder-artifact', /differs from the one the verified inputs produce/, probes],
+      // A repeated key is refused earlier still, by the copy check's lexical read.
+      ['duplicate-key-artifact', /is not canonical JSON the engine reads/, probes],
+    ];
+    for (const [mode, reason, refused, engineExits] of attacks) {
+      const directory = tempDir(`held-${mode}`);
+      const log = path.join(directory, 'argv.log');
+      const scored = evaluate(scoreArgs, {
+        ...made.env,
+        [ENGINE_CLI_ENV]: RACE_ENGINE,
+        TEA_RACE_LOG: log,
+        TEA_RACE_MODE: mode,
+        TEA_RACE_TARGET: directory,
+      });
+      const scoreDirectory = latestScoreDirectory(runDirectory);
+      check(
+        scored.status === 12,
+        `${mode}: a call whose artifact the held inputs do not reproduce exited ${scored.status}; expected 12\n${scored.output}`,
+      );
+      check(
+        loggedCalls(log).length === probes.length,
+        `${mode}: the engine was called ${loggedCalls(log).length} time(s) for ${probes.length} probe(s)`,
+      );
+      const summary = scoreDirectory === null ? null : written(path.join(scoreDirectory, 'score.json'), `${mode}'s score summary`);
+      for (const probeId of refused) {
+        const entry = summary?.scores?.find((candidate) => candidate.probeId === probeId);
+        check(
+          entry?.evidence === null && reason.test(entry?.failure ?? ''),
+          `${mode}, ${probeId}: the summary entry is ${JSON.stringify(entry)}; expected no evidence and ${reason}`,
+        );
+      }
+      check(evidenceIn(scoreDirectory).length === 0, `${mode}: evidence was copied: ${JSON.stringify(evidenceIn(scoreDirectory))}`);
+      if (engineExits !== undefined) {
+        const call = scoreDirectory === null ? null : written(path.join(scoreDirectory, probes[0], 'score.json'), `${mode}'s score call`);
+        check(engineExits.includes(call?.exitCode), `${mode}: the engine call exited ${call?.exitCode}; expected one of ${engineExits}`);
+      }
+      // The shim put the inputs back, so the held bytes still stand.
+      check(heldInputs.changedSince() === null, `${mode}: an input is still changed after the shim restored it`);
+    }
+
+    // A staged artifact where the verified inputs give none: P-002's manifest is left out, so the engine calls the set
+    // Invalid and stages nothing, and a process stages the clean score's evidence for it anyway.
+    fs.rmSync(manifestFile);
+    const stashLog = path.join(tempDir('held-stash'), 'argv.log');
+    const stashed = evaluate(scoreArgs, {
+      ...made.env,
+      [ENGINE_CLI_ENV]: RACE_ENGINE,
+      TEA_RACE_LOG: stashLog,
+      TEA_RACE_MODE: 'stage-stashed',
+      TEA_RACE_PROBE: secondSet.probeId,
+      TEA_RACE_STASH_DIR: firstDirectory,
+    });
+    const stashDirectory = latestScoreDirectory(runDirectory);
+    check(
+      stashed.status === 12,
+      `a staged artifact over a set the engine called Invalid exited ${stashed.status}; expected 12\n${stashed.output}`,
+    );
+    const stashSummary =
+      stashDirectory === null ? null : written(path.join(stashDirectory, 'score.json'), "the stashed artifact's summary");
+    const stashEntry = stashSummary?.scores?.find((candidate) => candidate.probeId === secondSet.probeId);
+    check(
+      stashEntry?.evidence === null && /which produce no artifact/.test(stashEntry?.failure ?? ''),
+      `the stashed artifact's entry is ${JSON.stringify(stashEntry)}`,
+    );
+    check(
+      !fs.existsSync(path.join(stashDirectory, secondSet.probeId, 'evidence-artifact.json')),
+      'an artifact staged over a set the verified inputs give none was copied',
+    );
+    fs.writeFileSync(manifestFile, manifestBytes);
+
+    // Presence is read from the one open that reads the bytes: a link at a manifest path that points nowhere is a link
+    // to refuse (exit 10, no engine call), not an absent manifest.
+    const danglingLog = path.join(tempDir('held-dangling'), 'argv.log');
+    fs.rmSync(manifestFile);
+    fs.symlinkSync(path.join(runDirectory, 'nowhere.json'), manifestFile);
+    const dangling = evaluate(scoreArgs, { ...made.env, [ENGINE_CLI_ENV]: RACE_ENGINE, TEA_RACE_LOG: danglingLog });
+    check(
+      dangling.status === 10 && /isolation-manifest\.json/.test(dangling.output) && /symbolic link/.test(dangling.output),
+      `a manifest path holding a dangling link exited ${dangling.status}; expected 10 naming the link\n${dangling.output}`,
+    );
+    check(loggedCalls(danglingLog).length === 0, 'score called the engine over a dangling link at a manifest path');
+    fs.rmSync(manifestFile);
+    fs.writeFileSync(manifestFile, manifestBytes);
+
+    // A path the index names as two kinds of input is refused before any engine call, whichever digest it would match.
+    editJson(indexFile, (value) => (value.policy = value.contract));
+    const aliasLog = path.join(tempDir('held-alias'), 'argv.log');
+    const aliased = evaluate(scoreArgs, { ...made.env, [ENGINE_CLI_ENV]: RACE_ENGINE, TEA_RACE_LOG: aliasLog });
+    check(
+      aliased.status === 10 && /is named as both the compiled contract and the policy the run used/.test(aliased.output),
+      `an index naming the contract as the policy exited ${aliased.status}; expected 10 naming both roles\n${aliased.output}`,
+    );
+    check(loggedCalls(aliasLog).length === 0, 'score called the engine over an index naming one path as two inputs');
+    fs.writeFileSync(indexFile, indexBytes);
+
+    // The call's exit is compared with the exit the held bytes give, so an artifact that agrees is not enough. A clean
+    // run: an input is rewritten so the engine exits 3, put back, and the earlier clean artifact is staged in its place.
+    const exitAttack = (label, mode, kind, reason) => {
+      const log = path.join(tempDir(`held-exit-${label}`), 'argv.log');
+      const attacked = evaluate(scoreArgs, {
+        ...made.env,
+        [ENGINE_CLI_ENV]: RACE_ENGINE,
+        TEA_RACE_LOG: log,
+        TEA_RACE_MODE: mode,
+        TEA_RACE_KIND: kind,
+        TEA_RACE_STASH_DIR: firstDirectory,
+      });
+      const directory = latestScoreDirectory(runDirectory);
+      const summary = directory === null ? null : written(path.join(directory, 'score.json'), `${label}'s score summary`);
+      check(attacked.status === 12, `${label}: exited ${attacked.status}; expected 12\n${attacked.output}`);
+      for (const probeId of probes) {
+        const entry = summary?.scores?.find((candidate) => candidate.probeId === probeId);
+        check(
+          entry?.evidence === null && reason.test(entry?.failure ?? ''),
+          `${label}, ${probeId}: the summary entry is ${JSON.stringify(entry)}; expected no evidence and ${reason}`,
+        );
+      }
+      check(evidenceIn(directory).length === 0, `${label}: evidence was copied: ${JSON.stringify(evidenceIn(directory))}`);
+    };
+    exitAttack('restage-over-an-exit-3', 'restore-and-restage', 'preflight', /the call exited 3 where the verified inputs give 0/);
+
+    // An Invalid run: the preflight verdict is sealed as failed (a clean score exits 3 with no artifact). It is rewritten
+    // as passed for the engine's read, put back, and the staged artifact removed: nothing is staged, exactly what the
+    // held bytes give, and only the exit (0) is not.
+    const sealedFailed = Buffer.from(`${JSON.stringify({ ...readJson(preflightFile), passed: false }, null, 2)}\n`, 'utf8');
+    fs.writeFileSync(preflightFile, sealedFailed);
+    editJson(runFile, (value) => (value.artifacts.preflightVerdict = engine.digestBytes(sealedFailed)));
+    const invalidScore = evaluate(scoreArgs, made.env);
+    check(
+      invalidScore.status === 3,
+      `a run sealed with a failed preflight verdict exited ${invalidScore.status}; expected 3\n${invalidScore.output}`,
+    );
+    exitAttack('unstage-an-exit-0', 'restore-and-unstage', 'preflight-pass', /the call exited 0 where the verified inputs give 3/);
+    // The same Invalid run, rewritten into another invalidating condition for the engine's read: both exit 3 with no
+    // artifact, and only the reasons on stderr differ from what the held bytes give.
+    exitAttack(
+      'another-reason-for-an-exit-3',
+      'restore-and-unstage',
+      'configuration',
+      /diagnostics differ from those the verified inputs give/,
+    );
+    for (const [file, bytes] of originals.slice(3)) fs.writeFileSync(file, bytes);
+
+    // A manifest absent at the check and planted before the call returns is named as appeared since the check; the set
+    // the shim leaves alone is still copied.
+    fs.rmSync(manifestFile);
+    const plantLog = path.join(tempDir('held-plant'), 'argv.log');
+    const planted = evaluate(scoreArgs, {
+      ...made.env,
+      [ENGINE_CLI_ENV]: RACE_ENGINE,
+      TEA_RACE_LOG: plantLog,
+      TEA_RACE_MODE: 'plant-manifest',
+      TEA_RACE_PROBE: secondSet.probeId,
+      TEA_RACE_TARGET: runDirectory,
+    });
+    const plantDirectory = latestScoreDirectory(runDirectory);
+    check(planted.status === 12, `a manifest planted after the check exited ${planted.status}; expected 12\n${planted.output}`);
+    const plantSummary =
+      plantDirectory === null ? null : written(path.join(plantDirectory, 'score.json'), "the planted manifest's summary");
+    const plantedEntry = plantSummary?.scores?.find((candidate) => candidate.probeId === secondSet.probeId);
+    check(
+      plantedEntry?.evidence === null &&
+        new RegExp(`${secondSet.isolationManifest.replaceAll('.', String.raw`\.`)} appeared after the input check`).test(
+          plantedEntry?.failure ?? '',
+        ),
+      `the planted manifest's entry is ${JSON.stringify(plantedEntry)}`,
+    );
+    check(
+      JSON.stringify(evidenceIn(plantDirectory).map((entry) => entry.split(path.sep)[0])) === JSON.stringify([firstSet.probeId]),
+      `a planted manifest left evidence ${JSON.stringify(evidenceIn(plantDirectory))}; expected only ${firstSet.probeId}'s`,
+    );
+    fs.rmSync(manifestFile);
+    fs.writeFileSync(manifestFile, manifestBytes);
+  } finally {
+    for (const [file, bytes] of originals) {
+      fs.rmSync(file, { force: true });
+      fs.writeFileSync(file, bytes);
+    }
+  }
+}
+
+/**
+ * What the re-score returns when the library refuses the held bytes or the CLI would refuse them before scoring, what a
+ * diagnostic line looks like when the held bytes give a qualification failure, and a newline inside a diagnostic
+ * (Story 1.68). Each case works on a snapshot of the run directory, put back afterwards.
+ */
+async function checkHeldDiagnostics() {
+  const engine = await loadEngine();
+  const { holdScoreInputs } = require('../cli/lib/evaluate/score-inputs');
+  const made = makeProject('held-diagnostics', { unconfined: true });
+  const ran = evaluate(['run', '--evaluation', made.folder], made.env);
+  check(ran.status === 0, `the run for the held-diagnostic cases exited ${ran.status}: ${ran.output}`);
+  const runDirectory = runDirectoryOf(made.folder);
+  if (runDirectory === null) return;
+  const scoreArgs = ['score', '--evaluation', made.folder, '--run', path.basename(runDirectory)];
+  const index = readJson(path.join(runDirectory, 'trial-sets.json'));
+  const record = () => readJson(path.join(runDirectory, 'run.json'));
+  const [firstSet, secondSet] = index.trialSets;
+  const snapshot = path.join(tempDir('held-diagnostics-snapshot'), 'run');
+  fs.cpSync(runDirectory, snapshot, { recursive: true });
+  const restore = () => {
+    fs.rmSync(runDirectory, { recursive: true });
+    fs.cpSync(snapshot, runDirectory, { recursive: true });
+  };
+  /** Rewrites a JSON file of the run and restamps the digests that name it, the way a run that sealed it would hold them. */
+  const reseal = (relative, edit, restamp) => {
+    const file = path.join(runDirectory, relative);
+    editJson(file, edit);
+    const digest = engine.digestBytes(fs.readFileSync(file));
+    editJson(path.join(runDirectory, 'run.json'), (value) => restamp(value, digest));
+    return digest;
+  };
+  /** The `eval-quality:` pieces of a stderr text, split the way the CLI's lines are. */
+  const diagnosticsOf = (text) => text.split('\n').filter((line) => line.startsWith('eval-quality: '));
+  try {
+    // The library refuses the held bytes with a structural failure (exit 4), a runtime fault or any other error (exit 5),
+    // and a private-storage manifest reference is a usage error (exit 64) the CLI raises before it scores.
+    const held = holdScoreInputs({ runDirectory, index, record: record(), engine });
+    const refusing = (error) =>
+      holdScoreInputs({
+        runDirectory,
+        index,
+        record: record(),
+        engine: {
+          ...engine,
+          runScore: async () => {
+            throw error;
+          },
+        },
+      });
+    for (const [label, error, exitCode] of [
+      ['a structural failure', new engine.StructuralFailure('binding-cycle', 'EvalContract', 'refused'), 4],
+      ['a runtime fault', new engine.RuntimeFault('schema-parse-failure', 'Probe', 'refused'), 5],
+      ['an error of neither class', new Error('a defect'), 5],
+    ]) {
+      const refused = await refusing(error).reproduce(firstSet);
+      check(
+        refused.artifact === null && refused.exitCode === exitCode && refused.lines === null,
+        `the re-score of ${label} is ${JSON.stringify(refused)}; expected no artifact, exit ${exitCode} and no lines`,
+      );
+    }
+    const privateRecord = path.join(runDirectory, firstSet.records[0]);
+    editJson(privateRecord, (value) => (value.isolationManifestArtifact.storage = 'private'));
+    const usage = await holdScoreInputs({ runDirectory, index, record: record(), engine }).reproduce(firstSet);
+    check(
+      usage.artifact === null && usage.exitCode === 64 && usage.lines === null,
+      `the re-score of a private-storage manifest reference is ${JSON.stringify(usage)}; expected no artifact, exit 64 and no lines`,
+    );
+    restore();
+    check((await held.reproduce(firstSet)).exitCode === 0, 'the re-score of an unchanged run is not exit 0');
+
+    // A probe the engine rejects: the held bytes give a qualification failure line and an Invalid basis. A clean score
+    // passes the engine's exit 3 through, and the lines the re-score gives are the ones the CLI printed.
+    reseal(
+      firstSet.probe,
+      (value) => (value.probeClass = 'defect'),
+      (value, digest) => (value.artifacts.probes[firstSet.probeId] = digest),
+    );
+    const rejected = evaluate(scoreArgs, made.env);
+    check(
+      rejected.status === 3,
+      `a score over a probe the engine rejects exited ${rejected.status}; expected the engine's 3\n${rejected.output}`,
+    );
+    const rejectedDirectory = latestScoreDirectory(runDirectory);
+    const rejectedCall =
+      rejectedDirectory === null ? null : written(path.join(rejectedDirectory, firstSet.probeId, 'score.json'), 'the rejected probe call');
+    const printed = diagnosticsOf(rejectedCall?.stderr ?? '');
+    check(
+      printed.some((line) => line.startsWith('eval-quality: qualification-route-incompatible: ')) &&
+        printed.some((line) => line.startsWith('eval-quality: invalid: ')),
+      `the rejected probe's call printed ${JSON.stringify(printed)}; expected a qualification failure line and an Invalid basis line`,
+    );
+    const rejectedRun = holdScoreInputs({ runDirectory, index, record: record(), engine });
+    const reproduced = await rejectedRun.reproduce(firstSet);
+    check(
+      reproduced.exitCode === 3 &&
+        reproduced.artifact === null &&
+        JSON.stringify(reproduced.lines.flatMap((line) => diagnosticsOf(line))) === JSON.stringify(printed),
+      `the re-score of the rejected probe is ${JSON.stringify(reproduced)}; the CLI printed ${JSON.stringify(printed)}`,
+    );
+    restore();
+
+    // A newline inside a diagnostic (a mount path the confinement audit reported): the CLI writes it as it is, and an
+    // untampered run it scores Invalid is not refused. The control without the newline scores the same way.
+    const sealMount = (mount) => {
+      const digest = reseal(
+        secondSet.isolationManifest,
+        (value) => (value.observedMounts = [mount]),
+        (value, sealed) => (value.artifacts.isolationManifests[secondSet.probeId] = sealed),
+      );
+      for (const relative of secondSet.records) {
+        editJson(path.join(runDirectory, relative), (value) => (value.isolationManifestArtifact.digest = digest));
+        editJson(path.join(runDirectory, 'run.json'), (value) => {
+          value.artifacts.records[relative] = engine.digestBytes(fs.readFileSync(path.join(runDirectory, relative)));
+        });
+      }
+    };
+    for (const [label, mount] of [
+      ['without a newline', '/tmp/evilname'],
+      ['with a newline', '/tmp/evil\nname'],
+    ]) {
+      restore();
+      sealMount(mount);
+      const scored = evaluate(scoreArgs, made.env);
+      const directory = latestScoreDirectory(runDirectory);
+      const call = directory === null ? null : written(path.join(directory, secondSet.probeId, 'score.json'), `the mount ${label}`);
+      check(
+        scored.status === 3 && call?.exitCode === 3,
+        `a score over an observed mount ${label} exited ${scored.status} with the call at ${call?.exitCode}; expected 3 for both\n${scored.output}`,
+      );
+      check(
+        /mount outside allowlist/.test(call?.stderr ?? ''),
+        `the call over a mount ${label} did not name the mount: ${JSON.stringify(call?.stderr)}`,
+      );
+      if (mount.includes('\n')) {
+        const given = await holdScoreInputs({ runDirectory, index, record: record(), engine }).reproduce(secondSet);
+        check(
+          given.lines.some((line) => line.includes('\n')),
+          `the re-score of a mount with a newline gave ${JSON.stringify(given.lines)}; expected a line that carries it`,
+        );
+      }
+    }
+  } finally {
+    restore();
+  }
+}
+
+/**
+ * The aggregate call (Story 1.45) held to the same inputs (Story 1.68): the run's policy rewritten for the aggregate's
+ * read and kept, rewritten and restored, or made unreadable and restored, and a well-formed aggregate substituted. A
+ * clean score reproduces the persisted aggregate byte for byte.
+ */
+async function checkHeldAggregate() {
+  const engine = await loadEngine();
+  const { holdScoreInputs } = require('../cli/lib/evaluate/score-inputs');
+  const made = makeProject('held-aggregate', { unconfined: true });
+  const ran = evaluate(['run', '--evaluation', made.folder], made.env);
+  check(ran.status === 0, `the run for the held-aggregate cases exited ${ran.status}: ${ran.output}`);
+  const runDirectory = runDirectoryOf(made.folder);
+  if (runDirectory === null) return;
+  const scoreArgs = ['score', '--evaluation', made.folder, '--run', path.basename(runDirectory)];
+  const index = readJson(path.join(runDirectory, 'trial-sets.json'));
+  const snapshot = path.join(tempDir('held-aggregate-snapshot'), 'run');
+  fs.cpSync(runDirectory, snapshot, { recursive: true });
+  const restore = () => {
+    fs.rmSync(runDirectory, { recursive: true });
+    fs.cpSync(snapshot, runDirectory, { recursive: true });
+  };
+  const scored = (mode) =>
+    evaluate(scoreArgs, {
+      ...made.env,
+      [ENGINE_CLI_ENV]: RACE_ENGINE,
+      TEA_RACE_LOG: path.join(tempDir('held-aggregate-log'), 'argv.log'),
+      TEA_RACE_AGGREGATE: mode,
+      TEA_RACE_TARGET: runDirectory,
+    });
+  const summaryOf = () => {
+    const directory = latestScoreDirectory(runDirectory);
+    return { directory, summary: directory === null ? null : written(path.join(directory, 'score.json'), 'the aggregate score summary') };
+  };
+  try {
+    // A clean score: the aggregate the CLI staged is what the held bytes give, byte for byte and in its exit.
+    const clean = scored('');
+    check(clean.status === 0, `a clean score with the aggregate exited ${clean.status}\n${clean.output}`);
+    const { directory: cleanDirectory, summary: cleanSummary } = summaryOf();
+    check(
+      cleanSummary?.strengthAggregate?.status === 'copied',
+      `the clean aggregate is ${JSON.stringify(cleanSummary?.strengthAggregate)}`,
+    );
+    if (cleanDirectory !== null) {
+      const held = holdScoreInputs({ runDirectory, index, record: readJson(path.join(runDirectory, 'run.json')), engine });
+      const reproduced = held.reproduceAggregate({
+        evidence: index.trialSets.map((set) => fs.readFileSync(path.join(cleanDirectory, set.probeId, 'evidence-artifact.json'))),
+        floors: fs.readFileSync(path.join(cleanDirectory, 'strength-floors.json')),
+      });
+      const persisted = path.join(cleanDirectory, 'strength-aggregate.json');
+      check(
+        reproduced.exitCode === 0 && fs.existsSync(persisted) && reproduced.aggregate?.equals(fs.readFileSync(persisted)),
+        'the in-process aggregate of the held bytes is not byte-identical to the persisted aggregate',
+      );
+      // Floors that are no JSON are a fault of an input (exit 5), and a set the engine refuses is exit 4.
+      const faulted = held.reproduceAggregate({ evidence: [], floors: Buffer.from('not json') });
+      check(
+        faulted.aggregate === null && faulted.exitCode === 5,
+        `the aggregate of floors that are no JSON is ${JSON.stringify(faulted)}; expected none and exit 5`,
+      );
+      // The policy is read through the lexical scanner too: a repeated key is a fault (exit 5), not an aggregate.
+      const policyFile = path.join(runDirectory, index.policy);
+      const policyText = fs.readFileSync(policyFile, 'utf8');
+      fs.writeFileSync(policyFile, policyText.replace('{', '{"policyId":"first",'));
+      const duplicated = holdScoreInputs({
+        runDirectory,
+        index,
+        record: readJson(path.join(runDirectory, 'run.json')),
+        engine,
+      }).reproduceAggregate({
+        evidence: index.trialSets.map((set) => fs.readFileSync(path.join(cleanDirectory, set.probeId, 'evidence-artifact.json'))),
+        floors: fs.readFileSync(path.join(cleanDirectory, 'strength-floors.json')),
+      });
+      fs.writeFileSync(policyFile, policyText);
+      check(
+        duplicated.aggregate === null && duplicated.exitCode === 5,
+        `the aggregate over a policy with a repeated key is ${JSON.stringify(duplicated)}; expected none and exit 5`,
+      );
+      const firstEvidence = fs.readFileSync(path.join(cleanDirectory, index.trialSets[0].probeId, 'evidence-artifact.json'));
+      const refused = held.reproduceAggregate({
+        evidence: [firstEvidence, firstEvidence],
+        floors: fs.readFileSync(path.join(cleanDirectory, 'strength-floors.json')),
+      });
+      check(
+        refused.aggregate === null && refused.exitCode === 4,
+        `the aggregate of one probe's evidence twice is ${JSON.stringify(refused)}; expected none and exit 4`,
+      );
+    }
+    const aggregateReason = (mode) => {
+      restore();
+      const attacked = scored(mode);
+      const { directory, summary } = summaryOf();
+      check(attacked.status === 12, `${mode}: the aggregate call exited ${attacked.status}; expected 12\n${attacked.output}`);
+      check(
+        summary?.strengthAggregate?.status === 'mismatch',
+        `${mode}: the aggregate is ${JSON.stringify(summary?.strengthAggregate)}; expected a mismatch`,
+      );
+      check(
+        directory !== null && !fs.existsSync(path.join(directory, 'strength-aggregate.json')),
+        `${mode}: an aggregate was copied for a call the held inputs do not stand behind`,
+      );
+      return summary?.strengthAggregate?.reason ?? '';
+    };
+    // The policy rewritten for the aggregate's read and kept: the file is named.
+    const policyFile = index.policy;
+    check(
+      new RegExp(`${policyFile.replaceAll('.', String.raw`\.`)} changed after the input check`).test(aggregateReason('rewrite-policy')),
+      'a policy rewritten for the aggregate and kept was not named',
+    );
+    // Rewritten for the read and restored: the engine refuses a policy the evidence does not name (exit 4) where the
+    // held bytes give an aggregate, and only that exit shows it.
+    check(
+      /the call exited 4 where the verified inputs give 0/.test(aggregateReason('restore-policy')),
+      'a policy rewritten for the aggregate and restored was not refused for its exit',
+    );
+    // Unreadable for the read and restored: the call exits 5 where the held bytes give an aggregate.
+    check(
+      /the call exited 5 where the verified inputs give 0/.test(aggregateReason('garble-policy')),
+      'a policy made unreadable for the aggregate and restored was not refused for its exit',
+    );
+    // A usage error from the aggregate call (exit 64) is one the held bytes never give: exit 12, not a pass-through.
+    check(
+      /the call exited 64 where the verified inputs give 0/.test(aggregateReason('usage-error')),
+      'an aggregate call that exited 64 was not refused for its exit',
+    );
+    // A well-formed aggregate that agrees with every digest and floor but not with the evidence.
+    check(
+      /differs from the one the verified inputs produce/.test(aggregateReason('forge-aggregate')),
+      'a well-formed substituted aggregate was not refused',
+    );
+  } finally {
+    restore();
+  }
 }
 
 /** What the first plan step of a trial printed on stdout, from its evidence file. */
@@ -4733,9 +5451,9 @@ function checkConfinementReference() {
 }
 
 /**
- * Every case in run order with the group it belongs to. CI runs the groups as two scripts (`--group=run`, which is
- * `test:evaluate-run`, and `--group=confinement`, which is `test:evaluate-confinement`) so no one runner carries the whole
- * file's wall time; with no `--group` every case runs. Story 1.31's confinement cases each stand on their own, so one that
+ * Every case in run order with the group it belongs to. CI runs the groups as four scripts (`--group=run`, which is
+ * `test:evaluate-run`, `--group=confinement`, which is `test:evaluate-confinement`, `--group=aggregate`, which is
+ * `test:evaluate-aggregate`, and `--group=held-inputs`, which is `test:evaluate-held-inputs`, Story 1.68) so no one runner carries the whole file's wall time; with no `--group` every case runs. Story 1.31's confinement cases each stand on their own, so one that
  * cannot finish leaves the others to report.
  */
 const CASES = [
@@ -4743,8 +5461,8 @@ const CASES = [
   { name: 'the run directory writer', body: checkRunDirectoryWriter, group: 'run' },
   { name: 'the templates and ignores', body: checkTemplatesAndIgnores, group: 'run' },
   { name: 'the run and its scores', body: checkRunAndScore, group: 'run' },
-  { name: 'the strength aggregate', body: checkStrengthAggregate, group: 'run' },
-  { name: 'the aggregate states', body: checkAggregateStates, group: 'run' },
+  { name: 'the strength aggregate', body: checkStrengthAggregate, group: 'aggregate' },
+  { name: 'the aggregate states', body: checkAggregateStates, group: 'aggregate' },
   { name: 'the unverified evidence copies', body: checkUnverifiedEvidence, group: 'run' },
   { name: 'the score output reference', body: checkScoreOutputReference, group: 'run' },
   { name: 'target usage reports', body: checkTargetUsageReports, group: 'run' },
@@ -4766,6 +5484,10 @@ const CASES = [
   { name: 'the withheld git history edges', body: checkWithheldHistoryEdges, group: 'confinement' },
   { name: "the probe ports' git access", body: checkProbePortGitAccess, group: 'confinement' },
   { name: 'the confinement reference', body: checkConfinementReference, group: 'confinement' },
+  { name: 'the held score inputs', body: checkHeldInputs, group: 'held-inputs' },
+  { name: 'the held score diagnostics', body: checkHeldDiagnostics, group: 'held-inputs' },
+  { name: 'the held strength aggregate', body: checkHeldAggregate, group: 'held-inputs' },
+  { name: 'the score input reference', body: checkScoreInputReference, group: 'held-inputs' },
 ];
 const GROUPS = new Set(CASES.map(({ group }) => group));
 

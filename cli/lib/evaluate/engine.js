@@ -8,7 +8,9 @@
  * named anywhere under `cli/`, and on any `compile` whose receiver is not an
  * Ajv instance. Those stages decide enforced verdicts, and every enforced
  * verdict comes from the eval-quality CLI over persisted files (AD-1, AD-6),
- * whose path `engineCliPath` resolves.
+ * whose path `engineCliPath` resolves. The one exemption is `runScore` in
+ * `score-inputs.js`, which re-scores the held bytes of a run to compare them
+ * with a staged artifact and never supplies a verdict (Story 1.68).
  *
  * eval-quality is an optional peer dependency of TeA: a project that never
  * runs Evaluate does not receive it, so a missing engine is reported as an
