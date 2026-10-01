@@ -2,7 +2,7 @@
 title: 'Story 1.40: Calibrate rubric scores imported from harness records'
 type: 'feature'
 created: '2026-10-01'
-status: 'review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '4ceb0503'

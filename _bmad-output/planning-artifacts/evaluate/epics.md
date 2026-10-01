@@ -1766,7 +1766,7 @@ So that my judgments file verifies the first time (AD-21, AD-22).
 **When** the harness asks the runtime for its calibration inputs (an option of an existing subcommand, or a subcommand if AD-5's count is amended in that story)
 **Then** the output lists, in the labelled file's order, each item's rubric, criterion and label-free `scorerInput`, the labelled file's digest and the `scorerConfigurationDigest` of the configuration it names, from the same functions `check` and `run` verify with, a `test:evaluate-evaluators` case in which a harness fixture builds its judgments file from that output alone and `check` and `run` accept it; changing how the runtime derives the observation or the digest changes the output and the verification together, and a hand-built copy of the old derivation fails the case
 **And** the output carries no `expectedLevel`, a `test:evaluate-evaluators` case; adding the label to the output fails it
-**And** the reference and the skill's evaluator guide tell the harness to copy these values and never to derive them, with the guidance test asserting that sentence by its exact heading.
+**And** the reference and the skill's evaluator guide tell the harness to copy these values verbatim, with the guidance test asserting that sentence by its exact heading.
 
 **Dependencies:** 1.40.
 **Gate:** `test:evaluate-evaluators`, `test:evaluate-guidance`, `npm test`.

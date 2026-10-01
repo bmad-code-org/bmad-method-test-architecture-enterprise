@@ -984,7 +984,7 @@ Added 2026-10-01 in Story 1.40. Levels: integration over real eval-quality, guid
 | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | --- | ---------------------------------------------------------------- |
 | A harness built from the emitted inputs verifies | A harness fixture writes its judgments file from the emitted inputs and digests alone; `check` exits 0 and `run` imports and scores | Integration over real eval-quality | P0  | Emitting an input the verification does not derive fails `check` |
 | The emitted inputs carry no label                | Search the output for `expectedLevel`                                                                                               | Integration                        | P1  | Adding the label to the output fails the search                  |
-| The guide says to copy, never to derive          | Assert the evaluator guide's sentence under its exact heading                                                                       | Guidance                           | P2  | Removing the sentence fails the guidance assertion               |
+| The guide says to copy the emitted values        | Assert the evaluator guide's sentence under its exact heading                                                                       | Guidance                           | P2  | Removing the sentence fails the guidance assertion               |
 
 ## The Dogfood Proof (AD-15)
 
