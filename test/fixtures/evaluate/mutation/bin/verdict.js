@@ -113,6 +113,22 @@
  *                           `refused <code>` for a file read), and the
  *                           worktree's own operations as `<name>: exit <code>`
  *                           (Story 1.57)
+ *   probe-private           answer as usual, then look for what the run keeps
+ *                           from a target, in the call the sealed-brief agent
+ *                           stub makes (its request, `Judge a request of my
+ *                           own.`), through the paths it announces in the file
+ *                           VERDICT_TOUCH names (`--announce`, Story 1.58): read the bridge's
+ *                           configuration file and token file, list the
+ *                           agent's working directory, its parent and the
+ *                           private root, connect to the bridge's socket, and
+ *                           write its own temp directory, printing one
+ *                           `private-<name>: <how>` line each (`token` when
+ *                           the token file's admission token was read, never
+ *                           its value); it also leaves a
+ *                           process running (`verdict-private-leftover.js`)
+ *                           that makes the same attempts on the directories
+ *                           made after it started and reports them to the port
+ *                           VERDICT_REPORT names
  *   write-temp              answer as usual, then write a file in the temp
  *                           directory TMPDIR names, printing `temp-dir: <path>`
  *                           and `temp-write: <how>` after the verdict
@@ -141,6 +157,8 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
+
+const { privateAnnouncements, privateAttempts } = require('./private-attempts');
 
 const POLICY = 'rules/policy.txt';
 
@@ -318,6 +336,24 @@ if (act === 'probe-git') {
     `commondir-file: ${commondirOf(own)}`,
     `git-view: ${fs.existsSync(path.join(path.dirname(ask('rev-parse', '--show-toplevel').stdout.trim()), 'git-view')) ? 'present' : 'absent'}`,
   );
+  process.stdout.write(`${lines.join('\n')}\n`);
+}
+if (act === 'probe-private') {
+  // Only the sealed-brief agent's own call, made while the directories it announced exist; the plan's steps run before it.
+  const announced = request === 'Judge a request of my own.' ? privateAnnouncements(process.env.VERDICT_TOUCH) : [];
+  const latest = announced.at(-1);
+  const lines = [`private-announced: ${announced.length}`];
+  if (latest !== undefined) {
+    lines.push(...privateAttempts(latest));
+    const temp = process.env.TMPDIR ?? '';
+    lines.push(`private-temp-write: ${attempt(() => fs.writeFileSync(path.join(temp, 'verdict-private.txt'), 'x\n'))}`);
+    const child = spawn(process.execPath, [path.join(__dirname, 'verdict-private-leftover.js'), process.env.VERDICT_TOUCH, String(announced.length), process.env.VERDICT_REPORT ?? ''], {
+      cwd: '/',
+      detached: true,
+      stdio: 'ignore',
+    });
+    child.unref();
+  }
   process.stdout.write(`${lines.join('\n')}\n`);
 }
 if (act === 'read-ungranted' && process.env.VERDICT_TOUCH) {

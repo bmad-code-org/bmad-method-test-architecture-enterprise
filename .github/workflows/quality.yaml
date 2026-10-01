@@ -8,10 +8,10 @@ name: Quality & Validation
 # - The whole `npm test` chain, split across the `chain` matrix
 # - Coverage over that chain, merged from every shard
 #
-# The `chain` job runs every script in `npm test`, split five ways by
+# The `chain` job runs every script in `npm test`, split six ways by
 # tools/test-shards.js. The split is deterministic: tools/test-shard-weights.json
 # holds each script's measured seconds under coverage, and the tool packs them
-# heaviest first onto the lightest shard, so each shard carries about four
+# heaviest first onto the lightest shard, so each shard carries about ten
 # minutes of the chain. Run serially on one runner under c8, the same chain
 # took about 20 minutes. Each shard records raw V8 coverage for its scripts
 # and uploads it; the `coverage` job merges every shard's files with
@@ -128,7 +128,7 @@ jobs:
       - name: Build documentation
         run: npm run docs:build
 
-  # The whole `npm test` chain, split across five runners. tools/test-shards.js
+  # The whole `npm test` chain, split across six runners. tools/test-shards.js
   # picks this shard's scripts from the chain and the committed weights, runs
   # them one at a time in chain order (several bind fixed ports or write fixed
   # temp paths), keeps going past a failure so one run names every failing
@@ -136,8 +136,8 @@ jobs:
   # $RUNNER_TEMP/v8 under a shard-and-script prefix for the coverage job.
   #
   # The shard count appears three times: in the matrix list, in the tool's
-  # `--shard ${{ matrix.shard }}/5` argument, and in the coverage job's
-  # `--shards 5`. test:shards and test:ci-coverage fail when the list is not
+  # `--shard ${{ matrix.shard }}/6` argument, and in the coverage job's
+  # `--shards 6`. test:shards and test:ci-coverage fail when the list is not
   # exactly 1 through that count, and test:shards when the coverage job's count
   # differs. They also refuse each setting that lets a green run skip a shard
   # or hide its failure: a matrix with include, exclude or any key besides
@@ -154,16 +154,16 @@ jobs:
   # defense against a hostile editor of this file, who could change the
   # guards in the same pull request.
   chain:
-    name: chain (${{ matrix.shard }}/5)
+    name: chain (${{ matrix.shard }}/6)
     runs-on: ubuntu-latest
-    # Each shard carries about four minutes of the chain by the weights, plus
-    # about a minute of setup. Three times that bounds a stalled registry
-    # request or a hung child without cutting off a slow but healthy run.
+    # Each shard carries about ten minutes of the chain by the weights, plus
+    # about a minute of setup. The cap leaves room for a loaded runner and
+    # still bounds a stalled registry request or a hung child.
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5]
+        shard: [1, 2, 3, 4, 5, 6]
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -238,7 +238,7 @@ jobs:
         run: npm run test:shards
 
       - name: Run this shard of the npm test chain under coverage
-        run: node tools/test-shards.js --shard ${{ matrix.shard }}/5 --coverage-dir "$RUNNER_TEMP/v8" --timings "$RUNNER_TEMP/timings/shard-${{ matrix.shard }}.json"
+        run: node tools/test-shards.js --shard ${{ matrix.shard }}/6 --coverage-dir "$RUNNER_TEMP/v8" --timings "$RUNNER_TEMP/timings/shard-${{ matrix.shard }}.json"
 
       - name: Upload this shard's raw coverage
         if: always()
@@ -396,7 +396,7 @@ jobs:
           path: ${{ runner.temp }}/v8
 
       - name: Prove every shard's coverage arrived and together covers the chain
-        run: node tools/test-shards.js --check-manifests "$RUNNER_TEMP/v8" --shards 5
+        run: node tools/test-shards.js --check-manifests "$RUNNER_TEMP/v8" --shards 6
 
       - name: Merge the shards' coverage and enforce the threshold
         run: npx c8 report --temp-directory "$RUNNER_TEMP/v8"

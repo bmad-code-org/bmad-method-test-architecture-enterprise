@@ -468,17 +468,106 @@ function unlockDirectories(directory) {
   }
 }
 
+/** The name prefix of the run's private parent, and of the per-user root every run's parent sits beneath. */
+const PRIVATE_PARENT_PREFIX = 'run-';
+const PRIVATE_ROOT_PREFIX = 'tea-evaluate-p';
+
+/** The per-user root's name: `tea-evaluate-p<uid>`, the one root of every run of the user. */
+function privateRootName() {
+  return `${PRIVATE_ROOT_PREFIX}${typeof process.getuid === 'function' ? process.getuid() : 'w'}`;
+}
+
+/**
+ * Where the user's private root sits: `/tmp` on POSIX, whatever each run's `TMPDIR` is, so every run of the user, with any
+ * temp directory, shares one root path that one sandbox can withhold (`/tmp/tea-evaluate-p<uid>`, which is also always
+ * within the bridge's 100 byte socket path budget); Windows has no confinement and keeps the system temp directory.
+ */
+function privateRootBase() {
+  return process.platform === 'win32' ? os.tmpdir() : '/tmp';
+}
+
+/**
+ * The user's private root, made when absent (mode 0700) and held to be a real directory (no link) the user owns, with no
+ * access for anyone else; `null` when it is not, so a planted link or a directory another user made is never used.
+ */
+function privateRootIn(base) {
+  const root = path.join(base, privateRootName());
+  try {
+    fs.mkdirSync(root, { mode: 0o700 });
+  } catch (error) {
+    if (error.code !== 'EEXIST') return null;
+  }
+  return heldPrivateRoot(root);
+}
+
+/**
+ * `root` when it is a real directory (no link) the user owns, its mode closed to 0700; `null` otherwise. It makes
+ * nothing, so a tool that only reads the root (a test suite reaping what killed runs left) shares the check.
+ */
+function heldPrivateRoot(root) {
+  try {
+    const stat = fs.lstatSync(root);
+    if (!stat.isDirectory() || stat.isSymbolicLink()) return null;
+    if (typeof process.getuid === 'function' && stat.uid !== process.getuid()) return null;
+    if ((stat.mode & 0o077) !== 0) fs.chmodSync(root, 0o700);
+  } catch {
+    return null;
+  }
+  return root;
+}
+
+/**
+ * The run's private parent directory, beneath the user's one private root.
+ *
+ * Every run of the user makes its parent beneath the same root,
+ * `/tmp/tea-evaluate-p<uid>` (mode 0700; no run removes it, since another run
+ * may be using it), whatever the run's `TMPDIR` is, and the target
+ * confinement (`confinement.js`) withholds the root. A sandbox built for one
+ * run therefore also covers the parent of a run that starts later, of a run
+ * another process is making now and of a run with another temp directory, so
+ * a process left running by an earlier run or a target of a concurrent run
+ * cannot reach this run's bridge token or socket. The parent is registered in
+ * `scratch` (listed first, so the run's end removes it with every directory
+ * beneath it) and recorded as `scratch.privateParent`, its root as
+ * `scratch.privateRoot`; its name carries the run's process id (`run-<pid>-<random>`), so a parent a killed run leaves is
+ * known to be dead. Every private directory the evaluation layer makes
+ * for the run (the engine's, the qualification's, an evaluator's, a judge's,
+ * the bridge's configuration, token and socket, the score's) is made beneath
+ * the parent by `makeScratchDirectory`. A directory the target is deliberately
+ * granted (its temp directory, the audit report, the status and port
+ * directories, the workspace) stays in the run's temp directory.
+ *
+ * @param {string[]} scratch
+ * @returns {string} the parent
+ */
+function makePrivateParent(scratch) {
+  if (typeof scratch.privateParent === 'string') return scratch.privateParent;
+  const root = privateRootIn(privateRootBase());
+  if (root === null) {
+    throw new WorkspaceRefusal(
+      `no private directory for the run can be made: ${path.join(privateRootBase(), privateRootName())} must be a directory you own that is not a link; remove what is there`,
+    );
+  }
+  const directory = fs.mkdtempSync(path.join(root, `${PRIVATE_PARENT_PREFIX}${process.pid}-`));
+  scratch.unshift(directory);
+  Object.defineProperty(scratch, 'privateParent', { value: directory, enumerable: false, configurable: true, writable: true });
+  Object.defineProperty(scratch, 'privateRoot', { value: root, enumerable: false, configurable: true, writable: true });
+  return directory;
+}
+
 /**
  * A private temporary directory registered in `scratch`, the run's list of
  * directories it removes however it ends (`preflight.js` `pipeline`), an
- * interrupting signal included.
+ * interrupting signal included. It is made beneath the run's private parent
+ * (`makePrivateParent`) when the list has one, and in the system temp
+ * directory otherwise.
  *
  * @param {string[]} scratch
  * @param {string} prefix the directory's name prefix
  * @returns {string}
  */
 function makeScratchDirectory(scratch, prefix) {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  const directory = fs.mkdtempSync(path.join(scratch.privateParent ?? os.tmpdir(), prefix));
   scratch.push(directory);
   return directory;
 }
@@ -1641,7 +1730,10 @@ module.exports = {
   journalDirectory,
   joinAsSpelled,
   makeReadOnly,
+  makePrivateParent,
   makeScratchDirectory,
+  heldPrivateRoot,
+  privateRootIn,
   realPathLoosely,
   releaseScratchDirectory,
   removeScratchDirectory,

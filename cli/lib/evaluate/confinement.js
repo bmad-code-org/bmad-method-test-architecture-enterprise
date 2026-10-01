@@ -35,7 +35,14 @@
  *                project's git directory, the worktree's own entry in it
  *                excepted (the workspace's git reads a private repository
  *                beside the checkout, `workspace.js`'s `buildWithheldRepository`,
- *                whose history holds the evaluation folder as an empty tree).
+ *                whose history holds the evaluation folder as an empty tree),
+ *                nor read, write or connect to anything under the user's
+ *                private root directory (`workspace.js` `makePrivateParent`),
+ *                beneath which every run's private parent holds the evaluation
+ *                layer's bridge configuration, admission token file and socket
+ *                and its evaluator, judge and command-evaluator working
+ *                directories (AD-21). A sandbox built for one run therefore also
+ *                covers a parent another run makes later or concurrently.
  *                Reads elsewhere are left to the audit: node, git and a
  *                target's own toolchain read from the system.
  *   layer        every other process the run starts to run adopter or agent
@@ -160,8 +167,11 @@ function seatbeltLayerProfile(evaluationFolder) {
  * project's git directory is denied reads and writes except the worktree's own
  * metadata directory, which stays readable; the evaluation folder's denial of
  * reads and writes comes last, so no allowance above it can reach inside it.
+ * The user's private root directory is denied reads and writes and a `connect()`
+ * to a unix socket under it (a denied read does not stop a connection), after
+ * every allowance.
  */
-function seatbeltTargetProfile({ workspace, writable, evaluationFolder, git = null }) {
+function seatbeltTargetProfile({ workspace, writable, evaluationFolder, git = null, privateRoot = null }) {
   const allowed = [workspace, ...writable]
     .flatMap(spellings)
     .map((entry) => `(subpath "${assertProfileSafePath(entry, refuseUnsafePath)}")`);
@@ -182,12 +192,22 @@ function seatbeltTargetProfile({ workspace, writable, evaluationFolder, git = nu
                 `(allow file-read-metadata\n  ${[...literals(git.directory), ...literals(path.dirname(git.metadata))].join('\n  ')})`,
               ]),
         ];
+  const privateRules =
+    privateRoot === null
+      ? []
+      : [
+          `(deny file-read* file-write*\n  ${subpaths(privateRoot).join('\n  ')})`,
+          `(deny network-outbound\n  ${spellings(privateRoot)
+            .map((entry) => `(remote unix-socket (subpath "${assertProfileSafePath(entry, refuseUnsafePath)}"))`)
+            .join('\n  ')})`,
+        ];
   return [
     '(version 1)',
     '(allow default)',
     '(deny file-write*)',
     `(allow file-write*\n  ${[...allowed, ...SEATBELT_DEVICE_WRITES].join('\n  ')})`,
     ...gitRules,
+    ...privateRules,
     `(deny file-read* file-write*\n  ${withheld.join('\n  ')})`,
     '',
   ].join('\n');
@@ -215,11 +235,12 @@ function bubblewrapIsolation() {
  * one's device nodes cannot be opened from the namespace), the workspace and
  * the private directories writable, the project's git directory covered by an
  * empty file system with the worktree's own metadata directory bound back in
- * read-only, and the evaluation folder covered by an empty read-only file
+ * read-only, the user's private root directory covered the same way, and the evaluation
+ * folder covered by an empty read-only file
  * system, so nothing under it can be read or written. No new network
  * namespace: a started HTTP server listens where the runtime reaches it.
  */
-function bubblewrapTargetArguments({ executable, workspace, writable, evaluationFolder, git = null }) {
+function bubblewrapTargetArguments({ executable, workspace, writable, evaluationFolder, git = null, privateRoot = null }) {
   const binds = [workspace, ...writable].flatMap((entry) => {
     const real = assertProfileSafePath(spellings(entry).at(-1), refuseUnsafePath);
     return ['--bind', real, real];
@@ -238,6 +259,7 @@ function bubblewrapTargetArguments({ executable, workspace, writable, evaluation
           '--remount-ro',
           realOf(git.directory),
         ];
+  const privateArguments = privateRoot === null ? [] : ['--tmpfs', realOf(privateRoot), '--remount-ro', realOf(privateRoot)];
   const withheld = realOf(evaluationFolder);
   return [
     executable,
@@ -250,6 +272,7 @@ function bubblewrapTargetArguments({ executable, workspace, writable, evaluation
     ...bubblewrapIsolation(),
     ...binds,
     ...gitArguments,
+    ...privateArguments,
     '--tmpfs',
     withheld,
     '--remount-ro',
@@ -386,11 +409,13 @@ function layerPrefix(confinement) {
  *   project's git directory and the object directories it borrows from (`alternates`), which the target can neither read
  *   nor write, the worktree's own metadata directory inside the first, which it may read, and the private repository
  *   (`view`) its git reads; `null` for a workspace in no repository
+ * @param {string|null} [options.privateRoot] the user's private root directory, the one every run's private parent sits beneath (`workspace.js` `makePrivateParent`),
+ *   which the target can neither read, write nor connect a socket under; `null` where the run made none
  * @param {string|null} [options.report] the audit report's path, `null` for a port that does not audit
  * @param {string|null} [options.status] under Bubblewrap, a private directory where the status of a target a signal
  *   ended is written (`confinement-status.cjs`)
  */
-function targetSandbox({ confinement, workspace, git: gitAccess = null, report = null, status = null }) {
+function targetSandbox({ confinement, workspace, git: gitAccess = null, privateRoot = null, report = null, status = null }) {
   const git = gitAccess === null ? null : { metadata: null, view: null, alternates: [], ...gitAccess };
   if (typeof workspace !== 'string' || workspace.length === 0) {
     throw new ConfinementError('a confined target needs the workspace it may write');
@@ -404,6 +429,14 @@ function targetSandbox({ confinement, workspace, git: gitAccess = null, report =
   for (const held of git === null ? [] : [git.directory, ...git.alternates]) {
     if (spellings(workspace).some((entry) => spellings(held).some((withheld) => isInside(withheld, entry)))) {
       throw new ConfinementError(`the workspace ${workspace} is inside ${held}, which the confinement withholds from the target`);
+    }
+  }
+  if (privateRoot !== null) {
+    if (typeof privateRoot !== 'string' || privateRoot.length === 0) {
+      throw new ConfinementError('the private root directory must be a path');
+    }
+    if (spellings(workspace).some((entry) => spellings(privateRoot).some((withheld) => isInside(withheld, entry)))) {
+      throw new ConfinementError(`the workspace ${workspace} is inside ${privateRoot}, which the confinement withholds from the target`);
     }
   }
   if (confinement.mode === 'bubblewrap' && (typeof status !== 'string' || status.length === 0)) {
@@ -423,7 +456,7 @@ function targetSandbox({ confinement, workspace, git: gitAccess = null, report =
     wrap(target, args, writable = []) {
       const grants = [...writable, ...(report === null ? [] : [report])];
       if (confinement.mode === 'seatbelt') {
-        const profile = seatbeltTargetProfile({ workspace, writable: grants, evaluationFolder, git });
+        const profile = seatbeltTargetProfile({ workspace, writable: grants, evaluationFolder, git, privateRoot });
         return { target: confinement.executable, args: ['-p', profile, target, ...args], statusFile: null };
       }
       calls += 1;
@@ -437,6 +470,7 @@ function targetSandbox({ confinement, workspace, git: gitAccess = null, report =
         writable: [...grants, statusFile],
         evaluationFolder,
         git,
+        privateRoot,
       });
       return { target: vector[0], args: [...vector.slice(1), process.execPath, STATUS_SHIM, statusFile, target, ...args], statusFile };
     },
@@ -458,7 +492,11 @@ function targetSandbox({ confinement, workspace, git: gitAccess = null, report =
         [AUDIT_ENV]: JSON.stringify({
           report,
           granted: grants,
-          withheld: [...spellings(evaluationFolder), ...(git === null ? [] : [git.directory, ...git.alternates].flatMap(spellings))],
+          withheld: [
+            ...spellings(evaluationFolder),
+            ...(git === null ? [] : [git.directory, ...git.alternates].flatMap(spellings)),
+            ...(privateRoot === null ? [] : spellings(privateRoot)),
+          ],
           ...(git?.metadata ? { withheldExcept: spellings(git.metadata) } : {}),
         }),
       };
