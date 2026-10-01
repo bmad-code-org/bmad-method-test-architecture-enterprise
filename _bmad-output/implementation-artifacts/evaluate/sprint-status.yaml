@@ -121,9 +121,9 @@ parallel_lanes:
     - 1-43-keep-ungraded-framework-errors-out-of-target-findings
     - 1-44-record-installed-framework-versions-in-evaluator-provenance
     - 1-67-emit-the-label-free-calibration-inputs-a-records-harness-fe
-    - 1-64-hold-the-release-across-the-witness-legs-and-the-trials
-    - 1-65-ask-every-http-interface-of-a-deployment-which-release-it-r
     - 1-66-scrub-an-observation-in-every-letter-case
+    - 1-65-ask-every-http-interface-of-a-deployment-which-release-it-r
+    - 1-64-hold-the-release-across-the-witness-legs-and-the-trials
   lane-2-confinement-and-process-lifecycle:
     - 1-62-share-one-sandbox-primitive-layer-across-teas-isolation-mod
     - 1-57-withhold-the-committed-evaluation-folder-from-a-confined-ta
@@ -141,16 +141,16 @@ parallel_lanes:
     - 2-2-plan-ci-tiers-and-run-them-with-tea-evaluate-ci
     - 2-3-render-evaluation-plans-in-bmad-testarch-ci
     - 2-4-finish-the-evaluation-with-its-ci-stage
-    - 2-5-tea-runs-its-pr-tier-and-documents-evaluate
-    - 1-42-attribute-reused-operation-ids-to-their-interfaces
+    - 1-47-distinguish-reference-risk-tables-from-the-scored-register
+    - 1-49-prove-test-design-mutation-rollback-before-claiming-it
     - 1-48-report-whole-document-coverage-for-a-structured-design-artifact
+    - 1-42-attribute-reused-operation-ids-to-their-interfaces
     - 1-50-send-malformed-raw-http-bodies-through-an-api-probe
     - 1-55-recognize-process-and-answer-separation-for-scalar-cli
     - 1-56-prove-malformed-cli-refusal-against-a-controlled-defect
-    - 1-46-close-the-dogfood-suites-coverage-gaps
-    - 1-47-distinguish-reference-risk-tables-from-the-scored-register
-    - 1-49-prove-test-design-mutation-rollback-before-claiming-it
     - 1-51-isolate-interaction-plans-by-evaluation-partition
+    - 1-46-close-the-dogfood-suites-coverage-gaps
+    - 2-5-tea-runs-its-pr-tier-and-documents-evaluate
 owner_handoff:
   - key: h-1-accept-the-dogfood-baseline-and-turn-its-pr-replay-green
     owner: Murat
