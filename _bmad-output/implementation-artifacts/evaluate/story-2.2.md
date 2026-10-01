@@ -2,7 +2,7 @@
 title: 'Story 2.2: Plan CI tiers and run them with tea-evaluate ci'
 type: 'feature'
 created: '2026-10-01'
-status: 'review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '5477e298bc97b5a82d7b9a1f74a7f703438980a9'
@@ -250,6 +250,8 @@ Each mutant was applied to a `/tmp` copy of the working tree with `node_modules`
 | R2-4 | no stop for a chunk that arrives with no room left                                   | gate limits           | killed (one byte over exits 0, expected 12)           |
 
 The first run of the R2-1 and R2-2 cases against the replay mutants hung at the harness limit until the stage the case leaves hanging was killed by hand; each such run ended in the case's own assertion once the stage was gone.
+
+- **Round 3 (bounded) and merge gates.** A fresh Opus reviewer checked the four round 2 changes for regressions against committed head `30c5509e` and found none: no scratch path in `ci.js` outside the private parent, a reclaim that removes only a dead owner's replay parent for the same folder, standalone `score` and `ci`'s live path still making and removing their own parent, a group kill that cannot reach ci's own group, and an output bound that keeps exactly `MAX_OUTPUT_BYTES`. The `test:evaluate-ci`, confinement group of `test:evaluate-run` and `test:evaluate-check` suites passed in its worktree. CI was green 13 of 13 on that head. The shard weights in `tools/test-shard-weights.json` were refreshed from that run's timings (`gh run download 36908433555 --pattern 'timings-*'`, merged with `jq -S -s add`): the slowest chain shard had run 13 minutes 28 seconds, and the six shards now balance at about 649 seconds each by weight; `test:evaluate-ci` measured 271.5 seconds.
 
 ## Spec Change Log
 

@@ -114,7 +114,7 @@ development_status:
 
   epic-2: in-progress
   2-1-compare-runs-and-accept-a-baseline: done
-  2-2-plan-ci-tiers-and-run-them-with-tea-evaluate-ci: review
+  2-2-plan-ci-tiers-and-run-them-with-tea-evaluate-ci: done
   2-3-render-evaluation-plans-in-bmad-testarch-ci: backlog
   2-4-finish-the-evaluation-with-its-ci-stage: backlog
   2-5-tea-runs-its-pr-tier-and-documents-evaluate: backlog
