@@ -4394,7 +4394,7 @@ async function checkHomeReach({ made, sibling, parent, root, folder, workspace }
       encoding: 'utf8',
       timeout: SPAWN_TIMEOUT_MS,
       cwd: workspace,
-      env: audited.environment({ PATH: process.env.PATH }, []),
+      env: audited.environment({ PATH: process.env.PATH }, walked.statusFile === null ? [] : [walked.statusFile]),
     });
     audited.settle();
     check(
