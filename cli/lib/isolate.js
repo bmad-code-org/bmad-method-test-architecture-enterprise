@@ -24,27 +24,14 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
+const { assertProfileSafePath, executableOnPath, isInside } = require('./isolation-primitives');
+
 const BACKEND_OVERRIDE_ENV = 'TEA_TEST_REVIEW_ISOLATION';
 
 function isolationError(message) {
   const error = new Error(message);
   error.code = 'ISOLATION_ERROR';
   return error;
-}
-
-function executableOnPath(name, env = process.env) {
-  for (const dir of (env.PATH || '').split(path.delimiter)) {
-    if (!dir) {
-      continue;
-    }
-    try {
-      fs.accessSync(path.join(dir, name), fs.constants.X_OK);
-      return true;
-    } catch {
-      // not in this PATH entry; keep looking
-    }
-  }
-  return false;
 }
 
 /**
@@ -78,10 +65,10 @@ function selectBackend(env = process.env, platform = process.platform) {
         '(sandbox-exec on darwin, bwrap on linux, chmod on darwin/linux, or none).',
     );
   }
-  if (platform === 'darwin' && executableOnPath('sandbox-exec', env)) {
+  if (platform === 'darwin' && executableOnPath('sandbox-exec', env) !== null) {
     return 'sandbox-exec';
   }
-  if (platform === 'linux' && executableOnPath('bwrap', env)) {
+  if (platform === 'linux' && executableOnPath('bwrap', env) !== null) {
     return 'bwrap';
   }
   if (platform !== 'win32') {
@@ -99,10 +86,8 @@ function isolationAvailable() {
   return selectBackend() !== null;
 }
 
-function assertProfileSafePath(filePath) {
-  if (/["\n\r]/.test(filePath)) {
-    throw isolationError(`Path cannot be embedded in a sandbox profile: ${JSON.stringify(filePath)}`);
-  }
+function refuseUnsafePath(filePath) {
+  return isolationError(`Path cannot be embedded in a sandbox profile: ${JSON.stringify(filePath)}`);
 }
 
 // The skill's own step contract hard-codes /tmp: steps-c/step-03a..03e each
@@ -126,7 +111,6 @@ function buildSandboxProfile(writablePaths, tmpDir = os.tmpdir()) {
   const allowed = new Set();
   for (const candidate of [tmpDir, SKILL_TMP_DIR, ...writablePaths]) {
     const resolved = path.resolve(candidate);
-    assertProfileSafePath(resolved);
     allowed.add(resolved);
     try {
       allowed.add(fs.realpathSync(resolved));
@@ -134,7 +118,8 @@ function buildSandboxProfile(writablePaths, tmpDir = os.tmpdir()) {
       // path may not exist yet; the literal entry still covers it
     }
   }
-  const subpaths = [...allowed].map((entry) => `    (subpath "${entry}")`).join('\n');
+  // A link can name a path no profile carries, so every spelling is checked, the real one included.
+  const subpaths = [...allowed].map((entry) => `    (subpath "${assertProfileSafePath(entry, refuseUnsafePath)}")`).join('\n');
   return ['(version 1)', '(allow default)', '(deny file-write*)', `(allow file-write*\n${subpaths})`, ''].join('\n');
 }
 
@@ -147,6 +132,8 @@ function buildSandboxProfile(writablePaths, tmpDir = os.tmpdir()) {
  * @returns {string[]}
  */
 function buildBwrapPrefix(projectRoot, writableTmp) {
+  assertProfileSafePath(projectRoot, refuseUnsafePath);
+  assertProfileSafePath(writableTmp, refuseUnsafePath);
   return [
     'bwrap',
     '--dev-bind',
@@ -169,11 +156,6 @@ function runChmod(args) {
     const detail = ((result.stderr || '').trim() || (result.error && result.error.message) || 'unknown chmod error').trim();
     throw isolationError(`chmod ${args.join(' ')} failed: ${detail}`);
   }
-}
-
-function isInside(child, parent) {
-  const relative = path.relative(path.resolve(parent), path.resolve(child));
-  return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
 }
 
 /** Parent directories of a path that sit strictly below projectRoot. */
@@ -264,7 +246,8 @@ function restoreModes(projectRoot, modes) {
  * stays locked so the agent cannot create new top-level entries.
  */
 function prepareChmodLock(projectRoot, writablePaths) {
-  const insidePaths = writablePaths.map((entry) => path.resolve(entry)).filter((entry) => isInside(entry, projectRoot));
+  const root = path.resolve(projectRoot);
+  const insidePaths = writablePaths.map((entry) => path.resolve(entry)).filter((entry) => entry !== root && isInside(root, entry));
   // Snapshot phase: the artifact parent directories must exist before the tree
   // is locked, because they cannot be created afterwards. The artifact files
   // themselves are pre-created empty for the same reason: an artifact that sits

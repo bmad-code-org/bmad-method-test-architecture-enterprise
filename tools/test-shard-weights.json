@@ -73,6 +73,7 @@
   "test:framework-scaffold-install-isolation": 1.2,
   "test:guard-publish": 0.3,
   "test:install": 3.4,
+  "test:isolation-primitives": 0.2,
   "test:knowledge": 0.3,
   "test:layering-boundary-lineage": 5,
   "test:licences": 0.3,

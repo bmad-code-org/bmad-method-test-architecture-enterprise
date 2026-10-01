@@ -68,7 +68,16 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
+
+const {
+  TRIVIAL_PROCESS,
+  assertProfileSafePath,
+  executableOnPath,
+  isInside,
+  isProfileSafePath,
+  probeTrivialProcess,
+  stderrTail,
+} = require('../isolation-primitives');
 
 /** Each mechanism as a sentence names it. */
 const MECHANISM_NAMES = Object.freeze({ seatbelt: 'macOS Seatbelt (sandbox-exec)', bubblewrap: 'Linux Bubblewrap (bwrap)' });
@@ -90,8 +99,7 @@ const PROBE_HINTS = Object.freeze({
     'Bubblewrap needs unprivileged user namespaces, which a container, a hardened kernel or an AppArmor restriction (kernel.apparmor_restrict_unprivileged_userns) can forbid',
 });
 
-/** How long the probe of a mechanism may take, and how much of a report the runtime reads. */
-const PROBE_TIMEOUT_MS = 20_000;
+/** How much of a report the runtime reads. */
 const REPORT_READ_BYTES = 4 * 1024 * 1024;
 
 /**
@@ -118,12 +126,6 @@ class ConfinementError extends Error {
   }
 }
 
-/** Whether `candidate` is `root` or a path inside it. */
-function isInside(root, candidate) {
-  const relative = path.relative(root, candidate);
-  return relative === '' || (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
-}
-
 /** A path as spelled and as the system resolves it, since `/var` and `/tmp` are links on macOS. */
 function spellings(candidate) {
   const resolved = path.resolve(candidate);
@@ -136,32 +138,14 @@ function spellings(candidate) {
   return [...new Set([resolved, real])];
 }
 
-/** A path a Seatbelt profile or a Bubblewrap argument may carry: absolute, with no quote, backslash or line break. */
-function profileSafe(candidate) {
-  if (typeof candidate !== 'string' || !path.isAbsolute(candidate) || /["\\\n\r]/.test(candidate)) {
-    throw new ConfinementError(`the path ${JSON.stringify(candidate)} cannot be carried into a confinement profile`);
-  }
-  return candidate;
-}
-
-/** The executable `name` resolves to on `env`'s PATH, or `null`. */
-function executableOnPath(name, env) {
-  for (const directory of String(env.PATH ?? '').split(path.delimiter)) {
-    if (!directory) continue;
-    const candidate = path.join(directory, name);
-    try {
-      fs.accessSync(candidate, fs.constants.X_OK);
-      if (fs.statSync(candidate).isFile()) return candidate;
-    } catch {
-      // keep looking
-    }
-  }
-  return null;
+/** The refusal of a path no Seatbelt profile or Bubblewrap argument can carry (`assertProfileSafePath` in `isolation-primitives.js` decides which). */
+function refuseUnsafePath(candidate) {
+  return new ConfinementError(`the path ${JSON.stringify(candidate)} cannot be carried into a confinement profile`);
 }
 
 /** The profile a Seatbelt process of the evaluation layer runs under: everything allowed, and no write under the evaluation folder. */
 function seatbeltLayerProfile(evaluationFolder) {
-  const denied = spellings(evaluationFolder).map((entry) => `(subpath "${profileSafe(entry)}")`);
+  const denied = spellings(evaluationFolder).map((entry) => `(subpath "${assertProfileSafePath(entry, refuseUnsafePath)}")`);
   return ['(version 1)', '(allow default)', `(deny file-write* ${denied.join(' ')})`, ''].join('\n');
 }
 
@@ -172,8 +156,10 @@ function seatbeltLayerProfile(evaluationFolder) {
  * above it can reach inside it.
  */
 function seatbeltTargetProfile({ workspace, writable, evaluationFolder }) {
-  const allowed = [workspace, ...writable].flatMap(spellings).map((entry) => `(subpath "${profileSafe(entry)}")`);
-  const withheld = spellings(evaluationFolder).map((entry) => `(subpath "${profileSafe(entry)}")`);
+  const allowed = [workspace, ...writable]
+    .flatMap(spellings)
+    .map((entry) => `(subpath "${assertProfileSafePath(entry, refuseUnsafePath)}")`);
+  const withheld = spellings(evaluationFolder).map((entry) => `(subpath "${assertProfileSafePath(entry, refuseUnsafePath)}")`);
   return [
     '(version 1)',
     '(allow default)',
@@ -211,10 +197,10 @@ function bubblewrapIsolation() {
  */
 function bubblewrapTargetArguments({ executable, workspace, writable, evaluationFolder }) {
   const binds = [workspace, ...writable].flatMap((entry) => {
-    const real = profileSafe(spellings(entry).at(-1));
+    const real = assertProfileSafePath(spellings(entry).at(-1), refuseUnsafePath);
     return ['--bind', real, real];
   });
-  const withheld = profileSafe(spellings(evaluationFolder).at(-1));
+  const withheld = assertProfileSafePath(spellings(evaluationFolder).at(-1), refuseUnsafePath);
   return [
     executable,
     '--unshare-user',
@@ -235,7 +221,7 @@ function bubblewrapTargetArguments({ executable, workspace, writable, evaluation
 
 /** The Bubblewrap argument vector a process of the evaluation layer runs under: `/` writable, the evaluation folder read-only. */
 function bubblewrapLayerArguments({ executable, evaluationFolder }) {
-  const protectedDirectory = profileSafe(spellings(evaluationFolder).at(-1));
+  const protectedDirectory = assertProfileSafePath(spellings(evaluationFolder).at(-1), refuseUnsafePath);
   return [
     executable,
     '--unshare-user',
@@ -261,22 +247,10 @@ function probeMechanism({ mode, executable }) {
     mode === 'seatbelt'
       ? [executable, '-p', '(version 1)\n(allow default)\n(deny file-write*)\n']
       : [executable, '--unshare-user', '--ro-bind', '/', '/', '--dev', '/dev', ...bubblewrapIsolation(), '--'];
-  const result = spawnSync(vector[0], [...vector.slice(1), process.execPath, '-e', ''], {
-    encoding: 'utf8',
-    timeout: PROBE_TIMEOUT_MS,
-    killSignal: 'SIGKILL',
-    stdio: ['ignore', 'ignore', 'pipe'],
-  });
-  if (result.error) return `${result.error.code ?? result.error.message}`;
-  if (result.status !== 0) {
-    const tail = String(result.stderr ?? '')
-      .trim()
-      .split('\n')
-      .slice(-2)
-      .join(' | ');
-    return `a trivial process under it ended ${result.status === null ? `by ${result.signal}` : `with exit ${result.status}`}${tail ? ` (${tail})` : ''}`;
-  }
-  return null;
+  const probe = probeTrivialProcess({ vector: [...vector, ...TRIVIAL_PROCESS] });
+  if (probe.ok) return null;
+  if (probe.error) return `${probe.error.code ?? probe.error.message}`;
+  return `a trivial process under it ended ${probe.status === null ? `by ${probe.signal}` : `with exit ${probe.status}`}${probe.tail ? ` (${probe.tail})` : ''}`;
 }
 
 /**
@@ -298,12 +272,8 @@ function selectConfinement({ evaluation, folder, env = process.env, platform = p
   const named = env[PLATFORM_ENV] || platform;
   let mechanism = null;
   if (named === 'darwin') {
-    try {
-      fs.accessSync(SANDBOX_EXEC, fs.constants.X_OK);
-      mechanism = { mode: 'seatbelt', executable: SANDBOX_EXEC };
-    } catch {
-      mechanism = null;
-    }
+    const sandboxExec = executableOnPath(path.basename(SANDBOX_EXEC), { PATH: path.dirname(SANDBOX_EXEC) });
+    if (sandboxExec !== null) mechanism = { mode: 'seatbelt', executable: sandboxExec };
   } else if (named === 'linux') {
     const bwrap = executableOnPath('bwrap', env);
     if (bwrap !== null) mechanism = { mode: 'bubblewrap', executable: bwrap };
@@ -330,17 +300,17 @@ function selectConfinement({ evaluation, folder, env = process.env, platform = p
       refusal: `the temp directory ${temp} is inside the evaluation folder, where the confinement denies every target read and write, so no workspace there could run; point TMPDIR outside the evaluation folder`,
     };
   }
-  const unsafe = spellings(evaluationFolder).find((entry) => /["\\\n\r]/.test(entry));
+  const unsafe = spellings(evaluationFolder).find((entry) => !isProfileSafePath(entry));
   if (unsafe !== undefined) {
     return {
-      refusal: `the evaluation folder's path ${JSON.stringify(unsafe)} holds a quote, a backslash or a line break, which no confinement profile can carry; move the folder, ${optOut}`,
+      refusal: `the evaluation folder's path ${JSON.stringify(unsafe)} holds a quote, a backslash or a line break (or another control character), which no confinement profile can carry; move the folder, ${optOut}`,
     };
   }
   // Every workspace, audit report and private directory a target is granted is made under the temp directory.
-  const unsafeTemp = spellings(temp).find((entry) => /["\\\n\r]/.test(entry));
+  const unsafeTemp = spellings(temp).find((entry) => !isProfileSafePath(entry));
   if (unsafeTemp !== undefined) {
     return {
-      refusal: `the temp directory ${JSON.stringify(unsafeTemp)} holds a quote, a backslash or a line break, which no confinement profile can carry, and every workspace is made under it; point TMPDIR elsewhere, ${optOut}`,
+      refusal: `the temp directory ${JSON.stringify(unsafeTemp)} holds a quote, a backslash or a line break (or another control character), which no confinement profile can carry, and every workspace is made under it; point TMPDIR elsewhere, ${optOut}`,
     };
   }
   return { ...mechanism, evaluationFolder };
@@ -593,11 +563,7 @@ function confinedCommandMechanism(base, sandbox, systemPathsOf = () => [], scrat
         sandbox.settle();
         if (!status.started) {
           // Bubblewrap exited before its shim ran: the exit code is its own, not a behavior of the target.
-          const said = String(result?.stderr?.value ?? result?.stderr ?? '')
-            .trim()
-            .split('\n')
-            .slice(-2)
-            .join(' | ');
+          const said = stderrTail(result?.stderr?.value ?? result?.stderr);
           throw new ConfinementError(
             `${MECHANISM_NAMES.bubblewrap} could not start the target ${JSON.stringify(request.target)}${said ? `: ${said}` : ''}`,
           );
