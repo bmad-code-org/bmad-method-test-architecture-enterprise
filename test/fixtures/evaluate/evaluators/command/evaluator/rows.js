@@ -45,6 +45,9 @@
  *                      probe-dep exports, resolved from this file's directory
  *                      as any module it loads is (the test installs it in the
  *                      project root's node_modules)
+ *   bump-package       the rows, after rewriting the package.json `--touch`
+ *                      names so its `version` is 9.9.9, as an installed
+ *                      dependency upgraded while the evaluator ran (Story 1.44)
  *   lock-cwd           the rows, after leaving locked/inner.txt in its working
  *                      directory with locked/ read-only (0o500)
  *   immutable-cwd      the rows, after leaving pinned.txt in its working
@@ -110,6 +113,10 @@ if (mode === 'write-beside') {
   fs.writeFileSync(path.join(__dirname, '__pycache__', 'cache.bin'), 'cached\n');
 }
 if (mode === 'write-project') fs.writeFileSync(flag('--touch'), 'written during calibration\n');
+if (mode === 'bump-package') {
+  const manifest = JSON.parse(fs.readFileSync(flag('--touch'), 'utf8'));
+  fs.writeFileSync(flag('--touch'), `${JSON.stringify({ ...manifest, version: '9.9.9' }, null, 2)}\n`);
+}
 if (mode === 'rewrite-self') fs.appendFileSync(__filename, '// rewritten by the evaluator during its trial\n');
 if (mode === 'lock-cwd') {
   fs.mkdirSync('locked');

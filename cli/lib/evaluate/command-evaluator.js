@@ -27,6 +27,11 @@
  * (`confinement.js` `layerPrefix`), so neither it nor any process it starts
  * can write under `evaluator/` (Story 1.31).
  *
+ * The frameworks it depends on are declared in `evaluator/frameworks.json` and read through the same launch path
+ * (`observeFrameworks`, Story 1.44): each declared version probe starts as the evaluator does, with the same
+ * environment, an empty private working directory of its own and the same confinement, and prints the installed
+ * package identity and version (`frameworks.js`).
+ *
  * Its stdout is read as UTF-8 (a byte sequence that is not UTF-8 reads as
  * U+FFFD), and what it printed is kept as the bytes it wrote. One that cannot
  * start, is still running at its wall clock, exits other than 0, or prints
@@ -39,8 +44,80 @@
 const path = require('node:path');
 
 const { buildMinimalEnv, runSupervised } = require('../run-agent');
+const { readProbeAnswer, stderrNote } = require('./frameworks');
 const { EvaluatorError, readAnswer } = require('./judgment-rows');
 const { releaseScratchDirectory, makeScratchDirectory } = require('./workspace');
+
+/**
+ * Starts one executable under the evaluation folder's `evaluator/` exactly as
+ * the evaluator itself starts: through `spawnPrefix` when the run confines it,
+ * under the supervisor, with an empty private working directory in `scratch`
+ * removed afterwards, the base environment plus `evaluator.environmentKeys`,
+ * and `evaluator.timeoutMs` as its wall clock. The evaluator's launch and a
+ * framework's version probe (`observeFrameworks`) both go through it, so a
+ * probe sees what the evaluator sees.
+ *
+ * @returns {Promise<object>} `runSupervised`'s report: the outcome and the streams
+ */
+async function launchExecutable({ folder, evaluator, command, args, input, scratch, env, spawnPrefix }) {
+  const executable = path.join(folder, ...command.split('/'));
+  const cwd = makeScratchDirectory(scratch, 'tea-evaluate-command-');
+  try {
+    return await runSupervised({
+      command: spawnPrefix.length === 0 ? executable : spawnPrefix[0],
+      args: [...spawnPrefix.slice(1), ...(spawnPrefix.length === 0 ? [] : [executable]), ...args],
+      input,
+      cwd,
+      env: buildMinimalEnv(evaluator.environmentKeys ?? [], env),
+      timeout: evaluator.timeoutMs,
+    });
+  } finally {
+    releaseScratchDirectory(scratch, cwd);
+  }
+}
+
+/**
+ * Reads the installed version of each declared framework (Story 1.44): runs
+ * the dependency's version probe through the evaluator's own launch path
+ * (`launchExecutable`) and reads the `{ package, version }` it prints
+ * (`frameworks.js`). A probe that cannot start, outlives the timeout, exits
+ * other than 0 or prints another shape yields no observation for that
+ * dependency and a `fault` naming why, with what it printed. Nothing is
+ * thrown for a dependency that is missing: the caller compares the entries
+ * with the declaration.
+ *
+ * @param {object} options
+ * @param {string} options.folder the evaluation folder
+ * @param {object} options.evaluator `evaluation.json`'s `command` evaluator
+ * @param {Array<{ package: string, probe: { command: string, args: string[] } }>} options.frameworks
+ * @param {string[]} options.scratch
+ * @param {NodeJS.ProcessEnv} [options.env]
+ * @param {string[]} [options.spawnPrefix]
+ * @returns {Promise<Array<{ package: string, observed: { package: string, version: string }|null, fault: string|null, stdout: string, stderr: string }>>}
+ *   one entry per declared framework, in the order given
+ */
+async function observeFrameworks({ folder, evaluator, frameworks, scratch, env = process.env, spawnPrefix = [] }) {
+  const entries = [];
+  for (const framework of frameworks) {
+    const { command, args } = framework.probe;
+    const label = `the version probe of ${framework.package} (${command})`;
+    const ended = await launchExecutable({ folder, evaluator, command, args, input: '', scratch, env, spawnPrefix });
+    const { outcome, stdout, stderr } = ended;
+    const entry = { package: framework.package, observed: null, fault: null, stdout, stderr };
+    if (outcome.spawnError) entry.fault = `${label} could not start: ${outcome.spawnError.message}`;
+    else if (outcome.timedOut) entry.fault = `${label} was still running at the evaluator's ${evaluator.timeoutMs}ms timeout`;
+    else if (outcome.failure) entry.fault = `${label} did not finish: ${outcome.failure}`;
+    else if (outcome.status === 0) {
+      const answer = readProbeAnswer(framework.package, stdout);
+      if ('fault' in answer) entry.fault = `${label}: ${answer.fault}`;
+      else entry.observed = answer;
+    } else {
+      entry.fault = `${label} ${outcome.signal ? `was killed by signal ${outcome.signal}` : `exited ${outcome.status}`}${stderrNote(stderr)}`;
+    }
+    entries.push(entry);
+  }
+  return entries;
+}
 
 /**
  * Runs the evaluator over one trial.
@@ -70,21 +147,16 @@ async function runCommandEvaluator({
   env = process.env,
   spawnPrefix = [],
 }) {
-  const executable = path.join(folder, ...evaluator.command.split('/'));
-  const cwd = makeScratchDirectory(scratch, 'tea-evaluate-command-');
-  let ended;
-  try {
-    ended = await runSupervised({
-      command: spawnPrefix.length === 0 ? executable : spawnPrefix[0],
-      args: [...spawnPrefix.slice(1), ...(spawnPrefix.length === 0 ? [] : [executable]), ...(evaluator.args ?? [])],
-      input: `${JSON.stringify({ sealedBrief, observations })}\n`,
-      cwd,
-      env: buildMinimalEnv(evaluator.environmentKeys ?? [], env),
-      timeout: evaluator.timeoutMs,
-    });
-  } finally {
-    releaseScratchDirectory(scratch, cwd);
-  }
+  const ended = await launchExecutable({
+    folder,
+    evaluator,
+    command: evaluator.command,
+    args: evaluator.args ?? [],
+    input: `${JSON.stringify({ sealedBrief, observations })}\n`,
+    scratch,
+    env,
+    spawnPrefix,
+  });
   const { outcome, stdout, stderr, stdoutBytes, stderrBytes } = ended;
   const streams = { stdout, stderr, stdoutBytes, stderrBytes };
   const fail = (message) => Object.assign(new EvaluatorError(message, streams), { outcome });
@@ -108,4 +180,4 @@ async function runCommandEvaluator({
   }
 }
 
-module.exports = { runCommandEvaluator };
+module.exports = { observeFrameworks, runCommandEvaluator };

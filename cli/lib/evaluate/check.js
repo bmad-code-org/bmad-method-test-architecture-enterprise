@@ -70,6 +70,10 @@
  * - `evaluator` (Story 1.34): a `sealed-brief-agent` evaluator whose `evaluation.json` has no
  *   `evaluatorQualification` (`attempts`, `minimumAgreement`), which `run` needs to qualify the agent
  *   before its verdicts count; and an `evaluatorQualification` beside any other kind, where nothing would use it.
+ * - `evaluator` (Story 1.44, AD-21): a `command` evaluator has no tracked `evaluator/frameworks.json` (its declared
+ *   installed frameworks, an empty list for none), one whose version probe is not a tracked regular executable under
+ *   `evaluator/`, or an `evaluator/LEARNED.md` whose `package@version` records disagree with a declaration; a declaration
+ *   that fails its shape is reported under `schema` (or `json`). `check` runs no probe (`run` does, `frameworks.js`).
  * - `evaluator` (Story 1.17, AD-21): a `command` or `sealed-brief-agent` evaluator has no
  *   `evaluator/mapping.json`, or one binding an oracle, behavior or rubric criterion the contract does not
  *   declare, an oracle to a behavior that does not declare it, levels other than the criterion's anchored
@@ -140,6 +144,7 @@ const {
 } = require('./registry');
 const { AGENT_ADAPTERS, bridgedArgsRefused, resolveModel } = require('../agent-adapters');
 const { EVALUATOR_DIRECTORY, EvaluatorLayerError, evaluatorFiles, evaluatorOf, isKnownEvaluator } = require('./evaluators');
+const { FRAMEWORKS_PATH, LEARNED_PATH, declarationProblems, declaredFrameworks, learnedProblems } = require('./frameworks');
 const { answeredKind, degenerateResponsePath } = require('./gameability');
 
 /** How a finding names a call of each interface kind. */
@@ -1240,6 +1245,82 @@ function checkRecordsCalibration(report, folder, evaluator, evaluation, contract
 const EXECUTE_BITS = 0o111;
 
 /**
+ * A `command` evaluator's declared framework dependencies (Story 1.44):
+ * `evaluator/frameworks.json` must be there, tracked, and meet its shape (an
+ * empty list for an evaluator with no installed framework), every version
+ * probe must be a tracked regular executable of the layer, and
+ * `evaluator/LEARNED.md` must record the version each nonempty declaration
+ * names. `run` observes what is installed; `check` runs no probe.
+ */
+function checkFrameworks(report, folder, layer, untracked) {
+  if (untracked(FRAMEWORKS_PATH)) {
+    report.add(
+      FRAMEWORKS_PATH,
+      'evaluator',
+      `${FRAMEWORKS_PATH} is not tracked by git, and a run reads only the files git tracks under evaluator/; git add it`,
+    );
+    return;
+  }
+  if (!fs.existsSync(path.join(folder, ...FRAMEWORKS_PATH.split('/')))) {
+    report.add(
+      FRAMEWORKS_PATH,
+      'evaluator',
+      `evaluation.json's evaluator is command, which declares the installed frameworks it depends on in ${FRAMEWORKS_PATH}, and the folder has none; declare each dependency, or an empty list for an evaluator with none`,
+    );
+    return;
+  }
+  const declaration = parseInto(report, folder, FRAMEWORKS_PATH);
+  if (declaration === undefined) return;
+  const shape = declarationProblems(declaration);
+  for (const problem of shape) report.add(FRAMEWORKS_PATH, 'schema', problem);
+  if (shape.length > 0) return;
+  const frameworks = declaredFrameworks(declaration);
+  for (const { package: name, probe } of frameworks) {
+    if (untracked(probe.command)) {
+      report.add(
+        FRAMEWORKS_PATH,
+        'evaluator',
+        `the version probe of ${name} names ${probe.command}, which git does not track, and a run reads only the files git tracks under evaluator/; git add it`,
+      );
+      continue;
+    }
+    let stats;
+    try {
+      stats = fs.lstatSync(path.join(folder, ...probe.command.split('/')));
+    } catch {
+      stats = null;
+    }
+    if (stats === null || !stats.isFile()) {
+      report.add(
+        FRAMEWORKS_PATH,
+        'evaluator',
+        `the version probe of ${name} names ${probe.command}, which is not a regular file the evaluation folder holds`,
+      );
+    } else if (process.platform !== 'win32' && (stats.mode & EXECUTE_BITS) === 0) {
+      report.add(
+        FRAMEWORKS_PATH,
+        'evaluator',
+        `the version probe of ${name} names ${probe.command}, which is not executable; set its execute bit`,
+      );
+    }
+  }
+  // Where the layer could not be read, the layer's own finding already says so.
+  if (layer === null) return;
+  if (untracked(LEARNED_PATH)) {
+    report.add(
+      LEARNED_PATH,
+      'evaluator',
+      `${LEARNED_PATH} is not tracked by git, and a run reads only the files git tracks under evaluator/; git add it`,
+    );
+    return;
+  }
+  const learned = layer.files.find((file) => file.path === LEARNED_PATH);
+  for (const problem of learnedProblems(frameworks, learned === undefined ? null : learned.bytes.toString('utf8'))) {
+    report.add(LEARNED_PATH, 'evaluator', problem);
+  }
+}
+
+/**
  * `evaluation.json`'s `evaluator` (AD-21) held to the folder and the
  * contract: a `command` or `sealed-brief-agent` evaluator needs
  * `evaluator/mapping.json`, meeting its schema and binding only oracles,
@@ -1339,6 +1420,7 @@ function checkEvaluator(report, folder, evaluation, contract, conditions, engine
       `evaluation.json's evaluator is ${kind}, whose judgment rows convert through ${MAPPING_PATH}, and the folder has none`,
     );
   }
+  if (kind === 'command') checkFrameworks(report, folder, layer, untracked);
   if (kind === 'command') {
     if (typeof evaluator.command !== 'string') return;
     if (untracked(evaluator.command)) {

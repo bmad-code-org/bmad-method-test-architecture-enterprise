@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "frameworks": [
+    {
+      "package": "autoevals",
+      "version": "0.3.0",
+      "probe": { "command": "evaluator/installed-version.mjs", "args": ["autoevals"] }
+    }
+  ]
+}

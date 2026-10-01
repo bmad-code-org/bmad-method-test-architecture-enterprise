@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "frameworks": [
+    {
+      "package": "agentevals",
+      "version": "0.0.7",
+      "probe": { "command": "evaluator/installed-version.mjs", "args": ["agentevals"] }
+    }
+  ]
+}

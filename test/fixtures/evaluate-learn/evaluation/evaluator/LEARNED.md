@@ -3,6 +3,7 @@
 ## Framework and installed version
 
 - Framework and package: Braintrust Autoevals, npm package `autoevals`.
+- Installed package and version: `autoevals@0.3.0`, the version `evaluator/frameworks.json` declares and `tea-evaluate run` observes before each launch of the evaluator.
 - Installed version and runtime: `0.3.0` on Node `v24.20.0`.
 - Licence and source: MIT, installed `autoevals/package.json`; [publisher repository at JavaScript 0.3.0](https://github.com/braintrustdata/autoevals/tree/b0500edbf6c157d526f9bc027798ea269a3ceb7c).
 - Model and credentials needed: none for `ExactMatch`. The publisher identifies it as a heuristic scorer in [SCORERS.md](https://github.com/braintrustdata/autoevals/blob/b0500edbf6c157d526f9bc027798ea269a3ceb7c/SCORERS.md).

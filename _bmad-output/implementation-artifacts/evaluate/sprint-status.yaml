@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-22-2026 18:09
-last_updated: 09-30-2026 09:00
+last_updated: 10-01-2026 12:40
 project: "bmad-method-test-architecture-enterprise: Evaluate"
 project_key: NOKEY
 tracking_system: file-system
@@ -79,7 +79,7 @@ development_status:
   1-41-confine-score-output-during-concurrent-run-directory-changes: done
   1-42-attribute-reused-operation-ids-to-their-interfaces: backlog
   1-43-keep-ungraded-framework-errors-out-of-target-findings: done
-  1-44-record-installed-framework-versions-in-evaluator-provenance: backlog
+  1-44-record-installed-framework-versions-in-evaluator-provenance: done
   1-45-aggregate-development-strength-through-eval-quality: done
   1-46-close-the-dogfood-suites-coverage-gaps: backlog
   1-47-distinguish-reference-risk-tables-from-the-scored-register: backlog
@@ -106,6 +106,9 @@ development_status:
   1-68-hold-a-runs-score-inputs-between-verification-and-the-engine-read: done
   1-69-hold-the-inputs-of-an-evaluator-attempts-score-call: backlog
   1-70-refuse-promptfoo-assertions-that-run-adopter-code-or-call-a-model: backlog
+  1-71-bound-a-framework-version-probe-with-its-own-timeout: backlog
+  1-72-observe-the-sealed-brief-agent-evaluators-installed-adapter-version: backlog
+  1-73-bind-the-declared-frameworks-install-state-not-only-their-versions: backlog
   1-80-bring-a-partial-clone-project-its-tags-and-a-very-large-history-into-the-withheld-repository: backlog
   1-90-verify-the-baseline-manifests-file-digests: backlog
   1-91-keep-machine-paths-out-of-a-committed-baseline: backlog
@@ -136,6 +139,9 @@ parallel_lanes:
     - 1-64-hold-the-release-across-the-witness-legs-and-the-trials
     - 1-69-hold-the-inputs-of-an-evaluator-attempts-score-call
     - 1-70-refuse-promptfoo-assertions-that-run-adopter-code-or-call-a-model
+    - 1-71-bound-a-framework-version-probe-with-its-own-timeout
+    - 1-72-observe-the-sealed-brief-agent-evaluators-installed-adapter-version
+    - 1-73-bind-the-declared-frameworks-install-state-not-only-their-versions
   lane-2-confinement-and-process-lifecycle:
     - 1-62-share-one-sandbox-primitive-layer-across-teas-isolation-mod
     - 1-57-withhold-the-committed-evaluation-folder-from-a-confined-ta
