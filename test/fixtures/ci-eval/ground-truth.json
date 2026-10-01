@@ -63,7 +63,7 @@
     "triggersConfigured": {
       "file": "src/workflows/testarch/bmad-testarch-ci/checklist.md",
       "section": "Configuration Validation",
-      "lines": "114-121",
+      "lines": "123-130",
       "rule": "The pipeline's triggers are configured: push, pull_request and schedule as the project needs them.",
       "requiredPhrase": "Triggers configured (push, pull_request, schedule)"
     },
@@ -129,6 +129,20 @@
       "lines": "79-86",
       "rule": "Artifacts are uploaded on failure only, at the paths the framework writes, with a retention period set.",
       "requiredPhrase": "Artifacts upload on failure only"
+    },
+    "evaluationPlanCommandSteps": {
+      "file": "src/workflows/testarch/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
+      "section": "3. Render Each Plan",
+      "lines": "65-91",
+      "rule": "A detected evaluation plan renders as a job per tier it holds, and every distinct check command in that job is a standalone run: step of its own, in plan order.",
+      "requiredPhrase": "one standalone `run:` step per distinct argv"
+    },
+    "evaluationRunsUpload": {
+      "file": "src/workflows/testarch/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
+      "section": "3. Render Each Plan",
+      "lines": "65-91",
+      "rule": "After the check steps the job uploads the evaluation folder's runs/ directory with if: always(), so the evidence of a failing run is kept.",
+      "requiredPhrase": "an upload of `<evaluation folder>/runs/` with `if: always()`"
     }
   },
   "negativeControls": [
@@ -420,6 +434,100 @@
         }
       ],
       "why": "Five elements and a closing sentence that forbids the rest. The stack is backend, so step-03's own default is to skip burn-in, and the request adds that nothing beyond one job is wanted. A run that copies the shipped template onto this project carries a schedule trigger, a lint job, a four-way shard matrix, a burn-in loop and two upload steps the request never mentioned, and every one of them is counted as an unrequested element. This set is the control that stops a suite scoring well by emitting everything."
+    },
+    {
+      "id": "evaluation-plan-quarry-grader",
+      "root": "evaluation-plan",
+      "projectRoot": "quarry-grader",
+      "remoteOwner": "quarry-labs",
+      "title": "A grading service whose repository holds an evaluation plan and whose request asks for its pull request checks as steps",
+      "requestSource": "docs/ci-requirements.md",
+      "nvmrcVersion": "24",
+      "isMinimalRequest": false,
+      "projectFiles": [
+        ".nvmrc",
+        "docs/ci-requirements.md",
+        "evals/grader/ci/evaluation-ci-plan.json",
+        "package-lock.json",
+        "package.json",
+        "src/grader.js",
+        "tests/grader.test.js"
+      ],
+      "expectedElements": [
+        {
+          "id": "trigger-pull-request-main",
+          "kind": "trigger",
+          "event": "pull_request",
+          "branches": [
+            "main"
+          ],
+          "rule": "triggersConfigured",
+          "requestQuote": "Trigger: pull requests targeting `main`.",
+          "contractToken": "pull_request:"
+        },
+        {
+          "id": "permission-contents-read",
+          "kind": "permission",
+          "scope": "contents",
+          "level": "read",
+          "rule": "githubActionsOutputPath",
+          "requestQuote": "Permissions: `contents: read` only.",
+          "contractToken": "contents: read"
+        },
+        {
+          "id": "node-version-from-nvmrc",
+          "kind": "node-version",
+          "rule": "nodeVersionFromNvmrc",
+          "requestQuote": "use the Node version pinned in `.nvmrc`",
+          "contractToken": null
+        },
+        {
+          "id": "command-install",
+          "kind": "command",
+          "command": "npm ci",
+          "rule": "githubActionsOutputPath",
+          "requestQuote": "install with `npm ci`",
+          "contractToken": "npm ci"
+        },
+        {
+          "id": "command-unit-tests",
+          "kind": "command",
+          "command": "npm test",
+          "rule": "pipelineStages",
+          "requestQuote": "then run `npm test`.",
+          "contractToken": "npm test"
+        },
+        {
+          "id": "command-evaluation-check",
+          "kind": "command",
+          "command": "npx tea-evaluate check --evaluation evals/grader",
+          "standaloneStep": true,
+          "rule": "evaluationPlanCommandSteps",
+          "requestQuote": "Run its pull request checks on every pull request, each in a step of its own.",
+          "contractToken": "tea-evaluate check --evaluation evals/grader"
+        },
+        {
+          "id": "command-evaluation-ci-pr",
+          "kind": "command",
+          "command": "npx tea-evaluate ci --evaluation evals/grader --tier pr",
+          "standaloneStep": true,
+          "rule": "evaluationPlanCommandSteps",
+          "requestQuote": "Run its pull request checks on every pull request, each in a step of its own.",
+          "contractToken": "tea-evaluate ci --evaluation evals/grader --tier pr"
+        },
+        {
+          "id": "artifact-evaluation-runs",
+          "kind": "artifact",
+          "pathToken": "runs/",
+          "onFailureOnly": false,
+          "condition": "always()",
+          "rule": "evaluationRunsUpload",
+          "requestQuote": "keep what the evaluation records under `runs/` as a build artifact, whether its checks pass or fail.",
+          "contractToken": "runs/"
+        }
+      ],
+      "mustNotEmit": [],
+      "why": "Eight elements, every one stated in docs/ci-requirements.md, and a closing sentence that forbids the rest, which the unrequested-element ceiling holds. The request never names the plan: it says the repository holds an evaluation and asks for its pull request checks as steps, so a run that does not detect ci/evaluation-ci-plan.json has no way to write them. The plan is a copy of the Story 1.10 fixture's with its evaluation folder moved to evals/grader, and its five pr checks carry two distinct commands, so a run that renders one step per check writes the second command four times and a run that renders none writes neither. The artifact element is the one in the corpus whose condition is always(): the evidence of a failing run is the evidence worth reading."
     }
   ]
 }

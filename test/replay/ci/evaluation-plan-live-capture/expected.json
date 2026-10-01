@@ -1,0 +1,46 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: it is the first REAL CAPTURE of the evaluation-plan project, produced by the live eval:ci path (tea-ci-runner through the local Claude Code CLI, the harness's own prompt and staged workspace) over the skill with step-03b-render-evaluation-plans.md.",
+    "The run found evals/grader/ci/evaluation-ci-plan.json without being told where it was, wrote an evaluation-pr job beside the test job, rendered the plan's five pr checks as two steps (the one check command, and the one `ci --tier pr` command the other four checks share), and uploaded evals/grader/runs/ under if: always()."
+  ],
+  "id": "evaluation-plan-live-capture",
+  "suite": "ci",
+  "scorerVersion": 15,
+  "storedOutput": {
+    "origin": "real-capture",
+    "workflow": ".github/workflows/test.yml",
+    "capturedBy": "a live `node test/eval-ci.js --agent claude --runs 2 --set evaluation-plan-quarry-grader` run on 2026-10-01 (8 of 8 requested elements, 0 unrequested, stable across both repetitions, every threshold met), whose staged workspace and prompt were run once more by hand through cli/ci-runner.js and the local Claude Code CLI because the harness discards the workflow it scores; the file is the by-hand run's, byte for byte"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/ci-eval/ground-truth.json",
+    "fixtureSet": "evaluation-plan-quarry-grader",
+    "scoringInputsDigest": "sha256:6017257df50a73e67578a1339265b607d70b7a50a8e535273f40e7469f11344b"
+  },
+  "derivation": [
+    "The file parses and actionlint reports nothing. All eight requested elements are present: the pull_request trigger scoped to main, contents:read, the Node version from .nvmrc, npm ci and npm test, both distinct pr commands of the plan, each invoked by exactly one run: block that holds that command alone, and the upload of runs/ under always().",
+    "Zero unrequested elements and zero rule violations: the only upload is the requested one, and the evaluation steps carry no continue-on-error."
+  ],
+  "result": {
+    "isMinimalRequest": false,
+    "parse": {
+      "ok": true,
+      "errors": []
+    },
+    "lint": {
+      "findings": []
+    },
+    "elements": {
+      "trigger-pull-request-main": true,
+      "permission-contents-read": true,
+      "node-version-from-nvmrc": true,
+      "command-install": true,
+      "command-unit-tests": true,
+      "command-evaluation-check": true,
+      "command-evaluation-ci-pr": true,
+      "artifact-evaluation-runs": true
+    },
+    "elementMisses": [],
+    "unrequested": [],
+    "ruleViolations": []
+  }
+}

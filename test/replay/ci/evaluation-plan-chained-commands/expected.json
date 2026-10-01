@@ -1,0 +1,47 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: it is the captured pipeline with both evaluation commands chained into one step. Both commands appear in a run: block, but the request asks for each in a step of its own.",
+    "Every other element is the capture's, so the result is that one deviation."
+  ],
+  "id": "evaluation-plan-chained-commands",
+  "suite": "ci",
+  "scorerVersion": 15,
+  "storedOutput": {
+    "origin": "constructed",
+    "workflow": ".github/workflows/test.yml"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/ci-eval/ground-truth.json",
+    "fixtureSet": "evaluation-plan-quarry-grader",
+    "scoringInputsDigest": "sha256:6017257df50a73e67578a1339265b607d70b7a50a8e535273f40e7469f11344b"
+  },
+  "derivation": [
+    "The file parses and lints clean and both commands and the upload are present, but each command is invoked by a run: block that holds more than that command, so both command elements miss. Nothing unrequested was added."
+  ],
+  "result": {
+    "isMinimalRequest": false,
+    "parse": {
+      "ok": true,
+      "errors": []
+    },
+    "lint": {
+      "findings": []
+    },
+    "elements": {
+      "trigger-pull-request-main": true,
+      "permission-contents-read": true,
+      "node-version-from-nvmrc": true,
+      "command-install": true,
+      "command-unit-tests": true,
+      "command-evaluation-check": false,
+      "command-evaluation-ci-pr": false,
+      "artifact-evaluation-runs": true
+    },
+    "elementMisses": [
+      "command-evaluation-check: the run: block that invokes npx tea-evaluate check --evaluation evals/grader holds more than that command",
+      "command-evaluation-ci-pr: the run: block that invokes npx tea-evaluate ci --evaluation evals/grader --tier pr holds more than that command"
+    ],
+    "unrequested": [],
+    "ruleViolations": []
+  }
+}

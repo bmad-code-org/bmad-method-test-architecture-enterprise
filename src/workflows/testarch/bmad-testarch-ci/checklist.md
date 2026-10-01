@@ -109,6 +109,15 @@ Note: CI setup is typically a one-time task per repo and can be run any time aft
 - [ ] Troubleshooting section included
 - [ ] Badge URLs provided (optional)
 
+### Step 10: Evaluation Plans (when a `ci/evaluation-ci-plan.json` exists)
+
+- [ ] Every plan detected, validated or reported as not validated
+- [ ] A job per tier the plan holds, carrying the `# tea-evaluation-plan:` marker
+- [ ] One standalone `run:` step per distinct check command, in plan order
+- [ ] No evaluation step marked `continue-on-error`
+- [ ] The evaluation folder's `runs/` uploaded with `if: always()` (or the platform's always-publish form)
+- [ ] Live-tier credential needs listed in the summary
+
 ## Output Validation
 
 ### Configuration Validation

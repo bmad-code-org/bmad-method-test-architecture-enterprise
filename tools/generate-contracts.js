@@ -3236,8 +3236,8 @@ function buildCiContract() {
   const full = sets.filter((set) => set.isMinimalRequest === false);
   const minimal = sets.filter((set) => set.isMinimalRequest === true);
   assert(
-    full.length === 1 && minimal.length === 1,
-    `expected one full and one minimal project; found ${full.length} and ${minimal.length}`,
+    full.length > 0 && minimal.length === 1,
+    `expected at least one full project and one minimal project; found ${full.length} and ${minimal.length}`,
   );
 
   const specs = ciOracleSpecs(groundTruth);

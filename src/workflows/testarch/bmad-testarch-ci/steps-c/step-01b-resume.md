@@ -76,12 +76,13 @@ Display:
 "📋 **Workflow Resume — CI/CD Pipeline Setup**
 
 **Last saved:** {lastSaved}
-**Steps completed:** {stepsCompleted.length} of 4
+**Steps completed:** {stepsCompleted.length} of 5
 
 1. Preflight Checks (step-01-preflight) — {✅ if in stepsCompleted, ⬜ otherwise}
 2. Generate Pipeline (step-02-generate-pipeline) — {✅ if in stepsCompleted, ⬜ otherwise}
 3. Configure Quality Gates (step-03-configure-quality-gates) — {✅ if in stepsCompleted, ⬜ otherwise}
-4. Validate & Summary (step-04-validate-and-summary) — {✅ if in stepsCompleted, ⬜ otherwise}"
+4. Render Evaluation Plans (step-03b-render-evaluation-plans) — {✅ if in stepsCompleted, ⬜ otherwise}
+5. Validate & Summary (step-04-validate-and-summary) — {✅ if in stepsCompleted, ⬜ otherwise}"
 
 ---
 
@@ -93,7 +94,8 @@ Based on `lastStep`, load the next incomplete step:
 
 - `'step-01-preflight'` → Load `./step-02-generate-pipeline.md`
 - `'step-02-generate-pipeline'` → Load `./step-03-configure-quality-gates.md`
-- `'step-03-configure-quality-gates'` → Load `./step-04-validate-and-summary.md`
+- `'step-03-configure-quality-gates'` → Load `./step-03b-render-evaluation-plans.md`
+- `'step-03b-render-evaluation-plans'` → Load `./step-04-validate-and-summary.md`
 - `'step-04-validate-and-summary'` → **Workflow already complete.** Display: "✅ **All steps completed.** Use **[V] Validate** to review outputs or **[E] Edit** to make revisions." Then halt.
 
 **If `lastStep` does not match any value above**, display: "⚠️ **Unknown progress state** (`lastStep`: {lastStep}). Please use **[C] Create** to start fresh." Then halt.

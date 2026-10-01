@@ -110,12 +110,13 @@ development_status:
   1-90-verify-the-baseline-manifests-file-digests: backlog
   1-91-keep-machine-paths-out-of-a-committed-baseline: backlog
   1-92-stop-tea-evaluate-ci-at-once-on-a-signal-while-an-engine-stage-runs: backlog
+  1-93-prove-the-merge-scheduled-and-release-rendering-and-the-re-render-of-evaluation-plans: backlog
   epic-1-retrospective: optional
 
   epic-2: in-progress
   2-1-compare-runs-and-accept-a-baseline: done
   2-2-plan-ci-tiers-and-run-them-with-tea-evaluate-ci: done
-  2-3-render-evaluation-plans-in-bmad-testarch-ci: backlog
+  2-3-render-evaluation-plans-in-bmad-testarch-ci: review
   2-4-finish-the-evaluation-with-its-ci-stage: backlog
   2-5-tea-runs-its-pr-tier-and-documents-evaluate: backlog
   epic-2-retrospective: optional
@@ -164,6 +165,7 @@ parallel_lanes:
     - 1-90-verify-the-baseline-manifests-file-digests
     - 1-91-keep-machine-paths-out-of-a-committed-baseline
     - 1-92-stop-tea-evaluate-ci-at-once-on-a-signal-while-an-engine-stage-runs
+    - 1-93-prove-the-merge-scheduled-and-release-rendering-and-the-re-render-of-evaluation-plans
 owner_handoff:
   - key: h-1-accept-the-dogfood-baseline-and-turn-its-pr-replay-green
     owner: Murat

@@ -36,7 +36,11 @@ From `workflow.yaml`, resolve:
 Load, read completely, and execute:
 `{skill-root}/steps-c/step-01-preflight.md`
 
-### 3. Resume Support
+### 3. Evaluation Plans
+
+Step 3b renders every `ci/evaluation-ci-plan.json` it finds into the pipeline, in create mode and, through the edit steps, in edit mode.
+
+### 4. Resume Support
 
 If the user selects **Resume** mode, load, read completely, and execute:
 `{skill-root}/steps-c/step-01b-resume.md`

@@ -306,7 +306,14 @@
         "test/fixtures/ci-eval/minimal/package-lock.json",
         "test/fixtures/ci-eval/minimal/package.json",
         "test/fixtures/ci-eval/minimal/src/audit-log.js",
-        "test/fixtures/ci-eval/minimal/tests/audit-log.test.js"
+        "test/fixtures/ci-eval/minimal/tests/audit-log.test.js",
+        "test/fixtures/ci-eval/evaluation-plan/.nvmrc",
+        "test/fixtures/ci-eval/evaluation-plan/docs/ci-requirements.md",
+        "test/fixtures/ci-eval/evaluation-plan/evals/grader/ci/evaluation-ci-plan.json",
+        "test/fixtures/ci-eval/evaluation-plan/package-lock.json",
+        "test/fixtures/ci-eval/evaluation-plan/package.json",
+        "test/fixtures/ci-eval/evaluation-plan/src/grader.js",
+        "test/fixtures/ci-eval/evaluation-plan/tests/grader.test.js"
       ],
       "groundTruth": ["test/fixtures/ci-eval/ground-truth.json"],
       "contracts": ["test/contracts/ci.contract.json"],
@@ -321,7 +328,7 @@
         "maxFixtureMutations": 0
       },
       "repetitions": 2,
-      "caseCount": 2,
+      "caseCount": 3,
       "ciTier": "full-matrix",
       "runnerCapabilities": ["scoped-artifact-writes"]
     },

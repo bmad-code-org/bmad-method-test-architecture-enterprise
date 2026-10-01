@@ -210,6 +210,71 @@ jobs:
           fi
 
 # ============================================================================
+# EVALUATION PLAN BLOCK (steps-c/step-03b-render-evaluation-plans.md)
+# ============================================================================
+# Used only when the repository holds a ci/evaluation-ci-plan.json. Copy the
+# block into `jobs:` once per tier the plan holds, and repeat the step pattern
+# once per distinct check command of that tier, in plan order.
+#
+#   JOB_ID:            evaluation-<tier>, or evaluation-<folder>-<tier> for several plans
+#   PLAN_PATH:         path of the plan file, as the marker comment records it
+#   TIER:              pr, merge, scheduled or release
+#   TIMEOUT_MINUTES:   30 for pr and merge, 120 for scheduled and release
+#   EVALUATION_FOLDER: the folder that holds ci/, relative to the repository root
+#   CHECK_IDS:         the ids of every check that carries the command, joined with ", "
+#   COMMAND:           the check's argv from the plan, led by npx, each argument quoted for a shell
+#
+# The step pattern holds standalone `run:` steps, each a block scalar that
+# holds its one command. The upload runs whatever the result, because the
+# evidence of a failing run is the evidence worth reading: each invocation
+# writes runs/<invocationId>/ under the evaluation folder.
+#
+# evaluation-plan:begin
+# jobs:
+#   JOB_ID:
+#     # tea-evaluation-plan: PLAN_PATH
+#     name: "Evaluation (TIER)"
+#     runs-on: ubuntu-latest
+#     timeout-minutes: TIMEOUT_MINUTES
+#
+#     steps:
+#       - uses: actions/checkout@v4
+#
+#       - name: Determine Node version
+#         id: node-version
+#         run: |
+#           if [ -f .nvmrc ]; then
+#             echo "value=$(cat .nvmrc)" >> "$GITHUB_OUTPUT"
+#           else
+#             echo "value=24" >> "$GITHUB_OUTPUT"
+#           fi
+#
+#       - name: Setup Node.js
+#         uses: actions/setup-node@v4
+#         with:
+#           node-version: ${{ steps.node-version.outputs.value }}
+#           cache: "npm"
+#
+#       - name: Install dependencies
+#         run: npm ci # Replace with INSTALL_CMD
+#
+#       # One step per distinct command, repeated in plan order.
+#       - name: "CHECK_IDS"
+#         run: |
+#           COMMAND
+#
+#       - name: Upload evaluation runs
+#         if: always()
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: JOB_ID-runs
+#           path: EVALUATION_FOLDER/runs/
+#           if-no-files-found: warn
+#           retention-days: 30
+# evaluation-plan:end
+# ============================================================================
+
+# ============================================================================
 # EXTENSION PATTERNS — Script Injection Prevention
 # ============================================================================
 # When extending this template into reusable workflows, manual dispatch

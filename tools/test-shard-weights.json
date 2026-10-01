@@ -56,6 +56,7 @@
   "test:evaluate-calibration": 49.1,
   "test:evaluate-check": 267,
   "test:evaluate-ci": 271.5,
+  "test:evaluate-ci-render": 0.4,
   "test:evaluate-compare": 90.9,
   "test:evaluate-confinement": 202.8,
   "test:evaluate-evaluators": 249.4,

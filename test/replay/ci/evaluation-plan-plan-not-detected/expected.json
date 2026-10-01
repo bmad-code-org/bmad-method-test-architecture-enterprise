@@ -1,0 +1,48 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: it is the captured pipeline with the whole evaluation job removed, which is what a run writes when it never detects ci/evaluation-ci-plan.json. The request says the repository holds an evaluation and never names the plan, so a run that skips the detection step writes the test job and nothing else.",
+    "Every other element is the capture's, so the result is that one deviation."
+  ],
+  "id": "evaluation-plan-plan-not-detected",
+  "suite": "ci",
+  "scorerVersion": 15,
+  "storedOutput": {
+    "origin": "constructed",
+    "workflow": ".github/workflows/test.yml"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/ci-eval/ground-truth.json",
+    "fixtureSet": "evaluation-plan-quarry-grader",
+    "scoringInputsDigest": "sha256:6017257df50a73e67578a1339265b607d70b7a50a8e535273f40e7469f11344b"
+  },
+  "derivation": [
+    "The file parses and lints clean and keeps the five elements the request states outright. Neither evaluation command is invoked by any run: block and no upload-artifact step names runs/, so three elements miss. Nothing unrequested was added."
+  ],
+  "result": {
+    "isMinimalRequest": false,
+    "parse": {
+      "ok": true,
+      "errors": []
+    },
+    "lint": {
+      "findings": []
+    },
+    "elements": {
+      "trigger-pull-request-main": true,
+      "permission-contents-read": true,
+      "node-version-from-nvmrc": true,
+      "command-install": true,
+      "command-unit-tests": true,
+      "command-evaluation-check": false,
+      "command-evaluation-ci-pr": false,
+      "artifact-evaluation-runs": false
+    },
+    "elementMisses": [
+      "command-evaluation-check: no run: block invokes npx tea-evaluate check --evaluation evals/grader",
+      "command-evaluation-ci-pr: no run: block invokes npx tea-evaluate ci --evaluation evals/grader --tier pr",
+      "artifact-evaluation-runs: no upload-artifact step names a path containing runs/"
+    ],
+    "unrequested": [],
+    "ruleViolations": []
+  }
+}

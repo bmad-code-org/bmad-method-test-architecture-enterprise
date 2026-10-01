@@ -50,7 +50,9 @@
  *                        ceiling zero
  *   rule violations      the two rules the workflow states about its own output: no
  *                        unsafe context interpolated into a run: block, and no
- *                        continue-on-error on a step that runs tests, ceiling zero
+ *                        continue-on-error on a step that runs tests or an evaluation
+ *                        check (a tea-evaluate or eval-quality-gates command, whose
+ *                        exit is the verdict), ceiling zero
  *   stability            the same scored answer on identical input, over everything above
  *   fixture mutations    the run must not change or delete a file the project came with
  *
@@ -289,6 +291,9 @@ const TEST_RUNNER_PATTERNS = [
 ];
 
 /** A run: block that lints, for the unrequested-gate count when no lint gate was asked for. */
+/** A `tea-evaluate` or `eval-quality-gates` invocation: a step that runs an evaluation check, whose exit is the verdict. */
+const EVALUATION_INVOCATION = /(?<![\w-])(?:tea-evaluate|eval-quality-gates)(?![\w-])/;
+
 const LINT_INVOCATION = /(?<![\w-])(?:npm run lint|npx eslint|eslint |prettier --check)/;
 
 /**
@@ -844,6 +849,9 @@ async function validateCorpus(groundTruth) {
           if (script !== null && scripts !== null && !Object.hasOwn(scripts, script)) {
             problems.push(`${elementLabel}: asks for "${element.command}" and the project's package.json declares no "${script}" script`);
           }
+          if (element.standaloneStep !== undefined && typeof element.standaloneStep !== 'boolean') {
+            problems.push(`${elementLabel}: standaloneStep is declared and is not a boolean`);
+          }
           break;
         }
         case 'gate': {
@@ -877,6 +885,12 @@ async function validateCorpus(groundTruth) {
           if (typeof element.onFailureOnly !== 'boolean') problems.push(`${elementLabel}: onFailureOnly is not a boolean`);
           if (element.retentionDays !== undefined && !Number.isInteger(element.retentionDays)) {
             problems.push(`${elementLabel}: retentionDays is declared and is not an integer`);
+          }
+          if (element.condition !== undefined && (typeof element.condition !== 'string' || element.condition.trim().length === 0)) {
+            problems.push(`${elementLabel}: condition is declared and is not a non-empty string`);
+          }
+          if (element.condition !== undefined && element.onFailureOnly === true) {
+            problems.push(`${elementLabel}: declares a condition and onFailureOnly, which both constrain the upload's if`);
           }
           break;
         }
@@ -1473,6 +1487,18 @@ function invokes(scripts, command) {
   return scripts.some((script) => pattern.test(script));
 }
 
+/**
+ * Whether a step's `if` is exactly `condition`, with the `${{ }}` wrapper GitHub allows around it removed. A substring
+ * match would accept `!always()` and `always() && false`, which are not the condition.
+ */
+function conditionIs(step, condition) {
+  const written = String(step.if ?? '')
+    .trim()
+    .replace(/^\$\{\{\s*([\S\s]*?)\s*\}\}$/, '$1')
+    .trim();
+  return written === condition;
+}
+
 /** The `needs` of a job, as a list of job ids. */
 function needsOf(job) {
   return asList(job?.needs).map(String);
@@ -1577,9 +1603,19 @@ function checkElement(element, set, workflow) {
     }
     case 'command': {
       const scripts = runScripts(workflow).map((entry) => entry.script);
-      return invokes(scripts, element.command)
-        ? { present: true, detail: `a run: block invokes ${element.command}` }
-        : { present: false, detail: `no run: block invokes ${element.command}` };
+      if (!invokes(scripts, element.command)) return { present: false, detail: `no run: block invokes ${element.command}` };
+      if (element.standaloneStep === true) {
+        // One step of its own: a command the request asks for in a step per command is invoked by exactly one run: block,
+        // and that block holds the command and nothing else, so a command repeated across steps or chained into another
+        // step's script is a miss.
+        const holding = scripts.filter((script) => invokes([script], element.command));
+        if (holding.length !== 1)
+          return { present: false, detail: `${holding.length} run: blocks invoke ${element.command}, expected one` };
+        if (holding[0].trim() !== element.command) {
+          return { present: false, detail: `the run: block that invokes ${element.command} holds more than that command` };
+        }
+      }
+      return { present: true, detail: `a run: block invokes ${element.command}` };
     }
     case 'gate': {
       return checkGate(element, workflow, jobs);
@@ -1590,10 +1626,14 @@ function checkElement(element, set, workflow) {
       if (matching.length === 0) return { present: false, detail: `no upload-artifact step names a path containing ${element.pathToken}` };
       const satisfying = matching.filter(({ step }) => {
         if (element.onFailureOnly && !String(step.if ?? '').includes('failure()')) return false;
+        if (element.condition !== undefined && !conditionIs(step, element.condition)) return false;
         if (element.retentionDays !== undefined && Number(step.with?.['retention-days']) !== element.retentionDays) return false;
         return true;
       });
       if (satisfying.length === 0) {
+        if (element.condition !== undefined && !matching.some(({ step }) => conditionIs(step, element.condition))) {
+          return { present: false, detail: `the upload of ${element.pathToken} does not run under ${element.condition}` };
+        }
         return {
           present: false,
           detail: `the upload of ${element.pathToken} ${element.onFailureOnly ? 'is not conditioned on failure() or ' : ''}is not kept for ${element.retentionDays} days`,
@@ -1769,6 +1809,8 @@ function workflowRuleViolations(workflow) {
     const suppressed = step['continue-on-error'] === true || String(step['continue-on-error'] ?? '').trim() === 'true';
     if (suppressed && TEST_RUNNER_PATTERNS.some((pattern) => new RegExp(pattern.source).test(script))) {
       found.push(`continue-on-error: on a step that runs tests in job ${jobId} step ${index + 1}`);
+    } else if (suppressed && EVALUATION_INVOCATION.test(script)) {
+      found.push(`continue-on-error: on a step that runs an evaluation check in job ${jobId} step ${index + 1}`);
     }
   }
   return found;

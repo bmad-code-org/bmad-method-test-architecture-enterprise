@@ -3,7 +3,7 @@
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "tea-ci-behavioral",
-  "sourceSpecDigest": "sha256:a7cbe3041323b47b0e39e3a4d3af1af536c116600ccd9dcba0dd42870883b046",
+  "sourceSpecDigest": "sha256:6f8a9c6868f185d889bce65dec6b3425783666edf4112ba8b139415cbe6d6d68",
   "behaviors": [
     {
       "id": "B-001",
@@ -498,6 +498,158 @@
         }
       ],
       "oracles": ["O-026"]
+    },
+    {
+      "id": "B-027",
+      "description": "evaluation-plan-quarry-grader: trigger-pull-request-main is requested. Trigger: pull requests targeting `main`.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-plan-quarry-grader/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-027"]
+    },
+    {
+      "id": "B-028",
+      "description": "evaluation-plan-quarry-grader: permission-contents-read is requested. Permissions: `contents: read` only.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-plan-quarry-grader/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-028"]
+    },
+    {
+      "id": "B-029",
+      "description": "evaluation-plan-quarry-grader: command-install is requested. install with `npm ci`",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-plan-quarry-grader/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-029"]
+    },
+    {
+      "id": "B-030",
+      "description": "evaluation-plan-quarry-grader: command-unit-tests is requested. then run `npm test`.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-plan-quarry-grader/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-030"]
+    },
+    {
+      "id": "B-031",
+      "description": "evaluation-plan-quarry-grader: command-evaluation-check is requested. Run its pull request checks on every pull request, each in a step of its own.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-plan-quarry-grader/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-031"]
+    },
+    {
+      "id": "B-032",
+      "description": "evaluation-plan-quarry-grader: command-evaluation-ci-pr is requested. Run its pull request checks on every pull request, each in a step of its own.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-plan-quarry-grader/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-032"]
+    },
+    {
+      "id": "B-033",
+      "description": "evaluation-plan-quarry-grader: artifact-evaluation-runs is requested. keep what the evaluation records under `runs/` as a build artifact, whether its checks pass or fail.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-plan-quarry-grader/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-033"]
+    },
+    {
+      "id": "B-034",
+      "description": "evaluation-plan-quarry-grader: the run wrote the workflow file the platform requires and exited clean. A run that wrote nothing, or that exited non-zero, is an environment failure and is never scored as a bad pipeline.",
+      "severity": "critical",
+      "observableSuccessCriterion": "Each run left the workflow file the platform requires on disk and exited 0.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-plan-quarry-grader/projectFiles"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "unmeasurable-run-scored-as-a-miss"
+        }
+      ],
+      "oracles": ["O-034"]
     }
   ],
   "oracles": [
@@ -1170,6 +1322,206 @@
           }
         ]
       }
+    },
+    {
+      "id": "O-027",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-plan-quarry-grader: trigger-pull-request-main is requested. Trigger: pull requests targeting `main`.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-plan-quarry-grader, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"pull_request:\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-plan-quarry-grader/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-plan-quarry-grader/artifact/workflow"
+          },
+          {
+            "literal": "pull_request:"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-028",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-plan-quarry-grader: permission-contents-read is requested. Permissions: `contents: read` only.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-plan-quarry-grader, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"contents: read\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-plan-quarry-grader/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-plan-quarry-grader/artifact/workflow"
+          },
+          {
+            "literal": "contents: read"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-029",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-plan-quarry-grader: command-install is requested. install with `npm ci`",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-plan-quarry-grader, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"npm ci\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-plan-quarry-grader/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-plan-quarry-grader/artifact/workflow"
+          },
+          {
+            "literal": "npm ci"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-030",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-plan-quarry-grader: command-unit-tests is requested. then run `npm test`.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-plan-quarry-grader, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"npm test\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-plan-quarry-grader/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-plan-quarry-grader/artifact/workflow"
+          },
+          {
+            "literal": "npm test"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-031",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-plan-quarry-grader: command-evaluation-check is requested. Run its pull request checks on every pull request, each in a step of its own.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-plan-quarry-grader, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"tea-evaluate check --evaluation evals/grader\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-plan-quarry-grader/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-plan-quarry-grader/artifact/workflow"
+          },
+          {
+            "literal": "tea-evaluate check --evaluation evals/grader"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-032",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-plan-quarry-grader: command-evaluation-ci-pr is requested. Run its pull request checks on every pull request, each in a step of its own.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-plan-quarry-grader, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"tea-evaluate ci --evaluation evals/grader --tier pr\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-plan-quarry-grader/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-plan-quarry-grader/artifact/workflow"
+          },
+          {
+            "literal": "tea-evaluate ci --evaluation evals/grader --tier pr"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-033",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-plan-quarry-grader: artifact-evaluation-runs is requested. keep what the evaluation records under `runs/` as a build artifact, whether its checks pass or fail.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-plan-quarry-grader, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"runs/\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-plan-quarry-grader/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-plan-quarry-grader/artifact/workflow"
+          },
+          {
+            "literal": "runs/"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-034",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-plan-quarry-grader: the run wrote the workflow file the platform requires and exited clean. A run that wrote nothing, or that exited non-zero, is an environment failure and is never scored as a bad pipeline.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The exit code and the workflow artifact of the run for evaluation-plan-quarry-grader.",
+        "negativeDomain": "A run that left no workflow file behind, or whose command reported a failure class through its exit code.",
+        "evidenceTargets": [
+          "/interactions/ci-evaluation-plan-quarry-grader/artifact/workflow",
+          "/interactions/ci-evaluation-plan-quarry-grader/exit-code"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/ci-evaluation-plan-quarry-grader/exit-code"
+              },
+              {
+                "literal": 0
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/ci-evaluation-plan-quarry-grader/artifact/workflow"
+              }
+            ]
+          }
+        ]
+      }
     }
   ],
   "rubrics": [],
@@ -1347,6 +1699,26 @@
           }
         }
       }
+    },
+    {
+      "stepId": "ci-evaluation-plan-quarry-grader",
+      "operationId": "generate-pipeline",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": {
+          "agent": {
+            "matcher": "any"
+          }
+        },
+        "environment": null,
+        "stdin": {
+          "prompt": {
+            "literal": "You are running the TEA workflow `bmad-testarch-ci` against the project in `quarry-grader/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nResolve the workflow placeholders and variables to these values:\n\n- `{project-root}`: `quarry-grader`\n- `{config_source}`: `quarry-grader/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `quarry-grader/test-artifacts`\n- `{skill-root}`: `skill`\n- `ci_platform`: `github-actions`\n- `test_dir`: `quarry-grader/tests`\n\nThe pipeline this project needs is stated in `quarry-grader/docs/ci-requirements.md`, which its team wrote. Treat it as\nthe decisions the pipeline has to carry, and read the rest of the project the way step 1 says to.\n\nThis workspace has no shell, so the checks in step 1 that run a command, such as running the test suite\nlocally or confirming that dependencies are installed, cannot be executed here. Record each of those as\nnot run and continue; do not halt on them. Everything else step 1 asks about is readable from the tree.\n\n----- what to produce -----\nWrite the pipeline configuration to the path step 2 resolves for `ci_platform` under `quarry-grader/`, and write\n`quarry-grader/test-artifacts/ci/ci-pipeline-progress.md` as the steps direct.\n\nDo not edit or delete any file that was under `quarry-grader/` when you started. This workflow adds a pipeline to a\nproject and changes nothing the project already had.\n\nWhen you are done, print one line naming the pipeline file you wrote. Nothing else you print is read."
+          }
+        }
+      }
     }
   ],
   "scopedResources": null,
@@ -1360,15 +1732,15 @@
     "human-labels"
   ],
   "testData": {
-    "setup": "Each plan step stages one project from test/fixtures/ci-eval/ into a disposable workspace: the project's files under its own root (meridian-storefront/ for full-meridian-storefront, lantern-audit-log/ for minimal-lantern-audit-log), a resolved _bmad/tea/config.yaml, a minimal .git/ directory, and the bmad-testarch-ci workflow under skill/. ground-truth.json is never staged, and the harness asserts that no staged file carries its bytes or its keys before the run. The workspace is the authorization's working directory, and the prompt on standard input names the project root and skill/ and resolves every placeholder against them. The project root is the one fact about the project the prompt carries, and it names the service rather than the project's role. The sensitivity witness differs its two legs on ci_platform rather than between the two projects: the two workflows differ because of the staged project, so a differential between the projects would attribute to the prompt a difference the project produced. Both witness legs stage the full project, because AD-10 reads every other leg of an operation as a clean leg and this operation has none besides them.",
+    "setup": "Each plan step stages one project from test/fixtures/ci-eval/ into a disposable workspace: the project's files under its own root (meridian-storefront/ for full-meridian-storefront, lantern-audit-log/ for minimal-lantern-audit-log, quarry-grader/ for evaluation-plan-quarry-grader), a resolved _bmad/tea/config.yaml, a minimal .git/ directory, and the bmad-testarch-ci workflow under skill/. ground-truth.json is never staged, and the harness asserts that no staged file carries its bytes or its keys before the run. The workspace is the authorization's working directory, and the prompt on standard input names the project root and skill/ and resolves every placeholder against them. The project root is the one fact about the project the prompt carries, and it names the service rather than the project's role. The sensitivity witness differs its two legs on ci_platform rather than between the two projects: the two workflows differ because of the staged project, so a differential between the projects would attribute to the prompt a difference the project produced. Both witness legs stage the full project, because AD-10 reads every other leg of an operation as a clean leg and this operation has none besides them.",
     "cleanup": "Delete the workspace. The corpus under test/fixtures/ci-eval/ is read-only and the harness digests it before and after every run.",
     "principals": null,
     "resources": null
   },
   "budgets": {
-    "maxToolCalls": 600,
-    "maxWallClockMinutes": 40,
-    "maxCostUsd": "8.00"
+    "maxToolCalls": 900,
+    "maxWallClockMinutes": 60,
+    "maxCostUsd": "12.00"
   },
   "safetyLimits": [
     "The runner writes only inside the staged workspace, and only what the workflow scaffolds; the harness fails a run that changed the repository or a pre-existing project file.",
@@ -1380,6 +1752,6 @@
     "The exit code of each invocation.",
     "The digest of the prompt each run was given, so an edit that changed the question is visible in the record."
   ],
-  "probeStepBound": 4,
+  "probeStepBound": 5,
   "fixtureReset": null
 }

@@ -202,7 +202,7 @@
   },
   "ci": {
     "contractId": "tea-ci-behavioral",
-    "corpusDigest": "sha256:7dc53a1b80a9af0b23b28be72de301c9cabc5cf4b0242e2dd5e5c41eab5941b1",
+    "corpusDigest": "sha256:5eecef8bbb64417b2bb5b9ffeadd6750aaf0e8c913e39090fa0d3a9d547cea34",
     "probeCount": 4,
     "strength": {
       "defect": {
@@ -324,6 +324,54 @@
             }
           ],
           "outcomes": [
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
@@ -4493,7 +4541,7 @@
   },
   "fragment-selection/bmad-testarch-ci": {
     "contractId": "tea-fragment-selection-ci",
-    "corpusDigest": "sha256:274ef28b60b02da48facdfc64919d9988ac4d91805c902fb45483f58ad61dafa",
+    "corpusDigest": "sha256:6b6b946c6cf4cf081c4afc0f8badfb321e579883cbe62ace165b84f9317581f6",
     "probeCount": 2,
     "strength": {
       "defect": null,

@@ -23,7 +23,7 @@ inputDocuments:
 
 ## Overview
 
-This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and eighty stories, including H.1 (Stories 1.27 to 1.70, 1.80, 1.90 to 1.92 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
+This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and eighty-one stories, including H.1 (Stories 1.27 to 1.70, 1.80, 1.90 to 1.93 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
 
 Evaluate is fully stacked. The stack runs system under test, then the evaluation (the mechanism that runs the system, collects evidence and makes judgments), then the Behavioral Evaluation Contract (what behavior matters, what evidence counts, how success and failure resolve), then eval-quality (contract sanity, evidence support, and whether the evaluation catches defects). TeA owns every layer above eval-quality, including each concern eval-quality states it leaves to the caller, so an adopter can evaluate any target end to end. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3 onward, Epic 2 and H.1 to close the plan gap audit; the Traceability section maps each audit item to the story that closes it.
 
@@ -150,7 +150,7 @@ None. Evaluate has no graphical interface.
 ### Epic 1: The Evaluate authoring loop
 
 An adopter describes a target, answers Evaluate's questions, chooses or builds the evaluation layer and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches the seeded defect, with the gaps named and closed. The epic closes by running Evaluate on `bmad-testarch-evaluate` itself, then proving the guidance on two more target kinds, on seeded weaknesses and on an evaluation framework its guides never name.
-Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.70, 1.80, 1.90 to 1.92.
+Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.70, 1.80, 1.90 to 1.93.
 
 **FRs covered:** FR1 to FR10, FR13, FR14.
 
@@ -240,12 +240,13 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 72    | 1.90  | 2.1                          |
 | 73    | 1.91  | 2.1                          |
 | 74    | 1.92  | 2.2                          |
-| 75    | 2.1   | 1.16, 1.26, 1.45             |
-| 76    | 2.2   | 2.1                          |
-| 77    | 2.3   | 2.2                          |
-| 78    | 2.4   | 2.3                          |
-| 79    | 2.5   | 2.4                          |
-| 80    | H.1   | 2.5                          |
+| 75    | 1.93  | 2.3                          |
+| 76    | 2.1   | 1.16, 1.26, 1.45             |
+| 77    | 2.2   | 2.1                          |
+| 78    | 2.3   | 2.2                          |
+| 79    | 2.4   | 2.3                          |
+| 80    | 2.5   | 2.4                          |
+| 81    | H.1   | 2.5                          |
 
 ### Parallel lanes (from 2026-10-01)
 
@@ -255,7 +256,7 @@ The table above gives every story's dependencies. Since Story 1.40 merged, the s
 
 **Lane 2: confinement and process lifecycle** (own worktree): 1.62, 1.57, 1.58, 1.59, 1.60, 1.63, 1.61, 1.52, 1.53, 1.54, 1.80. Story 1.62 goes first because it extracts the shared sandbox primitives the confinement stories build on. Story 1.60 may remove 1.63's premise, so 1.63 is re-read after it. Story 1.58 precedes 1.54, since both track the run's private scratch directories. Stories 1.52 to 1.54 touch the preflight and workspace modules the confinement stories also edit, so they run after them.
 
-**Lane 3: engine releases, dogfood and Epic 2** (own worktree): 1.45, 2.1, 2.2, 2.3, 2.4, 1.47, 1.49, 1.48, 1.42, 1.50, 1.55, 1.56, 1.51, 1.46, 2.5, 1.90, 1.91, 1.92. Story 1.45 starts the longest serial chain (1.45, 2.1 to 2.5, then H.1), so it runs first, and 2.5 runs last because it baselines every fixture and so waits for each story that changes committed evidence bytes (1.42, 1.44, 1.50, 1.51, 1.55, 1.56). Stories 1.47, 1.49 and 1.48 regenerate the test-design probes, so they run together with 1.48 last. Stories 1.42 and 1.50 both change the HTTP probe port and run back to back. Story 1.46 records live runs of the Evaluate skill, so it follows the skill-guide stories in other lanes (1.43, 1.44, 1.61, 1.67, 1.70). Lane 3 owns every eval-quality release, because 1.42, 1.45, 1.48, 1.50 and 1.55 each need a published engine and one publisher keeps the dependency pin and `package-lock.json` ordered. Stories 1.90 and 1.91 follow 2.5: 1.90 edits the baseline `check` and `compare` read, and 1.91 re-accepts the fixture baselines Stories 2.2 to 2.5 commit, so it waits for every one of them.
+**Lane 3: engine releases, dogfood and Epic 2** (own worktree): 1.45, 2.1, 2.2, 2.3, 2.4, 1.47, 1.49, 1.48, 1.42, 1.50, 1.55, 1.56, 1.51, 1.46, 2.5, 1.90, 1.91, 1.92, 1.93. Story 1.45 starts the longest serial chain (1.45, 2.1 to 2.5, then H.1), so it runs first, and 2.5 runs last because it baselines every fixture and so waits for each story that changes committed evidence bytes (1.42, 1.44, 1.50, 1.51, 1.55, 1.56). Stories 1.47, 1.49 and 1.48 regenerate the test-design probes, so they run together with 1.48 last. Stories 1.42 and 1.50 both change the HTTP probe port and run back to back. Story 1.46 records live runs of the Evaluate skill, so it follows the skill-guide stories in other lanes (1.43, 1.44, 1.61, 1.67, 1.70). Lane 3 owns every eval-quality release, because 1.42, 1.45, 1.48, 1.50 and 1.55 each need a published engine and one publisher keeps the dependency pin and `package-lock.json` ordered. Stories 1.90 and 1.91 follow 2.5: 1.90 edits the baseline `check` and `compare` read, and 1.91 re-accepts the fixture baselines Stories 2.2 to 2.5 commit, so it waits for every one of them.
 
 Rules the lanes share:
 
@@ -1955,6 +1956,26 @@ So that a cancelled run holds no runner and leaves nothing behind (AD-10, AD-12)
 **Dependencies:** 2.2.
 **Gate:** `test:evaluate-ci`, `test:evaluate-boundaries`, `npm test`.
 
+### Story 1.93: Prove the merge, scheduled and release rendering and the re-render of evaluation plans
+
+Added 2026-10-01 in Story 2.3. The `evaluation-plan` case of the `ci` behavioral suite proves one slice of `step-03b-render-evaluation-plans.md`: a plan with checks on the `pr` tier, rendered on GitHub Actions in create mode. The step also renders the `merge`, `scheduled` and `release` tiers (the event each trigger maps to, the `merge` job running the `pr` commands first, the 30 and 120 minute timeouts, the event guard a new event puts on the jobs that existed before), replaces its own jobs by their id and marker on a second run, and renders edit mode through the assess and apply steps. No harness case reaches any of that: `test/eval-ci.js` stages create mode over one `pr`-only plan, and `test:evaluate-ci-render` parses the template block and the step references and runs no agent. Other platforms stay outside the suite on purpose, since the corpus rejects them (actionlint lints GitHub Actions alone).
+
+As an adopter whose plan places checks beyond the pull request,
+I want the CI skill's rendering of the other tiers, of a re-run and of edit mode proved,
+So that an evaluation that runs on merge, on a schedule and on release is enforced there too (AD-11, AD-12).
+
+**Acceptance Criteria:**
+
+**Given** a fixture adopter under `test/fixtures/ci-eval/` whose plan places checks on `pr`, `merge` and `scheduled`, and whose request never names the plan
+**When** a live `npm run eval:ci` through the local Claude Code CLI renders it in create mode, and the worker captures the workflow by hand into `test/replay/ci/` with `storedOutput` marked a real capture
+**Then** the ground truth lists the triggers each tier maps to, a job per tier with its distinct commands in plan order, the `merge` job's `pr` commands ahead of its own, the timeouts and the `if: always()` upload of each job's `runs/` under its own artifact name, and `test:eval-replay` holds the capture to the scorer
+**And** the case's constructed deviations (a `merge` job without the `pr` commands, one artifact name for two jobs, a `scheduled` job under the `pr` timeout) each miss exactly the element they remove
+**And** the harness gains an edit-mode case over a pipeline that already carries a marker job and an unmarked job: the second run replaces the marker job, leaves the unmarked job byte for byte, and leaves the create-mode checkpoint untouched
+**And** `test:contract-sources`, `test:probe-sources`, `test:eval-schemas`, `test:eval-replay` and `test:eval-ci-data` hold the new sets, and the `ci` suite's `caseCount` and `fixtures` are updated
+
+**Dependencies:** 2.3.
+**Gate:** `test:evaluate-ci-render`, `test:eval-ci-data`, `test:eval-replay`, `test:contract-sources`, `test:probe-sources`, `npm test`; a live `eval:ci` run recorded in the story.
+
 ## Epic 2: Continuous proof in CI
 
 The evaluation Epic 1 produced is proven on every pull request, with the evidence to audit it.
@@ -2036,9 +2057,9 @@ So that one skill owns the pipeline files (AD-11).
 **Given** `src/workflows/testarch/bmad-testarch-ci/` in the house shape
 **When** a step is added, authored directly, that detects `ci/evaluation-ci-plan.json` files and renders them with the existing platform templates
 **Then** a standalone CI run and an edit-mode invocation both pick up existing plans
-**And** each `pr` check renders as its own pipeline step
-**And** the GitHub Actions template gains an evaluation block with a per-check step pattern and an upload of `runs/<invocationId>/` with `if: always()` (AD-12); a deterministic test, chained into `npm test` as `test:evaluate-ci-render`, which the `chain` matrix runs (amended 2026-09-25 in Story 1.9: CI runs the `npm test` chain in shards, so a chained script needs no step of its own), asserts the detection step is reached from both the create and edit entry points and parses the template block as YAML asserting both patterns
-**And** because the CI skill's templates are rendered by the agent, the rendering itself is proved behaviorally: `test/eval-ci.js` gains an `evaluation-plan` case over the fixture adopter from Story 1.10, whose ground truth lists each `pr` command as a standalone `run:` step and the `runs/` upload path; the case's fixture set lives under `test/fixtures/ci-eval/evaluation-plan/` (the harness requires set roots there) as a copy of that plan; a live `npm run eval:ci` through the local Claude Code CLI produces the workflow, which the worker captures by hand into `test/replay/ci/evaluation-plan-<case>/expected.json` with `storedOutput` marked a real capture; `node tools/generate-contracts.js` and `node tools/generate-probes.js` are re-run (the CI contract's `probeStepBound` grows with the set count) and the `ci` suite's `caseCount` and `fixtures` in `suite-manifest.json` are updated; `test:contract-sources`, `test:probe-sources`, `test:eval-schemas`, `test:eval-replay` and `test:eval-ci-data` then hold it
+**And** each distinct `pr` command renders as its own pipeline step, named for the checks that carry it (amended 2026-10-01 in Story 2.3: `tea-evaluate ci --tier pr` runs every check of the tier, so the plan gives several checks one command, and one step per check would run the whole tier once per check)
+**And** the GitHub Actions template gains an evaluation block with a per-check step pattern and an upload of the evaluation folder's `runs/`, which holds one `runs/<invocationId>/` per invocation, with `if: always()` (AD-12); a deterministic test, chained into `npm test` as `test:evaluate-ci-render`, which the `chain` matrix runs (amended 2026-09-25 in Story 1.9: CI runs the `npm test` chain in shards, so a chained script needs no step of its own), asserts the detection step is reached from both the create and edit entry points and parses the template block as YAML asserting both patterns
+**And** because the CI skill's templates are rendered by the agent, the rendering itself is proved behaviorally: `test/eval-ci.js` gains an `evaluation-plan` case over the fixture adopter from Story 1.10, whose ground truth lists each distinct `pr` command as a standalone `run:` step and the `runs/` upload path with its `if: always()` condition (the artifact element gains an optional `condition` the upload's `if` must contain); the case's fixture set lives under `test/fixtures/ci-eval/evaluation-plan/` (the harness requires set roots there) as a copy of that plan, the Story 1.10 fixture's, with its evaluation folder moved to `evals/grader` (amended 2026-10-01 in Story 2.3: the CI contract generator accepts more than one full-request set); a live `npm run eval:ci` through the local Claude Code CLI produces the workflow, which the worker captures by hand into `test/replay/ci/evaluation-plan-<case>/expected.json` with `storedOutput` marked a real capture; `node tools/generate-contracts.js` and `node tools/generate-probes.js` are re-run (the CI contract's `probeStepBound` grows with the set count) and the `ci` suite's `caseCount` and `fixtures` in `suite-manifest.json` are updated; `test:contract-sources`, `test:probe-sources`, `test:eval-schemas`, `test:eval-replay` and `test:eval-ci-data` then hold it
 **And** the house tests, `node tools/generate-contracts.js --check` for `ci.contract.json` and the CI suite's replay pass, and removing the new step fails the rendering test
 
 **Dependencies:** 2.2.

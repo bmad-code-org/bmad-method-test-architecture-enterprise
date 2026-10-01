@@ -1,0 +1,46 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: it is the captured pipeline with the four checks that share `tea-evaluate ci --tier pr` rendered as four steps, one per check. The command runs every check of the tier, so the whole tier then runs four times.",
+    "Every other element is the capture's, so the result is that one deviation."
+  ],
+  "id": "evaluation-plan-one-step-per-check",
+  "suite": "ci",
+  "scorerVersion": 15,
+  "storedOutput": {
+    "origin": "constructed",
+    "workflow": ".github/workflows/test.yml"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/ci-eval/ground-truth.json",
+    "fixtureSet": "evaluation-plan-quarry-grader",
+    "scoringInputsDigest": "sha256:6017257df50a73e67578a1339265b607d70b7a50a8e535273f40e7469f11344b"
+  },
+  "derivation": [
+    "The file parses and lints clean and every command and the upload are present, but `npx tea-evaluate ci --evaluation evals/grader --tier pr` is invoked by four run: blocks where the request asks for each command in a step of its own, so that element misses. Nothing unrequested was added."
+  ],
+  "result": {
+    "isMinimalRequest": false,
+    "parse": {
+      "ok": true,
+      "errors": []
+    },
+    "lint": {
+      "findings": []
+    },
+    "elements": {
+      "trigger-pull-request-main": true,
+      "permission-contents-read": true,
+      "node-version-from-nvmrc": true,
+      "command-install": true,
+      "command-unit-tests": true,
+      "command-evaluation-check": true,
+      "command-evaluation-ci-pr": false,
+      "artifact-evaluation-runs": true
+    },
+    "elementMisses": [
+      "command-evaluation-ci-pr: 4 run: blocks invoke npx tea-evaluate ci --evaluation evals/grader --tier pr, expected one"
+    ],
+    "unrequested": [],
+    "ruleViolations": []
+  }
+}
