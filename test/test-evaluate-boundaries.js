@@ -36,7 +36,9 @@
  *     in-process re-score that compares a call with the held inputs and never
  *     decides a verdict (Story 1.68, AD-6 amended 2026-10-01). That file reads
  *     the ladder's `exitCode`, `verdict` and `basis` and the qualification's
- *     `failures` and no other field of either; a returned or aliased
+ *     `failures` and no other field of either, and names the result's `artifact`
+ *     only to destructure it, test it against null and hand it to
+ *     `this.#engine.serializeArtifact`; a returned or aliased
  *     `runScore`, a rest element or a renamed key over the result, and a
  *     `ladder` anywhere else under `cli/` fail. `preflightFromObservations`
  *     and `seal` fail there too.
@@ -150,6 +152,7 @@ const REPRODUCTION_MODULE = path.join('lib', 'evaluate', 'score-inputs.js');
 const REPRODUCTION_STAGE = 'runScore';
 const REPRODUCTION_METHOD = 'reproduce';
 const REPRODUCTION_RESULT = new Set(['artifact', 'ladder', 'qualification']);
+// `artifact` is guarded as well (see the rule in `fileViolations`); only `ladder` and `qualification` have readable fields.
 const REPRODUCTION_READS = new Map([
   ['ladder', new Set(['exitCode', 'verdict', 'basis'])],
   ['qualification', new Set(['failures'])],
@@ -690,6 +693,36 @@ function fileViolations({ source, ast, isEngine, isReproduction, isSkillRunner, 
       }
     }
 
+    // engine-stage: the artifact of a score result already carries the library's verdict, exit and basis, so the
+    // re-score module names it only to destructure it, to test it against null, and to serialize it.
+    if (isReproduction && node.type === 'Identifier' && node.name === 'artifact') {
+      const declared = parent?.type === 'Property' && parentOf.get(parent)?.type === 'ObjectPattern';
+      const key = parent?.type === 'Property' && parent.key === node && !parent.shorthand && !parent.computed;
+      const otherObjectsField = parent?.type === 'MemberExpression' && parent.property === node && !parent.computed;
+      const nullTest =
+        parent?.type === 'BinaryExpression' &&
+        parent.operator === '===' &&
+        (parent.left === node ? parent.right : parent.left).type === 'Literal' &&
+        (parent.left === node ? parent.right : parent.left).value === null;
+      const serialized =
+        parent?.type === 'CallExpression' &&
+        parent.arguments[0] === node &&
+        parent.callee.type === 'MemberExpression' &&
+        !parent.callee.computed &&
+        parent.callee.property.name === 'serializeArtifact' &&
+        parent.callee.object.type === 'MemberExpression' &&
+        parent.callee.object.object.type === 'ThisExpression' &&
+        parent.callee.object.property.type === 'PrivateIdentifier' &&
+        parent.callee.object.property.name === 'engine';
+      if (!declared && !key && !otherObjectsField && !nullTest && !serialized) {
+        report(
+          node,
+          'engine-stage',
+          "uses the artifact of a score result beyond testing it against null and serializing it; its verdict, exit and basis are the library's to decide",
+        );
+      }
+    }
+
     // engine-stage: the re-score module reads a score result through the three names it destructures and, of the
     // ladder and the qualification, only the fields it compares; no other file reads a ladder.
     if (isReproduction && node.type === 'Identifier' && REPRODUCTION_READS.has(node.name)) {
@@ -1216,6 +1249,41 @@ const PLANTS = [
     file: 'lib/evaluate/score-inputs.js',
     source:
       'class Held {\n  #engine;\n\n  async other(options) {\n    const { artifact } = await this.#engine.runScore(options);\n    return artifact;\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'the production verdict returned from reproduce',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  async reproduce(options) {\n    const { artifact, ladder } = await this.#engine.runScore(options);\n    return { artifact, exitCode: ladder.exitCode, verdict: artifact === null ? null : artifact.productionVerdict };\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'the contract verdict returned from reproduce',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  async reproduce(options) {\n    const { artifact, ladder } = await this.#engine.runScore(options);\n    return { artifact, exitCode: ladder.exitCode, verdict: artifact === null ? null : artifact.contractVerdict };\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'the artifact exit returned from reproduce',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  async reproduce(options) {\n    const { artifact, ladder } = await this.#engine.runScore(options);\n    return { artifact, exitCode: ladder.exitCode, engineExit: artifact === null ? null : artifact.exitCode };\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'the artifact destructured into another variable that is read',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  async reproduce(options) {\n    const { artifact, ladder } = await this.#engine.runScore(options);\n    const { exitCode: engineExit } = artifact;\n    return { artifact: null, exitCode: engineExit };\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'the artifact handed to another call',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  async reproduce(options) {\n    const { artifact, ladder } = await this.#engine.runScore(options);\n    this.note(artifact);\n    return { artifact: null, exitCode: ladder.exitCode };\n  }\n}\nmodule.exports = { Held };\n',
   },
   {
     name: 'seal in the re-score module',

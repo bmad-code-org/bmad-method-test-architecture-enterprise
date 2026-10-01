@@ -117,7 +117,7 @@ context:
 ### Departures from the plan text
 
 - The plan lets only `engine.js` reach the library's stages, and `test:evaluate-boundaries` forbids `runScore` anywhere under `cli/`.
-  The in-process re-score needs it, so the rule has one exemption: `this.#engine.runScore(...)` in `cli/lib/evaluate/score-inputs.js`, whose file may read a result's `artifact` and none of its verdict.
+  The in-process re-score needs it, so the rule has one exemption: `this.#engine.runScore(...)` in `cli/lib/evaluate/score-inputs.js`, whose file names a result's `artifact` only to destructure it, test it against null and serialize it, and reads of the ladder only the exit, verdict (against null) and basis and of the qualification only the failures.
   AD-6 and the plan's boundary lines (`epics.md` Story 1.4, `test-design-epic-1.md` R1-02 and the engine-boundary row) are amended, dated 2026-10-01.
 - The views (`partitions.json`, `gap-view.json`, `interpretation.json`) read the probe, the records and the contract from the run directory after the engine's calls, so a rewrite that landed after the last check reached them even when no evidence was copied.
   They are built from the held bytes now (`readInput`), which the plan did not list.
@@ -275,6 +275,24 @@ A plan-consistency test for the Story 1.69 row stays unadded, as in round 1.
 
 Green on the last state of the tree: engine check, `test:evaluate-partitions`, `test:evaluate-run` 537, `test:evaluate-confinement` 110, `test:evaluate-held-inputs` 166, `test:evaluate-boundaries` 358, `test:evaluate-evaluators` 482, `test:evaluate-agents` 264, `test:evaluate-records` 127, `test:evaluate-check` 807, `test:evaluate-guidance`, `test:evaluate-interpret`, `test:evaluate-arms` 536, `test:evaluate-calibration`, `test:evaluate-workflow` 165, `test:evaluate-preflight` 236, `test:evaluate-mutation` 665, `test:evaluate-mcp` 226, `test:evaluate-api` 322, `test:evaluate-tool-use`, `test:evaluate-promptfoo`, `test:evaluate-learned-framework`, `test:evaluate-authoring`, `test:evaluate-gap-loop`, `test:direction`, `test:shards`, `test:ci-coverage` (101 steps), `test:doc-counts`, `test:doc-count-sources`, `test:changelog`, `test:release-metadata`, `lint`, `lint:md`, `format:check`, `docs:validate-links`, `docs:build`.
 Unrun: the full `npm test` (CI shards).
+
+## Review round 3
+
+### Fixed
+
+- The boundaries guard did not cover `artifact`: before `serializeArtifact` runs, the in-process artifact already carries the library's verdict (`productionVerdict` or `contractVerdict`), its exit and its basis, and `score-inputs.js` read it with no restriction (adding `verdict: artifact.productionVerdict` and `engineExit: artifact.exitCode` to the object `reproduce` returns still passed 358 checks), so "none of its verdict" was claimed and unenforced.
+  `artifact` is now guarded in `score-inputs.js`: it may be destructured from the result, tested against null (`=== null`) and passed as the first argument of `this.#engine.serializeArtifact(...)`; any other use, a property read included, fails.
+  Plants: the production verdict, the contract verdict and the artifact exit returned from `reproduce`, the artifact destructured into another variable that is then read, and the artifact handed to another call; the real file and the clean case stay green.
+
+### Revert observations
+
+- The `artifact` rule removed: 5 of 368 `test:evaluate-boundaries` checks fail (one per plant).
+- The serialize allowance removed: 2 of 369 fail (the real `score-inputs.js` and the clean case are refused).
+- The null-test allowance removed: 2 of 369 fail (the same two).
+
+### Gates
+
+Green on the last state of the tree: `test:evaluate-boundaries` 368, `test:evaluate-held-inputs`, `test:evaluate-partitions`, `lint`, `lint:md`, `format:check`, `test:doc-counts`, `test:changelog`.
 
 ## Left undone, reported
 
