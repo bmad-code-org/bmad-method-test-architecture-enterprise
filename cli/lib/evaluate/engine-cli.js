@@ -41,7 +41,9 @@ const MAX_STAGE_OUTPUT_BYTES = 64 * 1024 * 1024;
  * promoted by `--strict`, 2 FAIL, 3 Invalid or a failed preflight, 4 a
  * structural failure, 5 a runtime fault, 64 usage. Only `score` reaches a
  * verdict, so 2 is a `score` exit alone, and only `preflight` and `score` can
- * be Invalid, so 3 is theirs. Exit 1 is left out everywhere: it is a CONCERNS
+ * be Invalid, so 3 is theirs. `aggregate-strength` produces no verdict and exits
+ * 0 whatever its floor decisions are, 4 on a set whose artifacts disagree or
+ * contradict themselves and 5 on a fault in its inputs. Exit 1 is left out everywhere: it is a CONCERNS
  * promoted by `--strict`, which `tea-evaluate` never passes, so a 1 is a
  * crashed process with no verdict behind it. The stages are string keys, since
  * `test:evaluate-boundaries` forbids the stage names as identifiers.
@@ -51,6 +53,7 @@ const DOCUMENTED_EXITS = new Map([
   ['seal', new Set([0, 4, 5, 64])],
   ['preflight', new Set([0, 3, 4, 5, 64])],
   ['score', new Set([0, 2, 3, 4, 5, 64])],
+  ['aggregate-strength', new Set([0, 4, 5, 64])],
 ]);
 
 /**
@@ -62,11 +65,11 @@ const DOCUMENTED_EXITS = new Map([
  * `TEA_EVALUATE_ENGINE_CLI` substituted it, so the evidence shows which program
  * produced a verdict, and a substitution is announced through `log`.
  *
- * @param {string} stage `compile`, `seal`, `preflight` or `score`
+ * @param {string} stage `compile`, `seal`, `preflight`, `score` or `aggregate-strength`
  * @param {string[]} args
  * @param {object} options
  * @param {string} options.runDirectory `runs/<invocationId>/`; the record goes to `engine/<stage>.json` in it
- * @param {string} [options.recordPath] where the record goes instead, for a stage called more than once in a run (`score`, once per probe)
+ * @param {string} [options.recordPath] where the record goes instead, for a stage called more than once in a run (`score`, once per probe, and `aggregate-strength`, in the score directory)
  * @param {{ write: (file: string, bytes: string) => string }} [options.writer] the run directory's writer, which writes the record as a new file and holds its digest (`run-directory.js`)
  * @param {NodeJS.ProcessEnv} [options.env]
  * @param {(line: string) => void} [options.log]

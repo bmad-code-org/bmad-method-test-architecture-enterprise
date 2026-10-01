@@ -80,9 +80,36 @@
  * about to land stops the write before a byte leaves the run directory, and
  * the command exits 12.
  *
+ * After the probe loop, `eval-quality aggregate-strength` runs once (Story
+ * 1.45), over the evidence artifacts the loop copied, when every probe copied
+ * one and nothing refused an output; otherwise the summary records the
+ * aggregate as absent with the reason, and no class-wide claim stands. The
+ * floors are `evaluation.json.strengthFloor`, read once, staged as a private
+ * file and copied into the score directory as `strength-floors.json` with their
+ * digest, so the recorded argv (which names that copy, the persisted evidence
+ * artifacts and the run's own policy) replays to the same bytes. The engine owns
+ * every count, rate, comparability and floor decision in the aggregate it
+ * stages: it is validated against the published schema and schema version, held
+ * to the digests of the evidence files this command persisted (`digestScannedJson`,
+ * since the files end in a newline), to the scored probe set, to the engine
+ * version `run.json` recorded and to the floors `evaluation.json` declared (the
+ * floors copy is read back after the call, so a replay reads the floors the call
+ * read), and copied as `strength-aggregate.json` through
+ * the held writer and read back. A disagreement is not copied and exits 12. A
+ * floor decision never changes an exit; an engine exit of 4, 5 or 64 joins the
+ * combination below.
+ *
+ * The aggregate call is held to the same inputs (Story 1.68): after it every score
+ * input is read again (the run's policy among them), the persisted evidence
+ * artifacts are read back and compared with the bytes copied, and the held bytes
+ * are aggregated in process; the staged aggregate must equal the result byte for
+ * byte and the call's exit must be the one the held bytes give, or nothing is
+ * copied and the command exits 12.
+ *
  * Otherwise the command's exit is one of the calls' own exits, passed through:
- * the most severe across the probes, in the order 64, 5, 4, 3, 2, 0 (a usage
- * error, a runtime fault, a structural failure, Invalid, FAIL, success).
+ * the most severe across the probes and the aggregate, in the order 64, 5, 4, 3,
+ * 2, 0 (a usage error, a runtime fault, a structural failure, Invalid, FAIL,
+ * success).
  */
 
 'use strict';
@@ -92,7 +119,7 @@ const path = require('node:path');
 
 const AjvModule = require('ajv/dist/2020');
 
-const { loadEngine } = require('./engine');
+const { digestScannedJson, loadEngine } = require('./engine');
 const { EngineStageError, runEngineStage } = require('./engine-cli');
 const { newInvocationId, readJson } = require('./preflight');
 const { createArtifactValidator } = require('./records');
@@ -108,6 +135,12 @@ const Ajv = AjvModule.default ?? AjvModule;
 /** The exits a `score` call can pass through, most severe first. */
 const SEVERITY = [64, 5, 4, 3, 2, 0];
 const OPERATION_PHASES_NAME = 'operation-phases.json';
+const AGGREGATE_STAGE = 'aggregate-strength';
+const AGGREGATE_NAME = 'strength-aggregate.json';
+const AGGREGATE_CALL_NAME = 'aggregate-strength.json';
+const FLOORS_NAME = 'strength-floors.json';
+const EVIDENCE_ARTIFACT_PATH = 'EvidenceArtifact';
+const FLOOR_CLASSES = ['defect', 'gameability', 'zero-action'];
 const INFRASTRUCTURE = 12;
 const WIRING = 64;
 const AUTHORING = 10;
@@ -514,6 +547,7 @@ async function runScoreCommand(folder, { run: invocationId, env = process.env, l
   const scratch = [];
   try {
     return await scoreProbes({
+      engine,
       folder,
       runDirectory,
       index,
@@ -598,6 +632,8 @@ async function scoreProbe({ folder, runDirectory, set, index, held, validate, en
     }
     let evidence = null;
     let artifact = null;
+    let evidenceDigest = null;
+    let evidenceBytes = null;
     const staged = stagedArtifact(produced);
     if (staged.problem === undefined) {
       const problems = staged.bytes === null ? [] : await artifactProblems({ bytes: staged.bytes, set, index, validate });
@@ -622,6 +658,9 @@ async function scoreProbe({ folder, runDirectory, set, index, held, validate, en
         if (!back.equals(staged.bytes)) throw new RunDirectoryError(`${evidenceRelative} does not hold the artifact eval-quality staged`);
         evidence = writer.pathOf(evidenceRelative);
         artifact = JSON.parse(back.toString('utf8'));
+        // The digest of the file as persisted, which the aggregate's record of what it read is held to.
+        evidenceDigest = digestScannedJson(back.toString('utf8'), EVIDENCE_ARTIFACT_PATH);
+        evidenceBytes = back;
       }
     } else {
       stageFailed = true;
@@ -631,6 +670,8 @@ async function scoreProbe({ folder, runDirectory, set, index, held, validate, en
     return {
       stageFailed,
       artifact,
+      evidenceDigest,
+      evidenceBytes,
       entry: {
         probeId: set.probeId,
         exitCode,
@@ -719,6 +760,12 @@ async function artifactProblems({ bytes, set, index, validate }) {
   }
   const problems = await validate('evidence-artifact', artifact);
   if (problems.length > 0) return [`fails its published schema: ${problems[0]}`];
+  // The aggregate reads every copied artifact through the engine's lexical scanner, so one it refuses is not copied.
+  try {
+    digestScannedJson(bytes.toString('utf8'), EVIDENCE_ARTIFACT_PATH);
+  } catch (error) {
+    return [`is not canonical JSON the engine reads: ${error.message}`];
+  }
   if (artifact.scoringVersionInputs?.corpusDigest !== index.corpusDigest) {
     return [`names corpus ${artifact.scoringVersionInputs?.corpusDigest}, not the run's ${index.corpusDigest}`];
   }
@@ -726,7 +773,267 @@ async function artifactProblems({ bytes, set, index, validate }) {
   return [];
 }
 
+/** The summary of an aggregate that was not produced, with the reason, so no class-wide claim reads past it. */
+function absentAggregate(located, reason) {
+  return {
+    status: 'absent',
+    reason,
+    partition: located.record?.partition ?? null,
+    exitCode: null,
+    call: null,
+    aggregate: null,
+    aggregateDigest: null,
+    floors: null,
+    floorsDigest: null,
+    evidenceDigests: {},
+  };
+}
+
+/** `evaluation.json.strengthFloor`, read once from the evaluation folder; a problem message when it cannot be. */
+function declaredFloors(folder) {
+  let value;
+  try {
+    value = regularJson(path.join(folder, 'evaluation.json'));
+  } catch (error) {
+    return { problem: `evaluation.json cannot be read for its strengthFloor: ${error.message}` };
+  }
+  const floors = value?.strengthFloor;
+  if (floors === null || typeof floors !== 'object' || Array.isArray(floors)) {
+    return { problem: 'evaluation.json declares no strengthFloor object' };
+  }
+  return { floors };
+}
+
+/**
+ * Why a staged aggregate is not copied: it fails the published schema or schema version, or disagrees with what this
+ * command persisted (the evidence digests, the scored probe set, the engine version `run.json` recorded). TeA reads no
+ * rate, count or decision from it.
+ */
+async function aggregateProblems({ bytes, index, located, evidenceDigests, floors, validate }) {
+  let aggregate;
+  try {
+    aggregate = JSON.parse(bytes.toString('utf8'));
+  } catch (error) {
+    return [`is not JSON: ${error.message}`];
+  }
+  const problems = await validate('strength-aggregate', aggregate);
+  if (problems.length > 0) return [`fails its published schema: ${problems[0]}`];
+  const recordedVersion = located.record?.evalQualityVersion;
+  if (aggregate.engineVersion !== recordedVersion) {
+    return [`names engine ${aggregate.engineVersion}, not the ${recordedVersion} run.json recorded`];
+  }
+  const aggregated = aggregate.inputs.map((input) => input.probeId).sort();
+  const scored = index.trialSets.map((set) => set.probeId).sort();
+  if (JSON.stringify(aggregated) !== JSON.stringify(scored)) {
+    return [`covers probes ${JSON.stringify(aggregated)}, and this invocation scored ${JSON.stringify(scored)}`];
+  }
+  for (const input of aggregate.inputs) {
+    const persisted = evidenceDigests.get(input.probeId);
+    if (input.artifactDigest !== persisted) {
+      return [
+        `records evidence digest ${input.artifactDigest} for ${input.probeId}, and the file this command persisted digests to ${persisted}`,
+      ];
+    }
+  }
+  // The floors are the one aggregate input with no digest: the recorded decision floors must be the ones evaluation.json declared.
+  for (const className of FLOOR_CLASSES) {
+    const recorded = aggregate.floorDecisions[className]?.floor;
+    const declared = floors[className] ?? null;
+    if (recorded !== declared) {
+      return [`records floor ${JSON.stringify(recorded)} for ${className}, and evaluation.json declares ${JSON.stringify(declared)}`];
+    }
+  }
+  return [];
+}
+
+/**
+ * Why the aggregate call is not the one the held inputs stand behind, or null (Story 1.68): a score input (the run's
+ * policy among them) changed or appeared since the check, a persisted evidence artifact is no longer the bytes `score`
+ * copied, or the call is not what the CLI does with the held bytes: the staged aggregate (byte for byte, none when the
+ * set is refused) and the call's exit. The comparison only refuses; it never decides.
+ */
+function heldAggregateRefusal({ held, writer, index, scoreRelative, evidenceBytes, floorsBytes, exitCode, stagedBytes }) {
+  const changed = held.changedSince();
+  if (changed !== null) return `${changed.relative} ${changed.message}`;
+  const evidence = [];
+  for (const set of index.trialSets) {
+    const relative = `${scoreRelative}/${set.probeId}/evidence-artifact.json`;
+    if (!writer.read(relative).equals(evidenceBytes.get(set.probeId))) return `${relative} changed after score copied it`;
+    evidence.push(evidenceBytes.get(set.probeId));
+  }
+  const expected = held.reproduceAggregate({ evidence, floors: floorsBytes });
+  if (exitCode !== expected.exitCode) return `the call exited ${exitCode} where the verified inputs give ${expected.exitCode}`;
+  if (expected.aggregate === null) {
+    return stagedBytes === null ? null : 'the staged aggregate is not the result of the verified inputs, which produce none';
+  }
+  if (stagedBytes === null) return 'the call staged no aggregate, and the verified inputs produce one';
+  return expected.aggregate.equals(stagedBytes) ? null : 'the staged aggregate differs from the one the verified inputs produce';
+}
+
+/**
+ * The aggregate step (Story 1.45): `eval-quality aggregate-strength` over the persisted evidence artifacts, the floors
+ * copy and the run's policy, its output staged, checked and copied through the held writer. Returns the summary
+ * `score.json` records, the aggregate call's own exit when it ran, whether the step failed, and the held writer's refusal
+ * when it raised one (the summary then keeps what was written, and the run exits 12).
+ */
+async function strengthAggregateStep({
+  engine,
+  folder,
+  runDirectory,
+  index,
+  located,
+  held,
+  evidenceDigests,
+  evidenceBytes,
+  validate,
+  env,
+  log,
+  writer,
+  scratch,
+  scoreRelative,
+}) {
+  const missing = index.trialSets.map((set) => set.probeId).filter((probeId) => !evidenceDigests.has(probeId));
+  if (missing.length > 0) {
+    const reason = `no evidence artifact was copied for ${missing.join(', ')}, so no class-wide strength is aggregated`;
+    log(`strength aggregate: ${reason}`);
+    return { summary: absentAggregate(located, reason), exitCode: null, stageFailed: false, integrity: null };
+  }
+  const declared = declaredFloors(folder);
+  if (declared.problem !== undefined) {
+    log(`strength aggregate: ${declared.problem}, so no class-wide strength is aggregated`);
+    return {
+      summary: absentAggregate(located, `${declared.problem}, so no class-wide strength is aggregated`),
+      exitCode: null,
+      stageFailed: false,
+      integrity: null,
+    };
+  }
+
+  const floorsRelative = `${scoreRelative}/${FLOORS_NAME}`;
+  const aggregateRelative = `${scoreRelative}/${AGGREGATE_NAME}`;
+  const callRelative = `${scoreRelative}/${AGGREGATE_CALL_NAME}`;
+  const staging = makeScratchDirectory(scratch, 'tea-evaluate-aggregate-');
+  // Filled in as each file is written, so a refusal from the held writer records how far the step got.
+  const summary = {
+    status: 'failed',
+    reason: null,
+    partition: located.record?.partition ?? null,
+    exitCode: null,
+    call: null,
+    aggregate: null,
+    aggregateDigest: null,
+    floors: null,
+    floorsDigest: null,
+    evidenceDigests: Object.fromEntries(index.trialSets.map((set) => [set.probeId, evidenceDigests.get(set.probeId)])),
+  };
+  try {
+    // The floors are staged privately, then copied into the score directory; the recorded argv names that copy.
+    const stagedFloors = path.join(staging, FLOORS_NAME);
+    fs.writeFileSync(stagedFloors, `${JSON.stringify(declared.floors, null, 2)}\n`, { mode: 0o600 });
+    const floorsBytes = fs.readFileSync(stagedFloors);
+    writer.write(floorsRelative, floorsBytes);
+    summary.floors = path.relative(folder, writer.pathOf(floorsRelative));
+    summary.floorsDigest = engine.digestBytes(floorsBytes);
+    if (!writer.read(floorsRelative).equals(floorsBytes))
+      throw new RunDirectoryError(`${floorsRelative} does not hold the floors that were staged`);
+    summary.call = path.relative(folder, writer.pathOf(callRelative));
+
+    const produced = path.join(staging, AGGREGATE_NAME);
+    const args = [];
+    for (const set of index.trialSets) args.push('--evidence', writer.pathOf(`${scoreRelative}/${set.probeId}/evidence-artifact.json`));
+    args.push('--floors', writer.pathOf(floorsRelative), '--policy', inRun(runDirectory, index.policy), '--out', produced);
+    let result;
+    try {
+      result = runEngineStage(AGGREGATE_STAGE, args, {
+        runDirectory: writer.pathOf(scoreRelative),
+        recordPath: writer.pathOf(callRelative),
+        writer,
+        env,
+        log,
+      });
+    } catch (error) {
+      if (!(error instanceof EngineStageError)) throw error;
+      log(`strength aggregate: ${error.message}`);
+      return { summary: { ...summary, reason: error.message }, exitCode: null, stageFailed: true, integrity: null };
+    }
+    // The floors a replay reads are the ones this call read: the copy still holds the bytes that were staged.
+    if (!writer.read(floorsRelative).equals(floorsBytes))
+      throw new RunDirectoryError(`${floorsRelative} no longer holds the floors the aggregate call read`);
+    summary.exitCode = result.exitCode;
+    log(`strength aggregate: eval-quality ${AGGREGATE_STAGE} exited ${result.exitCode}`);
+    const heldCheck = (stagedBytes) =>
+      heldAggregateRefusal({
+        held,
+        writer,
+        index,
+        scoreRelative,
+        evidenceBytes,
+        floorsBytes,
+        exitCode: result.exitCode,
+        stagedBytes,
+      });
+    const heldMismatch = (refusal) => {
+      const reason = `the aggregate call is not the one the held inputs stand behind: ${refusal}`;
+      log(`strength aggregate: ${reason}; it is not copied`);
+      return { summary: { ...summary, status: 'mismatch', reason }, exitCode: result.exitCode, stageFailed: true, integrity: null };
+    };
+    if (result.exitCode !== 0) {
+      // The held bytes must refuse the set the same way, or an input changed under the call.
+      const refusal = heldCheck(null);
+      if (refusal !== null) return heldMismatch(refusal);
+      // The engine refused the set (a structural failure, a fault in its inputs or a usage error): it minted nothing.
+      const reason =
+        result.stderr.split('\n').find((line) => line.trim().length > 0) ?? `eval-quality ${AGGREGATE_STAGE} exited ${result.exitCode}`;
+      return { summary: { ...summary, status: 'refused', reason }, exitCode: result.exitCode, stageFailed: false, integrity: null };
+    }
+    const staged = stagedArtifact(produced);
+    if (staged.problem !== undefined || staged.bytes === null) {
+      const reason = staged.problem === undefined ? 'exited 0 and staged no aggregate' : `the staged aggregate ${staged.problem}`;
+      log(`strength aggregate: ${reason}; it is not copied`);
+      return { summary: { ...summary, reason }, exitCode: result.exitCode, stageFailed: true, integrity: null };
+    }
+    const problems = await aggregateProblems({
+      bytes: staged.bytes,
+      index,
+      located,
+      evidenceDigests,
+      floors: declared.floors,
+      validate,
+    });
+    if (problems.length > 0) {
+      const reason = `the staged aggregate ${problems[0]}`;
+      log(`strength aggregate: ${reason}; it is not copied`);
+      return { summary: { ...summary, status: 'mismatch', reason }, exitCode: result.exitCode, stageFailed: true, integrity: null };
+    }
+    const refusal = heldCheck(staged.bytes);
+    if (refusal !== null) return heldMismatch(refusal);
+    writer.write(aggregateRelative, staged.bytes);
+    const back = writer.read(aggregateRelative);
+    if (!back.equals(staged.bytes)) throw new RunDirectoryError(`${aggregateRelative} does not hold the aggregate eval-quality staged`);
+    return {
+      summary: {
+        ...summary,
+        status: 'copied',
+        aggregate: path.relative(folder, writer.pathOf(aggregateRelative)),
+        aggregateDigest: engine.digestBytes(back),
+      },
+      exitCode: result.exitCode,
+      stageFailed: false,
+      integrity: null,
+    };
+  } catch (error) {
+    if (!(error instanceof RunDirectoryError)) throw error;
+    // The held writer refused a file after the floors were staged: the summary keeps what was written and the run exits 12.
+    log(`strength aggregate: ${error.message}`);
+    const call = summary.call !== null && writer.has(callRelative) ? summary.call : null;
+    return { summary: { ...summary, call, reason: error.message }, exitCode: null, stageFailed: true, integrity: error.message };
+  } finally {
+    releaseScratchDirectory(scratch, staging);
+  }
+}
+
 async function scoreProbes({
+  engine,
   folder,
   runDirectory,
   index,
@@ -745,27 +1052,61 @@ async function scoreProbes({
   const validate = createArtifactValidator();
   const scores = [];
   const evidence = new Map();
+  const evidenceDigests = new Map();
+  const evidenceBytes = new Map();
   let stageFailed = false;
   let integrity = null;
   let unexpected = null;
+  let strengthAggregate = null;
+  let aggregateExit = null;
   try {
     for (const set of index.trialSets) {
       const probe = await scoreProbe({ folder, runDirectory, set, index, held, validate, env, log, writer, scratch, scoreRelative });
       stageFailed ||= probe.stageFailed;
       scores.push(probe.entry);
       if (probe.artifact !== null) evidence.set(set.probeId, probe.artifact);
+      if (probe.evidenceDigest !== null) evidenceDigests.set(set.probeId, probe.evidenceDigest);
+      if (probe.evidenceBytes !== null) evidenceBytes.set(set.probeId, probe.evidenceBytes);
     }
+    const step = await strengthAggregateStep({
+      engine,
+      folder,
+      runDirectory,
+      index,
+      located,
+      held,
+      evidenceDigests,
+      evidenceBytes,
+      validate,
+      env,
+      log,
+      writer,
+      scratch,
+      scoreRelative,
+    });
+    strengthAggregate = step.summary;
+    aggregateExit = step.exitCode;
+    stageFailed ||= step.stageFailed;
+    integrity ??= step.integrity ?? null;
   } catch (error) {
     if (error instanceof RunDirectoryError) integrity = error.message;
     else unexpected = error;
   }
-  const exitCode = stageFailed || integrity !== null ? INFRASTRUCTURE : combinedExit(scores.map((entry) => entry.exitCode));
+  strengthAggregate ??= absentAggregate(
+    located,
+    `scoring stopped before the aggregate step: ${integrity ?? unexpected?.message ?? 'no further detail'}`,
+  );
+  const exitCode =
+    stageFailed || integrity !== null
+      ? INFRASTRUCTURE
+      : combinedExit([...scores.map((entry) => entry.exitCode), ...(aggregateExit === null ? [] : [aggregateExit])]);
   try {
     writer.writeJson(`${scoreRelative}/score.json`, {
       invocationId: scoreInvocationId,
       run: index.invocationId,
       exitCode,
       scores,
+      strengthAggregate,
       refused,
       confinement: located.record?.confinement ?? null,
     });
@@ -777,6 +1118,7 @@ async function scoreProbes({
         trialSets: index.trialSets,
         evidence,
         heldOutProbes: located.record.heldOutProbes,
+        strengthAggregate,
       });
       writeInterpretation({
         writer,
@@ -787,6 +1129,7 @@ async function scoreProbes({
         evidence,
         contractPath: index.contract,
         operationPhases: located.record.operationPhases,
+        strengthAggregate,
       });
     }
   } catch (error) {
@@ -807,7 +1150,7 @@ async function scoreProbes({
     runDirectory,
     scores,
     message: stageFailed
-      ? `an eval-quality score call could not run, exited with a code the CLI does not document, staged an artifact that fails the copy check, or ran over inputs that changed or that its artifact does not reproduce; every call's record is in ${path.relative(folder, writer.pathOf(scoreRelative))}`
+      ? `an eval-quality score or aggregate-strength call could not run, exited with a code the CLI does not document, staged an artifact that fails the copy check or disagrees with what this command persisted, or ran over inputs that changed or that its artifact does not reproduce; every call's record is in ${path.relative(folder, writer.pathOf(scoreRelative))}`
       : `eval-quality score ran for ${scores.length} probe(s) of run ${index.invocationId}; each call's diagnostics and evidence are in ${path.relative(folder, writer.pathOf(scoreRelative))}${refusedNote}${optedOutNote}`,
   });
 }

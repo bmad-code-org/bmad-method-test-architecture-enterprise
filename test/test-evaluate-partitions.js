@@ -84,6 +84,17 @@ try {
     const gap = read(path.join(run, 'gap-view.json'));
     assert.deepEqual([...partitions.development, ...partitions['held-out']].map((entry) => entry.probeId).sort(), expected);
     const scoreDirectory = path.join(run, 'scores', partitions.scoreInvocationId);
+    // The invocation's aggregate covers the partition it scored, and `partitions.json` points at it without restating it.
+    assert.equal(partitions.strengthAggregate.status, 'copied', `${partition}: ${JSON.stringify(partitions.strengthAggregate)}`);
+    assert.equal(partitions.strengthAggregate.path, path.relative(project.folder, path.join(scoreDirectory, 'strength-aggregate.json')));
+    assert.deepEqual(
+      read(path.join(scoreDirectory, 'strength-aggregate.json'))
+        .inputs.map((input) => input.probeId)
+        .sort(),
+      expected,
+      `${partition}: the aggregate covers a different probe set than the invocation scored`,
+    );
+    assert.equal(JSON.stringify(gap).includes('strengthAggregate'), false, 'the gap view, which authoring reads, carries the aggregate');
     for (const entries of [partitions.development, partitions['held-out'], gap.development, gap['held-out']]) {
       for (const entry of entries) {
         const evidence = read(path.join(scoreDirectory, entry.probeId, 'evidence-artifact.json'));
@@ -121,6 +132,7 @@ try {
       trialSets: read(path.join(latest, 'trial-sets.json')).trialSets,
       evidence: new Map([['P-002', edited]]),
       heldOutProbes: ['P-002'],
+      strengthAggregate: current.strengthAggregate,
     });
   } finally {
     viewWriter.close();
@@ -141,6 +153,7 @@ try {
       trialSets: [{ probeId: 'P-001', probe: 'probes/P-001.probe.json' }],
       evidence: new Map(),
       heldOutProbes: [],
+      strengthAggregate: current.strengthAggregate,
     });
   } finally {
     heldWriter.close();

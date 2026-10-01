@@ -59,13 +59,40 @@ function engineProjection(evidence) {
 }
 
 /**
+ * The pointer to the run-wide strength aggregate the score invocation copied (Story 1.45): where it is, its digest and
+ * how its floors were read, or why there is none. The aggregate's counts, rates and floor decisions are the engine's
+ * and stay in `strength-aggregate.json`; nothing here restates or computes one.
+ */
+function strengthAggregatePointer(summary) {
+  return {
+    status: summary.status,
+    reason: summary.reason,
+    path: summary.aggregate,
+    digest: summary.aggregateDigest,
+    floors: summary.floors,
+    floorsDigest: summary.floorsDigest,
+  };
+}
+
+/**
  * Writes `interpretation.json` into the run directory through its held writer (`run-directory.js`).
  * `evidence` maps each scored probe to the parsed evidence artifact the writer read back from the score directory
- * (`score.js`); a probe with none has `engine: null`.
+ * (`score.js`); a probe with none has `engine: null`. `strengthAggregate` is the score summary's record of the
+ * run-wide aggregate, carried as a pointer.
  * `readInput(relative)` returns a run file parsed from the bytes `score` held at its input check (`score-inputs.js`),
  * so a record or the contract rewritten while `score` ran cannot reach the interpretation.
  */
-function writeInterpretation({ writer, readInput, scoreInvocationId, trialSets, scores, evidence, contractPath, operationPhases }) {
+function writeInterpretation({
+  writer,
+  readInput,
+  scoreInvocationId,
+  trialSets,
+  scores,
+  evidence,
+  contractPath,
+  operationPhases,
+  strengthAggregate,
+}) {
   const contract = readInput(contractPath);
   const oracles = new Map(contract.oracles.map((oracle) => [oracle.id, oracle]));
   const scoreByProbe = new Map(scores.map((score) => [score.probeId, score]));
@@ -84,7 +111,7 @@ function writeInterpretation({ writer, readInput, scoreInvocationId, trialSets, 
       engine: engineProjection(evidence.get(set.probeId) ?? null),
     };
   });
-  writer.replaceJson('interpretation.json', { scoreInvocationId, probes });
+  writer.replaceJson('interpretation.json', { scoreInvocationId, strengthAggregate: strengthAggregatePointer(strengthAggregate), probes });
 }
 
-module.exports = { engineProjection, projectTrial, writeInterpretation };
+module.exports = { engineProjection, projectTrial, strengthAggregatePointer, writeInterpretation };

@@ -80,7 +80,7 @@ development_status:
   1-42-attribute-reused-operation-ids-to-their-interfaces: backlog
   1-43-keep-ungraded-framework-errors-out-of-target-findings: backlog
   1-44-record-installed-framework-versions-in-evaluator-provenance: backlog
-  1-45-aggregate-development-strength-through-eval-quality: backlog
+  1-45-aggregate-development-strength-through-eval-quality: done
   1-46-close-the-dogfood-suites-coverage-gaps: backlog
   1-47-distinguish-reference-risk-tables-from-the-scored-register: backlog
   1-48-report-whole-document-coverage-for-a-structured-design-artifact: backlog
@@ -92,12 +92,12 @@ development_status:
   1-54-reclaim-auxiliary-scratch-after-a-killed-preflight: backlog
   1-55-recognize-process-and-answer-separation-for-scalar-cli: backlog
   1-56-prove-malformed-cli-refusal-against-a-controlled-defect: backlog
-  1-57-withhold-the-committed-evaluation-folder-from-a-confined-ta: backlog
+  1-57-withhold-the-committed-evaluation-folder-from-a-confined-ta: review
   1-58-keep-the-bridges-admission-token-and-the-runs-private-direc: backlog
   1-59-let-a-confined-agent-target-keep-the-state-its-cli-writes: backlog
   1-60-observe-every-confined-processs-file-access-beyond-node: backlog
   1-61-teach-file-system-confinement-in-the-evaluate-skill: backlog
-  1-62-share-one-sandbox-primitive-layer-across-teas-isolation-mod: backlog
+  1-62-share-one-sandbox-primitive-layer-across-teas-isolation-mod: done
   1-63-carry-the-audit-over-a-channel-the-target-cannot-write: backlog
   1-64-hold-the-release-across-the-witness-legs-and-the-trials: backlog
   1-65-ask-every-http-interface-of-a-deployment-which-release-it-r: backlog
@@ -105,6 +105,7 @@ development_status:
   1-67-emit-the-label-free-calibration-inputs-a-records-harness-fe: backlog
   1-68-hold-a-runs-score-inputs-between-verification-and-the-engine-read: done
   1-69-hold-the-inputs-of-an-evaluator-attempts-score-call: backlog
+  1-80-bring-a-partial-clone-project-its-tags-and-a-very-large-history-into-the-withheld-repository: backlog
   epic-1-retrospective: optional
 
   epic-2: backlog
@@ -138,6 +139,7 @@ parallel_lanes:
     - 1-52-stop-agent-descendants-on-windows
     - 1-53-bound-an-agent-whose-guardian-is-stopped
     - 1-54-reclaim-auxiliary-scratch-after-a-killed-preflight
+    - 1-80-bring-a-partial-clone-project-its-tags-and-a-very-large-history-into-the-withheld-repository
   lane-3-engine-releases-dogfood-and-epic-2:
     - 1-45-aggregate-development-strength-through-eval-quality
     - 2-1-compare-runs-and-accept-a-baseline

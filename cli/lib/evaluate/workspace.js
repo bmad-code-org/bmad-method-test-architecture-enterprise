@@ -55,6 +55,9 @@ const { RunDirectory } = require('./run-directory');
 
 /** How long one `git worktree add` may take: a checkout of a large repository is slow, and a hang still ends. */
 const GIT_CHECKOUT_TIMEOUT_MS = 10 * 60_000;
+/** How long one pack of a withheld repository may take: it holds the project's whole history. */
+const GIT_HISTORY_TIMEOUT_MS = 10 * 60_000;
+const WITHHELD_REPOSITORY = 'git-view';
 const OWNER_MARKER = '.tea-evaluate-owner.json';
 const JOURNAL_DIRECTORY = '.workspace-journal';
 
@@ -597,10 +600,11 @@ const GIT_OUTPUT_BYTES = 256 * 1024 * 1024;
  * Runs `git` with every `GIT_` variable removed from its environment, so a
  * caller running inside a git hook (where `GIT_DIR` and `GIT_INDEX_FILE` name
  * the hook's own repository) cannot redirect a command meant for `-C <dir>`.
+ * `input`, when a string, is the command's standard input; otherwise it reads nothing.
  *
  * @returns {{ok: true, stdout: string}|{ok: false, status?: number, detail: string}}
  */
-function runGit(args, { timeoutMs = GIT_QUESTION_TIMEOUT_MS, supervised = false } = {}) {
+function runGit(args, { timeoutMs = GIT_QUESTION_TIMEOUT_MS, supervised = false, input = null } = {}) {
   const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('GIT_')));
   const result = supervised
     ? spawnSync(
@@ -610,10 +614,18 @@ function runGit(args, { timeoutMs = GIT_QUESTION_TIMEOUT_MS, supervised = false 
           encoding: 'utf8',
           env,
           maxBuffer: GIT_OUTPUT_BYTES,
-          stdio: ['ignore', 'pipe', 'pipe', 'pipe'],
+          ...(input === null ? {} : { input }),
+          stdio: [input === null ? 'ignore' : 'pipe', 'pipe', 'pipe', 'pipe'],
         },
       )
-    : spawnSync('git', args, { encoding: 'utf8', env, timeout: timeoutMs, killSignal: 'SIGKILL', maxBuffer: GIT_OUTPUT_BYTES });
+    : spawnSync('git', args, {
+        encoding: 'utf8',
+        env,
+        timeout: timeoutMs,
+        killSignal: 'SIGKILL',
+        maxBuffer: GIT_OUTPUT_BYTES,
+        ...(input === null ? {} : { input }),
+      });
   if (result.error) return { ok: false, detail: `git ${args.join(' ')} could not run: ${result.error.code ?? result.error.message}` };
   if (supervised) {
     let report;
@@ -757,6 +769,319 @@ function adopterTreeState(directory, { exclude = [] } = {}) {
 }
 
 /**
+ * Local configuration a withheld repository takes from the adopter's: how git
+ * reads the tree it checks out. These `core.` keys are carried, and so are the
+ * `filter.<name>.clean`, `.smudge`, `.process` and `.required` of a tracked
+ * filter driver. Remotes, URLs, credentials and hooks are never carried.
+ */
+const CARRIED_CONFIGURATION = [
+  'core.autocrlf',
+  'core.eol',
+  'core.safecrlf',
+  'core.filemode',
+  'core.ignorecase',
+  'core.symlinks',
+  'core.precomposeunicode',
+  'core.trustctime',
+  'core.checkstat',
+];
+
+/**
+ * The withheld repositories this process built, by repository, commit and
+ * withheld paths: a later workspace for the same key links the objects of one
+ * that still exists in place of packing the history again.
+ */
+const BUILT_REPOSITORIES = new Map();
+
+/**
+ * The object directories `gitDirectory` borrows objects from
+ * (`objects/info/alternates`, and theirs in turn), as real paths. A target that
+ * could read one would read the history the project's git directory holds.
+ */
+function alternatesOf(gitDirectory) {
+  const found = [];
+  const visit = (objects) => {
+    let text;
+    try {
+      text = fs.readFileSync(path.join(objects, 'info', 'alternates'), 'utf8');
+    } catch {
+      return;
+    }
+    for (const line of text.split('\n')) {
+      const entry = line.trim();
+      if (entry === '' || entry.startsWith('#')) continue;
+      let resolved;
+      try {
+        resolved = fs.realpathSync.native(path.resolve(objects, entry));
+      } catch {
+        continue;
+      }
+      if (found.includes(resolved)) continue;
+      found.push(resolved);
+      visit(resolved);
+    }
+  };
+  visit(path.join(gitDirectory, 'objects'));
+  return found;
+}
+
+/**
+ * What a withheld repository takes from the adopter's repository, asked once per
+ * git directory in this process (a run builds many workspaces over one
+ * repository): whether it is a partial clone, its object and ref formats, and
+ * the local configuration that is carried.
+ */
+const ADOPTER_FACTS = new Map();
+
+function adopterFacts(repository, gitDirectory) {
+  const known = ADOPTER_FACTS.get(gitDirectory);
+  if (known !== undefined) return known;
+  const partial = partialCloneCause(repository);
+  const facts = { partial, objectFormat: null, refFormat: null, carried: [], filters: [] };
+  if (partial === null) {
+    // Git before 2.45 does not know `--show-ref-format` and echoes the flag with exit 0, and before 2.38 not
+    // `--show-object-format`: an answer that is not a known format means the format is unknown and is not passed on.
+    const objectFormat = runGit(['-C', repository, 'rev-parse', '--show-object-format']);
+    if (objectFormat.ok && /^(sha1|sha256)$/.test(objectFormat.stdout.trim())) facts.objectFormat = objectFormat.stdout.trim();
+    const refFormat = runGit(['-C', repository, 'rev-parse', '--show-ref-format']);
+    if (refFormat.ok && /^(files|reftable)$/.test(refFormat.stdout.trim())) facts.refFormat = refFormat.stdout.trim();
+    // One question for the `core.` and `filter.` sections; the names git prints are lower case, a filter's own name apart.
+    const local = runGit(['--git-dir', gitDirectory, 'config', '--local', '--get-regexp', String.raw`^(core|filter)\.`]);
+    if (local.ok) {
+      const wanted = new Set(CARRIED_CONFIGURATION.map((key) => key.toLowerCase()));
+      const values = new Map();
+      const filters = new Map();
+      for (const line of local.stdout.split('\n')) {
+        const [, key = '', value = ''] = /^(\S+)\s+(.*)$/.exec(line.trim()) ?? [];
+        if (wanted.has(key) && /^[A-Za-z0-9_.-]+$/.test(value)) values.set(key, value);
+        // A clean or smudge filter a `.gitattributes` names: without it every file it filters reads as modified.
+        else if (/^filter\..+\.(clean|smudge|process|required)$/i.test(key) && value !== '') filters.set(key, value);
+      }
+      facts.carried = [...values];
+      facts.filters = [...filters];
+    }
+  }
+  ADOPTER_FACTS.set(gitDirectory, facts);
+  return facts;
+}
+
+/** Why `repository` is a partial clone, or null: its history is not all on disk, so a pack or a walk would fetch it. */
+function partialCloneCause(repository) {
+  const extension = runGit(['-C', repository, 'config', '--get', 'extensions.partialclone']);
+  if (extension.ok && extension.stdout.trim() !== '') return `extensions.partialClone names the remote ${extension.stdout.trim()}`;
+  const promisor = runGit(['-C', repository, 'config', '--get-regexp', String.raw`^remote\..*\.promisor$`]);
+  if (promisor.ok) {
+    const line = promisor.stdout.split('\n').find((entry) => /\s+true$/i.test(entry.trim()));
+    if (line !== undefined) return `${line.trim().split(/\s+/)[0]} is true`;
+  }
+  return null;
+}
+
+/**
+ * The object ids of `path` (a repository-relative path in POSIX form) at every
+ * commit `commit` reaches that holds a tree there, once each, read from the
+ * repository's own graph (its replace refs ignored).
+ */
+function treesAtPath(repository, commit, withheldPath) {
+  const commits = runGit(['--no-replace-objects', '-C', repository, 'rev-list', commit], { timeoutMs: GIT_HISTORY_TIMEOUT_MS });
+  if (!commits.ok) return { failure: commits.detail };
+  const lines = commits.stdout.split('\n').filter((line) => line.length > 0);
+  if (lines.length === 0) return { trees: [] };
+  // One batch question for the whole history, where `rev-parse --verify --quiet <commit>:<path>` would start a process per commit.
+  const asked = runGit(['--no-replace-objects', '-C', repository, 'cat-file', '--batch-check'], {
+    timeoutMs: GIT_HISTORY_TIMEOUT_MS,
+    input: `${lines.map((line) => `${line}:${withheldPath}`).join('\n')}\n`,
+  });
+  if (!asked.ok) return { failure: asked.detail };
+  const trees = new Set();
+  for (const answer of asked.stdout.split('\n')) {
+    const parts = answer.split(' ');
+    if (parts.length === 3 && parts[1] === 'tree') trees.add(parts[0]);
+  }
+  return { trees: [...trees] };
+}
+
+/** Hard-links every file under `from` to the same place under `to`, which is made as needed. */
+function linkTree(from, to) {
+  fs.mkdirSync(to, { recursive: true });
+  for (const entry of fs.readdirSync(from, { withFileTypes: true })) {
+    if (entry.isDirectory()) linkTree(path.join(from, entry.name), path.join(to, entry.name));
+    else if (!fs.existsSync(path.join(to, entry.name))) fs.linkSync(path.join(from, entry.name), path.join(to, entry.name));
+  }
+}
+
+/**
+ * Builds the repository a confined target's git sees in place of the
+ * adopter's (Story 1.57, AD-7, AD-8), and points the worktree at it.
+ *
+ * It is a bare store under the workspace directory, outside the checkout, so
+ * the target cannot write it. It holds every commit, tree and blob reachable
+ * from the workspace's commit except what is reachable only through the
+ * withheld paths' subtrees at some commit. Each such subtree is replaced by
+ * the empty tree through a `refs/replace/<tree>` entry, so no id changes and
+ * git never reads an object of the folder; `git --no-replace-objects` asks for
+ * the folder's tree itself, which the store does not hold. The worktree's
+ * metadata `commondir` names the store, and the index is rebuilt from the
+ * replaced tree, so `git status` and `git diff` see the folder as an empty
+ * tree and list no deletions. Nothing is written into the adopter's
+ * repository: its objects are only read, and the worktree's metadata
+ * directory is the one the worktree add already made.
+ *
+ * A second workspace for the same commit and paths links the first one's
+ * objects when that store still exists, and packs the history only when it
+ * does not.
+ *
+ * @param {object} workspace a git worktree whose checkout `git worktree add` just made
+ * @param {string[]} withheld real paths inside the repository whose committed content is withheld
+ * @throws {WorkspaceRefusal}
+ */
+function buildWithheldRepository(workspace, withheld) {
+  const store = path.join(workspace.directory, WITHHELD_REPOSITORY);
+  const hooks = path.join(workspace.directory, 'no-hooks');
+  const top = realPathLoosely(workspace.repository);
+  const refuse = (detail) =>
+    new WorkspaceRefusal(
+      `could not withhold the committed evaluation folder from the ${workspace.label} workspace's git history: ${detail}`,
+    );
+  const must = (result) => {
+    if (!result.ok) throw refuse(result.detail);
+    return result.stdout;
+  };
+  // The adopter's own graph: its replace refs, if it has any, are not applied to what the store is built from.
+  const inAdopter = (args, options) =>
+    runGit(['--no-replace-objects', '-C', workspace.repository, '-c', `core.hooksPath=${hooks}`, ...args], options);
+  const inStore = (args, options) => runGit([`--git-dir=${store}`, '-c', `core.hooksPath=${hooks}`, ...args], options);
+  const packInto = (args, input) =>
+    must(
+      inAdopter(['pack-objects', '--quiet', ...args, path.join(store, 'objects', 'pack', 'pack')], {
+        timeoutMs: GIT_HISTORY_TIMEOUT_MS,
+        supervised: true,
+        input,
+      }),
+    );
+
+  if (workspace.metadata === null) throw refuse('the worktree has no metadata directory in the repository');
+  const relatives = withheld.map((entry) => posix(path.relative(top, entry)));
+  const key = JSON.stringify([workspace.repository, workspace.commit, [...relatives].sort()]);
+  const facts = adopterFacts(workspace.repository, workspace.gitDirectory);
+  if (facts.partial !== null) {
+    throw refuse(
+      `the project is a partial clone (${facts.partial}), so most of its history is not on disk and packing it would fetch all of it from the remote; fetch the full history (clone again without --filter), or set "confinement": false in evaluation.json to run the targets unconfined`,
+    );
+  }
+  // (1) The folder's tree at each commit of the history, when no store for this commit and these paths exists to link
+  // from. A path that is tracked at the commit and yields no tree there is spelled differently from the repository's
+  // (case, Unicode form), and nothing would be replaced.
+  const folderTrees = new Set();
+  const findFolderTrees = () => {
+    for (const relative of relatives) {
+      const found = treesAtPath(workspace.repository, workspace.commit, relative);
+      if (found.failure !== undefined) throw refuse(found.failure);
+      const tracked = runGit(['--no-replace-objects', '-C', workspace.repository, 'ls-tree', workspace.commit, '--', relative]);
+      if (!tracked.ok) throw refuse(tracked.detail);
+      for (const line of tracked.stdout.split('\n')) {
+        const match = /^\d+ tree ([0-9a-f]+)\t/.exec(line);
+        if (match !== null && !found.trees.includes(match[1])) {
+          throw refuse(`${relative} is tracked at commit ${workspace.commit} but no tree was found there under that spelling`);
+        }
+      }
+      for (const tree of found.trees) folderTrees.add(tree);
+    }
+  };
+  // (2) A store in the adopter's object and ref formats. `core.bare=false` lets git treat it as the common directory of a
+  // worktree, and the local settings git reads the tree by are appended to its configuration in one write.
+  const initStore = () => {
+    must(
+      runGit([
+        '-c',
+        `core.hooksPath=${hooks}`,
+        'init',
+        '--quiet',
+        '--bare',
+        '--template=',
+        ...(facts.objectFormat === null ? [] : [`--object-format=${facts.objectFormat}`]),
+        ...(facts.refFormat === null ? [] : [`--ref-format=${facts.refFormat}`]),
+        store,
+      ]),
+    );
+    const settings = ['bare = false', ...facts.carried.map(([name, value]) => `${name.slice('core.'.length)} = ${value}`)];
+    fs.appendFileSync(path.join(store, 'config'), `[core]\n${settings.map((line) => `\t${line}\n`).join('')}`);
+    for (const [name, value] of facts.filters) must(inStore(['config', name, value]));
+    fs.mkdirSync(path.join(store, 'info'), { recursive: true });
+    for (const name of ['exclude', 'attributes']) {
+      const source = path.join(workspace.gitDirectory, 'info', name);
+      if (fs.existsSync(source)) fs.copyFileSync(source, path.join(store, 'info', name));
+    }
+    // The same history boundary as the adopter's, before anything walks the store.
+    const shallow = path.join(workspace.gitDirectory, 'shallow');
+    if (fs.existsSync(shallow)) fs.copyFileSync(shallow, path.join(store, 'shallow'));
+  };
+  initStore();
+  const cached = BUILT_REPOSITORIES.get(key);
+  let linked = false;
+  if (cached !== undefined && facts.refFormat === 'files' && fs.existsSync(path.join(cached, 'objects'))) {
+    try {
+      linkTree(path.join(cached, 'objects'), path.join(store, 'objects'));
+      const replacements = path.join(cached, 'refs', 'replace');
+      if (fs.existsSync(replacements)) fs.cpSync(replacements, path.join(store, 'refs', 'replace'), { recursive: true });
+      linked = true;
+    } catch {
+      // The store it came from is gone or on another volume: this one is built in full.
+      fs.rmSync(store, { recursive: true, force: true });
+      initStore();
+    }
+  }
+  if (!linked) {
+    findFolderTrees();
+    // (3) Everything reachable from the commit except what only the folder's trees reach.
+    packInto(['--revs'], `${[workspace.commit, ...[...folderTrees].map((tree) => `^${tree}`)].join('\n')}\n`);
+    // (4) The empty tree, and one replacement per folder tree (a folder tree that is the empty tree replaces itself).
+    const empty = must(inStore(['hash-object', '-t', 'tree', '-w', '--stdin'], { input: '' })).trim();
+    folderTrees.delete(empty);
+    if (folderTrees.size > 0) {
+      must(
+        inStore(['update-ref', '--stdin'], {
+          input: `${[...folderTrees].map((tree) => `update refs/replace/${tree} ${empty}`).join('\n')}\n`,
+        }),
+      );
+    }
+    // (5) What the walk still misses, other than the folder's trees, is content the folder shares with the rest of the
+    // tree (a blob, or a subtree, that sits in both): the pack above left it out, and it comes from the adopter's
+    // repository with everything under it. The walk then runs again, and a pass that misses what the last one missed
+    // has made no progress.
+    let previous = null;
+    for (;;) {
+      const walked = must(
+        inStore(['rev-list', '--objects', '--no-object-names', '--missing=print', workspace.commit], {
+          timeoutMs: GIT_HISTORY_TIMEOUT_MS,
+        }),
+      );
+      const missing = walked
+        .split('\n')
+        .filter((line) => line.startsWith('?'))
+        .map((line) => line.slice(1).trim())
+        .filter((id) => !folderTrees.has(id))
+        .sort();
+      if (missing.length === 0) break;
+      if (previous !== null && previous === missing.join('\n')) {
+        throw refuse(`${missing.length} object(s) shared with the folder could not be restored from the repository`);
+      }
+      previous = missing.join('\n');
+      packInto(['--revs'], `${missing.join('\n')}\n`);
+    }
+  }
+  if (!BUILT_REPOSITORIES.has(key) || !fs.existsSync(path.join(BUILT_REPOSITORIES.get(key), 'objects'))) BUILT_REPOSITORIES.set(key, store);
+  // (6) The worktree reads the store, and its index matches the replaced tree.
+  fs.writeFileSync(path.join(workspace.metadata, 'commondir'), `${store}\n`);
+  const view = ['--git-dir', workspace.metadata, '--work-tree', workspace.top, '-c', `core.hooksPath=${hooks}`];
+  must(runGit([...view, 'read-tree', 'HEAD'], { timeoutMs: GIT_HISTORY_TIMEOUT_MS }));
+  // The index read-tree wrote carries no file stamps, so every `git status` would read every file, and the target cannot
+  // write the index to keep the stamps. Best effort: an index left unrefreshed is still correct.
+  runGit([...view, 'update-index', '-q', '--refresh'], { timeoutMs: GIT_HISTORY_TIMEOUT_MS });
+  workspace.gitView = store;
+}
+
+/**
  * Makes the workspace a run happens in.
  *
  * A workspace made with a `basis` holds what the basis held when it was made:
@@ -774,6 +1099,8 @@ function adopterTreeState(directory, { exclude = [] } = {}) {
  * @param {object} [options.basis] a workspace this one reproduces
  * @param {string} [options.commit] the full id of a commit to check out in place of `HEAD` (a historical
  *   probe's revisions); only on a worktree made with no basis
+ * @param {boolean} [options.withholdHistory] a worktree's git sees a private repository (`buildWithheldRepository`) in
+ *   which the committed content of every `exclude` path inside the repository is an empty tree, as a confined run needs
  * @returns {object} the workspace: `root` is where `launch.root` lies in it
  * @throws {WorkspaceRefusal}
  */
@@ -787,6 +1114,7 @@ function createWorkspace({
   basis = null,
   commit = null,
   ownership = null,
+  withholdHistory = false,
 }) {
   if (!isDirectory(root)) throw new WorkspaceRefusal(`launch.root ${root} is not a directory`);
   const repository = basis === null ? repositoryOf(root) : null;
@@ -838,6 +1166,7 @@ function createWorkspace({
     repository: repositoryTop,
     gitDirectory: basis === null ? (repository?.gitDirectory ?? null) : basis.gitDirectory,
     metadata: null,
+    gitView: null,
     commit: worktree ? (revision?.commit ?? basis?.commit ?? repository.commit) : null,
     tree: worktree ? (revision?.tree ?? basis?.tree ?? repository.tree) : null,
     treeDigest: null,
@@ -899,7 +1228,16 @@ function createWorkspace({
           { atRevision: true },
         );
       }
+      // The paths inside the repository, the evaluation folder outside `launch.root` included, whose committed content is
+      // withheld: git sees an empty tree there, so their files leave the checkout too.
+      const repositoryReal = realPathLoosely(workspace.repository);
+      const withheld = withholdHistory
+        ? exclude.map(realPathLoosely).filter((entry) => entry !== repositoryReal && isInside(repositoryReal, entry))
+        : [];
+      if (withholdHistory) buildWithheldRepository(workspace, withheld);
       for (const entry of excluded) fs.rmSync(path.join(workspace.root, path.relative(root, entry)), { recursive: true, force: true });
+      for (const entry of withheld)
+        fs.rmSync(path.join(workspace.top, path.relative(repositoryReal, entry)), { recursive: true, force: true });
     } else if (basis === null) {
       workspace.root = workspace.top;
       copyTreeInto(root, workspace.top, {
@@ -1031,6 +1369,24 @@ function worktreeMetadataOf(workspace, { requireReadable = false } = {}) {
     }
   }
   return null;
+}
+
+/**
+ * What a confined target must not read of the adopter's git, and what of it
+ * it may: the repository's git directory, withheld from the target, and the
+ * worktree's own metadata directory inside it, which the target's `.git` file
+ * names, with the private repository the worktree reads (readable) and the
+ * object directories the git directory borrows from (`alternates`, withheld
+ * as it is). `null` for a workspace in no repository.
+ */
+function gitAccessOf(workspace) {
+  if (workspace.gitDirectory === null || workspace.gitDirectory === undefined) return null;
+  return {
+    directory: workspace.gitDirectory,
+    metadata: workspace.metadata ?? null,
+    view: workspace.gitView ?? null,
+    alternates: alternatesOf(workspace.gitDirectory),
+  };
 }
 
 /**
@@ -1279,6 +1635,7 @@ module.exports = {
   cleanUpOnSignal,
   containLinks,
   createWorkspace,
+  gitAccessOf,
   isDirectory,
   isInside,
   journalDirectory,

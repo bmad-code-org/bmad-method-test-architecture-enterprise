@@ -129,6 +129,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
+const { TRIVIAL_PROCESS, assertProfileSafePath, executableOnPath, probeTrivialProcess } = require('./isolation-primitives');
+
 const BACKEND_OVERRIDE_ENV = 'TEA_ATDD_ISOLATION';
 
 /** The two backends, by platform. */
@@ -156,19 +158,6 @@ function isolationError(message) {
   return error;
 }
 
-function executableOnPath(name, env = process.env) {
-  for (const directory of String(env.PATH || '').split(path.delimiter)) {
-    if (!directory) continue;
-    try {
-      fs.accessSync(path.join(directory, name), fs.constants.X_OK);
-      return true;
-    } catch {
-      // keep looking
-    }
-  }
-  return false;
-}
-
 /**
  * The backend this platform runs generated tests under.
  *
@@ -194,20 +183,17 @@ function selectBackend({ env = process.env, platform = process.platform } = {}) 
     }
     return override;
   }
-  if (platform === 'darwin' && executableOnPath('sandbox-exec', env)) return 'seatbelt';
-  if (platform === 'linux' && executableOnPath('bwrap', env)) return 'bubblewrap';
+  if (platform === 'darwin' && executableOnPath('sandbox-exec', env) !== null) return 'seatbelt';
+  if (platform === 'linux' && executableOnPath('bwrap', env) !== null) return 'bubblewrap';
   throw isolationError(
     `no isolation backend is available on ${platform}: seatbelt needs sandbox-exec on darwin and bubblewrap needs bwrap on linux ` +
       '(apt-get install bubblewrap). Generated tests are not executed unconfined.',
   );
 }
 
-/** A path a sandbox profile or argv may carry: no quote and no line break, which the profile syntax and shell quoting both rely on. */
-function assertProfileSafePath(candidate) {
-  if (/["\n\r]/.test(candidate)) {
-    throw isolationError(`a path cannot be embedded in a sandbox profile: ${JSON.stringify(candidate)}`);
-  }
-  return candidate;
+/** The refusal of a path a sandbox profile or argv cannot carry (`assertProfileSafePath` in `isolation-primitives.js` decides which). */
+function refuseUnsafePath(candidate) {
+  return isolationError(`a path cannot be embedded in a sandbox profile: ${JSON.stringify(candidate)}`);
 }
 
 /**
@@ -242,7 +228,7 @@ function buildSeatbeltProfile({ workspace }) {
   } catch {
     // the workspace is created before the profile is used; the literal entry covers it
   }
-  const subpaths = [...writable].map((entry) => `    (subpath "${assertProfileSafePath(entry)}")`).join('\n');
+  const subpaths = [...writable].map((entry) => `    (subpath "${assertProfileSafePath(entry, refuseUnsafePath)}")`).join('\n');
   return [
     '(version 1)',
     '(allow default)',
@@ -303,7 +289,7 @@ function sandboxedCommand({ backend, profilePath, workspace, cpuSeconds, command
   }
   if (backend === 'bubblewrap') {
     if (!workspace) throw isolationError('bubblewrap needs a workspace path');
-    const resolved = assertProfileSafePath(path.resolve(workspace));
+    const resolved = assertProfileSafePath(path.resolve(workspace), refuseUnsafePath);
     const bwrapArgs = [
       'bwrap',
       '--unshare-user',
@@ -461,28 +447,19 @@ function probeBackend({ backend, workspace, cpuSeconds = DEFAULT_CPU_SECONDS }) 
     profilePath,
     workspace,
     cpuSeconds,
-    command: process.execPath,
-    args: ['-e', 'process.exit(0)'],
+    command: TRIVIAL_PROCESS[0],
+    args: TRIVIAL_PROCESS.slice(1),
   });
-  const result = spawnSync(vector.command, vector.args, {
-    cwd: workspace,
-    env: childEnvironment({ path: process.env.PATH, home: workspace }),
-    encoding: 'utf8',
-    timeout: 20_000,
+  const probe = probeTrivialProcess({
+    vector: [vector.command, ...vector.args],
+    spawn: { cwd: workspace, env: childEnvironment({ path: process.env.PATH, home: workspace }) },
   });
-  if (result.error) return { ok: false, reason: `${backend}: ${result.error.message}` };
-  if (result.status !== 0) {
-    const tail = String(result.stderr || '')
-      .trim()
-      .split('\n')
-      .slice(-2)
-      .join(' | ');
-    return {
-      ok: false,
-      reason: `${backend}: a trivial process exited ${result.status ?? `by ${result.signal}`}${tail ? ` (${tail})` : ''}`,
-    };
-  }
-  return { ok: true };
+  if (probe.ok) return { ok: true };
+  if (probe.error) return { ok: false, reason: `${backend}: ${probe.error.message}` };
+  return {
+    ok: false,
+    reason: `${backend}: a trivial process exited ${probe.status ?? `by ${probe.signal}`}${probe.tail ? ` (${probe.tail})` : ''}`,
+  };
 }
 
 module.exports = {

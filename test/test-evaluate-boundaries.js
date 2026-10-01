@@ -26,7 +26,7 @@
  *   path into `test/` cannot slip past `test-import`).
  * - `engine-stage`: the stages that decide enforced verdicts come only from the
  *   eval-quality CLI over persisted files.
- *   - `runScore`, `preflightFromObservations` and `seal` fail anywhere under
+ *   - `runScore`, `preflightFromObservations`, `aggregateStrength` and `seal` fail anywhere under
  *     `cli/`, `engine.js` included, as an identifier, a member property (dot,
  *     or a bracket string or static template), an object-pattern key, or an
  *     import or export specifier. `Object.seal` is an exemption, and only
@@ -38,7 +38,9 @@
  *     the ladder's `exitCode`, `verdict` and `basis` and the qualification's
  *     `failures` and no other field of either, and names the result's `artifact`
  *     only to destructure it, test it against null and hand it to
- *     `this.#engine.serializeArtifact`; a returned or aliased
+ *     `this.#engine.serializeArtifact`. `aggregateStrength` (Story 1.45) is the
+ *     other exemption: one call in the same file's `reproduceAggregate`, its
+ *     result bound to `aggregate`, which is only serialized. A returned or aliased
  *     `runScore`, a rest element or a renamed key over the result, and a
  *     `ladder` anywhere else under `cli/` fail. `preflightFromObservations`
  *     and `seal` fail there too.
@@ -151,6 +153,8 @@ const ENGINE_MODULE = path.join('lib', 'evaluate', 'engine.js');
 const REPRODUCTION_MODULE = path.join('lib', 'evaluate', 'score-inputs.js');
 const REPRODUCTION_STAGE = 'runScore';
 const REPRODUCTION_METHOD = 'reproduce';
+const AGGREGATION_STAGE = 'aggregateStrength';
+const AGGREGATION_METHOD = 'reproduceAggregate';
 const REPRODUCTION_RESULT = new Set(['artifact', 'ladder', 'qualification']);
 // `artifact` is guarded as well (see the rule in `fileViolations`); only `ladder` and `qualification` have readable fields.
 const REPRODUCTION_READS = new Map([
@@ -160,7 +164,7 @@ const REPRODUCTION_READS = new Map([
 const RUNTIME_DIRECTORY = path.join('lib', 'evaluate');
 const SOURCE_EXTENSIONS = new Set(['.js', '.cjs', '.mjs']);
 const DATA_EXTENSIONS = new Set(['.json', '.md', '.yml', '.yaml']);
-const ALWAYS_FORBIDDEN = new Set(['runScore', 'preflightFromObservations', 'seal']);
+const ALWAYS_FORBIDDEN = new Set(['runScore', 'preflightFromObservations', 'aggregateStrength', 'seal']);
 const AJV_STAGE = 'compile';
 const AJV_MODULES = new Set(['ajv', 'ajv/dist/2020']);
 const CREATE_REQUIRE = 'createRequire';
@@ -580,6 +584,7 @@ function fileViolations({ source, ast, isEngine, isReproduction, isSkillRunner, 
   const isGlobalObject = (node) => !objectRebound && isIdentifier(node, 'Object');
   const parentOf = new Map();
   let exemptCalls = 0;
+  let exemptAggregations = 0;
   /** The name of the class method `node` sits in, or null. */
   const enclosingMethod = (node) => {
     for (let at = parentOf.get(node); at !== undefined; at = parentOf.get(at)) {
@@ -594,7 +599,7 @@ function fileViolations({ source, ast, isEngine, isReproduction, isSkillRunner, 
   const isReproductionCall = (node, parent) => {
     if (
       !isReproduction ||
-      node.name !== REPRODUCTION_STAGE ||
+      (node.name !== REPRODUCTION_STAGE && node.name !== AGGREGATION_STAGE) ||
       parent?.type !== 'MemberExpression' ||
       parent.property !== node ||
       parent.computed ||
@@ -606,9 +611,23 @@ function fileViolations({ source, ast, isEngine, isReproduction, isSkillRunner, 
     ) {
       return false;
     }
+    const call = parentOf.get(parent);
+    if (node.name === AGGREGATION_STAGE) {
+      // The aggregate (Story 1.45): one call site, inside `reproduceAggregate`, its result bound to `aggregate`, which is
+      // only serialized.
+      const declaration = call?.type === 'CallExpression' && call.callee === parent ? parentOf.get(call) : undefined;
+      const aggregateExempt =
+        enclosingMethod(node) === AGGREGATION_METHOD &&
+        exemptAggregations === 0 &&
+        declaration?.type === 'VariableDeclarator' &&
+        declaration.init === call &&
+        declaration.id.type === 'Identifier' &&
+        declaration.id.name === 'aggregate';
+      if (aggregateExempt) exemptAggregations += 1;
+      return aggregateExempt;
+    }
     // One call site, inside the module's `reproduce` method, so the result has one place to go.
     if (enclosingMethod(node) !== REPRODUCTION_METHOD || exemptCalls > 0) return false;
-    const call = parentOf.get(parent);
     const awaited = call?.type === 'CallExpression' && call.callee === parent ? parentOf.get(call) : undefined;
     const declarator = awaited?.type === 'AwaitExpression' ? parentOf.get(awaited) : undefined;
     const exempt =
@@ -690,6 +709,31 @@ function fileViolations({ source, ast, isEngine, isReproduction, isSkillRunner, 
     if (node.type === 'ImportSpecifier' || node.type === 'ExportSpecifier') {
       for (const side of [node.imported, node.local, node.exported]) {
         if (side?.type === 'Literal' && ALWAYS_FORBIDDEN.has(specifierName(side))) report(node, 'engine-stage', `names "${side.value}"`);
+      }
+    }
+
+    // engine-stage: the aggregate the library returns carries its floor decisions, so the re-score module names it only
+    // to declare it and to hand it to `this.#engine.serializeArtifact`.
+    if (isReproduction && node.type === 'Identifier' && node.name === 'aggregate') {
+      const declared = parent?.type === 'VariableDeclarator' && parent.id === node;
+      const key = parent?.type === 'Property' && parent.key === node && !parent.shorthand && !parent.computed;
+      const otherObjectsField = parent?.type === 'MemberExpression' && parent.property === node && !parent.computed;
+      const serialized =
+        parent?.type === 'CallExpression' &&
+        parent.arguments[0] === node &&
+        parent.callee.type === 'MemberExpression' &&
+        !parent.callee.computed &&
+        parent.callee.property.name === 'serializeArtifact' &&
+        parent.callee.object.type === 'MemberExpression' &&
+        parent.callee.object.object.type === 'ThisExpression' &&
+        parent.callee.object.property.type === 'PrivateIdentifier' &&
+        parent.callee.object.property.name === 'engine';
+      if (!declared && !key && !otherObjectsField && !serialized) {
+        report(
+          node,
+          'engine-stage',
+          "uses the aggregate the library returns beyond serializing it; its floor decisions are the library's to make",
+        );
       }
     }
 
@@ -1286,6 +1330,55 @@ const PLANTS = [
       'class Held {\n  #engine;\n\n  async reproduce(options) {\n    const { artifact, ladder } = await this.#engine.runScore(options);\n    this.note(artifact);\n    return { artifact: null, exitCode: ladder.exitCode };\n  }\n}\nmodule.exports = { Held };\n',
   },
   {
+    name: 'aggregateStrength called outside reproduceAggregate',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  reproduce(bytes) {\n    const aggregate = this.#engine.aggregateStrength(bytes);\n    return this.#engine.serializeArtifact(aggregate, "StrengthAggregate");\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'a second aggregateStrength call site in reproduceAggregate',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  reproduceAggregate(bytes) {\n    const aggregate = this.#engine.aggregateStrength(bytes);\n    const again = this.#engine.aggregateStrength(bytes);\n    return this.#engine.serializeArtifact(aggregate, "StrengthAggregate");\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'the aggregate result not bound to aggregate',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  reproduceAggregate(bytes) {\n    const result = this.#engine.aggregateStrength(bytes);\n    return this.#engine.serializeArtifact(result, "StrengthAggregate");\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'a floor decision read from the aggregate',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  reproduceAggregate(bytes) {\n    const aggregate = this.#engine.aggregateStrength(bytes);\n    return { aggregate: this.#engine.serializeArtifact(aggregate, "StrengthAggregate"), decisions: aggregate.floorDecisions };\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'the aggregate returned bare',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  reproduceAggregate(bytes) {\n    const aggregate = this.#engine.aggregateStrength(bytes);\n    return aggregate;\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'aggregateStrength reached through a local alias',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  reproduceAggregate(bytes) {\n    const library = this.#engine;\n    const aggregate = library.aggregateStrength(bytes);\n    return this.#engine.serializeArtifact(aggregate, "StrengthAggregate");\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'a second aggregateStrength call bound to aggregate in reproduceAggregate',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  reproduceAggregate(bytes) {\n    {\n      const aggregate = this.#engine.aggregateStrength(bytes);\n      this.#engine.serializeArtifact(aggregate, "StrengthAggregate");\n    }\n    {\n      const aggregate = this.#engine.aggregateStrength(bytes);\n      return this.#engine.serializeArtifact(aggregate, "StrengthAggregate");\n    }\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
     name: 'seal in the re-score module',
     rule: 'engine-stage',
     file: 'lib/evaluate/score-inputs.js',
@@ -1296,6 +1389,18 @@ const PLANTS = [
     rule: 'engine-stage',
     file: 'lib/evaluate/score-inputs-2.js',
     source: "const engine = require('./engine');\nengine.runScore({});\n",
+  },
+  {
+    name: 'aggregateStrength on the engine module (the library import in place of the CLI stage, Story 1.45)',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score.js',
+    source: "const engine = require('./engine');\nengine.aggregateStrength({});\n",
+  },
+  {
+    name: 'aggregateStrength destructured from the engine module',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/aggregate.js',
+    source: `${LOADER}async function f() {\n  const { aggregateStrength } = await loadEngine();\n  return aggregateStrength;\n}\nmodule.exports = { f };\n`,
   },
   {
     name: 'seal destructured from the engine module',
@@ -1752,6 +1857,26 @@ const CLEAN_PLANTS = [
       '    const lines = qualification.failures.map((failure) => failure.detail);',
       '    if (ladder.verdict === null) lines.push(...ladder.basis);',
       '    return { artifact: artifact === null ? null : this.#engine.serializeArtifact(artifact, "EvidenceArtifact"), exitCode: ladder.exitCode, lines };',
+      '  }',
+      '}',
+      'module.exports = { Held };',
+      '',
+    ].join('\n'),
+  },
+  {
+    name: 'aggregateStrength bound to aggregate and serialized in reproduceAggregate',
+    file: 'lib/evaluate/score-inputs.js',
+    source: [
+      'class Held {',
+      '  #engine;',
+      '',
+      '  constructor(engine) {',
+      '    this.#engine = engine;',
+      '  }',
+      '',
+      '  reproduceAggregate(bytes) {',
+      '    const aggregate = this.#engine.aggregateStrength(bytes);',
+      '    return { aggregate: this.#engine.serializeArtifact(aggregate, "StrengthAggregate"), exitCode: 0 };',
       '  }',
       '}',
       'module.exports = { Held };',

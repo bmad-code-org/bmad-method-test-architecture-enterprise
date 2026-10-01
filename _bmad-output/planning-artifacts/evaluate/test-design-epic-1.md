@@ -38,7 +38,7 @@ inputDocuments:
 
 ## Executive Summary
 
-**Scope:** full epic-level test design for Stories 1.1 to 1.69 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.69. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
+**Scope:** full epic-level test design for Stories 1.1 to 1.69 and 1.80 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.69 and 1.80. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
 
 **Risk summary:**
 
@@ -770,6 +770,8 @@ Added 2026-09-28 in Story 1.14's final review. Levels: integration over a publis
 | Null and comparability remain distinct | Exercise no eligible probe, an admitted but unexercised probe, and a trial set below `minimumTrialCount`; exclude controls and canaries from the denominator                 | Integration                        | P0  | Counting an excluded probe or converting a null or non-comparable state fails |
 | Replay preserves the class result      | Replay the sealed inputs and compare the aggregate and lineage byte for byte; reject a missing or mismatched result                                                          | Replay                             | P0  | Replaying a changed artifact without a changed aggregate fails                |
 
+Amended 2026-10-01 in the Story 1.45 build. The integration cases run in `test/test-evaluate-run.js` over a six-probe fixture (a clean control and five defect probes, each with its own mutation and witness, one left uncaught) and a two-probe fixture whose run directory is edited and re-anchored to reach the non-comparable and `rate: null` states. The replay row is a direct rerun of the recorded `aggregate-strength` argv with a fresh `--out`, whose bytes equal the copied aggregate. The mismatch rows run through `race-engine.js`, which tampers a persisted evidence file or forges the staged aggregate (digest, probe set, engine version, schema, bytes, a link). A canary cannot be driven through `tea-evaluate run`, so its denominator boundary is the engine's own and the TeA case covers the engine's refusal of a canary floor.
+
 ### Story 1.46: Close the dogfood suite's coverage gaps
 
 Added 2026-09-28 by Story 1.16's proof run. Levels: live (the gap-loop session and its rerun), integration over real eval-quality, and static. The before state is Story 1.16's recorded `CONCERNS` evidence.
@@ -884,13 +886,18 @@ Added from Story 1.26's final review. Levels: preflight mutation qualification, 
 
 ### Story 1.57: Withhold the committed evaluation folder from a confined target's git history
 
-Added in Story 1.31. Levels: integration over real eval-quality, static. File: `test/test-evaluate-run.js` (`test:evaluate-run`).
+Added in Story 1.31. Levels: integration over real eval-quality, unit, static. File: `test/test-evaluate-run.js` (`test:evaluate-confinement`, its `--group=confinement` cases, and `test:evaluate-run`, the rest), `test/test-isolation-primitives.js` (the profile golden). Gate: `test:evaluate-confinement`, `test:evaluate-run`, `test:evaluate-mutation`, `test:evaluate-arms`, `npm test`.
 
-| AC                                               | Test                                                                                                                      | Level       | P   | Revert check                                          |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- | ----------- | --- | ----------------------------------------------------- |
-| No evaluation-folder object reaches the target   | A stub target runs `git show` and `git cat-file` for the committed contract at the evaluated commit and every ref         | Integration | P0  | Reverting the change lets the stub print the contract |
-| The target's own git operations still work       | The same stub runs `git status`, `git log` and `git diff` against the commit; assert each exits 0 with the evaluated tree | Integration | P1  | A workspace that breaks git fails the assertion       |
-| The reference drops the readable-history passage | Read `### File-system confinement` by its exact heading                                                                   | Static      | P2  | Leaving the passage fails the case                    |
+| AC                                               | Test                                                                                                                                                                                                | Level       | P   | Revert check                                                 |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | --- | ------------------------------------------------------------ |
+| No evaluation-folder object reaches the target   | A stub target runs `git show` and `git cat-file` for the committed contract at the evaluated commit and `HEAD`, a folder blob id from an older commit's `git log --raw`, and `--no-replace-objects` | Integration | P0  | Skipping the builder lets the stub print the contract        |
+| The project's git directory is withheld          | The stub reads `<project>/.git/HEAD` and `.git/objects`; assert each refused, and its own worktree metadata readable                                                                                | Integration | P0  | Removing the deny rule lets the read through                 |
+| The target's own git operations still work       | The same stub runs `git status`, `git log`, `git diff HEAD` and `git show HEAD:src/a`; assert each exits 0, the tree intact and no deletion listed                                                  | Integration | P1  | A workspace that breaks git fails the assertion              |
+| Shared content and changed folders are handled   | A file outside the folder with a folder file's bytes stays readable; two commits with two folder trees have both replaced; a shallow repository carries its `shallow` file                          | Unit        | P1  | Dropping the restore pass or the shallow copy fails the case |
+| A failed build leaves nothing                    | A `git pack-objects` that exits nonzero refuses with `WorkspaceRefusal`, and workspace and registration are gone; a killed run is reclaimed with its store                                          | Unit        | P1  | A half-built workspace left behind fails the assertion       |
+| An opt-out run keeps today's worktree            | `"confinement": false`: the worktree names the adopter's `commondir` and no store exists                                                                                                            | Integration | P1  | Building the store for an opt-out run fails the assertion    |
+| The profiles carry the git-directory rules       | The golden holds the Seatbelt profile, the Bubblewrap vector and the audit's `withheld` list with the git directory                                                                                 | Unit        | P1  | A changed rule fails the comparison                          |
+| The reference drops the readable-history passage | Read `### File-system confinement` by its exact heading                                                                                                                                             | Static      | P2  | Leaving the passage fails the case                           |
 
 ### Story 1.58: Keep the bridge's admission token and the run's private directories from a confined target
 
@@ -1008,6 +1015,7 @@ The second row adds the same seven inputs rewritten for the engine's read and re
 The third row adds the module's own units over a real run (`holdScoreInputs`, `changedSince`, `reproduce`), the recorded argv naming the run directory's paths, and the views reading the held bytes (`test:evaluate-partitions`, `test:evaluate-interpret`).
 The fourth row is `checkScoreInputReference` in `test:evaluate-run`.
 `test:evaluate-boundaries` gains plants for the one file that may name `runScore` and for the names still forbidden there.
+Amended 2026-10-01 in the merge with Story 1.45: the aggregate call is held too (`checkHeldAggregate` in `test:evaluate-held-inputs`): the run's policy rewritten for the aggregate's read and kept, rewritten and restored, or made unreadable and restored, and a well-formed substituted aggregate, each exit 12 with no aggregate copied; the revert check removes the held comparison and the aggregate is copied.
 
 ### Story 1.69: Hold the inputs of an evaluator attempt's score call
 
@@ -1019,6 +1027,17 @@ Added 2026-10-01 in Story 1.68. Levels: end-to-end over real eval-quality, integ
 | A restored rewrite or a substituted artifact is refused   | The shim restores the rewrite before exit, or replaces the staged artifact with a well-formed one whose votes differ; assert exit 12 and no vote recorded                                                                | End-to-end over real eval-quality | P0  | Removing the comparison with the held bytes records the altered votes                                                              |
 | An unchanged qualification is unchanged                   | Qualify twice; re-run the recorded argv with a fresh `--out` and compare the evidence byte for byte                                                                                                                      | Integration                       | P1  | A check that refuses a clean attempt fails the case                                                                                |
 | The attempt routes through the shared module              | Read `scoreAttempt` and fail when it names a score input without `score-inputs.js`                                                                                                                                       | Static                            | P2  | Reading the files directly in `scoreAttempt` fails the read                                                                        |
+
+### Story 1.80: Bring a partial-clone project, its tags and a very large history into the withheld repository
+
+Added 2026-10-01 in Story 1.57. Levels: integration over real eval-quality, static. File: `test/test-evaluate-run.js` (`test:evaluate-confinement`).
+
+| AC                                    | Test                                                                                                                                                             | Level       | P   | Revert check                                      |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | --- | ------------------------------------------------- |
+| A partial-clone project runs confined | A project cloned with a promisor remote and a committed folder; a stub runs `git status`, `git log` and `git show`; assert exit 0, no fetch and no folder object | Integration | P0  | Restoring the refusal exits the run with 12       |
+| Tags reach the target                 | A project with a lightweight and an annotated tag; the stub runs `git tag -l` and `git describe --tags`; assert both listed and no remote, URL or hook copied    | Integration | P1  | Dropping the tag copy lists nothing               |
+| A very large history builds           | A stub `git` on `PATH` prints more than six million ids for the walk; assert the run completes and the walk is read as a stream                                  | Integration | P1  | A walk that buffers all output fails with ENOBUFS |
+| The reference drops the three limits  | Read `### File-system confinement` by its exact heading                                                                                                          | Static      | P2  | Leaving either limit fails the case               |
 
 ## The Dogfood Proof (AD-15)
 

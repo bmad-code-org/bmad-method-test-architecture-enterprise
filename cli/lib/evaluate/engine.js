@@ -18,8 +18,9 @@
  *
  * This file also holds the runtime's one synchronous reading of the engine:
  * the schema-version constants a record builder stamps, the engine's
- * `VERSION`, and its `parseAddress`, which keys an IP literal the way the
- * engine's policy reads it. Record builders and `check` call these from
+ * `VERSION`, its `parseAddress`, which keys an IP literal the way the
+ * engine's policy reads it, and `digestScannedJson`, the digest of a persisted
+ * artifact's text that an aggregate records for each artifact it read. Record builders and `check` call these from
  * synchronous code, so they cannot wait for the dynamic import. `eval-quality.config.json` declares this file as
  * its own `dependency-direction` layer with a `purity` block, so an `await`, an
  * async function or `new Date` here fails `npm run test:direction`; the loaders
@@ -39,7 +40,7 @@ class EngineUnavailableError extends Error {
   constructor(cause) {
     super(
       `${ENGINE_PACKAGE} is not installed where tea-evaluate can reach it. ` +
-        `It is an optional peer dependency of TeA; install ${ENGINE_PACKAGE}@">=4.6.0" in the project that runs Evaluate. ` +
+        `It is an optional peer dependency of TeA; install ${ENGINE_PACKAGE}@">=4.7.0" in the project that runs Evaluate. ` +
         `(${cause?.message ?? 'no further detail'})`,
       { cause },
     );
@@ -184,6 +185,7 @@ const SCHEMA_VERSION_CONSTANTS = {
   'evidence-artifact': 'EVIDENCE_ARTIFACT_SCHEMA_VERSION',
   'sealed-evaluator-brief': 'SEALED_EVALUATOR_BRIEF_SCHEMA_VERSION',
   'preflight-verdict': 'PREFLIGHT_VERDICT_SCHEMA_VERSION',
+  'strength-aggregate': 'STRENGTH_AGGREGATE_SCHEMA_VERSION',
 };
 const SCHEMA_VERSIONS = Object.freeze(
   Object.defineProperties(
@@ -244,6 +246,27 @@ function schemaVersionProblems(kind, value) {
   return [`${kind} carries "schemaVersion" ${JSON.stringify(found)} where this build reads ${expected}`];
 }
 
+/**
+ * eval-quality's digest of a hashed artifact's persisted text: `digestArtifact`
+ * over `scanJson`, the reading `aggregate-strength` gives each evidence file it
+ * is handed. The text the engine writes ends in a line terminator that its
+ * digest does not cover, so a byte digest of the file would never match the one
+ * the aggregate records.
+ *
+ * @param {string} text the artifact's persisted text
+ * @param {string} artifactPath the artifact's schema name, for example `EvidenceArtifact`
+ * @returns {string}
+ */
+function digestScannedJson(text, artifactPath) {
+  const constants = engineConstants();
+  if (constants === null) throw new EngineUnavailableError(packageVersionsError);
+  for (const name of ['digestArtifact', 'scanJson']) {
+    if (typeof constants[name] !== 'function')
+      throw new EngineUnavailableError(new Error(`the installed ${ENGINE_PACKAGE} exports no ${name}`));
+  }
+  return constants.digestArtifact(constants.scanJson(text, artifactPath), artifactPath);
+}
+
 /** The directory of the installed engine package, read through its exported `./package.json`. */
 function enginePackageRoot() {
   try {
@@ -293,6 +316,7 @@ module.exports = {
   SCHEMA_VERSIONS,
   UNSTAMPED_KINDS,
   canonicalAddress,
+  digestScannedJson,
   engineCliPath,
   engineSchemaPath,
   engineVersion,

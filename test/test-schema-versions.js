@@ -11,10 +11,12 @@
  * literal beside the code that wrote it, and nothing compared any of them with
  * the constants the package exports, so an upstream bump passed `npm test` until
  * a `schema-version-mismatch` fault surfaced inside a pipeline stage, naming the
- * stage. TEA also receives three kinds it never stamps itself: `evidence-artifact`,
+ * stage. TEA also receives four kinds it never stamps itself: `evidence-artifact`,
  * `sealed-evaluator-brief` and `preflight-verdict`, each read back from the
- * package through a `validateArtifact` call in `test/lib/probe-scoring.js`. This
- * file holds the package's own constant for all nine, so a renamed or moved
+ * package through a `validateArtifact` call in `test/lib/probe-scoring.js`, and
+ * `strength-aggregate`, which `tea-evaluate score` copies from the engine's
+ * `aggregate-strength` stage after a `validateArtifact` call (Story 1.45). This
+ * file holds the package's own constant for all ten, so a renamed or moved
  * export is caught here rather than inside a live run.
  *
  * So the question this file answers: if the package moves a version, or someone
@@ -28,10 +30,10 @@
  *
  * WHAT IS CHECKED
  *
- * - Each of the nine constants the package exports for a kind TEA writes or
+ * - Each of the ten constants the package exports for a kind TEA writes or
  *   receives is a positive integer. A renamed export reads `undefined` on both
  *   sides of a comparison and would agree with itself.
- * - `SCHEMA_VERSIONS` carries exactly those nine kinds, each value the package's
+ * - `SCHEMA_VERSIONS` carries exactly those ten kinds, each value the package's
  *   constant.
  * - Each of the three builders stamps the version its kind's constant reads, and
  *   each generator's exported constant is the package's. A failure names the
@@ -93,6 +95,7 @@ const CONSTANT_OF = {
   'evidence-artifact': 'EVIDENCE_ARTIFACT_SCHEMA_VERSION',
   'sealed-evaluator-brief': 'SEALED_EVALUATOR_BRIEF_SCHEMA_VERSION',
   'preflight-verdict': 'PREFLIGHT_VERDICT_SCHEMA_VERSION',
+  'strength-aggregate': 'STRENGTH_AGGREGATE_SCHEMA_VERSION',
 };
 
 /** The one published kind TEA records as carrying no stamp by design. */

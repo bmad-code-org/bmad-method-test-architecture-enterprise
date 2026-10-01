@@ -133,12 +133,26 @@ try {
   const interpretation = read(path.join(run, 'interpretation.json'));
   const index = read(path.join(run, 'trial-sets.json'));
   const contract = read(path.join(run, index.contract));
-  const scores = read(path.join(run, 'scores', interpretation.scoreInvocationId, 'score.json')).scores;
+  const scoreSummary = read(path.join(run, 'scores', interpretation.scoreInvocationId, 'score.json'));
+  const scores = scoreSummary.scores;
   const runSnapshot = read(path.join(run, 'run.json'));
   const phaseBytes = fs.readFileSync(path.join(run, 'operation-phases.json'));
   assert.equal(runSnapshot.artifacts.operationPhases, `sha256:${crypto.createHash('sha256').update(phaseBytes).digest('hex')}`);
   assert.deepEqual(JSON.parse(phaseBytes.toString('utf8')), runSnapshot.operationPhases);
-  assert.deepEqual(Object.keys(interpretation).sort(), ['probes', 'scoreInvocationId']);
+  assert.deepEqual(Object.keys(interpretation).sort(), ['probes', 'scoreInvocationId', 'strengthAggregate']);
+  // The aggregate is carried as a pointer to the engine's copied file, its digest and its floors copy; no rate or decision is restated.
+  const pointer = interpretation.strengthAggregate;
+  assert.deepEqual(Object.keys(pointer).sort(), ['digest', 'floors', 'floorsDigest', 'path', 'reason', 'status']);
+  assert.equal(pointer.status, 'copied');
+  assert.equal(pointer.reason, null);
+  assert.equal(pointer.path, scoreSummary.strengthAggregate.aggregate);
+  const sha256 = (file) =>
+    `sha256:${crypto
+      .createHash('sha256')
+      .update(fs.readFileSync(path.join(project.folder, file)))
+      .digest('hex')}`;
+  assert.equal(pointer.digest, sha256(pointer.path));
+  assert.equal(pointer.floorsDigest, sha256(pointer.floors));
   let sawFirstMaterialError = false;
   assert.equal(read(path.join(run, 'run.json')).operationPhases['judge-request'], 'outcome');
   assert.deepEqual(
@@ -242,6 +256,7 @@ try {
     evidence: evidenceOf(scores),
     contractPath: index.contract,
     operationPhases: read(path.join(run, 'run.json')).operationPhases,
+    strengthAggregate: scoreSummary.strengthAggregate,
   };
   const multiRecord = path.join(run, 'multi-citation-record.json');
   fs.writeFileSync(
@@ -313,7 +328,18 @@ try {
     })),
     contractPath: index.contract,
     operationPhases: read(path.join(run, 'run.json')).operationPhases,
+    strengthAggregate: {
+      ...scoreSummary.strengthAggregate,
+      status: 'absent',
+      reason: 'no evidence artifact was copied',
+      aggregate: null,
+      aggregateDigest: null,
+    },
   });
+  assert.deepEqual(
+    [read(view).strengthAggregate.status, read(view).strengthAggregate.path, read(view).strengthAggregate.digest],
+    ['absent', null, null],
+  );
   assert(read(view).probes.every(({ engine }) => engine === null));
   assert(
     read(view).probes.every(

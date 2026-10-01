@@ -219,7 +219,8 @@ class HeldInputs {
         contract: this.json(this.index.contract),
         probe: this.json(set.probe),
         preflightVerdict: this.json(this.index.preflightVerdict),
-        policy: this.json(this.index.policy),
+        // The CLI reads its policy through the engine's lexical scanner, which refuses a repeated key.
+        policy: this.#engine.scanJson(this.entry(this.index.policy).bytes.toString('utf8'), 'ScoringPolicy'),
         privateManifest: null,
         corpusDigest: this.index.corpusDigest,
         port: undefined,
@@ -237,6 +238,30 @@ class HeldInputs {
     } catch (error) {
       // The library refused the held inputs as the CLI does: a structural failure is exit 4, a fault and a defect exit 5.
       return { artifact: null, exitCode: error instanceof this.#engine.StructuralFailure ? STRUCTURAL_EXIT : FAULT_EXIT, lines: null };
+    }
+  }
+
+  /**
+   * What `eval-quality aggregate-strength` does with the persisted evidence artifacts of an invocation, its floors copy
+   * and the held policy (Story 1.45, 1.68): the aggregate bytes it stages (null when it refuses) and the exit it
+   * takes, 0 for an aggregate, 4 for a refused set, 5 for a fault in its inputs. The CLI reads all three inputs through
+   * the engine's lexical scanner; so does this. The caller compares and refuses; nothing here becomes an aggregate.
+   *
+   * @param {{ evidence: Buffer[], floors: Buffer }} bytes the evidence files in trial-set order and the floors copy
+   * @returns {{ aggregate: Buffer | null, exitCode: number }}
+   */
+  reproduceAggregate({ evidence, floors }) {
+    try {
+      const aggregate = this.#engine.aggregateStrength({
+        evidence: evidence.map((bytes) => this.#engine.scanJson(bytes.toString('utf8'), 'EvidenceArtifact')),
+        floors: this.#engine.scanJson(floors.toString('utf8'), 'StrengthFloors'),
+        policy: this.#engine.scanJson(this.entry(this.index.policy).bytes.toString('utf8'), 'ScoringPolicy'),
+      });
+      return { aggregate: Buffer.from(this.#engine.serializeArtifact(aggregate, 'StrengthAggregate'), 'utf8'), exitCode: 0 };
+    } catch (error) {
+      // A refused set is a structural failure to the CLI; a fault in an input and a defect are exit 5.
+      const refused = error instanceof this.#engine.AggregationRefusal || error instanceof this.#engine.StructuralFailure;
+      return { aggregate: null, exitCode: refused ? STRUCTURAL_EXIT : FAULT_EXIT };
     }
   }
 }

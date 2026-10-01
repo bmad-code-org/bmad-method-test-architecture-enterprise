@@ -294,6 +294,54 @@ Unrun: the full `npm test` (CI shards).
 
 Green on the last state of the tree: `test:evaluate-boundaries` 368, `test:evaluate-held-inputs`, `test:evaluate-partitions`, `lint`, `lint:md`, `format:check`, `test:doc-counts`, `test:changelog`.
 
+## Merge with main
+
+`origin/main` moved while the PR was in review: #276 (lane 2, Stories 1.57 and 1.62: shared sandbox primitives, the withheld git history, `test:evaluate-confinement`), #277, and #279 (lane 3, Story 1.45: `eval-quality aggregate-strength` after the probe loop of `score`, engine 4.7.0).
+`npm ci` ran first; the lockfile moved `eval-quality` to 4.7.0 (peer floor `>=4.7.0`), which exports `aggregateStrength`, `scanJson` and `AggregationRefusal`.
+
+### Conflicts resolved
+
+- `package.json`: both sides' scripts and chain steps (`test:isolation-primitives` from lane 2; `test:evaluate-aggregate`, `test:evaluate-confinement`, `test:evaluate-held-inputs` and `test:evaluate-agents` split from this story and lane 2).
+  The chain is 103 steps; the README sentence is written in digits and `test:doc-counts` holds it.
+- `test/test-evaluate-run.js`: lane 2 had split the file with a `CASES` table and `--group=run|confinement`; this story's `--group=held-inputs` joined that table (the same split this story made independently), and lane 3's two aggregate cases moved to a `--group=aggregate` of their own after a local measure put the run group near 356 seconds under coverage.
+- `cli/lib/evaluate/score.js`, `partition.js`, `interpret.js`: the held-bytes views (`readInput`) with lane 3's `strengthAggregate` pointer in both views and the summary.
+- `test/fixtures/evaluate/race-engine.js`: lane 3's aggregate modes and this story's score modes sit side by side.
+- `test/test-evaluate-boundaries.js`: both sides' plants; `aggregateStrength` is forbidden everywhere under `cli/` (lane 3) except the one call in `reproduceAggregate` below.
+- `tools/test-shard-weights.json`: both sides' entries; lane 2's `test:evaluate-confinement` 196 kept, this story's weights re-measured (see Gates).
+- `CHANGELOG.md`, `epics.md`, `test-design-epic-1.md`, `sprint-status.yaml`, `ARCHITECTURE-SPINE.md`, the reference: both sides kept.
+  The plan counts seventy-six stories (1.69 from this lane, 1.80 from lane 2), the Epic Dependencies rows are renumbered 69 to 76 and the story-count sentences read `Stories 1.27 to 1.69 and 1.80`.
+
+### The aggregate call is held
+
+Story 1.45's `aggregate-strength` call reads the evidence artifacts `score` persisted, the floors copy and the run's policy.
+It now goes through the same hold (`score-inputs.js`, `score.js`):
+
+- after the call `score` re-reads every input (the policy among them) and refuses naming the file that changed or appeared (status `mismatch`, no aggregate copied, exit 12);
+- the persisted evidence artifacts are read back through the held directory and compared with the bytes copied;
+- `reproduceAggregate` aggregates the held bytes in process with the engine's `aggregateStrength` (evidence, floors and policy each through `scanJson`, as the CLI reads them) and the staged aggregate must equal the `serializeArtifact` result byte for byte, and the call's exit must be the one the held bytes give (0, 4 for a refused set, 5 for a fault); nothing the re-score returns becomes an aggregate, a floor decision or an exit.
+- `score`'s own re-score now reads the policy through `scanJson` too (4.7.0 changed the CLI's `score` that way): a repeated key is a fault (exit 5) on both sides.
+
+The engine exports an in-process aggregate, so the restore-before-recheck rewrite of the policy is caught by the engine's own refusal of a policy its evidence does not name (the held bytes give an aggregate, the call exited 4), not only by a recorded digest.
+`test:evaluate-boundaries` allows `aggregateStrength` exactly once, as `const aggregate = this.#engine.aggregateStrength(...)` inside `reproduceAggregate`, and `aggregate` only to be declared and passed to `this.#engine.serializeArtifact`; its plants cover a call elsewhere, a second call, an unbound result, a floor decision read, a bare return and an alias.
+`checkHeldAggregate` (in `test:evaluate-held-inputs`): a clean aggregate reproduces byte for byte; a policy rewritten for the aggregate and kept is named; rewritten and restored, and made unreadable and restored, are refused for the exit; a well-formed substituted aggregate is refused for its bytes; units for a refused set (exit 4), a fault (exit 5) and a repeated policy key (exit 5).
+
+### Departures
+
+- Lane 3's case "an evidence file contradicting itself" rewrote the persisted evidence under the aggregate's read and expected the engine's exit 4 to pass through.
+  The held bytes give an aggregate, so that is a rewrite, not a set the engine refused: the case now expects exit 12, status `failed` and the reason that the evidence no longer holds the bytes the runtime wrote.
+  An exit 4 from the aggregate passes through only when the held bytes give it too; the canary-floor refusal (exit 5) does.
+- `aggregateStrength` joins the doc-claims foreign symbols; the reference's two aggregate sentences are amended.
+
+### Revert observations
+
+- The post-aggregate `changedSince` removed: 1 of 200 `test:evaluate-held-inputs` checks fail (the kept policy is not named); the aggregate exit comparison removed: 2; the byte comparison replaced by a non-empty test: 4; both held checks removed: 13; the policy read by `JSON.parse` instead of `scanJson`: 1.
+- Boundaries (of 388): the identifier rule for `aggregate` dropped: 2; the `reproduceAggregate` restriction dropped: 1; the call count dropped: 1; the `aggregate` binding name dropped: 1.
+
+### Gates
+
+Green on the last state of the tree: engine check (4.7.0), `test:evaluate-run`, `test:evaluate-aggregate`, `test:evaluate-confinement`, `test:evaluate-held-inputs`, `test:evaluate-partitions`, `test:evaluate-boundaries`, `test:evaluate-evaluators`, `test:evaluate-agents`, `test:evaluate-records`, `test:evaluate-check`, `test:evaluate-guidance`, `test:evaluate-interpret`, the rest of the `test:evaluate-*` family, `test:isolation-primitives`, `test:schema-versions`, `test:guard-publish`, `test:release-metadata`, `test:direction`, `test:shards`, `test:ci-coverage` (103 steps), `test:doc-counts`, `test:doc-count-sources`, `test:doc-claims`, `test:changelog`, `lint`, `lint:md`, `format:check`, `docs:validate-links` and `docs:build`.
+Weights from local CPU time at about 2.2 times (CI over local): `test:evaluate-run` 240, `test:evaluate-aggregate` 115, `test:evaluate-held-inputs` 75, `test:evaluate-partitions` 80; no script is near 400 seconds and the five shards balance at 666.7 seconds.
+
 ## Left undone, reported
 
 - Story 1.69 (new, end of lane 1): `run` scores each qualification attempt of a sealed-brief agent evaluator through `eval-quality score` over files it wrote a moment before (`scoreAttempt` in `run.js`), and a run that opted out of confinement lets a leftover target process rewrite them before the engine's read.

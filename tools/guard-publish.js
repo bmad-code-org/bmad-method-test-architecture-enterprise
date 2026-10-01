@@ -24,7 +24,7 @@
  * It also refuses a manifest that would ship Evaluate broken: the
  * `tea-evaluate` bin must point at a file the package carries, and
  * `eval-quality` must be an optional peer whose range admits no release older
- * than 4.6.0: 4.0.0 is the first engine carrying the target-policy export and
+ * than 4.7.0: 4.0.0 is the first engine carrying the target-policy export and
  * trial-set scoring Evaluate needs, 4.1.1 the first whose command-line adapter
  * kills the target's process group at its ceiling, 4.1.2 the first that also
  * kills it when the host dies, by `SIGKILL` included, all of which
@@ -40,10 +40,12 @@
  * ended the session after the handshake with an observation carrying how it
  * ended, which `tea-evaluate` judges instead of stopping the run, 4.5.0 the
  * first exporting `parseProbeTargetPolicy`, the parser `tea-evaluate check`
- * holds an HTTP registry entry to, and 4.6.0 the first whose command-line
+ * holds an HTTP registry entry to, 4.6.0 the first whose command-line
  * adapter carries `portFailureReason` (`launch-too-large`) on a `port-failure`
  * fault, which `tea-evaluate run` reads to skip a step whose captured value is
- * too large to launch. Optional, because npm 7 and later install a
+ * too large to launch, and 4.7.0 the first shipping `aggregate-strength`, the
+ * stage `tea-evaluate score` calls for the run-wide class strength and floor
+ * decisions. Optional, because npm 7 and later install a
  * required peer automatically and would pull the engine into every project that
  * installs TeA for its other workflows.
  *
@@ -61,7 +63,7 @@ const semver = require('semver');
 const PROJECT_ROOT = path.join(__dirname, '..');
 const EVALUATE_BIN = 'tea-evaluate';
 const ENGINE_PACKAGE = 'eval-quality';
-const ENGINE_FLOOR = '4.6.0';
+const ENGINE_FLOOR = '4.7.0';
 
 const EXPECTED_REPOSITORY = 'bmad-code-org/bmad-method-test-architecture-enterprise';
 const EXPECTED_WORKFLOW = 'Publish';

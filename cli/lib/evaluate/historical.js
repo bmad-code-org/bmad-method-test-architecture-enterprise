@@ -61,7 +61,7 @@ const { DeploymentUnreachable, isApiEntry, originKey, originTarget, sharedOrigin
 const { expectedSchemaVersion } = require('./engine');
 const { evaluateOracles, oraclesOfBehaviors } = require('./evaluator');
 const { quotedIdentifier, reportProblems, reportedRelease } = require('./release-report');
-const { WorkspaceRefusal, isDirectory, runGit, trackedTreeDigest } = require('./workspace');
+const { WorkspaceRefusal, gitAccessOf, isDirectory, runGit, trackedTreeDigest } = require('./workspace');
 
 /** The eval-quality fault a command-line adapter throws when its policy refuses a request. */
 const DENIAL_FAULT = 'forbidden-target';
@@ -366,7 +366,12 @@ async function qualifyHistoricalProbe({
     const phases = [];
     for (const { phase, revision, expected, meaning } of PHASES) {
       const workspace = workspaces[phase];
-      const { port } = await registry.createProbePort({ cwd: workspace.root, projectRoot: workspace.root, workspace: workspace.top });
+      const { port } = await registry.createProbePort({
+        cwd: workspace.root,
+        projectRoot: workspace.root,
+        workspace: workspace.top,
+        git: gitAccessOf(workspace),
+      });
       phases.push({
         phase,
         expected,
@@ -622,6 +627,7 @@ async function qualifyDeploymentProbe({
       cwd: pristine.root,
       projectRoot: pristine.root,
       workspace: pristine.top,
+      git: gitAccessOf(pristine),
       deployment: reached[revision],
     }));
   }
@@ -704,7 +710,12 @@ async function historicalRoute({ preFix, make, registry, stop, log }) {
       message: `the registry cannot launch in the pre-fix workspace at ${preFix}: ${problems.join('; ')}`,
     });
   }
-  const { port } = await registry.createProbePort({ cwd: workspace.root, projectRoot: workspace.root, workspace: workspace.top });
+  const { port } = await registry.createProbePort({
+    cwd: workspace.root,
+    projectRoot: workspace.root,
+    workspace: workspace.top,
+    git: gitAccessOf(workspace),
+  });
   log(`pre-fix workspace at ${preFix}: ${workspace.root}`);
   return { label: `historical:${preFix}`, cwd: workspace.root, port, workspace, deployment: null };
 }
@@ -717,7 +728,13 @@ async function historicalRoute({ preFix, make, registry, stop, log }) {
  * call). The trials of its arm reach the same deployment.
  */
 async function deploymentRoute({ deployment, pristine, registry, log }) {
-  const { port } = await registry.createProbePort({ cwd: pristine.root, projectRoot: pristine.root, workspace: pristine.top, deployment });
+  const { port } = await registry.createProbePort({
+    cwd: pristine.root,
+    projectRoot: pristine.root,
+    workspace: pristine.top,
+    git: gitAccessOf(pristine),
+    deployment,
+  });
   log(`pre-fix deployment of ${deployment.release}: ${Object.values(deployment.origins).join(', ')}`);
   return { label: `historical:${deployment.release}`, cwd: pristine.root, port, workspace: null, deployment };
 }

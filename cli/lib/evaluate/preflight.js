@@ -82,7 +82,7 @@ const path = require('node:path');
 const { admissionRefusal, armVerdict, referenceTo } = require('./admission');
 const { causeNote, faultRecord, hostEnvironmentPort, persistableRequest, reasonNote, runArm } = require('./arm');
 const { TEA_MANIFEST, checkEvaluation } = require('./check');
-const { layerPrefix, selectConfinement } = require('./confinement');
+const { confines, layerPrefix, selectConfinement } = require('./confinement');
 const { MANIFEST_NAME } = require('./folder');
 const { engineVersion, loadEngine } = require('./engine');
 const { runEngineStage } = require('./engine-cli');
@@ -107,6 +107,7 @@ const {
   adopterTreeState,
   cleanUpOnSignal,
   createWorkspace,
+  gitAccessOf,
   joinAsSpelled,
   makeScratchDirectory,
   realPathLoosely,
@@ -570,6 +571,7 @@ async function pipeline(
         label,
         basis,
         commit,
+        withholdHistory: confines(confinement),
         ownership: { folder, root, journal, runId: invocationId },
       });
       workspaces.push(workspace);
@@ -765,6 +767,7 @@ async function runInWorkspaces({
     cwd: pristine.root,
     projectRoot: pristine.root,
     workspace: pristine.top,
+    git: gitAccessOf(pristine),
   });
   // The adopter's tree, read again after the qualification and after the
   // legs: a change stops the run with no qualified probe written (AD-8).
@@ -1159,7 +1162,12 @@ async function mutatedRoute({ entry, pristine, make, registry, engine, stop, log
       message: `the registry cannot launch in the mutated workspace: ${targetProblems.join('; ')}`,
     });
   }
-  const { port } = await registry.createProbePort({ cwd: workspace.root, projectRoot: workspace.root, workspace: workspace.top });
+  const { port } = await registry.createProbePort({
+    cwd: workspace.root,
+    projectRoot: workspace.root,
+    workspace: workspace.top,
+    git: gitAccessOf(workspace),
+  });
   log(`mutated workspace for ${mutation.mutationId}: ${workspace.root}`);
   return { label: `mutated:${mutation.mutationId}`, cwd: workspace.root, port };
 }
@@ -1203,7 +1211,12 @@ async function qualifySeededProbe({
   }
   const directory = `qualification/${probe.probeId}`;
   log(`${file}: qualifying through ${mutationId} in ${workspace.root}`);
-  const { port: adapter } = await registry.createProbePort({ cwd: workspace.root, projectRoot: workspace.root, workspace: workspace.top });
+  const { port: adapter } = await registry.createProbePort({
+    cwd: workspace.root,
+    projectRoot: workspace.root,
+    workspace: workspace.top,
+    git: gitAccessOf(workspace),
+  });
   const armPort = hostEnvironmentPort({ port: adapter, registry });
   const runArmFor = async (phase) => {
     let arm;
