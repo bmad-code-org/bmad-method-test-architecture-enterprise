@@ -3495,6 +3495,48 @@ async function checkCommandTrialDenial() {
   );
 }
 
+/**
+ * Every case in run order with the group it belongs to. CI runs the groups as two scripts (`--group=evaluators` and
+ * `--group=records`) so no one runner carries the whole file's wall time; with no `--group` every case runs.
+ */
+const CASES = [
+  { name: 'the units', body: checkUnits, group: 'evaluators' },
+  { name: 'the direction gate', body: checkDirectionGate, group: 'evaluators' },
+  { name: 'the reference names the denial reasons', body: checkReferenceNamesDenialReasons, group: 'evaluators' },
+  { name: 'the reference qualifies the sealed-brief agent', body: checkReferenceQualifiesSealedBriefAgent, group: 'evaluators' },
+  { name: 'a denied command trial step', body: checkCommandTrialDenial, group: 'evaluators' },
+  { name: 'the bridge', body: checkBridge, group: 'evaluators' },
+  { name: 'the command evaluator row shapes', body: checkCommandRowShapes, group: 'evaluators' },
+  { name: 'command and agent calibration disagreement', body: checkCalibrationDisagreementAcrossEvaluators, group: 'evaluators' },
+  { name: 'calibration follows its evidence channel', body: checkCalibrationFollowsEvidenceChannel, group: 'evaluators' },
+  { name: 'calibration preserves a JSON channel root', body: checkCalibrationJsonRoot, group: 'evaluators' },
+  { name: 'calibration rejects an invalid captured snapshot', body: checkCalibrationSnapshotGuard, group: 'evaluators' },
+  { name: 'calibration holds the adopter tree', body: checkCalibrationHoldsAdopterTree, group: 'evaluators' },
+  { name: 'an unwitnessed quote', body: checkUnwitnessedQuote, group: 'evaluators' },
+  { name: 'evaluators outside the import contract', body: checkEvaluatorFailures, group: 'evaluators' },
+  { name: 'a hung evaluator', body: checkEvaluatorTimeout, group: 'evaluators' },
+  { name: 'the set recommendation', body: checkSetRecommendation, group: 'evaluators' },
+  { name: 'the evaluator run in place', body: checkEvaluatorInPlace, group: 'evaluators' },
+  { name: 'the evaluation layer confined', body: checkLayerWritesRefused, group: 'evaluators' },
+  { name: 'the evaluation layer held to its bytes', body: checkEvaluatorLayerHeld, group: 'evaluators' },
+  { name: 'the scratch removal', body: checkScratchRemoval, group: 'evaluators' },
+  { name: 'a signal mid-trial', body: checkSignalMidTrial, group: 'evaluators' },
+  { name: 'an oracle two behaviors declare', body: checkSharedOracle, group: 'evaluators' },
+  { name: 'the sealed-brief agent', body: checkSealedBriefAgent, group: 'evaluators' },
+  { name: 'the sealed-brief agent qualified', body: checkEvaluatorQualification, group: 'evaluators' },
+  { name: 'a qualification attempt in an unexpected state', body: checkQualificationUnexpectedState, group: 'evaluators' },
+  { name: 'an arm agrees as its lowest probe', body: checkQualificationLowestProbe, group: 'evaluators' },
+  { name: 'the other arms are not qualified', body: checkQualificationSkipsOtherArms, group: 'evaluators' },
+  { name: 'a qualification attempt holds the adopter tree', body: checkQualificationHoldsAdopterTree, group: 'evaluators' },
+  { name: 'the sealed-brief agent edges', body: checkSealedBriefAgentEdges, group: 'evaluators' },
+  { name: 'the records evaluator', body: checkRecordsEvaluator, group: 'records' },
+  { name: 'imported rubric scores calibrated', body: checkImportedRubricCalibration, group: 'records' },
+  { name: 'imported rubric scores below the minimum', body: checkImportedCalibrationBelowMinimum, group: 'records' },
+  { name: 'imported calibration changes the scoring version', body: checkImportedCalibrationChangesScoringVersion, group: 'records' },
+  { name: 'the reference names the scorer input', body: checkImportedCalibrationReferenceExample, group: 'records' },
+];
+const GROUPS = new Set(CASES.map(({ group }) => group));
+
 /** Runs one case; an exception is a failed check, so the cases after it still run and every failure is reported. */
 async function runCase(name, body) {
   try {
@@ -3504,7 +3546,20 @@ async function runCase(name, body) {
   }
 }
 
+/** The `--group=<name>` argument's value, `null` when the flag is absent, `''` when it carries no name. */
+function requestedGroup() {
+  const argument = process.argv.find((value) => value === '--group' || value.startsWith('--group='));
+  return argument === undefined ? null : argument.slice('--group='.length);
+}
+
 async function main() {
+  const group = requestedGroup();
+  if (group !== null && !GROUPS.has(group)) {
+    console.error(
+      `${colors.red}unknown --group ${JSON.stringify(group)}:${colors.reset} expected one of ${[...GROUPS].map((name) => `--group=${name}`).join(', ')}`,
+    );
+    return 2;
+  }
   try {
     // `--layer-only` runs the confined evaluation layer's case alone (Story 1.31's revert checks).
     if (process.argv.includes('--layer-only')) {
@@ -3528,40 +3583,9 @@ async function main() {
       await runCase('imported calibration changes the scoring version', checkImportedCalibrationChangesScoringVersion);
       return report();
     }
-    await runCase('the units', checkUnits);
-    await runCase('the direction gate', checkDirectionGate);
-    await runCase('the reference names the denial reasons', checkReferenceNamesDenialReasons);
-    await runCase('the reference qualifies the sealed-brief agent', checkReferenceQualifiesSealedBriefAgent);
-    await runCase('a denied command trial step', checkCommandTrialDenial);
-    await runCase('the bridge', checkBridge);
-    await runCase('the command evaluator row shapes', checkCommandRowShapes);
-    await runCase('command and agent calibration disagreement', checkCalibrationDisagreementAcrossEvaluators);
-    await runCase('calibration follows its evidence channel', checkCalibrationFollowsEvidenceChannel);
-    await runCase('calibration preserves a JSON channel root', checkCalibrationJsonRoot);
-    await runCase('calibration rejects an invalid captured snapshot', checkCalibrationSnapshotGuard);
-    await runCase('calibration holds the adopter tree', checkCalibrationHoldsAdopterTree);
-    await runCase('an unwitnessed quote', checkUnwitnessedQuote);
-    await runCase('evaluators outside the import contract', checkEvaluatorFailures);
-    await runCase('a hung evaluator', checkEvaluatorTimeout);
-    await runCase('the set recommendation', checkSetRecommendation);
-    await runCase('the evaluator run in place', checkEvaluatorInPlace);
-    await runCase('the evaluation layer confined', checkLayerWritesRefused);
-    await runCase('the evaluation layer held to its bytes', checkEvaluatorLayerHeld);
-    await runCase('the scratch removal', checkScratchRemoval);
-    await runCase('a signal mid-trial', checkSignalMidTrial);
-    await runCase('an oracle two behaviors declare', checkSharedOracle);
-    await runCase('the sealed-brief agent', checkSealedBriefAgent);
-    await runCase('the sealed-brief agent qualified', checkEvaluatorQualification);
-    await runCase('a qualification attempt in an unexpected state', checkQualificationUnexpectedState);
-    await runCase('an arm agrees as its lowest probe', checkQualificationLowestProbe);
-    await runCase('the other arms are not qualified', checkQualificationSkipsOtherArms);
-    await runCase('a qualification attempt holds the adopter tree', checkQualificationHoldsAdopterTree);
-    await runCase('the sealed-brief agent edges', checkSealedBriefAgentEdges);
-    await runCase('the records evaluator', checkRecordsEvaluator);
-    await runCase('imported rubric scores calibrated', checkImportedRubricCalibration);
-    await runCase('imported rubric scores below the minimum', checkImportedCalibrationBelowMinimum);
-    await runCase('imported calibration changes the scoring version', checkImportedCalibrationChangesScoringVersion);
-    await runCase('the reference names the scorer input', checkImportedCalibrationReferenceExample);
+    for (const { name, body, group: caseGroup } of CASES) {
+      if (group === null || caseGroup === group) await runCase(name, body);
+    }
     for (const { label, directory } of runtimeTemps) {
       const left = fs.readdirSync(directory);
       check(left.length === 0, `the ${label} project's runs left ${JSON.stringify(left)} in their temp directory`);

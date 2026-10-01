@@ -84,7 +84,7 @@ context:
 **Commands:**
 
 - `node --input-type=module -e "const m = await import('eval-quality'); if (typeof m.evaluateTarget !== 'function') process.exit(1)"` -- expected: exit 0
-- `npm run test:evaluate-evaluators && npm run test:evaluate-check && npm run test:evaluate-guidance` -- expected: green
+- `npm run test:evaluate-evaluators && npm run test:evaluate-records && npm run test:evaluate-check && npm run test:evaluate-guidance` -- expected: green
 - `npm run test:evaluate-run && npm run test:evaluate-calibration && npm run test:evaluate-workflow` -- expected: green
 - `npm run lint && npm run lint:md && npm run format:check` -- expected: green
 - `npm run docs:validate-links && npm run docs:build` -- expected: green
@@ -187,3 +187,12 @@ Each exercised once by undoing the change in the working tree and restoring it (
 
 Green on the last state of the tree: `test:evaluate-evaluators` 873 checks, `test:evaluate-check` 807, `test:evaluate-run` 543, `test:evaluate-guidance`, `test:evaluate-calibration`, `test:direction`, `test:shards`, `lint`, `lint:md`, `format:check`, `docs:validate-links`, `docs:build`.
 `tools/test-shard-weights.json` is unchanged: the added cases are one more harness run and a handful of refusals in `test:evaluate-evaluators`, a change of a few percent.
+
+### CI round (PR 272)
+
+- `chain (2/5)` hit its 15 minute `timeout-minutes` (run 36818524342). Shard 2 held `test:evaluate-evaluators`, 442 s under coverage before this story and about 629 s with it, against a stale weight of 175.
+- `test/test-evaluate-evaluators.js` takes `--group=<name>`: `records` runs the five Story 1.40 cases (127 checks) and `evaluators` runs every other case (746 checks); no flag runs all 873, and an unknown name exits 2. `package.json` chains `test:evaluate-evaluators` (`--group=evaluators`) and `test:evaluate-records` (`--group=records`), one file and one set of fixtures.
+- Each group ends with the `runtimeTemps` leftover check and `scratch.removeAll()`: a group's `runtimeTemps` hold only the projects that group made, and both groups pass it.
+- `tools/test-shard-weights.json` is refreshed from the CI timings of this run's shards 1, 3, 4 and 5 and the previous green run's shard 2. Local times of 68.5 s (`records`) and 294.3 s (`evaluators`) scaled to the 629 s CI figure give 118.8 and 510.2. The five shards sum to 580.1 or 580.2 s by the weights, and the evaluators script shares its shard with 69.9 s of other weight.
+- Revert: removing `test:evaluate-records` from the `test` chain fails `test:ci-coverage` (the script is neither run in CI nor deliberately local) and `test:shards` (the weights name a script the chain no longer calls).
+- `README.md` reads ninety-eight chain checks.

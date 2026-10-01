@@ -171,6 +171,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The `test:evaluate-evaluators` suite splits into `test:evaluate-evaluators` and `test:evaluate-records`, two groups of `test/test-evaluate-evaluators.js`, both chained into `npm test`, and the shard weights are refreshed from CI timings so no chain shard nears its 15 minute timeout.
 - The pre-commit hook stays under 30 seconds.
   It runs `lint-staged` on the staged files, `test:conflict-markers`, `test:release-metadata` and `test:changelog`, and `docs:validate-links` when `docs/` is staged.
   The full `npm test` chain and `docs:build` no longer run on commit; CI runs them in `quality.yaml` (the five-shard chain, `docs:build`, `format:check`, `lint` and `lint:md`), and `npm test` remains available locally.

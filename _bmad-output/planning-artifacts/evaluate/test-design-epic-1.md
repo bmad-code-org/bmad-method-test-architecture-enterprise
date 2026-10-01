@@ -696,7 +696,7 @@ Amended 2026-10-01 in Story 1.39: the units also hold that only `portFailureReas
 
 ### Story 1.40: Calibrate rubric scores imported from harness records
 
-Added 2026-09-26 in Story 1.21. Levels: integration over real eval-quality, contract. Files: `test/test-evaluate-evaluators.js` (`test:evaluate-evaluators`), `test/test-evaluate-check.js` (`test:evaluate-check`).
+Added 2026-09-26 in Story 1.21. Levels: integration over real eval-quality, contract. Files: `test/test-evaluate-evaluators.js` (`test:evaluate-records`), `test/test-evaluate-check.js` (`test:evaluate-check`).
 
 | AC                                                     | Test                                                                                                                         | Level                              | P   | Revert check                                                    |
 | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | --- | --------------------------------------------------------------- |
@@ -707,6 +707,8 @@ Added 2026-09-26 in Story 1.21. Levels: integration over real eval-quality, cont
 
 Amended 2026-10-01 in Story 1.40: the binding row's Level is Integration over real eval-quality, where the plan named Contract, because the scoring version moves only when a harness over real eval-quality records another configuration.
 Its revert check is that dropping either binding check admits a configuration without it, and the missing or wrong binding case exits 0.
+
+Amended 2026-10-01 in Story 1.40: the records cases run as test:evaluate-records, a group of the same test file, so the shard holding the evaluators script stays under the job timeout.
 
 ### Story 1.41: Confine score output during concurrent run-directory changes
 

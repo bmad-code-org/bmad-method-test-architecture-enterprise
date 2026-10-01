@@ -1235,15 +1235,17 @@ So that its sealed records count only after its rubric judgments meet the agreem
 
 **Given** a `records` evaluator, a rubric, and labelled calibration items covering every criterion and anchored level
 **When** `tea-evaluate run` prepares to import trial records
-**Then** the harness supplies verifiable calibration judgments produced by the same scorer configuration and path that produced its trial scores, without sending `expectedLevel` to that scorer; the runtime validates the provenance and reports exact agreement and largest level distance per criterion in `runs/<invocationId>/judge-calibration.json`, a `test:evaluate-evaluators` integration case; accepting a report with a different scorer configuration or with labels in scorer input fails the case
-**And** agreement below `judgeCalibration.minimumAgreement` exits 11 before any imported trial record is copied or scored, a `test:evaluate-evaluators` case; removing the gate lets the case write a record
-**And** the calibration file digest and minimum agreement are bound to the imported `EvaluatorConfiguration` and scoring version, a `test:evaluate-evaluators` case; dropping either binding check admits a configuration without it, and the missing or wrong binding case exits 0
+**Then** the harness supplies verifiable calibration judgments produced by the same scorer configuration and path that produced its trial scores, without sending `expectedLevel` to that scorer; the runtime validates the provenance and reports exact agreement and largest level distance per criterion in `runs/<invocationId>/judge-calibration.json`, a `test:evaluate-records` integration case; accepting a report with a different scorer configuration or with labels in scorer input fails the case
+**And** agreement below `judgeCalibration.minimumAgreement` exits 11 before any imported trial record is copied or scored, a `test:evaluate-records` case; removing the gate lets the case write a record
+**And** the calibration file digest and minimum agreement are bound to the imported `EvaluatorConfiguration` and scoring version, a `test:evaluate-records` case; dropping either binding check admits a configuration without it, and the missing or wrong binding case exits 0
 **And** a `records` evaluator without a rubric still imports and scores through its existing path, while `check` refuses rubric records whose calibration provenance is absent or unverifiable, a `test:evaluate-check` case; bypassing the refusal accepts an uncalibrated rubric
 
 **Dependencies:** 1.17, 1.21.
 **Gate:** `npm test`, `npm run test:release-metadata`, engine check.
 
 (Amended 2026-10-01 in Story 1.40: the harness writes the judgments as `<records>/calibration-judgments.json`, `{ schemaVersion, scorerConfigurationDigest, items: [{ rubricId, criterionId, scorerInput, answer }] }`, one item per labelled item in the labelled file's order. `scorerInput` is compared whole with the label-free observation the runtime derives from the item, and `scorerConfigurationDigest` is `digestArtifact` over the imported configuration without its two `tea.judgeCalibration*` keys, since the full configuration's digest covers the labelled file's digest. `check` and `run` verify with one function; the verification is exit 10 and the gate is exit 11. A harness that needs proof its scorer ran uses a `command` evaluator.)
+
+(Amended 2026-10-01 in Story 1.40: the records cases run as test:evaluate-records, a group of the same test file, so the shard holding the evaluators script stays under the job timeout.)
 
 ### Story 1.41: Confine score output during concurrent run-directory changes
 
