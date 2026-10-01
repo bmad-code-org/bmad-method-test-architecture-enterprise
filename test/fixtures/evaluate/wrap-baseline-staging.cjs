@@ -11,11 +11,17 @@
  * makes the rename of the finished staging directory into place throw, after the old
  * baseline was moved aside. `TEA_BASELINE_FAIL=strand` makes that rename fail and then the rename
  * that puts the old baseline back fail too, which leaves `baseline/` absent and the old one retired.
+ * `TEA_BASELINE_FAIL=kill` makes the process SIGKILL itself while staging, after
+ * `TEA_BASELINE_FAIL_AFTER` files, so no cleanup runs. `TEA_BASELINE_FAIL=probe` runs a plain
+ * `compare` (the arguments in `TEA_BASELINE_PROBE_ARGS`, a JSON array; its status and output
+ * written to the JSON file `TEA_BASELINE_PROBE_OUT`) at the moment between the two renames, when
+ * `baseline/` is absent and the old one is retired, then lets the swap finish.
  */
 
 'use strict';
 
 const fs = require('node:fs');
+const { spawnSync } = require('node:child_process');
 
 const mode = process.env.TEA_BASELINE_FAIL;
 const allowed = Number(process.env.TEA_BASELINE_FAIL_AFTER ?? '3');
@@ -23,13 +29,16 @@ const inStaging = (file) => String(file).includes('.compare-staging/staging-');
 const inRetired = (file) => String(file).includes('.compare-staging/retired-');
 const refusal = () => Object.assign(new Error('ENOSPC: no space left on device (injected by the test)'), { code: 'ENOSPC' });
 
-if (mode === 'write') {
+if (mode === 'write' || mode === 'kill') {
   const write = fs.writeFileSync;
   let written = 0;
   fs.writeFileSync = function writeFileSync(file, ...rest) {
     if (inStaging(file)) {
       written += 1;
-      if (written > allowed) throw refusal();
+      if (written > allowed) {
+        if (mode === 'kill') process.kill(process.pid, 'SIGKILL');
+        throw refusal();
+      }
     }
     return write.call(this, file, ...rest);
   };
@@ -39,5 +48,21 @@ if (mode === 'rename' || mode === 'strand') {
   fs.renameSync = function renameSync(from, to) {
     if (inStaging(from) || (mode === 'strand' && inRetired(from))) throw refusal();
     return rename.call(this, from, to);
+  };
+}
+if (mode === 'probe') {
+  const rename = fs.renameSync;
+  fs.renameSync = function renameSync(from, to) {
+    const result = rename.call(this, from, to);
+    if (inRetired(to)) {
+      const folder = process.argv[process.argv.indexOf('--evaluation') + 1];
+      const probe = spawnSync(
+        process.execPath,
+        [process.argv[1], 'compare', '--evaluation', folder, ...JSON.parse(process.env.TEA_BASELINE_PROBE_ARGS)],
+        { encoding: 'utf8' },
+      );
+      fs.writeFileSync(process.env.TEA_BASELINE_PROBE_OUT, JSON.stringify({ status: probe.status, output: `${probe.stdout}${probe.stderr}` }));
+    }
+    return result;
   };
 }

@@ -9,7 +9,8 @@
  *  - the `evalQualityVersion`-only refusal (a relation without TeA's refusal),
  *  - the replay of an accepted baseline without its isolation manifests (exit 3),
  *  - the dirty refusal (an accepted dirty run writes `baseline/`),
- *  - staging inside the committed folder (a stale staging directory makes the next run dirty),
+ *  - staging inside the committed folder (an accept killed mid-staging makes the next run dirty),
+ *  - a plain compare that restores or deletes (an accept running at the same time loses both baselines),
  *  - the input checks `score` runs (an edited sealed record is accepted),
  *  - the directory-link check (a linked `trials/` directory is followed).
  */
@@ -114,6 +115,7 @@ function leftovers(folder) {
   return [
     ...fs.readdirSync(folder).filter((name) => name.startsWith('.baseline-')),
     ...(fs.existsSync(scratch) ? fs.readdirSync(scratch) : []),
+    ...fs.readdirSync(path.join(folder, 'runs')).filter((name) => name.startsWith('.compare-staging.lock')),
   ];
 }
 
@@ -286,16 +288,24 @@ async function main() {
       assert.match(replayed.output, /isolation manifest .* is absent/);
     }
 
-    // A staging directory an interrupted accept left behind sits under the gitignored runs/, so the next run is not dirty.
-    const stale = path.join(project.folder, 'runs', '.compare-staging', 'staging-stale');
-    fs.mkdirSync(stale, { recursive: true });
-    fs.writeFileSync(path.join(stale, 'run.json'), '{"command":"run"}\n');
+    // An accept killed while staging (SIGKILL, so no cleanup runs) leaves its staging directory and lock under the
+    // gitignored runs/, so the next run is not dirty. The accept re-records the same run: the baseline is unchanged.
+    {
+      const before = treeOf(baseline);
+      const killed = wrapped(project.folder, 'kill', {}, ['--accept', '--run', firstId]);
+      assert.equal(killed.status, null, `the accept was not killed: ${killed.output}`);
+      assert.ok(
+        leftovers(project.folder).some((name) => name.startsWith('staging-')),
+        'the killed accept left no staging directory',
+      );
+      assert.deepEqual(treeOf(baseline), before);
+    }
 
     // Compare with equal keys: a second run over one probe set compares to the engine's own relation.
     const second = runAndScore(project);
     const secondId = path.basename(second);
     assert.notEqual(secondId, firstId);
-    assert.equal(read(path.join(second, 'run.json')).dirty, false, 'a stale staging directory made the next run dirty');
+    assert.equal(read(path.join(second, 'run.json')).dirty, false, 'a killed accept made the next run dirty');
     {
       const { compareDominance } = engine;
       const floor = read(path.join(second, 'scoring-policy.json')).severityFloor;
@@ -311,10 +321,15 @@ async function main() {
           `${probeId}: not the engine's relation\n${result.output}`,
         );
       }
-      // The command compares and writes nothing to baseline/, and settles what the interrupted accept left.
+      // The command compares and writes nothing: what the killed accept left is still there.
       assert.deepEqual(treeOf(baseline), treeOf(path.join(project.folder, 'baseline')));
-      assert.equal(fs.existsSync(stale), false, 'compare did not remove the stale staging directory');
+      assert.ok(leftovers(project.folder).length > 0, 'a plain compare deleted what the killed accept left');
+      // The next accept takes over the dead holder's lock and deletes the stale staging directory.
+      const before = treeOf(baseline);
+      result = test.cli(project.folder, 'compare', ['--accept', '--run', firstId]);
+      assert.equal(result.status, 0, result.output);
       assert.deepEqual(leftovers(project.folder), []);
+      assert.deepEqual(treeOf(baseline), before);
     }
 
     // Revert check: a run that differs from the baseline only in evalQualityVersion is refused, never given a relation.
@@ -569,6 +584,78 @@ async function main() {
       assert.deepEqual(treeOf(path.join(folder, 'baseline')), before);
     }
 
+    // A directory above an evidence artifact that is a link is followed by no read, in a plain compare as in an accept.
+    {
+      const folder = copyOf(project);
+      const runDirectory = path.join(folder, 'runs', secondId);
+      const probeDirectory = path.join(runDirectory, 'scores', latestScore(runDirectory), 'P-001');
+      const outside = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'tea-evaluate-compare-outside-'));
+      copies.push(outside);
+      fs.renameSync(probeDirectory, path.join(outside, 'P-001'));
+      fs.symlinkSync(path.join(outside, 'P-001'), probeDirectory);
+      result = test.cli(folder, 'compare', ['--run', secondId]);
+      assert.equal(result.status, 10, result.output);
+      assert.match(result.output, /scores\/.*\/P-001: \[evidence\] is a link or a file where a directory is required/);
+      assert.doesNotMatch(result.output, /compared: |refused: |first-run: /);
+    }
+
+    // The latest score.json must be the record of this run's invocation, and an object.
+    for (const [label, edit, expected] of [
+      [
+        'another run',
+        (value) => ({ ...value, run: 'some-other-run' }),
+        /score\.json: \[score-record\] names run "some-other-run".*score the run again/,
+      ],
+      [
+        'another invocation',
+        (value) => ({ ...value, invocationId: 'some-other-invocation' }),
+        /\[score-record\] names score invocation "some-other-invocation"/,
+      ],
+      ['null', () => null, /\[score-record\] does not hold a JSON object/],
+    ]) {
+      const folder = copyOf(project);
+      const runDirectory = path.join(folder, 'runs', secondId);
+      const file = path.join(runDirectory, 'scores', latestScore(runDirectory), 'score.json');
+      writeJson(file, edit(read(file)));
+      const before = treeOf(path.join(folder, 'baseline'));
+      result = test.cli(folder, 'compare', ['--accept', '--run', secondId]);
+      assert.equal(result.status, 10, `${label}: ${result.output}`);
+      assert.match(result.output, expected, label);
+      assert.deepEqual(treeOf(path.join(folder, 'baseline')), before, label);
+    }
+
+    // score's own input checks run over the run: an index off its schema, and an operation phase snapshot that disagrees
+    // with the contract (a snapshot sealed that way, so every digest still matches and only the phase check can see it).
+    {
+      const folder = copyOf(project);
+      const indexFile = path.join(folder, 'runs', secondId, 'trial-sets.json');
+      const index = read(indexFile);
+      delete index.corpusDigest;
+      writeJson(indexFile, index);
+      result = test.cli(folder, 'compare', ['--accept', '--run', secondId]);
+      assert.equal(result.status, 10, result.output);
+      assert.match(result.output, /trial-sets\.json: \[schema\] .*corpusDigest/);
+    }
+    {
+      const folder = copyOf(project);
+      const runDirectory = path.join(folder, 'runs', secondId);
+      const phasesFile = path.join(runDirectory, 'operation-phases.json');
+      const phases = read(phasesFile);
+      phases['undeclared-operation'] = 'process';
+      writeJson(phasesFile, phases);
+      const record = read(path.join(runDirectory, 'run.json'));
+      writeJson(path.join(runDirectory, 'run.json'), {
+        ...record,
+        operationPhases: phases,
+        artifacts: { ...record.artifacts, operationPhases: engine.digestBytes(fs.readFileSync(phasesFile)) },
+      });
+      const before = treeOf(path.join(folder, 'baseline'));
+      result = test.cli(folder, 'compare', ['--accept', '--run', secondId]);
+      assert.equal(result.status, 10, result.output);
+      assert.match(result.output, /run\.json: \[operation-phases\] run\.json classifies undeclared operation undeclared-operation/);
+      assert.deepEqual(treeOf(path.join(folder, 'baseline')), before);
+    }
+
     // An actions artifact whose bytes differ from the digest its record names is not copied.
     {
       const folder = copyOf(project);
@@ -583,47 +670,111 @@ async function main() {
       assert.deepEqual(treeOf(path.join(folder, 'baseline')), before);
     }
 
-    // An accept interrupted between its two renames leaves baseline/ absent and the old one retired: compare puts it back.
+    // An accept interrupted between its two renames leaves baseline/ absent and the old one retired. A plain compare is
+    // read-only: it exits 10 naming the retired copy and deletes nothing.
     {
       const folder = copyOf(project);
-      const before = treeOf(path.join(folder, 'baseline'));
       const scratch = path.join(folder, 'runs', '.compare-staging');
-      fs.mkdirSync(scratch, { recursive: true });
-      fs.renameSync(path.join(folder, 'baseline'), path.join(scratch, 'retired-cafe0001'));
-      fs.mkdirSync(path.join(scratch, 'staging-dead0002'));
+      fs.mkdirSync(path.join(scratch, 'staging-dead0002'), { recursive: true });
       fs.writeFileSync(path.join(scratch, 'staging-dead0002', 'half-written.json'), '{');
+      fs.renameSync(path.join(folder, 'baseline'), path.join(scratch, 'retired-cafe0001'));
+      const before = treeOf(scratch);
       result = test.cli(folder, 'compare', ['--run', secondId]);
-      assert.equal(result.status, 0, result.output);
-      assert.match(result.output, /compared: 2 probe\(s\)/);
-      assert.doesNotMatch(result.output, /first-run: /);
-      assert.deepEqual(treeOf(path.join(folder, 'baseline')), before);
+      assert.equal(result.status, 10, result.output);
+      assert.match(result.output, /runs\/\.compare-staging\/retired-cafe0001: \[interrupted-accept\]/);
+      assert.match(result.output, /compare --accept restores it/);
+      assert.doesNotMatch(result.output, /compared: |refused: |first-run: /);
+      assert.deepEqual(treeOf(scratch), before, 'a plain compare changed what the interrupted accept left');
+      assert.equal(fs.existsSync(path.join(folder, 'baseline')), false);
+      // The next accept restores it first: even one that is then refused leaves the old baseline in place and the scratch empty.
+      const runDirectory = path.join(folder, 'runs', secondId);
+      fs.rmSync(path.join(runDirectory, 'scores', latestScore(runDirectory), 'P-002', 'evidence-artifact.json'));
+      result = test.cli(folder, 'compare', ['--accept', '--run', secondId]);
+      assert.equal(result.status, 10, result.output);
+      assert.deepEqual(
+        filesOf(path.join(folder, 'baseline')),
+        filesOf(path.join(project.folder, 'baseline')),
+        'the retired baseline was not put back',
+      );
       assert.deepEqual(leftovers(folder), []);
     }
-    // The same state with the put-back failing reports where the old baseline really is.
+    // A put-back that fails reports where the old baseline really is.
     {
       const folder = copyOf(project);
       const scratch = path.join(folder, 'runs', '.compare-staging');
       fs.mkdirSync(scratch, { recursive: true });
       fs.renameSync(path.join(folder, 'baseline'), path.join(scratch, 'retired-cafe0001'));
-      const failed = wrapped(folder, 'strand', {}, ['--run', secondId]);
+      const failed = wrapped(folder, 'strand', {}, ['--accept', '--run', secondId]);
       assert.equal(failed.status, 12, failed.output);
       assert.match(failed.output, /baseline\/ is absent: an earlier accept stopped.*runs\/\.compare-staging\/retired-cafe0001.*by hand/);
       assert.doesNotMatch(failed.output, /is as it was/);
       assert.deepEqual(fs.readdirSync(scratch), ['retired-cafe0001']);
+      assert.deepEqual(
+        leftovers(folder).filter((name) => name.includes('lock')),
+        [],
+        'the failed accept kept its lock',
+      );
     }
-    // A swap whose put-back fails too says baseline/ is absent and where the old one lies; the next compare restores it.
+    // A swap whose put-back fails too says baseline/ is absent and where the old one lies; the next accept restores it.
     {
       const folder = copyOf(project);
-      const before = treeOf(path.join(folder, 'baseline'));
       const failed = wrapped(folder, 'strand');
       assert.equal(failed.status, 12, failed.output);
       assert.match(failed.output, /baseline\/ is absent and the previous baseline lies at runs\/\.compare-staging\/retired-/);
+      assert.match(failed.output, /the next compare --accept puts it back/);
       assert.doesNotMatch(failed.output, /is as it was/);
       assert.equal(fs.existsSync(path.join(folder, 'baseline')), false);
+      result = test.cli(folder, 'compare', ['--accept', '--run', secondId]);
+      assert.equal(result.status, 0, result.output);
+      assert.equal(read(path.join(folder, 'baseline', 'baseline.json')).acceptedRun, secondId);
+      assert.deepEqual(leftovers(folder), []);
+    }
+    // A plain compare that runs between the two renames of an accept finds baseline/ absent: it exits 10 and deletes nothing,
+    // so the accept's swap completes and its message is true. A compare that restored or deleted would remove both copies.
+    {
+      const folder = copyOf(project);
+      const out = path.join(path.dirname(folder), 'probe.json');
+      const accepted = wrapped(
+        folder,
+        'probe',
+        { TEA_BASELINE_PROBE_ARGS: JSON.stringify(['--run', secondId]), TEA_BASELINE_PROBE_OUT: out },
+        ['--accept', '--run', secondId],
+      );
+      assert.equal(accepted.status, 0, accepted.output);
+      assert.match(accepted.output, /accepted: run /);
+      const probe = read(out);
+      assert.equal(probe.status, 10, probe.output);
+      assert.match(probe.output, /runs\/\.compare-staging\/retired-.*\[interrupted-accept\]/);
+      assert.equal(read(path.join(folder, 'baseline', 'baseline.json')).acceptedRun, secondId);
+      assert.deepEqual(leftovers(folder), []);
+      result = test.cli(folder, 'check');
+      assert.equal(result.status, 0, result.output);
+    }
+    // A second accept while a live process holds the lock exits 12 naming the holder and changes nothing.
+    {
+      const folder = copyOf(project);
+      const lock = path.join(folder, 'runs', '.compare-staging.lock');
+      fs.mkdirSync(lock);
+      fs.writeFileSync(path.join(lock, 'pid'), `${process.pid}\n`);
+      const before = treeOf(path.join(folder, 'baseline'));
+      result = test.cli(folder, 'compare', ['--accept', '--run', secondId]);
+      assert.equal(result.status, 12, result.output);
+      assert.match(result.output, new RegExp(`holds runs/\\.compare-staging\\.lock \\(pid ${process.pid}\\)`));
+      assert.deepEqual(treeOf(path.join(folder, 'baseline')), before);
+      assert.equal(fs.existsSync(lock), true, "the refused accept removed the other holder's lock");
+      // A plain compare does not take the lock.
       result = test.cli(folder, 'compare', ['--run', secondId]);
       assert.equal(result.status, 0, result.output);
-      assert.match(result.output, /compared: /);
-      assert.deepEqual(treeOf(path.join(folder, 'baseline')), before);
+    }
+    // A lock whose holder is gone is taken over.
+    {
+      const folder = copyOf(project);
+      const lock = path.join(folder, 'runs', '.compare-staging.lock');
+      fs.mkdirSync(lock);
+      fs.writeFileSync(path.join(lock, 'pid'), `${spawnSync(process.execPath, ['-e', '']).pid}\n`);
+      result = test.cli(folder, 'compare', ['--accept', '--run', secondId]);
+      assert.equal(result.status, 0, result.output);
+      assert.equal(read(path.join(folder, 'baseline', 'baseline.json')).acceptedRun, secondId);
       assert.deepEqual(leftovers(folder), []);
     }
 

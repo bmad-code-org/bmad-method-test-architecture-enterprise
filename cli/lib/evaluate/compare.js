@@ -71,9 +71,15 @@
  * evaluation folder, so an interrupted accept leaves no untracked entry there
  * for the next `run` to record as `dirty: true`. An accept interrupted between
  * its two renames leaves `baseline/` absent and the previous one under
- * `runs/.compare-staging/retired-*`: the start of every `compare` and
- * `compare --accept` puts a retired baseline back when `baseline/` is absent,
- * then deletes any stale staging or retired directory.
+ * `runs/.compare-staging/retired-*`. Plain `compare` is strictly read-only and
+ * never restores or deletes: with `baseline/` absent and a retired copy present
+ * it exits 10 naming the copy. `compare --accept` is the only writer. It holds
+ * an exclusive lock (`runs/.compare-staging.lock`, a directory made atomically
+ * and holding the holder's pid; a stale pid is taken over, a live holder makes
+ * a second accept exit 12) for its whole sequence: it puts a retired baseline
+ * back when `baseline/` is absent (a failed restore exits 12 naming where the
+ * old baseline lies), deletes stale staging and retired directories, then
+ * stages, swaps and cleans up.
  *
  * The members are the files a replay through `score` reads, taken from the run
  * directory by name: `run.json`, `trial-sets.json`, `contract.json`,
@@ -127,6 +133,11 @@ const BASELINE = 'baseline';
 const BASELINE_MANIFEST = 'baseline.json';
 /** Under `runs/`, which `run` keeps out of the adopter's commits: an interrupted accept leaves nothing there for git to see. */
 const SCRATCH = ['runs', '.compare-staging'];
+/** The directory an accept holds, with the holder's pid in it, from recovery through cleanup; `mkdir` is the atomic claim. */
+const LOCK = ['runs', '.compare-staging.lock'];
+const LOCK_PID = 'pid';
+/** A lock directory with no readable pid is a holder still writing it for this long, then a stale one. */
+const LOCK_GRACE_MS = 60_000;
 const STAGING_PREFIX = 'staging-';
 const RETIRED_PREFIX = 'retired-';
 /** What a score invocation's own exit may be for the run to become a baseline: success, FAIL (a weak result) and Invalid. */
@@ -512,6 +523,23 @@ async function compareWithBaseline({ folder, resolved, validate }) {
   const baselinePath = path.join(folder, BASELINE);
   const baselineStats = lstatOrNull(baselinePath);
   if (baselineStats === null) {
+    // A retired baseline with no `baseline/` is an accept that stopped between its renames or is running now; plain
+    // compare reads and deletes nothing, so it names the copy and leaves the recovery to `compare --accept`.
+    const retired = retiredBaselines(folder);
+    if (retired.length > 0) {
+      return new CompareOutcome({
+        exitCode: AUTHORING,
+        runDirectory,
+        findings: retired.map((entry) =>
+          finding(
+            entry,
+            'interrupted-accept',
+            `holds the previous baseline, and ${BASELINE}/ is absent: an accept stopped between its two renames, or is still running; tea-evaluate compare --accept restores it once no accept is running`,
+          ),
+        ),
+        message: `${BASELINE}/ is absent while a retired baseline exists; nothing was compared, written or deleted`,
+      });
+    }
     return new CompareOutcome({
       status: 'first-run',
       exitCode: OK,
@@ -887,11 +915,106 @@ function swap(folder, staging, log) {
   }
 }
 
+/** The `retired-*` entries under `runs/.compare-staging/`, relative to the folder; read only, nothing is touched. */
+function retiredBaselines(folder) {
+  const scratch = scratchDirectory(folder);
+  const stats = lstatOrNull(scratch);
+  if (stats === null || !stats.isDirectory()) return [];
+  return fs
+    .readdirSync(scratch)
+    .filter((name) => name.startsWith(RETIRED_PREFIX))
+    .sort()
+    .map((name) => `${inFolder(folder, scratch)}/${name}`);
+}
+
+function pidAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error.code === 'EPERM';
+  }
+}
+
+/** Who holds the lock directory: its pid when it names one, and whether that holder is still running. */
+function lockHolder(lock) {
+  let pid = null;
+  try {
+    const parsed = Number.parseInt(regularFileBytes(path.join(lock, LOCK_PID)).toString('utf8'), 10);
+    if (Number.isInteger(parsed) && parsed > 0) pid = parsed;
+  } catch {
+    // No readable pid: the holder may still be writing it.
+  }
+  if (pid !== null) return { pid, live: pidAlive(pid) };
+  const stats = lstatOrNull(lock);
+  return { pid: null, live: stats !== null && Date.now() - stats.mtimeMs < LOCK_GRACE_MS };
+}
+
+/**
+ * The exclusive lock an accept holds for its whole sequence: recovery, staging, the swap and cleanup. `mkdir` of
+ * `runs/.compare-staging.lock` is the atomic claim and a `pid` file names the holder. A lock whose pid is no longer
+ * running is taken over: it is renamed aside (one taker wins the rename), checked to be the stale holder it was read as,
+ * and removed. A live holder returns `problem`, the words for exit 12.
+ *
+ * @returns {{lock: string} | {problem: string}}
+ */
+function acquireLock(folder) {
+  const lock = path.join(folder, ...LOCK);
+  const where = inFolder(folder, lock);
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      fs.mkdirSync(lock, { mode: 0o755 });
+      try {
+        fs.writeFileSync(path.join(lock, LOCK_PID), `${process.pid}\n`, { flag: 'wx', mode: 0o644 });
+      } catch (error) {
+        fs.rmSync(lock, { recursive: true, force: true });
+        throw error;
+      }
+      return { lock };
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+    }
+    const holder = lockHolder(lock);
+    const named = holder.pid === null ? 'another accept that has not yet recorded its pid' : `pid ${holder.pid}`;
+    const held = { problem: `another tea-evaluate compare --accept holds ${where} (${named}); wait for it, then run this accept again` };
+    if (holder.live) return held;
+    const aside = `${lock}-stale-${crypto.randomBytes(4).toString('hex')}`;
+    try {
+      fs.renameSync(lock, aside);
+    } catch (error) {
+      if (error.code === 'ENOENT') continue;
+      throw error;
+    }
+    const taken = lockHolder(aside);
+    if (taken.pid !== holder.pid) {
+      // A new holder claimed the lock between the read and the rename: give it back.
+      try {
+        fs.renameSync(aside, lock);
+      } catch {
+        fs.rmSync(aside, { recursive: true, force: true });
+      }
+      return held;
+    }
+    fs.rmSync(aside, { recursive: true, force: true });
+  }
+  return { problem: `${where} could not be claimed; run this accept again` };
+}
+
+/** Gives the lock up, when this process still holds it. */
+function releaseLock(lock) {
+  try {
+    if (lockHolder(lock).pid === process.pid) fs.rmSync(lock, { recursive: true, force: true });
+  } catch {
+    // A lock that cannot be removed names this process's pid; the next accept sees a dead holder and takes it over.
+  }
+}
+
 /**
  * The state an interrupted accept can leave under `runs/.compare-staging/`,
- * settled at the start of every `compare` and `compare --accept`: a retired
- * baseline is put back when `baseline/` is absent (the accept stopped between
- * its two renames), then every stale staging or retired directory is deleted.
+ * settled by `compare --accept` while it holds the lock: a retired baseline is
+ * put back when `baseline/` is absent (the accept stopped between its two
+ * renames), then every stale staging or retired directory is deleted. Plain
+ * `compare` never calls this: it reads and deletes nothing.
  * Returns null, or the words that say what state the folder is really in when
  * the baseline could not be put back.
  */
@@ -979,7 +1102,7 @@ async function acceptBaseline({ folder, resolved, validate, log }) {
       exitCode: INFRASTRUCTURE,
       runDirectory,
       message: stranded
-        ? `the baseline could not be written (${readProblem(error)}); ${BASELINE}/ is absent and the previous baseline lies at ${inFolder(folder, error.retired)}; the next compare puts it back, or move it back by hand`
+        ? `the baseline could not be written (${readProblem(error)}); ${BASELINE}/ is absent and the previous baseline lies at ${inFolder(folder, error.retired)}; the next compare --accept puts it back, or move it back by hand`
         : `the baseline could not be written (${readProblem(error)}); the staging directory is removed and ${BASELINE}/ is as it was`,
     });
   }
@@ -1007,19 +1130,32 @@ async function acceptBaseline({ folder, resolved, validate, log }) {
  * @returns {Promise<CompareOutcome>}
  */
 async function runCompareCommand(folder, { run: invocationId, accept = false, log = () => {} } = {}) {
-  let problem;
+  let lock = null;
   try {
-    problem = recoverBaseline(folder, log);
+    // Only an accept writes, so only an accept takes the lock; a plain compare reads and deletes nothing.
+    const runs = lstatOrNull(path.join(folder, 'runs'));
+    if (accept && runs?.isDirectory()) {
+      const held = acquireLock(folder);
+      if (held.problem !== undefined) return new CompareOutcome({ exitCode: INFRASTRUCTURE, message: held.problem });
+      lock = held.lock;
+      const problem = recoverBaseline(folder, log);
+      if (problem !== null) return new CompareOutcome({ exitCode: INFRASTRUCTURE, message: problem });
+    }
+    const resolved = resolveScoredRun(folder, invocationId);
+    if (resolved.wiring !== undefined || resolved.findings !== undefined) return stopped(resolved);
+    log(`${accept ? 'accepting' : 'comparing'} run ${path.basename(resolved.runDirectory)}`);
+    const validate = createArtifactValidator();
+    if (accept) return await acceptBaseline({ folder, resolved, validate, log });
+    return await compareWithBaseline({ folder, resolved, validate });
   } catch (error) {
-    problem = `the state an interrupted accept left under ${SCRATCH.join('/')}/ could not be settled (${readProblem(error)})`;
+    if (lock === null) throw error;
+    return new CompareOutcome({
+      exitCode: INFRASTRUCTURE,
+      message: `compare --accept stopped on an unexpected error (${readProblem(error)}); ${BASELINE}/ and ${SCRATCH.join('/')}/ are as the failure left them`,
+    });
+  } finally {
+    if (lock !== null) releaseLock(lock);
   }
-  if (problem !== null) return new CompareOutcome({ exitCode: INFRASTRUCTURE, message: problem });
-  const resolved = resolveScoredRun(folder, invocationId);
-  if (resolved.wiring !== undefined || resolved.findings !== undefined) return stopped(resolved);
-  log(`${accept ? 'accepting' : 'comparing'} run ${path.basename(resolved.runDirectory)}`);
-  const validate = createArtifactValidator();
-  if (accept) return acceptBaseline({ folder, resolved, validate, log });
-  return compareWithBaseline({ folder, resolved, validate });
 }
 
 module.exports = {
