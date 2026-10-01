@@ -209,3 +209,15 @@ None: every valid item is fixed.
 ### Gates
 
 Green on the last state of the tree: `test:evaluate-promptfoo` 165 checks, `test:evaluate-guidance`, `test:evaluate-learned-framework`, `test:evaluate-check`, `test:shards`, `test:ci-coverage`, `test:doc-counts`, `test:doc-claims`, `test:changelog`, `lint`, `lint:md`, `format:check` (recorded after the run below).
+
+## Review round 2
+
+One Opus regression review of `8aab822c` and the merge with `origin/main` found two documentation defects, both fixed: the facts file and the Departures text gave one error shape to two different cases (a failing inline `transform` and a `file://` JavaScript value that throws at load), and the Left undone bullet kept the pre-merge story counts.
+The record and the sprint row are set to `done` in this pull request.
+
+### Shard weights
+
+The first green CI run on the final tree put chain shard 1 at 773 seconds of the 900 second job cap (14m24) and shard 2 at 467 seconds.
+Nine weights in `tools/test-shard-weights.json` had drifted from the CI measures under coverage, so the partition was uneven: `test:doc-invocations` 179.5 to 126.3, `test:evaluate-boundaries` 34.6 to 43.2, `test:evaluate-calibration` 37.2 to 49.6, `test:evaluate-compare` 75 to 53.2, `test:evaluate-evaluators` 262 to 177.2, `test:evaluate-partitions` 80 to 46.8, `test:evaluate-records` 120.8 to 143, `test:evaluate-run` 240 to 198.5, `test:probe-targets` 44.7 to 28.8.
+Re-partitioning with those weights predicts shard totals of 680, 669, 695, 649 and 667 seconds from the same run's script timings (before: 773, 467, 740, 652, 729).
+No timeout was raised.
