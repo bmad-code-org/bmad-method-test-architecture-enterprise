@@ -10,6 +10,7 @@
  *  - the replay of an accepted baseline without its isolation manifests (exit 3),
  *  - the dirty refusal (an accepted dirty run writes `baseline/`),
  *  - staging inside the committed folder (an accept killed mid-staging makes the next run dirty),
+ *  - a lock that is taken over (three accepts at once all run),
  *  - a plain compare that restores or deletes (an accept running at the same time loses both baselines),
  *  - the input checks `score` runs (an edited sealed record is accepted),
  *  - the directory-link check (a linked `trials/` directory is followed).
@@ -20,7 +21,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
+const { spawn, spawnSync } = require('node:child_process');
 
 const AjvModule = require('ajv/dist/2020');
 
@@ -288,7 +289,7 @@ async function main() {
       assert.match(replayed.output, /isolation manifest .* is absent/);
     }
 
-    // An accept killed while staging (SIGKILL, so no cleanup runs) leaves its staging directory and lock under the
+    // An accept killed while staging (SIGKILL, so no cleanup runs) leaves its staging directory and its lock under the
     // gitignored runs/, so the next run is not dirty. The accept re-records the same run: the baseline is unchanged.
     {
       const before = treeOf(baseline);
@@ -324,8 +325,16 @@ async function main() {
       // The command compares and writes nothing: what the killed accept left is still there.
       assert.deepEqual(treeOf(baseline), treeOf(path.join(project.folder, 'baseline')));
       assert.ok(leftovers(project.folder).length > 0, 'a plain compare deleted what the killed accept left');
-      // The next accept takes over the dead holder's lock and deletes the stale staging directory.
+      // The killed accept's lock stays: the next accept refuses and gives the remedy, then succeeds once the directory is
+      // deleted, and it deletes the stale staging directory.
       const before = treeOf(baseline);
+      const lock = path.join(project.folder, 'runs', '.compare-staging.lock');
+      assert.equal(fs.existsSync(lock), true, 'the killed accept left no lock');
+      result = test.cli(project.folder, 'compare', ['--accept', '--run', firstId]);
+      assert.equal(result.status, 12, result.output);
+      assert.match(result.output, /holds runs\/\.compare-staging\.lock.*delete that directory and run the accept again/);
+      assert.deepEqual(treeOf(baseline), before);
+      fs.rmSync(lock, { recursive: true });
       result = test.cli(project.folder, 'compare', ['--accept', '--run', firstId]);
       assert.equal(result.status, 0, result.output);
       assert.deepEqual(leftovers(project.folder), []);
@@ -766,15 +775,91 @@ async function main() {
       result = test.cli(folder, 'compare', ['--run', secondId]);
       assert.equal(result.status, 0, result.output);
     }
-    // A lock whose holder is gone is taken over.
+    // A leftover lock directory (an accept that was killed) refuses the accept with the remedy; once it is deleted, the accept runs.
     {
       const folder = copyOf(project);
       const lock = path.join(folder, 'runs', '.compare-staging.lock');
       fs.mkdirSync(lock);
-      fs.writeFileSync(path.join(lock, 'pid'), `${spawnSync(process.execPath, ['-e', '']).pid}\n`);
+      const before = treeOf(path.join(folder, 'baseline'));
+      result = test.cli(folder, 'compare', ['--accept', '--run', secondId]);
+      assert.equal(result.status, 12, result.output);
+      assert.match(
+        result.output,
+        /holds runs\/\.compare-staging\.lock; if none is running \(an earlier accept was killed\), delete that directory/,
+      );
+      assert.deepEqual(treeOf(path.join(folder, 'baseline')), before);
+      fs.rmSync(lock, { recursive: true });
       result = test.cli(folder, 'compare', ['--accept', '--run', secondId]);
       assert.equal(result.status, 0, result.output);
       assert.equal(read(path.join(folder, 'baseline', 'baseline.json')).acceptedRun, secondId);
+      assert.deepEqual(leftovers(folder), []);
+    }
+    // A lock entry that is a file refuses the same way, and a linked runs/ is a real error text, never a stack trace.
+    {
+      const folder = copyOf(project);
+      fs.writeFileSync(path.join(folder, 'runs', '.compare-staging.lock'), 'x');
+      result = test.cli(folder, 'compare', ['--accept', '--run', secondId]);
+      assert.equal(result.status, 12, result.output);
+      assert.match(result.output, /delete that directory/);
+      const linked = copyOf(project);
+      fs.renameSync(path.join(linked, 'runs'), path.join(linked, 'runs-real'));
+      fs.symlinkSync(path.join(linked, 'runs-real'), path.join(linked, 'runs'));
+      result = test.cli(linked, 'compare', ['--accept', '--run', secondId]);
+      assert.equal(result.status, 12, result.output);
+      assert.match(result.output, /runs is a link or a file where a directory is required/);
+      assert.equal(fs.existsSync(path.join(linked, 'runs-real', '.compare-staging.lock')), false);
+    }
+    // Three accepts at once over one scored project: the one that holds the lock (stalled by the wrapper) finishes, the others
+    // exit 12 with the lock message and no stack trace, and the baseline passes check with no staging or retired leftovers.
+    {
+      const folder = copyOf(project);
+      const results = await Promise.all(
+        [1, 2, 3].map(
+          () =>
+            new Promise((resolve) => {
+              const child = spawn(
+                process.execPath,
+                ['--require', STAGING_WRAPPER, CLI, 'compare', '--evaluation', folder, '--accept', '--run', secondId],
+                { cwd: path.join(__dirname, '..'), env: { ...process.env, TEA_BASELINE_FAIL: 'hold' } },
+              );
+              let output = '';
+              child.stdout.on('data', (chunk) => (output += chunk));
+              child.stderr.on('data', (chunk) => (output += chunk));
+              child.on('close', (status) => resolve({ status, output }));
+            }),
+        ),
+      );
+      const statuses = results.map((one) => one.status).sort();
+      assert.deepEqual(statuses, [0, 12, 12], JSON.stringify(results));
+      for (const lost of results.filter((one) => one.status === 12)) {
+        assert.match(lost.output, /another tea-evaluate compare --accept holds runs\/\.compare-staging\.lock/);
+        assert.doesNotMatch(lost.output, /\n\s+at .*:\d+:\d+\)?/, 'a losing accept printed a stack trace');
+      }
+      assert.equal(read(path.join(folder, 'baseline', 'baseline.json')).acceptedRun, secondId);
+      assert.deepEqual(leftovers(folder), []);
+      result = test.cli(folder, 'check');
+      assert.equal(result.status, 0, result.output);
+    }
+    // Ctrl-C mid-staging removes the lock and exits 130; the staging leftover stays for the next accept's recovery.
+    {
+      const folder = copyOf(project);
+      const before = treeOf(path.join(folder, 'baseline'));
+      const interrupted = wrapped(folder, 'sigint', {}, ['--accept', '--run', secondId]);
+      assert.equal(interrupted.status, 130, interrupted.output);
+      const left = leftovers(folder);
+      assert.equal(
+        left.some((name) => name.includes('lock')),
+        false,
+        'the interrupted accept left its lock',
+      );
+      assert.equal(
+        left.some((name) => name.startsWith('staging-')),
+        true,
+        'the interrupted accept left no staging directory to recover',
+      );
+      assert.deepEqual(treeOf(path.join(folder, 'baseline')), before);
+      result = test.cli(folder, 'compare', ['--accept', '--run', secondId]);
+      assert.equal(result.status, 0, result.output);
       assert.deepEqual(leftovers(folder), []);
     }
 

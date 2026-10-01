@@ -11,8 +11,9 @@
  * makes the rename of the finished staging directory into place throw, after the old
  * baseline was moved aside. `TEA_BASELINE_FAIL=strand` makes that rename fail and then the rename
  * that puts the old baseline back fail too, which leaves `baseline/` absent and the old one retired.
+ * `TEA_BASELINE_FAIL=hold` sleeps `TEA_BASELINE_HOLD_MS` (default 1500) after the first staged file, while the lock is held.
  * `TEA_BASELINE_FAIL=kill` makes the process SIGKILL itself while staging, after
- * `TEA_BASELINE_FAIL_AFTER` files, so no cleanup runs. `TEA_BASELINE_FAIL=probe` runs a plain
+ * `TEA_BASELINE_FAIL_AFTER` files, so no cleanup runs. `TEA_BASELINE_FAIL=sigint` sends the process a SIGINT at the same point and lets staging continue until the handler runs. `TEA_BASELINE_FAIL=probe` runs a plain
  * `compare` (the arguments in `TEA_BASELINE_PROBE_ARGS`, a JSON array; its status and output
  * written to the JSON file `TEA_BASELINE_PROBE_OUT`) at the moment between the two renames, when
  * `baseline/` is absent and the old one is retired, then lets the swap finish.
@@ -29,15 +30,25 @@ const inStaging = (file) => String(file).includes('.compare-staging/staging-');
 const inRetired = (file) => String(file).includes('.compare-staging/retired-');
 const refusal = () => Object.assign(new Error('ENOSPC: no space left on device (injected by the test)'), { code: 'ENOSPC' });
 
-if (mode === 'write' || mode === 'kill') {
+if (mode === 'write' || mode === 'kill' || mode === 'sigint' || mode === 'hold') {
   const write = fs.writeFileSync;
   let written = 0;
+  let signalled = false;
   fs.writeFileSync = function writeFileSync(file, ...rest) {
     if (inStaging(file)) {
       written += 1;
+      // `hold` stalls the accept that holds the lock once, so concurrent accepts started now meet it.
+      if (mode === 'hold') {
+        if (written === 1) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, Number(process.env.TEA_BASELINE_HOLD_MS ?? '1500'));
+        return write.call(this, file, ...rest);
+      }
       if (written > allowed) {
         if (mode === 'kill') process.kill(process.pid, 'SIGKILL');
-        throw refusal();
+        if (mode === 'sigint') {
+          // Delivered to the process's own handler at the next yield to the event loop, which the staging loop makes per file.
+          if (!signalled) process.kill(process.pid, 'SIGINT');
+          signalled = true;
+        } else throw refusal();
       }
     }
     return write.call(this, file, ...rest);
