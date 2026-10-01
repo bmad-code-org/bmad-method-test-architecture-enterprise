@@ -74,7 +74,7 @@ development_status:
   1-36-hold-an-http-entry-to-eval-qualitys-own-target-policy-parser: done
   1-37-know-a-started-http-server-by-the-port-it-bound-itself: done
   1-38-hold-a-deployment-to-the-release-it-reports: done
-  1-39-tell-a-captured-value-too-large-to-launch-from-a-target-tha: backlog
+  1-39-tell-a-captured-value-too-large-to-launch-from-a-target-tha: done
   1-40-calibrate-rubric-scores-imported-from-harness-records: backlog
   1-41-confine-score-output-during-concurrent-run-directory-changes: backlog
   1-42-attribute-reused-operation-ids-to-their-interfaces: backlog

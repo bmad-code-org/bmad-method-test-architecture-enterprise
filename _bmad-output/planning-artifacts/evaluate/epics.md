@@ -1209,6 +1209,7 @@ I want a value too large to launch recorded as a step not issued,
 So that a target printing an oversized value is judged on that behavior and the run goes on (AD-7, AD-10).
 
 **Engine consumption.** eval-quality ships a release whose command-line adapter reports a launch the system refused for its argument and environment size with a `RuntimeFault` reason of its own, as a policy denial carries `reason`, and TeA's devDependency and peer floor rise to it with the engine check at start and end; the coordinator makes that change in eval-quality.
+Amended 2026-10-01 in Story 1.39: the engine carries the value on a field of its own, `portFailureReason` (`launch-too-large`), so `RuntimeFault.reason` keeps its type, and the arm reads `error.portFailureReason` on a `port-failure` fault and records it beside `reason` in the fault record.
 
 **Acceptance Criteria:**
 

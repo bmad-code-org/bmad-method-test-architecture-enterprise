@@ -23,8 +23,16 @@
  * not issued, or its observation lacks the value), is not issued: it gets no
  * observation, and `steps` records it as skipped with the reason, so
  * eval-quality reads the missing observation as it reads any evidence that
- * does not exist. A binding this release cannot materialize and an operation
- * of another kind stop the arm with an `ArmError` (exit 12): the run cannot
+ * does not exist. A command step with a captured argument, option or environment
+ * binding that the system refuses to launch for the size of its arguments and
+ * environment (eval-quality's `port-failure` fault whose `portFailureReason` is
+ * `launch-too-large`) is not issued either, and `steps` records it as
+ * `captured-value-unsendable` naming each such binding; only the launch knows the
+ * system's limit, so the arm computes none. A captured stdin value is written
+ * after the launch and is never named.
+ * A binding this release cannot materialize, an operation of another kind and
+ * a command step with no captured binding in those channels that the system
+ * refuses to launch stop the arm with an `ArmError` (exit 12): the run cannot
  * send the request the contract means.
  * A cycle over the `after` and capture edges never reaches an arm, since
  * `eval-quality compile` refuses it (`binding-cycle`, `nested-temporal-clause`);
@@ -73,6 +81,8 @@ const MIN_SCRUBBED_VALUE_LENGTH = 8;
 /** The shortest leading part of a secret redacted where a cut text ends in it; a shorter one would match ordinary text. */
 const MIN_CUT_PREFIX_LENGTH = 4;
 const SCRUBBED = '[redacted]';
+/** The `portFailureReason` eval-quality's command-line adapter gives a launch the system refused for the size of its arguments and environment. */
+const LAUNCH_TOO_LARGE = 'launch-too-large';
 /** How much of what a process printed a message quotes, from its end. */
 const QUOTED_TAIL = 2000;
 
@@ -306,20 +316,27 @@ function redactPrincipalRequest(request, bindings) {
 /**
  * What a run records of an adapter fault: its code, the `reason` eval-quality
  * gives a policy denial (`tool-not-authorized`, `executable-not-authorized`,
- * `interface-not-authorized`, ...), for every kind, its message, and the
+ * `interface-not-authorized`, ...), for every kind, the `portFailureReason` it
+ * gives a `port-failure` it can name (`launch-too-large`), its message, and the
  * scrubbed `cause` of a fault the target could not run under. Nothing is read
  * from the message: a fault that carries no reason is recorded with none.
  *
  * @param {unknown} error
- * @returns {{ code: string|null, reason?: string, message: string }}
+ * @returns {{ code: string|null, reason?: string, portFailureReason?: string, message: string }}
  */
 function faultRecord(error) {
   return {
     code: typeof error?.code === 'string' ? error.code : null,
     ...(typeof error?.reason === 'string' ? { reason: error.reason } : {}),
+    ...(typeof error?.portFailureReason === 'string' ? { portFailureReason: error.portFailureReason } : {}),
     message: String(error?.message ?? error),
     ...(typeof error?.scrubbedCause === 'string' ? { cause: error.scrubbedCause } : {}),
   };
+}
+
+/** Whether a fault is eval-quality's refusal of a launch for the size of its arguments and environment, by the `portFailureReason` it carries. */
+function isLaunchTooLarge(error) {
+  return error?.code === 'port-failure' && error.portFailureReason === LAUNCH_TOO_LARGE;
 }
 
 /** A denial's reason as a message names it, or nothing when the fault carries none. */
@@ -506,14 +523,17 @@ function typeViolatingValue(type) {
  * which the evaluation's HTTP port refuses, or a command argument, option or
  * environment value holding a NUL character, which no process argument or
  * variable can), each as
- * `{ binding, pointer }` with the reason for an unsendable one. A literal the
- * request cannot carry is the contract's own defect and stops the arm.
+ * `{ binding, pointer }` with the reason for an unsendable one. `captured`
+ * lists every captured binding of the channel in that shape, whatever it
+ * resolved to, for a step whose launch the system refuses for size. A literal
+ * the request cannot carry is the contract's own defect and stops the arm.
  */
 function boundValues(channel, stepId, name, resolve, shape, { seed, interfaceId, principalValue, principalBindings }) {
-  if (channel === null || channel === undefined) return { values: null, absent: [], unsendable: [] };
+  if (channel === null || channel === undefined) return { values: null, absent: [], unsendable: [], captured: [] };
   const values = {};
   const absent = [];
   const unsendable = [];
+  const captured = [];
   for (const [key, binding] of Object.entries(channel)) {
     // eval-quality's request parser drops an own `__proto__` key, so the target would receive other inputs than the record shows.
     if (key === '__proto__') {
@@ -580,6 +600,7 @@ function boundValues(channel, stepId, name, resolve, shape, { seed, interfaceId,
       );
     }
     const site = { binding: `${name}.${key}`, pointer: binding.captured };
+    captured.push(site);
     const resolved = resolve(binding.captured);
     if (!resolved.present) absent.push(site);
     else if (carriesPrototypeKey(resolved.value)) unsendable.push({ ...site, reason: 'the value holds a __proto__ key' });
@@ -599,7 +620,7 @@ function boundValues(channel, stepId, name, resolve, shape, { seed, interfaceId,
       });
     } else values[key] = resolved.value;
   }
-  return { values, absent, unsendable };
+  return { values, absent, unsendable, captured };
 }
 
 /** Whether `value` holds an own `__proto__` key at any depth. */
@@ -726,6 +747,7 @@ async function runArm({
     const binding = step.inputBinding ?? {};
     const absent = [];
     const unsendable = [];
+    const capturedSites = [];
     const principalBindings = [];
     const bound = (channel, name) => {
       const read = boundValues(channel, step.stepId, name, resolve, operation.requestShape?.[name], {
@@ -736,6 +758,8 @@ async function runArm({
       });
       absent.push(...read.absent);
       unsendable.push(...read.unsendable);
+      // Only what a spawn carries can make a launch too large: a stdin value is written to a pipe after the process starts.
+      if (PROCESS_CHANNELS.has(name)) capturedSites.push(...read.captured);
       return read.values;
     };
     let request;
@@ -807,7 +831,25 @@ async function runArm({
       skip({ reason: 'captured-value-unsendable', bindings: unsendable });
       continue;
     }
-    const answered = await port.probe(request, signal);
+    let answered;
+    try {
+      answered = await port.probe(request, signal);
+    } catch (error) {
+      // A launch the system refused for the size of its arguments and environment is eval-quality's own reason on the
+      // fault. With a captured value among the step's bindings the target's output is what made it too large, so the
+      // step is not issued; a step of literals alone is a contract the run cannot send, and the fault stops the arm.
+      if (isLaunchTooLarge(error) && request.kind === 'cli' && capturedSites.length > 0) {
+        skip({
+          reason: 'captured-value-unsendable',
+          bindings: capturedSites.map((site) => ({
+            ...site,
+            reason: `the system refused to launch the command for the size of its arguments and environment (${error.portFailureReason}), and the refusal does not say which captured value made it too large`,
+          })),
+        });
+        continue;
+      }
+      throw error;
+    }
     const { observation } = answered;
     sequence += 1;
     issued.add(step.stepId);

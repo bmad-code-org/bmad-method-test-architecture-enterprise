@@ -776,6 +776,10 @@
           "reason": "an eval-quality package export, not a TEA declaration"
         },
         {
+          "token": "portFailureReason",
+          "reason": "a field of an eval-quality RuntimeFault that names why a port-failure happened, not a TEA declaration"
+        },
+        {
           "token": "StructuralFailure",
           "reason": "an eval-quality package export, not a TEA declaration"
         },
