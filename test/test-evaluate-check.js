@@ -2151,6 +2151,8 @@ const HARDENING_CASES = [
 
 /** The stub command evaluator Story 1.17's run cases use, copied into a folder's evaluator/. */
 const COMMAND_STUB = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'evaluators', 'command', 'evaluator', 'rows.js');
+/** The declaration of a command evaluator with no installed framework dependency (Story 1.44). */
+const NO_FRAMEWORKS = { schemaVersion: 1, frameworks: [] };
 /** A command evaluator's evaluation.json block. */
 const COMMAND_EVALUATOR = { kind: 'command', command: 'evaluator/rows.js', timeoutMs: 60_000 };
 /** A sealed-brief agent evaluator's evaluation.json block. */
@@ -2197,6 +2199,7 @@ function plantEvaluator(folder, evaluator, { mapping, conditions = null, rubric 
     fs.mkdirSync(path.join(folder, 'evaluator'), { recursive: true });
     fs.copyFileSync(COMMAND_STUB, path.join(folder, 'evaluator', 'rows.js'));
     fs.chmodSync(path.join(folder, 'evaluator', 'rows.js'), 0o755);
+    fs.writeFileSync(path.join(folder, 'evaluator', 'frameworks.json'), `${JSON.stringify(NO_FRAMEWORKS, null, 2)}\n`);
   }
   if (conditions !== null)
     fs.writeFileSync(path.join(folder, 'policy', 'evaluator-conditions.json'), `${JSON.stringify(conditions, null, 2)}\n`);
@@ -2270,6 +2273,203 @@ async function plantRecordsRubric(
     fs.writeFileSync(path.join(records, 'calibration-judgments.json'), `${JSON.stringify(written, null, 2)}\n`);
   }
 }
+
+/** Story 1.44: the declaration a command evaluator's `evaluator/frameworks.json` carries for one installed framework. */
+const FRAMEWORK_ENTRY = { package: 'acme-evals', version: '1.2.3', probe: { command: 'evaluator/probe.js', args: ['acme-evals'] } };
+
+/** The `LEARNED.md` a declared framework is recorded in, one line per package at the version given. */
+function learnedRecord(...recorded) {
+  return `# Learned evaluation framework\n\n## Framework and installed version\n\n${recorded.map((entry) => `- Installed package and version: \`${entry}\``).join('\n')}\n\n## Primary-source facts used\n\n- A later section is never read for versions, \`other-pkg@9.9.9\`.\n`;
+}
+
+/**
+ * A command evaluator that declares `frameworks` (Story 1.44): the stub, an executable probe beside it, the declaration
+ * (`declaration` replaces the whole parsed file; `raw` writes text in its place) and `learned` as `evaluator/LEARNED.md`
+ * (none when null).
+ */
+function plantFrameworks(folder, { frameworks = [FRAMEWORK_ENTRY], declaration, raw, learned = null } = {}) {
+  plantEvaluator(folder, COMMAND_EVALUATOR);
+  fs.writeFileSync(path.join(folder, 'evaluator', 'probe.js'), '#!/usr/bin/env node\n');
+  fs.chmodSync(path.join(folder, 'evaluator', 'probe.js'), 0o755);
+  const file = path.join(folder, 'evaluator', 'frameworks.json');
+  fs.writeFileSync(file, raw ?? `${JSON.stringify(declaration ?? { schemaVersion: 1, frameworks }, null, 2)}\n`);
+  if (learned !== null) fs.writeFileSync(path.join(folder, 'evaluator', 'LEARNED.md'), learned);
+}
+
+/** Story 1.44's refusals: a declaration that is absent, malformed or inconsistent with LEARNED.md, each exit 10. */
+const FRAMEWORK_CASES = [
+  {
+    name: 'a command evaluator with no evaluator/frameworks.json',
+    file: 'evaluator/frameworks.json',
+    rule: 'evaluator',
+    plant: (folder) => {
+      plantEvaluator(folder, COMMAND_EVALUATOR);
+      fs.rmSync(path.join(folder, 'evaluator', 'frameworks.json'));
+    },
+    expect: (output) => [
+      [output.includes('declares the installed frameworks it depends on'), 'the finding does not say the declaration is missing'],
+    ],
+  },
+  {
+    name: 'a declaration that is not JSON',
+    file: 'evaluator/frameworks.json',
+    rule: 'json',
+    plant: (folder) => plantFrameworks(folder, { raw: 'not json' }),
+  },
+  ...[
+    ['a declaration that is a list', { declaration: [] }, 'the declaration must be a JSON object'],
+    ['a declaration of another schema version', { declaration: { schemaVersion: 2, frameworks: [] } }, 'schemaVersion must be 1'],
+    ['a declaration with no frameworks list', { declaration: { schemaVersion: 1 } }, 'frameworks must be a list'],
+    ['a declaration with an unknown property', { declaration: { schemaVersion: 1, frameworks: [], note: 'x' } }, 'unknown property "note"'],
+    [
+      'a version range in place of a version',
+      { frameworks: [{ ...FRAMEWORK_ENTRY, version: '^1.2.3' }] },
+      'frameworks[0].version must be the one exact version expected',
+    ],
+    [
+      'a framework with no probe',
+      { frameworks: [{ package: 'acme-evals', version: '1.2.3' }] },
+      'frameworks[0].probe must be { "command": "evaluator/<executable>", "args": [...] }',
+    ],
+    [
+      'a probe outside evaluator/',
+      { frameworks: [{ ...FRAMEWORK_ENTRY, probe: { command: 'node', args: ['-e', '1'] } }] },
+      'frameworks[0].probe.command must be a path of an executable under evaluator/',
+    ],
+    [
+      'a probe path that leaves evaluator/',
+      { frameworks: [{ ...FRAMEWORK_ENTRY, probe: { command: 'evaluator/../probe.js' } }] },
+      'frameworks[0].probe.command must be a path of an executable under evaluator/',
+    ],
+    [
+      'probe arguments that are not strings',
+      { frameworks: [{ ...FRAMEWORK_ENTRY, probe: { command: 'evaluator/probe.js', args: [1] } }] },
+      'frameworks[0].probe.args must be a list of strings',
+    ],
+    [
+      'a tag in place of a version',
+      { frameworks: [{ ...FRAMEWORK_ENTRY, version: 'latest' }] },
+      'frameworks[0].version must be the one exact version expected, starting with a digit, with no tag, range, wildcard',
+    ],
+    [
+      'a wildcard version',
+      { frameworks: [{ ...FRAMEWORK_ENTRY, version: '1.x' }] },
+      'frameworks[0].version must be the one exact version expected',
+    ],
+    ['a framework named twice', { frameworks: [FRAMEWORK_ENTRY, FRAMEWORK_ENTRY] }, 'frameworks[1].package repeats acme-evals'],
+    [
+      'a framework with a property the declaration does not define',
+      { frameworks: [{ ...FRAMEWORK_ENTRY, range: '^1' }] },
+      'frameworks[0] has the unknown property "range"',
+    ],
+  ].map(([name, options, says]) => ({
+    name,
+    file: 'evaluator/frameworks.json',
+    rule: 'schema',
+    plant: (folder) => plantFrameworks(folder, { ...options, learned: learnedRecord('acme-evals@1.2.3') }),
+    expect: (output) => [[output.includes(says), `the finding does not say ${says}`]],
+  })),
+  {
+    name: 'a version probe that is not a file the folder holds',
+    file: 'evaluator/frameworks.json',
+    rule: 'evaluator',
+    plant: (folder) => {
+      plantFrameworks(folder, { learned: learnedRecord('acme-evals@1.2.3') });
+      fs.rmSync(path.join(folder, 'evaluator', 'probe.js'));
+    },
+    expect: (output) => [
+      [
+        output.includes('the version probe of acme-evals names evaluator/probe.js, which is not a regular file'),
+        'the finding does not name the probe',
+      ],
+    ],
+  },
+  {
+    name: 'a version probe that is not executable',
+    file: 'evaluator/frameworks.json',
+    rule: 'evaluator',
+    plant: (folder) => {
+      plantFrameworks(folder, { learned: learnedRecord('acme-evals@1.2.3') });
+      fs.chmodSync(path.join(folder, 'evaluator', 'probe.js'), 0o644);
+    },
+    expect: (output) => [
+      [output.includes('evaluator/probe.js, which is not executable'), 'the finding does not say the probe is not executable'],
+    ],
+  },
+  {
+    name: 'a nonempty declaration with no LEARNED.md',
+    file: 'evaluator/LEARNED.md',
+    rule: 'evaluator',
+    plant: (folder) => plantFrameworks(folder),
+    expect: (output) => [
+      [output.includes('records the installed version of acme-evals'), 'the finding does not name the package LEARNED.md must record'],
+    ],
+  },
+  {
+    name: 'a LEARNED.md that records another version than the declaration',
+    file: 'evaluator/LEARNED.md',
+    rule: 'evaluator',
+    plant: (folder) => plantFrameworks(folder, { learned: learnedRecord('acme-evals@1.2.2') }),
+    expect: (output) => [
+      [
+        output.includes('records acme-evals@1.2.2, and evaluator/frameworks.json declares acme-evals@1.2.3'),
+        'the finding does not name both versions',
+      ],
+    ],
+  },
+  {
+    name: 'a LEARNED.md that records two versions of the package',
+    file: 'evaluator/LEARNED.md',
+    rule: 'evaluator',
+    plant: (folder) => plantFrameworks(folder, { learned: learnedRecord('acme-evals@1.2.3', 'acme-evals@1.2.2') }),
+    expect: (output) => [
+      [output.includes('records acme-evals@1.2.3, acme-evals@1.2.2'), 'the finding does not list both recorded versions'],
+    ],
+  },
+  {
+    name: 'a LEARNED.md that does not record the declared package',
+    file: 'evaluator/LEARNED.md',
+    rule: 'evaluator',
+    plant: (folder) => plantFrameworks(folder, { learned: learnedRecord('other-evals@1.2.3') }),
+    expect: (output) => [
+      [output.includes('records no `acme-evals@1.2.3`'), 'the finding does not say the declared package is unrecorded'],
+      [
+        output.includes('records other-evals, which evaluator/frameworks.json does not declare'),
+        'the finding does not name the undeclared package',
+      ],
+    ],
+  },
+  {
+    name: 'a LEARNED.md with two installed-version sections',
+    file: 'evaluator/LEARNED.md',
+    rule: 'evaluator',
+    plant: (folder) => plantFrameworks(folder, { learned: `${learnedRecord('acme-evals@1.2.3')}\n${learnedRecord('acme-evals@1.2.3')}` }),
+    expect: (output) => [
+      [output.includes('has more than one "## Framework and installed version" section'), 'the finding does not name the repeated section'],
+    ],
+  },
+  {
+    name: 'a LEARNED.md with no installed-version section',
+    file: 'evaluator/LEARNED.md',
+    rule: 'evaluator',
+    plant: (folder) => plantFrameworks(folder, { learned: '# Learned evaluation framework\n\n`acme-evals@1.2.3`\n' }),
+    expect: (output) => [[output.includes('has no "## Framework and installed version" section'), 'the finding does not name the section']],
+  },
+  {
+    name: 'a LEARNED.md that records a framework an empty declaration omits',
+    file: 'evaluator/LEARNED.md',
+    rule: 'evaluator',
+    plant: (folder) => {
+      plantFrameworks(folder, { frameworks: [], learned: learnedRecord('acme-evals@1.2.3') });
+    },
+    expect: (output) => [
+      [
+        output.includes('records acme-evals, which evaluator/frameworks.json does not declare'),
+        'the finding does not name the omitted package',
+      ],
+    ],
+  },
+];
 
 /** Story 1.17's evaluator cases: each exits 10 naming its file and rule. */
 const EVALUATOR_CASES = [
@@ -2710,6 +2910,36 @@ EVALUATOR_CASES.push(
 
 /** Story 1.17's legitimate evaluator folders: each exits 0, a rubric under a non-deterministic kind with no judge included. */
 const EVALUATOR_CLEAN_CASES = [
+  {
+    name: 'a command evaluator whose declaration and LEARNED.md agree on an installed framework',
+    plant: (folder) => plantFrameworks(folder, { learned: learnedRecord('acme-evals@1.2.3') }),
+  },
+  {
+    name: 'a command evaluator with an empty declaration and a LEARNED.md that records no framework',
+    plant: (folder) => plantFrameworks(folder, { frameworks: [], learned: learnedRecord() }),
+  },
+  {
+    name: 'a LEARNED.md with CRLF line endings',
+    plant: (folder) => plantFrameworks(folder, { learned: learnedRecord('acme-evals@1.2.3').replaceAll('\n', '\r\n') }),
+  },
+  {
+    name: 'a LEARNED.md whose prose holds backticked text that is no package version',
+    plant: (folder) =>
+      plantFrameworks(folder, {
+        learned: learnedRecord('acme-evals@1.2.3').replace(
+          '\n\n## Primary',
+          '\n- Contact `maintainer@example.com`; track `npm@latest`.\n\n## Primary',
+        ),
+      }),
+  },
+  {
+    name: 'a command evaluator that declares a scoped package',
+    plant: (folder) =>
+      plantFrameworks(folder, {
+        frameworks: [{ ...FRAMEWORK_ENTRY, package: '@acme/evals' }],
+        learned: learnedRecord('@acme/evals@1.2.3'),
+      }),
+  },
   { name: 'a command evaluator with its mapping and executable', plant: (folder) => plantEvaluator(folder, COMMAND_EVALUATOR) },
   {
     name: 'a command evaluator that names the model it calls',
@@ -2889,6 +3119,7 @@ async function checkDefectCases() {
   for (const rule of STORY_RULES) check(covered.has(rule), `no defect case covers the story's ${rule} rule`);
   await runCases(HARDENING_CASES);
   await runCases(EVALUATOR_CASES);
+  await runCases(FRAMEWORK_CASES);
   await runCases([
     {
       name: 'held-out unknown ID',

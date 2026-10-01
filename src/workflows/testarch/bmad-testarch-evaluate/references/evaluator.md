@@ -18,7 +18,7 @@ Stage 6 may have prepared a deterministic rubric judge. When choosing `command` 
 
 ## Emit judgment rows or sealed records
 
-`command` and `sealed-brief-agent` produce one JSON answer per trial: `{ "rows": [...], "recommendation": "PASS" }`. Each row names a mapped `key`, an `outcome` of `pass`, `fail` or `score`, and `observationIds`. A `fail` also needs a verbatim `quote`, `quoteChannel`, `confidence` and `comment`; a `score` needs an anchored integer `score`. TeA converts these rows through `evaluator/mapping.json` into sealed run records. `deterministic` produces its records within TeA. `records` imports schema-valid `SealedRunRecord` files from the adopter harness. See `assets/evaluators/command-evaluator.mjs` and `assets/evaluators/mapping.json` for starter shapes.
+`command` and `sealed-brief-agent` produce one JSON answer per trial: `{ "rows": [...], "recommendation": "PASS" }`. Each row names a mapped `key`, an `outcome` of `pass`, `fail` or `score`, and `observationIds`. A `fail` also needs a verbatim `quote`, `quoteChannel`, `confidence` and `comment`; a `score` needs an anchored integer `score`. TeA converts these rows through `evaluator/mapping.json` into sealed run records. `deterministic` produces its records within TeA. `records` imports schema-valid `SealedRunRecord` files from the adopter harness. See `assets/evaluators/command-evaluator.mjs`, `assets/evaluators/mapping.json` and `assets/evaluators/frameworks.json` for starter shapes.
 
 For a sealed-brief agent, set `evaluation.json.evaluator` to `{ "kind": "sealed-brief-agent", "agent": "claude", "timeoutMs": 30000 }`, then supply a compatible installed agent and credentials. Keep `evaluator/mapping.json` with the judgment keys and add `policy/evaluator-conditions.json` with `evaluator.modelSnapshot` naming the exact agent model snapshot. Check that the selected adapter supports bridged runs and record its installed version in `evaluator/LEARNED.md`. The [Evaluate CLI reference](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/docs/reference/tea-evaluate-cli.md#the-evaluation-layer) documents the bridge and model conditions.
 
@@ -34,7 +34,7 @@ The [Evaluate CLI reference](https://github.com/bmad-code-org/bmad-method-test-a
 
 ## Selection rubric
 
-Discuss each criterion with the adopter before choosing an option. Record the reason and installed version in the evaluation folder. The table's `evaluator.kind` values are the four values the runtime accepts. For a `command` choice, keep framework-specific code under the adopter's `evaluator/` folder, install its dependencies in the adopter's evaluation folder, and declare the executable, timeout and permitted environment keys in `evaluation.json`.
+Discuss each criterion with the adopter before choosing an option. Record the reason and installed version in the evaluation folder. The table's `evaluator.kind` values are the four values the runtime accepts. For a `command` choice, keep framework-specific code under the adopter's `evaluator/` folder, install its dependencies in the adopter's evaluation folder, and declare the executable, timeout and permitted environment keys in `evaluation.json`, and each installed framework in `evaluator/frameworks.json`.
 
 | Option                          | `evaluator.kind`     | Determinism                               | Need for a model and its credentials                  | Visibility of process and trajectory                                          | Need for reference outputs                      | Rubric and calibration needs                | Language and runtime fit with adopter                  | Licence                          | Maintenance and version drift                     | Cost per trial                                      | CI tier fit                                                      |
 | ------------------------------- | -------------------- | ----------------------------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------- | ------------------------------------------------------ | -------------------------------- | ------------------------------------------------- | --------------------------------------------------- | ---------------------------------------------------------------- |
@@ -47,9 +47,9 @@ Discuss each criterion with the adopter before choosing an option. Record the re
 
 ## Framework landscape
 
-The list is illustrative. Any framework is admissible through the import contract. [AgentEvals](https://github.com/langchain-ai/agentevals) can score an agent's tool-call trajectory with a deterministic strict matcher; [the calling-agent fixture](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/tree/main/test/fixtures/evaluate-tool-use-agent) demonstrates its judgment rows and reference trajectory. [promptfoo](https://github.com/promptfoo/promptfoo) can run deterministic assertions over already captured outputs; [the summary fixture](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/tree/main/test/fixtures/evaluate-promptfoo) imports its per-assertion results. Their starter executables are `assets/evaluators/agentevals-trajectory.mjs` and `assets/evaluators/promptfoo-assertions.mjs`. Other frameworks need the same evidence path and may use a different language behind a `command` executable.
+The list is illustrative. Any framework is admissible through the import contract. [AgentEvals](https://github.com/langchain-ai/agentevals) can score an agent's tool-call trajectory with a deterministic strict matcher; [the calling-agent fixture](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/tree/main/test/fixtures/evaluate-tool-use-agent) demonstrates its judgment rows and reference trajectory. [promptfoo](https://github.com/promptfoo/promptfoo) can run deterministic assertions over already captured outputs; [the summary fixture](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/tree/main/test/fixtures/evaluate-promptfoo) imports its per-assertion results. Their starter executables are `assets/evaluators/agentevals-trajectory.mjs` and `assets/evaluators/promptfoo-assertions.mjs`, each paired with the version probe `assets/evaluators/installed-version.mjs` and a declaration template (`agentevals-frameworks.json`, `promptfoo-frameworks.json`) whose `<installed version>` you replace. Other frameworks need the same evidence path and may use a different language behind a `command` executable.
 
-For AgentEvals, copy a regular, tracked reference trajectory to `evaluator/reference/trajectory.json`, or set `evaluator.args` to `--reference=reference/<name>.json` for another tracked file under that directory. The template rejects paths or links outside the digested reference tree. The target's stdout must carry the JSON trajectory after `trajectory:` and one space; set `--prefix=<text>` if its prefix differs. Bind the `trajectory_strict_match` row key to the trajectory oracle in `evaluator/mapping.json`. For promptfoo, put the assertions in `evaluator/asserts.yaml` and give each assertion a distinct `metric` that exactly matches its key in `evaluator/mapping.json`. Assertion order can change without changing the mapping. A trial must judge every mapped assertion exactly once. The wrapper runs promptfoo over the captured stdout in a temporary directory; `--stdout-prefix=<text>` selects an observation when the trial has several stdout channels. Each prefix must identify exactly one observation, or the template stops with an ambiguity error. This installed promptfoo CLI removes one final line feed from model outputs; use another evaluator for an oracle that judges that byte. Install the chosen framework as a dependency of the adopter's evaluation folder and check its installed version.
+For AgentEvals, copy a regular, tracked reference trajectory to `evaluator/reference/trajectory.json`, or set `evaluator.args` to `--reference=reference/<name>.json` for another tracked file under that directory. The template rejects paths or links outside the digested reference tree. The target's stdout must carry the JSON trajectory after `trajectory:` and one space; set `--prefix=<text>` if its prefix differs. Bind the `trajectory_strict_match` row key to the trajectory oracle in `evaluator/mapping.json`. For promptfoo, put the assertions in `evaluator/asserts.yaml` and give each assertion a distinct `metric` that exactly matches its key in `evaluator/mapping.json`. Assertion order can change without changing the mapping. A trial must judge every mapped assertion exactly once. The wrapper runs promptfoo over the captured stdout in a temporary directory; `--stdout-prefix=<text>` selects an observation when the trial has several stdout channels. Each prefix must identify exactly one observation, or the template stops with an ambiguity error. This installed promptfoo CLI removes one final line feed from model outputs; use another evaluator for an oracle that judges that byte. Install the chosen framework as a dependency of the adopter's evaluation folder and declare its installed version (see Declare the installed framework versions below), copying `installed-version.mjs` into `evaluator/` and the declaration template to `evaluator/frameworks.json`.
 
 ## Separate ungraded framework errors from graded target failures
 
@@ -108,15 +108,58 @@ The second carries a graded failure, which the wrapper maps to a `fail` row quot
 }
 ```
 
+## Declare the installed framework versions
+
+A `command` evaluator that depends on an installed framework declares it in `evaluator/frameworks.json`, a tracked file the evaluator tree digest covers.
+A package in `node_modules` sits outside that tree, so without a declaration an upgrade would change the judgments while the scoring configuration stays the same.
+Each entry names the package, the one exact version expected and a version probe.
+The probe is an executable under `evaluator/` that prints `{"package": "<name>", "version": "<installed version>"}` for the installed package and exits non-zero when the package is not installed.
+`assets/evaluators/installed-version.mjs` is that probe for any Node package: pass the package name as its argument.
+Run `node evaluator/installed-version.mjs <package>` to read the version, and copy that value into `frameworks.json` and `LEARNED.md`.
+An evaluator with no installed framework dependency declares `"frameworks": []`.
+Declare the framework and any plugin or provider package whose behavior produces the judgments.
+Install the declared version exactly (`npm install --save-exact <package>@<version>`) and track the evaluation folder's `package.json` and lockfile, so a clean install or CI resolves the same release.
+
+<!-- example:frameworks -->
+
+```json
+{
+  "schemaVersion": 1,
+  "frameworks": [
+    {
+      "package": "acme-evals",
+      "version": "1.2.3",
+      "probe": { "command": "evaluator/installed-version.mjs", "args": ["acme-evals"] }
+    }
+  ]
+}
+```
+
+For a framework in another language, write the probe in that language.
+The run launches it with only the base environment and the evaluator's `environmentKeys`, in an empty private working directory, under the run's confinement and the evaluator's timeout, so it activates no virtual environment.
+It must find the same installation the wrapper uses, by a path relative to its own file or a pinned interpreter, and read installed metadata (in Python, `importlib.metadata.version`) without importing or running the framework.
+It prints the package string exactly as `frameworks.json` declares it, which is limited to letters, digits, `.`, `_`, `-` and an optional `@scope/`.
+
+`tea-evaluate run` reads the installed versions before the first trial, before each launch of the evaluator and after each trial.
+A package that is missing, installed at a version other than the declared one, or changed during the run ends the run with exit 12 and seals no record for the affected trial.
+Either reinstall the declared version or make the deliberate upgrade below.
+The observed versions join the evaluator configuration, so a changed version changes the scoring version, and `framework-versions.json` in the run directory keeps what each probe printed.
+`tea-evaluate check` runs no probe.
+It refuses an absent or malformed declaration, and it reads `evaluator/LEARNED.md`: the "Framework and installed version" section carries one backticked `package@version` for each declared package, and a different version, a missing one or a package the declaration omits is a finding.
+Write the runtime and any other version in that section as plain prose, because every backticked `package@version` there is read as a record.
+
+An upgrade is a deliberate change, including the one `npm install` at the `latest` spec makes.
+Read the new version's API and release notes, run the known pass and known fail again, update `LEARNED.md` and `frameworks.json` together, commit both and run again.
+
 ## Learn an unfamiliar framework
 
 1. Read primary sources only: the framework's documentation, repository, API reference, examples and changelog. Record URLs or commit references for every API or behavior you use. Do not adopt a claim from a secondary summary.
 2. Find how the framework takes inputs, invokes or observes the target, judges, returns results, and whether it needs a model or credentials. Check whether it exposes every process and output channel the oracles need.
-3. Install the version the adopter uses. Record the package name, installed version, runtime and licence. Read that installed version's API and release notes before writing the adapter.
+3. Install the version the adopter uses. Record the package name, installed version, runtime and licence, and declare the package, version and a version probe in `evaluator/frameworks.json`. Read that installed version's API and release notes before writing the adapter.
 4. Execute a minimal example against a known pass and a known fail with that installed version. Save the command, input, stdout, stderr, exit status and framework result for both. Add a third case the framework cannot grade (a failing input transform, a missing credential, a timeout) and record how its result arrives; a thrown assertion may arrive as an ordinary failing grade. A documented API claim that execution contradicts remains unadopted until resolved.
-5. Fill `evaluator/LEARNED.md` from `assets/evaluators/LEARNED.md`: framework and installed version, each fact used with its primary source, executed pass and fail output, and contradictions. Keep the file with the evaluator so its digest captures the learned conditions.
+5. Fill `evaluator/LEARNED.md` from `assets/evaluators/LEARNED.md`: framework and installed version (the backticked `package@version` that `frameworks.json` declares), each fact used with its primary source, executed pass and fail output, and contradictions. Keep the file with the evaluator so its digest captures the learned conditions.
 6. Map each framework result to a stable judgment key in `evaluator/mapping.json`. Write a `command` wrapper under `evaluator/` that reads `{ sealedBrief, observations }` from stdin and prints `{ rows, recommendation? }`. Make failures quote the actual observation, and make the wrapper exit non-zero on a result the framework did not grade. Run `tea-evaluate check` and `preflight` now. After the mutation and run stages have supplied their artifacts, run and score a clean control and a seeded defect. Accept the full pipeline only when eval-quality resolves `passed-clean-control` and `caught`.
 
 ## Vendor rule
 
-The framework and any judge model are fixed conditions of a run. Record the installed framework version in a tracked `evaluator/LEARNED.md` file and the model snapshot in `policy/evaluator-conditions.json`. Update that version record whenever the installed dependency changes; the runtime digests the tracked `evaluator/` tree and the updated record moves the scoring configuration. The system under test is the adopter's use of the vendor dependency. Mutate the adopter's prompts, context, wiring, validation or state handling; keep the vendor version and model snapshot fixed across arms.
+The framework and any judge model are fixed conditions of a run. Record the installed framework version in a tracked `evaluator/LEARNED.md` file and the model snapshot in `policy/evaluator-conditions.json`. For a `command` evaluator, also declare the framework in `evaluator/frameworks.json`; the runtime stops with exit 12 on a package that differs. Update the record and the declaration together whenever the installed dependency changes. The system under test is the adopter's use of the vendor dependency. Mutate the adopter's prompts, context, wiring, validation or state handling; keep the vendor version and model snapshot fixed across arms.

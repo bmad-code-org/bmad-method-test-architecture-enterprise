@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "frameworks": [
+    {
+      "package": "promptfoo",
+      "version": "<installed version>",
+      "probe": { "command": "evaluator/installed-version.mjs", "args": ["promptfoo"] }
+    }
+  ]
+}

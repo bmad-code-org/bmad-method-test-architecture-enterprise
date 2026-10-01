@@ -1607,6 +1607,7 @@ async function checkMissingValueUnderCommand() {
         schemaVersion: 1,
         keys: { 'read-back': { oracleId: 'O-001', behaviorId: 'B-001' } },
       });
+      writeJson(path.join(folder, 'evaluator', 'frameworks.json'), { schemaVersion: 1, frameworks: [] });
       editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
         evaluation.evaluator = { kind: 'command', command: 'evaluator/rows.js', timeoutMs: 30_000 };
       });

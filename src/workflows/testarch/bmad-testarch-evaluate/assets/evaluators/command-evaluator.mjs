@@ -3,6 +3,7 @@
 // Copy into evaluator/ and set evaluation.json.evaluator to
 // { "kind": "command", "command": "evaluator/command-evaluator.mjs", "timeoutMs": 30000 }.
 // Replace judge() with an oracle-specific check or a framework call.
+// Keep evaluator/frameworks.json beside it: an empty list while judge() uses no installed framework, otherwise one entry per framework.
 import fs from 'node:fs';
 
 const { sealedBrief, observations } = JSON.parse(fs.readFileSync(0, 'utf8'));

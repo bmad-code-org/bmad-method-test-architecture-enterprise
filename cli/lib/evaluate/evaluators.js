@@ -14,7 +14,10 @@
  * row-converting kinds `tea.evaluatorWiring` (the `evaluation.json` block
  * that runs it: arguments, environment keys, timeout, or adapter, command,
  * arguments and model); a command's model snapshot when the conditions name
- * one (`tea.evaluatorModelSnapshot`); for a `sealed-brief-agent` the tree
+ * one (`tea.evaluatorModelSnapshot`); for a `command` evaluator the installed
+ * versions of the frameworks it declares in `evaluator/frameworks.json`, as
+ * the run observed them (`tea.evaluatorFrameworks`, an empty list for an
+ * evaluator with no dependency, Story 1.44); for a `sealed-brief-agent` the tree
  * digest (its mapping lives there), the agent adapter and the model it
  * resolves to. A changed evaluator therefore changes the configuration
  * digest, every record's `evaluatorConfigurationDigest`, and the scoring
@@ -29,6 +32,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const { resolveModel } = require('../agent-adapters');
+const { FRAMEWORKS_PATH, declarationProblems, declaredFrameworks } = require('./frameworks');
 const { MAPPING_PATH, mappingContractProblems, mappingSchemaProblems, rowsValidator } = require('./judgment-rows');
 const { evaluatorTemplateDigest } = require('./sealed-brief-agent');
 const { runGit } = require('./workspace');
@@ -209,6 +213,41 @@ function notInLayer(relative, tracked) {
 }
 
 /**
+ * The command evaluator's declared framework dependencies, read from the
+ * layer's own bytes (`evaluator/frameworks.json`, Story 1.44), each probe an
+ * executable the layer holds.
+ *
+ * @param {(relative: string) => { bytes: Buffer, mode: number }|undefined} held
+ * @param {boolean} tracked whether git chose the layer's files
+ * @returns {Array<{ package: string, version: string, probe: { command: string, args: string[] } }>}
+ * @throws {EvaluatorLayerError}
+ */
+function readFrameworks(held, tracked) {
+  const file = held(FRAMEWORKS_PATH);
+  if (file === undefined) {
+    throw new EvaluatorLayerError(
+      `${FRAMEWORKS_PATH} cannot be read: ${notInLayer(FRAMEWORKS_PATH, tracked)}; declare each installed framework the evaluator depends on, or an empty list`,
+    );
+  }
+  let declaration;
+  try {
+    declaration = JSON.parse(file.bytes.toString('utf8'));
+  } catch (error) {
+    throw new EvaluatorLayerError(`${FRAMEWORKS_PATH} cannot be read: ${error.message}`);
+  }
+  const problems = declarationProblems(declaration);
+  if (problems.length > 0) throw new EvaluatorLayerError(`${FRAMEWORKS_PATH}: ${problems.join('; ')}`);
+  const frameworks = declaredFrameworks(declaration);
+  for (const { probe } of frameworks) {
+    const executable = held(probe.command);
+    if (executable === undefined) throw new EvaluatorLayerError(notInLayer(probe.command, tracked));
+    if (process.platform !== 'win32' && (executable.mode & EXECUTE_BITS) === 0)
+      throw new EvaluatorLayerError(`${probe.command} is not executable`);
+  }
+  return frameworks;
+}
+
+/**
  * What a run reads of its evaluation layer before anything runs: the mapping
  * and its row validator, which the trials use as read here, the digests the
  * configuration records, and the files those digests are taken over.
@@ -225,13 +264,14 @@ function notInLayer(relative, tracked) {
  * @param {object} options.evaluation
  * @param {object} options.contract
  * @param {object} options.engine the loaded engine (`digestBytes`, `digestArtifact`)
- * @returns {{ evaluator: object, files: Array<{ path: string, bytes: Buffer }>|null, mapping: object|null, validate: Function|null, treeDigest: string|null, executableDigest: string|null }}
- *   `files` are the layer's files as read, null for a kind with no layer to read
+ * @returns {{ evaluator: object, files: Array<{ path: string, bytes: Buffer }>|null, mapping: object|null, validate: Function|null, treeDigest: string|null, executableDigest: string|null, frameworks: Array<{ package: string, version: string, probe: object }>|null }}
+ *   `files` are the layer's files as read, null for a kind with no layer to read; `frameworks` the command
+ *   evaluator's declared dependencies (`evaluator/frameworks.json`, sorted by package), null for any other kind
  * @throws {EvaluatorLayerError}
  */
 function readEvaluatorLayer({ folder, evaluation, contract, engine }) {
   const evaluator = evaluatorOf(evaluation);
-  const layer = { evaluator, files: null, mapping: null, validate: null, treeDigest: null, executableDigest: null };
+  const layer = { evaluator, files: null, mapping: null, validate: null, treeDigest: null, executableDigest: null, frameworks: null };
   if (evaluator.kind === 'deterministic' || evaluator.kind === 'records') return layer;
   const { tracked, files } = evaluatorFiles(folder);
   layer.files = files.map((file) => ({ path: file.path, bytes: file.bytes }));
@@ -260,6 +300,7 @@ function readEvaluatorLayer({ folder, evaluation, contract, engine }) {
       throw new EvaluatorLayerError(`${evaluator.command} is not executable`);
     }
     layer.executableDigest = engine.digestBytes(executable.bytes);
+    layer.frameworks = readFrameworks(held, tracked);
   }
   return layer;
 }
@@ -308,6 +349,8 @@ function evaluatorLayerChange(folder, files) {
  * @param {object|null} options.judgeConfiguration the rubric judge's, under the deterministic kind
  * @param {(bytes: Uint8Array) => string} options.digestBytes
  * @param {{ attempts: number, minimumAgreement: number }|null} [options.qualification] a sealed-brief agent's `evaluatorQualification`
+ * @param {Array<{ package: string, version: string }>|null} [options.frameworks] a command evaluator's installed
+ *   framework versions as the run observed them (`frameworks.js` `observedVersions`); required for that kind
  * @returns {{ evaluatorIdentity: string, modelSnapshot: string, systemPromptDigest: string, decodingParameters: object, judgeConfiguration: object|null }}
  */
 function configurationFields({
@@ -318,6 +361,7 @@ function configurationFields({
   calibrationDigest = null,
   calibrationMinimumAgreement = null,
   qualification = null,
+  frameworks = null,
 }) {
   const { evaluator } = layer;
   const noPrompt = digestBytes(new Uint8Array(0));
@@ -335,6 +379,10 @@ function configurationFields({
   decodingParameters['tea.evaluatorWiring'] = evaluatorWiring(evaluator);
   if (evaluator.kind === 'command') {
     decodingParameters['tea.evaluatorExecutableDigest'] = layer.executableDigest;
+    // The installed versions are conditions the tracked tree cannot hold: an upgrade changes the configuration digest only here.
+    if (!Array.isArray(frameworks))
+      throw new TypeError("a command evaluator's configuration needs the framework versions the run observed");
+    decodingParameters['tea.evaluatorFrameworks'] = frameworks.map((entry) => ({ package: entry.package, version: entry.version }));
     // A command evaluator that calls a model names it in the conditions, beside the target's.
     if (typeof conditions?.evaluator?.modelSnapshot === 'string')
       decodingParameters['tea.evaluatorModelSnapshot'] = conditions.evaluator.modelSnapshot;

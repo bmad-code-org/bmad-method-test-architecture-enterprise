@@ -14,6 +14,11 @@
  *      its committed degenerate response satisfies its naive oracle and
  *      violates the disciplined one, exit 11 otherwise) and materialized as
  *      eval-quality's `gameability` probe;
+ *   1a. a command evaluator's declared frameworks observed before any evaluator launch (Story 1.44): each version
+ *      probe of `evaluator/frameworks.json` runs through the evaluator's own launch path, `framework-versions.json`
+ *      records the declared and observed versions, and a package that is missing or at another version exits 12
+ *      with no trial; the run reads them again before each launch of the evaluator and after each trial, and a
+ *      change exits 12 with no record for that trial;
  *   1b. a sealed-brief agent evaluator qualified before any trial (Story 1.34): the agent runs
  *      `evaluatorQualification.attempts` times on the clean arm and on each mutated arm, each attempt in a
  *      workspace of its own that writes under `evaluator-qualification/` alone, its record scored by
@@ -79,7 +84,8 @@ const AjvModule = require('ajv/dist/2020');
 
 const { admissionRefusal, armVerdict, referenceTo } = require('./admission');
 const { callLabel, causeNote, faultRecord, hostEnvironmentPort, persistableRequest, reasonNote, runArm } = require('./arm');
-const { runCommandEvaluator } = require('./command-evaluator');
+const { observeFrameworks, runCommandEvaluator } = require('./command-evaluator');
+const { observationProblems, observedVersions, versionsRecord } = require('./frameworks');
 const { corpusDigestOf } = require('./corpus-index');
 const { calibrationObservation, calibrationOperationId, readCalibration, runCalibration } = require('./calibration');
 const { expectedSchemaVersion, loadEngine } = require('./engine');
@@ -428,6 +434,8 @@ async function qualifyCleanControls({
 const QUALIFICATION_DIRECTORY = 'evaluator-qualification';
 /** The report `run` writes once the attempts are scored. */
 const QUALIFICATION_REPORT = 'evaluator-qualification.json';
+/** The installed frameworks a command evaluator's run observed (Story 1.44). */
+const FRAMEWORK_VERSIONS = 'framework-versions.json';
 
 /**
  * What a trial is called and where it writes. A trial of the arm's trial set
@@ -676,12 +684,16 @@ async function concludeWithRows(context, facts) {
   const { label, evidenceFile, executed, began, evidence, port, mounts, observedMounts, toolCalls } = facts;
   const { evaluator, mapping, validate } = snapshot.layer;
   // The evaluator runs from the evaluation folder, so the run holds the layer's files to the bytes it digested
-  // before each launch and after each trial. In a confined run no process of the run can write `evaluator/`
-  // (`confinement.js`), which closes the window between this read and the launch; an opted-out run keeps the reads.
+  // before each launch and after each trial, and the frameworks it declares the same way. In a confined run no
+  // process of the run can write `evaluator/` (`confinement.js`), which closes the window between this read and
+  // the launch; an opted-out run keeps the reads.
   const spawnPrefix = layerPrefix(context.registry.confinement);
-  const holdLayer = (when) => {
+  const holdLayer = async (when) => {
     const change = evaluatorLayerChange(folder, snapshot.layer.files);
     if (change !== null) throw new EvaluatorError(`the evaluation layer changed ${when}: ${change}`);
+    // The installed frameworks sit outside the tracked tree, so they are read again beside it (Story 1.44).
+    const moved = await frameworkChange(context);
+    if (moved !== null) throw new EvaluatorError(`the installed frameworks changed ${when}: ${moved}`);
   };
   const baseline = Object.values(executed.stepObservations).sort((a, b) => a.sequence - b.sequence);
   const { observationLabel, streams } = trialNames(context);
@@ -691,7 +703,7 @@ async function concludeWithRows(context, facts) {
   const judgments = {};
   let judgeResults = [];
   try {
-    holdLayer("before the evaluator's launch");
+    await holdLayer("before the evaluator's launch");
     if (evaluator.kind === 'command') {
       evaluated = await runCommandEvaluator({
         folder,
@@ -732,7 +744,7 @@ async function concludeWithRows(context, facts) {
         spawnPrefix,
       });
     }
-    holdLayer('while the evaluator ran');
+    await holdLayer('while the evaluator ran');
     // The conversion refuses a row on a key of the other kind and a score off its levels, as the schema refuses a bad shape.
     for (const probe of arm.probes) {
       const judgment = judgmentFromRows({
@@ -837,6 +849,52 @@ function setRecommendation(judgments) {
   return unsettled ? 'CONCERNS' : 'PASS';
 }
 
+/** The installed version of each framework the command evaluator declares, probed through the evaluator's own launch path. */
+function frameworkEntries(context) {
+  const { snapshot, folder, scratch, env, registry } = context;
+  return observeFrameworks({
+    folder,
+    evaluator: snapshot.layer.evaluator,
+    frameworks: snapshot.layer.frameworks,
+    scratch,
+    env,
+    spawnPrefix: layerPrefix(registry.confinement),
+  });
+}
+
+/**
+ * Reads the installed frameworks before any evaluator trial and writes
+ * `framework-versions.json` (the declared and observed versions, with the
+ * diagnostics of a probe that failed). A dependency that is missing, or
+ * installed at a version other than the declaration's, stops the run with
+ * exit 12 before a trial runs, the artifact left behind. Returns the observed
+ * `{ package, version }` list the configuration records.
+ */
+async function observeInstalledFrameworks(context) {
+  const { snapshot, writer, stop } = context;
+  const { frameworks } = snapshot.layer;
+  const entries = await frameworkEntries(context);
+  const problems = observationProblems(frameworks, entries);
+  writer.writeJson(FRAMEWORK_VERSIONS, versionsRecord(frameworks, entries, problems));
+  if (problems.length > 0) {
+    throw stop({
+      stage: 'trial',
+      exitCode: 12,
+      message: `the installed frameworks do not meet evaluator/frameworks.json, so no trial runs: ${problems.join('; ')}; see ${FRAMEWORK_VERSIONS}`,
+    });
+  }
+  return observedVersions(entries);
+}
+
+/** How the installed frameworks differ from the ones the run started with, or null when they are the same. */
+async function frameworkChange(context) {
+  const { frameworks } = context.snapshot.layer;
+  // Only a command evaluator declares frameworks; any other kind has none to hold.
+  if (frameworks === null || frameworks.length === 0) return null;
+  const problems = observationProblems(frameworks, await frameworkEntries(context), { changed: true });
+  return problems.length === 0 ? null : problems.join('; ');
+}
+
 /** The trial sets, the evaluator configuration and the index, after the preflight verdict passed. */
 async function runTrialSets(given) {
   // The trials judge with the scoring policy the run copies, read before anything ran.
@@ -928,6 +986,9 @@ async function runTrialSets(given) {
     context.sealedBrief = writer.readJson('sealed-evaluator-brief.json');
   }
 
+  // A command evaluator's installed frameworks are read before anything it judges runs (Story 1.44).
+  const observedFrameworks = kind === 'command' ? await observeInstalledFrameworks(context) : null;
+
   let calibrationDigest = null;
   if ((contract.rubrics ?? []).length > 0) {
     const { layer } = snapshot;
@@ -953,6 +1014,8 @@ async function runTrialSets(given) {
       let answer;
       const changedBefore = evaluatorLayerChange(folder, layer.files);
       if (changedBefore !== null) throw new EvaluatorError(`the evaluation layer changed before calibration: ${changedBefore}`);
+      const movedBefore = await frameworkChange(context);
+      if (movedBefore !== null) throw new EvaluatorError(`the installed frameworks changed before calibration: ${movedBefore}`);
       if (kind === 'command') {
         const result = await runCommandEvaluator({
           folder,
@@ -1008,6 +1071,8 @@ async function runTrialSets(given) {
       } else throw new Error(`the ${kind} evaluator cannot calibrate a rubric`);
       const changedAfter = evaluatorLayerChange(folder, layer.files);
       if (changedAfter !== null) throw new EvaluatorError(`the evaluation layer changed during calibration: ${changedAfter}`);
+      const movedAfter = await frameworkChange(context);
+      if (movedAfter !== null) throw new EvaluatorError(`the installed frameworks changed during calibration: ${movedAfter}`);
       treeUnchanged('calibration');
       return answer.rows.find((row) => row.key === key && row.outcome === 'score')?.score ?? null;
     };
@@ -1052,6 +1117,7 @@ async function runTrialSets(given) {
     calibrationDigest,
     calibrationMinimumAgreement: evaluation.judgeCalibration?.minimumAgreement ?? null,
     qualification: kind === 'sealed-brief-agent' ? (evaluation.evaluatorQualification ?? null) : null,
+    frameworks: observedFrameworks,
   });
   // The tools a sealed-brief agent had: one per interface the bridge exposed.
   const bridged =
@@ -1170,7 +1236,7 @@ async function runTrialSets(given) {
     evaluatorRecord: {
       kind,
       identity: configuration.evaluatorIdentity,
-      ...(kind === 'command' ? { command: layer.evaluator.command } : {}),
+      ...(kind === 'command' ? { command: layer.evaluator.command, frameworks: observedFrameworks } : {}),
       ...(kind === 'sealed-brief-agent' ? { agent: layer.evaluator.agent, model: recordedEvaluatorModel(layer.evaluator) } : {}),
     },
     model: { modelSnapshot: configuration.modelSnapshot, systemPromptDigest: configuration.systemPromptDigest },
