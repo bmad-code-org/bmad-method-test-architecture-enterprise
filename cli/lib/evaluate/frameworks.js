@@ -153,10 +153,16 @@ function learnedProblems(frameworks, learned) {
   }
   // A file edited on Windows ends its lines with CRLF; text inside a fenced code block is no heading and no record.
   const lines = [];
-  let fenced = false;
+  // CommonMark's fences: an opener of three or more backticks or tildes (up to three spaces of indent; a backtick
+  // opener's info string holds no backtick), closed only by the same character, at least as long, and nothing after it.
+  let fence = null;
   for (const line of learned.replaceAll('\r\n', '\n').split('\n')) {
-    if (/^\s*(?:```|~~~)/.test(line)) fenced = !fenced;
-    else if (!fenced) lines.push(line);
+    if (fence === null) {
+      const opener = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+      if (opener !== null && !(opener[1][0] === '`' && opener[2].includes('`')))
+        fence = { character: opener[1][0], length: opener[1].length };
+      else lines.push(line);
+    } else if (new RegExp(`^ {0,3}\\${fence.character}{${fence.length},}[ \\t]*$`).test(line)) fence = null;
   }
   const headings = lines.flatMap((line, index) => (SECTION_HEADING.test(line) ? [index] : []));
   if (headings.length > 1) return [`${LEARNED_PATH} has more than one "${LEARNED_SECTION}" section; keep one`];

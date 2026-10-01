@@ -2,7 +2,7 @@
 title: 'Story 1.44: Record installed framework versions in evaluator provenance'
 type: 'feature'
 created: '2026-10-01'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'ef1b127cc92a9981d53ab9ea15c64ff2adc0b4d5'
@@ -271,6 +271,44 @@ Each applied once to a scratch copy of the final tree and restored.
 - Schema version stated as a literal again: `npm run test:schema-versions` fails naming `frameworks.js:35`.
 - The run-artifact schema without its `problems` property: 2 of 95 `--frameworks-only` checks fail (the refused and the missing-package artifacts).
   The declaration schema accepting a tag or a wildcard: 2 of 95 (the schema and `declarationProblems` disagree).
+
+### Second batch from the test-quality lens (items A to G)
+
+Thirty-five mutations from the Opus test-quality review reproduced the 28 recorded reverts; seven items needed new cases.
+Each mutation below was applied once to a scratch copy of the tree and restored; the counts are failed checks of the named script.
+
+- A, probe confinement (high): the stub `probe.js` gained `--try-write`, a write of a gitignored cache beside itself under `evaluator/` whose result (`allowed` or `refused <code>`) joins its log line.
+  The confined `framework-probe-launch` case asserts every read's attempt is refused, and an opted-out twin case (the positive control) asserts every attempt is allowed.
+  Mutation `spawnPrefix: []` in `frameworkEntries`: 1 of 111 `--frameworks-only` checks fail (the confined write was allowed in every read).
+- B, `run`-side refusals (high): `checkFrameworkDeclarationRefusedByRun` drives `readEvaluatorLayer` directly over five variants (absent, not JSON, a version range, a probe the layer lacks, a probe that is not executable) and commits three variants in a project (`frameworks.json` removed, `^1.0.0`, the probe file deleted), asserting `run` exits 10 with the finding and leaves no sealed record.
+  `run` reads `check` first, so only the unit reaches `readFrameworks`: absent file returning `[]`, shape problems ignored, a missing probe not refused and a non-executable probe not refused each fail 1 of 111.
+- C, declaration shape (high): five new `FRAMEWORK_CASES` (a package named `bad name`, `probe.extra`, `evaluator/sub\probe.js`, `evaluator//probe.js` and `evaluator/./probe.js`).
+  Mutations: the package pattern not applied 2 of 908 `test:evaluate-check` checks fail; an unknown probe property accepted 3; a backslash accepted 2; an empty segment accepted 3; a dot segment accepted 3.
+- D, truncation (low): a `noisy` probe mode prints 5000 characters on each stream and exits 1; the case holds the entry at 5000 and the artifact's `stdout` and `stderr` at 2000.
+  `PRINTED_LENGTH` set to `1e9`: 1 of 111.
+- E, cannot-start (low): the case asserts the fault begins `the version probe of probe-fw (<command>) could not start: spawn` and ends in `ENOENT` (absent file) or `EACCES` (not executable).
+  The `spawnError` branch removed: 2 of 111 (the fault read "exited undefined").
+- F, starter headers (low): `requireText` over the header of each starter and the probe (`command-evaluator.mjs`, `agentevals-trajectory.mjs`, `promptfoo-assertions.mjs`, `installed-version.mjs`).
+  Deleting the line from each of the three starters: 1 `test:evaluate-guidance` failure each.
+- G, shard weights (low, CI-gating): my earlier method (double the loaded-local delta) was unsound.
+  From CI run 36911784360 (per-script `<seconds>s ok npm run <script>`), every script this story touched takes the measured seconds: `test:evaluate-agents` 303.9 (+27 for the new cases), `test:evaluate-evaluators` 242.6 (+3), `test:evaluate-check` 260.1 (+10), `test:evaluate-guidance` 78.4, `test:evaluate-learned-framework` 31.5, `test:evaluate-promptfoo` 75.8, `test:evaluate-tool-use` 47.7, `test:evaluate-workflow` 59.9, `test:evaluate-run` 214.5, `test:evaluate-confinement` 197.7.
+  The new cases cost about 14 seconds locally (`--frameworks-only` 49 to 63 seconds), scaled by about 1.9, the local-to-CI ratio of scripts this story did not change (`test:evaluate-workflow`, `-calibration`, `-confinement`, `-arms`, `-api` measured 1.5 to 2.4).
+  Final weights: agents 331.0, evaluators 246.0, check 270.3, guidance 79.0, learned-framework 31.5, promptfoo 75.8, tool-use 47.7, workflow 59.9, run 214.5, confinement 197.7.
+  The six shard sums by the weights on the branch before the merge: 606.1, 606.1, 606.1, 606.1, 606.1 and 606.2 seconds (the last CI run measured 549.7 to 671.2 seconds a shard; the cap is 900).
+
+### Round 2 (reviewer low): the fence reader
+
+The `LEARNED.md` reader closed a code fence on any later fence marker, whatever its character or length, so a four-backtick fence quoting three-backtick lines or a `~~~` line inside a backtick block flipped the state (a false "more than one section" or a false mismatch), and a line such as ` ```js``` ` opened a fence that hid the real records after it.
+`frameworks.js` now follows CommonMark: an opener of three or more backticks or tildes with up to three spaces of indent (a backtick opener whose info string holds a backtick is no fence), closed only by a line of the same character, at least as long, with nothing after it.
+New cases in `test-evaluate-check.js`: accepted (clean cases) are a longer fence quoting a shorter one, a tilde line inside a backtick block, a tilde fence quoting the heading and an indented fence quoting the heading; refused (`FRAMEWORK_CASES`) is an inline span line followed by a stale record, which must still be read.
+Revert (the any-marker closing restored in a scratch copy): 5 of 987 `test:evaluate-check` checks fail (three in the span-line case, one each in the longer-fence and tilde-line cases).
+
+### Merge with Story 2.2 (origin/main #284)
+
+`3f863342` merges `origin/main` (Story 2.2, `tea-evaluate ci`).
+It touched `check.js`, `run.js`, `calibration.js`, `evaluators.js` and `workspace.js` on main's side, beside this story's edits to `check.js`, `run.js` and `evaluators.js`.
+What the merge resolved on this story's files: `references/gaps.md` keeps this story's `tea-evaluate 12` row (installed frameworks) beside main's `13` row; `docs/reference/tea-evaluate-cli.md` keeps this story's `evaluator` rule row (declaration, probe, `LEARNED.md`) and main's rows; `tools/test-shard-weights.json` takes main's weights (`test:evaluate-ci` 271.5, `test:evaluate-confinement` 202.8, `test:evaluate-run` 217, `test:evaluate-workflow` 62) and keeps this story's weights for the scripts it measured.
+The six shard sums by the weights on the merged tree: 668.5, 668.7, 668.5, 668.7, 668.6 and 668.5 seconds.
 
 ## Verification
 

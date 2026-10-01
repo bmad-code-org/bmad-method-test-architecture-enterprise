@@ -79,7 +79,7 @@ development_status:
   1-41-confine-score-output-during-concurrent-run-directory-changes: done
   1-42-attribute-reused-operation-ids-to-their-interfaces: backlog
   1-43-keep-ungraded-framework-errors-out-of-target-findings: done
-  1-44-record-installed-framework-versions-in-evaluator-provenance: review
+  1-44-record-installed-framework-versions-in-evaluator-provenance: done
   1-45-aggregate-development-strength-through-eval-quality: done
   1-46-close-the-dogfood-suites-coverage-gaps: backlog
   1-47-distinguish-reference-risk-tables-from-the-scored-register: backlog

@@ -2573,6 +2573,19 @@ const FRAMEWORK_CASES = [
     ],
   },
   {
+    name: 'a LEARNED.md with an inline span line that opens no fence',
+    file: 'evaluator/LEARNED.md',
+    rule: 'evaluator',
+    // A backtick opener whose info string holds a backtick is no fence, so the stale record after it still counts.
+    plant: (folder) =>
+      plantFrameworks(folder, {
+        learned: learnedRecord('acme-evals@1.2.3').replace('\n\n## Primary', '\n```js```\n- Earlier: `acme-evals@1.2.2`\n\n## Primary'),
+      }),
+    expect: (output) => [
+      [output.includes('records acme-evals@1.2.3, acme-evals@1.2.2'), 'a span line opened a fake fence that hid the stale record'],
+    ],
+  },
+  {
     name: 'a LEARNED.md with two installed-version sections',
     file: 'evaluator/LEARNED.md',
     rule: 'evaluator',
@@ -3070,6 +3083,15 @@ const EVALUATOR_CLEAN_CASES = [
         learned: `${learnedRecord('acme-evals@1.2.3')}\n\`\`\`md\n## Framework and installed version\n- \`other-evals@9.9.9\`\n\`\`\`\n`,
       }),
   },
+  ...[
+    ['a longer fence that quotes a shorter one', '\n````md\n```\n## Framework and installed version\n- `other-evals@9.9.9`\n```\n````\n'],
+    ['a tilde line inside a backtick block', '\n```md\n~~~\n## Framework and installed version\n- `other-evals@9.9.9`\n```\n'],
+    ['a tilde fence that quotes the heading', '\n~~~md\n## Framework and installed version\n- `other-evals@9.9.9`\n~~~\n'],
+    ['an indented fence that quotes the heading', '\n   ```md\n## Framework and installed version\n- `other-evals@9.9.9`\n   ```\n'],
+  ].map(([name, quoted]) => ({
+    name: `a LEARNED.md with ${name}`,
+    plant: (folder) => plantFrameworks(folder, { learned: `${learnedRecord('acme-evals@1.2.3')}${quoted}` }),
+  })),
   {
     name: 'a LEARNED.md whose section heading has trailing spaces',
     plant: (folder) =>
