@@ -107,10 +107,12 @@ development_status:
   1-69-hold-the-inputs-of-an-evaluator-attempts-score-call: backlog
   1-70-refuse-promptfoo-assertion-types-whose-crash-is-graded-as-a-target-failure: backlog
   1-80-bring-a-partial-clone-project-its-tags-and-a-very-large-history-into-the-withheld-repository: backlog
+  1-90-verify-the-baseline-manifests-file-digests: backlog
+  1-91-keep-machine-paths-out-of-a-committed-baseline: backlog
   epic-1-retrospective: optional
 
-  epic-2: backlog
-  2-1-compare-runs-and-accept-a-baseline: backlog
+  epic-2: in-progress
+  2-1-compare-runs-and-accept-a-baseline: done
   2-2-plan-ci-tiers-and-run-them-with-tea-evaluate-ci: backlog
   2-3-render-evaluation-plans-in-bmad-testarch-ci: backlog
   2-4-finish-the-evaluation-with-its-ci-stage: backlog
@@ -158,6 +160,8 @@ parallel_lanes:
     - 1-51-isolate-interaction-plans-by-evaluation-partition
     - 1-46-close-the-dogfood-suites-coverage-gaps
     - 2-5-tea-runs-its-pr-tier-and-documents-evaluate
+    - 1-90-verify-the-baseline-manifests-file-digests
+    - 1-91-keep-machine-paths-out-of-a-committed-baseline
 owner_handoff:
   - key: h-1-accept-the-dogfood-baseline-and-turn-its-pr-replay-green
     owner: Murat

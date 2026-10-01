@@ -1156,4 +1156,13 @@ async function scoreProbes({
   });
 }
 
-module.exports = { SEVERITY, ScoreOutcome, combinedExit, runScoreCommand };
+module.exports = {
+  SEVERITY,
+  ScoreOutcome,
+  combinedExit,
+  inputFindings,
+  phaseSnapshotProblems,
+  regularFileBytes,
+  runDirectoryFor,
+  runScoreCommand,
+};

@@ -38,7 +38,7 @@ inputDocuments:
 
 ## Executive Summary
 
-**Scope:** full epic-level test design for Stories 1.1 to 1.70 and 1.80 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.70 and 1.80. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
+**Scope:** full epic-level test design for Stories 1.1 to 1.70, 1.80, 1.90 and 1.91 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.70, 1.80, 1.90 and 1.91. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
 
 **Risk summary:**
 
@@ -1051,6 +1051,28 @@ Added 2026-10-01 in Story 1.57. Levels: integration over real eval-quality, stat
 | Tags reach the target                 | A project with a lightweight and an annotated tag; the stub runs `git tag -l` and `git describe --tags`; assert both listed and no remote, URL or hook copied    | Integration | P1  | Dropping the tag copy lists nothing               |
 | A very large history builds           | A stub `git` on `PATH` prints more than six million ids for the walk; assert the run completes and the walk is read as a stream                                  | Integration | P1  | A walk that buffers all output fails with ENOBUFS |
 | The reference drops the three limits  | Read `### File-system confinement` by its exact heading                                                                                                          | Static      | P2  | Leaving either limit fails the case               |
+
+### Story 1.90: Verify the baseline manifest's file digests
+
+Added 2026-10-01 in Story 2.1. Levels: integration, static. Files: `test/test-evaluate-check.js` (`test:evaluate-check`) and `test/test-evaluate-compare.js` (`test:evaluate-compare`).
+
+| AC                                                                    | Test                                                                                                                                                                                 | Level       | P   | Revert check                                                               |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------- | --- | -------------------------------------------------------------------------- |
+| `check` names each file that differs from the manifest                | Accept a baseline, then edit one file by one byte, delete a file the `files` map lists and add an unlisted file in turn; assert a `baseline-digest` finding naming each, and exit 10 | Integration | P0  | Removing the comparison passes the file edited by one byte                 |
+| A plain `compare` refuses such a baseline before reading its evidence | Run `compare` over the same three edited baselines; assert exit 10, no verdict and no read of the baseline's evidence                                                                | Integration | P0  | Removing the check from `compare` lets the edited evidence reach a verdict |
+| A freshly accepted baseline passes both                               | Accept a baseline and run `check` and `compare` over it; assert exit 0 from `check` and a verdict from `compare`                                                                     | Integration | P1  | A check that refuses a clean baseline fails both cases                     |
+| The reference documents the rule                                      | Read the `check` rule list and the `compare` section for `baseline-digest`                                                                                                           | Static      | P2  | Removing the rule from either place fails the read                         |
+
+### Story 1.91: Keep machine paths out of a committed baseline
+
+Added 2026-10-01 in Story 2.1. Levels: integration, static. File: `test/test-evaluate-compare.js` (`test:evaluate-compare`). Stories 2.2 to 2.5 commit fixture baselines before this story runs, so this story re-accepts them in its own pull request.
+
+| AC                                                         | Test                                                                                                                                                                                                            | Level       | P   | Revert check                                                   |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | --- | -------------------------------------------------------------- |
+| The runtime records neutral path forms                     | Run over a project under a distinctive absolute path and temporary directory; assert `run.json`, each `score.json` and each observation record run-relative or placeholder forms, and each digest still matches | Integration | P0  | Restoring an absolute path fails the scan below                |
+| No file under `baseline/` carries a machine path           | Accept that run, then scan every file under `baseline/` byte for byte for the distinctive path, the home directory and the temporary root; assert no hit                                                        | Integration | P0  | Restoring an absolute path in any baseline file fails the scan |
+| The replay placement still scores to the accepted evidence | Copy the baseline to `runs/<acceptedRun>/` in a scratch folder and score it; assert the evidence bytes equal the accepted ones                                                                                  | Integration | P0  | A substitution that moves a digest anchor fails the replay     |
+| Committed fixture baselines pass the scan                  | Run the same scan over every committed `baseline/` under `test/fixtures/` and `test/evaluations/`                                                                                                               | Static      | P1  | A fixture baseline that keeps a machine path fails the scan    |
 
 ## The Dogfood Proof (AD-15)
 

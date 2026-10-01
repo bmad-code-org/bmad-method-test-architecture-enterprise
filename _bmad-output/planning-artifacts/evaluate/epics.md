@@ -23,7 +23,7 @@ inputDocuments:
 
 ## Overview
 
-This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and seventy-seven stories, including H.1 (Stories 1.27 to 1.70 and 1.80 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
+This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and seventy-nine stories, including H.1 (Stories 1.27 to 1.70, 1.80, 1.90 and 1.91 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
 
 Evaluate is fully stacked. The stack runs system under test, then the evaluation (the mechanism that runs the system, collects evidence and makes judgments), then the Behavioral Evaluation Contract (what behavior matters, what evidence counts, how success and failure resolve), then eval-quality (contract sanity, evidence support, and whether the evaluation catches defects). TeA owns every layer above eval-quality, including each concern eval-quality states it leaves to the caller, so an adopter can evaluate any target end to end. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3 onward, Epic 2 and H.1 to close the plan gap audit; the Traceability section maps each audit item to the story that closes it.
 
@@ -150,7 +150,7 @@ None. Evaluate has no graphical interface.
 ### Epic 1: The Evaluate authoring loop
 
 An adopter describes a target, answers Evaluate's questions, chooses or builds the evaluation layer and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches the seeded defect, with the gaps named and closed. The epic closes by running Evaluate on `bmad-testarch-evaluate` itself, then proving the guidance on two more target kinds, on seeded weaknesses and on an evaluation framework its guides never name.
-Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.70 and 1.80.
+Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.70, 1.80, 1.90 and 1.91.
 
 **FRs covered:** FR1 to FR10, FR13, FR14.
 
@@ -237,12 +237,14 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 69    | 1.69  | 1.68                         |
 | 70    | 1.70  | 1.43                         |
 | 71    | 1.80  | 1.57                         |
-| 72    | 2.1   | 1.16, 1.26, 1.45             |
-| 73    | 2.2   | 2.1                          |
-| 74    | 2.3   | 2.2                          |
-| 75    | 2.4   | 2.3                          |
-| 76    | 2.5   | 2.4                          |
-| 77    | H.1   | 2.5                          |
+| 72    | 1.90  | 2.1                          |
+| 73    | 1.91  | 2.1                          |
+| 74    | 2.1   | 1.16, 1.26, 1.45             |
+| 75    | 2.2   | 2.1                          |
+| 76    | 2.3   | 2.2                          |
+| 77    | 2.4   | 2.3                          |
+| 78    | 2.5   | 2.4                          |
+| 79    | H.1   | 2.5                          |
 
 ### Parallel lanes (from 2026-10-01)
 
@@ -252,7 +254,7 @@ The table above gives every story's dependencies. Since Story 1.40 merged, the s
 
 **Lane 2: confinement and process lifecycle** (own worktree): 1.62, 1.57, 1.58, 1.59, 1.60, 1.63, 1.61, 1.52, 1.53, 1.54, 1.80. Story 1.62 goes first because it extracts the shared sandbox primitives the confinement stories build on. Story 1.60 may remove 1.63's premise, so 1.63 is re-read after it. Story 1.58 precedes 1.54, since both track the run's private scratch directories. Stories 1.52 to 1.54 touch the preflight and workspace modules the confinement stories also edit, so they run after them.
 
-**Lane 3: engine releases, dogfood and Epic 2** (own worktree): 1.45, 2.1, 2.2, 2.3, 2.4, 1.47, 1.49, 1.48, 1.42, 1.50, 1.55, 1.56, 1.51, 1.46, 2.5. Story 1.45 starts the longest serial chain (1.45, 2.1 to 2.5, then H.1), so it runs first, and 2.5 runs last because it baselines every fixture and so waits for each story that changes committed evidence bytes (1.42, 1.44, 1.50, 1.51, 1.55, 1.56). Stories 1.47, 1.49 and 1.48 regenerate the test-design probes, so they run together with 1.48 last. Stories 1.42 and 1.50 both change the HTTP probe port and run back to back. Story 1.46 records live runs of the Evaluate skill, so it follows the skill-guide stories in other lanes (1.43, 1.44, 1.61, 1.67). Lane 3 owns every eval-quality release, because 1.42, 1.45, 1.48, 1.50 and 1.55 each need a published engine and one publisher keeps the dependency pin and `package-lock.json` ordered.
+**Lane 3: engine releases, dogfood and Epic 2** (own worktree): 1.45, 2.1, 2.2, 2.3, 2.4, 1.47, 1.49, 1.48, 1.42, 1.50, 1.55, 1.56, 1.51, 1.46, 2.5, 1.90, 1.91. Story 1.45 starts the longest serial chain (1.45, 2.1 to 2.5, then H.1), so it runs first, and 2.5 runs last because it baselines every fixture and so waits for each story that changes committed evidence bytes (1.42, 1.44, 1.50, 1.51, 1.55, 1.56). Stories 1.47, 1.49 and 1.48 regenerate the test-design probes, so they run together with 1.48 last. Stories 1.42 and 1.50 both change the HTTP probe port and run back to back. Story 1.46 records live runs of the Evaluate skill, so it follows the skill-guide stories in other lanes (1.43, 1.44, 1.61, 1.67). Lane 3 owns every eval-quality release, because 1.42, 1.45, 1.48, 1.50 and 1.55 each need a published engine and one publisher keeps the dependency pin and `package-lock.json` ordered. Stories 1.90 and 1.91 follow 2.5: 1.90 edits the baseline `check` and `compare` read, and 1.91 re-accepts the fixture baselines Stories 2.2 to 2.5 commit, so it waits for every one of them.
 
 Rules the lanes share:
 
@@ -1887,6 +1889,48 @@ So that a confined run needs neither an opt-out nor a changed target (AD-7, AD-8
 **Dependencies:** 1.57.
 **Gate:** `test:evaluate-confinement`, `npm test`.
 
+### Story 1.90: Verify the baseline manifest's file digests
+
+Added 2026-10-01 in Story 2.1. `compare --accept` writes `baseline/baseline.json` with a `files` map of every baseline member's path to its `digestBytes`. Neither `compare` nor `tea-evaluate check` re-verifies those digests against the bytes in `baseline/`, so a hand-edited baseline file passes both while the manifest claims otherwise. Only Story 2.2's replay would eventually disagree, and only for the files it reads.
+
+As an adopter reviewing a baseline pull request,
+I want `check` and `compare` to refuse a baseline whose bytes differ from its manifest,
+So that a baseline edited by hand cannot pass as the one that was accepted (AD-12).
+
+**Acceptance Criteria:**
+
+**Given** a baseline written by `compare --accept`
+**When** a `baseline/` file is edited by one byte, a file the manifest's `files` map lists is missing, or a file other than `baseline.json` sits in `baseline/` with no entry in the map
+**Then** `check` reports a `baseline-digest` finding and exits 10, naming each file whose `digestBytes` differs from the map, each map entry whose file is missing and each unlisted file; removing the comparison passes a file edited by one byte
+**And** a plain `compare` refuses a baseline that fails the same check, with exit 10 and no verdict, before it reads the baseline's evidence; removing the check from `compare` lets the edited file's evidence reach a verdict
+**And** a freshly accepted baseline passes both, a `test:evaluate-check` case and a `test:evaluate-compare` case that each accept a baseline and run the command over it, and fail while either command refuses it
+**And** the reference's `check` rule list and its `compare` section document the `baseline-digest` rule, and a static test fails if the rule is removed from either.
+
+**Dependencies:** 2.1.
+**Gate:** `npm test`, `npm run docs:validate-links`, `npm run docs:build`, engine check.
+
+### Story 1.91: Keep machine paths out of a committed baseline
+
+Added 2026-10-01 in Story 2.1. `compare --accept` copies the run's files byte for byte, so every digest `run.json` recorded still matches. Several of those files carry the absolute paths of the machine that produced the run: `run.json`'s `adopterTree.repository` and workspace paths, the recorded argv and staging path in each `scores/<id>/<probeId>/score.json`, and the observations' recorded paths. A baseline committed to a public repository therefore publishes the maintainer's home directory and temporary directory names.
+
+As a maintainer committing an accepted baseline,
+I want the machine paths absent from what `compare --accept` writes, with every digest still holding,
+So that a public baseline reveals no machine (AD-12).
+
+**Acceptance Criteria:**
+
+**Given** a run produced under an absolute project path and an absolute temporary directory
+**When** the runtime records the files `compare --accept` later copies
+**Then** it records neutral, run-relative or placeholder path forms in them; the build chooses between recording relative paths at the source and a documented neutral substitution at accept time that keeps each digest anchor valid, and records the choice and why, because rewriting a digest-anchored file moves its digest; restoring an absolute path makes the scan in the next criterion fail
+**And** a `test:evaluate-compare` case runs an accept over a project under a distinctive absolute path and a distinctive temporary directory, then scans every file under `baseline/` byte for byte and asserts that none contains that path, the home directory or the temporary root
+**And** the replay placement still works: a copy of the baseline at `runs/<acceptedRun>/` in a scratch folder scores to the accepted evidence bytes, a `test:evaluate-compare` case
+**And** the fixture baselines committed by Stories 2.2 to 2.5 pass the same scan, which runs over every committed `baseline/` under `test/fixtures/` and `test/evaluations/`.
+
+Stories 2.2 to 2.5 commit fixture baselines before this story runs, so this story re-accepts them in its own pull request.
+
+**Dependencies:** 2.1.
+**Gate:** `npm test`, `npm run docs:validate-links`, `npm run docs:build`, engine check.
+
 ## Epic 2: Continuous proof in CI
 
 The evaluation Epic 1 produced is proven on every pull request, with the evidence to audit it.
@@ -1903,8 +1947,8 @@ So that drift in strength or evidence is visible and a baseline changes only by 
 
 **Given** `test/lib/compare-dominance.js` and `test/lib/compare-eval-runs.js`
 **When** `cli/lib/evaluate/compare.js` generalizes them and `tea-evaluate compare` ships
-**Then** it compares a run with `baseline/` through `compareDominance` and reports `refused` when `comparabilityKey` differs, including across `evalQualityVersion`
-**And** `compare --accept` writes `baseline/` (contract snapshot, sealed brief, qualified probes, observations, preflight verdict, sealed records, per-trial-set isolation manifests, evaluator configuration, scoring policy, evidence) and `baseline/qualification/`, and refuses a run whose `run.json` says `dirty: true`; a replay through `score` needs every one of these, so omitting the isolation manifests makes Story 2.2's replay exit 3
+**Then** it compares a run with `baseline/` through `compareDominance` and reports `refused` when `comparabilityKey` differs, including across `evalQualityVersion` (amended 2026-10-01 in Story 2.1: `comparabilityKey` lives in each score's `evidence-artifact.json`, not in `run.json`, so the key refusal reads the evidence artifacts probe by probe; the `evalQualityVersion` refusal reads `run.json`, since every artifact below it was scored by that install, and routes to `compare --accept`; the partitions and the probe sets must also agree, and a held-out or `both` run is accepted as the partition it recorded)
+**And** `compare --accept` writes `baseline/` (contract snapshot, sealed brief, qualified probes, observations, preflight verdict, sealed records, per-trial-set isolation manifests, evaluator configuration, scoring policy, evidence) and `baseline/qualification/`, and refuses a run whose `run.json` says `dirty: true`; a replay through `score` needs every one of these, so omitting the isolation manifests makes Story 2.2's replay exit 3 (amended 2026-10-01 in Story 2.1: `baseline/` mirrors the run directory's relative paths byte for byte, so every digest `run.json` recorded still matches; the actions artifact each record references stays under `trials/`, where the record names it, since `score` refuses a record whose actions artifact is absent. The sealed records name their artifacts as `runs/<acceptedRun>/...` and `score` refuses a reference outside the run directory it scores, so Story 2.2's replay places the baseline's bytes at `runs/<acceptedRun>/` inside a scratch copy of the evaluation folder and rewrites no path. `compare --accept` also refuses a run `score` would reject: any finding of `score`'s input checks, or a latest `score.json` recording an infrastructure failure or a refused strength aggregate)
 **And** since `compareDominance` already reports `incomparable` for differing `comparabilityKey`, the named revert check for TeA's own refusal is the case whose only difference is `evalQualityVersion` in `run.json`
 **And** `test/lib/compare-dominance.js` and `test/lib/compare-eval-runs.js` import the runtime module and keep only TeA data
 **And** `test/test-evaluate-compare.js`, chained into `npm test` as `test:evaluate-compare`, which the `chain` matrix runs (amended 2026-09-25 in Story 1.9: CI runs the `npm test` chain in shards, so a chained script needs no step of its own), asserts each case, and it fails when the dirty refusal is removed
@@ -1948,7 +1992,7 @@ So that the pipeline enforces eval-quality's verdicts without a second taxonomy 
 **Given** `test/test-evaluate-ci.js`, chained into `npm test` as `test:evaluate-ci`, which the `chain` matrix runs (amended 2026-09-25 in Story 1.9: CI runs the `npm test` chain in shards, so a chained script needs no step of its own)
 **When** it runs over fixture plans and a fixture evaluation with a committed test baseline under `test/fixtures/evaluate/`
 **Then** it asserts the AD-10 enforcement table row by row, the outcome-state mapping, the tier membership and a replay that reproduces the fixture evidence
-**And** replay reads produced evidence only from a fresh `runs/<invocationId>/replay/` directory and baseline bytes only from `baseline/`; produced evidence that differs from the baseline exits 13, class evaluation evidence drift, action block (an AD-10 row)
+**And** replay reads baseline bytes only from `baseline/`: it places them at `runs/<acceptedRun>/` inside a scratch copy of the evaluation folder, because the sealed records name their artifacts under that path and `score` refuses a reference outside the run directory it scores (amended 2026-10-01 in Story 2.1), and it writes produced evidence only to a fresh `runs/<invocationId>/replay/` directory; produced evidence that differs from the baseline exits 13, class evaluation evidence drift, action block (an AD-10 row)
 **And** mutating one committed baseline evidence byte exits 13, which catches a replay that compares a file with itself
 **And** mutating the clean-control leg's `exitCode` in one committed baseline observation exits 13 while eval-quality's own exits stay as recorded, and with `TEA_EVALUATE_ENGINE_CLI` pointed at a logging shim the argv log shows `preflight` and `score` invoked, which together catch a replay that copies baseline evidence forward without re-scoring
 **And** a baseline tree whose `policy/` digest differs from the baseline's recorded policy is a stale baseline under AD-10

@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:tea:evaluate:schema:baseline",
+  "title": "baseline/baseline.json",
+  "description": "The manifest tea-evaluate compare --accept writes beside the snapshot of the accepted run: which run and score invocation it is, the partition and engine version it was measured under, the digests that identify its corpus, contract and policy, the digestBytes of every file the snapshot holds (relative to baseline/), and each qualification file as a public reference under baseline/qualification/ that tea-evaluate check verifies. The tea-evaluate runtime owns this schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "acceptedRun",
+    "scoreInvocationId",
+    "partition",
+    "evalQualityVersion",
+    "corpusDigest",
+    "contractDigest",
+    "policyDigest",
+    "files",
+    "qualification"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "acceptedRun": { "type": "string", "minLength": 1 },
+    "scoreInvocationId": { "type": "string", "minLength": 1 },
+    "partition": { "enum": ["development", "held-out", "both"] },
+    "evalQualityVersion": { "type": "string", "minLength": 1 },
+    "corpusDigest": { "$ref": "#/$defs/Digest" },
+    "contractDigest": { "$ref": "#/$defs/Digest" },
+    "policyDigest": { "$ref": "#/$defs/Digest" },
+    "files": {
+      "description": "Every file of the snapshot except baseline.json itself: its path relative to baseline/ (the run directory's own relative path) and its digestBytes.",
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/RelativePath" },
+      "additionalProperties": { "$ref": "#/$defs/Digest" }
+    },
+    "qualification": {
+      "description": "The run's qualification files, each as the public artifact reference tea-evaluate check verifies against baseline/qualification/.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["storage", "path", "privateRef", "digest"],
+        "properties": {
+          "storage": { "const": "public" },
+          "path": { "type": "string", "pattern": "^baseline/qualification/.+" },
+          "privateRef": { "type": "null" },
+          "digest": { "$ref": "#/$defs/Digest" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "Digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "RelativePath": {
+      "description": "A POSIX path inside baseline/: relative, with no empty, \".\" or \"..\" segment.",
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?![\\s\\S]*(?:^|/)\\.{1,2}(?:/|$))(?![\\s\\S]*//)(?![\\s\\S]*/$)[^\\\\\\u0000-\\u001f]+$"
+    }
+  }
+}
