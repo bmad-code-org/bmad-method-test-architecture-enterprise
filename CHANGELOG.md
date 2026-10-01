@@ -261,6 +261,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The two tests that read `npm pack --dry-run --json` (`test:install`'s builder-artifact exclusion and `test:layering-boundary-lineage`'s published-file scan) read both shapes npm prints: an array with one entry per package (npm 11 and earlier) and one object keyed by the package name (npm 12). The publish workflow installs the latest npm, so with npm 12.2.0 `test:install` failed there on `object is not iterable` and every push to `main` still failed at `Run tests` after the lockfile fix. `test/lib/pack-listing.js` holds the reading, with a unit for each shape.
 - The publish workflow installs the latest npm on the runner. Its pinned `npm@11.6.2` could not `npm ci` a lockfile written by a newer npm (`Missing: google-logging-utils@1.2.0 from lock file`), so every push to `main` since the lockfile moved failed to publish.
 - Evaluate's gap guide now states the engine's `malformed-input` contract requirement: every relevant operation needs a type-violating planned input and an oracle check addressing its step. A blind repair exposed that caught malformed probes alone left the coverage gap open (Story 1.25).
 - The pre-commit gate clears Git's hook-local repository selectors while running `npm test`, and the test-review CLI fixture clears inherited Git selectors before building its scratch repository. This keeps nested fixture checkouts from changing the contributor's branch (Story 1.24).

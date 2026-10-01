@@ -17,6 +17,7 @@ const fs = require('node:fs/promises');
 const { execFileSync } = require('node:child_process');
 const { parse } = require('csv-parse/sync');
 const yaml = require('js-yaml');
+const { packedPaths: readPackedPaths } = require('./lib/pack-listing');
 
 async function pathExists(filePath) {
   try {
@@ -641,8 +642,7 @@ async function runTests() {
       await fs.writeFile(plantedReport, '# analysis\n', { flag: 'wx' });
 
       const packOutput = execFileSync('npm', ['pack', '--dry-run', '--json'], { cwd: projectRoot, encoding: 'utf8' });
-      const [packResult] = JSON.parse(packOutput);
-      const packedPaths = packResult.files.map((file) => file.path);
+      const packedPaths = readPackedPaths(packOutput);
       assert(!packedPaths.some((filePath) => filePath.endsWith('.memlog.md')), 'npm pack excludes a planted .memlog.md builder artifact');
       assert(!packedPaths.some((filePath) => filePath.includes('/.analysis/')), 'npm pack excludes a planted .analysis/ builder artifact');
 
@@ -668,6 +668,25 @@ async function runTests() {
   console.log('');
 
   // ============================================================
+  // The listing reads both shapes `npm pack --json` prints: an array of one entry per package (npm 11 and
+  // earlier) and one object keyed by the package name (npm 12), which the Publish workflow installs.
+  {
+    const entry = { files: [{ path: 'LICENSE' }, { path: 'src/a.md' }] };
+    const expected = JSON.stringify(['LICENSE', 'src/a.md']);
+    assert(JSON.stringify(readPackedPaths(JSON.stringify([entry]))) === expected, 'the pack listing reads the array shape');
+    assert(
+      JSON.stringify(readPackedPaths(JSON.stringify({ 'some-package': entry }))) === expected,
+      'the pack listing reads the object shape',
+    );
+    let refused = null;
+    try {
+      readPackedPaths(JSON.stringify({ 'some-package': { id: 'x' } }));
+    } catch (error) {
+      refused = error;
+    }
+    assert(refused !== null, 'the pack listing refuses an entry with no files array');
+  }
+
   // Test Suite 6: Scoped Output Layout
   // ============================================================
   console.log(`${colors.yellow}Test Suite 6: Scoped Output Layout${colors.reset}\n`);
