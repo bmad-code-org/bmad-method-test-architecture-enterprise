@@ -7,10 +7,13 @@
  * fields: `failureClass`, `measurements`, `thresholds`, `declaredRepetitions`.
  *
  * For a suite whose stored result carries `eval-quality`'s `ComparableResult`
- * fields (see `isComparableShaped`), the comparison calls
- * `test/lib/compare-dominance.js`'s `compareStoredResults` (Story 5.1)
- * directly, so a suite that does produce `eval-quality`'s `ComparableResult`
- * shape is compared through the package's own dominance rule.
+ * fields (see `isComparableShaped`), the comparison calls the runtime's
+ * `dominanceBetween` (`cli/lib/evaluate/compare.js`, which holds the
+ * comparison logic since Story 2.1), so a suite that does produce
+ * `eval-quality`'s `ComparableResult` shape is compared through the package's
+ * own dominance rule. This file keeps TeA's data: the suite and
+ * `suiteResultRecord` shapes, thresholds, repetitions, skipped suites and
+ * measurement changes.
  *
  * WHAT COUNTS AS "THE SAME SUITE-MANIFEST CONFIGURATION"
  *
@@ -38,7 +41,7 @@
 'use strict';
 
 const { scoringPolicy } = require('./eval-quality-inputs');
-const { compareStoredResults } = require('./compare-dominance');
+const { dominanceBetween, isComparableShaped, versionRefusalReason } = require('../../cli/lib/evaluate/compare');
 
 /**
  * @param {Record<string, number>} a
@@ -108,12 +111,8 @@ function configMismatches(previousSuites, currentSuites) {
  * @returns {string|null}
  */
 function refusalReason(previous, current) {
-  if (previous.evalQualityVersion !== current.evalQualityVersion) {
-    return (
-      `eval-quality version differs (${previous.evalQualityVersion} vs ${current.evalQualityVersion}): the two runs were not measured ` +
-      'by the same installed package, so no drift between them is meaningful'
-    );
-  }
+  const version = versionRefusalReason(previous, current);
+  if (version !== null) return version;
   const mismatches = configMismatches(suitesById(previous), suitesById(current));
   if (mismatches.length > 0) {
     return `the suite manifest's own configuration differs between the two runs: ${mismatches.join('; ')}`;
@@ -164,45 +163,6 @@ function measurementChanges(previousSuiteResult, currentSuiteResult) {
 }
 
 /**
- * Whether a stored suite result carries the `ComparableResult` shape
- * `compareStoredResults` (TEA Story 5.1) reads: `{outcomes, strength,
- * comparabilityKey, scoredProbeId, reducedProbeOutcomes, trials}`. No suite
- * `eval:all` runs today produces this (see the module comment), so this always
- * reads false against a real stored record.
- * It is a structural check rather than a schema check on purpose: a schema-valid
- * `evalResultSchema` record can never carry these keys at all (the schema is
- * `.strict()`), so this is the only test that can ever say yes, the day a suite
- * genuinely starts carrying them under a schema revision that allows it.
- *
- * The last three keys arrived with `EvidenceArtifact` schema version 4, whose
- * `compareDominance` recomputes each side's trial-set reduction from them before
- * comparing. A result stored in the version 3 shape lacks them, so it reads as
- * not comparable here and never reaches the package. The same holds for a half
- * migrated one: the recomputation dereferences `trials.completedAttempts`,
- * `trials.invalidatedAttempts`, and each reduced entry's `trialVotes` and
- * `invalidatedAttempts`, so each of those must be an array.
- *
- * @param {object} suiteResult
- * @returns {boolean}
- */
-function isComparableShaped(suiteResult) {
-  const isObject = (value) => value !== null && typeof value === 'object';
-  return (
-    Array.isArray(suiteResult?.outcomes) &&
-    isObject(suiteResult?.strength) &&
-    typeof suiteResult?.comparabilityKey === 'string' &&
-    (suiteResult?.scoredProbeId === null || typeof suiteResult?.scoredProbeId === 'string') &&
-    Array.isArray(suiteResult?.reducedProbeOutcomes) &&
-    suiteResult.reducedProbeOutcomes.every(
-      (entry) => isObject(entry) && Array.isArray(entry.trialVotes) && Array.isArray(entry.invalidatedAttempts),
-    ) &&
-    isObject(suiteResult?.trials) &&
-    Array.isArray(suiteResult?.trials?.completedAttempts) &&
-    Array.isArray(suiteResult?.trials?.invalidatedAttempts)
-  );
-}
-
-/**
  * The dominance relation between two suites' stored results, when both carry
  * `ComparableResult` data, or `null` when either does not. Reads
  * `test/probes/scoring-policy.json`'s `severityFloor` the same way
@@ -216,7 +176,7 @@ function isComparableShaped(suiteResult) {
 async function dominanceFor(previousSuiteResult, currentSuiteResult) {
   if (!isComparableShaped(previousSuiteResult) || !isComparableShaped(currentSuiteResult)) return null;
   const policy = await scoringPolicy();
-  return compareStoredResults(previousSuiteResult, currentSuiteResult, policy.severityFloor);
+  return dominanceBetween(previousSuiteResult, currentSuiteResult, policy.severityFloor);
 }
 
 /**

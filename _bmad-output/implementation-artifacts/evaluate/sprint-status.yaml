@@ -107,8 +107,8 @@ development_status:
   1-80-bring-a-partial-clone-project-its-tags-and-a-very-large-history-into-the-withheld-repository: backlog
   epic-1-retrospective: optional
 
-  epic-2: backlog
-  2-1-compare-runs-and-accept-a-baseline: backlog
+  epic-2: in-progress
+  2-1-compare-runs-and-accept-a-baseline: review
   2-2-plan-ci-tiers-and-run-them-with-tea-evaluate-ci: backlog
   2-3-render-evaluation-plans-in-bmad-testarch-ci: backlog
   2-4-finish-the-evaluation-with-its-ci-stage: backlog

@@ -1,72 +1,26 @@
 /**
- * A TEA-level wrapper around `eval-quality`'s own `compareDominance` (AD-7),
- * closing the one gap the package leaves to its caller.
+ * TeA's door to `eval-quality`'s `compareDominance` (AD-7) for its own tests
+ * and tools.
  *
- * The package's `compareDominance` returns the same four-valued
- * `'incomparable'` whether two results disagree on `comparabilityKey` (they
- * do not measure the same scoring-policy-and-probe-set at all) or whether
- * they agree and a genuine component-wise comparison finds no winner. A
- * caller that treats that string as one of four ordinary verdicts would
- * silently accept "these two runs are not comparable in the first place" as
- * a measured tie. `compareStoredResults` checks `comparabilityKey` first and
- * refuses distinctly, with the reason, before the package ever runs.
- * Everything else — including each side's own `strength.comparable`, which
- * the package already checks and folds into its own `'incomparable'`
- * answer — is left untouched: this wrapper adds one check ahead of the
- * package's, it does not relax or duplicate what the package already does.
+ * The logic is the runtime's since Story 2.1: `cli/lib/evaluate/compare.js`
+ * holds `compareStoredResults`, which checks `comparabilityKey` ahead of the
+ * package and refuses distinctly, with the reason, because the package answers
+ * `'incomparable'` both when two results do not measure the same scoring policy
+ * and probe set and when they agree and a component-wise comparison finds no
+ * winner. This file keeps the names its callers import; it holds no logic and
+ * no TeA data of its own, since the one TeA input (the scoring policy's
+ * `severityFloor`) is each caller's own argument.
  *
- * Usage: `await compareStoredResults(a, b, severityFloor)`, where `a` and
- * `b` are each the `{outcomes, strength, comparabilityKey, scoredProbeId,
- * reducedProbeOutcomes, trials}` slice of a stored `EvidenceArtifact`
- * (`eval-quality`'s own `ComparableResult` shape; the last three arrived
- * with schema version 4, and the package recomputes each side's trial-set
- * reduction from them before it compares), and `severityFloor` is the
- * scoring policy's own declared floor (`test/probes/scoring-policy.json`'s
- * `severityFloor`, read through `scoringPolicy()` in
- * `./eval-quality-inputs.js`).
+ * Usage: `await compareStoredResults(a, b, severityFloor)`, where `a` and `b`
+ * are each the `{outcomes, strength, comparabilityKey, scoredProbeId,
+ * reducedProbeOutcomes, trials}` slice of a stored `EvidenceArtifact` and
+ * `severityFloor` is the scoring policy's own declared floor
+ * (`test/probes/scoring-policy.json`'s `severityFloor`, read through
+ * `scoringPolicy()` in `./eval-quality-inputs.js`).
  */
 
 'use strict';
 
-const { loadEvalQuality } = require('./eval-quality-inputs');
-
-/**
- * `null` when both sides measure the same scoring-policy-and-probe-set, the
- * reason string otherwise.
- * @param {{comparabilityKey: string}} a
- * @param {{comparabilityKey: string}} b
- * @returns {string | null}
- */
-function refusalReason(a, b) {
-  if (a.comparabilityKey === b.comparabilityKey) return null;
-  return (
-    `comparabilityKey differs (${a.comparabilityKey} vs ${b.comparabilityKey}): the two results do not ` +
-    'measure the same scoring policy and probe set, so no relation between them is meaningful'
-  );
-}
-
-/**
- * The `ComparableResult` slice one stored result carries.
- * @typedef {object} ComparableSlice
- * @property {object[]} outcomes
- * @property {object} strength
- * @property {string} comparabilityKey
- * @property {string|null} scoredProbeId
- * @property {object[]} reducedProbeOutcomes
- * @property {object} trials
- */
-
-/**
- * @param {ComparableSlice} a
- * @param {ComparableSlice} b
- * @param {string} severityFloor
- * @returns {Promise<{ok: true, relation: string} | {ok: false, reason: string}>}
- */
-async function compareStoredResults(a, b, severityFloor) {
-  const reason = refusalReason(a, b);
-  if (reason !== null) return { ok: false, reason };
-  const { compareDominance } = await loadEvalQuality();
-  return { ok: true, relation: compareDominance(a, b, severityFloor) };
-}
+const { compareStoredResults, refusalReason } = require('../../cli/lib/evaluate/compare');
 
 module.exports = { compareStoredResults, refusalReason };

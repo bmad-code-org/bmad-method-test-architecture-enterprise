@@ -204,7 +204,7 @@ function generateLlmsTxt(docsDir, outputDir) {
     '',
     '## Command-line references',
     '',
-    `- **[tea-evaluate CLI](${SITE_URL}/reference/tea-evaluate-cli)** - Check, digest, preflight, run and score an evaluation folder: flags, rules and exit codes`,
+    `- **[tea-evaluate CLI](${SITE_URL}/reference/tea-evaluate-cli)** - Check, digest, preflight, run, score and compare an evaluation folder: flags, rules and exit codes`,
     `- **[tea-test-review CLI](${SITE_URL}/reference/tea-test-review-cli)** - Headless test review in CI: flags, exit codes and the JSON verdict`,
     '',
     '---',

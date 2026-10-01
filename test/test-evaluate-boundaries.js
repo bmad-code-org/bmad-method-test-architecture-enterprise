@@ -1568,16 +1568,36 @@ const MOVES = [
     specifier: '../cli/lib/evaluate/mutation',
     definitions: ['runMutationCycle'],
   },
+  // Story 2.1 (AD-12): the comparison logic of the two test helpers is the
+  // runtime's `compare.js`; the helpers keep TeA's own data and import it.
+  {
+    testFile: 'test/lib/compare-dominance.js',
+    runtimeModule: 'cli/lib/evaluate/compare.js',
+    specifier: '../../cli/lib/evaluate/compare',
+    definitions: ['compareStoredResults'],
+  },
+  {
+    testFile: 'test/lib/compare-eval-runs.js',
+    runtimeModule: 'cli/lib/evaluate/compare.js',
+    specifier: '../../cli/lib/evaluate/compare',
+    definitions: ['isComparableShaped'],
+  },
 ];
 /**
  * Wrappers a `test/lib/` file may define under a runtime function's name, each
  * with the reason. `digestFiles` hands the runtime digest TEA's own
- * file-system port as its byte reader.
+ * file-system port as its byte reader. `refusalReason` in `compare-eval-runs.js`
+ * is the run-summary refusal: the runtime's version refusal plus TeA's own
+ * suite-manifest rules (declared repetitions and thresholds), which share a name
+ * with the runtime's comparability-key refusal and are another function.
  */
-const WRAPPER_EXEMPTIONS = { 'test/lib/eval-record.js': new Set(['digestFiles']) };
+const WRAPPER_EXEMPTIONS = {
+  'test/lib/eval-record.js': new Set(['digestFiles']),
+  'test/lib/compare-eval-runs.js': new Set(['refusalReason']),
+};
 const TEST_LIB = 'test/lib';
 /** The runtime modules Story 1.5 moved code into; every function each declares is guarded. */
-const GUARDED_MODULES = [...MOVES.map((move) => move.runtimeModule), 'cli/lib/evaluate/bounded-probe.js'];
+const GUARDED_MODULES = [...new Set(MOVES.map((move) => move.runtimeModule)), 'cli/lib/evaluate/bounded-probe.js'];
 const SCHEMA_VERSIONS_FILE = 'test/lib/eval-quality-schema-versions.js';
 const SCHEMA_VERSION_DEFINITIONS = ['expectedSchemaVersion', 'schemaVersionProblems'];
 const ENGINE_FILE = 'cli/lib/evaluate/engine.js';
@@ -2196,6 +2216,44 @@ const MOVE_PLANTS = [
         ),
     },
     expect: "test/lib/probe-targets.js exports a registry that cli/lib/evaluate/registry.js's createRegistry did not build",
+  },
+  {
+    name: 'compare-dominance.js no longer requiring the compare module',
+    edit: {
+      'test/lib/compare-dominance.js': (text) => text.replace("require('../../cli/lib/evaluate/compare')", "require('./compare-copy')"),
+    },
+    expect: 'does not require ../../cli/lib/evaluate/compare',
+  },
+  {
+    name: 'compareStoredResults moved back into compare-dominance.js',
+    edit: {
+      'test/lib/compare-dominance.js': (text) =>
+        `${text.replace('const { compareStoredResults, refusalReason }', 'const { refusalReason }')}\nasync function compareStoredResults() {\n  return { ok: true, relation: "equivalent" };\n}\n`,
+    },
+    expect: 'test/lib/compare-dominance.js defines compareStoredResults, which lives only in cli/lib/evaluate/compare.js',
+  },
+  {
+    name: 'compare-eval-runs.js no longer requiring the compare module',
+    edit: {
+      'test/lib/compare-eval-runs.js': (text) => text.replace("require('../../cli/lib/evaluate/compare')", "require('./compare-copy')"),
+    },
+    expect: 'does not require ../../cli/lib/evaluate/compare',
+  },
+  {
+    name: 'isComparableShaped moved back into compare-eval-runs.js',
+    edit: {
+      'test/lib/compare-eval-runs.js': (text) =>
+        `${text.replace('const { dominanceBetween, isComparableShaped, versionRefusalReason }', 'const { dominanceBetween, versionRefusalReason }')}\nfunction isComparableShaped() {\n  return false;\n}\n`,
+    },
+    expect: 'test/lib/compare-eval-runs.js defines isComparableShaped, which lives only in cli/lib/evaluate/compare.js',
+  },
+  {
+    name: 'versionRefusalReason defined again in compare-eval-runs.js (the refusalReason exemption stays narrow)',
+    edit: {
+      'test/lib/compare-eval-runs.js': (text) =>
+        `${text.replace('const { dominanceBetween, isComparableShaped, versionRefusalReason }', 'const { dominanceBetween, isComparableShaped }')}\nfunction versionRefusalReason() {\n  return null;\n}\n`,
+    },
+    expect: 'test/lib/compare-eval-runs.js defines versionRefusalReason, which lives only in cli/lib/evaluate/compare.js',
   },
   {
     name: 'a copy of the registry module under test/lib',
