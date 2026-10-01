@@ -360,7 +360,7 @@ A completed `run` adds the contract, corpus, sealed brief and evaluator configur
 The runtime first confines a trivial process through the mechanism, since a host can carry the executable and still refuse it (a kernel that forbids unprivileged user namespaces).
 A host with neither mechanism, or one whose mechanism refuses, stops the command with exit 12 and names the reason.
 `sandbox-exec` cannot apply a profile inside a Seatbelt sandbox that restricts anything, so a `tea-evaluate` started from a sandboxed shell (an agent's tool, say) is refused on macOS; run it from an unsandboxed terminal.
-A temp directory (`TMPDIR`) inside the evaluation folder, or an evaluation folder or temp directory whose path holds a quote, a backslash or a line break, is refused the same way, since no profile can carry it.
+A temp directory (`TMPDIR`) inside the evaluation folder, or an evaluation folder or temp directory whose path holds a quote, a backslash or a line break (or another control character), is refused the same way, since no profile can carry it.
 Set `"confinement": false` in `evaluation.json` to run the targets unconfined instead; `run.json` then records `"confinement": "opt-out"`, and a confined run records `"seatbelt"` or `"bubblewrap"`.
 
 Each target runs confined, and so does every process it starts, one still running after the target exits, one started with `setsid` and one left behind by a killed target included. A confined process:
