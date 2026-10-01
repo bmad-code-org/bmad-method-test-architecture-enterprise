@@ -109,6 +109,7 @@ const {
   createWorkspace,
   gitAccessOf,
   joinAsSpelled,
+  makePrivateParent,
   makeScratchDirectory,
   realPathLoosely,
   releaseScratchDirectory,
@@ -518,7 +519,8 @@ async function pipeline(
   // Run-directory files an interrupting signal removes (the CLI's probe list
   // until its verdict), and the private directories the command makes for
   // the processes it starts (engine stages, an evaluator, a judge, the
-  // bridge), which are removed however it ends.
+  // bridge), which are removed however it ends. They sit beneath one private
+  // parent (`makePrivateParent`) a confined target is denied.
   const retractOnSignal = [];
   const scratch = [];
   // Each directory is tried on its own, write bits restored first, and one that cannot be removed is reported,
@@ -547,6 +549,9 @@ async function pipeline(
   };
   const release = cleanUpOnSignal(workspaces, controller, { onSignal });
   try {
+    // The one private parent every evaluation-layer directory is made under, before any sandbox is built, so a
+    // confined target's profile names it and covers the directories made after it (`confinement.js`).
+    makePrivateParent(scratch);
     const refused = await prepare({ folder, evaluation, seeded });
     const gameability = gameabilityProbes(folder).filter(({ probe }) => selectedProbeIds === null || selectedProbeIds.has(probe.probeId));
     if (refused !== null) return refused;
@@ -768,6 +773,7 @@ async function runInWorkspaces({
     projectRoot: pristine.root,
     workspace: pristine.top,
     git: gitAccessOf(pristine),
+    privateParent: registry.privateParent,
   });
   // The adopter's tree, read again after the qualification and after the
   // legs: a change stops the run with no qualified probe written (AD-8).
@@ -1167,6 +1173,7 @@ async function mutatedRoute({ entry, pristine, make, registry, engine, stop, log
     projectRoot: workspace.root,
     workspace: workspace.top,
     git: gitAccessOf(workspace),
+    privateParent: registry.privateParent,
   });
   log(`mutated workspace for ${mutation.mutationId}: ${workspace.root}`);
   return { label: `mutated:${mutation.mutationId}`, cwd: workspace.root, port };
@@ -1216,6 +1223,7 @@ async function qualifySeededProbe({
     projectRoot: workspace.root,
     workspace: workspace.top,
     git: gitAccessOf(workspace),
+    privateParent: registry.privateParent,
   });
   const armPort = hostEnvironmentPort({ port: adapter, registry });
   const runArmFor = async (phase) => {

@@ -54,8 +54,14 @@ const BRIDGE_NAME = 'tea-evaluate';
 const SERVER_INFO = { name: 'tea-evaluate-bridge', version: '1' };
 /** The protocol version the bridge answers with when a client names none. */
 const DEFAULT_PROTOCOL_VERSION = '2025-06-18';
-/** The longest socket path the platforms Node supports all accept (macOS's `sun_path` holds 104 bytes). */
+/**
+ * The longest socket path the platforms Node supports all accept (macOS's
+ * `sun_path` holds 104 bytes), which decides where the run's private parent is
+ * made (`workspace.js` `makePrivateParent`).
+ */
 const MAX_SOCKET_PATH = 100;
+/** The name prefix of the socket's directory beneath the run's private parent. */
+const SOCKET_DIRECTORY_PREFIX = 'bridge-';
 /** The environment variable the relay reads the admission token from. */
 const TOKEN_VARIABLE = 'TEA_EVALUATE_BRIDGE_TOKEN';
 /** The most a connection may send before it has presented the token. */
@@ -122,10 +128,25 @@ function bridgeTools(interfaces) {
     }));
 }
 
-/** Where the socket goes: a private directory, under the system temp directory unless that path is too long for a socket. */
-function socketPlace() {
+/**
+ * Where the socket goes: a private directory beneath the run's private parent
+ * (`workspace.js` `makePrivateParent`, made where a socket path fits), which a
+ * confined target cannot reach. A caller with no parent (a bridge opened
+ * outside a run) gets one under the system temp directory unless that path is
+ * too long for a socket.
+ */
+function socketPlace(scratch) {
   if (process.platform === 'win32') {
     return { directory: null, socketPath: `\\\\.\\pipe\\tea-evaluate-bridge-${crypto.randomBytes(12).toString('hex')}` };
+  }
+  if (typeof scratch.privateParent === 'string') {
+    const directory = fs.mkdtempSync(path.join(scratch.privateParent, SOCKET_DIRECTORY_PREFIX));
+    const socketPath = path.join(directory, 'bridge.sock');
+    if (Buffer.byteLength(socketPath) <= MAX_SOCKET_PATH) return { directory, socketPath };
+    fs.rmSync(directory, { recursive: true, force: true });
+    throw new Error(
+      `the run's private directory ${scratch.privateParent} leaves no room for a socket path within ${MAX_SOCKET_PATH} bytes`,
+    );
   }
   for (const base of [os.tmpdir(), '/tmp']) {
     const directory = fs.mkdtempSync(path.join(base, 'tea-evaluate-bridge-'));
@@ -153,7 +174,7 @@ function responseLine(id, outcome) {
  *   `server` is the MCP server configuration the agent's adapter starts
  */
 async function openBridge({ tools, handle, scratch = [] }) {
-  const { directory, socketPath } = socketPlace();
+  const { directory, socketPath } = socketPlace(scratch);
   if (directory !== null) scratch.push(directory);
   // The directory holds the socket alone; one that cannot be removed stays listed, for the run's end to try again.
   const removeDirectory = () => {
@@ -312,4 +333,4 @@ function relay(argv) {
 
 if (require.main === module) relay(process.argv.slice(2));
 
-module.exports = { BRIDGE_NAME, CALL_SHAPES, TOKEN_VARIABLE, bridgeTools, openBridge };
+module.exports = { BRIDGE_NAME, CALL_SHAPES, MAX_SOCKET_PATH, SOCKET_DIRECTORY_PREFIX, TOKEN_VARIABLE, bridgeTools, openBridge };

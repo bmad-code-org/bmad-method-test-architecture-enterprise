@@ -2,7 +2,7 @@
 title: "Story 1.57: Withhold the committed evaluation folder from a confined target's git history"
 type: 'bugfix'
 created: '2026-10-01'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'b4bcff028f5eebd24935b582caec73917e1e8b28'

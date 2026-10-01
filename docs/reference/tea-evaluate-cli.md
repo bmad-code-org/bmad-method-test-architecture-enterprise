@@ -368,6 +368,7 @@ Each target runs confined, and so does every process it starts, one still runnin
 
 - writes its workspace's checkout and nothing else, apart from the private directories the runtime hands it (the file a started HTTP service reports its port in, the audit report below, and a temp directory of its own for each call, which `TMPDIR`, `TMP` and `TEMP` name and which is removed when the call ends);
 - can neither read nor write anything under the evaluation folder: `contract.json`, `probes/`, `mutations/`, `corpus/`, `evaluator/`, `runs/` and the rest; Seatbelt answers `EPERM`, and Bubblewrap covers the folder with an empty read-only file system, so a read answers `ENOENT` and a write `EROFS`;
+- can neither read, write nor connect to a unix socket under the run's private parent directory, which holds the evaluation layer's private directories: the bridge's configuration (and its admission token) and socket, and the working directories of an evaluator and the judge (see [The bridge's admission token](#the-bridges-admission-token)); Seatbelt answers `EPERM`, and Bubblewrap covers the directory with an empty read-only file system;
 - reads the rest of the host, since Node, git and your toolchain read from the system, and nothing of the project's git directory but its own worktree's entry in it: Seatbelt answers `EPERM`, and Bubblewrap covers the git directory with an empty file system, the worktree's entry bound back in read-only.
   The target's git sees the evaluated commit's full history with the evaluation folder as an empty tree, and the project's git directory is withheld: the runtime builds a private repository for each worktree beside its checkout, outside what the target may write, with every commit, tree and blob your repository holds for the evaluated commit's history, every commit id as your repository has it, except the objects reachable only through the evaluation folder.
   Each tree your history holds at the evaluation folder's path is replaced by the empty tree (a `refs/replace/` entry), so `git show` and `git cat-file` find no committed file of the folder at the evaluated commit, at an older one or by a blob id read from `git log --raw`, `git --no-replace-objects` finds no folder object, and `git status`, `git log`, `git diff` and `git show HEAD:<path>` work over the rest of the tree and list no deletion.
@@ -393,7 +394,7 @@ An evaluator that writes a cache beside itself under `evaluator/` fails its writ
 Each trial also audits what its targets open.
 Every Node process of the trial loads TeA's audit through `NODE_OPTIONS` (`--require` of `cli/lib/evaluate/confinement-guard.cjs`), which reports each path the process hands Node's `fs` functions to open, read, list or write outside what the trial was granted: its workspace, the Node installation it runs from, the operating system's own directories (`/System`, `/usr`, `/bin`, `/sbin`, `/dev`, `/etc`, `/lib` and their like), and the `systemPaths` of the target's registry entry.
 A path is judged and reported by its real path, so a link in the workspace that leads outside it reports the path it leads to.
-A read of a path that does not exist, and a metadata probe (`stat`, `access`), are not reported; a write outside the grants and every access to the evaluation folder or the project's git directory (its worktree's own entry excepted) are reported, refused or not, those two even under a declared system path.
+A read of a path that does not exist, and a metadata probe (`stat`, `access`), are not reported; a write outside the grants and every access to the evaluation folder, the project's git directory (its worktree's own entry excepted) or the run's private parent directory are reported, refused or not, those two even under a declared system path.
 The module loader's own lookups (`require` and `import` resolve paths through Node's internal bindings) are not seen.
 The trial set's isolation manifest lists the reported paths as `observedMounts`; none is an allowed mount, so `score` exits 3 (Invalid) with eval-quality's isolation violation, one `mount outside allowlist` reason per path.
 A registry entry names what its target legitimately reads outside the workspace as absolute `systemPaths`:
@@ -839,8 +840,7 @@ A call carrying the trial's answer nonce is refused unsent and uncounted, so the
 On a gameability arm a call goes through the same adapter or port and authorizations with nothing launched or sent, so an ungranted one is denied as on any arm, and every other is answered from the degenerate response.
 A call the target could not run exits 12, and the exit message names that call's fault, followed by the agent's own failure when the agent then failed.
 A plan step and an agent call with the same bindings both match the step, so declare cardinality `any` on a step an agent may repeat.
-The bridge admits one connection, presenting a token its process reads from its environment; its configuration reaches the adapter as a private file.
-A target running as your user can read that token before the agent connects: the confinement withholds the evaluation folder, and the bridge's private directory lies outside it.
+The bridge admits one connection, presenting a token its process reads from its environment; its configuration reaches the adapter as a private file the confinement withholds from a target (see [The bridge's admission token](#the-bridges-admission-token)).
 `claude` runs with no built-in tool, the bridge alone, no user or project settings and no saved transcript (`--tools ""`, `--mcp-config <file>`, `--strict-mcp-config`, `--setting-sources ""`, `--no-session-persistence`), and `check` refuses `agentArgs` that reopen any of them; `custom` receives `--mcp-config <file>`, and keeping to the bridge is its own contract; other adapters are refused.
 `evaluator.modelSnapshot` names the agent's model, recorded as the configuration's `modelSnapshot` beside the digest of the evaluator template (instructions, answer line, heading, tool descriptions and call shapes), and as `judgeConfiguration` when a rubric key is bound; a target model named at the top level is kept as `tea.targetModelSnapshot`.
 Before its first trial the agent is qualified on the clean arm and on each mutated arm (see [Qualifying a sealed-brief agent](#qualifying-a-sealed-brief-agent)).
@@ -882,6 +882,19 @@ A harness that wants that proof runs its scorer through a `command` evaluator.
 
 **Fixed conditions.** `decodingParameters` carries `tea.evaluatorKind` for every kind (so deterministic digests differ once from the release before), and for the row-converting kinds `tea.evaluatorTreeDigest` over the layer's files, `tea.evaluatorWiring` (the `evaluation.json` block), and `tea.evaluatorExecutableDigest` and `tea.evaluatorModelSnapshot` for a command or `tea.evaluatorAgent` and `tea.evaluatorModel` for an agent: a changed file, argument, model or timeout changes the scoring version.
 The isolation manifest adds the evaluator's timeout and an agent's call budget to its ceilings and the agent's calls to its use; target reported tokens and cost are included in actual resource use, while absent reports remain zero and are listed in `run.json.unreportedResourceUse`.
+
+#### The bridge's admission token
+
+The bridge admits one connection, presenting a token its relay process reads from its environment.
+The configuration file that carries the token and the bridge's socket are private files and sit with the other private directories of the evaluation layer: the working directories of a sealed-brief agent, a `command` evaluator and the rubric judge, and the staging directories of the engine, the qualification and `score`.
+A run makes one private parent directory when it starts, before any target runs, and makes each of those beneath it.
+The parent is in the temp directory, or in `/tmp` where the temp directory's path would leave the socket's path too long for the system to accept, and the run removes it however it ends, an interrupting signal included.
+
+The confinement withholds the run's private directories from every target and every process a target leaves running, those started before a directory was made included, so the token is unreadable to a confined target, which can neither take the bridge's one admission nor read an evaluator's or a judge's working files.
+Seatbelt denies each read and write under the parent and each connection to a unix socket under it (`EPERM`), Bubblewrap covers it with an empty read-only file system, and the audit reports a Node process that opens it.
+The agent's own connection and every process of the evaluation layer keep their access, since those processes are not confined as a target is.
+The directories a target is granted (its workspace, its temp directory, the audit report, the status and port files) are not under the parent.
+A run with `"confinement": false` leaves the private directories as readable to its targets as any other directory of the host.
 
 ### Qualifying a sealed-brief agent
 

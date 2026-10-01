@@ -2151,8 +2151,13 @@ async function checkRubric() {
     : [];
   check(
     directories.length === 2 * TRIALS + 2 &&
-      directories.every((entry) => path.basename(entry.cwd).startsWith('tea-evaluate-judge-') && entry.entries.length === 0),
-    `the judge ran in ${JSON.stringify(directories)}; expected an empty tea-evaluate-judge-* directory per call`,
+      directories.every(
+        (entry) =>
+          path.basename(entry.cwd).startsWith('tea-evaluate-judge-') &&
+          path.basename(path.dirname(entry.cwd)).startsWith('tea-evaluate-run-') &&
+          entry.entries.length === 0,
+      ),
+    `the judge ran in ${JSON.stringify(directories)}; expected an empty tea-evaluate-judge-* directory per call, beneath the run's private parent`,
   );
   // Every prompt carries the template, the rubric's anchors and penalties and the evidence, and nothing of the contract.
   const prompts = fs.existsSync(project.capture)

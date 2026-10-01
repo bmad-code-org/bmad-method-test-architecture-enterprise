@@ -45,6 +45,9 @@
  *                      path outside the project, since every run starts in a
  *                      scratch directory of its own; a calibration call does
  *                      not advance it
+ *   --announce <file>  append one JSON line per run that judges a trial, before it calls the target: the configuration
+ *                      file's path, its working directory and the bridge's socket path (never the token), and leave a
+ *                      working file in that directory, so a stub target can look for what Story 1.58 withholds from it
  *   --plant <file> --plant-log <log>
  *                      first try to append a line to <file>, a path under the
  *                      evaluation folder, and append `{ calibration, outcome }`
@@ -73,6 +76,7 @@ const config = configFile === null ? {} : JSON.parse(fs.readFileSync(configFile,
 const prompt = fs.readFileSync(0, 'utf8');
 const nonce = /<judge-answer nonce="([0-9a-f]+)">/.exec(prompt)?.[1];
 const [name, server] = Object.entries(config.mcpServers ?? {})[0] ?? [];
+const announce = flag('--announce', null);
 const plant = flag('--plant', null);
 const plantLog = flag('--plant-log', null);
 if (plant !== null && plantLog !== null) {
@@ -83,6 +87,12 @@ if (plant !== null && plantLog !== null) {
     outcome = `refused ${error.code ?? error.message}`;
   }
   fs.appendFileSync(plantLog, `${JSON.stringify({ calibration: prompt.includes('calibration example at level'), outcome })}\n`);
+}
+
+if (announce !== null && !prompt.includes('calibration example at level')) {
+  fs.appendFileSync(announce, `${JSON.stringify({ config: configFile, cwd: process.cwd(), socket: server.args.at(-1) })}\n`);
+  // A working file, so a listing of this directory shows something to withhold.
+  fs.writeFileSync('working-notes.txt', 'the agent\'s working file\n');
 }
 
 const child = spawn(server.command, server.args, { stdio: ['pipe', 'pipe', 'inherit'], env: { ...process.env, ...server.env } });

@@ -638,14 +638,18 @@ async function checkRealScore({ engine, validate, folder, env, runDirectory, ind
         value('--probe') === path.join(runDirectory, set.probe),
       `${probeId}'s score call carried ${JSON.stringify(call.argv)}`,
     );
-    // `--out` is the private staging file the call really used: outside the evaluation folder, under the run's own temp
-    // directory, and gone once the call was copied in.
+    // `--out` is the private staging file the call really used: outside the evaluation folder, under the run's private
+    // parent, in its own temp directory or in `/tmp` where that path is too long for a socket (Story 1.58), and gone once the call was copied in.
     const out = value('--out');
     check(
       typeof out === 'string' &&
         path.basename(out) === 'evidence-artifact.json' &&
         path.basename(path.dirname(out)).startsWith('tea-evaluate-score-') &&
-        [env.TMPDIR, fs.realpathSync(env.TMPDIR)].includes(path.dirname(path.dirname(out))) &&
+        path.basename(path.dirname(path.dirname(out))).startsWith('tea-evaluate-run-') &&
+        [env.TMPDIR, fs.realpathSync(env.TMPDIR), '/tmp', fs.realpathSync('/tmp')].includes(
+          path.dirname(path.dirname(path.dirname(out))),
+        ) &&
+        !fs.existsSync(path.dirname(path.dirname(out))) &&
         !out.startsWith(`${folder}${path.sep}`) &&
         !fs.existsSync(path.dirname(out)),
       `${probeId}'s score call names --out ${out}, which is not a removed staging file in the run's temp directory`,
@@ -4665,7 +4669,10 @@ function probeGitReports(runDirectory) {
   return reports;
 }
 
-/** Every call that makes a target's port names the git access of the workspace it runs in, or its sandbox would withhold nothing. */
+/**
+ * Every call that makes a target's port names the git access of the workspace it runs in and the run's private parent
+ * directory (Story 1.58), or its sandbox would withhold nothing.
+ */
 function checkProbePortGitAccess() {
   const directory = path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate');
   let calls = 0;
@@ -4683,9 +4690,44 @@ function checkProbePortGitAccess() {
         /git:\s*gitAccessOf\(\w+\)/.test(text.slice(match.index, end)),
         `a createProbePort call in ${name} (character ${match.index}) does not pass git: gitAccessOf(workspace)`,
       );
+      check(
+        /privateParent:\s*registry\.privateParent\b/.test(text.slice(match.index, end)),
+        `a createProbePort call in ${name} (character ${match.index}) does not pass privateParent: registry.privateParent`,
+      );
     }
   }
   check(calls === 9, `found ${calls} createProbePort call(s) in cli/lib/evaluate; expected 9`);
+}
+
+/**
+ * A private directory the evaluation layer makes for itself is made through `makeScratchDirectory`, beneath the run's
+ * private parent (Story 1.58), and a directory made straight in the temp directory is one a target is granted or the
+ * parent itself. A new `mkdtempSync` in the evaluate runtime fails this scan until it is named here with the reason it
+ * may sit beside the parent.
+ */
+function checkPrivateDirectorySources() {
+  const directory = path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate');
+  const allowed = {
+    // The private parent, the scratch fallback for a list without one, and a staged copy.
+    'workspace.js': 3,
+    // A target's own temp directory per call.
+    'confinement.js': 1,
+    // The audit report's directory and Bubblewrap's status directory, both granted to a target.
+    'registry.js': 2,
+    // The file a started HTTP service reports its port in, granted to the target.
+    'http-target.js': 1,
+    // The socket directory beneath the run's private parent, and the fallback of a bridge opened with no parent.
+    'bridge.js': 2,
+  };
+  const found = {};
+  for (const name of fs.readdirSync(directory).filter((entry) => entry.endsWith('.js'))) {
+    const count = [...fs.readFileSync(path.join(directory, name), 'utf8').matchAll(/mkdtempSync\(/g)].length;
+    if (count > 0) found[name] = count;
+  }
+  check(
+    JSON.stringify(Object.fromEntries(Object.entries(found).sort())) === JSON.stringify(Object.fromEntries(Object.entries(allowed).sort())),
+    `the evaluate runtime makes temp directories in ${JSON.stringify(found)}; expected ${JSON.stringify(allowed)}: a private directory of the evaluation layer goes through makeScratchDirectory, beneath the run's private parent`,
+  );
 }
 
 /** A repository with the evaluation folder committed twice with different trees, for the workspace cases below. */
@@ -5443,10 +5485,44 @@ function checkConfinementReference() {
     "the reference's confinement section still says the project's git history stays readable",
   );
   check(
+    section.includes("run's private parent directory") && section.includes('connect to a unix socket'),
+    "the reference's confinement section does not say the confinement withholds the run's private parent directory",
+  );
+  check(
     section.includes('with the evaluation folder as an empty tree') &&
       section.includes("the project's git directory is withheld") &&
       /a target that must read the project's git directory opts out/i.test(section),
     "the reference's confinement section does not say the target's git sees the evaluation folder as an empty tree, that the project's git directory is withheld and that a target that must read it opts out",
+  );
+}
+
+/**
+ * The bridge passage of the reference, read under its exact heading, states that the confinement withholds the run's private
+ * directories, so the token is unreadable to a confined target, and the sentence saying a target can read it is gone (Story 1.58).
+ */
+function checkBridgeTokenReference() {
+  const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
+  const heading = "#### The bridge's admission token\n";
+  const start = reference.indexOf(heading);
+  const layer = reference.indexOf('\n### The evaluation layer\n');
+  const end = start === -1 ? -1 : reference.slice(start + heading.length).search(/\n#{1,4} /);
+  const passage = start === -1 ? '' : reference.slice(start + heading.length, end === -1 ? undefined : start + heading.length + end);
+  check(start !== -1, `the reference has no "${heading.trim()}" section`);
+  const layerEnd = layer === -1 ? -1 : reference.indexOf('\n### ', layer + 1);
+  check(
+    layer !== -1 && start > layer && (layerEnd === -1 || start < layerEnd),
+    `the reference's "${heading.trim()}" section is not under "### The evaluation layer"`,
+  );
+  check(
+    passage.includes("The confinement withholds the run's private directories from every target") &&
+      passage.includes('the token is unreadable to a confined target') &&
+      passage.includes('one private parent directory') &&
+      passage.includes('connection to a unix socket'),
+    "the reference's bridge passage does not state that the confinement withholds the run's private directories, so the token is unreadable to a confined target",
+  );
+  check(
+    !/can read that token before the agent connects/.test(reference) && !/private directory lies outside it/.test(reference),
+    'the reference still says a confined target can read the bridge token',
   );
 }
 
@@ -5483,11 +5559,13 @@ const CASES = [
   { name: 'the withheld git history units', body: checkWithheldHistoryUnits, group: 'confinement' },
   { name: 'the withheld git history edges', body: checkWithheldHistoryEdges, group: 'confinement' },
   { name: "the probe ports' git access", body: checkProbePortGitAccess, group: 'confinement' },
+  { name: "the layer's private directory sources", body: checkPrivateDirectorySources, group: 'confinement' },
   { name: 'the confinement reference', body: checkConfinementReference, group: 'confinement' },
   { name: 'the held score inputs', body: checkHeldInputs, group: 'held-inputs' },
   { name: 'the held score diagnostics', body: checkHeldDiagnostics, group: 'held-inputs' },
   { name: 'the held strength aggregate', body: checkHeldAggregate, group: 'held-inputs' },
   { name: 'the score input reference', body: checkScoreInputReference, group: 'held-inputs' },
+  { name: "the bridge's admission token reference", body: checkBridgeTokenReference, group: 'confinement' },
 ];
 const GROUPS = new Set(CASES.map(({ group }) => group));
 

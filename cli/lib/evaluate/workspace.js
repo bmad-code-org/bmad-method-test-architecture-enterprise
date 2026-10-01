@@ -49,6 +49,7 @@ const path = require('node:path');
 const { createHash, randomUUID } = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 
+const { MAX_SOCKET_PATH, SOCKET_DIRECTORY_PREFIX } = require('./bridge');
 const { digest } = require('./digest');
 const { cliObservation } = require('./registry');
 const { RunDirectory } = require('./run-directory');
@@ -468,17 +469,57 @@ function unlockDirectories(directory) {
   }
 }
 
+/** The name prefix of the run's private parent. */
+const PRIVATE_PARENT_PREFIX = 'tea-evaluate-run-';
+/** The name `mkdtemp` appends to a prefix: six characters. */
+const MKDTEMP_SUFFIX = 'XXXXXX';
+
+/**
+ * The run's one private parent directory, registered in `scratch` (listed
+ * first, so the run's end removes it with every directory beneath it) and
+ * recorded as `scratch.privateParent`. Every private directory the evaluation
+ * layer makes for the run (the engine's, the qualification's, an evaluator's,
+ * a judge's, the bridge's configuration and socket, the score's) is made
+ * beneath it by `makeScratchDirectory`, so the target's confinement
+ * (`confinement.js`) withholds the one path and covers directories made after
+ * a sandbox was built. A directory the target is deliberately granted (its
+ * temp directory, the audit report, the status and port directories, the
+ * workspace) stays beside it in the temp directory.
+ *
+ * It is made where the bridge's longest socket path still fits: the system
+ * temp directory, then `/tmp`.
+ *
+ * @param {string[]} scratch
+ * @returns {string}
+ */
+function makePrivateParent(scratch) {
+  if (typeof scratch.privateParent === 'string') return scratch.privateParent;
+  const socketPath = (base) =>
+    path.join(base, `${PRIVATE_PARENT_PREFIX}${MKDTEMP_SUFFIX}`, `${SOCKET_DIRECTORY_PREFIX}${MKDTEMP_SUFFIX}`, 'bridge.sock');
+  const bases = [os.tmpdir(), '/tmp'];
+  const base =
+    process.platform === 'win32'
+      ? bases[0]
+      : (bases.find((candidate) => Buffer.byteLength(socketPath(candidate)) <= MAX_SOCKET_PATH) ?? bases[0]);
+  const directory = fs.mkdtempSync(path.join(base, PRIVATE_PARENT_PREFIX));
+  scratch.unshift(directory);
+  Object.defineProperty(scratch, 'privateParent', { value: directory, enumerable: false, configurable: true, writable: true });
+  return directory;
+}
+
 /**
  * A private temporary directory registered in `scratch`, the run's list of
  * directories it removes however it ends (`preflight.js` `pipeline`), an
- * interrupting signal included.
+ * interrupting signal included. It is made beneath the run's private parent
+ * (`makePrivateParent`) when the list has one, and in the system temp
+ * directory otherwise.
  *
  * @param {string[]} scratch
  * @param {string} prefix the directory's name prefix
  * @returns {string}
  */
 function makeScratchDirectory(scratch, prefix) {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  const directory = fs.mkdtempSync(path.join(scratch.privateParent ?? os.tmpdir(), prefix));
   scratch.push(directory);
   return directory;
 }
@@ -1641,6 +1682,7 @@ module.exports = {
   journalDirectory,
   joinAsSpelled,
   makeReadOnly,
+  makePrivateParent,
   makeScratchDirectory,
   realPathLoosely,
   releaseScratchDirectory,

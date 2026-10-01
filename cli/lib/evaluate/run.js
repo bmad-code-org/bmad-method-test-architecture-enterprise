@@ -301,6 +301,7 @@ async function qualificationArm({ contract, registry, workspace, stop, writer, d
     projectRoot: workspace.root,
     workspace: workspace.top,
     git: gitAccessOf(workspace),
+    privateParent: registry.privateParent,
   });
   try {
     return await runArm({ contract, port: hostEnvironmentPort({ port, registry }), registry, label: 'baseline', seed, signal });
@@ -542,6 +543,7 @@ async function runTrial(context) {
       projectRoot: workspace.root,
       workspace: workspace.top,
       git: gitAccessOf(workspace),
+      privateParent: registry.privateParent,
       deployment: arm.deployment ?? null,
       audit: true,
     });

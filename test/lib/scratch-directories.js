@@ -44,10 +44,13 @@ function removeTree(directory) {
 
 /**
  * @param {string} prefix the suite's name prefix, `tea-evaluate-run` say
+ * @param {object} [options]
+ * @param {string} [options.base] where the parent is made instead of the system temp directory; a short path such as
+ *   `/tmp` for a case whose runs need a temp directory short enough for a socket path beneath it
  * @returns {{ make: (label: string) => string, removeAll: () => void }}
  */
-function scratchDirectories(prefix) {
-  const temp = fs.realpathSync(os.tmpdir());
+function scratchDirectories(prefix, { base = os.tmpdir() } = {}) {
+  const temp = fs.realpathSync(base);
   if (!/^[a-z][a-z-]*$/.test(prefix))
     throw new Error(`the scratch prefix ${JSON.stringify(prefix)} must be lowercase words joined by hyphens`);
   const owned = new RegExp(String.raw`^${prefix}-(\d+)-[A-Za-z0-9]{6}$`);
