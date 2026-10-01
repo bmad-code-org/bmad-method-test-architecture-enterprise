@@ -1392,13 +1392,19 @@ function runReport(label, { command = 'run', preFix, fix, authorized, edit }) {
  * release other than the declared one, a denied request or an answer with no
  * string at the pointer refuses the probe; a deployment that cannot answer
  * stops the run with exit 12. The cases run over a pair of deployments of
- * their own, so the request logs they read start empty.
+ * their own, and each asserts the change in the request logs it caused, read
+ * against a baseline taken before its run.
  */
 async function checkReportedReleases() {
   const pre = await startDeployment('report-pre-fix', 'lenient', PRE_RELEASE);
   const post = await startDeployment('report-post-fix', 'strict', FIX_RELEASE);
-  /** What `server` received, as paths. */
-  const pathsTo = (server) => JSON.stringify(requestsTo(server).map((request) => request.path));
+  /** How many requests each of `servers` has received so far, the baseline a case reads its own change against. */
+  const snapshot = (...servers) => new Map(servers.map((server) => [server, requestsTo(server).length]));
+  /** What `server` received since `before`, as paths: the change one case caused, whatever ran earlier. */
+  const pathsSince = (before, server) =>
+    requestsTo(server)
+      .slice(before.get(server))
+      .map((request) => request.path);
   /** The refusal of a probe: its record, its file, no release record, no qualification evidence, and the asked reasons. */
   const held = (what, { ran, directory, record, refusal, file }, reasons) => {
     check(ran.status === 0, `${what} exited ${ran.status}; expected 0\n${ran.output}`);
@@ -1419,16 +1425,14 @@ async function checkReportedReleases() {
       JSON.stringify(sealedProbes(directory)) === '["P-001"]',
       `${what} sealed ${JSON.stringify(sealedProbes(directory))}; expected the clean control alone`,
     );
-  const asked = (what, server, others = {}) => {
+  const asked = (what, before, server, others = {}) => {
     // Each side is asked once and nothing else is sent: the report request first, no arm after it.
-    check(
-      pathsTo(server) === '["/release"]',
-      `${what}: the deployment received ${pathsTo(server)}; expected the release report request alone`,
-    );
+    const received = JSON.stringify(pathsSince(before, server));
+    check(received === '["/release"]', `${what}: the deployment received ${received}; expected the release report request alone`);
     for (const [name, [deployment, count]] of Object.entries(others)) {
       check(
-        requestsTo(deployment).length === count,
-        `${what}: the ${name} deployment received ${pathsTo(deployment)}; expected ${count} request(s)`,
+        pathsSince(before, deployment).length === count,
+        `${what}: the ${name} deployment received ${JSON.stringify(pathsSince(before, deployment))}; expected ${count} request(s)`,
       );
     }
   };
@@ -1437,21 +1441,23 @@ async function checkReportedReleases() {
   // with both identifiers before any arm runs, each side asked in turn, so a pre-fix mismatch leaves the post-fix
   // deployment unasked.
   const stale = await startDeployment('pre-fix-redeployed', 'lenient', 'grader-9.9.9');
+  const beforePreStale = snapshot(stale, post);
   const preStale = runReport('report-stale-pre-fix', { preFix: stale, fix: post, authorized: [stale, post] });
   held('a run whose pre-fix deployment reports another release', preStale, [
     'pre-fix deployment',
     `reports release "grader-9.9.9" where the probe declares "${PRE_RELEASE}"`,
   ]);
   sealedCleanControl('a run whose pre-fix deployment reports another release', preStale);
-  asked('a run whose pre-fix deployment reports another release', stale, { 'post-fix': [post, 0] });
+  asked('a run whose pre-fix deployment reports another release', beforePreStale, stale, { 'post-fix': [post, 0] });
   const moved = await startDeployment('post-fix-redeployed', 'strict', 'grader-9.9.9');
+  const beforePostStale = snapshot(pre, moved);
   const postStale = runReport('report-stale-post-fix', { preFix: pre, fix: moved, authorized: [pre, moved] });
   held('a run whose post-fix deployment reports another release', postStale, [
     'post-fix deployment',
     `reports release "grader-9.9.9" where the probe declares "${FIX_RELEASE}"`,
   ]);
   sealedCleanControl('a run whose post-fix deployment reports another release', postStale);
-  asked('a run whose post-fix deployment reports another release', moved, { 'pre-fix': [pre, 1] });
+  asked('a run whose post-fix deployment reports another release', beforePostStale, moved, { 'pre-fix': [pre, 1] });
 
   // A release is quoted as JSON writes it, every character outside printable ASCII escaped, and cut at 160 characters, since
   // the deployment controls the text a refusal carries.
@@ -1471,7 +1477,7 @@ async function checkReportedReleases() {
 
   // eval-quality's policy decides the report request as it decides every call: a report operation whose method the
   // registry does not authorize is denied before anything is sent, and the refusal carries eval-quality's reason.
-  const beforeDenial = [requestsTo(pre).length, requestsTo(post).length];
+  const beforeDenial = snapshot(pre, post);
   const denied = runReport('report-denied', {
     preFix: pre,
     fix: post,
@@ -1482,11 +1488,15 @@ async function checkReportedReleases() {
         report.method = 'DELETE';
       }),
   });
-  held('a run whose report request the policy denies', denied, ['pre-fix deployment', 'report-release', 'method-not-authorized']);
+  held('a run whose report request the policy denies', denied, [
+    `pre-fix deployment ${PRE_RELEASE}`,
+    'report-release',
+    'method-not-authorized',
+  ]);
   sealedCleanControl('a run whose report request the policy denies', denied);
   check(
-    requestsTo(pre).length === beforeDenial[0] && requestsTo(post).length === beforeDenial[1],
-    `a report request the policy denies reached a deployment: ${pathsTo(pre)} and ${pathsTo(post)}; expected nothing beyond the ${beforeDenial} requests before it`,
+    pathsSince(beforeDenial, pre).length === 0 && pathsSince(beforeDenial, post).length === 0,
+    `a report request the policy denies reached a deployment: ${JSON.stringify(pathsSince(beforeDenial, pre))} to the pre-fix one and ${JSON.stringify(pathsSince(beforeDenial, post))} to the post-fix one; expected no request`,
   );
 
   // An answer with no string at the pointer: another kind of value, nothing, a body that is no JSON, a status that is no
@@ -1503,18 +1513,21 @@ async function checkReportedReleases() {
   ]) {
     const what = `a run whose pre-fix deployment answers the report request with ${shape}`;
     const server = await startDeployment(`pre-fix-${shape}`, 'lenient', PRE_RELEASE, `release: ${shape}\n`);
+    const before = snapshot(server, post);
     const outcome = runReport(`report-${shape}`, { command: 'preflight', preFix: server, fix: post, authorized: [server, post] });
-    held(what, outcome, ['pre-fix deployment', 'did not report its release through report-release', found]);
-    asked(what, server, { 'post-fix': [post, 0] });
+    held(what, outcome, [`pre-fix deployment ${PRE_RELEASE}`, 'did not report its release through report-release', found]);
+    asked(what, before, server, { 'post-fix': [post, 0] });
     server.stop();
   }
   const absent = await startDeployment('post-fix-missing', 'strict', FIX_RELEASE, 'release: missing\n');
+  const beforePostUnread = snapshot(pre, absent);
   const postUnread = runReport('report-post-fix-missing', { command: 'preflight', preFix: pre, fix: absent, authorized: [pre, absent] });
   held('a run whose post-fix deployment answers the report request with nothing', postUnread, [
-    'post-fix deployment',
+    `post-fix deployment ${FIX_RELEASE}`,
     `the JSON pointer ${pointer} finds nothing in its answer`,
   ]);
-  asked('a run whose post-fix deployment answers the report request with nothing', absent, { 'pre-fix': [pre, 2] });
+  asked('a run whose post-fix deployment answers the report request with nothing', beforePostUnread, absent, { 'pre-fix': [pre, 1] });
+  const beforeBoolean = snapshot(pre, post);
   const boolean = runReport('report-pointer', {
     command: 'preflight',
     preFix: pre,
@@ -1523,10 +1536,10 @@ async function checkReportedReleases() {
     edit: ({ probe }) => (probe.qualification.deployments.preFix.report = { ...REPORT, pointer: '/ok' }),
   });
   held('a run whose report pointer finds a boolean', boolean, [
-    'pre-fix deployment',
+    `pre-fix deployment ${PRE_RELEASE}`,
     'the JSON pointer "/ok" finds a boolean in its answer',
   ]);
-  check(requestsTo(post).length === 0, `a pre-fix refusal left the post-fix deployment with ${pathsTo(post)}; expected no request`);
+  asked('a run whose report pointer finds a boolean', beforeBoolean, pre, { 'post-fix': [post, 0] });
 
   // A deployment that reaches no answer is a target that could not run: exit 12, as it is for any call.
   const crashing = await startDeployment('pre-fix-crashing', 'lenient', PRE_RELEASE, 'crash: /release\n');

@@ -260,6 +260,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The publish workflow installs the latest npm on the runner. Its pinned `npm@11.6.2` could not `npm ci` a lockfile written by a newer npm (`Missing: google-logging-utils@1.2.0 from lock file`), so every push to `main` since the lockfile moved failed to publish.
 - Evaluate's gap guide now states the engine's `malformed-input` contract requirement: every relevant operation needs a type-violating planned input and an oracle check addressing its step. A blind repair exposed that caught malformed probes alone left the coverage gap open (Story 1.25).
 - The pre-commit gate clears Git's hook-local repository selectors while running `npm test`, and the test-review CLI fixture clears inherited Git selectors before building its scratch repository. This keeps nested fixture checkouts from changing the contributor's branch (Story 1.24).
 - The Evaluate HTTP probe port enforces its elapsed cap across resolution, server preparation, sending and redirects, including large declared caps. Typed mutations reject string-only CLI and header bindings before launch (Story 1.24).

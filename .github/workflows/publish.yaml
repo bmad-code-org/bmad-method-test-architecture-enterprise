@@ -63,8 +63,8 @@ jobs:
 
       - name: Ensure trusted publishing toolchain
         run: |
-          # npm trusted publishing requires modern npm on the runner.
-          npm install --global npm@11.6.2
+          # npm trusted publishing requires modern npm on the runner; the version floats so npm ci reads the lockfile the repo's own npm wrote.
+          npm install --global npm@latest
 
       - name: Configure git user
         if: github.event_name == 'workflow_dispatch' && inputs.channel == 'latest'

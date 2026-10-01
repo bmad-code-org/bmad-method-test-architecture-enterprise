@@ -330,6 +330,11 @@ function findingsOf(stdout) {
   return stdout.split('\n').filter((line) => /^\S+: \[[a-z-]+\] /.test(line));
 }
 
+/** The findings of the historical rule among `findingsOf`. */
+function historicalFindingsOf(stdout) {
+  return findingsOf(stdout).filter((line) => line.includes(': [historical] '));
+}
+
 function sha256Hex(bytes) {
   return crypto.createHash('sha256').update(bytes).digest('hex');
 }
@@ -1583,8 +1588,44 @@ const HARDENING_CASES = [
         value.permittedInterfaces.push(cli);
       });
     },
-    expect: (output) => [
+    expect: (output, stdout) => [
       [output.includes('which is not an operation of an api interface'), 'the finding does not name the interface kind'],
+      [
+        // The planted cli interface is no valid contract, so engine-schema findings come with it; the historical ones are the
+        // probe's own, one for each deployment, each naming the kind.
+        historicalFindingsOf(stdout).length === 2 &&
+          historicalFindingsOf(stdout).every((line) => line.includes('which is not an operation of an api interface')),
+        'the interface kind is not the only historical finding, once for each deployment',
+      ],
+    ],
+  },
+  {
+    name: 'a deployment-routed probe whose report names an operation two interfaces declare',
+    file: 'probes/P-002.probe.json',
+    rule: 'historical',
+    copy: copyApi,
+    plant: (folder) => {
+      plantApiHistorical(folder, DEPLOYMENTS);
+      editJson(folder, 'contract.json', (value) => {
+        const other = structuredClone(value.permittedInterfaces[0]);
+        other.logicalId = 'status';
+        value.permittedInterfaces.push(other);
+      });
+    },
+    expect: (output, stdout) => [
+      [
+        output.includes('deployments.preFix.report.operationId names "report-release", which 2 interfaces of the contract declare'),
+        'the finding does not name the operation both interfaces declare',
+      ],
+      [
+        output.includes('deployments.fix.report.operationId names "report-release", which 2 interfaces of the contract declare'),
+        'the finding does not name the operation for the post-fix deployment',
+      ],
+      [
+        historicalFindingsOf(stdout).length === 2 &&
+          historicalFindingsOf(stdout).every((line) => line.includes('which 2 interfaces of the contract declare')),
+        'the twice-declared operation is not the only historical finding, once for each deployment',
+      ],
     ],
   },
   {
