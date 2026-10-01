@@ -1,7 +1,7 @@
 {
   "$comment": [
     "Why this case is in the corpus: it is the REAL CAPTURE of the evaluation-plan project, produced by the live eval:ci path (tea-ci-runner through the local Claude Code CLI, the harness's own prompt and staged workspace) over the skill with step-03b-render-evaluation-plans.md.",
-    "The run found evals/grader/ci/evaluation-ci-plan.json without being told where it was and the evaluations folder's package.json beside it, wrote an evaluation-pr job under the plan's marker, chose its Node version against the tooling's floor, installed evals/ with --prefix, rendered the plan's five pr checks as the one `tea-evaluate ci --tier pr` step named for all five, and uploaded evals/grader/runs/ under if: always()."
+    "The run found evals/grader/ci/evaluation-ci-plan.json without being told where it was and the evaluations folder's package.json beside it, wrote an evaluation-pr job under the plan's marker, chose its Node version against the tooling's floor, installed evals/ with --prefix (the paths quoted for the shell, as the step says), rendered the plan's five pr checks as the one `tea-evaluate ci --tier pr` step named for all five, and uploaded evals/grader/runs/ under if: always()."
   ],
   "id": "evaluation-plan-live-capture",
   "suite": "ci",
@@ -9,7 +9,7 @@
   "storedOutput": {
     "origin": "real-capture",
     "workflow": ".github/workflows/test.yml",
-    "sha256": "d9d166214d8f25cfa0c9e2ac6ded56fef62624dbab988eb35e0fbcae0d448775",
+    "sha256": "796d4702eba58215c85435042a3e940e8997590fc56d02a84d233bef7f1651a2",
     "capturedBy": "a live `node test/eval-ci.js --agent claude --runs 2 --set evaluation-plan-quarry-grader` run on 2026-10-01 (10 of 10 requested elements, 0 unrequested, stable across both repetitions, every threshold met), whose staged workspace and prompt were run once more by hand through cli/ci-runner.js and the local Claude Code CLI because the harness discards the workflow it scores; the file is the by-hand run's, byte for byte"
   },
   "inputs": {

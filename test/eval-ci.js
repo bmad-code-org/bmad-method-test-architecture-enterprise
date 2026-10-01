@@ -373,9 +373,14 @@ const THRESHOLDS = {
   // an untrusted input interpolated into a script, a syntax error. Each is a
   // workflow that fails on its first push.
   maxLintFindings: 0,
-  // Eighteen requested elements across the two projects, thirteen and five.
-  // 0.9 admits one miss in the corpus and no more, which is the width of a
-  // single defensible disagreement about how an element is spelled.
+  // Twenty-eight requested elements across the three projects, thirteen, five
+  // and ten. 0.9 admits two misses in the corpus, the width of a defensible
+  // disagreement about how an element is spelled in the two projects whose
+  // requests state their elements in prose. A project whose ground truth sets
+  // `requireEveryElement` is held to every one of its elements on its own,
+  // whatever this ratio says: the evaluation-plan project's elements each read
+  // one property the skill's step prescribes, so a single miss is a deviation
+  // and must not hide in the aggregate.
   requestedElementRecall: 0.9,
   // The four trigger elements on their own. A workflow whose triggers are
   // wrong never runs on the event the team asked for, so nothing else in it
@@ -739,6 +744,9 @@ async function validateCorpus(groundTruth) {
       );
     }
     if (typeof set.isMinimalRequest !== 'boolean') problems.push(`${label}: isMinimalRequest is not a boolean`);
+    if (set.requireEveryElement !== undefined && typeof set.requireEveryElement !== 'boolean') {
+      problems.push(`${label}: requireEveryElement is declared and is not a boolean`);
+    }
 
     // The declared project file list is held equal to what is on disk in both
     // directions, for the reason the nfr harness gives: a shipped file the
@@ -1517,13 +1525,23 @@ function commandPattern(command) {
 
 /** Whether a script invokes the command and nothing follows it on its line but the end, a shell separator or a comment. */
 function invokesExactly(script, command) {
-  return new RegExp(String.raw`(?:^|[\s;&|(])${escapeRegex(command)}(?=[\t ]*(?:$|[;&|)#]))`, 'm').test(script);
+  return new RegExp(String.raw`(?:^|[\s;&|(])${escapeRegex(command)}(?=[\t ]*(?:$|[;&|)#]))`, 'm').test(shellForm(script));
+}
+
+/**
+ * A script as the shell reads its words: the quote characters a word was wrapped in are gone, so `npm install --prefix 'evals'`
+ * and `npm install --prefix evals` are one command. The skill tells the run to quote each path for a POSIX shell, and a
+ * command spelled with quotes is the same invocation. A quoted argument that holds a space reads as two words here, which no
+ * requested command depends on.
+ */
+function shellForm(script) {
+  return String(script).replaceAll(/["']/g, '');
 }
 
 /** Whether any script in the list invokes the command. */
 function invokes(scripts, command) {
   const pattern = commandPattern(command);
-  return scripts.some((script) => pattern.test(script));
+  return scripts.some((script) => pattern.test(shellForm(script)));
 }
 
 /**
@@ -1612,13 +1630,18 @@ function nodeVersionFromNvmrc(job, index, step, version) {
 }
 
 /**
- * Whether one setup-node step runs Node `floor` or later. A version file or a literal is read as its version, and a
- * version a run: step wrote is read through that step: a script that names the floor guards its own choice, one that
- * reads .nvmrc unguarded takes the project's version, and any other writes the literal it echoes.
+ * Whether one setup-node step runs Node `floor` or later. A version file or a literal is read as its version (a plain
+ * version number is compared with the floor, `lts/*` and `node` are the current release and meet it, any other alias such
+ * as `lts/iron` names an older line and does not), and a version a run: step wrote is read by running that step: the
+ * writer script runs under bash in an empty directory whose `.nvmrc` holds the project's version, and the value it appends
+ * to the output file is read. A script that names the floor and ignores it therefore reads as what it writes.
  */
 function nodeVersionAtFloor(job, index, step, nvmrcVersion, floor) {
   const atFloor = (version) => {
-    const coerced = semver.coerce(String(version));
+    const text = String(version).trim();
+    if (['lts/*', 'node', 'latest'].includes(text)) return true;
+    if (!/^v?\d+(?:\.\d+){0,2}$/.test(text)) return false;
+    const coerced = semver.coerce(text);
     return coerced !== null && semver.gte(coerced, floor);
   };
   const inputs = step.with && typeof step.with === 'object' ? step.with : {};
@@ -1633,11 +1656,23 @@ function nodeVersionAtFloor(job, index, step, nvmrcVersion, floor) {
     .filter((entry) => entry.index < index && typeof entry.step.run === 'string' && entry.step.run.includes('GITHUB_OUTPUT'))
     .map((entry) => entry.step.run);
   if (writers.length === 0) return false;
-  const script = writers.at(-1);
-  if (script.includes(floor)) return true;
-  if (script.includes('.nvmrc')) return atFloor(nvmrcVersion);
-  const literal = /value=v?(\d[\d.]*)/.exec(script)?.[1];
-  return literal !== undefined && atFloor(literal);
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-ci-node-'));
+  try {
+    fs.writeFileSync(path.join(directory, '.nvmrc'), `${nvmrcVersion}\n`);
+    const output = path.join(directory, 'github-output');
+    fs.writeFileSync(output, '');
+    const ran = spawnSync('bash', ['-c', writers.at(-1)], {
+      cwd: directory,
+      env: { PATH: process.env.PATH, GITHUB_OUTPUT: output },
+      encoding: 'utf8',
+      timeout: 10_000,
+    });
+    if (ran.status !== 0) return false;
+    const written = /^value=(.*)$/m.exec(fs.readFileSync(output, 'utf8'))?.[1];
+    return written !== undefined && atFloor(written);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
 }
 
 /**
@@ -1719,7 +1754,7 @@ function checkElement(element, set, workflow, text = '') {
         if (repeated !== undefined) {
           return { present: false, detail: `${repeated[1]} run: blocks of job ${repeated[0]} invoke ${element.command}, expected one` };
         }
-        if (holders.some((entry) => entry.script.trim() !== element.command)) {
+        if (holders.some((entry) => shellForm(entry.script).trim() !== element.command)) {
           return { present: false, detail: `the run: block that invokes ${element.command} holds more than that command` };
         }
         if (element.checkIds !== undefined) {
@@ -1892,7 +1927,7 @@ function unrequestedElements(set, workflow) {
   // An evaluation invocation no requested command covers: a second tier, a check selector or a bare tea-evaluate.
   for (const { jobId, index, script } of runScripts(workflow)) {
     for (const segment of script.split(/&&|\|\||[;|\n]/)) {
-      if (EVALUATION_INVOCATION.test(segment) && !requestedCommands.some((command) => segment.trim().startsWith(command))) {
+      if (EVALUATION_INVOCATION.test(segment) && !requestedCommands.some((command) => shellForm(segment).trim().startsWith(command))) {
         found.push(`command: ${segment.trim()} in job ${jobId} step ${index + 1}`);
       }
     }
@@ -2062,6 +2097,8 @@ function ciDiagnosticClassifier(diagnostics) {
     const reasons = [];
     if (failed.includes('parse failure') && metric.parseFailures > metric.maxParseFailures) reasons.push('parse failure');
     if (failed.includes('lint finding') && metric.lintFindings > metric.maxLintFindings) reasons.push('lint finding');
+    if (failed.includes('missed a requested element') && metric['requestedElements.numerator'] < metric['requestedElements.denominator'])
+      reasons.push('requested element miss');
     if (failed.includes('requestedElementRecall') && diagnosticRateMiss(entry, 'requestedElements', diagnostics))
       reasons.push('requested element miss');
     if (failed.includes('triggerAccuracy') && diagnosticRateMiss(entry, 'triggers', diagnostics)) reasons.push('trigger miss');
@@ -2419,6 +2456,7 @@ async function main() {
   for (const agent of agents) {
     console.log(`${colors.cyan}${agent}${colors.reset}`);
     const agentStartedAt = await nowMs();
+    const strictSetFailures = [];
     const totals = {
       parseFailures: 0,
       lintFindings: 0,
@@ -2472,6 +2510,11 @@ async function main() {
         console.log(`  ${colors.red}${set.id}: no measurable run${colors.reset}`);
         incompleteCases += 1;
         continue;
+      }
+
+      if (set.requireEveryElement === true) {
+        const missed = caseScores.flatMap((scored) => scored.elements.filter((element) => !element.present).map((element) => element.id));
+        if (missed.length > 0) strictSetFailures.push(`${set.id} missed a requested element (${[...new Set(missed)].join(', ')})`);
       }
 
       for (const scored of caseScores) {
@@ -2544,7 +2587,7 @@ async function main() {
     console.log(`  rule violations     ${String(totals.ruleViolations).padStart(4)}   (max ${THRESHOLDS.maxWorkflowRuleViolations})`);
     console.log(`  fixture mutations   ${String(totals.mutations).padStart(4)}   (max ${THRESHOLDS.maxFixtureMutations})`);
 
-    const failures = [];
+    const failures = [...strictSetFailures];
     for (const key of ['requestedElementRecall', 'triggerAccuracy']) {
       const value = measurements[key];
       // NaN fails every comparison, so an unmeasurable metric would otherwise

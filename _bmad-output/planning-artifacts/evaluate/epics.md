@@ -2079,7 +2079,7 @@ So that a count that drifts fails where it drifts (CAP-12).
 
 **Given** the replay corpus under `test/replay/`
 **When** `test:eval-replay` (or a `doc-counts` entry) runs
-**Then** the four totals in `test/README.md` and the `test/test-eval-replay.js` header equal the counts derived from the `expected.json` files, and adding a case without moving them fails
+**Then** the four totals in `test/README.md` and the `test/test-eval-replay.js` header, and the stored-output count on the `npm run test:eval-replay` line of `README.md`, equal the counts derived from the `expected.json` files, and adding a case without moving them fails
 **And** the story count and the appended-story range in the `epics.md` overview equal the number of story sections the file holds, and every story in the lane 3 sequence has a row in `sprint-status.yaml` `parallel_lanes` in the same order
 **And** each gate fails when its subject is changed by one (a count off by one, a lane entry removed), observed once in a scratch copy and recorded
 **And** the existing `test:doc-counts` entries keep their meaning and no new entry widens what an existing one reads

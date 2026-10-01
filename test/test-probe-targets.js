@@ -1340,6 +1340,20 @@ function checkCiHarnessSmoke(runDir) {
     JSON.stringify(unrequested.record?.runners?.[0]?.measurements),
   );
 
+  // The evaluation-plan project is held to every one of its elements, so a run one element short of the correct
+  // pipeline fails the gate although the corpus-wide recall stays above its threshold.
+  const deviation = runCiHarness(runDir, 'deviation', ['--runs', '1']);
+  assert(deviation.status === 1, 'a run one requested element short on the evaluation-plan project exits 1', `exit ${deviation.status}`);
+  assert(
+    deviation.record?.failureClass === 'quality' &&
+      deviation.record?.runners?.[0]?.measurements?.requestedElementRecall >= 0.9 &&
+      deviation.record?.runners?.[0]?.failures?.some((failure) =>
+        failure.includes('evaluation-plan-quarry-grader missed a requested element'),
+      ),
+    'the record names the evaluation-plan project that missed an element while the corpus recall stays above its threshold',
+    JSON.stringify(deviation.record?.runners?.[0]?.failures),
+  );
+
   // The workflow scaffolds a pipeline and does not edit the project, so a write
   // into it is a measured quality failure. This is the only path that reaches
   // maxFixtureMutations at all, which is what its threshold comment promises.

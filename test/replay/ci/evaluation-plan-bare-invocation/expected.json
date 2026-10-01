@@ -44,7 +44,7 @@
       "job-evaluation-pr: job evaluation-pr does not run npm exec --prefix evals -- tea-evaluate ci --evaluation evals/grader --tier pr"
     ],
     "unrequested": [
-      "command: npx tea-evaluate ci --evaluation evals/grader --tier pr in job evaluation-pr step 5"
+      "command: npx tea-evaluate ci --evaluation 'evals/grader' --tier pr in job evaluation-pr step 5"
     ],
     "ruleViolations": []
   }

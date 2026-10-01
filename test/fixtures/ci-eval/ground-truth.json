@@ -458,6 +458,7 @@
       "requestSource": "docs/ci-requirements.md",
       "nvmrcVersion": "24",
       "isMinimalRequest": false,
+      "requireEveryElement": true,
       "projectFiles": [
         ".nvmrc",
         "docs/ci-requirements.md",

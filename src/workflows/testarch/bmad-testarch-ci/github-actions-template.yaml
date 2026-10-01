@@ -224,7 +224,7 @@ jobs:
 #   TIER:               pr, merge, scheduled or release
 #   TIMEOUT_MINUTES:    30 for pr and merge, 120 for scheduled and release
 #   NODE_FLOOR:         the lower bound of engines.node of the TeA package, 22.20.0 when it is not readable
-#   NODE_LTS:           the current Node LTS, used when .nvmrc is absent or below NODE_FLOOR
+#   NODE_LTS:           the current Node LTS, used when .nvmrc is absent, below NODE_FLOOR or not a plain version number
 #   EVALUATIONS_FOLDER: the folder that holds the private package.json with TeA and eval-quality
 #   EVALUATION_FOLDER:  the folder that holds ci/, relative to the repository root
 #   CHECK_IDS:          the ids of every check the plan places on the tier, joined with ", "
@@ -254,7 +254,7 @@ jobs:
 #           value=NODE_LTS
 #           if [ -f .nvmrc ]; then
 #             pinned="$(tr -d 'v \r\n' < .nvmrc)"
-#             if [ "$(printf '%s\n' "$floor" "$pinned" | sort -V | head -n 1)" = "$floor" ]; then value="$pinned"; fi
+#             if printf '%s' "$pinned" | grep -Eq '^[0-9]+(\.[0-9]+){0,2}$' && [ "$(printf '%s\n' "$floor" "$pinned" | sort -V | head -n 1)" = "$floor" ]; then value="$pinned"; fi
 #           fi
 #           echo "value=$value" >> "$GITHUB_OUTPUT"
 #

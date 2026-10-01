@@ -28,7 +28,9 @@
 
 const crypto = require('node:crypto');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 
 const YAML = require('yaml');
 
@@ -479,6 +481,22 @@ function checkPrescribedRenderings() {
     merged.unrequested.length === 0 && merged.ruleViolations.length === 0,
     'a merge job and a lockfile install score unrequested elements or violations',
   );
+  // Quoting each path for the shell, as the step says to, is the same invocation.
+  const quoted = mergePipeline
+    .replaceAll(
+      'npm exec --prefix evals -- tea-evaluate ci --evaluation evals/grader',
+      "npm exec --prefix 'evals' -- tea-evaluate ci --evaluation 'evals/grader'",
+    )
+    .replace('npm ci --prefix evals', "npm ci --prefix 'evals'");
+  const quotedResult = scored(elements, quoted);
+  check(
+    quoted !== mergePipeline && missesOf(quotedResult).length === 0,
+    `a rendering that quotes its paths misses ${missesOf(quotedResult).join(', ')}`,
+  );
+  check(
+    quotedResult.unrequested.length === 0,
+    `a rendering that quotes its paths adds unrequested elements: ${quotedResult.unrequested.join('; ')}`,
+  );
   const repeated = mergePipeline.replace(step('merge', mergeStep), step('merge', mergeStep) + step('again', mergeStep));
   check(missesOf(scored(elements, repeated)).join(',') === 'merge', 'a merge step repeated inside one job does not miss');
 
@@ -506,6 +524,22 @@ function checkPrescribedRenderings() {
     `  evaluation-pr:\n    runs-on: ubuntu-latest\n    steps:\n      - id: node-version\n        run: |\n          floor=22.20.0\n          echo "value=$floor" >> "$GITHUB_OUTPUT"\n      - uses: actions/setup-node@v4\n        with:\n          node-version: \${{ steps.node-version.outputs.value }}\n${step('pr', prStep)}`,
   );
   check(missesOf(scored([floor], guarded, '20')).length === 0, 'an evaluation job whose Node step names the floor misses it');
+  // A step that names the floor and ignores it writes what it reads, and the aliases are read as what they name.
+  const ignoresFloor = workflow(
+    `  evaluation-pr:\n    runs-on: ubuntu-latest\n    steps:\n      - id: node-version\n        run: |\n          floor=22.20.0\n          value="$(cat .nvmrc)"\n          echo "value=$value" >> "$GITHUB_OUTPUT"\n      - uses: actions/setup-node@v4\n        with:\n          node-version: \${{ steps.node-version.outputs.value }}\n${step('pr', prStep)}`,
+  );
+  check(
+    missesOf(scored([floor], ignoresFloor, '20')).join(',') === 'floor',
+    'a Node step that names the floor and ignores it does not miss the floor on .nvmrc 20',
+  );
+  check(missesOf(scored([floor], ignoresFloor, '24')).length === 0, 'a Node step that reads .nvmrc misses the floor on .nvmrc 24');
+  check(missesOf(scored([floor], job("          node-version: 'lts/*'\n"), '20')).length === 0, 'a literal lts/* misses the Node floor');
+  check(missesOf(scored([floor], job('          node-version: node\n'), '20')).length === 0, 'a literal node misses the Node floor');
+  check(
+    missesOf(scored([floor], job('          node-version: lts/iron\n'), '24')).join(',') === 'floor',
+    'a literal lts/iron does not miss the Node floor',
+  );
+  check(missesOf(scored([floor], job(fileSetup), 'lts/iron')).join(',') === 'floor', 'an .nvmrc of lts/iron does not miss the Node floor');
   const testJobOnly = workflow(
     `  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/setup-node@v4\n        with:\n${fileSetup}`,
   );
@@ -552,7 +586,11 @@ function checkStepSentences() {
     ['no root install', 'Never run the root install in this job.'],
     [
       'Node floor',
-      "The Node version is the project's `.nvmrc` version only when it is at or above the floor the tooling declares, the lower bound of `engines.node` in the `package.json` of the installed `bmad-method-test-architecture-enterprise` package (22.20.0 when that package is not readable), and the current LTS otherwise:",
+      "The Node version is the project's `.nvmrc` version only when it is at or above the floor the tooling declares, the lower bound of `engines.node` in the `package.json` of the installed `bmad-method-test-architecture-enterprise` package (22.20.0 when that package is not readable), and the current LTS otherwise.",
+    ],
+    [
+      'Node alias',
+      'Keep `.nvmrc` only when its value, after a leading `v` is dropped, matches `^[0-9]+(\\.[0-9]+){0,2}$` and is at or above the floor: an alias such as `lts/iron` names an older line and falls back to the current LTS.',
     ],
     [
       'the tier step',
@@ -615,6 +653,61 @@ function checkSupportingFiles() {
     ),
     'the validation step lacks its evaluation plan bullet',
   );
+}
+
+/**
+ * The Node version step of the template block, run under bash for each `.nvmrc` an adopter might hold. It keeps the file only
+ * when it is a plain version number at or above the floor, so an alias such as `lts/iron` (Node 20) or `lts/hydrogen`
+ * (Node 18), which a version sort would rank above the floor, falls back to the LTS.
+ */
+function checkTemplateNodeStep() {
+  const template = readSkill('github-actions-template.yaml') ?? '';
+  const block = /^# evaluation-plan:begin\n([\S\s]*?)^# evaluation-plan:end$/m.exec(template)?.[1] ?? '';
+  const parsed = YAML.parse(
+    block
+      .split('\n')
+      .map((line) => line.replace(/^# ?/, ''))
+      .join('\n'),
+  );
+  const writer = parsed?.jobs?.JOB_ID?.steps?.find((step) => step?.id === 'node-version')?.run;
+  check(typeof writer === 'string', 'the template block has no Node version step to run');
+  if (typeof writer !== 'string') return;
+  const script = writer.replaceAll('NODE_FLOOR', '22.20.0').replaceAll('NODE_LTS', '24');
+  const valueFor = (nvmrc) => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-ci-render-'));
+    try {
+      if (nvmrc !== null) fs.writeFileSync(path.join(directory, '.nvmrc'), nvmrc);
+      const output = path.join(directory, 'out');
+      fs.writeFileSync(output, '');
+      const ran = spawnSync('bash', ['-c', script], {
+        cwd: directory,
+        env: { PATH: process.env.PATH, GITHUB_OUTPUT: output },
+        encoding: 'utf8',
+      });
+      return ran.status === 0 ? /^value=(.*)$/m.exec(fs.readFileSync(output, 'utf8'))?.[1] : `exit ${ran.status}`;
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  };
+  for (const [nvmrc, expected] of [
+    ['24\n', '24'],
+    ['v22.20.0\n', '22.20.0'],
+    ['22.21\n', '22.21'],
+    ['20\n', '24'],
+    ['22.12.0\n', '24'],
+    ['22\n', '24'],
+    ['lts/iron\n', '24'],
+    ['lts/hydrogen\n', '24'],
+    ['lts/*\n', '24'],
+    ['node\n', '24'],
+    [null, '24'],
+  ]) {
+    const got = valueFor(nvmrc);
+    check(
+      got === expected,
+      `the template Node step writes ${JSON.stringify(got)} for .nvmrc ${JSON.stringify(nvmrc)} where ${JSON.stringify(expected)} belongs`,
+    );
+  }
 }
 
 /** Every regular file under a directory, as sorted paths relative to it. */
@@ -710,6 +803,7 @@ async function main() {
   checkManifestFixtures();
   checkStepNaming();
   checkPrescribedRenderings();
+  checkTemplateNodeStep();
   await checkCorpusGuards();
   checkStoredCapture();
 

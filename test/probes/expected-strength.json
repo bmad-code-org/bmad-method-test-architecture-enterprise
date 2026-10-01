@@ -202,7 +202,7 @@
   },
   "ci": {
     "contractId": "tea-ci-behavioral",
-    "corpusDigest": "sha256:2e11a38873ae4f5311d0b2b7ba25893a04038c4e423458247fbb8843f5a9bdd1",
+    "corpusDigest": "sha256:bc1efaac0e706e37e1664ccf49b8e17898e03d90894cd4a7744b4eae1adcb381",
     "probeCount": 4,
     "strength": {
       "defect": {

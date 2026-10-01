@@ -29,6 +29,8 @@
  *   mutate      write the workflow, add a file under the project's evidence/, and
  *               change a byte of package.json, so the caller must count a mutation
  *   unparseable write the file with a syntax error, so the caller reads a parse failure
+ *   deviation   write the evaluation-plan project's one-step-per-check deviation, one requested
+ *               element short of its correct run, and the correct run for every other project
  *   unrequested write the full-request template regardless of which project was named,
  *               so the caller reads unrequested elements on a minimal request
  *
@@ -84,8 +86,14 @@ const correctRuns = [
   [/lantern/, 'minimal-correct-pipeline'],
   [/quarry/, 'evaluation-plan-live-capture'],
 ];
+// A one-element deviation of the evaluation-plan project's correct run: the tier step repeated once per check.
+const deviations = [[/quarry/, 'evaluation-plan-one-step-per-check']];
 const replaySource =
-  mode === 'unrequested' ? 'full-correct-pipeline' : (correctRuns.find(([pattern]) => pattern.test(named ?? ''))?.[1] ?? 'full-correct-pipeline');
+  mode === 'unrequested'
+    ? 'full-correct-pipeline'
+    : mode === 'deviation'
+      ? (deviations.find(([pattern]) => pattern.test(named ?? ''))?.[1] ?? 'full-correct-pipeline')
+      : (correctRuns.find(([pattern]) => pattern.test(named ?? ''))?.[1] ?? 'full-correct-pipeline');
 const source = path.join(__dirname, '..', '..', 'replay', 'ci', replaySource, '.github', 'workflows', 'test.yml');
 const workflowDir = path.join(projectRoot, '.github', 'workflows');
 fs.mkdirSync(workflowDir, { recursive: true });
