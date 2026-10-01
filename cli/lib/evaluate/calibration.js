@@ -87,6 +87,12 @@ function calibrationObservation({ criterion, response, responseKind, operationId
   });
 }
 
+/** The operation id the contract's interaction plan gives the step a criterion reads, else `calibration`. */
+function calibrationOperationId(contract, criterion) {
+  const stepId = /^\/interactions\/([^/]+)/.exec(criterion.evidence)?.[1];
+  return contract.interactionPlan?.find((step) => step.stepId === stepId)?.operationId ?? 'calibration';
+}
+
 function calibrationProblems(evaluation, contract, calibration, engine) {
   const problems = [];
   const rubrics = Array.isArray(contract?.rubrics) ? contract.rubrics : [];
@@ -241,4 +247,11 @@ async function runCalibration({ calibration, evaluation, contract, engine, write
   return { digest: engine.digestBytes(calibration.bytes), report };
 }
 
-module.exports = { CALIBRATION_PATH, calibrationObservation, calibrationProblems, readCalibration, runCalibration };
+module.exports = {
+  CALIBRATION_PATH,
+  calibrationObservation,
+  calibrationOperationId,
+  calibrationProblems,
+  readCalibration,
+  runCalibration,
+};

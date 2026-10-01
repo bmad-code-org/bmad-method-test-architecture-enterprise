@@ -702,7 +702,7 @@ Added 2026-09-26 in Story 1.21. Levels: integration over real eval-quality, cont
 | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | --- | --------------------------------------------------------------- |
 | Imported rubric scores carry verifiable calibration    | A harness supplies label-free judgments and provenance for the same scorer configuration used in trial records               | Integration over real eval-quality | P0  | A mismatched scorer or leaked label fails provenance validation |
 | Low agreement stops before records are imported        | Two labelled items yield agreement 0.5 under a 0.9 minimum; inspect the report, exit 11, and absence of copied trial records | Integration                        | P0  | Removing the gate writes a trial record                         |
-| Calibration inputs change the imported scoring version | Change one item and then the minimum agreement; assert both change `EvaluatorConfiguration` and its scoring version          | Contract                           | P1  | Omitting either binding leaves the version unchanged            |
+| Calibration inputs change the imported scoring version | Change one item and then the minimum agreement; assert both change `EvaluatorConfiguration` and its scoring version          | Integration over real eval-quality | P1  | Omitting either binding leaves the version unchanged            |
 | Uncalibrated rubric records are refused                | `check` exits 10 for absent or unverifiable provenance; a non-rubric `records` evaluation still passes its import path       | Contract                           | P1  | Bypassing the refusal accepts an uncalibrated rubric            |
 
 ### Story 1.41: Confine score output during concurrent run-directory changes
@@ -972,6 +972,16 @@ Added 2026-09-30 in Story 1.38. Levels: integration over real eval-quality, unit
 | A reported release echoing the secret reaches no artifact | A deployment reports a release holding the secret uppercased; assert `refused/<probeId>.json` and `run.json`      | Integration over real eval-quality | P1  | Restoring the case-sensitive scrub writes the secret into the refusal |
 | The fault path and the observation scrub the same cases   | A fault quoting the secret uppercased; assert the message and cause                                               | Integration                        | P1  | Two different case sets let the uppercased echo through the fault     |
 | A short value stays unscrubbed in every case              | A value under the minimum length echoed in each case; assert it stays                                             | Unit                               | P2  | Scrubbing it redacts ordinary text and fails the case                 |
+
+### Story 1.67: Emit the label-free calibration inputs a records harness feeds its scorer
+
+Added 2026-10-01 in Story 1.40. Levels: integration over real eval-quality, guidance. Files: `test/test-evaluate-evaluators.js` (`test:evaluate-evaluators`), `test/test-evaluate-guidance.js` (`test:evaluate-guidance`).
+
+| AC                                               | Test                                                                                                                                | Level                              | P   | Revert check                                                     |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | --- | ---------------------------------------------------------------- |
+| A harness built from the emitted inputs verifies | A harness fixture writes its judgments file from the emitted inputs and digests alone; `check` exits 0 and `run` imports and scores | Integration over real eval-quality | P0  | Emitting an input the verification does not derive fails `check` |
+| The emitted inputs carry no label                | Search the output for `expectedLevel`                                                                                               | Integration                        | P1  | Adding the label to the output fails the search                  |
+| The guide says to copy, never to derive          | Assert the evaluator guide's sentence under its exact heading                                                                       | Guidance                           | P2  | Removing the sentence fails the guidance assertion               |
 
 ## The Dogfood Proof (AD-15)
 

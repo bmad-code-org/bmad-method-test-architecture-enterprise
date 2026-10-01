@@ -75,7 +75,7 @@ development_status:
   1-37-know-a-started-http-server-by-the-port-it-bound-itself: done
   1-38-hold-a-deployment-to-the-release-it-reports: done
   1-39-tell-a-captured-value-too-large-to-launch-from-a-target-tha: done
-  1-40-calibrate-rubric-scores-imported-from-harness-records: backlog
+  1-40-calibrate-rubric-scores-imported-from-harness-records: review
   1-41-confine-score-output-during-concurrent-run-directory-changes: backlog
   1-42-attribute-reused-operation-ids-to-their-interfaces: backlog
   1-43-keep-ungraded-framework-errors-out-of-target-findings: backlog
@@ -102,6 +102,7 @@ development_status:
   1-64-hold-the-release-across-the-witness-legs-and-the-trials: backlog
   1-65-ask-every-http-interface-of-a-deployment-which-release-it-r: backlog
   1-66-scrub-an-observation-in-every-letter-case: backlog
+  1-67-emit-the-label-free-calibration-inputs-a-records-harness-fe: backlog
   epic-1-retrospective: optional
 
   epic-2: backlog

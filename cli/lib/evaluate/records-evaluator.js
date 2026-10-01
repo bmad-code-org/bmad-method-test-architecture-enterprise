@@ -23,6 +23,12 @@
  * judge (AD-1). The records directory must resolve inside the evaluation
  * folder, through no link.
  *
+ * When the contract declares a rubric, the harness also writes
+ * `<records>/calibration-judgments.json`, its scorer's answers over the
+ * labelled items. Once the configuration validates and before any record is
+ * read, the run verifies those judgments and gates on their agreement
+ * (`records-calibration.js`); a contract with no rubric never reads the file.
+ *
  * Anything missing, unreadable or off its schema is an authoring defect:
  * `EvaluatorLayerError`, exit 10, before any `score` call.
  */
@@ -33,6 +39,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const { EvaluatorLayerError } = require('./evaluators');
+const { calibrateImported } = require('./records-calibration');
 
 const CONFIGURATION_NAME = 'evaluator-configuration.json';
 const MANIFEST_NAME = 'isolation-manifest.json';
@@ -61,10 +68,11 @@ function regularBytes(file, spelled) {
  * @param {string} options.sealedBriefDigest the brief this run sealed
  * @param {Function} options.validate eval-quality's schema validator (`createArtifactValidator`)
  * @param {object} options.writer the run directory's writer
+ * @param {{ labelled: object, evaluation: object, contract: object, engine: object, stop: Function }|null} [options.calibration] the labelled items and what the gate needs, when the contract declares a rubric
  * @returns {Promise<{ configuration: object, sets: Array<{ probeId: string, runId: string, conditionArm: string, records: string[], manifest: string|null }> }>}
  * @throws {EvaluatorLayerError}
  */
-async function importRecords({ folder, evaluator, probes, sealedBriefDigest, validate, writer }) {
+async function importRecords({ folder, evaluator, probes, sealedBriefDigest, validate, writer, calibration = null }) {
   const root = path.join(folder, ...evaluator.records.split('/'));
   let real;
   try {
@@ -97,6 +105,9 @@ async function importRecords({ folder, evaluator, probes, sealedBriefDigest, val
       `${spell(CONFIGURATION_NAME)} carries sealedBriefDigest ${configuration.sealedBriefDigest}, not the ${sealedBriefDigest} of the brief this run sealed`,
     );
   }
+
+  // The imported rubric scores count only once their calibration holds, so no record is read before it does.
+  if (calibration !== null) await calibrateImported({ ...calibration, records: evaluator.records, root, configuration, writer });
 
   const sets = [];
   const copies = [[CONFIGURATION_NAME, configurationBytes]];

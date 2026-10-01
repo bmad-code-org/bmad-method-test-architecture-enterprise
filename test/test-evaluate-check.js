@@ -56,6 +56,7 @@ const { spawnSync } = require('node:child_process');
 const AjvModule = require('ajv/dist/2020');
 
 const { buildCorpusIndex, writeCorpusIndex } = require('../cli/lib/evaluate/corpus-index');
+const { calibrationObservation, calibrationOperationId } = require('../cli/lib/evaluate/calibration');
 const { engineCliPath, engineSchemaPath, loadEngine, ENGINE_CLI_ENV } = require('../cli/lib/evaluate/engine');
 const { resolveEvaluationFolder } = require('../cli/lib/evaluate/folder');
 const { createRegistry, registryFromEvaluation } = require('../cli/lib/evaluate/registry');
@@ -2209,6 +2210,64 @@ const AGENT_CONDITIONS = {
 /** The mapping with its first key's binding replaced. */
 const mappingWith = (binding) => ({ schemaVersion: 1, keys: { accepted: binding } });
 
+/**
+ * A records evaluator over the rubric R-001 with what an adopter harness
+ * writes beside its records (Story 1.40): a configuration binding the
+ * labelled file's digest and the minimum agreement, and the calibration
+ * judgments, its scorer's answers to each label-free observation. Both verify
+ * unless an option changes them: `configuration` and `judgments` edit the
+ * parsed file (null leaves it out), `rawJudgments` writes text in its place.
+ */
+async function plantRecordsRubric(
+  folder,
+  { configuration: editConfiguration = () => {}, judgments: editJudgments = () => {}, rawJudgments } = {},
+) {
+  plantEvaluator(folder, { kind: 'records', records: 'harness-records' }, { mapping: null });
+  editJson(folder, 'contract.json', (value) => (value.rubrics = [EVALUATOR_RUBRIC]));
+  plantCalibration(folder, EVALUATOR_RUBRIC);
+  const engine = await loadEngine();
+  const records = path.join(folder, 'harness-records');
+  fs.mkdirSync(records);
+  const labelled = JSON.parse(fs.readFileSync(path.join(folder, 'policy', 'judge-calibration.json'), 'utf8'));
+  const contract = JSON.parse(fs.readFileSync(path.join(folder, 'contract.json'), 'utf8'));
+  const [criterion] = EVALUATOR_RUBRIC.criteria;
+  const configuration = {
+    evaluatorIdentity: 'a harness scorer',
+    decodingParameters: {
+      'tea.judgeCalibrationDigest': engine.digestBytes(fs.readFileSync(path.join(folder, 'policy', 'judge-calibration.json'))),
+      'tea.judgeCalibrationMinimumAgreement': 0.5,
+    },
+  };
+  const written = {
+    schemaVersion: 1,
+    // The binding keys are not part of what the scorer ran under.
+    scorerConfigurationDigest: engine.digestArtifact(
+      { evaluatorIdentity: configuration.evaluatorIdentity, decodingParameters: {} },
+      'EvaluatorConfiguration',
+    ),
+    items: labelled.items.map((item) => ({
+      rubricId: item.rubricId,
+      criterionId: item.criterionId,
+      scorerInput: calibrationObservation({
+        criterion,
+        response: item.response,
+        responseKind: item.responseKind,
+        operationId: calibrationOperationId(contract, criterion),
+      }),
+      answer: item.expectedLevel,
+    })),
+  };
+  if (editConfiguration !== null) {
+    editConfiguration(configuration);
+    fs.writeFileSync(path.join(records, 'evaluator-configuration.json'), `${JSON.stringify(configuration, null, 2)}\n`);
+  }
+  if (rawJudgments !== undefined) fs.writeFileSync(path.join(records, 'calibration-judgments.json'), rawJudgments);
+  else if (editJudgments !== null) {
+    editJudgments(written);
+    fs.writeFileSync(path.join(records, 'calibration-judgments.json'), `${JSON.stringify(written, null, 2)}\n`);
+  }
+}
+
 /** Story 1.17's evaluator cases: each exits 10 naming its file and rule. */
 const EVALUATOR_CASES = [
   {
@@ -2318,18 +2377,55 @@ const EVALUATOR_CASES = [
     plant: (folder) => plantEvaluator(folder, { kind: 'records', records: 'harness-records' }, { mapping: null }),
     expect: (output) => [[output.includes('harness-records, which is not a directory'), 'the finding does not name the directory']],
   },
-  {
-    name: 'a records evaluator with a rubric but no verifiable calibration path',
-    file: 'evaluation.json',
-    rule: 'evaluator',
-    plant: (folder) => {
-      plantEvaluator(folder, { kind: 'records', records: 'harness-records' }, { mapping: null });
-      editJson(folder, 'contract.json', (value) => (value.rubrics = [EVALUATOR_RUBRIC]));
-      plantCalibration(folder, EVALUATOR_RUBRIC);
-      fs.mkdirSync(path.join(folder, 'harness-records'));
-    },
-    expect: (output) => [[output.includes('cannot score rubrics'), 'the finding does not explain the records scorer refusal']],
-  },
+  ...[
+    ['no judgments file', { judgments: null }, ['harness-records/calibration-judgments.json is not there']],
+    ['judgments that are not JSON', { rawJudgments: 'not json' }, ['harness-records/calibration-judgments.json is not JSON']],
+    [
+      'judgments of another scorer configuration',
+      { judgments: (value) => (value.scorerConfigurationDigest = `sha256:${'4'.repeat(64)}`) },
+      [`names scorerConfigurationDigest "sha256:${'4'.repeat(64)}"`, 'so the judgments are not from the scorer that produced the records'],
+    ],
+    [
+      'a label in the scorer input',
+      { judgments: (value) => (value.items[1].scorerInput.expectedLevel = 1) },
+      ['items[1].scorerInput is not the label-free observation', 'carries expectedLevel'],
+    ],
+    [
+      'a response the scorer did not see',
+      { judgments: (value) => (value.items[0].scorerInput.exitCode = 7) },
+      ['items[0].scorerInput is not the label-free observation'],
+    ],
+    ['a judgments item missing', { judgments: (value) => value.items.pop() }, ['holds 1 items; policy/judge-calibration.json holds 2']],
+    [
+      'an answer off the criterion levels',
+      { judgments: (value) => (value.items[0].answer = 9) },
+      ['items[0].answer 9 is not null or an anchored level of R-001/RC-001'],
+    ],
+    [
+      'a configuration with no calibration binding',
+      { configuration: (value) => delete value.decodingParameters['tea.judgeCalibrationDigest'] },
+      ['carries no decodingParameters["tea.judgeCalibrationDigest"]'],
+      'harness-records/evaluator-configuration.json',
+    ],
+    [
+      'a configuration binding another minimum agreement',
+      { configuration: (value) => (value.decodingParameters['tea.judgeCalibrationMinimumAgreement'] = 0.9) },
+      ['binds decodingParameters["tea.judgeCalibrationMinimumAgreement"] 0.9', 'judgeCalibration.minimumAgreement is 0.5'],
+      'harness-records/evaluator-configuration.json',
+    ],
+    [
+      'a configuration that is not there',
+      { configuration: null },
+      ['harness-records/evaluator-configuration.json cannot be read as JSON'],
+      'harness-records/evaluator-configuration.json',
+    ],
+  ].map(([what, options, says, file = 'harness-records/calibration-judgments.json']) => ({
+    name: `a records evaluator with a rubric and ${what}`,
+    file,
+    rule: 'judge-calibration',
+    plant: (folder) => plantRecordsRubric(folder, options),
+    expect: (output) => says.map((text) => [output.includes(text), `the finding does not say ${JSON.stringify(text)}`]),
+  })),
   {
     name: 'a sealed-brief agent with no evaluator model in the evaluator conditions',
     file: 'policy/evaluator-conditions.json',
@@ -2582,6 +2678,18 @@ const EVALUATOR_CLEAN_CASES = [
     plant: (folder) => plantEvaluator(folder, AGENT_EVALUATOR, { rubric: true, conditions: AGENT_CONDITIONS }),
   },
   {
+    name: 'a records evaluator whose rubric scores carry verified calibration judgments',
+    plant: (folder) => plantRecordsRubric(folder),
+  },
+  {
+    name: 'a records evaluator with no rubric, beside a judgments file it never reads',
+    plant: (folder) => {
+      plantEvaluator(folder, { kind: 'records', records: 'harness-records' }, { mapping: null });
+      fs.mkdirSync(path.join(folder, 'harness-records'));
+      fs.writeFileSync(path.join(folder, 'harness-records', 'calibration-judgments.json'), 'not json');
+    },
+  },
+  {
     name: 'an explicit deterministic evaluator',
     plant: (folder) => editJson(folder, 'evaluation.json', (value) => (value.evaluator = { kind: 'deterministic' })),
   },
@@ -2694,7 +2802,7 @@ const CLEAN_CASES = [
 async function runCleanCases() {
   for (const testCase of [...CLEAN_CASES, ...EVALUATOR_CLEAN_CASES]) {
     const folder = copyValid();
-    testCase.plant(folder);
+    await testCase.plant(folder);
     await writeCorpusIndex(folder);
     const result = runCli(['check', '--evaluation', folder]);
     check(result.status === 0, `${testCase.name}: check exited ${result.status}; expected 0\n${result.output}`);
@@ -2704,7 +2812,7 @@ async function runCleanCases() {
 async function runCases(cases) {
   for (const testCase of cases) {
     const folder = testCase.copy?.() ?? copyValid();
-    testCase.plant(folder);
+    await testCase.plant(folder);
     if (testCase.redigest !== false) await writeCorpusIndex(folder);
     const result = runCli(['check', '--evaluation', folder]);
     const label = `${testCase.name}: `;
