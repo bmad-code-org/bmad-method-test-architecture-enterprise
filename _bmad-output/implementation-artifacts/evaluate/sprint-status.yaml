@@ -76,7 +76,7 @@ development_status:
   1-38-hold-a-deployment-to-the-release-it-reports: done
   1-39-tell-a-captured-value-too-large-to-launch-from-a-target-tha: done
   1-40-calibrate-rubric-scores-imported-from-harness-records: done
-  1-41-confine-score-output-during-concurrent-run-directory-changes: review
+  1-41-confine-score-output-during-concurrent-run-directory-changes: done
   1-42-attribute-reused-operation-ids-to-their-interfaces: backlog
   1-43-keep-ungraded-framework-errors-out-of-target-findings: backlog
   1-44-record-installed-framework-versions-in-evaluator-provenance: backlog

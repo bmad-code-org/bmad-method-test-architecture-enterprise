@@ -2,7 +2,7 @@
 title: 'Story 1.41: Confine score output during concurrent run-directory changes'
 type: 'bugfix'
 created: '2026-10-01'
-status: 'review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '8a77825b'
