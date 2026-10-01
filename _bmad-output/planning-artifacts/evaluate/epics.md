@@ -23,7 +23,7 @@ inputDocuments:
 
 ## Overview
 
-This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and seventy-four stories, including H.1 (Stories 1.27 to 1.68 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
+This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and seventy-five stories, including H.1 (Stories 1.27 to 1.68 and 1.80 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
 
 Evaluate is fully stacked. The stack runs system under test, then the evaluation (the mechanism that runs the system, collects evidence and makes judgments), then the Behavioral Evaluation Contract (what behavior matters, what evidence counts, how success and failure resolve), then eval-quality (contract sanity, evidence support, and whether the evaluation catches defects). TeA owns every layer above eval-quality, including each concern eval-quality states it leaves to the caller, so an adopter can evaluate any target end to end. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3 onward, Epic 2 and H.1 to close the plan gap audit; the Traceability section maps each audit item to the story that closes it.
 
@@ -150,7 +150,7 @@ None. Evaluate has no graphical interface.
 ### Epic 1: The Evaluate authoring loop
 
 An adopter describes a target, answers Evaluate's questions, chooses or builds the evaluation layer and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches the seeded defect, with the gaps named and closed. The epic closes by running Evaluate on `bmad-testarch-evaluate` itself, then proving the guidance on two more target kinds, on seeded weaknesses and on an evaluation framework its guides never name.
-Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.68.
+Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.68 and 1.80.
 
 **FRs covered:** FR1 to FR10, FR13, FR14.
 
@@ -234,12 +234,13 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 66    | 1.66  | 1.11, 1.38                   |
 | 67    | 1.67  | 1.40                         |
 | 68    | 1.68  | 1.41                         |
-| 69    | 2.1   | 1.16, 1.26, 1.45             |
-| 70    | 2.2   | 2.1                          |
-| 71    | 2.3   | 2.2                          |
-| 72    | 2.4   | 2.3                          |
-| 73    | 2.5   | 2.4                          |
-| 74    | H.1   | 2.5                          |
+| 69    | 1.80  | 1.57                         |
+| 70    | 2.1   | 1.16, 1.26, 1.45             |
+| 71    | 2.2   | 2.1                          |
+| 72    | 2.3   | 2.2                          |
+| 73    | 2.4   | 2.3                          |
+| 74    | 2.5   | 2.4                          |
+| 75    | H.1   | 2.5                          |
 
 ### Parallel lanes (from 2026-10-01)
 
@@ -247,7 +248,7 @@ The table above gives every story's dependencies. Since Story 1.40 merged, the s
 
 **Lane 1: run integrity, scoring and evaluators** (main checkout): 1.41, 1.68, 1.43, 1.44, 1.67, 1.66, 1.65, 1.64. Story 1.68 reads the files 1.41 changes, so it follows directly. Story 1.65 turns the single release report into a per-interface report and 1.64 adds call sites that 1.65 would otherwise rewrite, so 1.66, 1.65, 1.64 run in that order. Story 1.44 rewrites the `evaluate-learn` fixture's evaluator, which lane 3's 1.55 and 1.56 own, so those two wait for it.
 
-**Lane 2: confinement and process lifecycle** (own worktree): 1.62, 1.57, 1.58, 1.59, 1.60, 1.63, 1.61, 1.52, 1.53, 1.54. Story 1.62 goes first because it extracts the shared sandbox primitives the confinement stories build on. Story 1.60 may remove 1.63's premise, so 1.63 is re-read after it. Story 1.58 precedes 1.54, since both track the run's private scratch directories. Stories 1.52 to 1.54 touch the preflight and workspace modules the confinement stories also edit, so they run after them.
+**Lane 2: confinement and process lifecycle** (own worktree): 1.62, 1.57, 1.58, 1.59, 1.60, 1.63, 1.61, 1.52, 1.53, 1.54, 1.80. Story 1.62 goes first because it extracts the shared sandbox primitives the confinement stories build on. Story 1.60 may remove 1.63's premise, so 1.63 is re-read after it. Story 1.58 precedes 1.54, since both track the run's private scratch directories. Stories 1.52 to 1.54 touch the preflight and workspace modules the confinement stories also edit, so they run after them.
 
 **Lane 3: engine releases, dogfood and Epic 2** (own worktree): 1.45, 2.1, 2.2, 2.3, 2.4, 1.47, 1.49, 1.48, 1.42, 1.50, 1.55, 1.56, 1.51, 1.46, 2.5. Story 1.45 starts the longest serial chain (1.45, 2.1 to 2.5, then H.1), so it runs first, and 2.5 runs last because it baselines every fixture and so waits for each story that changes committed evidence bytes (1.42, 1.44, 1.50, 1.51, 1.55, 1.56). Stories 1.47, 1.49 and 1.48 regenerate the test-design probes, so they run together with 1.48 last. Stories 1.42 and 1.50 both change the HTTP probe port and run back to back. Story 1.46 records live runs of the Evaluate skill, so it follows the skill-guide stories in other lanes (1.43, 1.44, 1.61, 1.67). Lane 3 owns every eval-quality release, because 1.42, 1.45, 1.48, 1.50 and 1.55 each need a published engine and one publisher keeps the dependency pin and `package-lock.json` ordered.
 
@@ -1602,7 +1603,7 @@ So that a target cannot read the contract, the probes or which defect a mutation
 **And** `docs/reference/tea-evaluate-cli.md`'s `### File-system confinement` drops the passage saying the git history stays readable; a case reading that section fails while the passage remains.
 
 **Dependencies:** 1.31.
-**Gate:** `test:evaluate-run`, `test:evaluate-mutation`, `test:evaluate-arms`, `npm test`.
+**Gate:** `test:evaluate-confinement` (the confinement cases, split from `test:evaluate-run`), `test:evaluate-run`, `test:evaluate-mutation`, `test:evaluate-arms`, `npm test`.
 
 ### Story 1.58: Keep the bridge's admission token and the run's private directories from a confined target
 
@@ -1814,6 +1815,27 @@ So that a process writing the run directory during scoring cannot change what is
 
 **Dependencies:** 1.41.
 **Gate:** `npm test`, `npm run docs:validate-links`, `npm run docs:build`, engine check.
+
+### Story 1.80: Bring a partial-clone project, its tags and a very large history into the withheld repository
+
+Added 2026-10-01 in Story 1.57. The private repository that Story 1.57 builds for a confined git workspace packs the project's whole history from the project's object store. A project cloned with a promisor remote (`--filter=blob:none`, `--filter=tree:0`) does not hold that history on disk, so the build would fetch all of it from the remote, and a confined run over such a project exits 12 with a message that names the cause. The private repository also carries `HEAD` and the history but no branches or tags, so a target that builds with `git describe` or reads a tag finds none, where it found the project's before. The build reads the object walk's whole output into memory, so a history of more than about six million objects exceeds the buffer and the run exits 12. The config it carries for a tracked filter driver misses a driver whose name holds a space and a `required` setting written without a value, so the target's `git status` lists those files as modified.
+
+As an adopter whose project is a partial clone, has a very large history, or whose build reads a tag,
+I want the target's git to see what the project's git shows apart from the evaluation folder,
+So that a confined run needs neither an opt-out nor a changed target (AD-7, AD-8).
+
+**Acceptance Criteria:**
+
+**Given** a confined run over a project cloned with a promisor remote whose evaluation folder is committed
+**When** the run starts and a stub target runs `git status`, `git log` and `git show HEAD:<a tracked file>`
+**Then** the run completes with no exit 12, the stub's commands exit 0 over the objects the project holds on disk, no process fetches from the remote, and `git show` of the committed contract finds no object; restoring the refusal makes the run exit 12, which the case catches
+**And** a stub target in a confined run over a project with a lightweight and an annotated tag lists both with `git tag -l`, resolves `git describe --tags`, and reads the tagged commit's files, while no remote URL, credential or hook reaches the private repository; dropping the tag copy makes `git tag -l` print nothing, which the case catches
+**And** a confined run over a history of more than six million objects (the object walk streamed from a stub `git` that prints that many ids, so no such repository is built) completes, and a walk that buffers its whole output fails the case
+**And** a project whose local config sets a filter driver named with a space, or `required` with no value, shows the target the same `git status` as the project, a case that fails while the driver is dropped
+**And** the reference's `### File-system confinement` drops its three limits (a partial-clone project is refused; the target's git has no branches or tags; a history of more than about six million objects is refused), and a case reading that section under its exact heading fails while any remains.
+
+**Dependencies:** 1.57.
+**Gate:** `test:evaluate-confinement`, `npm test`.
 
 ## Epic 2: Continuous proof in CI
 

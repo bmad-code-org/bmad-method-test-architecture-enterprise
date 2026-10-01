@@ -38,7 +38,7 @@ inputDocuments:
 
 ## Executive Summary
 
-**Scope:** full epic-level test design for Stories 1.1 to 1.68 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.68. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
+**Scope:** full epic-level test design for Stories 1.1 to 1.68 and 1.80 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.68 and 1.80. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
 
 **Risk summary:**
 
@@ -886,13 +886,18 @@ Added from Story 1.26's final review. Levels: preflight mutation qualification, 
 
 ### Story 1.57: Withhold the committed evaluation folder from a confined target's git history
 
-Added in Story 1.31. Levels: integration over real eval-quality, static. File: `test/test-evaluate-run.js` (`test:evaluate-run`).
+Added in Story 1.31. Levels: integration over real eval-quality, unit, static. File: `test/test-evaluate-run.js` (`test:evaluate-confinement`, its `--group=confinement` cases, and `test:evaluate-run`, the rest), `test/test-isolation-primitives.js` (the profile golden). Gate: `test:evaluate-confinement`, `test:evaluate-run`, `test:evaluate-mutation`, `test:evaluate-arms`, `npm test`.
 
-| AC                                               | Test                                                                                                                      | Level       | P   | Revert check                                          |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- | ----------- | --- | ----------------------------------------------------- |
-| No evaluation-folder object reaches the target   | A stub target runs `git show` and `git cat-file` for the committed contract at the evaluated commit and every ref         | Integration | P0  | Reverting the change lets the stub print the contract |
-| The target's own git operations still work       | The same stub runs `git status`, `git log` and `git diff` against the commit; assert each exits 0 with the evaluated tree | Integration | P1  | A workspace that breaks git fails the assertion       |
-| The reference drops the readable-history passage | Read `### File-system confinement` by its exact heading                                                                   | Static      | P2  | Leaving the passage fails the case                    |
+| AC                                               | Test                                                                                                                                                                                                | Level       | P   | Revert check                                                 |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | --- | ------------------------------------------------------------ |
+| No evaluation-folder object reaches the target   | A stub target runs `git show` and `git cat-file` for the committed contract at the evaluated commit and `HEAD`, a folder blob id from an older commit's `git log --raw`, and `--no-replace-objects` | Integration | P0  | Skipping the builder lets the stub print the contract        |
+| The project's git directory is withheld          | The stub reads `<project>/.git/HEAD` and `.git/objects`; assert each refused, and its own worktree metadata readable                                                                                | Integration | P0  | Removing the deny rule lets the read through                 |
+| The target's own git operations still work       | The same stub runs `git status`, `git log`, `git diff HEAD` and `git show HEAD:src/a`; assert each exits 0, the tree intact and no deletion listed                                                  | Integration | P1  | A workspace that breaks git fails the assertion              |
+| Shared content and changed folders are handled   | A file outside the folder with a folder file's bytes stays readable; two commits with two folder trees have both replaced; a shallow repository carries its `shallow` file                          | Unit        | P1  | Dropping the restore pass or the shallow copy fails the case |
+| A failed build leaves nothing                    | A `git pack-objects` that exits nonzero refuses with `WorkspaceRefusal`, and workspace and registration are gone; a killed run is reclaimed with its store                                          | Unit        | P1  | A half-built workspace left behind fails the assertion       |
+| An opt-out run keeps today's worktree            | `"confinement": false`: the worktree names the adopter's `commondir` and no store exists                                                                                                            | Integration | P1  | Building the store for an opt-out run fails the assertion    |
+| The profiles carry the git-directory rules       | The golden holds the Seatbelt profile, the Bubblewrap vector and the audit's `withheld` list with the git directory                                                                                 | Unit        | P1  | A changed rule fails the comparison                          |
+| The reference drops the readable-history passage | Read `### File-system confinement` by its exact heading                                                                                                                                             | Static      | P2  | Leaving the passage fails the case                           |
 
 ### Story 1.58: Keep the bridge's admission token and the run's private directories from a confined target
 
@@ -1004,6 +1009,17 @@ Added 2026-10-01 in Story 1.41. Levels: end-to-end over real eval-quality, integ
 | A substituted well-formed artifact is refused   | A shim over real eval-quality replaces the staged artifact with a well-formed one whose outcomes are altered; assert exit 12 and no evidence copied                                    | End-to-end over real eval-quality | P0  | Removing the digest or re-score check copies the altered outcomes     |
 | A normal and a repeated score are unchanged     | Score twice; re-run the recorded argv with a fresh `--out` and compare the evidence byte for byte                                                                                      | Integration                       | P1  | A check that refuses a clean score fails the case                     |
 | The reference states the check                  | Read the score section and fail when the rewriting-limit sentence is back or the new section is gone                                                                                   | Static                            | P2  | Restoring the sentence or removing the section fails the read         |
+
+### Story 1.80: Bring a partial-clone project, its tags and a very large history into the withheld repository
+
+Added 2026-10-01 in Story 1.57. Levels: integration over real eval-quality, static. File: `test/test-evaluate-run.js` (`test:evaluate-confinement`).
+
+| AC                                    | Test                                                                                                                                                             | Level       | P   | Revert check                                      |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | --- | ------------------------------------------------- |
+| A partial-clone project runs confined | A project cloned with a promisor remote and a committed folder; a stub runs `git status`, `git log` and `git show`; assert exit 0, no fetch and no folder object | Integration | P0  | Restoring the refusal exits the run with 12       |
+| Tags reach the target                 | A project with a lightweight and an annotated tag; the stub runs `git tag -l` and `git describe --tags`; assert both listed and no remote, URL or hook copied    | Integration | P1  | Dropping the tag copy lists nothing               |
+| A very large history builds           | A stub `git` on `PATH` prints more than six million ids for the walk; assert the run completes and the walk is read as a stream                                  | Integration | P1  | A walk that buffers all output fails with ENOBUFS |
+| The reference drops the three limits  | Read `### File-system confinement` by its exact heading                                                                                                          | Static      | P2  | Leaving either limit fails the case               |
 
 ## The Dogfood Proof (AD-15)
 

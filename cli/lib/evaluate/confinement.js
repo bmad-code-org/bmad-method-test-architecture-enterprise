@@ -6,7 +6,8 @@
  * adopter's git directory, beside which the evaluation folder sits, so a
  * target that follows it can read the contract and rewrite the evidence in
  * `runs/`, during its trial or from a process it leaves running after it
- * exits. This module holds the one decision per platform that closes that:
+ * exits, and can read the contract from the committed history. This module
+ * holds the one decision per platform that closes that:
  *
  *   mechanism    macOS Seatbelt (`/usr/bin/sandbox-exec` with a generated
  *                profile) or Linux Bubblewrap (`bwrap` on PATH, an unprivileged
@@ -30,9 +31,13 @@
  *                (the file a started HTTP server reports its port in, the audit
  *                report below) and nothing else, and can neither read nor write
  *                the evaluation folder (`contract.json`, `probes/`, `runs/`,
- *                `evaluator/`, everything under it). Reads elsewhere are left to
- *                the audit: node, git and a target's own toolchain read from the
- *                system and from the project's git directory.
+ *                `evaluator/`, everything under it), nor read or write the
+ *                project's git directory, the worktree's own entry in it
+ *                excepted (the workspace's git reads a private repository
+ *                beside the checkout, `workspace.js`'s `buildWithheldRepository`,
+ *                whose history holds the evaluation folder as an empty tree).
+ *                Reads elsewhere are left to the audit: node, git and a
+ *                target's own toolchain read from the system.
  *   layer        every other process the run starts to run adopter or agent
  *                code (a `command` evaluator, a sealed-brief agent and the
  *                bridge relay it starts, the rubric judge, the evaluation's HTTP
@@ -152,19 +157,37 @@ function seatbeltLayerProfile(evaluationFolder) {
 /**
  * The profile a target runs under. Writes are denied outright and allowed
  * again under the workspace and the runtime's private directories; the
- * evaluation folder's denial of reads and writes comes last, so no allowance
- * above it can reach inside it.
+ * project's git directory is denied reads and writes except the worktree's own
+ * metadata directory, which stays readable; the evaluation folder's denial of
+ * reads and writes comes last, so no allowance above it can reach inside it.
  */
-function seatbeltTargetProfile({ workspace, writable, evaluationFolder }) {
+function seatbeltTargetProfile({ workspace, writable, evaluationFolder, git = null }) {
   const allowed = [workspace, ...writable]
     .flatMap(spellings)
     .map((entry) => `(subpath "${assertProfileSafePath(entry, refuseUnsafePath)}")`);
-  const withheld = spellings(evaluationFolder).map((entry) => `(subpath "${assertProfileSafePath(entry, refuseUnsafePath)}")`);
+  const subpaths = (candidate) => spellings(candidate).map((entry) => `(subpath "${assertProfileSafePath(entry, refuseUnsafePath)}")`);
+  const withheld = subpaths(evaluationFolder);
+  // Git resolves the path of the worktree's metadata directory component by component (`lstat`), so the git directory
+  // and its `worktrees/` answer a metadata request, which tells nothing a path does not already say.
+  const literals = (candidate) => spellings(candidate).map((entry) => `(literal "${assertProfileSafePath(entry, refuseUnsafePath)}")`);
+  const gitRules =
+    git === null
+      ? []
+      : [
+          `(deny file-read* file-write*\n  ${[...subpaths(git.directory), ...git.alternates.flatMap(subpaths)].join('\n  ')})`,
+          ...(git.metadata === null
+            ? []
+            : [
+                `(allow file-read*\n  ${subpaths(git.metadata).join('\n  ')})`,
+                `(allow file-read-metadata\n  ${[...literals(git.directory), ...literals(path.dirname(git.metadata))].join('\n  ')})`,
+              ]),
+        ];
   return [
     '(version 1)',
     '(allow default)',
     '(deny file-write*)',
     `(allow file-write*\n  ${[...allowed, ...SEATBELT_DEVICE_WRITES].join('\n  ')})`,
+    ...gitRules,
     `(deny file-read* file-write*\n  ${withheld.join('\n  ')})`,
     '',
   ].join('\n');
@@ -190,17 +213,32 @@ function bubblewrapIsolation() {
  * The Bubblewrap argument vector a target runs under, before its own command:
  * an unprivileged user namespace, `/` read-only, a synthetic `/dev` (the real
  * one's device nodes cannot be opened from the namespace), the workspace and
- * the private directories writable, and the evaluation folder covered by an
- * empty read-only file system, so nothing under it can be read or written.
- * No new network namespace: a started HTTP server listens where the runtime
- * reaches it.
+ * the private directories writable, the project's git directory covered by an
+ * empty file system with the worktree's own metadata directory bound back in
+ * read-only, and the evaluation folder covered by an empty read-only file
+ * system, so nothing under it can be read or written. No new network
+ * namespace: a started HTTP server listens where the runtime reaches it.
  */
-function bubblewrapTargetArguments({ executable, workspace, writable, evaluationFolder }) {
+function bubblewrapTargetArguments({ executable, workspace, writable, evaluationFolder, git = null }) {
   const binds = [workspace, ...writable].flatMap((entry) => {
     const real = assertProfileSafePath(spellings(entry).at(-1), refuseUnsafePath);
     return ['--bind', real, real];
   });
-  const withheld = assertProfileSafePath(spellings(evaluationFolder).at(-1), refuseUnsafePath);
+  const realOf = (candidate) => assertProfileSafePath(spellings(candidate).at(-1), refuseUnsafePath);
+  // The git directory and each object directory it borrows from are covered by an empty file system; the worktree's own
+  // entry is bound back in read-only before the git directory is remounted read-only.
+  const gitArguments =
+    git === null
+      ? []
+      : [
+          ...git.alternates.flatMap((alternate) => ['--tmpfs', realOf(alternate), '--remount-ro', realOf(alternate)]),
+          '--tmpfs',
+          realOf(git.directory),
+          ...(git.metadata === null ? [] : ['--ro-bind', realOf(git.metadata), realOf(git.metadata)]),
+          '--remount-ro',
+          realOf(git.directory),
+        ];
+  const withheld = realOf(evaluationFolder);
   return [
     executable,
     '--unshare-user',
@@ -211,6 +249,7 @@ function bubblewrapTargetArguments({ executable, workspace, writable, evaluation
     '/dev',
     ...bubblewrapIsolation(),
     ...binds,
+    ...gitArguments,
     '--tmpfs',
     withheld,
     '--remount-ro',
@@ -343,11 +382,16 @@ function layerPrefix(confinement) {
  * @param {object} options
  * @param {object} options.confinement `selectConfinement`'s answer for a run that confines
  * @param {string} options.workspace the workspace's checkout, the one tree the target may write
+ * @param {{ directory: string, metadata?: string|null, view?: string|null, alternates?: string[] }|null} [options.git] the
+ *   project's git directory and the object directories it borrows from (`alternates`), which the target can neither read
+ *   nor write, the worktree's own metadata directory inside the first, which it may read, and the private repository
+ *   (`view`) its git reads; `null` for a workspace in no repository
  * @param {string|null} [options.report] the audit report's path, `null` for a port that does not audit
  * @param {string|null} [options.status] under Bubblewrap, a private directory where the status of a target a signal
  *   ended is written (`confinement-status.cjs`)
  */
-function targetSandbox({ confinement, workspace, report = null, status = null }) {
+function targetSandbox({ confinement, workspace, git: gitAccess = null, report = null, status = null }) {
+  const git = gitAccess === null ? null : { metadata: null, view: null, alternates: [], ...gitAccess };
   if (typeof workspace !== 'string' || workspace.length === 0) {
     throw new ConfinementError('a confined target needs the workspace it may write');
   }
@@ -356,6 +400,11 @@ function targetSandbox({ confinement, workspace, report = null, status = null })
     throw new ConfinementError(
       `the workspace ${workspace} is inside the evaluation folder, which the confinement withholds from the target`,
     );
+  }
+  for (const held of git === null ? [] : [git.directory, ...git.alternates]) {
+    if (spellings(workspace).some((entry) => spellings(held).some((withheld) => isInside(withheld, entry)))) {
+      throw new ConfinementError(`the workspace ${workspace} is inside ${held}, which the confinement withholds from the target`);
+    }
   }
   if (confinement.mode === 'bubblewrap' && (typeof status !== 'string' || status.length === 0)) {
     throw new ConfinementError('a target confined by Bubblewrap needs a status directory');
@@ -374,7 +423,7 @@ function targetSandbox({ confinement, workspace, report = null, status = null })
     wrap(target, args, writable = []) {
       const grants = [...writable, ...(report === null ? [] : [report])];
       if (confinement.mode === 'seatbelt') {
-        const profile = seatbeltTargetProfile({ workspace, writable: grants, evaluationFolder });
+        const profile = seatbeltTargetProfile({ workspace, writable: grants, evaluationFolder, git });
         return { target: confinement.executable, args: ['-p', profile, target, ...args], statusFile: null };
       }
       calls += 1;
@@ -387,6 +436,7 @@ function targetSandbox({ confinement, workspace, report = null, status = null })
         workspace,
         writable: [...grants, statusFile],
         evaluationFolder,
+        git,
       });
       return { target: vector[0], args: [...vector.slice(1), process.execPath, STATUS_SHIM, statusFile, target, ...args], statusFile };
     },
@@ -399,11 +449,18 @@ function targetSandbox({ confinement, workspace, report = null, status = null })
      */
     environment(env, granted = []) {
       if (report === null) return env;
-      const grants = [workspace, ...(report === null ? [] : [report]), ...granted].flatMap(spellings);
+      // The worktree's own entry in the git directory and the private repository it reads are the target's to open.
+      const own = git === null ? [] : [git.metadata, git.view].filter((entry) => typeof entry === 'string');
+      const grants = [workspace, ...(report === null ? [] : [report]), ...granted, ...own].flatMap(spellings);
       return {
         ...env,
         NODE_OPTIONS: [env?.NODE_OPTIONS, `--require ${JSON.stringify(GUARD_PATH)}`].filter(Boolean).join(' '),
-        [AUDIT_ENV]: JSON.stringify({ report, granted: grants, withheld: spellings(evaluationFolder) }),
+        [AUDIT_ENV]: JSON.stringify({
+          report,
+          granted: grants,
+          withheld: [...spellings(evaluationFolder), ...(git === null ? [] : [git.directory, ...git.alternates].flatMap(spellings))],
+          ...(git?.metadata ? { withheldExcept: spellings(git.metadata) } : {}),
+        }),
       };
     },
     /** The absolute paths the audit reported, each once, sorted; empty for a port that does not audit. */
@@ -640,7 +697,7 @@ function forbiddenInputNote(confinement) {
   if (!confines(confinement)) {
     return `${handed} The evaluation opted out of file-system confinement ("confinement": false), so the runtime does not sandbox the target's file system and a target that searches for the evaluation folder can reach it.`;
   }
-  return `${handed} Withheld as well by ${MECHANISM_NAMES[confinement.mode]} file-system confinement: every process the target starts, those left running after it exits included, is denied each read and write of the evaluation folder and each write outside its workspace.`;
+  return `${handed} Withheld as well by ${MECHANISM_NAMES[confinement.mode]} file-system confinement: every process the target starts, those left running after it exits included, is denied each read and write of the evaluation folder and of the project's git directory (its worktree's own entry excepted) and each write outside its workspace.`;
 }
 
 module.exports = {

@@ -2819,6 +2819,28 @@ async function checkConfinedArms() {
       `a confined historical run records ${JSON.stringify({ completed: record.completed, confinement: record.confinement })}`,
     );
   }
+  // The project's git directory is refused in each workspace a historical probe runs in: the pre-fix witness leg and
+  // trials, and the qualification's worktrees at the pre-fix and the fix revision (Story 1.57). The deployment route
+  // runs in a project outside git, so its two call sites have no git directory to withhold and stay held by the
+  // source scan in test:evaluate-confinement.
+  for (const context of ['historical', 'qualify-P-004-fail-before', 'qualify-P-004-pass-after']) {
+    const probing = makeHistoricalProject(`historical-git-${context}`, { marker: false });
+    const when = context === 'historical' ? `historical-${probing.parent}` : context;
+    const probed = evaluate(['run', '--evaluation', probing.folder], { ...probing.env, VERDICT_WHEN: when, VERDICT_DO: 'probe-git' });
+    check(probed.status === 0, `a confined historical run whose ${when} workspace probed git exited ${probed.status}\n${probed.output}`);
+    const reports = probeGitReports(runDirectoryOf(probing.folder));
+    check(reports.length > 0, `the stub's probe in the ${when} workspace left no report`);
+    for (const report of reports) {
+      check(
+        ['project-git-head', 'project-git-objects', 'project-git-config'].every((name) =>
+          /^refused (EPERM|EACCES|ENOENT)$/.test(report[name] ?? ''),
+        ) &&
+          report['own-git-head'] === 'allowed' &&
+          /\/git-view$/.test(report['commondir-file'] ?? ''),
+        `the ${when} workspace's target read the project's git directory or lacks a withheld repository: ${JSON.stringify(report)}`,
+      );
+    }
+  }
   const gameability = makeGameabilityProject('gameability-confined', 'request: Judge the request.\nverdict: pending\n', { marker: false });
   const played = evaluate(['run', '--evaluation', gameability.folder], gameability.env);
   check(played.status === 0, `a confined gameability run exited ${played.status}; expected 0\n${played.output}`);
@@ -2832,6 +2854,39 @@ async function checkConfinedArms() {
   } finally {
     stopDeployments();
   }
+}
+
+/** Every `probe-git` report the fixture's target printed in a run directory's records, as `{ name: how }`. */
+function probeGitReports(runDirectory) {
+  const reports = [];
+  const visit = (value) => {
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+    } else if (value !== null && typeof value === 'object') {
+      const stdout = value.stdout?.value;
+      if (typeof stdout === 'string' && stdout.includes('project-git-head: ')) {
+        reports.push(
+          Object.fromEntries(
+            stdout
+              .split('\n')
+              .map((line) => /^([a-z-]+): (.*)$/.exec(line))
+              .filter((match) => match !== null)
+              .map(([, name, how]) => [name, how]),
+          ),
+        );
+      }
+      for (const item of Object.values(value)) visit(item);
+    }
+  };
+  const walk = (directory) => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const full = path.join(directory, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.name.endsWith('.json')) visit(readJson(full));
+    }
+  };
+  if (runDirectory !== null) walk(runDirectory);
+  return reports;
 }
 
 /** The deployment route in a confined run: each phase and trial reaches its deployment as it does unconfined. */

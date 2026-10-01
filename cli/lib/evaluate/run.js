@@ -105,7 +105,7 @@ const { bridgeRouter, runSealedBriefAgent } = require('./sealed-brief-agent');
 const { ZERO, addUsage } = require('./usage-report');
 const { forbiddenInputNote, layerPrefix } = require('./confinement');
 const { EngineStageError, runEngineStage } = require('./engine-cli');
-const { makeScratchDirectory, releaseScratchDirectory } = require('./workspace');
+const { gitAccessOf, makeScratchDirectory, releaseScratchDirectory } = require('./workspace');
 
 const Ajv = AjvModule.default ?? AjvModule;
 
@@ -296,7 +296,12 @@ function runRunCommand(folder, { fromWorkingTree = false, partition, seed, env =
 
 /** One arm of the clean controls' qualification: the evidence, or a stop with the exit its failure maps to. */
 async function qualificationArm({ contract, registry, workspace, stop, writer, directory, log, seed, signal }) {
-  const { port } = await registry.createProbePort({ cwd: workspace.root, projectRoot: workspace.root, workspace: workspace.top });
+  const { port } = await registry.createProbePort({
+    cwd: workspace.root,
+    projectRoot: workspace.root,
+    workspace: workspace.top,
+    git: gitAccessOf(workspace),
+  });
   try {
     return await runArm({ contract, port: hostEnvironmentPort({ port, registry }), registry, label: 'baseline', seed, signal });
   } catch (error) {
@@ -536,6 +541,7 @@ async function runTrial(context) {
       cwd: workspace.root,
       projectRoot: workspace.root,
       workspace: workspace.top,
+      git: gitAccessOf(workspace),
       deployment: arm.deployment ?? null,
       audit: true,
     });

@@ -108,7 +108,8 @@
  *   evaluation opts out, which `run.json` records; the reference names each
  *   platform's mechanism under its exact heading.
  *
- * Usage: node test/test-evaluate-run.js
+ * Usage: node test/test-evaluate-run.js [--group=run|--group=confinement]
+ *   `test:evaluate-run` runs `--group=run` and `test:evaluate-confinement` runs `--group=confinement`; with no group every case runs.
  */
 
 'use strict';
@@ -132,8 +133,17 @@ const {
   PLATFORM_ENV,
   confinedCommandMechanism,
   confinedMcpMechanism,
+  selectConfinement,
   targetSandbox,
 } = require('../cli/lib/evaluate/confinement');
+const {
+  WorkspaceRefusal,
+  createWorkspace,
+  gitAccessOf,
+  journalDirectory,
+  reclaimDeadWorkspaces,
+  removeWorkspace,
+} = require('../cli/lib/evaluate/workspace');
 const { combinedExit } = require('../cli/lib/evaluate/score');
 const { agentReplyAndUsage } = require('../cli/lib/agent-adapters');
 const { parseUsageReport } = require('../cli/lib/evaluate/usage-report');
@@ -245,9 +255,10 @@ function evaluate(args, env = {}, node = [], { timeout = SPAWN_TIMEOUT_MS } = {}
  * that directory of a larger repository whose top holds `other/` beside it.
  * With `unconfined`, the evaluation opts out of file-system confinement, for
  * a case that proves the runtime's own checks against a target that writes
- * where it must not, which a confined run refuses (Story 1.31).
+ * where it must not, which a confined run refuses (Story 1.31). `history`
+ * makes further commits after the first, with the project and its folder.
  */
-function makeProject(label, { edit = () => {}, below = null, unconfined = false } = {}) {
+function makeProject(label, { edit = () => {}, below = null, unconfined = false, history = () => {} } = {}) {
   const repository = path.join(tempDir(label), 'repository');
   const project = below === null ? repository : path.join(repository, below);
   fs.cpSync(FIXTURE, project, { recursive: true, filter: (from) => path.basename(from) !== 'runs' });
@@ -264,6 +275,7 @@ function makeProject(label, { edit = () => {}, below = null, unconfined = false 
   git(repository, ['init', '--quiet', '--initial-branch', 'main']);
   git(repository, ['add', '--all']);
   git(repository, ['commit', '--quiet', '--message', 'the verdict project']);
+  history({ repository, project, folder });
   const directory = tempDir(`${label}-temp`);
   runtimeTemps.push({ label, directory });
   return { repository, project, folder, env: { TMPDIR: directory, TMP: directory, TEMP: directory } };
@@ -3692,6 +3704,1003 @@ async function checkConfinementUnits() {
   }
 }
 
+/**
+ * The committed evaluation folder is withheld from a confined target's git (Story 1.57), in two parts:
+ *
+ * - `checkWithheldHistoryRun` runs the real CLI over a project that commits its evaluation folder in three commits and
+ *   lets a stub target ask its worktree's git for the contract at the evaluated commit and at an older one, for a folder
+ *   blob id read from `git log --raw`, with replace refs disabled, and for the project's git directory by path; it also
+ *   runs the worktree's own git operations. The same stub in a run that opted out is the control that the asks work
+ *   when nothing withholds, and the probe digests and the commit the target sees are the adopter's.
+ * - `checkWithheldHistoryUnits` builds workspaces directly, to hold the builder's edges (content the folder shares with
+ *   the rest of the tree, a folder that changed across commits, a shallow repository, a failing `git pack-objects`, an
+ *   opt-out run) and each part's revert check: the builder skipped, the `commondir` left on the adopter's repository and
+ *   the git directory's deny removed each let the stub read what the change withholds.
+ */
+function withheldHistoryProject(label, { unconfined = false } = {}) {
+  return makeProject(label, {
+    unconfined,
+    // A file outside the folder holding the contract's bytes: content the folder shares with the rest of the tree.
+    edit: ({ project, folder }) => {
+      fs.mkdirSync(path.join(project, 'docs'), { recursive: true });
+      fs.copyFileSync(path.join(folder, 'contract.json'), path.join(project, 'docs', 'contract-copy.json'));
+    },
+    // The folder holds three different trees across the history: the fixture's, then two versions of a note beside it.
+    history: ({ repository, folder }) => {
+      for (const version of ['one', 'two']) {
+        fs.writeFileSync(path.join(folder, 'notes.md'), `note ${version}\n`);
+        git(repository, ['add', '--all']);
+        git(repository, ['commit', '--quiet', '--message', `note ${version}`]);
+      }
+    },
+  });
+}
+
+/** The `<name>: <how>` lines the `probe-git` stub printed, by name. */
+function probeGitLines(stdout) {
+  return Object.fromEntries(
+    stdout
+      .split('\n')
+      .map((line) => /^([a-z-]+): (.*)$/.exec(line))
+      .filter((match) => match !== null)
+      .map(([, name, how]) => [name, how]),
+  );
+}
+
+async function checkWithheldHistoryRun() {
+  const project = withheldHistoryProject('withheld-history');
+  const head = git(project.repository, ['rev-parse', 'HEAD']).toString('utf8').trim();
+  const branches = git(project.repository, ['for-each-ref', '--format=%(refname) %(objectname)']).toString('utf8');
+  const objects = () => git(project.repository, ['cat-file', '--batch-all-objects', '--batch-check']).toString('utf8');
+  const objectsBefore = objects();
+  const ran = evaluate(['run', '--evaluation', project.folder], { ...project.env, VERDICT_WHEN: 'trial-clean-1', VERDICT_DO: 'probe-git' });
+  check(
+    ran.status === 0,
+    `a confined run whose target asked its git for the committed evaluation folder exited ${ran.status}; expected 0\n${ran.output}`,
+  );
+  const runDirectory = runDirectoryOf(project.folder);
+  const out = trialStdout(runDirectory, 'clean', 1);
+  const seen = probeGitLines(out);
+  for (const name of ['head-contract-show', 'head-contract-cat', 'older-contract-show', 'folder-tree-cat', 'folder-tree-without-replace']) {
+    check(
+      /^none \d+$/.test(seen[name] ?? ''),
+      `a confined target's ${name} ended ${JSON.stringify(seen[name])}; expected no object\n${out}`,
+    );
+  }
+  check(
+    seen['folder-in-tree'] === '0',
+    `a confined target's git lists ${seen['folder-in-tree']} path(s) under the evaluation folder\n${out}`,
+  );
+  check(
+    seen['history-folder-blobs'] === '0',
+    `a confined target's git log --raw names ${seen['history-folder-blobs']} folder blob(s)\n${out}`,
+  );
+  check(seen['history-blob-read'] === 'none', `a confined target read a folder blob named by the history\n${out}`);
+  check(seen['refs-beyond-replace'] === '0', `a confined target's git names ${seen['refs-beyond-replace']} ref(s) of the project\n${out}`);
+  check(
+    seen['shared-content-show'] === 'printed',
+    `a file outside the folder with the folder's bytes was not readable: ${seen['shared-content-show']}\n${out}`,
+  );
+  check(seen['tracked-show'] === 'printed', `a tracked file outside the folder was not readable: ${seen['tracked-show']}\n${out}`);
+  check(
+    /^exit 0$/.test(seen.status ?? ''),
+    `a confined target's git status over the evaluated tree ended ${JSON.stringify(seen.status)}; expected exit 0 and no change\n${out}`,
+  );
+  check(
+    /^exit 0 \(3 line\(s\)\)$/.test(seen.log ?? ''),
+    `a confined target's git log ended ${JSON.stringify(seen.log)}; expected exit 0 with the three commits\n${out}`,
+  );
+  check(
+    seen.diff === 'exit 0',
+    `a confined target's git diff HEAD ended ${JSON.stringify(seen.diff)}; expected exit 0 and no change\n${out}`,
+  );
+  check(
+    (seen['log-patch'] ?? '').startsWith('exit 0 '),
+    `a confined target's git log -p ended ${JSON.stringify(seen['log-patch'])}; expected exit 0\n${out}`,
+  );
+  for (const name of ['project-git-head', 'project-git-objects', 'project-git-config']) {
+    check(
+      /^refused (EPERM|EACCES|ENOENT)$/.test(seen[name] ?? ''),
+      `a confined target's ${name} ended ${JSON.stringify(seen[name])}; expected a refusal\n${out}`,
+    );
+  }
+  check(
+    seen['own-git-head'] === 'allowed',
+    `a confined target could not read its own worktree's metadata: ${seen['own-git-head']}\n${out}`,
+  );
+
+  check(
+    /\/git-view$/.test(seen['commondir-file'] ?? '') && seen['git-view'] === 'present',
+    `a confined worktree's commondir ${JSON.stringify(seen['commondir-file'])} does not name the withheld repository beside its checkout\n${out}`,
+  );
+
+  // The audit side: the target's attempts on the project's git directory are reported, and its own worktree's entry is not.
+  const projectGit = fs.realpathSync(path.join(project.repository, '.git'));
+  const observed = observedMountsOf(runDirectory, 'P-001') ?? [];
+  check(
+    ['HEAD', 'config', 'objects'].every((name) => observed.includes(path.join(projectGit, name))),
+    `the audit did not report the target's attempts on the project's git directory: ${JSON.stringify(observed)}`,
+  );
+  check(
+    !observed.some((entry) => entry.startsWith(`${path.join(projectGit, 'worktrees')}${path.sep}`)),
+    `the audit reported the target's read of its own worktree's metadata: ${JSON.stringify(observed)}`,
+  );
+  const audited = evaluate(['score', '--evaluation', project.folder], project.env);
+  check(
+    audited.status === 3 && audited.output.includes(`mount outside allowlist: ${path.join(projectGit, 'HEAD')}`),
+    `score over a target that reached for the project's git directory exited ${audited.status}; expected 3 with the isolation violation\n${audited.output}`,
+  );
+  check(
+    !audited.output.includes(`mount outside allowlist: ${path.join(projectGit, 'worktrees')}`),
+    `score named the worktree's own metadata as an isolation violation\n${audited.output}`,
+  );
+
+  // The probe digests AD-7 names read the adopter's repository, so the worktree's private one leaves them as they were.
+  const probe = written(path.join(runDirectory, 'probes', 'P-002.probe.json'), 'the qualified probe (withheld history)');
+  check(
+    probe?.commitDigest === sha256(Buffer.from(head, 'utf8')),
+    `the qualified probe's commitDigest ${probe?.commitDigest} is not the evaluated commit's ${sha256(Buffer.from(head, 'utf8'))}`,
+  );
+  const listing = git(project.repository, ['ls-tree', '-r', '-z', 'HEAD^{tree}'])
+    .toString('utf8')
+    .split('\u0000')
+    .filter((entry) => entry.length > 0 && !entry.slice(entry.indexOf('\t') + 1).startsWith('evals/verdict/'));
+  const implementationDigest = sha256(Buffer.from(listing.map((entry) => `${entry}\u0000`).join(''), 'utf8'));
+  check(
+    probe?.implementationDigest === implementationDigest,
+    `the qualified probe's implementationDigest ${probe?.implementationDigest} is not the tracked tree's ${implementationDigest}`,
+  );
+  check(objects() === objectsBefore, 'a confined run changed the objects of the adopter repository');
+  check(
+    git(project.repository, ['for-each-ref', '--format=%(refname) %(objectname)']).toString('utf8') === branches,
+    'a confined run changed the refs of the adopter repository',
+  );
+  check(
+    !fs.existsSync(path.join(project.repository, '.git', 'refs', 'replace')),
+    'a confined run wrote refs/replace into the adopter repository',
+  );
+
+  // The control: the same stub in a run that opted out reads the committed contract, so the asks above can find it.
+  const open = withheldHistoryProject('withheld-history-open', { unconfined: true });
+  const openRan = evaluate(['run', '--evaluation', open.folder], { ...open.env, VERDICT_WHEN: 'trial-clean-1', VERDICT_DO: 'probe-git' });
+  check(openRan.status === 0, `the unconfined control run exited ${openRan.status}\n${openRan.output}`);
+  const openOut = trialStdout(runDirectoryOf(open.folder), 'clean', 1);
+  const control = probeGitLines(openOut);
+  for (const name of ['head-contract-show', 'head-contract-cat', 'older-contract-show', 'folder-tree-cat', 'history-blob-read']) {
+    check(
+      control[name] === 'printed',
+      `the unconfined control's ${name} ended ${JSON.stringify(control[name])}; expected the committed folder\n${openOut}`,
+    );
+  }
+  check(
+    ['project-git-head', 'project-git-objects', 'project-git-config'].every((name) => control[name] === 'allowed'),
+    `the unconfined control could not read the project's git directory\n${openOut}`,
+  );
+  check(
+    control['commondir-file'] === '../..' && control['git-view'] === 'absent',
+    `an opt-out run's worktree names the common directory ${JSON.stringify(control['commondir-file'])} with git-view ${control['git-view']}; expected ../.. and none\n${openOut}`,
+  );
+  check(!fs.existsSync(path.join(open.repository, '.git', 'refs', 'replace')), 'the unconfined control changed the adopter repository');
+
+  // The same stub in the workspaces a leg, a mutation and a qualification run in: the project's git directory is refused in
+  // each when the run confines, and each worktree of an opt-out run still names the adopter's common directory.
+  for (const context of ['pristine', 'mutated-M-001', 'qualify-clean', 'qualify-P-002', 'trial-mutated-M-001-1']) {
+    const confined = makeProject(`withheld-context-${context}`);
+    const contextRan = evaluate(['run', '--evaluation', confined.folder], {
+      ...confined.env,
+      VERDICT_WHEN: context,
+      VERDICT_DO: 'probe-git',
+    });
+    check(
+      contextRan.status === 0,
+      `a confined run whose ${context} workspace probed git exited ${contextRan.status}\n${contextRan.output}`,
+    );
+    const reports = probeGitReports(runDirectoryOf(confined.folder));
+    check(reports.length > 0, `the stub's probe in the ${context} workspace left no report`);
+    for (const report of reports) {
+      check(
+        ['project-git-head', 'project-git-objects', 'project-git-config'].every((name) =>
+          /^refused (EPERM|EACCES|ENOENT)$/.test(report[name] ?? ''),
+        ),
+        `the ${context} workspace's target read the project's git directory: ${JSON.stringify(report)}`,
+      );
+      check(
+        report['own-git-head'] === 'allowed' && /\/git-view$/.test(report['commondir-file'] ?? '') && report['git-view'] === 'present',
+        `the ${context} workspace's worktree does not read a withheld repository: ${JSON.stringify(report)}`,
+      );
+    }
+  }
+  for (const context of ['pristine', 'mutated-M-001']) {
+    const optOut = makeProject(`withheld-context-open-${context}`, { unconfined: true });
+    const optOutRan = evaluate(['run', '--evaluation', optOut.folder], { ...optOut.env, VERDICT_WHEN: context, VERDICT_DO: 'probe-git' });
+    check(optOutRan.status === 0, `an opt-out run whose ${context} workspace probed git exited ${optOutRan.status}\n${optOutRan.output}`);
+    const reports = probeGitReports(runDirectoryOf(optOut.folder));
+    check(reports.length > 0, `the stub's probe in the opt-out ${context} workspace left no report`);
+    for (const report of reports) {
+      check(
+        report['commondir-file'] === '../..' && report['git-view'] === 'absent',
+        `an opt-out ${context} workspace built a withheld repository: ${JSON.stringify(report)}`,
+      );
+    }
+  }
+}
+
+/** Every `probe-git` report in a run directory's records (a trial, a leg, a qualification arm), parsed. */
+function probeGitReports(runDirectory) {
+  const reports = [];
+  const visit = (value) => {
+    if (Array.isArray(value)) for (const item of value) visit(item);
+    else if (value !== null && typeof value === 'object') {
+      const stdout = value.stdout?.value;
+      if (typeof stdout === 'string' && stdout.includes('project-git-head: ')) reports.push(probeGitLines(stdout));
+      for (const item of Object.values(value)) visit(item);
+    }
+  };
+  const walk = (directory) => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const full = path.join(directory, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.name.endsWith('.json')) visit(readJson(full));
+    }
+  };
+  if (runDirectory !== null) walk(runDirectory);
+  return reports;
+}
+
+/** Every call that makes a target's port names the git access of the workspace it runs in, or its sandbox would withhold nothing. */
+function checkProbePortGitAccess() {
+  const directory = path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate');
+  let calls = 0;
+  for (const name of fs.readdirSync(directory).filter((entry) => entry.endsWith('.js'))) {
+    const text = fs.readFileSync(path.join(directory, name), 'utf8');
+    for (const match of text.matchAll(/registry\.createProbePort\(/g)) {
+      let depth = 0;
+      let end = match.index + match[0].length - 1;
+      for (; end < text.length; end += 1) {
+        if (text[end] === '(') depth += 1;
+        else if (text[end] === ')' && --depth === 0) break;
+      }
+      calls += 1;
+      check(
+        /git:\s*gitAccessOf\(\w+\)/.test(text.slice(match.index, end)),
+        `a createProbePort call in ${name} (character ${match.index}) does not pass git: gitAccessOf(workspace)`,
+      );
+    }
+  }
+  check(calls === 9, `found ${calls} createProbePort call(s) in cli/lib/evaluate; expected 9`);
+}
+
+/** A repository with the evaluation folder committed twice with different trees, for the workspace cases below. */
+function makeHistoryRepository(label, { shallow = false, refFormat = null, objectFormat = null } = {}) {
+  const repository = path.join(fs.realpathSync(tempDir(label)), 'repository');
+  fs.mkdirSync(path.join(repository, 'evals', 'verdict', 'probes'), { recursive: true });
+  fs.mkdirSync(path.join(repository, 'docs'));
+  fs.mkdirSync(path.join(repository, 'src'));
+  const folder = path.join(repository, 'evals', 'verdict');
+  git(repository, [
+    'init',
+    '--quiet',
+    '--initial-branch',
+    'main',
+    ...(refFormat === null ? [] : [`--ref-format=${refFormat}`]),
+    ...(objectFormat === null ? [] : [`--object-format=${objectFormat}`]),
+  ]);
+  const commit = (message) => {
+    git(repository, ['add', '--all']);
+    git(repository, ['commit', '--quiet', '--message', message]);
+  };
+  fs.writeFileSync(path.join(repository, 'src', 'a.txt'), 'source a\n');
+  fs.writeFileSync(path.join(folder, 'contract.json'), 'secret contract one\n');
+  fs.writeFileSync(path.join(folder, 'probes', 'p.json'), 'secret probe one\n');
+  commit('one');
+  fs.writeFileSync(path.join(folder, 'contract.json'), 'secret contract two\n');
+  fs.writeFileSync(path.join(folder, 'probes', 'p.json'), 'secret probe two\n');
+  fs.writeFileSync(path.join(repository, 'src', 'a.txt'), 'source a, changed\n');
+  commit('two');
+  // Outside the folder, with the bytes of the folder's current contract and the folder's whole current probes/ subtree.
+  fs.copyFileSync(path.join(folder, 'contract.json'), path.join(repository, 'docs', 'contract-copy.txt'));
+  fs.cpSync(path.join(folder, 'probes'), path.join(repository, 'docs', 'probes'), { recursive: true });
+  commit('three');
+  if (!shallow) return { repository, folder };
+  const clone = path.join(fs.realpathSync(tempDir(`${label}-clone`)), 'clone');
+  const cloned = spawnSync('git', ['clone', '--quiet', '--depth', '1', `file://${repository}`, clone], { env: GIT_ENV, encoding: 'utf8' });
+  if (cloned.status !== 0) throw new Error(`could not make a shallow clone: ${cloned.stderr}`);
+  return { repository: clone, folder: path.join(clone, 'evals', 'verdict') };
+}
+
+/** Runs `script` in `sh` under the host's confinement, as a target in `workspace` would run; `git` is the sandbox's git access. */
+function runConfined(workspace, folder, script, { git: gitAccess = gitAccessOf(workspace) } = {}) {
+  const confinement = selectConfinement({ evaluation: {}, folder });
+  if (confinement.refusal !== undefined) throw new Error(confinement.refusal);
+  const status = confinement.mode === 'bubblewrap' ? tempDir('withheld-history-status') : null;
+  const sandbox = targetSandbox({ confinement, workspace: workspace.top, git: gitAccess, status });
+  const wrapped = sandbox.wrap('/bin/sh', ['-c', script], []);
+  const result = spawnSync(wrapped.target, wrapped.args, {
+    cwd: workspace.root,
+    encoding: 'utf8',
+    timeout: SPAWN_TIMEOUT_MS,
+    killSignal: 'SIGKILL',
+  });
+  return { status: result.status, stdout: result.stdout ?? '', stderr: result.stderr ?? '' };
+}
+
+/** The ids git names for the folder's files at every commit of the history, read from the adopter's repository. */
+function folderBlobsOf(repository, folder) {
+  const relative = path.relative(repository, folder).split(path.sep).join('/');
+  const blobs = [];
+  for (const commit of git(repository, ['--no-replace-objects', 'rev-list', 'HEAD']).toString('utf8').trim().split('\n')) {
+    const listed = git(repository, ['--no-replace-objects', 'ls-tree', '-r', commit, '--', relative]).toString('utf8').trim();
+    for (const line of listed.split('\n').filter((entry) => entry.length > 0)) blobs.push(/^\d+ blob ([0-9a-f]+)\t/.exec(line)[1]);
+  }
+  return [...new Set(blobs)];
+}
+
+async function checkWithheldHistoryUnits() {
+  const { repository, folder } = makeHistoryRepository('withheld-units');
+  const options = { root: repository, kind: 'git', exclude: [folder] };
+  const commits = git(repository, ['rev-list', 'HEAD']).toString('utf8').trim().split('\n');
+  const folderBlobs = folderBlobsOf(repository, folder);
+  check(folderBlobs.length === 4, `the history repository holds ${folderBlobs.length} folder blob(s); expected 4`);
+  // A folder blob whose bytes the rest of the tree holds too stays readable by id: its bytes are readable at that other path.
+  const shared = git(repository, ['ls-tree', '-r', 'HEAD', '--', 'docs']).toString('utf8');
+  const blobs = folderBlobs.filter((blob) => !shared.includes(blob));
+  check(blobs.length === 2, `${blobs.length} folder blob(s) are held by the folder alone; expected 2`);
+  const objectsBefore = git(repository, ['cat-file', '--batch-all-objects', '--batch-check']).toString('utf8');
+  const refsBefore = git(repository, ['for-each-ref']).toString('utf8');
+  const asks = [
+    ...commits.flatMap((commit) => [
+      `git cat-file -e ${commit}:evals/verdict/contract.json`,
+      `git show ${commit}:evals/verdict/probes/p.json`,
+    ]),
+    ...blobs.map((blob) => `git cat-file -e ${blob}`),
+    'git --no-replace-objects cat-file -p HEAD:evals/verdict',
+  ];
+  // Every ask must end non-zero; a script that prints the status of each, so one failing does not hide the rest.
+  const ask = (workspace, gitAccess) =>
+    runConfined(workspace, folder, asks.map((line) => `${line} >/dev/null 2>&1 && echo "read: ${line}"`).join('\n') + '\ntrue', {
+      git: gitAccess,
+    });
+
+  // The change: nothing of the folder is readable, content shared with it is, and the target's own git works.
+  const withheld = createWorkspace({ ...options, label: 'withheld', withholdHistory: true });
+  try {
+    check(
+      typeof withheld.gitView === 'string' && fs.existsSync(path.join(withheld.gitView, 'objects')),
+      'a confined git workspace has no withheld repository',
+    );
+    check(
+      path.dirname(withheld.gitView) === withheld.directory && !withheld.gitView.startsWith(`${withheld.top}${path.sep}`),
+      "the withheld repository is not beside the checkout, inside the workspace's directory",
+    );
+    const read = ask(withheld, gitAccessOf(withheld));
+    check(read.stdout.trim() === '', `a confined git workspace let the target read the folder:\n${read.stdout}`);
+    const own = runConfined(
+      withheld,
+      folder,
+      [
+        'git status --porcelain',
+        'echo "status: $?"',
+        'git log --format=%H',
+        'git diff HEAD',
+        'echo "diff: $?"',
+        'git log -p >/dev/null',
+        'echo "log-patch: $?"',
+        'git show HEAD:src/a.txt',
+        'git show HEAD:docs/contract-copy.txt',
+        'git show HEAD:docs/probes/p.json',
+        'git log -p -- docs/probes >/dev/null',
+        'echo "log-docs: $?"',
+        'git cat-file -p HEAD:evals/verdict | wc -c',
+        'git rev-parse HEAD',
+      ].join('\n'),
+    );
+    const expectedLog = commits.join('\n');
+    check(
+      own.stdout.startsWith(
+        `status: 0\n${expectedLog}\ndiff: 0\nlog-patch: 0\nsource a, changed\nsecret contract two\nsecret probe two\nlog-docs: 0\n`,
+      ) && own.stdout.trim().endsWith(`0\n${commits[0]}`),
+      `the target's own git operations in a confined git workspace printed:\n${own.stdout}${own.stderr}`,
+    );
+    const hidden = runConfined(
+      withheld,
+      folder,
+      `cat ${path.join(repository, '.git', 'HEAD')} 2>/dev/null; ls ${path.join(repository, '.git', 'objects')} 2>/dev/null; cat ${path.join(repository, '.git', 'config')} 2>/dev/null; cat ${path.join(withheld.metadata, 'HEAD')}`,
+    );
+    check(
+      hidden.stdout.trim() === commits[0],
+      `the project's git directory was readable, or the worktree's own metadata was not:\n${hidden.stdout}`,
+    );
+    check(
+      git(repository, ['cat-file', '--batch-all-objects', '--batch-check']).toString('utf8') === objectsBefore &&
+        git(repository, ['for-each-ref']).toString('utf8') === refsBefore,
+      'building the withheld repository wrote an object or a ref into the adopter repository',
+    );
+    check(
+      git(repository, ['rev-list', 'HEAD']).toString('utf8').trim().split('\n').join('') === commits.join(''),
+      'a commit id of the adopter repository changed',
+    );
+    // The workspace and its registration go together, the withheld repository with the directory.
+    const view = withheld.gitView;
+    removeWorkspace(withheld);
+    check(!fs.existsSync(view) && !fs.existsSync(withheld.directory), 'removing a workspace left its withheld repository');
+    check(
+      !git(repository, ['worktree', 'list', '--porcelain']).toString('utf8').includes(withheld.top),
+      'removing a workspace left its registration',
+    );
+  } finally {
+    if (fs.existsSync(withheld.directory)) removeWorkspace(withheld);
+  }
+
+  // Revert checks: the target reads the folder when the builder is skipped (today's worktree), when the worktree keeps the
+  // adopter's common directory, and the project's git directory is readable when its deny is removed.
+  const reads = (result) =>
+    result.stdout
+      .trim()
+      .split('\n')
+      .filter((line) => line.startsWith('read: ')).length;
+  const skipped = createWorkspace({ ...options, label: 'skipped' });
+  try {
+    check(
+      skipped.gitView === null && fs.readFileSync(path.join(skipped.metadata, 'commondir'), 'utf8').trim() === '../..',
+      'an opt-out workspace has a withheld repository',
+    );
+    check(!fs.existsSync(path.join(skipped.directory, 'git-view')), 'an opt-out workspace built a withheld repository directory');
+    const open = ask(skipped, null);
+    check(
+      reads(open) === asks.length,
+      `without the builder the stub read ${reads(open)} of ${asks.length} folder asks; expected the committed folder\n${open.stdout}`,
+    );
+    const broken = runConfined(skipped, folder, 'git status >/dev/null 2>&1; echo "status: $?"');
+    check(
+      broken.stdout.trim() !== 'status: 0',
+      'with the project git directory withheld and no withheld repository, the worktree git still worked',
+    );
+  } finally {
+    removeWorkspace(skipped);
+  }
+  const kept = createWorkspace({ ...options, label: 'kept', withholdHistory: true });
+  try {
+    fs.writeFileSync(path.join(kept.metadata, 'commondir'), '../..\n');
+    const open = ask(kept, null);
+    check(reads(open) > 0, `with the worktree on the adopter's common directory the stub read nothing of the folder\n${open.stdout}`);
+  } finally {
+    removeWorkspace(kept);
+  }
+  const unguarded = createWorkspace({ ...options, label: 'unguarded', withholdHistory: true });
+  try {
+    const open = runConfined(unguarded, folder, `cat ${path.join(repository, '.git', 'HEAD')}`, { git: null });
+    check(open.stdout.trim().length > 0, "with the git directory's deny removed the stub could not read the project's git directory");
+  } finally {
+    removeWorkspace(unguarded);
+  }
+
+  // A historical probe's revision is a worktree at another commit, built by the same recipe at that commit.
+  const older = createWorkspace({ ...options, label: 'older', commit: commits[2], withholdHistory: true });
+  try {
+    const history = runConfined(
+      older,
+      folder,
+      'git rev-parse HEAD; git log --format=%H | wc -l; git cat-file -e HEAD:evals/verdict/contract.json || echo "no folder"; git show HEAD:src/a.txt',
+    );
+    check(
+      history.stdout.split('\n')[0] === commits[2] &&
+        /^\s*1$/.test(history.stdout.split('\n')[1]) &&
+        history.stdout.includes('no folder\nsource a\n'),
+      `a withheld repository at an older commit printed:\n${history.stdout}${history.stderr}`,
+    );
+    const leaks = ask(older, gitAccessOf(older));
+    check(leaks.stdout.trim() === '', `a withheld repository at an older commit let the target read the folder:\n${leaks.stdout}`);
+  } finally {
+    removeWorkspace(older);
+  }
+
+  // A shallow repository: the withheld repository carries the same boundary, and git log stops where the adopter's does.
+  const shallow = makeHistoryRepository('withheld-units-shallow', { shallow: true });
+  const shallowWorkspace = createWorkspace({
+    root: shallow.repository,
+    kind: 'git',
+    exclude: [shallow.folder],
+    label: 'shallow',
+    withholdHistory: true,
+  });
+  try {
+    check(
+      fs.existsSync(path.join(shallowWorkspace.gitView, 'shallow')) &&
+        fs.readFileSync(path.join(shallowWorkspace.gitView, 'shallow'), 'utf8') ===
+          fs.readFileSync(path.join(shallow.repository, '.git', 'shallow'), 'utf8'),
+      "the withheld repository of a shallow project does not carry the adopter's shallow file",
+    );
+    const log = runConfined(
+      shallowWorkspace,
+      shallow.folder,
+      'git log --format=%H; git status --porcelain; git cat-file -p HEAD:evals/verdict | wc -c',
+    );
+    const adopterLog = git(shallow.repository, ['log', '--format=%H']).toString('utf8');
+    check(
+      log.stdout.startsWith(adopterLog) && adopterLog.trim().split('\n').length === 1,
+      `a shallow project's log in the workspace printed:\n${log.stdout}${log.stderr}`,
+    );
+  } finally {
+    removeWorkspace(shallowWorkspace);
+  }
+
+  // A run killed after the withheld repository is built leaves the workspace, its repository and its registration; the next
+  // run's reclaim removes all three.
+  const killed = makeHistoryRepository('withheld-units-killed');
+  const runs = path.join(killed.folder, 'runs');
+  fs.mkdirSync(runs);
+  const abandoned = spawn(
+    process.execPath,
+    [
+      '-e',
+      `const workspace = require(${JSON.stringify(path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate', 'workspace.js'))});
+       const [root, folder, runs] = process.argv.slice(1);
+       const journal = workspace.journalDirectory(runs);
+       const made = workspace.createWorkspace({ root, kind: 'git', exclude: [folder], label: 'killed', withholdHistory: true, ownership: { folder, root, journal, runId: 'killed-run' } });
+       process.stdout.write(JSON.stringify({ directory: made.directory, gitView: made.gitView, top: made.top }) + '\\n');
+       setInterval(() => {}, 1000);`,
+      killed.repository,
+      killed.folder,
+      runs,
+    ],
+    { env: BASE_ENV, stdio: ['ignore', 'pipe', 'inherit'] },
+  );
+  const closed = new Promise((resolve) => abandoned.once('close', resolve));
+  const made = await new Promise((resolve) => {
+    let text = '';
+    abandoned.stdout.on('data', (chunk) => {
+      text += chunk;
+      if (text.includes('\n')) resolve(JSON.parse(text));
+    });
+    abandoned.once('close', () => resolve(null));
+  });
+  abandoned.kill('SIGKILL');
+  await closed;
+  check(made !== null && fs.existsSync(path.join(made.gitView, 'objects')), 'the killed run never built its withheld repository');
+  if (made !== null) {
+    check(
+      git(killed.repository, ['worktree', 'list', '--porcelain']).toString('utf8').includes(made.top),
+      'the killed run left no worktree registration to reclaim',
+    );
+    const journal = journalDirectory(runs);
+    const reclaimed = [];
+    try {
+      reclaimDeadWorkspaces({ folder: killed.folder, root: killed.repository, journal, log: (message) => reclaimed.push(message) });
+    } finally {
+      journal.close();
+    }
+    check(
+      !fs.existsSync(made.directory) && !fs.existsSync(made.gitView),
+      `the reclaim left the killed run's workspace or withheld repository (${reclaimed.join('; ')})`,
+    );
+    check(
+      !git(killed.repository, ['worktree', 'list', '--porcelain']).toString('utf8').includes(made.top),
+      "the reclaim left the killed run's worktree registration",
+    );
+  }
+
+  // A build step that fails is a refusal that leaves no workspace and no registration.
+  const failing = makeHistoryRepository('withheld-units-failing');
+  const bin = tempDir('withheld-units-bin');
+  const realGit = spawnSync('which', ['git'], { encoding: 'utf8' }).stdout.trim();
+  fs.writeFileSync(
+    path.join(bin, 'git'),
+    `#!/bin/sh\nfor argument in "$@"; do\n  if [ "$argument" = pack-objects ]; then echo "pack-objects refused by the case" >&2; exit 1; fi\ndone\nexec "${realGit}" "$@"\n`,
+    { mode: 0o755 },
+  );
+  const temporary = tempDir('withheld-units-temp');
+  const environment = { PATH: process.env.PATH, TMPDIR: process.env.TMPDIR };
+  process.env.PATH = `${bin}${path.delimiter}${process.env.PATH}`;
+  process.env.TMPDIR = temporary;
+  let refusal = null;
+  try {
+    createWorkspace({ root: failing.repository, kind: 'git', exclude: [failing.folder], label: 'failing', withholdHistory: true });
+  } catch (error) {
+    refusal = error;
+  } finally {
+    process.env.PATH = environment.PATH;
+    if (environment.TMPDIR === undefined) delete process.env.TMPDIR;
+    else process.env.TMPDIR = environment.TMPDIR;
+  }
+  check(
+    refusal instanceof WorkspaceRefusal && refusal.message.includes('pack-objects'),
+    `a failing git pack-objects did not refuse the workspace: ${refusal?.stack ?? refusal}`,
+  );
+  check(
+    fs.readdirSync(temporary).length === 0,
+    `a refused workspace left ${JSON.stringify(fs.readdirSync(temporary))} in the temp directory`,
+  );
+  check(
+    !git(failing.repository, ['worktree', 'list', '--porcelain']).toString('utf8').includes('tea-evaluate-failing'),
+    'a refused workspace left its worktree registration',
+  );
+  check(
+    !fs.existsSync(path.join(failing.repository, '.git', 'worktrees')) ||
+      fs.readdirSync(path.join(failing.repository, '.git', 'worktrees')).length === 0,
+    'a refused workspace left its worktree metadata',
+  );
+}
+
+/** Runs `body` with a `git` ahead of the real one on `PATH` that runs `script` first (it may `exit`), and TMPDIR at `temporary`. */
+function withGitWrapper(script, temporary, body) {
+  const bin = tempDir('withheld-git-wrapper');
+  const realGit = spawnSync('which', ['git'], { encoding: 'utf8' }).stdout.trim();
+  fs.writeFileSync(path.join(bin, 'git'), `#!/bin/sh\n${script}\nexec "${realGit}" "$@"\n`, { mode: 0o755 });
+  const saved = { PATH: process.env.PATH, TMPDIR: process.env.TMPDIR };
+  process.env.PATH = `${bin}${path.delimiter}${process.env.PATH}`;
+  if (temporary !== null) process.env.TMPDIR = temporary;
+  try {
+    return body();
+  } finally {
+    process.env.PATH = saved.PATH;
+    if (saved.TMPDIR === undefined) delete process.env.TMPDIR;
+    else process.env.TMPDIR = saved.TMPDIR;
+  }
+}
+
+/** The builder's refusals and edges that need a particular repository (Story 1.57). */
+async function checkWithheldHistoryEdges() {
+  // A folder tracked at the commit that no tree is found for (a spelling that differs from the repository's) refuses.
+  const spelled = makeHistoryRepository('withheld-edge-spelling');
+  let refusal = null;
+  withGitWrapper(
+    'for argument in "$@"; do\n  if [ "$argument" = --batch-check ]; then\n    while read -r line; do echo "$line missing"; done\n    exit 0\n  fi\ndone',
+    null,
+    () => {
+      try {
+        createWorkspace({ root: spelled.repository, kind: 'git', exclude: [spelled.folder], label: 'spelling', withholdHistory: true });
+      } catch (error) {
+        refusal = error;
+      }
+    },
+  );
+  check(
+    refusal instanceof WorkspaceRefusal && refusal.message.includes('is tracked at commit'),
+    `a folder tracked at the commit with no tree found did not refuse: ${refusal?.stack ?? refusal}`,
+  );
+
+  // The script of asks that must all end non-zero: the folder's files at every commit, by path and by the blob ids held by the folder alone.
+  const folderAsks = (repository, folder) => {
+    const everyCommit = git(repository, ['--no-replace-objects', 'rev-list', 'HEAD']).toString('utf8').trim().split('\n');
+    const shared = git(repository, ['ls-tree', '-r', 'HEAD', '--', 'docs']).toString('utf8');
+    const alone = folderBlobsOf(repository, folder).filter((blob) => !shared.includes(blob));
+    return [
+      ...everyCommit.flatMap((commit) => [
+        `git cat-file -e ${commit}:evals/verdict/contract.json`,
+        `git show ${commit}:evals/verdict/probes/p.json`,
+      ]),
+      ...alone.map((blob) => `git cat-file -e ${blob}`),
+      'git --no-replace-objects cat-file -p HEAD:evals/verdict',
+    ];
+  };
+  const readsOf = (workspace, repository, folder) =>
+    runConfined(
+      workspace,
+      folder,
+      `${folderAsks(repository, folder)
+        .map((line) => `${line} >/dev/null 2>&1 && echo "read: ${line}"`)
+        .join('\n')}\ntrue`,
+    ).stdout.trim();
+
+  // A git that does not know the format questions (before 2.45 and 2.38) echoes the flag with exit 0: the formats are then
+  // unknown and are not passed to `git init`.
+  const echoing = makeHistoryRepository('withheld-edge-echo');
+  let echoed = null;
+  let echoFailure = null;
+  withGitWrapper(
+    'for argument in "$@"; do\n  case "$argument" in\n    --show-ref-format|--show-object-format) echo "$argument"; exit 0 ;;\n  esac\ndone',
+    null,
+    () => {
+      try {
+        echoed = createWorkspace({
+          root: echoing.repository,
+          kind: 'git',
+          exclude: [echoing.folder],
+          label: 'echo',
+          withholdHistory: true,
+        });
+      } catch (error) {
+        echoFailure = error;
+      }
+    },
+  );
+  check(echoed !== null, `a git that echoes the format questions broke the build: ${echoFailure?.message}`);
+  if (echoed !== null) {
+    try {
+      check(
+        readsOf(echoed, echoing.repository, echoing.folder) === '',
+        'a workspace built with unknown formats let the target read the folder',
+      );
+    } finally {
+      removeWorkspace(echoed);
+    }
+  }
+
+  // The adopter's graft hides a commit from its own rev-list; the history that is withheld is the one under the graft.
+  const grafted = makeHistoryRepository('withheld-edge-graft');
+  const graftCommits = git(grafted.repository, ['rev-list', 'HEAD']).toString('utf8').trim().split('\n');
+  git(grafted.repository, ['replace', '--graft', graftCommits[1]]);
+  const graftedWorkspace = createWorkspace({
+    root: grafted.repository,
+    kind: 'git',
+    exclude: [grafted.folder],
+    label: 'graft',
+    withholdHistory: true,
+  });
+  try {
+    check(
+      git(grafted.repository, ['rev-list', 'HEAD']).toString('utf8').trim().split('\n').length === 2,
+      'the graft did not hide the oldest commit from the adopter',
+    );
+    check(
+      readsOf(graftedWorkspace, grafted.repository, grafted.folder) === '',
+      'a grafted adopter let the target read the folder of a commit its graft hides',
+    );
+  } finally {
+    removeWorkspace(graftedWorkspace);
+  }
+
+  // The adopter's ref and object formats are the store's.
+  for (const [label, options, flag] of [
+    ['reftable', { refFormat: 'reftable' }, '--ref-format=reftable'],
+    ['sha256', { objectFormat: 'sha256' }, '--object-format=sha256'],
+  ]) {
+    const probe = spawnSync('git', ['init', '--quiet', flag, path.join(tempDir(`withheld-edge-${label}-probe`), 'probe')], {
+      env: GIT_ENV,
+    });
+    if (probe.status !== 0) {
+      console.log(`  skipped the ${label} case: this host's git cannot init with ${flag}`);
+      continue;
+    }
+    const formatted = makeHistoryRepository(`withheld-edge-${label}`, options);
+    let built = null;
+    let failure = null;
+    try {
+      built = createWorkspace({ root: formatted.repository, kind: 'git', exclude: [formatted.folder], label, withholdHistory: true });
+    } catch (error) {
+      failure = error;
+    }
+    check(built !== null, `a ${label} adopter broke the build: ${failure?.message}`);
+    if (built !== null) {
+      try {
+        check(readsOf(built, formatted.repository, formatted.folder) === '', `a ${label} adopter let the target read the folder`);
+        const status = runConfined(built, formatted.folder, 'git status --porcelain; git log --format=%H | wc -l');
+        check(/^\s*3\n$/.test(status.stdout), `git in a ${label} workspace printed:\n${status.stdout}${status.stderr}`);
+      } finally {
+        removeWorkspace(built);
+      }
+    }
+  }
+
+  // A partial clone is refused before any history is packed, by either marker.
+  for (const [label, configure] of [
+    ['extension', (repository) => git(repository, ['config', 'extensions.partialClone', 'origin'])],
+    ['remote', (repository) => git(repository, ['config', 'remote.origin.promisor', 'true'])],
+  ]) {
+    const partial = makeHistoryRepository(`withheld-edge-partial-${label}`);
+    configure(partial.repository);
+    let partialRefusal = null;
+    try {
+      createWorkspace({ root: partial.repository, kind: 'git', exclude: [partial.folder], label: 'partial', withholdHistory: true });
+    } catch (error) {
+      partialRefusal = error;
+    }
+    check(
+      partialRefusal instanceof WorkspaceRefusal &&
+        partialRefusal.message.includes('partial clone') &&
+        partialRefusal.message.includes('"confinement": false') &&
+        partialRefusal.message.includes('fetch the full history'),
+      `a partial clone (${label}) was not refused with its cause and both ways out: ${partialRefusal?.message}`,
+    );
+    check(
+      !git(partial.repository, ['worktree', 'list', '--porcelain']).toString('utf8').includes('tea-evaluate-partial'),
+      `a refused partial clone (${label}) left a worktree registration`,
+    );
+  }
+
+  // A copy workspace in a repository withholds the project's git directory too.
+  const copied = makeHistoryRepository('withheld-edge-copy');
+  const copy = createWorkspace({ root: copied.repository, kind: 'copy', exclude: [copied.folder], label: 'copy' });
+  try {
+    const head = path.join(copied.repository, '.git', 'HEAD');
+    check(
+      runConfined(copy, copied.folder, `cat ${head}`).stdout.trim() === '',
+      "a confined copy workspace could read the project's git directory",
+    );
+    check(
+      runConfined(copy, copied.folder, `cat ${head}`, { git: null }).stdout.trim() !== '',
+      "the copy case's control could not read the git directory",
+    );
+  } finally {
+    removeWorkspace(copy);
+  }
+
+  // A folder outside launch.root leaves the checkout too, and git sees it as an empty tree: nothing untracked, nothing deleted.
+  const outside = makeHistoryRepository('withheld-edge-outside');
+  const away = createWorkspace({
+    root: path.join(outside.repository, 'src'),
+    kind: 'git',
+    exclude: [outside.folder],
+    label: 'outside',
+    withholdHistory: true,
+  });
+  try {
+    check(!fs.existsSync(path.join(away.top, 'evals', 'verdict')), 'the evaluation folder outside launch.root stayed in the checkout');
+    const status = runConfined(away, outside.folder, 'git status --porcelain; echo "exit $?"');
+    check(
+      status.stdout === 'exit 0\n',
+      `git status in a workspace whose folder lies outside launch.root printed:\n${status.stdout}${status.stderr}`,
+    );
+  } finally {
+    removeWorkspace(away);
+  }
+
+  // Objects borrowed through alternates are the history too: the borrowed store is withheld, and git still reads the history.
+  const lender = makeHistoryRepository('withheld-edge-alternates');
+  const borrowerParent = path.join(fs.realpathSync(tempDir('withheld-edge-alternates-clone')), 'borrower');
+  const cloned = spawnSync('git', ['clone', '--quiet', '--shared', lender.repository, borrowerParent], { env: GIT_ENV, encoding: 'utf8' });
+  check(cloned.status === 0, `could not make a repository with alternates: ${cloned.stderr}`);
+  const borrower = createWorkspace({
+    root: borrowerParent,
+    kind: 'git',
+    exclude: [path.join(borrowerParent, 'evals', 'verdict')],
+    label: 'alternates',
+    withholdHistory: true,
+  });
+  try {
+    const lent = path.join(fs.realpathSync(lender.repository), '.git', 'objects');
+    check(
+      JSON.stringify(gitAccessOf(borrower).alternates) === JSON.stringify([lent]),
+      `the git access names the alternates ${JSON.stringify(gitAccessOf(borrower).alternates)}; expected ${lent}`,
+    );
+    const log = runConfined(borrower, path.join(borrowerParent, 'evals', 'verdict'), `git log --format=%H; ls ${lent}`);
+    const lenderLog = git(lender.repository, ['log', '--format=%H']).toString('utf8');
+    check(log.stdout === lenderLog, `a workspace over borrowed objects printed:\n${log.stdout}${log.stderr}`);
+    const open = runConfined(borrower, path.join(borrowerParent, 'evals', 'verdict'), `ls ${lent}`, {
+      git: { ...gitAccessOf(borrower), alternates: [] },
+    });
+    check(open.stdout.includes('pack'), "the alternates case's control could not read the borrowed store");
+  } finally {
+    removeWorkspace(borrower);
+  }
+
+  // A second workspace for the same commit links the first one's objects and packs nothing.
+  const cached = makeHistoryRepository('withheld-edge-cache');
+  const log = path.join(tempDir('withheld-edge-cache-log'), 'git.log');
+  const first = [];
+  withGitWrapper(`printf '%s\\n' "$*" >> "${log}"`, null, () => {
+    first.push(createWorkspace({ root: cached.repository, kind: 'git', exclude: [cached.folder], label: 'first', withholdHistory: true }));
+  });
+  const calls = () => (fs.existsSync(log) ? fs.readFileSync(log, 'utf8').split('\n') : []);
+  const walks = calls().filter((line) => line.includes('rev-list --objects')).length;
+  check(
+    calls().some((line) => line.includes('pack-objects')) && walks === 2,
+    `the first workspace made ${walks} restore walk(s) over its store (expected the walk that finds the shared objects and one that confirms them)`,
+  );
+  const packsBefore = calls().filter((line) => line.includes('pack-objects')).length;
+  const second = [];
+  withGitWrapper(`printf '%s\\n' "$*" >> "${log}"`, null, () => {
+    second.push(
+      createWorkspace({ root: cached.repository, kind: 'git', exclude: [cached.folder], label: 'second', withholdHistory: true }),
+    );
+  });
+  try {
+    check(
+      calls().filter((line) => line.includes('pack-objects')).length === packsBefore &&
+        calls().filter((line) => line.includes('rev-list --objects')).length === walks,
+      'a second workspace for the same commit packed the history again',
+    );
+    const reads = runConfined(
+      second[0],
+      cached.folder,
+      'git status --porcelain; git show HEAD:docs/probes/p.json; git cat-file -e HEAD:evals/verdict/contract.json || echo "no folder"; git cat-file -p HEAD:evals/verdict | wc -c',
+    );
+    check(
+      /^secret probe two\nno folder\n\s*0\n$/.test(reads.stdout),
+      `a workspace whose store was linked from another printed:\n${reads.stdout}${reads.stderr}`,
+    );
+    check(
+      fs.statSync(path.join(second[0].gitView, 'objects', 'pack', fs.readdirSync(path.join(second[0].gitView, 'objects', 'pack'))[0]))
+        .nlink > 1,
+      'the second workspace copied the packs of the first in place of linking them',
+    );
+  } finally {
+    removeWorkspace(second[0]);
+    removeWorkspace(first[0]);
+  }
+
+  // A third workspace after the cached store is gone is built in full again.
+  const gone = [];
+  withGitWrapper(`printf '%s\\n' "$*" >> "${log}"`, null, () => {
+    gone.push(createWorkspace({ root: cached.repository, kind: 'git', exclude: [cached.folder], label: 'third', withholdHistory: true }));
+  });
+  try {
+    check(
+      calls().filter((line) => line.includes('pack-objects')).length > packsBefore,
+      'a workspace whose cached store was gone did not pack the history',
+    );
+    check(
+      runConfined(gone[0], cached.folder, 'git log --format=%H').stdout === git(cached.repository, ['log', '--format=%H']).toString('utf8'),
+      'a rebuilt withheld repository lost the history',
+    );
+  } finally {
+    removeWorkspace(gone[0]);
+  }
+
+  // The adopter's reading of the tree (file mode, exclude rules) carries over: the target's git says what the adopter's says.
+  const configured = makeHistoryRepository('withheld-edge-fidelity');
+  git(configured.repository, ['config', 'core.filemode', 'false']);
+  fs.mkdirSync(path.join(configured.repository, '.git', 'info'), { recursive: true });
+  fs.appendFileSync(path.join(configured.repository, '.git', 'info', 'exclude'), '*.log\n');
+  git(configured.repository, ['remote', 'add', 'origin', 'https://user:secret@example.test/repo.git']);
+  const script = 'chmod +x src/a.txt; echo x > noise.log; git status --porcelain; echo "exit $?"';
+  const plain = createWorkspace({ root: configured.repository, kind: 'git', exclude: [configured.folder], label: 'plain' });
+  const withheldConfigured = createWorkspace({
+    root: configured.repository,
+    kind: 'git',
+    exclude: [configured.folder],
+    label: 'configured',
+    withholdHistory: true,
+  });
+  try {
+    const before = runConfined(plain, configured.folder, script, { git: null });
+    const after = runConfined(withheldConfigured, configured.folder, script);
+    // Today's worktree lists the evaluation folder's files as deleted; the empty tree lists nothing, and nothing else differs.
+    const beforeWithoutFolder = before.stdout
+      .split('\n')
+      .filter((line) => !line.startsWith(' D evals/verdict/'))
+      .join('\n');
+    check(
+      beforeWithoutFolder === 'exit 0\n',
+      `the adopter's git status over the configured repository printed:\n${before.stdout}${before.stderr}`,
+    );
+    check(after.stdout === 'exit 0\n', `the target's git status differs from the adopter's:\n${after.stdout}${after.stderr}`);
+    const carried = fs.readFileSync(path.join(withheldConfigured.gitView, 'config'), 'utf8');
+    check(/filemode = false/.test(carried), 'the withheld repository did not carry core.filemode');
+    check(!/remote|secret|example\.test/.test(carried), `the withheld repository carried a remote or a credential:\n${carried}`);
+    check(
+      fs.readFileSync(path.join(withheldConfigured.gitView, 'info', 'exclude'), 'utf8').includes('*.log'),
+      'the withheld repository did not carry info/exclude',
+    );
+  } finally {
+    removeWorkspace(withheldConfigured);
+    removeWorkspace(plain);
+  }
+
+  // A tracked filter driver (a clean and smudge pair named in .gitattributes) is part of how the adopter's git reads the tree.
+  const filtered = makeHistoryRepository('withheld-edge-filter');
+  git(filtered.repository, ['config', 'filter.upper.clean', 'tr A-Z a-z']);
+  git(filtered.repository, ['config', 'filter.upper.smudge', 'tr a-z A-Z']);
+  fs.writeFileSync(path.join(filtered.repository, '.gitattributes'), 'src/shout.txt filter=upper\n');
+  fs.writeFileSync(path.join(filtered.repository, 'src', 'shout.txt'), 'quiet words\n');
+  git(filtered.repository, ['add', '--all']);
+  git(filtered.repository, ['commit', '--quiet', '--message', 'a filtered file']);
+  const filterScript = 'git status --porcelain; echo "exit $?"';
+  const filteredPlain = createWorkspace({ root: filtered.repository, kind: 'git', exclude: [filtered.folder], label: 'filter-plain' });
+  const filteredWithheld = createWorkspace({
+    root: filtered.repository,
+    kind: 'git',
+    exclude: [filtered.folder],
+    label: 'filter-withheld',
+    withholdHistory: true,
+  });
+  try {
+    check(
+      fs.readFileSync(path.join(filteredPlain.top, 'src', 'shout.txt'), 'utf8') === 'QUIET WORDS\n',
+      'the adopter checkout did not smudge the filtered file',
+    );
+    const adopterStatus = runConfined(filteredPlain, filtered.folder, filterScript, { git: null }).stdout.split('\n');
+    const targetStatus = runConfined(filteredWithheld, filtered.folder, filterScript).stdout;
+    check(
+      adopterStatus.filter((line) => !line.startsWith(' D evals/verdict/')).join('\n') === 'exit 0\n' && targetStatus === 'exit 0\n',
+      `the target's git status over a filtered file printed ${JSON.stringify(targetStatus)}; the adopter's printed ${JSON.stringify(adopterStatus)}`,
+    );
+  } finally {
+    removeWorkspace(filteredWithheld);
+    removeWorkspace(filteredPlain);
+  }
+}
+
 /** The reference names each platform's mechanism under its exact heading, and what an opted-out run records (Story 1.31). */
 function checkConfinementReference() {
   const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
@@ -3708,20 +4717,57 @@ function checkConfinementReference() {
     "the reference's confinement section does not name Linux's mechanism, Bubblewrap through bwrap",
   );
   check(section.includes('"confinement": "opt-out"'), "the reference's confinement section does not say what an opted-out run records");
+  // The git history is withheld (Story 1.57): the passage saying it stays readable is gone, and the section says what replaces it.
+  check(
+    !/git directory included/.test(section) &&
+      !/still reads the committed contract/.test(section) &&
+      !/against the commit still reads/.test(section),
+    "the reference's confinement section still says the project's git history stays readable",
+  );
+  check(
+    section.includes('with the evaluation folder as an empty tree') &&
+      section.includes("the project's git directory is withheld") &&
+      /a target that must read the project's git directory opts out/i.test(section),
+    "the reference's confinement section does not say the target's git sees the evaluation folder as an empty tree, that the project's git directory is withheld and that a target that must read it opts out",
+  );
 }
 
-/** Story 1.31's cases, each on its own, so one that cannot finish leaves the others to report. */
-async function runConfinementCases() {
-  await runCase('the confined evaluation folder', checkConfinedEvaluationFolder);
-  await runCase('the observed mounts', checkObservedMounts);
-  await runCase('the platform refusal', checkPlatformRefusal);
-  await runCase('the leftover process', checkLeftoverProcess);
-  await runCase('the evaluator swap', checkEvaluatorSwap);
-  await runCase('the confinement refusals', checkConfinementRefusals);
-  await runCase("a confined target's temp directory", checkTargetTemp);
-  await runCase('the confinement units', checkConfinementUnits);
-  await runCase('the confinement reference', checkConfinementReference);
-}
+/**
+ * Every case in run order with the group it belongs to. CI runs the groups as two scripts (`--group=run`, which is
+ * `test:evaluate-run`, and `--group=confinement`, which is `test:evaluate-confinement`) so no one runner carries the whole
+ * file's wall time; with no `--group` every case runs. Story 1.31's confinement cases each stand on their own, so one that
+ * cannot finish leaves the others to report.
+ */
+const CASES = [
+  { name: 'the units', body: checkUnits, group: 'run' },
+  { name: 'the run directory writer', body: checkRunDirectoryWriter, group: 'run' },
+  { name: 'the templates and ignores', body: checkTemplatesAndIgnores, group: 'run' },
+  { name: 'the run and its scores', body: checkRunAndScore, group: 'run' },
+  { name: 'the strength aggregate', body: checkStrengthAggregate, group: 'run' },
+  { name: 'the aggregate states', body: checkAggregateStates, group: 'run' },
+  { name: 'the unverified evidence copies', body: checkUnverifiedEvidence, group: 'run' },
+  { name: 'the score output reference', body: checkScoreOutputReference, group: 'run' },
+  { name: 'target usage reports', body: checkTargetUsageReports, group: 'run' },
+  { name: 'the stopped runs', body: checkStoppedRuns, group: 'run' },
+  { name: 'the refusals', body: checkRefusals, group: 'run' },
+  { name: 'the conditions and the set recommendation', body: checkConditionsAndSetRecommendation, group: 'run' },
+  { name: 'the clean-only runs', body: checkCleanOnlyAndNewest, group: 'run' },
+  { name: 'the subdirectory digest', body: checkSubdirectoryDigest, group: 'run' },
+  { name: 'the confined evaluation folder', body: checkConfinedEvaluationFolder, group: 'confinement' },
+  { name: 'the observed mounts', body: checkObservedMounts, group: 'confinement' },
+  { name: 'the platform refusal', body: checkPlatformRefusal, group: 'confinement' },
+  { name: 'the leftover process', body: checkLeftoverProcess, group: 'confinement' },
+  { name: 'the evaluator swap', body: checkEvaluatorSwap, group: 'confinement' },
+  { name: 'the confinement refusals', body: checkConfinementRefusals, group: 'confinement' },
+  { name: "a confined target's temp directory", body: checkTargetTemp, group: 'confinement' },
+  { name: 'the confinement units', body: checkConfinementUnits, group: 'confinement' },
+  { name: "a confined target's git history", body: checkWithheldHistoryRun, group: 'confinement' },
+  { name: 'the withheld git history units', body: checkWithheldHistoryUnits, group: 'confinement' },
+  { name: 'the withheld git history edges', body: checkWithheldHistoryEdges, group: 'confinement' },
+  { name: "the probe ports' git access", body: checkProbePortGitAccess, group: 'confinement' },
+  { name: 'the confinement reference', body: checkConfinementReference, group: 'confinement' },
+];
+const GROUPS = new Set(CASES.map(({ group }) => group));
 
 /** Runs one case; an exception is a failed check, so the cases after it still run and every failure is reported. */
 async function runCase(name, body) {
@@ -3732,28 +4778,27 @@ async function runCase(name, body) {
   }
 }
 
+/** The `--group=<name>` argument's value, `null` when the flag is absent, `''` when it carries no name. */
+function requestedGroup() {
+  const argument = process.argv.find((value) => value === '--group' || value.startsWith('--group='));
+  return argument === undefined ? null : argument.slice('--group='.length);
+}
+
 async function main() {
+  const group = requestedGroup();
+  if (group !== null && !GROUPS.has(group)) {
+    console.error(
+      `${colors.red}unknown --group ${JSON.stringify(group)}:${colors.reset} expected one of ${[...GROUPS].map((name) => `--group=${name}`).join(', ')}`,
+    );
+    return 2;
+  }
   try {
     if (process.argv.includes('--usage-only')) {
       await runCase('target usage reports', checkTargetUsageReports);
-    } else if (process.argv.includes('--confinement-only')) {
-      await runConfinementCases();
     } else {
-      await runCase('the units', checkUnits);
-      await runCase('the run directory writer', checkRunDirectoryWriter);
-      await runCase('the templates and ignores', checkTemplatesAndIgnores);
-      await runCase('the run and its scores', checkRunAndScore);
-      await runCase('the strength aggregate', checkStrengthAggregate);
-      await runCase('the aggregate states', checkAggregateStates);
-      await runCase('the unverified evidence copies', checkUnverifiedEvidence);
-      await runCase('the score output reference', checkScoreOutputReference);
-      await runCase('target usage reports', checkTargetUsageReports);
-      await runCase('the stopped runs', checkStoppedRuns);
-      await runCase('the refusals', checkRefusals);
-      await runCase('the conditions and the set recommendation', checkConditionsAndSetRecommendation);
-      await runCase('the clean-only runs', checkCleanOnlyAndNewest);
-      await runCase('the subdirectory digest', checkSubdirectoryDigest);
-      await runConfinementCases();
+      for (const { name, body, group: caseGroup } of CASES) {
+        if (group === null || caseGroup === group) await runCase(name, body);
+      }
     }
     for (const { label, directory } of runtimeTemps) {
       const left = fs.readdirSync(directory);
