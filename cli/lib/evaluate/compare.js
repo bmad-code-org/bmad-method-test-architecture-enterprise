@@ -50,14 +50,30 @@
  *
  * With `--accept` it replaces `baseline/` wholesale with a byte-identical
  * snapshot of the run. `baseline/` mirrors the run directory's relative paths,
- * so a replay reads it as a run directory and every digest `run.json` recorded
- * still matches. The refusal order is: no run, a run that did not complete or a
- * run with no score invocation (64); `dirty: true` (10, nothing written); a
- * probe with no evidence artifact in the latest score invocation, a missing
- * member, or an entry that is not a regular file (10, nothing written); then the
- * copy. The copy is staged in a temporary sibling directory inside the
- * evaluation folder and swapped in last, so a refused or failed accept leaves
- * the old `baseline/` untouched (12 on a failure while staging or swapping).
+ * so every digest `run.json` recorded still matches. The sealed records name
+ * their actions artifacts and isolation manifests as `runs/<acceptedRun>/...`
+ * paths and `score` refuses a reference outside the run directory it scores, so
+ * a replay through `score` places the baseline's bytes at `runs/<acceptedRun>/`
+ * (in a scratch copy of the evaluation folder); no path is rewritten, since that
+ * would move the digests. The refusal order is: no run, a run that did not
+ * complete or a run with no score invocation (64); `dirty: true` (10, nothing
+ * written); a probe with no evidence artifact in the latest score invocation, a
+ * missing member, an entry that is not a regular file, a directory on the way
+ * to a member that is a link, a latest `scores/<id>/score.json` that does not
+ * name this run or records an exit or an aggregate `score` would refuse (12, 64,
+ * a refused or mismatched aggregate), or any finding the input checks `score`
+ * runs over the run would report (10, nothing written); then the copy.
+ *
+ * The copy is staged under `runs/.compare-staging/` (gitignored, on the same
+ * file system as `baseline/`, so each rename stays atomic) and swapped in last,
+ * so a refused or failed accept leaves the old `baseline/` untouched (12 on a
+ * failure while staging or swapping). Nothing is staged inside the committed
+ * evaluation folder, so an interrupted accept leaves no untracked entry there
+ * for the next `run` to record as `dirty: true`. An accept interrupted between
+ * its two renames leaves `baseline/` absent and the previous one under
+ * `runs/.compare-staging/retired-*`: the start of every `compare` and
+ * `compare --accept` puts a retired baseline back when `baseline/` is absent,
+ * then deletes any stale staging or retired directory.
  *
  * The members are the files a replay through `score` reads, taken from the run
  * directory by name: `run.json`, `trial-sets.json`, `contract.json`,
@@ -94,7 +110,7 @@ const AjvModule = require('ajv/dist/2020');
 
 const { loadEngine } = require('./engine');
 const { createArtifactValidator } = require('./records');
-const { regularFileBytes, runDirectoryFor } = require('./score');
+const { inputFindings, phaseSnapshotProblems, regularFileBytes, runDirectoryFor } = require('./score');
 
 const Ajv = AjvModule.default ?? AjvModule;
 
@@ -109,8 +125,15 @@ const OK = 0;
 
 const BASELINE = 'baseline';
 const BASELINE_MANIFEST = 'baseline.json';
-const STAGING_PREFIX = '.baseline-staging-';
-const RETIRED_PREFIX = '.baseline-previous-';
+/** Under `runs/`, which `run` keeps out of the adopter's commits: an interrupted accept leaves nothing there for git to see. */
+const SCRATCH = ['runs', '.compare-staging'];
+const STAGING_PREFIX = 'staging-';
+const RETIRED_PREFIX = 'retired-';
+/** What a score invocation's own exit may be for the run to become a baseline: success, FAIL (a weak result) and Invalid. */
+const ACCEPTED_SCORE_EXITS = new Set([0, 2, 3]);
+/** A strength aggregate `score` could not copy: the engine refused it, it failed, or it disagreed with what `score` persisted. */
+const REFUSED_AGGREGATES = new Set(['failed', 'refused', 'mismatch']);
+const TRIAL_SETS_SCHEMA = path.join(__dirname, 'schemas', 'trial-sets.schema.json');
 const SCORES = 'scores';
 const EVIDENCE_NAME = 'evidence-artifact.json';
 const TRIAL_SETS_NAME = 'trial-sets.json';
@@ -280,6 +303,29 @@ function lstatOrNull(file) {
 }
 
 /**
+ * The first directory on the way down to `relative` (a file below `root`) that
+ * is a link or a file, relative to `root`, or null when each one that exists is
+ * a real directory. A link in the middle of a path is followed by every plain
+ * read, so each directory above a file is held to `lstat` before the file is
+ * read; one that is absent is reported where its file is read.
+ */
+function linkedDirectory(root, relative) {
+  let current = '';
+  for (const part of relative.split('/').slice(0, -1)) {
+    current = current === '' ? part : `${current}/${part}`;
+    const stats = lstatOrNull(absolute(root, current));
+    if (stats === null) return null;
+    if (!stats.isDirectory()) return current;
+  }
+  return null;
+}
+
+/** The finding for a directory `linkedDirectory` named. */
+function linkedFinding(label, directory, rule) {
+  return finding(`${label}${directory}`, rule, 'is a link or a file where a directory is required; nothing is followed');
+}
+
+/**
  * Every regular file under `root/relative`, passed to `onFile` as its path
  * relative to `root`. Only real directories are entered, so a link (a loop
  * included) is never followed; each entry that is neither a directory nor a
@@ -365,6 +411,11 @@ async function readEvidence({ root, scoreId, probes, validate, findings, label }
   const artifacts = new Map();
   for (const probeId of probes) {
     const relative = `${SCORES}/${scoreId}/${probeId}/${EVIDENCE_NAME}`;
+    const linked = linkedDirectory(root, relative);
+    if (linked !== null) {
+      findings.push(linkedFinding(label, linked, 'evidence'));
+      continue;
+    }
     const stats = lstatOrNull(absolute(root, relative));
     if (stats === null) {
       findings.push(
@@ -401,6 +452,9 @@ function resolveScoredRun(folder, invocationId) {
   if (located.wiring !== undefined) return { wiring: located.wiring, runDirectory: located.directory ?? null };
   const runDirectory = located.directory;
   const name = path.basename(runDirectory);
+  // `runs/` and the run directory are read below as real directories; a link at either is followed by every plain read.
+  const linked = linkedDirectory(folder, `runs/${name}/run.json`);
+  if (linked !== null) return { findings: [linkedFinding('', linked, 'run-file')], runDirectory };
   const invocations = scoreInvocations(runDirectory);
   if (invocations === null) {
     return { findings: [finding(`${SCORES}`, 'run-file', 'is a link or a file where the score invocations are expected')], runDirectory };
@@ -444,16 +498,6 @@ function baselineTreeFindings(folder) {
   return findings;
 }
 
-/** `run.json`'s `evalQualityVersion` and `partition` of one side, read as a regular file. */
-function readRunRecord(root, label, findings) {
-  try {
-    return JSON.parse(regularFileBytes(path.join(root, 'run.json')).toString('utf8'));
-  } catch (error) {
-    findings.push(finding(`${label}run.json`, 'json', `cannot be read as a regular JSON file: ${readProblem(error)}`));
-    return null;
-  }
-}
-
 function listOf(values) {
   return values.length === 0 ? 'none' : values.join(', ');
 }
@@ -484,7 +528,7 @@ async function compareWithBaseline({ folder, resolved, validate }) {
   const tree = baselineTreeFindings(folder);
   if (tree.length > 0) return stopped({ findings: tree, runDirectory });
 
-  const baselineRecord = readRunRecord(baselinePath, `${BASELINE}/`, findings);
+  const baselineRecord = readBaselineJson(baselinePath, 'run.json', findings);
   if (baselineRecord === null) return stopped({ findings, runDirectory });
 
   // What the two run records say, before any artifact below them is read: a baseline another engine scored may hold
@@ -558,13 +602,20 @@ function refused(runDirectory, reasons) {
   return new CompareOutcome({ status: 'refused', exitCode: OK, runDirectory, message: `refused: ${reasons.join('; ')}` });
 }
 
+/** A baseline file read as a regular file holding one JSON object; a finding, and null, when it is anything else. */
 function readBaselineJson(baselinePath, relative, findings) {
+  let value;
   try {
-    return JSON.parse(regularFileBytes(absolute(baselinePath, relative)).toString('utf8'));
+    value = JSON.parse(regularFileBytes(absolute(baselinePath, relative)).toString('utf8'));
   } catch (error) {
     findings.push(finding(`${BASELINE}/${relative}`, 'baseline-file', `cannot be read as a regular JSON file: ${readProblem(error)}`));
     return null;
   }
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    findings.push(finding(`${BASELINE}/${relative}`, 'baseline-file', 'does not hold a JSON object'));
+    return null;
+  }
+  return value;
 }
 
 /** The run's scoring policy's `severityFloor`, which `compareDominance` reads. */
@@ -582,12 +633,15 @@ function readSeverityFloor(runDirectory, findings) {
 // ---------------------------------------------------------------------------
 // accept
 
-/** The actions artifacts and isolation manifests the run's records reference inside the run directory, run-relative. */
+/**
+ * The actions artifacts and isolation manifests the run's records reference inside the run directory: run-relative
+ * path to the digest the record recorded for it.
+ */
 function referencedFiles({ folder, runDirectory, record, files, index, findings }) {
   const prefix = `${path.relative(folder, runDirectory).split(path.sep).join('/')}/`;
   // A records run's references are an adopter harness's own; only the ones that resolve inside this run directory are copied.
   const imported = record.evaluator?.kind === 'records';
-  const found = new Set();
+  const found = new Map();
   for (const set of index.trialSets) {
     for (const recordPath of Array.isArray(set.records) ? set.records : []) {
       const bytes = files.get(recordPath);
@@ -608,15 +662,15 @@ function referencedFiles({ folder, runDirectory, record, files, index, findings 
           }
           continue;
         }
-        found.add(relative);
+        found.set(relative, imported ? null : reference.digest);
       }
     }
   }
-  return [...found].sort();
+  return [...found].sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
 }
 
 /** Every member of the run as `relative path -> bytes`, with the findings that stop an accept. */
-function collectMembers({ folder, runDirectory, record, resolved }) {
+function collectMembers({ folder, runDirectory, record, resolved, engine }) {
   const findings = [];
   const files = new Map();
   const read = (relative) => readRegularInto(files, runDirectory, relative, findings, 'run-file', '');
@@ -636,7 +690,12 @@ function collectMembers({ folder, runDirectory, record, resolved }) {
     }
     walkRegular(runDirectory, directory, read, findings, 'run-file', '');
   }
-  for (const relative of referencedFiles({ folder, runDirectory, record, files, index: resolved.index, findings })) {
+  for (const [relative, digest] of referencedFiles({ folder, runDirectory, record, files, index: resolved.index, findings })) {
+    const linked = linkedDirectory(runDirectory, relative);
+    if (linked !== null) {
+      findings.push(linkedFinding('', linked, 'run-file'));
+      continue;
+    }
     if (lstatOrNull(absolute(runDirectory, relative)) === null) {
       findings.push(
         finding(relative, 'run-file', 'is referenced by a record and missing from the run, and a replay through score needs it'),
@@ -644,9 +703,78 @@ function collectMembers({ folder, runDirectory, record, resolved }) {
       continue;
     }
     read(relative);
+    // The record names the digest its artifact must hold; a file that differs is not the one the record sealed.
+    const bytes = files.get(relative);
+    if (bytes !== undefined && digest !== null && engine.digestBytes(bytes) !== digest) {
+      findings.push(
+        finding(relative, 'run-file', `digests to ${engine.digestBytes(bytes)}, not the ${digest} the record that references it recorded`),
+      );
+    }
   }
   walkRegular(runDirectory, `${SCORES}/${resolved.scoreId}`, read, findings, 'run-file', '');
   return { files, findings };
+}
+
+/**
+ * The findings `score` would report over this run's inputs, so no run `score`
+ * would refuse becomes a baseline. One seam over `score.js`: the trial-set index
+ * schema, `inputFindings` and the operation-phase snapshot check, in the order
+ * `runScoreCommand` runs them.
+ */
+async function scoreInputFindings({ folder, runDirectory, index, record, engine }) {
+  const ajv = new Ajv({ strict: false, allErrors: true });
+  const indexSchema = ajv.compile(JSON.parse(fs.readFileSync(TRIAL_SETS_SCHEMA, 'utf8')));
+  if (!indexSchema(index)) {
+    return [...new Set((indexSchema.errors ?? []).map((error) => `${error.instancePath || '/'} ${error.message}`))].map((message) =>
+      finding(TRIAL_SETS_NAME, 'schema', message),
+    );
+  }
+  const found = await inputFindings({ folder, runDirectory, index, record, engine });
+  if (found.length === 0) {
+    try {
+      const contract = JSON.parse(regularFileBytes(absolute(runDirectory, index.contract)).toString('utf8'));
+      for (const message of phaseSnapshotProblems(record, contract)) found.push(finding('run.json', 'operation-phases', message));
+    } catch (error) {
+      found.push(finding(index.contract, 'json', `cannot be read as a regular JSON file: ${readProblem(error)}`));
+    }
+  }
+  return found;
+}
+
+/**
+ * The findings that say the latest score invocation is not one `score` stands
+ * behind: its `score.json` does not parse, does not name this run and invocation,
+ * records an exit other than success, FAIL or Invalid (12 infrastructure, 64
+ * wiring, 4 and 5 engine failures), or records a strength aggregate that was
+ * refused, failed or disagreed with the evidence `score` persisted. A weak
+ * result, such as a probe the corpus did not catch, exits 2 and stays acceptable.
+ */
+function scoreRecordFindings({ runDirectory, scoreId, index }) {
+  const relative = `${SCORES}/${scoreId}/score.json`;
+  const again = 'score the run again before accepting it';
+  let value;
+  try {
+    value = JSON.parse(regularFileBytes(absolute(runDirectory, relative)).toString('utf8'));
+  } catch (error) {
+    return [finding(relative, 'score-record', `cannot be read as a regular JSON file (${readProblem(error)}); ${again}`)];
+  }
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return [finding(relative, 'score-record', `does not hold a JSON object; ${again}`)];
+  }
+  const problems = [];
+  if (value.invocationId !== scoreId) problems.push(`names score invocation ${JSON.stringify(value.invocationId)}, not ${scoreId}`);
+  if (value.run !== index.invocationId) problems.push(`names run ${JSON.stringify(value.run)}, not ${index.invocationId}`);
+  if (!ACCEPTED_SCORE_EXITS.has(value.exitCode)) {
+    problems.push(`records exit ${JSON.stringify(value.exitCode)}, so that score invocation did not complete cleanly`);
+  }
+  const aggregate = value.strengthAggregate;
+  if (aggregate === null || typeof aggregate !== 'object') problems.push('records no strengthAggregate');
+  else if (REFUSED_AGGREGATES.has(aggregate.status)) {
+    problems.push(
+      `records its strength aggregate as ${aggregate.status}${typeof aggregate.reason === 'string' ? ` (${aggregate.reason})` : ''}`,
+    );
+  }
+  return problems.map((problem) => finding(relative, 'score-record', `${problem}; ${again}`));
 }
 
 /** The `baseline.json` content over the members' digests, and the findings where it does not meet its schema. */
@@ -682,9 +810,29 @@ function manifestOf({ engine, record, scoreId, files }) {
   return { manifest, findings };
 }
 
-/** Writes `files` into a fresh staging directory beside `baseline/` and reads each back; the staging path. */
+function scratchDirectory(folder) {
+  return path.join(folder, ...SCRATCH);
+}
+
+/** `file` relative to the evaluation folder, as the messages spell it. */
+function inFolder(folder, file) {
+  return path.relative(folder, file).split(path.sep).join('/');
+}
+
+/** An accept's swap that failed after it retired the previous baseline and could not put it back. */
+class StrandedBaselineError extends Error {
+  constructor(message, retired) {
+    super(message);
+    this.name = 'StrandedBaselineError';
+    this.retired = retired;
+  }
+}
+
+/** Writes `files` into a fresh staging directory under `runs/.compare-staging/` and reads each back; the staging path. */
 function stage({ folder, files, engine }) {
-  const staging = fs.mkdtempSync(path.join(folder, STAGING_PREFIX));
+  const scratch = scratchDirectory(folder);
+  fs.mkdirSync(scratch, { recursive: true, mode: 0o755 });
+  const staging = fs.mkdtempSync(path.join(scratch, STAGING_PREFIX));
   try {
     fs.chmodSync(staging, 0o755);
     for (const [relative, bytes] of files) {
@@ -708,13 +856,22 @@ function stage({ folder, files, engine }) {
 function swap(folder, staging, log) {
   const target = path.join(folder, BASELINE);
   const hadOld = lstatOrNull(target) !== null;
-  const retired = path.join(folder, `${RETIRED_PREFIX}${crypto.randomBytes(4).toString('hex')}`);
+  const retired = path.join(path.dirname(staging), `${RETIRED_PREFIX}${crypto.randomBytes(4).toString('hex')}`);
   try {
     if (hadOld) fs.renameSync(target, retired);
     try {
       fs.renameSync(staging, target);
     } catch (error) {
-      if (hadOld) fs.renameSync(retired, target);
+      if (hadOld) {
+        try {
+          fs.renameSync(retired, target);
+        } catch (restoreError) {
+          throw new StrandedBaselineError(
+            `${readProblem(error)}, and putting the previous baseline back failed too (${readProblem(restoreError)})`,
+            retired,
+          );
+        }
+      }
       throw error;
     }
   } catch (error) {
@@ -728,6 +885,54 @@ function swap(folder, staging, log) {
       log(`the previous baseline could not be removed from ${retired}: ${error.message}`);
     }
   }
+}
+
+/**
+ * The state an interrupted accept can leave under `runs/.compare-staging/`,
+ * settled at the start of every `compare` and `compare --accept`: a retired
+ * baseline is put back when `baseline/` is absent (the accept stopped between
+ * its two renames), then every stale staging or retired directory is deleted.
+ * Returns null, or the words that say what state the folder is really in when
+ * the baseline could not be put back.
+ */
+function recoverBaseline(folder, log) {
+  const scratch = scratchDirectory(folder);
+  const stats = lstatOrNull(scratch);
+  if (stats === null) return null;
+  const where = inFolder(folder, scratch);
+  if (!stats.isDirectory()) {
+    fs.rmSync(scratch, { force: true });
+    return null;
+  }
+  const target = path.join(folder, BASELINE);
+  const retired = fs
+    .readdirSync(scratch)
+    .filter((name) => name.startsWith(RETIRED_PREFIX))
+    .sort();
+  if (lstatOrNull(target) === null && retired.length > 0) {
+    if (retired.length > 1) {
+      return `${BASELINE}/ is absent and ${where}/ holds ${retired.length} retired baselines (${retired.join(', ')}); move the right one back to ${BASELINE}/ by hand`;
+    }
+    try {
+      fs.renameSync(path.join(scratch, retired[0]), target);
+    } catch (error) {
+      return `${BASELINE}/ is absent: an earlier accept stopped after it retired the previous baseline, which lies at ${where}/${retired[0]}, and putting it back failed (${readProblem(error)}); move it back to ${BASELINE}/ by hand`;
+    }
+    log(`restored ${BASELINE}/ from ${where}/${retired[0]}, where an interrupted accept had left it`);
+  }
+  for (const name of fs.readdirSync(scratch)) {
+    try {
+      fs.rmSync(path.join(scratch, name), { recursive: true, force: true });
+    } catch (error) {
+      log(`stale ${where}/${name} could not be removed: ${error.message}`);
+    }
+  }
+  try {
+    fs.rmdirSync(scratch);
+  } catch {
+    // It stays when something could not be removed from it; the next command tries again.
+  }
+  return null;
 }
 
 async function acceptBaseline({ folder, resolved, validate, log }) {
@@ -748,10 +953,12 @@ async function acceptBaseline({ folder, resolved, validate, log }) {
     });
   }
   const findings = [];
-  await readEvidence({ root: runDirectory, scoreId, probes: resolved.probes, validate, findings, label: '' });
-  const collected = collectMembers({ folder, runDirectory, record, resolved });
-  findings.push(...collected.findings);
   const engine = await loadEngine();
+  await readEvidence({ root: runDirectory, scoreId, probes: resolved.probes, validate, findings, label: '' });
+  const collected = collectMembers({ folder, runDirectory, record, resolved, engine });
+  findings.push(...collected.findings, ...scoreRecordFindings({ runDirectory, scoreId, index: resolved.index }));
+  // `score`'s own input checks read through the paths the findings above vouch for, so they run only when those are clean.
+  if (findings.length === 0) findings.push(...(await scoreInputFindings({ folder, runDirectory, index: resolved.index, record, engine })));
   const { manifest, findings: manifestFindings } = manifestOf({ engine, record, scoreId, files: collected.files });
   findings.push(...manifestFindings);
   if (findings.length > 0) {
@@ -764,16 +971,22 @@ async function acceptBaseline({ folder, resolved, validate, log }) {
   }
   const files = new Map(collected.files);
   files.set(BASELINE_MANIFEST, Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`));
-  let staging;
   try {
-    staging = stage({ folder, files, engine });
-    swap(folder, staging, log);
+    swap(folder, stage({ folder, files, engine }), log);
   } catch (error) {
+    const stranded = error instanceof StrandedBaselineError;
     return new CompareOutcome({
       exitCode: INFRASTRUCTURE,
       runDirectory,
-      message: `the baseline could not be written (${readProblem(error)}); the staging directory is removed and ${BASELINE}/ is as it was`,
+      message: stranded
+        ? `the baseline could not be written (${readProblem(error)}); ${BASELINE}/ is absent and the previous baseline lies at ${inFolder(folder, error.retired)}; the next compare puts it back, or move it back by hand`
+        : `the baseline could not be written (${readProblem(error)}); the staging directory is removed and ${BASELINE}/ is as it was`,
     });
+  }
+  try {
+    fs.rmdirSync(scratchDirectory(folder));
+  } catch {
+    // Only a directory with nothing in it is removed; one that is not empty or already gone stays as it is.
   }
   return new CompareOutcome({
     status: 'accepted',
@@ -794,6 +1007,13 @@ async function acceptBaseline({ folder, resolved, validate, log }) {
  * @returns {Promise<CompareOutcome>}
  */
 async function runCompareCommand(folder, { run: invocationId, accept = false, log = () => {} } = {}) {
+  let problem;
+  try {
+    problem = recoverBaseline(folder, log);
+  } catch (error) {
+    problem = `the state an interrupted accept left under ${SCRATCH.join('/')}/ could not be settled (${readProblem(error)})`;
+  }
+  if (problem !== null) return new CompareOutcome({ exitCode: INFRASTRUCTURE, message: problem });
   const resolved = resolveScoredRun(folder, invocationId);
   if (resolved.wiring !== undefined || resolved.findings !== undefined) return stopped(resolved);
   log(`${accept ? 'accepting' : 'comparing'} run ${path.basename(resolved.runDirectory)}`);

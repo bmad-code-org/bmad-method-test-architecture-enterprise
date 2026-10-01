@@ -8,7 +8,10 @@
  * committed fixture. The revert checks the story names are each one case:
  *  - the `evalQualityVersion`-only refusal (a relation without TeA's refusal),
  *  - the replay of an accepted baseline without its isolation manifests (exit 3),
- *  - the dirty refusal (an accepted dirty run writes `baseline/`).
+ *  - the dirty refusal (an accepted dirty run writes `baseline/`),
+ *  - staging inside the committed folder (a stale staging directory makes the next run dirty),
+ *  - the input checks `score` runs (an edited sealed record is accepted),
+ *  - the directory-link check (a linked `trials/` directory is followed).
  */
 
 const assert = require('node:assert/strict');
@@ -88,8 +91,8 @@ function runAndScore(project, runArgs = []) {
 }
 
 /** `compare` through the CLI with a failure injected by the staging wrapper. */
-function wrapped(folder, mode, extraEnv = {}) {
-  const run = spawnSync(process.execPath, ['--require', STAGING_WRAPPER, CLI, 'compare', '--evaluation', folder, '--accept'], {
+function wrapped(folder, mode, extraEnv = {}, args = ['--accept']) {
+  const run = spawnSync(process.execPath, ['--require', STAGING_WRAPPER, CLI, 'compare', '--evaluation', folder, ...args], {
     cwd: path.join(__dirname, '..'),
     encoding: 'utf8',
     env: { ...process.env, TEA_BASELINE_FAIL: mode, ...extraEnv },
@@ -105,9 +108,28 @@ function evidenceOf(directory, probeId) {
   return read(path.join(directory, 'scores', latestScore(directory), probeId, 'evidence-artifact.json'));
 }
 
-/** What no stray entry of an accept may leave beside `baseline/`. */
+/** What an accept may leave behind: nothing in the folder beside `baseline/`, and nothing under `runs/.compare-staging/`. */
 function leftovers(folder) {
-  return fs.readdirSync(folder).filter((name) => name.startsWith('.baseline-'));
+  const scratch = path.join(folder, 'runs', '.compare-staging');
+  return [
+    ...fs.readdirSync(folder).filter((name) => name.startsWith('.baseline-')),
+    ...(fs.existsSync(scratch) ? fs.readdirSync(scratch) : []),
+  ];
+}
+
+/** A copy of `artifact` as a run that missed what the original caught: the one probe's reduction and strength agree. */
+function weakened(artifact) {
+  const weak = structuredClone(artifact);
+  weak.outcomes[0].state = 'missed';
+  weak.reducedProbeOutcomes[0].trialVotes[0].state = 'missed';
+  weak.reducedProbeOutcomes[0].caught = false;
+  weak.reducedProbeOutcomes[0].caughtCount = 0;
+  weak.strength.vector.defect = { caught: 0, exercised: 1, rate: 0 };
+  return weak;
+}
+
+function writeJson(file, value) {
+  fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
 }
 
 /** The files `score` reads from a run directory, derived from the run's own index and records, not from `compare`. */
@@ -228,7 +250,9 @@ async function main() {
     // The reviewed pull request commits the baseline; an uncommitted one would make every later run dirty.
     commitAll(project.repository, 'accept the baseline');
 
-    // Replay the accepted baseline through score in a copy.
+    // Replay the accepted baseline through score in a copy. The sealed records name their actions artifacts and isolation
+    // manifests as runs/<acceptedRun>/... and score refuses a reference outside the run directory it scores, so the replay
+    // places the baseline's bytes at the accepted id; under any other id every record would reach outside its run.
     {
       const folder = copyOf(project);
       const runDirectory = path.join(folder, 'runs', firstId);
@@ -262,10 +286,16 @@ async function main() {
       assert.match(replayed.output, /isolation manifest .* is absent/);
     }
 
+    // A staging directory an interrupted accept left behind sits under the gitignored runs/, so the next run is not dirty.
+    const stale = path.join(project.folder, 'runs', '.compare-staging', 'staging-stale');
+    fs.mkdirSync(stale, { recursive: true });
+    fs.writeFileSync(path.join(stale, 'run.json'), '{"command":"run"}\n');
+
     // Compare with equal keys: a second run over one probe set compares to the engine's own relation.
     const second = runAndScore(project);
     const secondId = path.basename(second);
     assert.notEqual(secondId, firstId);
+    assert.equal(read(path.join(second, 'run.json')).dirty, false, 'a stale staging directory made the next run dirty');
     {
       const { compareDominance } = engine;
       const floor = read(path.join(second, 'scoring-policy.json')).severityFloor;
@@ -281,8 +311,10 @@ async function main() {
           `${probeId}: not the engine's relation\n${result.output}`,
         );
       }
-      // The command compares and writes nothing.
+      // The command compares and writes nothing to baseline/, and settles what the interrupted accept left.
       assert.deepEqual(treeOf(baseline), treeOf(path.join(project.folder, 'baseline')));
+      assert.equal(fs.existsSync(stale), false, 'compare did not remove the stale staging directory');
+      assert.deepEqual(leftovers(project.folder), []);
     }
 
     // Revert check: a run that differs from the baseline only in evalQualityVersion is refused, never given a relation.
@@ -298,7 +330,11 @@ async function main() {
         );
       result = test.cli(folder, 'compare', ['--run', secondId]);
       assert.equal(result.status, 0, result.output);
-      assert.match(result.output, /refused: .*3\.9\.9.*4\.7\.0|refused: .*4\.7\.0.*3\.9\.9/);
+      assert.match(result.output, /refused: /);
+      assert.ok(
+        result.output.includes(`eval-quality version differs (${record.evalQualityVersion} vs 3.9.9)`),
+        `the refusal does not name both versions\n${result.output}`,
+      );
       assert.match(result.output, /compare --accept/);
       assert.doesNotMatch(result.output, /(a-dominates-b|b-dominates-a|equivalent|incomparable) \(a is/);
     }
@@ -367,6 +403,228 @@ async function main() {
       assert.deepEqual(leftovers(folder), []);
       result = test.cli(folder, 'compare', ['--run', secondId]);
       assert.equal(result.status, 10, result.output);
+    }
+
+    // A baseline file that parses to null or to anything but an object blames the baseline, naming it.
+    for (const text of ['null', '[]', '7']) {
+      const folder = copyOf(project);
+      fs.writeFileSync(path.join(folder, 'baseline', 'run.json'), `${text}\n`);
+      result = test.cli(folder, 'compare', ['--run', secondId]);
+      assert.equal(result.status, 10, `${text}: ${result.output}`);
+      assert.match(result.output, /baseline\/run\.json: \[baseline-file\] does not hold a JSON object/);
+      assert.doesNotMatch(result.output, /compared: |refused: |first-run: /);
+    }
+
+    // The evidence artifact of the baseline is held to the engine schema: a missing required field is exit 10.
+    {
+      const folder = copyOf(project);
+      const evidence = path.join(folder, 'baseline', 'scores', manifest.scoreInvocationId, 'P-001', 'evidence-artifact.json');
+      const artifact = read(evidence);
+      delete artifact.comparabilityKey;
+      writeJson(evidence, artifact);
+      result = test.cli(folder, 'compare', ['--run', secondId]);
+      assert.equal(result.status, 10, result.output);
+      assert.match(result.output, /baseline\/scores\/.*\/P-001\/evidence-artifact\.json: \[engine-schema\]/);
+      assert.doesNotMatch(result.output, /compared: |refused: |first-run: /);
+    }
+
+    // The probe sets differ under one partition: refused, exit 0, naming the probe the baseline lacks.
+    {
+      const folder = copyOf(project);
+      const indexFile = path.join(folder, 'baseline', 'trial-sets.json');
+      const index = read(indexFile);
+      index.trialSets = index.trialSets.filter((set) => set.probeId !== 'P-002');
+      writeJson(indexFile, index);
+      assert.equal(
+        read(path.join(folder, 'baseline', 'run.json')).partition,
+        read(path.join(folder, 'runs', secondId, 'run.json')).partition,
+      );
+      result = test.cli(folder, 'compare', ['--run', secondId]);
+      assert.equal(result.status, 0, result.output);
+      assert.match(result.output, /refused: the probe sets differ \(only the baseline scores: none; only this run scores: P-002\)/);
+      assert.doesNotMatch(result.output, /compared: |a is the baseline/);
+    }
+
+    // The baseline is `a`, the run `b`: a baseline that measured stronger is `a-dominates-b`, a weaker one `b-dominates-a`.
+    {
+      const { compareDominance } = engine;
+      const floor = read(path.join(second, 'scoring-policy.json')).severityFloor;
+      const strong = evidenceOf(baseline, 'P-002');
+      const weak = weakened(strong);
+      assert.equal(compareDominance(strong, weak, floor), 'a-dominates-b');
+      assert.equal(compareDominance(weak, strong, floor), 'b-dominates-a');
+      for (const [side, expected] of [
+        ['run', 'a-dominates-b'],
+        ['baseline', 'b-dominates-a'],
+      ]) {
+        const folder = copyOf(project);
+        const root = side === 'run' ? path.join(folder, 'runs', secondId) : path.join(folder, 'baseline');
+        writeJson(path.join(root, 'scores', latestScore(root), 'P-002', 'evidence-artifact.json'), weak);
+        result = test.cli(folder, 'compare', ['--run', secondId]);
+        assert.equal(result.status, 0, result.output);
+        assert.match(result.output, new RegExp(`P-002: ${expected} \\(a is the baseline, b is run ${secondId}\\)`), `${side} weakened`);
+      }
+    }
+
+    // The latest score invocation is the one compared and accepted: a run scored twice counts its second score.
+    {
+      const folder = copyOf(project);
+      const runDirectory = path.join(folder, 'runs', secondId);
+      const scoredAgain = test.cli(folder, 'score', ['--run', secondId]);
+      assert.equal(scoredAgain.status, 0, scoredAgain.output);
+      const [firstScore, latest] = fs.readdirSync(path.join(runDirectory, 'scores')).sort();
+      assert.equal(latest, latestScore(runDirectory));
+      // The first invocation's evidence is weaker, so a compare that read it would report another relation for P-002.
+      const { compareDominance } = engine;
+      const floor = read(path.join(second, 'scoring-policy.json')).severityFloor;
+      const strongEvidence = evidenceOf(runDirectory, 'P-002');
+      const firstEvidence = path.join(runDirectory, 'scores', firstScore, 'P-002', 'evidence-artifact.json');
+      writeJson(firstEvidence, weakened(read(firstEvidence)));
+      const fromLatest = compareDominance(evidenceOf(path.join(folder, 'baseline'), 'P-002'), strongEvidence, floor);
+      const fromFirst = compareDominance(evidenceOf(path.join(folder, 'baseline'), 'P-002'), read(firstEvidence), floor);
+      assert.notEqual(fromLatest, fromFirst);
+      result = test.cli(folder, 'compare', ['--run', secondId]);
+      assert.equal(result.status, 0, result.output);
+      assert.ok(
+        result.output.includes(`P-002: ${fromLatest} (a is the baseline`),
+        `compare did not read the latest score\n${result.output}`,
+      );
+      writeJson(firstEvidence, strongEvidence);
+      result = test.cli(folder, 'compare', ['--accept', '--run', secondId]);
+      assert.equal(result.status, 0, result.output);
+      assert.equal(read(path.join(folder, 'baseline', 'baseline.json')).scoreInvocationId, latest);
+      assert.deepEqual(fs.readdirSync(path.join(folder, 'baseline', 'scores')), [latest], 'the baseline holds an earlier score invocation');
+    }
+
+    // Accept copies only a run `score` would still accept: an edited sealed record is refused, exit 10, nothing written.
+    {
+      const folder = copyOf(project);
+      const runDirectory = path.join(folder, 'runs', secondId);
+      const record = path.join(runDirectory, read(path.join(runDirectory, 'trial-sets.json')).trialSets[0].records[0]);
+      fs.appendFileSync(record, ' ');
+      const before = treeOf(path.join(folder, 'baseline'));
+      result = test.cli(folder, 'compare', ['--accept', '--run', secondId]);
+      assert.equal(result.status, 10, result.output);
+      assert.match(result.output, /\[run-integrity\] digests to .* not the .* run\.json recorded/);
+      assert.deepEqual(treeOf(path.join(folder, 'baseline')), before);
+      assert.deepEqual(leftovers(folder), []);
+    }
+
+    // A score invocation that exited 12 (its strength aggregate disagreed with run.json) is refused; a weak result, exit 2, is not.
+    {
+      const folder = copyOf(project);
+      const runDirectory = path.join(folder, 'runs', secondId);
+      const record = read(path.join(runDirectory, 'run.json'));
+      writeJson(path.join(runDirectory, 'run.json'), { ...record, evalQualityVersion: '3.9.9' });
+      const scoredAgain = test.cli(folder, 'score', ['--run', secondId]);
+      assert.equal(scoredAgain.status, 12, scoredAgain.output);
+      const recorded = read(path.join(runDirectory, 'scores', latestScore(runDirectory), 'score.json'));
+      assert.equal(recorded.exitCode, 12);
+      assert.equal(recorded.strengthAggregate.status, 'mismatch');
+      const before = treeOf(path.join(folder, 'baseline'));
+      result = test.cli(folder, 'compare', ['--accept', '--run', secondId]);
+      assert.equal(result.status, 10, result.output);
+      assert.match(result.output, /score\.json: \[score-record\] records exit 12.*score the run again/);
+      assert.match(result.output, /\[score-record\] records its strength aggregate as mismatch/);
+      assert.deepEqual(treeOf(path.join(folder, 'baseline')), before);
+      assert.deepEqual(leftovers(folder), []);
+      // The same invocation recorded as a FAIL result with a copied aggregate is a legitimately weak run, and is accepted.
+      const scoreFile = path.join(runDirectory, 'scores', latestScore(runDirectory), 'score.json');
+      writeJson(path.join(runDirectory, 'run.json'), record);
+      writeJson(scoreFile, { ...recorded, exitCode: 2, strengthAggregate: { ...recorded.strengthAggregate, status: 'copied' } });
+      result = test.cli(folder, 'compare', ['--accept', '--run', secondId]);
+      assert.equal(result.status, 0, result.output);
+    }
+
+    // A directory above a file the accept reads that is a link is followed by no read: exit 10, naming it, nothing written.
+    {
+      const folder = copyOf(project);
+      const runDirectory = path.join(folder, 'runs', secondId);
+      const outside = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'tea-evaluate-compare-outside-'));
+      copies.push(outside);
+      fs.renameSync(path.join(runDirectory, 'trials'), path.join(outside, 'trials'));
+      fs.symlinkSync(path.join(outside, 'trials'), path.join(runDirectory, 'trials'));
+      const before = treeOf(path.join(folder, 'baseline'));
+      result = test.cli(folder, 'compare', ['--accept', '--run', secondId]);
+      assert.equal(result.status, 10, result.output);
+      assert.match(result.output, /trials: \[run-file\] is a link or a file where a directory is required/);
+      assert.deepEqual(treeOf(path.join(folder, 'baseline')), before);
+      assert.deepEqual(leftovers(folder), []);
+    }
+    {
+      const folder = copyOf(project);
+      const runs = path.join(folder, 'runs');
+      fs.renameSync(path.join(runs, secondId), path.join(runs, 'zz-real'));
+      fs.symlinkSync(path.join(runs, 'zz-real'), path.join(runs, secondId));
+      const before = treeOf(path.join(folder, 'baseline'));
+      for (const args of [
+        ['--run', secondId],
+        ['--accept', '--run', secondId],
+      ]) {
+        result = test.cli(folder, 'compare', args);
+        assert.equal(result.status, 10, `${args.join(' ')}: ${result.output}`);
+        assert.match(result.output, new RegExp(`runs/${secondId}: \\[run-file\\] is a link or a file where a directory is required`));
+        assert.doesNotMatch(result.output, /compared: |refused: |first-run: |accepted: /);
+      }
+      assert.deepEqual(treeOf(path.join(folder, 'baseline')), before);
+    }
+
+    // An actions artifact whose bytes differ from the digest its record names is not copied.
+    {
+      const folder = copyOf(project);
+      const runDirectory = path.join(folder, 'runs', secondId);
+      const record = read(path.join(runDirectory, read(path.join(runDirectory, 'trial-sets.json')).trialSets[0].records[0]));
+      const actions = path.join(folder, record.actionsArtifact.path);
+      fs.appendFileSync(actions, ' ');
+      const before = treeOf(path.join(folder, 'baseline'));
+      result = test.cli(folder, 'compare', ['--accept', '--run', secondId]);
+      assert.equal(result.status, 10, result.output);
+      assert.match(result.output, /trials\/.*: \[run-file\] digests to .* not the .* the record that references it recorded/);
+      assert.deepEqual(treeOf(path.join(folder, 'baseline')), before);
+    }
+
+    // An accept interrupted between its two renames leaves baseline/ absent and the old one retired: compare puts it back.
+    {
+      const folder = copyOf(project);
+      const before = treeOf(path.join(folder, 'baseline'));
+      const scratch = path.join(folder, 'runs', '.compare-staging');
+      fs.mkdirSync(scratch, { recursive: true });
+      fs.renameSync(path.join(folder, 'baseline'), path.join(scratch, 'retired-cafe0001'));
+      fs.mkdirSync(path.join(scratch, 'staging-dead0002'));
+      fs.writeFileSync(path.join(scratch, 'staging-dead0002', 'half-written.json'), '{');
+      result = test.cli(folder, 'compare', ['--run', secondId]);
+      assert.equal(result.status, 0, result.output);
+      assert.match(result.output, /compared: 2 probe\(s\)/);
+      assert.doesNotMatch(result.output, /first-run: /);
+      assert.deepEqual(treeOf(path.join(folder, 'baseline')), before);
+      assert.deepEqual(leftovers(folder), []);
+    }
+    // The same state with the put-back failing reports where the old baseline really is.
+    {
+      const folder = copyOf(project);
+      const scratch = path.join(folder, 'runs', '.compare-staging');
+      fs.mkdirSync(scratch, { recursive: true });
+      fs.renameSync(path.join(folder, 'baseline'), path.join(scratch, 'retired-cafe0001'));
+      const failed = wrapped(folder, 'strand', {}, ['--run', secondId]);
+      assert.equal(failed.status, 12, failed.output);
+      assert.match(failed.output, /baseline\/ is absent: an earlier accept stopped.*runs\/\.compare-staging\/retired-cafe0001.*by hand/);
+      assert.doesNotMatch(failed.output, /is as it was/);
+      assert.deepEqual(fs.readdirSync(scratch), ['retired-cafe0001']);
+    }
+    // A swap whose put-back fails too says baseline/ is absent and where the old one lies; the next compare restores it.
+    {
+      const folder = copyOf(project);
+      const before = treeOf(path.join(folder, 'baseline'));
+      const failed = wrapped(folder, 'strand');
+      assert.equal(failed.status, 12, failed.output);
+      assert.match(failed.output, /baseline\/ is absent and the previous baseline lies at runs\/\.compare-staging\/retired-/);
+      assert.doesNotMatch(failed.output, /is as it was/);
+      assert.equal(fs.existsSync(path.join(folder, 'baseline')), false);
+      result = test.cli(folder, 'compare', ['--run', secondId]);
+      assert.equal(result.status, 0, result.output);
+      assert.match(result.output, /compared: /);
+      assert.deepEqual(treeOf(path.join(folder, 'baseline')), before);
+      assert.deepEqual(leftovers(folder), []);
     }
 
     // An accept that fails while staging or swapping leaves the old baseline byte-identical and nothing behind.
