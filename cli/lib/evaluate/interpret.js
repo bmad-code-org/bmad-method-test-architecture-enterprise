@@ -4,11 +4,10 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { replaceView } = require('./partition');
-
 const READ_REGULAR = fs.constants.O_RDONLY | (fs.constants.O_NONBLOCK ?? 0) | (fs.constants.O_NOFOLLOW ?? 0);
 
-function read(file) {
+/** `file` parsed as JSON; it must be a regular file, opened without blocking and without following a link. */
+function readRegularJson(file) {
   let descriptor;
   try {
     descriptor = fs.openSync(file, READ_REGULAR);
@@ -81,13 +80,17 @@ function engineProjection(evidence) {
   return value;
 }
 
-function writeInterpretation({ folder, runDirectory, scoreInvocationId, trialSets, scores, contractPath, operationPhases }) {
-  const contract = read(path.join(runDirectory, contractPath));
+/**
+ * Writes `interpretation.json` into the run directory through its held writer (`run-directory.js`).
+ * `evidence` maps each scored probe to the parsed evidence artifact the writer read back from the score directory
+ * (`score.js`); a probe with none has `engine: null`.
+ */
+function writeInterpretation({ writer, runDirectory, scoreInvocationId, trialSets, scores, evidence, contractPath, operationPhases }) {
+  const contract = readRegularJson(path.join(runDirectory, contractPath));
   const oracles = new Map(contract.oracles.map((oracle) => [oracle.id, oracle]));
   const scoreByProbe = new Map(scores.map((score) => [score.probeId, score]));
   const probes = trialSets.map((set) => {
     const score = scoreByProbe.get(set.probeId);
-    const evidence = score?.evidence === null || score?.evidence === undefined ? null : read(path.join(folder, score.evidence));
     return {
       probeId: set.probeId,
       evidence: score?.evidence ?? null,
@@ -96,12 +99,12 @@ function writeInterpretation({ folder, runDirectory, scoreInvocationId, trialSet
       scoreFailure: score?.failure ?? null,
       trials: set.records.map((recordPath) => ({
         record: recordPath,
-        ...projectTrial(read(path.join(runDirectory, recordPath)), operationPhases, oracles),
+        ...projectTrial(readRegularJson(path.join(runDirectory, recordPath)), operationPhases, oracles),
       })),
-      engine: engineProjection(evidence),
+      engine: engineProjection(evidence.get(set.probeId) ?? null),
     };
   });
-  replaceView(runDirectory, 'interpretation.json', { scoreInvocationId, probes });
+  writer.replaceJson('interpretation.json', { scoreInvocationId, probes });
 }
 
-module.exports = { engineProjection, projectTrial, writeInterpretation };
+module.exports = { engineProjection, projectTrial, readRegularJson, writeInterpretation };

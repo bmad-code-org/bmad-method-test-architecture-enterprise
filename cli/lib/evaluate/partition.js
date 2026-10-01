@@ -1,38 +1,22 @@
 /** Project eval-quality's scored outcomes into authoring-safe partitions. */
 'use strict';
 
-const fs = require('node:fs');
 const path = require('node:path');
-const crypto = require('node:crypto');
 
-function replaceView(runDirectory, name, value) {
-  const temporary = path.join(runDirectory, `.${name}.${crypto.randomBytes(6).toString('hex')}.tmp`);
-  const destination = path.join(runDirectory, name);
-  try {
-    fs.writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`, { flag: 'wx', mode: 0o600 });
-    // Rename replaces a planted link as a directory entry without following it.
-    fs.renameSync(temporary, destination);
-  } catch (error) {
-    try {
-      fs.unlinkSync(temporary);
-    } catch (cleanupError) {
-      if (cleanupError.code !== 'ENOENT') throw cleanupError;
-    }
-    throw error;
-  }
-}
+const { readRegularJson } = require('./interpret');
 
-function writePartitionViews({ folder, runDirectory, scoreInvocationId, trialSets, scores, heldOutProbes }) {
+/**
+ * Writes `partitions.json` and `gap-view.json` into the run directory through its held writer (`run-directory.js`).
+ * `evidence` maps each scored probe to the parsed evidence artifact the writer read back from the score directory
+ * (`score.js`); a probe with none has `outcome: null`.
+ */
+function writePartitionViews({ writer, runDirectory, scoreInvocationId, trialSets, evidence, heldOutProbes }) {
   const heldOut = new Set(heldOutProbes ?? []);
   const partitions = { scoreInvocationId, development: [], 'held-out': [] };
   const gapView = { scoreInvocationId, development: [], 'held-out': [] };
-  const byId = new Map(scores.map((score) => [score.probeId, score]));
   for (const set of trialSets) {
-    const probe = JSON.parse(fs.readFileSync(path.join(runDirectory, set.probe), 'utf8'));
-    const evidenceFile = byId.get(set.probeId)?.evidence;
-    const evidence =
-      evidenceFile === null || evidenceFile === undefined ? null : JSON.parse(fs.readFileSync(path.join(folder, evidenceFile), 'utf8'));
-    const outcome = evidence?.reducedProbeOutcomes?.find((entry) => entry.probeId === set.probeId) ?? null;
+    const probe = readRegularJson(path.join(runDirectory, set.probe));
+    const outcome = evidence.get(set.probeId)?.reducedProbeOutcomes?.find((entry) => entry.probeId === set.probeId) ?? null;
     const partition = heldOut.has(set.probeId) ? 'held-out' : 'development';
     const summary = { probeId: set.probeId, probeClass: probe.probeClass, outcome };
     partitions[partition].push(summary);
@@ -42,7 +26,7 @@ function writePartitionViews({ folder, runDirectory, scoreInvocationId, trialSet
     ['partitions.json', partitions],
     ['gap-view.json', gapView],
   ])
-    replaceView(runDirectory, name, value);
+    writer.replaceJson(name, value);
 }
 
-module.exports = { replaceView, writePartitionViews };
+module.exports = { writePartitionViews };

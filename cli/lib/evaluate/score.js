@@ -44,13 +44,26 @@
  *
  * Then `eval-quality score` runs once per probe, with every trial's
  * `--record`, the set's `--isolation-manifest`, the run's
- * `--evaluator-configuration`, and `--out` naming the evidence artifact. Each
- * call's argv, exit code, stdout and stderr are written to
- * `scores/<scoreInvocationId>/<probeId>/score.json` in the run directory
- * whether or not an evidence artifact was emitted, since AD-10 classifies a
- * `score` exit 3 from those diagnostics and AD-12 lists them in the bundle.
+ * `--evaluator-configuration`, and `--out` naming a private staging file the
+ * runtime owns outside the evaluation folder (removed after the call). Each
+ * call's argv, exit code, stdout and stderr, the argv exactly as it ran, are
+ * written to `scores/<scoreInvocationId>/<probeId>/score.json` in the run
+ * directory whether or not an evidence artifact was emitted, since AD-10
+ * classifies a `score` exit 3 from those diagnostics and AD-12 lists them in
+ * the bundle. A staged artifact that meets its published schema and names this
+ * probe and the run's corpus is copied in as `evidence-artifact.json` and read
+ * back; one that does not is not copied, and the command exits 12.
  * A call that cannot run, is killed or exits with a code the CLI does not
  * document is recorded and the others still run; the command then exits 12.
+ *
+ * Every score output goes through the held-directory writer `run` uses
+ * (`run-directory.js`, AD-7, AD-12). The run directory already exists, so the
+ * writer attaches to it, adopts a real `scores` directory or creates it
+ * exclusively, and creates the invocation and probe directories exclusively.
+ * A link or another entry planted at one of them, a directory a process swaps
+ * for a link or moves while `score` runs, or a file planted where an output is
+ * about to land stops the write before a byte leaves the run directory, and
+ * the command exits 12.
  *
  * Otherwise the command's exit is one of the calls' own exits, passed through:
  * the most severe across the probes, in the order 64, 5, 4, 3, 2, 0 (a usage
@@ -66,9 +79,11 @@ const AjvModule = require('ajv/dist/2020');
 
 const { loadEngine } = require('./engine');
 const { EngineStageError, runEngineStage } = require('./engine-cli');
-const { newInvocationId, readJson, writeJson } = require('./preflight');
+const { newInvocationId, readJson } = require('./preflight');
 const { createArtifactValidator } = require('./records');
+const { RunDirectory, RunDirectoryError } = require('./run-directory');
 const { TRIAL_SETS_NAME } = require('./run');
+const { makeScratchDirectory, releaseScratchDirectory, removeScratchDirectory } = require('./workspace');
 const { writePartitionViews } = require('./partition');
 const { writeInterpretation } = require('./interpret');
 
@@ -497,110 +512,259 @@ async function runScoreCommand(folder, { run: invocationId, env = process.env, l
   if (optedOut) log('the run opted out of file-system confinement: its targets ran unconfined and could reach the evaluation folder');
 
   const scoreInvocationId = newInvocationId();
-  const scoresRoot = path.join(runDirectory, 'scores');
+  const scoreRelative = `scores/${scoreInvocationId}`;
+  let writer;
   try {
-    try {
-      fs.mkdirSync(scoresRoot);
-    } catch (error) {
-      if (error.code !== 'EEXIST') throw error;
-    }
-    if (!fs.lstatSync(scoresRoot).isDirectory()) throw new Error('scores is a link or a non-directory entry');
+    writer = RunDirectory.attach(runDirectory);
+    writer.adoptDirectory('scores');
+    writer.ensureDirectory(scoreRelative);
   } catch (error) {
+    writer?.close();
+    if (!(error instanceof RunDirectoryError)) throw error;
     return new ScoreOutcome({
       exitCode: INFRASTRUCTURE,
       runDirectory,
       message: `score output cannot be created inside the run directory: ${error.message}`,
     });
   }
-  const scoreDirectory = path.join(scoresRoot, scoreInvocationId);
-  fs.mkdirSync(scoreDirectory);
-  const scores = [];
-  let stageFailed = false;
+  const scratch = [];
   try {
-    for (const set of index.trialSets) {
-      const directory = path.join(scoreDirectory, set.probeId);
-      const evidence = path.join(directory, 'evidence-artifact.json');
-      fs.mkdirSync(directory, { recursive: true });
-      const args = [];
-      for (const relative of set.records) args.push('--record', inRun(runDirectory, relative));
-      args.push(
-        '--contract',
-        inRun(runDirectory, index.contract),
-        '--probe',
-        inRun(runDirectory, set.probe),
-        '--preflight-verdict',
-        inRun(runDirectory, index.preflightVerdict),
-        '--policy',
-        inRun(runDirectory, index.policy),
-        '--corpus-digest',
-        index.corpusDigest,
-      );
-      const manifest = inRun(runDirectory, set.isolationManifest);
-      if (fs.existsSync(manifest)) args.push('--isolation-manifest', manifest);
-      else
-        log(
-          `${set.probeId}: the isolation manifest ${set.isolationManifest} is absent and is not supplied; eval-quality reads the trial set as Invalid`,
-        );
-      args.push('--evaluator-configuration', inRun(runDirectory, index.evaluatorConfiguration), '--out', evidence);
-      const recordPath = path.join(directory, 'score.json');
-      let exitCode = null;
-      let failure = null;
+    return await scoreProbes({
+      folder,
+      runDirectory,
+      index,
+      located,
+      env,
+      log,
+      writer,
+      scratch,
+      scoreInvocationId,
+      scoreRelative,
+      refused,
+      refusedNote,
+      optedOutNote,
+    });
+  } finally {
+    // A staging directory that could not be removed after its call is tried again here.
+    while (scratch.length > 0) {
       try {
-        const result = runEngineStage('score', args, { runDirectory: scoreDirectory, recordPath, env, log });
-        ({ exitCode } = result);
-        log(`${set.probeId}: eval-quality score exited ${exitCode}`);
-        // An Invalid result emits no artifact; its reasons are the stage's own stderr lines.
-        for (const line of result.stderr.split('\n').filter((text) => text.startsWith('eval-quality: invalid:')))
-          log(`${set.probeId}: ${line}`);
-      } catch (error) {
-        if (!(error instanceof EngineStageError)) throw error;
-        stageFailed = true;
-        failure = error.message;
-        log(`${set.probeId}: ${error.message}`);
+        removeScratchDirectory(scratch.pop());
+      } catch {
+        // It stays on disk under the system's temporary directory; the score's own result is already decided.
       }
-      scores.push({
+    }
+    writer.close();
+  }
+}
+
+/** One probe's `eval-quality score` call, staged and copied in; the entry `score.json` and the views summarize it. */
+async function scoreProbe({ folder, runDirectory, set, index, validate, env, log, writer, scratch, scoreRelative }) {
+  const relative = `${scoreRelative}/${set.probeId}`;
+  const recordRelative = `${relative}/score.json`;
+  const evidenceRelative = `${relative}/evidence-artifact.json`;
+  // The probe's directory is made, exclusively, before the engine runs, so an entry planted at it stops the probe unscored.
+  writer.ensureDirectory(relative);
+  const staging = makeScratchDirectory(scratch, 'tea-evaluate-score-');
+  try {
+    const produced = path.join(staging, 'evidence-artifact.json');
+    const args = [];
+    for (const record of set.records) args.push('--record', inRun(runDirectory, record));
+    args.push(
+      '--contract',
+      inRun(runDirectory, index.contract),
+      '--probe',
+      inRun(runDirectory, set.probe),
+      '--preflight-verdict',
+      inRun(runDirectory, index.preflightVerdict),
+      '--policy',
+      inRun(runDirectory, index.policy),
+      '--corpus-digest',
+      index.corpusDigest,
+    );
+    const manifest = inRun(runDirectory, set.isolationManifest);
+    if (fs.existsSync(manifest)) args.push('--isolation-manifest', manifest);
+    else
+      log(
+        `${set.probeId}: the isolation manifest ${set.isolationManifest} is absent and is not supplied; eval-quality reads the trial set as Invalid`,
+      );
+    args.push('--evaluator-configuration', inRun(runDirectory, index.evaluatorConfiguration), '--out', produced);
+    let exitCode = null;
+    let failure = null;
+    let stageFailed = false;
+    try {
+      const result = runEngineStage('score', args, {
+        runDirectory: writer.pathOf(scoreRelative),
+        recordPath: writer.pathOf(recordRelative),
+        writer,
+        env,
+        log,
+      });
+      ({ exitCode } = result);
+      log(`${set.probeId}: eval-quality score exited ${exitCode}`);
+      // An Invalid result emits no artifact; its reasons are the stage's own stderr lines.
+      for (const line of result.stderr.split('\n').filter((text) => text.startsWith('eval-quality: invalid:')))
+        log(`${set.probeId}: ${line}`);
+    } catch (error) {
+      if (!(error instanceof EngineStageError)) throw error;
+      stageFailed = true;
+      failure = error.message;
+      log(`${set.probeId}: ${error.message}`);
+    }
+    let evidence = null;
+    let artifact = null;
+    const staged = stagedArtifact(produced);
+    if (staged.problem !== undefined) {
+      stageFailed = true;
+      failure = failure === null ? `${set.probeId}: the staged evidence artifact ${staged.problem}` : failure;
+      log(`${set.probeId}: the staged evidence artifact ${staged.problem}; it is not copied`);
+    } else if (staged.bytes !== null) {
+      const problems = await artifactProblems({ bytes: staged.bytes, set, index, validate });
+      if (problems.length > 0) {
+        stageFailed = true;
+        failure =
+          failure === null ? `${set.probeId}: the staged evidence artifact is not what this call produced: ${problems[0]}` : failure;
+        log(`${set.probeId}: the staged evidence artifact is not what this call produced (${problems.join('; ')}); it is not copied`);
+      } else {
+        // Copied through the held directory and read back from it: the parsed artifact is the one that was written.
+        writer.write(evidenceRelative, staged.bytes);
+        const back = writer.read(evidenceRelative);
+        if (!back.equals(staged.bytes)) throw new RunDirectoryError(`${evidenceRelative} does not hold the artifact eval-quality staged`);
+        evidence = writer.pathOf(evidenceRelative);
+        artifact = JSON.parse(back.toString('utf8'));
+      }
+    }
+    return {
+      stageFailed,
+      artifact,
+      entry: {
         probeId: set.probeId,
         exitCode,
         failure,
-        record: path.relative(folder, recordPath),
-        evidence: fs.existsSync(evidence) ? path.relative(folder, evidence) : null,
-      });
-    }
+        record: path.relative(folder, writer.pathOf(recordRelative)),
+        evidence: evidence === null ? null : path.relative(folder, evidence),
+      },
+    };
   } finally {
-    writeJson(path.join(scoreDirectory, 'score.json'), {
+    releaseScratchDirectory(scratch, staging);
+  }
+}
+
+/** The staged artifact's bytes (null when the call wrote none), read as a regular file without following a link. */
+function stagedArtifact(file) {
+  let stats;
+  try {
+    stats = fs.lstatSync(file);
+  } catch (error) {
+    if (error.code === 'ENOENT') return { bytes: null };
+    return { problem: `cannot be examined: ${error.message}` };
+  }
+  if (!stats.isFile()) return { problem: 'is a link or a non-file entry' };
+  try {
+    return { bytes: regularFileBytes(file) };
+  } catch (error) {
+    return { problem: `cannot be read: ${error.message}` };
+  }
+}
+
+/** Why a staged artifact is not the evidence of this probe's call; empty when it is. */
+async function artifactProblems({ bytes, set, index, validate }) {
+  let artifact;
+  try {
+    artifact = JSON.parse(bytes.toString('utf8'));
+  } catch (error) {
+    return [`is not JSON: ${error.message}`];
+  }
+  const problems = await validate('evidence-artifact', artifact);
+  if (problems.length > 0) return [`fails its published schema: ${problems[0]}`];
+  if (artifact.scoringVersionInputs?.corpusDigest !== index.corpusDigest) {
+    return [`names corpus ${artifact.scoringVersionInputs?.corpusDigest}, not the run's ${index.corpusDigest}`];
+  }
+  if (!artifact.reducedProbeOutcomes?.some((outcome) => outcome.probeId === set.probeId)) return [`holds no outcome for ${set.probeId}`];
+  return [];
+}
+
+async function scoreProbes({
+  folder,
+  runDirectory,
+  index,
+  located,
+  env,
+  log,
+  writer,
+  scratch,
+  scoreInvocationId,
+  scoreRelative,
+  refused,
+  refusedNote,
+  optedOutNote,
+}) {
+  const validate = createArtifactValidator();
+  const scores = [];
+  const evidence = new Map();
+  let stageFailed = false;
+  let integrity = null;
+  let unexpected = null;
+  try {
+    for (const set of index.trialSets) {
+      const probe = await scoreProbe({ folder, runDirectory, set, index, validate, env, log, writer, scratch, scoreRelative });
+      stageFailed ||= probe.stageFailed;
+      scores.push(probe.entry);
+      if (probe.artifact !== null) evidence.set(set.probeId, probe.artifact);
+    }
+  } catch (error) {
+    if (error instanceof RunDirectoryError) integrity = error.message;
+    else unexpected = error;
+  }
+  const exitCode = stageFailed || integrity !== null ? INFRASTRUCTURE : combinedExit(scores.map((entry) => entry.exitCode));
+  try {
+    writer.writeJson(`${scoreRelative}/score.json`, {
       invocationId: scoreInvocationId,
       run: index.invocationId,
-      exitCode: stageFailed ? INFRASTRUCTURE : combinedExit(scores.map((entry) => entry.exitCode)),
+      exitCode,
       scores,
       refused,
       confinement: located.record?.confinement ?? null,
     });
+    if (integrity === null && unexpected === null) {
+      writePartitionViews({
+        writer,
+        runDirectory,
+        scoreInvocationId,
+        trialSets: index.trialSets,
+        evidence,
+        heldOutProbes: located.record.heldOutProbes,
+      });
+      writeInterpretation({
+        writer,
+        runDirectory,
+        scoreInvocationId,
+        trialSets: index.trialSets,
+        scores,
+        evidence,
+        contractPath: index.contract,
+        operationPhases: located.record.operationPhases,
+      });
+    }
+  } catch (error) {
+    if (!(error instanceof RunDirectoryError)) throw error;
+    integrity ??= error.message;
   }
-  const exitCode = stageFailed ? INFRASTRUCTURE : combinedExit(scores.map((entry) => entry.exitCode));
-  writePartitionViews({
-    folder,
-    runDirectory,
-    scoreInvocationId,
-    trialSets: index.trialSets,
-    scores,
-    heldOutProbes: located.record.heldOutProbes,
-  });
-  writeInterpretation({
-    folder,
-    runDirectory,
-    scoreInvocationId,
-    trialSets: index.trialSets,
-    scores,
-    contractPath: index.contract,
-    operationPhases: located.record.operationPhases,
-  });
+  if (unexpected !== null) throw unexpected;
+  if (integrity !== null) {
+    return new ScoreOutcome({
+      exitCode: INFRASTRUCTURE,
+      runDirectory,
+      scores,
+      message: `score output was refused to keep it inside the run directory: ${integrity}`,
+    });
+  }
   return new ScoreOutcome({
     exitCode,
     runDirectory,
     scores,
     message: stageFailed
-      ? `an eval-quality score call could not run or exited with a code the CLI does not document; every call's record is in ${path.relative(folder, scoreDirectory)}`
-      : `eval-quality score ran for ${scores.length} probe(s) of run ${index.invocationId}; each call's diagnostics and evidence are in ${path.relative(folder, scoreDirectory)}${refusedNote}${optedOutNote}`,
+      ? `an eval-quality score call could not run, exited with a code the CLI does not document, or staged an artifact that is not its evidence; every call's record is in ${path.relative(folder, writer.pathOf(scoreRelative))}`
+      : `eval-quality score ran for ${scores.length} probe(s) of run ${index.invocationId}; each call's diagnostics and evidence are in ${path.relative(folder, writer.pathOf(scoreRelative))}${refusedNote}${optedOutNote}`,
   });
 }
 

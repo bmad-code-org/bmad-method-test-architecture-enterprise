@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const { engineProjection, projectTrial, writeInterpretation } = require('../cli/lib/evaluate/interpret');
+const { RunDirectory } = require('../cli/lib/evaluate/run-directory');
 const { suite } = require('./lib/evaluate-story-121');
 
 const read = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -223,12 +224,21 @@ try {
     }
   }
   assert.equal(sawFirstMaterialError, true, 'the persisted scored run contains no first material error');
+  // The view helpers write through the run directory's held writer and summarize the evidence artifacts they are handed.
+  const writer = RunDirectory.attach(run);
+  const evidenceOf = (entries) =>
+    new Map(
+      entries
+        .filter(({ evidence }) => evidence !== null)
+        .map(({ probeId, evidence }) => [probeId, read(path.join(project.folder, evidence))]),
+    );
   const interpretationArgs = {
-    folder: project.folder,
+    writer,
     runDirectory: run,
     scoreInvocationId: interpretation.scoreInvocationId,
     trialSets: index.trialSets,
     scores,
+    evidence: evidenceOf(scores),
     contractPath: index.contract,
     operationPhases: read(path.join(run, 'run.json')).operationPhases,
   };
@@ -254,18 +264,15 @@ try {
   assert.deepEqual(multiView.probes[0].trials[0].process, ['F-010']);
   assert.equal(multiView.probes[0].trials[0].firstMaterialError.sequence, 1);
   fs.unlinkSync(multiRecord);
-  for (const kind of ['contract', 'record', 'evidence']) {
+  for (const kind of ['contract', 'record']) {
     const linked = path.join(run, `${kind}-input-link.json`);
-    const options = structuredClone(interpretationArgs);
+    const options = { ...interpretationArgs, trialSets: structuredClone(index.trialSets), scores: structuredClone(scores) };
     if (kind === 'contract') {
       fs.symlinkSync(path.join(run, index.contract), linked);
       options.contractPath = path.basename(linked);
-    } else if (kind === 'record') {
+    } else {
       fs.symlinkSync(path.join(run, index.trialSets[0].records[0]), linked);
       options.trialSets[0].records[0] = path.basename(linked);
-    } else {
-      fs.symlinkSync(path.join(project.folder, scores[0].evidence), linked);
-      options.scores[0].evidence = path.relative(project.folder, linked);
     }
     assert.throws(() => writeInterpretation(options), /symbolic link/, `${kind} link was followed`);
   }
@@ -290,9 +297,10 @@ try {
   assert.equal(fs.readdirSync(path.join(run, 'scores')).length, scoreDirectories, 'scorer ran after run.json phase tampering');
   fs.writeFileSync(tamperRunFile, untampered);
   writeInterpretation({
-    folder: project.folder,
+    writer,
     runDirectory: run,
     scoreInvocationId: 'missing-artifacts',
+    evidence: new Map(),
     trialSets: index.trialSets,
     scores: index.trialSets.map(({ probeId }, index) => ({
       probeId,
@@ -311,6 +319,7 @@ try {
         evidence === null && scoreExitCode === 3 && scoreRecord !== null && scoreFailure === 'invalid input',
     ),
   );
+  writer.close();
   const runFile = path.join(run, 'run.json');
   const outdated = read(runFile);
   delete outdated.operationPhases;
