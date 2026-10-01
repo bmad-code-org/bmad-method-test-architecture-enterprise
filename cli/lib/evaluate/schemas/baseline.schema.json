@@ -19,8 +19,8 @@
   ],
   "properties": {
     "schemaVersion": { "const": 1 },
-    "acceptedRun": { "type": "string", "minLength": 1 },
-    "scoreInvocationId": { "type": "string", "minLength": 1 },
+    "acceptedRun": { "$ref": "#/$defs/InvocationId" },
+    "scoreInvocationId": { "$ref": "#/$defs/InvocationId" },
     "partition": { "enum": ["development", "held-out", "both"] },
     "evalQualityVersion": { "type": "string", "minLength": 1 },
     "corpusDigest": { "$ref": "#/$defs/Digest" },
@@ -49,6 +49,11 @@
     }
   },
   "$defs": {
+    "InvocationId": {
+      "description": "An invocation identifier as the runtime writes it (a UTC timestamp and eight hex digits). It names a directory below runs/ and scores/, so only an identifier of that form is accepted.",
+      "type": "string",
+      "pattern": "^[0-9]{8}T[0-9]{9}Z-[0-9a-f]{8}$"
+    },
     "Digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
     "RelativePath": {
       "description": "A POSIX path inside baseline/: relative, with no empty, \".\" or \"..\" segment.",

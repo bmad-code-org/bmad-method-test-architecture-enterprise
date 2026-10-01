@@ -3,7 +3,7 @@
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "tea-evaluate-check-fixture",
-  "sourceSpecDigest": "sha256:7db023f2dc7a820a5fb2fcf398042b41d11aabf9b28d4b0a72c9b74e154ced92",
+  "sourceSpecDigest": "sha256:00915b7cd0d39a70760c657b7a23422da750a4a6bc0902ad32d08b16892572b6",
   "behaviors": [
     {
       "id": "B-001",

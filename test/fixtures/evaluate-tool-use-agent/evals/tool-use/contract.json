@@ -3,7 +3,7 @@
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "tea-evaluate-tool-use-agent-fixture",
-  "sourceSpecDigest": "sha256:1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a",
+  "sourceSpecDigest": "sha256:64382aff7ba66dc502fc4103b3195c7d55c86b63493bc8967cb4abab978a8de8",
   "behaviors": [
     {
       "id": "B-001",

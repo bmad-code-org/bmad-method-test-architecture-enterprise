@@ -1,6 +1,10 @@
 {
   "schemaVersion": 1,
   "evaluationId": "stub-skill-preflight",
+  "requirements": {
+    "path": "requirements.md",
+    "digest": "sha256:921abb71e20b4abdc8478e1f8f90e79fc6003c48c823c9cd73d0453c32674e7a"
+  },
   "targetKind": "skill",
   "interface": "cli",
   "registry": [

@@ -203,6 +203,19 @@ function readCalibration(folder) {
   }
 }
 
+/**
+ * The criteria of a calibration report whose agreement is below its `minimumAgreement`, each as a sentence; empty when
+ * every criterion meets it. `run` stops with exit 11 on any, and `tea-evaluate ci` reads the same report with this.
+ */
+function calibrationShortfalls(report) {
+  return report.criteria
+    .filter((criterion) => criterion.agreement < report.minimumAgreement)
+    .map(
+      (criterion) =>
+        `${criterion.rubricId}/${criterion.criterionId}: judge agreement ${criterion.agreement} is below the minimum ${report.minimumAgreement}`,
+    );
+}
+
 /** A report carries the judge's answer beside its label, never into its input. */
 async function runCalibration({ calibration, evaluation, contract, engine, writer, stop, judgeItem }) {
   if ((contract.rubrics ?? []).length === 0) return null;
@@ -239,7 +252,7 @@ async function runCalibration({ calibration, evaluation, contract, engine, write
     }
   const report = { minimumAgreement: evaluation.judgeCalibration.minimumAgreement, criteria };
   writer.writeJson('judge-calibration.json', report);
-  if (criteria.some((criterion) => criterion.agreement < report.minimumAgreement))
+  if (calibrationShortfalls(report).length > 0)
     throw stop({
       stage: 'trial',
       exitCode: 11,
@@ -253,6 +266,7 @@ module.exports = {
   calibrationObservation,
   calibrationOperationId,
   calibrationProblems,
+  calibrationShortfalls,
   readCalibration,
   runCalibration,
 };

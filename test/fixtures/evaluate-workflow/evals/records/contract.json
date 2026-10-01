@@ -3,7 +3,7 @@
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "tea-evaluate-workflow-fixture",
-  "sourceSpecDigest": "sha256:3b7e1d9a5c2f4e6a8b0c1d3e5f7a9b1c3d5e7f9a1b3c5d7e9f1a3b5c7d9e1f3a",
+  "sourceSpecDigest": "sha256:14058b85fc5eec2455805f2895b86800e26720447e871fdfceee1adfd40f1e6e",
   "behaviors": [
     {
       "id": "B-001",

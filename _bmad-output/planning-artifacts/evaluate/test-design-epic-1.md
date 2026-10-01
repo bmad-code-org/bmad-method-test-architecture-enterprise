@@ -38,7 +38,7 @@ inputDocuments:
 
 ## Executive Summary
 
-**Scope:** full epic-level test design for Stories 1.1 to 1.70, 1.80, 1.90 and 1.91 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.70, 1.80, 1.90 and 1.91. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
+**Scope:** full epic-level test design for Stories 1.1 to 1.70, 1.80, 1.90 to 1.92 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.70, 1.80, 1.90 to 1.92. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
 
 **Risk summary:**
 
@@ -1082,6 +1082,17 @@ Added 2026-10-01 in Story 2.1. Levels: integration, static. File: `test/test-eva
 | No file under `baseline/` carries a machine path           | Accept that run, then scan every file under `baseline/` byte for byte for the distinctive path, the home directory and the temporary root; assert no hit                                                        | Integration | P0  | Restoring an absolute path in any baseline file fails the scan |
 | The replay placement still scores to the accepted evidence | Copy the baseline to `runs/<acceptedRun>/` in a scratch folder and score it; assert the evidence bytes equal the accepted ones                                                                                  | Integration | P0  | A substitution that moves a digest anchor fails the replay     |
 | Committed fixture baselines pass the scan                  | Run the same scan over every committed `baseline/` under `test/fixtures/` and `test/evaluations/`                                                                                                               | Static      | P1  | A fixture baseline that keeps a machine path fails the scan    |
+
+### Story 1.92: Stop `tea-evaluate ci` at once on a signal while an engine stage runs
+
+Added 2026-10-01 in Story 2.2's review. Levels: integration, static. File: `test/test-evaluate-ci.js` (`test:evaluate-ci`).
+
+| AC                                                        | Test                                                                                                                                                                            | Level       | P   | Revert check                                                          |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | --- | --------------------------------------------------------------------- |
+| A signal ends `ci` while the replay's stage hangs         | Run `ci --tier pr` over the verdict fixture with the kill shim hanging at `score`; send SIGINT, then SIGTERM, to `ci` and do not kill the stage; assert `ci` ends by the signal | Integration | P0  | Reverting `runEngineStage` to `spawnSync` fails on the timeout        |
+| The stage and the scratch directory are gone              | After the signal, assert the stage's pid is gone and the temporary directory holds no `tea-evaluate-*` entry                                                                    | Integration | P0  | A handler that leaves the scratch directory fails the empty listing   |
+| The same for `compile`, `seal` and the stale-baseline run | Hang each stage in turn and repeat the two assertions                                                                                                                           | Integration | P1  | A stage still called synchronously fails its case                     |
+| Stage exits still pass through verbatim                   | The existing `checkEngineStageExits` and shim-log cases run unchanged                                                                                                           | Integration | P0  | An exit rewritten on the asynchronous path fails the direct-CLI check |
 
 ## The Dogfood Proof (AD-15)
 

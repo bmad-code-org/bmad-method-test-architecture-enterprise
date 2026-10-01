@@ -1,6 +1,10 @@
 {
   "schemaVersion": 1,
   "evaluationId": "grader-http-service",
+  "requirements": {
+    "path": "requirements.md",
+    "digest": "sha256:f2e457b1457f969bdf13dc4909183f589a7c3e9fe256c205e8a147cf61be7633"
+  },
   "targetKind": "ai-feature",
   "interface": "api",
   "registry": [

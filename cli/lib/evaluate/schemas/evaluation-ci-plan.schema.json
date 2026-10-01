@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:tea:evaluate:schema:evaluation-ci-plan",
+  "title": "ci/evaluation-ci-plan.json",
+  "description": "The platform-neutral CI plan of an evaluation: the only definition of tier membership (AD-10). tea-evaluate ci --tier <tier> runs exactly the checks whose placement.tier is that tier, in the order they are listed. Each check records where it runs, what blocks, which evidence it leaves and why it sits in its tier. The tea-evaluate runtime owns this schema; its placement rules (a tier moved off the default needs a reason, a deterministic check that needs no secret stays on pr, a live check sits off pr, a command led by its tool) are checked by the runtime and by tea-evaluate check.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "checks"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "checks": {
+      "description": "The plan's checks, in the order a tier runs them.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/Check" }
+    }
+  },
+  "$defs": {
+    "Tier": { "enum": ["pr", "merge", "scheduled", "release"] },
+    "EvaluateCheckId": {
+      "description": "The closed set of evaluate checks, one per AD-10 default-tier member. An unknown id fails validation.",
+      "enum": [
+        "check",
+        "compile",
+        "seal",
+        "api-conformance",
+        "gameability",
+        "oracle-agreement",
+        "replay",
+        "preflight-live",
+        "twin-run",
+        "held-out",
+        "judge-calibration",
+        "strength-comparison"
+      ]
+    },
+    "Check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "tier", "trigger", "kind", "command", "enforcement", "evidence", "placement"],
+      "properties": {
+        "id": {
+          "description": "An evaluate check names one of the closed set; a gate check names the adopted eval-quality-gates gate it runs.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+        },
+        "tier": { "$ref": "#/$defs/Tier" },
+        "trigger": {
+          "description": "What starts the check in a pipeline, platform-neutral: a pull request, a merge to the default branch, a schedule, a release, or a manual dispatch.",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["pull-request", "merge", "schedule", "release", "manual-dispatch"] }
+        },
+        "kind": {
+          "description": "evaluate: run by tea-evaluate ci through the check's id, whose command is the tea-evaluate argv a pipeline step renders. gate: an eval-quality-gates command the adopter adopted, run as a child process with no shell.",
+          "enum": ["evaluate", "gate"]
+        },
+        "command": {
+          "description": "The argv of the check, led by tea-evaluate (evaluate) or eval-quality-gates (gate), one array item per argument with no shell.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "enforcement": {
+          "description": "The class AD-10 gives a failing result of this check: block, or warn where AD-10 says warn (a strength regression against the baseline on strength-comparison, the strength floor on twin-run and held-out on scheduled). The field records the class; the action comes from AD-10's table and the exit passes through verbatim. The runtime refuses warn anywhere else.",
+          "enum": ["block", "warn"]
+        },
+        "timeoutMs": {
+          "description": "A gate check only: how long the child may run, in milliseconds, before the runtime kills its process group and records exit 12. Defaults to 600000 (ten minutes) when absent; bounded to 1000 through 3600000.",
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 3600000
+        },
+        "evidence": {
+          "description": "The paths, relative to the evaluation folder, where the check leaves its evidence.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!/)(?![\\s\\S]*(?:^|/)\\.\\.(?:/|$))[^\\\\\\u0000-\\u001f]+$"
+          }
+        },
+        "placement": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["tier", "defaultTier"],
+          "properties": {
+            "tier": { "$ref": "#/$defs/Tier" },
+            "defaultTier": {
+              "description": "The tier AD-10's default table gives this check.",
+              "$ref": "#/$defs/Tier"
+            },
+            "reason": {
+              "description": "What the repository inspection found that placed the check here. Required whenever tier differs from defaultTier.",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "if": { "properties": { "kind": { "const": "evaluate" } }, "required": ["kind"] },
+      "then": { "properties": { "id": { "$ref": "#/$defs/EvaluateCheckId" }, "timeoutMs": false } }
+    }
+  }
+}

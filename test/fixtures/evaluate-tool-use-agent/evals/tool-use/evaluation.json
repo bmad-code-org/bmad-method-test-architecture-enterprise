@@ -1,6 +1,10 @@
 {
   "schemaVersion": 1,
   "evaluationId": "calling-agent-tool-use",
+  "requirements": {
+    "path": "requirements.md",
+    "digest": "sha256:64382aff7ba66dc502fc4103b3195c7d55c86b63493bc8967cb4abab978a8de8"
+  },
   "targetKind": "agent",
   "interface": "cli",
   "registry": [

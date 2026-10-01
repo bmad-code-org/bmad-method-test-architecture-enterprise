@@ -564,10 +564,11 @@ function makePrivateParent(scratch) {
  *
  * @param {string[]} scratch
  * @param {string} prefix the directory's name prefix
+ * @param {string} [root] the directory it is made in; the system's temporary directory when absent
  * @returns {string}
  */
-function makeScratchDirectory(scratch, prefix) {
-  const directory = fs.mkdtempSync(path.join(scratch.privateParent ?? os.tmpdir(), prefix));
+function makeScratchDirectory(scratch, prefix, root = scratch.privateParent ?? os.tmpdir()) {
+  const directory = fs.mkdtempSync(path.join(root, prefix));
   scratch.push(directory);
   return directory;
 }
@@ -1733,7 +1734,9 @@ module.exports = {
   makePrivateParent,
   makeScratchDirectory,
   heldPrivateRoot,
+  privateRootBase,
   privateRootIn,
+  privateRootName,
   realPathLoosely,
   releaseScratchDirectory,
   removeScratchDirectory,

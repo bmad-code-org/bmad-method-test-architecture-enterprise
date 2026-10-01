@@ -3,7 +3,7 @@
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "tea-evaluate-preflight-fixture",
-  "sourceSpecDigest": "sha256:4a8e6f1f2a7c1d7e0c6b8a0d7c0e2f5b9a3d1c4e6f8a0b2c4d6e8f0a1b3c5d7e",
+  "sourceSpecDigest": "sha256:921abb71e20b4abdc8478e1f8f90e79fc6003c48c823c9cd73d0453c32674e7a",
   "behaviors": [
     {
       "id": "B-001",

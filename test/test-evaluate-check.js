@@ -366,7 +366,10 @@ async function checkValidFixture() {
   );
 }
 
-/** Story 1.12's statement is an optional additive manifest field until earlier fixtures are backfilled in Story 2.2. */
+/**
+ * Story 1.12's requirements statement and Story 2.2's contract-source freshness: every evaluation names a committed
+ * `requirements.md`, and the contract's `sourceSpecDigest` is the digest of exactly those bytes.
+ */
 async function checkRequirementsStatement() {
   const engine = await loadEngine();
   const assets = path.join(PROJECT_ROOT, 'src', 'workflows', 'testarch', 'bmad-testarch-evaluate', 'assets');
@@ -383,6 +386,8 @@ async function checkRequirementsStatement() {
   const fromStarter = copyValid();
   fs.writeFileSync(path.join(fromStarter, 'requirements.md'), starterBytes);
   editJson(fromStarter, 'evaluation.json', (value) => (value.requirements = starter.requirements));
+  // The contract stage stamps the statement's digest; a fixture built from the starter carries it the same way.
+  editJson(fromStarter, 'contract.json', (value) => (value.sourceSpecDigest = starter.requirements.digest));
   const starterCheck = runCli(['check', '--evaluation', fromStarter]);
   check(
     starterCheck.status === 0,
@@ -395,15 +400,66 @@ async function checkRequirementsStatement() {
     const folder = copyValid();
     fs.writeFileSync(path.join(folder, 'requirements.md'), bytes);
     editJson(folder, 'evaluation.json', (value) => (value.requirements = { path: 'requirements.md', digest: recorded }));
+    editJson(folder, 'contract.json', (value) => (value.sourceSpecDigest = recorded));
     return folder;
   };
 
   const valid = withStatement();
   const accepted = runCli(['check', '--evaluation', valid]);
   check(accepted.status === 0, `a committed requirements statement exited ${accepted.status}; expected 0\n${accepted.output}`);
+
+  // Contract-source freshness (Story 2.2): a requirements change the contract has not absorbed blocks the pull request.
+  // One byte of the statement changes, and evaluation.json is re-recorded, so the contract's sourceSpecDigest is the only
+  // thing left that disagrees with the committed bytes.
+  const edited = withStatement();
+  const editedBytes = Buffer.concat([bytes, Buffer.from(' ')]);
+  fs.writeFileSync(path.join(edited, 'requirements.md'), editedBytes);
+  editJson(edited, 'evaluation.json', (value) => (value.requirements.digest = engine.digestBytes(editedBytes)));
+  const editedResult = runCli(['check', '--evaluation', edited]);
   check(
-    JSON.parse(fs.readFileSync(path.join(valid, 'contract.json'), 'utf8')).sourceSpecDigest !== recorded,
-    'the fixture contract unexpectedly has the requirements digest, so this case cannot prove Story 2.2 freshness is deferred',
+    editedResult.status === 10,
+    `a requirements edit the contract did not absorb exited ${editedResult.status}; expected 10\n${editedResult.output}`,
+  );
+  check(
+    editedResult.stdout.includes('contract.json: [requirements] sourceSpecDigest') &&
+      editedResult.stdout.includes(engine.digestBytes(editedBytes)),
+    `a requirements edit the contract did not absorb lacks the freshness finding\n${editedResult.output}`,
+  );
+  const staleContract = withStatement();
+  editJson(staleContract, 'contract.json', (value) => (value.sourceSpecDigest = `sha256:${'0'.repeat(64)}`));
+  const staleContractResult = runCli(['check', '--evaluation', staleContract]);
+  check(
+    staleContractResult.status === 10,
+    `a stale sourceSpecDigest exited ${staleContractResult.status}; expected 10\n${staleContractResult.output}`,
+  );
+  check(
+    staleContractResult.stdout.includes('contract.json: [requirements] sourceSpecDigest'),
+    `a stale sourceSpecDigest lacks the freshness finding\n${staleContractResult.output}`,
+  );
+  // A null or absent sourceSpecDigest is a finding: the contract is held to the statement like any other value.
+  for (const [label, edit] of [
+    ['a null sourceSpecDigest', (value) => (value.sourceSpecDigest = null)],
+    ['an absent sourceSpecDigest', (value) => delete value.sourceSpecDigest],
+  ]) {
+    const unstamped = withStatement();
+    editJson(unstamped, 'contract.json', edit);
+    const unstampedResult = runCli(['check', '--evaluation', unstamped]);
+    check(unstampedResult.status === 10, `${label} exited ${unstampedResult.status}; expected 10\n${unstampedResult.output}`);
+    check(
+      unstampedResult.stdout.includes('contract.json: [requirements] sourceSpecDigest'),
+      `${label} lacks the freshness finding\n${unstampedResult.output}`,
+    );
+  }
+  const undeclared = withStatement();
+  editJson(undeclared, 'evaluation.json', (value) => delete value.requirements);
+  const undeclaredResult = runCli(['check', '--evaluation', undeclared]);
+  check(
+    undeclaredResult.status === 10,
+    `an evaluation with no requirements statement exited ${undeclaredResult.status}; expected 10\n${undeclaredResult.output}`,
+  );
+  check(
+    undeclaredResult.stdout.includes('evaluation.json: [requirements] evaluation.json declares no requirements statement'),
+    `an evaluation with no requirements statement lacks its finding\n${undeclaredResult.output}`,
   );
 
   for (const [label, edit, named] of [
@@ -492,6 +548,58 @@ async function checkRequirementsStatement() {
       );
     }
   }
+}
+
+/** Every `evaluation.json` under `directory`, found without following a link. */
+function evaluationManifestsUnder(directory) {
+  const found = [];
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    const file = path.join(directory, entry.name);
+    if (entry.isDirectory()) found.push(...evaluationManifestsUnder(file));
+    else if (entry.isFile() && entry.name === 'evaluation.json') found.push(file);
+  }
+  return found.sort();
+}
+
+/**
+ * Story 2.2: every evaluation committed under `test/fixtures/` and `test/evaluations/` names a `requirements.md` whose
+ * digest is the one its contract's `sourceSpecDigest` carries, so the freshness rule holds for every evaluation `check`
+ * runs over. Negative cases are built in temp folders at test time, so no committed folder holds a failing
+ * `evaluation.json` and the walk sees only evaluations meant to pass. Deleting one fixture's statement makes `check`
+ * exit 10, which the last case observes in a copy.
+ */
+async function checkEveryEvaluationHasItsStatement() {
+  const engine = await loadEngine();
+  const manifests = ['fixtures', 'evaluations'].flatMap((root) => evaluationManifestsUnder(path.join(PROJECT_ROOT, 'test', root)));
+  check(
+    manifests.length >= 14,
+    `the walk found ${manifests.length} evaluation.json file(s); expected at least the 14 committed evaluations`,
+  );
+  for (const manifest of manifests) {
+    const folder = path.dirname(manifest);
+    const name = path.relative(PROJECT_ROOT, folder);
+    const evaluation = JSON.parse(fs.readFileSync(manifest, 'utf8'));
+    const statement = evaluation.requirements;
+    check(statement?.path === 'requirements.md', `${name} names no requirements.md statement`);
+    if (statement?.path !== 'requirements.md') continue;
+    const file = path.join(folder, statement.path);
+    check(fs.existsSync(file), `${name} names ${statement.path}, which is not committed`);
+    if (!fs.existsSync(file)) continue;
+    const digest = engine.digestBytes(fs.readFileSync(file));
+    check(statement.digest === digest, `${name}: evaluation.json records ${statement.digest}; requirements.md digests to ${digest}`);
+    const contract = JSON.parse(fs.readFileSync(path.join(folder, 'contract.json'), 'utf8'));
+    check(
+      contract.sourceSpecDigest === digest,
+      `${name}: the contract's sourceSpecDigest ${contract.sourceSpecDigest} is not the statement's digest ${digest}`,
+    );
+  }
+  // Deleting a statement from a copy of one back-filled fixture makes check exit 10, naming the statement.
+  const copy = path.join(tempDir('walk'), 'valid');
+  fs.cpSync(VALID, copy, { recursive: true });
+  fs.rmSync(path.join(copy, 'requirements.md'));
+  const result = runCli(['check', '--evaluation', copy]);
+  check(result.status === 10, `a fixture with its requirements.md deleted exited ${result.status}; expected 10\n${result.output}`);
+  check(result.stdout.includes('requirements.md: [requirements]'), `the deleted statement lacks its finding\n${result.output}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -3237,6 +3345,7 @@ async function main() {
   try {
     await checkValidFixture();
     await checkRequirementsStatement();
+    await checkEveryEvaluationHasItsStatement();
     checkRegistry();
     checkEngineAbsent();
     checkUsage();
