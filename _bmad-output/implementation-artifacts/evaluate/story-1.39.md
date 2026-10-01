@@ -22,7 +22,7 @@ context:
 
 **Problem:** a `captured` binding sends the value an earlier step's target printed. A command step that value makes too large for the system's argument and environment limit fails to launch, and eval-quality's command-line adapter reports that as a plain `port-failure` carrying the spawn's `E2BIG` as its cause, the same fault as a target that could not start. The run stops with exit 12 and reads the printing target's own output as an unfit harness. Story 1.18 already skips a step whose captured value the request cannot carry for every reason it can decide before the launch (`captured-value-unsendable`); the size limit belongs to the system, and only the launch knows it.
 
-**Approach:** eval-quality's command-line adapter reports a launch the system refused for its argument and environment size as a `port-failure` fault carrying the `portFailureReason` `launch-too-large` (released as a minor version; the coordinator makes that change in eval-quality first). TeA's arm runner reads that field on a command step: a step with at least one `captured` binding is not issued and the arm's evidence lists it as `captured-value-unsendable`, naming each captured binding of the step and eval-quality's reason; a step with only literal bindings keeps stopping the run with exit 12, since the contract itself cannot be sent. TeA's devDependency and peer floor rise to the release with the engine check at start and end.
+**Approach:** eval-quality's command-line adapter reports a launch the system refused for its argument and environment size as a `port-failure` fault carrying the `portFailureReason` `launch-too-large` (released as a minor version; the coordinator makes that change in eval-quality first). TeA's arm runner reads that field on a command step: a step with at least one `captured` binding is not issued and the arm's evidence lists it as `captured-value-unsendable`, naming each captured binding of its argument, option and environment channels and eval-quality's reason; a step with no captured binding in those channels keeps stopping the run with exit 12, since the contract itself cannot be sent. TeA's devDependency and peer floor rise to the release with the engine check at start and end.
 
 ## Boundaries & Constraints
 
@@ -33,7 +33,7 @@ context:
 **Decisions (coordinator, owner-delegated):**
 
 - The reason is `launch-too-large`, carried on `fault.portFailureReason` (eval-quality's typed `PORT_FAILURE_REASONS`). It rides on a field of its own because widening `RuntimeFault.reason` would break TypeScript consumers that narrow it (engine review, 2026-10-01); `reason` stays the policy denial's.
-- The skip names every captured binding of the step (`binding`, `pointer`, and a `reason` text that carries eval-quality's reason), since a refused launch cannot say which value made it too large.
+- The skip names every captured binding of the step's argument, option and environment channels (a captured stdin value is written to a pipe after the spawn and cannot make a launch too large; the build review found the first wording hid an oversized literal behind one) (`binding`, `pointer`, and a `reason` text that carries eval-quality's reason), since a refused launch cannot say which value made it too large.
 - The skip covers command steps only: an HTTP request or a tool call has no spawn limit in this adapter, and the MCP adapter's spawn is a separate story if a target ever needs it.
 - A step with captured and literal bindings together is a skipped step; the literals alone are not the cause the system can name.
 
@@ -110,6 +110,7 @@ context:
 
 - The plan named `reason` as the carrier; the engine review moved the value to `portFailureReason`, so the arm reads and records that field. Amended in place, dated 2026-10-01, in `epics.md` (Story 1.39's engine consumption paragraph) and `test-design-epic-1.md` (Story 1.39's section).
 - `ARCHITECTURE-SPINE.md` AD-5's Packaging bullet, the AD-20 rule and the dependency table name the floor `>=4.6.0` with a dated 2026-10-01 note (they still said `>=4.3.0`).
+- The frozen Decision "names every captured binding of the step" narrows to the argument, option and environment channels (round 1, adversarial lens); the reference, CHANGELOG and test-design section say so (round 2).
 - The fault record gains `portFailureReason`, which the plan does not mention; the coordinator's message asked for it.
 - The unit set is wider than the plan's two units: it also holds the other fault shapes, the wrapper, the record and the non-command kinds.
 - The integration case uses a 2 MiB identifier, not the 4 MiB the brief suggests, which exceeds both limits and keeps the run artifacts smaller.
@@ -127,6 +128,14 @@ context:
 | Skip shape pinned only by `includes`                 | fixed   | test lens: the whole entry is compared with `JSON.stringify` against the exact reason text at the integration case, and each binding's keys are asserted in both units; a record leaking the value fails    |
 | No confined integration run                          | fixed   | test lens: `checkOversizedValueConfined` runs the same case with confinement on and the store log off, and reads `run.json`'s `confinement`                                                                 |
 | Guidance fixture registry differs (CI, shard 3)      | fixed   | `RECORDS_OVERSIZE_ID` left the committed fixture registry, which the skill's `adapters.md` embeds; each oversized case adds it to its own project copy                                                      |
+
+### Round 2 (PR #270: regression pass on opus at e696e852, and CI)
+
+| Finding                                                                     | Verdict | Evidence and disposition                                                                                                                                                                                               |
+| --------------------------------------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Docs say the skip names every captured binding, stdin bindings are left out | fixed   | the reference, CHANGELOG, `arm.js` header, test-design section and the frozen Decision now say argument, option and environment channels; a captured stdin value is never named; the reading case holds both sentences |
+
+Round 2 found no other defect: `PROCESS_CHANNELS` is exactly the three cli channel names, the guard accepts `>=4.6.0`, `^4.6.0`, `>=4.6.0 <6`, `4.6.0` and `~4.6.0` and refuses `>4.5.0`, `^4.5.0`, `>=4.5.9`, `>=4.6.0-rc.1`, `4.x` and `>=4.6.0 || <1`, the confined case left no temp directory or process, and the guidance fixture registry is byte-identical to main.
 
 ## Revert observations
 

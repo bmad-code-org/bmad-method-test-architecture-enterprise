@@ -1693,8 +1693,9 @@ function checkReference() {
     skipped?.includes("too large for the system's argument and environment limit") === true &&
       skipped.includes('`launch-too-large`') &&
       skipped.includes('naming each of its captured bindings') &&
-      skipped.includes('only literal bindings that the system refuses for its size still stops the run with exit 12'),
-    'the reference\'s "### Steps not issued" does not name the system\'s argument and environment limit among the values a request cannot carry, its port-failure reason `launch-too-large`, and that a step with only literal bindings still stops the run',
+      skipped.includes('no captured binding in those channels that the system refuses for its size still stops the run with exit 12') &&
+      skipped.includes('a captured `stdin` value is written after the launch and is never named'),
+    'the reference\'s "### Steps not issued" does not name the system\'s argument and environment limit among the values a request cannot carry, its port-failure reason `launch-too-large`, and that a step with no captured binding in the process channels still stops the run, a stdin value never named',
   );
 }
 

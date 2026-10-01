@@ -23,15 +23,17 @@
  * not issued, or its observation lacks the value), is not issued: it gets no
  * observation, and `steps` records it as skipped with the reason, so
  * eval-quality reads the missing observation as it reads any evidence that
- * does not exist. A command step with a captured binding that the system
- * refuses to launch for the size of its arguments and environment (eval-quality's
- * `port-failure` fault whose `portFailureReason` is `launch-too-large`) is not issued either,
- * and `steps` records it as `captured-value-unsendable` naming each captured
- * binding; only the launch knows the system's limit, so the arm computes none.
+ * does not exist. A command step with a captured argument, option or environment
+ * binding that the system refuses to launch for the size of its arguments and
+ * environment (eval-quality's `port-failure` fault whose `portFailureReason` is
+ * `launch-too-large`) is not issued either, and `steps` records it as
+ * `captured-value-unsendable` naming each such binding; only the launch knows the
+ * system's limit, so the arm computes none. A captured stdin value is written
+ * after the launch and is never named.
  * A binding this release cannot materialize, an operation of another kind and
- * a command step with only literal bindings the system refuses to launch stop
- * the arm with an `ArmError` (exit 12): the run cannot send the request the
- * contract means.
+ * a command step with no captured binding in those channels that the system
+ * refuses to launch stop the arm with an `ArmError` (exit 12): the run cannot
+ * send the request the contract means.
  * A cycle over the `after` and capture edges never reaches an arm, since
  * `eval-quality compile` refuses it (`binding-cycle`, `nested-temporal-clause`);
  * if one does, the arm stops with an `ArmError`.
