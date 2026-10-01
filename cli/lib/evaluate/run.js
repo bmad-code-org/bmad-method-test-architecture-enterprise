@@ -1161,8 +1161,11 @@ async function runTrialSets(given) {
   // A sealed-brief agent's own calls count against the contract's budget in each trial, beside the plan's steps.
   const callsPerTrial =
     (contract.interactionPlan ?? []).length + (kind === 'sealed-brief-agent' ? (contract.budgets?.maxToolCalls ?? 0) : 0);
-  // The evaluator's wall clock counts toward a trial's ceiling beside the plan's.
-  const trialCeilingMs = stepCeilingMs + (convertsRows(kind) ? layer.evaluator.timeoutMs : 0);
+  // The evaluator's wall clock counts toward a trial's ceiling beside the plan's. A command evaluator's trial also
+  // reads its declared frameworks twice (before the launch and after the evaluator), each probe bounded by the
+  // evaluator's timeout and run in turn; an empty declaration adds nothing.
+  const probePassesMs = kind === 'command' ? 2 * layer.frameworks.length * layer.evaluator.timeoutMs : 0;
+  const trialCeilingMs = stepCeilingMs + (convertsRows(kind) ? layer.evaluator.timeoutMs : 0) + probePassesMs;
   // The digest of the bytes the runtime wrote to a run-directory file, which `score` holds each file to.
   const bytesDigest = (file) => engine.digestBytes(writer.read(file));
   const sealing = {

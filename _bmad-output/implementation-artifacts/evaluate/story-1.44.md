@@ -303,6 +303,14 @@ The `LEARNED.md` reader closed a code fence on any later fence marker, whatever 
 New cases in `test-evaluate-check.js`: accepted (clean cases) are a longer fence quoting a shorter one, a tilde line inside a backtick block, a tilde fence quoting the heading and an indented fence quoting the heading; refused (`FRAMEWORK_CASES`) is an inline span line followed by a stale record, which must still be read.
 Revert (the any-marker closing restored in a scratch copy): 5 of 987 `test:evaluate-check` checks fail (three in the span-line case, one each in the longer-fence and tilde-line cases).
 
+### Round 3 (CodeRabbit, PR #286): the trial wall-clock ceiling
+
+`run.js` reserved one evaluator timeout in a trial's ceiling (`trialCeilingMs`), but a command trial also reads its declared frameworks before the launch and after the evaluator (`holdLayer` and `frameworkChange`), each probe bounded by `evaluator.timeoutMs` and run in turn, and that time lands in the trial's `elapsedMs`; the sealed `maxWallClockMinutes` derived from the ceiling could sit below what a trial records.
+The ceiling for `kind === 'command'` now adds `2 * frameworks.length * evaluator.timeoutMs`; every other kind and an empty declaration add zero, so a dependency-free command evaluator's manifests keep their bytes (the existing `checkCommandRowShapes` assertion of `(30000 + 60000) * 3 / 60000` minutes still holds).
+Tests in `test/test-evaluate-evaluators.js` (group `agents`): the first run of `checkInstalledFrameworks` (one framework) and the new `checkProbePassesInCeiling` (two frameworks, 60 second timeout) assert the manifest's `maxWallClockMinutes` is `(30000 + 60000 + 2 * N * 60000) * 3 / 60000`, 10.5 and 16.5 minutes.
+Revert (the probe-pass term set to zero in a scratch copy): 2 of 114 `--frameworks-only` checks fail, both reading 4.5 minutes.
+Story 1.71 bounds a probe with its own timeout, which later shrinks this term (the term then uses the probe's timeout, not the evaluator's).
+
 ### Merge with Story 2.2 (origin/main #284)
 
 `3f863342` merges `origin/main` (Story 2.2, `tea-evaluate ci`).

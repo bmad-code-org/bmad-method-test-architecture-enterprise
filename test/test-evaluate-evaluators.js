@@ -4054,6 +4054,40 @@ function schemaProblems(name) {
   return (value) => (validate(value) ? [] : (validate.errors ?? []).map((error) => `${error.instancePath || '/'} ${error.message}`));
 }
 
+/**
+ * The wall-clock ceiling a command trial can record holds the framework probes (Story 1.44, round 3): two passes of one
+ * probe per declared framework, each bounded by the evaluator's timeout. Two frameworks at a 60 second timeout add 240
+ * seconds to the 30 second plan step and the 60 second evaluator, and an empty declaration adds none.
+ */
+function checkProbePassesInCeiling() {
+  const project = frameworkProject('framework-two-probes', {
+    extra: ({ folder, repository }) => {
+      installFramework(repository, '1.0.0');
+      writeJson(path.join(repository, 'node_modules', 'probe-fw-two', 'package.json'), { name: 'probe-fw-two', version: '2.0.0' });
+      writeJson(path.join(folder, 'evaluator', 'frameworks.json'), {
+        schemaVersion: 1,
+        frameworks: [
+          { package: FRAMEWORK, version: '1.0.0', probe: SHIPPED_PROBE },
+          { package: 'probe-fw-two', version: '2.0.0', probe: { command: 'evaluator/installed-version.mjs', args: ['probe-fw-two'] } },
+        ],
+      });
+      fs.writeFileSync(
+        path.join(folder, 'evaluator', 'LEARNED.md'),
+        `# Learned evaluation framework\n\n## Framework and installed version\n\n- Installed package and version: \`${FRAMEWORK}@1.0.0\`, \`probe-fw-two@2.0.0\`\n`,
+      );
+    },
+  });
+  const ran = evaluate(['run', '--evaluation', project.folder], project.env);
+  check(ran.status === 0, `a run declaring two frameworks exited ${ran.status}\n${ran.output}`);
+  const runDirectory = runDirectoryOf(project.folder);
+  if (ran.status !== 0 || runDirectory === null) return;
+  const manifest = readJson(path.join(runDirectory, 'trial-sets', 'P-001', 'isolation-manifest.json'));
+  check(
+    manifest.resourceCeilings.maxWallClockMinutes === ((30_000 + 60_000 + 2 * 2 * 60_000) * TRIALS) / 60_000,
+    `a command run declaring two frameworks: the manifest allows ${manifest.resourceCeilings.maxWallClockMinutes} minutes; expected ${((30_000 + 60_000 + 240_000) * TRIALS) / 60_000}`,
+  );
+}
+
 /** A stopped run's directory holds no sealed trial record and no trial index. */
 function checkNoSealedRecord(what, runDirectory) {
   check(
@@ -4097,6 +4131,12 @@ async function checkInstalledFrameworks() {
   check(
     canonical(firstRecord.evaluator.frameworks) === canonical(observed),
     "run.json's evaluator does not record the observed frameworks",
+  );
+  // A trial reads the declared framework twice beside the evaluator's launch, so the manifest's wall-clock ceiling holds both probe passes.
+  const probedManifest = readJson(path.join(firstRun, 'trial-sets', 'P-001', 'isolation-manifest.json'));
+  check(
+    probedManifest.resourceCeilings.maxWallClockMinutes === ((30_000 + 60_000 + 2 * 1 * 60_000) * TRIALS) / 60_000,
+    `a command run declaring one framework: the manifest allows ${probedManifest.resourceCeilings.maxWallClockMinutes} minutes; expected the plan step, the evaluator and two probe passes per trial`,
   );
   const firstScore = scoreRun(project, 'the run with the declared framework');
 
@@ -4565,6 +4605,7 @@ const CASES = [
   { name: 'the units', body: checkUnits, group: 'evaluators' },
   { name: 'a framework probe reads one observation or a fault', body: checkFrameworkProbeShapes, group: 'evaluators' },
   { name: 'run refuses a bad framework declaration', body: checkFrameworkDeclarationRefusedByRun, group: 'agents' },
+  { name: 'the probe passes are inside the trial ceiling', body: checkProbePassesInCeiling, group: 'agents' },
   { name: 'the installed framework versions bind the configuration', body: checkInstalledFrameworks, group: 'agents' },
   { name: 'the installed framework versions held during the run', body: checkInstalledFrameworksMidRun, group: 'agents' },
   { name: 'the installed framework versions held around calibration', body: checkInstalledFrameworksCalibration, group: 'agents' },
@@ -4649,6 +4690,7 @@ async function main() {
       await runCase('the units', checkUnits);
       await runCase('a framework probe reads one observation or a fault', checkFrameworkProbeShapes);
       await runCase('run refuses a bad framework declaration', checkFrameworkDeclarationRefusedByRun);
+      await runCase('the probe passes are inside the trial ceiling', checkProbePassesInCeiling);
       await runCase('the installed framework versions bind the configuration', checkInstalledFrameworks);
       await runCase('the installed framework versions held during the run', checkInstalledFrameworksMidRun);
       await runCase('the installed framework versions held around calibration', checkInstalledFrameworksCalibration);
