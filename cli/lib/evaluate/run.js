@@ -218,11 +218,22 @@ function refusal({ folder, selectedProbeIds = null }) {
  * @param {string} folder the resolved evaluation folder
  * @param {object} [options]
  * @param {boolean} [options.fromWorkingTree]
+ * @param {string} [options.partition] `development` or `held-out`; everything when absent
+ * @param {number} [options.trials] trials per arm, for a caller that asks for a count other than `evaluation.json`'s
+ *   (`tea-evaluate ci`'s twin run asks for the scoring policy's `minimumTrialCount`); the evaluation's own when absent
  * @param {NodeJS.ProcessEnv} [options.env]
  * @param {(line: string) => void} [options.log]
  * @returns {Promise<PreflightOutcome>}
  */
-function runRunCommand(folder, { fromWorkingTree = false, partition, seed, env = process.env, log = () => {} } = {}) {
+function runRunCommand(folder, { fromWorkingTree = false, partition, trials, seed, env = process.env, log = () => {} } = {}) {
+  if (trials !== undefined && !(Number.isInteger(trials) && trials >= 1))
+    return Promise.resolve(
+      new PreflightOutcome({
+        stage: 'check',
+        exitCode: 64,
+        message: `unknown trial count ${JSON.stringify(trials)}; choose a positive integer`,
+      }),
+    );
   if (partition !== undefined && !['development', 'held-out'].includes(partition))
     return Promise.resolve(
       new PreflightOutcome({
@@ -285,6 +296,7 @@ function runRunCommand(folder, { fromWorkingTree = false, partition, seed, env =
         heldOutProbes: [...heldOut],
         operationPhases: structuredClone(context.evaluation.operationPhases ?? {}),
         partition: partition ?? 'both',
+        trials: trials ?? null,
         calibration: readCalibration(folder),
         layer,
       };
@@ -1025,7 +1037,7 @@ async function runTrialSets(given) {
     }
   }
 
-  const trialCount = evaluation.trials;
+  const trialCount = snapshot.trials ?? evaluation.trials;
   if (sealed === null) throw noStages();
   const { contractDigest, sealedBriefDigest } = sealed;
   const { conditions, layer } = snapshot;

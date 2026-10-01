@@ -753,6 +753,10 @@
           "reason": "an eval-quality published schema type, not a TEA declaration"
         },
         {
+          "token": "contractVerdict",
+          "reason": "a field of an eval-quality evidence artifact that holds its CONCERNS or PASS rung, not a TEA declaration"
+        },
+        {
           "token": "structuredContent",
           "reason": "a field of the MCP protocol's tool result, not a TEA declaration"
         },

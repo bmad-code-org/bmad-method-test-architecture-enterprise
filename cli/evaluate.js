@@ -19,15 +19,25 @@
  *                                             compare a scored run's evidence with baseline/ through eval-quality's
  *                                             compareDominance (compared, first-run or refused, every one exit 0), or
  *                                             with --accept replace baseline/ with a byte-identical snapshot of the run
+ *   tea-evaluate ci --evaluation <path> --tier <pr|merge|scheduled|release>
+ *                                             run exactly the checks ci/evaluation-ci-plan.json places on the tier, in
+ *                                             plan order, each one's exit, stdout and stderr kept under
+ *                                             runs/<invocationId>/; the stage exits pass through verbatim and the final
+ *                                             exit is the most severe blocking one (64, 12, 5, 4, 3, 13, 11, 10, 2, 1, 0)
  *
  * `--evaluation` names the folder or its evaluation.json. Nothing else locates
  * an evaluation: no default path and no project configuration.
  *
  * Exit codes (AD-10):
- *   0   success
+ *   0   success (ci: every check passed or warned)
+ *   1   ci only: a gate check's own exit 1, a repository policy violation, and any gate exit AD-10's table does not
+ *       name, passed through verbatim and ranked after every other blocking exit
  *   2-5 preflight, run and score: an eval-quality stage's own exit, passed through verbatim (2, FAIL, from
  *       score alone; score passes on the most severe of its per-probe exits); a sealed-brief agent
  *       qualification records its score exit 3 and stops the run with 12 on any exit other than 0, 2 or 3
+ *   2-5 also ci: the exit of each stage it runs (compile, seal, the replay's preflight and score, a live check's
+ *       preflight, run and score), passed through the same way; 2 is also a probe class below its strength floor
+ *       on the release tier
  *   10  authoring defect: every finding is printed, one per line (digest: an indexed entry it cannot digest;
  *       preflight: a leg the registry does not authorize, or a mutation whose find text does not occur
  *       exactly once)
@@ -35,6 +45,11 @@
  *       or an entry that is not a regular file, or a baseline artifact that does not meet its schema; compare
  *       --accept: a run whose run.json says dirty: true, a probe with no evidence artifact, or a member a replay
  *       through score needs that is missing, a link or not a regular file (nothing is written under baseline/)
+ *   10  also ci: a plan that fails its schema or its placement rules (a tier moved off the default with no reason, a
+ *       deterministic check that needs no secret placed off pr, a live check on pr, a command not led by its tool, a
+ *       warn enforcement where AD-10 gives no warn) or that sits in a ci/ directory that is a link; a baseline that
+ *       fails its schema, holds anything in scores/ besides the accepted score invocation, or holds a probe or
+ *       contract that is not JSON; a check's own exit 10 (a check finding, a conformance run that exits 1) passes through
  *   10  also run: a trial request the registry denies, no probe or no scoring policy, a clean control whose
  *       behavior declares no oracle, or a materialized probe eval-quality's checks refuse; score: a run
  *       artifact that does not meet its schema or does not agree with its run, before any engine call
@@ -44,6 +59,9 @@
  *       oracle rejects or the disciplined oracle accepts; run: a rubric judge whose calibration agreement is
  *       below judgeCalibration.minimumAgreement, or a sealed-brief agent whose agreement on an arm is below
  *       evaluatorQualification.minimumAgreement
+ *   11  also ci: a stale baseline on the release tier (the current contract, corpus or policy digest, or the strength
+ *       floors, differ from the baseline's), a baseline oracle outcome whose corroboration is disagrees, or
+ *       not-evaluable or unreached for an oracle a behavior requires, and a judge below its calibration agreement
  *   12  infrastructure: the optional eval-quality peer is not installed; preflight: a workspace that cannot
  *       be made, a target that cannot launch, a qualification arm step that exits an infrastructure code,
  *       a restore that fails, a restored workspace that does not pass again, a leg that could not run, a
@@ -55,6 +73,15 @@
  *       entry the runtime did not write or a file whose bytes differ from the ones it wrote; score: a score call that could not
  *       run or exited with a code the CLI does not document; compare --accept: a baseline that could not be staged or
  *       swapped in (the old baseline/ is untouched)
+ *   12  also ci: an engine stage killed or exiting a code the CLI does not document (the replay's included), a gate
+ *       that cannot start, runs past its timeoutMs or prints more than 64 MiB, a conformance run that cannot finish, a
+ *       gameability arm score did not score, a stale-baseline check that cannot run, or a CI run directory that
+ *       cannot be written
+ *   13  evaluation evidence drift: ci's pr replay of the committed baseline through eval-quality preflight and score
+ *       produced evidence that differs from the baseline's, or lacks or adds a file (the stage exits themselves pass
+ *       through when they are not success or FAIL)
+ *   64  also ci: no ci/evaluation-ci-plan.json, an unknown --tier, a check that needs a baseline/ that is absent, an
+ *       api-conformance check over an evaluation with no HTTP target, or a gate's own 64 passed through
  *   64  wiring defect: no --evaluation resolves, or the command line is malformed (preflight, run and score: or
  *       eval-quality's own 64; score: no run to score, a --run naming no run or a preflight, or a run that did
  *       not complete; compare: the same, and a run with no score invocation; a sealed-brief agent qualification's score call that exits 64 stops the run with 12)
@@ -73,45 +100,22 @@ const { runPreflightCommand } = require('./lib/evaluate/preflight');
 const { runRunCommand } = require('./lib/evaluate/run');
 const { runCompareCommand } = require('./lib/evaluate/compare');
 const { runScoreCommand } = require('./lib/evaluate/score');
+const { runCiCommand } = require('./lib/evaluate/ci');
+const { TIERS } = require('./lib/evaluate/ci-plan');
+const { escapeUnprintable, findingLine } = require('./lib/evaluate/finding-lines');
 
 const EXIT_CODES = {
   ok: 0,
   authoring: 10,
   weakness: 11,
   infrastructure: 12,
+  drift: 13,
   usage: 64,
 };
 
 const NAME = 'tea-evaluate';
 
 class UsageError extends Error {}
-
-// C0 and C1 controls, DEL, the line and paragraph separators and the
-// bidirectional formatting characters: any of them in a printed finding could
-// start a forged finding line or reorder what a reader sees.
-// eslint-disable-next-line no-control-regex
-const UNPRINTABLE = /[\u0000-\u001F\u007F-\u009F\u061C\u200E\u200F\u2028\u2029\u202A-\u202E\u2066-\u2069]/gu;
-const SHORT_ESCAPES = { '\n': String.raw`\n`, '\r': String.raw`\r`, '\t': String.raw`\t` };
-
-/** `text` with every unprintable character written as an escape (`\n`, `\u202E`). */
-function escapeUnprintable(text) {
-  return String(text).replaceAll(
-    UNPRINTABLE,
-    (character) => SHORT_ESCAPES[character] ?? String.raw`\u` + character.codePointAt(0).toString(16).toUpperCase().padStart(4, '0'),
-  );
-}
-
-/**
- * One finding as exactly one printed line. A file name holding an unprintable
- * character is quoted as well as escaped, so the reader can tell the name from
- * the text after it; a message is escaped in place.
- */
-function findingLine(file, rule, message) {
-  const name = String(file);
-  const escaped = escapeUnprintable(name);
-  const printedName = escaped === name ? name : JSON.stringify(name).replaceAll(UNPRINTABLE, (character) => escapeUnprintable(character));
-  return `${printedName}: [${rule}] ${escapeUnprintable(message)}\n`;
-}
 
 function folderFrom(options) {
   const resolved = resolveEvaluationFolder(options.evaluation);
@@ -192,11 +196,20 @@ function compareCommand(options) {
   return runDriven('compare', runCompareCommand, options, { run: options.run, accept: options.accept === true });
 }
 
+async function ciCommand(options) {
+  if (!TIERS.includes(options.tier)) {
+    throw new UsageError(
+      `--tier ${options.tier === undefined ? 'is required' : `${JSON.stringify(options.tier)} is not a tier`}: choose ${TIERS.join(', ')}`,
+    );
+  }
+  return runDriven('ci', runCiCommand, options, { tier: options.tier });
+}
+
 function buildProgram(run) {
   const program = new Command();
   program
     .name(NAME)
-    .description('Validate, digest, preflight, run, score and compare an Evaluate evaluation folder.')
+    .description('Validate, digest, preflight, run, score, compare and run the CI tiers of an Evaluate evaluation folder.')
     .showHelpAfterError()
     .exitOverride()
     .configureOutput({ writeErr: (text) => process.stderr.write(text) });
@@ -241,6 +254,14 @@ function buildProgram(run) {
     .option('--run <invocationId>', 'the run to compare or accept; the most recent run when omitted')
     .option('--accept', 'replace baseline/ with a byte-identical snapshot of the run; refused for a dirty run')
     .action((options) => run(compareCommand, options));
+  program
+    .command('ci')
+    .description(
+      'Run the checks ci/evaluation-ci-plan.json places on a tier, passing every stage exit through; the final exit is the most severe blocking one.',
+    )
+    .option('--evaluation <path>', 'the evaluation folder, or its evaluation.json')
+    .option('--tier <tier>', 'pr, merge, scheduled or release')
+    .action((options) => run(ciCommand, options));
   return program;
 }
 
@@ -272,7 +293,7 @@ async function main(argv) {
     return await pending;
   } catch (error) {
     if (error instanceof UsageError) {
-      process.stderr.write(`${NAME}: ${error.message}\nUsage: ${NAME} <check|digest|preflight|run|score|compare> --evaluation <path>\n`);
+      process.stderr.write(`${NAME}: ${error.message}\nUsage: ${NAME} <check|digest|preflight|run|score|compare|ci> --evaluation <path>\n`);
       return EXIT_CODES.usage;
     }
     if (error instanceof CorpusIndexError) {

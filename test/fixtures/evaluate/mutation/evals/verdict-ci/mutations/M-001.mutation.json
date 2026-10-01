@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "mutationId": "M-001",
+  "mutationSource": "rules/policy.txt: the strict mode relaxed to lenient",
+  "targetArtifact": "rules/policy.txt",
+  "operator": {
+    "kind": "replace-exact",
+    "find": "mode: strict",
+    "replace": "mode: lenient",
+    "occurrences": 1
+  },
+  "expectedObservableFailure": "The verdict command rejects the request, so its stdout says verdict: rejected."
+}

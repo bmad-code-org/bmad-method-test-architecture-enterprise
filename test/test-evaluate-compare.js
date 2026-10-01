@@ -26,6 +26,7 @@ const { spawn, spawnSync } = require('node:child_process');
 const AjvModule = require('ajv/dist/2020');
 
 const { loadEngine } = require('../cli/lib/evaluate/engine');
+const baselines = require('./lib/evaluate-baseline');
 const { suite } = require('./lib/evaluate-story-121');
 
 const Ajv = AjvModule.default ?? AjvModule;
@@ -58,39 +59,9 @@ function filesOf(directory) {
   return treeOf(directory).map((line) => line.split(' ')[0]);
 }
 
-/** A copy of a project's repository in a temp directory of its own; the evaluation folder inside it. */
-function copyOf(project) {
-  const root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'tea-evaluate-compare-copy-'));
-  copies.push(root);
-  fs.cpSync(project.repository, path.join(root, 'repository'), { recursive: true });
-  return path.join(root, 'repository', path.relative(project.repository, project.folder));
-}
-
-/** Commits the repository's current state, as the reviewed pull request that accepts a baseline does. */
-function commitAll(repository, message) {
-  const git = ['-c', 'user.name=TeA test', '-c', 'user.email=tea-test@example.test', '-c', 'core.hooksPath=/dev/null'];
-  const env = {
-    ...Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('GIT_'))),
-    GIT_CONFIG_GLOBAL: '/dev/null',
-    GIT_CONFIG_NOSYSTEM: '1',
-  };
-  for (const args of [
-    ['add', '--all'],
-    ['commit', '--quiet', '-m', message],
-  ]) {
-    const run = spawnSync('git', [...git, '-C', repository, ...args], { encoding: 'utf8', env });
-    assert.equal(run.status, 0, `${args.join(' ')}: ${run.stderr}`);
-  }
-}
-
-function runAndScore(project, runArgs = []) {
-  const ran = test.cli(project.folder, 'run', runArgs, project.env);
-  assert.equal(ran.status, 0, ran.output);
-  const run = test.latest(project.folder);
-  const scored = test.cli(project.folder, 'score', ['--run', path.basename(run)], project.env);
-  assert.equal(scored.status, 0, scored.output);
-  return run;
-}
+const copyOf = (project) => baselines.copyOf(project, copies);
+const { commitAll } = baselines;
+const runAndScore = (project, runArgs) => baselines.runAndScore(test, project, runArgs);
 
 /** `compare` through the CLI with a failure injected by the staging wrapper. */
 function wrapped(folder, mode, extraEnv = {}, args = ['--accept']) {
@@ -258,12 +229,7 @@ async function main() {
     // places the baseline's bytes at the accepted id; under any other id every record would reach outside its run.
     {
       const folder = copyOf(project);
-      const runDirectory = path.join(folder, 'runs', firstId);
-      fs.rmSync(runDirectory, { recursive: true });
-      fs.cpSync(path.join(folder, 'baseline'), runDirectory, {
-        recursive: true,
-        filter: (file) => path.basename(file) !== 'baseline.json',
-      });
+      const runDirectory = baselines.placeBaseline(folder, firstId);
       const replayed = test.cli(folder, 'score', ['--run', firstId]);
       assert.equal(replayed.status, 0, replayed.output);
       const scores = fs.readdirSync(path.join(runDirectory, 'scores')).sort();
@@ -278,12 +244,7 @@ async function main() {
     // Revert check: a baseline without its isolation manifests replays as Invalid, exit 3.
     {
       const folder = copyOf(project);
-      const runDirectory = path.join(folder, 'runs', firstId);
-      fs.rmSync(runDirectory, { recursive: true });
-      fs.cpSync(path.join(folder, 'baseline'), runDirectory, {
-        recursive: true,
-        filter: (file) => path.basename(file) !== 'baseline.json' && path.basename(file) !== 'isolation-manifest.json',
-      });
+      baselines.placeBaseline(folder, firstId, ['isolation-manifest.json']);
       const replayed = test.cli(folder, 'score', ['--run', firstId]);
       assert.equal(replayed.status, 3, replayed.output);
       assert.match(replayed.output, /isolation manifest .* is absent/);

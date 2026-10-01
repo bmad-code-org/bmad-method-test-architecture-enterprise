@@ -1,6 +1,10 @@
 {
   "schemaVersion": 1,
   "evaluationId": "grader-tool-server",
+  "requirements": {
+    "path": "requirements.md",
+    "digest": "sha256:b1dacab8c57f047abb6d284bf4676ce99fb852a9968960e80134648fde7f613b"
+  },
   "targetKind": "tool-use",
   "interface": "mcp",
   "registry": [

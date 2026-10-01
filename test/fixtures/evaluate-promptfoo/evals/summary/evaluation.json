@@ -1,6 +1,10 @@
 {
   "schemaVersion": 1,
   "evaluationId": "promptfoo-summary",
+  "requirements": {
+    "path": "requirements.md",
+    "digest": "sha256:943f88e36cbeb2dfd6f42f322c90f31e14c157f5f75ff9fbbcd6b3709d97ebf3"
+  },
   "targetKind": "ai-feature",
   "interface": "cli",
   "registry": [

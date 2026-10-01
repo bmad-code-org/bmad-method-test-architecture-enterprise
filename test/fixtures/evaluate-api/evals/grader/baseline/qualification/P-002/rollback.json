@@ -1,0 +1,71 @@
+{
+  "probeId": "P-002",
+  "mutationId": "M-001",
+  "targetArtifact": "rules/policy.txt",
+  "preDigest": "sha256:2a7782e752bb92cbe4c7e2039710d647fccd5e79d023d121c650d664cfdf1d7d",
+  "mutatedDigest": "sha256:fb28f8d8d7607ace3f541c9c806816d70dc7291cc0591d99b86ad61256ecbd64",
+  "restoredDigest": "sha256:2a7782e752bb92cbe4c7e2039710d647fccd5e79d023d121c650d664cfdf1d7d",
+  "reExecutionCap": 2,
+  "rePasses": [
+    {
+      "phase": "re-pass-1",
+      "verdict": "held",
+      "oracles": [
+        {
+          "oracleId": "O-001",
+          "polarity": "expects-hold",
+          "resolution": "true",
+          "disposition": "held",
+          "observationIds": [
+            "re-pass-1-grade-run"
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "stepId": "grade-run",
+          "request": {
+            "probeId": "re-pass-1-grade-run",
+            "interfaceId": "grader",
+            "operationId": "grade-answer",
+            "kind": "api",
+            "method": "GET",
+            "pathTemplate": "/grade",
+            "channels": {
+              "path": {},
+              "query": {
+                "answer": "forty-two"
+              },
+              "header": {},
+              "body": {
+                "kind": "absent"
+              }
+            }
+          },
+          "observation": {
+            "probeId": "re-pass-1-grade-run",
+            "interfaceId": "grader",
+            "operationId": "grade-answer",
+            "kind": "api",
+            "status": 200,
+            "headers": {
+              "content-type": "application/json",
+              "date": "Thu, 01 Oct 2026 17:17:32 GMT",
+              "connection": "close",
+              "transfer-encoding": "chunked"
+            },
+            "body": {
+              "kind": "json",
+              "value": {
+                "ok": true,
+                "answer": "forty-two",
+                "verdict": "accepted"
+              }
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "rollbackVerified": true
+}

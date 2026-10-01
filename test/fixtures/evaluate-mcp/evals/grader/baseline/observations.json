@@ -1,0 +1,77 @@
+[
+  {
+    "probeId": "witness-alpha",
+    "interfaceId": "grader",
+    "operationId": "grade-answer",
+    "kind": "mcp",
+    "isError": false,
+    "result": {
+      "kind": "json",
+      "value": {
+        "ok": true,
+        "answer": "alpha",
+        "verdict": "accepted"
+      }
+    }
+  },
+  {
+    "probeId": "witness-beta",
+    "interfaceId": "grader",
+    "operationId": "grade-answer",
+    "kind": "mcp",
+    "isError": false,
+    "result": {
+      "kind": "json",
+      "value": {
+        "ok": true,
+        "answer": "beta",
+        "verdict": "accepted"
+      }
+    }
+  },
+  {
+    "probeId": "preflight-control-observe",
+    "interfaceId": "grader",
+    "operationId": "grade-answer",
+    "kind": "mcp",
+    "isError": false,
+    "result": {
+      "kind": "json",
+      "value": {
+        "ok": true,
+        "answer": "alpha",
+        "verdict": "accepted"
+      }
+    }
+  },
+  {
+    "probeId": "preflight-control-observe-2",
+    "interfaceId": "grader",
+    "operationId": "grade-answer",
+    "kind": "mcp",
+    "isError": false,
+    "result": {
+      "kind": "json",
+      "value": {
+        "ok": true,
+        "answer": "alpha",
+        "verdict": "accepted"
+      }
+    }
+  },
+  {
+    "probeId": "manifest-lenient",
+    "interfaceId": "grader",
+    "operationId": "grade-answer",
+    "kind": "mcp",
+    "isError": false,
+    "result": {
+      "kind": "json",
+      "value": {
+        "ok": true,
+        "answer": "forty-two",
+        "verdict": "rejected"
+      }
+    }
+  }
+]

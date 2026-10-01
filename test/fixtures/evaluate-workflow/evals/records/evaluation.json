@@ -1,6 +1,10 @@
 {
   "schemaVersion": 1,
   "evaluationId": "records-workflow",
+  "requirements": {
+    "path": "requirements.md",
+    "digest": "sha256:14058b85fc5eec2455805f2895b86800e26720447e871fdfceee1adfd40f1e6e"
+  },
   "targetKind": "workflow",
   "interface": "cli",
   "registry": [

@@ -1,0 +1,83 @@
+{
+  "probeId": "P-002",
+  "probeClass": "defect",
+  "behaviorId": "B-001",
+  "expectedClean": false,
+  "rationale": "Seeded defect: M-001 relaxes the policy to lenient, and the verdict command then rejects the request on stdout.",
+  "defects": [
+    {
+      "defectId": "D-001",
+      "behaviorId": "B-001",
+      "summary": "The relaxed policy makes the verdict command reject a request it must accept.",
+      "severity": "critical",
+      "source": "controlled-mutation",
+      "manifestationWitness": {
+        "legId": "manifest-lenient",
+        "interfaceId": "verdict",
+        "operationId": "judge-request",
+        "inputs": {
+          "argument": {},
+          "option": {},
+          "environment": {},
+          "stdin": {
+            "kind": "text",
+            "value": "Judge the request."
+          }
+        },
+        "relation": {
+          "op": "containment",
+          "operands": [
+            {
+              "pointer": "/interactions/manifest-lenient/stdout"
+            },
+            {
+              "literal": "verdict: rejected"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "defectSignature": {
+    "interfaceKind": "cli",
+    "invocation": {
+      "executable": "verdict",
+      "subcommandPath": []
+    },
+    "observableChannel": "stdout",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": null,
+          "header": null,
+          "body": null,
+          "argument": null,
+          "option": null,
+          "environment": null,
+          "stdin": {
+            "prompt": {
+              "matcher": "any"
+            }
+          },
+          "arguments": null
+        }
+      },
+      "predicate": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/observed/stdout"
+          },
+          {
+            "literal": "verdict: rejected"
+          }
+        ]
+      }
+    }
+  },
+  "qualification": {
+    "route": "controlled-mutation",
+    "mutation": "M-001"
+  }
+}

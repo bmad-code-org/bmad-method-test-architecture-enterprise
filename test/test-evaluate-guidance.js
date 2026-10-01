@@ -2399,7 +2399,7 @@ function checkGapsGuidance(guide, engine, failures) {
     })
   )
     failures.push('gaps.md AD-10 exit mapping changed');
-  requireText(guide, 'planned Stage 12 PR replay', 'gaps.md exit 13', failures);
+  requireText(guide, '`ci --tier pr` exits 13 when the replay', 'gaps.md exit 13', failures);
   requireText(guide, 'a framework result with no grade; see `evaluator.md`', 'gaps.md exit 12', failures);
   for (const marker of [
     'score` exit 3',

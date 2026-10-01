@@ -274,13 +274,15 @@ async function dominanceBetween(previous, current, severityFloor) {
 
 /** The outcome of one `tea-evaluate compare`. */
 class CompareOutcome {
-  constructor({ exitCode, message, findings = [], runDirectory = null, report = [], status = null }) {
+  constructor({ exitCode, message, findings = [], runDirectory = null, report = [], status = null, relations = [] }) {
     this.exitCode = exitCode;
     this.message = message;
     this.findings = findings;
     this.runDirectory = runDirectory;
     this.report = report;
     this.status = status;
+    /** `compared` only: the engine's relation per probe, the baseline as `a` and the run as `b` (`tea-evaluate ci` reads them). */
+    this.relations = relations;
   }
 }
 
@@ -623,6 +625,7 @@ async function compareWithBaseline({ folder, resolved, validate }) {
     status: 'compared',
     exitCode: OK,
     runDirectory,
+    relations,
     report: relations.map(({ probeId, relation }) => `${probeId}: ${relation} (a is the baseline, b is run ${where})`),
     message: `compared: ${relations.length} probe(s) of run ${where} with the baseline of run ${baselineRecord.invocationId ?? 'unknown'}`,
   });
@@ -646,6 +649,28 @@ function readBaselineJson(baselinePath, relative, findings) {
     return null;
   }
   return value;
+}
+
+/**
+ * `baseline/baseline.json` read as a regular JSON file and held to its schema; the findings say what is wrong with it.
+ * `tea-evaluate ci` reads the accepted run, score invocation and digests through this, so the manifest has one reader.
+ *
+ * @param {string} folder the evaluation folder
+ * @returns {{ manifest: object | null, findings: Array<{ file: string, rule: string, message: string }> }}
+ */
+function readBaselineManifest(folder) {
+  const findings = [];
+  const manifest = readBaselineJson(path.join(folder, BASELINE), BASELINE_MANIFEST, findings);
+  if (manifest === null) return { manifest: null, findings };
+  const ajv = new Ajv({ strict: false, allErrors: true });
+  const validate = ajv.compile(BASELINE_SCHEMA);
+  if (!validate(manifest)) {
+    for (const message of new Set(validate.errors.map((error) => `${error.instancePath || '/'} ${error.message}`))) {
+      findings.push(finding(`${BASELINE}/${BASELINE_MANIFEST}`, 'schema', message));
+    }
+    return { manifest: null, findings };
+  }
+  return { manifest, findings };
 }
 
 /** The run's scoring policy's `severityFloor`, which `compareDominance` reads. */
@@ -1148,11 +1173,20 @@ async function runCompareCommand(folder, { run: invocationId, accept = false, lo
 }
 
 module.exports = {
+  BASELINE,
   CompareOutcome,
+  baselineTreeFindings,
   compareStoredResults,
   dominanceBetween,
   isComparableShaped,
+  lstatOrNull,
+  probesOf,
+  readBaselineJson,
+  readBaselineManifest,
+  readEvidence,
   refusalReason,
   runCompareCommand,
+  scoreInvocations,
   versionRefusalReason,
+  walkRegular,
 };

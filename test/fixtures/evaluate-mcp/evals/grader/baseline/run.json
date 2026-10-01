@@ -1,0 +1,144 @@
+{
+  "invocationId": "20261001T155752286Z-e92b3669",
+  "seed": "20261001T155752286Z-e92b3669",
+  "command": "run",
+  "teaVersion": "1.27.2",
+  "evalQualityVersion": "4.7.0",
+  "commit": null,
+  "dirty": false,
+  "evaluationFolder": {
+    "dirty": false
+  },
+  "workspace": {
+    "kind": "copy",
+    "commit": null,
+    "tree": null,
+    "treeDigest": "sha256:1ab37ae347e02e5f63f6361380a39bd3186c68dba859fbc87afd023ca6787c96",
+    "dirty": false
+  },
+  "workspaces": {
+    "pristine": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-pristine-561b2ff2-adfe-4a0e-94f7-fdf0001083a6/target",
+    "mutated:M-001": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-001-c6376213-7558-467b-a44d-c9ae8e4d2778/target"
+  },
+  "confinement": "seatbelt",
+  "adopterTree": {
+    "repository": null,
+    "unchanged": true
+  },
+  "refused": [],
+  "artifacts": {
+    "contract": "sha256:0f0f1f1979679578bb08c0af88502275b9b6ff9601d6f6b0e04b757768fe45bd",
+    "operationPhases": "sha256:a34aad44029827fec47e810a03b3103d26afc8968cd45da51c62bf7c615f7cbc",
+    "evaluatorConfiguration": "sha256:377c4a34ee898a6a0b94e2d865b0c44c0e8771f9d7daf5d7243ad925b1d51a4d",
+    "preflightVerdict": "sha256:685d2b9d115caef7f327a3a54a0c4506744c2fd315f0a5ef5e5bd69ff83dc19c",
+    "probes": {
+      "P-001": "sha256:d4c04bc53158c0386098ed49f6f5c3c403e03f3f6a7c5e84b2695a362ba6b197",
+      "P-002": "sha256:3581ad9bfe06322779265f7cf1670ff654553fc64051765bd919990ac5140abb"
+    },
+    "records": {
+      "trial-sets/P-001/record-1.json": "sha256:ef75a146be4ba8bb8f2a34b110215a28bf594660b1f256e7c183deb3ffcfa031",
+      "trial-sets/P-001/record-2.json": "sha256:1b416c4c10caf8b2520841d191734d3da4d326e028909015da61893127539cb2",
+      "trial-sets/P-001/record-3.json": "sha256:cc7a2fca67fb3b492ef53ead3d73e0a5e1063ac4ce092b75385503556001b872",
+      "trial-sets/P-002/record-1.json": "sha256:8e1209ccce09c33dc9da7e01c8da2a784178fe816f3a9e793f560e53463e889f",
+      "trial-sets/P-002/record-2.json": "sha256:3fa7e6e97f55d74b0f59515caf7865d3bef1107a974b1e7d213fa0b08fbb8de8",
+      "trial-sets/P-002/record-3.json": "sha256:3d475a035ece8bbf20ed5dc333461124cb6f82bb26564260975de086ae65ce42"
+    },
+    "isolationManifests": {
+      "P-001": "sha256:d22c9f5f09af60db1b26f58c5cbfcfb29b34309d7a5def39f4c0d75fd4188321",
+      "P-002": "sha256:faa93715819cc27f44c3e02b1c3cbbc5f4e294403e9989f7954542e98a39cbf6"
+    }
+  },
+  "contractDigest": "sha256:405b65124ee6237984760a7298a1e51917442b620a9c2d732d7d4aa83e8c7597",
+  "corpusDigest": "sha256:d6353e482f94182b0a51f0817d76e2f7b912839dfa8e1a222f7830ceed42873b",
+  "policyDigest": "sha256:f89f273f47ba3f0aac1d0d7508a675c00c449056128cd21a7ae89bf29d5e5b96",
+  "sealedBriefDigest": "sha256:b5c3243ecedb5c49705385ae58ddd6a28f8574d90445eb4ccc958cc6c68c598a",
+  "evaluatorConfigurationDigest": "sha256:89bab990df0959ee3cc27d18ae39063c0e329775067b149921938799a0562b8f",
+  "partition": "both",
+  "heldOutProbes": [],
+  "operationPhases": {
+    "grade-answer": "outcome"
+  },
+  "runner": [
+    {
+      "interfaceId": "grader",
+      "kind": "mcp",
+      "target": "server/grader.js",
+      "targetArgs": [
+        "--policy=rules/policy.txt"
+      ],
+      "tools": [
+        "grade_answer",
+        "describe_policy"
+      ]
+    }
+  ],
+  "evaluator": {
+    "kind": "deterministic",
+    "identity": "tea-evaluate deterministic evaluator"
+  },
+  "model": {
+    "modelSnapshot": "none",
+    "systemPromptDigest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "judge": null,
+  "trials": {
+    "perArm": 3,
+    "arms": [
+      "clean",
+      "mutated:M-001"
+    ]
+  },
+  "trialCount": 3,
+  "unreportedResourceUse": [
+    {
+      "conditionArm": "clean",
+      "trialIndex": 1,
+      "stepIds": [
+        "grade-run"
+      ]
+    },
+    {
+      "conditionArm": "clean",
+      "trialIndex": 2,
+      "stepIds": [
+        "grade-run"
+      ]
+    },
+    {
+      "conditionArm": "clean",
+      "trialIndex": 3,
+      "stepIds": [
+        "grade-run"
+      ]
+    },
+    {
+      "conditionArm": "mutated:M-001",
+      "trialIndex": 1,
+      "stepIds": [
+        "grade-run"
+      ]
+    },
+    {
+      "conditionArm": "mutated:M-001",
+      "trialIndex": 2,
+      "stepIds": [
+        "grade-run"
+      ]
+    },
+    {
+      "conditionArm": "mutated:M-001",
+      "trialIndex": 3,
+      "stepIds": [
+        "grade-run"
+      ]
+    }
+  ],
+  "startedAt": "2026-10-01T15:57:52.020Z",
+  "durationMs": 2199,
+  "completed": true,
+  "outcome": {
+    "stage": "trial",
+    "exitCode": 0,
+    "message": "2 trial set(s) of 3 trial(s) sealed over clean, mutated:M-001; score them with tea-evaluate score --run 20261001T155752286Z-e92b3669"
+  }
+}

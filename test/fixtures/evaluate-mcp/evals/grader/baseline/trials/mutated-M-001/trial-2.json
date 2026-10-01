@@ -1,0 +1,49 @@
+{
+  "conditionArm": "mutated:M-001",
+  "trialIndex": 2,
+  "workspace": "trial-mutated-M-001-2",
+  "elapsedMs": 95,
+  "oracles": [
+    {
+      "oracleId": "O-001",
+      "polarity": "expects-hold",
+      "resolution": "false",
+      "disposition": "violated",
+      "observationIds": [
+        "trial-2-grade-run"
+      ]
+    }
+  ],
+  "steps": [
+    {
+      "stepId": "grade-run",
+      "request": {
+        "probeId": "trial-2-grade-run",
+        "interfaceId": "grader",
+        "operationId": "grade-answer",
+        "kind": "mcp",
+        "toolName": "grade_answer",
+        "channels": {
+          "arguments": {
+            "answer": "forty-two"
+          }
+        }
+      },
+      "observation": {
+        "probeId": "trial-2-grade-run",
+        "interfaceId": "grader",
+        "operationId": "grade-answer",
+        "kind": "mcp",
+        "isError": false,
+        "result": {
+          "kind": "json",
+          "value": {
+            "ok": true,
+            "answer": "forty-two",
+            "verdict": "rejected"
+          }
+        }
+      }
+    }
+  ]
+}
