@@ -300,7 +300,7 @@ The `npm test` chain is credential-free, makes no network call and no model call
 npm run test:eval-data          # fragment-selection corpus, static
 npm run test:eval-trace-data    # trace corpus, static
 npm run test:eval-schemas       # manifest against harness constants, and the preflight argv
-npm run test:eval-replay        # 123 stored outputs against the scorers
+npm run test:eval-replay        # stored outputs against the scorers
 npm run test:contract-sources   # are the contracts what their sources generate?
 npm run test:contracts          # does the compiler still say what the baseline records?
 npm run test:contract-oracles   # does every oracle resolve, and agree with the scorer?

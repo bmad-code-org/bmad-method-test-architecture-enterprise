@@ -158,7 +158,7 @@ function checkEntryPoints() {
   );
   check(
     paragraphsOf(apply).includes(
-      'When step 1 found evaluation plans, run sections 3 and 4 of `{evaluationPlansStepFile}` on the loaded pipeline file when it is a pipeline file, then return here. Skip its section 5.',
+      'When the loaded target is a pipeline file, run sections 3 and 4 of `{evaluationPlansStepFile}` on it, whether or not step 1 found plans, so the generated jobs of a plan that was deleted are removed, then return here. Skip its section 5.',
     ),
     'edit mode: the apply step lacks its whole instruction that loads {evaluationPlansStepFile} for sections 3 and 4 and skips section 5',
   );
@@ -584,6 +584,14 @@ function checkStepSentences() {
       'Then install the evaluations folder: `npm ci --prefix <evaluations folder>` when it holds a `package-lock.json`, else `npm install --prefix <evaluations folder>`.',
     ],
     ['no root install', 'Never run the root install in this job.'],
+    [
+      'no plan still reaches the cleanup',
+      'When no plan is found, record `evaluation plans: none`, render nothing and go to section 4, which removes the jobs of plans that no longer exist, before section 5.',
+    ],
+    [
+      'cleanup removes the jobs of gone plans',
+      'Remove a job only when its plan file is gone or the plan no longer places a check on its tier.',
+    ],
     [
       'Node floor',
       "The Node version is the project's `.nvmrc` version only when it is at or above the floor the tooling declares, the lower bound of `engines.node` in the `package.json` of the installed `bmad-method-test-architecture-enterprise` package (22.20.0 when that package is not readable), and the current LTS otherwise.",

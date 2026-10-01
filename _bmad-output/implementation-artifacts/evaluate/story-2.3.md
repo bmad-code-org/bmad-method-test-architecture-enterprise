@@ -239,6 +239,18 @@ Thirty-eight mutants, each made once in a `/tmp` copy (node_modules linked) and 
 | Step sentence for the alias rule reworded                      | render test, pinned sentence                            | exits 1                                                                                                                               |
 | Plain-version regex removed from `atFloor`                     | none                                                    | survives: `semver.coerce` already returns null for every alias it excludes, so the guard is near-equivalent and kept as documentation |
 
+### Round 4 fixes (PR #287)
+
+- **F1 (CI shards 4 and 8):** R3-5 changed the README comment to a number the doc-invocation lookup (`test/lib/doc-invocation-entry.js`) and the adoption guide still keyed on at 123, so `test:doc-invocation-entry` and `doc-invocations` failed. The number is a drift magnet (already wrong at 123 on main), so the `README.md` line, the adoption guide line and the lookup key all read `stored outputs against the scorers`; a grep for that phrase finds exactly those three. Story 1.95's criteria no longer name the README count and say why; they name the totals still unguarded (`test/README.md` and the `test-eval-replay.js` header). I ran every chain script that reads `README.md`, `docs/` or `test/lib/doc-*` (36 scripts, the three heavier docs readers `evaluate-gap-loop`, `evaluate-learned-framework` and `evaluate-workflow` included) and a sweep for the other counts R3-5 touched: the remaining "123" figures sit in the roadmap and adoption guide prose, were stale before this story and no gate reads them.
+- **F2 (CodeRabbit, valid):** with the last `evaluation-ci-plan.json` deleted, section 1 recorded `evaluation plans: none` and went to section 5, and the apply step ran sections 3 and 4 only when step 1 found plans, so the marked jobs stayed. Section 1 now goes to section 4 (removal of jobs whose plan is gone) before section 5, and the apply step runs sections 3 and 4 on every pipeline file target. The pinned apply paragraph is updated, two sentences are pinned (the no-plan route and the removal rule), and the capture is unchanged (the rendering text did not move).
+
+| Mutant                                       | Case                        | Result                            |
+| -------------------------------------------- | --------------------------- | --------------------------------- |
+| Apply step back to "when step 1 found plans" | whole-paragraph pin         | `test:evaluate-ci-render` exits 1 |
+| No-plan sentence back to "go to section 5"   | pinned sentence             | exits 1                           |
+| Removal sentence reworded to never remove    | pinned sentence             | exits 1                           |
+| Lookup key back to `123 stored outputs ...`  | `test:doc-invocation-entry` | exits 1                           |
+
 ## Design Notes
 
 Why 03b: step 2 is the pipeline's generation and a plan is a second input to the same file, so the render follows the quality gates and the validation step covers it. Why one step per tier: the runtime runs a tier as a unit and writes one evidence bundle per invocation (AD-10, AD-12), so the pipeline's granularity is the tier. Why the evaluation steps use a `run: |` block: the paths come from a repository file, and a block scalar holds any quoted command without YAML escaping. Why the tooling is installed with `--prefix`: AD-20 keeps the private `package.json` out of the adopter's root manifest.

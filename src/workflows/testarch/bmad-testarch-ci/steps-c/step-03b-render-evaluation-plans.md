@@ -48,7 +48,7 @@ List the files named `evaluation-ci-plan.json` whose parent directory is `ci` wi
 
 For each plan keep its path and its evaluation folder (the directory that holds `ci/`, relative to `{project-root}`). Read the plan as JSON; a file that is not JSON is reported and skipped.
 
-When no plan is found, record `evaluation plans: none`, change nothing in the pipeline and go to section 5.
+When no plan is found, record `evaluation plans: none`, render nothing and go to section 4, which removes the jobs of plans that no longer exist, before section 5.
 
 ---
 

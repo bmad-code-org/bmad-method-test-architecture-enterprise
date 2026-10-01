@@ -46,7 +46,7 @@ Restate what will be changed and confirm.
 
 Update the output file accordingly.
 
-When step 1 found evaluation plans, run sections 3 and 4 of `{evaluationPlansStepFile}` on the loaded pipeline file when it is a pipeline file, then return here. Skip its section 5.
+When the loaded target is a pipeline file, run sections 3 and 4 of `{evaluationPlansStepFile}` on it, whether or not step 1 found plans, so the generated jobs of a plan that was deleted are removed, then return here. Skip its section 5.
 
 ### 3. Report
 
