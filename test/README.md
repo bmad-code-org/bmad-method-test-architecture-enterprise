@@ -302,8 +302,8 @@ cases whose numbers actually moved.
 The same caveat the CLI parser fixtures carry applies here and applies harder.
 Every constructed case that produces a number was written by hand to be parsed, so a
 green run proves the scorers are deterministic and reproduce history. It proves nothing
-about whether they handle real agent output correctly. One hundred thirty-two of the one
-hundred thirty-seven cases produce a number and one hundred seventeen of those are constructed.
+about whether they handle real agent output correctly. One hundred thirty-five of the one
+hundred forty cases produce a number and one hundred twenty of those are constructed.
 Fifteen carry captured bytes: twelve from the ATDD fixture corpus, two from
 `fixtures/test-review-cli/` and one from a live `eval:ci` run over the `evaluation-plan`
 project. The two test-review captures score zero recall because their reports document no
@@ -391,7 +391,7 @@ scaffolded in one run: each project is its own workspace, its own agent call, an
 case. The `evaluation-plan/` project holds a copy of the Story 1.10 fixture's
 `ci/evaluation-ci-plan.json` and a request that never names it, so the case measures
 whether the workflow detects the plan (`steps-c/step-03b-render-evaluation-plans.md`) and
-renders each distinct `pr` command as a standalone `run:` step and `runs/` as an upload under
+renders the `pr` tier as one `tea-evaluate ci --tier pr` step named for its checks, after an `--prefix` install, and `runs/` as an upload under
 `if: always()`. Its stored replay is a real capture of that run; the deterministic half is
 `test:evaluate-ci-render`.
 

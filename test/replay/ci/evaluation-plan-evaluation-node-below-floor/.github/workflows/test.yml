@@ -41,21 +41,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Determine Node version
-        id: node-version
-        run: |
-          floor=22.20.0
-          value=24
-          if [ -f .nvmrc ]; then
-            pinned="$(tr -d 'v \r\n' < .nvmrc)"
-            if [ "$(printf '%s\n' "$floor" "$pinned" | sort -V | head -n 1)" = "$floor" ]; then value="$pinned"; fi
-          fi
-          echo "value=$value" >> "$GITHUB_OUTPUT"
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ steps.node-version.outputs.value }}
+          node-version: 20
 
       - name: Install evaluation tooling
         run: |
@@ -66,7 +55,7 @@ jobs:
           npm exec --prefix evals -- tea-evaluate ci --evaluation evals/grader --tier pr
 
       - name: Upload evaluation runs
-        if: ${{ always() }}
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: evaluation-pr-runs

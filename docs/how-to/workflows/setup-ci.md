@@ -453,12 +453,13 @@ git push -u origin test-ci-setup
 
 ## Evaluation Plans
 
-If the repository holds an evaluation written with `bmad-testarch-evaluate`, the CI workflow finds its `ci/evaluation-ci-plan.json` and renders it into the same pipeline file. A standalone run picks up existing plans after the quality gates step, and an edit-mode run detects them first and renders them into the pipeline it loaded, which is how Evaluate's last stage hands the plan over. Evaluate writes the plan and this workflow writes every pipeline file.
+If the repository holds an evaluation written with `bmad-testarch-evaluate`, the CI workflow finds its `ci/evaluation-ci-plan.json` and renders it into the same pipeline file. A standalone run picks up existing plans after the quality gates step, and an edit-mode run detects them first and renders them into the pipeline it loaded. Evaluate writes the plan and this workflow writes every pipeline file.
 
 For each tier the plan places a check on, the pipeline gets one job, `evaluation-pr` for the `pr` tier:
 
 - **One step per tier.** `tea-evaluate ci --tier <tier>` is the runtime's one entry that runs a tier. It runs every check the plan places on the tier and writes the evidence bundle, and it takes no check selector, so the job runs it once as `npm exec --prefix <evaluations folder> -- tea-evaluate ci --evaluation <evaluation folder> --tier <tier>`, named for the ids of the checks it carries. A `merge` job runs the `pr` tier's step first and its own second.
 - **The tooling stays in the evaluations folder.** The job installs the private `package.json` Evaluate wrote there with `npm ci --prefix` (`npm install --prefix` when no lockfile is committed), so the repository's own manifest stays untouched and a repository in any language works.
+- **The Node version respects the tooling's floor.** The evaluation job runs the project's `.nvmrc` version only when it is at or above the Node floor TeA and eval-quality declare (22.20.0), and the current LTS otherwise, so a project pinned to an older Node is not blocked.
 - **Tier placement is read from the plan.** The workflow never moves, adds or drops a check.
 - **Evidence is kept whatever the result.** The job uploads `<evaluation folder>/runs/` with `if: always()`, and each invocation writes `runs/<invocationId>/` under that folder.
 - **Triggers follow the plan.** The workflow gains the events the checks name. When an event is new to the workflow, the jobs that existed before get an `if:` that keeps them on the events they already ran on, and the summary names each guard.

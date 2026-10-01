@@ -290,9 +290,12 @@ const TEST_RUNNER_PATTERNS = [
   /(?<![\w-])maestro test(?![\w-])/g,
 ];
 
-/** A run: block that lints, for the unrequested-gate count when no lint gate was asked for. */
 /** A `tea-evaluate` invocation: a step that runs an evaluation check, whose exit is the verdict. */
 const EVALUATION_INVOCATION = /(?<![\w-])tea-evaluate(?![\w-])/;
+
+/** A run: block that lints, for the unrequested-gate count when no lint gate was asked for. */
+/** An npm install with no --prefix: it installs the repository's own manifest. */
+const ROOT_INSTALL = /^[\t ]*npm (?:ci|install|i)\b(?![^\n]*--prefix)[^\n]*$/gm;
 
 const LINT_INVOCATION = /(?<![\w-])(?:npm run lint|npx eslint|eslint |prettier --check)/;
 
@@ -905,6 +908,18 @@ async function validateCorpus(groundTruth) {
           }
           break;
         }
+        case 'node-version': {
+          if (element.scope !== undefined && !['jobs-without-evaluation', 'evaluation'].includes(element.scope)) {
+            problems.push(`${elementLabel}: scope ${JSON.stringify(element.scope)} is not jobs-without-evaluation or evaluation`);
+          }
+          if (element.floor !== undefined && semver.valid(semver.coerce(String(element.floor))) === null) {
+            problems.push(`${elementLabel}: floor is declared and is not a version`);
+          }
+          if (element.scope === 'evaluation' && element.floor === undefined) {
+            problems.push(`${elementLabel}: the evaluation scope declares no floor`);
+          }
+          break;
+        }
         case 'job': {
           for (const field of ['jobId', 'marker', 'command']) {
             if (typeof element[field] !== 'string' || element[field].trim().length === 0) {
@@ -1500,6 +1515,11 @@ function commandPattern(command) {
   return new RegExp(String.raw`(?:^|[\s;&|(])${escapeRegex(command)}(?=$|[\s;&|)])`, 'm');
 }
 
+/** Whether a script invokes the command and nothing follows it on its line but the end, a shell separator or a comment. */
+function invokesExactly(script, command) {
+  return new RegExp(String.raw`(?:^|[\s;&|(])${escapeRegex(command)}(?=[\t ]*(?:$|[;&|)#]))`, 'm').test(script);
+}
+
 /** Whether any script in the list invokes the command. */
 function invokes(scripts, command) {
   const pattern = commandPattern(command);
@@ -1592,6 +1612,35 @@ function nodeVersionFromNvmrc(job, index, step, version) {
 }
 
 /**
+ * Whether one setup-node step runs Node `floor` or later. A version file or a literal is read as its version, and a
+ * version a run: step wrote is read through that step: a script that names the floor guards its own choice, one that
+ * reads .nvmrc unguarded takes the project's version, and any other writes the literal it echoes.
+ */
+function nodeVersionAtFloor(job, index, step, nvmrcVersion, floor) {
+  const atFloor = (version) => {
+    const coerced = semver.coerce(String(version));
+    return coerced !== null && semver.gte(coerced, floor);
+  };
+  const inputs = step.with && typeof step.with === 'object' ? step.with : {};
+  if (typeof inputs['node-version-file'] === 'string') {
+    return /(?:^|\/)\.nvmrc$/.test(inputs['node-version-file'].trim()) ? atFloor(nvmrcVersion) : false;
+  }
+  const value = inputs['node-version'];
+  if (value === undefined || value === null) return false;
+  const text = String(value).trim();
+  if (!/^\$\{\{\s*steps\.[\w-]+\.outputs\.[\w-]+\s*\}\}$/.test(text)) return atFloor(text);
+  const writers = stepsOf(job)
+    .filter((entry) => entry.index < index && typeof entry.step.run === 'string' && entry.step.run.includes('GITHUB_OUTPUT'))
+    .map((entry) => entry.step.run);
+  if (writers.length === 0) return false;
+  const script = writers.at(-1);
+  if (script.includes(floor)) return true;
+  if (script.includes('.nvmrc')) return atFloor(nvmrcVersion);
+  const literal = /value=v?(\d[\d.]*)/.exec(script)?.[1];
+  return literal !== undefined && atFloor(literal);
+}
+
+/**
  * One requested element checked against the parsed workflow.
  *
  * @param {object} element One entry of a fixture set's expectedElements.
@@ -1628,8 +1677,19 @@ function checkElement(element, set, workflow, text = '') {
       return { present: false, detail: `no permissions block grants ${element.scope}: ${element.level} at workflow level or on every job` };
     }
     case 'node-version': {
-      const setups = allSteps(workflow).filter(({ step }) => usesAction(step, 'actions/setup-node'));
-      if (setups.length === 0) return { present: false, detail: 'no actions/setup-node step' };
+      const runsEvaluation = (job) => jobScripts(job).some((script) => EVALUATION_INVOCATION.test(script));
+      let setups = allSteps(workflow).filter(({ step }) => usesAction(step, 'actions/setup-node'));
+      // A scope reads the jobs that run an evaluation check apart from the others, because the tooling those jobs run
+      // declares its own Node floor and an adopter's .nvmrc may sit below it.
+      if (element.scope === 'jobs-without-evaluation') setups = setups.filter(({ job }) => !runsEvaluation(job));
+      if (element.scope === 'evaluation') setups = setups.filter(({ job }) => runsEvaluation(job));
+      if (setups.length === 0)
+        return { present: false, detail: `no actions/setup-node step${element.scope ? ` in ${element.scope}` : ''}` };
+      if (element.floor !== undefined) {
+        const low = setups.filter(({ job, index, step }) => !nodeVersionAtFloor(job, index, step, set.nvmrcVersion, element.floor));
+        if (low.length > 0) return { present: false, detail: `setup-node in job ${low[0].jobId} can run a Node below ${element.floor}` };
+        return { present: true, detail: `every setup-node step of an evaluation job runs Node ${element.floor} or later` };
+      }
       const off = setups.filter(({ job, index, step }) => !nodeVersionFromNvmrc(job, index, step, set.nvmrcVersion));
       if (off.length > 0) {
         return { present: false, detail: `setup-node in job ${off[0].jobId} does not take its version from .nvmrc` };
@@ -1637,22 +1697,34 @@ function checkElement(element, set, workflow, text = '') {
       return { present: true, detail: `every setup-node step takes its version from .nvmrc` };
     }
     case 'command': {
-      const scripts = runScripts(workflow).map((entry) => entry.script);
-      if (!invokes(scripts, element.command)) return { present: false, detail: `no run: block invokes ${element.command}` };
+      const entries = runScripts(workflow);
+      if (
+        !invokes(
+          entries.map((entry) => entry.script),
+          element.command,
+        )
+      ) {
+        return { present: false, detail: `no run: block invokes ${element.command}` };
+      }
       if (element.standaloneStep === true) {
-        // One step of its own: a command the request asks for in a step per command is invoked by exactly one run: block,
-        // and that block holds the command and nothing else, so a command repeated across steps or chained into another
-        // step's script is a miss.
-        const holding = scripts.filter((script) => invokes([script], element.command));
-        if (holding.length !== 1)
-          return { present: false, detail: `${holding.length} run: blocks invoke ${element.command}, expected one` };
-        if (holding[0].trim() !== element.command) {
+        // One step of its own, per job: the command ends its line or sits before a shell separator, so a trailing argument
+        // makes it another command, and each job that holds it holds it once, in a block that holds nothing else. A
+        // command repeated across steps or chained into another step's script is a miss, and the same pipeline step in
+        // two jobs (a merge job repeating the pr step) is not.
+        const holders = entries.filter((entry) => invokesExactly(entry.script, element.command));
+        if (holders.length === 0) return { present: false, detail: `${element.command} is invoked only with trailing arguments` };
+        const perJob = new Map();
+        for (const { jobId } of holders) perJob.set(jobId, (perJob.get(jobId) ?? 0) + 1);
+        const repeated = [...perJob].find(([, count]) => count > 1);
+        if (repeated !== undefined) {
+          return { present: false, detail: `${repeated[1]} run: blocks of job ${repeated[0]} invoke ${element.command}, expected one` };
+        }
+        if (holders.some((entry) => entry.script.trim() !== element.command)) {
           return { present: false, detail: `the run: block that invokes ${element.command} holds more than that command` };
         }
         if (element.checkIds !== undefined) {
           // The step is named for the checks it carries: every id appears in its name.
-          const holder = allSteps(workflow).find(({ step }) => String(step.run) === holding[0]);
-          const unnamed = element.checkIds.filter((id) => !String(holder?.step.name ?? '').includes(id));
+          const unnamed = element.checkIds.filter((id) => holders.some((entry) => !String(entry.step.name ?? '').includes(id)));
           if (unnamed.length > 0)
             return { present: false, detail: `the step that runs ${element.command} is not named for ${unnamed.join(', ')}` };
         }
@@ -1817,6 +1889,15 @@ function unrequestedElements(set, workflow) {
     }
   }
 
+  // An evaluation invocation no requested command covers: a second tier, a check selector or a bare tea-evaluate.
+  for (const { jobId, index, script } of runScripts(workflow)) {
+    for (const segment of script.split(/&&|\|\||[;|\n]/)) {
+      if (EVALUATION_INVOCATION.test(segment) && !requestedCommands.some((command) => segment.trim().startsWith(command))) {
+        found.push(`command: ${segment.trim()} in job ${jobId} step ${index + 1}`);
+      }
+    }
+  }
+
   const requestedGates = new Set(requested.filter((element) => element.kind === 'gate').map((element) => element.gate));
   for (const [jobId, job] of jobs) {
     if (!requestedGates.has('burn-in') && isBurnInJob(jobId, job)) found.push(`gate: burn-in job ${jobId}`);
@@ -1854,11 +1935,20 @@ function unrequestedElements(set, workflow) {
  */
 function workflowRuleViolations(workflow) {
   const found = [];
-  // A job-level continue-on-error lets every step of the job fail without failing the run.
+  // Any value but the literal false can suppress a failure, an expression included.
+  const suppresses = (value) => value !== undefined && String(value).trim() !== 'false';
   for (const [jobId, job] of jobsOf(workflow)) {
-    const suppressed = job['continue-on-error'] === true || String(job['continue-on-error'] ?? '').trim() === 'true';
-    if (suppressed && jobScripts(job).some((script) => EVALUATION_INVOCATION.test(script))) {
+    const evaluation = jobScripts(job).filter((script) => EVALUATION_INVOCATION.test(script));
+    if (evaluation.length === 0) continue;
+    // A job-level continue-on-error lets every step of the job fail without failing the run.
+    if (suppresses(job['continue-on-error'])) {
       found.push(`continue-on-error: on the job ${jobId}, which runs an evaluation check`);
+    }
+    // The tooling lives in the evaluations folder, so a root install in this job is the wrong install.
+    for (const script of jobScripts(job)) {
+      for (const match of script.matchAll(ROOT_INSTALL)) {
+        found.push(`root-install: ${match[0].trim()} in job ${jobId}, which runs an evaluation check`);
+      }
     }
   }
   for (const { jobId, index, step, script } of runScripts(workflow)) {
@@ -1868,7 +1958,7 @@ function workflowRuleViolations(workflow) {
     const suppressed = step['continue-on-error'] === true || String(step['continue-on-error'] ?? '').trim() === 'true';
     if (suppressed && TEST_RUNNER_PATTERNS.some((pattern) => new RegExp(pattern.source).test(script))) {
       found.push(`continue-on-error: on a step that runs tests in job ${jobId} step ${index + 1}`);
-    } else if (suppressed && EVALUATION_INVOCATION.test(script)) {
+    } else if (suppresses(step['continue-on-error']) && EVALUATION_INVOCATION.test(script)) {
       found.push(`continue-on-error: on a step that runs an evaluation check in job ${jobId} step ${index + 1}`);
     }
   }

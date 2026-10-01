@@ -26,6 +26,7 @@
  *  - the stored `evaluation-plan` replay is a real capture of the live `eval:ci` run.
  */
 
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -77,6 +78,24 @@ function skillPathOf(value) {
   return typeof value === 'string' && value.startsWith('{skill-root}/') ? value.slice('{skill-root}/'.length) : null;
 }
 
+/** The blank-line separated paragraphs of a document, so a whole paragraph can be pinned. */
+const paragraphsOf = (text) =>
+  String(text ?? '')
+    .split(/\n\s*\n/)
+    .map((paragraph) => paragraph.trim());
+
+/**
+ * Whether `sentence` stands in `text` from the start of a line, a list item, a bold lead or a previous sentence, so a
+ * negated or reworded copy that merely contains its words does not satisfy it.
+ */
+function hasSentence(text, sentence) {
+  const source = String(text ?? '');
+  const at = source.indexOf(sentence);
+  if (at === -1) return false;
+  const lead = source.slice(source.lastIndexOf('\n', at - 1) + 1, at);
+  return /^(?:(?:[-*] |\d+\. )?(?:\*\*[^*]+\*\* )?|.*\. )$/.test(lead);
+}
+
 /** Follows `nextStepFile` from a step file and returns every file on the way, the first one included. */
 function nextChain(entry) {
   const chain = [];
@@ -119,20 +138,28 @@ function checkEntryPoints() {
     skillPathOf(frontmatterOf(assess).nextStepFile) === 'steps-e/step-02-apply-edit.md',
     'edit mode: the assess step hands over to a step other than the apply step',
   );
-  for (const [file, text, instruction] of [
-    ['steps-e/step-01-assess.md', assess, /^Load `\{evaluationPlansStepFile\}`, read it completely, and run its sections 1 and 2 /m],
-    [
-      'steps-e/step-02-apply-edit.md',
-      apply,
-      /^When step 1 found evaluation plans, run sections 3 and 4 of `\{evaluationPlansStepFile\}` /m,
-    ],
+  for (const [file, text] of [
+    ['steps-e/step-01-assess.md', assess],
+    ['steps-e/step-02-apply-edit.md', apply],
   ]) {
     check(
       skillPathOf(frontmatterOf(text).evaluationPlansStepFile) === STEP,
       `edit mode: ${file} names another file than ${STEP} as its evaluationPlansStepFile`,
     );
-    check(instruction.test(text ?? ''), `edit mode: ${file} lacks the instruction that loads {evaluationPlansStepFile} at its verb`);
   }
+  // Each load instruction is pinned as a whole paragraph, so a reworded, negated or truncated copy fails.
+  check(
+    paragraphsOf(assess).includes(
+      'Load `{evaluationPlansStepFile}`, read it completely, and run its sections 1 and 2 (detect and validate) against the repository, holding what it finds in the conversation. Every `ci/evaluation-ci-plan.json` it finds is an edit to apply.',
+    ),
+    'edit mode: the assess step lacks its whole instruction that loads {evaluationPlansStepFile} for sections 1 and 2',
+  );
+  check(
+    paragraphsOf(apply).includes(
+      'When step 1 found evaluation plans, run sections 3 and 4 of `{evaluationPlansStepFile}` on the loaded pipeline file when it is a pipeline file, then return here. Skip its section 5.',
+    ),
+    'edit mode: the apply step lacks its whole instruction that loads {evaluationPlansStepFile} for sections 3 and 4 and skips section 5',
+  );
   check(edit === 'steps-e/step-01-assess.md', `edit mode: SKILL.md routes E to ${edit}, which is not the assess step`);
 
   // Resume: the checkpoint's last step routes onto the detection step and past it.
@@ -145,9 +172,16 @@ function checkEntryPoints() {
     /'step-03b-render-evaluation-plans'` → Load `\.\/step-04-validate-and-summary\.md`/.test(resumeText),
     'resume mode: a run last saved at the detection step skips the validation step',
   );
+  const dashboard = resumeText.split('\n').find((line) => line.startsWith('4. Render Evaluation Plans'));
   check(
-    /not run: checkpoint predates this step, use \[E\] Edit to render plans/.test(resumeText),
-    'resume mode: the dashboard of a checkpoint that predates the detection step does not say so',
+    dashboard ===
+      '4. Render Evaluation Plans (step-03b-render-evaluation-plans) — {✅ if in stepsCompleted, ⬜ otherwise; when `lastStep` is `step-04-validate-and-summary` and this step is absent, "not run: checkpoint predates this step, use [E] Edit to render plans"}',
+    'resume mode: the dashboard line of the detection step differs from the one that tells a checkpoint predating it to use [E] Edit',
+  );
+  const rows = resumeText.split('\n').filter((line) => /^\d+\. .*\(step-[\w-]+\) — /.test(line));
+  check(
+    rows.length === chain.length && resumeText.includes(`of ${chain.length}\n`),
+    `resume mode: the dashboard lists ${rows.length} steps and the create chain runs ${chain.length}`,
   );
 }
 
@@ -201,8 +235,8 @@ function checkTemplateBlock() {
     'the evaluation block does not install the evaluations folder with --prefix in exactly one step',
   );
   check(
-    !steps.some((step) => typeof step?.run === 'string' && /^npm (ci|install)\s*(#.*)?$/m.test(step.run.trim())),
-    'the evaluation block runs a root install',
+    !steps.some((step) => typeof step?.run === 'string' && /^npm (?:ci|install|i)\b(?![^\n]*--prefix)/m.test(step.run)),
+    'the evaluation block runs an npm install with no --prefix',
   );
   check(
     !steps.some((step) => step?.with?.cache !== undefined),
@@ -226,7 +260,38 @@ function checkTemplateBlock() {
     upload?.with?.path === 'EVALUATION_FOLDER/runs/',
     `the evaluation upload path is ${JSON.stringify(upload?.with?.path)} where the evaluation folder's runs/ directory belongs`,
   );
+  check(upload?.with?.['if-no-files-found'] === 'warn', 'the evaluation upload lacks if-no-files-found: warn');
   check(steps.indexOf(upload) > steps.indexOf(tierStep), 'the evaluation upload comes before the tier step');
+
+  // The Node setup chooses the project's .nvmrc only at or above the floor the tooling declares.
+  const nodeStep = steps.find((step) => step?.id === 'node-version');
+  check(
+    typeof nodeStep?.run === 'string' && nodeStep.run.includes('floor=NODE_FLOOR') && nodeStep.run.includes('value=NODE_LTS'),
+    'the evaluation block lacks a Node version step that starts from the NODE_FLOOR and NODE_LTS placeholders',
+  );
+  check(
+    nodeStep?.run.includes('sort -V') && nodeStep.run.includes('"$GITHUB_OUTPUT"'),
+    'the Node version step does not compare .nvmrc with the floor or does not write its output',
+  );
+
+  // The legend and prose the render rules rest on are pinned line by line.
+  const prose = template
+    .split('\n')
+    .map((line) => line.replace(/^# ?/, ''))
+    .join(' ')
+    .replaceAll(/\s+/g, ' ');
+  for (const line of [
+    'JOB_ID:             evaluation-<tier>, or evaluation-<folder>-<tier> for several plans',
+    'TIMEOUT_MINUTES:    30 for pr and merge, 120 for scheduled and release',
+    'NODE_FLOOR:         the lower bound of engines.node of the TeA package, 22.20.0 when it is not readable',
+    'INSTALL:            npm ci when the evaluations folder holds a package-lock.json, else npm install',
+  ]) {
+    check(template.split('\n').includes(`#   ${line}`), `the template legend lacks the line ${JSON.stringify(line)}`);
+  }
+  check(
+    prose.includes('A merge job repeats the step pattern for the pr tier, then for the merge tier.'),
+    'the template prose lacks the sentence that orders the merge job: the pr tier, then the merge tier',
+  );
 
   // The template as a whole stays YAML a workflow can start from.
   try {
@@ -261,7 +326,7 @@ function checkNoRestatedTable() {
   const files = skillFiles();
   check(
     files.length > 10 && files.includes(STEP),
-    `the scan found ${files.length} skill files and ${files.includes(STEP) ? 'the step' : 'not the step'}`,
+    `the whole-skill scan covers ${files.length} files and ${files.includes(STEP) ? 'includes' : 'omits'} the step`,
   );
   for (const relative of files) {
     const restated = distinctive.filter((id) => (readSkill(relative) ?? '').includes(id));
@@ -306,7 +371,7 @@ function checkFixturePlan() {
   );
 
   const prIds = checkIdsOf(adopter.plan, 'pr');
-  check(prIds.length >= 2, `the plan places ${prIds.length} checks on pr`);
+  check(prIds.length >= 2, `the plan places ${prIds.length} checks on pr where the tier step needs at least two to be named for them`);
 
   const groundTruth = JSON.parse(fs.readFileSync(GROUND_TRUTH, 'utf8'));
   const set = groundTruth.fixtureSets.find((entry) => entry.id === SET_ID);
@@ -356,11 +421,199 @@ function checkStepNaming() {
       .elements.filter((element) => !element.present)
       .map((element) => element.id);
   check(missesOf(capture).length === 0, `the stored capture misses ${missesOf(capture).join(', ')}`);
-  const renamed = capture.replace(/name: "check, compile, seal, oracle-agreement, replay"/, 'name: "evaluate"');
-  check(renamed !== capture, 'the stored capture no longer names its tier step for the checks, so the renaming case cannot run');
+  const named = 'name: "check, compile, seal, oracle-agreement, replay"';
+  for (const [label, replacement] of [
+    ['evaluate', 'name: "evaluate"'],
+    ['the list without its last id', 'name: "check, compile, seal, oracle-agreement"'],
+    ['the list without its first id', 'name: "compile, seal, oracle-agreement, replay"'],
+  ]) {
+    const renamed = capture.replace(named, replacement);
+    check(renamed !== capture, `the stored capture no longer names its tier step for the checks, so the case for ${label} cannot run`);
+    check(
+      missesOf(renamed).join(',') === 'command-evaluation-ci-pr',
+      `a tier step named for ${label} misses ${missesOf(renamed).join(', ') || 'nothing'} where the tier step element belongs`,
+    );
+  }
+
+  // The marker belongs inside the evaluation job. Moved into a job that follows it, the job element misses.
+  const marker = '    # tea-evaluation-plan: evals/grader/ci/evaluation-ci-plan.json\n';
+  const moved = `${capture.replace(marker, '')}\n  later:\n${marker}    runs-on: ubuntu-latest\n    steps:\n      - run: echo later\n`;
+  check(capture.includes(marker), 'the stored capture lacks the marker comment the marker case moves');
   check(
-    missesOf(renamed).join(',') === 'command-evaluation-ci-pr',
-    `a tier step named "evaluate" misses ${missesOf(renamed).join(', ') || 'nothing'} where the tier step element belongs`,
+    missesOf(moved).join(',') === 'job-evaluation-pr',
+    `the marker moved into a following job misses ${missesOf(moved).join(', ') || 'nothing'} where the job element belongs`,
+  );
+}
+
+/**
+ * Renderings the step prescribes that the stored capture does not show, scored through the same elements: a merge job
+ * that repeats the pr step before its own, an evaluations folder with a lockfile, and the evaluation job's Node floor.
+ */
+function checkPrescribedRenderings() {
+  const base = JSON.parse(fs.readFileSync(GROUND_TRUTH, 'utf8')).fixtureSets.find((entry) => entry.id === SET_ID);
+  const command = (id, text, extra = {}) => ({ id, kind: 'command', command: text, standaloneStep: true, ...extra });
+  const prStep = 'npm exec --prefix evals -- tea-evaluate ci --evaluation evals/grader --tier pr';
+  const mergeStep = 'npm exec --prefix evals -- tea-evaluate ci --evaluation evals/grader --tier merge';
+  const scored = (elements, text, nvmrcVersion = '24') =>
+    scoreRun({ ...base, nvmrcVersion, expectedElements: elements }, text, { findings: [] });
+  const missesOf = (result) => result.elements.filter((element) => !element.present).map((element) => element.id);
+
+  const workflow = (jobs) => `name: t\non:\n  pull_request:\n  push:\n    branches: [main]\njobs:\n${jobs}`;
+  const step = (name, run) => `      - name: ${name}\n        run: |\n          ${run}\n`;
+  const mergePipeline = workflow(
+    `  test:\n    runs-on: ubuntu-latest\n    steps:\n${step('install', 'npm ci')}` +
+      `  evaluation-pr:\n    runs-on: ubuntu-latest\n    steps:\n${step('install', 'npm ci --prefix evals')}${step('pr', prStep)}` +
+      `  evaluation-merge:\n    runs-on: ubuntu-latest\n    steps:\n${step('pr', prStep)}${step('merge', mergeStep)}`,
+  );
+  const elements = [
+    command('root-install', 'npm ci'),
+    command('lockfile-install', 'npm ci --prefix evals'),
+    command('pr', prStep),
+    command('merge', mergeStep),
+    { id: 'on-pull-request', kind: 'trigger', event: 'pull_request' },
+    { id: 'on-push', kind: 'trigger', event: 'push', branches: ['main'] },
+  ];
+  const merged = scored(elements, mergePipeline);
+  check(missesOf(merged).length === 0, `a merge job that repeats the pr step before its own misses ${missesOf(merged).join(', ')}`);
+  check(
+    merged.unrequested.length === 0 && merged.ruleViolations.length === 0,
+    'a merge job and a lockfile install score unrequested elements or violations',
+  );
+  const repeated = mergePipeline.replace(step('merge', mergeStep), step('merge', mergeStep) + step('again', mergeStep));
+  check(missesOf(scored(elements, repeated)).join(',') === 'merge', 'a merge step repeated inside one job does not miss');
+
+  // Node floor: an evaluation job runs the project's .nvmrc only at or above the floor.
+  const floor = { id: 'floor', kind: 'node-version', scope: 'evaluation', floor: '22.20.0' };
+  const job = (setup) =>
+    workflow(
+      `  evaluation-pr:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/setup-node@v4\n        with:\n${setup}${step('pr', prStep)}`,
+    );
+  const fileSetup = '          node-version-file: .nvmrc\n';
+  check(missesOf(scored([floor], job(fileSetup), '24')).length === 0, 'an evaluation job on .nvmrc 24 misses the Node floor');
+  check(
+    missesOf(scored([floor], job(fileSetup), '20')).join(',') === 'floor',
+    'an evaluation job on .nvmrc 20 does not miss the Node floor',
+  );
+  check(
+    missesOf(scored([floor], job('          node-version: 20\n'), '24')).join(',') === 'floor',
+    'an evaluation job on a literal Node 20 does not miss the floor',
+  );
+  check(
+    missesOf(scored([floor], job('          node-version: 24\n'), '20')).length === 0,
+    'an evaluation job on a literal Node 24 misses the Node floor',
+  );
+  const guarded = workflow(
+    `  evaluation-pr:\n    runs-on: ubuntu-latest\n    steps:\n      - id: node-version\n        run: |\n          floor=22.20.0\n          echo "value=$floor" >> "$GITHUB_OUTPUT"\n      - uses: actions/setup-node@v4\n        with:\n          node-version: \${{ steps.node-version.outputs.value }}\n${step('pr', prStep)}`,
+  );
+  check(missesOf(scored([floor], guarded, '20')).length === 0, 'an evaluation job whose Node step names the floor misses it');
+  const testJobOnly = workflow(
+    `  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/setup-node@v4\n        with:\n${fileSetup}`,
+  );
+  check(
+    missesOf(scored([floor], testJobOnly, '24')).join(',') === 'floor',
+    'a pipeline with no evaluation job does not miss the Node floor',
+  );
+  const scoped = { id: 'tests', kind: 'node-version', scope: 'jobs-without-evaluation' };
+  const both = workflow(
+    `  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/setup-node@v4\n        with:\n${fileSetup}` +
+      `  evaluation-pr:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/setup-node@v4\n        with:\n          node-version: 24\n${step('pr', prStep)}`,
+  );
+  check(missesOf(scored([scoped], both, '24')).length === 0, 'the test job scope misses a literal Node 24 in the evaluation job');
+}
+
+/** The sentences of the step the renderer's behavior rests on, each pinned whole and anchored at a sentence start. */
+function checkStepSentences() {
+  const step = readSkill(STEP) ?? '';
+  const sentences = [
+    [
+      'detection lists tracked and untracked files',
+      'List the files named `evaluation-ci-plan.json` whose parent directory is `ci` with `git ls-files --cached --others --exclude-standard`, so a plan Evaluate has just written and not yet committed is found while ignored copies are skipped.',
+    ],
+    [
+      'detection skip list',
+      'Skip `node_modules/`, `runs/` and `baseline/`, and skip a plan whose `ci/` is a symbolic link, naming it in the summary.',
+    ],
+    [
+      'only ci-plan findings refuse a plan',
+      'Refuse the plan only when a finding line concerns `ci/evaluation-ci-plan.json` (the `ci-plan` family, exit 10): report those findings verbatim and do not render that plan.',
+    ],
+    [
+      'validation runs check through npm exec',
+      'With a shell, run `npm exec --prefix <evaluations folder> -- tea-evaluate check --evaluation <evaluation folder>`.',
+    ],
+    [
+      'job id digest on a collision',
+      "When that id equals the id of a job this step did not write, or of another plan's job, append a hyphen and the first six hexadecimal characters of the SHA-256 of the plan path.",
+    ],
+    [
+      'install of the evaluations folder',
+      'Then install the evaluations folder: `npm ci --prefix <evaluations folder>` when it holds a `package-lock.json`, else `npm install --prefix <evaluations folder>`.',
+    ],
+    ['no root install', 'Never run the root install in this job.'],
+    [
+      'Node floor',
+      "The Node version is the project's `.nvmrc` version only when it is at or above the floor the tooling declares, the lower bound of `engines.node` in the `package.json` of the installed `bmad-method-test-architecture-enterprise` package (22.20.0 when that package is not readable), and the current LTS otherwise:",
+    ],
+    [
+      'the tier step',
+      'Write one standalone `run:` step, `npm exec --prefix <evaluations folder> -- tea-evaluate ci --evaluation <evaluation folder> --tier <tier>`, as a `run: |` block that holds that one command.',
+    ],
+    ['the tier step name', 'Name it for the ids of every check the plan places on the tier, in plan order.'],
+    ['a gate renders nothing', 'Render nothing for a `gate` check, which `ci` runs.'],
+    [
+      'merge order',
+      "The job for the `merge` tier runs the `pr` tier's step first and the `merge` tier's step second, each as its own step, since a tier holds only the checks placed on it.",
+    ],
+    [
+      'never continue-on-error',
+      "Never add `continue-on-error` to a step or to the job: the runtime's exit is the verdict, and a `warn` enforcement is already exit 0 there.",
+    ],
+    [
+      'timeouts',
+      '`timeout-minutes` is 30 for the `pr` and `merge` jobs and 120 for `scheduled` and `release`, whose live checks spend model calls.',
+    ],
+    [
+      're-render by marker path',
+      'Find the jobs that carry a `# tea-evaluation-plan:` marker and match each to its plan by the path in the marker, whatever its id.',
+    ],
+    [
+      'edit mode never writes the checkpoint',
+      'Hold what section 1 finds in the conversation and never write `{outputFile}`: the checkpoint belongs to the create run.',
+    ],
+    [
+      'success line',
+      'Every plan found was validated or reported, and each valid plan is rendered with one `tea-evaluate ci` step per tier and an `if: always()` upload of its `runs/` folder',
+    ],
+  ];
+  for (const [label, sentence] of sentences) {
+    check(hasSentence(step, sentence), `${STEP} lacks the sentence for ${label}, whole and at a sentence start`);
+  }
+  check(
+    step.includes('`.github/workflows/*.yml` and `.github/workflows/*.yaml` are `github-actions`'),
+    `${STEP} lacks the .yml and .yaml platform map for edit mode`,
+  );
+}
+
+/** The files that carry the step's output into summaries and validation name it, so a copy that dropped it fails. */
+function checkSupportingFiles() {
+  const example = readSkill('resources/ci-pipeline-progress.example.md') ?? '';
+  check(
+    example.includes("'step-03b-render-evaluation-plans'") && example.includes('## Step 3b: Render Evaluation Plans'),
+    'the progress example does not list step-03b or carry its section',
+  );
+  check(
+    (readSkill('checklist.md') ?? '').includes('### Step 10: Evaluation Plans'),
+    'the checklist lacks its Step 10 for evaluation plans',
+  );
+  check(
+    (readSkill('steps-v/step-01-validate.md') ?? '').includes('### 3b. Evaluation Plan Check'),
+    'the validate step lacks its 3b evaluation plan check',
+  );
+  check(
+    (readSkill('steps-c/step-04-validate-and-summary.md') ?? '').includes(
+      '- Evaluation plans found by step 3b rendered, one `tea-evaluate ci` step per tier',
+    ),
+    'the validation step lacks its evaluation plan bullet',
   );
 }
 
@@ -437,6 +690,11 @@ function checkStoredCapture() {
       typeof expected.storedOutput.capturedBy === 'string' && expected.storedOutput.capturedBy.length > 0,
       `${name} is a real capture and does not say which run produced it`,
     );
+    const stored = fs.readFileSync(path.join(directory, '.github', 'workflows', 'test.yml'));
+    check(
+      expected.storedOutput.sha256 === crypto.createHash('sha256').update(stored).digest('hex'),
+      `${name} holds a workflow whose sha256 differs from the one recorded when the run was captured`,
+    );
   }
   // The live run's workflow, kept byte for byte, is what holds the rendering. The other cases are single deviations from it.
   check(captures === 1, `test/replay/ci holds ${captures} real captures of the evaluation-plan project, expected one`);
@@ -447,8 +705,11 @@ async function main() {
   checkTemplateBlock();
   checkNoRestatedTable();
   checkFixturePlan();
+  checkStepSentences();
+  checkSupportingFiles();
   checkManifestFixtures();
   checkStepNaming();
+  checkPrescribedRenderings();
   await checkCorpusGuards();
   checkStoredCapture();
 

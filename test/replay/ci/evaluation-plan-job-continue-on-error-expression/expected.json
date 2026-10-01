@@ -1,9 +1,9 @@
 {
   "$comment": [
-    "Why this case is in the corpus: the upload's condition is the wrapped spelling GitHub allows, `${{ always() }}`. It means the same as always(), so the case passes and pins that the wrapper alone is no deviation.",
+    "Why this case is in the corpus: the evaluation job carries continue-on-error as an expression, `${{ true }}`, which suppresses failures like the literal and is the spelling a literal check misses.",
     "Every other element is the capture's, so the result is that one deviation."
   ],
-  "id": "evaluation-plan-upload-wrapped-condition",
+  "id": "evaluation-plan-job-continue-on-error-expression",
   "suite": "ci",
   "scorerVersion": 15,
   "storedOutput": {
@@ -16,7 +16,7 @@
     "scoringInputsDigest": "sha256:3ca50810b3cf55b8d929e12e756976d8ad029fbed783f097b1621832140eb857"
   },
   "derivation": [
-    "The file parses and lints clean. The upload's if, with its expression wrapper removed, is always(), so every element is present, nothing unrequested was added and no rule is violated."
+    "The file parses and lints clean and every element is present, but the job that runs tea-evaluate carries a continue-on-error that is not the literal false, so the result carries one rule violation."
   ],
   "result": {
     "isMinimalRequest": false,
@@ -41,6 +41,8 @@
     },
     "elementMisses": [],
     "unrequested": [],
-    "ruleViolations": []
+    "ruleViolations": [
+      "continue-on-error: on the job evaluation-pr, which runs an evaluation check"
+    ]
   }
 }

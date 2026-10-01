@@ -3,7 +3,7 @@
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "tea-ci-behavioral",
-  "sourceSpecDigest": "sha256:ce0e31576fcd32ccb96b2d084113c40b2e72f211e462192195e68c6bfe99c3cb",
+  "sourceSpecDigest": "sha256:68b1034ae1d5aa3adfacf49a861ef0a3e289a49adbcb6046fb6f49a434a75fd0",
   "behaviors": [
     {
       "id": "B-001",

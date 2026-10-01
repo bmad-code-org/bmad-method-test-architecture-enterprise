@@ -1,9 +1,9 @@
 {
   "$comment": [
-    "Why this case is in the corpus: the upload's condition is the wrapped spelling GitHub allows, `${{ always() }}`. It means the same as always(), so the case passes and pins that the wrapper alone is no deviation.",
+    "Why this case is in the corpus: the evaluation job runs Node 20, the version an adopter's older .nvmrc pins, where the tooling declares Node 22.20.0 or later and exits 12 below it, so every pull request of such an adopter would be blocked.",
     "Every other element is the capture's, so the result is that one deviation."
   ],
-  "id": "evaluation-plan-upload-wrapped-condition",
+  "id": "evaluation-plan-evaluation-node-below-floor",
   "suite": "ci",
   "scorerVersion": 15,
   "storedOutput": {
@@ -16,7 +16,7 @@
     "scoringInputsDigest": "sha256:3ca50810b3cf55b8d929e12e756976d8ad029fbed783f097b1621832140eb857"
   },
   "derivation": [
-    "The file parses and lints clean. The upload's if, with its expression wrapper removed, is always(), so every element is present, nothing unrequested was added and no rule is violated."
+    "The file parses and lints clean and every other element is present, but the evaluation job's setup-node can run a Node below 22.20.0, so the evaluation floor element misses."
   ],
   "result": {
     "isMinimalRequest": false,
@@ -31,7 +31,7 @@
       "trigger-pull-request-main": true,
       "permission-contents-read": true,
       "node-version-from-nvmrc": true,
-      "node-version-evaluation-floor": true,
+      "node-version-evaluation-floor": false,
       "command-install": true,
       "command-unit-tests": true,
       "command-evaluation-install": true,
@@ -39,7 +39,9 @@
       "job-evaluation-pr": true,
       "artifact-evaluation-runs": true
     },
-    "elementMisses": [],
+    "elementMisses": [
+      "node-version-evaluation-floor: setup-node in job evaluation-pr can run a Node below 22.20.0"
+    ],
     "unrequested": [],
     "ruleViolations": []
   }

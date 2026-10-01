@@ -13,10 +13,10 @@
   "inputs": {
     "groundTruth": "test/fixtures/ci-eval/ground-truth.json",
     "fixtureSet": "evaluation-plan-quarry-grader",
-    "scoringInputsDigest": "sha256:beec250ed15e6758311fcbdad2d38e095ca2e1de42a6b1ac3d0128a486289042"
+    "scoringInputsDigest": "sha256:3ca50810b3cf55b8d929e12e756976d8ad029fbed783f097b1621832140eb857"
   },
   "derivation": [
-    "The file parses and lints clean, but the root npm ci is invoked by two run: blocks, so that element misses. Everything else is present."
+    "The file parses and lints clean and every element is present, but the evaluation job runs a root npm ci, which the scorer reports as a rule violation."
   ],
   "result": {
     "isMinimalRequest": false,
@@ -31,17 +31,18 @@
       "trigger-pull-request-main": true,
       "permission-contents-read": true,
       "node-version-from-nvmrc": true,
-      "command-install": false,
+      "node-version-evaluation-floor": true,
+      "command-install": true,
       "command-unit-tests": true,
       "command-evaluation-install": true,
       "command-evaluation-ci-pr": true,
       "job-evaluation-pr": true,
       "artifact-evaluation-runs": true
     },
-    "elementMisses": [
-      "command-install: 2 run: blocks invoke npm ci, expected one"
-    ],
+    "elementMisses": [],
     "unrequested": [],
-    "ruleViolations": []
+    "ruleViolations": [
+      "root-install: npm ci in job evaluation-pr, which runs an evaluation check"
+    ]
   }
 }

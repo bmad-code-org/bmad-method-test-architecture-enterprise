@@ -1,7 +1,7 @@
 {
   "$comment": [
     "Why this case is in the corpus: it is the REAL CAPTURE of the evaluation-plan project, produced by the live eval:ci path (tea-ci-runner through the local Claude Code CLI, the harness's own prompt and staged workspace) over the skill with step-03b-render-evaluation-plans.md.",
-    "The run found evals/grader/ci/evaluation-ci-plan.json without being told where it was and the evaluations folder's package.json beside it, wrote an evaluation-pr job under the plan's marker, installed evals/ with --prefix, rendered the plan's five pr checks as the one `tea-evaluate ci --tier pr` step named for all five, and uploaded evals/grader/runs/ under if: always()."
+    "The run found evals/grader/ci/evaluation-ci-plan.json without being told where it was and the evaluations folder's package.json beside it, wrote an evaluation-pr job under the plan's marker, chose its Node version against the tooling's floor, installed evals/ with --prefix, rendered the plan's five pr checks as the one `tea-evaluate ci --tier pr` step named for all five, and uploaded evals/grader/runs/ under if: always()."
   ],
   "id": "evaluation-plan-live-capture",
   "suite": "ci",
@@ -9,15 +9,16 @@
   "storedOutput": {
     "origin": "real-capture",
     "workflow": ".github/workflows/test.yml",
-    "capturedBy": "a live `node test/eval-ci.js --agent claude --runs 2 --set evaluation-plan-quarry-grader` run on 2026-10-01 (9 of 9 requested elements, 0 unrequested, stable across both repetitions, every threshold met), whose staged workspace and prompt were run once more by hand through cli/ci-runner.js and the local Claude Code CLI because the harness discards the workflow it scores; the file is the by-hand run's, byte for byte"
+    "sha256": "d9d166214d8f25cfa0c9e2ac6ded56fef62624dbab988eb35e0fbcae0d448775",
+    "capturedBy": "a live `node test/eval-ci.js --agent claude --runs 2 --set evaluation-plan-quarry-grader` run on 2026-10-01 (10 of 10 requested elements, 0 unrequested, stable across both repetitions, every threshold met), whose staged workspace and prompt were run once more by hand through cli/ci-runner.js and the local Claude Code CLI because the harness discards the workflow it scores; the file is the by-hand run's, byte for byte"
   },
   "inputs": {
     "groundTruth": "test/fixtures/ci-eval/ground-truth.json",
     "fixtureSet": "evaluation-plan-quarry-grader",
-    "scoringInputsDigest": "sha256:beec250ed15e6758311fcbdad2d38e095ca2e1de42a6b1ac3d0128a486289042"
+    "scoringInputsDigest": "sha256:3ca50810b3cf55b8d929e12e756976d8ad029fbed783f097b1621832140eb857"
   },
   "derivation": [
-    "The file parses and actionlint reports nothing. All nine requested elements are present: the pull_request trigger scoped to main, contents:read, the Node version from .nvmrc, the root npm ci and npm test, the evaluations folder's install, the one tea-evaluate ci step run through npm exec with that prefix and named for the five checks, the evaluation-pr job under its marker, and the upload of evals/grader/runs/ under always().",
+    "The file parses and actionlint reports nothing. All ten requested elements are present: the pull_request trigger scoped to main, contents:read, the Node version from .nvmrc in the test job, the root npm ci and npm test, an evaluation job whose Node version is chosen by a step that keeps the project's .nvmrc only at or above the tooling's 22.20.0 floor, the evaluations folder's install, the one tea-evaluate ci step run through npm exec with that prefix and named for the five checks, the evaluation-pr job under its marker, and the upload of evals/grader/runs/ under always().",
     "Zero unrequested elements and zero rule violations: the only upload is the requested one, and neither the evaluation step nor its job carries continue-on-error."
   ],
   "result": {
@@ -33,6 +34,7 @@
       "trigger-pull-request-main": true,
       "permission-contents-read": true,
       "node-version-from-nvmrc": true,
+      "node-version-evaluation-floor": true,
       "command-install": true,
       "command-unit-tests": true,
       "command-evaluation-install": true,

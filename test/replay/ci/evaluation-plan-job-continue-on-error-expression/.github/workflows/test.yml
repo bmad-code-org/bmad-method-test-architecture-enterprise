@@ -37,6 +37,7 @@ jobs:
     name: "Evaluation (pr)"
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    continue-on-error: ${{ true }}
 
     steps:
       - uses: actions/checkout@v4
@@ -66,7 +67,7 @@ jobs:
           npm exec --prefix evals -- tea-evaluate ci --evaluation evals/grader --tier pr
 
       - name: Upload evaluation runs
-        if: ${{ always() }}
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: evaluation-pr-runs

@@ -135,7 +135,7 @@
       "section": "3. Render Each Plan",
       "lines": "66-95",
       "rule": "A detected evaluation plan renders as a job per tier it places a check on, and the job's one step runs tea-evaluate ci for that tier through npm exec with the evaluations folder as its prefix, as a standalone run: step named for every check on the tier.",
-      "requiredPhrase": "Write one standalone `run:` step, `npm exec --prefix <evaluations folder> -- tea-evaluate ci"
+      "requiredPhrase": "Write one standalone `run:` step, `npm exec --prefix <evaluations folder> -- tea-evaluate ci --evaluation <evaluation folder> --tier <tier>`, as a `run: |` block that holds that one command."
     },
     "evaluationRunsUpload": {
       "file": "src/workflows/testarch/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
@@ -150,6 +150,13 @@
       "lines": "66-95",
       "rule": "The evaluation job installs the evaluations folder's private package.json with --prefix and never runs the root install.",
       "requiredPhrase": "Never run the root install in this job."
+    },
+    "evaluationNodeFloor": {
+      "file": "src/workflows/testarch/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
+      "section": "3. Render Each Plan",
+      "lines": "66-95",
+      "rule": "The evaluation job runs the project's .nvmrc version only when it is at or above the floor the tooling declares, and the current LTS otherwise, so a project pinned to an older Node is not blocked.",
+      "requiredPhrase": "the lower bound of `engines.node` in the `package.json` of the installed `bmad-method-test-architecture-enterprise` package"
     }
   },
   "negativeControls": [
@@ -485,7 +492,17 @@
         {
           "id": "node-version-from-nvmrc",
           "kind": "node-version",
+          "scope": "jobs-without-evaluation",
           "rule": "nodeVersionFromNvmrc",
+          "requestQuote": "use the Node version pinned in `.nvmrc`",
+          "contractToken": null
+        },
+        {
+          "id": "node-version-evaluation-floor",
+          "kind": "node-version",
+          "scope": "evaluation",
+          "floor": "22.20.0",
+          "rule": "evaluationNodeFloor",
           "requestQuote": "use the Node version pinned in `.nvmrc`",
           "contractToken": null
         },
@@ -553,7 +570,7 @@
         }
       ],
       "mustNotEmit": [],
-      "why": "Nine elements, every one stated in docs/ci-requirements.md, and a closing sentence that forbids the rest, which the unrequested-element ceiling holds. The request never names the plan: it says the repository holds an evaluation and asks for its pull request checks, so a run that does not detect ci/evaluation-ci-plan.json has no way to write them. The plan is a copy of the Story 1.10 fixture's with its evaluation folder moved to evals/grader, and its five pr checks share one runtime entry, tea-evaluate ci --tier pr, which runs every check of the tier, so a run that renders a step per check runs the tier several times and a run that renders none writes nothing. The evaluations folder evals/ holds the private package.json AD-20 writes, so the tooling installs and runs with --prefix evals and the root install stays in the test job. The artifact element is the one in the corpus whose condition is always(): the evidence of a failing run is the evidence worth reading."
+      "why": "Ten elements, every one stated in docs/ci-requirements.md, and a closing sentence that forbids the rest, which the unrequested-element ceiling holds. The request never names the plan: it says the repository holds an evaluation and asks for its pull request checks, so a run that does not detect ci/evaluation-ci-plan.json has no way to write them. The plan is a copy of the Story 1.10 fixture's with its evaluation folder moved to evals/grader, and its five pr checks share one runtime entry, tea-evaluate ci --tier pr, which runs every check of the tier, so a run that renders a step per check runs the tier several times and a run that renders none writes nothing. The evaluations folder evals/ holds the private package.json AD-20 writes, so the tooling installs and runs with --prefix evals and the root install stays in the test job. The artifact element is the one in the corpus whose condition is always(): the evidence of a failing run is the evidence worth reading."
     }
   ]
 }

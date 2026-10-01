@@ -13,10 +13,10 @@
   "inputs": {
     "groundTruth": "test/fixtures/ci-eval/ground-truth.json",
     "fixtureSet": "evaluation-plan-quarry-grader",
-    "scoringInputsDigest": "sha256:beec250ed15e6758311fcbdad2d38e095ca2e1de42a6b1ac3d0128a486289042"
+    "scoringInputsDigest": "sha256:3ca50810b3cf55b8d929e12e756976d8ad029fbed783f097b1621832140eb857"
   },
   "derivation": [
-    "The file parses and lints clean and keeps the five elements the request states outright. The evaluation install, the tier step, the job and the upload are absent, so four elements miss. Nothing unrequested was added."
+    "The file parses and lints clean and keeps the five elements the request states outright. The evaluation install, the tier step, the job, its Node floor and the upload are absent, so five elements miss. Nothing unrequested was added."
   ],
   "result": {
     "isMinimalRequest": false,
@@ -31,6 +31,7 @@
       "trigger-pull-request-main": true,
       "permission-contents-read": true,
       "node-version-from-nvmrc": true,
+      "node-version-evaluation-floor": false,
       "command-install": true,
       "command-unit-tests": true,
       "command-evaluation-install": false,
@@ -39,6 +40,7 @@
       "artifact-evaluation-runs": false
     },
     "elementMisses": [
+      "node-version-evaluation-floor: no actions/setup-node step in evaluation",
       "command-evaluation-install: no run: block invokes npm install --prefix evals",
       "command-evaluation-ci-pr: no run: block invokes npm exec --prefix evals -- tea-evaluate ci --evaluation evals/grader --tier pr",
       "job-evaluation-pr: no job is named evaluation-pr",

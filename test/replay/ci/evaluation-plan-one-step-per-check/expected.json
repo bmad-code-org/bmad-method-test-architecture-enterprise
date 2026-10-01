@@ -13,7 +13,7 @@
   "inputs": {
     "groundTruth": "test/fixtures/ci-eval/ground-truth.json",
     "fixtureSet": "evaluation-plan-quarry-grader",
-    "scoringInputsDigest": "sha256:beec250ed15e6758311fcbdad2d38e095ca2e1de42a6b1ac3d0128a486289042"
+    "scoringInputsDigest": "sha256:3ca50810b3cf55b8d929e12e756976d8ad029fbed783f097b1621832140eb857"
   },
   "derivation": [
     "The file parses and lints clean, but the tier command is invoked by five run: blocks where one is expected, so the tier step element misses. Everything else is present."
@@ -31,6 +31,7 @@
       "trigger-pull-request-main": true,
       "permission-contents-read": true,
       "node-version-from-nvmrc": true,
+      "node-version-evaluation-floor": true,
       "command-install": true,
       "command-unit-tests": true,
       "command-evaluation-install": true,
@@ -39,7 +40,7 @@
       "artifact-evaluation-runs": true
     },
     "elementMisses": [
-      "command-evaluation-ci-pr: 5 run: blocks invoke npm exec --prefix evals -- tea-evaluate ci --evaluation evals/grader --tier pr, expected one"
+      "command-evaluation-ci-pr: 5 run: blocks of job evaluation-pr invoke npm exec --prefix evals -- tea-evaluate ci --evaluation evals/grader --tier pr, expected one"
     ],
     "unrequested": [],
     "ruleViolations": []

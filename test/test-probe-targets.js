@@ -1288,7 +1288,7 @@ function checkCiHarnessSmoke(runDir) {
   const complete = runCiHarness(runDir, 'complete', ['--runs', '2']);
   assert(
     complete.status === 0,
-    'a correct pipeline for both projects, twice, exits 0',
+    'a correct pipeline for all three projects, twice, exits 0',
     complete.stderr.trim().split('\n').slice(-3).join(' | '),
   );
   assert(
@@ -1298,8 +1298,8 @@ function checkCiHarnessSmoke(runDir) {
   );
   const runner = complete.record?.runners?.[0];
   assert(
-    runner?.repetitions?.expected === 4 && runner?.repetitions?.completed === 4,
-    'every declared repetition completed: two projects, two runs each',
+    runner?.repetitions?.expected === 6 && runner?.repetitions?.completed === 6,
+    'every declared repetition completed: three projects, two runs each',
     JSON.stringify(runner?.repetitions),
   );
   assert(runner?.failures?.length === 0, 'every threshold is met on the correct pipeline', JSON.stringify(runner?.failures));

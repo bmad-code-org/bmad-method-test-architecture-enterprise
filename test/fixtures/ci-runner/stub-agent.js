@@ -12,7 +12,8 @@
  * .github/workflows/ directory. This stub copies a checked-in workflow there,
  * chosen by which project the workspace carries, so the runner can be driven
  * against it. The workflows are the replay corpus's own correct runs,
- * test/replay/ci/full-correct-pipeline and test/replay/ci/minimal-correct-pipeline,
+ * test/replay/ci/full-correct-pipeline, test/replay/ci/minimal-correct-pipeline and
+ * the real capture test/replay/ci/evaluation-plan-live-capture,
  * which `npm run test:eval-replay` already pins to a scored result; a second copy
  * here would be a second thing to keep in step with the ground truth.
  *
@@ -79,8 +80,12 @@ if (mode === 'nothing') {
 // the stub falls back to the working directory there.
 const named = /^- `\{project-root\}`: `([^`]+)`$/m.exec(prompt)?.[1] ?? null;
 const projectRoot = named === null ? process.cwd() : path.join(process.cwd(), named);
-const minimal = /lantern/.test(named ?? '');
-const replaySource = mode === 'unrequested' ? 'full-correct-pipeline' : minimal ? 'minimal-correct-pipeline' : 'full-correct-pipeline';
+const correctRuns = [
+  [/lantern/, 'minimal-correct-pipeline'],
+  [/quarry/, 'evaluation-plan-live-capture'],
+];
+const replaySource =
+  mode === 'unrequested' ? 'full-correct-pipeline' : (correctRuns.find(([pattern]) => pattern.test(named ?? ''))?.[1] ?? 'full-correct-pipeline');
 const source = path.join(__dirname, '..', '..', 'replay', 'ci', replaySource, '.github', 'workflows', 'test.yml');
 const workflowDir = path.join(projectRoot, '.github', 'workflows');
 fs.mkdirSync(workflowDir, { recursive: true });

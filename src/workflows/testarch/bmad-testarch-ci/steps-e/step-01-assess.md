@@ -60,7 +60,7 @@ Read the provided output file in full.
 
 ### 3. Detect Evaluation Plans
 
-Load `{evaluationPlansStepFile}`, read it completely, and run its sections 1 and 2 (detect and validate) against the repository, holding what it finds in the conversation. Every `ci/evaluation-ci-plan.json` it finds is an edit to apply: Evaluate's CI stage invokes this workflow in edit mode for that purpose.
+Load `{evaluationPlansStepFile}`, read it completely, and run its sections 1 and 2 (detect and validate) against the repository, holding what it finds in the conversation. Every `ci/evaluation-ci-plan.json` it finds is an edit to apply.
 
 ### 4. Confirm
 

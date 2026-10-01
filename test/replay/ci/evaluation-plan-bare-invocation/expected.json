@@ -13,10 +13,10 @@
   "inputs": {
     "groundTruth": "test/fixtures/ci-eval/ground-truth.json",
     "fixtureSet": "evaluation-plan-quarry-grader",
-    "scoringInputsDigest": "sha256:beec250ed15e6758311fcbdad2d38e095ca2e1de42a6b1ac3d0128a486289042"
+    "scoringInputsDigest": "sha256:3ca50810b3cf55b8d929e12e756976d8ad029fbed783f097b1621832140eb857"
   },
   "derivation": [
-    "The file parses and lints clean, but no run: block invokes the npm exec form with the evaluations folder as prefix, so the tier step element and the job element miss."
+    "The file parses and lints clean, but no run: block invokes the npm exec form with the evaluations folder as prefix, so the tier step element and the job element miss, and the bare invocation counts as one unrequested command."
   ],
   "result": {
     "isMinimalRequest": false,
@@ -31,6 +31,7 @@
       "trigger-pull-request-main": true,
       "permission-contents-read": true,
       "node-version-from-nvmrc": true,
+      "node-version-evaluation-floor": true,
       "command-install": true,
       "command-unit-tests": true,
       "command-evaluation-install": true,
@@ -42,7 +43,9 @@
       "command-evaluation-ci-pr: no run: block invokes npm exec --prefix evals -- tea-evaluate ci --evaluation evals/grader --tier pr",
       "job-evaluation-pr: job evaluation-pr does not run npm exec --prefix evals -- tea-evaluate ci --evaluation evals/grader --tier pr"
     ],
-    "unrequested": [],
+    "unrequested": [
+      "command: npx tea-evaluate ci --evaluation evals/grader --tier pr in job evaluation-pr step 5"
+    ],
     "ruleViolations": []
   }
 }
