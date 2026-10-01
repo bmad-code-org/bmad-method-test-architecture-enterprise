@@ -680,7 +680,9 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
    *
    * In a confined run every process the port starts runs through the run's
    * mechanism, writing only `options.workspace` (the workspace's checkout,
-   * which a confined run requires); with `options.audit` the port's Node
+   * which a confined run requires) and reading none of `options.git.directory`
+   * (the project's git directory) but `options.git.metadata` (the worktree's
+   * own entry in it); with `options.audit` the port's Node
    * processes also report the paths they open outside what was granted, which
    * `observedMounts()` reads, and which is empty otherwise.
    *
@@ -710,7 +712,7 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
         status = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-evaluate-status-'));
         scratch.push(status);
       }
-      sandbox = targetSandbox({ confinement, workspace: options.workspace, report, status });
+      sandbox = targetSandbox({ confinement, workspace: options.workspace, git: options.git ?? null, report, status });
       // Each started target's own declared system paths, which its audit grants.
       const declared = new Map();
       const declare = (target, entry) => {

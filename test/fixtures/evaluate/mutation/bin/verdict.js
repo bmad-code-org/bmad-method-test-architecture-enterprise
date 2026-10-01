@@ -104,6 +104,15 @@
  *   read-ungranted          answer as usual, then read the file VERDICT_TOUCH
  *                           names, outside the workspace, printing
  *                           `ungranted-read: <how>` after the verdict
+ *   probe-git               answer as usual, then ask the worktree's git for
+ *                           the committed evaluation folder and for the
+ *                           project's git directory, printing one
+ *                           `<name>: <how>` line per attempt after the verdict
+ *                           (`printed` when git printed something, `none <exit>`
+ *                           when it found nothing, `allowed` or
+ *                           `refused <code>` for a file read), and the
+ *                           worktree's own operations as `<name>: exit <code>`
+ *                           (Story 1.57)
  *   write-temp              answer as usual, then write a file in the temp
  *                           directory TMPDIR names, printing `temp-dir: <path>`
  *                           and `temp-write: <how>` after the verdict
@@ -251,16 +260,65 @@ const attempt = (action) => {
     return `refused ${error.code ?? error.message}`;
   }
 };
-/** The adopter's evaluation folder, found through the git directory the worktree shares with its repository. */
+/**
+ * The adopter's evaluation folder, found through the worktree's own git directory, `<project>/.git/worktrees/<name>`:
+ * a confined target's git no longer shares the project's git directory (Story 1.57), but the path of the worktree's
+ * entry in it still names the project, as it names it to any target that follows the `.git` file.
+ */
 const evaluationFolder = () => {
-  const common = spawnSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { encoding: 'utf8' }).stdout.trim();
-  return path.join(path.dirname(common), 'evals', 'verdict');
+  const own = spawnSync('git', ['rev-parse', '--absolute-git-dir'], { encoding: 'utf8' }).stdout.trim();
+  return path.join(path.dirname(path.dirname(path.dirname(own))), 'evals', 'verdict');
 };
 if (act === 'probe-confinement') {
   const folder = evaluationFolder();
   const read = attempt(() => fs.readFileSync(path.join(folder, 'contract.json')));
   const write = attempt(() => fs.writeFileSync(path.join(folder, 'runs', 'tamper.txt'), 'written by the verdict stub\n'));
   process.stdout.write(`contract-read: ${read}\nruns-write: ${write}\n`);
+}
+/** What the worktree's metadata names as its common directory: `../..` for a worktree of the adopter's repository. */
+const commondirOf = (metadata) => {
+  try {
+    return fs.readFileSync(path.join(metadata, 'commondir'), 'utf8').trim();
+  } catch {
+    return 'unreadable';
+  }
+};
+if (act === 'probe-git') {
+  const ask = (...args) => spawnSync('git', args, { encoding: 'utf8' });
+  const printed = (result) => (result.status === 0 && result.stdout.length > 0 ? 'printed' : `none ${result.status}`);
+  const exit = (result) => `exit ${result.status}${result.stdout.length > 0 ? ` (${result.stdout.trim().split('\n').length} line(s))` : ''}`;
+  const own = ask('rev-parse', '--absolute-git-dir').stdout.trim();
+  const projectGit = path.dirname(path.dirname(own));
+  const folder = 'evals/verdict';
+  const lines = [
+    `head-contract-show: ${printed(ask('show', `HEAD:${folder}/contract.json`))}`,
+    `head-contract-cat: ${printed(ask('cat-file', '-p', `HEAD:${folder}/contract.json`))}`,
+    `older-contract-show: ${printed(ask('show', `HEAD~2:${folder}/contract.json`))}`,
+    `folder-tree-cat: ${printed(ask('cat-file', '-p', `HEAD:${folder}`))}`,
+    `folder-tree-without-replace: ${printed(ask('--no-replace-objects', 'cat-file', '-p', `HEAD:${folder}`))}`,
+    `folder-in-tree: ${ask('ls-tree', '-r', '--name-only', 'HEAD').stdout.split('\n').filter((name) => name.startsWith(`${folder}/`)).length}`,
+  ];
+  // Every blob id the history names for a path of the folder, read as a target that guessed one from `git log --raw` would.
+  const raw = ask('log', '--raw', '--no-abbrev', '--format=').stdout.split('\n').filter((line) => line.includes(`${folder}/`));
+  const blobs = [...new Set(raw.flatMap((line) => line.split(/\s+/).filter((word) => /^[0-9a-f]{40}([0-9a-f]{24})?$/.test(word) && !/^0+$/.test(word))))];
+  lines.push(
+    `history-folder-blobs: ${blobs.length}`,
+    `history-blob-read: ${blobs.some((blob) => printed(ask('cat-file', '-p', blob)) === 'printed') ? 'printed' : 'none'}`,
+    `refs-beyond-replace: ${ask('for-each-ref', '--format=%(refname)').stdout.split('\n').filter((name) => name.length > 0 && !name.startsWith('refs/replace/')).length}`,
+    `shared-content-show: ${printed(ask('show', 'HEAD:docs/contract-copy.json'))}`,
+    `tracked-show: ${printed(ask('show', 'HEAD:rules/policy.txt'))}`,
+    `status: ${exit(ask('status', '--porcelain'))}`,
+    `log: ${exit(ask('log', '--oneline'))}`,
+    `diff: ${exit(ask('diff', 'HEAD'))}`,
+    `log-patch: ${exit(ask('log', '-p'))}`,
+    `project-git-head: ${attempt(() => fs.readFileSync(path.join(projectGit, 'HEAD')))}`,
+    `project-git-objects: ${attempt(() => fs.readdirSync(path.join(projectGit, 'objects')))}`,
+    `project-git-config: ${attempt(() => fs.readFileSync(path.join(projectGit, 'config')))}`,
+    `own-git-head: ${attempt(() => fs.readFileSync(path.join(own, 'HEAD')))}`,
+    `commondir-file: ${commondirOf(own)}`,
+    `git-view: ${fs.existsSync(path.join(path.dirname(ask('rev-parse', '--show-toplevel').stdout.trim()), 'git-view')) ? 'present' : 'absent'}`,
+  );
+  process.stdout.write(`${lines.join('\n')}\n`);
 }
 if (act === 'read-ungranted' && process.env.VERDICT_TOUCH) {
   process.stdout.write(`ungranted-read: ${attempt(() => fs.readFileSync(process.env.VERDICT_TOUCH))}\n`);

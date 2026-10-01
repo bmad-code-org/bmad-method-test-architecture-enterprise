@@ -102,7 +102,12 @@ function configuration() {
     const parsed = JSON.parse(process.env[AUDIT_ENV] ?? '');
     if (typeof parsed?.report !== 'string' || !Array.isArray(parsed.granted)) return null;
     const absolute = (list) => (Array.isArray(list) ? list : []).filter((entry) => typeof entry === 'string' && path.isAbsolute(entry));
-    return { report: parsed.report, granted: absolute(parsed.granted), withheld: absolute(parsed.withheld) };
+    return {
+      report: parsed.report,
+      granted: absolute(parsed.granted),
+      withheld: absolute(parsed.withheld),
+      withheldExcept: absolute(parsed.withheldExcept),
+    };
   } catch {
     return null;
   }
@@ -195,9 +200,11 @@ if (config !== null) {
       const absolute = absoluteOf(args[index]);
       if (absolute === null || reported.has(absolute)) continue;
       const real = realLoosely(absolute);
-      // The evaluation folder is reported whatever grant covers it (a system path declared over the project, say) and
-      // whatever the answer, since Bubblewrap hides it behind an empty file system.
-      const withheld = config.withheld.some((root) => isInside(root, absolute) || isInside(root, real));
+      // The evaluation folder, and the project's git directory with its worktree's own entry excepted, are reported
+      // whatever grant covers them (a system path declared over the project, say) and whatever the answer, since
+      // Bubblewrap hides them behind an empty file system.
+      const except = config.withheldExcept.some((root) => isInside(root, absolute) && isInside(root, real));
+      const withheld = !except && config.withheld.some((root) => isInside(root, absolute) || isInside(root, real));
       if (!withheld && granted(real)) continue;
       const writing = kind === 'write' || (kind === 'open' && writes(typeof args[1] === 'function' ? undefined : args[1]));
       if (!writing && !withheld && missing(absolute)) continue;
