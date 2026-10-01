@@ -383,7 +383,7 @@ The `atdd`, `automate`, `ci`, `framework`, `nfr`, `teach-me-testing`, `test-desi
 | `bmad-teach-me-testing`     | N/A                      | Yes; multi-turn session with seeded wrong quiz answer, review loop, and progress    |
 | `bmad-testarch-atdd`        | 3                        | Yes; one unimplemented fixture and five acceptance criteria                         |
 | `bmad-testarch-automate`    | 5                        | Yes; four hand-authored spec sets against a fixed service and its seeded regression |
-| `bmad-testarch-ci`          | 2                        | Yes; one full request and one minimal request                                       |
+| `bmad-testarch-ci`          | 2                        | Yes; one full request, one minimal request and one request over an evaluation plan  |
 | `bmad-testarch-evaluate`    | N/A                      | Yes; Evaluate-authored, a gap-guide class swap seeded and a second held out         |
 | `bmad-testarch-framework`   | 3                        | Yes; install and smoke-test generated scaffold in network-isolated sandbox          |
 | `bmad-testarch-nfr`         | 2                        | Yes; one evidence bundle with known gaps and one clean bundle                       |
@@ -395,7 +395,7 @@ A passing fragment-selection eval means the workflow loaded the right knowledge.
 
 ### Deterministic Checks
 
-`npm test` chains 106 checks. That count covers the whole chain: every entry in it is deterministic and credential-free, so the chain and its credential-free subset are the same list. `npm run test:ci-coverage` derives the count from `package.json` and prints it. Twelve of the 106 keep the rules, guidance, hook, eval data, eval contracts, diagnostics, and documentation aligned:
+`npm test` chains 107 checks. That count covers the whole chain: every entry in it is deterministic and credential-free, so the chain and its credential-free subset are the same list. `npm run test:ci-coverage` derives the count from `package.json` and prints it. Twelve of the 107 keep the rules, guidance, hook, eval data, eval contracts, diagnostics, and documentation aligned:
 
 - `test:criteria-fragments` fails when a registry row is neither mapped to a knowledge fragment nor declared a known gap. A rule the reviewer scores but no fragment teaches is a rule TEA punishes without ever having explained it. All 36 rows are currently mapped across 50 anchors. Because the declared-gap list is empty, the validator feeds itself a synthetic unmapped row on every run to prove that path still works.
 - `test:doc-counts` runs `eval-quality-gates doc-counts`, which holds a hand-written count on a published page against the source that computes it: the roadmap's per-suite `eval:all` call counts, the knowledge-fragment tier breakdown, this section's own npm-test-chain length, and the fragment-selection case count. A pattern matching no sentence, or more than one, fails the same way a wrong number does, so the entry cannot go stale by drifting out from under its own pattern either.
@@ -432,7 +432,7 @@ npm run eval:all -- --agent agy
 npm run eval:all -- --agent agy --agent claude --agent codex
 ```
 
-`eval:all` uses two repetitions per fragment-selection case and per routing intent, three repetitions for `test-review`, and two repetitions per `nfr` evidence bundle, per `ci` project, per `test-design` epic, per `trace` fixture set, and per `atdd` story. One runner makes 107 agent calls: 48 fragment selections, 38 routing intents, 3 reviews, 4 audits, 4 pipelines, 4 test designs, 4 traces, and 2 ATDD generations. All three built-in runners make 321 calls.
+`eval:all` uses two repetitions per fragment-selection case and per routing intent, three repetitions for `test-review`, and two repetitions per `nfr` evidence bundle, per `ci` project, per `test-design` epic, per `trace` fixture set, and per `atdd` story. One runner makes 109 agent calls: 48 fragment selections, 38 routing intents, 3 reviews, 4 audits, 6 pipelines, 4 test designs, 4 traces, and 2 ATDD generations. All three built-in runners make 327 calls.
 
 Check the data, executable, login, fixtures, and expected results without making a model call:
 
@@ -558,7 +558,7 @@ Every row below is a declared gate. Ten of TEA's eleven skills have behavioral s
 
 | Eval                              | Declared threshold                                                                                                                                                                                                                                                                                                                                                                                 | Declared volume                                                                                            |
 | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `npm run eval:all -- --agent ...` | All eight live suites below meet their thresholds for the selected runner                                                                                                                                                                                                                                                                                                                          | 48 selections, 38 routing calls, 3 reviews, 4 audits, 4 pipelines, 4 test designs, 4 traces, 2 generations |
+| `npm run eval:all -- --agent ...` | All eight live suites below meet their thresholds for the selected runner                                                                                                                                                                                                                                                                                                                          | 48 selections, 38 routing calls, 3 reviews, 4 audits, 6 pipelines, 4 test designs, 4 traces, 2 generations |
 | Fragment selection                | At least 90% required-fragment recall, at most 10% forbidden-fragment selection, and stable choices across repeated cases                                                                                                                                                                                                                                                                          | 24 cases twice: 48 calls                                                                                   |
 | Test review                       | At least 70% overall recall, 100% CRITICAL recall, an 80% non-false-positive rate, score standard deviation no higher than 3, and a stable verdict                                                                                                                                                                                                                                                 | Three complete reviews                                                                                     |
 | Trace                             | At least 90% criterion-status accuracy and 90% evidence-citation precision; 100% on both discriminating criteria, the gate decision, the gate criteria, the coverage arithmetic, the oracle resolution, the rejected evidence, the waiver validity, and the live evidence; no clean-set false positive, no unstable case, and no fixture mutation                                                  | Two fixture sets twice: 4 calls                                                                            |
@@ -596,7 +596,7 @@ npm ci
 npm run test:eval-data          # fragment-selection corpus, static
 npm run test:eval-trace-data    # trace corpus, static
 npm run test:eval-schemas       # manifest against harness constants, and the preflight argv
-npm run test:eval-replay        # 123 stored outputs against the scorers
+npm run test:eval-replay        # stored outputs against the scorers
 ```
 
 Run live evals in a scheduled or manually triggered CI job after installing and authenticating the selected agent CLI:

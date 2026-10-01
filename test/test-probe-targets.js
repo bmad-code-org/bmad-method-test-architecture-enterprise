@@ -1288,7 +1288,7 @@ function checkCiHarnessSmoke(runDir) {
   const complete = runCiHarness(runDir, 'complete', ['--runs', '2']);
   assert(
     complete.status === 0,
-    'a correct pipeline for both projects, twice, exits 0',
+    'a correct pipeline for all three projects, twice, exits 0',
     complete.stderr.trim().split('\n').slice(-3).join(' | '),
   );
   assert(
@@ -1298,8 +1298,8 @@ function checkCiHarnessSmoke(runDir) {
   );
   const runner = complete.record?.runners?.[0];
   assert(
-    runner?.repetitions?.expected === 4 && runner?.repetitions?.completed === 4,
-    'every declared repetition completed: two projects, two runs each',
+    runner?.repetitions?.expected === 6 && runner?.repetitions?.completed === 6,
+    'every declared repetition completed: three projects, two runs each',
     JSON.stringify(runner?.repetitions),
   );
   assert(runner?.failures?.length === 0, 'every threshold is met on the correct pipeline', JSON.stringify(runner?.failures));
@@ -1338,6 +1338,20 @@ function checkCiHarnessSmoke(runDir) {
       unrequested.record?.runners?.[0]?.measurements?.unrequestedElements > 0,
     'the record keeps every requested element and counts the elements the request never named',
     JSON.stringify(unrequested.record?.runners?.[0]?.measurements),
+  );
+
+  // The evaluation-plan project is held to every one of its elements, so a run one element short of the correct
+  // pipeline fails the gate although the corpus-wide recall stays above its threshold.
+  const deviation = runCiHarness(runDir, 'deviation', ['--runs', '1']);
+  assert(deviation.status === 1, 'a run one requested element short on the evaluation-plan project exits 1', `exit ${deviation.status}`);
+  assert(
+    deviation.record?.failureClass === 'quality' &&
+      deviation.record?.runners?.[0]?.measurements?.requestedElementRecall >= 0.9 &&
+      deviation.record?.runners?.[0]?.failures?.some((failure) =>
+        failure.includes('evaluation-plan-quarry-grader missed a requested element'),
+      ),
+    'the record names the evaluation-plan project that missed an element while the corpus recall stays above its threshold',
+    JSON.stringify(deviation.record?.runners?.[0]?.failures),
   );
 
   // The workflow scaffolds a pipeline and does not edit the project, so a write

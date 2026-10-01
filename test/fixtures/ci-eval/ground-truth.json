@@ -63,7 +63,7 @@
     "triggersConfigured": {
       "file": "src/workflows/testarch/bmad-testarch-ci/checklist.md",
       "section": "Configuration Validation",
-      "lines": "114-121",
+      "lines": "123-130",
       "rule": "The pipeline's triggers are configured: push, pull_request and schedule as the project needs them.",
       "requiredPhrase": "Triggers configured (push, pull_request, schedule)"
     },
@@ -129,6 +129,34 @@
       "lines": "79-86",
       "rule": "Artifacts are uploaded on failure only, at the paths the framework writes, with a retention period set.",
       "requiredPhrase": "Artifacts upload on failure only"
+    },
+    "evaluationPlanCommandSteps": {
+      "file": "src/workflows/testarch/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
+      "section": "3. Render Each Plan",
+      "lines": "66-95",
+      "rule": "A detected evaluation plan renders as a job per tier it places a check on, and the job's one step runs tea-evaluate ci for that tier through npm exec with the evaluations folder as its prefix, as a standalone run: step named for every check on the tier.",
+      "requiredPhrase": "Write one standalone `run:` step, `npm exec --prefix <evaluations folder> -- tea-evaluate ci --evaluation <evaluation folder> --tier <tier>`, as a `run: |` block that holds that one command."
+    },
+    "evaluationRunsUpload": {
+      "file": "src/workflows/testarch/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
+      "section": "3. Render Each Plan",
+      "lines": "66-95",
+      "rule": "After the check steps the job uploads the evaluation folder's runs/ directory with if: always(), so the evidence of a failing run is kept.",
+      "requiredPhrase": "an upload of `<evaluation folder>/runs/` with `if: always()`"
+    },
+    "evaluationToolingInstall": {
+      "file": "src/workflows/testarch/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
+      "section": "3. Render Each Plan",
+      "lines": "66-95",
+      "rule": "The evaluation job installs the evaluations folder's private package.json with --prefix and never runs the root install.",
+      "requiredPhrase": "Never run the root install in this job."
+    },
+    "evaluationNodeFloor": {
+      "file": "src/workflows/testarch/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md",
+      "section": "3. Render Each Plan",
+      "lines": "66-95",
+      "rule": "The evaluation job runs the project's .nvmrc version only when it is at or above the floor the tooling declares, and the current LTS otherwise, so a project pinned to an older Node is not blocked.",
+      "requiredPhrase": "the lower bound of `engines.node` in the `package.json` of the installed `bmad-method-test-architecture-enterprise` package"
     }
   },
   "negativeControls": [
@@ -420,6 +448,130 @@
         }
       ],
       "why": "Five elements and a closing sentence that forbids the rest. The stack is backend, so step-03's own default is to skip burn-in, and the request adds that nothing beyond one job is wanted. A run that copies the shipped template onto this project carries a schedule trigger, a lint job, a four-way shard matrix, a burn-in loop and two upload steps the request never mentioned, and every one of them is counted as an unrequested element. This set is the control that stops a suite scoring well by emitting everything."
+    },
+    {
+      "id": "evaluation-plan-quarry-grader",
+      "root": "evaluation-plan",
+      "projectRoot": "quarry-grader",
+      "remoteOwner": "quarry-labs",
+      "title": "A grading service whose repository holds an evaluation plan and whose request asks for its pull request checks as steps",
+      "requestSource": "docs/ci-requirements.md",
+      "nvmrcVersion": "24",
+      "isMinimalRequest": false,
+      "requireEveryElement": true,
+      "projectFiles": [
+        ".nvmrc",
+        "docs/ci-requirements.md",
+        "evals/grader/ci/evaluation-ci-plan.json",
+        "evals/package.json",
+        "package-lock.json",
+        "package.json",
+        "src/grader.js",
+        "tests/grader.test.js"
+      ],
+      "expectedElements": [
+        {
+          "id": "trigger-pull-request-main",
+          "kind": "trigger",
+          "event": "pull_request",
+          "branches": [
+            "main"
+          ],
+          "rule": "triggersConfigured",
+          "requestQuote": "Trigger: pull requests targeting `main`.",
+          "contractToken": "pull_request:"
+        },
+        {
+          "id": "permission-contents-read",
+          "kind": "permission",
+          "scope": "contents",
+          "level": "read",
+          "rule": "githubActionsOutputPath",
+          "requestQuote": "Permissions: `contents: read` only.",
+          "contractToken": "contents: read"
+        },
+        {
+          "id": "node-version-from-nvmrc",
+          "kind": "node-version",
+          "scope": "jobs-without-evaluation",
+          "rule": "nodeVersionFromNvmrc",
+          "requestQuote": "use the Node version pinned in `.nvmrc`",
+          "contractToken": null
+        },
+        {
+          "id": "node-version-evaluation-floor",
+          "kind": "node-version",
+          "scope": "evaluation",
+          "floor": "22.20.0",
+          "rule": "evaluationNodeFloor",
+          "requestQuote": "use the Node version pinned in `.nvmrc`",
+          "contractToken": null
+        },
+        {
+          "id": "command-install",
+          "kind": "command",
+          "command": "npm ci",
+          "rule": "githubActionsOutputPath",
+          "requestQuote": "install with `npm ci`",
+          "contractToken": "npm ci",
+          "standaloneStep": true
+        },
+        {
+          "id": "command-unit-tests",
+          "kind": "command",
+          "command": "npm test",
+          "rule": "pipelineStages",
+          "requestQuote": "then run `npm test`.",
+          "contractToken": "npm test"
+        },
+        {
+          "id": "command-evaluation-install",
+          "kind": "command",
+          "command": "npm install --prefix evals",
+          "standaloneStep": true,
+          "rule": "evaluationToolingInstall",
+          "requestQuote": "Run its pull request checks on every pull request.",
+          "contractToken": "npm install --prefix evals"
+        },
+        {
+          "id": "command-evaluation-ci-pr",
+          "kind": "command",
+          "command": "npm exec --prefix evals -- tea-evaluate ci --evaluation evals/grader --tier pr",
+          "standaloneStep": true,
+          "checkIds": [
+            "check",
+            "compile",
+            "seal",
+            "oracle-agreement",
+            "replay"
+          ],
+          "rule": "evaluationPlanCommandSteps",
+          "requestQuote": "Run its pull request checks on every pull request.",
+          "contractToken": "tea-evaluate ci --evaluation evals/grader --tier pr"
+        },
+        {
+          "id": "job-evaluation-pr",
+          "kind": "job",
+          "jobId": "evaluation-pr",
+          "command": "npm exec --prefix evals -- tea-evaluate ci --evaluation evals/grader --tier pr",
+          "marker": "# tea-evaluation-plan: evals/grader/ci/evaluation-ci-plan.json",
+          "rule": "evaluationPlanCommandSteps",
+          "requestQuote": "Run its pull request checks on every pull request.",
+          "contractToken": "evaluation-pr"
+        },
+        {
+          "id": "artifact-evaluation-runs",
+          "kind": "artifact",
+          "pathToken": "evals/grader/runs/",
+          "onFailureOnly": false,
+          "condition": "always()",
+          "rule": "evaluationRunsUpload",
+          "requestQuote": "keep what the evaluation records under `runs/` as a build artifact, whether its checks pass or fail.",
+          "contractToken": "evals/grader/runs/"
+        }
+      ],
+      "mustNotEmit": [],
+      "why": "Ten elements, every one stated in docs/ci-requirements.md, and a closing sentence that forbids the rest, which the unrequested-element ceiling holds. The request never names the plan: it says the repository holds an evaluation and asks for its pull request checks, so a run that does not detect ci/evaluation-ci-plan.json has no way to write them. The plan is a copy of the Story 1.10 fixture's with its evaluation folder moved to evals/grader, and its five pr checks share one runtime entry, tea-evaluate ci --tier pr, which runs every check of the tier, so a run that renders a step per check runs the tier several times and a run that renders none writes nothing. The evaluations folder evals/ holds the private package.json AD-20 writes, so the tooling installs and runs with --prefix evals and the root install stays in the test job. The artifact element is the one in the corpus whose condition is always(): the evidence of a failing run is the evidence worth reading."
     }
   ]
 }

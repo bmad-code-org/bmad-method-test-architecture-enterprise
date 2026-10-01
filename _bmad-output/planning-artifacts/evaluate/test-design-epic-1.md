@@ -38,7 +38,7 @@ inputDocuments:
 
 ## Executive Summary
 
-**Scope:** full epic-level test design for Stories 1.1 to 1.73, 1.80, 1.90 to 1.92 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.73, 1.80, 1.90 to 1.92. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
+**Scope:** full epic-level test design for Stories 1.1 to 1.73, 1.80, 1.90 to 1.95 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.73, 1.80, 1.90 to 1.95. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
 
 **Risk summary:**
 
@@ -1144,6 +1144,40 @@ Added 2026-10-01 in Story 2.2's review. Levels: integration, static. File: `test
 | The stage and the scratch directory are gone              | After the signal, assert the stage's pid is gone and the temporary directory holds no `tea-evaluate-*` entry                                                                    | Integration | P0  | A handler that leaves the scratch directory fails the empty listing   |
 | The same for `compile`, `seal` and the stale-baseline run | Hang each stage in turn and repeat the two assertions                                                                                                                           | Integration | P1  | A stage still called synchronously fails its case                     |
 | Stage exits still pass through verbatim                   | The existing `checkEngineStageExits` and shim-log cases run unchanged                                                                                                           | Integration | P0  | An exit rewritten on the asynchronous path fails the direct-CLI check |
+
+### Story 1.93: Prove the merge, scheduled and release rendering and the re-render of evaluation plans
+
+Added 2026-10-01 in Story 2.3. Levels: replay, live (recorded), static. Files: `test/eval-ci.js` (`test:eval-ci-data`), the CI suite corpus under `test/fixtures/ci-eval/`, replay records under `test/replay/ci/`, `test/test-evaluate-ci-render.js` (`test:evaluate-ci-render`).
+
+| AC                                                             | Test                                                                                                                                                                                                     | Level        | P   | Revert check                                                                            |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | --- | --------------------------------------------------------------------------------------- |
+| The tiers render as the plan places them                       | A fixture adopter with `pr`, `merge` and `scheduled` checks; ground truth lists the triggers, a job per tier with its one `tea-evaluate ci` step, the timeouts and one upload per job under its own name | Replay, live | P0  | A skill without the tier rules produces a workflow the stored capture's scoring rejects |
+| The `merge` job runs the `pr` commands first                   | Ground truth element on the job's step order; a constructed deviation drops the `pr` step                                                                                                                | Replay       | P1  | Removing the `merge` rule from the step leaves a capture that misses the element        |
+| One artifact name per job                                      | A constructed deviation shares one name between two jobs; the scorer reads the upload names                                                                                                              | Replay       | P1  | A scorer that ignores names scores the deviation as clean                               |
+| Edit mode replaces the marker job and leaves the rest as it is | An edit-mode case over a pipeline with a marker job and an unmarked job; the unmarked job's bytes and the checkpoint are compared before and after                                                       | Live, replay | P0  | An edit step that rewrites the checkpoint or the unmarked job fails the comparison      |
+| New sets are counted                                           | `test:contract-sources`, `test:probe-sources`, `test:eval-schemas`, `test:eval-replay`, `test:eval-ci-data`                                                                                              | Static       | P0  | A stale `caseCount` or contract fails                                                   |
+
+### Story 1.94: Score each stored workflow in the CI probe leg
+
+Added 2026-10-01 in Story 2.3's review. Levels: static, replay. Files: `test/lib/probe-scoring.js`, `test/test-probe-corpus.js` (`test:probe-corpus`), `tools/generate-contracts.js` (`ciOracleSpecs`).
+
+| AC                                                        | Test                                                                                                             | Level  | P   | Revert check                                                      |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------ | --- | ----------------------------------------------------------------- |
+| Dispositions come from the paired scorer                  | `recordInputs` applies each oracle's scorer to the workflow its leg reads; `test:probe-corpus` scores the record | Static | P0  | Restoring the constant `held` leaves a wrong-workflow row passing |
+| A wrong `CI_CORRECT_RUNS` row fails                       | Point the third project's row at the minimal project's workflow in a scratch copy and run `test:probe-corpus`    | Replay | P0  | The unchanged leg passes the wrong row, which the case observes   |
+| `expected-strength.json` is unchanged                     | `test:probe-corpus` over the committed file                                                                      | Static | P1  | A scorer that disagrees with a correct workflow moves the file    |
+| Other suites' builders read a stored run through a scorer | Search `test/lib/probe-scoring.js` for fixed dispositions over a stored run; record each hit's disposition       | Static | P2  | A builder left on a constant fails its wrong-run case             |
+
+### Story 1.95: Gate the replay totals, the story count and the lane lists
+
+Added 2026-10-01 in Story 2.3's second review. Levels: static. Files: `test/test-eval-replay.js` (`test:eval-replay`), the `doc-counts` entries of `eval-quality.config.json` (`test:doc-counts`).
+
+| AC                                               | Test                                                                                                           | Level  | P   | Revert check                                              |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- | ------ | --- | --------------------------------------------------------- |
+| The four replay totals equal the tree            | Count `expected.json` files by origin and by unmeasurable result; compare with `test/README.md` and the header | Static | P1  | Adding a replay case without moving the totals fails      |
+| The story count and range equal the sections     | Count `### Story` headings in `epics.md`; compare with the overview                                            | Static | P1  | An overview count off by one fails                        |
+| Lane 3 matches `sprint-status.yaml`              | Read the lane 3 sequence and `parallel_lanes`; compare order and membership                                    | Static | P2  | Removing one lane entry fails                             |
+| Existing `doc-counts` entries keep their meaning | `test:doc-counts` over the unchanged entries                                                                   | Static | P1  | An entry widened to read a new subject fails its own case |
 
 ## The Dogfood Proof (AD-15)
 

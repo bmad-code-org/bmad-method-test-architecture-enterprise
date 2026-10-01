@@ -1,0 +1,9 @@
+{
+  "name": "quarry-grader",
+  "version": "0.4.0",
+  "private": true,
+  "description": "Answer grading service for the Quarry learning platform",
+  "scripts": {
+    "test": "node --test tests"
+  }
+}

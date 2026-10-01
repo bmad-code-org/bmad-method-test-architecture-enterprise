@@ -827,6 +827,17 @@ function ciWorkflowArtifact(workflow) {
   return { workflow: { kind: 'text', value: workflow } };
 }
 
+/**
+ * The stored replay case that holds each project's correct workflow, and the observation identifier its leg records.
+ * Every project needs its own observation identifier, since a clean control's record carries every project's leg and
+ * the engine refuses two observations of one identifier.
+ */
+const CI_CORRECT_RUNS = {
+  'full-meridian-storefront': { caseId: 'full-correct-pipeline', observationId: 'ci-full-run' },
+  'minimal-lantern-audit-log': { caseId: 'minimal-correct-pipeline', observationId: 'ci-minimal-run' },
+  'evaluation-plan-quarry-grader': { caseId: 'evaluation-plan-live-capture', observationId: 'ci-evaluation-plan-run' },
+};
+
 /** The `ci_platform` value one assembled prompt carries. */
 const CI_PLATFORM_PATTERN = /`ci_platform`: `([^`]*)`/;
 
@@ -855,10 +866,14 @@ async function ciEvidence(contract) {
         `${step?.stepId ?? `interactionPlan[${index}]`} binds a stdin literal that is not the prompt the harness assembles for ${set.id}; run node tools/generate-contracts.js`,
       );
     }
+    const stored = CI_CORRECT_RUNS[set.id];
+    if (stored === undefined) {
+      throw new Error(`ci project ${set.id} names no stored correct run in CI_CORRECT_RUNS, so no replay answers its leg`);
+    }
     return {
       setId: set.id,
-      caseId: set.isMinimalRequest ? 'minimal-correct-pipeline' : 'full-correct-pipeline',
-      observationId: set.isMinimalRequest ? 'ci-minimal-run' : 'ci-full-run',
+      caseId: stored.caseId,
+      observationId: stored.observationId,
       projectRoot: set.projectRoot,
       step,
       prompt,

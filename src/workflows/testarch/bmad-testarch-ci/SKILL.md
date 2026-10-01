@@ -66,6 +66,8 @@ This workflow uses **tri-modal step-file architecture**:
 - **Validate mode (steps-v/)**: validation against checklist
 - **Edit mode (steps-e/)**: revise existing outputs
 
+Create and edit modes both detect `ci/evaluation-ci-plan.json` files and render them into the pipeline (`steps-c/step-03b-render-evaluation-plans.md`).
+
 ## Initialization Sequence
 
 ### 1. Mode Determination

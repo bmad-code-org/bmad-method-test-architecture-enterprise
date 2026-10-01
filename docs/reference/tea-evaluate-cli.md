@@ -13,8 +13,8 @@ TeA also ships `tea-skill-runner`, the command an evaluation registers to run a 
 
 ## Prerequisites
 
-- Node.js 22.20 or later, with TeA installed (`npm install --save-dev bmad-method-test-architecture-enterprise`), which provides the `tea-evaluate` bin.
-- `eval-quality` 4.7.0 or later, installed beside TeA in the project that runs Evaluate (`npm install --save-dev eval-quality`).
+- Node.js 22.20 or later, with TeA installed in the evaluations folder (`{tea_evaluations_folder}`, `evals` in these examples) through its private `package.json` (`npm install --prefix evals`), which provides the `tea-evaluate` bin. The adopter's root manifest stays untouched, so every invocation names the folder: `npm exec --prefix evals -- tea-evaluate ...`.
+- `eval-quality` 4.7.0 or later, a devDependency of the same private `package.json`.
   TeA declares it as an optional peer dependency, so a project that installs TeA only for its other workflows never receives it.
   Without it, `tea-evaluate` exits 12 and names the missing package.
 
@@ -71,7 +71,7 @@ The calibration response follows the criterion's evidence channel. `stdout`, `st
 ## check
 
 ```bash
-npx tea-evaluate check --evaluation evals/my-evaluation
+npm exec --prefix evals -- tea-evaluate check --evaluation evals/my-evaluation
 ```
 
 `check` prints one line per finding, `<file>: [<rule>] <message>`, and lists every finding.
@@ -591,7 +591,7 @@ The qualified probe records `oracleStableAcrossRevisions` as true: both arms are
 ## digest
 
 ```bash
-npx tea-evaluate digest --evaluation evals/my-evaluation
+npm exec --prefix evals -- tea-evaluate digest --evaluation evals/my-evaluation
 ```
 
 `digest` writes `corpus-index.json`: every file under `corpus/`, `probes/` and `mutations/` as a path relative to the folder and the SHA-256 of its bytes, sorted by path.
@@ -601,7 +601,7 @@ Run it after every change to those folders; `check` refuses a stale index.
 ## preflight
 
 ```bash
-npx tea-evaluate preflight --evaluation evals/my-evaluation [--from-working-tree]
+npm exec --prefix evals -- tea-evaluate preflight --evaluation evals/my-evaluation [--from-working-tree]
 ```
 
 `preflight` asks whether the environment can measure anything at all, against the real target, before a run spends a trial on it.
@@ -650,7 +650,7 @@ Before the preflight verdict, and for `run` again after the trials and before `r
 ## run
 
 ```bash
-npx tea-evaluate run --evaluation evals/my-evaluation [--from-working-tree] [--partition development|held-out]
+npm exec --prefix evals -- tea-evaluate run --evaluation evals/my-evaluation [--from-working-tree] [--partition development|held-out]
 ```
 
 `run` measures the evaluation: it runs every arm a probe needs `trials` times and seals every trial as a record `eval-quality score` reads.
@@ -979,7 +979,7 @@ The two numbers appear in `EvaluatorConfiguration.decodingParameters` as `tea.ev
 ## score
 
 ```bash
-npx tea-evaluate score --evaluation evals/my-evaluation [--run <invocationId>]
+npm exec --prefix evals -- tea-evaluate score --evaluation evals/my-evaluation [--run <invocationId>]
 ```
 
 `score` scores the trial sets of a completed run: the one `--run` names, or the most recent `run` invocation.
@@ -1069,7 +1069,7 @@ The recorded argv names the run directory's own files, so rerunning `eval-qualit
 ## compare
 
 ```bash
-npx tea-evaluate compare --evaluation evals/my-evaluation [--run <invocationId>] [--accept]
+npm exec --prefix evals -- tea-evaluate compare --evaluation evals/my-evaluation [--run <invocationId>] [--accept]
 ```
 
 `compare` sets a scored run beside the committed `baseline/` and, with `--accept`, replaces `baseline/` with that run.
@@ -1126,7 +1126,7 @@ Omitting any of these inputs makes the replay fail: without the isolation manife
 ## ci
 
 ```bash
-npx tea-evaluate ci --evaluation evals/my-evaluation --tier pr
+npm exec --prefix evals -- tea-evaluate ci --evaluation evals/my-evaluation --tier pr
 ```
 
 `ci` runs exactly the checks `ci/evaluation-ci-plan.json` places on one tier, `pr`, `merge`, `scheduled` or `release`: the plan is the only definition of tier membership.
@@ -1146,7 +1146,7 @@ Each check carries:
 | `id`          | for an `evaluate` check, one of the closed set below, so an unknown id fails validation; for a `gate` check, the name of the adopted gate                                                                                                                                                                                                         |
 | `tier`        | `pr`, `merge`, `scheduled` or `release`; it equals `placement.tier`                                                                                                                                                                                                                                                                               |
 | `trigger`     | what starts the check in a pipeline: `pull-request`, `merge`, `schedule`, `release` or `manual-dispatch`                                                                                                                                                                                                                                          |
-| `kind`        | `evaluate`, run by `ci` through its id, with a `tea-evaluate` command a pipeline step renders; or `gate`, an `eval-quality-gates` command the adopter adopted, run as a child process in the evaluation folder with the plan's argv and no shell                                                                                                  |
+| `kind`        | `evaluate`, run by `ci` through its id, with a `tea-evaluate` command that records the argv a reader can run by hand (a pipeline runs `tea-evaluate ci --tier <tier>` once per tier); or `gate`, an `eval-quality-gates` command the adopter adopted, run as a child process in the evaluation folder with the plan's argv and no shell           |
 | `command`     | the argv, led by `tea-evaluate` or `eval-quality-gates`, one array item per argument with no shell                                                                                                                                                                                                                                                |
 | `enforcement` | `block`, or `warn` where AD-10 says warn: a strength regression on `strength-comparison` (`scheduled`, `release`) and the strength floor on `twin-run` and `held-out` (`scheduled`). The field records the AD-10 class; the action comes from AD-10's table, so a plan cannot demote a blocking exit, and validation refuses `warn` anywhere else |
 | `timeoutMs`   | a `gate` check only: how long the child may run, from 1000 to 3600000 milliseconds, 600000 when absent. Past it the runtime stops the gate's process group and the check exits 12                                                                                                                                                                 |
@@ -1190,7 +1190,7 @@ A gate exit outside that table passes through as an undocumented exit, blocking,
 A `gate` check runs as a child process in a process group of its own, with the plan's argv, no shell and stdin closed. It ends at its plan check's `timeoutMs` (600000 when absent): the group gets SIGTERM, then SIGKILL after two seconds, and the check exits 12. It ends the same way, with the bytes up to the bound kept, when it prints more than 64 MiB; exactly 64 MiB passes. Whatever the gate left running in its process group, a descendant that holds no stream included, is killed when the gate exits. A SIGINT or SIGTERM to `ci` reaches the group, which is killed half a second later, before `ci` ends; only a SIGKILL of `ci` itself leaves the gate running. What the gate printed is persisted whatever the exit.
 
 `runs/<invocationId>/` holds `ci.json` (the tier, each check's id, exit, class, action, enforcement, evidence paths, warnings and notes, and the final exit), and per check `checks/<id>/exit-code`, `stdout` and `stderr` byte for byte, whatever the exit; the engine's call records and outputs of `compile`, `seal` and the replay (`replay/preflight-verdict.json`, `replay/scores/`, `replay/engine/preflight.json`) sit beside them, and a live check's own run directories stay under `runs/`.
-Upload `runs/<invocationId>/` as a pipeline artifact whatever the result.
+Upload the evaluation folder's `runs/`, which holds every invocation's `<invocationId>/` directory, as a pipeline artifact whatever the result. `bmad-testarch-ci` renders the plan into the pipeline as one `tea-evaluate ci` step per tier with that upload under `if: always()` (see [How to Set Up CI Pipeline with TEA](/docs/how-to/workflows/setup-ci.md#evaluation-plans)).
 
 The baselines TeA's own fixtures commit were recorded by real `compare --accept` runs over clean copy-workspace runs from a temporary directory. They carry the recording machine's paths until a later release re-accepts them with those paths removed: `run.json` (its workspace paths), each probe's `score.json` and `aggregate-strength.json` (the argv of each engine call), and the `cwd` of every file under `observations/`. The replay leaves the call records of `score` out of its comparison for that reason, and compares every other file.
 
