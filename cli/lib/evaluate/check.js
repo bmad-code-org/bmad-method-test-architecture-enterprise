@@ -116,6 +116,7 @@ const AjvModule = require('ajv/dist/2020');
 
 const { engineSchemaPath, loadEngine, schemaVersionProblems } = require('./engine');
 const { CALIBRATION_PATH, calibrationProblems, readCalibration } = require('./calibration');
+const { verifyRecordsCalibration } = require('./records-calibration');
 const { MANIFEST_NAME } = require('./folder');
 const { addFormats } = require('./formats');
 const { HTTP_PORT_MODULE, originTarget, sharedOrigin } = require('./http-target');
@@ -1188,6 +1189,45 @@ function checkJudge(report, evaluation, contract, conditions) {
   }
 }
 
+/**
+ * A records evaluator's rubric scores carry the harness's calibration
+ * judgments, verified by the one function `run` uses (`records-calibration.js`).
+ * A labelled file `checkCalibration` already faults is left to it.
+ */
+function checkRecordsCalibration(report, folder, evaluator, evaluation, contract, root, engine) {
+  const configurationFile = `${evaluator.records}/evaluator-configuration.json`;
+  let labelled;
+  try {
+    labelled = readCalibration(folder);
+  } catch {
+    return;
+  }
+  if (calibrationProblems(evaluation, contract, labelled?.value, engine).length > 0) return;
+  let configuration;
+  try {
+    const stats = fs.lstatSync(path.join(root, 'evaluator-configuration.json'));
+    if (!stats.isFile()) throw new Error('it is not a regular file');
+    configuration = JSON.parse(fs.readFileSync(path.join(root, 'evaluator-configuration.json'), 'utf8'));
+  } catch (error) {
+    report.add(
+      configurationFile,
+      'judge-calibration',
+      `${configurationFile} cannot be read as JSON, so the imported rubric scores cannot be verified: ${error.message}`,
+    );
+    return;
+  }
+  const { problems } = verifyRecordsCalibration({
+    records: evaluator.records,
+    root,
+    configuration,
+    evaluation,
+    contract,
+    labelled,
+    engine,
+  });
+  for (const problem of problems) report.add(problem.file, 'judge-calibration', problem.message);
+}
+
 /** The mode bits that let anyone execute a file. */
 const EXECUTE_BITS = 0o111;
 
@@ -1201,10 +1241,11 @@ const EXECUTE_BITS = 0o111;
  * a `sealed-brief-agent` needs an adapter that can run with the bridge as its
  * only tools, its command and model, and its model snapshot in
  * `policy/evaluator-conditions.json`; a `records` evaluator's directory must
- * exist. An evaluator block in the conditions beside any other kind is
+ * exist, and when the contract declares a rubric its judgments and
+ * configuration must verify (`records-calibration.js`). An evaluator block in the conditions beside any other kind is
  * never used, so it is refused.
  */
-function checkEvaluator(report, folder, evaluation, contract, conditions) {
+function checkEvaluator(report, folder, evaluation, contract, conditions, engine) {
   const evaluator = evaluatorOf(evaluation);
   if (!isKnownEvaluator(evaluator)) return;
   const { kind } = evaluator;
@@ -1236,12 +1277,6 @@ function checkEvaluator(report, folder, evaluation, contract, conditions) {
     );
   }
   if (kind === 'records') {
-    if ((contract?.rubrics ?? []).length > 0)
-      report.add(
-        MANIFEST_NAME,
-        'evaluator',
-        'a records evaluator cannot score rubrics until its harness supplies a verifiable calibration path',
-      );
     if (typeof evaluator.records !== 'string') return;
     // Only a directory inside the folder, reached through no link, is the folder's own.
     const spelled = path.join(fs.realpathSync(folder), ...evaluator.records.split('/'));
@@ -1257,7 +1292,7 @@ function checkEvaluator(report, folder, evaluation, contract, conditions) {
         'evaluator',
         `evaluator.records names ${evaluator.records}, which is not a directory the evaluation folder holds, reached through no link; the records evaluator reads the harness's sealed records there`,
       );
-    }
+    } else if ((contract?.rubrics ?? []).length > 0) checkRecordsCalibration(report, folder, evaluator, evaluation, contract, real, engine);
     return;
   }
   if (kind !== 'command' && kind !== 'sealed-brief-agent') return;
@@ -1889,7 +1924,7 @@ async function checkEvaluation(folder) {
     conditions = undefined;
   }
   checkJudge(report, evaluation, context.contract, conditions);
-  checkEvaluator(report, folder, evaluation, context.contract, conditions);
+  checkEvaluator(report, folder, evaluation, context.contract, conditions, context.engine);
   checkQualificationEvidence(report, folder, context);
 
   try {

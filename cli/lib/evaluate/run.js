@@ -81,7 +81,7 @@ const { admissionRefusal, armVerdict, referenceTo } = require('./admission');
 const { callLabel, causeNote, faultRecord, hostEnvironmentPort, persistableRequest, reasonNote, runArm } = require('./arm');
 const { runCommandEvaluator } = require('./command-evaluator');
 const { corpusDigestOf } = require('./corpus-index');
-const { calibrationObservation, readCalibration, runCalibration } = require('./calibration');
+const { calibrationObservation, calibrationOperationId, readCalibration, runCalibration } = require('./calibration');
 const { expectedSchemaVersion, loadEngine } = require('./engine');
 const { evaluateOracles, judgeTrial, oraclesOfBehaviors } = require('./evaluator');
 const {
@@ -925,7 +925,7 @@ async function runTrialSets(given) {
     const { layer } = snapshot;
     const judgeItem = async ({ rubric, criterion, response, responseKind }) => {
       const stepId = /^\/interactions\/([^/]+)/.exec(criterion.evidence)?.[1];
-      const operationId = contract.interactionPlan?.find((step) => step.stepId === stepId)?.operationId ?? 'calibration';
+      const operationId = calibrationOperationId(contract, criterion);
       const observation = calibrationObservation({ criterion, response, responseKind, operationId });
       if (kind === 'deterministic') {
         const result = await judgeRubrics({
@@ -1483,7 +1483,7 @@ function writeQualifiedProbe({ writer, stop }, probe) {
  * copied unchanged, beside the harness's own evaluator configuration.
  */
 async function concludeImportedRecords(context) {
-  const { folder, arms, refusedIds, snapshot, sealed, validate, writer, engine, stop } = context;
+  const { folder, arms, refusedIds, snapshot, sealed, validate, writer, engine, stop, contract, evaluation } = context;
   const probes = arms.flatMap((arm) => arm.probes);
   const unarmed = snapshot.probeIds.filter((probeId) => !probes.some((probe) => probe.probeId === probeId) && !refusedIds.has(probeId));
   if (unarmed.length > 0) {
@@ -1502,6 +1502,8 @@ async function concludeImportedRecords(context) {
       sealedBriefDigest: sealed.sealedBriefDigest,
       validate,
       writer,
+      // An imported rubric score is gated on the harness's calibration judgments, over the labelled file this run took (exit 11 below the minimum).
+      calibration: (contract.rubrics ?? []).length > 0 ? { labelled: snapshot.calibration, evaluation, contract, engine, stop } : null,
     });
   } catch (error) {
     if (!(error instanceof EvaluatorLayerError)) throw error;

@@ -13,6 +13,7 @@
  *   recommend          the same rows with the evaluator's own recommendation,
  *                      PASS when accepted and CONCERNS otherwise
  *   score              beside them, a score row for verdict-quality (3 when accepted, 1 otherwise)
+ *   score-two          the score mode on a two-level scale (2 when accepted, 1 otherwise)
  *   artifact           a fail row quoting the written file `residue` (artifact channel)
  *   unwitnessed        a fail row whose quote the observation does not hold
  *   crash              an uncaught error, before printing anything
@@ -178,6 +179,10 @@ function answer() {
     }
     case 'score': {
       rows.push({ key: 'verdict-quality', outcome: 'score', score: accepted ? 3 : 1, observationIds: cite, comment: 'Scored on the verdict line.' });
+      break;
+    }
+    case 'score-two': {
+      rows.push({ key: 'verdict-quality', outcome: 'score', score: accepted ? 2 : 1, observationIds: cite, comment: 'Scored on the verdict line.' });
       break;
     }
     case 'artifact': {

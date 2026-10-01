@@ -38,7 +38,7 @@ inputDocuments:
 
 ## Executive Summary
 
-**Scope:** full epic-level test design for Stories 1.1 to 1.66 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.66. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
+**Scope:** full epic-level test design for Stories 1.1 to 1.67 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.67. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
 
 **Risk summary:**
 
@@ -696,14 +696,19 @@ Amended 2026-10-01 in Story 1.39: the units also hold that only `portFailureReas
 
 ### Story 1.40: Calibrate rubric scores imported from harness records
 
-Added 2026-09-26 in Story 1.21. Levels: integration over real eval-quality, contract. Files: `test/test-evaluate-evaluators.js` (`test:evaluate-evaluators`), `test/test-evaluate-check.js` (`test:evaluate-check`).
+Added 2026-09-26 in Story 1.21. Levels: integration over real eval-quality, contract. Files: `test/test-evaluate-evaluators.js` (`test:evaluate-records`), `test/test-evaluate-check.js` (`test:evaluate-check`).
 
 | AC                                                     | Test                                                                                                                         | Level                              | P   | Revert check                                                    |
 | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | --- | --------------------------------------------------------------- |
 | Imported rubric scores carry verifiable calibration    | A harness supplies label-free judgments and provenance for the same scorer configuration used in trial records               | Integration over real eval-quality | P0  | A mismatched scorer or leaked label fails provenance validation |
 | Low agreement stops before records are imported        | Two labelled items yield agreement 0.5 under a 0.9 minimum; inspect the report, exit 11, and absence of copied trial records | Integration                        | P0  | Removing the gate writes a trial record                         |
-| Calibration inputs change the imported scoring version | Change one item and then the minimum agreement; assert both change `EvaluatorConfiguration` and its scoring version          | Contract                           | P1  | Omitting either binding leaves the version unchanged            |
+| Calibration inputs change the imported scoring version | Change one item and then the minimum agreement; assert both change `EvaluatorConfiguration` and its scoring version          | Integration over real eval-quality | P1  | Dropping either binding check admits a configuration without it |
 | Uncalibrated rubric records are refused                | `check` exits 10 for absent or unverifiable provenance; a non-rubric `records` evaluation still passes its import path       | Contract                           | P1  | Bypassing the refusal accepts an uncalibrated rubric            |
+
+Amended 2026-10-01 in Story 1.40: the binding row's Level is Integration over real eval-quality, where the plan named Contract, because the scoring version moves only when a harness over real eval-quality records another configuration.
+Its revert check is that dropping either binding check admits a configuration without it, and the missing or wrong binding case exits 0.
+
+Amended 2026-10-01 in Story 1.40: the records cases run as test:evaluate-records, a group of the same test file, so the shard holding the evaluators script stays under the job timeout.
 
 ### Story 1.41: Confine score output during concurrent run-directory changes
 
@@ -972,6 +977,16 @@ Added 2026-09-30 in Story 1.38. Levels: integration over real eval-quality, unit
 | A reported release echoing the secret reaches no artifact | A deployment reports a release holding the secret uppercased; assert `refused/<probeId>.json` and `run.json`      | Integration over real eval-quality | P1  | Restoring the case-sensitive scrub writes the secret into the refusal |
 | The fault path and the observation scrub the same cases   | A fault quoting the secret uppercased; assert the message and cause                                               | Integration                        | P1  | Two different case sets let the uppercased echo through the fault     |
 | A short value stays unscrubbed in every case              | A value under the minimum length echoed in each case; assert it stays                                             | Unit                               | P2  | Scrubbing it redacts ordinary text and fails the case                 |
+
+### Story 1.67: Emit the label-free calibration inputs a records harness feeds its scorer
+
+Added 2026-10-01 in Story 1.40. Levels: integration over real eval-quality, guidance. Files: `test/test-evaluate-evaluators.js` (`test:evaluate-evaluators`), `test/test-evaluate-guidance.js` (`test:evaluate-guidance`).
+
+| AC                                               | Test                                                                                                                                | Level                              | P   | Revert check                                                     |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | --- | ---------------------------------------------------------------- |
+| A harness built from the emitted inputs verifies | A harness fixture writes its judgments file from the emitted inputs and digests alone; `check` exits 0 and `run` imports and scores | Integration over real eval-quality | P0  | Emitting an input the verification does not derive fails `check` |
+| The emitted inputs carry no label                | Search the output for `expectedLevel`                                                                                               | Integration                        | P1  | Adding the label to the output fails the search                  |
+| The guide says to copy the emitted values        | Assert the evaluator guide's sentence under its exact heading                                                                       | Guidance                           | P2  | Removing the sentence fails the guidance assertion               |
 
 ## The Dogfood Proof (AD-15)
 

@@ -66,6 +66,15 @@
  * - Records: a harness's sealed records are validated and copied unchanged,
  *   `score` hands eval-quality the adopter's bytes and passes its exit
  *   through, and a record off its schema exits 10 before any `score` call.
+ * - Imported rubric scores (Story 1.40): a harness over real eval-quality
+ *   writes label-free calibration judgments beside its records and a
+ *   configuration binding the labelled file and the minimum; verified
+ *   judgments import and score, a different scorer configuration, a label in
+ *   scorer input, a missing or wrong binding and judgments not 1:1 with the
+ *   labelled items exit 10, agreement below the minimum exits 11, and none
+ *   of them copies a record. Changing a labelled item or the minimum changes
+ *   the configuration digest and the scoring version. A records evaluation
+ *   with no rubric never reads a judgments file.
  * - Framework neutrality: an import of an unlisted package under `cli/`
  *   fails `eval-quality-gates dependency-direction` in a copy of the tree.
  * - Units: the row conversion, the command-line call reading, the bridged
@@ -85,7 +94,7 @@ const { spawn, spawnSync } = require('node:child_process');
 
 const { ENGINE_CLI_ENV, engineCliPath, loadEngine } = require('../cli/lib/evaluate/engine');
 const { createArtifactValidator } = require('../cli/lib/evaluate/records');
-const { runCalibration } = require('../cli/lib/evaluate/calibration');
+const { calibrationObservation, calibrationOperationId, runCalibration } = require('../cli/lib/evaluate/calibration');
 const { registryFromEvaluation } = require('../cli/lib/evaluate/registry');
 const { runTrial } = require('../cli/lib/evaluate/run');
 const { hostEnvironmentPort } = require('../cli/lib/evaluate/arm');
@@ -2461,12 +2470,15 @@ async function checkRecordsEvaluator() {
   editJson(path.join(project.folder, 'evaluation.json'), (evaluation) => {
     evaluation.evaluator = { kind: 'records', records: 'records' };
   });
+  // A contract with no rubric has no use for a judgments file: it is never read, so one that is not JSON changes nothing.
+  fs.writeFileSync(path.join(records, JUDGMENTS_NAME), 'not json');
   commitAll(project.repository, project.folder, "the harness's records");
 
   const ran = evaluate(['run', '--evaluation', project.folder], project.env);
   check(ran.status === 0, `a records run exited ${ran.status}; expected 0\n${ran.output}`);
   const runDirectory = runDirectoryOf(project.folder);
   if (ran.status !== 0 || runDirectory === source) return;
+  check(!fs.existsSync(path.join(runDirectory, 'judge-calibration.json')), 'a records run with no rubric wrote a calibration report');
   const run = readJson(path.join(runDirectory, 'run.json'));
   check(run.evaluator?.kind === 'records' && run.judge === null, `a records run records the evaluator ${JSON.stringify(run.evaluator)}`);
   const index = readJson(path.join(runDirectory, 'trial-sets.json'));
@@ -2624,6 +2636,390 @@ async function checkRecordsEvaluator() {
   });
   check(after.status === 64, `score over the refused records run exited ${after.status}; expected 64\n${after.output}`);
   check(!fs.existsSync(refusedLog), 'score over the refused records run called the engine');
+}
+
+// ------------------------------------------------- imported rubric calibration (Story 1.40)
+
+const JUDGMENTS_NAME = 'calibration-judgments.json';
+const DIGEST_BINDING = 'tea.judgeCalibrationDigest';
+const MINIMUM_BINDING = 'tea.judgeCalibrationMinimumAgreement';
+
+/** What the harness's scorer, the command stub, answers for one label-free observation. */
+function harnessScore(observation) {
+  const scored = spawnSync(process.execPath, [path.join(COMMAND_EVALUATOR, 'rows.js'), '--mode', 'score'], {
+    input: JSON.stringify({ sealedBrief: {}, observations: [observation] }),
+    encoding: 'utf8',
+    env: BASE_ENV,
+    timeout: SPAWN_TIMEOUT_MS,
+  });
+  if (scored.status !== 0) throw new Error(`the harness scorer exited ${scored.status}: ${scored.stderr}`);
+  return JSON.parse(scored.stdout).rows.find((row) => row.key === 'verdict-quality')?.score ?? null;
+}
+
+/** The harness's configuration without the two calibration bindings: what its scorer ran under. */
+function scorerConfigurationOf(configuration) {
+  const scorer = structuredClone(configuration);
+  delete scorer.decodingParameters[DIGEST_BINDING];
+  delete scorer.decodingParameters[MINIMUM_BINDING];
+  return scorer;
+}
+
+/**
+ * Writes the judgments an adopter harness writes beside its records: its
+ * scorer run over each labelled item's label-free observation, under the
+ * configuration it imports. `edit` changes the file before it is written.
+ */
+async function writeHarnessJudgments(project, edit = () => {}) {
+  const engine = await loadEngine();
+  const records = path.join(project.folder, 'records');
+  const configuration = readJson(path.join(records, 'evaluator-configuration.json'));
+  const contract = readJson(path.join(project.folder, 'contract.json'));
+  const criteria = new Map(
+    contract.rubrics.flatMap((rubric) => rubric.criteria.map((criterion) => [`${rubric.id}/${criterion.id}`, criterion])),
+  );
+  const items = readJson(path.join(project.folder, 'policy', 'judge-calibration.json')).items.map((item) => {
+    const criterion = criteria.get(`${item.rubricId}/${item.criterionId}`);
+    // The harness hands its scorer the response and nothing of the label.
+    const scorerInput = calibrationObservation({
+      criterion,
+      response: item.response,
+      responseKind: item.responseKind,
+      operationId: calibrationOperationId(contract, criterion),
+    });
+    return { rubricId: item.rubricId, criterionId: item.criterionId, scorerInput, answer: harnessScore(scorerInput) };
+  });
+  const judgments = {
+    schemaVersion: 1,
+    scorerConfigurationDigest: engine.digestArtifact(scorerConfigurationOf(configuration), 'EvaluatorConfiguration'),
+    items,
+  };
+  edit(judgments);
+  writeJson(path.join(records, JUDGMENTS_NAME), judgments);
+}
+
+/**
+ * An adopter harness over a rubric: a command run scores the verdict
+ * project, its configuration and records are copied into `records/`, its
+ * judgments are written beside them, and the evaluation then names the
+ * directory as a records evaluator. `half` makes the rubric two levels and
+ * the labelled items judged at the wrong one half the time, at a minimum the
+ * harness's own run meets (0.5) and the records evaluation then raises to 0.9
+ * in `useRecords`.
+ */
+async function harnessProject(label, { half = false, edit = () => {} } = {}) {
+  const project = makeProject(label, {
+    edit: ({ folder }) => {
+      useCommandEvaluator(folder, { mode: half ? 'score-two' : 'score' });
+      addRubric(folder);
+      if (half) {
+        setHalfAgreement(folder);
+        editJson(path.join(folder, 'evaluation.json'), (evaluation) => (evaluation.judgeCalibration.minimumAgreement = 0.5));
+      }
+      edit(folder);
+    },
+  });
+  const produced = evaluate(['run', '--evaluation', project.folder], project.env);
+  check(produced.status === 0, `${label}: the harness's own run exited ${produced.status}\n${produced.output}`);
+  const source = runDirectoryOf(project.folder);
+  if (produced.status !== 0 || source === null) return null;
+  project.harnessRun = source;
+  const records = path.join(project.folder, 'records');
+  fs.mkdirSync(records);
+  fs.copyFileSync(path.join(source, 'evaluator-configuration.json'), path.join(records, 'evaluator-configuration.json'));
+  for (const probeId of ['P-001', 'P-002'])
+    fs.cpSync(path.join(source, 'trial-sets', probeId), path.join(records, probeId), { recursive: true });
+  await writeHarnessJudgments(project);
+  return project;
+}
+
+/** Names `records/` as the evaluator, with `minimum` as the evaluation's minimum agreement (and the configuration's binding) when given. */
+function useRecords(project, { minimum } = {}) {
+  const records = path.join(project.folder, 'records');
+  editJson(path.join(project.folder, 'evaluation.json'), (evaluation) => {
+    evaluation.evaluator = { kind: 'records', records: 'records' };
+    if (minimum !== undefined) evaluation.judgeCalibration.minimumAgreement = minimum;
+  });
+  if (minimum !== undefined)
+    editJson(path.join(records, 'evaluator-configuration.json'), (configuration) => {
+      configuration.decodingParameters[MINIMUM_BINDING] = minimum;
+    });
+  commitAll(project.repository, project.folder, "the harness's records and judgments");
+}
+
+/** Edits a harness file and returns the function that puts its bytes back. */
+function editHarnessFile(project, name, edit) {
+  const file = path.join(project.folder, 'records', name);
+  const bytes = fs.readFileSync(file);
+  editJson(file, edit);
+  return () => fs.writeFileSync(file, bytes);
+}
+
+/** The names under `runs/`, so a run's directory can be told from the ones before it. */
+function runNames(folder) {
+  const runs = path.join(folder, 'runs');
+  return fs.existsSync(runs) ? fs.readdirSync(runs).filter((name) => name !== '.gitignore' && name !== '.workspace-journal') : [];
+}
+
+/**
+ * A records run over a calibration that cannot be verified or does not meet
+ * the minimum stops with `exitCode`, the output names each of `says`, and no
+ * run directory it left holds a copied record or the harness's configuration.
+ */
+function checkImportRefused(project, what, exitCode, says) {
+  const before = runNames(project.folder);
+  const ran = evaluate(['run', '--evaluation', project.folder], project.env);
+  check(ran.status === exitCode, `${what}: run exited ${ran.status}; expected ${exitCode}\n${ran.output}`);
+  for (const text of says) check(ran.output.includes(text), `${what}: the output does not say ${JSON.stringify(text)}\n${ran.output}`);
+  for (const name of runNames(project.folder).filter((candidate) => !before.includes(candidate))) {
+    const directory = path.join(project.folder, 'runs', name);
+    check(
+      !fs.existsSync(path.join(directory, 'trial-sets')) &&
+        !fs.existsSync(path.join(directory, 'trial-sets.json')) &&
+        !fs.existsSync(path.join(directory, 'evaluator-configuration.json')),
+      `${what}: the refused run copied the harness's files into ${name}`,
+    );
+  }
+  return ran;
+}
+
+/** What the scoring-version case compares across calibrated records runs: the configuration digest, the scoring version and the two bindings. */
+function scoredCalibration(runDirectory, evidence) {
+  const configuration = readJson(path.join(runDirectory, 'evaluator-configuration.json'));
+  return {
+    digest: readJson(path.join(runDirectory, 'run.json')).evaluatorConfigurationDigest,
+    version: evidence['P-002']?.scoringVersion,
+    bound: [configuration.decodingParameters[DIGEST_BINDING], configuration.decodingParameters[MINIMUM_BINDING]],
+  };
+}
+
+async function checkImportedRubricCalibration() {
+  const project = await harnessProject('records-rubric');
+  if (project === null) return;
+  const judgmentsFile = path.join(project.folder, 'records', JUDGMENTS_NAME);
+  const judgmentsText = fs.readFileSync(judgmentsFile, 'utf8');
+  check(!judgmentsText.includes('expectedLevel'), 'the harness fixture wrote a label into its judgments');
+  const configuration = readJson(path.join(project.folder, 'records', 'evaluator-configuration.json'));
+  check(
+    configuration.decodingParameters[DIGEST_BINDING] ===
+      sha256(fs.readFileSync(path.join(project.folder, 'policy', 'judge-calibration.json'))) &&
+      configuration.decodingParameters[MINIMUM_BINDING] === 1,
+    `the harness configuration binds ${JSON.stringify(configuration.decodingParameters)}`,
+  );
+  useRecords(project);
+
+  // Verified judgments: the report is written from the harness's answers, the records are copied byte for byte and scored.
+  const ran = evaluate(['run', '--evaluation', project.folder], project.env);
+  check(ran.status === 0, `a records run over verified calibration judgments exited ${ran.status}; expected 0\n${ran.output}`);
+  const runDirectory = runDirectoryOf(project.folder);
+  if (ran.status !== 0 || runDirectory === null || runDirectory === project.harnessRun) return;
+  const reportFile = path.join(runDirectory, 'judge-calibration.json');
+  check(fs.existsSync(reportFile), 'a calibrated records run wrote no judge-calibration.json');
+  if (!fs.existsSync(reportFile)) return;
+  const report = readJson(reportFile);
+  check(
+    report.minimumAgreement === 1 &&
+      report.criteria.length === 1 &&
+      report.criteria[0].rubricId === 'R-101' &&
+      report.criteria[0].criterionId === 'RC-101' &&
+      report.criteria[0].agreement === 1 &&
+      report.criteria[0].largestLevelDistance === 0 &&
+      JSON.stringify(report.criteria[0].items.map((item) => [item.expectedLevel, item.actualLevel, item.levelDistance])) ===
+        '[[1,1,0],[2,2,0],[3,3,0]]',
+    `the calibration report over the harness's answers is ${JSON.stringify(report)}`,
+  );
+  for (const set of readJson(path.join(runDirectory, 'trial-sets.json')).trialSets) {
+    for (const relative of set.records) {
+      check(
+        fs
+          .readFileSync(path.join(runDirectory, relative))
+          .equals(fs.readFileSync(path.join(project.folder, 'records', set.probeId, path.basename(relative)))),
+        `a calibrated records run changed ${relative} on its way into the run`,
+      );
+    }
+  }
+  const { evidence } = scoreRun(project, 'a calibrated records run');
+  checkVotes('a calibrated records run', evidence, 'P-001', 'passed-clean-control');
+  checkVotes('a calibrated records run', evidence, 'P-002', 'caught');
+
+  // A scorer configuration other than the one the records name, and a label in what the scorer saw.
+  const otherConfiguration = structuredClone(configuration);
+  otherConfiguration.evaluatorIdentity = 'a different harness scorer';
+  const engine = await loadEngine();
+  const otherDigest = engine.digestArtifact(scorerConfigurationOf(otherConfiguration), 'EvaluatorConfiguration');
+  const ownDigest = engine.digestArtifact(scorerConfigurationOf(configuration), 'EvaluatorConfiguration');
+  let restore = editHarnessFile(project, JUDGMENTS_NAME, (value) => (value.scorerConfigurationDigest = otherDigest));
+  checkImportRefused(project, 'judgments of another scorer configuration', 10, [
+    otherDigest,
+    ownDigest,
+    'not from the scorer that produced the records',
+  ]);
+  restore();
+  restore = editHarnessFile(project, JUDGMENTS_NAME, (value) => (value.items[1].scorerInput.expectedLevel = 2));
+  checkImportRefused(project, 'a label in the scorer input', 10, ['items[1].scorerInput', 'carries expectedLevel']);
+  restore();
+  restore = editHarnessFile(project, JUDGMENTS_NAME, (value) => (value.items[2].scorerInput.stdout.value += ' (expected level 3)'));
+  checkImportRefused(project, 'a label in the scorer input response', 10, ['items[2].scorerInput is not the label-free observation']);
+  restore();
+  restore = editHarnessFile(project, JUDGMENTS_NAME, (value) => (value.items[0].expectedLevel = 1));
+  checkImportRefused(project, 'a label beside the scorer input', 10, ['items[0] has an unknown field "expectedLevel"']);
+  restore();
+  restore = editHarnessFile(project, JUDGMENTS_NAME, (value) => (value.expectedLevel = 1));
+  checkImportRefused(project, 'a label beside the items', 10, [`records/${JUDGMENTS_NAME} has an unknown field "expectedLevel"`]);
+  restore();
+
+  // The configuration binds the labelled file and the minimum: absent or another value is refused.
+  for (const [what, key, value, says] of [
+    ['a configuration with no digest binding', DIGEST_BINDING, undefined, `carries no decodingParameters["${DIGEST_BINDING}"]`],
+    ['a configuration with no minimum binding', MINIMUM_BINDING, undefined, `carries no decodingParameters["${MINIMUM_BINDING}"]`],
+    ['a configuration binding another digest', DIGEST_BINDING, `sha256:${'3'.repeat(64)}`, `binds decodingParameters["${DIGEST_BINDING}"]`],
+    ['a configuration binding another minimum', MINIMUM_BINDING, 0.5, `binds decodingParameters["${MINIMUM_BINDING}"] 0.5`],
+  ]) {
+    restore = editHarnessFile(project, 'evaluator-configuration.json', (config) => {
+      if (value === undefined) delete config.decodingParameters[key];
+      else config.decodingParameters[key] = value;
+    });
+    checkImportRefused(project, what, 10, [says]);
+    restore();
+  }
+
+  // The judgments are one item per labelled item, in order, answered on the criterion's levels.
+  for (const [what, edit, says] of [
+    ['a missing item', (value) => value.items.pop(), 'holds 2 items; policy/judge-calibration.json holds 3'],
+    ['an extra item', (value) => value.items.push(structuredClone(value.items[0])), 'holds 4 items; policy/judge-calibration.json holds 3'],
+    [
+      'reordered items',
+      (value) => value.items.splice(0, 2, value.items[1], value.items[0]),
+      'items[0].scorerInput is not the label-free observation',
+    ],
+    ['an answer off the levels', (value) => (value.items[1].answer = 7), 'items[1].answer 7 is not null or an anchored level'],
+    ['another item for a criterion', (value) => (value.items[2].criterionId = 'RC-999'), 'items[2] names R-101/RC-999'],
+    ['another schema version', (value) => (value.schemaVersion = 2), 'schemaVersion must be 1'],
+  ]) {
+    restore = editHarnessFile(project, JUDGMENTS_NAME, edit);
+    checkImportRefused(project, what, 10, [says]);
+    restore();
+  }
+
+  // No judgments at all, and a file that is not JSON.
+  const bytes = fs.readFileSync(judgmentsFile);
+  fs.rmSync(judgmentsFile);
+  checkImportRefused(project, 'no judgments file', 10, [`records/${JUDGMENTS_NAME} is not there`]);
+  fs.writeFileSync(judgmentsFile, 'not json');
+  checkImportRefused(project, 'judgments that are not JSON', 10, [`records/${JUDGMENTS_NAME} is not JSON`]);
+  // A link to a valid copy of the file is refused, as the records are: the judgments are read through no link.
+  fs.rmSync(judgmentsFile);
+  const linked = path.join(project.folder, 'linked-judgments.json');
+  fs.writeFileSync(linked, bytes);
+  fs.symlinkSync(linked, judgmentsFile);
+  checkImportRefused(project, 'judgments reached through a link', 10, [`records/${JUDGMENTS_NAME} is not a regular file`]);
+  fs.rmSync(judgmentsFile);
+  fs.rmSync(linked);
+  fs.writeFileSync(judgmentsFile, bytes);
+
+  // After every refusal the original bytes verify again.
+  const again = evaluate(['run', '--evaluation', project.folder], project.env);
+  check(again.status === 0, `the restored harness files no longer import: exit ${again.status}\n${again.output}`);
+}
+
+/** The reference's worked scorer input is the observation the runtime derives, so the page cannot drift from the verification. */
+function checkImportedCalibrationReferenceExample() {
+  const page = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
+  const [, example] = /the response `Response at level 1` is the observation `(\{.*?\})`\./s.exec(page) ?? [];
+  check(example !== undefined, 'the reference has no worked scorer input for a stdout criterion');
+  if (example === undefined) return;
+  const criterion = { evidence: '/interactions/judge-run/stdout' };
+  const contract = readJson(path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'mutation', 'evals', 'verdict', 'contract.json'));
+  const derived = calibrationObservation({
+    criterion,
+    response: 'Response at level 1',
+    operationId: calibrationOperationId(contract, criterion),
+  });
+  check(derived.operationId === 'judge-request', `the verdict contract's plan gives step judge-run the operation ${derived.operationId}`);
+  check(
+    canonical(JSON.parse(example)) === canonical(derived),
+    `the reference's scorer input is ${example}; the runtime derives ${JSON.stringify(derived)}`,
+  );
+}
+
+async function checkImportedCalibrationBelowMinimum() {
+  // The harness judges two labelled items against one anchor, so one of the two agrees: 0.5 under a 0.9 minimum.
+  const project = await harnessProject('records-rubric-half', { half: true });
+  if (project === null) return;
+  useRecords(project, { minimum: 0.9 });
+  const before = runNames(project.folder);
+  const ran = evaluate(['run', '--evaluation', project.folder], project.env);
+  check(ran.status === 11, `imported rubric scores below the minimum exited ${ran.status}; expected 11\n${ran.output}`);
+  const created = runNames(project.folder).filter((name) => !before.includes(name));
+  check(created.length === 1, `the run below the minimum left ${created.length} run directories; expected 1`);
+  if (created.length !== 1) return;
+  const directory = path.join(project.folder, 'runs', created[0]);
+  const reportFile = path.join(directory, 'judge-calibration.json');
+  check(fs.existsSync(reportFile), 'the run below the minimum wrote no judge-calibration.json');
+  if (!fs.existsSync(reportFile)) return;
+  const report = readJson(reportFile);
+  check(
+    report.minimumAgreement === 0.9 &&
+      report.criteria[0].agreement === 0.5 &&
+      report.criteria[0].largestLevelDistance === 1 &&
+      JSON.stringify(report.criteria[0].items.map((item) => [item.expectedLevel, item.actualLevel, item.levelDistance])) ===
+        '[[1,2,1],[2,2,0]]',
+    `the report below the minimum is ${JSON.stringify(report)}`,
+  );
+  check(recordFiles(directory).length === 0, 'the run below the minimum copied a record');
+  check(
+    !fs.existsSync(path.join(directory, 'trial-sets')) &&
+      !fs.existsSync(path.join(directory, 'trial-sets.json')) &&
+      !fs.existsSync(path.join(directory, 'evaluator-configuration.json')),
+    'the run below the minimum copied the harness files',
+  );
+}
+
+async function checkImportedCalibrationChangesScoringVersion() {
+  // A changed labelled item and a changed minimum each give the harness another configuration, and score under another version.
+  const variants = [
+    { label: 'base', edit: () => {} },
+    {
+      label: 'item',
+      edit: (folder) =>
+        editJson(
+          path.join(folder, 'policy', 'judge-calibration.json'),
+          (value) => (value.items[2].response = 'calibration example at level 3, reworded'),
+        ),
+    },
+    {
+      label: 'minimum',
+      edit: (folder) =>
+        editJson(path.join(folder, 'evaluation.json'), (evaluation) => (evaluation.judgeCalibration.minimumAgreement = 0.8)),
+    },
+  ];
+  const seen = [];
+  for (const { label, edit } of variants) {
+    const project = await harnessProject(`records-version-${label}`, { edit });
+    if (project === null) return;
+    useRecords(project);
+    const ran = evaluate(['run', '--evaluation', project.folder], project.env);
+    check(ran.status === 0, `${label}: the records run exited ${ran.status}\n${ran.output}`);
+    const runDirectory = runDirectoryOf(project.folder);
+    if (ran.status !== 0 || runDirectory === null) return;
+    const { evidence } = scoreRun(project, `the ${label} records run`);
+    seen.push({ label, ...scoredCalibration(runDirectory, evidence) });
+  }
+  for (const [at, left] of seen.entries())
+    for (const right of seen.slice(at + 1)) {
+      check(left.digest !== right.digest, `the ${left.label} and ${right.label} configurations share the digest ${left.digest}`);
+      check(
+        typeof left.version === 'string' && left.version !== right.version,
+        `the ${left.label} and ${right.label} runs share the scoring version ${left.version}`,
+      );
+    }
+  check(
+    seen.every((entry) => /^sha256:[0-9a-f]{64}$/.test(entry.bound[0]) && typeof entry.bound[1] === 'number') &&
+      seen[0].bound[0] !== seen[1].bound[0] &&
+      seen[0].bound[0] === seen[2].bound[0] &&
+      seen[0].bound[1] === 1 &&
+      seen[2].bound[1] === 0.8,
+    `the bindings across the variants are ${JSON.stringify(seen.map((entry) => entry.bound))}`,
+  );
 }
 
 // ------------------------------------------------------------------------- units
@@ -3099,6 +3495,48 @@ async function checkCommandTrialDenial() {
   );
 }
 
+/**
+ * Every case in run order with the group it belongs to. CI runs the groups as two scripts (`--group=evaluators` and
+ * `--group=records`) so no one runner carries the whole file's wall time; with no `--group` every case runs.
+ */
+const CASES = [
+  { name: 'the units', body: checkUnits, group: 'evaluators' },
+  { name: 'the direction gate', body: checkDirectionGate, group: 'evaluators' },
+  { name: 'the reference names the denial reasons', body: checkReferenceNamesDenialReasons, group: 'evaluators' },
+  { name: 'the reference qualifies the sealed-brief agent', body: checkReferenceQualifiesSealedBriefAgent, group: 'evaluators' },
+  { name: 'a denied command trial step', body: checkCommandTrialDenial, group: 'evaluators' },
+  { name: 'the bridge', body: checkBridge, group: 'evaluators' },
+  { name: 'the command evaluator row shapes', body: checkCommandRowShapes, group: 'evaluators' },
+  { name: 'command and agent calibration disagreement', body: checkCalibrationDisagreementAcrossEvaluators, group: 'evaluators' },
+  { name: 'calibration follows its evidence channel', body: checkCalibrationFollowsEvidenceChannel, group: 'evaluators' },
+  { name: 'calibration preserves a JSON channel root', body: checkCalibrationJsonRoot, group: 'evaluators' },
+  { name: 'calibration rejects an invalid captured snapshot', body: checkCalibrationSnapshotGuard, group: 'evaluators' },
+  { name: 'calibration holds the adopter tree', body: checkCalibrationHoldsAdopterTree, group: 'evaluators' },
+  { name: 'an unwitnessed quote', body: checkUnwitnessedQuote, group: 'evaluators' },
+  { name: 'evaluators outside the import contract', body: checkEvaluatorFailures, group: 'evaluators' },
+  { name: 'a hung evaluator', body: checkEvaluatorTimeout, group: 'evaluators' },
+  { name: 'the set recommendation', body: checkSetRecommendation, group: 'evaluators' },
+  { name: 'the evaluator run in place', body: checkEvaluatorInPlace, group: 'evaluators' },
+  { name: 'the evaluation layer confined', body: checkLayerWritesRefused, group: 'evaluators' },
+  { name: 'the evaluation layer held to its bytes', body: checkEvaluatorLayerHeld, group: 'evaluators' },
+  { name: 'the scratch removal', body: checkScratchRemoval, group: 'evaluators' },
+  { name: 'a signal mid-trial', body: checkSignalMidTrial, group: 'evaluators' },
+  { name: 'an oracle two behaviors declare', body: checkSharedOracle, group: 'evaluators' },
+  { name: 'the sealed-brief agent', body: checkSealedBriefAgent, group: 'evaluators' },
+  { name: 'the sealed-brief agent qualified', body: checkEvaluatorQualification, group: 'evaluators' },
+  { name: 'a qualification attempt in an unexpected state', body: checkQualificationUnexpectedState, group: 'evaluators' },
+  { name: 'an arm agrees as its lowest probe', body: checkQualificationLowestProbe, group: 'evaluators' },
+  { name: 'the other arms are not qualified', body: checkQualificationSkipsOtherArms, group: 'evaluators' },
+  { name: 'a qualification attempt holds the adopter tree', body: checkQualificationHoldsAdopterTree, group: 'evaluators' },
+  { name: 'the sealed-brief agent edges', body: checkSealedBriefAgentEdges, group: 'evaluators' },
+  { name: 'the records evaluator', body: checkRecordsEvaluator, group: 'records' },
+  { name: 'imported rubric scores calibrated', body: checkImportedRubricCalibration, group: 'records' },
+  { name: 'imported rubric scores below the minimum', body: checkImportedCalibrationBelowMinimum, group: 'records' },
+  { name: 'imported calibration changes the scoring version', body: checkImportedCalibrationChangesScoringVersion, group: 'records' },
+  { name: 'the reference names the scorer input', body: checkImportedCalibrationReferenceExample, group: 'records' },
+];
+const GROUPS = new Set(CASES.map(({ group }) => group));
+
 /** Runs one case; an exception is a failed check, so the cases after it still run and every failure is reported. */
 async function runCase(name, body) {
   try {
@@ -3108,7 +3546,20 @@ async function runCase(name, body) {
   }
 }
 
+/** The `--group=<name>` argument's value, `null` when the flag is absent, `''` when it carries no name. */
+function requestedGroup() {
+  const argument = process.argv.find((value) => value === '--group' || value.startsWith('--group='));
+  return argument === undefined ? null : argument.slice('--group='.length);
+}
+
 async function main() {
+  const group = requestedGroup();
+  if (group !== null && !GROUPS.has(group)) {
+    console.error(
+      `${colors.red}unknown --group ${JSON.stringify(group)}:${colors.reset} expected one of ${[...GROUPS].map((name) => `--group=${name}`).join(', ')}`,
+    );
+    return 2;
+  }
   try {
     // `--layer-only` runs the confined evaluation layer's case alone (Story 1.31's revert checks).
     if (process.argv.includes('--layer-only')) {
@@ -3124,36 +3575,17 @@ async function main() {
       await runCase('a qualification attempt holds the adopter tree', checkQualificationHoldsAdopterTree);
       return report();
     }
-    await runCase('the units', checkUnits);
-    await runCase('the direction gate', checkDirectionGate);
-    await runCase('the reference names the denial reasons', checkReferenceNamesDenialReasons);
-    await runCase('the reference qualifies the sealed-brief agent', checkReferenceQualifiesSealedBriefAgent);
-    await runCase('a denied command trial step', checkCommandTrialDenial);
-    await runCase('the bridge', checkBridge);
-    await runCase('the command evaluator row shapes', checkCommandRowShapes);
-    await runCase('command and agent calibration disagreement', checkCalibrationDisagreementAcrossEvaluators);
-    await runCase('calibration follows its evidence channel', checkCalibrationFollowsEvidenceChannel);
-    await runCase('calibration preserves a JSON channel root', checkCalibrationJsonRoot);
-    await runCase('calibration rejects an invalid captured snapshot', checkCalibrationSnapshotGuard);
-    await runCase('calibration holds the adopter tree', checkCalibrationHoldsAdopterTree);
-    await runCase('an unwitnessed quote', checkUnwitnessedQuote);
-    await runCase('evaluators outside the import contract', checkEvaluatorFailures);
-    await runCase('a hung evaluator', checkEvaluatorTimeout);
-    await runCase('the set recommendation', checkSetRecommendation);
-    await runCase('the evaluator run in place', checkEvaluatorInPlace);
-    await runCase('the evaluation layer confined', checkLayerWritesRefused);
-    await runCase('the evaluation layer held to its bytes', checkEvaluatorLayerHeld);
-    await runCase('the scratch removal', checkScratchRemoval);
-    await runCase('a signal mid-trial', checkSignalMidTrial);
-    await runCase('an oracle two behaviors declare', checkSharedOracle);
-    await runCase('the sealed-brief agent', checkSealedBriefAgent);
-    await runCase('the sealed-brief agent qualified', checkEvaluatorQualification);
-    await runCase('a qualification attempt in an unexpected state', checkQualificationUnexpectedState);
-    await runCase('an arm agrees as its lowest probe', checkQualificationLowestProbe);
-    await runCase('the other arms are not qualified', checkQualificationSkipsOtherArms);
-    await runCase('a qualification attempt holds the adopter tree', checkQualificationHoldsAdopterTree);
-    await runCase('the sealed-brief agent edges', checkSealedBriefAgentEdges);
-    await runCase('the records evaluator', checkRecordsEvaluator);
+    // `--imported-calibration-only` runs Story 1.40's cases alone (its revert checks).
+    if (process.argv.includes('--imported-calibration-only')) {
+      await runCase('the records evaluator', checkRecordsEvaluator);
+      await runCase('imported rubric scores calibrated', checkImportedRubricCalibration);
+      await runCase('imported rubric scores below the minimum', checkImportedCalibrationBelowMinimum);
+      await runCase('imported calibration changes the scoring version', checkImportedCalibrationChangesScoringVersion);
+      return report();
+    }
+    for (const { name, body, group: caseGroup } of CASES) {
+      if (group === null || caseGroup === group) await runCase(name, body);
+    }
     for (const { label, directory } of runtimeTemps) {
       const left = fs.readdirSync(directory);
       check(left.length === 0, `the ${label} project's runs left ${JSON.stringify(left)} in their temp directory`);

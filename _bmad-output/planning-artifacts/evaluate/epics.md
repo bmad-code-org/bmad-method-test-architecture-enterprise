@@ -23,7 +23,7 @@ inputDocuments:
 
 ## Overview
 
-This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and seventy-two stories, including H.1 (Stories 1.27 to 1.66 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
+This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and seventy-three stories, including H.1 (Stories 1.27 to 1.67 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
 
 Evaluate is fully stacked. The stack runs system under test, then the evaluation (the mechanism that runs the system, collects evidence and makes judgments), then the Behavioral Evaluation Contract (what behavior matters, what evidence counts, how success and failure resolve), then eval-quality (contract sanity, evidence support, and whether the evaluation catches defects). TeA owns every layer above eval-quality, including each concern eval-quality states it leaves to the caller, so an adopter can evaluate any target end to end. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3 onward, Epic 2 and H.1 to close the plan gap audit; the Traceability section maps each audit item to the story that closes it.
 
@@ -150,7 +150,7 @@ None. Evaluate has no graphical interface.
 ### Epic 1: The Evaluate authoring loop
 
 An adopter describes a target, answers Evaluate's questions, chooses or builds the evaluation layer and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches the seeded defect, with the gaps named and closed. The epic closes by running Evaluate on `bmad-testarch-evaluate` itself, then proving the guidance on two more target kinds, on seeded weaknesses and on an evaluation framework its guides never name.
-Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.66.
+Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.67.
 
 **FRs covered:** FR1 to FR10, FR13, FR14.
 
@@ -232,12 +232,13 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 64    | 1.64  | 1.38                         |
 | 65    | 1.65  | 1.38                         |
 | 66    | 1.66  | 1.11, 1.38                   |
-| 67    | 2.1   | 1.16, 1.26, 1.45             |
-| 68    | 2.2   | 2.1                          |
-| 69    | 2.3   | 2.2                          |
-| 70    | 2.4   | 2.3                          |
-| 71    | 2.5   | 2.4                          |
-| 72    | H.1   | 2.5                          |
+| 67    | 1.67  | 1.40                         |
+| 68    | 2.1   | 1.16, 1.26, 1.45             |
+| 69    | 2.2   | 2.1                          |
+| 70    | 2.3   | 2.2                          |
+| 71    | 2.4   | 2.3                          |
+| 72    | 2.5   | 2.4                          |
+| 73    | H.1   | 2.5                          |
 
 ## Epic 1: The Evaluate authoring loop
 
@@ -1234,13 +1235,17 @@ So that its sealed records count only after its rubric judgments meet the agreem
 
 **Given** a `records` evaluator, a rubric, and labelled calibration items covering every criterion and anchored level
 **When** `tea-evaluate run` prepares to import trial records
-**Then** the harness supplies verifiable calibration judgments produced by the same scorer configuration and path that produced its trial scores, without sending `expectedLevel` to that scorer; the runtime validates the provenance and reports exact agreement and largest level distance per criterion in `runs/<invocationId>/judge-calibration.json`, a `test:evaluate-evaluators` integration case; accepting a report with a different scorer configuration or with labels in scorer input fails the case
-**And** agreement below `judgeCalibration.minimumAgreement` exits 11 before any imported trial record is copied or scored, a `test:evaluate-evaluators` case; removing the gate lets the case write a record
-**And** the calibration file digest and minimum agreement are bound to the imported `EvaluatorConfiguration` and scoring version, a `test:evaluate-evaluators` case; omitting either binding leaves the scoring version unchanged and fails the case
+**Then** the harness supplies verifiable calibration judgments produced by the same scorer configuration and path that produced its trial scores, without sending `expectedLevel` to that scorer; the runtime validates the provenance and reports exact agreement and largest level distance per criterion in `runs/<invocationId>/judge-calibration.json`, a `test:evaluate-records` integration case; accepting a report with a different scorer configuration or with labels in scorer input fails the case
+**And** agreement below `judgeCalibration.minimumAgreement` exits 11 before any imported trial record is copied or scored, a `test:evaluate-records` case; removing the gate lets the case write a record
+**And** the calibration file digest and minimum agreement are bound to the imported `EvaluatorConfiguration` and scoring version, a `test:evaluate-records` case; dropping either binding check admits a configuration without it, and the missing or wrong binding case exits 0
 **And** a `records` evaluator without a rubric still imports and scores through its existing path, while `check` refuses rubric records whose calibration provenance is absent or unverifiable, a `test:evaluate-check` case; bypassing the refusal accepts an uncalibrated rubric
 
 **Dependencies:** 1.17, 1.21.
 **Gate:** `npm test`, `npm run test:release-metadata`, engine check.
+
+(Amended 2026-10-01 in Story 1.40: the harness writes the judgments as `<records>/calibration-judgments.json`, `{ schemaVersion, scorerConfigurationDigest, items: [{ rubricId, criterionId, scorerInput, answer }] }`, one item per labelled item in the labelled file's order. `scorerInput` is compared whole with the label-free observation the runtime derives from the item, and `scorerConfigurationDigest` is `digestArtifact` over the imported configuration without its two `tea.judgeCalibration*` keys, since the full configuration's digest covers the labelled file's digest. `check` and `run` verify with one function; the verification is exit 10 and the gate is exit 11. A harness that needs proof its scorer ran uses a `command` evaluator.)
+
+(Amended 2026-10-01 in Story 1.40: the records cases run as test:evaluate-records, a group of the same test file, so the shard holding the evaluators script stays under the job timeout.)
 
 ### Story 1.41: Confine score output during concurrent run-directory changes
 
@@ -1748,6 +1753,25 @@ So that no evidence artifact holds a value the host injected (AD-4, AD-8).
 
 **Dependencies:** 1.11, 1.38.
 **Gate:** `test:evaluate-api`, `test:evaluate-arms`, `npm test`.
+
+### Story 1.67: Emit the label-free calibration inputs a records harness feeds its scorer
+
+Added 2026-10-01 in Story 1.40 from its builder Analyze (determinism lens). A `records` harness proves its rubric scores with `<records>/calibration-judgments.json`, whose `scorerInput` must equal, key for key, the observation the runtime derives from each labelled item, and whose `scorerConfigurationDigest` is `digestArtifact` over the configuration without its two calibration bindings. Story 1.40 documents both, but a harness in any language can reproduce them only by hand, and a mismatch shows only as a `check` exit 10.
+
+As an adopter bringing rubric scores from my harness,
+I want the runtime to emit the scorer inputs and the digests I must copy,
+So that my judgments file verifies the first time (AD-21, AD-22).
+
+**Acceptance Criteria:**
+
+**Given** a `records` evaluation whose contract declares a rubric and a harness configuration
+**When** the harness asks the runtime for its calibration inputs (an option of an existing subcommand, or a subcommand if AD-5's count is amended in that story)
+**Then** the output lists, in the labelled file's order, each item's rubric, criterion and label-free `scorerInput`, the labelled file's digest and the `scorerConfigurationDigest` of the configuration it names, from the same functions `check` and `run` verify with, a `test:evaluate-evaluators` case in which a harness fixture builds its judgments file from that output alone and `check` and `run` accept it; changing how the runtime derives the observation or the digest changes the output and the verification together, and a hand-built copy of the old derivation fails the case
+**And** the output carries no `expectedLevel`, a `test:evaluate-evaluators` case; adding the label to the output fails it
+**And** the reference and the skill's evaluator guide tell the harness to copy these values verbatim, with the guidance test asserting that sentence by its exact heading.
+
+**Dependencies:** 1.40.
+**Gate:** `test:evaluate-evaluators`, `test:evaluate-guidance`, `npm test`.
 
 ## Epic 2: Continuous proof in CI
 
