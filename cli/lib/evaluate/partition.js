@@ -3,16 +3,17 @@
 
 const path = require('node:path');
 
-const { readRegularJson } = require('./interpret');
+const { readRegularJson, strengthAggregatePointer } = require('./interpret');
 
 /**
  * Writes `partitions.json` and `gap-view.json` into the run directory through its held writer (`run-directory.js`).
+ * `partitions.json` carries the pointer to the run's strength aggregate (Story 1.45); the counts, rates and decisions stay in `strength-aggregate.json`.
  * `evidence` maps each scored probe to the parsed evidence artifact the writer read back from the score directory
  * (`score.js`); a probe with none has `outcome: null`.
  */
-function writePartitionViews({ writer, runDirectory, scoreInvocationId, trialSets, evidence, heldOutProbes }) {
+function writePartitionViews({ writer, runDirectory, scoreInvocationId, trialSets, evidence, heldOutProbes, strengthAggregate }) {
   const heldOut = new Set(heldOutProbes ?? []);
-  const partitions = { scoreInvocationId, development: [], 'held-out': [] };
+  const partitions = { scoreInvocationId, strengthAggregate: strengthAggregatePointer(strengthAggregate), development: [], 'held-out': [] };
   const gapView = { scoreInvocationId, development: [], 'held-out': [] };
   for (const set of trialSets) {
     const probe = readRegularJson(path.join(runDirectory, set.probe));

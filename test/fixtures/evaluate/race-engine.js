@@ -20,12 +20,35 @@
  * - `plant-record`, `plant-evidence`, `plant-summary`: a link to the sentinel is
  *   planted where the probe's `score.json`, its evidence artifact or the
  *   invocation's `score.json` will be written.
+ * - `duplicate-key`: the staged artifact is rewritten as JSON that repeats its `runId` key, the
+ *   first occurrence holding another value, so a parser that keeps the last key reads a valid artifact.
  * - `forge-corpus`, `forge-schema`, `garbage`, `forge-probe`, `stage-link`: the
  *   staged evidence artifact (`--out`) is replaced with the artifact of another
  *   corpus, with one that keeps its corpus digest and its probe's outcome but
  *   loses a required field and gains a forbidden one, with
  *   bytes that are no artifact, with the artifact of the previous probe
  *   (`TEA_RACE_STASH` keeps it between calls), or with a link to a valid artifact.
+ *
+ * Every other stage passes through untouched, so the `aggregate-strength` call
+ * `tea-evaluate score` makes after the probe loop (Story 1.45) does not reach
+ * `TEA_RACE_LOG`, which counts `score` calls alone. It is appended to
+ * `TEA_RACE_AGGREGATE_LOG` when that names a file, and `TEA_RACE_AGGREGATE`
+ * names what happens to it:
+ *
+ * - `tamper-evidence`: before the real call, the first persisted evidence artifact
+ *   (`--evidence`) gets another `runId`, which keeps it consistent and changes its digest.
+ * - `inconsistent-evidence`: before the real call, the first persisted evidence
+ *   artifact's `strength.comparable` is flipped, which the engine refuses with exit 4.
+ * - `tamper-floors`, `swap-floors`: before the real call, the floors copy (`--floors`) is rewritten to
+ *   `{"defect":0.1}`, so the engine reads floors this command never staged. `swap-floors` writes
+ *   the original bytes back once the call has finished, which leaves only the aggregate to show it.
+ * - `forge-digest`, `forge-probes`, `forge-engine`, `forge-floor`, `forge-schema`, `garbage`, `stage-link`: after
+ *   the real call, the staged aggregate (`--out`) records another digest for its first
+ *   input, drops its last input, names another engine version, records another floor for
+ *   the defect class, loses a required field and gains a forbidden one, holds bytes that are
+ *   no aggregate, or becomes a link to a valid one.
+ * - `plant-aggregate`: after the real call, a link to the sentinel is planted where the
+ *   copied aggregate (`strength-aggregate.json`) will be written.
  */
 
 'use strict';
@@ -38,6 +61,48 @@ const { engineCliPath } = require('../../../cli/lib/evaluate/engine');
 
 const argv = process.argv.slice(2);
 const value = (flag) => argv[argv.indexOf(flag) + 1];
+
+if (argv[0] !== 'score') {
+  if (process.env.TEA_RACE_AGGREGATE_LOG) fs.appendFileSync(process.env.TEA_RACE_AGGREGATE_LOG, `${JSON.stringify(argv)}\n`);
+  const aggregateMode = argv[0] === 'aggregate-strength' ? (process.env.TEA_RACE_AGGREGATE ?? '') : '';
+  const evidence = argv.flatMap((argument, at) => (argument === '--evidence' ? [argv[at + 1]] : []))[0];
+  if (aggregateMode === 'tamper-evidence' || aggregateMode === 'inconsistent-evidence') {
+    const artifact = JSON.parse(fs.readFileSync(evidence, 'utf8'));
+    if (aggregateMode === 'tamper-evidence') artifact.runId = `${artifact.runId}-edited`;
+    else artifact.strength.comparable = !artifact.strength.comparable;
+    fs.writeFileSync(evidence, `${JSON.stringify(artifact)}\n`);
+  }
+  const floorsFile = value('--floors');
+  const originalFloors = floorsFile === undefined ? null : fs.readFileSync(floorsFile);
+  if (aggregateMode === 'tamper-floors' || aggregateMode === 'swap-floors') fs.writeFileSync(floorsFile, '{"defect":0.1}\n');
+  const passed = spawnSync(process.execPath, [engineCliPath({}), ...argv], { stdio: 'inherit' });
+  if (aggregateMode === 'swap-floors') fs.writeFileSync(floorsFile, originalFloors);
+  const staged = value('--out');
+  if (aggregateMode === 'plant-aggregate') {
+    fs.symlinkSync(process.env.TEA_RACE_SENTINEL, path.join(path.dirname(floorsFile), 'strength-aggregate.json'));
+  }
+  if (passed.status === 0 && staged !== undefined) {
+    if (aggregateMode === 'garbage') fs.writeFileSync(staged, 'not an aggregate\n');
+    else if (aggregateMode === 'stage-link') {
+      const valid = path.join(process.env.TEA_RACE_TARGET, 'valid-aggregate.json');
+      fs.renameSync(staged, valid);
+      fs.symlinkSync(valid, staged);
+    } else if (['forge-digest', 'forge-probes', 'forge-engine', 'forge-floor', 'forge-schema'].includes(aggregateMode)) {
+      const aggregate = JSON.parse(fs.readFileSync(staged, 'utf8'));
+      if (aggregateMode === 'forge-digest') aggregate.inputs[0].artifactDigest = `sha256:${'0'.repeat(64)}`;
+      else if (aggregateMode === 'forge-probes') aggregate.inputs.pop();
+      else if (aggregateMode === 'forge-engine') aggregate.engineVersion = '0.0.1';
+      else if (aggregateMode === 'forge-floor') aggregate.floorDecisions.defect.floor = 0.5;
+      else {
+        delete aggregate.floorDecisions;
+        aggregate.unexpectedField = true;
+      }
+      fs.writeFileSync(staged, JSON.stringify(aggregate));
+    }
+  }
+  process.exit(passed.status ?? 5);
+}
+
 fs.appendFileSync(process.env.TEA_RACE_LOG, `${JSON.stringify(argv)}\n`);
 const real = spawnSync(process.execPath, [engineCliPath({}), ...argv], { stdio: 'inherit' });
 
@@ -94,6 +159,9 @@ if (mode === 'swap-scores') {
   fs.writeFileSync(out, JSON.stringify(artifact));
 } else if (mode === 'garbage') {
   fs.writeFileSync(out, 'not an evidence artifact\n');
+} else if (mode === 'duplicate-key') {
+  const text = fs.readFileSync(out, 'utf8');
+  fs.writeFileSync(out, text.replace(/^\{/, '{"runId":"shadowed",'));
 } else if (mode === 'forge-probe') {
   if (probe === 'P-001') fs.copyFileSync(out, stash);
   else fs.copyFileSync(stash, out);

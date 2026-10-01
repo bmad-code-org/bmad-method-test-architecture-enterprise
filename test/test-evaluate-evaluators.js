@@ -261,12 +261,16 @@ function scoreRun(project, what, expectedExit = 0, env = {}) {
   const latest = fs.existsSync(scores) ? fs.readdirSync(scores).sort().at(-1) : undefined;
   const evidence = {};
   if (latest !== undefined) {
-    for (const probeId of fs.readdirSync(path.join(scores, latest)).filter((name) => name !== 'score.json')) {
+    for (const probeId of fs
+      .readdirSync(path.join(scores, latest))
+      .filter((name) => fs.statSync(path.join(scores, latest, name)).isDirectory())) {
       const file = path.join(scores, latest, probeId, 'evidence-artifact.json');
       evidence[probeId] = fs.existsSync(file) ? readJson(file) : null;
     }
   }
-  return { evidence, output: scored.output };
+  const aggregateFile = latest === undefined ? null : path.join(scores, latest, 'strength-aggregate.json');
+  const aggregate = aggregateFile !== null && fs.existsSync(aggregateFile) ? readJson(aggregateFile) : null;
+  return { evidence, aggregate, output: scored.output };
 }
 
 /** Each trial's vote for a probe equals `state`, over `TRIALS` trials. */
@@ -2489,9 +2493,17 @@ async function checkRecordsEvaluator() {
       check(copied.equals(original), `a records run changed ${relative} on its way into the run`);
     }
   }
-  const { evidence } = scoreRun(project, 'a records run');
+  const { evidence, aggregate } = scoreRun(project, 'a records run');
   checkVotes('a records run', evidence, 'P-001', 'passed-clean-control');
   checkVotes('a records run', evidence, 'P-002', 'caught');
+  // A records run aggregates too (Story 1.45): the harness's records, copied byte for byte, are scored and aggregated as any run's.
+  check(
+    aggregate?.inputs?.map((input) => input.probeId).join(',') === 'P-001,P-002' &&
+      aggregate.classes?.defect?.caught === 1 &&
+      aggregate.classes.defect.rate === 1 &&
+      aggregate.inputs[0].probeClass === null,
+    `a records run's aggregate is ${JSON.stringify(aggregate?.classes)}`,
+  );
 
   // An imported observation finding is schema-valid without citations or quotes, but interpretation requires both.
   const uncitedRelative = index.trialSets.find((set) => set.probeId === 'P-002').records[0];

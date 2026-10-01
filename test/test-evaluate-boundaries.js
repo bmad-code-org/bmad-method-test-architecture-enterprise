@@ -26,7 +26,7 @@
  *   path into `test/` cannot slip past `test-import`).
  * - `engine-stage`: the stages that decide enforced verdicts come only from the
  *   eval-quality CLI over persisted files.
- *   - `runScore`, `preflightFromObservations` and `seal` fail anywhere under
+ *   - `runScore`, `preflightFromObservations`, `aggregateStrength` and `seal` fail anywhere under
  *     `cli/`, `engine.js` included, as an identifier, a member property (dot,
  *     or a bracket string or static template), an object-pattern key, or an
  *     import or export specifier. `Object.seal` is the one exemption, and only
@@ -134,7 +134,7 @@ const ENGINE_MODULE = path.join('lib', 'evaluate', 'engine.js');
 const RUNTIME_DIRECTORY = path.join('lib', 'evaluate');
 const SOURCE_EXTENSIONS = new Set(['.js', '.cjs', '.mjs']);
 const DATA_EXTENSIONS = new Set(['.json', '.md', '.yml', '.yaml']);
-const ALWAYS_FORBIDDEN = new Set(['runScore', 'preflightFromObservations', 'seal']);
+const ALWAYS_FORBIDDEN = new Set(['runScore', 'preflightFromObservations', 'aggregateStrength', 'seal']);
 const AJV_STAGE = 'compile';
 const AJV_MODULES = new Set(['ajv', 'ajv/dist/2020']);
 const CREATE_REQUIRE = 'createRequire';
@@ -938,6 +938,18 @@ const PLANTS = [
     rule: 'engine-stage',
     file: 'lib/evaluate/score.js',
     source: "const engine = require('./engine');\nengine.runScore({});\n",
+  },
+  {
+    name: 'aggregateStrength on the engine module (the library import in place of the CLI stage, Story 1.45)',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score.js',
+    source: "const engine = require('./engine');\nengine.aggregateStrength({});\n",
+  },
+  {
+    name: 'aggregateStrength destructured from the engine module',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/aggregate.js',
+    source: `${LOADER}async function f() {\n  const { aggregateStrength } = await loadEngine();\n  return aggregateStrength;\n}\nmodule.exports = { f };\n`,
   },
   {
     name: 'seal destructured from the engine module',

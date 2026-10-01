@@ -2016,11 +2016,33 @@ function checkRunGuidance(guide, failures) {
     'strength.vector',
     'evaluation.json.strengthFloor',
     'one probe',
-    'no engine-owned class rate across all probes',
-    'no class-wide strength claim',
     './node_modules/.bin/eval-quality compile',
   ])
     requireText(guide, marker, 'run.md', failures);
+  const strength = headingBody(guide, '## Read development strength before held-out');
+  for (const marker of [
+    'strength-aggregate.json',
+    'strengthAggregate',
+    'aggregate-strength',
+    'floorDecisions',
+    '`meets`, `does-not-meet` or `undeclared`',
+    'with its `basis`',
+    'compute none',
+    'A `null` class has no eligible probe',
+    'A class with `rate: null`',
+    '`comparable: false`',
+    '`not-comparable`',
+    'which must be `copied`',
+    'reads `undeclared` with basis `no-floor-declared`',
+    'the readings that follow apply under a declared floor',
+    'under a declared floor reads `does-not-meet` with basis `not-comparable`',
+    'None of the three is a pass',
+    '`absent`, `refused`, `mismatch` or `failed`',
+    'no aggregate stands, so the guide makes no class-wide claim',
+    'A `does-not-meet` class gets a development repair',
+    "the adopter's declined reason on record, before held-out",
+  ])
+    requireText(strength, marker, 'run.md run-wide strength reading', failures);
   const packages = taggedExamples(guide, 'package');
   if (
     packages.length !== 1 ||
@@ -2077,7 +2099,18 @@ function checkGapsGuidance(guide, engine, failures) {
         'One `caught`',
         'caughtCount / validCount > catchThreshold',
         'one evidence artifact reports only that probe',
-        'no class-wide catch rate across probes',
+        '`strength-aggregate.json`',
+        '`aggregate-strength` stage',
+        'floor decision with its `basis`',
+        'compute no rate or decision',
+        '`no-eligible-probe`',
+        '`no-exercised-probe`',
+        '`not-comparable`',
+        '`unexercised-probe`',
+        'A class with no declared floor reads `undeclared` with basis `no-floor-declared`',
+        'Under a declared floor the first match wins, in this order',
+        'None of these is a pass',
+        'no aggregate stands and no class-wide claim does either',
       ],
     ],
     ['## Read a loose oracle', ['gameability probe', 'fails qualification', 'does not resolve `caught`', 'clean control', 'oracle']],
@@ -2251,6 +2284,13 @@ function checkGapsGuidance(guide, engine, failures) {
     'held-out partition',
   ].entries())
     if (!steps[index]?.includes(marker)) failures.push(`gaps.md loop step ${index + 1} changed`);
+  for (const marker of [
+    'strength-aggregate.json',
+    'does-not-meet',
+    '`absent`, `refused`, `mismatch` or `failed`',
+    'blocks every class-wide claim',
+  ])
+    if (!steps[5]?.includes(marker)) failures.push(`gaps.md loop step 6 no longer reads the run-wide aggregate (${marker})`);
   if (
     !steps[2]?.includes('tea-evaluate check --evaluation <evaluation-folder>') ||
     steps[2].indexOf('tea-evaluate digest') >= steps[2].indexOf('tea-evaluate check')
