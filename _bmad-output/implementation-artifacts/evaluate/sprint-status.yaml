@@ -73,7 +73,7 @@ development_status:
   1-35-judge-a-tool-server-that-crashes-mid-call: done
   1-36-hold-an-http-entry-to-eval-qualitys-own-target-policy-parser: done
   1-37-know-a-started-http-server-by-the-port-it-bound-itself: done
-  1-38-hold-a-deployment-to-the-release-it-reports: backlog
+  1-38-hold-a-deployment-to-the-release-it-reports: done
   1-39-tell-a-captured-value-too-large-to-launch-from-a-target-tha: backlog
   1-40-calibrate-rubric-scores-imported-from-harness-records: backlog
   1-41-confine-score-output-during-concurrent-run-directory-changes: backlog
@@ -99,6 +99,9 @@ development_status:
   1-61-teach-file-system-confinement-in-the-evaluate-skill: backlog
   1-62-share-one-sandbox-primitive-layer-across-teas-isolation-mod: backlog
   1-63-carry-the-audit-over-a-channel-the-target-cannot-write: backlog
+  1-64-hold-the-release-across-the-witness-legs-and-the-trials: backlog
+  1-65-ask-every-http-interface-of-a-deployment-which-release-it-r: backlog
+  1-66-scrub-an-observation-in-every-letter-case: backlog
   epic-1-retrospective: optional
 
   epic-2: backlog

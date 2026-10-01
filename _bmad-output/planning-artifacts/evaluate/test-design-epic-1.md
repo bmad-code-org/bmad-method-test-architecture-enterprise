@@ -38,7 +38,7 @@ inputDocuments:
 
 ## Executive Summary
 
-**Scope:** full epic-level test design for Stories 1.1 to 1.63 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.63. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
+**Scope:** full epic-level test design for Stories 1.1 to 1.66 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.66. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
 
 **Risk summary:**
 
@@ -592,7 +592,7 @@ Levels: integration over real eval-quality, unit. File: `test/test-evaluate-run.
 
 Levels: integration over real eval-quality, contract. Files: `test/test-evaluate-arms.js` (`test:evaluate-arms`), `test/test-evaluate-check.js` (`test:evaluate-check`).
 
-Amended 2026-09-26 in Story 1.32: the two loopback fixture servers are `test/fixtures/evaluate-api/`'s grader, started by the case with a policy each (`mode: lenient` before the fix, `mode: strict` after it) and a request log each; the release identifiers are the ones the probe declares, since asking a deployment for its release needs a report request the probe names, which Story 1.38 adds; the check row's further refusals (neither boundary, one release for both, a registry entry that is not HTTP, origins off the registry's HTTP interfaces, a pre-fix origin that reaches a post-fix one) are `test:evaluate-check` and `test:evaluate-arms` cases, and each deployment origin's host and auth rules under `registry` are `test:evaluate-api` cases.
+Amended 2026-09-26 in Story 1.32: the two loopback fixture servers are `test/fixtures/evaluate-api/`'s grader, started by the case with a policy each (`mode: lenient` before the fix, `mode: strict` after it) and a request log each; the release identifiers are the ones the probe declares, since asking a deployment for its release needs a report request the probe names, which Story 1.38 adds (amended 2026-09-30 in Story 1.38: each deployment names `report`, the fixture grader answers it at `GET /release` with the release it was started with, and the Story 1.32 cases' request logs begin with that request at each deployment); the check row's further refusals (neither boundary, one release for both, a registry entry that is not HTTP, origins off the registry's HTTP interfaces, a pre-fix origin that reaches a post-fix one) are `test:evaluate-check` and `test:evaluate-arms` cases, and each deployment origin's host and auth rules under `registry` are `test:evaluate-api` cases.
 
 | AC                                                                                                               | Test                                                                                                         | Level                              | P   | Revert check                                                             |
 | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ---------------------------------- | --- | ------------------------------------------------------------------------ |
@@ -671,7 +671,9 @@ The no-port and non-number rows run both as `preflight` cases and as `callServer
 
 ### Story 1.38: Hold a deployment to the release it reports
 
-Added 2026-09-26 in Story 1.32. Levels: integration over real eval-quality, contract, static. Files: `test/test-evaluate-arms.js` (`test:evaluate-arms`), `test/test-evaluate-check.js` (`test:evaluate-check`).
+Added 2026-09-26 in Story 1.32. Levels: integration over real eval-quality, contract, static, unit. Files: `test/test-evaluate-arms.js` (`test:evaluate-arms`), `test/test-evaluate-check.js` (`test:evaluate-check`).
+
+Amended 2026-09-30 in Story 1.38: the cases run over `test/fixtures/evaluate-api/`'s grader started by the case with `GRADER_RELEASE` and, for the answer shapes, a `release: number|object|missing|text|down` policy line, each deployment logging its requests, so every assertion on routing reads the servers' own logs (the report request first, then the arms); the policy denial is a report operation whose method the registry does not authorize (`method-not-authorized`, nothing sent); a deployment whose process ends on the report request exits 12; `deploymentPair` units and `reportProblems` units carry the runtime guard and every `check` rule that `run` cannot reach below `check`; the `check` cases add one state-changing operation, one of a `cli` interface and one of an interface the registry does not serve, and a `schema` case each for a missing `report` and one with an extra or empty field. A refusal's quoted identifier (escaped, cut at 160 characters) has a unit and two cases.
 
 | AC                                                                     | Test                                                                                                                | Level                              | P   | Revert check                                                   |
 | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | --- | -------------------------------------------------------------- |
@@ -934,6 +936,40 @@ Added in Story 1.31 from its local review. Levels: integration. Files: `test/tes
 | A rewritten report hides nothing                         | A confined target reads an ungranted path, then rewrites, truncates and pads the report file; `observedMounts` still lists it | Integration | P0  | Reading the file in place of the channel drops the path |
 | No route to a service manager through an abstract socket | On Linux, a listener on an abstract address is unreachable from the target while a started HTTP service answers the runtime   | Integration | P1  | Removing the isolation lets the connection through      |
 | The reference claims only what it can back               | The reference's confinement section is compared with the mechanism's behavior in the cases above                              | Static      | P2  | A claim the cases do not back fails the comparison      |
+
+### Story 1.64: Hold the release across the witness legs and the trials
+
+Added 2026-09-30 in Story 1.38. Levels: integration over real eval-quality, static. File: `test/test-evaluate-arms.js` (`test:evaluate-arms`).
+
+| AC                                                    | Test                                                                                                                           | Level                              | P   | Revert check                                                             |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------- | --- | ------------------------------------------------------------------------ |
+| A release changed after the witness legs refuses      | The pre-fix grader reports another release once the witness leg has run; assert the refusal naming both and no trial run       | Integration over real eval-quality | P0  | Dropping the request after the witness legs runs the trials              |
+| A release changed during the trials refuses           | The pre-fix grader changes its release while the trials run; assert the refusal and that no trial set is sealed                | Integration over real eval-quality | P0  | Dropping the request after the trials seals trials under another release |
+| An unchanged release is asked at each point           | Read the pre-fix server's request log: report, arms, witness leg, report, trials, report; assert the unchanged qualified probe | Integration                        | P1  | Asking only before the arms leaves two requests short                    |
+| The later requests go through the port and the policy | A report operation the policy denies after the first request, and an answer with no string; assert each refusal and reason     | Integration                        | P1  | Sending them outside the port exits 0 with no refusal                    |
+| The reference states the three points                 | Read `### Against deployments` under its heading                                                                               | Static                             | P2  | Removing the sentence fails the read                                     |
+
+### Story 1.65: Ask every HTTP interface of a deployment which release it runs
+
+Added 2026-09-30 in Story 1.38. Levels: integration over real eval-quality, contract, unit, static. Files: `test/test-evaluate-arms.js` (`test:evaluate-arms`), `test/test-evaluate-check.js` (`test:evaluate-check`).
+
+| AC                                                       | Test                                                                                                                                         | Level                              | P   | Revert check                                                   |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | --- | -------------------------------------------------------------- |
+| A second origin on another release refuses               | Two HTTP interfaces, two fixture servers per deployment; the second origin reports another release; assert the refusal and each server's log | Integration over real eval-quality | P0  | Asking the first interface alone lets the probe qualify        |
+| `check` and `deploymentPair` hold a report per interface | A report missing for an interface and one for an interface the registry does not serve, each exit 10 under `historical`; the unit's exit 12  | Contract, unit                     | P1  | Dropping the rule leaves an origin unasked                     |
+| The probe schema carries a report per interface          | A missing report and one with an extra or empty field under `schema`; a one-interface registry keeps its single report valid                 | Contract                           | P1  | Dropping the field lets a probe through with an origin unasked |
+| The reference states that every origin is asked          | Read `### Against deployments` under its heading                                                                                             | Static                             | P2  | Removing the sentence fails the read                           |
+
+### Story 1.66: Scrub an observation in every letter case
+
+Added 2026-09-30 in Story 1.38. Levels: integration over real eval-quality, unit. Files: `test/test-evaluate-api.js` (`test:evaluate-api`), `test/test-evaluate-arms.js` (`test:evaluate-arms`).
+
+| AC                                                        | Test                                                                                                              | Level                              | P   | Revert check                                                          |
+| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------- | --- | --------------------------------------------------------------------- |
+| An echoed secret is scrubbed in every letter case         | The grader echoes the injected auth value lowercased and uppercased in its body and a header; assert `[redacted]` | Integration over real eval-quality | P0  | Restoring the case-sensitive scrub leaves both echoes in              |
+| A reported release echoing the secret reaches no artifact | A deployment reports a release holding the secret uppercased; assert `refused/<probeId>.json` and `run.json`      | Integration over real eval-quality | P1  | Restoring the case-sensitive scrub writes the secret into the refusal |
+| The fault path and the observation scrub the same cases   | A fault quoting the secret uppercased; assert the message and cause                                               | Integration                        | P1  | Two different case sets let the uppercased echo through the fault     |
+| A short value stays unscrubbed in every case              | A value under the minimum length echoed in each case; assert it stays                                             | Unit                               | P2  | Scrubbing it redacts ordinary text and fails the case                 |
 
 ## The Dogfood Proof (AD-15)
 
