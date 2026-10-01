@@ -55,6 +55,7 @@
   "test:evaluate-boundaries": 34.6,
   "test:evaluate-calibration": 37.2,
   "test:evaluate-check": 247.3,
+  "test:evaluate-compare": 75,
   "test:evaluate-confinement": 196,
   "test:evaluate-evaluators": 262,
   "test:evaluate-gap-loop": 6.4,

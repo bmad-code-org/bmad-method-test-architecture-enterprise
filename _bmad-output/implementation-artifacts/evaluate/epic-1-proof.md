@@ -137,3 +137,19 @@ The run-wide class gate is unavailable: `tea-evaluate score` calls eval-quality 
 ## Kept for Epic 2
 
 `test/evaluations/bmad-testarch-evaluate/runs/` holds all four invocations in the worktree, gitignored. `compare --accept` must refuse them as dirty (Story 2.1); Story H.1 records the clean baseline.
+
+## Story 2.1: the retained dirty run is refused
+
+Story 2.1 ran `compare --accept` read-only against the retained invocation `20260928T165418209Z-f89a3a6b` in the main checkout's `test/evaluations/bmad-testarch-evaluate`, with the Story 2.1 branch's CLI. The run records `dirty: true`, so the command refuses it before it stages or writes a byte:
+
+```sh
+node cli/evaluate.js compare --evaluation test/evaluations/bmad-testarch-evaluate --accept --run 20260928T165418209Z-f89a3a6b
+```
+
+```text
+tea-evaluate compare: accepting run 20260928T165418209Z-f89a3a6b
+run.json: [dirty] records dirty true; a run measured over uncommitted work is never accepted as a baseline
+tea-evaluate compare: run 20260928T165418209Z-f89a3a6b is dirty; nothing was written under baseline/ (exit 10, test/evaluations/bmad-testarch-evaluate/runs/20260928T165418209Z-f89a3a6b)
+```
+
+Exit 10. The folder holds no `baseline/` and no staging directory afterwards, and `git status` over `test/evaluations/` is unchanged. This is the expected overnight state: the baseline for `bmad-testarch-evaluate` stays absent until Story H.1 records one from a clean run.

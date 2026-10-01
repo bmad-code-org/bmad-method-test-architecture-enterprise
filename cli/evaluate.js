@@ -15,6 +15,10 @@
  *                                             trial set per probe under runs/<invocationId>/
  *   tea-evaluate score --evaluation <path> [--run <invocationId>]
  *                                             eval-quality score once per probe over a completed run's trial sets
+ *   tea-evaluate compare --evaluation <path> [--run <invocationId>] [--accept]
+ *                                             compare a scored run's evidence with baseline/ through eval-quality's
+ *                                             compareDominance (compared, first-run or refused, every one exit 0), or
+ *                                             with --accept replace baseline/ with a byte-identical snapshot of the run
  *
  * `--evaluation` names the folder or its evaluation.json. Nothing else locates
  * an evaluation: no default path and no project configuration.
@@ -27,6 +31,10 @@
  *   10  authoring defect: every finding is printed, one per line (digest: an indexed entry it cannot digest;
  *       preflight: a leg the registry does not authorize, or a mutation whose find text does not occur
  *       exactly once)
+ *   10  also compare: a run whose scores or members cannot be read as files the run wrote, a baseline holding a link
+ *       or an entry that is not a regular file, or a baseline artifact that does not meet its schema; compare
+ *       --accept: a run whose run.json says dirty: true, a probe with no evidence artifact, or a member a replay
+ *       through score needs that is missing, a link or not a regular file (nothing is written under baseline/)
  *   10  also run: a trial request the registry denies, no probe or no scoring policy, a clean control whose
  *       behavior declares no oracle, or a materialized probe eval-quality's checks refuse; score: a run
  *       artifact that does not meet its schema or does not agree with its run, before any engine call
@@ -45,10 +53,11 @@
  *       a run whose every probe was refused, or a sealed-brief agent attempt eval-quality score cannot score (a call
  *       that cannot run, an exit other than 0, 2 or 3, no evidence artifact, or no single trial vote); preflight and run: a run directory holding an
  *       entry the runtime did not write or a file whose bytes differ from the ones it wrote; score: a score call that could not
- *       run or exited with a code the CLI does not document
+ *       run or exited with a code the CLI does not document; compare --accept: a baseline that could not be staged or
+ *       swapped in (the old baseline/ is untouched)
  *   64  wiring defect: no --evaluation resolves, or the command line is malformed (preflight, run and score: or
  *       eval-quality's own 64; score: no run to score, a --run naming no run or a preflight, or a run that did
- *       not complete; a sealed-brief agent qualification's score call that exits 64 stops the run with 12)
+ *       not complete; compare: the same, and a run with no score invocation; a sealed-brief agent qualification's score call that exits 64 stops the run with 12)
  */
 
 'use strict';
@@ -62,6 +71,7 @@ const { EngineUnavailableError } = require('./lib/evaluate/engine');
 const { EngineStageError } = require('./lib/evaluate/engine-cli');
 const { runPreflightCommand } = require('./lib/evaluate/preflight');
 const { runRunCommand } = require('./lib/evaluate/run');
+const { runCompareCommand } = require('./lib/evaluate/compare');
 const { runScoreCommand } = require('./lib/evaluate/score');
 
 const EXIT_CODES = {
@@ -146,6 +156,7 @@ async function runDriven(name, command, options, extra) {
     return EXIT_CODES.infrastructure;
   }
   for (const finding of outcome.findings) process.stdout.write(findingLine(finding.file, finding.rule, finding.message));
+  for (const line of outcome.report ?? []) process.stdout.write(`${escapeUnprintable(line)}\n`);
   for (const entry of outcome.scores ?? []) {
     const how = entry.exitCode === null ? 'could not run' : `exited ${entry.exitCode}`;
     process.stdout.write(
@@ -177,11 +188,15 @@ function scoreCommand(options) {
   return runDriven('score', runScoreCommand, options, { run: options.run });
 }
 
+function compareCommand(options) {
+  return runDriven('compare', runCompareCommand, options, { run: options.run, accept: options.accept === true });
+}
+
 function buildProgram(run) {
   const program = new Command();
   program
     .name(NAME)
-    .description('Validate, digest, preflight, run and score an Evaluate evaluation folder.')
+    .description('Validate, digest, preflight, run, score and compare an Evaluate evaluation folder.')
     .showHelpAfterError()
     .exitOverride()
     .configureOutput({ writeErr: (text) => process.stderr.write(text) });
@@ -217,6 +232,15 @@ function buildProgram(run) {
     .option('--evaluation <path>', 'the evaluation folder, or its evaluation.json')
     .option('--run <invocationId>', 'the run to score; the most recent run when omitted')
     .action((options) => run(scoreCommand, options));
+  program
+    .command('compare')
+    .description(
+      'Compare a scored run with baseline/ through eval-quality compareDominance; with --accept, replace baseline/ with a snapshot of the run.',
+    )
+    .option('--evaluation <path>', 'the evaluation folder, or its evaluation.json')
+    .option('--run <invocationId>', 'the run to compare or accept; the most recent run when omitted')
+    .option('--accept', 'replace baseline/ with a byte-identical snapshot of the run; refused for a dirty run')
+    .action((options) => run(compareCommand, options));
   return program;
 }
 
@@ -248,7 +272,7 @@ async function main(argv) {
     return await pending;
   } catch (error) {
     if (error instanceof UsageError) {
-      process.stderr.write(`${NAME}: ${error.message}\nUsage: ${NAME} <check|digest|preflight|run|score> --evaluation <path>\n`);
+      process.stderr.write(`${NAME}: ${error.message}\nUsage: ${NAME} <check|digest|preflight|run|score|compare> --evaluation <path>\n`);
       return EXIT_CODES.usage;
     }
     if (error instanceof CorpusIndexError) {
