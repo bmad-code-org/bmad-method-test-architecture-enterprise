@@ -56,6 +56,9 @@
  *   Story 1.32: it names neither or both of `fixCommit` and `deployments`, one deployment without the
  *   other, one release for both, a deployment beside a registry entry that is not an HTTP entry, or origins
  *   that are not an http or https origin for each HTTP interface of the registry and no other.
+ *   Story 1.38: a deployment's `report` names an operation the contract does not declare on an `api` interface
+ *   the registry serves, one it marks as changing state, one that needs an input (a path parameter or a
+ *   required key in any channel), or a pointer that is no RFC 6901 JSON pointer.
  * - `judge` (Story 1.9): the contract declares a rubric and `evaluation.json` has no `judge`, or
  *   `policy/evaluator-conditions.json` names no `judge.modelSnapshot`; the contract declares no rubric and
  *   either file carries a `judge` block, which nothing would use; or `judge` names an agent adapter TeA
@@ -116,6 +119,7 @@ const { CALIBRATION_PATH, calibrationProblems, readCalibration } = require('./ca
 const { MANIFEST_NAME } = require('./folder');
 const { addFormats } = require('./formats');
 const { HTTP_PORT_MODULE, originTarget, sharedOrigin } = require('./http-target');
+const { reportProblems } = require('./release-report');
 const {
   apiRegistryProblems,
   kindOf,
@@ -824,10 +828,12 @@ function checkProbeAgainstRegistry(report, relative, probe, context, registry) {
  * one (`sharedOrigin`); a deployment-routed probe reaches its target over
  * HTTP alone, so every registry entry is an HTTP entry; and each
  * deployment names an http or https origin for every HTTP interface of the
- * registry and no other. Whether an origin is one the registry's policy
- * authorizes is eval-quality's to decide at run time.
+ * registry and no other; and each deployment's `report` (Story 1.38) names an
+ * operation of an `api` interface of the contract that needs no input, with a
+ * JSON pointer (`reportProblems`). Whether an origin is one the registry's
+ * policy authorizes is eval-quality's to decide at run time.
  */
-function historicalBoundaryProblems(qualification, registry) {
+function historicalBoundaryProblems(qualification, registry, contract) {
   const { fixCommit, deployments } = qualification ?? {};
   if (fixCommit === undefined && deployments === undefined) {
     return [
@@ -864,6 +870,14 @@ function historicalBoundaryProblems(qualification, registry) {
   if (shared !== null) {
     problems.push(
       `deployments.preFix.origins.${shared.preFix} and deployments.fix.origins.${shared.fix} both reach ${shared.origin}; the fail-before arm, the witness leg and the trials would reach the post-fix deployment and record a fix boundary the run never crossed, so give each deployment origins of its own`,
+    );
+  }
+  const httpInterfaces = Array.isArray(registry)
+    ? registry.filter((entry) => kindOf(entry) === 'api').map((entry) => entry.interfaceId)
+    : null;
+  for (const side of named) {
+    problems.push(
+      ...reportProblems({ report: deployments[side]?.report, contract, interfaces: httpInterfaces, where: `deployments.${side}.report` }),
     );
   }
   if (!Array.isArray(registry)) return problems;
@@ -974,7 +988,8 @@ function checkProbe(report, relative, probe, context, behaviors, mutations, regi
         `a probe on the historical route seeds the natural defect its fix commit removed, so it carries expectedClean false and at least one defect, each with source "natural"; got expectedClean ${JSON.stringify(probe.expectedClean)}, ${defects.length} defect(s), ${unnatural.length} not natural`,
       );
     }
-    for (const message of historicalBoundaryProblems(probe.qualification, registry)) report.add(relative, 'historical', message);
+    for (const message of historicalBoundaryProblems(probe.qualification, registry, context.contract))
+      report.add(relative, 'historical', message);
   }
 
   if (route === 'controlled-mutation' && (defects.length === 0 || probe.expectedClean !== false)) {

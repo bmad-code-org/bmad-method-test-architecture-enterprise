@@ -8,16 +8,26 @@
   "required": ["probeId", "probeClass", "behaviorId", "expectedClean", "rationale", "defects", "qualification"],
   "$defs": {
     "Deployment": {
-      "description": "One deployment of the target: the release it runs and where each HTTP interface of the registry answers.",
+      "description": "One deployment of the target: the release it runs, how it reports that release, and where each HTTP interface of the registry answers.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["release", "origins"],
+      "required": ["release", "report", "origins"],
       "properties": {
         "release": {
           "description": "The identifier of the release this deployment runs, as its adopter names it (a version, a tag, a build id). The qualified probe records its digest: the pre-fix one as artifactDigest, the post-fix one as fixCommitDigest; the pre-fix one names the arm historical:<release>. One path segment: a letter or digit, then letters, digits, '.', '_', '+' or '-'.",
           "type": "string",
           "maxLength": 128,
           "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$"
+        },
+        "report": {
+          "description": "How the deployment reports its release: an operation of the contract's api interface and an RFC 6901 JSON pointer into the JSON body of its answer. Before either arm the runtime sends that request to each deployment through the evaluation's HTTP port, with no bound inputs, and refuses the probe when the string at the pointer is not the declared release. check requires the operation to be declared on an api interface of the contract that needs no input, and the pointer to be a JSON pointer (rule historical).",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["operationId", "pointer"],
+          "properties": {
+            "operationId": { "type": "string", "minLength": 1 },
+            "pointer": { "type": "string", "minLength": 1 }
+          }
         },
         "origins": {
           "description": "The origin (scheme://host[:port], with no path, query, fragment or credentials) each HTTP interface of the registry answers at in this deployment, keyed by interface ID. check requires every HTTP interface of the registry and no other (rule historical); each origin must be one the registry's api policy authorizes, which eval-quality's evaluateTarget decides at run time.",

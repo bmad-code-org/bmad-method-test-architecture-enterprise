@@ -23,7 +23,7 @@ inputDocuments:
 
 ## Overview
 
-This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and sixty-nine stories, including H.1 (Stories 1.27 to 1.63 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
+This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and seventy-two stories, including H.1 (Stories 1.27 to 1.66 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
 
 Evaluate is fully stacked. The stack runs system under test, then the evaluation (the mechanism that runs the system, collects evidence and makes judgments), then the Behavioral Evaluation Contract (what behavior matters, what evidence counts, how success and failure resolve), then eval-quality (contract sanity, evidence support, and whether the evaluation catches defects). TeA owns every layer above eval-quality, including each concern eval-quality states it leaves to the caller, so an adopter can evaluate any target end to end. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3 onward, Epic 2 and H.1 to close the plan gap audit; the Traceability section maps each audit item to the story that closes it.
 
@@ -150,7 +150,7 @@ None. Evaluate has no graphical interface.
 ### Epic 1: The Evaluate authoring loop
 
 An adopter describes a target, answers Evaluate's questions, chooses or builds the evaluation layer and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches the seeded defect, with the gaps named and closed. The epic closes by running Evaluate on `bmad-testarch-evaluate` itself, then proving the guidance on two more target kinds, on seeded weaknesses and on an evaluation framework its guides never name.
-Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.63.
+Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.66.
 
 **FRs covered:** FR1 to FR10, FR13, FR14.
 
@@ -229,12 +229,15 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 61    | 1.61  | 1.31                         |
 | 62    | 1.62  | 1.31                         |
 | 63    | 1.63  | 1.31                         |
-| 64    | 2.1   | 1.16, 1.26, 1.45             |
-| 65    | 2.2   | 2.1                          |
-| 66    | 2.3   | 2.2                          |
-| 67    | 2.4   | 2.3                          |
-| 68    | 2.5   | 2.4                          |
-| 69    | H.1   | 2.5                          |
+| 64    | 1.64  | 1.38                         |
+| 65    | 1.65  | 1.38                         |
+| 66    | 1.66  | 1.11, 1.38                   |
+| 67    | 2.1   | 1.16, 1.26, 1.45             |
+| 68    | 2.2   | 2.1                          |
+| 69    | 2.3   | 2.2                          |
+| 70    | 2.4   | 2.3                          |
+| 71    | 2.5   | 2.4                          |
+| 72    | H.1   | 2.5                          |
 
 ## Epic 1: The Evaluate authoring loop
 
@@ -1058,7 +1061,7 @@ So that a defect a release fixed is measured where no worktree can launch the ta
 
 **Given** a historical probe whose qualification names a pre-fix and a post-fix deployment, each an address the registry's `api` target policy authorizes (Story 1.11), with the release identifier each deployment reports (amended 2026-09-26 in Story 1.32: declared by the probe)
 **When** `tea-evaluate run` qualifies it
-**Then** the fail-before arm runs against the pre-fix deployment and must be violated, the pass-after arm against the post-fix deployment and must hold, the defect's manifestation-witness leg routes to the pre-fix deployment, and the probe's trials run on the arm `historical:<pre-fix release identifier>`; a `test:evaluate-arms` case over two loopback fixture servers asserts each routing from the servers' own request logs, and routing the fail-before arm to the post-fix deployment makes it hold and exit 11, which the case catches (amended 2026-09-26 in Story 1.32: the probe names `qualification.deployments`, a `preFix` and a `fix` deployment, each the `release` identifier it runs and the `origins` (`scheme://host[:port]`) each HTTP interface of the registry answers at, in place of `fixCommit`; a registry entry authorizes a deployment's origin in its `deployments` list, and the one authorization eval-quality allows for a deployment's origin is the whole policy of that deployment's arm; the release identifier is declared by the probe, since asking a deployment for it needs a report request the probe names, which Story 1.38 adds; the two loopback fixture servers are the grader of `test/fixtures/evaluate-api/` started by the case itself, each logging its own requests, so the case asserts the fail-before arm, the witness leg and every trial at the pre-fix server in that order and the pass-after arm alone at the post-fix one; two probes naming one arm label at two targets exit 10)
+**Then** the fail-before arm runs against the pre-fix deployment and must be violated, the pass-after arm against the post-fix deployment and must hold, the defect's manifestation-witness leg routes to the pre-fix deployment, and the probe's trials run on the arm `historical:<pre-fix release identifier>`; a `test:evaluate-arms` case over two loopback fixture servers asserts each routing from the servers' own request logs, and routing the fail-before arm to the post-fix deployment makes it hold and exit 11, which the case catches (amended 2026-09-26 in Story 1.32: the probe names `qualification.deployments`, a `preFix` and a `fix` deployment, each the `release` identifier it runs and the `origins` (`scheme://host[:port]`) each HTTP interface of the registry answers at, in place of `fixCommit`; a registry entry authorizes a deployment's origin in its `deployments` list, and the one authorization eval-quality allows for a deployment's origin is the whole policy of that deployment's arm; the release identifier is declared by the probe, since asking a deployment for it needs a report request the probe names, which Story 1.38 adds (amended 2026-09-30 in Story 1.38: each deployment names `report`, and the runtime asks it which release it runs before either arm); the two loopback fixture servers are the grader of `test/fixtures/evaluate-api/` started by the case itself, each logging its own requests, so the case asserts the fail-before arm, the witness leg and every trial at the pre-fix server in that order and the pass-after arm alone at the post-fix one; two probes naming one arm label at two targets exit 10)
 **And** the qualified probe records `fixCommitDigest` as the digest of the post-fix release identifier and `artifactDigest` as the digest of the pre-fix one, each asserted by the case; recording one identifier for both makes the digests equal, which the case catches
 **And** a deployment the registry does not authorize refuses the probe with its reason in `run.json`'s `refused` and `refused/<probeId>.json`, the rest of the run going on, a `test:evaluate-arms` case; dropping the refusal sends a request the adapter denies and the run exits 10, which the case catches (amended 2026-09-26 in Story 1.32: the runtime asks eval-quality's `evaluateTarget` which of the entry's authorizations, its `deployments` and its own when it names a deployed `port`, allows each origin, at the first method the entry authorizes; an origin whose scheme, host or port none admits is refused before its host is resolved; otherwise the host is resolved once, to its first address, and one that does not resolve within the entry's `maxElapsedMs` and the port call's start allowance leaves the deployment unreachable, exit 12; the reason names each authorization's denial in eval-quality's words, `port-not-authorized` in the case, for a pre-fix and for a post-fix deployment)
 **And** `tea-evaluate check` exits 10 under the `historical` rule when a deployment-routed probe names one deployment but not the other, or names both and a `fixCommit`, each a `test:evaluate-check` case; dropping the rule lets `run` reach qualification and stop with exit 12, which the case catches (amended 2026-09-26 in Story 1.32: the rule also refuses a historical probe naming neither boundary, one release for both deployments, a deployment beside a registry entry that is not an HTTP entry, origins that are not an http or https origin for each HTTP interface of the registry and no other, and a pre-fix origin that reaches a post-fix one, each a `test:evaluate-check` or `test:evaluate-arms` case; `registry` holds each deployment origin's `host` and, under `auth` over `http`, its addresses to the entry's own rules, a `test:evaluate-api` case each)
@@ -1188,9 +1191,9 @@ So that the digests a qualified probe records name the releases the run measured
 
 **Given** a deployment-routed historical probe whose deployments each name how the deployment reports its release (an operation of the contract's `api` interface and a JSON pointer into its answer's body)
 **When** `tea-evaluate run` qualifies it
-**Then** before either arm the runtime sends that request to each deployment through the evaluation's HTTP port, and a reported identifier other than the declared `release` refuses the probe with both identifiers named in `run.json`'s `refused` and `refused/<probeId>.json`, a `test:evaluate-arms` case over two loopback fixture servers that report their release; skipping the comparison lets a deployment reporting another release qualify, which the case catches
-**And** eval-quality's policy decides the report request as it decides every call, and a denial, or an answer with no string at the pointer, refuses the probe with its reason, a `test:evaluate-arms` case; recording the declared release unasked lets the case exit 0 with no refusal, which the case catches
-**And** `check` refuses under `historical` a report request naming an operation the contract does not declare, or a pointer that is not a JSON pointer, a `test:evaluate-check` case each; dropping the rule lets `run` stop with exit 12, which the case catches
+**Then** before either arm the runtime sends that request to each deployment through the evaluation's HTTP port, and a reported identifier other than the declared `release` refuses the probe with both identifiers named in `run.json`'s `refused` and `refused/<probeId>.json`, a `test:evaluate-arms` case over two loopback fixture servers that report their release; skipping the comparison lets a deployment reporting another release qualify, which the case catches (amended 2026-09-30 in Story 1.38: the fixture grader answers `GET /release` with the release it was started with, each deployment's `report` is required by the probe schema, the request runs through `runArm` as a one-step plan with no bound inputs so it is built as every `api` step is, the pre-fix deployment is asked first and a refusal there leaves the post-fix one unasked, and `run.json` gains `releases`, each qualified probe's declared and reported identifier for both sides)
+**And** eval-quality's policy decides the report request as it decides every call, and a denial, or an answer with no string at the pointer, refuses the probe with its reason, a `test:evaluate-arms` case; recording the declared release unasked lets the case exit 0 with no refusal, which the case catches (amended 2026-09-30 in Story 1.38: a "failed call" is read as an answer that is no 2xx, which has no string at the pointer and refuses the probe with its status named; a call that reaches no answer, or passes a ceiling of the registry entry, is a target that could not run and stops the run with exit 12 as it does for any call, so the "call's fault" a refusal names is eval-quality's denial reason alone; a report identifier in a refusal is quoted as JSON writes it with every character outside printable ASCII escaped, cut at 160 characters)
+**And** `check` refuses under `historical` a report request naming an operation the contract does not declare, or a pointer that is not a JSON pointer, a `test:evaluate-check` case each; dropping the rule lets `run` stop with exit 12, which the case catches (amended 2026-09-30 in Story 1.38: `check` also refuses under `historical` a report operation that is declared on two interfaces or on a non-`api` one, one of an interface the registry does not serve over HTTP, one the contract marks as changing state, and one that needs an input, a path parameter or a required key in any channel, since nothing binds one; the runtime's `deploymentPair` holds the same rules with exit 12 and a deployment with no `report`, a `test:evaluate-arms` unit since `run` always runs `check` first; a deployment with no `report` fails the probe schema under `schema`)
 **And** the reference's `### Against deployments` states the comparison, and the case reading the section fails when its sentence is removed
 
 **Dependencies:** 1.32.
@@ -1682,6 +1685,68 @@ So that an empty `observedMounts` is evidence and not something the target could
 
 **Dependencies:** 1.31.
 **Gate:** `test:evaluate-run`, `test:evaluate-api`, `npm test`, and the Linux CI job.
+
+### Story 1.64: Hold the release across the witness legs and the trials
+
+Added 2026-09-30 in Story 1.38 from its review. Story 1.38 asks each deployment which release it runs once, before the qualification arms. The manifestation-witness legs and the trials of the arm `historical:<pre-fix release>` reach the pre-fix deployment afterwards (`deploymentRoute`), so a deployment redeployed between the report and those calls is measured under the identifier the probe declares, and the digests a qualified probe records name a release the trials never ran against.
+
+As an adopter whose historical probe runs against two deployments,
+I want the pre-fix deployment asked which release it runs again after the witness legs and after the trials,
+So that every trial a verdict counts ran against the release my probe names (AD-7, AD-8).
+
+**Acceptance Criteria:**
+
+**Given** a deployment-routed historical probe whose pre-fix deployment reports its declared release before the arms and another release once the witness legs have run (a loopback fixture grader whose `GET /release` answer changes on a signal the case sends)
+**When** `tea-evaluate run` has run the witness legs
+**Then** the runtime sends the report request again through `holdToReport`, and a changed identifier refuses the probe with the identifier reported then and the one the probe declares both named in `run.json`'s `refused` and `refused/<probeId>.json`, and no trial of that probe is run, a `test:evaluate-arms` case reading the deployment's request log; dropping the request after the witness legs lets the trials run under the declared identifier, which the case catches
+**And** a pre-fix deployment that changes its release while the trials run is asked once more after the last trial and before any trial set is sealed, a changed identifier refuses the probe with both identifiers named and no trial of it reaches a sealed trial set, a `test:evaluate-arms` case; dropping the request after the trials seals trials measured under another release, which the case catches
+**And** a deployment that keeps its release is asked three times by the runtime (before the arms, after the witness legs, after the trials), its qualified probe and digests are the ones Story 1.38 records, and the request log shows each request, a `test:evaluate-arms` case; asking only before the arms leaves two requests short in the log, which the case catches
+**And** the later requests go through the evaluation's HTTP port and eval-quality's policy as the first does, so a denial or an answer with no string at the pointer refuses the probe with its reason, a `test:evaluate-arms` case; sending them outside the port lets the case exit 0 with no refusal, which the case catches
+**And** the reference's `### Against deployments` states the three points at which the release is asked, and the case reading the section fails when its sentence is removed.
+
+**Dependencies:** 1.38.
+**Gate:** `test:evaluate-arms`, `npm test`.
+
+### Story 1.65: Ask every HTTP interface of a deployment which release it runs
+
+Added 2026-09-30 in Story 1.38 from its review. A deployment names one `report`, and the request goes to the origin the deployment names for the interface its operation belongs to. A deployment answers every HTTP interface of the registry at its own origin (`origins` names one per interface), and the origins of the other interfaces are never asked which release they run, so a deployment whose second origin runs another release is measured under the identifier the first origin reported.
+
+As an adopter whose deployment serves more than one HTTP interface,
+I want each interface's origin held to the release my probe names,
+So that every call a trial makes reaches the release the digests name (AD-7, AD-8).
+
+**Acceptance Criteria:**
+
+**Given** a registry that serves two HTTP interfaces, a probe whose deployments each name a report for every one of them, and two loopback fixture servers per deployment, the second interface's origin of the pre-fix deployment running another release
+**When** `tea-evaluate run` qualifies the probe
+**Then** before either arm the runtime sends each deployment one report request per HTTP interface, each to that interface's own origin, and the second origin reporting another release refuses the probe with the interface, the identifier reported and the one declared named in `run.json`'s `refused` and `refused/<probeId>.json`, a `test:evaluate-arms` case reading each server's request log; asking the first interface alone lets the probe qualify, which the case catches
+**And** `check` refuses under `historical` a deployment whose reports leave an HTTP interface of the registry without one, or name an interface the registry does not serve over HTTP, a `test:evaluate-check` case each, and `deploymentPair` holds the same rules with exit 12, a `test:evaluate-arms` unit; dropping the rule lets an origin go unasked, which the cases catch
+**And** the probe schema carries a report per interface (its shape is the build's call, and the reference documents it), a `test:evaluate-check` `schema` case for a missing report and one with an extra or empty field; a registry with one HTTP interface keeps a probe that names one report valid
+**And** the reference's `### Against deployments` states that every HTTP interface's origin is asked, and the case reading the section fails when its sentence is removed
+**And** if the build shows that one report suffices, it amends this story with the reason, the reference and AD-8 state the reason, and `check` refuses a report for an interface other than the one the operation belongs to, a `test:evaluate-check` case; dropping the refusal lets the case exit 0.
+
+**Dependencies:** 1.38.
+**Gate:** `test:evaluate-arms`, `test:evaluate-check`, `npm test`.
+
+### Story 1.66: Scrub an observation in every letter case
+
+Added 2026-09-30 in Story 1.38 from its review. `hostEnvironmentPort` in `cli/lib/evaluate/arm.js` scrubs an observation with `secretForms(values)`, which holds each injected value and its escapings in the case the host knows them, while a fault's message and cause are scrubbed in the value's own case and lowercased. A deployment or target that echoes an auth value in another letter case (a header a server normalizes, a URL a proxy lowercases) leaves it in the observation, which reaches the evidence artifacts and, through `reportedRelease`, a refusal's quoted identifier.
+
+As an adopter whose target echoes what it was sent,
+I want an echoed secret scrubbed in whatever letter case it comes back,
+So that no evidence artifact holds a value the host injected (AD-4, AD-8).
+
+**Acceptance Criteria:**
+
+**Given** an `api` registry entry whose auth value the host injects and a fixture grader that echoes it in the body and a header of its answer, lowercased in one field and uppercased in another
+**When** the call goes through `hostEnvironmentPort`
+**Then** the observation holds `[redacted]` in each place, in every case the fault path already covers and in uppercase, a `test:evaluate-api` case beside the existing scrub case; restoring the case-sensitive scrub leaves the lowercased and uppercased echoes in the observation, which the case catches
+**And** the same secret echoed in another letter case as the identifier a deployment reports for its release reaches `refused/<probeId>.json` and `run.json` as `[redacted]`, a `test:evaluate-arms` case; restoring the case-sensitive scrub writes the secret into the refusal's quoted identifier, which the case catches
+**And** the fault path scrubs the secret in the same set of cases as the observation, a `test:evaluate-api` case whose fault quotes it uppercased; scrubbing the two paths with different sets lets the uppercased echo through the fault, which the case catches
+**And** a value shorter than the scrub's minimum length stays unscrubbed in every case, so ordinary text is not redacted, a `test:evaluate-api` case.
+
+**Dependencies:** 1.11, 1.38.
+**Gate:** `test:evaluate-api`, `test:evaluate-arms`, `npm test`.
 
 ## Epic 2: Continuous proof in CI
 

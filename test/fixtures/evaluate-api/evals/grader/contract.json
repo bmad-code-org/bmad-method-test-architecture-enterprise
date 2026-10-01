@@ -198,6 +198,53 @@
               ]
             }
           }
+        },
+        {
+          "operationId": "report-release",
+          "method": "GET",
+          "pathTemplate": "/release",
+          "stateChangeMarker": false,
+          "requestShape": {
+            "path": {
+              "requiredKeys": [],
+              "permittedKeys": [],
+              "types": {}
+            },
+            "query": {
+              "requiredKeys": [],
+              "permittedKeys": [],
+              "types": {}
+            },
+            "header": {
+              "requiredKeys": [],
+              "permittedKeys": [],
+              "types": {}
+            },
+            "body": {
+              "requiredKeys": [],
+              "permittedKeys": [],
+              "types": {}
+            }
+          },
+          "responseDescriptor": {
+            "requiredKeys": [
+              "ok",
+              "release"
+            ],
+            "permittedKeys": [],
+            "types": {
+              "ok": "boolean",
+              "release": "string"
+            },
+            "successIndicator": "/ok",
+            "channelRoles": {
+              "/ok": "success-indicator",
+              "/release": "payload"
+            },
+            "collectionLocations": null
+          },
+          "volatilePointers": [],
+          "sensitivityWitness": null
         }
       ]
     }

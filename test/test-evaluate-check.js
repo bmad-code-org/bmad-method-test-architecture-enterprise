@@ -274,10 +274,13 @@ const UNPRINTABLE_PATH_CHARACTERS = [
   ['an Arabic letter mark (U+061C)', '\u061C'],
 ];
 
+/** How each deployment reports its release: an operation of the HTTP fixture's contract and a JSON pointer into its answer. */
+const REPORT = { operationId: 'report-release', pointer: '/release' };
+
 /** Two deployments of the target, each an origin for the interface `grader`. */
 const DEPLOYMENTS = {
-  preFix: { release: 'grader-1.4.2', origins: { grader: 'http://127.0.0.1:41001' } },
-  fix: { release: 'grader-1.4.3', origins: { grader: 'http://127.0.0.1:41002' } },
+  preFix: { release: 'grader-1.4.2', report: REPORT, origins: { grader: 'http://127.0.0.1:41001' } },
+  fix: { release: 'grader-1.4.3', report: REPORT, origins: { grader: 'http://127.0.0.1:41002' } },
 };
 
 /** P-002 as a historical probe with a natural defect whose qualification carries `boundary`, on the historical arm. */
@@ -1432,6 +1435,184 @@ const HARDENING_CASES = [
       ],
       [findingsOf(stdout).length === 1, 'the shared origin is not the only finding'],
     ],
+  },
+  {
+    name: 'a deployment-routed probe whose report names an operation the contract does not declare',
+    file: 'probes/P-002.probe.json',
+    rule: 'historical',
+    copy: copyApi,
+    plant: (folder) =>
+      plantApiHistorical(folder, {
+        preFix: { ...DEPLOYMENTS.preFix, report: { ...REPORT, operationId: 'report-version' } },
+        fix: DEPLOYMENTS.fix,
+      }),
+    expect: (output, stdout) => [
+      [
+        output.includes('deployments.preFix.report.operationId names "report-version", which no interface of the contract declares'),
+        'the finding does not name the undeclared operation',
+      ],
+      [findingsOf(stdout).length === 1, 'the undeclared operation is not the only finding'],
+    ],
+  },
+  {
+    name: 'a deployment-routed probe whose report pointer names no JSON pointer (no leading slash)',
+    file: 'probes/P-002.probe.json',
+    rule: 'historical',
+    copy: copyApi,
+    plant: (folder) =>
+      plantApiHistorical(folder, {
+        preFix: DEPLOYMENTS.preFix,
+        fix: { ...DEPLOYMENTS.fix, report: { ...REPORT, pointer: 'release' } },
+      }),
+    expect: (output, stdout) => [
+      [output.includes('deployments.fix.report.pointer is "release", which is no JSON pointer'), 'the finding does not name the pointer'],
+      [findingsOf(stdout).length === 1, 'the pointer is not the only finding'],
+    ],
+  },
+  {
+    name: 'a deployment-routed probe whose report pointer holds an unescaped tilde',
+    file: 'probes/P-002.probe.json',
+    rule: 'historical',
+    copy: copyApi,
+    plant: (folder) =>
+      plantApiHistorical(folder, {
+        preFix: { ...DEPLOYMENTS.preFix, report: { ...REPORT, pointer: '/a/~2' } },
+        fix: DEPLOYMENTS.fix,
+      }),
+    expect: (output, stdout) => [
+      [output.includes('deployments.preFix.report.pointer is "/a/~2", which is no JSON pointer'), 'the finding does not name the pointer'],
+      [findingsOf(stdout).length === 1, 'the pointer is not the only finding'],
+    ],
+  },
+  {
+    name: 'a deployment-routed probe whose report names an operation that requires an input',
+    file: 'probes/P-002.probe.json',
+    rule: 'historical',
+    copy: copyApi,
+    plant: (folder) =>
+      plantApiHistorical(folder, {
+        preFix: DEPLOYMENTS.preFix,
+        fix: { ...DEPLOYMENTS.fix, report: { ...REPORT, operationId: 'grade-answer' } },
+      }),
+    expect: (output, stdout) => [
+      [
+        output.includes('deployments.fix.report.operationId names "grade-answer", which requires input in its query channel'),
+        'the finding does not name the required input',
+      ],
+      [findingsOf(stdout).length === 1, 'the required input is not the only finding'],
+    ],
+  },
+  {
+    name: 'a deployment-routed probe whose report names an operation with a path parameter',
+    file: 'probes/P-002.probe.json',
+    rule: 'historical',
+    copy: copyApi,
+    plant: (folder) => {
+      plantApiHistorical(folder, DEPLOYMENTS);
+      editJson(folder, 'contract.json', (value) => {
+        const report = value.permittedInterfaces[0].operations.find((operation) => operation.operationId === 'report-release');
+        report.pathTemplate = '/release/{build}';
+      });
+    },
+    expect: (output, stdout) => [
+      [output.includes('has the path parameter in "/release/{build}"'), 'the finding does not name the path parameter'],
+      [findingsOf(stdout).length === 2, 'the path parameter is not the only finding, once for each deployment'],
+    ],
+  },
+  {
+    name: 'a deployment-routed probe whose report names an operation of an interface the registry does not serve',
+    file: 'probes/P-002.probe.json',
+    rule: 'historical',
+    copy: copyApi,
+    plant: (folder) => {
+      plantApiHistorical(folder, DEPLOYMENTS);
+      editJson(folder, 'contract.json', (value) => {
+        const [grader] = value.permittedInterfaces;
+        const other = structuredClone(grader);
+        other.logicalId = 'status';
+        other.operations = [
+          { ...grader.operations.find((operation) => operation.operationId === 'report-release'), operationId: 'report-status' },
+        ];
+        value.permittedInterfaces.push(other);
+      });
+      editJson(folder, 'evaluation.json', (value) => (value.operationPhases['report-status'] = 'outcome'));
+      editJson(folder, 'probes/P-002.probe.json', (value) => (value.qualification.deployments.fix.report.operationId = 'report-status'));
+    },
+    expect: (output, stdout) => [
+      [
+        output.includes(
+          'deployments.fix.report.operationId names "report-status" of interface "status", which the registry does not serve over HTTP',
+        ),
+        'the finding does not name the interface the registry lacks',
+      ],
+      [findingsOf(stdout).length === 1, 'the unserved interface is not the only finding'],
+    ],
+  },
+  {
+    name: 'a deployment-routed probe whose report names an operation the contract marks as changing state',
+    file: 'probes/P-002.probe.json',
+    rule: 'historical',
+    copy: copyApi,
+    plant: (folder) => {
+      plantApiHistorical(folder, DEPLOYMENTS);
+      editJson(folder, 'contract.json', (value) => {
+        const report = value.permittedInterfaces[0].operations.find((operation) => operation.operationId === 'report-release');
+        report.stateChangeMarker = true;
+      });
+    },
+    expect: (output, stdout) => [
+      [output.includes('which the contract marks as changing state'), 'the finding does not name the state change'],
+      [findingsOf(stdout).length === 2, 'the state change is not the only finding, once for each deployment'],
+    ],
+  },
+  {
+    name: 'a deployment-routed probe whose report names an operation of a cli interface',
+    file: 'probes/P-002.probe.json',
+    rule: 'historical',
+    copy: copyApi,
+    plant: (folder) => {
+      plantApiHistorical(folder, DEPLOYMENTS);
+      editJson(folder, 'contract.json', (value) => {
+        const [grader] = value.permittedInterfaces;
+        const report = grader.operations.find((operation) => operation.operationId === 'report-release');
+        grader.operations = grader.operations.filter((operation) => operation !== report);
+        const cli = structuredClone(grader);
+        cli.logicalId = 'runner';
+        cli.kind = 'cli';
+        cli.operations = [report];
+        value.permittedInterfaces.push(cli);
+      });
+    },
+    expect: (output) => [
+      [output.includes('which is not an operation of an api interface'), 'the finding does not name the interface kind'],
+    ],
+  },
+  {
+    name: 'a deployment-routed probe whose report names extra fields and an empty operation',
+    file: 'probes/P-002.probe.json',
+    rule: 'schema',
+    copy: copyApi,
+    plant: (folder) => {
+      plantApiHistorical(folder, DEPLOYMENTS);
+      editJson(folder, 'probes/P-002.probe.json', (value) => {
+        value.qualification.deployments.preFix.report = { operationId: '', pointer: '/release', extra: 1 };
+      });
+    },
+    expect: (output) => [
+      [output.includes('must NOT have additional properties'), 'the finding does not refuse the extra field'],
+      [output.includes('must NOT have fewer than 1 characters'), 'the finding does not refuse the empty operationId'],
+    ],
+  },
+  {
+    name: 'a deployment-routed probe whose deployment names no report',
+    file: 'probes/P-002.probe.json',
+    rule: 'schema',
+    copy: copyApi,
+    plant: (folder) => {
+      plantApiHistorical(folder, DEPLOYMENTS);
+      editJson(folder, 'probes/P-002.probe.json', (value) => delete value.qualification.deployments.preFix.report);
+    },
+    expect: (output) => [[output.includes("must have required property 'report'"), 'the finding does not name the missing report']],
   },
   {
     name: 'a deployment-routed probe beside a command registry entry',

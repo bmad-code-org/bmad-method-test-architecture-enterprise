@@ -35,7 +35,13 @@
  * release identifier each runs and the origin each HTTP interface answers at.
  * Each origin must be one the registry's HTTP policy authorizes, which
  * eval-quality's `evaluateTarget` decides before any arm runs; a deployment it
- * does not authorize refuses the probe with its reason. The fail-before arm
+ * does not authorize refuses the probe with its reason. Each deployment also
+ * names `report` (Story 1.38), an operation of the contract's `api` interface
+ * and a JSON pointer into its answer: before either arm the runtime sends that
+ * request to each deployment through the evaluation's HTTP port and refuses
+ * the probe when the string at the pointer is not the declared `release`, or
+ * when the request is denied or its answer holds no string there
+ * (`release-report.js`). The fail-before arm
  * runs against the pre-fix deployment and the pass-after arm against the
  * post-fix one, with the same verdicts required and the same evidence files;
  * the qualified probe records `artifactDigest` as the digest of the pre-fix
@@ -50,10 +56,11 @@
 const path = require('node:path');
 
 const { admissionRefusal, armVerdict, referenceTo } = require('./admission');
-const { causeNote, faultRecord, hostEnvironmentPort, reasonNote, runArm } = require('./arm');
+const { ArmError, causeNote, faultRecord, hostEnvironmentPort, reasonNote, runArm } = require('./arm');
 const { DeploymentUnreachable, isApiEntry, originKey, originTarget, sharedOrigin } = require('./http-target');
 const { expectedSchemaVersion } = require('./engine');
 const { evaluateOracles, oraclesOfBehaviors } = require('./evaluator');
+const { quotedIdentifier, reportProblems, reportedRelease } = require('./release-report');
 const { WorkspaceRefusal, isDirectory, runGit, trackedTreeDigest } = require('./workspace');
 
 /** The eval-quality fault a command-line adapter throws when its policy refuses a request. */
@@ -423,15 +430,17 @@ async function qualifyHistoricalProbe({
  * deployments beside a `fixCommit`, one deployment without the other, one
  * release for both, a registry entry that is not an HTTP entry, origins that
  * are not an http or https origin for each HTTP interface of the registry and
- * no other, or a pre-fix origin reaching a post-fix one. `check` refuses each
- * first, so this guard is defence in depth: reaching one here stops the
- * qualification with exit 12.
+ * no other, a pre-fix origin reaching a post-fix one, or a deployment with no
+ * `report` or one `reportProblems` refuses. `check` refuses each first, so
+ * this guard is defence in depth: reaching one here stops the qualification
+ * with exit 12.
  *
  * @param {object} qualification the committed probe's `qualification`
  * @param {object[]} registry the evaluation's registry entries
+ * @param {object} contract the authored contract, which declares the report operations
  * @returns {{ preFix: object, fix: object } | { unaddressable: string }}
  */
-function deploymentPair(qualification, registry) {
+function deploymentPair(qualification, registry, contract) {
   const { deployments, fixCommit } = qualification;
   if (deployments === undefined && fixCommit === undefined) {
     return { unaddressable: 'it names neither a fixCommit nor deployments, so there is no fix boundary to qualify across' };
@@ -472,6 +481,19 @@ function deploymentPair(qualification, registry) {
       unaddressable: `its pre-fix origin for ${shared.preFix} and its post-fix origin for ${shared.fix} both reach ${shared.origin}, so the fail-before arm would reach the post-fix deployment`,
     };
   }
+  for (const side of ['preFix', 'fix']) {
+    const { report } = deployments[side];
+    if (report === null || typeof report !== 'object' || typeof report.operationId !== 'string' || typeof report.pointer !== 'string') {
+      return {
+        unaddressable: `its ${side} deployment names no report (an operationId and a pointer), so the run cannot ask it which release it runs`,
+      };
+    }
+    const [problem] = reportProblems({ report, contract, interfaces: wanted, where: `deployments.${side}.report` });
+    if (problem !== undefined) return { unaddressable: problem };
+    if (!Array.isArray(contract?.permittedInterfaces)) {
+      return { unaddressable: `the contract declares no interfaces, so ${report.operationId} is no operation the run can send` };
+    }
+  }
   return { preFix: deployments.preFix, fix: deployments.fix };
 }
 
@@ -492,17 +514,65 @@ function routeIdentity(historical) {
 }
 
 /**
+ * Sends one deployment its report request (Story 1.38) and holds the release
+ * it reports to the one the probe declares. A reported identifier other than
+ * the declared `release`, a request eval-quality's policy denies, and an
+ * answer with no string at the pointer (a status other than 2xx, a body the
+ * port reads as no JSON, or anything but a string at the pointer) each refuse
+ * the probe, naming the side, the declared release and what was found. A call
+ * that reaches no answer or passes a ceiling of the registry entry, a
+ * deployment the port could not reach or hear from in time, stops the run with
+ * exit 12 as it does for any call, and so does a request the run cannot build.
+ * The call is no trial: it records no evidence artifact.
+ *
+ * @returns {Promise<{ reported: string } | { refused: string }>}
+ */
+async function holdToReport({ contract, report, reached, side, port, registry, file, stop, seed, signal }) {
+  const { release } = reached;
+  let answer;
+  try {
+    answer = await reportedRelease({ contract, report, port, registry, label: `report-${side}`, seed, signal });
+  } catch (error) {
+    if (error?.code === DENIAL_FAULT) {
+      return {
+        refused: `the ${side} deployment ${release} was denied the release report request ${report.operationId}${reasonNote(error)}: ${error.message}`,
+      };
+    }
+    throw stop({
+      stage: 'qualification',
+      exitCode: 12,
+      message: `${file}: ${
+        error instanceof ArmError
+          ? `the release report request ${report.operationId} for the ${side} deployment ${release} could not be built or recorded`
+          : `the ${side} deployment ${release} could not answer the release report request ${report.operationId}`
+      }: ${error?.message ?? error}${causeNote(error)}`,
+    });
+  }
+  if (answer.unread !== undefined) {
+    return { refused: `the ${side} deployment ${release} did not report its release through ${report.operationId}: ${answer.unread}` };
+  }
+  if (answer.reported !== release) {
+    return {
+      refused: `the ${side} deployment reports release ${quotedIdentifier(answer.reported)} where the probe declares ${JSON.stringify(release)}, so the run would measure it under an identifier it does not run`,
+    };
+  }
+  return { reported: answer.reported };
+}
+
+/**
  * Qualifies one deployment-routed historical probe: each deployment is first
  * held to the registry's HTTP policy (a deployment eval-quality does not
  * authorize refuses the probe, with its reason; one whose host does not
- * resolve is unreachable, exit 12), then the plan runs once against the
- * pre-fix deployment, where the oracles of the probe's behaviors must be
- * violated, and once against the post-fix one, where they must hold (exit 11
- * otherwise). No workspace is made: every HTTP call goes to the deployment's
- * origin, starts nothing, and is decided over the one authorization
- * eval-quality allowed there. The qualified probe records `artifactDigest` as
- * the digest of the pre-fix release identifier and `fixCommitDigest` as the
- * digest of the post-fix one.
+ * resolve is unreachable, exit 12), then asked which release it runs
+ * (`holdToReport`: a release other than the declared one refuses the probe),
+ * then the plan runs once against the pre-fix deployment, where the oracles
+ * of the probe's behaviors must be violated, and once against the post-fix
+ * one, where they must hold (exit 11 otherwise). No workspace is made: every
+ * HTTP call goes to the deployment's origin, starts nothing, and is decided
+ * over the one authorization eval-quality allowed there. The qualified probe
+ * records `artifactDigest` as the digest of the pre-fix release identifier and
+ * `fixCommitDigest` as the digest of the post-fix one, each a release the
+ * deployment reported.
  *
  * @returns {Promise<{ probe: object, historical: { fix: string, preFix: string, deployments: object } } | { refused: string }>}
  */
@@ -546,22 +616,43 @@ async function qualifyDeploymentProbe({
     }
     reached[revision] = { release, ...access };
   }
-  const phases = [];
-  for (const { phase, revision, expected, meaning } of PHASES) {
-    const deployment = reached[revision];
-    const { port } = await registry.createProbePort({
+  const ports = {};
+  for (const { revision } of PHASES) {
+    ({ port: ports[revision] } = await registry.createProbePort({
       cwd: pristine.root,
       projectRoot: pristine.root,
       workspace: pristine.top,
-      deployment,
+      deployment: reached[revision],
+    }));
+  }
+  // Each deployment is asked which release it runs before either arm, so a release redeployed since the probe was
+  // authored refuses the probe here, where the arms would measure it under the identifier the probe declares.
+  for (const { revision } of PHASES) {
+    const held = await holdToReport({
+      contract,
+      report: deployments[revision].report,
+      reached: reached[revision],
+      side: revision === 'fix' ? 'post-fix' : 'pre-fix',
+      port: ports[revision],
+      registry,
+      file,
+      stop,
+      seed,
+      signal,
     });
+    if (held.refused !== undefined) return held;
+    reached[revision].reported = held.reported;
+  }
+  const phases = [];
+  for (const { phase, revision, expected, meaning } of PHASES) {
+    const deployment = reached[revision];
     phases.push({
       phase,
       expected,
       meaning,
       at: `the deployment of ${deployment.release}`,
       where: { release: deployment.release, origins: deployment.origins },
-      port,
+      port: ports[revision],
     });
   }
   const references = await qualifyingArms({

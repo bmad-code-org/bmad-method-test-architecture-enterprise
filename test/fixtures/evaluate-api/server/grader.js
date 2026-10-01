@@ -15,6 +15,9 @@
  *                              rejected under `mode: lenient`, the mutation
  *                              M-001 plants; with no answer, 400 and ok false
  *   GET /policy                { ok, mode }
+ *   GET /release               { ok, release }: the release the service was
+ *                              started with, GRADER_RELEASE (Story 1.38's
+ *                              report request); 404 without it
  *   anything else              404
  *
  * The policy file is the one its `--policy=<path>` argument names, relative to
@@ -57,6 +60,11 @@
  *   port: text        listen and write `not-a-port` to PORT_FILE
  *   port: fifo        listen and make PORT_FILE a named pipe it never opens
  *   port: zero        listen and make PORT_FILE a link to /dev/zero
+ *   release: number   answer /release with a number in place of the release
+ *   release: object   answer /release with an object in place of the release
+ *   release: missing  answer /release with no release at all
+ *   release: text     answer /release with a plain-text body
+ *   release: down     answer /release with status 503 and the release in its body
  */
 
 'use strict';
@@ -82,6 +90,7 @@ const hanging = new Set([...policy.matchAll(/^hang: (\S+)$/gm)].map((match) => m
 const crashing = new Set([...policy.matchAll(/^crash: (\S+)$/gm)].map((match) => match[1]));
 const startDelayMs = Number(/^start: delay (\d+)$/m.exec(policy)?.[1] ?? 0);
 const portReport = /^port: (none|text|fifo|zero)$/m.exec(policy)?.[1] ?? null;
+const releaseShape = /^release: (number|object|missing|text|down)$/m.exec(policy)?.[1] ?? null;
 
 /** The runtime label of the workspace a directory lies in (`trial-clean-2` for tea-evaluate-trial-clean-2-<uuid>/target), or null. */
 const labelOf = (directory) => /^tea-evaluate-(.+)-(?:[A-Za-z0-9]{6}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/.exec(path.basename(path.dirname(directory)))?.[1] ?? null;
@@ -145,6 +154,16 @@ const server = http.createServer((request, response) => {
   }
   if (request.method === 'GET' && url.pathname === '/policy') {
     answer(response, 200, { ok: true, mode, ...(token === undefined ? {} : { token }) });
+    return;
+  }
+  if (request.method === 'GET' && url.pathname === '/release' && process.env.GRADER_RELEASE !== undefined) {
+    const release = process.env.GRADER_RELEASE;
+    if (releaseShape === 'text') response.writeHead(200, { 'content-type': 'text/plain' }).end(`release ${release}`);
+    else if (releaseShape === 'down') answer(response, 503, { ok: true, release });
+    else if (releaseShape === 'missing') answer(response, 200, { ok: true });
+    else if (releaseShape === 'number') answer(response, 200, { ok: true, release: 42 });
+    else if (releaseShape === 'object') answer(response, 200, { ok: true, release: { name: release } });
+    else answer(response, 200, { ok: true, release });
     return;
   }
   answer(response, 404, { ok: false, error: 'not found' });

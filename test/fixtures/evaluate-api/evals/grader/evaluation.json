@@ -63,6 +63,7 @@
     "zero-action": 1
   },
   "operationPhases": {
-    "grade-answer": "outcome"
+    "grade-answer": "outcome",
+    "report-release": "outcome"
   }
 }

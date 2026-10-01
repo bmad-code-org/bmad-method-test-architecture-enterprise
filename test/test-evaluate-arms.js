@@ -42,16 +42,24 @@
  * - Deployments (Story 1.32): a copy of the HTTP fixture outside git whose
  *   P-004 names two deployments of the grader the test starts itself, the
  *   pre-fix one lenient and the post-fix one strict, each logging its own
- *   requests. The deployments' logs show the fail-before arm, the witness leg
- *   and every trial of `historical:<pre-fix release>` at the pre-fix
+ *   requests. The deployments' logs show the release report request of
+ *   Story 1.38 first at each deployment, then the fail-before arm, the witness
+ *   leg and every trial of `historical:<pre-fix release>` at the pre-fix
  *   deployment, in that order, and the pass-after arm alone at the post-fix
  *   one, and no call to a deployment starts the workspace's service; the
- *   probe records the digests of the two release identifiers, `qualifyProbe`
+ *   probe records the digests of the two release identifiers, `run.json`
+ *   records each side's declared and reported release, `qualifyProbe`
  *   admits it and `score` reduces it to `caught`. A pre-fix deployment that
  *   answers as the fix does exits 11; a pre-fix or a post-fix deployment the
  *   registry does not authorize is refused with eval-quality's
  *   `port-not-authorized` while the clean control runs, and nothing reaches
- *   either deployment; two probes on one arm label at two pre-fix origins, or
+ *   either deployment. A deployment that reports another release than the one
+ *   declared (pre-fix, then post-fix, each refused with both identifiers while
+ *   the other is left unasked), a report request the policy denies
+ *   (`method-not-authorized`), an answer with a number, an object, nothing or
+ *   text at the pointer, a 503 and a pointer that finds a boolean are each a
+ *   refusal with its reason and no arm; a deployment whose process ends on the
+ *   report request exits 12. Two probes on one arm label at two pre-fix origins, or
  *   on two labels that differ only in letter case, exit 10; an authorized
  *   pre-fix host that does not resolve exits 12 with no refusal; `check`
  *   refuses an origin with a path and origins naming another interface in
@@ -62,7 +70,8 @@
  *   reason, an unresolvable or stalled host, the lookup's bound), the lookup
  *   and the port exchange under `maxElapsedMs` 2147483647 with no
  *   `TimeoutOverflowWarning`, `originKey` over an IPv4-mapped address,
- *   `deploymentPair`'s exit 12 reasons and `routeIdentity`, and a static
+ *   `deploymentPair`'s exit 12 reasons (the report's among them) and
+ *   `routeIdentity`, and a static
  *   case reads the reference's `### From worktrees` and
  *   `### Against deployments` sections.
  * - Rubric: a contract declaring R-101, judged by the stub judge through the
@@ -96,6 +105,7 @@ const { ENGINE_CLI_ENV, loadAdapters, loadEngine } = require('../cli/lib/evaluat
 const { AGENT_ADAPTERS } = require('../cli/lib/agent-adapters');
 const { qualifyGameabilityProbes, syntheticPort } = require('../cli/lib/evaluate/gameability');
 const { deploymentPair, historicalRevisions, qualifyHistoricalProbe, routeIdentity } = require('../cli/lib/evaluate/historical');
+const { isJsonPointer, quotedIdentifier, reportProblems } = require('../cli/lib/evaluate/release-report');
 const {
   DeploymentUnreachable,
   degenerateApiPort,
@@ -953,6 +963,8 @@ const REFERENCE = path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli
 const GRADER_TOKEN = 'deployment-token-value-8901';
 const PRE_RELEASE = 'grader-1.4.2';
 const FIX_RELEASE = 'grader-1.4.3';
+/** How each deployment of the fixture reports its release: the contract's report operation and a pointer into its answer. */
+const REPORT = Object.freeze({ operationId: 'report-release', pointer: '/release' });
 /** How long a deployment the test starts may take to report the port it bound. */
 const DEPLOYMENT_READY_MS = 20_000;
 /**
@@ -962,24 +974,26 @@ const DEPLOYMENT_READY_MS = 20_000;
  */
 const LIFELINE = "process.stdin.on('end', () => process.exit(0)).resume(); require(process.argv[1]);";
 
-/** Every deployment server the test started, each stopped when its case ends and again as the suite ends. */
+/** Every deployment server the test started, each stopped by the case that wants it gone and all of them as the route's cases end. */
 const deploymentServers = [];
 
 /**
  * A deployment of the grader the test starts itself, standing in for a
  * remote deployment no worktree can launch: the fixture's own loopback
  * service under `mode` (`lenient`, the defect; `strict`, the fix), binding a
- * port the system chooses and reporting it, with its own request log.
+ * port the system chooses and reporting it, with its own request log, and
+ * answering the release report request with `release`. `policy` adds lines to
+ * its policy file (how it answers that request, or where it crashes).
  */
-async function startDeployment(label, mode) {
+async function startDeployment(label, mode, release, policy = '') {
   const directory = scratch.make(`deployment-${label}`);
   fs.mkdirSync(path.join(directory, 'rules'));
-  fs.writeFileSync(path.join(directory, 'rules', 'policy.txt'), `mode: ${mode}\n`);
+  fs.writeFileSync(path.join(directory, 'rules', 'policy.txt'), `mode: ${mode}\n${policy}`);
   const portFile = path.join(directory, 'port');
   const log = path.join(directory, 'requests.jsonl');
   const child = spawn(process.execPath, ['-e', LIFELINE, GRADER, '--policy=rules/policy.txt'], {
     cwd: directory,
-    env: { PATH: process.env.PATH, PORT: '0', PORT_FILE: portFile, GRADER_LOG: log, GRADER_TOKEN },
+    env: { PATH: process.env.PATH, PORT: '0', PORT_FILE: portFile, GRADER_LOG: log, GRADER_TOKEN, GRADER_RELEASE: release },
     stdio: ['pipe', 'ignore', 'ignore'],
   });
   deploymentServers.push(child);
@@ -989,7 +1003,7 @@ async function startDeployment(label, mode) {
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
   const port = Number(fs.readFileSync(portFile, 'utf8'));
-  return { port, log, origin: `http://127.0.0.1:${port}` };
+  return { port, log, origin: `http://127.0.0.1:${port}`, stop: () => child.kill('SIGKILL') };
 }
 
 /** Stops every deployment server still running. */
@@ -1081,8 +1095,8 @@ function makeDeploymentProject(label, { preFix, fix, authorized, edit = () => {}
     qualification: {
       route: 'historical',
       deployments: {
-        preFix: { release: PRE_RELEASE, origins: { grader: preFix } },
-        fix: { release: FIX_RELEASE, origins: { grader: fix } },
+        preFix: { release: PRE_RELEASE, report: { ...REPORT }, origins: { grader: preFix } },
+        fix: { release: FIX_RELEASE, report: { ...REPORT }, origins: { grader: fix } },
       },
     },
   };
@@ -1113,8 +1127,8 @@ async function checkDeployments() {
 async function checkDeploymentRoute() {
   const engine = await loadEngine();
   const validate = createArtifactValidator();
-  const pre = await startDeployment('pre-fix', 'lenient');
-  const post = await startDeployment('post-fix', 'strict');
+  const pre = await startDeployment('pre-fix', 'lenient', PRE_RELEASE);
+  const post = await startDeployment('post-fix', 'strict', FIX_RELEASE);
   const project = makeDeploymentProject('deployments', { preFix: pre.origin, fix: post.origin, authorized: [pre, post] });
   const { folder } = project;
   const ran = evaluate(['run', '--evaluation', folder], project.env);
@@ -1123,17 +1137,18 @@ async function checkDeploymentRoute() {
   const arm = `historical:${PRE_RELEASE}`;
   if (runDirectory === null) check(false, 'the deployment-routed run wrote no run directory');
   else {
-    // Each routing, read from the deployments' own request logs: the fail-before arm, the witness leg and every trial
-    // reached the pre-fix deployment, in that order, and the pass-after arm alone reached the post-fix one.
+    // Each routing, read from the deployments' own request logs: the release report request reached each deployment
+    // first, then the fail-before arm, the witness leg and every trial reached the pre-fix deployment, in that order,
+    // and the pass-after arm alone reached the post-fix one.
     const planned = '/grade?answer=forty-two';
-    const expectedPre = [planned, '/grade?answer=witness-answer', ...Array.from({ length: TRIALS }, () => planned)];
+    const expectedPre = ['/release', planned, '/grade?answer=witness-answer', ...Array.from({ length: TRIALS }, () => planned)];
     check(
       JSON.stringify(requestsTo(pre).map((request) => request.path)) === JSON.stringify(expectedPre),
-      `the pre-fix deployment received ${JSON.stringify(requestsTo(pre))}; expected the fail-before arm, the witness leg and ${TRIALS} trials, ${JSON.stringify(expectedPre)}`,
+      `the pre-fix deployment received ${JSON.stringify(requestsTo(pre))}; expected the release report request, the fail-before arm, the witness leg and ${TRIALS} trials, ${JSON.stringify(expectedPre)}`,
     );
     check(
-      JSON.stringify(requestsTo(post).map((request) => request.path)) === JSON.stringify([planned]),
-      `the post-fix deployment received ${JSON.stringify(requestsTo(post))}; expected the pass-after arm alone`,
+      JSON.stringify(requestsTo(post).map((request) => request.path)) === JSON.stringify(['/release', planned]),
+      `the post-fix deployment received ${JSON.stringify(requestsTo(post))}; expected the release report request and the pass-after arm alone`,
     );
     check(
       [...requestsTo(pre), ...requestsTo(post)].every((request) => request.authorized === true),
@@ -1170,6 +1185,17 @@ async function checkDeploymentRoute() {
     check(
       recordedRun.deployments?.[arm]?.origins?.grader === pre.origin && recordedRun.workspaces?.[arm] === undefined,
       `run.json records the pre-fix route as ${JSON.stringify({ deployments: recordedRun.deployments, workspaces: recordedRun.workspaces })}`,
+    );
+    // The release each deployment reported, beside the one the probe declares.
+    check(
+      JSON.stringify(recordedRun.releases) ===
+        JSON.stringify({
+          'P-004': {
+            preFix: { declared: PRE_RELEASE, reported: PRE_RELEASE },
+            fix: { declared: FIX_RELEASE, reported: FIX_RELEASE },
+          },
+        }),
+      `run.json records the releases ${JSON.stringify(recordedRun.releases)}; expected each deployment's reported release beside the declared one`,
     );
     const runner = (recordedRun.runner ?? []).find((entry) => entry.interfaceId === 'grader');
     check(
@@ -1214,7 +1240,7 @@ async function checkDeploymentRoute() {
 
   // A pre-fix deployment that answers as the fix does holds the fail-before arm, so the probe does not qualify. It is a
   // second strict deployment, since check refuses a pre-fix origin that is the post-fix one.
-  const fixed = await startDeployment('pre-fix-already-fixed', 'strict');
+  const fixed = await startDeployment('pre-fix-already-fixed', 'strict', PRE_RELEASE);
   const held = makeDeploymentProject('deployment-held-before', { preFix: fixed.origin, fix: post.origin, authorized: [fixed, post] });
   const heldRun = evaluate(['preflight', '--evaluation', held.folder], held.env);
   check(
@@ -1260,7 +1286,7 @@ async function checkDeploymentRoute() {
   }
 
   // One arm runs one target: a second probe naming the same pre-fix release at another origin stops the run.
-  const otherPre = await startDeployment('other-pre-fix', 'lenient');
+  const otherPre = await startDeployment('other-pre-fix', 'lenient', PRE_RELEASE);
   const shared = makeDeploymentProject('deployment-shared-arm', {
     preFix: pre.origin,
     fix: post.origin,
@@ -1278,16 +1304,19 @@ async function checkDeploymentRoute() {
     `two probes on one historical arm at two pre-fix origins exited ${sharedRun.status}; expected 10 naming the arm\n${sharedRun.output}`,
   );
   // Two labels that differ only in letter case meet in one trial directory where the file system ignores case; the
-  // second probe runs at the same origins, so the target-identity stop does not reach it first.
+  // letter-case stop comes before the target-identity one, so the second probe's own pre-fix deployment, which reports
+  // the cased release, reaches it.
   const casedRelease = PRE_RELEASE.replace('grader', 'Grader');
+  const casedPre = await startDeployment('cased-pre-fix', 'lenient', casedRelease);
   const cased = makeDeploymentProject('deployment-cased-arm', {
     preFix: pre.origin,
     fix: post.origin,
-    authorized: [pre, post],
+    authorized: [pre, casedPre, post],
     edit: ({ folder: edited, probe: first }) => {
       const second = structuredClone(first);
       second.probeId = 'P-005';
       second.qualification.deployments.preFix.release = casedRelease;
+      second.qualification.deployments.preFix.origins.grader = casedPre.origin;
       writeJson(path.join(edited, 'probes', 'P-005.probe.json'), second);
     },
   });
@@ -1322,6 +1351,8 @@ async function checkDeploymentRoute() {
     `a pre-fix deployment whose host does not resolve exited ${unreachableRun.status} with the refusals ${JSON.stringify(unreachableRecord?.refused)}; expected 12, "cannot be reached" and no refusal\n${unreachableRun.output}`,
   );
 
+  await checkReportedReleases();
+
   // check holds each deployment's origins to the registry's HTTP interfaces: a path, an interface the registry does not
   // declare, and one it declares left out.
   const misnamed = makeDeploymentProject('deployment-misnamed', {
@@ -1338,6 +1369,174 @@ async function checkDeploymentRoute() {
         `probes/P-004.probe.json: [historical] deployments.fix.origins names ["other"], where the registry's HTTP interfaces are ["grader"]`,
       ),
     `a probe whose origins carry a path, or name another interface in place of the registry's: check exited ${misnamedCheck.status}; expected 10 with both historical findings\n${misnamedCheck.output}`,
+  );
+}
+
+/**
+ * Runs `command` over a deployment project whose probe P-004 names the given
+ * deployments, and reads what it left: the run's exit status and output, the
+ * refusals `run.json` records, and `refused/P-004.json`.
+ */
+function runReport(label, { command = 'run', preFix, fix, authorized, edit }) {
+  const project = makeDeploymentProject(label, { preFix: preFix.origin, fix: fix.origin, authorized, edit });
+  const ran = evaluate([command, '--evaluation', project.folder], project.env);
+  const directory = runDirectoryOf(project.folder);
+  const record = directory === null ? null : readIfWritten(path.join(directory, 'run.json'));
+  const file = directory === null ? null : readIfWritten(path.join(directory, 'refused', 'P-004.json'));
+  return { ran, directory, record, refusal: record?.refused?.[0] ?? null, file };
+}
+
+/**
+ * The release report request (Story 1.38): before either arm the runtime asks
+ * each deployment which release it runs, through the evaluation's port, and a
+ * release other than the declared one, a denied request or an answer with no
+ * string at the pointer refuses the probe; a deployment that cannot answer
+ * stops the run with exit 12. The cases run over a pair of deployments of
+ * their own, so the request logs they read start empty.
+ */
+async function checkReportedReleases() {
+  const pre = await startDeployment('report-pre-fix', 'lenient', PRE_RELEASE);
+  const post = await startDeployment('report-post-fix', 'strict', FIX_RELEASE);
+  /** What `server` received, as paths. */
+  const pathsTo = (server) => JSON.stringify(requestsTo(server).map((request) => request.path));
+  /** The refusal of a probe: its record, its file, no release record, no qualification evidence, and the asked reasons. */
+  const held = (what, { ran, directory, record, refusal, file }, reasons) => {
+    check(ran.status === 0, `${what} exited ${ran.status}; expected 0\n${ran.output}`);
+    check(
+      record?.refused?.length === 1 && refusal.probeId === 'P-004' && reasons.every((reason) => refusal.reason.includes(reason)),
+      `${what}: run.json records the refusals ${JSON.stringify(record?.refused)}; expected P-004 refused, its reason naming ${JSON.stringify(reasons)}`,
+    );
+    check(JSON.stringify(file) === JSON.stringify(refusal), `${what}: refused/P-004.json reads ${JSON.stringify(file)}`);
+    check(record?.releases === undefined, `${what}: run.json records the releases ${JSON.stringify(record?.releases)} of a refused probe`);
+    check(
+      directory !== null && !fs.existsSync(path.join(directory, 'qualification', 'P-004')),
+      `${what} wrote qualification evidence for the refused probe`,
+    );
+  };
+  /** After a `run`, the clean control alone is sealed, since the refused probe runs nowhere. */
+  const sealedCleanControl = (what, { directory }) =>
+    check(
+      JSON.stringify(sealedProbes(directory)) === '["P-001"]',
+      `${what} sealed ${JSON.stringify(sealedProbes(directory))}; expected the clean control alone`,
+    );
+  const asked = (what, server, others = {}) => {
+    // Each side is asked once and nothing else is sent: the report request first, no arm after it.
+    check(
+      pathsTo(server) === '["/release"]',
+      `${what}: the deployment received ${pathsTo(server)}; expected the release report request alone`,
+    );
+    for (const [name, [deployment, count]] of Object.entries(others)) {
+      check(
+        requestsTo(deployment).length === count,
+        `${what}: the ${name} deployment received ${pathsTo(deployment)}; expected ${count} request(s)`,
+      );
+    }
+  };
+
+  // A deployment redeployed since the probe was authored reports another release than the probe declares. It is refused
+  // with both identifiers before any arm runs, each side asked in turn, so a pre-fix mismatch leaves the post-fix
+  // deployment unasked.
+  const stale = await startDeployment('pre-fix-redeployed', 'lenient', 'grader-9.9.9');
+  const preStale = runReport('report-stale-pre-fix', { preFix: stale, fix: post, authorized: [stale, post] });
+  held('a run whose pre-fix deployment reports another release', preStale, [
+    'pre-fix deployment',
+    `reports release "grader-9.9.9" where the probe declares "${PRE_RELEASE}"`,
+  ]);
+  sealedCleanControl('a run whose pre-fix deployment reports another release', preStale);
+  asked('a run whose pre-fix deployment reports another release', stale, { 'post-fix': [post, 0] });
+  const moved = await startDeployment('post-fix-redeployed', 'strict', 'grader-9.9.9');
+  const postStale = runReport('report-stale-post-fix', { preFix: pre, fix: moved, authorized: [pre, moved] });
+  held('a run whose post-fix deployment reports another release', postStale, [
+    'post-fix deployment',
+    `reports release "grader-9.9.9" where the probe declares "${FIX_RELEASE}"`,
+  ]);
+  sealedCleanControl('a run whose post-fix deployment reports another release', postStale);
+  asked('a run whose post-fix deployment reports another release', moved, { 'pre-fix': [pre, 1] });
+
+  // A release is quoted as JSON writes it, every character outside printable ASCII escaped, and cut at 160 characters, since
+  // the deployment controls the text a refusal carries.
+  const hostile = await startDeployment('pre-fix-hostile', 'lenient', `${PRE_RELEASE}${String.fromCodePoint(0x20_28, 0x20_2e, 0x85)}`);
+  held(
+    'a run whose pre-fix deployment reports a release with separator and direction characters',
+    runReport('report-hostile', { command: 'preflight', preFix: hostile, fix: post, authorized: [hostile, post] }),
+    [String.raw`reports release "grader-1.4.2\u2028\u202e\u0085" where the probe declares`],
+  );
+  const long = `g${'x'.repeat(400)}`;
+  const lengthy = await startDeployment('pre-fix-long', 'lenient', long);
+  const lengthyRun = runReport('report-long', { command: 'preflight', preFix: lengthy, fix: post, authorized: [lengthy, post] });
+  held('a run whose pre-fix deployment reports a release of 401 characters', lengthyRun, [
+    `reports release ${JSON.stringify(long.slice(0, 160))} (cut short) where the probe declares`,
+  ]);
+  check(!lengthyRun.refusal?.reason.includes(long), 'a refusal quoted the whole of a 401-character release');
+
+  // eval-quality's policy decides the report request as it decides every call: a report operation whose method the
+  // registry does not authorize is denied before anything is sent, and the refusal carries eval-quality's reason.
+  const beforeDenial = [requestsTo(pre).length, requestsTo(post).length];
+  const denied = runReport('report-denied', {
+    preFix: pre,
+    fix: post,
+    authorized: [pre, post],
+    edit: ({ folder }) =>
+      editJson(path.join(folder, 'contract.json'), (contract) => {
+        const report = contract.permittedInterfaces[0].operations.find((operation) => operation.operationId === 'report-release');
+        report.method = 'DELETE';
+      }),
+  });
+  held('a run whose report request the policy denies', denied, ['pre-fix deployment', 'report-release', 'method-not-authorized']);
+  sealedCleanControl('a run whose report request the policy denies', denied);
+  check(
+    requestsTo(pre).length === beforeDenial[0] && requestsTo(post).length === beforeDenial[1],
+    `a report request the policy denies reached a deployment: ${pathsTo(pre)} and ${pathsTo(post)}; expected nothing beyond the ${beforeDenial} requests before it`,
+  );
+
+  // An answer with no string at the pointer: another kind of value, nothing, a body that is no JSON, a status that is no
+  // success (which carries the right release, so a status gate that went missing would let the probe qualify), or a
+  // pointer the declaration aims at a boolean. Each is a refusal naming the pointer and what was found, before any arm,
+  // the pre-fix deployment asked once and the post-fix one left unasked.
+  const pointer = '"/release"';
+  for (const [shape, found] of [
+    ['number', `the JSON pointer ${pointer} finds a number in its answer`],
+    ['object', `the JSON pointer ${pointer} finds an object in its answer`],
+    ['missing', `the JSON pointer ${pointer} finds nothing in its answer`],
+    ['text', `the JSON pointer ${pointer} has no JSON answer to read, since it answered status 200 with a text body`],
+    ['down', `the JSON pointer ${pointer} has no answer to read, since it answered status 503`],
+  ]) {
+    const what = `a run whose pre-fix deployment answers the report request with ${shape}`;
+    const server = await startDeployment(`pre-fix-${shape}`, 'lenient', PRE_RELEASE, `release: ${shape}\n`);
+    const outcome = runReport(`report-${shape}`, { command: 'preflight', preFix: server, fix: post, authorized: [server, post] });
+    held(what, outcome, ['pre-fix deployment', 'did not report its release through report-release', found]);
+    asked(what, server, { 'post-fix': [post, 0] });
+    server.stop();
+  }
+  const absent = await startDeployment('post-fix-missing', 'strict', FIX_RELEASE, 'release: missing\n');
+  const postUnread = runReport('report-post-fix-missing', { command: 'preflight', preFix: pre, fix: absent, authorized: [pre, absent] });
+  held('a run whose post-fix deployment answers the report request with nothing', postUnread, [
+    'post-fix deployment',
+    `the JSON pointer ${pointer} finds nothing in its answer`,
+  ]);
+  asked('a run whose post-fix deployment answers the report request with nothing', absent, { 'pre-fix': [pre, 2] });
+  const boolean = runReport('report-pointer', {
+    command: 'preflight',
+    preFix: pre,
+    fix: post,
+    authorized: [pre, post],
+    edit: ({ probe }) => (probe.qualification.deployments.preFix.report = { ...REPORT, pointer: '/ok' }),
+  });
+  held('a run whose report pointer finds a boolean', boolean, [
+    'pre-fix deployment',
+    'the JSON pointer "/ok" finds a boolean in its answer',
+  ]);
+  check(requestsTo(post).length === 0, `a pre-fix refusal left the post-fix deployment with ${pathsTo(post)}; expected no request`);
+
+  // A deployment that reaches no answer is a target that could not run: exit 12, as it is for any call.
+  const crashing = await startDeployment('pre-fix-crashing', 'lenient', PRE_RELEASE, 'crash: /release\n');
+  const crashed = runReport('report-crash', { command: 'preflight', preFix: crashing, fix: post, authorized: [crashing, post] });
+  check(
+    crashed.ran.status === 12 &&
+      crashed.ran.output.includes(`the pre-fix deployment ${PRE_RELEASE} could not answer the release report request report-release`) &&
+      Array.isArray(crashed.record?.refused) &&
+      crashed.record.refused.length === 0,
+    `a pre-fix deployment that ends its process on the report request exited ${crashed.ran.status} with the refusals ${JSON.stringify(crashed.record?.refused)}; expected 12, "could not answer" and no refusal\n${crashed.ran.output}`,
   );
 }
 
@@ -1376,6 +1575,14 @@ function checkHistoricalReference() {
       /against the post-fix one/.test(deployments) &&
       deployments.includes('`evaluateTarget`'),
     'the reference has no "### Against deployments" section naming deployments, the pre-fix and post-fix arms, evaluateTarget and the arm historical:<release>',
+  );
+  // Story 1.38: the section states the comparison of the reported release with the declared one, the report request
+  // and the record of each side's two identifiers.
+  check(
+    deployments.includes('`report`') &&
+      deployments.includes('It refuses the probe when that string is not the declared `release`, naming both identifiers') &&
+      deployments.includes("`run.json`'s `releases`"),
+    'the reference\'s "### Against deployments" section does not state that the probe is refused when the reported string is not the declared release, naming both identifiers, or where run.json records them',
   );
 }
 
@@ -1574,8 +1781,9 @@ async function checkDeploymentUnits() {
     process.off('warning', onWarning);
   }
 
-  const preFix = { release: 'r1', origins: { grader: 'http://127.0.0.1:1' } };
-  const fix = { release: 'r2', origins: { grader: 'http://127.0.0.1:2' } };
+  const contract = readJson(path.join(API_FIXTURE, 'evals', 'grader', 'contract.json'));
+  const preFix = { release: 'r1', report: REPORT, origins: { grader: 'http://127.0.0.1:1' } };
+  const fix = { release: 'r2', report: REPORT, origins: { grader: 'http://127.0.0.1:2' } };
   const pairs = [
     [{ route: 'historical' }, /names neither a fixCommit nor deployments/],
     [{ route: 'historical', deployments: {} }, /names no preFix and no fix deployment/],
@@ -1591,17 +1799,38 @@ async function checkDeploymentUnits() {
       { route: 'historical', deployments: { preFix, fix: { ...fix, origins: { grader: 'HTTP://127.0.0.1:1/' } } } },
       /both reach http:\/\/127\.0\.0\.1:1/,
     ],
+    // Story 1.38: the report each deployment names, which `check` holds first and this guard holds again.
+    [
+      { route: 'historical', deployments: { preFix: { release: 'r1', origins: preFix.origins }, fix } },
+      /its preFix deployment names no report/,
+    ],
+    [
+      { route: 'historical', deployments: { preFix, fix: { ...fix, report: { operationId: 'report-version', pointer: '/release' } } } },
+      /deployments\.fix\.report\.operationId names "report-version", which no interface of the contract declares/,
+    ],
+    [
+      { route: 'historical', deployments: { preFix, fix: { ...fix, report: { operationId: 'grade-answer', pointer: '/release' } } } },
+      /"grade-answer", which requires input in its query channel/,
+    ],
+    [
+      { route: 'historical', deployments: { preFix: { ...preFix, report: { ...REPORT, pointer: 'release' } }, fix } },
+      /deployments\.preFix\.report\.pointer is "release", which is no JSON pointer/,
+    ],
+    [
+      { route: 'historical', deployments: { preFix, fix: { ...fix, report: { ...REPORT, pointer: '/a/~2' } } } },
+      /deployments\.fix\.report\.pointer is "\/a\/~2"/,
+    ],
   ];
   const graderEntry = { kind: 'api', interfaceId: 'grader' };
   for (const [qualification, expected] of pairs) {
-    const pair = deploymentPair(qualification, [graderEntry]);
+    const pair = deploymentPair(qualification, [graderEntry], contract);
     check(expected.test(pair.unaddressable ?? ''), `deploymentPair(${JSON.stringify(qualification)}) gave ${JSON.stringify(pair)}`);
   }
   for (const other of [
     { kind: 'cli', interfaceId: 'runner' },
     { kind: 'mcp', interfaceId: 'tools' },
   ]) {
-    const pair = deploymentPair({ route: 'historical', deployments: { preFix, fix } }, [graderEntry, other]);
+    const pair = deploymentPair({ route: 'historical', deployments: { preFix, fix } }, [graderEntry, other], contract);
     check(
       /which a deployment does not answer over HTTP/.test(pair.unaddressable ?? ''),
       `deploymentPair beside a ${other.kind} registry entry gave ${JSON.stringify(pair)}`,
@@ -1612,11 +1841,12 @@ async function checkDeploymentUnits() {
     {
       route: 'historical',
       deployments: {
-        preFix: { release: 'r1', origins: { grader: 'http://127.0.0.1:1', admin: 'http://127.0.0.1:3' } },
-        fix: { release: 'r2', origins: { grader: 'http://127.0.0.1:2', admin: 'http://127.0.0.1:1' } },
+        preFix: { ...preFix, origins: { grader: 'http://127.0.0.1:1', admin: 'http://127.0.0.1:3' } },
+        fix: { ...fix, origins: { grader: 'http://127.0.0.1:2', admin: 'http://127.0.0.1:1' } },
       },
     },
     [graderEntry, { kind: 'api', interfaceId: 'admin' }],
+    contract,
   );
   check(
     /pre-fix origin for grader and its post-fix origin for admin both reach/.test(swapped.unaddressable ?? ''),
@@ -1636,13 +1866,121 @@ async function checkDeploymentUnits() {
       },
     },
     [graderEntry],
+    contract,
   );
   check(
     /both reach http:\/\/127\.0\.0\.1:4343/.test(mapped.unaddressable ?? ''),
     `deploymentPair over 127.0.0.1 and [::ffff:7f00:1] at one port gave ${JSON.stringify(mapped)}`,
   );
-  const whole = deploymentPair({ route: 'historical', deployments: { preFix, fix } }, [graderEntry]);
+  const whole = deploymentPair({ route: 'historical', deployments: { preFix, fix } }, [graderEntry], contract);
   check(whole.preFix === preFix && whole.fix === fix, `deploymentPair over a whole pair gave ${JSON.stringify(whole)}`);
+
+  // Story 1.38: the report each deployment names, read against the contract. A contract edited into each shape the rule
+  // refuses gives the finding its own words, and the whole pair is addressable in none of them.
+  const reportOperation = () => contract.permittedInterfaces[0].operations.find((operation) => operation.operationId === 'report-release');
+  const reportedOver = (edit) => {
+    const edited = structuredClone(contract);
+    edit(
+      edited,
+      edited.permittedInterfaces[0].operations.find((operation) => operation.operationId === 'report-release'),
+    );
+    return deploymentPair({ route: 'historical', deployments: { preFix, fix } }, [graderEntry], edited);
+  };
+  for (const [what, edit, expected] of [
+    [
+      'an operation that changes state',
+      (_, operation) => (operation.stateChangeMarker = true),
+      /which the contract marks as changing state/,
+    ],
+    [
+      'an operation with a required header',
+      (_, operation) => (operation.requestShape.header.requiredKeys = ['x-build']),
+      /requires input in its header channel/,
+    ],
+    [
+      'an operation with a required body and path key',
+      (_, operation) => {
+        operation.requestShape.body.requiredKeys = ['build'];
+        operation.requestShape.path.requiredKeys = ['id'];
+      },
+      /requires input in its path and body channel/,
+    ],
+    [
+      'an operation with a path parameter',
+      (_, operation) => (operation.pathTemplate = '/release/{build}'),
+      /has the path parameter in "\/release\/\{build\}"/,
+    ],
+    [
+      'an operation of a cli interface',
+      (edited) => {
+        edited.permittedInterfaces[0].kind = 'cli';
+      },
+      /which is not an operation of an api interface/,
+    ],
+    [
+      'an operation two interfaces declare',
+      (edited) => {
+        const second = structuredClone(edited.permittedInterfaces[0]);
+        second.logicalId = 'grader-second';
+        edited.permittedInterfaces.push(second);
+      },
+      /which 2 interfaces of the contract declare/,
+    ],
+    [
+      'an operation of an interface the registry does not serve',
+      (edited) => {
+        edited.permittedInterfaces[0].logicalId = 'status';
+      },
+      /of interface "status", which the registry does not serve over HTTP/,
+    ],
+  ]) {
+    const pair = reportedOver(edit);
+    check(expected.test(pair.unaddressable ?? ''), `deploymentPair over ${what} gave ${JSON.stringify(pair)}; expected ${expected}`);
+  }
+  // An operation declared on both a cli and an api interface is the ambiguity the contract has.
+  const both = reportedOver((edited) => {
+    const second = structuredClone(edited.permittedInterfaces[0]);
+    second.logicalId = 'runner';
+    second.kind = 'cli';
+    edited.permittedInterfaces.push(second);
+  });
+  check(
+    /which 2 interfaces of the contract declare/.test(both.unaddressable ?? ''),
+    `deploymentPair over a twice-declared operation gave ${JSON.stringify(both)}`,
+  );
+  const empty = deploymentPair({ route: 'historical', deployments: { preFix, fix } }, [graderEntry], {});
+  check(
+    /the contract declares no interfaces/.test(empty.unaddressable ?? ''),
+    `deploymentPair over a contract with no interfaces gave ${JSON.stringify(empty)}`,
+  );
+  check(reportOperation() !== undefined, 'the HTTP fixture declares no report-release operation');
+  for (const [pointer, valid] of [
+    ['/release', true],
+    ['/', true],
+    ['//', true],
+    ['/a/b/0', true],
+    ['/a~0b~1c', true],
+    ['', false],
+    ['release', false],
+    ['/a/~2', false],
+    ['/~', false],
+    ['/a~', false],
+    ['#/release', false],
+  ]) {
+    check(isJsonPointer(pointer) === valid, `isJsonPointer(${JSON.stringify(pointer)}) is ${!valid}; expected ${valid}`);
+    const findings = reportProblems({ report: { operationId: 'report-release', pointer }, contract, interfaces: ['grader'], where: 'r' });
+    check(findings.length === (valid ? 0 : 1), `reportProblems over pointer ${JSON.stringify(pointer)} gave ${JSON.stringify(findings)}`);
+  }
+  const backslash = String.fromCodePoint(0x5c);
+  const escaped = (...units) => units.map((unit) => `${backslash}u${unit}`).join('');
+  check(
+    quotedIdentifier('grader-1.4.2') === '"grader-1.4.2"' &&
+      quotedIdentifier(`a"b${backslash}c`) === `"a${backslash}"b${backslash}${backslash}c"` &&
+      quotedIdentifier(`a${String.fromCodePoint(0x20_28, 0x85, 0x20_2e, 0xe9)}`) === `"a${escaped('2028', '0085', '202e', '00e9')}"`,
+    'quotedIdentifier does not quote JSON-style with every character outside printable ASCII escaped',
+  );
+  const cutShort = quotedIdentifier('x'.repeat(200));
+  check(cutShort === `"${'x'.repeat(160)}" (cut short)`, `quotedIdentifier over 200 characters gave ${cutShort.length} characters`);
 
   const identity = (origins) => routeIdentity({ deployments: { preFix: { origins } } });
   check(routeIdentity({ preFix: 'a'.repeat(40) }) === 'a worktree', 'a worktree route is not named a worktree');
@@ -2485,8 +2823,8 @@ async function checkConfinedArms() {
 
 /** The deployment route in a confined run: each phase and trial reaches its deployment as it does unconfined. */
 async function checkConfinedDeploymentRoute(confinement) {
-  const pre = await startDeployment('confined-pre-fix', 'lenient');
-  const post = await startDeployment('confined-post-fix', 'strict');
+  const pre = await startDeployment('confined-pre-fix', 'lenient', PRE_RELEASE);
+  const post = await startDeployment('confined-post-fix', 'strict', FIX_RELEASE);
   const project = makeDeploymentProject('deployments-confined', {
     preFix: pre.origin,
     fix: post.origin,
@@ -2515,7 +2853,7 @@ async function checkConfinedDeploymentRoute(confinement) {
     `a confined deployment-routed qualification ran ${JSON.stringify([failBefore?.origins, failBefore?.verdict, passAfter?.origins, passAfter?.verdict])}`,
   );
   const planned = '/grade?answer=forty-two';
-  const expectedPre = [planned, '/grade?answer=witness-answer', ...Array.from({ length: TRIALS }, () => planned)];
+  const expectedPre = ['/release', planned, '/grade?answer=witness-answer', ...Array.from({ length: TRIALS }, () => planned)];
   check(
     JSON.stringify(requestsTo(pre).map((request) => request.path)) === JSON.stringify(expectedPre),
     `the confined run's pre-fix deployment received ${JSON.stringify(requestsTo(pre))}; expected ${JSON.stringify(expectedPre)}`,
