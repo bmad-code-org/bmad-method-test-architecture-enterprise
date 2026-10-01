@@ -42,8 +42,9 @@
  *                    working directory
  *   STUB-BIG <n>     print n bytes of filler after the reply
  *   STUB-HOME        keep session state under HOME the way an agent CLI does
- *                    and print HOME and whether the write was allowed
- *   STUB-HOME-SEEN   with STUB-HOME, also print every file under HOME before
+ *                    and print whether HOME is a private home of a run and
+ *                    whether the write was allowed
+ *   STUB-HOME-SEEN   with STUB-HOME, also print HOME itself and every file under HOME before
  *                    this call wrote its own state and how many calls have
  *                    written it (a case that asserts a confined target keeps
  *                    its state between the calls of a trial; a call whose
@@ -143,8 +144,10 @@ if (request.includes('STUB-HOME')) {
     wrote = `refused ${error.code}`;
   }
   const calls = wrote === 'allowed' ? fs.readFileSync(state, 'utf8').split('\n').filter(Boolean).length : 0;
-  home = `home: ${root}\nhome-write: ${wrote}\n${
-    request.includes('STUB-HOME-SEEN') ? `home-before: ${JSON.stringify(before.sort())}\nhome-calls: ${calls}\n` : ''
+  const shape = /\/tea-evaluate-p\d+\/run-[^/]+\/tea-evaluate-target-home-[^/]+$/.test(root) ? 'private' : 'other';
+  const seen = request.includes('STUB-HOME-SEEN');
+  home = `home-shape: ${shape}\nhome-write: ${wrote}\n${
+    seen ? `home: ${root}\nhome-before: ${JSON.stringify(before.sort())}\nhome-calls: ${calls}\n` : ''
   }`;
 }
 const attempts = [];

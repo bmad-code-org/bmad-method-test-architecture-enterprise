@@ -1221,7 +1221,7 @@ function checkPrivateHome() {
       for (const [index, leg] of operation.sensitivityWitness.legs.entries()) {
         leg.inputs.stdin.value = [
           leg.inputs.stdin.value,
-          index === 1 ? 'STUB-HOME STUB-HOME-SEEN STUB-ENV HOME' : 'STUB-HOME STUB-ENV HOME',
+          index === 1 ? 'STUB-HOME STUB-HOME-SEEN STUB-ENV HOME' : 'STUB-HOME',
           `STUB-TRY-WRITE ${path.join(hostHome, 'real-home.txt')}`,
           `STUB-TRY-WRITE ${path.join(temp.directory, 'beside-home.txt')}`,
           `STUB-TRY-READ ${path.join(folder, 'contract.json')}`,
@@ -1244,13 +1244,9 @@ function checkPrivateHome() {
     const label = `a confined preflight with environmentKeys ${JSON.stringify(keys)}`;
     check(confined.length >= 2, `${label} observed ${confined.length} call(s); expected the witness legs and the controls`);
     for (const [index, stdout] of confined.entries()) {
-      const home = field(stdout, 'home') ?? '';
       check(
-        path.basename(path.dirname(home)).startsWith('run-') &&
-          path.dirname(path.dirname(home)) === fs.realpathSync(path.join('/tmp', `tea-evaluate-p${process.getuid()}`)) &&
-          path.basename(home).startsWith('tea-evaluate-target-home-') &&
-          field(stdout, 'env') === home,
-        `${label}: call ${index + 1} found HOME ${JSON.stringify(home)} (the agent's environment holds ${JSON.stringify(field(stdout, 'env'))}); expected one private home beneath the run's private parent`,
+        field(stdout, 'home-shape') === 'private',
+        `${label}: call ${index + 1} found HOME of the shape ${field(stdout, 'home-shape')}; expected a private home beneath the run's private parent`,
       );
       check(
         field(stdout, 'home-write') === 'allowed',
@@ -1272,13 +1268,17 @@ function checkPrivateHome() {
       field(confined[1], 'home-before') === '[]' && field(confined[1], 'home-calls') === '1',
       `${label}: the second leg found ${field(confined[1], 'home-before')} in its home after ${Number(field(confined[1], 'home-calls')) - 1} earlier write(s); each leg starts with an empty home`,
     );
+    // The second leg prints its home (the legs of a repeated request must answer alike, so the others print no path).
+    const home = field(confined[1], 'home') ?? '';
     check(
-      new Set(confined.map((stdout) => field(stdout, 'home'))).size === confined.length,
-      `${label}: the legs did not each get a home of their own: ${JSON.stringify(confined.map((stdout) => field(stdout, 'home')))}`,
+      path.dirname(path.dirname(home)) === fs.realpathSync(path.join('/tmp', `tea-evaluate-p${process.getuid()}`)) &&
+        path.basename(path.dirname(home)).startsWith('run-') &&
+        field(confined[1], 'env') === home,
+      `${label}: the second leg found HOME ${JSON.stringify(home)} (the agent's environment holds ${JSON.stringify(field(confined[1], 'env'))}); expected a private home beneath the run's private parent`,
     );
     check(
-      confined.every((stdout) => !fs.existsSync(field(stdout, 'home') ?? '')),
-      `${label} left a private home behind after the preflight`,
+      !fs.existsSync(home) && !fs.existsSync(path.dirname(home)),
+      `${label} left a private home or the run's private parent behind after the preflight`,
     );
     check(!fs.existsSync(path.join(hostHome, 'real-home.txt')), "a confined agent wrote a file in the host's real home");
     check(
@@ -1289,8 +1289,11 @@ function checkPrivateHome() {
 
   const open = run(false, ['HOME']);
   check(
-    open.length > 0 && open.every((stdout) => field(stdout, 'env') === '[redacted]' && field(stdout, 'home') === '[redacted]'),
-    `an unconfined agent did not see the host's HOME: ${JSON.stringify(open.map((stdout) => field(stdout, 'home')))}`,
+    open.length > 1 &&
+      open.every((stdout) => field(stdout, 'home-shape') === 'other') &&
+      field(open[1], 'env') === '[redacted]' &&
+      field(open[1], 'home') === '[redacted]',
+    `an unconfined agent did not see the host's HOME: ${JSON.stringify(open.map((stdout) => field(stdout, 'home-shape')))}`,
   );
 }
 
