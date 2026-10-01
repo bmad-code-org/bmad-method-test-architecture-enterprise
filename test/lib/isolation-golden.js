@@ -100,11 +100,11 @@ function collectGeneratedOutputs() {
           status: statusDirectory,
         })
         .wrap('/fixture/bin/node', ['target.js'], []);
-      // The run's private parent directory is withheld from every target, a git workspace's included (Story 1.58).
-      const privateParent = '/var/folders/ab/cd/T/tea-evaluate-run-AbCdEf';
-      const seatbeltPrivateTarget = confinement.targetSandbox({ confinement: seatbeltConfinement, workspace, git, privateParent, report });
+      // The user's private root directory is withheld from every target, a git workspace's included (Story 1.58).
+      const privateRoot = '/var/folders/ab/cd/T/tea-evaluate-p501';
+      const seatbeltPrivateTarget = confinement.targetSandbox({ confinement: seatbeltConfinement, workspace, git, privateRoot, report });
       const bubblewrapPrivateWrapped = confinement
-        .targetSandbox({ confinement: bubblewrapConfinement, workspace, git, privateParent, report, status: statusDirectory })
+        .targetSandbox({ confinement: bubblewrapConfinement, workspace, git, privateRoot, report, status: statusDirectory })
         .wrap('/fixture/bin/node', ['target.js', '--flag'], [privateDirectory]);
       const outputs = {
         'isolate.buildSandboxProfile': isolate.buildSandboxProfile(
@@ -165,13 +165,13 @@ function collectGeneratedOutputs() {
             report,
           })
           .environment({ PATH: '/usr/bin' }, [privateDirectory]),
-        'confinement.targetSandbox.wrap.seatbelt.privateParent': seatbeltPrivateTarget.wrap(
+        'confinement.targetSandbox.wrap.seatbelt.privateRoot': seatbeltPrivateTarget.wrap(
           '/fixture/bin/node',
           ['target.js', '--flag'],
           [privateDirectory],
         ),
-        'confinement.targetSandbox.wrap.bubblewrap.privateParent': { ...bubblewrapPrivateWrapped },
-        'confinement.targetSandbox.environment.privateParent': seatbeltPrivateTarget.environment({ PATH: '/usr/bin' }, [privateDirectory]),
+        'confinement.targetSandbox.wrap.bubblewrap.privateRoot': { ...bubblewrapPrivateWrapped },
+        'confinement.targetSandbox.environment.privateRoot': seatbeltPrivateTarget.environment({ PATH: '/usr/bin' }, [privateDirectory]),
       };
       // The Bubblewrap status file's name carries a random token, its directory is made fresh and the node binary is the host's,
       // so each is named by role.

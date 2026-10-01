@@ -118,13 +118,13 @@
  *                           stub makes (its request, `Judge a request of my
  *                           own.`), through the paths it announces in the file
  *                           VERDICT_TOUCH names (`--announce`, Story 1.58): read the bridge's
- *                           configuration file, list the agent's working
- *                           directory and its parent, connect to the bridge's
- *                           socket, scan the temp directory for the run's
- *                           private parent, and write its own temp directory,
- *                           printing one `private-<name>: <how>` line each
- *                           (`token` when the configuration's admission token
- *                           was read, never its value); it also leaves a
+ *                           configuration file and token file, list the
+ *                           agent's working directory, its parent and the
+ *                           private root, connect to the bridge's socket, and
+ *                           write its own temp directory, printing one
+ *                           `private-<name>: <how>` line each (`token` when
+ *                           the token file's admission token was read, never
+ *                           its value); it also leaves a
  *                           process running (`verdict-private-leftover.js`)
  *                           that makes the same attempts on the directories
  *                           made after it started and reports them to the port
@@ -158,7 +158,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
 
-const { privateAnnouncements, privateAttempts, scanForPrivateParent } = require('./private-attempts');
+const { privateAnnouncements, privateAttempts } = require('./private-attempts');
 
 const POLICY = 'rules/policy.txt';
 
@@ -344,7 +344,7 @@ if (act === 'probe-private') {
   const latest = announced.at(-1);
   const lines = [`private-announced: ${announced.length}`];
   if (latest !== undefined) {
-    lines.push(...privateAttempts(latest), `private-scan: ${scanForPrivateParent(latest)}`);
+    lines.push(...privateAttempts(latest));
     const temp = process.env.TMPDIR ?? '';
     lines.push(`private-temp-write: ${attempt(() => fs.writeFileSync(path.join(temp, 'verdict-private.txt'), 'x\n'))}`);
     const child = spawn(process.execPath, [path.join(__dirname, 'verdict-private-leftover.js'), process.env.VERDICT_TOUCH, String(announced.length), process.env.VERDICT_REPORT ?? ''], {

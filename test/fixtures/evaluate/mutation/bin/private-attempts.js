@@ -2,9 +2,9 @@
  * What `verdict.js`'s `probe-private` act and its leftover process
  * (`verdict-private-leftover.js`) try on the run's private directories
  * (Story 1.58): the paths the sealed-brief agent stub announced
- * (`--announce`), each attempt answered as `allowed` or `refused <code>`; the
- * configuration read answers `token` when the file held the bridge's admission
- * token (a 48-character hex value) and never prints it.
+ * (`--announce`), each attempt answered as `allowed`, `listed <entries>` or
+ * `refused <code>`; the token file's read answers `token` when it held the
+ * bridge's admission token (48 hex characters) and never prints it.
  */
 
 'use strict';
@@ -43,42 +43,26 @@ function connectAttempt(socket) {
   return result.stdout.trim() || `refused ${result.error?.code ?? 'no answer'}`;
 }
 
+/** How reading a file ended: `allowed`, `token` when it holds a 48-hex admission token, or refused with the error code. */
+function readAttempt(file) {
+  try {
+    return /^[0-9a-f]{48}$/.test(fs.readFileSync(file, 'utf8').trim()) ? 'token' : 'allowed';
+  } catch (error) {
+    return `refused ${error.code ?? error.message}`;
+  }
+}
+
 /** The attempts on one announcement's paths, as `private-<name>: <how>` lines. */
 function privateAttempts(announced) {
-  let token;
-  try {
-    token = /"TEA_EVALUATE_BRIDGE_TOKEN":"[0-9a-f]{48}"/.test(fs.readFileSync(announced.config, 'utf8')) ? 'token' : 'allowed (no token)';
-  } catch (error) {
-    token = `refused ${error.code ?? error.message}`;
-  }
   return [
-    `private-config-read: ${token}`,
+    // The configuration names the token's file and carries no token; the token is in the file alone.
+    `private-config-read: ${readAttempt(announced.config)}`,
+    `private-token-read: ${readAttempt(announced.tokenFile)}`,
     `private-evaluator-list: ${listAttempt(announced.cwd)}`,
     `private-parent-list: ${listAttempt(path.dirname(announced.cwd))}`,
+    `private-root-list: ${listAttempt(path.dirname(path.dirname(announced.cwd)))}`,
     `private-socket-connect: ${connectAttempt(announced.socket)}`,
   ];
 }
 
-/**
- * How many `tea-evaluate-run-*` directories the directory holding the announced run's private parent lists, and how many
- * entries the target can see in them: a target that names nothing of the run can still scan for the parent.
- */
-function scanForPrivateParent(announced) {
-  const base = path.dirname(path.dirname(announced.cwd));
-  let names = [];
-  try {
-    names = fs.readdirSync(base).filter((name) => name.startsWith('tea-evaluate-run-'));
-  } catch {
-    // An unreadable directory names nothing.
-  }
-  const visible = names.reduce((total, name) => {
-    try {
-      return total + fs.readdirSync(path.join(base, name)).length;
-    } catch {
-      return total;
-    }
-  }, 0);
-  return `${names.length} found, ${visible} visible`;
-}
-
-module.exports = { privateAnnouncements, privateAttempts, scanForPrivateParent };
+module.exports = { privateAnnouncements, privateAttempts };

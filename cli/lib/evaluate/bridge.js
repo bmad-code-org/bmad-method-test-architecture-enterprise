@@ -23,17 +23,19 @@
  *   private temporary directory (a named pipe on Windows), admitting one
  *   connection, the first that presents the bridge's random token; any other
  *   connection, and a later one presenting the token, is closed unanswered;
- * - this file run as a program (`node bridge.js --socket <path>`, the token in
- *   the environment variable `TEA_EVALUATE_BRIDGE_TOKEN`, so no process
- *   listing shows it), which is the MCP server command the agent's adapter
+ * - this file run as a program (`node bridge.js --socket <path>`, the path of
+ *   the token's file in the environment variable `TEA_EVALUATE_BRIDGE_TOKEN_FILE`,
+ *   so no process listing or environment shows the token), which is the MCP server command the agent's adapter
  *   starts from the configuration file the runtime writes, relays its standard
  *   input to that socket and the socket to its standard output, and knows
  *   nothing else.
  *
- * The target runs as the same user as the runtime, with no sandbox until
- * Story 1.31 confines it, so a target that reads the agent's environment or
- * files could learn the token; the one-connection rule is what keeps it out
- * once the agent's relay has connected, which it does before its first call.
+ * The target runs as the same user as the runtime, so a target that reads
+ * another process's environment or files could learn a token kept there. The
+ * token therefore exists only in a file beneath the run's private parent
+ * directory, which a confined target is denied (`confinement.js`); the
+ * one-connection rule is what keeps an unconfined target out once the agent's
+ * relay has connected, which it does before its first call.
  *
  * The runtime runs the agent asynchronously (`runAgentAsync`), so its event
  * loop serves the socket while the agent works. Calls are answered one at a
@@ -60,10 +62,10 @@ const DEFAULT_PROTOCOL_VERSION = '2025-06-18';
  * made (`workspace.js` `makePrivateParent`).
  */
 const MAX_SOCKET_PATH = 100;
-/** The name prefix of the socket's directory beneath the run's private parent. */
-const SOCKET_DIRECTORY_PREFIX = 'bridge-';
-/** The environment variable the relay reads the admission token from. */
-const TOKEN_VARIABLE = 'TEA_EVALUATE_BRIDGE_TOKEN';
+/** The name prefix of the directory beneath the run's private parent that holds the socket and the token file; short, since the socket path is. */
+const SOCKET_DIRECTORY_PREFIX = 's-';
+/** The environment variable naming the file the relay reads the admission token from; the token itself is in no environment or argument list. */
+const TOKEN_FILE_VARIABLE = 'TEA_EVALUATE_BRIDGE_TOKEN_FILE';
 /** The most a connection may send before it has presented the token. */
 const MAX_UNADMITTED_BYTES = 4096;
 
@@ -129,15 +131,15 @@ function bridgeTools(interfaces) {
 }
 
 /**
- * Where the socket goes: a private directory beneath the run's private parent
- * (`workspace.js` `makePrivateParent`, made where a socket path fits), which a
- * confined target cannot reach. A caller with no parent (a bridge opened
- * outside a run) gets one under the system temp directory unless that path is
- * too long for a socket.
+ * Where the bridge's directory goes: it holds the socket and the token file, and sits beneath the run's private parent
+ * (`workspace.js` `makePrivateParent`, made where a socket path fits), which a confined target cannot reach. A caller with
+ * no parent (a bridge opened outside a run) gets one under the system temp directory unless that path is too long for a
+ * socket. A Windows pipe has no path, so its directory holds the token file alone.
  */
 function socketPlace(scratch) {
   if (process.platform === 'win32') {
-    return { directory: null, socketPath: `\\\\.\\pipe\\tea-evaluate-bridge-${crypto.randomBytes(12).toString('hex')}` };
+    const directory = fs.mkdtempSync(path.join(scratch.privateParent ?? os.tmpdir(), SOCKET_DIRECTORY_PREFIX));
+    return { directory, socketPath: `\\\\.\\pipe\\tea-evaluate-bridge-${crypto.randomBytes(12).toString('hex')}` };
   }
   if (typeof scratch.privateParent === 'string') {
     const directory = fs.mkdtempSync(path.join(scratch.privateParent, SOCKET_DIRECTORY_PREFIX));
@@ -175,10 +177,9 @@ function responseLine(id, outcome) {
  */
 async function openBridge({ tools, handle, scratch = [] }) {
   const { directory, socketPath } = socketPlace(scratch);
-  if (directory !== null) scratch.push(directory);
+  scratch.push(directory);
   // The directory holds the socket alone; one that cannot be removed stays listed, for the run's end to try again.
   const removeDirectory = () => {
-    if (directory === null) return;
     try {
       fs.rmSync(directory, { recursive: true, force: true });
     } catch {
@@ -187,6 +188,10 @@ async function openBridge({ tools, handle, scratch = [] }) {
     if (scratch.includes(directory)) scratch.splice(scratch.indexOf(directory), 1);
   };
   const token = crypto.randomBytes(24).toString('hex');
+  // The token exists only in this file, beneath the private parent: a process's environment and argument list are readable by
+  // other processes of the user, a confined target included.
+  const tokenFile = path.join(directory, 'token');
+  fs.writeFileSync(tokenFile, token, { mode: 0o600 });
   const connections = new Set();
   // One call at a time, in arrival order.
   let queue = Promise.resolve();
@@ -289,7 +294,12 @@ async function openBridge({ tools, handle, scratch = [] }) {
     throw error;
   }
   return {
-    server: { name: BRIDGE_NAME, command: process.execPath, args: [__filename, '--socket', socketPath], env: { [TOKEN_VARIABLE]: token } },
+    server: {
+      name: BRIDGE_NAME,
+      command: process.execPath,
+      args: [__filename, '--socket', socketPath],
+      env: { [TOKEN_FILE_VARIABLE]: tokenFile },
+    },
     async close() {
       for (const socket of connections) socket.destroy();
       await new Promise((resolve) => server.close(() => resolve()));
@@ -311,9 +321,15 @@ function relay(argv) {
     return at === -1 ? undefined : argv[at + 1];
   };
   const socketPath = value('--socket');
-  const token = process.env[TOKEN_VARIABLE];
-  if (socketPath === undefined || typeof token !== 'string' || token.length === 0) {
-    process.stderr.write(`usage: ${TOKEN_VARIABLE}=<token> bridge.js --socket <path>\n`);
+  const tokenFile = process.env[TOKEN_FILE_VARIABLE];
+  let token = '';
+  try {
+    token = typeof tokenFile === 'string' && tokenFile.length > 0 ? fs.readFileSync(tokenFile, 'utf8').trim() : '';
+  } catch {
+    // An unreadable token file is the usage error below.
+  }
+  if (socketPath === undefined || token.length === 0) {
+    process.stderr.write(`usage: ${TOKEN_FILE_VARIABLE}=<file holding the token> bridge.js --socket <path>\n`);
     process.exit(64);
   }
   const socket = net.connect(socketPath);
@@ -333,4 +349,4 @@ function relay(argv) {
 
 if (require.main === module) relay(process.argv.slice(2));
 
-module.exports = { BRIDGE_NAME, CALL_SHAPES, MAX_SOCKET_PATH, SOCKET_DIRECTORY_PREFIX, TOKEN_VARIABLE, bridgeTools, openBridge };
+module.exports = { BRIDGE_NAME, CALL_SHAPES, MAX_SOCKET_PATH, SOCKET_DIRECTORY_PREFIX, TOKEN_FILE_VARIABLE, bridgeTools, openBridge };

@@ -371,7 +371,7 @@ async function qualifyHistoricalProbe({
         projectRoot: workspace.root,
         workspace: workspace.top,
         git: gitAccessOf(workspace),
-        privateParent: registry.privateParent,
+        privateRoot: registry.privateRoot,
       });
       phases.push({
         phase,
@@ -629,7 +629,7 @@ async function qualifyDeploymentProbe({
       projectRoot: pristine.root,
       workspace: pristine.top,
       git: gitAccessOf(pristine),
-      privateParent: registry.privateParent,
+      privateRoot: registry.privateRoot,
       deployment: reached[revision],
     }));
   }
@@ -717,7 +717,7 @@ async function historicalRoute({ preFix, make, registry, stop, log }) {
     projectRoot: workspace.root,
     workspace: workspace.top,
     git: gitAccessOf(workspace),
-    privateParent: registry.privateParent,
+    privateRoot: registry.privateRoot,
   });
   log(`pre-fix workspace at ${preFix}: ${workspace.root}`);
   return { label: `historical:${preFix}`, cwd: workspace.root, port, workspace, deployment: null };
@@ -736,7 +736,7 @@ async function deploymentRoute({ deployment, pristine, registry, log }) {
     projectRoot: pristine.root,
     workspace: pristine.top,
     git: gitAccessOf(pristine),
-    privateParent: registry.privateParent,
+    privateRoot: registry.privateRoot,
     deployment,
   });
   log(`pre-fix deployment of ${deployment.release}: ${Object.values(deployment.origins).join(', ')}`);

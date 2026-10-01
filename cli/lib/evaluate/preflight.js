@@ -549,8 +549,9 @@ async function pipeline(
   };
   const release = cleanUpOnSignal(workspaces, controller, { onSignal });
   try {
-    // The one private parent every evaluation-layer directory is made under, before any sandbox is built, so a
-    // confined target's profile names it and covers the directories made after it (`confinement.js`).
+    // The one private parent every evaluation-layer directory is made under, beneath the user's private root, before any
+    // sandbox is built: a confined target's profile names the root, which covers this parent and every directory made
+    // after it, and the parent of a run that starts later (`confinement.js`).
     makePrivateParent(scratch);
     const refused = await prepare({ folder, evaluation, seeded });
     const gameability = gameabilityProbes(folder).filter(({ probe }) => selectedProbeIds === null || selectedProbeIds.has(probe.probeId));
@@ -773,7 +774,7 @@ async function runInWorkspaces({
     projectRoot: pristine.root,
     workspace: pristine.top,
     git: gitAccessOf(pristine),
-    privateParent: registry.privateParent,
+    privateRoot: registry.privateRoot,
   });
   // The adopter's tree, read again after the qualification and after the
   // legs: a change stops the run with no qualified probe written (AD-8).
@@ -1173,7 +1174,7 @@ async function mutatedRoute({ entry, pristine, make, registry, engine, stop, log
     projectRoot: workspace.root,
     workspace: workspace.top,
     git: gitAccessOf(workspace),
-    privateParent: registry.privateParent,
+    privateRoot: registry.privateRoot,
   });
   log(`mutated workspace for ${mutation.mutationId}: ${workspace.root}`);
   return { label: `mutated:${mutation.mutationId}`, cwd: workspace.root, port };
@@ -1223,7 +1224,7 @@ async function qualifySeededProbe({
     projectRoot: workspace.root,
     workspace: workspace.top,
     git: gitAccessOf(workspace),
-    privateParent: registry.privateParent,
+    privateRoot: registry.privateRoot,
   });
   const armPort = hostEnvironmentPort({ port: adapter, registry });
   const runArmFor = async (phase) => {

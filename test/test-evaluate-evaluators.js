@@ -132,8 +132,8 @@ const ENGINE_SHIM = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'eng
 const RACE_ENGINE = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'race-engine.js');
 const EVALUATION = path.join('evals', 'verdict');
 const TRIALS = 3;
-/** The name prefix of a run's private parent directory (`workspace.js`), which holds every private directory of the evaluation layer. */
-const PRIVATE_PARENT = 'tea-evaluate-run-';
+/** The name of the user's private root directory (`workspace.js`), which stays in a temp directory, empty, once runs end. */
+const PRIVATE_ROOT = /^tea-evaluate-p\w+$/;
 const AGENT_SNAPSHOT = 'stub-evaluator-2026-09';
 
 const BASE_ENV = Object.fromEntries(Object.entries(process.env).filter(([name]) => name !== ENGINE_CLI_ENV && !name.startsWith('GIT_')));
@@ -224,6 +224,18 @@ function commitAll(repository, folder, message) {
  */
 function shortTemp() {
   return process.platform === 'win32' ? scratch.make('temp') : shortScratch.make('t');
+}
+
+/**
+ * What `directory` holds once the user's private root is looked into: the root itself stays (it is shared by every run of the
+ * user, and no run removes it), so what counts is a run's parent in it, listed as `<root>/<parent>`.
+ */
+function residueOf(directory) {
+  return fs
+    .readdirSync(directory)
+    .flatMap((entry) =>
+      PRIVATE_ROOT.test(entry) ? fs.readdirSync(path.join(directory, entry)).map((parent) => `${entry}/${parent}`) : [entry],
+    );
 }
 
 /** A temp git repository from the fixture, `edit` applied before the first commit, with a private temp directory and a marker file. */
@@ -1077,8 +1089,8 @@ function checkScratchRemoval() {
   const ran = evaluate(['run', '--evaluation', locked.folder], locked.env);
   check(ran.status === 0, `an evaluator leaving a read-only directory: run exited ${ran.status}; expected 0\n${ran.output}`);
   check(
-    fs.readdirSync(temp).length === 0,
-    `an evaluator leaving a read-only directory: the run left ${JSON.stringify(fs.readdirSync(temp))} in its temp directory`,
+    residueOf(temp).length === 0,
+    `an evaluator leaving a read-only directory: the run left ${JSON.stringify(residueOf(temp))} in its temp directory`,
   );
   if (process.platform !== 'darwin') return;
   const pinned = makeProject('command-immutable-cwd', { edit: ({ folder }) => useCommandEvaluator(folder, { mode: 'immutable-cwd' }) });
@@ -1090,16 +1102,16 @@ function checkScratchRemoval() {
   );
   try {
     const kept = evaluate(['run', '--evaluation', pinned.folder], pinned.env);
-    const left = fs.readdirSync(pinnedTemp);
+    const left = residueOf(pinnedTemp);
     check(
       kept.status === 0 && /could not remove the private directory \S*tea-evaluate-command-/.test(kept.output),
       `an evaluator leaving an immutable file: run exited ${kept.status}; expected 0 naming the directory it could not remove\n${kept.output}`,
     );
-    // Every private directory sits beneath the run's one private parent, so what stays is that parent and each trial's working directory in it.
+    // Every private directory sits beneath the run's one private parent in the user's private root, so what stays is that parent and each trial's working directory in it.
     const inside = left.length === 1 ? fs.readdirSync(path.join(pinnedTemp, left[0])) : [];
     check(
       left.length === 1 &&
-        left[0].startsWith(PRIVATE_PARENT) &&
+        PRIVATE_ROOT.test(left[0].split('/')[0]) &&
         inside.length === 2 * TRIALS &&
         inside.every((entry) => entry.startsWith('tea-evaluate-command-')),
       `an evaluator leaving an immutable file: the run left ${JSON.stringify(left)} holding ${JSON.stringify(inside)} in its temp directory; expected the private parent holding each trial's working directory alone, every workspace removed`,
@@ -1130,15 +1142,17 @@ async function checkSignalMidTrial() {
     const deadline = Date.now() + SPAWN_TIMEOUT_MS;
     while (!fs.existsSync(ready) && Date.now() < deadline && child.exitCode === null)
       await new Promise((resolve) => setTimeout(resolve, 100));
-    const top = fs.readdirSync(project.env.TMPDIR);
-    // Every private directory of the run sits beneath its one private parent (Story 1.58).
+    const top = fs.readdirSync(project.env.TMPDIR).filter((entry) => !PRIVATE_ROOT.test(entry));
+    // Every private directory of the run sits beneath its one private parent, in the user's private root (Story 1.58).
     const during = [
       ...top,
-      ...top.filter((entry) => entry.startsWith(PRIVATE_PARENT)).flatMap((entry) => fs.readdirSync(path.join(project.env.TMPDIR, entry))),
+      ...residueOf(project.env.TMPDIR)
+        .filter((entry) => entry.includes('/'))
+        .flatMap((entry) => fs.readdirSync(path.join(project.env.TMPDIR, entry))),
     ];
     child.kill(signal);
     const { code, name } = await ended;
-    const after = fs.readdirSync(project.env.TMPDIR);
+    const after = residueOf(project.env.TMPDIR);
     check(name === signal, `${expected.join(', ')} under ${signal}: the run ended with code ${code} and signal ${name}\n${output}`);
     for (const prefix of expected) {
       check(
@@ -1542,34 +1556,55 @@ async function checkSealedBriefAgent() {
 }
 
 /**
- * Story 1.58: the run's private parent is made once, listed first in its scratch list, and every scratch directory is
- * made beneath it; it is made in the temp directory where the bridge's longest socket path still fits there, and in
- * `/tmp` where it does not, and the bridge's socket directory goes beneath it.
+ * Story 1.58: the run's private parent is made once, beneath the user's one private root (mode 700, a real directory the user
+ * owns, and no run removes it), listed first in the run's scratch list, and every scratch directory is made beneath it; the root is
+ * made in the temp directory where the bridge's longest socket path still fits there, and in `/tmp` where it does not (or
+ * where the root there is a link), and the bridge's socket directory, which holds the token file, goes beneath the parent.
+ * The token is in that file alone.
  */
 async function checkPrivateParent() {
   if (process.platform === 'win32') return;
   const previous = process.env.TMPDIR;
   const made = [];
+  const linked = shortTemp();
+  const linkTarget = shortTemp();
+  fs.symlinkSync(linkTarget, path.join(linked, `tea-evaluate-p${process.getuid()}`));
   try {
     for (const [what, temp, expectedBase] of [
       ['a short temp directory', shortTemp(), null],
       ['a temp directory too long for a socket', fs.mkdtempSync(path.join(scratch.make('long'), `${'a'.repeat(60)}-`)), '/tmp'],
+      ['a temp directory whose private root is a link', linked, '/tmp'],
     ]) {
       process.env.TMPDIR = temp;
       const list = [];
       const parent = makePrivateParent(list);
       made.push(parent);
+      const root = path.dirname(parent);
       check(
         list[0] === parent && list.privateParent === parent && makePrivateParent(list) === parent && list.length === 1,
         `${what}: the private parent is not the first and only entry of the scratch list once`,
       );
+      check(list.privateRoot === root, `${what}: the scratch list names the private root ${list.privateRoot}; expected ${root}`);
       check(
-        path.dirname(parent) === (expectedBase ?? temp),
-        `${what}: the private parent is in ${path.dirname(parent)}; expected ${expectedBase ?? temp}`,
+        path.dirname(root) === (expectedBase ?? temp) && PRIVATE_ROOT.test(path.basename(root)),
+        `${what}: the private root is ${root}; expected a tea-evaluate-p<uid> directory in ${expectedBase ?? temp}`,
+      );
+      const rootStat = fs.lstatSync(root);
+      check(
+        rootStat.isDirectory() && rootStat.uid === process.getuid() && (rootStat.mode & 0o777) === 0o700,
+        `${what}: the private root is not a directory of yours with mode 700`,
       );
       check(
         (fs.statSync(parent).mode & 0o777) === 0o700,
         `${what}: the private parent's mode is ${(fs.statSync(parent).mode & 0o777).toString(8)}; expected 700`,
+      );
+      // A run that starts later makes its parent beneath the same root, so one sandbox over the root covers both.
+      const second = [];
+      const secondParent = makePrivateParent(second);
+      made.push(secondParent);
+      check(
+        path.dirname(secondParent) === root && secondParent !== parent,
+        `${what}: a second run's parent is ${secondParent}; expected another directory in ${root}`,
       );
       const child = makeScratchDirectory(list, 'tea-evaluate-evaluator-');
       check(
@@ -1583,6 +1618,20 @@ async function checkPrivateParent() {
           path.dirname(path.dirname(socket)) === parent && Buffer.byteLength(socket) <= MAX_SOCKET_PATH && fs.statSync(socket).isSocket(),
           `${what}: the bridge's socket ${socket} is not a socket within ${MAX_SOCKET_PATH} bytes in a directory of the private parent`,
         );
+        // The token is in a file of mode 600 beside the socket; the relay's environment and argument list name the file.
+        const tokenFile = bridge.server.env.TEA_EVALUATE_BRIDGE_TOKEN_FILE;
+        const token = fs.readFileSync(tokenFile, 'utf8');
+        check(
+          path.dirname(tokenFile) === path.dirname(socket) &&
+            /^[0-9a-f]{48}$/.test(token) &&
+            (fs.statSync(tokenFile).mode & 0o777) === 0o600,
+          `${what}: the token file ${tokenFile} is not a mode 600 file of 48 hex characters beside the socket`,
+        );
+        check(
+          JSON.stringify(Object.keys(bridge.server.env)) === '["TEA_EVALUATE_BRIDGE_TOKEN_FILE"]' &&
+            !JSON.stringify(bridge.server).includes(token),
+          `${what}: the relay's environment or argument list carries the token: ${JSON.stringify(bridge.server)}`,
+        );
       } finally {
         await bridge.close();
       }
@@ -1591,6 +1640,7 @@ async function checkPrivateParent() {
         `${what}: the bridge left a directory in the private parent`,
       );
     }
+    check(fs.readdirSync(linkTarget).length === 0, 'a run made a directory through the linked private root');
   } finally {
     if (previous === undefined) delete process.env.TMPDIR;
     else process.env.TMPDIR = previous;
@@ -1655,20 +1705,25 @@ function agentPrivateReport(runDirectory) {
   return reports.filter((report) => report.announced !== '0');
 }
 
-/** What a confined target's attempt on a private path may end as: refused, or a listing that shows nothing (an empty file system). */
-const WITHHELD = /^(refused (EPERM|EACCES|ENOENT)|listed 0)$/;
+/**
+ * How a confined target's attempt on a private path ends. Seatbelt answers `EPERM` to every one, so a path that was already
+ * gone (`ENOENT`) fails the case on macOS; Bubblewrap covers the root with an empty file system, so a path there is absent or
+ * lists nothing.
+ */
+const WITHHELD = process.platform === 'linux' ? /^(refused (EPERM|EACCES|ENOENT)|listed 0)$/ : /^refused EPERM$/;
+const WITHHELD_SOCKET = process.platform === 'linux' ? /^refused (EPERM|EACCES|ENOENT|ECONNREFUSED)$/ : /^refused EPERM$/;
 
 /**
- * Story 1.58: the bridge's configuration file (which carries its admission
- * token), its socket and the agent's working directory are withheld from a
- * confined target and from a process it leaves running, including the
- * directories made after that process started, while the agent's own
- * connection is admitted; a run that opted out of confinement leaves them
- * readable, so the attempts are known to find them.
+ * Story 1.58: the bridge's configuration file, its token file, its socket and the agent's working directory are withheld
+ * from a confined target and from a process it leaves running, including directories made after that process started,
+ * while the agent's own connection is admitted; a run that opted out of confinement leaves them readable, so the attempts
+ * are known to find them. Under Bubblewrap the leftover process ends with the target's process-id namespace, so its report
+ * is optional there and the target's own attempts carry the case (`checkLeftoverProcess` in `test-evaluate-run.js`).
  */
 async function checkBridgePrivateDirectories() {
   if (process.platform === 'win32') return;
   const attempts = async (label, { unconfined }) => {
+    const namespaced = !unconfined && process.platform === 'linux';
     const announce = path.join(scratch.make(`${label}-announce`), 'announce.jsonl');
     const capture = path.join(scratch.make(`${label}-capture`), 'captures.jsonl');
     const listener = await reportListener();
@@ -1693,7 +1748,7 @@ async function checkBridgePrivateDirectories() {
         `${label}: ${new Set(reports.map((one) => JSON.stringify(one))).size} distinct private-directory report(s) found; expected 1`,
       );
       // The leftover reports on the directories made after it started: the next trial's.
-      const reported = await listener.until((line) => line.startsWith('private-leftover'));
+      const reported = namespaced ? listener.lines() : await listener.until((line) => line.startsWith('private-leftover'));
       const leftover = privateLines(reported.join('\n'));
       // The agent's own connection was admitted in every trial: each record carries the agent's observation.
       if (runDirectory !== null) {
@@ -1706,12 +1761,24 @@ async function checkBridgePrivateDirectories() {
           );
         }
       }
+      const calls = captures(capture);
       check(
-        captures(capture).length === 2 * QUALIFICATION.attempts + 2 * TRIALS &&
-          captures(capture).every((call) => call.results.length === 1),
-        `${label}: the agent ran ${captures(capture).length} time(s) with results ${JSON.stringify(captures(capture).map((call) => call.results?.length))}; expected one call each in the qualification's ${2 * QUALIFICATION.attempts} attempts and ${2 * TRIALS} trials`,
+        calls.length === 2 * QUALIFICATION.attempts + 2 * TRIALS && calls.every((call) => call.results.length === 1),
+        `${label}: the agent ran ${calls.length} time(s) with results ${JSON.stringify(calls.map((call) => call.results?.length))}; expected one call each in the qualification's ${2 * QUALIFICATION.attempts} attempts and ${2 * TRIALS} trials`,
       );
-      return { report: reports[0] ?? {}, leftover, output: ran.output };
+      // The token is in the token file alone: the relay's configuration (its environment and argument list) names the file.
+      check(
+        calls.every((call) => {
+          const server = call.config?.mcpServers?.[call.server];
+          return (
+            !/[0-9a-f]{48}/.test(JSON.stringify(call.config)) &&
+            JSON.stringify(Object.keys(server?.env ?? {})) === '["TEA_EVALUATE_BRIDGE_TOKEN_FILE"]' &&
+            !JSON.stringify(server?.args ?? []).includes('TOKEN')
+          );
+        }),
+        `${label}: the relay's environment or argument list carries more than the token file's path: ${JSON.stringify(calls[0]?.config)}`,
+      );
+      return { report: reports[0] ?? {}, leftover, output: ran.output, namespaced };
     } finally {
       await listener.close();
     }
@@ -1719,50 +1786,45 @@ async function checkBridgePrivateDirectories() {
 
   const confined = await attempts('private-confined', { unconfined: false });
   const { report, leftover } = confined;
-  check(
-    WITHHELD.test(report['config-read'] ?? ''),
-    `a confined target's read of the bridge's configuration ended ${JSON.stringify(report['config-read'])}; expected a refusal`,
-  );
-  check(
-    WITHHELD.test(report['evaluator-list'] ?? ''),
-    `a confined target's listing of the agent's working directory ended ${JSON.stringify(report['evaluator-list'])}; expected a refusal or an empty listing`,
-  );
-  check(
-    WITHHELD.test(report['parent-list'] ?? ''),
-    `a confined target's listing of the run's private parent ended ${JSON.stringify(report['parent-list'])}; expected a refusal or an empty listing`,
-  );
-  check(
-    /^refused (EPERM|EACCES|ENOENT|ECONNREFUSED)$/.test(report['socket-connect'] ?? ''),
-    `a confined target's connection to the bridge's socket ended ${JSON.stringify(report['socket-connect'])}; expected a refusal`,
-  );
-  check(
-    /^1 found, 0 visible$/.test(report.scan ?? ''),
-    `a confined target's scan of the temp directory ended ${JSON.stringify(report.scan)}; expected the private parent found and nothing visible in it`,
-  );
+  const refused = (what, how, pattern = WITHHELD) =>
+    check(pattern.test(how ?? ''), `${what} ended ${JSON.stringify(how)}; expected it withheld (${pattern})`);
+  refused("a confined target's read of the bridge's configuration", report['config-read']);
+  refused("a confined target's read of the bridge's token file", report['token-read']);
+  refused("a confined target's listing of the agent's working directory", report['evaluator-list']);
+  refused("a confined target's listing of the run's private parent", report['parent-list']);
+  refused("a confined target's listing of the private root", report['root-list']);
+  refused("a confined target's connection to the bridge's socket", report['socket-connect'], WITHHELD_SOCKET);
   check(
     report['temp-write'] === 'allowed',
     `a confined target's write to its own temp directory ended ${JSON.stringify(report['temp-write'])}; expected it allowed`,
   );
   // The process the target left running, which started before the directories it tries were made.
-  check(
-    WITHHELD.test(leftover['leftover-config-read'] ?? ''),
-    `a confined leftover process's read of a later bridge configuration ended ${JSON.stringify(leftover['leftover-config-read'])}; expected a refusal`,
-  );
-  check(
-    WITHHELD.test(leftover['leftover-evaluator-list'] ?? ''),
-    `a confined leftover process's listing of a later working directory ended ${JSON.stringify(leftover['leftover-evaluator-list'])}; expected a refusal or an empty listing`,
-  );
-  check(
-    /^refused (EPERM|EACCES|ENOENT|ECONNREFUSED)$/.test(leftover['leftover-socket-connect'] ?? ''),
-    `a confined leftover process's connection to a later bridge socket ended ${JSON.stringify(leftover['leftover-socket-connect'])}; expected a refusal`,
-  );
+  if (confined.namespaced) {
+    for (const name of ['config-read', 'token-read', 'evaluator-list', 'socket-connect']) {
+      const how = leftover[`leftover-${name}`];
+      check(
+        how === undefined || (name === 'socket-connect' ? WITHHELD_SOCKET : WITHHELD).test(how),
+        `a confined leftover process's ${name} ended ${JSON.stringify(how)}; expected no report or a refusal`,
+      );
+    }
+  } else {
+    refused("a confined leftover process's read of a later bridge configuration", leftover['leftover-config-read']);
+    refused("a confined leftover process's read of a later bridge token file", leftover['leftover-token-read']);
+    refused("a confined leftover process's listing of a later working directory", leftover['leftover-evaluator-list']);
+    refused("a confined leftover process's listing of the private root", leftover['leftover-root-list']);
+    refused("a confined leftover process's connection to a later bridge socket", leftover['leftover-socket-connect'], WITHHELD_SOCKET);
+  }
 
   // The control: the same stub in a run that opted out finds all of it, so the attempts above can see what they are refused.
   const open = await attempts('private-open', { unconfined: true });
   const control = open.report;
   check(
-    control['config-read'] === 'token',
-    `the unconfined control's read of the bridge's configuration ended ${JSON.stringify(control['config-read'])}; expected the admission token`,
+    control['config-read'] === 'allowed',
+    `the unconfined control's read of the bridge's configuration ended ${JSON.stringify(control['config-read'])}`,
+  );
+  check(
+    control['token-read'] === 'token',
+    `the unconfined control's read of the bridge's token file ended ${JSON.stringify(control['token-read'])}; expected the admission token`,
   );
   check(
     control['evaluator-list'] === 'listed 1',
@@ -1773,16 +1835,20 @@ async function checkBridgePrivateDirectories() {
     `the unconfined control's listing of the private parent ended ${JSON.stringify(control['parent-list'])}; expected its entries`,
   );
   check(
+    /^listed [1-9]\d*$/.test(control['root-list'] ?? ''),
+    `the unconfined control's listing of the private root ended ${JSON.stringify(control['root-list'])}; expected its entries`,
+  );
+  check(
     control['socket-connect'] === 'allowed',
     `the unconfined control's connection to the bridge's socket ended ${JSON.stringify(control['socket-connect'])}`,
   );
   check(
-    /^1 found, [1-9]\d* visible$/.test(control.scan ?? ''),
-    `the unconfined control's scan ended ${JSON.stringify(control.scan)}; expected the private parent found with entries`,
+    open.leftover['leftover-token-read'] === 'token',
+    `the unconfined control's leftover process read ${JSON.stringify(open.leftover['leftover-token-read'])}; expected the admission token`,
   );
   check(
-    open.leftover['leftover-config-read'] === 'token',
-    `the unconfined control's leftover process read ${JSON.stringify(open.leftover['leftover-config-read'])}; expected the admission token`,
+    open.leftover['leftover-evaluator-list'] === 'listed 1',
+    `the unconfined control's leftover process listed ${JSON.stringify(open.leftover['leftover-evaluator-list'])}; expected the working directory's file`,
   );
   check(
     open.leftover['leftover-socket-connect'] === 'allowed',
@@ -2597,7 +2663,7 @@ async function checkBridge() {
     // A second connection, even with the token, and one with a wrong token, are closed unanswered.
     const socketPath = bridge.server.args[bridge.server.args.indexOf('--socket') + 1];
     for (const [what, token] of [
-      ['a second connection with the token', bridge.server.env.TEA_EVALUATE_BRIDGE_TOKEN],
+      ['a second connection with the token', fs.readFileSync(bridge.server.env.TEA_EVALUATE_BRIDGE_TOKEN_FILE, 'utf8')],
       ['a connection with a wrong token', 'not-the-token'],
     ]) {
       const answered = await intrude(socketPath, token);
@@ -3890,7 +3956,7 @@ async function main() {
       if (group === null || caseGroup === group) await runCase(name, body);
     }
     for (const { label, directory } of runtimeTemps) {
-      const left = fs.readdirSync(directory);
+      const left = residueOf(directory);
       check(left.length === 0, `the ${label} project's runs left ${JSON.stringify(left)} in their temp directory`);
     }
   } finally {

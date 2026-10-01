@@ -127,7 +127,13 @@ const { createArtifactValidator } = require('./records');
 const { RunDirectory, RunDirectoryError } = require('./run-directory');
 const { TRIAL_SETS_NAME } = require('./run');
 const { holdScoreInputs, regularFileBytes } = require('./score-inputs');
-const { makePrivateParent, makeScratchDirectory, releaseScratchDirectory, removeScratchDirectory } = require('./workspace');
+const {
+  WorkspaceRefusal,
+  makePrivateParent,
+  makeScratchDirectory,
+  releaseScratchDirectory,
+  removeScratchDirectory,
+} = require('./workspace');
 const { writePartitionViews } = require('./partition');
 const { writeInterpretation } = require('./interpret');
 
@@ -547,7 +553,12 @@ async function runScoreCommand(folder, { run: invocationId, env = process.env, l
   }
   const scratch = [];
   try {
-    makePrivateParent(scratch);
+    try {
+      makePrivateParent(scratch);
+    } catch (error) {
+      if (!(error instanceof WorkspaceRefusal)) throw error;
+      return new ScoreOutcome({ exitCode: INFRASTRUCTURE, runDirectory, message: error.message });
+    }
     return await scoreProbes({
       engine,
       folder,

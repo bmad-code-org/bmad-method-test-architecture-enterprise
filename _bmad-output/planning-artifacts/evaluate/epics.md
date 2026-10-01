@@ -1619,8 +1619,9 @@ So that no target can take the bridge's one admission or read an evaluator's or 
 **Acceptance Criteria:**
 
 **Given** a confined run with a sealed-brief agent evaluator
-**When** a stub target, and a process it leaves running, try to read the bridge's configuration file, list the evaluator's and the judge's working directories and connect to the bridge's socket
-**Then** each attempt is refused on both mechanisms, the agent's own connection is admitted, and the trial's evidence and records are unchanged; reverting the change lets the stub print the token, which the case catches
+**When** a stub target, and a process it leaves running, try to read the bridge's configuration file and token file, list the evaluator's working directory and the run's private directories and connect to the bridge's socket, and a sandbox built for one run is asked for the token file and socket of a run made after it
+**Then** each attempt is refused (macOS answers `EPERM` to each; under Bubblewrap the target's own attempts are refused or find an empty file system, and the process it leaves running ends with the target's process-id namespace, so its report is optional there), the agent's own connection is admitted in every trial and each record carries the agent's observations, and reverting the change lets the stub print the token, which the case catches
+**And** the token exists only in a file beneath the run's private parent directory (the relay's environment and argument list carry the file's path), and every directory the evaluation layer makes for the run, the judge's and the `command` evaluator's included, sits beneath the same withheld root, which the arms suite's judge case and a source scan over the runtime's temp directories hold
 **And** `docs/reference/tea-evaluate-cli.md`'s passage on the bridge token states the withholding; a case reading it under its exact heading fails while the old sentence remains.
 
 **Dependencies:** 1.31.

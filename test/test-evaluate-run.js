@@ -118,6 +118,7 @@
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
+const net = require('node:net');
 const { spawn, spawnSync } = require('node:child_process');
 
 const AjvModule = require('ajv/dist/2020');
@@ -142,6 +143,7 @@ const {
   createWorkspace,
   gitAccessOf,
   journalDirectory,
+  makePrivateParent,
   reclaimDeadWorkspaces,
   removeWorkspace,
 } = require('../cli/lib/evaluate/workspace');
@@ -639,15 +641,16 @@ async function checkRealScore({ engine, validate, folder, env, runDirectory, ind
       `${probeId}'s score call carried ${JSON.stringify(call.argv)}`,
     );
     // `--out` is the private staging file the call really used: outside the evaluation folder, under the run's private
-    // parent, in its own temp directory or in `/tmp` where that path is too long for a socket (Story 1.58), and gone once the call was copied in.
+    // parent beneath the user's private root, in its own temp directory or in `/tmp` where that path is too long for a socket (Story 1.58), and gone once the call was copied in.
     const out = value('--out');
     check(
       typeof out === 'string' &&
         path.basename(out) === 'evidence-artifact.json' &&
         path.basename(path.dirname(out)).startsWith('tea-evaluate-score-') &&
-        path.basename(path.dirname(path.dirname(out))).startsWith('tea-evaluate-run-') &&
+        path.basename(path.dirname(path.dirname(out))).startsWith('run-') &&
+        /^tea-evaluate-p\w+$/.test(path.basename(path.dirname(path.dirname(path.dirname(out))))) &&
         [env.TMPDIR, fs.realpathSync(env.TMPDIR), '/tmp', fs.realpathSync('/tmp')].includes(
-          path.dirname(path.dirname(path.dirname(out))),
+          path.dirname(path.dirname(path.dirname(path.dirname(out)))),
         ) &&
         !fs.existsSync(path.dirname(path.dirname(out))) &&
         !out.startsWith(`${folder}${path.sep}`) &&
@@ -4670,7 +4673,7 @@ function probeGitReports(runDirectory) {
 }
 
 /**
- * Every call that makes a target's port names the git access of the workspace it runs in and the run's private parent
+ * Every call that makes a target's port names the git access of the workspace it runs in and the user's private root
  * directory (Story 1.58), or its sandbox would withhold nothing.
  */
 function checkProbePortGitAccess() {
@@ -4691,8 +4694,8 @@ function checkProbePortGitAccess() {
         `a createProbePort call in ${name} (character ${match.index}) does not pass git: gitAccessOf(workspace)`,
       );
       check(
-        /privateParent:\s*registry\.privateParent\b/.test(text.slice(match.index, end)),
-        `a createProbePort call in ${name} (character ${match.index}) does not pass privateParent: registry.privateParent`,
+        /privateRoot:\s*registry\.privateRoot\b/.test(text.slice(match.index, end)),
+        `a createProbePort call in ${name} (character ${match.index}) does not pass privateRoot: registry.privateRoot`,
       );
     }
   }
@@ -4716,8 +4719,8 @@ function checkPrivateDirectorySources() {
     'registry.js': 2,
     // The file a started HTTP service reports its port in, granted to the target.
     'http-target.js': 1,
-    // The socket directory beneath the run's private parent, and the fallback of a bridge opened with no parent.
-    'bridge.js': 2,
+    // The bridge's directory (socket and token file) beneath the run's private parent, on Windows, and the fallback of a bridge opened with no parent.
+    'bridge.js': 3,
   };
   const found = {};
   for (const name of fs.readdirSync(directory).filter((entry) => entry.endsWith('.js'))) {
@@ -4728,6 +4731,86 @@ function checkPrivateDirectorySources() {
     JSON.stringify(Object.fromEntries(Object.entries(found).sort())) === JSON.stringify(Object.fromEntries(Object.entries(allowed).sort())),
     `the evaluate runtime makes temp directories in ${JSON.stringify(found)}; expected ${JSON.stringify(allowed)}: a private directory of the evaluation layer goes through makeScratchDirectory, beneath the run's private parent`,
   );
+}
+
+/**
+ * Story 1.58: a sandbox is built over the user's private root, so a run's parent made after it, by another run, is refused as
+ * well: the second run's token file and socket are out of the first sandbox's reach. The control builds the sandbox over the
+ * first run's parent alone (the per-run design), which the second run's files are readable through.
+ */
+async function checkPrivateRootAcrossRuns() {
+  if (process.platform === 'win32') return;
+  const folder = tempDir('root-folder');
+  const confinement = selectConfinement({ evaluation: {}, folder });
+  if (confinement.refusal !== undefined) throw new Error(confinement.refusal);
+  const workspace = tempDir('root-workspace');
+  const status = confinement.mode === 'bubblewrap' ? tempDir('root-status') : null;
+  const first = [];
+  const firstParent = makePrivateParent(first);
+  const probe = `
+    const fs = require('node:fs');
+    const net = require('node:net');
+    const [tokenFile, socket] = process.argv.slice(1);
+    let token;
+    try { token = fs.readFileSync(tokenFile, 'utf8') === 'second-run-token' ? 'token' : 'allowed'; } catch (error) { token = 'refused ' + error.code; }
+    const client = net.connect(socket);
+    client.on('connect', () => { console.log('token: ' + token + '\\nsocket: allowed'); client.destroy(); });
+    client.on('error', (error) => console.log('token: ' + token + '\\nsocket: refused ' + error.code));
+  `;
+  const second = [];
+  let server = null;
+  try {
+    // The sandbox is built for the first run, and the second run's parent is made after it.
+    const sandboxes = {
+      root: targetSandbox({ confinement, workspace, privateRoot: first.privateRoot, status }),
+      parentOnly: targetSandbox({ confinement, workspace, privateRoot: firstParent, status }),
+    };
+    const secondParent = makePrivateParent(second);
+    const directory = fs.mkdtempSync(path.join(secondParent, 's-'));
+    const tokenFile = path.join(directory, 'token');
+    fs.writeFileSync(tokenFile, 'second-run-token', { mode: 0o600 });
+    const socket = path.join(directory, 'b.sock');
+    server = net.createServer((connection) => connection.end());
+    await new Promise((resolve) => server.listen(socket, resolve));
+    check(
+      path.dirname(secondParent) === first.privateRoot && secondParent !== firstParent,
+      "the second run's parent is not beneath the first run's root",
+    );
+    const attempt = (sandbox) => {
+      const wrapped = sandbox.wrap(process.execPath, ['-e', probe, tokenFile, socket], []);
+      const result = spawnSync(wrapped.target, wrapped.args, {
+        cwd: workspace,
+        encoding: 'utf8',
+        timeout: SPAWN_TIMEOUT_MS,
+        killSignal: 'SIGKILL',
+      });
+      return Object.fromEntries(
+        result.stdout
+          .split('\n')
+          .filter((line) => line.includes(': '))
+          .map((line) => line.split(': ')),
+      );
+    };
+    const withheld = process.platform === 'linux' ? /^refused (EPERM|EACCES|ENOENT|ECONNREFUSED)$/ : /^refused EPERM$/;
+    const seen = attempt(sandboxes.root);
+    check(
+      withheld.test(seen.token ?? ''),
+      `a sandbox built for one run read the token file of a run made after it: ${JSON.stringify(seen.token)}; expected a refusal`,
+    );
+    check(
+      withheld.test(seen.socket ?? ''),
+      `a sandbox built for one run connected to the socket of a run made after it: ${JSON.stringify(seen.socket)}; expected a refusal`,
+    );
+    // The control: a sandbox over the first run's parent alone reaches the second run's files, so the case sees what the root withholds.
+    const narrow = attempt(sandboxes.parentOnly);
+    check(
+      narrow.token === 'token' && narrow.socket === 'allowed',
+      `a sandbox over one run's parent alone ended ${JSON.stringify(narrow)} on a later run's files; expected the token read and the socket connected`,
+    );
+  } finally {
+    if (server !== null) await new Promise((resolve) => server.close(() => resolve()));
+    for (const parent of [firstParent, second.privateParent].filter(Boolean)) fs.rmSync(parent, { recursive: true, force: true });
+  }
 }
 
 /** A repository with the evaluation folder committed twice with different trees, for the workspace cases below. */
@@ -5485,8 +5568,8 @@ function checkConfinementReference() {
     "the reference's confinement section still says the project's git history stays readable",
   );
   check(
-    section.includes("run's private parent directory") && section.includes('connect to a unix socket'),
-    "the reference's confinement section does not say the confinement withholds the run's private parent directory",
+    section.includes("user's private root directory") && section.includes('connect to a unix socket'),
+    "the reference's confinement section does not say the confinement withholds the user's private root directory",
   );
   check(
     section.includes('with the evaluation folder as an empty tree') &&
@@ -5517,6 +5600,8 @@ function checkBridgeTokenReference() {
     passage.includes("The confinement withholds the run's private directories from every target") &&
       passage.includes('the token is unreadable to a confined target') &&
       passage.includes('one private parent directory') &&
+      passage.includes('one private root') &&
+      passage.includes('SIGKILL') &&
       passage.includes('connection to a unix socket'),
     "the reference's bridge passage does not state that the confinement withholds the run's private directories, so the token is unreadable to a confined target",
   );
@@ -5560,6 +5645,7 @@ const CASES = [
   { name: 'the withheld git history edges', body: checkWithheldHistoryEdges, group: 'confinement' },
   { name: "the probe ports' git access", body: checkProbePortGitAccess, group: 'confinement' },
   { name: "the layer's private directory sources", body: checkPrivateDirectorySources, group: 'confinement' },
+  { name: 'the private root across runs', body: checkPrivateRootAcrossRuns, group: 'confinement' },
   { name: 'the confinement reference', body: checkConfinementReference, group: 'confinement' },
   { name: 'the held score inputs', body: checkHeldInputs, group: 'held-inputs' },
   { name: 'the held score diagnostics', body: checkHeldDiagnostics, group: 'held-inputs' },

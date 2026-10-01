@@ -683,9 +683,9 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
    * which a confined run requires) and reading none of `options.git.directory`
    * (the project's git directory) but `options.git.metadata` (the worktree's
    * own entry in it), and reading, writing or connecting to nothing under
-   * `options.privateParent` (the run's private parent directory, where the
-   * evaluation layer keeps the bridge's token and socket and its working
-   * directories; `registry.privateParent`); with `options.audit` the port's Node
+   * `options.privateRoot` (the user's private root directory, beneath which
+   * the run's private parent holds the evaluation layer's bridge token and
+   * socket and its working directories; `registry.privateRoot`); with `options.audit` the port's Node
    * processes also report the paths they open outside what was granted, which
    * `observedMounts()` reads, and which is empty otherwise.
    *
@@ -719,7 +719,7 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
         confinement,
         workspace: options.workspace,
         git: options.git ?? null,
-        privateParent: options.privateParent ?? null,
+        privateRoot: options.privateRoot ?? null,
         report,
         status,
       });
@@ -884,9 +884,9 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
     root: registryRoot,
     httpPort,
     confinement,
-    /** The run's private parent directory (`workspace.js` `makePrivateParent`), or `null` where none was made. */
-    get privateParent() {
-      return scratch.privateParent ?? null;
+    /** The user's private root directory the run's parent sits beneath (`workspace.js` `makePrivateParent`), or `null` where none was made. */
+    get privateRoot() {
+      return scratch.privateRoot ?? null;
     },
     apiFor,
     apiSecrets,
