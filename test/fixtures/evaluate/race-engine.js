@@ -26,6 +26,28 @@
  *   loses a required field and gains a forbidden one, with
  *   bytes that are no artifact, with the artifact of the previous probe
  *   (`TEA_RACE_STASH` keeps it between calls), or with a link to a valid artifact.
+ *
+ * Story 1.68 adds modes that act on the inputs the engine reads, named by the
+ * input's kind (`record`, `contract`, `preflight`, `policy`, `configuration`,
+ * `probe` or `manifest`, and `unreadable`, the first record turned into bytes
+ * that are no JSON):
+ *
+ * - `rewrite-<kind>`: the file is rewritten before the real call and kept, so
+ *   the engine scores the new bytes and the run directory holds them afterwards.
+ * - `restore-<kind>`: the file is rewritten before the real call and put back
+ *   byte for byte once it has finished, so only the engine's read ever saw the
+ *   new bytes.
+ * - `plant-manifest`: after the real call a file is written where the trial set
+ *   has no isolation manifest (a set that has one is left alone).
+ * - `forge-outcomes`: the staged evidence artifact is replaced with a
+ *   schema-valid one that keeps its corpus digest and its probe's outcome and
+ *   flips what the outcome says.
+ * - `stage-stashed`: after the real call the evidence artifact an earlier
+ *   score kept for the probe (`TEA_RACE_STASH_DIR/<probe>/evidence-artifact.json`)
+ *   is copied to `--out`, whether or not the call staged one.
+ *
+ * `TEA_RACE_PROBE`, when set, limits those modes to the call that scores that
+ * probe.
  */
 
 'use strict';
@@ -39,7 +61,6 @@ const { engineCliPath } = require('../../../cli/lib/evaluate/engine');
 const argv = process.argv.slice(2);
 const value = (flag) => argv[argv.indexOf(flag) + 1];
 fs.appendFileSync(process.env.TEA_RACE_LOG, `${JSON.stringify(argv)}\n`);
-const real = spawnSync(process.execPath, [engineCliPath({}), ...argv], { stdio: 'inherit' });
 
 const mode = process.env.TEA_RACE_MODE ?? '';
 const target = process.env.TEA_RACE_TARGET;
@@ -58,6 +79,44 @@ const invocation = fs.existsSync(scores)
       .sort()
       .at(-1)
   : undefined;
+
+/** The flag that names each kind of input, and the change that makes the engine read something else (and keeps it a valid input where it can). */
+const INPUTS = {
+  // The recommendation flips and the findings go, so both the artifact and what a view shows of the record change.
+  record: [
+    '--record',
+    (input) => {
+      input.evaluatorRecommendation = input.evaluatorRecommendation === 'FAIL' ? 'PASS' : 'FAIL';
+      input.findings = [];
+    },
+  ],
+  contract: ['--contract', (input) => (input.contractId = 'rewritten-contract')],
+  preflight: ['--preflight-verdict', (input) => (input.passed = false)],
+  policy: ['--policy', (input) => (input.catchThreshold = 0.6)],
+  configuration: ['--evaluator-configuration', (input) => (input.evaluatorIdentity = 'rewritten evaluator')],
+  probe: ['--probe', (input) => (input.probeClass = input.probeClass === 'zero-action' ? 'defect' : 'zero-action')],
+  manifest: ['--isolation-manifest', (input) => (input.violation = 'rewritten manifest')],
+  // The first record becomes bytes that are no JSON, which the engine refuses with a fault and no artifact.
+  unreadable: ['--record', null],
+};
+const attack = /^(rewrite|restore)-(.+)$/.exec(mode);
+const inputKind = attack !== null && Object.hasOwn(INPUTS, attack[2]) ? attack[2] : null;
+const attacking = process.env.TEA_RACE_PROBE === undefined || process.env.TEA_RACE_PROBE === probe;
+let original = null;
+let inputFile = null;
+if (inputKind !== null && attacking && argv.includes(INPUTS[inputKind][0])) {
+  inputFile = value(INPUTS[inputKind][0]);
+  original = fs.readFileSync(inputFile);
+  if (INPUTS[inputKind][1] === null) fs.writeFileSync(inputFile, 'not json\n');
+  else {
+    const parsed = JSON.parse(original.toString('utf8'));
+    INPUTS[inputKind][1](parsed);
+    fs.writeFileSync(inputFile, `${JSON.stringify(parsed, null, 2)}\n`);
+  }
+}
+
+const real = spawnSync(process.execPath, [engineCliPath({}), ...argv], { stdio: 'inherit' });
+if (attack?.[1] === 'restore' && original !== null) fs.writeFileSync(inputFile, original);
 
 /** Moves `entry` aside and leaves a link to the target in its place, once. */
 function swap(entry) {
@@ -97,6 +156,16 @@ if (mode === 'swap-scores') {
 } else if (mode === 'forge-probe') {
   if (probe === 'P-001') fs.copyFileSync(out, stash);
   else fs.copyFileSync(stash, out);
+} else if (mode === 'plant-manifest' && attacking) {
+  const planted = path.join(runDirectory, 'trial-sets', probe, 'isolation-manifest.json');
+  if (!fs.existsSync(planted)) fs.writeFileSync(planted, '{"planted":true}\n');
+} else if (mode === 'stage-stashed' && attacking) {
+  // The artifact of an earlier clean score of the same probe takes the place of whatever this call staged.
+  fs.copyFileSync(path.join(process.env.TEA_RACE_STASH_DIR, probe, 'evidence-artifact.json'), out);
+} else if (mode === 'forge-outcomes' && attacking) {
+  const artifact = JSON.parse(fs.readFileSync(out, 'utf8'));
+  artifact.reducedProbeOutcomes[0].caught = !artifact.reducedProbeOutcomes[0].caught;
+  fs.writeFileSync(out, `${JSON.stringify(artifact)}\n`);
 } else if (mode === 'stage-link') {
   const valid = path.join(target, 'valid-artifact.json');
   fs.renameSync(out, valid);

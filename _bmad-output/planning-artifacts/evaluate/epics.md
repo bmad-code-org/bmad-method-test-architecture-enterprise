@@ -23,7 +23,7 @@ inputDocuments:
 
 ## Overview
 
-This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and seventy-four stories, including H.1 (Stories 1.27 to 1.68 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
+This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and seventy-five stories, including H.1 (Stories 1.27 to 1.69 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
 
 Evaluate is fully stacked. The stack runs system under test, then the evaluation (the mechanism that runs the system, collects evidence and makes judgments), then the Behavioral Evaluation Contract (what behavior matters, what evidence counts, how success and failure resolve), then eval-quality (contract sanity, evidence support, and whether the evaluation catches defects). TeA owns every layer above eval-quality, including each concern eval-quality states it leaves to the caller, so an adopter can evaluate any target end to end. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3 onward, Epic 2 and H.1 to close the plan gap audit; the Traceability section maps each audit item to the story that closes it.
 
@@ -150,7 +150,7 @@ None. Evaluate has no graphical interface.
 ### Epic 1: The Evaluate authoring loop
 
 An adopter describes a target, answers Evaluate's questions, chooses or builds the evaluation layer and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches the seeded defect, with the gaps named and closed. The epic closes by running Evaluate on `bmad-testarch-evaluate` itself, then proving the guidance on two more target kinds, on seeded weaknesses and on an evaluation framework its guides never name.
-Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.68.
+Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.69.
 
 **FRs covered:** FR1 to FR10, FR13, FR14.
 
@@ -234,18 +234,19 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 66    | 1.66  | 1.11, 1.38                   |
 | 67    | 1.67  | 1.40                         |
 | 68    | 1.68  | 1.41                         |
-| 69    | 2.1   | 1.16, 1.26, 1.45             |
-| 70    | 2.2   | 2.1                          |
-| 71    | 2.3   | 2.2                          |
-| 72    | 2.4   | 2.3                          |
-| 73    | 2.5   | 2.4                          |
-| 74    | H.1   | 2.5                          |
+| 69    | 1.69  | 1.68                         |
+| 70    | 2.1   | 1.16, 1.26, 1.45             |
+| 71    | 2.2   | 2.1                          |
+| 72    | 2.3   | 2.2                          |
+| 73    | 2.4   | 2.3                          |
+| 74    | 2.5   | 2.4                          |
+| 75    | H.1   | 2.5                          |
 
 ### Parallel lanes (from 2026-10-01)
 
 The table above gives every story's dependencies. Since Story 1.40 merged, the stories not yet built run in three parallel lanes, each a serial relay: a story's coordinator hands off to the next story in its lane, and the lanes merge into `main` independently. A lane groups stories that share modules or a dependency chain, so two lanes rarely edit the same file. Stories keep their numbers and rows above; the lane gives the order to run them in. `sprint-status.yaml` carries the same lists under `parallel_lanes`.
 
-**Lane 1: run integrity, scoring and evaluators** (main checkout): 1.41, 1.68, 1.43, 1.44, 1.67, 1.66, 1.65, 1.64. Story 1.68 reads the files 1.41 changes, so it follows directly. Story 1.65 turns the single release report into a per-interface report and 1.64 adds call sites that 1.65 would otherwise rewrite, so 1.66, 1.65, 1.64 run in that order. Story 1.44 rewrites the `evaluate-learn` fixture's evaluator, which lane 3's 1.55 and 1.56 own, so those two wait for it.
+**Lane 1: run integrity, scoring and evaluators** (main checkout): 1.41, 1.68, 1.43, 1.44, 1.67, 1.66, 1.65, 1.64, 1.69. Story 1.68 reads the files 1.41 changes, so it follows directly. Story 1.65 turns the single release report into a per-interface report and 1.64 adds call sites that 1.65 would otherwise rewrite, so 1.66, 1.65, 1.64 run in that order. Story 1.44 rewrites the `evaluate-learn` fixture's evaluator, which lane 3's 1.55 and 1.56 own, so those two wait for it. Story 1.69 reuses the module Story 1.68 builds and edits `run.js`, which 1.64 and 1.65 also edit, so it runs last.
 
 **Lane 2: confinement and process lifecycle** (own worktree): 1.62, 1.57, 1.58, 1.59, 1.60, 1.63, 1.61, 1.52, 1.53, 1.54. Story 1.62 goes first because it extracts the shared sandbox primitives the confinement stories build on. Story 1.60 may remove 1.63's premise, so 1.63 is re-read after it. Story 1.58 precedes 1.54, since both track the run's private scratch directories. Stories 1.52 to 1.54 touch the preflight and workspace modules the confinement stories also edit, so they run after them.
 
@@ -383,7 +384,7 @@ So that a stale index or a malformed artifact fails before anything runs.
 **And** it exits 10 on each of these eleven: a stale `corpus-index.json`, an unknown `evaluation.json` `schemaVersion` (naming the installed TeA version and the schema versions it knows; amended 2026-09-23 because a runtime cannot name a release newer than itself), a committed probe carrying a runtime-owned field, a mutation file whose operator is not `replace-exact`, a `targetArtifact` inside a provisioned directory, a contract declaring kind `web`, a defect signature addressing a written file, a behavior discharged by a defect or gameability probe whose `oracles` count is not exactly 1, a probe, behavior, oracle or mutation ID off eval-quality's patterns, a `baseline/qualification/` reference whose digest does not match, and a clean control that is not `zero-action` with `expectedClean: true` (AD-9, AD-19). AD-14's one-authoring-path rule is TeA repository policy and is enforced by Story 1.15 in `tools/validate-eval-schemas.js`
 **And** `tea-evaluate digest` writes `corpus-index.json` as sorted `{path, sha256}` over `corpus/`, `probes/` and `mutations/`, and prints `corpusDigest` computed by eval-quality's `digestArtifact` over that index
 **And** a new `test/test-evaluate-check.js`, chained into `npm test` as `test:evaluate-check` with its own `quality.yaml` step, holds each case above
-**And** a new `test/test-evaluate-boundaries.js`, chained as `test:evaluate-boundaries` with its own `quality.yaml` step, scans `cli/` and fails when: any file other than `cli/lib/evaluate/engine.js` names `eval-quality` in an `import(` or `require(` call, subpaths and synchronous requires included; any binding obtained from that module reaches the engine's `runScore`, `preflightFromObservations`, `compile` or `seal` (AD-1, AD-6: those stages run through the CLI); the string `_bmad` appears under `cli/lib/evaluate/`. `engine.js` resolves the CLI path and honours `TEA_EVALUATE_ENGINE_CLI` so tests can substitute a shim. Later stories extend the test
+**And** a new `test/test-evaluate-boundaries.js`, chained as `test:evaluate-boundaries` with its own `quality.yaml` step, scans `cli/` and fails when: any file other than `cli/lib/evaluate/engine.js` names `eval-quality` in an `import(` or `require(` call, subpaths and synchronous requires included; any binding obtained from that module reaches the engine's `runScore`, `preflightFromObservations`, `compile` or `seal` (AD-1, AD-6: those stages run through the CLI); (amended 2026-10-01 in Story 1.68: `cli/lib/evaluate/score-inputs.js` alone may name `runScore`, to compare a staged artifact with an in-process score of the held bytes, and never to decide a verdict); the string `_bmad` appears under `cli/lib/evaluate/`. `engine.js` resolves the CLI path and honours `TEA_EVALUATE_ENGINE_CLI` so tests can substitute a shim. Later stories extend the test
 
 **Dependencies:** 1.3.
 **Gate:** `npm test`, `npm run test:release-metadata`.
@@ -1812,6 +1813,30 @@ So that a process writing the run directory during scoring cannot change what is
 
 **Dependencies:** 1.41.
 **Gate:** `npm test`, `npm run docs:validate-links`, `npm run docs:build`, engine check.
+
+Amended 2026-10-01 in Story 1.68's build, where the build departs from the plan text: the check after each call re-reads and re-digests every input (a manifest absent at the check and present afterwards counts), and the in-process re-score of the held bytes, serialized with `serializeArtifact`, must equal the staged artifact byte for byte (an absent artifact must match a result with no artifact); the second criterion's "engine's own digest" alternative is not used.
+`partitions.json`, `gap-view.json` and `interpretation.json` are built from the held bytes as well, since they read the probe, the records and the contract after the engine's calls; a call that exits 4, 5 or 64 states no verdict, so an absent staged file is not compared for it.
+`test:evaluate-boundaries` names `score-inputs.js` as the one file that may name `runScore`.
+
+### Story 1.69: Hold the inputs of an evaluator attempt's score call
+
+Added 2026-10-01 in Story 1.68. `run` qualifies a sealed-brief agent evaluator (Story 1.34) by scoring each qualification attempt through `eval-quality score` over files it wrote into the run directory a moment before (`scoreAttempt` in `cli/lib/evaluate/run.js`). In a run that opted out of file-system confinement, a target's leftover process can rewrite one of those files between the runtime's write and the engine's read, so an attempt's votes can come from bytes the runtime never wrote, and the votes decide whether the evaluator qualifies. Story 1.68 holds the inputs of `score` only.
+
+As an adopter running a sealed-brief agent evaluator in a run that opted out of confinement,
+I want an attempt's votes to come from the bytes the runtime wrote,
+So that a process writing the run directory during qualification cannot move the evaluator's agreement (AD-7, AD-12).
+
+**Acceptance Criteria:**
+
+**Given** a run that opted out of confinement, qualifying a sealed-brief agent evaluator
+**When** a process rewrites an attempt's record, the contract, the policy, the probe, the preflight verdict, the manifest or the evaluator configuration after the runtime wrote it and before or during the attempt's `eval-quality score` call (the Story 1.41 engine shim, over real eval-quality)
+**Then** `run` exits 12 naming the changed file and records no vote from that call; removing the check after the call lets the rewritten bytes be scored, a `test:evaluate-evaluators` case
+**And** a rewrite restored before the check, and a well-formed staged artifact with altered votes, exit 12 the same way; removing the in-process comparison with the held bytes lets both through, a `test:evaluate-evaluators` case each
+**And** an unchanged qualification scores as before, and its recorded argv with a fresh `--out` still reproduces the attempt's evidence byte for byte
+**And** `scoreAttempt` reads the bytes it holds through `cli/lib/evaluate/score-inputs.js`, the module Story 1.68 builds, so the enumeration of score inputs stays in one place; a static test fails if `scoreAttempt` names those files without it.
+
+**Dependencies:** 1.68.
+**Gate:** `npm test`, engine check.
 
 ## Epic 2: Continuous proof in CI
 

@@ -9,10 +9,13 @@
  * neither has a `preflight` invocation: both exit 64, since the command was
  * pointed at nothing it can score.
  *
- * Before any engine call, every input is read from the run directory as a
- * regular file, opened without blocking and without following a link (a FIFO
- * or a link there is a finding, never waited on), and checked (exit 10 on any
- * finding, naming the file):
+ * Before any engine call, every file the engine reads is read from the run
+ * directory once, as a regular file opened without blocking and without
+ * following a link (a FIFO or a link there is a finding, never waited on), and
+ * held in memory (`score-inputs.js`, Story 1.68); the check parses and digests
+ * those held bytes (exit 10 on any finding, naming the file), and the views are
+ * built from them. The files a record's actions artifact names are read for
+ * the digest check alone, and the engine reads none of them:
  *
  *   - `trial-sets.json` against the runtime's own schema, with each probe
  *     named once;
@@ -39,8 +42,8 @@
  * every other check, the schemas and the digests `run.json` recorded
  * included, holds as for any run.
  *
- * An isolation manifest that is absent is passed on as absent, never filled
- * in: eval-quality reads a trial set with none as Invalid.
+ * An isolation manifest that is absent at the check is passed on as absent,
+ * never filled in: eval-quality reads a trial set with none as Invalid.
  *
  * Then `eval-quality score` runs once per probe, with every trial's
  * `--record`, the set's `--isolation-manifest`, the run's
@@ -51,11 +54,20 @@
  * directory whether or not an evidence artifact was emitted, since AD-10
  * classifies a `score` exit 3 from those diagnostics and AD-12 lists them in
  * the bundle. A staged artifact that meets its published schema, names the run's
- * corpus digest and carries an outcome for this probe is copied in as
- * `evidence-artifact.json` and read back; one that fails that copy check is not
- * copied, and the command exits 12. The check cannot tell the engine's artifact
- * from a well-formed one a process with access to the private staging directory
- * substituted (Story 1.68).
+ * corpus digest and carries an outcome for this probe passes the copy check;
+ * one that fails it is not copied, and the command exits 12. It is copied in as
+ * `evidence-artifact.json` and read back only when the held inputs still stand
+ * and reproduce it (Story 1.68):
+ *
+ *   - after the call every input is read and digested again, and the first one
+ *     that changed or appeared since the check is named (exit 12, nothing copied);
+ *   - the held bytes are scored in process the way the CLI scores a probe, and
+ *     the staged file must equal the serialized result byte for byte (an absent
+ *     staged file must match a result with no artifact), so a rewrite the
+ *     engine read and a process then restored, and a well-formed artifact a
+ *     process substituted, are refused (exit 12, nothing copied). The re-score
+ *     compares and refuses; the CLI still decides every enforced verdict.
+ *
  * A call that cannot run, is killed or exits with a code the CLI does not
  * document is recorded and the others still run; the command then exits 12.
  *
@@ -86,6 +98,7 @@ const { newInvocationId, readJson } = require('./preflight');
 const { createArtifactValidator } = require('./records');
 const { RunDirectory, RunDirectoryError } = require('./run-directory');
 const { TRIAL_SETS_NAME } = require('./run');
+const { holdScoreInputs, regularFileBytes } = require('./score-inputs');
 const { makeScratchDirectory, releaseScratchDirectory, removeScratchDirectory } = require('./workspace');
 const { writePartitionViews } = require('./partition');
 const { writeInterpretation } = require('./interpret');
@@ -109,32 +122,6 @@ class ScoreOutcome {
     this.findings = findings;
     this.runDirectory = runDirectory;
     this.scores = scores;
-  }
-}
-
-/** Opening for a read never waits on a FIFO and never follows a link. */
-const READ_REGULAR = fs.constants.O_RDONLY | (fs.constants.O_NONBLOCK ?? 0) | (fs.constants.O_NOFOLLOW ?? 0);
-
-/**
- * The bytes of `file`, which must be a regular file: it is opened without
- * blocking and without following a link, so a FIFO, a device or a link left
- * in the run directory is refused at once and never waited on.
- *
- * @returns {Buffer}
- */
-function regularFileBytes(file) {
-  let descriptor;
-  try {
-    descriptor = fs.openSync(file, READ_REGULAR);
-  } catch (error) {
-    if (error.code === 'ELOOP' || error.code === 'EMLINK') throw new Error('is a symbolic link, not a regular file the run wrote');
-    throw error;
-  }
-  try {
-    if (!fs.fstatSync(descriptor).isFile()) throw new Error('is not a regular file the run wrote');
-    return fs.readFileSync(descriptor);
-  } finally {
-    fs.closeSync(descriptor);
   }
 }
 
@@ -235,25 +222,25 @@ function phaseSnapshotProblems(run, contract) {
   return problems;
 }
 
-/** Every finding in the run directory's inputs, before any engine call. */
-async function inputFindings({ folder, runDirectory, index, record, engine }) {
+/** Every finding in the held inputs of the run directory, before any engine call. */
+async function inputFindings({ folder, runDirectory, index, record, engine, held }) {
   const validate = createArtifactValidator();
   const findings = [];
   const add = (file, rule, message) => findings.push({ file, rule, message });
   const parsed = new Map();
   const read = async (relative, kind) => {
-    const file = inRun(runDirectory, relative);
-    if (parsed.has(file)) return parsed.get(file);
+    if (parsed.has(relative)) return parsed.get(relative);
     let value = null;
     try {
-      value = regularJson(file);
+      value = held.json(relative);
     } catch (error) {
       add(relative, 'json', `cannot be read as JSON: ${error.message}`);
     }
     if (value !== null) for (const problem of await validate(kind, value)) add(relative, 'engine-schema', problem);
-    parsed.set(file, value);
+    parsed.set(relative, value);
     return value;
   };
+  for (const { relative, message } of held.aliasFindings()) add(relative, 'run-integrity', message);
   const runPrefix = `${referencePath(folder, runDirectory)}/`;
   const referenceProblem = (reference, what, expectedPath = null) => {
     if (reference?.storage !== 'public' || typeof reference.path !== 'string') {
@@ -264,10 +251,13 @@ async function inputFindings({ folder, runDirectory, index, record, engine }) {
     }
     if (expectedPath !== null && reference.path !== expectedPath) return `its ${what} ${reference.path} is not its set's ${expectedPath}`;
     const file = path.join(folder, ...reference.path.split('/'));
-    if (!fs.existsSync(file)) return `its ${what} ${reference.path} is not there`;
+    // A file the score reads is digested from the bytes held for it, never read a second time.
+    const heldEntry = held.lookup(path.relative(runDirectory, file).split(path.sep).join('/'));
+    if (heldEntry === undefined ? !fs.existsSync(file) : !heldEntry.exists) return `its ${what} ${reference.path} is not there`;
     let bytes;
     try {
-      bytes = regularFileBytes(file);
+      bytes = heldEntry === undefined ? regularFileBytes(file) : heldEntry.bytes;
+      if (bytes === null) throw new Error(heldEntry.error);
     } catch (error) {
       return `its ${what} ${reference.path} ${error.message}`;
     }
@@ -276,22 +266,9 @@ async function inputFindings({ folder, runDirectory, index, record, engine }) {
       ? null
       : `its ${what} ${reference.path} digests to ${actual}, not the ${reference.digest} it records`;
   };
-  const anchored = (relative, expected, what) => {
-    const file = inRun(runDirectory, relative);
-    if (!fs.existsSync(file)) return;
-    if (expected === undefined) {
-      add(relative, 'run-integrity', `has no digest in run.json, so it is not a file the run sealed as ${what}`);
-      return;
-    }
-    let bytes;
-    try {
-      bytes = regularFileBytes(file);
-    } catch (error) {
-      add(relative, 'run-integrity', `${error.message}, so it is not ${what} the run sealed`);
-      return;
-    }
-    const actual = engine.digestBytes(bytes);
-    if (actual !== expected) add(relative, 'run-integrity', `digests to ${actual}, not the ${expected} run.json recorded for ${what}`);
+  const anchored = (relative) => {
+    const problem = held.anchorFinding(relative);
+    if (problem !== null) add(relative, 'run-integrity', problem);
   };
   const recorded = record.artifacts ?? {};
   // A records run's sets are an adopter harness's own records, copied unchanged: their run IDs, references and
@@ -299,7 +276,7 @@ async function inputFindings({ folder, runDirectory, index, record, engine }) {
   const imported = record.evaluator?.kind === 'records';
 
   await read(index.contract, 'eval-contract');
-  anchored(index.contract, recorded.contract, 'the compiled contract');
+  anchored(index.contract);
   let phaseSnapshot;
   try {
     const bytes = regularFileBytes(inRun(runDirectory, OPERATION_PHASES_NAME));
@@ -317,11 +294,11 @@ async function inputFindings({ folder, runDirectory, index, record, engine }) {
   if (phaseSnapshot !== undefined && phaseEntries(phaseSnapshot) !== phaseEntries(record.operationPhases))
     add('run.json', 'operation-phases', `operationPhases differs from the sealed ${OPERATION_PHASES_NAME}`);
   await read(index.preflightVerdict, 'preflight-verdict');
-  anchored(index.preflightVerdict, recorded.preflightVerdict, 'the preflight verdict');
+  anchored(index.preflightVerdict);
   await read(index.evaluatorConfiguration, 'evaluator-configuration');
-  anchored(index.evaluatorConfiguration, recorded.evaluatorConfiguration, 'the evaluator configuration');
+  anchored(index.evaluatorConfiguration);
   const policy = await read(index.policy, 'scoring-policy');
-  if (policy !== null) anchored(index.policy, record.policyDigest, 'the policy the run used');
+  if (policy !== null) anchored(index.policy);
   if (index.corpusDigest !== record.corpusDigest) {
     add(TRIAL_SETS_NAME, 'run-integrity', `names corpusDigest ${index.corpusDigest}, not the ${record.corpusDigest} run.json recorded`);
   }
@@ -350,7 +327,7 @@ async function inputFindings({ folder, runDirectory, index, record, engine }) {
     const probe = await read(set.probe, 'probe');
     if (probe !== null && probe.probeId !== set.probeId)
       add(set.probe, 'run-integrity', `is probe ${probe.probeId}, not the ${set.probeId} its trial set scores`);
-    anchored(set.probe, recorded.probes?.[set.probeId], `probe ${set.probeId}`);
+    anchored(set.probe);
     if (imported) {
       // The harness chose how many records a set holds; the index must name exactly the ones the run copied.
       const copied = Object.keys(recorded.records ?? {})
@@ -374,7 +351,7 @@ async function inputFindings({ folder, runDirectory, index, record, engine }) {
       if (seenRecords.has(relative)) add(TRIAL_SETS_NAME, 'run-integrity', `names the record ${relative} more than once`);
       seenRecords.add(relative);
       const sealed = await read(relative, 'sealed-run-record');
-      anchored(relative, recorded.records?.[relative], `a record of ${set.probeId}`);
+      anchored(relative);
       if (sealed !== null && Array.isArray(sealed.observations) && Array.isArray(sealed.findings)) {
         const observedIds = new Set(sealed.observations.map((observation) => observation.observationId));
         if (record.operationPhases && typeof record.operationPhases === 'object') {
@@ -417,7 +394,7 @@ async function inputFindings({ folder, runDirectory, index, record, engine }) {
       const actions = referenceProblem(sealed.actionsArtifact, 'actions artifact');
       if (actions !== null) add(relative, 'run-integrity', actions);
       // An absent manifest reaches eval-quality as absent; one that is there must be the one the records name.
-      if (fs.existsSync(inRun(runDirectory, set.isolationManifest))) {
+      if (held.exists(set.isolationManifest)) {
         const manifest = referenceProblem(
           sealed.isolationManifestArtifact,
           'isolation manifest',
@@ -426,9 +403,9 @@ async function inputFindings({ folder, runDirectory, index, record, engine }) {
         if (manifest !== null) add(relative, 'run-integrity', manifest);
       }
     }
-    if (fs.existsSync(inRun(runDirectory, set.isolationManifest))) {
+    if (held.exists(set.isolationManifest)) {
       await read(set.isolationManifest, 'isolation-manifest');
-      anchored(set.isolationManifest, recorded.isolationManifests?.[set.probeId], `the isolation manifest of ${set.probeId}`);
+      anchored(set.isolationManifest);
     }
   }
   return findings;
@@ -481,9 +458,10 @@ async function runScoreCommand(folder, { run: invocationId, env = process.env, l
   }
 
   const engine = await loadEngine();
-  const findings = await inputFindings({ folder, runDirectory, index, record: located.record, engine });
+  const held = holdScoreInputs({ runDirectory, index, record: located.record, engine });
+  const findings = await inputFindings({ folder, runDirectory, index, record: located.record, engine, held });
   if (findings.length === 0) {
-    const contract = regularJson(inRun(runDirectory, index.contract));
+    const contract = held.json(index.contract);
     for (const message of phaseSnapshotProblems(located.record, contract))
       findings.push({ file: 'run.json', rule: 'operation-phases', message });
   }
@@ -537,6 +515,7 @@ async function runScoreCommand(folder, { run: invocationId, env = process.env, l
       runDirectory,
       index,
       located,
+      held,
       env,
       log,
       writer,
@@ -561,7 +540,7 @@ async function runScoreCommand(folder, { run: invocationId, env = process.env, l
 }
 
 /** One probe's `eval-quality score` call, staged and copied in; the entry `score.json` and the views summarize it. */
-async function scoreProbe({ folder, runDirectory, set, index, validate, env, log, writer, scratch, scoreRelative }) {
+async function scoreProbe({ folder, runDirectory, set, index, held, validate, env, log, writer, scratch, scoreRelative }) {
   const relative = `${scoreRelative}/${set.probeId}`;
   const recordRelative = `${relative}/score.json`;
   const evidenceRelative = `${relative}/evidence-artifact.json`;
@@ -584,8 +563,8 @@ async function scoreProbe({ folder, runDirectory, set, index, validate, env, log
       '--corpus-digest',
       index.corpusDigest,
     );
-    const manifest = inRun(runDirectory, set.isolationManifest);
-    if (fs.existsSync(manifest)) args.push('--isolation-manifest', manifest);
+    // The manifest is supplied when the input check found it, and left out when it found none, whatever is there now.
+    if (held.exists(set.isolationManifest)) args.push('--isolation-manifest', inRun(runDirectory, set.isolationManifest));
     else
       log(
         `${set.probeId}: the isolation manifest ${set.isolationManifest} is absent and is not supplied; eval-quality reads the trial set as Invalid`,
@@ -616,17 +595,20 @@ async function scoreProbe({ folder, runDirectory, set, index, validate, env, log
     let evidence = null;
     let artifact = null;
     const staged = stagedArtifact(produced);
-    if (staged.problem !== undefined) {
-      stageFailed = true;
-      failure = failure === null ? `${set.probeId}: the staged evidence artifact ${staged.problem}` : failure;
-      log(`${set.probeId}: the staged evidence artifact ${staged.problem}; it is not copied`);
-    } else if (staged.bytes !== null) {
-      const problems = await artifactProblems({ bytes: staged.bytes, set, index, validate });
+    if (staged.problem === undefined) {
+      const problems = staged.bytes === null ? [] : await artifactProblems({ bytes: staged.bytes, set, index, validate });
+      // A call that could not run, was killed or exited undocumented already fails the command and has no staged file to
+      // compare; every other call is held to the inputs the check accepted.
+      const refusal = problems.length > 0 || (failure !== null && staged.bytes === null) ? null : await heldRefusal({ held, set, staged });
       if (problems.length > 0) {
         stageFailed = true;
         failure = failure === null ? `${set.probeId}: the staged evidence artifact fails the copy check: ${problems[0]}` : failure;
         log(`${set.probeId}: the staged evidence artifact fails the copy check (${problems.join('; ')}); it is not copied`);
-      } else {
+      } else if (refusal !== null) {
+        stageFailed = true;
+        failure = failure === null ? `${set.probeId}: ${refusal}` : failure;
+        log(`${set.probeId}: ${refusal}; nothing is copied`);
+      } else if (staged.bytes !== null) {
         // Copied through the held directory and read back from it: the parsed artifact is the one that was written.
         writer.write(evidenceRelative, staged.bytes);
         const back = writer.read(evidenceRelative);
@@ -634,6 +616,10 @@ async function scoreProbe({ folder, runDirectory, set, index, validate, env, log
         evidence = writer.pathOf(evidenceRelative);
         artifact = JSON.parse(back.toString('utf8'));
       }
+    } else {
+      stageFailed = true;
+      failure = failure === null ? `${set.probeId}: the staged evidence artifact ${staged.problem}` : failure;
+      log(`${set.probeId}: the staged evidence artifact ${staged.problem}; it is not copied`);
     }
     return {
       stageFailed,
@@ -649,6 +635,27 @@ async function scoreProbe({ folder, runDirectory, set, index, validate, env, log
   } finally {
     releaseScratchDirectory(scratch, staging);
   }
+}
+
+/**
+ * Why a call's result is not the one the held inputs stand behind, or null (Story 1.68): an input changed or appeared
+ * since the check (named first), or the staged artifact is not the byte-for-byte result of scoring the held bytes in
+ * process (an absent staged file must match a result with no artifact). The comparison only refuses; it never decides.
+ */
+async function heldRefusal({ held, set, staged }) {
+  const changed = held.changedSince();
+  if (changed !== null) return `${changed.relative} ${changed.message}`;
+  const reproduced = await held.reproduce(set);
+  if (reproduced === null) {
+    return staged.bytes === null
+      ? null
+      : 'the staged evidence artifact is not the result of the verified inputs, which produce no artifact';
+  }
+  // Whatever the call exited, one that staged nothing while the verified inputs produce an artifact read other bytes.
+  if (staged.bytes === null) return 'the call staged no evidence artifact, and the verified inputs produce one';
+  return reproduced.equals(staged.bytes)
+    ? null
+    : 'the staged evidence artifact differs from the one the verified inputs produce (an in-process score of the held bytes)';
 }
 
 /** The staged artifact's bytes (null when the call wrote none), read as a regular file without following a link. */
@@ -690,6 +697,7 @@ async function scoreProbes({
   runDirectory,
   index,
   located,
+  held,
   env,
   log,
   writer,
@@ -708,7 +716,7 @@ async function scoreProbes({
   let unexpected = null;
   try {
     for (const set of index.trialSets) {
-      const probe = await scoreProbe({ folder, runDirectory, set, index, validate, env, log, writer, scratch, scoreRelative });
+      const probe = await scoreProbe({ folder, runDirectory, set, index, held, validate, env, log, writer, scratch, scoreRelative });
       stageFailed ||= probe.stageFailed;
       scores.push(probe.entry);
       if (probe.artifact !== null) evidence.set(set.probeId, probe.artifact);
@@ -730,7 +738,7 @@ async function scoreProbes({
     if (integrity === null && unexpected === null) {
       writePartitionViews({
         writer,
-        runDirectory,
+        readInput: (relative) => held.json(relative),
         scoreInvocationId,
         trialSets: index.trialSets,
         evidence,
@@ -738,7 +746,7 @@ async function scoreProbes({
       });
       writeInterpretation({
         writer,
-        runDirectory,
+        readInput: (relative) => held.json(relative),
         scoreInvocationId,
         trialSets: index.trialSets,
         scores,
@@ -765,7 +773,7 @@ async function scoreProbes({
     runDirectory,
     scores,
     message: stageFailed
-      ? `an eval-quality score call could not run, exited with a code the CLI does not document, or staged an artifact that fails the copy check; every call's record is in ${path.relative(folder, writer.pathOf(scoreRelative))}`
+      ? `an eval-quality score call could not run, exited with a code the CLI does not document, staged an artifact that fails the copy check, or ran over inputs that changed or that its artifact does not reproduce; every call's record is in ${path.relative(folder, writer.pathOf(scoreRelative))}`
       : `eval-quality score ran for ${scores.length} probe(s) of run ${index.invocationId}; each call's diagnostics and evidence are in ${path.relative(folder, writer.pathOf(scoreRelative))}${refusedNote}${optedOutNote}`,
   });
 }

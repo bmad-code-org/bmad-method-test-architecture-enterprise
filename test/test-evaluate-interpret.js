@@ -232,9 +232,10 @@ try {
         .filter(({ evidence }) => evidence !== null)
         .map(({ probeId, evidence }) => [probeId, read(path.join(project.folder, evidence))]),
     );
+  const readInput = (relative) => read(path.join(run, relative));
   const interpretationArgs = {
     writer,
-    runDirectory: run,
+    readInput,
     scoreInvocationId: interpretation.scoreInvocationId,
     trialSets: index.trialSets,
     scores,
@@ -264,18 +265,19 @@ try {
   assert.deepEqual(multiView.probes[0].trials[0].process, ['F-010']);
   assert.equal(multiView.probes[0].trials[0].firstMaterialError.sequence, 1);
   fs.unlinkSync(multiRecord);
-  for (const kind of ['contract', 'record']) {
-    const linked = path.join(run, `${kind}-input-link.json`);
-    const options = { ...interpretationArgs, trialSets: structuredClone(index.trialSets), scores: structuredClone(scores) };
-    if (kind === 'contract') {
-      fs.symlinkSync(path.join(run, index.contract), linked);
-      options.contractPath = path.basename(linked);
-    } else {
-      fs.symlinkSync(path.join(run, index.trialSets[0].records[0]), linked);
-      options.trialSets[0].records[0] = path.basename(linked);
-    }
-    assert.throws(() => writeInterpretation(options), /symbolic link/, `${kind} link was followed`);
-  }
+  // The view reads the bytes `score` held at its input check and nothing from the run directory: a record or the
+  // contract that differs on disk cannot reach it (Story 1.68).
+  const heldSet = index.trialSets.find((set) => readInput(set.records[0]).findings.length > 0);
+  assert.ok(heldSet, 'no record of the run has a finding to drop');
+  const heldRecord = structuredClone(readInput(heldSet.records[0]));
+  heldRecord.findings = [];
+  writeInterpretation({
+    ...interpretationArgs,
+    trialSets: [heldSet],
+    scores: scores.filter(({ probeId }) => probeId === heldSet.probeId),
+    readInput: (relative) => (relative === heldSet.records[0] ? heldRecord : readInput(relative)),
+  });
+  assert.deepEqual(read(path.join(run, 'interpretation.json')).probes[0].trials[0].findings, [], 'the view read the record from disk');
   const view = path.join(run, 'interpretation.json');
   const sentinel = path.join(project.directory, 'outside.txt');
   fs.writeFileSync(sentinel, 'outside\n');
@@ -298,7 +300,7 @@ try {
   fs.writeFileSync(tamperRunFile, untampered);
   writeInterpretation({
     writer,
-    runDirectory: run,
+    readInput,
     scoreInvocationId: 'missing-artifacts',
     evidence: new Map(),
     trialSets: index.trialSets,

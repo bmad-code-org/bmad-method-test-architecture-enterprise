@@ -127,6 +127,7 @@ const EVALUATORS = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'eval
 const COMMAND_EVALUATOR = path.join(EVALUATORS, 'command', 'evaluator');
 const STUB_AGENT = path.join(EVALUATORS, 'stub-evaluator-agent.js');
 const ENGINE_SHIM = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'engine-shim.js');
+const RACE_ENGINE = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'race-engine.js');
 const EVALUATION = path.join('evals', 'verdict');
 const TRIALS = 3;
 const AGENT_SNAPSHOT = 'stub-evaluator-2026-09';
@@ -2533,7 +2534,7 @@ async function checkRecordsEvaluator() {
 
   // score hands eval-quality the adopter's own bytes: the logging shim's --record files equal the harness's.
   const log = path.join(scratch.make('records-shim'), 'argv.jsonl');
-  scoreRun(project, 'a records run under the shim', 0, { [ENGINE_CLI_ENV]: ENGINE_SHIM, TEA_EVALUATE_SHIM_LOG: log });
+  scoreRun(project, 'a records run under the shim', 0, { [ENGINE_CLI_ENV]: RACE_ENGINE, TEA_RACE_LOG: log });
   const scoreCalls = fs
     .readFileSync(log, 'utf8')
     .trim()

@@ -103,7 +103,8 @@ development_status:
   1-65-ask-every-http-interface-of-a-deployment-which-release-it-r: backlog
   1-66-scrub-an-observation-in-every-letter-case: backlog
   1-67-emit-the-label-free-calibration-inputs-a-records-harness-fe: backlog
-  1-68-hold-a-runs-score-inputs-between-verification-and-the-engine-read: backlog
+  1-68-hold-a-runs-score-inputs-between-verification-and-the-engine-read: done
+  1-69-hold-the-inputs-of-an-evaluator-attempts-score-call: backlog
   epic-1-retrospective: optional
 
   epic-2: backlog
@@ -125,6 +126,7 @@ parallel_lanes:
     - 1-66-scrub-an-observation-in-every-letter-case
     - 1-65-ask-every-http-interface-of-a-deployment-which-release-it-r
     - 1-64-hold-the-release-across-the-witness-legs-and-the-trials
+    - 1-69-hold-the-inputs-of-an-evaluator-attempts-score-call
   lane-2-confinement-and-process-lifecycle:
     - 1-62-share-one-sandbox-primitive-layer-across-teas-isolation-mod
     - 1-57-withhold-the-committed-evaluation-folder-from-a-confined-ta

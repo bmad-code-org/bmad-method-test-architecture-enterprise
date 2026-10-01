@@ -116,7 +116,7 @@ try {
   try {
     writePartitionViews({
       writer: viewWriter,
-      runDirectory: latest,
+      readInput: (relative) => read(path.join(latest, relative)),
       scoreInvocationId: current.scoreInvocationId,
       trialSets: read(path.join(latest, 'trial-sets.json')).trialSets,
       evidence: new Map([['P-002', edited]]),
@@ -129,27 +129,24 @@ try {
     JSON.stringify(read(path.join(latest, 'partitions.json'))['held-out'][0].outcome),
     JSON.stringify(edited.reducedProbeOutcomes[0]),
   );
-  // The probe a view summarizes is a regular file of the run, read without following a link.
-  const probeLink = path.join(latest, 'probe-link.json');
-  fs.symlinkSync(path.join(latest, read(path.join(latest, 'trial-sets.json')).trialSets[0].probe), probeLink);
-  const linkWriter = RunDirectory.attach(latest);
+  // The probe a view summarizes is the one `score` held at its input check: a probe file rewritten on disk after the
+  // check cannot reach the view, since the view reads nothing from the run directory (Story 1.68).
+  const heldProbe = { ...read(path.join(latest, 'probes/P-001.probe.json')), probeClass: 'held-class' };
+  const heldWriter = RunDirectory.attach(latest);
   try {
-    assert.throws(
-      () =>
-        writePartitionViews({
-          writer: linkWriter,
-          runDirectory: latest,
-          scoreInvocationId: current.scoreInvocationId,
-          trialSets: [{ probeId: 'P-001', probe: 'probe-link.json' }],
-          evidence: new Map(),
-          heldOutProbes: [],
-        }),
-      /symbolic link/,
-    );
+    writePartitionViews({
+      writer: heldWriter,
+      readInput: () => heldProbe,
+      scoreInvocationId: current.scoreInvocationId,
+      trialSets: [{ probeId: 'P-001', probe: 'probes/P-001.probe.json' }],
+      evidence: new Map(),
+      heldOutProbes: [],
+    });
   } finally {
-    linkWriter.close();
-    fs.unlinkSync(probeLink);
+    heldWriter.close();
   }
+  assert.equal(read(path.join(latest, 'partitions.json')).development[0].probeClass, 'held-class');
+  assert.equal(read(path.join(latest, 'probes/P-001.probe.json')).probeClass, 'zero-action');
   for (const name of ['partitions.json', 'gap-view.json']) {
     const view = path.join(latest, name);
     const sentinel = path.join(project.directory, `${name}.sentinel`);
@@ -315,6 +312,86 @@ try {
   assert.deepEqual(gotThrough, [], `${gotThrough.length} race attempt(s) were not refused cleanly`);
   const afterRaces = test.cli(race.folder, 'score', ['--run', path.basename(raceRun)], race.env);
   assert.equal(afterRaces.status, 0, afterRaces.output);
+  // A process that rewrites an input of a run that opted out of confinement after the input check, before the engine's
+  // read, and leaves it rewritten: the real engine scores the new bytes (Invalid, or an artifact that differs from a
+  // clean score), and `score` exits 12 naming the file with no evidence copied for any call (Story 1.68).
+  const held = test.project('held-inputs', () => {}, { marker: true });
+  const heldRan = test.cli(held.folder, 'run', [], held.env);
+  assert.equal(heldRan.status, 0, heldRan.output);
+  const heldRun = test.latest(held.folder);
+  const heldIndex = read(path.join(heldRun, 'trial-sets.json'));
+  assert.equal(read(path.join(heldRun, 'run.json')).confinement, 'opt-out');
+  const heldSnapshot = path.join(held.directory, 'snapshot');
+  fs.cpSync(heldRun, heldSnapshot, { recursive: true });
+  const [firstSet] = heldIndex.trialSets;
+  const rewrites = {
+    record: firstSet.records[0],
+    contract: heldIndex.contract,
+    preflight: heldIndex.preflightVerdict,
+    policy: heldIndex.policy,
+    configuration: heldIndex.evaluatorConfiguration,
+    probe: firstSet.probe,
+    manifest: firstSet.isolationManifest,
+  };
+  const heldOutcomes = [];
+  for (const [kind, relative] of Object.entries(rewrites)) {
+    fs.rmSync(heldRun, { recursive: true });
+    fs.cpSync(heldSnapshot, heldRun, { recursive: true });
+    const log = path.join(held.directory, `rewrite-${kind}.log`);
+    const attacked = test.cli(held.folder, 'score', ['--run', path.basename(heldRun)], {
+      ...held.env,
+      [ENGINE_CLI_ENV]: RACE_ENGINE,
+      TEA_RACE_LOG: log,
+      TEA_RACE_MODE: `rewrite-${kind}`,
+      TEA_RACE_TARGET: held.directory,
+    });
+    const named = new RegExp(`${relative.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)} changed after the input check`);
+    const problems = [];
+    if (attacked.status !== 12) problems.push(`exited ${attacked.status}, not 12`);
+    if (!named.test(attacked.output)) problems.push(`did not name ${relative} as changed`);
+    if (loggedCalls(log).length !== heldIndex.trialSets.length) problems.push(`made ${loggedCalls(log).length} engine call(s)`);
+    const scoreDirectory = path.join(heldRun, 'scores', fs.readdirSync(path.join(heldRun, 'scores')).sort().at(-1));
+    const copied = fs.readdirSync(scoreDirectory, { recursive: true }).filter((entry) => entry.endsWith('evidence-artifact.json'));
+    if (copied.length > 0) problems.push(`copied ${copied.join(', ')}`);
+    const summary = read(path.join(scoreDirectory, 'score.json'));
+    for (const entry of summary.scores) {
+      if (entry.evidence !== null) problems.push(`${entry.probeId} records evidence ${entry.evidence}`);
+      if (!named.test(entry.failure ?? '')) problems.push(`${entry.probeId}'s failure does not name ${relative}: ${entry.failure}`);
+    }
+    if (summary.exitCode !== 12) problems.push(`its summary says exit ${summary.exitCode}`);
+    const partitions = read(path.join(heldRun, 'partitions.json'));
+    if (![...partitions.development, ...partitions['held-out']].every((entry) => entry.outcome === null)) {
+      problems.push('a view holds an outcome');
+    }
+    if (!read(path.join(heldRun, 'interpretation.json')).probes.every((probe) => probe.engine === null)) {
+      problems.push('the interpretation holds engine output');
+    }
+    // The views are built from the bytes the check held, not from what the run directory holds by then.
+    if (kind === 'probe') {
+      for (const entry of [...partitions.development, ...partitions['held-out']]) {
+        const sealed = read(path.join(heldSnapshot, 'probes', `${entry.probeId}.probe.json`));
+        if (entry.probeClass !== sealed.probeClass)
+          problems.push(`${entry.probeId}'s view says probe class ${entry.probeClass}, not ${sealed.probeClass}`);
+      }
+    }
+    if (kind === 'record') {
+      const interpretation = read(path.join(heldRun, 'interpretation.json'));
+      const sealedFindings = heldIndex.trialSets.map((set) => read(path.join(heldSnapshot, set.records[0])).findings.length);
+      if (!sealedFindings.some((count) => count > 0)) problems.push('no sealed record has a finding for the view to lose');
+      const shown = interpretation.probes.map((probe) => probe.trials[0].findings.length);
+      if (JSON.stringify(shown) !== JSON.stringify(sealedFindings)) {
+        problems.push(
+          `the interpretation shows ${JSON.stringify(shown)} findings per record, not the sealed ${JSON.stringify(sealedFindings)}`,
+        );
+      }
+    }
+    heldOutcomes.push(`${kind}: ${problems.length === 0 ? 'refused' : problems.join('; ')}`);
+  }
+  assert.deepEqual(
+    heldOutcomes,
+    Object.keys(rewrites).map((kind) => `${kind}: refused`),
+    'a rewritten input was scored or its refusal did not name the file',
+  );
   const invalid = test.cli(project.folder, 'run', ['--partition', 'unknown'], project.env);
   assert.equal(invalid.status, 64);
   process.stdout.write('Evaluate partition selection and evidence projections passed.\n');

@@ -29,8 +29,15 @@
  *   - `runScore`, `preflightFromObservations` and `seal` fail anywhere under
  *     `cli/`, `engine.js` included, as an identifier, a member property (dot,
  *     or a bracket string or static template), an object-pattern key, or an
- *     import or export specifier. `Object.seal` is the one exemption, and only
- *     in a file that binds no name `Object`.
+ *     import or export specifier. `Object.seal` is an exemption, and only
+ *     in a file that binds no name `Object`. `runScore` is the other, and only
+ *     as `this.#engine.runScore(...)` in `cli/lib/evaluate/score-inputs.js`,
+ *     the in-process re-score that compares a staged artifact with the held
+ *     inputs and never decides a verdict (Story 1.68, AD-6 amended
+ *     2026-10-01); that file may read a score result's `artifact` and none of
+ *     its `ladder`, `qualification`, `exitCode`, `verdict` or
+ *     `strictPromotable`, and `preflightFromObservations` and `seal` fail
+ *     there too.
  *   - `compile` as a member property or an object-pattern key fails everywhere
  *     under `cli/` unless its receiver is an identifier every binding of which
  *     is a `new X(...)` of Ajv (`X` bound to `require('ajv')` or
@@ -131,6 +138,13 @@ const acorn = require('acorn');
 const PROJECT_ROOT = path.join(__dirname, '..');
 const CLI_ROOT = path.join(PROJECT_ROOT, 'cli');
 const ENGINE_MODULE = path.join('lib', 'evaluate', 'engine.js');
+/**
+ * The one file that may name `runScore`, and only as `this.#engine.runScore(...)`: the in-process re-score that
+ * compares a staged artifact and never decides (Story 1.68, AD-6). It reads the result's `artifact` and nothing else.
+ */
+const REPRODUCTION_MODULE = path.join('lib', 'evaluate', 'score-inputs.js');
+const REPRODUCTION_STAGE = 'runScore';
+const REPRODUCTION_UNREAD = new Set(['ladder', 'qualification', 'exitCode', 'verdict', 'strictPromotable']);
 const RUNTIME_DIRECTORY = path.join('lib', 'evaluate');
 const SOURCE_EXTENSIONS = new Set(['.js', '.cjs', '.mjs']);
 const DATA_EXTENSIONS = new Set(['.json', '.md', '.yml', '.yaml']);
@@ -540,7 +554,7 @@ function skillRunnerViolations(node, value, report) {
 }
 
 /** Every boundary violation in one parsed file. */
-function fileViolations({ source, ast, isEngine, isSkillRunner, file, projectRoot }) {
+function fileViolations({ source, ast, isEngine, isReproduction, isSkillRunner, file, projectRoot }) {
   const found = [];
   const report = (node, rule, message) => found.push({ line: node.loc.start.line, rule, message });
   const excerpt = (node) => {
@@ -552,6 +566,18 @@ function fileViolations({ source, ast, isEngine, isSkillRunner, file, projectRoo
   const requires = requireBindings(values);
   const objectRebound = values.has('Object');
   const isGlobalObject = (node) => !objectRebound && isIdentifier(node, 'Object');
+  /** `this.#engine.runScore`, the one spelling the re-score module may use. */
+  const isReproductionCall = (node, parent) =>
+    isReproduction &&
+    node.name === REPRODUCTION_STAGE &&
+    parent?.type === 'MemberExpression' &&
+    parent.property === node &&
+    !parent.computed &&
+    parent.object.type === 'MemberExpression' &&
+    parent.object.object.type === 'ThisExpression' &&
+    !parent.object.computed &&
+    parent.object.property.type === 'PrivateIdentifier' &&
+    parent.object.property.name === 'engine';
   const parentOf = new Map();
   let engineImports = 0;
   const isAjvReceiver = (node) => node !== null && node !== undefined && node.type === 'Identifier' && instances.has(node.name);
@@ -595,7 +621,11 @@ function fileViolations({ source, ast, isEngine, isSkillRunner, file, projectRoo
     }
 
     // engine-stage: the always-forbidden names.
-    if ((node.type === 'Identifier' || node.type === 'PrivateIdentifier') && ALWAYS_FORBIDDEN.has(node.name)) {
+    if (
+      (node.type === 'Identifier' || node.type === 'PrivateIdentifier') &&
+      ALWAYS_FORBIDDEN.has(node.name) &&
+      !isReproductionCall(node, parent)
+    ) {
       const onObject = parent?.type === 'MemberExpression' && parent.property === node && isGlobalObject(parent.object);
       if (!onObject) report(node, 'engine-stage', `names "${node.name}"`);
     }
@@ -614,6 +644,14 @@ function fileViolations({ source, ast, isEngine, isSkillRunner, file, projectRoo
       for (const side of [node.imported, node.local, node.exported]) {
         if (side?.type === 'Literal' && ALWAYS_FORBIDDEN.has(specifierName(side))) report(node, 'engine-stage', `names "${side.value}"`);
       }
+    }
+
+    // engine-stage: the re-score module reads the artifact of a score result and none of the verdict it carries.
+    if (isReproduction && node.type === 'MemberExpression' && REPRODUCTION_UNREAD.has(memberKey(node))) {
+      report(node, 'engine-stage', `reads "${memberKey(node)}" of a score result; the re-score module reads its artifact alone`);
+    }
+    if (isReproduction && node.type === 'Property' && parent?.type === 'ObjectPattern' && REPRODUCTION_UNREAD.has(propertyKey(node))) {
+      report(node, 'engine-stage', `destructures "${propertyKey(node)}" of a score result; the re-score module reads its artifact alone`);
     }
 
     // rollback-literal: `rollbackVerified` is computed, never written true.
@@ -744,6 +782,7 @@ function scanCli(cliRoot) {
       source,
       ast,
       isEngine: file === engineFile,
+      isReproduction: file === path.join(cliRoot, REPRODUCTION_MODULE),
       isSkillRunner: file === path.join(cliRoot, SKILL_RUNNER),
       file,
       projectRoot: path.dirname(cliRoot),
@@ -937,6 +976,66 @@ const PLANTS = [
     name: 'runScore on the engine module',
     rule: 'engine-stage',
     file: 'lib/evaluate/score.js',
+    source: "const engine = require('./engine');\nengine.runScore({});\n",
+  },
+  {
+    name: 'preflightFromObservations in the re-score module',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source: "const engine = require('./engine');\nengine.preflightFromObservations({});\n",
+  },
+  {
+    name: 'runScore through a local alias in the re-score module',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      "const engine = require('./engine');\nasync function f(options) {\n  const library = await engine.loadEngine();\n  return library.runScore(options);\n}\nmodule.exports = { f };\n",
+  },
+  {
+    name: 'runScore through a public engine property in the re-score module',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  constructor(engine) {\n    this.engine = engine;\n  }\n\n  score(options) {\n    return this.engine.runScore(options);\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'runScore destructured in the re-score module',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  score(options) {\n    const { runScore } = this.#engine;\n    return runScore(options);\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'a verdict read from a score result in the re-score module',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  async exit(options) {\n    const result = await this.#engine.runScore(options);\n    return result.ladder.exitCode;\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'a verdict destructured from a score result in the re-score module',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  async basis(options) {\n    const { ladder } = await this.#engine.runScore(options);\n    return ladder;\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'the exact re-score spelling in a file of the same base name elsewhere',
+    rule: 'engine-stage',
+    file: 'lib/other/score-inputs.js',
+    source:
+      'class Held {\n  #engine;\n\n  async reproduce(options) {\n    return (await this.#engine.runScore(options)).artifact;\n  }\n}\nmodule.exports = { Held };\n',
+  },
+  {
+    name: 'seal in the re-score module',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs.js',
+    source: "const engine = require('./engine');\nconst { seal } = engine;\nseal({});\n",
+  },
+  {
+    name: 'runScore in a sibling of the re-score module',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score-inputs-2.js',
     source: "const engine = require('./engine');\nengine.runScore({});\n",
   },
   {
@@ -1377,6 +1476,26 @@ const CLEAN_PLANTS = [
     file: SKILL_RUNNER,
     source:
       "// No ~/.claude/skills lookup, no os.homedir(), no default of claude or codex.\nconst adapters = require('./lib/agent-adapters');\nconst strategy = 'legacy';\nmodule.exports = { adapters, strategy };\n",
+  },
+  {
+    name: 'runScore as this.#engine.runScore in the re-score module, the one place that compares a staged artifact',
+    file: 'lib/evaluate/score-inputs.js',
+    source: [
+      'class Held {',
+      '  #engine;',
+      '',
+      '  constructor(engine) {',
+      '    this.#engine = engine;',
+      '  }',
+      '',
+      '  async reproduce(options) {',
+      '    const result = await this.#engine.runScore(options);',
+      '    return result.artifact === null ? null : this.#engine.serializeArtifact(result.artifact, "EvidenceArtifact");',
+      '  }',
+      '}',
+      'module.exports = { Held };',
+      '',
+    ].join('\n'),
   },
   {
     name: 'engine digests, Ajv compile, and stage names in comments and messages',

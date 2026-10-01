@@ -1,28 +1,6 @@
 /** Trace scored findings to the sealed observations and contract pointers they cite. */
 'use strict';
 
-const fs = require('node:fs');
-const path = require('node:path');
-
-const READ_REGULAR = fs.constants.O_RDONLY | (fs.constants.O_NONBLOCK ?? 0) | (fs.constants.O_NOFOLLOW ?? 0);
-
-/** `file` parsed as JSON; it must be a regular file, opened without blocking and without following a link. */
-function readRegularJson(file) {
-  let descriptor;
-  try {
-    descriptor = fs.openSync(file, READ_REGULAR);
-  } catch (error) {
-    if (error.code === 'ELOOP' || error.code === 'EMLINK') throw new Error(`${file} is a symbolic link, not a regular file`);
-    throw error;
-  }
-  try {
-    if (!fs.fstatSync(descriptor).isFile()) throw new Error(`${file} is not a regular file`);
-    return JSON.parse(fs.readFileSync(descriptor, 'utf8'));
-  } finally {
-    fs.closeSync(descriptor);
-  }
-}
-
 function projectTrial(record, phases, oracles) {
   const observations = new Map(record.observations.map((observation) => [observation.observationId, observation]));
   const findings = record.findings.map((finding) => {
@@ -84,9 +62,11 @@ function engineProjection(evidence) {
  * Writes `interpretation.json` into the run directory through its held writer (`run-directory.js`).
  * `evidence` maps each scored probe to the parsed evidence artifact the writer read back from the score directory
  * (`score.js`); a probe with none has `engine: null`.
+ * `readInput(relative)` returns a run file parsed from the bytes `score` held at its input check (`score-inputs.js`),
+ * so a record or the contract rewritten while `score` ran cannot reach the interpretation.
  */
-function writeInterpretation({ writer, runDirectory, scoreInvocationId, trialSets, scores, evidence, contractPath, operationPhases }) {
-  const contract = readRegularJson(path.join(runDirectory, contractPath));
+function writeInterpretation({ writer, readInput, scoreInvocationId, trialSets, scores, evidence, contractPath, operationPhases }) {
+  const contract = readInput(contractPath);
   const oracles = new Map(contract.oracles.map((oracle) => [oracle.id, oracle]));
   const scoreByProbe = new Map(scores.map((score) => [score.probeId, score]));
   const probes = trialSets.map((set) => {
@@ -99,7 +79,7 @@ function writeInterpretation({ writer, runDirectory, scoreInvocationId, trialSet
       scoreFailure: score?.failure ?? null,
       trials: set.records.map((recordPath) => ({
         record: recordPath,
-        ...projectTrial(readRegularJson(path.join(runDirectory, recordPath)), operationPhases, oracles),
+        ...projectTrial(readInput(recordPath), operationPhases, oracles),
       })),
       engine: engineProjection(evidence.get(set.probeId) ?? null),
     };
@@ -107,4 +87,4 @@ function writeInterpretation({ writer, runDirectory, scoreInvocationId, trialSet
   writer.replaceJson('interpretation.json', { scoreInvocationId, probes });
 }
 
-module.exports = { engineProjection, projectTrial, readRegularJson, writeInterpretation };
+module.exports = { engineProjection, projectTrial, writeInterpretation };

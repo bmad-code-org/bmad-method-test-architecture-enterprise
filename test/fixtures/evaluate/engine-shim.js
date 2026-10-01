@@ -20,11 +20,20 @@
  * `TEA_EVALUATE_SHIM_EXIT_<STAGE>_<PROBE>` (for example
  * `TEA_EVALUATE_SHIM_EXIT_SCORE_P_001=4`) sets the exit for the call whose
  * `--probe` names that probe, ahead of the stage's own.
+ * When `TEA_EVALUATE_SHIM_RUN_REAL` is set, the shim also runs the installed
+ * eval-quality CLI over the same argv with its streams discarded and exits with
+ * that run's code, so `--out` holds the real artifact and no exit variable
+ * applies: `tea-evaluate score` compares a staged artifact with an in-process
+ * score of the verified inputs (Story 1.68), which a shim that stages nothing
+ * and exits 4 or 2 cannot match.
  */
 
 'use strict';
 
 const fs = require('node:fs');
+const { spawnSync } = require('node:child_process');
+
+const { engineCliPath } = require('../../../cli/lib/evaluate/engine');
 
 const [stage = ''] = process.argv.slice(2);
 fs.appendFileSync(process.env.TEA_EVALUATE_SHIM_LOG, `${JSON.stringify(process.argv.slice(2))}\n`);
@@ -38,4 +47,9 @@ if (streams) {
 }
 const probeKey = probe.replace(/\.probe\.json$/, '').replaceAll('-', '_').toUpperCase();
 const code = process.env[`TEA_EVALUATE_SHIM_EXIT_${stage.toUpperCase()}_${probeKey}`] ?? process.env[`TEA_EVALUATE_SHIM_EXIT_${stage.toUpperCase()}`];
-process.exitCode = code === undefined ? 0 : Number(code);
+if (process.env.TEA_EVALUATE_SHIM_RUN_REAL) {
+  const real = spawnSync(process.execPath, [engineCliPath({}), ...argv], { stdio: 'ignore' });
+  process.exitCode = real.status ?? 5;
+} else {
+  process.exitCode = code === undefined ? 0 : Number(code);
+}
