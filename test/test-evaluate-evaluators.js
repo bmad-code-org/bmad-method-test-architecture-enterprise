@@ -127,6 +127,7 @@ const EVALUATORS = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'eval
 const COMMAND_EVALUATOR = path.join(EVALUATORS, 'command', 'evaluator');
 const STUB_AGENT = path.join(EVALUATORS, 'stub-evaluator-agent.js');
 const ENGINE_SHIM = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'engine-shim.js');
+const RACE_ENGINE = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'race-engine.js');
 const EVALUATION = path.join('evals', 'verdict');
 const TRIALS = 3;
 const AGENT_SNAPSHOT = 'stub-evaluator-2026-09';
@@ -2545,7 +2546,7 @@ async function checkRecordsEvaluator() {
 
   // score hands eval-quality the adopter's own bytes: the logging shim's --record files equal the harness's.
   const log = path.join(scratch.make('records-shim'), 'argv.jsonl');
-  scoreRun(project, 'a records run under the shim', 0, { [ENGINE_CLI_ENV]: ENGINE_SHIM, TEA_EVALUATE_SHIM_LOG: log });
+  scoreRun(project, 'a records run under the shim', 0, { [ENGINE_CLI_ENV]: RACE_ENGINE, TEA_RACE_LOG: log });
   const scoreCalls = fs
     .readFileSync(log, 'utf8')
     .trim()
@@ -3508,8 +3509,9 @@ async function checkCommandTrialDenial() {
 }
 
 /**
- * Every case in run order with the group it belongs to. CI runs the groups as two scripts (`--group=evaluators` and
- * `--group=records`) so no one runner carries the whole file's wall time; with no `--group` every case runs.
+ * Every case in run order with the group it belongs to. CI runs the groups as three scripts (`--group=evaluators`,
+ * `--group=agents` and `--group=records`) so no one runner carries the whole file's wall time; with no `--group` every
+ * case runs.
  */
 const CASES = [
   { name: 'the units', body: checkUnits, group: 'evaluators' },
@@ -3528,19 +3530,19 @@ const CASES = [
   { name: 'evaluators outside the import contract', body: checkEvaluatorFailures, group: 'evaluators' },
   { name: 'a hung evaluator', body: checkEvaluatorTimeout, group: 'evaluators' },
   { name: 'the set recommendation', body: checkSetRecommendation, group: 'evaluators' },
-  { name: 'the evaluator run in place', body: checkEvaluatorInPlace, group: 'evaluators' },
+  { name: 'the evaluator run in place', body: checkEvaluatorInPlace, group: 'agents' },
   { name: 'the evaluation layer confined', body: checkLayerWritesRefused, group: 'evaluators' },
-  { name: 'the evaluation layer held to its bytes', body: checkEvaluatorLayerHeld, group: 'evaluators' },
+  { name: 'the evaluation layer held to its bytes', body: checkEvaluatorLayerHeld, group: 'agents' },
   { name: 'the scratch removal', body: checkScratchRemoval, group: 'evaluators' },
   { name: 'a signal mid-trial', body: checkSignalMidTrial, group: 'evaluators' },
-  { name: 'an oracle two behaviors declare', body: checkSharedOracle, group: 'evaluators' },
-  { name: 'the sealed-brief agent', body: checkSealedBriefAgent, group: 'evaluators' },
-  { name: 'the sealed-brief agent qualified', body: checkEvaluatorQualification, group: 'evaluators' },
-  { name: 'a qualification attempt in an unexpected state', body: checkQualificationUnexpectedState, group: 'evaluators' },
-  { name: 'an arm agrees as its lowest probe', body: checkQualificationLowestProbe, group: 'evaluators' },
-  { name: 'the other arms are not qualified', body: checkQualificationSkipsOtherArms, group: 'evaluators' },
-  { name: 'a qualification attempt holds the adopter tree', body: checkQualificationHoldsAdopterTree, group: 'evaluators' },
-  { name: 'the sealed-brief agent edges', body: checkSealedBriefAgentEdges, group: 'evaluators' },
+  { name: 'an oracle two behaviors declare', body: checkSharedOracle, group: 'agents' },
+  { name: 'the sealed-brief agent', body: checkSealedBriefAgent, group: 'agents' },
+  { name: 'the sealed-brief agent qualified', body: checkEvaluatorQualification, group: 'agents' },
+  { name: 'a qualification attempt in an unexpected state', body: checkQualificationUnexpectedState, group: 'agents' },
+  { name: 'an arm agrees as its lowest probe', body: checkQualificationLowestProbe, group: 'agents' },
+  { name: 'the other arms are not qualified', body: checkQualificationSkipsOtherArms, group: 'agents' },
+  { name: 'a qualification attempt holds the adopter tree', body: checkQualificationHoldsAdopterTree, group: 'agents' },
+  { name: 'the sealed-brief agent edges', body: checkSealedBriefAgentEdges, group: 'agents' },
   { name: 'the records evaluator', body: checkRecordsEvaluator, group: 'records' },
   { name: 'imported rubric scores calibrated', body: checkImportedRubricCalibration, group: 'records' },
   { name: 'imported rubric scores below the minimum', body: checkImportedCalibrationBelowMinimum, group: 'records' },

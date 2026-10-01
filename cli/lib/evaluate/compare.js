@@ -119,7 +119,8 @@ const AjvModule = require('ajv/dist/2020');
 
 const { loadEngine } = require('./engine');
 const { createArtifactValidator } = require('./records');
-const { inputFindings, phaseSnapshotProblems, regularFileBytes, runDirectoryFor } = require('./score');
+const { inputFindings, phaseSnapshotProblems, runDirectoryFor } = require('./score');
+const { holdScoreInputs, regularFileBytes, scoreInputList } = require('./score-inputs');
 
 const Ajv = AjvModule.default ?? AjvModule;
 
@@ -741,6 +742,13 @@ function collectMembers({ folder, runDirectory, record, resolved, engine }) {
     }
   }
   walkRegular(runDirectory, `${SCORES}/${resolved.scoreId}`, read, findings, 'run-file', '');
+  // `score` names the files it reads once, in `scoreInputList`; every one of them is a member, so a replay never lacks an input.
+  if (findings.length === 0) {
+    for (const input of scoreInputList({ runDirectory, index: resolved.index, record })) {
+      if (!files.has(input.relative))
+        findings.push(finding(input.relative, 'run-file', `is ${input.what}, which score reads, and the baseline would not hold it`));
+    }
+  }
   return { files, findings };
 }
 
@@ -758,7 +766,8 @@ async function scoreInputFindings({ folder, runDirectory, index, record, engine 
       finding(TRIAL_SETS_NAME, 'schema', message),
     );
   }
-  const found = await inputFindings({ folder, runDirectory, index, record, engine });
+  const held = holdScoreInputs({ runDirectory, index, record, engine });
+  const found = await inputFindings({ folder, runDirectory, index, record, engine, held });
   if (found.length === 0) {
     try {
       const contract = JSON.parse(regularFileBytes(absolute(runDirectory, index.contract)).toString('utf8'));
