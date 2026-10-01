@@ -2,7 +2,7 @@
 title: 'Story 1.43: Keep ungraded framework errors out of target findings'
 type: 'bugfix'
 created: '2026-10-01'
-status: 'review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'a776042a'
@@ -119,7 +119,7 @@ context:
 - The installed promptfoo (0.123.1) grades a thrown JavaScript assertion (and a `file://` Python or Ruby value that raises) as a failing component, with `gradingResult.pass: false`, `componentResults[0].pass: false` and the crash text as `reason` (and an `error` field, which it also sets on every ordinary failed assertion; `failureReason` is 1 in both cases).
   Such a result is graded, so it still maps to a cited target `fail` row, as the intent says a graded `pass: false` must.
   The existing `errored` case deleted `gradingResult` to build an ungraded row; it now maps the real crashed result as a graded fail and builds the ungraded row from it by deletion.
-  A real promptfoo run does return an ungraded row (`gradingResult: null`, `error` beginning `Error: Transform failed`) for an assertion whose inline `transform` throws, and for a `file://` JavaScript value that throws at load; the end-to-end case uses the transform (Review round 1).
+  A real promptfoo run does return an ungraded row (`gradingResult: null`) for an assertion whose inline `transform` throws, with an `error` beginning `Error: Transform failed`, and for a `file://` JavaScript value that throws at load, whose `error` carries the script's own exception; the end-to-end case uses the transform (Review round 1).
   Reported to the coordinator as a finding; it became Story 1.70 (see Left undone).
 - The guide does not claim an assertion crash arrives ungraded; it states that a thrown `javascript` assertion or a crashing code file arrives graded until Story 1.70 (Review round 1).
 - Of the five end-to-end shapes the matrix could give (`run` per scenario), three run through `tea-evaluate run`; the other two (an ungraded row without an error, a repeated grade) stay in the `--map-results` units, since each `run` case costs about 4.5 seconds local and the refusal path is the same function.
@@ -170,7 +170,7 @@ Builder Analyze (delta, five lenses) found 0 critical, 0 high, 7 medium and 6 lo
 
 ## Left undone, reported
 
-- Story 1.70, "Refuse promptfoo assertions that run adopter code or call a model" (new, end of lane 1): with the installed promptfoo a thrown JavaScript assertion is a graded failing component (see Departures), and promptfoo sets `error` on every failed assertion, so neither `error` nor the result shape tells a crash from a violated oracle. The starter and its guide will admit only deterministic built-in assertion types that run no adopter code and call no model, and the wrapper will refuse any other type with exit 12 naming it. Added to `epics.md` (the section, the Epic Dependencies row with the later rows renumbered 71 to 77, the lane 1 list, the story-count sentences, seventy-seven stories and Stories 1.27 to 1.70, and a pointer from Story 1.43), `test-design-epic-1.md` and `sprint-status.yaml` (`backlog`, and the end of `lane-1`).
+- Story 1.70, "Refuse promptfoo assertions that run adopter code or call a model" (new, end of lane 1): with the installed promptfoo a thrown JavaScript assertion is a graded failing component (see Departures), and promptfoo sets `error` on every failed assertion, so neither `error` nor the result shape tells a crash from a violated oracle. The starter and its guide will admit only deterministic built-in assertion types that run no adopter code and call no model, and the wrapper will refuse any other type with exit 12 naming it. Added to `epics.md` (the section, the Epic Dependencies row with the later rows renumbered, the lane 1 list, the story-count sentences, and a pointer from Story 1.43; the merge with `origin/main` then added Stories 1.90 and 1.91 beside it, so the plan counts seventy-nine stories and the dependency table runs to row 79), `test-design-epic-1.md` and `sprint-status.yaml` (`backlog`, and the end of `lane-1`).
 - The pre-existing medium findings above (SKILL.md Stage 6, `corpus.md` size, the hand-run requirements digest).
 
 ## Review round 1
