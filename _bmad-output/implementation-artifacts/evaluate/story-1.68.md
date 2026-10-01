@@ -330,6 +330,7 @@ The engine exports an in-process aggregate, so the restore-before-recheck rewrit
 - Lane 3's case "an evidence file contradicting itself" rewrote the persisted evidence under the aggregate's read and expected the engine's exit 4 to pass through.
   The held bytes give an aggregate, so that is a rewrite, not a set the engine refused: the case now expects exit 12, status `failed` and the reason that the evidence no longer holds the bytes the runtime wrote.
   An exit 4 from the aggregate passes through only when the held bytes give it too; the canary-floor refusal (exit 5) does.
+  An exit 64 from the aggregate call, which lane 3's text let join the combination, exits 12 (status `mismatch`): the held bytes never give a usage error, so a 64 means the call was wired wrong (Review round 4).
 - `aggregateStrength` joins the doc-claims foreign symbols; the reference's two aggregate sentences are amended.
 
 ### Revert observations
@@ -341,6 +342,31 @@ The engine exports an in-process aggregate, so the restore-before-recheck rewrit
 
 Green on the last state of the tree: engine check (4.7.0), `test:evaluate-run`, `test:evaluate-aggregate`, `test:evaluate-confinement`, `test:evaluate-held-inputs`, `test:evaluate-partitions`, `test:evaluate-boundaries`, `test:evaluate-evaluators`, `test:evaluate-agents`, `test:evaluate-records`, `test:evaluate-check`, `test:evaluate-guidance`, `test:evaluate-interpret`, the rest of the `test:evaluate-*` family, `test:isolation-primitives`, `test:schema-versions`, `test:guard-publish`, `test:release-metadata`, `test:direction`, `test:shards`, `test:ci-coverage` (103 steps), `test:doc-counts`, `test:doc-count-sources`, `test:doc-claims`, `test:changelog`, `lint`, `lint:md`, `format:check`, `docs:validate-links` and `docs:build`.
 Weights from local CPU time at about 2.2 times (CI over local): `test:evaluate-run` 240, `test:evaluate-aggregate` 115, `test:evaluate-held-inputs` 75, `test:evaluate-partitions` 80; no script is near 400 seconds and the five shards balance at 666.7 seconds.
+
+## Review round 4
+
+### Fixed
+
+- The boundaries guard let the exempt calls escape in four ways, each reproduced by the merge reviewer with all 388 checks passing:
+  - a floor decision or a verdict built from `JSON.parse` of the serialized aggregate or artifact;
+  - the single call site held in a closure inside `reproduce` or `reproduceAggregate` and published (`this.aggregateWith = (inputs) => ...`), so `score.js` could call it with other floors;
+  - the same shape for `runScore`.
+
+  The guard now requires the nearest function around each exempt call to be the method's own function expression (an arrow, an inner function expression or a function declaration between them fails), requires `serializeArtifact(...)` to be the direct argument of `Buffer.from` as the `artifact` or `aggregate` value of the object the method returns (so a parse of the serialization cannot be built), and allows exactly one `held.reproduce(...)` call under `cli/`, in `score.js`'s `heldRefusal`, and one `held.reproduceAggregate(...)`, in `heldAggregateRefusal`, with the answer's `.artifact` and `.aggregate` used only in `=== null` and `.equals(...)`.
+  Plants: the parse of the serialized aggregate and of the serialized artifact, the serialization returned as text, a published closure for each of `aggregateStrength` and `runScore`, an inner function expression, a call from another module, outside `heldRefusal`, twice in `heldRefusal`, a parse of `expected.aggregate`, and the whole answer returned; the real files and a clean `score.js` shape stay green.
+
+- The text claimed an exit 64 from the aggregate call joins the combination, but the code refuses every exit the held bytes do not give and the held bytes never give 64, so the command exits 12 with status `mismatch`.
+  The code stays (a 64 means the call was wired wrong); the `score.js` header, the reference and the Merge-with-main section now say so, a race-engine mode `usage-error` exits 64, and `checkHeldAggregate` pins exit 12, status `mismatch` and no aggregate copied.
+  Neither `epics.md` nor `test-design-epic-1.md` promised the pass-through, so the plan text is unchanged.
+
+### Revert observations
+
+- The function-boundary rule dropped: 3 of 412 `test:evaluate-boundaries` checks fail (the published closures and the inner function); the `Buffer.from` return requirement dropped: 3 (both parses and the text return); the call-site rule dropped: 3; the answer-use rule dropped: 2; the call count dropped: 1; the enclosing-function name dropped: 1.
+- The 64 passed through: 1 of 204 `test:evaluate-held-inputs` checks fails.
+
+### Gates
+
+Green on the last state of the tree: engine check, `test:evaluate-boundaries` 412, `test:evaluate-held-inputs`, `test:evaluate-aggregate`, `test:evaluate-partitions`, `test:evaluate-run`, `lint`, `lint:md`, `format:check`, `test:doc-counts`, `test:doc-claims`, `test:changelog`, `test:shards`, `test:ci-coverage`.
 
 ## Left undone, reported
 

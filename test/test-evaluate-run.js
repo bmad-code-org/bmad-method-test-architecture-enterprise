@@ -3599,6 +3599,11 @@ async function checkHeldAggregate() {
       /the call exited 5 where the verified inputs give 0/.test(aggregateReason('garble-policy')),
       'a policy made unreadable for the aggregate and restored was not refused for its exit',
     );
+    // A usage error from the aggregate call (exit 64) is one the held bytes never give: exit 12, not a pass-through.
+    check(
+      /the call exited 64 where the verified inputs give 0/.test(aggregateReason('usage-error')),
+      'an aggregate call that exited 64 was not refused for its exit',
+    );
     // A well-formed aggregate that agrees with every digest and floor but not with the evidence.
     check(
       /differs from the one the verified inputs produce/.test(aggregateReason('forge-aggregate')),

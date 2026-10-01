@@ -96,8 +96,9 @@
  * floors copy is read back after the call, so a replay reads the floors the call
  * read), and copied as `strength-aggregate.json` through
  * the held writer and read back. A disagreement is not copied and exits 12. A
- * floor decision never changes an exit; an engine exit of 4, 5 or 64 joins the
- * combination below.
+ * floor decision never changes an exit; an engine exit of 4 or 5 joins the
+ * combination below when the held bytes give the same exit, and an exit of 64 (a
+ * usage error the held bytes never give) exits 12.
  *
  * The aggregate call is held to the same inputs (Story 1.68): after it every score
  * input is read again (the run's policy among them), the persisted evidence

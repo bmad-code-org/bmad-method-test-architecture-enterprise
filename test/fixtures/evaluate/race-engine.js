@@ -81,7 +81,7 @@
  * - `plant-aggregate`: after the real call, a link to the sentinel is planted where the
  *   copied aggregate (`strength-aggregate.json`) will be written.
  * - Story 1.68: `rewrite-policy` raises the run's policy `regexMatchStepBudget` (`--policy`), which changes the policy digest the aggregate records, for the real call and keeps it,
- *   `restore-policy` puts it back after the call, `garble-policy` turns it into bytes that are no JSON for the call and
+ *   `usage-error` exits 64 without calling the engine, `restore-policy` puts it back after the call, `garble-policy` turns it into bytes that are no JSON for the call and
  *   puts it back, and `forge-aggregate` replaces the staged aggregate with a well-formed one whose defect rate the
  *   evidence does not give.
  */
@@ -120,6 +120,8 @@ if (argv[0] !== 'score') {
     policy.regexMatchStepBudget += 1;
     fs.writeFileSync(policyFile, `${JSON.stringify(policy, null, 2)}\n`);
   }
+  // A usage error (exit 64) the held bytes never give.
+  if (aggregateMode === 'usage-error') process.exit(64);
   const passed = spawnSync(process.execPath, [engineCliPath({}), ...argv], { stdio: 'inherit' });
   if (aggregateMode === 'restore-policy' || aggregateMode === 'garble-policy') fs.writeFileSync(policyFile, originalPolicy);
   if (aggregateMode === 'swap-floors') fs.writeFileSync(floorsFile, originalFloors);
