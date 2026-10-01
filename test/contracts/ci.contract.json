@@ -3,7 +3,7 @@
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "tea-ci-behavioral",
-  "sourceSpecDigest": "sha256:6f8a9c6868f185d889bce65dec6b3425783666edf4112ba8b139415cbe6d6d68",
+  "sourceSpecDigest": "sha256:ce0e31576fcd32ccb96b2d084113c40b2e72f211e462192195e68c6bfe99c3cb",
   "behaviors": [
     {
       "id": "B-001",
@@ -577,7 +577,7 @@
     },
     {
       "id": "B-031",
-      "description": "evaluation-plan-quarry-grader: command-evaluation-check is requested. Run its pull request checks on every pull request, each in a step of its own.",
+      "description": "evaluation-plan-quarry-grader: command-evaluation-install is requested. Run its pull request checks on every pull request.",
       "severity": "critical",
       "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
       "requirementLinks": [
@@ -596,7 +596,7 @@
     },
     {
       "id": "B-032",
-      "description": "evaluation-plan-quarry-grader: command-evaluation-ci-pr is requested. Run its pull request checks on every pull request, each in a step of its own.",
+      "description": "evaluation-plan-quarry-grader: command-evaluation-ci-pr is requested. Run its pull request checks on every pull request.",
       "severity": "critical",
       "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
       "requirementLinks": [
@@ -615,7 +615,7 @@
     },
     {
       "id": "B-033",
-      "description": "evaluation-plan-quarry-grader: artifact-evaluation-runs is requested. keep what the evaluation records under `runs/` as a build artifact, whether its checks pass or fail.",
+      "description": "evaluation-plan-quarry-grader: job-evaluation-pr is requested. Run its pull request checks on every pull request.",
       "severity": "critical",
       "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
       "requirementLinks": [
@@ -634,6 +634,25 @@
     },
     {
       "id": "B-034",
+      "description": "evaluation-plan-quarry-grader: artifact-evaluation-runs is requested. keep what the evaluation records under `runs/` as a build artifact, whether its checks pass or fail.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "evaluation-plan-quarry-grader/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-034"]
+    },
+    {
+      "id": "B-035",
       "description": "evaluation-plan-quarry-grader: the run wrote the workflow file the platform requires and exited clean. A run that wrote nothing, or that exited non-zero, is an environment failure and is never scored as a bad pipeline.",
       "severity": "critical",
       "observableSuccessCriterion": "Each run left the workflow file the platform requires on disk and exited 0.",
@@ -649,7 +668,7 @@
           "id": "unmeasurable-run-scored-as-a-miss"
         }
       ],
-      "oracles": ["O-034"]
+      "oracles": ["O-035"]
     }
   ],
   "oracles": [
@@ -1418,12 +1437,12 @@
     {
       "id": "O-031",
       "polarity": "expects-hold",
-      "commentary": "evaluation-plan-quarry-grader: command-evaluation-check is requested. Run its pull request checks on every pull request, each in a step of its own.",
+      "commentary": "evaluation-plan-quarry-grader: command-evaluation-install is requested. Run its pull request checks on every pull request.",
       "direction": {
         "polarity": "expects-hold",
         "relation": "containment",
         "scope": "The workflow file written for evaluation-plan-quarry-grader, read as one document.",
-        "negativeDomain": "A run whose workflow does not contain \"tea-evaluate check --evaluation evals/grader\".",
+        "negativeDomain": "A run whose workflow does not contain \"npm install --prefix evals\".",
         "evidenceTargets": ["/interactions/ci-evaluation-plan-quarry-grader/artifact/workflow"]
       },
       "check": {
@@ -1433,7 +1452,7 @@
             "pointer": "/interactions/ci-evaluation-plan-quarry-grader/artifact/workflow"
           },
           {
-            "literal": "tea-evaluate check --evaluation evals/grader"
+            "literal": "npm install --prefix evals"
           }
         ]
       }
@@ -1441,7 +1460,7 @@
     {
       "id": "O-032",
       "polarity": "expects-hold",
-      "commentary": "evaluation-plan-quarry-grader: command-evaluation-ci-pr is requested. Run its pull request checks on every pull request, each in a step of its own.",
+      "commentary": "evaluation-plan-quarry-grader: command-evaluation-ci-pr is requested. Run its pull request checks on every pull request.",
       "direction": {
         "polarity": "expects-hold",
         "relation": "containment",
@@ -1464,12 +1483,12 @@
     {
       "id": "O-033",
       "polarity": "expects-hold",
-      "commentary": "evaluation-plan-quarry-grader: artifact-evaluation-runs is requested. keep what the evaluation records under `runs/` as a build artifact, whether its checks pass or fail.",
+      "commentary": "evaluation-plan-quarry-grader: job-evaluation-pr is requested. Run its pull request checks on every pull request.",
       "direction": {
         "polarity": "expects-hold",
         "relation": "containment",
         "scope": "The workflow file written for evaluation-plan-quarry-grader, read as one document.",
-        "negativeDomain": "A run whose workflow does not contain \"runs/\".",
+        "negativeDomain": "A run whose workflow does not contain \"evaluation-pr\".",
         "evidenceTargets": ["/interactions/ci-evaluation-plan-quarry-grader/artifact/workflow"]
       },
       "check": {
@@ -1479,13 +1498,36 @@
             "pointer": "/interactions/ci-evaluation-plan-quarry-grader/artifact/workflow"
           },
           {
-            "literal": "runs/"
+            "literal": "evaluation-pr"
           }
         ]
       }
     },
     {
       "id": "O-034",
+      "polarity": "expects-hold",
+      "commentary": "evaluation-plan-quarry-grader: artifact-evaluation-runs is requested. keep what the evaluation records under `runs/` as a build artifact, whether its checks pass or fail.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for evaluation-plan-quarry-grader, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"evals/grader/runs/\".",
+        "evidenceTargets": ["/interactions/ci-evaluation-plan-quarry-grader/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-evaluation-plan-quarry-grader/artifact/workflow"
+          },
+          {
+            "literal": "evals/grader/runs/"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-035",
       "polarity": "expects-hold",
       "commentary": "evaluation-plan-quarry-grader: the run wrote the workflow file the platform requires and exited clean. A run that wrote nothing, or that exited non-zero, is an environment failure and is never scored as a bad pipeline.",
       "direction": {

@@ -310,6 +310,7 @@
         "test/fixtures/ci-eval/evaluation-plan/.nvmrc",
         "test/fixtures/ci-eval/evaluation-plan/docs/ci-requirements.md",
         "test/fixtures/ci-eval/evaluation-plan/evals/grader/ci/evaluation-ci-plan.json",
+        "test/fixtures/ci-eval/evaluation-plan/evals/package.json",
         "test/fixtures/ci-eval/evaluation-plan/package-lock.json",
         "test/fixtures/ci-eval/evaluation-plan/package.json",
         "test/fixtures/ci-eval/evaluation-plan/src/grader.js",

@@ -202,7 +202,7 @@
   },
   "ci": {
     "contractId": "tea-ci-behavioral",
-    "corpusDigest": "sha256:5eecef8bbb64417b2bb5b9ffeadd6750aaf0e8c913e39090fa0d3a9d547cea34",
+    "corpusDigest": "sha256:5b12e233bd0b5d67df765b52588bfdfe7ac66f685826f2c8f5ca6433ad69aeac",
     "probeCount": 4,
     "strength": {
       "defect": {
@@ -324,6 +324,12 @@
             }
           ],
           "outcomes": [
+            {
+              "probeId": "P-004",
+              "state": "passed-clean-control",
+              "severity": "critical",
+              "trialIndex": 1
+            },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",

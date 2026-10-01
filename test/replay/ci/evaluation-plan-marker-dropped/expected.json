@@ -1,0 +1,47 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: the marker comment is dropped, so a later run cannot find the job and appends a second one.",
+    "Every other element is the capture's, so the result is that one deviation."
+  ],
+  "id": "evaluation-plan-marker-dropped",
+  "suite": "ci",
+  "scorerVersion": 15,
+  "storedOutput": {
+    "origin": "constructed",
+    "workflow": ".github/workflows/test.yml"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/ci-eval/ground-truth.json",
+    "fixtureSet": "evaluation-plan-quarry-grader",
+    "scoringInputsDigest": "sha256:beec250ed15e6758311fcbdad2d38e095ca2e1de42a6b1ac3d0128a486289042"
+  },
+  "derivation": [
+    "The file parses and lints clean and every command is present, but the job carries no marker comment, so the job element misses."
+  ],
+  "result": {
+    "isMinimalRequest": false,
+    "parse": {
+      "ok": true,
+      "errors": []
+    },
+    "lint": {
+      "findings": []
+    },
+    "elements": {
+      "trigger-pull-request-main": true,
+      "permission-contents-read": true,
+      "node-version-from-nvmrc": true,
+      "command-install": true,
+      "command-unit-tests": true,
+      "command-evaluation-install": true,
+      "command-evaluation-ci-pr": true,
+      "job-evaluation-pr": false,
+      "artifact-evaluation-runs": true
+    },
+    "elementMisses": [
+      "job-evaluation-pr: job evaluation-pr does not carry the comment # tea-evaluation-plan: evals/grader/ci/evaluation-ci-plan.json"
+    ],
+    "unrequested": [],
+    "ruleViolations": []
+  }
+}

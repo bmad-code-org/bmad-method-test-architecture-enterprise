@@ -51,8 +51,8 @@
  *   rule violations      the two rules the workflow states about its own output: no
  *                        unsafe context interpolated into a run: block, and no
  *                        continue-on-error on a step that runs tests or an evaluation
- *                        check (a tea-evaluate or eval-quality-gates command, whose
- *                        exit is the verdict), ceiling zero
+ *                        check (a tea-evaluate command, whose exit is the verdict), or
+ *                        on a job that runs one, ceiling zero
  *   stability            the same scored answer on identical input, over everything above
  *   fixture mutations    the run must not change or delete a file the project came with
  *
@@ -260,7 +260,7 @@ const ACTIONLINT = {
 const LINT_TIMEOUT_MS = 30_000;
 
 /** The kinds an expected element may declare, and what each one is checked with. */
-const ELEMENT_KINDS = ['trigger', 'permission', 'node-version', 'command', 'gate', 'artifact'];
+const ELEMENT_KINDS = ['trigger', 'permission', 'node-version', 'command', 'gate', 'artifact', 'job'];
 
 /** The gate shapes checkElement knows how to read. */
 const GATE_SHAPES = ['lint-precedes-tests', 'matrix-shards', 'burn-in'];
@@ -291,8 +291,8 @@ const TEST_RUNNER_PATTERNS = [
 ];
 
 /** A run: block that lints, for the unrequested-gate count when no lint gate was asked for. */
-/** A `tea-evaluate` or `eval-quality-gates` invocation: a step that runs an evaluation check, whose exit is the verdict. */
-const EVALUATION_INVOCATION = /(?<![\w-])(?:tea-evaluate|eval-quality-gates)(?![\w-])/;
+/** A `tea-evaluate` invocation: a step that runs an evaluation check, whose exit is the verdict. */
+const EVALUATION_INVOCATION = /(?<![\w-])tea-evaluate(?![\w-])/;
 
 const LINT_INVOCATION = /(?<![\w-])(?:npm run lint|npx eslint|eslint |prettier --check)/;
 
@@ -852,6 +852,17 @@ async function validateCorpus(groundTruth) {
           if (element.standaloneStep !== undefined && typeof element.standaloneStep !== 'boolean') {
             problems.push(`${elementLabel}: standaloneStep is declared and is not a boolean`);
           }
+          if (
+            element.checkIds !== undefined &&
+            (!Array.isArray(element.checkIds) ||
+              element.checkIds.length === 0 ||
+              element.checkIds.some((id) => typeof id !== 'string' || id.length === 0))
+          ) {
+            problems.push(`${elementLabel}: checkIds is declared and is not a non-empty list of names`);
+          }
+          if (element.checkIds !== undefined && element.standaloneStep !== true) {
+            problems.push(`${elementLabel}: checkIds names the checks a step carries and needs standaloneStep to find that step`);
+          }
           break;
         }
         case 'gate': {
@@ -891,6 +902,14 @@ async function validateCorpus(groundTruth) {
           }
           if (element.condition !== undefined && element.onFailureOnly === true) {
             problems.push(`${elementLabel}: declares a condition and onFailureOnly, which both constrain the upload's if`);
+          }
+          break;
+        }
+        case 'job': {
+          for (const field of ['jobId', 'marker', 'command']) {
+            if (typeof element[field] !== 'string' || element[field].trim().length === 0) {
+              problems.push(`${elementLabel}: job declares no ${field}`);
+            }
           }
           break;
         }
@@ -1499,6 +1518,21 @@ function conditionIs(step, condition) {
   return written === condition;
 }
 
+/**
+ * Whether `marker` is a comment line inside the job `jobId`: after its two-space key line and before the next
+ * two-space key. A parse drops comments, so this reads the source.
+ */
+function jobCarriesMarker(text, jobId, marker) {
+  const lines = String(text).split('\n');
+  const start = lines.findIndex((line) => line.trimEnd() === `  ${jobId}:`);
+  if (start === -1) return false;
+  for (let index = start + 1; index < lines.length; index += 1) {
+    if (/^ {2}\S/.test(lines[index])) return false;
+    if (lines[index].trim() === marker) return true;
+  }
+  return false;
+}
+
 /** The `needs` of a job, as a list of job ids. */
 function needsOf(job) {
   return asList(job?.needs).map(String);
@@ -1563,9 +1597,10 @@ function nodeVersionFromNvmrc(job, index, step, version) {
  * @param {object} element One entry of a fixture set's expectedElements.
  * @param {object} set The fixture set, for the values a check reads off it.
  * @param {object} workflow The parsed document.
+ * @param {string} [text] The workflow's source, for what a parse drops (a comment).
  * @returns {{present: boolean, detail: string}}
  */
-function checkElement(element, set, workflow) {
+function checkElement(element, set, workflow, text = '') {
   const jobs = jobsOf(workflow);
   switch (element.kind) {
     case 'trigger': {
@@ -1614,11 +1649,28 @@ function checkElement(element, set, workflow) {
         if (holding[0].trim() !== element.command) {
           return { present: false, detail: `the run: block that invokes ${element.command} holds more than that command` };
         }
+        if (element.checkIds !== undefined) {
+          // The step is named for the checks it carries: every id appears in its name.
+          const holder = allSteps(workflow).find(({ step }) => String(step.run) === holding[0]);
+          const unnamed = element.checkIds.filter((id) => !String(holder?.step.name ?? '').includes(id));
+          if (unnamed.length > 0)
+            return { present: false, detail: `the step that runs ${element.command} is not named for ${unnamed.join(', ')}` };
+        }
       }
       return { present: true, detail: `a run: block invokes ${element.command}` };
     }
     case 'gate': {
       return checkGate(element, workflow, jobs);
+    }
+    case 'job': {
+      const job = jobs.find(([jobId]) => jobId === element.jobId)?.[1];
+      if (job === undefined) return { present: false, detail: `no job is named ${element.jobId}` };
+      if (!invokes(jobScripts(job), element.command))
+        return { present: false, detail: `job ${element.jobId} does not run ${element.command}` };
+      if (!jobCarriesMarker(text, element.jobId, element.marker)) {
+        return { present: false, detail: `job ${element.jobId} does not carry the comment ${element.marker}` };
+      }
+      return { present: true, detail: `job ${element.jobId} runs the command under its marker` };
     }
     case 'artifact': {
       const uploads = allSteps(workflow).filter(({ step }) => usesAction(step, 'actions/upload-artifact'));
@@ -1802,6 +1854,13 @@ function unrequestedElements(set, workflow) {
  */
 function workflowRuleViolations(workflow) {
   const found = [];
+  // A job-level continue-on-error lets every step of the job fail without failing the run.
+  for (const [jobId, job] of jobsOf(workflow)) {
+    const suppressed = job['continue-on-error'] === true || String(job['continue-on-error'] ?? '').trim() === 'true';
+    if (suppressed && jobScripts(job).some((script) => EVALUATION_INVOCATION.test(script))) {
+      found.push(`continue-on-error: on the job ${jobId}, which runs an evaluation check`);
+    }
+  }
   for (const { jobId, index, step, script } of runScripts(workflow)) {
     for (const match of script.matchAll(UNSAFE_CONTEXT)) {
       found.push(`unsafe-interpolation: ${match[0].replaceAll(/\s+/g, ' ')} in job ${jobId} step ${index + 1}`);
@@ -1833,7 +1892,8 @@ function scoreRun(set, text, lint) {
   const parsed = parseWorkflow(text);
   const workflow = parsed.ok ? parsed.workflow : null;
   const elements = (set.expectedElements ?? []).map((element) => {
-    const result = workflow === null ? { present: false, detail: 'the workflow did not parse' } : checkElement(element, set, workflow);
+    const result =
+      workflow === null ? { present: false, detail: 'the workflow did not parse' } : checkElement(element, set, workflow, text);
     return { id: element.id, kind: element.kind, present: result.present, detail: result.detail };
   });
   return {

@@ -81,7 +81,7 @@ Display:
 1. Preflight Checks (step-01-preflight) — {✅ if in stepsCompleted, ⬜ otherwise}
 2. Generate Pipeline (step-02-generate-pipeline) — {✅ if in stepsCompleted, ⬜ otherwise}
 3. Configure Quality Gates (step-03-configure-quality-gates) — {✅ if in stepsCompleted, ⬜ otherwise}
-4. Render Evaluation Plans (step-03b-render-evaluation-plans) — {✅ if in stepsCompleted, ⬜ otherwise}
+4. Render Evaluation Plans (step-03b-render-evaluation-plans) — {✅ if in stepsCompleted, ⬜ otherwise; when `lastStep` is `step-04-validate-and-summary` and this step is absent, "not run: checkpoint predates this step, use [E] Edit to render plans"}
 5. Validate & Summary (step-04-validate-and-summary) — {✅ if in stepsCompleted, ⬜ otherwise}"
 
 ---

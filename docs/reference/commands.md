@@ -132,12 +132,14 @@ To ship your own workflow, package it as custom content and attach it to `bmad-t
 
 - CI platform (GitHub Actions, GitLab CI, etc.)
 - Sharding strategy, burn-in preferences
+- Any `ci/evaluation-ci-plan.json` an evaluation holds, which the workflow detects and renders
 
 **Key Outputs:**
 
 - Platform-specific CI workflow (`.github/workflows/test.yml` by default, resolved per platform)
 - Parallel execution configuration
 - Burn-in loops for flakiness detection
+- An `evaluation-<tier>` job per tier an evaluation plan places a check on, with an `if: always()` upload of the evaluation folder's `runs/`
 - `docs/ci.md` (pipeline guide) and `docs/ci-secrets-checklist.md` (required secrets)
 
 **How-To Guide:** [Setup CI Pipeline](/docs/how-to/workflows/setup-ci.md)

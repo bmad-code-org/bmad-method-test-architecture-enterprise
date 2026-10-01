@@ -1,0 +1,47 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: the evaluation job runs the root install, which the evaluations folder's own package.json makes unnecessary and which fails in a repository with no root manifest.",
+    "Every other element is the capture's, so the result is that one deviation."
+  ],
+  "id": "evaluation-plan-root-install-in-job",
+  "suite": "ci",
+  "scorerVersion": 15,
+  "storedOutput": {
+    "origin": "constructed",
+    "workflow": ".github/workflows/test.yml"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/ci-eval/ground-truth.json",
+    "fixtureSet": "evaluation-plan-quarry-grader",
+    "scoringInputsDigest": "sha256:beec250ed15e6758311fcbdad2d38e095ca2e1de42a6b1ac3d0128a486289042"
+  },
+  "derivation": [
+    "The file parses and lints clean, but the root npm ci is invoked by two run: blocks, so that element misses. Everything else is present."
+  ],
+  "result": {
+    "isMinimalRequest": false,
+    "parse": {
+      "ok": true,
+      "errors": []
+    },
+    "lint": {
+      "findings": []
+    },
+    "elements": {
+      "trigger-pull-request-main": true,
+      "permission-contents-read": true,
+      "node-version-from-nvmrc": true,
+      "command-install": false,
+      "command-unit-tests": true,
+      "command-evaluation-install": true,
+      "command-evaluation-ci-pr": true,
+      "job-evaluation-pr": true,
+      "artifact-evaluation-runs": true
+    },
+    "elementMisses": [
+      "command-install: 2 run: blocks invoke npm ci, expected one"
+    ],
+    "unrequested": [],
+    "ruleViolations": []
+  }
+}

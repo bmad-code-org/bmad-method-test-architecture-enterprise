@@ -111,6 +111,7 @@ development_status:
   1-91-keep-machine-paths-out-of-a-committed-baseline: backlog
   1-92-stop-tea-evaluate-ci-at-once-on-a-signal-while-an-engine-stage-runs: backlog
   1-93-prove-the-merge-scheduled-and-release-rendering-and-the-re-render-of-evaluation-plans: backlog
+  1-94-score-each-stored-workflow-in-the-ci-probe-leg: backlog
   epic-1-retrospective: optional
 
   epic-2: in-progress
@@ -166,6 +167,7 @@ parallel_lanes:
     - 1-91-keep-machine-paths-out-of-a-committed-baseline
     - 1-92-stop-tea-evaluate-ci-at-once-on-a-signal-while-an-engine-stage-runs
     - 1-93-prove-the-merge-scheduled-and-release-rendering-and-the-re-render-of-evaluation-plans
+    - 1-94-score-each-stored-workflow-in-the-ci-probe-leg
 owner_handoff:
   - key: h-1-accept-the-dogfood-baseline-and-turn-its-pr-replay-green
     owner: Murat

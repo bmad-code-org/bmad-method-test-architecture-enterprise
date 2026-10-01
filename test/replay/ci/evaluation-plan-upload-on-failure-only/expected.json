@@ -1,6 +1,6 @@
 {
   "$comment": [
-    "Why this case is in the corpus: it is the captured pipeline with one deviation, the evidence upload conditioned on failure() instead of always(). A passing run then leaves no evidence bundle, which is the case AD-12 says the upload exists to prevent.",
+    "Why this case is in the corpus: the evidence upload is conditioned on failure() instead of always(). A passing run then leaves no evidence bundle, which AD-12 says the upload exists to prevent.",
     "Every other element is the capture's, so the result is that one deviation."
   ],
   "id": "evaluation-plan-upload-on-failure-only",
@@ -13,10 +13,10 @@
   "inputs": {
     "groundTruth": "test/fixtures/ci-eval/ground-truth.json",
     "fixtureSet": "evaluation-plan-quarry-grader",
-    "scoringInputsDigest": "sha256:6017257df50a73e67578a1339265b607d70b7a50a8e535273f40e7469f11344b"
+    "scoringInputsDigest": "sha256:beec250ed15e6758311fcbdad2d38e095ca2e1de42a6b1ac3d0128a486289042"
   },
   "derivation": [
-    "The file parses and lints clean. The upload of evals/grader/runs/ names runs/ and its if is failure(), which is not always(), so the artifact element misses. The other seven elements are present and nothing unrequested was added."
+    "The file parses and lints clean. The upload of evals/grader/runs/ runs under failure(), which is not always(), so the artifact element misses and every other element is present."
   ],
   "result": {
     "isMinimalRequest": false,
@@ -33,12 +33,13 @@
       "node-version-from-nvmrc": true,
       "command-install": true,
       "command-unit-tests": true,
-      "command-evaluation-check": true,
+      "command-evaluation-install": true,
       "command-evaluation-ci-pr": true,
+      "job-evaluation-pr": true,
       "artifact-evaluation-runs": false
     },
     "elementMisses": [
-      "artifact-evaluation-runs: the upload of runs/ does not run under always()"
+      "artifact-evaluation-runs: the upload of evals/grader/runs/ does not run under always()"
     ],
     "unrequested": [],
     "ruleViolations": []

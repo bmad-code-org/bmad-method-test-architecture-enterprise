@@ -302,8 +302,8 @@ cases whose numbers actually moved.
 The same caveat the CLI parser fixtures carry applies here and applies harder.
 Every constructed case that produces a number was written by hand to be parsed, so a
 green run proves the scorers are deterministic and reproduce history. It proves nothing
-about whether they handle real agent output correctly. One hundred twenty-two of the one
-hundred twenty-seven cases produce a number and one hundred seven of those are constructed.
+about whether they handle real agent output correctly. One hundred thirty-two of the one
+hundred thirty-seven cases produce a number and one hundred seventeen of those are constructed.
 Fifteen carry captured bytes: twelve from the ATDD fixture corpus, two from
 `fixtures/test-review-cli/` and one from a live `eval:ci` run over the `evaluation-plan`
 project. The two test-review captures score zero recall because their reports document no

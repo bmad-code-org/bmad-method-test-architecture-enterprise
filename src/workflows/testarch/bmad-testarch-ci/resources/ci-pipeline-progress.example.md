@@ -1,5 +1,12 @@
 ---
-stepsCompleted: ['step-01-preflight', 'step-02-generate-pipeline', 'step-03-configure-quality-gates', 'step-04-validate-and-summary']
+stepsCompleted:
+  [
+    'step-01-preflight',
+    'step-02-generate-pipeline',
+    'step-03-configure-quality-gates',
+    'step-03b-render-evaluation-plans',
+    'step-04-validate-and-summary',
+  ]
 lastStep: 'step-04-validate-and-summary'
 lastSaved: '2026-08-12'
 ---
@@ -91,6 +98,10 @@ No `contract-test` stage: `tea_use_pactjs_utils` is `false`.
 ### Notifications
 
 Failure notifications post to Slack (`#eng-ci-alerts`) via `slackapi/slack-github-action` on `test`, `burn-in`, or `test-review` job failure. The notification payload links the failing run and the uploaded artifact.
+
+## Step 3b: Render Evaluation Plans
+
+evaluation plans: none. No `ci/evaluation-ci-plan.json` found in the repository, so the pipeline is unchanged.
 
 ## Step 4: Validate & Summarize
 

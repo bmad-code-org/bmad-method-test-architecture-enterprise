@@ -10,15 +10,19 @@
  * Each case below is one revert check the story names:
  *  - the detection step is reached from the create entry (the `nextStepFile` chain from step 1), from the edit entry
  *    (`steps-e/step-01-assess.md` detects and `steps-e/step-02-apply-edit.md` renders, both through their
- *    `evaluationPlansStepFile`) and from the resume routing, so deleting the step file or dropping any reference fails;
- *  - the GitHub Actions template carries the evaluation block between its markers, parsed as YAML: a per-check step
- *    pattern (a named standalone `run:` step) and an upload of the evaluation folder's `runs/` with `if: always()`, so
- *    removing the block or either pattern fails;
- *  - skill prose points at the runtime's schema and `ci-plan.js` and restates no AD-10 tier table, so writing a check id
- *    with its default tier into the skill fails;
+ *    `evaluationPlansStepFile` and their anchored load instructions) and from the resume routing, so deleting the step
+ *    file or dropping any reference fails;
+ *  - the GitHub Actions template carries the evaluation block between its markers, parsed as YAML: one step that runs
+ *    `tea-evaluate ci` for the tier through `npm exec --prefix`, named for the tier's checks, an install of the evaluations
+ *    folder with `--prefix`, and an upload of exactly the evaluation folder's `runs/` with `if: always()`, so removing the
+ *    block or any pattern fails;
+ *  - skill prose points at the runtime's schema and `ci-plan.js` and restates no AD-10 tier table, in every skill file but
+ *    the knowledge fragments;
  *  - the fixture adopter's plan is the Story 1.10 fixture's plan with its evaluation folder moved, validates through the
- *    runtime's own reader, and the ground truth's command elements are the plan's distinct `pr` commands, so a plan and a
- *    ground truth that drift apart fail;
+ *    runtime's own reader, and the ground truth's elements are what that plan renders to, so a plan and a ground truth
+ *    that drift apart fail;
+ *  - the corpus validator refuses the malformed elements it names;
+ *  - the CI suite's manifest lists exactly the files under each project root;
  *  - the stored `evaluation-plan` replay is a real capture of the live `eval:ci` run.
  */
 
@@ -28,6 +32,7 @@ const path = require('node:path');
 const YAML = require('yaml');
 
 const { DEFAULT_TIERS, PLAN_PATH, readPlan } = require('../cli/lib/evaluate/ci-plan');
+const { validateCorpus, scoreRun } = require('./eval-ci');
 
 const ROOT = path.join(__dirname, '..');
 const SKILL = path.join(ROOT, 'src', 'workflows', 'testarch', 'bmad-testarch-ci');
@@ -39,6 +44,8 @@ const SET_ID = 'evaluation-plan-quarry-grader';
 const FIXTURE_FOLDER = 'test/fixtures/ci-eval/evaluation-plan/evals/grader';
 const SOURCE_FOLDER = 'test/fixtures/evaluate-mcp/evals/grader';
 const REPLAY_ROOT = path.join(__dirname, 'replay', 'ci');
+const FIXTURE_ROOT = path.join(__dirname, 'fixtures', 'ci-eval');
+const MANIFEST = path.join(__dirname, 'evals', 'suite-manifest.json');
 
 const colors = { reset: '\u001B[0m', red: '\u001B[31m', green: '\u001B[32m' };
 const failures = [];
@@ -86,50 +93,61 @@ function checkEntryPoints() {
   const create = /\*\*If C:\*\* Load `\{skill-root\}\/([^`]+)`/.exec(skill)?.[1] ?? null;
   const edit = /\*\*If E:\*\* Load `\{skill-root\}\/([^`]+)`/.exec(skill)?.[1] ?? null;
   const resume = /\*\*If R:\*\* Load `\{skill-root\}\/([^`]+)`/.exec(skill)?.[1] ?? null;
-  check(create !== null && edit !== null && resume !== null, 'SKILL.md routes the create, edit and resume entries');
+  check(create !== null && edit !== null && resume !== null, 'SKILL.md lacks a create, edit or resume route');
 
-  check(readSkill(STEP) !== null, `${STEP} exists`);
-  check(frontmatterOf(readSkill(STEP)).name === 'step-03b-render-evaluation-plans', `${STEP} names itself in its frontmatter`);
+  check(readSkill(STEP) !== null, `${STEP} is missing`);
+  check(frontmatterOf(readSkill(STEP)).name === 'step-03b-render-evaluation-plans', `${STEP} carries another name in its frontmatter`);
 
   // Create mode: the chain of nextStepFile from the first step reaches the detection step before the validation step.
   const chain = create === null ? [] : nextChain(create);
   const at = chain.indexOf(STEP);
-  check(at !== -1, `create mode: the nextStepFile chain from ${create} (${chain.join(' > ')}) does not reach ${STEP}`);
+  check(at !== -1, `create mode: the nextStepFile chain from ${create} (${chain.join(' > ')}) skips ${STEP}`);
   check(
     at !== -1 && chain[at + 1] === 'steps-c/step-04-validate-and-summary.md',
-    `create mode: ${STEP} is not followed by the validation step in the chain (${chain.join(' > ')})`,
+    `create mode: ${STEP} is followed by another step than the validation step (${chain.join(' > ')})`,
   );
   check(
     at > 0 && chain[at - 1] === 'steps-c/step-03-configure-quality-gates.md',
-    `create mode: ${STEP} does not follow the quality gates step in the chain (${chain.join(' > ')})`,
+    `create mode: ${STEP} follows another step than the quality gates step (${chain.join(' > ')})`,
   );
 
-  // Edit mode: the assess step detects and validates, the apply step renders, each through its own reference.
-  for (const [file, sections] of [
-    ['steps-e/step-01-assess.md', 'sections 1 and 2'],
-    ['steps-e/step-02-apply-edit.md', 'sections 3 and 4'],
+  // Edit mode: the assess step detects and validates, the apply step renders, each through its own reference and an
+  // instruction that starts at the verb, so a negated sentence does not satisfy it.
+  const assess = readSkill('steps-e/step-01-assess.md');
+  const apply = readSkill('steps-e/step-02-apply-edit.md');
+  check(
+    skillPathOf(frontmatterOf(assess).nextStepFile) === 'steps-e/step-02-apply-edit.md',
+    'edit mode: the assess step hands over to a step other than the apply step',
+  );
+  for (const [file, text, instruction] of [
+    ['steps-e/step-01-assess.md', assess, /^Load `\{evaluationPlansStepFile\}`, read it completely, and run its sections 1 and 2 /m],
+    [
+      'steps-e/step-02-apply-edit.md',
+      apply,
+      /^When step 1 found evaluation plans, run sections 3 and 4 of `\{evaluationPlansStepFile\}` /m,
+    ],
   ]) {
-    const text = readSkill(file);
     check(
       skillPathOf(frontmatterOf(text).evaluationPlansStepFile) === STEP,
-      `edit mode: ${file} does not name ${STEP} as its evaluationPlansStepFile`,
+      `edit mode: ${file} names another file than ${STEP} as its evaluationPlansStepFile`,
     );
-    check(
-      text !== null && text.includes('{evaluationPlansStepFile}') && text.includes(sections),
-      `edit mode: ${file} does not load {evaluationPlansStepFile} for ${sections}`,
-    );
+    check(instruction.test(text ?? ''), `edit mode: ${file} lacks the instruction that loads {evaluationPlansStepFile} at its verb`);
   }
-  check(edit === 'steps-e/step-01-assess.md', `edit mode: SKILL.md routes E to ${edit}, expected the assess step`);
+  check(edit === 'steps-e/step-01-assess.md', `edit mode: SKILL.md routes E to ${edit}, which is not the assess step`);
 
   // Resume: the checkpoint's last step routes onto the detection step and past it.
   const resumeText = resume === null ? '' : (readSkill(resume) ?? '');
   check(
     /'step-03-configure-quality-gates'` → Load `\.\/step-03b-render-evaluation-plans\.md`/.test(resumeText),
-    'resume mode: a run last saved at the quality gates step does not route to the detection step',
+    'resume mode: a run last saved at the quality gates step skips the detection step',
   );
   check(
     /'step-03b-render-evaluation-plans'` → Load `\.\/step-04-validate-and-summary\.md`/.test(resumeText),
-    'resume mode: a run last saved at the detection step does not route to the validation step',
+    'resume mode: a run last saved at the detection step skips the validation step',
+  );
+  check(
+    /not run: checkpoint predates this step, use \[E\] Edit to render plans/.test(resumeText),
+    'resume mode: the dashboard of a checkpoint that predates the detection step does not say so',
   );
 }
 
@@ -152,42 +170,63 @@ function checkTemplateBlock() {
   const jobs = Object.entries(parsed?.jobs ?? {});
   check(jobs.length === 1, `the evaluation block declares ${jobs.length} jobs, expected one per tier pattern`);
   const [jobId, job] = jobs[0] ?? [];
-  check(jobId === 'JOB_ID', `the evaluation job is keyed ${JSON.stringify(jobId)}, expected the JOB_ID placeholder`);
-  check(job?.['timeout-minutes'] === 'TIMEOUT_MINUTES', 'the evaluation job does not carry the TIMEOUT_MINUTES placeholder');
+  check(jobId === 'JOB_ID', `the evaluation job is keyed ${JSON.stringify(jobId)} where the JOB_ID placeholder belongs`);
+  check(job?.['timeout-minutes'] === 'TIMEOUT_MINUTES', 'the evaluation job lacks the TIMEOUT_MINUTES placeholder');
+  check(job?.['continue-on-error'] === undefined, 'the evaluation job is marked continue-on-error, so no step of it can fail the run');
   check(
-    /# tea-evaluation-plan: /.test(match[1]),
-    'the evaluation block carries the tea-evaluation-plan marker comment the re-render looks for',
+    /# tea-evaluation-plan: PLAN_PATH/.test(match[1]),
+    'the evaluation block lacks the tea-evaluation-plan marker comment the re-render looks for',
   );
   const steps = Array.isArray(job?.steps) ? job.steps : [];
 
-  // The per-check step pattern: a named, standalone run: step that holds the command placeholder.
-  const checkSteps = steps.filter(
-    (step) => typeof step?.name === 'string' && typeof step?.run === 'string' && step.run.includes('COMMAND'),
-  );
-  check(checkSteps.length === 1, `the evaluation block holds ${checkSteps.length} per-check step patterns, expected one`);
+  // The tier step: exactly one step runs the runtime's tier entry, through npm exec with the evaluations folder as prefix.
+  const tierSteps = steps.filter((step) => typeof step?.run === 'string' && step.run.includes('tea-evaluate'));
+  check(tierSteps.length === 1, `the evaluation block holds ${tierSteps.length} steps that run tea-evaluate, expected one`);
+  const [tierStep] = tierSteps;
   check(
-    checkSteps.every((step) => step.name.includes('CHECK_IDS') && step['continue-on-error'] === undefined),
-    'the per-check step pattern is not named for its check ids or is marked continue-on-error',
+    tierStep?.run.trim() === 'npm exec --prefix EVALUATIONS_FOLDER -- tea-evaluate ci --evaluation EVALUATION_FOLDER --tier TIER' &&
+      tierStep.run.endsWith('\n'),
+    'the tier step is not a block scalar that holds the npm exec invocation of tea-evaluate ci and nothing else',
   );
   check(
-    checkSteps.every((step) => step.run.trim() === 'COMMAND' && step.run.endsWith('\n')),
-    'the per-check step pattern is not a block scalar that holds its one command and nothing else',
+    typeof tierStep?.name === 'string' && tierStep.name.includes('CHECK_IDS'),
+    'the tier step is not named for the ids of the checks on the tier',
+  );
+  check(tierStep?.if === undefined && tierStep?.['continue-on-error'] === undefined, 'the tier step carries an if or continue-on-error');
+
+  // The install runs against the evaluations folder, and the job runs no root install or root-keyed cache.
+  const installs = steps.filter((step) => typeof step?.run === 'string' && /^INSTALL\b/.test(step.run.trim()));
+  check(
+    installs.length === 1 && installs[0].run.trim() === 'INSTALL --prefix EVALUATIONS_FOLDER',
+    'the evaluation block does not install the evaluations folder with --prefix in exactly one step',
+  );
+  check(
+    !steps.some((step) => typeof step?.run === 'string' && /^npm (ci|install)\s*(#.*)?$/m.test(step.run.trim())),
+    'the evaluation block runs a root install',
+  );
+  check(
+    !steps.some((step) => step?.with?.cache !== undefined),
+    'the evaluation block caches on a root manifest the repository may not have',
   );
 
-  // The evidence upload: the evaluation folder's runs/ directory, whatever the result.
-  const uploads = steps.filter((step) => typeof step?.uses === 'string' && step.uses.startsWith('actions/upload-artifact@'));
+  // The evidence upload: exactly the evaluation folder's runs/ directory, whatever the result.
+  const uploads = steps.filter((step) => typeof step?.uses === 'string' && step.uses.startsWith('actions/upload-artifact'));
   check(uploads.length === 1, `the evaluation block holds ${uploads.length} artifact uploads, expected one`);
   const upload = uploads[0];
-  check(upload?.if === 'always()', `the evaluation upload runs under ${JSON.stringify(upload?.if)}, expected always()`);
+  check(
+    upload?.uses === 'actions/upload-artifact@v4',
+    `the evaluation upload uses ${JSON.stringify(upload?.uses)} where actions/upload-artifact@v4 belongs`,
+  );
+  check(upload?.if === 'always()', `the evaluation upload runs under ${JSON.stringify(upload?.if)} where always() belongs`);
   check(
     upload?.with?.name === 'JOB_ID-runs',
-    `the evaluation upload is named ${JSON.stringify(upload?.with?.name)}, expected the job id and -runs`,
+    `the evaluation upload is named ${JSON.stringify(upload?.with?.name)} where the job id and -runs belong`,
   );
   check(
-    typeof upload?.with?.path === 'string' && upload.with.path.endsWith('/runs/'),
-    `the evaluation upload path is ${JSON.stringify(upload?.with?.path)}, expected the evaluation folder's runs/ directory`,
+    upload?.with?.path === 'EVALUATION_FOLDER/runs/',
+    `the evaluation upload path is ${JSON.stringify(upload?.with?.path)} where the evaluation folder's runs/ directory belongs`,
   );
-  check(steps.indexOf(upload) > steps.indexOf(checkSteps[0]), 'the evaluation upload does not come after the check step pattern');
+  check(steps.indexOf(upload) > steps.indexOf(tierStep), 'the evaluation upload comes before the tier step');
 
   // The template as a whole stays YAML a workflow can start from.
   try {
@@ -197,10 +236,21 @@ function checkTemplateBlock() {
   }
 }
 
+/** Every file under the skill except the knowledge fragments, as paths relative to the skill root. */
+function skillFiles(directory = SKILL) {
+  return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const absolute = path.join(directory, entry.name);
+    const relative = path.relative(SKILL, absolute).split(path.sep).join('/');
+    if (entry.isDirectory()) return relative === 'resources/knowledge' ? [] : skillFiles(absolute);
+    return [relative];
+  });
+}
+
 function checkNoRestatedTable() {
   const step = readSkill(STEP) ?? '';
   check(step.includes(PLAN_SCHEMA_FILE), `${STEP} does not point at ${PLAN_SCHEMA_FILE}`);
   check(step.includes(PLAN_RULES_FILE), `${STEP} does not point at ${PLAN_RULES_FILE}`);
+  check(step.includes('Never copy their contents into this skill or into a pipeline file.'), `${STEP} lacks its never-copy sentence`);
   check(fs.existsSync(path.join(ROOT, PLAN_SCHEMA_FILE)), `${PLAN_SCHEMA_FILE} does not exist`);
   check(fs.existsSync(path.join(ROOT, PLAN_RULES_FILE)), `${PLAN_RULES_FILE} does not exist`);
 
@@ -208,28 +258,23 @@ function checkNoRestatedTable() {
   // without its tier, copies the table. A test may import the table and the skill must point at it.
   const distinctive = Object.keys(DEFAULT_TIERS).filter((id) => id.includes('-') || id === 'gameability');
   check(distinctive.length >= 7, `the AD-10 table gives ${distinctive.length} distinctive check ids, expected at least 7`);
-  const block =
-    /^# evaluation-plan:begin\n[\S\s]*?^# evaluation-plan:end$/m.exec(readSkill('github-actions-template.yaml') ?? '')?.[0] ?? '';
-  for (const [label, text] of [
-    [STEP, step],
-    ['the evaluation block of github-actions-template.yaml', block],
-    ['steps-e/step-01-assess.md', readSkill('steps-e/step-01-assess.md') ?? ''],
-    ['steps-e/step-02-apply-edit.md', readSkill('steps-e/step-02-apply-edit.md') ?? ''],
-    ['checklist.md', readSkill('checklist.md') ?? ''],
-    ['SKILL.md', readSkill('SKILL.md') ?? ''],
-    ['instructions.md', readSkill('instructions.md') ?? ''],
-    ['steps-c/step-01b-resume.md', readSkill('steps-c/step-01b-resume.md') ?? ''],
-    ['steps-c/step-04-validate-and-summary.md', readSkill('steps-c/step-04-validate-and-summary.md') ?? ''],
-    ['steps-v/step-01-validate.md', readSkill('steps-v/step-01-validate.md') ?? ''],
-  ]) {
-    const restated = distinctive.filter((id) => text.includes(id));
-    check(restated.length === 0, `${label} restates the AD-10 table by naming ${restated.join(', ')}; point at ${PLAN_RULES_FILE} instead`);
+  const files = skillFiles();
+  check(
+    files.length > 10 && files.includes(STEP),
+    `the scan found ${files.length} skill files and ${files.includes(STEP) ? 'the step' : 'not the step'}`,
+  );
+  for (const relative of files) {
+    const restated = distinctive.filter((id) => (readSkill(relative) ?? '').includes(id));
+    check(
+      restated.length === 0,
+      `${relative} restates the AD-10 table by naming ${restated.join(', ')}; point at ${PLAN_RULES_FILE} instead`,
+    );
   }
 }
 
-/** The distinct argv of one tier's checks, in plan order, as the step renders them (an `npx` lead). */
-function distinctCommands(plan, tier) {
-  return [...new Set(plan.checks.filter((entry) => entry.placement.tier === tier).map((entry) => ['npx', ...entry.command].join(' ')))];
+/** The ids of one tier's checks, in plan order. */
+function checkIdsOf(plan, tier) {
+  return plan.checks.filter((entry) => entry.placement.tier === tier).map((entry) => entry.id);
 }
 
 function checkFixturePlan() {
@@ -250,29 +295,131 @@ function checkFixturePlan() {
     "the fixture adopter's plan is not the Story 1.10 fixture's plan with its evaluation folder moved",
   );
 
-  const prCommands = distinctCommands(adopter.plan, 'pr');
+  // The evaluations folder holds the private package.json AD-20 writes, with both packages as devDependencies.
+  const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'test/fixtures/ci-eval/evaluation-plan/evals/package.json'), 'utf8'));
   check(
-    prCommands.length >= 2 && prCommands.length < adopter.plan.checks.length,
-    `the plan's pr checks give ${prCommands.length} distinct commands for ${adopter.plan.checks.length} checks`,
+    manifest.private === true &&
+      Object.keys(manifest.devDependencies ?? {})
+        .sort()
+        .join(',') === 'bmad-method-test-architecture-enterprise,eval-quality',
+    "the fixture's evaluations folder lacks the private package.json with TeA and eval-quality as devDependencies",
   );
+
+  const prIds = checkIdsOf(adopter.plan, 'pr');
+  check(prIds.length >= 2, `the plan places ${prIds.length} checks on pr`);
 
   const groundTruth = JSON.parse(fs.readFileSync(GROUND_TRUTH, 'utf8'));
   const set = groundTruth.fixtureSets.find((entry) => entry.id === SET_ID);
   check(set !== undefined, `ground-truth.json has no fixture set ${SET_ID}`);
   if (set === undefined) return;
-  const requested = set.expectedElements
-    .filter((element) => element.rule === 'evaluationPlanCommandSteps')
-    .map((element) => element.command);
+  const element = (id) => set.expectedElements.find((entry) => entry.id === id);
+  const tierCommand = 'npm exec --prefix evals -- tea-evaluate ci --evaluation evals/grader --tier pr';
+  const tierElement = element('command-evaluation-ci-pr');
   check(
-    JSON.stringify(requested) === JSON.stringify(prCommands),
-    `the ground truth lists ${JSON.stringify(requested)} as the pr commands and the plan's distinct pr commands are ${JSON.stringify(prCommands)}`,
+    tierElement?.command === tierCommand,
+    `the ground truth lists ${JSON.stringify(tierElement?.command)} as the pr step where ${tierCommand} belongs`,
   );
-  const upload = set.expectedElements.find((element) => element.kind === 'artifact');
   check(
-    upload?.pathToken === 'runs/' && upload?.condition === 'always()',
-    'the ground truth does not ask for an upload of runs/ under always()',
+    tierElement?.standaloneStep === true && JSON.stringify(tierElement?.checkIds) === JSON.stringify(prIds),
+    `the ground truth names ${JSON.stringify(tierElement?.checkIds)} for the pr step where the plan's pr checks ${JSON.stringify(prIds)} belong`,
+  );
+  check(
+    element('command-evaluation-install')?.command === 'npm install --prefix evals' &&
+      element('command-evaluation-install')?.standaloneStep === true,
+    'the ground truth lacks the standalone install of the evaluations folder',
+  );
+  check(element('command-install')?.standaloneStep === true, 'the ground truth lets the root install run in more than one step');
+  const job = element('job-evaluation-pr');
+  check(
+    job?.jobId === 'evaluation-pr' && job?.command === tierCommand && job?.marker === `# tea-evaluation-plan: evals/grader/${PLAN_PATH}`,
+    'the ground truth lacks the evaluation-pr job with its command and marker',
+  );
+  const upload = element('artifact-evaluation-runs');
+  check(
+    upload?.pathToken === 'evals/grader/runs/' && upload?.condition === 'always()',
+    "the ground truth does not ask for an upload of the evaluation folder's runs/ under always()",
   );
   check(set.projectFiles.includes(`evals/grader/${PLAN_PATH}`), 'the fixture adopter does not declare its plan as a project file');
+  check(set.projectFiles.includes('evals/package.json'), 'the fixture adopter does not declare the evaluations folder manifest');
+}
+
+/**
+ * The scorer's reading of the tier step's name. Two replay cases cannot hold it, since a case that misses the tier step
+ * element for another reason signs like it, so the capture is scored here with the step renamed.
+ */
+function checkStepNaming() {
+  const captureFile = path.join(REPLAY_ROOT, 'evaluation-plan-live-capture', '.github', 'workflows', 'test.yml');
+  const capture = fs.readFileSync(captureFile, 'utf8');
+  const set = JSON.parse(fs.readFileSync(GROUND_TRUTH, 'utf8')).fixtureSets.find((entry) => entry.id === SET_ID);
+  const missesOf = (text) =>
+    scoreRun(set, text, { findings: [] })
+      .elements.filter((element) => !element.present)
+      .map((element) => element.id);
+  check(missesOf(capture).length === 0, `the stored capture misses ${missesOf(capture).join(', ')}`);
+  const renamed = capture.replace(/name: "check, compile, seal, oracle-agreement, replay"/, 'name: "evaluate"');
+  check(renamed !== capture, 'the stored capture no longer names its tier step for the checks, so the renaming case cannot run');
+  check(
+    missesOf(renamed).join(',') === 'command-evaluation-ci-pr',
+    `a tier step named "evaluate" misses ${missesOf(renamed).join(', ') || 'nothing'} where the tier step element belongs`,
+  );
+}
+
+/** Every regular file under a directory, as sorted paths relative to it. */
+function filesUnder(root, prefix = '') {
+  return fs
+    .readdirSync(path.join(root, prefix), { withFileTypes: true })
+    .flatMap((entry) => (entry.isDirectory() ? filesUnder(root, `${prefix}${entry.name}/`) : [`${prefix}${entry.name}`]))
+    .sort();
+}
+
+function checkManifestFixtures() {
+  const manifest = JSON.parse(fs.readFileSync(MANIFEST, 'utf8'));
+  const suite = manifest.suites.find((entry) => entry.id === 'ci');
+  const groundTruth = JSON.parse(fs.readFileSync(GROUND_TRUTH, 'utf8'));
+  const onDisk = groundTruth.fixtureSets
+    .flatMap((set) => filesUnder(path.join(FIXTURE_ROOT, set.root)).map((file) => `test/fixtures/ci-eval/${set.root}/${file}`))
+    .sort();
+  const declared = [...(suite?.fixtures ?? [])].sort();
+  const missing = onDisk.filter((file) => !declared.includes(file));
+  const extra = declared.filter((file) => !onDisk.includes(file));
+  check(missing.length === 0, `the ci suite's fixtures omit ${missing.join(', ')}`);
+  check(extra.length === 0, `the ci suite's fixtures list ${extra.join(', ')}, which no project root holds`);
+}
+
+/** The corpus validator refuses each malformed element it names, so a guard that stops working fails here. */
+async function checkCorpusGuards() {
+  const baseline = JSON.parse(fs.readFileSync(GROUND_TRUTH, 'utf8'));
+  const clean = await validateCorpus(baseline);
+  check(clean.problems.length === 0, `the committed corpus has problems: ${clean.problems.join('; ')}`);
+  const cases = [
+    [
+      'standaloneStep that is not a boolean',
+      'command-evaluation-ci-pr',
+      { standaloneStep: 'yes' },
+      'standaloneStep is declared and is not a boolean',
+    ],
+    ['checkIds that is empty', 'command-evaluation-ci-pr', { checkIds: [] }, 'checkIds is declared and is not a non-empty list'],
+    ['checkIds without standaloneStep', 'command-evaluation-ci-pr', { standaloneStep: false }, 'needs standaloneStep'],
+    ['condition that is empty', 'artifact-evaluation-runs', { condition: '' }, 'condition is declared and is not a non-empty string'],
+    ['condition beside onFailureOnly', 'artifact-evaluation-runs', { onFailureOnly: true }, 'declares a condition and onFailureOnly'],
+    [
+      'retentionDays that is not an integer',
+      'artifact-evaluation-runs',
+      { retentionDays: 'many' },
+      'retentionDays is declared and is not an integer',
+    ],
+    ['job with no marker', 'job-evaluation-pr', { marker: '' }, 'job declares no marker'],
+  ];
+  for (const [label, elementId, patch, expected] of cases) {
+    const mutated = structuredClone(baseline);
+    const element = mutated.fixtureSets.find((set) => set.id === SET_ID).expectedElements.find((entry) => entry.id === elementId);
+    Object.assign(element, patch);
+    const { problems } = await validateCorpus(mutated);
+    check(
+      problems.some((problem) => problem.includes(expected)),
+      `validateCorpus does not refuse ${label} (${problems.length} problems)`,
+    );
+  }
 }
 
 function checkStoredCapture() {
@@ -295,17 +442,27 @@ function checkStoredCapture() {
   check(captures === 1, `test/replay/ci holds ${captures} real captures of the evaluation-plan project, expected one`);
 }
 
-checkEntryPoints();
-checkTemplateBlock();
-checkNoRestatedTable();
-checkFixturePlan();
-checkStoredCapture();
+async function main() {
+  checkEntryPoints();
+  checkTemplateBlock();
+  checkNoRestatedTable();
+  checkFixturePlan();
+  checkManifestFixtures();
+  checkStepNaming();
+  await checkCorpusGuards();
+  checkStoredCapture();
 
-if (failures.length > 0) {
-  for (const message of failures) console.error(`${colors.red}✗${colors.reset} ${message}`);
-  console.error(`${colors.red}${failures.length} of ${checks} checks failed${colors.reset}`);
-  process.exit(1);
+  if (failures.length > 0) {
+    for (const message of failures) console.error(`${colors.red}✗${colors.reset} ${message}`);
+    console.error(`${colors.red}${failures.length} of ${checks} checks failed${colors.reset}`);
+    process.exit(1);
+  }
+  console.log(
+    `${colors.green}✓${colors.reset} ${checks} checks: the evaluation plan step is reached from create, edit and resume, the template block holds its patterns, and the fixture adopter's plan is the Story 1.10 plan`,
+  );
 }
-console.log(
-  `${colors.green}✓${colors.reset} ${checks} checks: the evaluation plan step is reached from create, edit and resume, the template block holds both patterns, and the fixture adopter's plan is the Story 1.10 plan`,
-);
+
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

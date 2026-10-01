@@ -42,7 +42,7 @@ Validate against `checklist.md`:
 - Stages and sharding configured
 - Burn-in and artifacts enabled
 - Secrets/variables documented
-- Evaluation plans found by step 3b rendered, one step per distinct command and an `if: always()` upload of each `runs/` folder (when any plan exists)
+- Evaluation plans found by step 3b rendered, one `tea-evaluate ci` step per tier and an `if: always()` upload of each `runs/` folder (when any plan exists)
 
 Fix gaps before completion.
 

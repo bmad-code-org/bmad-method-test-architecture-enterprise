@@ -82,7 +82,7 @@ Scan all generated YAML workflow files for unsafe interpolation patterns inside 
 
 ### 3b. Evaluation Plan Check
 
-When the repository holds `ci/evaluation-ci-plan.json` files, check the pipeline against each one: a job per tier the plan holds with the `# tea-evaluation-plan:` marker named in `steps-c/step-03b-render-evaluation-plans.md`, one standalone `run:` step per distinct check command, no `continue-on-error` on an evaluation step, and an upload of the evaluation folder's `runs/` that runs whatever the result (`if: always()` on GitHub Actions). A plan with no matching job is **FAIL**. A repository with no plan skips this section.
+When the repository holds `ci/evaluation-ci-plan.json` files, check the pipeline against each one: a job per tier the plan holds with the `# tea-evaluation-plan:` marker named in `steps-c/step-03b-render-evaluation-plans.md`, one standalone `tea-evaluate ci` step per tier (the `merge` job runs the `pr` tier's step first), the install run with `--prefix` on the evaluations folder, no `continue-on-error` on an evaluation step or job, and an upload of the evaluation folder's `runs/` that runs whatever the result (`if: always()` on GitHub Actions). A plan with no matching job is **FAIL**. A repository with no plan skips this section.
 
 ### 4. Write Report
 

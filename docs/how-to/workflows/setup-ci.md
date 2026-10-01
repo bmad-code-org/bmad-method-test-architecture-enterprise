@@ -455,17 +455,18 @@ git push -u origin test-ci-setup
 
 If the repository holds an evaluation written with `bmad-testarch-evaluate`, the CI workflow finds its `ci/evaluation-ci-plan.json` and renders it into the same pipeline file. A standalone run picks up existing plans after the quality gates step, and an edit-mode run detects them first and renders them into the pipeline it loaded, which is how Evaluate's last stage hands the plan over. Evaluate writes the plan and this workflow writes every pipeline file.
 
-For each tier the plan holds a check on, the pipeline gets one job, `evaluation-pr` for the `pr` tier:
+For each tier the plan places a check on, the pipeline gets one job, `evaluation-pr` for the `pr` tier:
 
-- **One step per distinct command.** Each check's `command` is rendered as a standalone `run:` step led by `npx`, in plan order. `tea-evaluate ci --tier pr` runs every check of the tier, so checks that share that command run once and the step is named for all of them.
-- **Tier placement is read as written.** The workflow never moves, adds or drops a check. A `merge` job runs the `pr` tier's commands first, since a tier holds only the checks placed on it.
+- **One step per tier.** `tea-evaluate ci --tier <tier>` is the runtime's one entry that runs a tier. It runs every check the plan places on the tier and writes the evidence bundle, and it takes no check selector, so the job runs it once as `npm exec --prefix <evaluations folder> -- tea-evaluate ci --evaluation <evaluation folder> --tier <tier>`, named for the ids of the checks it carries. A `merge` job runs the `pr` tier's step first and its own second.
+- **The tooling stays in the evaluations folder.** The job installs the private `package.json` Evaluate wrote there with `npm ci --prefix` (`npm install --prefix` when no lockfile is committed), so the repository's own manifest stays untouched and a repository in any language works.
+- **Tier placement is read from the plan.** The workflow never moves, adds or drops a check.
 - **Evidence is kept whatever the result.** The job uploads `<evaluation folder>/runs/` with `if: always()`, and each invocation writes `runs/<invocationId>/` under that folder.
 - **Triggers follow the plan.** The workflow gains the events the checks name. When an event is new to the workflow, the jobs that existed before get an `if:` that keeps them on the events they already ran on, and the summary names each guard.
 - **Timeouts.** The `pr` and `merge` jobs get 30 minutes and the `scheduled` and `release` jobs 120, since their live checks spend model calls.
-- **The plan is validated first.** The workflow runs `npx tea-evaluate check --evaluation <evaluation folder>` and renders nothing from a plan it refuses.
+- **The plan is validated first.** The workflow runs `tea-evaluate check` and refuses a plan only for findings about `ci/evaluation-ci-plan.json`.
 - **Credentials stay yours.** The plan carries none, so the summary lists what the live tiers need.
 
-The jobs carry a `# tea-evaluation-plan:` marker, so a later run replaces them instead of duplicating them. The rendered steps need `bmad-method-test-architecture-enterprise` and `eval-quality` as devDependencies of the project, and the summary lists the install command when either is missing. See [tea-evaluate CLI](/docs/reference/tea-evaluate-cli.md#ci) for the plan and its tiers.
+The jobs carry a `# tea-evaluation-plan:` marker with the plan's path, so a later run replaces them under the current id. See [tea-evaluate CLI](/docs/reference/tea-evaluate-cli.md#ci) for the plan and its tiers.
 
 ## What You Get
 
