@@ -106,6 +106,25 @@ function collectGeneratedOutputs() {
       const bubblewrapPrivateWrapped = confinement
         .targetSandbox({ confinement: bubblewrapConfinement, workspace, git, privateRoot, report, status: statusDirectory })
         .wrap('/fixture/bin/node', ['target.js', '--flag'], [privateDirectory]);
+      // Every confined trial's private home is granted like the call's temp directory (Story 1.59).
+      const home = '/var/folders/ab/cd/T/tea-evaluate-target-home-AbCdEf';
+      const seatbeltHomeTarget = confinement.targetSandbox({ confinement: seatbeltConfinement, workspace, git, privateRoot, home, report });
+      const bubblewrapHomeWrapped = confinement
+        .targetSandbox({ confinement: bubblewrapConfinement, workspace, git, privateRoot, home, report, status: statusDirectory })
+        .wrap('/fixture/bin/node', ['target.js', '--flag'], [privateDirectory]);
+      // A home beneath the user's private root, the run's own parent holding it, is the one directory of the root a target reaches.
+      const rootHome = `${privateRoot}/run-501-AbCdEf/tea-evaluate-target-home-AbCdEf`;
+      const seatbeltRootHomeTarget = confinement.targetSandbox({
+        confinement: seatbeltConfinement,
+        workspace,
+        git,
+        privateRoot,
+        home: rootHome,
+        report,
+      });
+      const bubblewrapRootHomeWrapped = confinement
+        .targetSandbox({ confinement: bubblewrapConfinement, workspace, git, privateRoot, home: rootHome, report, status: statusDirectory })
+        .wrap('/fixture/bin/node', ['target.js', '--flag'], [privateDirectory]);
       const outputs = {
         'isolate.buildSandboxProfile': isolate.buildSandboxProfile(
           ['/proj/out/test-review.md', '/proj/out/verdict.json'],
@@ -172,6 +191,20 @@ function collectGeneratedOutputs() {
         ),
         'confinement.targetSandbox.wrap.bubblewrap.privateRoot': { ...bubblewrapPrivateWrapped },
         'confinement.targetSandbox.environment.privateRoot': seatbeltPrivateTarget.environment({ PATH: '/usr/bin' }, [privateDirectory]),
+        'confinement.targetSandbox.wrap.seatbelt.home': seatbeltHomeTarget.wrap(
+          '/fixture/bin/node',
+          ['target.js', '--flag'],
+          [privateDirectory],
+        ),
+        'confinement.targetSandbox.wrap.bubblewrap.home': { ...bubblewrapHomeWrapped },
+        'confinement.targetSandbox.environment.home': seatbeltHomeTarget.environment({ PATH: '/usr/bin' }, [privateDirectory]),
+        'confinement.targetSandbox.wrap.seatbelt.rootHome': seatbeltRootHomeTarget.wrap(
+          '/fixture/bin/node',
+          ['target.js', '--flag'],
+          [privateDirectory],
+        ),
+        'confinement.targetSandbox.wrap.bubblewrap.rootHome': { ...bubblewrapRootHomeWrapped },
+        'confinement.targetSandbox.environment.rootHome': seatbeltRootHomeTarget.environment({ PATH: '/usr/bin' }, [privateDirectory]),
       };
       // The Bubblewrap status file's name carries a random token, its directory is made fresh and the node binary is the host's,
       // so each is named by role.

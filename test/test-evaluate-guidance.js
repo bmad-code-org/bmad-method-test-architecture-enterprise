@@ -2186,8 +2186,34 @@ function checkMutationGuidance(guide, failures) {
     requireText(toolLesson, marker, 'mutation.md tool-result lesson', failures);
 }
 
+/** The harness guide's confined skill target is a tagged registry entry that passes the runtime schema and equals its working fixture (Story 1.59). */
+function checkConfinedSkillExample(guide, failures) {
+  const examples = taggedExamples(guide, 'registry');
+  if (examples.length !== 1) {
+    failures.push(`harness.md needs one tagged registry example of the confined skill target; found ${examples.length}`);
+    return;
+  }
+  const schema = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'cli', 'lib', 'evaluate', 'schemas', 'evaluation.schema.json')));
+  const validate = new Ajv({ strict: false, allErrors: true }).compile(schema);
+  const starter = JSON.parse(fs.readFileSync(ASSET('evaluation.json'), 'utf8'));
+  if (!validate({ ...starter, registry: examples }))
+    failures.push(`harness.md confined skill registry fails runtime schema: ${JSON.stringify(validate.errors)}`);
+  const fixture = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'evaluate', 'preflight', 'evaluation.json'), 'utf8'));
+  if (
+    JSON.stringify(examples[0]) !== JSON.stringify(fixture.registry[0]) ||
+    examples[0].executable !== 'tea-skill-runner' ||
+    fixture.confinement === false
+  )
+    failures.push('harness.md confined skill registry differs from its working confined fixture');
+}
+
 function checkHarnessGuidance(guide, failures) {
-  for (const heading of ['## Choose risk and trials', '## Record evaluator conditions', '## Verify isolation'])
+  for (const heading of [
+    '## Choose risk and trials',
+    '## Record evaluator conditions',
+    '## Verify isolation',
+    '## Run a skill or agent target confined',
+  ])
     requireHeading(guide, heading, 'harness.md', failures);
   for (const marker of [
     'severityFloor',
@@ -2218,8 +2244,18 @@ function checkHarnessGuidance(guide, failures) {
     'exits 10 when the manifest plans fewer trials',
     'npm exec --prefix {tea_evaluations_folder} -- tea-evaluate check --evaluation <evaluation-folder>',
     'node cli/evaluate.js check --evaluation <evaluation-folder>',
+    'one private home directory that the runtime makes beneath the run',
+    '`XDG_CONFIG_HOME`, `XDG_CACHE_HOME` and `XDG_DATA_HOME`',
+    'No registry field declares a writable path',
+    'keeps its state across the calls of one trial or arm',
+    'each independent arm or leg starts empty',
+    '`"confinement": false` keeps the host environment and makes no home',
+    'A login the agent stored under the adopter',
+    'cannot read the evaluation folder',
+    'No other home is reachable from it',
   ])
     requireText(guide, marker, 'harness.md', failures);
+  checkConfinedSkillExample(guide, failures);
   const rows = tableRows(
     guide,
     '## Choose risk and trials',
@@ -2754,6 +2790,19 @@ async function main() {
         'mutation',
         checkMutationGuidance,
         (text) => text.replace('sign the descriptor-nominated stdout.', 'sign the descriptor-nominated stderr.'),
+      ],
+      ['harness confined example removal', 'harness', checkHarnessGuidance, (text) => text.replace('<!-- example:registry -->', '')],
+      [
+        'harness confined example corruption',
+        'harness',
+        checkHarnessGuidance,
+        (text) => text.replace('"target": "tea-skill-runner"', '"target": "stub-skill-runner"'),
+      ],
+      [
+        'harness home sentence removal',
+        'harness',
+        checkHarnessGuidance,
+        (text) => text.replace('each independent arm or leg starts empty', 'the next trial goes on'),
       ],
       ['harness risk row removal', 'harness', checkHarnessGuidance, (text) => text.replace(/^\| Sampled model \| critical \|.*\n/m, '')],
       [

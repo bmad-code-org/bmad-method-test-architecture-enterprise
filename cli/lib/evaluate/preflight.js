@@ -248,6 +248,8 @@ function recordingPort({ pristine, routes = new Map(), registry, writer }) {
     const legSequence = sequence;
     const route = routes.get(request?.probeId) ?? pristine;
     try {
+      // Each leg is independent of the legs before it on a shared port, so its target starts with an empty private home.
+      route.port.resetHome?.();
       const answered = await portFor(route).probe(request, signal);
       writer.writeJson(`observations/${legFileName(legSequence, request.probeId)}`, {
         legId: request.probeId,

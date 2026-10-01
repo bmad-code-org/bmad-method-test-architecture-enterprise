@@ -117,6 +117,7 @@
 
 const crypto = require('node:crypto');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const net = require('node:net');
 const { spawn, spawnSync } = require('node:child_process');
@@ -135,8 +136,12 @@ const {
   PLATFORM_ENV,
   confinedCommandMechanism,
   confinedMcpMechanism,
+  makeTargetHome,
+  releaseTargetHome,
   selectConfinement,
   targetSandbox,
+  chmodDirectoryNoFollow,
+  unlockDirectories,
 } = require('../cli/lib/evaluate/confinement');
 const {
   WorkspaceRefusal,
@@ -2641,6 +2646,7 @@ function checkRunDirectoryWriter() {
 
   const script = `
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { RunDirectory } = require(${JSON.stringify(path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate', 'run-directory.js'))});
@@ -4145,6 +4151,582 @@ async function checkTargetTemp() {
   );
 }
 
+/** What the `write-home` act printed, by name: `name: value` lines. */
+function homeReport(stdout) {
+  return Object.fromEntries(
+    [
+      ...stdout.matchAll(
+        /^(home|xdg|home-before|parent-list|root-list|run-homes|peer-read|home-write|xdg-write|beside-write|host-write): (.*)$/gm,
+      ),
+    ].map((m) => [m[1], m[2]]),
+  );
+}
+
+/**
+ * A confined target keeps its state in a private home (Story 1.59): `HOME` and the XDG base directories name a directory
+ * beneath the run's private parent that the trial may write, whatever the registry entry's `environmentKeys` pass from
+ * the host; the host's home, the directory the home sits in and the evaluation folder stay closed; the target reaches no
+ * other home, whether another stage's, another trial's or another run's; the next trial starts with an empty home; and
+ * no home outlives the run. An opt-out run keeps the host environment and makes no home.
+ */
+async function checkTargetHome() {
+  const hostHome = fs.realpathSync(tempDir('home-host'));
+  const hostEnv = {
+    HOME: hostHome,
+    XDG_CONFIG_HOME: path.join(hostHome, 'config'),
+    XDG_CACHE_HOME: path.join(hostHome, 'cache'),
+    XDG_DATA_HOME: path.join(hostHome, 'data'),
+    VERDICT_TOUCH: path.join(hostHome, 'touched.txt'),
+  };
+  // Another run's private parent beneath the same root, holding a file no target of this run may read.
+  const peerScratch = [];
+  const peerFile = path.join(makePrivateParent(peerScratch), 'peer-secret.txt');
+  fs.writeFileSync(peerFile, 'another run\n');
+  hostEnv.VERDICT_PEER = peerFile;
+  try {
+    await checkTargetHomeRuns(hostHome, hostEnv);
+  } finally {
+    for (const directory of peerScratch) fs.rmSync(directory, { recursive: true, force: true });
+  }
+}
+
+async function checkTargetHomeRuns(hostHome, hostEnv) {
+  const passHome = ({ folder }) =>
+    editJson(path.join(folder, 'evaluation.json'), (evaluation) =>
+      evaluation.registry[0].environmentKeys.push('HOME', 'XDG_CONFIG_HOME', 'XDG_CACHE_HOME', 'XDG_DATA_HOME', 'VERDICT_PEER'),
+    );
+  const closed = /^refused (EPERM|EACCES|ENOENT)$/;
+  // The confined project's plan has a second step, so the calls of one arm are two: the second must find the first's state.
+  const twoSteps = ({ folder }) =>
+    editJson(path.join(folder, 'contract.json'), (contract) => {
+      contract.interactionPlan.push({ ...structuredClone(contract.interactionPlan[0]), stepId: 'judge-run-again', after: 'judge-run' });
+    });
+
+  const project = makeProject('confinement-home', {
+    edit: (made) => {
+      passHome(made);
+      twoSteps(made);
+    },
+  });
+  const ran = evaluate(['run', '--evaluation', project.folder], {
+    ...project.env,
+    ...hostEnv,
+    VERDICT_WHEN: 'qualify-P-002,trial-clean-1,trial-clean-2',
+    VERDICT_DO: 'write-home',
+  });
+  check(ran.status === 0, `a confined run whose target kept state under HOME exited ${ran.status}; expected 0\n${ran.output}`);
+  const runDirectory = runDirectoryOf(project.folder);
+  const root = fs.realpathSync(path.join('/tmp', `tea-evaluate-p${process.getuid()}`));
+  const homes = [];
+  const everyHome = new Set();
+  const stepsOf = (trial) => {
+    const evidence = written(path.join(runDirectory, 'trials', 'clean', `trial-${trial}.json`), `clean trial ${trial}`);
+    return (evidence?.steps ?? []).map((step) => String(step.observation?.stdout?.value ?? step.observation?.stdout ?? ''));
+  };
+  for (const trial of [1, 2]) {
+    const [out, again] = stepsOf(trial);
+    const second = homeReport(again ?? '');
+    // The calls of one trial share its home, so the second step finds what the first wrote.
+    check(
+      second.home === homeReport(out ?? '').home && /\.verdict-state\/session\.json/.test(second['home-before'] ?? ''),
+      `confined trial ${trial}'s second step found ${second['home-before']} in ${second.home}; the calls of one trial keep the state they write`,
+    );
+    const report = homeReport(out);
+    homes.push(report.home);
+    everyHome.add(report.home);
+    const label = `confined trial ${trial}`;
+    const home = report.home ?? '';
+    check(
+      path.dirname(path.dirname(home)) === root &&
+        path.basename(path.dirname(home)).startsWith('run-') &&
+        path.basename(home).startsWith('tea-evaluate-target-home-'),
+      `${label} saw HOME ${JSON.stringify(report.home)}; expected a private home beneath the run's private parent in ${root}\n${out}`,
+    );
+    check(
+      report.xdg === ['.config', '.cache', path.join('.local', 'share')].map((name) => path.join(home, name)).join(' '),
+      `${label} saw the XDG base directories ${JSON.stringify(report.xdg)}; expected directories inside HOME, the host's values overridden`,
+    );
+    check(
+      report['home-write'] === 'allowed' && report['xdg-write'] === 'allowed',
+      `${label} could not write its state: ${JSON.stringify({ home: report['home-write'], xdg: report['xdg-write'] })}`,
+    );
+    check(
+      report['home-before'] === '[]',
+      `${label} started with ${report['home-before']} in its home; each trial starts with an empty one`,
+    );
+    // Only its own home is reachable: the parent and the root answer a refusal or show nothing but the path to the home
+    // (Bubblewrap's empty file system holds the mount point), and another run's file is out of reach.
+    check(
+      closed.test(report['parent-list'] ?? '') || report['parent-list'] === JSON.stringify([path.basename(home)]),
+      `${label} listed its home's parent as ${report['parent-list']}; expected a refusal or its own home alone`,
+    );
+    check(
+      closed.test(report['root-list'] ?? '') || report['root-list'] === JSON.stringify([path.basename(path.dirname(home))]),
+      `${label} listed the private root as ${report['root-list']}; expected a refusal or its own parent alone`,
+    );
+    check(closed.test(report['peer-read'] ?? ''), `${label} read another run's file: ${report['peer-read']}`);
+    for (const [name, what] of [
+      ['beside-write', 'the directory its home sits in'],
+      ['host-write', "the host's real home"],
+    ]) {
+      check(/^refused (EPERM|EACCES|EROFS|ENOENT)$/.test(report[name] ?? ''), `${label} wrote ${what}: ${JSON.stringify(report[name])}`);
+    }
+  }
+  check(homes[0] !== undefined && homes[0] !== homes[1], `two trials shared one home: ${JSON.stringify(homes)}`);
+
+  // The baseline, mutated and re-pass arms of one probe's qualification share one port and one working directory, and each
+  // writes its state; an arm that kept the one before's would carry state across a mutation, so each starts empty.
+  const qualified = ['baseline-pass', 'mutated-fail', 'rollback'].map((phase) => {
+    const file = path.join(runDirectory, 'qualification', 'P-002', `${phase}.json`);
+    const text = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
+    for (const match of text.matchAll(/(?:\\n|")home: ([^\\"]*)\\n/g)) everyHome.add(match[1]);
+    return { phase, before: /home-before: ([^\\]*)\\n/.exec(text)?.[1], written: /home-write: (\w+)/.exec(text)?.[1] };
+  });
+  check(
+    qualified.every(({ before, written }) => before === '[]' && written === 'allowed'),
+    `the qualification arms of one probe found ${JSON.stringify(qualified)} in their homes; each independent arm starts with an empty home it can write`,
+  );
+  check(!fs.existsSync(path.join(hostHome, 'touched.txt')), "a confined target wrote a file in the host's real home");
+  // Every home an arm reported (a new one for each independent arm) is gone once the run ends.
+  check(
+    everyHome.size >= 5 &&
+      [...everyHome].every(
+        (home) => home !== undefined && path.isAbsolute(home) && !fs.existsSync(home) && !fs.existsSync(path.dirname(home)),
+      ),
+    `a private home or the run's private parent outlived the run: ${JSON.stringify([...everyHome].filter((home) => home !== undefined && fs.existsSync(path.dirname(home))))} of ${everyHome.size} reported`,
+  );
+
+  // The opt-out run keeps today's environment and makes no home. Its target is not withheld the private root, so it lists
+  // the homes under the run's own parent and reads the peer file (the control that the confined reads above are refusals).
+  const open = makeProject('confinement-home-open', { edit: passHome, unconfined: true });
+  const openRan = evaluate(['run', '--evaluation', open.folder], {
+    ...open.env,
+    ...hostEnv,
+    VERDICT_WHEN: 'trial-clean-1',
+    VERDICT_DO: 'write-home',
+  });
+  check(openRan.status === 0, `an unconfined run exited ${openRan.status}; expected 0\n${openRan.output}`);
+  const openReport = homeReport(trialStdout(runDirectoryOf(open.folder), 'clean', 1));
+  check(
+    openReport.home === '[redacted]' && openReport.xdg === '[redacted] [redacted] [redacted]',
+    `an unconfined target saw ${JSON.stringify({ home: openReport.home, xdg: openReport.xdg })}; expected the host's values, which the run records redacted`,
+  );
+  check(
+    openReport['run-homes'] === JSON.stringify({ found: true, homes: [] }),
+    `an unconfined target saw ${openReport['run-homes']} under its run's private parent; expected the parent found and no home, since an opt-out run keeps the host environment and makes none`,
+  );
+  check(openReport['peer-read'] === 'allowed', `the unconfined control read another run's file as ${openReport['peer-read']}`);
+}
+
+/**
+ * What a target confined with its own home reaches beneath the private root (the real mechanism of this host): its home
+ * writable and readable; a sibling home, the private parent and the root, another run's parent, the evaluation folder and
+ * a unix socket under the root refused or empty.
+ */
+async function checkHomeReach({ made, sibling, parent, root, folder, workspace }) {
+  const confinement = selectConfinement({ evaluation: {}, folder });
+  if (confinement.refusal !== undefined) throw new Error(confinement.refusal);
+  const status = confinement.mode === 'bubblewrap' ? tempDir('home-reach-status') : null;
+  const peer = fs.mkdtempSync(path.join(root, 'run-0-peer-'));
+  fs.writeFileSync(path.join(peer, 'secret.txt'), 'another run\n');
+  fs.writeFileSync(path.join(sibling, 'secret.txt'), 'a sibling home\n');
+  fs.mkdirSync(path.join(made, 'm'));
+  fs.writeFileSync(path.join(made, 'm', 'index.js'), 'module.exports = 42;\n');
+  const socket = path.join(parent, 'b.sock');
+  const server = net.createServer((connection) => connection.end());
+  await new Promise((resolve) => server.listen(socket, resolve));
+  try {
+    const sandbox = targetSandbox({ confinement, workspace, privateRoot: root, home: made, status });
+    const probe = `
+      const fs = require('node:fs');
+      const net = require('node:net');
+      const [home, sibling, parent, root, peer, socket] = process.argv.slice(1);
+      const attempt = (name, action) => { try { return name + ': ' + action(); } catch (error) { return name + ': refused ' + error.code; } };
+      const lines = [
+        attempt('own-write', () => { fs.writeFileSync(home + '/x', '1'); return 'allowed'; }),
+        attempt('own-read', () => fs.readFileSync(home + '/x', 'utf8') === '1' ? 'allowed' : 'wrong'),
+        attempt('sibling-read', () => fs.readFileSync(sibling + '/secret.txt', 'utf8')),
+        attempt('sibling-write', () => { fs.writeFileSync(sibling + '/y', '1'); return 'allowed'; }),
+        attempt('peer-read', () => fs.readFileSync(peer + '/secret.txt', 'utf8')),
+        attempt('parent-list', () => JSON.stringify(fs.readdirSync(parent))),
+        attempt('root-list', () => JSON.stringify(fs.readdirSync(root))),
+        attempt('parent-write', () => { fs.writeFileSync(parent + '/y', '1'); return 'allowed'; }),
+        // What an agent CLI does with its home: load a module stored in it, resolve its path, make directories, change into it.
+        attempt('module', () => require(home + '/m/index.js') === 42 ? 'allowed' : 'wrong'),
+        attempt('realpath', () => fs.realpathSync(home) === home ? 'allowed' : 'wrong'),
+        attempt('mkdir-p', () => { require('node:child_process').execFileSync('mkdir', ['-p', home + '/.config/x']); return 'allowed'; }),
+        attempt('cd-pwd', () => require('node:child_process').execFileSync('/bin/sh', ['-c', 'cd "$0" && pwd -P', home], { encoding: 'utf8' }).trim() === home ? 'allowed' : 'wrong'),
+      ];
+      const client = net.connect(socket);
+      client.on('connect', () => { console.log(lines.join('\\n') + '\\nsocket: allowed'); client.destroy(); });
+      client.on('error', (error) => console.log(lines.join('\\n') + '\\nsocket: refused ' + error.code));
+    `;
+    const wrapped = sandbox.wrap(process.execPath, ['-e', probe, made, sibling, parent, root, peer, socket]);
+    const ran = spawnSync(wrapped.target, wrapped.args, { encoding: 'utf8', timeout: SPAWN_TIMEOUT_MS, cwd: workspace });
+    const reached = Object.fromEntries([...ran.stdout.matchAll(/^([a-z-]+): (.*)$/gm)].map((match) => [match[1], match[2]]));
+    const closed = /^refused (EPERM|EACCES|ENOENT|EROFS|ECONNREFUSED)$/;
+    // A second call of the same sandbox finds what the first wrote, and a sibling home it has no grant for stays closed.
+    const again = sandbox.wrap(process.execPath, [
+      '-e',
+      "process.stdout.write(require('node:fs').readFileSync(process.argv[1] + '/x', 'utf8'))",
+      made,
+    ]);
+    const second = spawnSync(again.target, again.args, { encoding: 'utf8', timeout: SPAWN_TIMEOUT_MS, cwd: workspace });
+    check(
+      second.stdout === '1',
+      `a second call of one sandbox read ${JSON.stringify(second.stdout)} from its home; expected what the first call wrote\n${second.stderr}`,
+    );
+    check(
+      reached['own-write'] === 'allowed' && reached['own-read'] === 'allowed',
+      `a confined target could not use its own home: ${ran.stdout}${ran.stderr}`,
+    );
+    check(
+      ['module', 'realpath', 'mkdir-p', 'cd-pwd'].every((name) => reached[name] === 'allowed'),
+      `a confined target could not resolve and use its home's path: ${JSON.stringify(['module', 'realpath', 'mkdir-p', 'cd-pwd'].map((name) => [name, reached[name]]))}`,
+    );
+    // The same use of the home is no isolation violation for the audit.
+    const auditReport = path.join(tempDir('home-reach-audit'), 'report.jsonl');
+    fs.writeFileSync(auditReport, '');
+    const audited = targetSandbox({ confinement, workspace, privateRoot: root, home: made, status, report: auditReport });
+    const auditScript =
+      "const fs = require('node:fs'); const home = process.argv[1]; require(home + '/m/index.js'); fs.realpathSync(home); fs.mkdirSync(home + '/.config/y', { recursive: true }); fs.writeFileSync(home + '/.config/y/z', '1');";
+    const walked = audited.wrap(process.execPath, ['-e', auditScript, made]);
+    const walk = spawnSync(walked.target, walked.args, {
+      encoding: 'utf8',
+      timeout: SPAWN_TIMEOUT_MS,
+      cwd: workspace,
+      env: audited.environment({ PATH: process.env.PATH }, walked.statusFile === null ? [] : [walked.statusFile]),
+    });
+    audited.settle();
+    check(
+      walk.status === 0 && audited.observedMounts().length === 0,
+      `a confined Node process that loaded a module from its home and wrote it exited ${walk.status} with observed mounts ${JSON.stringify(audited.observedMounts())}\n${walk.stderr}`,
+    );
+    for (const name of ['sibling-read', 'sibling-write', 'peer-read', 'parent-write', 'socket']) {
+      check(closed.test(reached[name] ?? ''), `a confined target with its own home reached ${name}: ${JSON.stringify(reached[name])}`);
+    }
+    // Bubblewrap's empty file system holds the mount point of the home, so a listing shows the path to it and nothing else.
+    check(
+      closed.test(reached['parent-list'] ?? '') || reached['parent-list'] === JSON.stringify([path.basename(made)]),
+      `a confined target listed its home's parent as ${reached['parent-list']}`,
+    );
+    check(
+      closed.test(reached['root-list'] ?? '') || reached['root-list'] === JSON.stringify([path.basename(parent)]),
+      `a confined target listed the private root as ${reached['root-list']}`,
+    );
+    check(
+      fs.readFileSync(path.join(sibling, 'secret.txt'), 'utf8') === 'a sibling home\n' && !fs.existsSync(path.join(sibling, 'y')),
+      'a confined target changed a sibling home',
+    );
+  } finally {
+    server.close();
+    fs.rmSync(peer, { recursive: true, force: true });
+  }
+}
+
+/**
+ * `unlockDirectories` follows no link (Story 1.59): a process that swaps a directory of its home for a link to a directory
+ * outside, while the runtime opens the home up to remove it, cannot have the outside directory's mode changed. A child
+ * swaps the two names in a loop; the outside directory is mode 700, which following the link would raise to the link's 755.
+ */
+function checkNoFollowUnlock(parent, closedMode = null) {
+  if (closedMode !== null) {
+    // The route that opens a closed directory sets exactly 700 on a real directory and leaves what a link names alone.
+    const closed = fs.mkdtempSync(path.join(parent, 'closed-'));
+    const target = tempDir('closed-outside');
+    fs.chmodSync(target, 0o755);
+    const link = path.join(closed, 'lnk');
+    fs.symlinkSync(target, link);
+    const real = path.join(closed, 'dir');
+    fs.mkdirSync(real);
+    fs.chmodSync(real, closedMode);
+    try {
+      chmodDirectoryNoFollow(link, fs.lstatSync(link));
+    } catch {
+      // A link is refused outright where the system opens it with `O_NOFOLLOW`.
+    }
+    chmodDirectoryNoFollow(real, fs.lstatSync(real));
+    check(
+      (fs.statSync(target).mode & 0o777) === 0o755 && (fs.statSync(real).mode & 0o777) === 0o700,
+      `the no-follow chmod left ${(fs.statSync(target).mode & 0o777).toString(8)} on what a link names (expected 755) and ${(fs.statSync(real).mode & 0o777).toString(8)} on a closed directory (expected 700)`,
+    );
+    fs.rmSync(closed, { recursive: true, force: true });
+  }
+  const base = fs.mkdtempSync(path.join(parent, 'flip-'));
+  const outside = tempDir('flip-outside');
+  fs.mkdirSync(path.join(outside, 'inner'));
+  fs.writeFileSync(path.join(outside, 'inner', 'kept'), 'outside\n');
+  fs.chmodSync(path.join(outside, 'inner'), 0o700);
+  fs.chmodSync(outside, 0o700);
+  fs.mkdirSync(path.join(base, 'dir', 'sub'), { recursive: true });
+  fs.symlinkSync(outside, path.join(base, 'lnk'));
+  const flipper = spawn(
+    process.execPath,
+    [
+      '-e',
+      `const fs = require('node:fs'); const [base] = process.argv.slice(1);
+       const closed = process.argv[2] === '' ? null : Number(process.argv[2]);
+       for (;;) { try { fs.renameSync(base + '/dir', base + '/hold'); if (closed !== null && fs.lstatSync(base + '/hold').isDirectory()) fs.chmodSync(base + '/hold', closed); fs.renameSync(base + '/lnk', base + '/dir'); fs.renameSync(base + '/hold', base + '/lnk'); } catch {} }`,
+      base,
+      closedMode === null ? '' : String(closedMode),
+    ],
+    { stdio: 'ignore' },
+  );
+  try {
+    const started = Date.now();
+    let rounds = 0;
+    while (Date.now() - started < 1500) {
+      unlockDirectories(base);
+      rounds += 1;
+    }
+    const modes = [outside, path.join(outside, 'inner')].map((directory) => fs.statSync(directory).mode & 0o777);
+    check(
+      modes.every((mode) => mode === 0o700) && rounds > 20,
+      `opening up a directory a process swapped for a link${closedMode === null ? '' : ` while keeping its own mode ${closedMode.toString(8)}`} changed the outside directories' modes to ${modes.map((mode) => mode.toString(8))} after ${rounds} rounds`,
+    );
+  } finally {
+    flipper.kill('SIGKILL');
+    unlockDirectories(base);
+    fs.rmSync(base, { recursive: true, force: true });
+  }
+}
+
+/**
+ * The private home's parts on their own (Story 1.59): a sandbox refuses a home inside the evaluation folder or the
+ * workspace, grants a home outside the private root as it grants the call's temp directory, and treats a home beneath the
+ * root as the one exception to the root's withholding (profile, vector and audit); `makeTargetHome` makes it beneath the
+ * run's private parent and lists it in `scratch`; the real mechanism lets a target use its own home and reach no sibling
+ * home, other run's parent, listing of the root or socket under it; a reset or release removes a read-only directory;
+ * both mechanisms hand a call `HOME` and the XDG variables over any host value, and none without a home.
+ */
+async function checkTargetHomeUnits() {
+  const root = fs.realpathSync(tempDir('home-units'));
+  const folder = path.join(root, 'evals', 'verdict');
+  const workspace = path.join(root, 'workspace');
+  const privateRoot = path.join(root, 'private');
+  const home = path.join(root, 'home');
+  const status = path.join(root, 'status');
+  for (const directory of [folder, workspace, privateRoot, home, status]) fs.mkdirSync(directory, { recursive: true });
+  const modes = {
+    seatbelt: { mode: 'seatbelt', executable: '/usr/bin/sandbox-exec', evaluationFolder: folder },
+    bubblewrap: { mode: 'bubblewrap', executable: '/usr/bin/bwrap', evaluationFolder: folder },
+  };
+  const build = (mode, extra) => targetSandbox({ confinement: modes[mode], workspace, status, ...extra });
+
+  for (const [what, unsafe, named] of [
+    ['the evaluation folder', path.join(folder, 'home'), 'the evaluation folder'],
+    ['the workspace', path.join(workspace, 'home'), 'the workspace'],
+  ]) {
+    for (const mode of Object.keys(modes)) {
+      let refused = null;
+      try {
+        build(mode, { privateRoot, home: unsafe });
+      } catch (error) {
+        refused = error;
+      }
+      check(
+        refused?.name === 'ConfinementError' && refused.message.includes(`is inside ${named}`),
+        `a ${mode} sandbox with a home inside ${what} was not refused: ${refused}`,
+      );
+    }
+  }
+
+  // A home outside the private root is granted as the call's temp directory is.
+  const seatbelt = build('seatbelt', { privateRoot, home });
+  const writeRules = (text) => text.slice(text.indexOf('(allow file-write*'), text.indexOf('(literal "/dev/null")'));
+  const profile = seatbelt.wrap('/bin/true', []).args[1];
+  check(writeRules(profile).includes(`(subpath "${home}")`), `the Seatbelt profile grants no write to the home:\n${profile}`);
+  check(
+    !writeRules(build('seatbelt', { privateRoot }).wrap('/bin/true', []).args[1]).includes(home),
+    'a Seatbelt profile for a sandbox with no home grants it',
+  );
+  const bound = (wrapped) => wrapped.args.flatMap((argument, index) => (argument === '--bind' ? [wrapped.args[index + 1]] : []));
+  check(bound(build('bubblewrap', { home }).wrap('/bin/true', [])).includes(home), 'the Bubblewrap vector binds no home');
+  check(!bound(build('bubblewrap', {}).wrap('/bin/true', [])).includes(home), 'a Bubblewrap vector for a sandbox with no home binds it');
+  const audit = (extra) => {
+    const report = path.join(root, 'report.jsonl');
+    fs.writeFileSync(report, '');
+    const env = build('seatbelt', { report, ...extra }).environment({ PATH: '/bin' }, []);
+    return JSON.parse(env.TEA_EVALUATE_CONFINEMENT_AUDIT ?? '{}');
+  };
+  check(audit({ home }).granted?.includes(home) === true, "the audit's grants do not name the home");
+  check(audit({}).granted?.includes(home) === false, "the audit's grants name a home the sandbox has none of");
+
+  // A home beneath the private root (the run's own parent holds it) is the one exception to the root's withholding: the
+  // Seatbelt allowance comes after the root's denial, which the last matching rule overrides, and the Bubblewrap bind comes
+  // between the empty file system over the root and its read-only remount, which touches that mount alone.
+  const rootHome = path.join(privateRoot, 'run-1-abc', 'tea-evaluate-target-home-x');
+  fs.mkdirSync(rootHome, { recursive: true });
+  const inRoot = build('seatbelt', { privateRoot, home: rootHome }).wrap('/bin/true', []).args[1];
+  const rootDeny = inRoot.indexOf(`(deny file-read* file-write*\n  (subpath "${privateRoot}")`);
+  const rootAllow = inRoot.indexOf(`(allow file-read* file-write*\n  (subpath "${rootHome}")`);
+  check(
+    rootDeny !== -1 && rootAllow > rootDeny && !writeRules(inRoot).includes(rootHome),
+    `the Seatbelt profile does not re-allow the home beneath the private root after the root's denial:\n${inRoot}`,
+  );
+  const rootArguments = build('bubblewrap', { privateRoot, home: rootHome }).wrap('/bin/true', []).args;
+  const at = (...words) =>
+    rootArguments.findIndex((argument, index) => words.every((word, offset) => rootArguments[index + offset] === word));
+  check(
+    at('--tmpfs', privateRoot) !== -1 &&
+      at('--bind', rootHome, rootHome) > at('--tmpfs', privateRoot) &&
+      at('--remount-ro', privateRoot) > at('--bind', rootHome, rootHome),
+    `the Bubblewrap vector does not bind the home beneath the private root between the root's empty file system and its remount: ${rootArguments.join(' ')}`,
+  );
+  const rootAudit = audit({ privateRoot, home: rootHome });
+  check(
+    rootAudit.withheld?.includes(privateRoot) && rootAudit.withheldExcept?.includes(rootHome) && rootAudit.granted?.includes(rootHome),
+    `the audit does not withhold the private root and except the home beneath it: ${JSON.stringify(rootAudit)}`,
+  );
+
+  // The home is made beneath the run's private parent, where the sandbox withholds every other home.
+  const scratch = [];
+  const parent = makePrivateParent(scratch);
+  const made = makeTargetHome(scratch);
+  const sibling = makeTargetHome(scratch);
+  const loose = [];
+  const fallback = makeTargetHome(loose);
+  try {
+    check(
+      path.dirname(made) === fs.realpathSync(parent) &&
+        path.basename(made).startsWith('tea-evaluate-target-home-') &&
+        scratch.includes(made),
+      `the private home ${made} is not a directory of the run's private parent listed in scratch`,
+    );
+    check(
+      path.dirname(fallback) === fs.realpathSync(os.tmpdir()) && loose.includes(fallback),
+      `a scratch list with no private parent put the home at ${fallback}; expected the system temp directory`,
+    );
+    check(
+      ['.config', '.cache', path.join('.local', 'share')].every((name) => fs.statSync(path.join(made, name)).isDirectory()),
+      'the private home holds no XDG base directories',
+    );
+    await checkHomeReach({ made, sibling, parent, root: scratch.privateRoot, folder, workspace });
+
+    // A directory a process left read-only inside the home does not keep it: a release removes the home, and the retired
+    // name it was moved to for the removal is gone too.
+    fs.mkdirSync(path.join(made, 'cache', 'locked'), { recursive: true });
+    fs.writeFileSync(path.join(made, 'cache', 'locked', 'entry'), 'x\n');
+    fs.chmodSync(path.join(made, 'cache', 'locked'), 0o555);
+    releaseTargetHome(scratch, made);
+    check(
+      !fs.existsSync(made) &&
+        !scratch.includes(made) &&
+        !scratch.some((directory) => directory.includes('retired')) &&
+        !fs.readdirSync(parent).some((name) => name.includes('retired')),
+      `a release of a home holding a read-only directory left ${JSON.stringify(fs.readdirSync(parent))} beneath the parent and ${JSON.stringify(scratch)} in scratch`,
+    );
+    checkNoFollowUnlock(parent);
+    // A directory the agent keeps closed (no owner bits) cannot be opened, so the mode is set by another route that follows no link.
+    checkNoFollowUnlock(parent, 0o077);
+
+    // A sandbox pointed at another home grants that one and sets its variables from then on, and no longer names the old one.
+    const [first, second] = [path.join(parent, 'switch-a'), path.join(parent, 'switch-b')];
+    fs.mkdirSync(first);
+    fs.mkdirSync(second);
+    const switching = targetSandbox({
+      confinement: { mode: 'seatbelt', executable: '/usr/bin/sandbox-exec', evaluationFolder: folder },
+      workspace,
+      privateRoot: scratch.privateRoot,
+      home: first,
+    });
+    const named = () => switching.wrap('/bin/true', []).args[1];
+    const seenBefore = (
+      await confinedCommandMechanism({ run: async (request) => ({ seen: request.env }) }, switching).run(
+        { target: '/bin/true', subcommandPath: [], argv: [], env: {} },
+        new AbortController().signal,
+      )
+    ).seen;
+    switching.setHome(second);
+    const seenAfter = (
+      await confinedCommandMechanism({ run: async (request) => ({ seen: request.env }) }, switching).run(
+        { target: '/bin/true', subcommandPath: [], argv: [], env: {} },
+        new AbortController().signal,
+      )
+    ).seen;
+    check(
+      seenBefore.HOME === first &&
+        seenAfter.HOME === second &&
+        named().includes(`(subpath "${second}")`) &&
+        !named().includes(`(subpath "${first}")`),
+      `a sandbox pointed at another home still names the old one: ${JSON.stringify({ before: seenBefore.HOME, after: seenAfter.HOME })}`,
+    );
+  } finally {
+    for (const directory of [made, sibling, fallback]) {
+      unlockDirectories(directory);
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+    for (const directory of scratch) fs.rmSync(directory, { recursive: true, force: true });
+  }
+
+  const hostEnv = {
+    HOME: '/host/home',
+    XDG_CONFIG_HOME: '/host/config',
+    XDG_CACHE_HOME: '/host/cache',
+    XDG_DATA_HOME: '/host/data',
+    KEPT: 'yes',
+  };
+  const environments = {};
+  const fake = (extra) => ({
+    wrap: (target, args) => ({ target, args, statusFile: null }),
+    environment: (env) => env,
+    settle: () => {},
+    ...extra,
+  });
+  for (const [what, sandboxHome] of [
+    ['with a home', home],
+    ['without one', null],
+  ]) {
+    const command = confinedCommandMechanism({ run: async (request) => ({ exitCode: 0, seen: request.env }) }, fake({ home: sandboxHome }));
+    const tool = confinedMcpMechanism(
+      { callTool: async (request) => ({ isError: false, seen: request.env }) },
+      fake({ home: sandboxHome }),
+    );
+    environments[`command ${what}`] = (
+      await command.run({ target: '/bin/true', subcommandPath: [], argv: [], env: hostEnv }, new AbortController().signal)
+    ).seen;
+    environments[`tool ${what}`] = (
+      await tool.callTool({ target: '/bin/true', targetArgs: [], env: hostEnv }, new AbortController().signal)
+    ).seen;
+  }
+  for (const [what, sandboxHome, env] of [
+    ['command', home, {}],
+    ['tool', home, {}],
+  ]) {
+    // An entry that passes no HOME or XDG variable still gets all four (the starter entry's `environmentKeys` is empty).
+    const bare =
+      what === 'command'
+        ? await confinedCommandMechanism({ run: async (request) => ({ seen: request.env }) }, fake({ home: sandboxHome })).run(
+            { target: '/bin/true', subcommandPath: [], argv: [], env },
+            new AbortController().signal,
+          )
+        : await confinedMcpMechanism({ callTool: async (request) => ({ seen: request.env }) }, fake({ home: sandboxHome })).callTool(
+            { target: '/bin/true', targetArgs: [], env },
+            new AbortController().signal,
+          );
+    check(
+      bare.seen.HOME === home && ['XDG_CONFIG_HOME', 'XDG_CACHE_HOME', 'XDG_DATA_HOME'].every((name) => bare.seen[name]?.startsWith(home)),
+      `a confined ${what} call over an environment holding no HOME or XDG variable got ${JSON.stringify(bare.seen)}; expected all four set inside the home`,
+    );
+  }
+  for (const kind of ['command', 'tool']) {
+    const withHome = environments[`${kind} with a home`];
+    check(
+      withHome.HOME === home &&
+        withHome.XDG_CONFIG_HOME === path.join(home, '.config') &&
+        withHome.XDG_CACHE_HOME === path.join(home, '.cache') &&
+        withHome.XDG_DATA_HOME === path.join(home, '.local', 'share') &&
+        withHome.KEPT === 'yes',
+      `a confined ${kind} call with a home got ${JSON.stringify(withHome)}; expected HOME and the XDG directories inside the home over the host's values`,
+    );
+    const without = environments[`${kind} without one`];
+    check(
+      without.HOME === '/host/home' && without.XDG_DATA_HOME === '/host/data',
+      `a confined ${kind} call with no home got ${JSON.stringify(without)}; expected the host's values`,
+    );
+  }
+}
+
 /**
  * The confinement's parts on their own (Story 1.31): a workspace inside the
  * evaluation folder is refused, the status shim records the signal that ended
@@ -4715,8 +5297,8 @@ function checkPrivateDirectorySources() {
   const allowed = {
     // The private parent, the scratch fallback for a list without one, and a staged copy.
     'workspace.js': 3,
-    // A target's own temp directory per call.
-    'confinement.js': 1,
+    // A target's own temp directory per call, and the sandbox's private home beneath the run's private parent (Story 1.59), both granted to the target.
+    'confinement.js': 2,
     // The audit report's directory and Bubblewrap's status directory, both granted to a target.
     'registry.js': 2,
     // The file a started HTTP service reports its port in, granted to the target.
@@ -5609,6 +6191,17 @@ function checkConfinementReference() {
       /a target that must read the project's git directory opts out/i.test(section),
     "the reference's confinement section does not say the target's git sees the evaluation folder as an empty tree, that the project's git directory is withheld and that a target that must read it opts out",
   );
+  // Story 1.59: the one private home a confined trial may write, and the variables that name it.
+  check(
+    section.includes('one private home directory') &&
+      section.includes('a login an agent stored under your real home is not found under the private home') &&
+      ['`HOME`', '`XDG_CONFIG_HOME`', '`XDG_CACHE_HOME`', '`XDG_DATA_HOME`'].every((name) => section.includes(name)) &&
+      section.includes("replace any host value, including one a registry entry's `environmentKeys` names") &&
+      section.includes('each independent arm or leg starts with an empty home') &&
+      section.includes('reads and writes its own home and nothing else under the root') &&
+      section.includes('A run that opts out of confinement keeps the host environment and makes no home'),
+    "the reference's confinement section does not say a confined trial gets a private home that HOME and the XDG base directories name, over any host value, empty for the next trial, and that an opt-out run has none",
+  );
 }
 
 /**
@@ -5671,6 +6264,8 @@ const CASES = [
   { name: 'the evaluator swap', body: checkEvaluatorSwap, group: 'confinement' },
   { name: 'the confinement refusals', body: checkConfinementRefusals, group: 'confinement' },
   { name: "a confined target's temp directory", body: checkTargetTemp, group: 'confinement' },
+  { name: "a confined target's private home", body: checkTargetHome, group: 'confinement' },
+  { name: "the private home's units", body: checkTargetHomeUnits, group: 'confinement' },
   { name: 'the confinement units', body: checkConfinementUnits, group: 'confinement' },
   { name: "a confined target's git history", body: checkWithheldHistoryRun, group: 'confinement' },
   { name: 'the withheld git history units', body: checkWithheldHistoryUnits, group: 'confinement' },

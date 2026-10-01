@@ -379,6 +379,8 @@ function bodyValue(body) {
  */
 function hostEnvironmentPort({ port, registry }) {
   return {
+    /** Empties the private home the port's sandbox keeps, where it has one (`registry.js` `createProbePort`). */
+    resetHome: () => port.resetHome?.(),
     async probe(request, signal) {
       const registered = request?.kind === 'cli' && registry.targetFor(request.interfaceId, request.executable) !== undefined;
       const injected = registered ? registry.hostEnvironment(request.interfaceId, [], request.executable) : {};
@@ -720,6 +722,9 @@ async function runArm({
   signal,
   seed = 'tea-evaluate-default-seed',
 }) {
+  // An arm is independent of the arms before it on a shared port, so its target starts with an empty private home; the
+  // steps of this arm share it.
+  port.resetHome?.();
   const operations = operationsById(contract);
   const plan = contract.interactionPlan ?? [];
   const declared = new Set(plan.map((step) => step.stepId));

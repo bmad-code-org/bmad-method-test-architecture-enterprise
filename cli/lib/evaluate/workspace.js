@@ -49,6 +49,7 @@ const path = require('node:path');
 const { createHash, randomUUID } = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 
+const { unlockDirectories } = require('./confinement');
 const { digest } = require('./digest');
 const { cliObservation } = require('./registry');
 const { RunDirectory } = require('./run-directory');
@@ -442,29 +443,6 @@ function makeReadOnly(directory) {
   for (const entry of entriesUnder(directory)) {
     const mode = fs.lstatSync(entry.file).mode & 0o7777;
     fs.chmodSync(entry.file, mode & ~0o222);
-  }
-}
-
-/**
- * Gives the owner full access to `directory` and every directory under it, so
- * it can be removed: each directory is opened up before it is read, and one
- * that still cannot be read is skipped, so a single unreadable directory a leg
- * left behind cannot keep the rest locked.
- */
-function unlockDirectories(directory) {
-  try {
-    fs.chmodSync(directory, (fs.lstatSync(directory).mode & 0o7777) | 0o700);
-  } catch {
-    return;
-  }
-  let entries;
-  try {
-    entries = fs.readdirSync(directory, { withFileTypes: true });
-  } catch {
-    return;
-  }
-  for (const entry of entries) {
-    if (entry.isDirectory()) unlockDirectories(path.join(directory, entry.name));
   }
 }
 

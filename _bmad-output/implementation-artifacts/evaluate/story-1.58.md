@@ -2,7 +2,7 @@
 title: "Story 1.58: Keep the bridge's admission token and the run's private directories from a confined target"
 type: 'bugfix'
 created: '2026-10-01'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'd654b5d3e789c26ff7a37f6abf1440ec3b78e972'

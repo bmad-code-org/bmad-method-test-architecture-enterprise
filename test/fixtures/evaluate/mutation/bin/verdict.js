@@ -136,6 +136,23 @@
  *   write-temp              answer as usual, then write a file in the temp
  *                           directory TMPDIR names, printing `temp-dir: <path>`
  *                           and `temp-write: <how>` after the verdict
+ *   write-home             answer as usual, then keep state the way an agent CLI
+ *                           does (Story 1.59), printing `home: <HOME>`,
+ *                           `xdg: <the three XDG base directories>`,
+ *                           `home-before: <every file under HOME before this
+ *                           call wrote>`, `parent-list` and `root-list`
+ *                           (what listing the directory HOME sits in and its
+ *                           parent shows), `run-homes` (the private homes
+ *                           under this run's own private parent, which only a
+ *                           target the confinement leaves unconfined can
+ *                           list), `peer-read` (a read of the file
+ *                           VERDICT_PEER names, which a case plants beside
+ *                           this run's private parent), and `<name>: <how>` for each write
+ *                           it makes: `home-write` and `xdg-write` (state under
+ *                           HOME and under XDG_DATA_HOME), `beside-write` (the
+ *                           directory HOME sits in), and `host-write` (the file
+ *                           VERDICT_TOUCH names, which a case puts in the
+ *                           host's real home)
  *   leftover-tamper         answer as usual, and leave a process running,
  *                           outside this process group, whose argument vector
  *                           carries VERDICT_TOUCH as a marker: once the
@@ -370,6 +387,69 @@ if (act === 'read-ungranted' && process.env.VERDICT_TOUCH) {
 if (act === 'write-temp') {
   const temp = process.env.TMPDIR ?? '';
   process.stdout.write(`temp-dir: ${temp}\ntemp-write: ${attempt(() => fs.writeFileSync(path.join(temp, 'verdict-temp.txt'), 'x\n'))}\n`);
+}
+if (act === 'write-home') {
+  const home = process.env.HOME ?? '';
+  const files = (directory) =>
+    fs.existsSync(directory)
+      ? fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+          const full = path.join(directory, entry.name);
+          return entry.isDirectory() ? files(full) : [path.relative(home, full)];
+        })
+      : [];
+  const before = files(home).sort();
+  // The private homes under this run's own private parent (`run-<runtime pid>-<random>` beneath the user's private root),
+  // which only a target the confinement does not withhold it from can list. The runtime is one of this process's ancestors
+  // (the command mechanism may start the target through a shell), so every ancestor's pid is tried, and `found` says whether
+  // the run's parent was seen at all.
+  const ownRunHomes = () => {
+    const root = path.join('/tmp', `tea-evaluate-p${process.getuid()}`);
+    let names;
+    try {
+      names = fs.readdirSync(root);
+    } catch (error) {
+      return `refused ${error.code}`;
+    }
+    const ancestors = [];
+    for (let pid = process.ppid; Number.isInteger(pid) && pid > 1 && ancestors.length < 12; ) {
+      ancestors.push(pid);
+      pid = Number(spawnSync('ps', ['-o', 'ppid=', '-p', String(pid)], { encoding: 'utf8' }).stdout.trim());
+    }
+    const parents = names.filter((name) => ancestors.some((pid) => name.startsWith(`run-${pid}-`)));
+    return JSON.stringify({
+      found: parents.length > 0,
+      homes: parents.flatMap((parent) => fs.readdirSync(path.join(root, parent)).filter((name) => name.startsWith('tea-evaluate-target-home-'))),
+    });
+  };
+  const list = (directory) => {
+    try {
+      return JSON.stringify(fs.readdirSync(directory).sort());
+    } catch (error) {
+      return `refused ${error.code}`;
+    }
+  };
+  const xdg = ['XDG_CONFIG_HOME', 'XDG_CACHE_HOME', 'XDG_DATA_HOME'].map((name) => process.env[name] ?? '(unset)');
+  const write = (file) =>
+    attempt(() => {
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, 'x\n');
+    });
+  process.stdout.write(
+    [
+      `home: ${home}`,
+      `xdg: ${xdg.join(' ')}`,
+      `home-before: ${JSON.stringify(before)}`,
+      `parent-list: ${list(path.dirname(home))}`,
+      `root-list: ${list(path.dirname(path.dirname(home)))}`,
+      `run-homes: ${ownRunHomes()}`,
+      `peer-read: ${process.env.VERDICT_PEER ? attempt(() => fs.readFileSync(process.env.VERDICT_PEER)) : '(none)'}`,
+      `home-write: ${write(path.join(home, '.verdict-state', 'session.json'))}`,
+      `xdg-write: ${write(path.join(process.env.XDG_DATA_HOME ?? home, 'verdict', 'state.json'))}`,
+      `beside-write: ${write(path.join(path.dirname(home), 'verdict-beside.txt'))}`,
+      `host-write: ${process.env.VERDICT_TOUCH ? write(process.env.VERDICT_TOUCH) : '(no path)'}`,
+      '',
+    ].join('\n'),
+  );
 }
 if ((act === 'leftover-tamper' || act === 'swap-evaluator') && process.env.VERDICT_TOUCH) {
   // The runtime's pid, found by its command line: `pgrep`, since a sandboxed process cannot start the setuid `ps` on macOS.
