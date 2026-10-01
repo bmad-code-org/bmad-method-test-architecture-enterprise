@@ -32,7 +32,7 @@ const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
 
 const { engineCliPath, engineVersion, loadEngine } = require('../cli/lib/evaluate/engine');
-const { confine } = require('../cli/lib/evaluate/ci');
+const { MAX_OUTPUT_BYTES, confine } = require('../cli/lib/evaluate/ci');
 const planModule = require('../cli/lib/evaluate/ci-plan');
 const { EXIT_CODES } = require('../cli/evaluate');
 const baselines = require('./lib/evaluate-baseline');
@@ -188,6 +188,26 @@ function privateTemp(label) {
 
 /** What the runtime's scratch directories left under `temp`. */
 const scratchNames = (temp) => fs.readdirSync(temp).filter((name) => name.startsWith('tea-evaluate-'));
+
+/** The user's private root (`workspace.js` `makePrivateParent`): `/tmp/tea-evaluate-p<uid>`, whatever the run's TMPDIR is. */
+const PRIVATE_ROOT = path.join('/tmp', `tea-evaluate-p${process.getuid()}`);
+const privateNames = () => (fs.existsSync(PRIVATE_ROOT) ? fs.readdirSync(PRIVATE_ROOT) : []);
+/** The private parents (`run-<pid>-*`) the process `pid` holds under the private root. */
+const privateParents = (pid) => privateNames().filter((name) => name.startsWith(`run-${pid}-`));
+/** The replay scratch directories inside the private parents of the process `pid`. */
+const replaysOf = (pid) =>
+  privateParents(pid).flatMap((parent) =>
+    fs
+      .readdirSync(path.join(PRIVATE_ROOT, parent))
+      .filter((name) => name.startsWith('tea-evaluate-replay-'))
+      .map((name) => path.join(PRIVATE_ROOT, parent, name)),
+  );
+/** The private parents of ended processes that were not there at `before`, which a run that ended left behind. */
+const strayParents = (before) =>
+  privateNames().filter((name) => {
+    const match = /^run-(\d+)-/.exec(name);
+    return match !== null && !before.has(name) && !alive(Number(match[1]));
+  });
 
 /**
  * A stand-in for the engine CLI that runs the real one, except at the stage `KILL_AT` names (and only when an argument
@@ -546,7 +566,7 @@ async function checkEnforcementTable() {
     assert.equal(planModule.classify(kind, exit).class, expected, `${kind} exit ${exit}`);
     assert.equal(planModule.classify(kind, exit).action, exit === 0 ? 'pass' : 'block', `${kind} exit ${exit}`);
   }
-  assert.equal(planModule.classify('evaluate', 1).class, 'undocumented exit', 'exit 1 is a gate exit; an evaluate check never gives it');
+  assert.equal(planModule.classify('evaluate', 1).class, 'undocumented exit', 'exit 1 is a gate exit');
   // The final exit is the most severe blocking one, in the order AD-10 records (a coordinator decision).
   assert.deepEqual(planModule.SEVERITY, [64, 12, 5, 4, 3, 13, 11, 10, 2, 1]);
   assert.match(AD10, /64, 12, 5, 4, 3, 13, 11, 10, 2, 1/, 'AD-10 does not record the severity order');
@@ -638,7 +658,7 @@ function checkStaticRules() {
   }
   // TeA holds no table of oracle dispositions: the engine's corroboration is read as recorded.
   assert.equal(sources.find(([name]) => name === 'ci.js')[1].includes('disposition'), false, 'ci.js holds a disposition table');
-  // `--strict` is passed nowhere: not by the runtime, not by any committed plan.
+  // No runtime file and no committed plan passes `--strict`.
   const walk = (directory, found = []) => {
     for (const item of fs.readdirSync(directory, { withFileTypes: true })) {
       const file = path.join(directory, item.name);
@@ -652,7 +672,7 @@ function checkStaticRules() {
     ...Object.values(FIXTURES).map(({ root, folder }) => path.join(ROOT, root, folder, PLAN)),
   ];
   for (const file of scanned) {
-    // The one line of the CLI that says it is never passed is a comment.
+    // The one CLI line that mentions `--strict` is a comment.
     const text = fs
       .readFileSync(file, 'utf8')
       .split('\n')
@@ -704,13 +724,38 @@ const fs = require('node:fs');
 fs.appendFileSync(${JSON.stringify(log)}, JSON.stringify(process.argv.slice(2)) + '\\n');
 const mode = process.argv[2];
 // Known bytes on each stream: no closing newline on stdout, a byte no text decoding keeps on stderr.
-process.stdout.write(Buffer.from('gate stdout line 1\\ngate stdout line 2 (no newline)', 'utf8'));
-process.stderr.write(Buffer.concat([Buffer.from('gate stderr \\u00e9\\n', 'utf8'), Buffer.from([0xff, 0xfe, 0x0a])]));
+const preambleOut = Buffer.from('gate stdout line 1\\ngate stdout line 2 (no newline)', 'utf8');
+const preambleErr = Buffer.concat([Buffer.from('gate stderr \\u00e9\\n', 'utf8'), Buffer.from([0xff, 0xfe, 0x0a])]);
+process.stdout.write(preambleOut);
+process.stderr.write(preambleErr);
 if (mode === 'hang') {
-  // A descendant in the gate's own process group, both pids recorded for the test, then nothing more: the gate never ends.
+  // A descendant in the gate's own process group, both pids recorded for the test, then nothing more: the gate runs until it is stopped.
   const grandchild = require('node:child_process').spawn(process.execPath, ['-e', 'setTimeout(() => {}, 600000)'], { stdio: 'ignore' });
   fs.writeFileSync(process.argv[3], JSON.stringify({ gate: process.pid, grandchild: grandchild.pid }));
   setTimeout(() => {}, 600000);
+} else if (mode === 'background') {
+  // What \`(sleep 301 >/dev/null 2>&1 </dev/null &); echo done; exit 0\` leaves: a descendant in the gate's process group
+  // that holds none of its streams, so they close the moment the gate exits. Its pid is recorded for the test.
+  const sleeper = require('node:child_process').spawn('sleep', ['301'], { stdio: 'ignore' });
+  fs.writeFileSync(process.argv[3], String(sleeper.pid));
+  sleeper.unref();
+} else if (mode === 'fill') {
+  // Output up to a total of argv[3] bytes over both streams, preamble included, in 1 MiB writes; the last byte is a write
+  // of its own, after the rest has been read, so it meets the bound as a chunk that arrives with no room left or exactly
+  // filling it. The gate then exits cleanly.
+  let remaining = Number(process.argv[3]) - 1 - preambleOut.length - preambleErr.length;
+  const pump = () => {
+    while (remaining > 0) {
+      const chunk = Buffer.alloc(Math.min(1024 * 1024, remaining), 121);
+      remaining -= chunk.length;
+      if (!process.stdout.write(chunk)) {
+        process.stdout.once('drain', pump);
+        return;
+      }
+    }
+    setTimeout(() => process.stdout.write('y'), 300);
+  };
+  pump();
 } else if (mode === 'flood') {
   // More than the runtime's output bound, in 1 MiB writes.
   const chunk = Buffer.alloc(1024 * 1024, 120);
@@ -826,7 +871,7 @@ function checkGates() {
 
 /** The pids a `hang` gate recorded: the gate and its descendant in the gate's process group. */
 async function hangingPids(file) {
-  assert.ok(await appears(file), 'the hanging gate never started');
+  assert.ok(await appears(file), 'the hanging gate did not start');
   return read(file);
 }
 
@@ -875,6 +920,46 @@ async function checkGateLimits() {
   const keptStderr = path.join(latestCi(flooding).directory, 'checks', 'flood-gate', 'stderr');
   assert.equal(fs.statSync(kept).size + fs.statSync(keptStderr).size, 64 * 1024 * 1024, 'the captured output is not cut at the bound');
   assert.equal(fs.readFileSync(kept).subarray(0, knownStdout.length).equals(knownStdout), true, 'the captured output lost its start');
+
+  // The bound is inclusive: a gate that prints exactly MAX_OUTPUT_BYTES passes with all of it kept, and one byte more
+  // stops it with exit 12 and the bytes up to the bound kept (revert: stopping at `size >= MAX_OUTPUT_BYTES` fails the
+  // first; a bound that never stops fails the second).
+  for (const [label, total, status] of [
+    ['exactly the bound', MAX_OUTPUT_BYTES, 0],
+    ['one byte over the bound', MAX_OUTPUT_BYTES + 1, 12],
+  ]) {
+    const bounded = copyFixture('mcp', 'gate-bound');
+    writePlan(bounded, { schemaVersion: planModule.PLAN_SCHEMA_VERSION, checks: [gate('bound-gate', 'fill', [String(total)])] });
+    const outcome = ci(bounded, 'pr', env);
+    assert.equal(outcome.status, status, `${label}: ${outcome.output.slice(0, 2000)}`);
+    const captured = path.join(latestCi(bounded).directory, 'checks', 'bound-gate');
+    assert.equal(
+      fs.statSync(path.join(captured, 'stdout')).size + fs.statSync(path.join(captured, 'stderr')).size,
+      MAX_OUTPUT_BYTES,
+      `${label}: the captured output is not the bound`,
+    );
+    const notes = rowOf(latestCi(bounded).json, 'bound-gate').notes;
+    assert.equal(
+      notes.some((note) => /printed more than/.test(note)),
+      status === 12,
+      `${label}: ${JSON.stringify(notes)}`,
+    );
+  }
+
+  // A descendant that outlives the gate with no stream open (what `(sleep 301 >/dev/null 2>&1 </dev/null &); echo done;
+  // exit 0` leaves) is killed with the gate's process group when the gate ends: the streams close at once, so nothing
+  // waits for them (revert: ending the group only while a stream stays open leaves the sleeper running).
+  const background = copyFixture('mcp', 'gate-background');
+  const sleeperFile = path.join(directory, 'background-pid');
+  writePlan(background, { schemaVersion: planModule.PLAN_SCHEMA_VERSION, checks: [gate('background-gate', 'background', [sleeperFile])] });
+  const sleeping = ci(background, 'pr', env);
+  const sleeper = Number(fs.readFileSync(sleeperFile, 'utf8'));
+  try {
+    assert.equal(sleeping.status, 0, sleeping.output);
+    assert.equal(await goneWithin([sleeper], 5000), true, 'a descendant of a gate that exited outlived ci');
+  } finally {
+    if (alive(sleeper)) process.kill(sleeper, 'SIGKILL');
+  }
 }
 
 /**
@@ -895,11 +980,12 @@ async function checkInterruptedGate() {
     const run = ciChild(folder, 'pr', env({ PATH: `${stubs.bin}${path.delimiter}${process.env.PATH}` }));
     const recorded = await hangingPids(pids);
     assert.ok(alive(recorded.gate) && alive(recorded.grandchild));
-    assert.equal(scratchNames(temp).length > 0, true, `${signal}: the compile check left no scratch directory to remove`);
+    assert.equal(replaysOf(run.child.pid).length, 1, `${signal}: the compile check left no scratch directory to remove`);
     run.child.kill(signal);
     const ended = await run.exited;
     assert.equal(ended.signal, signal, `${signal}: ci ended ${JSON.stringify(ended)}`);
     assert.equal(await goneWithin([recorded.gate, recorded.grandchild]), true, `${signal}: the gate outlived ci`);
+    assert.deepEqual(privateParents(run.child.pid), [], `${signal}: ci left a private parent behind`);
     assert.deepEqual(scratchNames(temp), [], `${signal}: ci left ${JSON.stringify(scratchNames(temp))} behind`);
   }
 }
@@ -1018,7 +1104,7 @@ function checkPrReplay() {
   assert.equal(
     read(path.join(scoreDirectory(folder), 'P-002', 'evidence-artifact.json')).contractVerdict,
     'CONCERNS',
-    'the fixture baseline no longer records CONCERNS, so this case would not read one',
+    'the fixture baseline records no CONCERNS, so this case would read none',
   );
   for (const row of json.checks.filter((candidate) => candidate.id !== 'replay')) assert.equal(row.action, 'pass', row.id);
 
@@ -1163,9 +1249,10 @@ function checkBaselineIntegrity() {
     const rows = latestCi(folder).json;
     return ids.map((id) => [id, rowOf(rows, id).exit]);
   };
-  // `baseline/scores/` holds the accepted score invocation alone (AD-12): a planted second subtree is refused, and the
-  // replay compares the baseline with the produced subtree (revert: choosing the last invocation that is not the
-  // manifest's reads the planted one and exits 0).
+  // `baseline/scores/` holds the accepted score invocation alone (AD-12): a planted second subtree is refused before the
+  // replay runs (revert: dropping the layout rule lets the replay run over the planted subtree). The replay's own pick of
+  // the produced subtree (the one new `scores/` entry) is a second line of defence the layout rule makes unreachable from
+  // a case: with `scores/` held to one entry, choosing the last entry that is not the manifest's picks the same subtree.
   {
     const folder = copyFixture('verdict', 'planted-scores');
     const accepted = scoreDirectory(folder);
@@ -1374,7 +1461,7 @@ function checkContractDigestOnPr() {
 
 function checkBadCommittedInput() {
   const noStack = (text, label) => assert.doesNotMatch(text, /\n\s+at .*\(.*:\d+:\d+\)/, `${label}: a stack trace reached the output`);
-  // A baseline probe that is not JSON: an authoring finding of the gameability check, not a crash.
+  // A baseline probe that is not JSON: an authoring finding of the gameability check.
   const probes = copyFixture('verdict', 'bad-baseline-probe');
   writePlan(probes, { schemaVersion: planModule.PLAN_SCHEMA_VERSION, checks: [entry('gameability', 'pr')] });
   fs.writeFileSync(path.join(probes, 'baseline', 'probes', 'P-002.probe.json'), '{ not json');
@@ -1431,7 +1518,6 @@ function checkStaleBaselineOnPr() {
 
 async function checkInterruptedReplay() {
   const { temp, env } = privateTemp('interrupt-temp');
-  const replays = () => scratchNames(temp).filter((name) => name.startsWith('tea-evaluate-replay-'));
   const wrapper = killShim('kill-shim');
   const mark = path.join(temp, 'mark');
   const folder = copyFixture('verdict', 'interrupt');
@@ -1441,10 +1527,12 @@ async function checkInterruptedReplay() {
   // nothing is left in the temporary directory (revert: a scratch directory kept past the run leaves it behind).
   for (const stage of ['score', 'preflight']) {
     fs.rmSync(mark, { force: true });
+    const before = new Set(privateNames());
     const killed = ci(folder, 'pr', env({ TEA_EVALUATE_ENGINE_CLI: wrapper, KILL_AT: stage, KILL_MARK: mark }));
     assert.equal(killed.status, 12, `${stage}: ${killed.output}`);
-    assert.ok(fs.existsSync(mark), `the ${stage} stage was never reached`);
+    assert.ok(fs.existsSync(mark), `the ${stage} stage was not reached`);
     assert.deepEqual(scratchNames(temp), [], `a killed ${stage} stage left a scratch directory behind`);
+    assert.deepEqual(strayParents(before), [], `a killed ${stage} stage left a private parent behind`);
     const row = rowOf(latestCi(folder).json, 'replay');
     assert.deepEqual([row.exit, row.class], [12, 'infrastructure'], stage);
     assert.match(fs.readFileSync(path.join(latestCi(folder).directory, 'checks', 'replay', 'stderr'), 'utf8'), /killed by SIGKILL/);
@@ -1460,21 +1548,21 @@ async function checkInterruptedReplay() {
       'pr',
       env({ TEA_EVALUATE_ENGINE_CLI: wrapper, KILL_AT: 'score', KILL_HOW: 'hang', KILL_ONCE: '1', KILL_MARK: mark }),
     );
-    assert.ok(await appears(mark), `${signal}: the replay never reached the score stage`);
-    assert.equal(replays().length, 1, `${signal}: ${JSON.stringify(scratchNames(temp))}`);
-    assert.deepEqual(
-      scratchNames(temp).filter((name) => name.startsWith('tea-evaluate-score-') || name.startsWith('tea-evaluate-aggregate-')),
-      [],
-      `${signal}: the replay's score staged directly in the temporary directory`,
-    );
+    assert.ok(await appears(mark), `${signal}: the replay did not reach the score stage`);
+    const pid = run.child.pid;
+    // One private parent holds the scratch directory: the replay's score makes none of its own.
+    assert.equal(privateParents(pid).length, 1, `${signal}: ${JSON.stringify(privateParents(pid))}`);
+    assert.equal(replaysOf(pid).length, 1, `${signal}: ${JSON.stringify(privateNames())}`);
+    assert.deepEqual(scratchNames(temp), [], `${signal}: the replay made a directory in the temporary directory`);
     assert.equal(
-      fs.readdirSync(path.join(temp, replays()[0], 'score-staging')).some((name) => name.startsWith('tea-evaluate-score-')),
+      fs.readdirSync(path.join(replaysOf(pid)[0], 'score-staging')).some((name) => name.startsWith('tea-evaluate-score-')),
       true,
       `${signal}: the replay's score staging is not inside the scratch directory`,
     );
     run.child.kill(signal);
     process.kill(Number(fs.readFileSync(mark, 'utf8')), 'SIGKILL');
     await run.exited;
+    assert.deepEqual(privateParents(pid), [], `${signal} left ${JSON.stringify(privateParents(pid))} under ${PRIVATE_ROOT}`);
     assert.deepEqual(scratchNames(temp), [], `${signal} left ${JSON.stringify(scratchNames(temp))} behind`);
   }
 
@@ -1482,31 +1570,46 @@ async function checkInterruptedReplay() {
   // staging included, and the next ci run over the same folder removes all of it.
   fs.rmSync(mark, { force: true });
   const killedRun = ciChild(folder, 'pr', env({ TEA_EVALUATE_ENGINE_CLI: wrapper, KILL_AT: 'score', KILL_HOW: 'hang', KILL_MARK: mark }));
-  assert.ok(await appears(mark), 'the replay never reached the engine stage');
+  assert.ok(await appears(mark), 'the replay did not reach the engine stage');
   // ci first, so no cleanup runs, then the stage it was waiting on.
   killedRun.child.kill('SIGKILL');
   await killedRun.exited;
   process.kill(Number(fs.readFileSync(mark, 'utf8')), 'SIGKILL');
-  assert.equal(replays().length, 1, `a killed ci left ${JSON.stringify(scratchNames(temp))}`);
-  const owner = read(path.join(temp, replays()[0], '.tea-evaluate-ci-owner.json'));
+  const killedPid = killedRun.child.pid;
+  assert.equal(replaysOf(killedPid).length, 1, `a killed ci left ${JSON.stringify(privateNames())}`);
+  const [replay] = replaysOf(killedPid);
+  const owner = read(path.join(replay, '.tea-evaluate-ci-owner.json'));
   assert.equal(owner.folder, fs.realpathSync.native(folder));
-  assert.ok(fs.readdirSync(path.join(temp, replays()[0], 'score-staging')).length > 0, 'the staging is not inside the scratch directory');
+  assert.equal(owner.pid, killedPid);
+  assert.ok(fs.readdirSync(path.join(replay, 'score-staging')).length > 0, 'the staging is not inside the scratch directory');
   const dead = spawnSync(process.execPath, ['-e', ''], { encoding: 'utf8' });
-  // A directory whose owner is another folder's, and one whose owner is alive, are not this ci's to remove.
-  const plant = (name, value) => {
-    fs.mkdirSync(path.join(temp, name));
-    fs.writeFileSync(path.join(temp, name, '.tea-evaluate-ci-owner.json'), `${JSON.stringify(value)}\n`);
+  // A parent whose owner is another folder's, and one whose owner is alive, are not this ci's to remove.
+  const planted = [];
+  const plant = (parentName, name, value) => {
+    const parent = path.join(PRIVATE_ROOT, parentName);
+    fs.mkdirSync(path.join(parent, name), { recursive: true });
+    fs.writeFileSync(path.join(parent, name, '.tea-evaluate-ci-owner.json'), `${JSON.stringify(value)}\n`);
+    planted.push(parent);
+    return parentName;
   };
-  plant('tea-evaluate-replay-live-owner', { pid: process.pid, folder: fs.realpathSync.native(folder) });
-  plant('tea-evaluate-replay-other-folder', { pid: dead.pid, folder: path.join(temp, 'some-other-evaluation') });
-  const again = ci(folder, 'pr', env());
-  assert.equal(again.status, 0, again.output);
-  assert.match(again.stderr, /removed the replay scratch directory/);
-  assert.deepEqual(
-    scratchNames(temp).sort(),
-    ['tea-evaluate-replay-live-owner', 'tea-evaluate-replay-other-folder'],
-    "the next ci run did not remove exactly the dead owner's scratch directory of this folder",
-  );
+  try {
+    const live = plant(`run-${process.pid}-liveown`, 'tea-evaluate-replay-live-owner', {
+      pid: process.pid,
+      folder: fs.realpathSync.native(folder),
+    });
+    const other = plant(`run-${dead.pid}-otherfol`, 'tea-evaluate-replay-other-folder', {
+      pid: dead.pid,
+      folder: path.join(temp, 'some-other-evaluation'),
+    });
+    const again = ci(folder, 'pr', env());
+    assert.equal(again.status, 0, again.output);
+    assert.match(again.stderr, /removed the replay scratch directory/);
+    assert.deepEqual(privateParents(killedPid), [], "the next ci run did not remove the dead owner's scratch directory of this folder");
+    for (const name of [live, other]) assert.ok(privateNames().includes(name), `the next ci run removed ${name}`);
+    assert.deepEqual(scratchNames(temp), [], 'the next ci run left a scratch directory in the temporary directory');
+  } finally {
+    for (const parent of planted) fs.rmSync(parent, { recursive: true, force: true });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1677,7 +1780,7 @@ function checkGameability() {
   writePlan(project.folder, { schemaVersion: planModule.PLAN_SCHEMA_VERSION, checks: [entry('gameability', 'pr'), entry('replay', 'pr')] });
   baselines.commitAll(project.repository, 'accept the baseline and the plan');
   const launched = launchesOf(project);
-  assert.ok(launched.length > 0, 'the run never launched the target, so the marker proves nothing');
+  assert.ok(launched.length > 0, 'the run launched no target, so the marker proves nothing');
   const result = ci(project.folder, 'pr', project.env);
   assert.equal(result.status, 0, result.output);
   // The gameability arm is scored through score over the baseline records, and no target launches: the marker stays as the run left it.
@@ -1844,9 +1947,9 @@ function checkLiveTiers() {
   );
   write(recorded, { ...run, evalQualityVersion: engineVersion() });
 
-  // A check's own non-zero exit never hides the stale rule. With P-002 missed the twin run breaches the class floor, which
+  // A check's own non-zero exit keeps the stale rule in the final exit. With P-002 missed the twin run breaches the class floor, which
   // is exit 2 on release, so a fresh baseline gives 2 and a stale one 11, which outranks it; each row carries the stale
-  // finding too (revert: a twin run that never applies the rule keeps the exit at 2).
+  // finding too (revert: a twin run that skips the rule keeps the exit at 2).
   const failing = { ...project.env, VERDICT_WHEN: 'trial-mutated-M-001-1', VERDICT_DO: 'accept' };
   const fresh = ci(project.folder, 'release', failing);
   assert.equal(fresh.status, 2, fresh.output);
@@ -1990,7 +2093,7 @@ function addGateProbes({ folder, repository }, gates) {
 }
 
 /**
- * Edits that make a missed defect CONCERNS instead of FAIL, so a run that misses a probe still exits 0 and the floor
+ * Edits that make a missed defect CONCERNS, so a run that misses a probe still exits 0 and the floor
  * decision, measured from a real rate, decides alone: the behavior's severity is `low`, below the policy's
  * `severityFloor`. P-003 (gate 2) is the held-out defect probe and P-004 (gate 3) a development one beside P-002, so the
  * development partition holds two eligible defect probes and the held-out partition one. The evaluation declares two

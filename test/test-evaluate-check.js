@@ -408,7 +408,7 @@ async function checkRequirementsStatement() {
   const accepted = runCli(['check', '--evaluation', valid]);
   check(accepted.status === 0, `a committed requirements statement exited ${accepted.status}; expected 0\n${accepted.output}`);
 
-  // Contract-source freshness (Story 2.2): a requirements change the contract never absorbed blocks the pull request.
+  // Contract-source freshness (Story 2.2): a requirements change the contract has not absorbed blocks the pull request.
   // One byte of the statement changes, and evaluation.json is re-recorded, so the contract's sourceSpecDigest is the only
   // thing left that disagrees with the committed bytes.
   const edited = withStatement();
@@ -418,12 +418,12 @@ async function checkRequirementsStatement() {
   const editedResult = runCli(['check', '--evaluation', edited]);
   check(
     editedResult.status === 10,
-    `a requirements edit the contract never absorbed exited ${editedResult.status}; expected 10\n${editedResult.output}`,
+    `a requirements edit the contract did not absorb exited ${editedResult.status}; expected 10\n${editedResult.output}`,
   );
   check(
     editedResult.stdout.includes('contract.json: [requirements] sourceSpecDigest') &&
       editedResult.stdout.includes(engine.digestBytes(editedBytes)),
-    `a requirements edit the contract never absorbed lacks the freshness finding\n${editedResult.output}`,
+    `a requirements edit the contract did not absorb lacks the freshness finding\n${editedResult.output}`,
   );
   const staleContract = withStatement();
   editJson(staleContract, 'contract.json', (value) => (value.sourceSpecDigest = `sha256:${'0'.repeat(64)}`));
@@ -436,7 +436,7 @@ async function checkRequirementsStatement() {
     staleContractResult.stdout.includes('contract.json: [requirements] sourceSpecDigest'),
     `a stale sourceSpecDigest lacks the freshness finding\n${staleContractResult.output}`,
   );
-  // A null or absent sourceSpecDigest is not freshness: the contract is held to the statement like any other value.
+  // A null or absent sourceSpecDigest is a finding: the contract is held to the statement like any other value.
   for (const [label, edit] of [
     ['a null sourceSpecDigest', (value) => (value.sourceSpecDigest = null)],
     ['an absent sourceSpecDigest', (value) => delete value.sourceSpecDigest],
@@ -564,8 +564,8 @@ function evaluationManifestsUnder(directory) {
 /**
  * Story 2.2: every evaluation committed under `test/fixtures/` and `test/evaluations/` names a `requirements.md` whose
  * digest is the one its contract's `sourceSpecDigest` carries, so the freshness rule holds for every evaluation `check`
- * runs over. Negative cases are built in temp folders at test time and never committed as folders holding an
- * `evaluation.json`, so the walk sees only evaluations meant to pass. Deleting one fixture's statement makes `check`
+ * runs over. Negative cases are built in temp folders at test time, so no committed folder holds a failing
+ * `evaluation.json` and the walk sees only evaluations meant to pass. Deleting one fixture's statement makes `check`
  * exit 10, which the last case observes in a copy.
  */
 async function checkEveryEvaluationHasItsStatement() {

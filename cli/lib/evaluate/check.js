@@ -14,7 +14,7 @@
  * - `requirements`: `evaluation.json` declares no requirements statement, the statement is absent, is not a
  *   regular file held by the evaluation folder, its committed bytes disagree with the recorded digest, or
  *   they digest to something other than the contract's `sourceSpecDigest` (contract-source freshness, Story
- *   2.2: a requirements change the contract never absorbed blocks the pull request).
+ *   2.2: a requirements change the contract has not absorbed blocks the pull request).
  * - `runtime-owned-field`: a committed probe carries a field the runtime writes.
  * - `mutation-operator`: a mutation is not `replace-exact` with exactly one occurrence.
  * - `provisioned-target`: a mutation's `targetArtifact` sits inside a provisioned directory, which every

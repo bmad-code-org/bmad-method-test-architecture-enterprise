@@ -13,14 +13,16 @@
  * Every stage exit passes through verbatim and nothing here computes a verdict from evidence: the engine's exits and
  * the evidence artifact decide. The class and action of an exit are looked up in AD-10's table (`ci-plan.js`), CONCERNS
  * is read from the evidence artifact's `contractVerdict` and is a warning (exit 0 plus a warning line and a `warn` row),
- * and `--strict` is never passed. The final exit is the most severe blocking result in the order 64, 12, 5, 4, 3, 13, 11,
+ * and `ci` passes no `--strict`. The final exit is the most severe blocking result in the order 64, 12, 5, 4, 3, 13, 11,
  * 10, 2, 1, then 0.
  *
  * Persistence: `runs/<invocationId>/` is created through `RunDirectory`, so the write rules of Story 1.8 hold. Per
  * check it holds `checks/<id>/exit-code`, `stdout` and `stderr` byte for byte, and `ci.json` (the tier, whether the
  * baseline is stale, each check's exit, class, action and evidence paths, and the final exit). A replay's produced
- * evidence goes to `replay/`. The invocation's one scratch directory holds the replay's copy of the folder and every
- * staging directory of an engine call, the replay's `score` included, so one removal leaves nothing behind.
+ * evidence goes to `replay/`. The invocation's one scratch directory sits beneath its private parent in the user's
+ * private root (`workspace.js` `makePrivateParent`, the root a confined target is denied) and holds the replay's copy of
+ * the folder and every staging directory of an engine call, the replay's `score` included, so one removal of the parent
+ * leaves nothing behind.
  *
  * The checks of the `pr` tier that read the committed `baseline/`:
  *
@@ -57,7 +59,6 @@
 'use strict';
 
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 
@@ -87,7 +88,15 @@ const { RunDirectory, RunDirectoryError } = require('./run-directory');
 const { runRunCommand } = require('./run');
 const { runScoreCommand } = require('./score');
 const { regularFileBytes } = require('./score-inputs');
-const { cleanUpOnSignal, makeScratchDirectory, removeScratchDirectory } = require('./workspace');
+const {
+  cleanUpOnSignal,
+  heldPrivateRoot,
+  makePrivateParent,
+  makeScratchDirectory,
+  privateRootBase,
+  privateRootName,
+  removeScratchDirectory,
+} = require('./workspace');
 
 const WIRING = 64;
 const AUTHORING = 10;
@@ -102,7 +111,7 @@ const POLICY_NAME = 'policy/scoring-policy.json';
 const CONFORMANCE_FILE = 'adapter/http-probe-port.conformance.mjs';
 const SCRATCH_PREFIX = 'tea-evaluate-replay-';
 const OWNER_NAME = '.tea-evaluate-ci-owner.json';
-/** What a replay never compares: the call records of `score`, which hold each engine call's argv, private staging paths and invocation id. */
+/** What a replay leaves out of its comparison: the call records of `score`, which hold each engine call's argv, private staging paths and invocation id. */
 const CALL_RECORDS = new Set(['score.json', 'aggregate-strength.json']);
 /**
  * What a child (a gate, the conformance run) may print and how long it may run. A child that prints more than
@@ -164,31 +173,39 @@ function relativeTo(folder, file) {
 // The invocation
 
 /**
- * Removes the scratch directories a killed `ci` over this evaluation folder left in the temporary directory: each
- * carries its owner's pid and folder, and only one whose owner no longer runs is removed. A directory of another
- * folder, or of an owner that still runs, is left as it is.
+ * Removes what a killed `ci` over this evaluation folder left in the user's private root: a private parent
+ * (`run-<pid>-*`) whose pid is gone and whose replay scratch directory carries an owner file naming that pid and this
+ * folder. A parent of another folder, of an owner that still runs, or one with no owner file is left as it is.
  */
 function reclaimReplayScratch(folder, log) {
+  if (process.platform === 'win32') return;
+  const root = heldPrivateRoot(path.join(privateRootBase(), privateRootName()));
+  if (root === null) return;
   let names;
   try {
-    names = fs.readdirSync(os.tmpdir()).filter((name) => name.startsWith(SCRATCH_PREFIX));
+    names = fs.readdirSync(root);
   } catch {
     return;
   }
   const real = fs.realpathSync.native(folder);
   for (const name of names) {
-    const directory = path.join(os.tmpdir(), name);
+    const parent = path.join(root, name);
+    const named = /^run-(\d+)-/.exec(name);
+    if (named === null) continue;
     try {
-      const owner = JSON.parse(fs.readFileSync(path.join(directory, OWNER_NAME), 'utf8'));
-      if (owner.folder !== real || !Number.isInteger(owner.pid) || owner.pid <= 0) continue;
+      const pid = Number(named[1]);
+      const replay = fs.readdirSync(parent).find((entry) => entry.startsWith(SCRATCH_PREFIX));
+      if (replay === undefined) continue;
+      const owner = JSON.parse(fs.readFileSync(path.join(parent, replay, OWNER_NAME), 'utf8'));
+      if (owner.folder !== real || owner.pid !== pid || !Number.isInteger(pid) || pid <= 0) continue;
       try {
-        process.kill(owner.pid, 0);
+        process.kill(pid, 0);
         continue;
       } catch (error) {
         if (error.code !== 'ESRCH') continue;
       }
-      removeScratchDirectory(directory);
-      log(`removed the replay scratch directory ${directory}, which a killed ci run left behind`);
+      removeScratchDirectory(parent);
+      log(`removed the replay scratch directory ${path.join(parent, replay)}, which a killed ci run left behind`);
     } catch {
       // Not a directory this command owns, or one it cannot read: left as it is.
     }
@@ -252,7 +269,7 @@ async function runCiCommand(folder, { tier, env = process.env, log = () => {} } 
     }
   };
   const context = createContext({ folder, tier, env, log, writer, scratch });
-  // An interrupting signal reaches the gate's process group (the child outlives nothing) and removes the scratch directory.
+  // An interrupting signal reaches the gate's process group and removes the scratch directory.
   const release = cleanUpOnSignal([], new AbortController(), {
     onSignal: (name) => {
       stopChildren(context, name, SIGNAL_GRACE_MS);
@@ -294,13 +311,15 @@ function createContext({ folder, tier, env, log, writer, scratch }) {
 }
 
 /**
- * The invocation's one scratch directory (`tea-evaluate-replay-*`, on the scratch list, with an owner file naming the pid
- * and the evaluation folder so the next `ci` over the folder can reclaim it after a kill that no handler saw). The replay's
- * copy of the evaluation folder, every staging directory of an engine call and the staging root of the replay's `score`
- * live inside it, so one removal leaves nothing behind.
+ * The invocation's one scratch directory (`tea-evaluate-replay-*`) beneath the invocation's private parent, which is the
+ * first entry of the scratch list (`makePrivateParent`, so a signal or the end of the run removes the parent and with it
+ * everything below), with an owner file naming the pid and the evaluation folder so the next `ci` over the folder can
+ * reclaim it after a kill that no handler saw. The replay's copy of the evaluation folder, every staging directory of an
+ * engine call and the staging root of the replay's `score` live inside it.
  */
 function invocationScratch(context) {
   return context.once('scratch-root', () => {
+    makePrivateParent(context.scratch);
     const directory = makeScratchDirectory(context.scratch, SCRATCH_PREFIX);
     fs.writeFileSync(
       path.join(directory, OWNER_NAME),
@@ -312,7 +331,7 @@ function invocationScratch(context) {
 
 /** A private directory inside the invocation's scratch directory, which the invocation removes however it ends. */
 function stagingDirectory(context, prefix) {
-  return fs.mkdtempSync(path.join(invocationScratch(context), prefix));
+  return makeScratchDirectory(context.scratch, prefix, invocationScratch(context));
 }
 
 async function runCheck(context, entry) {
@@ -330,7 +349,7 @@ async function runCheck(context, entry) {
     if (entry.kind === 'evaluate' && READS_BASELINE.has(entry.id)) outcome = await applyStaleness(scoped, outcome);
   } catch (error) {
     // An engine that cannot run, or a stage killed or exiting undocumented, is infrastructure; so is anything unexpected,
-    // since exit 1 means nothing in AD-10's table for tea-evaluate. The message is kept and the stack is not.
+    // since exit 1 means nothing in AD-10's table for tea-evaluate. The message is kept; the stack trace is dropped.
     outcome = result(INFRASTRUCTURE, { stderr: `${escapeUnprintable(String(error?.message ?? error))}\n`, source: 'tea-evaluate' });
   }
   if (outcome.stderr === '' && logged.length > 0) outcome.stderr = `${logged.map((line) => escapeUnprintable(line)).join('\n')}\n`;
@@ -468,7 +487,8 @@ function stopChildren(context, signal, graceMs) {
  * invocation's environment. Both streams are captured byte for byte, whatever the exit.
  *
  * The child ends early when it runs past `timeoutMs` (SIGTERM to its group, then SIGKILL) or prints more than
- * `MAX_OUTPUT_BYTES` (SIGKILL; the captured bytes stop at the bound). Resolves with `{ status, signal, stdout, stderr,
+ * `MAX_OUTPUT_BYTES` (SIGKILL; the captured bytes stop at the bound; output of exactly the bound passes). Once the child has
+ * ended its process group is killed, so no descendant outlives the call. Resolves with `{ status, signal, stdout, stderr,
  * ended, error }`: `ended` names why the runtime stopped it (`timeout`, `output`), `error` is a failure to start it.
  */
 function runChild(context, { command, args, cwd, timeoutMs }) {
@@ -491,6 +511,8 @@ function runChild(context, { command, args, cwd, timeoutMs }) {
       settled = true;
       for (const timer of timers) clearTimeout(timer);
       context.children.delete(child);
+      // Whatever the group still holds is killed once its leader has ended, a descendant that closed its streams included.
+      if (child.pid !== undefined) signalGroup(child, 'SIGKILL');
       resolve({
         status,
         signal,
@@ -507,11 +529,15 @@ function runChild(context, { command, args, cwd, timeoutMs }) {
     for (const name of ['stdout', 'stderr']) {
       child[name].on('data', (chunk) => {
         const room = MAX_OUTPUT_BYTES - size;
-        if (room <= 0) return;
+        if (room <= 0) {
+          stop('output', 'SIGKILL');
+          return;
+        }
         const kept = chunk.length > room ? chunk.subarray(0, room) : chunk;
         captured[name].push(kept);
         size += kept.length;
-        if (chunk.length > room || size >= MAX_OUTPUT_BYTES) stop('output', 'SIGKILL');
+        // Output of exactly the bound passes; the first byte past it stops the child.
+        if (chunk.length > room) stop('output', 'SIGKILL');
       });
     }
     if (timeoutMs !== undefined) {
@@ -949,7 +975,7 @@ function replayScore(context, baseline) {
   });
 }
 
-/** The CONCERNS the evidence artifacts record: a warning each (`--strict` is never passed). */
+/** The CONCERNS the evidence artifacts record: a warning each (`ci` passes no `--strict`). */
 function concernsOf(files, label) {
   const warnings = [];
   for (const [name, bytes] of files) {
@@ -1343,4 +1369,4 @@ const EVALUATE_CHECKS = Object.fromEntries([
   ['strength-comparison', strengthComparisonCheck],
 ]);
 
-module.exports = { CALL_RECORDS, CiOutcome, EVALUATE_CHECKS, confine, runCiCommand };
+module.exports = { CALL_RECORDS, CiOutcome, EVALUATE_CHECKS, MAX_OUTPUT_BYTES, confine, runCiCommand };

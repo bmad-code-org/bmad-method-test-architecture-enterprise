@@ -463,7 +463,9 @@ async function inputFindings({ folder, runDirectory, index, record, engine, held
  * @param {NodeJS.ProcessEnv} [options.env] the environment the engine CLI runs under
  * @param {(line: string) => void} [options.log]
  * @param {string} [options.stagingRoot] the existing directory the call's private staging directories are made in, for a
- *   caller that removes that directory itself however it ends (`tea-evaluate ci`'s replay); the system's temporary directory when absent
+ *   caller that removes that directory itself however it ends (`tea-evaluate ci`'s replay, whose directory sits beneath its
+ *   own private parent); the call then makes no private parent of its own. A call without one makes its parent beneath the
+ *   user's private root (`workspace.js` `makePrivateParent`) and removes it at its end
  * @returns {Promise<ScoreOutcome>}
  */
 async function runScoreCommand(folder, { run: invocationId, env = process.env, log = () => {}, stagingRoot } = {}) {
@@ -556,7 +558,7 @@ async function runScoreCommand(folder, { run: invocationId, env = process.env, l
   const scratch = [];
   try {
     try {
-      makePrivateParent(scratch);
+      if (stagingRoot === undefined) makePrivateParent(scratch);
     } catch (error) {
       if (!(error instanceof WorkspaceRefusal)) throw error;
       return new ScoreOutcome({ exitCode: INFRASTRUCTURE, runDirectory, message: error.message });

@@ -42,7 +42,7 @@ const TIERS = ['pr', 'merge', 'scheduled', 'release'];
 
 /** The deterministic checks that need no secret: AD-10's `pr` members. */
 const DETERMINISTIC_CHECKS = ['check', 'compile', 'seal', 'api-conformance', 'gameability', 'oracle-agreement', 'replay'];
-/** The checks that drive a live target or compare live results: never on `pr` (AD-20). */
+/** The checks that drive a live target or compare live results, so none sits on `pr` (AD-20). */
 const LIVE_CHECKS = ['preflight-live', 'twin-run', 'held-out', 'judge-calibration', 'strength-comparison'];
 
 /**
@@ -86,7 +86,7 @@ const COMMAND_LEADS = Object.freeze({ evaluate: 'tea-evaluate', gate: 'eval-qual
 
 /**
  * AD-10's enforcement table: the class of each exit by the source that gives it. `ci` looks a class up by the exit
- * a stage gave and never rewrites the exit. `action` is what the pipeline does with it.
+ * a stage gave and passes the exit through unchanged. `action` is what the pipeline does with it.
  */
 const ENFORCEMENT_TABLE = Object.freeze([
   { exit: 0, source: 'eval-quality', class: 'pass', action: 'pass' },
