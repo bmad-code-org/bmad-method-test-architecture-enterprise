@@ -52,7 +52,14 @@ const path = require('node:path');
 
 const AjvModule = require('ajv/dist/2020');
 
-const { confinedCommandMechanism, confinedMcpMechanism, confines, targetSandbox } = require('./confinement');
+const {
+  confinedCommandMechanism,
+  confinedMcpMechanism,
+  confines,
+  makeTargetHome,
+  releaseTargetHome,
+  targetSandbox,
+} = require('./confinement');
 const { loadAdapters, loadEngine } = require('./engine');
 const {
   authorizationOf,
@@ -685,11 +692,15 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
    * own entry in it), and reading, writing or connecting to nothing under
    * `options.privateRoot` (the user's private root directory, beneath which
    * the run's private parent holds the evaluation layer's bridge token and
-   * socket and its working directories; `registry.privateRoot`); with `options.audit` the port's Node
+   * socket and its working directories; `registry.privateRoot`) apart from
+   * the one private home directory the port makes beneath that parent, which
+   * `HOME` and the XDG base directories name, which the target may read and
+   * write and which the run removes; `resetHome()` empties it for an
+   * independent arm or leg; with `options.audit` the port's Node
    * processes also report the paths they open outside what was granted, which
    * `observedMounts()` reads, and which is empty otherwise.
    *
-   * @returns {Promise<{port: {probe: Function}, policy: object, mcpPolicy: object, observedMounts: () => string[]}>}
+   * @returns {Promise<{port: {probe: Function}, policy: object, mcpPolicy: object, observedMounts: () => string[], releaseHome: () => void, resetHome: () => void}>}
    */
   async function createProbePort(options) {
     const policy = commandTargetPolicy(options);
@@ -700,6 +711,7 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
     let commandMechanism = adapters.nodeCommandMechanism;
     let mcpMechanism = adapters.nodeStdioMcpMechanism;
     let sandbox = null;
+    let home = null;
     if (confines(confinement)) {
       let report = null;
       if (options.audit === true) {
@@ -720,6 +732,8 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
         workspace: options.workspace,
         git: options.git ?? null,
         privateRoot: options.privateRoot ?? null,
+        // One private home per sandbox, beneath the run's private parent; an opt-out run makes none and keeps the host's environment.
+        home: (home = makeTargetHome(scratch)),
         report,
         status,
       });
@@ -752,14 +766,31 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
             scratch,
             deployment: options.deployment ?? null,
           });
+    // An independent arm or leg that shares this port starts with an empty home (one call): a new home replaces the old one,
+    // which is removed, so a process an earlier arm left running holds a profile that cannot reach the next arm's home.
+    let used = false;
+    const resetHome = () => {
+      if (home === null || !used) return;
+      used = false;
+      const previous = home;
+      home = makeTargetHome(scratch);
+      sandbox.setHome(home);
+      releaseTargetHome(scratch, previous);
+    };
     const port = {
       probe: (request, signal) => {
+        used = true;
         if (request?.kind === 'mcp') return mcpAdapter.probe(request, signal);
         if (request?.kind === 'api') return apiPort.probe(request, signal);
         return commandAdapter.probe(request, signal);
       },
+      resetHome,
     };
-    return { port, policy, mcpPolicy, observedMounts: () => sandbox?.observedMounts() ?? [] };
+    // The trial's private home goes when its trial ends; one that cannot be removed stays in `scratch` for the run's end.
+    const releaseHome = () => {
+      if (home !== null) releaseTargetHome(scratch, home);
+    };
+    return { port, policy, mcpPolicy, observedMounts: () => sandbox?.observedMounts() ?? [], releaseHome, resetHome };
   }
 
   /**

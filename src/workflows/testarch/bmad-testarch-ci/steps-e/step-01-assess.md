@@ -2,6 +2,7 @@
 name: 'step-01-assess'
 description: 'Load an existing output for editing'
 nextStepFile: '{skill-root}/steps-e/step-02-apply-edit.md'
+evaluationPlansStepFile: '{skill-root}/steps-c/step-03b-render-evaluation-plans.md'
 ---
 
 # Step 1: Assess Edit Target
@@ -57,9 +58,13 @@ When several files match, list each one with its scope and ask which to edit. Do
 
 Read the provided output file in full.
 
-### 3. Confirm
+### 3. Detect Evaluation Plans
 
-Confirm the target and proceed to edit.
+Load `{evaluationPlansStepFile}`, read it completely, and run its sections 1 and 2 (detect and validate) against the repository, holding what it finds in the conversation. Every `ci/evaluation-ci-plan.json` it finds is an edit to apply.
+
+### 4. Confirm
+
+Confirm the target and the plans found, and proceed to edit.
 
 Load next step: `{nextStepFile}`
 

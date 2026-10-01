@@ -1,0 +1,48 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: the upload's condition is negated, `${{ !always() }}`. The text contains always() and the upload never runs, so a substring match would score it as satisfying the request.",
+    "Every other element is the capture's, so the result is that one deviation."
+  ],
+  "id": "evaluation-plan-upload-negated",
+  "suite": "ci",
+  "scorerVersion": 15,
+  "storedOutput": {
+    "origin": "constructed",
+    "workflow": ".github/workflows/test.yml"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/ci-eval/ground-truth.json",
+    "fixtureSet": "evaluation-plan-quarry-grader",
+    "scoringInputsDigest": "sha256:3ca50810b3cf55b8d929e12e756976d8ad029fbed783f097b1621832140eb857"
+  },
+  "derivation": [
+    "The file parses and lints clean. The upload's if, with its expression wrapper removed, is !always(), which is not always(), so the artifact element misses and every other element is present."
+  ],
+  "result": {
+    "isMinimalRequest": false,
+    "parse": {
+      "ok": true,
+      "errors": []
+    },
+    "lint": {
+      "findings": []
+    },
+    "elements": {
+      "trigger-pull-request-main": true,
+      "permission-contents-read": true,
+      "node-version-from-nvmrc": true,
+      "node-version-evaluation-floor": true,
+      "command-install": true,
+      "command-unit-tests": true,
+      "command-evaluation-install": true,
+      "command-evaluation-ci-pr": true,
+      "job-evaluation-pr": true,
+      "artifact-evaluation-runs": false
+    },
+    "elementMisses": [
+      "artifact-evaluation-runs: the upload of evals/grader/runs/ does not run under always()"
+    ],
+    "unrequested": [],
+    "ruleViolations": []
+  }
+}

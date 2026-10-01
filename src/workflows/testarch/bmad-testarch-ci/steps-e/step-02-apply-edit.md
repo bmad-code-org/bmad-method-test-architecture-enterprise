@@ -1,6 +1,7 @@
 ---
 name: 'step-02-apply-edit'
 description: 'Apply edits to the selected output'
+evaluationPlansStepFile: '{skill-root}/steps-c/step-03b-render-evaluation-plans.md'
 ---
 
 # Step 2: Apply Edits
@@ -22,7 +23,7 @@ Apply the requested edits to the selected output and confirm changes.
 
 ### Step-Specific Rules:
 
-- 🎯 Only apply edits explicitly requested by the user
+- 🎯 Only apply edits explicitly requested by the user. The evaluation plans step 1 found are requested by their existence
 
 ## EXECUTION PROTOCOLS:
 
@@ -44,6 +45,8 @@ Restate what will be changed and confirm.
 ### 2. Apply Changes
 
 Update the output file accordingly.
+
+When the loaded target is a pipeline file, run sections 3 and 4 of `{evaluationPlansStepFile}` on it, whether or not step 1 found plans, so the generated jobs of a plan that was deleted are removed, then return here. Skip its section 5.
 
 ### 3. Report
 

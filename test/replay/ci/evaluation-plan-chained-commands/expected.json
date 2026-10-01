@@ -1,0 +1,49 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: the install and the tier command are chained into one step. Both appear in a run: block, but each is asked for in a step of its own.",
+    "Every other element is the capture's, so the result is that one deviation."
+  ],
+  "id": "evaluation-plan-chained-commands",
+  "suite": "ci",
+  "scorerVersion": 15,
+  "storedOutput": {
+    "origin": "constructed",
+    "workflow": ".github/workflows/test.yml"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/ci-eval/ground-truth.json",
+    "fixtureSet": "evaluation-plan-quarry-grader",
+    "scoringInputsDigest": "sha256:3ca50810b3cf55b8d929e12e756976d8ad029fbed783f097b1621832140eb857"
+  },
+  "derivation": [
+    "The file parses and lints clean and both commands are present, but each is invoked by a run: block that holds more than that command, so the install element and the tier step element miss."
+  ],
+  "result": {
+    "isMinimalRequest": false,
+    "parse": {
+      "ok": true,
+      "errors": []
+    },
+    "lint": {
+      "findings": []
+    },
+    "elements": {
+      "trigger-pull-request-main": true,
+      "permission-contents-read": true,
+      "node-version-from-nvmrc": true,
+      "node-version-evaluation-floor": true,
+      "command-install": true,
+      "command-unit-tests": true,
+      "command-evaluation-install": false,
+      "command-evaluation-ci-pr": false,
+      "job-evaluation-pr": true,
+      "artifact-evaluation-runs": true
+    },
+    "elementMisses": [
+      "command-evaluation-install: the run: block that invokes npm install --prefix evals holds more than that command",
+      "command-evaluation-ci-pr: the run: block that invokes npm exec --prefix evals -- tea-evaluate ci --evaluation evals/grader --tier pr holds more than that command"
+    ],
+    "unrequested": [],
+    "ruleViolations": []
+  }
+}

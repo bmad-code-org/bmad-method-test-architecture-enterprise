@@ -42,6 +42,7 @@ Validate against `checklist.md`:
 - Stages and sharding configured
 - Burn-in and artifacts enabled
 - Secrets/variables documented
+- Evaluation plans found by step 3b rendered, one `tea-evaluate ci` step per tier and an `if: always()` upload of each `runs/` folder (when any plan exists)
 
 Fix gaps before completion.
 
@@ -54,6 +55,7 @@ Report:
 - CI platform and config path
 - Key stages enabled
 - Artifacts and notifications
+- Evaluation plans rendered, refused or not validated, and the credentials their live tiers need
 - Next steps (set secrets, run pipeline)
 
 ---

@@ -1,0 +1,52 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: the whole evaluation job is removed, which is what a run writes when it never detects ci/evaluation-ci-plan.json. The request says the repository holds an evaluation and never names the plan.",
+    "Every other element is the capture's, so the result is that one deviation."
+  ],
+  "id": "evaluation-plan-plan-not-detected",
+  "suite": "ci",
+  "scorerVersion": 15,
+  "storedOutput": {
+    "origin": "constructed",
+    "workflow": ".github/workflows/test.yml"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/ci-eval/ground-truth.json",
+    "fixtureSet": "evaluation-plan-quarry-grader",
+    "scoringInputsDigest": "sha256:3ca50810b3cf55b8d929e12e756976d8ad029fbed783f097b1621832140eb857"
+  },
+  "derivation": [
+    "The file parses and lints clean and keeps the five elements the request states outright. The evaluation install, the tier step, the job, its Node floor and the upload are absent, so five elements miss. Nothing unrequested was added."
+  ],
+  "result": {
+    "isMinimalRequest": false,
+    "parse": {
+      "ok": true,
+      "errors": []
+    },
+    "lint": {
+      "findings": []
+    },
+    "elements": {
+      "trigger-pull-request-main": true,
+      "permission-contents-read": true,
+      "node-version-from-nvmrc": true,
+      "node-version-evaluation-floor": false,
+      "command-install": true,
+      "command-unit-tests": true,
+      "command-evaluation-install": false,
+      "command-evaluation-ci-pr": false,
+      "job-evaluation-pr": false,
+      "artifact-evaluation-runs": false
+    },
+    "elementMisses": [
+      "node-version-evaluation-floor: no actions/setup-node step in evaluation",
+      "command-evaluation-install: no run: block invokes npm install --prefix evals",
+      "command-evaluation-ci-pr: no run: block invokes npm exec --prefix evals -- tea-evaluate ci --evaluation evals/grader --tier pr",
+      "job-evaluation-pr: no job is named evaluation-pr",
+      "artifact-evaluation-runs: no upload-artifact step names a path containing evals/grader/runs/"
+    ],
+    "unrequested": [],
+    "ruleViolations": []
+  }
+}

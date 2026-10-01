@@ -1,0 +1,50 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: the upload names runs/ at the repository root, where the evaluation writes nothing, instead of the evaluation folder's runs/. The step runs under always() and uploads an empty path, so the evidence of every run is lost.",
+    "Every other element is the capture's, so the result is that one deviation."
+  ],
+  "id": "evaluation-plan-upload-wrong-path",
+  "suite": "ci",
+  "scorerVersion": 15,
+  "storedOutput": {
+    "origin": "constructed",
+    "workflow": ".github/workflows/test.yml"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/ci-eval/ground-truth.json",
+    "fixtureSet": "evaluation-plan-quarry-grader",
+    "scoringInputsDigest": "sha256:3ca50810b3cf55b8d929e12e756976d8ad029fbed783f097b1621832140eb857"
+  },
+  "derivation": [
+    "The file parses and lints clean. The upload names runs/, which does not contain evals/grader/runs/, so the artifact element misses and every other element is present. The upload is also one unrequested element, since it names no requested path."
+  ],
+  "result": {
+    "isMinimalRequest": false,
+    "parse": {
+      "ok": true,
+      "errors": []
+    },
+    "lint": {
+      "findings": []
+    },
+    "elements": {
+      "trigger-pull-request-main": true,
+      "permission-contents-read": true,
+      "node-version-from-nvmrc": true,
+      "node-version-evaluation-floor": true,
+      "command-install": true,
+      "command-unit-tests": true,
+      "command-evaluation-install": true,
+      "command-evaluation-ci-pr": true,
+      "job-evaluation-pr": true,
+      "artifact-evaluation-runs": false
+    },
+    "elementMisses": [
+      "artifact-evaluation-runs: no upload-artifact step names a path containing evals/grader/runs/"
+    ],
+    "unrequested": [
+      "artifact: runs/ in job evaluation-pr"
+    ],
+    "ruleViolations": []
+  }
+}

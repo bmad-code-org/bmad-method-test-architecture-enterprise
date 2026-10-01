@@ -300,7 +300,7 @@ The `npm test` chain is credential-free, makes no network call and no model call
 npm run test:eval-data          # fragment-selection corpus, static
 npm run test:eval-trace-data    # trace corpus, static
 npm run test:eval-schemas       # manifest against harness constants, and the preflight argv
-npm run test:eval-replay        # 123 stored outputs against the scorers
+npm run test:eval-replay        # stored outputs against the scorers
 npm run test:contract-sources   # are the contracts what their sources generate?
 npm run test:contracts          # does the compiler still say what the baseline records?
 npm run test:contract-oracles   # does every oracle resolve, and agree with the scorer?
@@ -334,7 +334,7 @@ Run live against more than one vendor when you can. The confirming `trace` run w
 
 ### Model calls
 
-One `npm run eval:all` for one runner spends 107 calls: 48 fragment selections (24 cases at two repetitions), 38 routing intents (19 intents at two repetitions), 4 complete test designs (two cases at two repetitions), 3 complete reviews (one call covers all three fixtures, at three repetitions), 4 complete audits (two evidence bundles at two repetitions), 4 complete pipelines (two ci projects at two repetitions), 4 complete traces (two cases at two repetitions), and 2 complete atdd generations (one story at two repetitions).
+One `npm run eval:all` for one runner spends 109 calls: 48 fragment selections (24 cases at two repetitions), 38 routing intents (19 intents at two repetitions), 4 complete test designs (two cases at two repetitions), 3 complete reviews (one call covers all three fixtures, at three repetitions), 4 complete audits (two evidence bundles at two repetitions), 6 complete pipelines (three ci projects at two repetitions), 4 complete traces (two cases at two repetitions), and 2 complete atdd generations (one story at two repetitions).
 
 Repetition counts are a real cost multiplier and are declared per suite. Two is the smallest number that can say whether an answer is reproducible. `test-review` uses three because it also measures score variance.
 

@@ -5,7 +5,7 @@
  * The plan (`ci-plan.js`) is the only definition of tier membership. The runtime reads it, validates its placement
  * rules (exit 10 on a finding, 64 when the plan is absent) and runs exactly the checks whose `placement.tier` is the
  * tier asked for, in plan order. Every check runs, whether or not an earlier one failed, so the evidence bundle is
- * complete. An `evaluate` check is run by its id; its `command` is the `tea-evaluate` argv a pipeline step renders. A
+ * complete. An `evaluate` check is run by its id; its `command` records the `tea-evaluate` argv a reader can run by hand, and a pipeline runs `tea-evaluate ci --tier <tier>` once per tier. A
  * `gate` check is an `eval-quality-gates` command the adopter adopted, run as a child process with no shell and the
  * plan's argv, in the evaluation folder, as the leader of a process group of its own: it ends at the plan check's
  * `timeoutMs` or past 64 MiB of output (exit 12, what it printed kept), and a signal to `ci` reaches the group first.
