@@ -1454,6 +1454,10 @@
         {
           "token": "ABSENT",
           "reason": "an eval-quality package export (its sentinel), reachable off require('eval-quality') since 3.3.0's public barrel, not a TEA declaration"
+        },
+        {
+          "token": "floorDecisions",
+          "reason": "a field of eval-quality's StrengthAggregate artifact since 4.7.0, declared by the engine's published schema and read by TeA only to compare the recorded floors"
         }
       ]
     },
