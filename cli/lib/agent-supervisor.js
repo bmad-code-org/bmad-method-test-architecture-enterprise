@@ -128,8 +128,8 @@ const WINDOWS_SETUP_MS = 90_000;
 /** Allows cold Node startup before the guardian's own setup timer begins. */
 const WINDOWS_STARTUP_SLACK_MS = 15_000;
 
-/** A Windows leader cannot wait indefinitely for its supervisor's lifeline pipe to drain. */
-const WINDOWS_LIFELINE_WRITE_MS = 2000;
+/** A Windows leader cannot wait indefinitely for its supervisor report pipe to drain. */
+const WINDOWS_REPORT_WRITE_MS = 2000;
 
 /** How often the supervisor checks that the runner is alive. */
 const POLL_MS = 100;
@@ -482,8 +482,9 @@ function relay(source, fd) {
 function lead([supervisorArgument, timeoutArgument, command, ...args]) {
   trace('leader-enter', `timeout=${timeoutArgument}`);
   const supervisorPid = Number(supervisorArgument);
-  const lifeline = new net.Socket({ fd: LIFELINE_FD, readable: true, writable: true });
+  const lifeline = new net.Socket({ fd: LIFELINE_FD, readable: true, writable: GROUPS });
   lifeline.on('error', () => {});
+  const supervisorReport = GROUPS ? null : fs.createWriteStream(null, { fd: 5, autoClose: false });
   // Pipes this process owns: a process the agent leaves behind may hold them,
   // and the runner's, which only this process and the supervisor hold, stay out of its reach.
   const agent = spawn(process.execPath, [__filename, GUARDIAN_FLAG, command, ...args], {
@@ -496,37 +497,39 @@ function lead([supervisorArgument, timeoutArgument, command, ...args]) {
     const error = write(LIFELINE_FD, `agent ${agent.pid}\n`);
     trace('leader-guardian-pid-write-end', error ? `error=${error.message}` : `pid=${agent.pid}`);
   }
-  const failWindowsLifeline = (stage, error) => {
-    trace('leader-lifeline-write-fail', `${stage}: ${error.message}`);
+  const failWindowsReport = (stage, error) => {
+    trace('leader-report-write-fail', `${stage}: ${error.message}`);
     agent.stdio[4].end();
     agent.kill('SIGKILL');
+    supervisorReport.destroy();
     lifeline.destroy();
     process.exit(0);
   };
-  const sendWindowsLine = (line, stage, done = () => {}, end = false) => {
+  if (supervisorReport !== null) supervisorReport.on('error', (error) => failWindowsReport('stream', error));
+  const sendWindowsReport = (line, stage, done = () => {}, end = false) => {
     let completed = false;
     const timer = setTimeout(() => {
       if (completed) return;
       completed = true;
-      failWindowsLifeline(stage, new Error(`the supervisor lifeline did not drain within ${WINDOWS_LIFELINE_WRITE_MS}ms`));
-    }, WINDOWS_LIFELINE_WRITE_MS);
+      failWindowsReport(stage, new Error(`the supervisor report pipe did not drain within ${WINDOWS_REPORT_WRITE_MS}ms`));
+    }, WINDOWS_REPORT_WRITE_MS);
     const complete = (error) => {
       if (completed) return;
       completed = true;
       clearTimeout(timer);
-      if (error) return failWindowsLifeline(stage, error);
-      trace('leader-lifeline-write-done', stage);
+      if (error) return failWindowsReport(stage, error);
+      trace('leader-report-write-done', stage);
       done();
     };
-    trace('leader-lifeline-write-start', stage);
+    trace('leader-report-write-start', stage);
     try {
-      if (end) lifeline.end(line, complete);
-      else lifeline.write(line, complete);
+      if (end) supervisorReport.end(line, complete);
+      else supervisorReport.write(line, complete);
     } catch (error) {
       complete(error);
     }
   };
-  if (!GROUPS && agent.pid !== undefined) sendWindowsLine(`agent ${agent.pid}\n`, 'guardian-pid');
+  if (!GROUPS && agent.pid !== undefined) sendWindowsReport(`agent ${agent.pid}\n`, 'guardian-pid');
   let guardianReport = '';
   let completeAfterGuardianExit = null;
   let agentPid = null;
@@ -619,7 +622,7 @@ function lead([supervisorArgument, timeoutArgument, command, ...args]) {
     } else {
       // Flush the acknowledgement before the FD4 report, so a closing leader
       // cannot make the supervisor write a second JSON report.
-      sendWindowsLine(
+      sendWindowsReport(
         REPORTED,
         'reported',
         () => {
@@ -642,7 +645,7 @@ function lead([supervisorArgument, timeoutArgument, command, ...args]) {
     wallClockStarted = true;
     if (GROUPS) return;
     trace('leader-agent-ready', `pid=${pid} timeout=${timeoutArgument}`);
-    sendWindowsLine('ready\n', 'agent-ready', () => trace('leader-supervisor-ready-written', `pid=${pid}`));
+    sendWindowsReport('ready\n', 'agent-ready', () => trace('leader-supervisor-ready-written', `pid=${pid}`));
     after(Number(timeoutArgument), () => {
       if (settled) return;
       trace('leader-wallclock-timeout', `agentPid=${agentPid}`);
@@ -729,14 +732,18 @@ function supervise([runnerPidArgument, timeoutArgument, command, ...args]) {
   const runnerPid = Number(runnerPidArgument);
   const timeout = Number(timeoutArgument);
   const leader = spawn(process.execPath, [__filename, LEADER_FLAG, String(process.pid), timeoutArgument, command, ...args], {
-    stdio: ['inherit', 'inherit', 'inherit', 'pipe', RUNNER_REPORT_FD],
+    stdio: GROUPS
+      ? ['inherit', 'inherit', 'inherit', 'pipe', RUNNER_REPORT_FD]
+      : ['inherit', 'inherit', 'inherit', 'pipe', RUNNER_REPORT_FD, 'pipe'],
     detached: GROUPS,
   });
   trace('supervisor-leader-spawned', `pid=${leader.pid}`);
   const lifeline = leader.stdio[LIFELINE_FD];
   lifeline.on('error', () => {});
+  const messages = GROUPS ? lifeline : leader.stdio[5];
+  messages.on('error', () => {});
   let heard = '';
-  lifeline.setEncoding('utf8');
+  messages.setEncoding('utf8');
   let overdue = false;
   let overduePhase = null;
   let ready = false;
@@ -788,8 +795,8 @@ function supervise([runnerPidArgument, timeoutArgument, command, ...args]) {
     }
     killAgentGroup();
   };
-  lifeline.on('data', (chunk) => {
-    trace('supervisor-lifeline-data', chunk);
+  messages.on('data', (chunk) => {
+    trace('supervisor-report-data', chunk);
     heard += chunk;
     pending += chunk;
     const lines = pending.split('\n');

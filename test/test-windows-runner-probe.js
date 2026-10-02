@@ -64,9 +64,9 @@ async function probe() {
     result?.code !== 0 ||
     !stdout.includes('probe agent answered') ||
     !trace.includes('guardian-agent-pid-write-end') ||
-    !trace.includes('leader-lifeline-write-done guardian-pid') ||
-    !trace.includes('leader-lifeline-write-done agent-ready') ||
-    !trace.includes('leader-lifeline-write-done reported') ||
+    !trace.includes('leader-report-write-done guardian-pid') ||
+    !trace.includes('leader-report-write-done agent-ready') ||
+    !trace.includes('leader-report-write-done reported') ||
     !trace.includes('leader-agent-ready') ||
     !trace.includes('supervisor-agent-ready') ||
     !trace.includes('guardian-report-written');
