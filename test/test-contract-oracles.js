@@ -955,6 +955,53 @@ async function checkTestDesignOracles(evaluator) {
     '| Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
     '| --- | --- | --- | --- | --- | --- | --- |\n' +
     `| R-001 | SEC | ${description} | ${probability} | ${impact} | ${score} | ${action} |\n`;
+  // A labeled reference table carries the same columns as the register. It repeats the register's
+  // R-001, scores the ruled-out category at 6 and links a coverage row to R-099, so every figure
+  // below moves when its rows are read as the design's own.
+  const referenceRows =
+    '| Risk ID | Category | Description | Probability | Impact | Score | Action |\n' +
+    '| --- | --- | --- | --- | --- | --- | --- |\n' +
+    `| R-001 | SEC | ${marker} | 3 | 2 | 6 | Test |\n` +
+    '| R-099 | SEC | A second example row with no counterpart in the register. | 3 | 3 | 9 | Test |\n';
+  const referenceCoverage = '\n| Test Level | Risk Link |\n| --- | --- |\n| Unit | R-099 |\n';
+  const guardRegister = register('The local queue is checked before upload.', 1, 2, 2, 'Document');
+  const scoredRegister = register(marker, 2, 2, 4, 'Test');
+  const referenceFixture = (label, registerDocument, reference, mentioned) => ({
+    label,
+    document: registerDocument + reference,
+    mentioned,
+    riskRowCount: 1,
+    // Every table in the labeled section is a reference table, the coverage table included.
+    referenceTables: reference.includes('| Test Level |') ? 2 : 1,
+  });
+  const referenceSections = {
+    'a reference heading': `\n## Appendix: Scoring Reference\n\n${referenceRows}${referenceCoverage}`,
+    'a worked example whose headings copy the register band': `\n## Worked Example\n\n### High-Priority Risks (Score ≥6)\n\n${referenceRows}`,
+    'a lead-in paragraph under the register heading': `\n**Example:** the register of another epic.\n\n${referenceRows}`,
+    'a closing example word in the heading': `\n### High Risks (Example)\n\n${referenceRows}`,
+  };
+  const referenceExamples = [
+    ...Object.entries(referenceSections).flatMap(([name, reference]) => [
+      // The ruled-out category is in the reference table only: the register has a guard row.
+      referenceFixture(`reference-only category in ${name}`, guardRegister, reference, false),
+      // The same category is also a scored register row above the guard band.
+      referenceFixture(`same category in ${name} and a scored register row`, scoredRegister, reference, true),
+    ]),
+    {
+      label: 'a feature title that names a reference does not label its register',
+      document: scoredRegister.replace('# Test Design: Epic 7', '# Reference Data: Sync Design'),
+      mentioned: true,
+      riskRowCount: 1,
+      referenceTables: 0,
+    },
+    {
+      label: 'a story heading that mentions a reference does not label its register',
+      document: scoredRegister.replace('### Risk Register (Score 1-9)', '### Story 7.1: Distinguish reference risk tables (Score 1-9)'),
+      mentioned: true,
+      riskRowCount: 1,
+      referenceTables: 0,
+    },
+  ];
   const examples = [
     { label: 'Document guard', document: register(marker, 1, 2, 2, 'Document'), mentioned: false },
     { label: 'top of Document guard band', document: register(marker, 1, 3, 3, 'Document'), mentioned: false },
@@ -1237,6 +1284,7 @@ async function checkTestDesignOracles(evaluator) {
         register('The local queue is checked before upload.', 1, 2, 2, 'Document') + `\n${marker}\n\n\`\`\`text\n${marker}\n\`\`\`\n`,
       mentioned: false,
     },
+    ...referenceExamples,
   ];
   for (const example of examples) {
     const artifact = { kind: 'text', value: example.document };
@@ -1246,6 +1294,19 @@ async function checkTestDesignOracles(evaluator) {
     const scored = scoreTestDesignRun(seeded, read.design, categories);
     if (example.riskRowCount !== undefined) {
       assert(read.design.risks.length === example.riskRowCount, `${example.label}: only register rows are parsed`);
+    }
+    if (example.referenceTables !== undefined) {
+      assert(
+        read.design.referenceTables.length === example.referenceTables,
+        `${example.label}: ${example.referenceTables} labeled reference table(s) leave the register`,
+      );
+      assert(scored.shape.rows === example.riskRowCount, `${example.label}: the harness counts the register rows only`);
+      assert(
+        scoredRiskProjection(read.design).riskRowCount === scored.shape.rows,
+        `${example.label}: the runner projection and the harness count the same register rows`,
+      );
+      assert(scored.shapeFailures.length === 0, `${example.label}: reference rows add no duplicate id or scale failure`);
+      assert(scored.links.dangling.length === 0, `${example.label}: a reference coverage row maps no risk`);
     }
     if (example.riskHeading) {
       assert(
@@ -1289,6 +1350,46 @@ async function checkTestDesignOracles(evaluator) {
     assert(
       JSON.stringify(coverageRead.design.coverage.map((row) => row.priority)) === JSON.stringify(['P0', 'P1', 'P1']),
       'coverage heading scope: the list item keeps P0; sibling and top-level tables return to P1; quoted examples are ignored',
+    );
+  }
+  // Reference coverage rows map no risk: a reference table linking R-099 leaves the one real link resolved.
+  const mappedDocument =
+    guardRegister +
+    '\n## Test Coverage Plan\n\n### P1 (High)\n\n| Test Level | Risk Link |\n| --- | --- |\n| E2E | R-001 |\n' +
+    referenceSections['a reference heading'];
+  const mappedRead = readTestDesign({ kind: 'text', value: mappedDocument });
+  assert(mappedRead.ok, 'reference coverage: the document parses');
+  if (mappedRead.ok) {
+    assert(mappedRead.design.coverage.length === 1, 'reference coverage: only the design coverage row is read');
+    const mapped = scoreTestDesignRun(seeded, mappedRead.design, categories);
+    assert(
+      mapped.links.total === 1 && mapped.links.dangling.length === 0,
+      'reference coverage: the reference link to R-099 is not counted or dangling',
+    );
+  }
+  // The rule is documented against the shipped worked example, a real test design: its register is the
+  // seven rows under "## Risk Assessment", and a labeled copy of its band tables added to it changes nothing.
+  const exampleRoot = path.join(PROJECT_ROOT, 'src', 'workflows', 'testarch', 'bmad-testarch-test-design');
+  const shipped = fs.readFileSync(path.join(exampleRoot, 'resources', 'test-design-epic-3.example.md'), 'utf8');
+  const shippedRead = readTestDesign({ kind: 'text', value: shipped });
+  assert(shippedRead.ok && shippedRead.design.risks.length === 7, 'the shipped worked example reads as a seven-row register');
+  assert(
+    shippedRead.ok && shippedRead.design.referenceTables.length === 0,
+    'the shipped worked example labels none of its tables a reference',
+  );
+  const riskSection = shipped.slice(shipped.indexOf('## Risk Assessment'), shipped.indexOf('## NFR Planning'));
+  const extended = readTestDesign({
+    kind: 'text',
+    value: `${shipped}\n## Appendix: Scoring Reference\n\n${riskSection.replace('## Risk Assessment', '### Risk Assessment')}`,
+  });
+  assert(extended.ok && extended.design.risks.length === 7, 'a labeled copy of the shipped register adds no register row');
+  assert(extended.ok && extended.design.referenceTables.length === 3, 'the labeled copy is read as three reference tables');
+  if (extended.ok && shippedRead.ok) {
+    const { design: _extendedText, ...extendedFields } = scoredRiskProjection(extended.design);
+    const { design: _shippedText, ...shippedFields } = scoredRiskProjection(shippedRead.design);
+    assert(
+      JSON.stringify(extendedFields) === JSON.stringify(shippedFields),
+      'the runner projection of the extended document carries the same row count and scored descriptions',
     );
   }
   // Every oracle but the shape one has to have been seen failing somewhere, or this

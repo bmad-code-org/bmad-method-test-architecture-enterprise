@@ -213,6 +213,13 @@ of the binding being correct, and it is paid by a generated file rather than by 
 `bmad-testarch-test-design` declares one epic-level deliverable: `{test_artifacts}/test-design/test-design-epic-{epic_num}.md`.
 The runner emits a JSON projection on stdout after the agent finishes. It uses the same parser as the harness and carries the original Markdown, the parsed risk-row count, descriptions from risk rows scored above 3, and their count. `markdown-it` identifies Markdown tables and headings, including tables in lists, while excluding fenced and indented code examples. The parser maps score and description columns by header. The workflow produces one Markdown file.
 
+The scored register is the risk tables a design states as its own. A table the document labels a reference example is outside it, and so are its rows in the risk count, the unsupported-risk reading, risk precision and the coverage map.
+The label is an enclosing heading below the title that begins or ends with `Reference`, `Example`, `Sample` or `Illustration`, or a paragraph directly above the table that opens with one of those words (`## Appendix: Scoring Reference`, `### Worked Example`, `**Example:** the register of another epic`).
+Any enclosing label counts, so a labeled section whose own headings copy the register's band headings stays a reference. The title heading is never a label, and a story title that merely mentions the word is not one.
+The shipped worked example `src/workflows/testarch/bmad-testarch-test-design/resources/test-design-epic-3.example.md` shows the register this rule keeps: seven rows in the three band tables under `## Risk Assessment`, none labeled.
+`test/test-contract-oracles.js` reads that document, appends a labeled copy of its register and requires the same seven rows and the same projection, and its constructed pairs put one ruled-out category in a reference table with and without a scored register row above the guard band.
+Material-risk vocabulary stays document-wide, so the words of a reference table still count toward it.
+
 Material-risk vocabulary is read from the original document text. Unsupported-risk vocabulary is read from one parsed scored-risk description at a time. The `for-any` check is guarded by the projected count, so an empty scored-risk collection passes the exclusion oracle while missing stdout yields insufficient evidence. `test/test-contract-oracles.js` compares both readings with the harness predicate on stored and constructed designs.
 
 What a green `test-contract-oracles.js` buys here is narrow, so it is worth stating plainly.

@@ -2,7 +2,7 @@
 title: 'Story 2.4: Finish the evaluation with its CI stage'
 type: 'feature'
 created: '2026-10-01'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '0d43d45fd501b1dec2f500e60394c2e7386f8243'

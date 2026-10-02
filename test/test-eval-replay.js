@@ -392,8 +392,16 @@ const ATDD_GROUND_TRUTH = path.join(__dirname, 'fixtures', 'atdd-eval', 'ground-
  * a byte of scored content changing beyond `links.trace_report_path`, which names
  * the matrix at its new path. No test-review, fragment-selection, test-design,
  * routing, ci, atdd or nfr case moved.
+ *
+ * 16 is the test-design parser leaving labeled reference tables out of the
+ * register and the coverage map (`referenceLabelOf` in cli/lib/test-design-parser.js).
+ * No stored design labels a table a reference, so every earlier case reproduces and
+ * is reported as a version stamp only. The new seeded-z-reference-table-scored-risk
+ * case appends a labeled worked example to the browser-risk case and stores the
+ * same result: the example's duplicate R-001, out-of-scale R-099, score-9 browser
+ * row and dangling coverage link would each move it if they were read as the design's own.
  */
-const SCORER_VERSION = 15;
+const SCORER_VERSION = 16;
 
 const colors = {
   reset: '[0m',
