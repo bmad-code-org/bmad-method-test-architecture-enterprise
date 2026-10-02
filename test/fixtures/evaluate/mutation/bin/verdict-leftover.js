@@ -23,8 +23,10 @@
  * port, it sends one line to the test's listener on 127.0.0.1 once it has
  * attempted, `tamper: <how>` or `swap: <how>`, each `allowed` or `refused
  * <code>` (the swap's with ` (evaluator not seen)` when it gave up waiting): a
- * confined process can write nothing a test could read, and the network is
- * not confined, so the line proves the attempt was made and how it ended. It
+ * confined process can write nothing a test could read, and a Seatbelt
+ * process keeps the host's network, so the line proves the attempt was made
+ * and how it ended (a Bubblewrap process has a network namespace of its own,
+ * Story 1.63, and no line arrives). It
  * finds processes with `pgrep`: a process under Seatbelt cannot start the
  * setuid `ps`.
  */

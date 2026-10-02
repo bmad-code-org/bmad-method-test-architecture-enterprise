@@ -29,6 +29,8 @@ Stage 6 creates `policy/evaluator-conditions.json` from `assets/evaluator-condit
 
 `tea-evaluate` confines every target process it starts, so keep `confinement` on for a skill or agent target. A confined target writes the trial's workspace and the runtime's private directories only, and it cannot read the evaluation folder. An agent CLI behind `tea-skill-runner`, or the agent's own command, writes its session and settings state under `HOME`. Each confined sandbox therefore gets one private home directory that the runtime makes beneath the run's private parent and removes with the run. `HOME` names it, `XDG_CONFIG_HOME`, `XDG_CACHE_HOME` and `XDG_DATA_HOME` name directories inside it, and the profile grants that directory for reading and writing as it grants the call's temp directory. No other home is reachable from it. The adopter's real home and the project stay unwritable. No registry field declares a writable path, since the private home covers the state an agent CLI writes.
 
+On Linux a confined target also runs in a network namespace of its own with a loopback and nothing else, which cuts an agent off from its model provider. Declare `"network": "host"` on the registry entry of a skill or agent target, and of any target that calls a model, an outside service or a database on the host, until Story 1.83 gives a confined target a route to the hosts its entry authorizes. The entry keeps the host's network and so a route to the host's abstract Unix sockets, which `run.json` records under `hostNetwork`; every other entry keeps the default, `"network": "isolated"`. macOS Seatbelt ignores the field.
+
 The home keeps its state across the calls of one trial or arm, so an agent's session continues, and each independent arm or leg starts empty: the next trial, the baseline, mutated and re-pass arms of a qualification, and each leg of a `preflight`. List the credential variables the agent needs under `environmentKeys` (for example the vendor's API key name); the runtime passes their host values and sets the home variables over any host value, `HOME` included. A login the agent stored under the adopter's real home is not found under the private home, so give that agent its API key variable. A run with `"confinement": false` keeps the host environment and makes no home; use it only for a target that must write outside its workspace.
 
 <!-- example:registry -->
@@ -42,8 +44,9 @@ The home keeps its state across the calls of one trial or arm, so an agent's ses
   "artifacts": {},
   "environmentKeys": [],
   "maxElapsedMs": 60000,
-  "infrastructureExitCodes": [3, 4, 5, 6]
+  "infrastructureExitCodes": [3, 4, 5, 6],
+  "network": "host"
 }
 ```
 
-This entry is the working [source fixture: evaluation.json](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/evaluate/preflight/evaluation.json) that runs confined with no `confinement` field. Add the agent's credential names to `environmentKeys` for a real agent.
+This entry is the working [source fixture: evaluation.json](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/evaluate/preflight/evaluation.json) that runs confined with no `confinement` field and declares `"network": "host"`, as an agent entry does. Add the agent's credential names to `environmentKeys` for a real agent.

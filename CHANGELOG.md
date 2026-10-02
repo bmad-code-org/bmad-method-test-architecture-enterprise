@@ -189,6 +189,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- A registry entry takes `network`, `"isolated"` (the default) or `"host"` (Story 1.63).
+  A command, tool-server or HTTP entry whose target needs the network declares `"network": "host"`, since a Linux Bubblewrap target with the default has a loopback only: a skill or agent target (`tea-skill-runner`, any agent CLI) calls its model provider, and a service may call a model or an outside service.
+  Declare it on those entries on Linux until Story 1.83 gives a confined target a route to the hosts its entry authorizes; without it the target cannot reach its provider.
+  A `host` entry runs without `--unshare-net` and a started service is reached directly with no bridge; it keeps a route to the host's abstract Unix sockets, so `run.json` lists each such entry under `hostNetwork` and the isolation manifest's notes name them.
+  `check` refuses another value, and two entries that start one target must declare the same network. macOS Seatbelt accepts the field and ignores it.
+  The harness and adapters guides of the Evaluate skill and the reference teach the declaration, and the skill's starter `evaluation.json` declares it for its `tea-skill-runner` entry.
 - A deployment-routed historical probe holds the pre-fix deployment to its release across the witness legs and the trials (Story 1.64, AD-7, AD-8).
   `run` asks the pre-fix deployment which release each of its HTTP interfaces runs at three points: before the qualification arms, after the witness legs and after the last trial of the arm `historical:<pre-fix release>`; `preflight` runs no trial and asks at the first two.
   The two later points go through the same port, policy and refusal as the first, each interface in sorted order, the first answer that refuses stopping the asking; the post-fix deployment is reached by the qualification arms alone and is asked before the arms only.
@@ -304,6 +310,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A Bubblewrap target has no route to the host's abstract Unix sockets (Story 1.63, AD-8).
+  Every process `tea-evaluate` starts for a Linux target whose entry keeps the default network now runs in a network namespace of its own (`--unshare-net`): a loopback and nothing else, so a desktop session's D-Bus and every other abstract socket of the host do not exist for it.
+  An HTTP server such a target starts stays reachable through a bridge the runtime owns, with no network path between the namespaces: the status shim serves a Unix socket in a private directory of the call, readiness is the bridge's answer for the address and port the server bound, and the runtime listens on the address and port the call is configured for and forwards each connection through the socket.
+  A server that reports its port reports the one it bound inside the namespace, and the runtime listens on the same number when the host has it free and on a port the system gives otherwise; a chosen port is the runtime's from before the server starts.
+  The runtime connects to the bridge's socket through a descriptor that follows no link and checks that it is a socket of its own user, so a target that writes the directory cannot steer the connection to another socket, and a temp directory too long for a socket path puts the directory under `/tmp`.
+  A host that cannot create the namespace is refused at selection (exit 12) as one that cannot start Bubblewrap is.
+  macOS Seatbelt is unchanged, and path-based sockets the read-only `/` shows (`/var/run/docker.sock`, the system bus) stay connectable until Story 1.82.
+  `test:evaluate-run` drives the bridge protocol, its refusals, its streams and the shim's endings over Unix sockets on every host, `test:evaluate-api` drives the forwarder and the readiness semantics through the real HTTP port and a stood-in namespace, and the Linux CI job proves the abstract socket is refused and that the same commands reach it once `--unshare-net` is taken out.
+  The reference's confinement section states the closed route, and each sentence of it that speaks of the network names the case that backs it.
 - `tea-evaluate run` scores the bytes of an evaluator qualification attempt that its runtime wrote (Story 1.69).
   `run` qualifies a sealed-brief agent evaluator by scoring each attempt through `eval-quality score` over files it wrote into the run directory a moment before.
   In a run that opted out of file-system confinement, a target's leftover process could rewrite the attempt's record, the contract, the policy, the probe, the preflight verdict, the manifest or the evaluator configuration, or substitute a well-formed artifact with altered votes for the staged one.

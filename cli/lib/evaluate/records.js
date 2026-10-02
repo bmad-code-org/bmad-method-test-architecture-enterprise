@@ -174,8 +174,10 @@ function evaluatorConfiguration({
  * audit saw the target open outside what it was granted (`confinement.js`,
  * Story 1.31), none of which is an allowed mount, so eval-quality records each
  * as an isolation violation; a run that opted out of confinement observes no
- * file-system access and records none. The runtime does not sandbox the
- * target's network and observes no network access, so `networkAllowlist` and
+ * file-system access and records none. The runtime observes no network
+ * access (a Bubblewrap target with the default has a loopback only, and an
+ * entry that declares `"network": "host"` and a macOS target keep the host's
+ * network), so `networkAllowlist` and
  * `observedNetworkTargets` are empty: the published schema's only honest shape
  * for "nothing observed", since a list of the grants would claim an
  * observation never made. `toolAllowlist` and `observedToolCalls` are the

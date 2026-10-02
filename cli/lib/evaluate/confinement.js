@@ -45,6 +45,18 @@
  *                covers a parent another run makes later or concurrently.
  *                Reads elsewhere are left to the audit: node, git and a
  *                target's own toolchain read from the system.
+ *   network      every process the runtime starts for a Bubblewrap target
+ *                (`--unshare-net`) runs in a network namespace of its own, a
+ *                loopback and nothing else, so the host's abstract Unix sockets
+ *                (a desktop session's D-Bus is one) do not exist for it: they
+ *                live in the network namespace. A started HTTP server stays
+ *                reachable through a bridge the runtime owns and no network
+ *                path joins (Story 1.63): the call's status shim serves a Unix
+ *                socket in a private directory of the call and the runtime
+ *                listens, on the host, where the server's caller expects it
+ *                (`confinement-status.cjs`, `confinement-relay.js`,
+ *                `http-target.js`). A command target and a tool server have no
+ *                bridge. Seatbelt has no abstract sockets and is unchanged.
  *   layer        every other process the run starts to run adopter or agent
  *                code (a `command` evaluator, a sealed-brief agent and the
  *                bridge relay it starts, the rubric judge, the evaluation's HTTP
@@ -52,7 +64,9 @@
  *                of the run can swap a file of the evaluation layer under
  *                `evaluator/` between the runtime's re-read of it and the
  *                evaluator's launch, or rewrite the evidence under `runs/`
- *                (the runtime's own writes there are the only ones). The whole
+ *                (the runtime's own writes there are the only ones). The
+ *                layer keeps the host's network, since its HTTP port reaches
+ *                the forwarded server over the host's loopback. The whole
  *                folder is held, and not `evaluator/` alone, since a folder
  *                with no `evaluator/` has nothing Bubblewrap could bind in
  *                its place and a process could make one.
@@ -312,6 +326,25 @@ function bubblewrapIsolation() {
 }
 
 /**
+ * A network namespace of the process's own, with a loopback and nothing else
+ * (Story 1.63): abstract Unix sockets belong to the network namespace, so a
+ * process in it cannot connect to one the host serves. The target's vector and
+ * both probes carry it, so a host that cannot create the namespace is refused
+ * at selection as one that cannot start Bubblewrap is; the evaluation layer's
+ * vector does not, since its HTTP port reaches the forwarded server over the
+ * host's loopback.
+ */
+const BUBBLEWRAP_NETWORK = Object.freeze(['--unshare-net']);
+
+/**
+ * What the probes run a trivial process under: the target's isolation, whatever
+ * binds the target gets, so what a probe confirms is what a target runs under.
+ */
+function bubblewrapProbeArguments(executable) {
+  return [executable, '--unshare-user', ...BUBBLEWRAP_NETWORK, '--ro-bind', '/', '/', '--dev', '/dev', ...bubblewrapIsolation(), '--'];
+}
+
+/**
  * The Bubblewrap argument vector a target runs under, before its own command:
  * an unprivileged user namespace, `/` read-only, a synthetic `/dev` (the real
  * one's device nodes cannot be opened from the namespace), the workspace and
@@ -319,10 +352,21 @@ function bubblewrapIsolation() {
  * empty file system with the worktree's own metadata directory bound back in
  * read-only, the user's private root directory covered the same way, and the evaluation
  * folder covered by an empty read-only file
- * system, so nothing under it can be read or written. No new network
- * namespace: a started HTTP server listens where the runtime reaches it.
+ * system, so nothing under it can be read or written. A network namespace of
+ * its own (`BUBBLEWRAP_NETWORK`) unless the entry declares `network: 'host'`:
+ * a started HTTP server listens in it and the runtime reaches it through the
+ * bridge of `confinement-relay.js`.
  */
-function bubblewrapTargetArguments({ executable, workspace, writable, evaluationFolder, git = null, privateRoot = null, rootHome = null }) {
+function bubblewrapTargetArguments({
+  executable,
+  workspace,
+  writable,
+  evaluationFolder,
+  git = null,
+  privateRoot = null,
+  rootHome = null,
+  network = 'isolated',
+}) {
   const binds = [workspace, ...writable].flatMap((entry) => {
     const real = assertProfileSafePath(spellings(entry).at(-1), refuseUnsafePath);
     return ['--bind', real, real];
@@ -357,6 +401,7 @@ function bubblewrapTargetArguments({ executable, workspace, writable, evaluation
   return [
     executable,
     '--unshare-user',
+    ...(network === 'host' ? [] : BUBBLEWRAP_NETWORK),
     '--ro-bind',
     '/',
     '/',
@@ -374,7 +419,10 @@ function bubblewrapTargetArguments({ executable, workspace, writable, evaluation
   ];
 }
 
-/** The Bubblewrap argument vector a process of the evaluation layer runs under: `/` writable, the evaluation folder read-only. */
+/**
+ * The Bubblewrap argument vector a process of the evaluation layer runs under: `/` writable, the evaluation folder read-only.
+ * It keeps the host's network, since the evaluation's HTTP port reaches a started server over the host's loopback.
+ */
 function bubblewrapLayerArguments({ executable, evaluationFolder }) {
   const protectedDirectory = assertProfileSafePath(spellings(evaluationFolder).at(-1), refuseUnsafePath);
   return [
@@ -399,9 +447,7 @@ function bubblewrapLayerArguments({ executable, evaluationFolder }) {
  */
 function probeMechanism({ mode, executable }) {
   const vector =
-    mode === 'seatbelt'
-      ? [executable, '-p', '(version 1)\n(allow default)\n(deny file-write*)\n']
-      : [executable, '--unshare-user', '--ro-bind', '/', '/', '--dev', '/dev', ...bubblewrapIsolation(), '--'];
+    mode === 'seatbelt' ? [executable, '-p', '(version 1)\n(allow default)\n(deny file-write*)\n'] : bubblewrapProbeArguments(executable);
   const probe = probeTrivialProcess({ vector: [...vector, ...TRIVIAL_PROCESS] });
   if (probe.ok) return null;
   if (probe.error) return `${probe.error.code ?? probe.error.message}`;
@@ -449,7 +495,7 @@ function probeObserver(mechanism, env) {
   if (confirmedObservers.has(key)) return confirmedObservers.get(key);
   const failure = probeTrace({
     strace,
-    vector: [mechanism.executable, '--unshare-user', '--ro-bind', '/', '/', '--dev', '/dev', ...bubblewrapIsolation(), '--'],
+    vector: bubblewrapProbeArguments(mechanism.executable),
   });
   if (failure !== null) return { failure };
   return confirmedObservers.set(key, { observer: { executable: strace } }).get(key);
@@ -682,9 +728,14 @@ function targetSandbox({
      * workspace and `readable` the system paths its registry entry declares;
      * under Bubblewrap the command also carries the file the status shim
      * writes a signal to, which `recordedStatus` reads, and, for an audited
-     * sandbox, `strace` and the trace file `collect` reads.
+     * sandbox, `strace` and the trace file `collect` reads. `bridge` (Bubblewrap
+     * alone, a started HTTP server's call) is the Unix socket the shim serves
+     * as the runtime's way into the target's network namespace; it lies in a
+     * directory `writable` names, which is the call's grant and the audit's.
+     * `network` (Bubblewrap alone) is `isolated`, the default, or `host` for an
+     * entry that declares it: the call keeps the host's network and has no bridge.
      */
-    wrap(target, args, writable = [], readable = []) {
+    wrap(target, args, writable = [], readable = [], { bridge = null, network = 'isolated' } = {}) {
       const grants = [...writable, ...(home === null || rootHome !== null ? [] : [home])];
       if (confinement.mode === 'seatbelt') {
         const profile = seatbeltTargetProfile({
@@ -697,6 +748,16 @@ function targetSandbox({
           audit: observer === null ? null : { token: observer.token, exempt: readRoots([...grants, ...readable]), quiet: ownGitEntries() },
         });
         return { target: confinement.executable, args: ['-p', profile, target, ...args], statusFile: null };
+      }
+      if (bridge !== null && network === 'host') {
+        throw new ConfinementError('a target that keeps the host network has no bridge: it is reached directly');
+      }
+      if (bridge !== null) {
+        const granted =
+          typeof bridge === 'string' &&
+          path.isAbsolute(bridge) &&
+          writable.some((held) => spellings(held).some((entry) => spellings(bridge).some((socket) => isInside(entry, socket))));
+        if (!granted) throw new ConfinementError('the bridge socket must be a path inside a directory the call may write');
       }
       calls += 1;
       // A name the target cannot guess, made here and the only status file it may write, so no process can plant the
@@ -711,8 +772,18 @@ function targetSandbox({
         git,
         privateRoot,
         rootHome,
+        network,
       });
-      const command = [vector[0], ...vector.slice(1), process.execPath, STATUS_SHIM, statusFile, target, ...args];
+      const command = [
+        vector[0],
+        ...vector.slice(1),
+        process.execPath,
+        STATUS_SHIM,
+        ...(bridge === null ? [] : ['--bridge', bridge]),
+        statusFile,
+        target,
+        ...args,
+      ];
       if (observer === null) return { target: command[0], args: command.slice(1), statusFile };
       const file = path.join(audit.directory, `trace-${calls}-${crypto.randomBytes(6).toString('hex')}.txt`);
       const traced = [...straceCommand(confinement.observer.executable, file), ...command];
@@ -1059,11 +1130,22 @@ function withTemporary(env, directory, home = null) {
  * directory (`callTemporary`), removed once the call ends. A target a signal
  * ended keeps the exit eval-quality gives one, the signal's number negated,
  * under Bubblewrap too.
+ *
+ * Under Bubblewrap a target has a network namespace of its own, so the
+ * mechanism `bridges`: a call that names `bridge` (the Unix socket a started
+ * HTTP server's shim serves, in a private directory the caller made, which
+ * the call may write) is the only one whose server the runtime can reach, and
+ * the server call asks `bridges` before it makes one (`http-target.js`).
  */
-function confinedCommandMechanism(base, sandbox, systemPathsOf = () => [], scratch = []) {
+function confinedCommandMechanism(base, sandbox, systemPathsOf = () => [], scratch = [], networkOf = () => 'isolated') {
   return {
+    bridges: sandbox.mode === 'bubblewrap',
     async run(request, signal) {
-      const writable = typeof request.portFile === 'string' ? [path.dirname(request.portFile)] : [];
+      const bridge = typeof request.bridge === 'string' ? request.bridge : null;
+      const writable = [
+        ...(typeof request.portFile === 'string' ? [path.dirname(request.portFile)] : []),
+        ...(bridge === null ? [] : [path.dirname(bridge)]),
+      ];
       const temporary = callTemporary(scratch);
       let wrapped = null;
       let started = false;
@@ -1074,6 +1156,7 @@ function confinedCommandMechanism(base, sandbox, systemPathsOf = () => [], scrat
           [...request.subcommandPath, ...request.argv],
           [...writable, temporary],
           systemPathsOf(request.target),
+          { bridge, network: networkOf(request.target) },
         );
         const result = await base.run(
           {
@@ -1117,14 +1200,16 @@ function confinedCommandMechanism(base, sandbox, systemPathsOf = () => [], scrat
  * left and recorded as the signal's number negated, as a command's is; an
  * answered call has no exit, and the status a signal left is only removed.
  */
-function confinedMcpMechanism(base, sandbox, systemPathsOf = () => [], scratch = []) {
+function confinedMcpMechanism(base, sandbox, systemPathsOf = () => [], scratch = [], networkOf = () => 'isolated') {
   return {
     async callTool(request, signal) {
       const temporary = callTemporary(scratch);
       let wrapped = null;
       let status = null;
       try {
-        wrapped = sandbox.wrap(request.target, request.targetArgs, [temporary], systemPathsOf(request.target));
+        wrapped = sandbox.wrap(request.target, request.targetArgs, [temporary], systemPathsOf(request.target), {
+          network: networkOf(request.target),
+        });
         const result = await base.callTool(
           {
             ...request,
@@ -1159,15 +1244,20 @@ function confinedMcpMechanism(base, sandbox, systemPathsOf = () => [], scratch =
  * that opted out, that none did.
  *
  * @param {object|null} confinement
+ * @param {string[]} [hostNetwork] the interface IDs of the registry entries that declare `"network": "host"` (Story 1.63)
  * @returns {string}
  */
-function forbiddenInputNote(confinement) {
+function forbiddenInputNote(confinement, hostNetwork = []) {
   const handed =
     "Withheld from what the runtime hands the target: each trial runs in a disposable workspace that leaves out the evaluation folder, and every request carries only the interaction plan's literal bindings and the values its captured bindings read from the target's own earlier observations in the same trial.";
   if (!confines(confinement)) {
     return `${handed} The evaluation opted out of file-system confinement ("confinement": false), so the runtime does not sandbox the target's file system and a target that searches for the evaluation folder can reach it.`;
   }
-  return `${handed} Withheld as well by ${MECHANISM_NAMES[confinement.mode]} file-system confinement: every process the target starts, those left running after it exits included, is denied each read and write of the evaluation folder and of the project's git directory (its worktree's own entry excepted) and each write outside its workspace.`;
+  const shared =
+    confinement.mode === 'bubblewrap' && hostNetwork.length > 0
+      ? ` The registry entries ${hostNetwork.map((id) => JSON.stringify(id)).join(', ')} declare "network": "host" and keep the host's network, so their processes keep a route to the host's abstract Unix sockets; every other target runs in a network namespace of its own with a loopback only.`
+      : '';
+  return `${handed} Withheld as well by ${MECHANISM_NAMES[confinement.mode]} file-system confinement: every process the target starts, those left running after it exits included, is denied each read and write of the evaluation folder and of the project's git directory (its worktree's own entry excepted) and each write outside its workspace.${shared}`;
 }
 
 module.exports = {

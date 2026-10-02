@@ -55,6 +55,19 @@
  *   5. the server's group is ended once the call settles, however it settles,
  *      and the port file's directory is removed.
  *
+ * A server a Bubblewrap run starts has a network namespace of its own (Story
+ * 1.63, `confinement.js`), so the runtime reaches it through a bridge (`mechanism.bridges`):
+ * the call makes a private directory on the run's scratch list, the server's
+ * status shim serves a Unix socket there (`bridge` in the request), "accepts a
+ * connection" becomes the bridge's `ok` for the address and port inside the
+ * namespace (`confinement-relay.js`, so a server that has not bound yet is not
+ * ready), and once it is ready the runtime listens on the address and port the
+ * call is configured for, on the host, and forwards each connection through the
+ * bridge. A server that reports its port reports the one it bound inside the
+ * namespace; the runtime listens on the same number when the host has it free
+ * and on a port the system gives otherwise, and the call is configured for the
+ * port the runtime listens on. The forwarder ends with the server's call.
+ *
  * A call therefore runs against the workspace's code as it stands, a mutation
  * included, as a command and a tool server do, and a denied call starts
  * nothing. A deployed target (an entry naming its `port`) is reached as it is.
@@ -84,6 +97,7 @@ const path = require('node:path');
 const { StringDecoder } = require('node:string_decoder');
 
 const { quotedCapture } = require('./arm');
+const { bridgeAccepts, bridgeHostOf, startForwarder } = require('./confinement-relay');
 const { canonicalAddress, loadAdapters, loadConformance, loadEngine } = require('./engine');
 const { HOST_ENVIRONMENT_KEY, HTTP_PORT_PROTOCOL, PROTOCOL_FD, UnansweredRequest } = require('./http-port-host');
 
@@ -700,6 +714,14 @@ function delay(ms, signal) {
 
 /** The name of the file a server reports its port in, inside the call's private directory. */
 const PORT_FILE_NAME = 'port';
+/** The name of the Unix socket a bridged server's shim serves, inside the call's private bridge directory. */
+const BRIDGE_SOCKET_NAME = 'b';
+/** The prefix of a call's bridge directory; short, since a Unix socket path holds about 100 bytes. */
+const BRIDGE_DIRECTORY_PREFIX = 'tea-nb-';
+/** The longest Unix socket path every platform binds (macOS holds 103 bytes, Linux 107). */
+const BRIDGE_SOCKET_PATH_BYTES = 100;
+/** Where a bridge directory goes when the temp directory leaves no room for its socket: the bridge exists on Linux, which has it. */
+const BRIDGE_FALLBACK_DIRECTORY = '/tmp';
 /** The most bytes a port file holds: a port number with a line ending and a little whitespace around it. */
 const PORT_FILE_MAX_BYTES = 16;
 /** What `readIfWritten` gives for a port file that names no port whatever it holds: a link, a file that is not regular, a long one. */
@@ -763,7 +785,18 @@ function readIfWritten(file) {
  * private directory the caller made; any other listens on `port`, which the
  * caller chose. `start` resolves with the port the server is ready on.
  */
-function callServer({ entry, port: chosenPort = null, portFile = null, cwd, target, environment, mechanism, maxOutputBytes }) {
+function callServer({
+  entry,
+  port: chosenPort = null,
+  portFile = null,
+  bridge = null,
+  cwd,
+  target,
+  environment,
+  mechanism,
+  maxOutputBytes,
+  relay = { bridgeAccepts, startForwarder },
+}) {
   const reports = entry.server.portFileEnvironmentKey !== undefined;
   if (reports && typeof portFile !== 'string')
     throw new Error(`the server ${entry.server.target} reports its port and no port file was given`);
@@ -774,6 +807,15 @@ function callServer({ entry, port: chosenPort = null, portFile = null, cwd, targ
   let starting = null;
   let address = null;
   let port = reports ? null : chosenPort;
+  // With a bridge the server listens inside its own network namespace and the runtime listens on the host: the forwarder.
+  let forwarder = null;
+  let stopped = false;
+
+  /** Behind a bridge, the loopback host the bridge and the forwarder name for the address the port sends to (`bridgeHostOf`). */
+  let bridgeHost = null;
+
+  /** Whether `address:candidate` accepts a connection now, asked of the server itself or, behind a bridge, of its namespace. */
+  const acceptsAt = (host, candidate) => (bridge === null ? accepts(host, candidate) : relay.bridgeAccepts(bridge, bridgeHost, candidate));
 
   /** Where the server was to listen, as a sentence names it. */
   function where() {
@@ -817,11 +859,22 @@ function callServer({ entry, port: chosenPort = null, portFile = null, cwd, targ
     starting ??= (async () => {
       address = sendingTo;
       if (typeof address !== 'string' || address.length === 0) throw new Error('the port named no address it sends to');
+      bridgeHost = bridge === null ? null : bridgeHostOf(address);
+      if (bridge !== null && bridgeHost === null) {
+        throw new Error(
+          `the server ${entry.server.target} runs in a network namespace of its own and is reached through a bridge to its loopback (127.0.0.1 or ::1), and the port named ${address}`,
+        );
+      }
       // A chosen port that already accepts a connection belongs to another process, which took it after the runtime
-      // released it. A server that reports its port binds one the system gives it alone.
+      // released it (behind a bridge it is the host's port, the one the forwarder listens on). A server that reports its
+      // port binds one the system gives it alone.
       if (!reports && (await accepts(address, port)) === true) {
         throw new Error(`another process listens on ${address} port ${port}, which was chosen for the server ${entry.server.target}`);
       }
+      // A chosen port is the host's port the call is configured for: the runtime holds it from here, before the server starts,
+      // so no other process can take it between the check above and the server's readiness. A connection that arrives
+      // before the server has bound is answered by the bridge's `fail` and closed; readiness stays the bridge's `ok`.
+      if (bridge !== null && !reports) await listenForwarder(port, port, true);
       const env = {
         ...(process.env.PATH === undefined ? {} : { PATH: process.env.PATH }),
         ...environment,
@@ -837,6 +890,8 @@ function callServer({ entry, port: chosenPort = null, portFile = null, cwd, targ
           env,
           // The private file the server reports its port in, which a confined server may write (`confinement.js`).
           portFile,
+          // The Unix socket the server's shim serves behind a bridge, in a directory the confined server's call may write.
+          ...(bridge === null ? {} : { bridge }),
           stdin: { kind: 'absent' },
           cwd,
           maxElapsedMs: timerDelay(entry.server.readyTimeoutMs + entry.maxElapsedMs + SERVER_GRACE_MS),
@@ -859,13 +914,14 @@ function callServer({ entry, port: chosenPort = null, portFile = null, cwd, targ
         const report = reports ? readReport() : null;
         const candidate = reports ? report.reported : port;
         if (candidate !== null) {
-          accepted = await accepts(address, candidate);
+          accepted = await acceptsAt(address, candidate);
           if (accepted === true) {
             if (ended !== null) throw account();
             // A number read while the server was writing it is a prefix of the port: once the file stops changing, the
             // port it names is the one the server bound.
             if (!reports || readIfWritten(portFile) === report.text) {
-              port = candidate;
+              if (bridge !== null && reports) port = await listenForwarder(candidate, candidate, false);
+              else if (bridge === null) port = candidate;
               ready = true;
               return port;
             }
@@ -886,6 +942,29 @@ function callServer({ entry, port: chosenPort = null, portFile = null, cwd, targ
     return starting;
   }
 
+  /**
+   * Behind a bridge, the runtime's listener on the host for the server that listens on `targetPort` inside its namespace:
+   * on `wanted`, the port the call is configured for. A chosen port is insisted on (`strict`: another process must not
+   * hold it); for a server that reports its port `wanted` is the number it bound, kept when the host has it free, and
+   * a port the system gives otherwise. Resolves with the port it listens on.
+   */
+  async function listenForwarder(targetPort, wanted, strict) {
+    if (stopped) throw new Error('the call was aborted while its server started');
+    try {
+      forwarder = await relay.startForwarder({ socketPath: bridge, address: bridgeHost, targetPort, port: wanted, strict });
+    } catch (error) {
+      if (error.code === 'EADDRINUSE') {
+        throw new Error(`another process listens on ${address} port ${wanted}, which was chosen for the server ${entry.server.target}`);
+      }
+      throw new Error(`the runtime could not listen on ${address} for the server ${entry.server.target}: ${error.code ?? error.message}`);
+    }
+    if (stopped) {
+      await forwarder.close();
+      throw new Error('the call was aborted while its server started');
+    }
+    return forwarder.port;
+  }
+
   /** Why the server ended, once its end has been reported within `settleMs`, or null while it runs or when it never started. */
   async function endedWithin(settleMs) {
     if (running === null) return null;
@@ -899,7 +978,9 @@ function callServer({ entry, port: chosenPort = null, portFile = null, cwd, targ
   }
 
   async function stop() {
+    stopped = true;
     controller.abort();
+    await forwarder?.close();
     if (running !== null) await running.catch(() => {});
   }
 
@@ -1064,9 +1145,10 @@ function channelCeiling(entry) {
  * @param {string} options.cwd the workspace a server starts in
  * @param {(entry: object) => string} options.targetOf what starts an entry's server
  * @param {(names: string[]) => Record<string, string>} options.readEnvironment the host's values for keys
- * @param {{ run: Function }} options.mechanism eval-quality's `nodeCommandMechanism`
+ * @param {{ run: Function, bridges?: boolean }} options.mechanism eval-quality's `nodeCommandMechanism`, or the confined one,
+ *   whose `bridges` says a started server runs in a network namespace of its own and is reached through a bridge
  * @param {number} options.maxOutputBytes a server's default output ceiling
- * @param {string[]} [options.scratch] the run's private directories, which a call's port-file directory joins while it runs
+ * @param {string[]} [options.scratch] the run's private directories, which a call's port-file and bridge directories join while they exist
  * @param {{ origins: object, authorizations: object }|null} [options.deployment] on a historical probe's deployment arm,
  *   `deploymentAccess`'s answer: the origin each HTTP interface answers at, where every call goes and no server starts,
  *   and the one authorization eval-quality allowed there
@@ -1085,8 +1167,12 @@ function createApiPort({ entries, httpPort, cwd, targetOf, readEnvironment, mech
       // a signal that ends the run removes it too.
       const portDirectory = reports ? fs.mkdtempSync(path.join(os.tmpdir(), 'tea-evaluate-port-')) : null;
       if (portDirectory !== null) scratch.push(portDirectory);
+      let bridgeDirectory = null;
       let server = null;
       try {
+        // A server behind a bridge gets a private directory for the Unix socket its shim serves, which only that call's
+        // server may write; it joins the scratch list like the port directory.
+        if (launched !== null && mechanism.bridges === true && launched.network !== 'host') bridgeDirectory = makeBridgeDirectory(scratch);
         const launchedPort = launched === null || reports ? null : await freePort();
         const configurationAt = (port) =>
           portConfiguration({
@@ -1107,6 +1193,7 @@ function createApiPort({ entries, httpPort, cwd, targetOf, readEnvironment, mech
                 entry: launched,
                 port: launchedPort,
                 portFile: portDirectory === null ? null : path.join(portDirectory, PORT_FILE_NAME),
+                bridge: bridgeDirectory === null ? null : path.join(bridgeDirectory, BRIDGE_SOCKET_NAME),
                 cwd,
                 target: targetOf(launched),
                 environment: readEnvironment(launched.server.environmentKeys),
@@ -1128,6 +1215,7 @@ function createApiPort({ entries, httpPort, cwd, targetOf, readEnvironment, mech
       } finally {
         await server?.stop();
         if (portDirectory !== null) releasePortDirectory(scratch, portDirectory);
+        if (bridgeDirectory !== null) releasePortDirectory(scratch, bridgeDirectory);
       }
     },
   };
@@ -1139,7 +1227,60 @@ function defaultPortOf(entry) {
 }
 
 /**
- * Removes a call's port-file directory and takes it off the run's scratch
+ * The directory a call's bridge directory is made in: the temp directory when the socket's path under it fits a Unix
+ * socket (`BRIDGE_SOCKET_PATH_BYTES`), else `fallback`. A run's temp directory can be long (a runner points `TMPDIR` at
+ * a deep workspace), and a bridge directory has to be reachable by the sandbox and by the runtime alone, which `/tmp` is as
+ * much as the temp directory is.
+ *
+ * @param {string} [temp] the temp directory
+ * @param {string} [fallback]
+ * @returns {string}
+ */
+function bridgeDirectoryBase(temp = os.tmpdir(), fallback = BRIDGE_FALLBACK_DIRECTORY) {
+  // The directory's name is the prefix and six random characters.
+  const socketPathUnder = (base) => Buffer.byteLength(path.join(base, `${BRIDGE_DIRECTORY_PREFIX}XXXXXX`, BRIDGE_SOCKET_NAME));
+  let real = temp;
+  try {
+    real = fs.realpathSync.native(temp);
+  } catch {
+    // The directory is made under the spelling it has.
+  }
+  return socketPathUnder(real) <= BRIDGE_SOCKET_PATH_BYTES ? real : fallback;
+}
+
+/**
+ * A private directory for one call's bridge socket, on the run's scratch list
+ * (so a signal that ends the run removes it too), by its real path, which the
+ * server's sandbox binds and the runtime connects through. A path too long for
+ * a Unix socket even under the fallback is refused here, naming the temp
+ * directory, since the shim would otherwise fail to listen with an error that
+ * names neither.
+ *
+ * @param {string[]} scratch
+ * @param {{ temp?: string, fallback?: string }} [options] where to make it, for a case to drive the choice
+ */
+function makeBridgeDirectory(scratch, { temp = os.tmpdir(), fallback = BRIDGE_FALLBACK_DIRECTORY } = {}) {
+  const base = bridgeDirectoryBase(temp, fallback);
+  const made = fs.mkdtempSync(path.join(base, BRIDGE_DIRECTORY_PREFIX));
+  scratch.push(made);
+  let directory = made;
+  try {
+    directory = fs.realpathSync.native(made);
+  } catch {
+    // The directory keeps the spelling it was made under.
+  }
+  scratch[scratch.indexOf(made)] = directory;
+  if (Buffer.byteLength(path.join(directory, BRIDGE_SOCKET_NAME)) > BRIDGE_SOCKET_PATH_BYTES) {
+    releasePortDirectory(scratch, directory);
+    throw new Error(
+      `the bridge's socket path under ${base} is longer than ${BRIDGE_SOCKET_PATH_BYTES} bytes, which a Unix socket cannot bind, and so is the one under ${fallback}; point TMPDIR at a shorter directory`,
+    );
+  }
+  return directory;
+}
+
+/**
+ * Removes a call's port-file or bridge directory and takes it off the run's scratch
  * list once it is gone; one that cannot be removed stays listed, so the run's
  * end tries it again and reports it.
  */
@@ -1208,6 +1349,8 @@ module.exports = {
   deploymentAuthorizations,
   httpPortFile,
   isApiEntry,
+  makeBridgeDirectory,
+  bridgeDirectoryBase,
   missingCredentials,
   originKey,
   originTarget,

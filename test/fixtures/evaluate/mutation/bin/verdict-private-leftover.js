@@ -10,7 +10,9 @@
  * working directory, configuration file and socket made after this process
  * started) and makes `private-attempts.js`'s attempts on those paths, sending
  * the lines to the test's listener on 127.0.0.1 (a confined process can write
- * nothing a test could read, and the network is not confined). It gives up
+ * nothing a test could read, and a Seatbelt process keeps the host's network; a
+ * Bubblewrap process has a network namespace of its own, Story 1.63, and no line
+ * arrives). It gives up
  * after a minute and reports `private-leftover: none`.
  */
 
