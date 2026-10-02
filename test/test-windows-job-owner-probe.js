@@ -3,7 +3,7 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { spawn } = require('node:child_process');
+const { spawn, spawnSync } = require('node:child_process');
 const { buildMinimalEnv } = require('../cli/lib/run-agent');
 
 if (process.platform !== 'win32') {
@@ -15,11 +15,46 @@ const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-windows-guardian-pr
 const traceFile = path.join(directory, 'trace.log');
 const agentFile = path.join(directory, 'agent.cjs');
 const supervisorFile = path.join(__dirname, '..', 'cli', 'lib', 'agent-supervisor.js');
+const helperFile = path.join(__dirname, '..', 'cli', 'lib', 'windows-job-owner.ps1');
+const minimalEnv = buildMinimalEnv(['TEA_WINDOWS_JOB_TRACE'], { ...process.env, TEA_WINDOWS_JOB_TRACE: traceFile }, [], 'win32');
+const typeDefinition = /Add-Type -TypeDefinition @'\r?\n([\s\S]*?)\r?\n'@/.exec(fs.readFileSync(helperFile, 'utf8'))?.[1];
+if (!typeDefinition) throw new Error('could not isolate the Windows Job Object helper Add-Type definition');
+const addTypeFile = path.join(directory, 'add-type.ps1');
+fs.writeFileSync(
+  addTypeFile,
+  `$ErrorActionPreference = 'Stop'
+Write-Output "runtime ps=$($PSVersionTable.PSVersion) edition=$($PSVersionTable.PSEdition) clr=$([Environment]::Version)"
+$started = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+Write-Output 'add-type-start'
+Add-Type -TypeDefinition @'
+${typeDefinition}
+'@
+Write-Output "add-type-done elapsed-ms=$([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() - $started)"
+`,
+);
+const addTypeStartedAt = Date.now();
+const addType = spawnSync(
+  'powershell.exe',
+  ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', addTypeFile],
+  {
+    env: minimalEnv,
+    encoding: 'utf8',
+    timeout: 120_000,
+  },
+);
+const addTypeResult = {
+  elapsedMs: Date.now() - addTypeStartedAt,
+  status: addType.status,
+  signal: addType.signal,
+  error: addType.error?.message,
+  stdout: addType.stdout,
+  stderr: addType.stderr,
+};
 fs.writeFileSync(agentFile, "process.stdout.write('probe agent answered\\n');\n");
 
 const guardian = spawn(process.execPath, [supervisorFile, '--agent-guardian', process.execPath, agentFile], {
   stdio: ['pipe', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe'],
-  env: buildMinimalEnv(['TEA_WINDOWS_JOB_TRACE'], { ...process.env, TEA_WINDOWS_JOB_TRACE: traceFile }, [], 'win32'),
+  env: minimalEnv,
   windowsHide: true,
 });
 let stdout = '';
@@ -42,7 +77,7 @@ const finish = async () => {
   const ending = await Promise.race([
     closed,
     new Promise((resolve) => {
-      timer = setTimeout(() => resolve(null), 25_000);
+      timer = setTimeout(() => resolve(null), 110_000);
     }),
   ]);
   clearTimeout(timer);
@@ -51,6 +86,12 @@ const finish = async () => {
   await pause(200);
 
   const trace = fs.existsSync(traceFile) ? fs.readFileSync(traceFile, 'utf8') : '(trace file absent)';
+  const pwsh = spawnSync('pwsh.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', '$PSVersionTable.PSVersion.ToString()'], {
+    env: minimalEnv,
+    encoding: 'utf8',
+    timeout: 15_000,
+  });
+  const pwshResult = { status: pwsh.status, error: pwsh.error?.message, stdout: pwsh.stdout, stderr: pwsh.stderr };
   let outcome = null;
   try {
     outcome = JSON.parse(report);
@@ -59,6 +100,7 @@ const finish = async () => {
   }
   const agentPid = Number(agentPidText.trim());
   const succeeded =
+    addType.status === 0 &&
     ending?.code === 0 &&
     outcome?.status === 0 &&
     stdout.includes('probe agent answered') &&
@@ -68,7 +110,7 @@ const finish = async () => {
     trace.includes('guardian-helper-ready');
   fs.writeSync(
     2,
-    `Windows guardian startup probe: ${succeeded ? 'passed' : 'failed'}\nGuardian exit: ${JSON.stringify(exit)}; close: ${JSON.stringify(ending)}\nFD3 report: ${report || '(empty)'}\nFD5 agent PID: ${agentPidText || '(empty)'}\nGuardian stdout: ${stdout || '(empty)'}\nGuardian stderr: ${stderr || '(empty)'}\nTrace:\n${trace}\n`,
+    `Windows guardian startup probe: ${succeeded ? 'passed' : 'failed'}\nIsolated Add-Type under minimal env: ${JSON.stringify(addTypeResult)}\npwsh.exe availability: ${JSON.stringify(pwshResult)}\nGuardian exit: ${JSON.stringify(exit)}; close: ${JSON.stringify(ending)}\nFD3 report: ${report || '(empty)'}\nFD5 agent PID: ${agentPidText || '(empty)'}\nGuardian stdout: ${stdout || '(empty)'}\nGuardian stderr: ${stderr || '(empty)'}\nTrace:\n${trace}\n`,
   );
   if (!succeeded) process.exitCode = 1;
 

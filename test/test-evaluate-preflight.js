@@ -806,6 +806,7 @@ const ready = setInterval(() => {
 
   progress('setup race: begin');
   const setupRaceFile = path.join(directory, 'setup-race.json');
+  const setupRaceTrace = path.join(directory, 'setup-race.trace');
   const setupRace = spawn(
     process.execPath,
     [
@@ -816,13 +817,19 @@ const ready = setInterval(() => {
       '--agent-arg',
       setupRaceFile,
       '--agent-arg',
-      'exit',
+      'wait',
       '--env-pass',
       'TEA_WINDOWS_JOB_OWNER_TEST_FAILURE',
+      '--env-pass',
+      'TEA_WINDOWS_JOB_TRACE',
       '--timeout-ms',
       '500',
     ],
-    { cwd: PROJECT_ROOT, env: { ...BASE_ENV, TEA_WINDOWS_JOB_OWNER_TEST_FAILURE: 'ready-delay' }, stdio: ['pipe', 'pipe', 'pipe'] },
+    {
+      cwd: PROJECT_ROOT,
+      env: { ...BASE_ENV, TEA_WINDOWS_JOB_OWNER_TEST_FAILURE: 'ready-delay', TEA_WINDOWS_JOB_TRACE: setupRaceTrace },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    },
   );
   let setupRaceStderr = '';
   setupRace.stdout.resume();
@@ -831,13 +838,19 @@ const ready = setInterval(() => {
   const setupRaceClosed = ended(setupRace);
   let setupRacePids = null;
   try {
-    const ending = await Promise.race([setupRaceClosed, delay(20_000).then(() => null)]);
+    const ending = await Promise.race([setupRaceClosed, delay(110_000).then(() => null)]);
     setupRacePids = fs.existsSync(setupRaceFile) ? readPids(setupRaceFile) : null;
+    const setupTrace = fs.existsSync(setupRaceTrace) ? fs.readFileSync(setupRaceTrace, 'utf8') : '';
+    const readyAt = Number(/^(\d+) node \d+ leader-agent-ready\b/m.exec(setupTrace)?.[1]);
+    const timedAt = Number(/^(\d+) node \d+ leader-wallclock-timeout\b/m.exec(setupTrace)?.[1]);
     check(
       ending?.code === EXIT_CODES['environment-timeout'],
-      `a Windows runner stopped during Job Object setup ${ending === null ? 'waited over 20 s' : `returned ${ending.code}`}; expected timeout\n${setupRaceStderr}`,
+      `a Windows runner with delayed Job Object readiness ${ending === null ? 'waited over 110 s' : `returned ${ending.code}`}; expected timeout\n${setupRaceStderr}\n${setupTrace}`,
     );
-    check(setupRacePids === null, `a Windows agent started after setup was stopped: ${JSON.stringify(setupRacePids)}`);
+    check(
+      setupTrace.includes('guardian-agent-spawned') && Number.isFinite(readyAt) && Number.isFinite(timedAt) && timedAt - readyAt >= 500,
+      `the delayed helper did not let the agent start and run for its 500 ms wall clock: ready=${readyAt}, timed out=${timedAt}, PIDs=${JSON.stringify(setupRacePids)}\n${setupTrace}`,
+    );
   } finally {
     setupRace.kill('SIGKILL');
     if (setupRacePids === null && fs.existsSync(setupRaceFile)) setupRacePids = readPids(setupRaceFile);

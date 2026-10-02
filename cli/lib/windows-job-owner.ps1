@@ -11,6 +11,8 @@ function Write-Trace([string]$Stage) {
 }
 
 Write-Trace 'helper-enter'
+Write-Trace "helper-runtime ps=$($PSVersionTable.PSVersion) edition=$($PSVersionTable.PSEdition) clr=$([Environment]::Version) temp=$([bool]$env:TEMP) tmp=$([bool]$env:TMP) systemroot=$([bool]$env:SystemRoot) windir=$([bool]$env:windir) userprofile=$([bool]$env:USERPROFILE)"
+$addTypeStarted = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
 Write-Trace 'helper-add-type-start'
 Add-Type -TypeDefinition @'
 using System;
@@ -70,7 +72,7 @@ public static class TeaWindowsJob {
     public static extern bool CloseHandle(IntPtr handle);
 }
 '@
-Write-Trace 'helper-add-type-done'
+Write-Trace "helper-add-type-done elapsed-ms=$([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() - $addTypeStarted)"
 
 $job = [IntPtr]::Zero
 $guardian = [IntPtr]::Zero

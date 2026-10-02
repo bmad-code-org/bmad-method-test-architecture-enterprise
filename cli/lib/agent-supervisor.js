@@ -118,6 +118,9 @@ const DRAIN_MS = 2000;
 /** How long past the wall clock the supervisor waits for the leader: its grace period and some slack. */
 const BACKSTOP_MS = 5000;
 
+/** Job Object setup has its own bound before the agent's wall clock starts. */
+const WINDOWS_SETUP_MS = process.env.TEA_WINDOWS_JOB_TRACE ? 90_000 : 15_000;
+
 /** How often the supervisor checks that the runner is alive. */
 const POLL_MS = 100;
 
@@ -238,10 +241,11 @@ function guard([command, ...args]) {
   let ready = false;
   let output = '';
   let diagnostic = '';
+  trace('guardian-setup-deadline', `${WINDOWS_SETUP_MS}ms`);
   const setupTimer = setTimeout(() => {
     trace('guardian-setup-timeout');
     failSetup(new Error('Windows Job Object setup timed out'));
-  }, 15_000);
+  }, WINDOWS_SETUP_MS);
   failSetup = (error) => {
     if (ready || finished) return;
     trace('guardian-setup-fail', error.message);
@@ -258,9 +262,9 @@ function guard([command, ...args]) {
     );
     trace('guardian-report-written', 'setup failure on fd3');
     job.stdin.destroy();
-    job.kill();
-    trace('guardian-helper-killed');
-    process.exit(0);
+    trace('guardian-helper-kill-requested', `accepted=${job.kill()}`);
+    if (process.env.TEA_WINDOWS_JOB_TRACE) setTimeout(() => process.exit(0), 1000);
+    else process.exit(0);
   };
   job.stdin.on('error', () => {});
   job.stdout.setEncoding('utf8');
@@ -442,22 +446,18 @@ function lead([supervisorArgument, timeoutArgument, command, ...args]) {
   trace('leader-guardian-spawned', `pid=${agent.pid}`);
   if (agent.pid !== undefined) write(LIFELINE_FD, `agent ${agent.pid}\n`);
   let guardianReport = '';
+  let completeAfterGuardianExit = null;
   let agentPid = null;
   let agentPidLine = '';
   agent.stdio[3].setEncoding('utf8');
   agent.stdio[3].on('data', (chunk) => {
     trace('leader-guardian-report-data', chunk);
     guardianReport += chunk;
+    if (completeAfterGuardianExit !== null) completeAfterGuardianExit();
   });
   agent.stdio[3].on('end', () => trace('leader-guardian-report-end'));
   agent.stdio[4].on('error', () => {});
   agent.stdio[5].setEncoding('utf8');
-  agent.stdio[5].on('data', (chunk) => {
-    agentPidLine += chunk;
-    if (!agentPidLine.includes('\n')) return;
-    const pid = Number(agentPidLine.split('\n', 1)[0]);
-    if (Number.isSafeInteger(pid) && pid > 0) agentPid = pid;
-  });
 
   const input = descriptorStream(0, false);
   input.on('error', () => agent.stdin.destroy());
@@ -469,6 +469,7 @@ function lead([supervisorArgument, timeoutArgument, command, ...args]) {
   let timedOut = false;
   let supervisorGone = false;
   let settled = false;
+  let wallClockStarted = false;
   let killTimer = null;
   /** The stopping signal that first made this process stop the group, reported beside how the agent ended. */
   let stoppedBy = null;
@@ -529,6 +530,25 @@ function lead([supervisorArgument, timeoutArgument, command, ...args]) {
     for (const output of outputs) output.close(() => --open === 0 && process.exit(0));
   };
 
+  // The agent's wall clock starts after the guardian confirms its real PID.
+  agent.stdio[5].on('data', (chunk) => {
+    agentPidLine += chunk;
+    if (settled || wallClockStarted || !agentPidLine.includes('\n')) return;
+    const pid = Number(agentPidLine.split('\n', 1)[0]);
+    if (!Number.isSafeInteger(pid) || pid <= 0) return;
+    agentPid = pid;
+    wallClockStarted = true;
+    if (GROUPS) return;
+    trace('leader-agent-ready', `pid=${pid} timeout=${timeoutArgument}`);
+    write(LIFELINE_FD, 'ready\n');
+    after(Number(timeoutArgument), () => {
+      if (settled) return;
+      trace('leader-wallclock-timeout', `agentPid=${agentPid}`);
+      timedOut = true;
+      stop('SIGTERM');
+    });
+  });
+
   // A stopping signal sent to this process alone stops the agent's group, as a forwarded one does.
   for (const name of STOPPING) process.on(name, () => stop(name, { requested: true }));
 
@@ -551,15 +571,33 @@ function lead([supervisorArgument, timeoutArgument, command, ...args]) {
       }
       return finish(stoppedBy === null ? outcome : { ...outcome, stoppedBy });
     };
-    if (agent.stdio[3].readableEnded) complete();
-    else agent.stdio[3].once('end', complete);
+    if (GROUPS) {
+      if (agent.stdio[3].readableEnded) complete();
+      else agent.stdio[3].once('end', complete);
+      return;
+    }
+    completeAfterGuardianExit = () => {
+      if (agent.stdio[3].readableEnded) return complete();
+      try {
+        JSON.parse(guardianReport);
+        return complete();
+      } catch {
+        // Wait briefly for a report already in the pipe.
+      }
+    };
+    completeAfterGuardianExit();
+    if (!settled) {
+      agent.stdio[3].once('end', complete);
+      setTimeout(complete, 1000);
+    }
   });
 
-  after(Number(timeoutArgument), () => {
-    if (settled) return;
-    timedOut = true;
-    stop('SIGTERM');
-  });
+  if (GROUPS)
+    after(Number(timeoutArgument), () => {
+      if (settled) return;
+      timedOut = true;
+      stop('SIGTERM');
+    });
 
   let pending = '';
   lifeline.on('data', (chunk) => {
@@ -597,8 +635,10 @@ function supervise([runnerPidArgument, timeoutArgument, command, ...args]) {
   lifeline.on('error', () => {});
   let heard = '';
   lifeline.setEncoding('utf8');
-  lifeline.on('data', (chunk) => (heard += chunk));
   let overdue = false;
+  let overduePhase = null;
+  let ready = false;
+  let pending = '';
 
   // The group a leader that ended or hung without a report leaves behind.
   const killAgentGroup = () => {
@@ -621,15 +661,23 @@ function supervise([runnerPidArgument, timeoutArgument, command, ...args]) {
   leader.once('close', (status, signal) => {
     trace('supervisor-leader-close', `status=${status} signal=${signal} overdue=${overdue}`);
     if (heard.includes(REPORTED)) return process.exit(0);
-    if (overdue) return fail(`the agent's group leader gave no report ${BACKSTOP_MS}ms past the agent's ${timeout}ms wall clock`);
+    if (overdue) {
+      const failure =
+        overduePhase === 'setup'
+          ? `the agent's group leader gave no report ${BACKSTOP_MS}ms past the Windows Job Object setup bound`
+          : `the agent's group leader gave no report ${BACKSTOP_MS}ms past the agent's ${timeout}ms wall clock`;
+      return fail(failure);
+    }
     const ending = signal ? `was killed by signal ${signal}` : `exited with code ${status}`;
     return fail(`the agent's group leader ${ending} without reporting how the agent ended`);
   });
 
-  // A leader that has not ended well past the wall clock cannot stop the
-  // agent's group, so both are killed.
-  after(timeout + BACKSTOP_MS, () => {
+  // Setup and agent execution have separate bounds. The wall clock begins
+  // only after the leader sees the guardian's real agent PID.
+  const backstop = (phase) => {
+    if (overdue || heard.includes(REPORTED)) return;
     overdue = true;
+    overduePhase = phase;
     try {
       if (GROUPS) process.kill(-leader.pid, 'SIGKILL');
       else leader.kill('SIGKILL');
@@ -637,7 +685,24 @@ function supervise([runnerPidArgument, timeoutArgument, command, ...args]) {
       // The leader is already gone.
     }
     killAgentGroup();
+  };
+  lifeline.on('data', (chunk) => {
+    heard += chunk;
+    pending += chunk;
+    const lines = pending.split('\n');
+    pending = lines.pop();
+    for (const line of lines) {
+      if (line !== 'ready' || ready) continue;
+      ready = true;
+      trace('supervisor-agent-ready', `timeout=${timeout}`);
+      after(timeout + BACKSTOP_MS, () => backstop('agent'));
+    }
   });
+  if (GROUPS) after(timeout + BACKSTOP_MS, () => backstop('agent'));
+  else
+    after(WINDOWS_SETUP_MS + BACKSTOP_MS, () => {
+      if (!ready) backstop('setup');
+    });
 
   for (const name of STOPPING) process.on(name, () => lifeline.write(`${name}\n`));
 
