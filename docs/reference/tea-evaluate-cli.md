@@ -556,6 +556,9 @@ The qualification names a pre-fix and a post-fix deployment: the release identif
   The run asks the origin of every HTTP interface of the registry which release it runs: `reports` names one report for each, and each request goes to that interface's own origin.
   A deployment whose second origin runs another release than its first would otherwise be measured under the identifier the first reported, so `check` refuses a `reports` that leaves an HTTP interface of the registry without a report or names an interface the registry does not serve over HTTP.
   A registry of one HTTP interface names one report.
+  Each interface's report operation needs a method and a path template that no other `api` operation of the contract uses, because eval-quality refuses a duplicate operation signature across interfaces.
+  Services that serve their release at the same path need distinct paths (for example a path prefix their proxy strips), or they cannot each be asked.
+  `check` does not yet name this collision: `run` exits 4 with the compile refusal.
   `operationId` names an operation the contract declares on the `api` interface its key names, which the registry serves over HTTP; `check` refuses an operation declared on another interface and names the interface it belongs to.
   It is a permitted operation of the contract like any other, so `operationPhases` in `evaluation.json` names its phase, and adding it changes the compiled contract.
   The request reads a release and goes to each live deployment before any arm runs, so `check` refuses an operation the contract marks as changing state.

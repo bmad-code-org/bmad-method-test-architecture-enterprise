@@ -98,7 +98,7 @@ context:
   Its `interfaces` option is gone: the key rule covers an operation of an interface the registry does not serve, since the key itself must be an HTTP interface of the registry.
   `reportsProblems({ reports, contract, interfaces, where })` is the one derivation of the per-deployment rules: an HTTP interface with no report, a key the registry does not serve over HTTP, and each entry through `reportProblems`, interfaces in sorted order.
   `check.js` (`historicalBoundaryProblems`) and `historical.js` (`deploymentPair`) both call it, so `check` and the runtime guard cannot drift.
-  `reportedRelease`, `quotedIdentifier` and `holdToReport` are reused, not copied: the per-interface ask is the existing ask run once per key.
+  `reportedRelease`, `quotedIdentifier` and `holdToReport` are reused: the per-interface ask is the existing ask run once per key.
 - `deploymentPair` (exit 12) refuses `reports` that is no object, then the first `reportsProblems` finding, then an entry without both string fields (the schema's finding in `check`), then a contract with no interfaces.
 - `qualifyDeploymentProbe`: for each side (pre-fix first) it asks `Object.keys(reports).sort()` one `holdToReport` each, through `ports[revision]`, which routes each request to the interface its operation belongs to.
   The first refusal returns at once, so the later interfaces and the post-fix deployment stay unasked.
@@ -116,10 +116,14 @@ context:
   Every existing case that named `report` moved to `reports`, and the refusal wording that gained the interface moved with it.
   `--reported-interfaces-only` runs the interface cases, the deployment units and the reference read.
   `test/test-evaluate-check.js`: `reportOf` and `TWO_INTERFACE_DEPLOYMENTS`, `plantApiHistorical` declares each extra interface in the contract, six new cases (a missing report on the second interface post-fix and on the first pre-fix, the first interface's operation under the second key, a second report without its pointer, an empty map, the old single `report`), the unserved-key case rewritten for the new shape, the extra and empty field case moved to `reports`, and two clean cases (a registry of one HTTP interface with one report, a registry of two with two) through `runCleanCases`, which now takes a case's own `copy`.
-- The second interface needed a path of its own: eval-quality refuses two `api` operations that share a method and a path template ("duplicate-operation-signature"), and the fixture's grader answers `GET /release` alone.
-  The `ledger` servers are the same `grader.js` behind a wrapper (`prefixed`) that cuts `/ledger` from each request path and answers a path outside the prefix as unknown, so a request that reached the wrong interface's origin would find no release.
+- Adopter limit: each interface's report operation needs a method and path template that no other `api` operation of the contract uses.
+  eval-quality 4.7.0 refuses `duplicate-operation-signature` across the whole contract, so two services that both serve their release at `GET /release` cannot each declare a report operation.
+  `check` exits 0 for such a registry and `run` exits 4 with the compile refusal.
+  The reference states the limit (`### Against deployments`, the `reports` bullet) and the CHANGELOG entry carries a line for it; Story 1.75 makes `check` name the collision.
+  The tests meet the limit too: the `ledger` interface's report operation sits under a `/ledger` path prefix, and its servers are the fixture's `grader.js` behind a wrapper (`prefixed`) that cuts `/ledger` from each request path and answers a path outside the prefix as unknown, so a request that reached the wrong interface's origin finds no release.
   The grader's bytes are unchanged.
   The server logs the cut path, so each server's own log tells the interface.
+  The `ledger` servers run the grader's `release: object` policy and `ledger` reports at `/release/name`, so a pointer read from the wrong interface's report finds an object or nothing (round 1).
 - Digests and evidence bytes refreshed: none.
   No fixture, committed digest, record or evidence file changed; the arms cases write to temporary projects.
 - `story-1.65.md`'s I/O matrix table was re-padded by `prettier --write` (cell text unchanged), because `lint:md` (MD060) and `format:check` fail on the record as written.
@@ -162,6 +166,25 @@ The counts are failed checks.
   The rule dropped: 4 `check` checks fail (the case on the second interface's key exits 0), and the `deploymentPair` unit fails in the arms run.
 - The request label (`report-<side>-<interfaceId>`): no revert check, as noted in Implementation Notes.
 
+### Round 1 reverts
+
+Same method on a fresh scratch copy of the round 1 tree (`rsync` without `.git`, `node_modules` linked).
+The unmodified copy passes `node test/test-evaluate-arms.js --reported-interfaces-only` with 155 checks (152 before round 1, plus three new).
+
+- Item 3, the pointer of the wrong interface.
+  The mutation reads the first interface's pointer for each interface in `holdToReport`'s call (`report: { ...reports[interfaceId], pointer: reports[Object.keys(reports).sort()[0]].pointer }`).
+  Round 0 test file with the mutation: 0 of 152 fail.
+  Round 1 test file with the mutation: 9 of 155 fail (the qualified case, the `run.json` releases record, the request logs, the sealed probes, the stale, moved, unread and echo cases).
+- Item 4, the interface in the exit 12 message.
+  Removing the clause `for ${interfaceNote}` (with its leading space) from the could-not-answer branch of `holdToReport`: 1 of 155 fails, the new second-interface crash case.
+  The could-not-be-built branch (`ArmError`) has no case, and none can reach it.
+  The report operation is built from a plan with no bound inputs, and `reportsProblems` refuses beforehand each operation the arm cannot build a request for (undeclared, declared by two interfaces, not an `api` operation, requiring input or a path parameter), so `runArm` throws no `ArmError` for a report that passed `check` or `deploymentPair`.
+- Item 5, the one-interface refusal beside the comment.
+  Dropping the unserved-key loop in `reportsProblems`: 2 of 155 fail, the earlier two-interface unit and the new one-interface unit.
+- Item 6, the refusal exists and omits the later interface.
+  Neutralising the mismatch comparison (`answer.reported !== release`): 17 of 155 fail, the new `recorded no refusal` assertion among them, where the old assertion passed with no refusal at all.
+  Asking the keys in written order in place of sorted order: 3 fail, the omission assertion among them.
+
 ## Gates
 
 - Engine check (`evaluateTarget` is a function, eval-quality 4.7.0) exit 0 at the end of the build.
@@ -179,6 +202,15 @@ Results on the final tree.
   The weights file is the coordinator's: `test:evaluate-arms` rises by about the 14 seconds measured, `test:evaluate-check` (about 90 seconds locally) by a few.
 - Unrun: the full `npm test` (CI shards).
 
+Round 1, on the final tree.
+
+- Green: `test:evaluate-arms` 638 checks, `test:evaluate-check`, `test:evaluate-boundaries`, `test:evaluate-guidance`, `test:schemas`, `test:doc-counts`, `test:shards`, `test:ci-coverage`, `test:changelog`, `lint`, `lint:md`, `format:check`, `docs:validate-links`.
+  `lint` and `format:check` first failed on the round 1 test edit (an unneeded escape, then the table of the new `test-design-epic-1.md` section) and passed after the fix.
+- Measured weight of `test:evaluate-arms` after round 1, the round 0 test file beside it in the same scratch tree, run alone one after the other on a machine busier than at the round 0 measurement: 239.9 seconds before (634 checks, 210.3 CPU seconds), 241.2 after (638 checks, 211.9 CPU seconds), +1.3 seconds.
+  The round 0 weight (+13.5 seconds) stands for the story; round 1 adds about 1 second of CPU (one more server start, no new run beyond the crash case).
+  `--reported-interfaces-only` takes 19 seconds (155 checks).
+- `git diff -- package.json package-lock.json` is empty.
+
 ## Build review
 
 No independent reviewer ran in this worker; the coordinator's reviewer follows.
@@ -194,8 +226,22 @@ My own read of the final diff against the frozen block, row by row of the I/O ma
 - Request count: a qualified probe sends each deployment one request per HTTP interface (the qualified case reads exactly `["/release"]` on each `ledger` server and one `/release` on each `grader` server).
 - Pre-fix first and sorted order: the stale-second case (post-fix servers unasked, the pre-fix `grader` asked once) and the both-stale case (keys written `ledger` first).
 
+### Round 1 (2026-10-02)
+
+Two Opus lenses (adversarial, test quality) reviewed `2e30ee18`.
+The fix applies their six items:
+
+1. The limit was not stated (adversarial, high).
+   The reference, the CHANGELOG entry and this record's Implementation Notes and Undone now state it, and Story 1.75 closes it (`epics.md`, `test-design-epic-1.md`, the dependency row, `sprint-status.yaml` and both lane lists).
+2. A banned antithesis in Implementation Notes (adversarial, low): reworded; the line sits outside the frozen block.
+3. The ledger report pointer equalled the grader's (test quality, medium): `ledger` runs under `release: object` and reports at `/release/name`; the proof is in Round 1 reverts.
+4. No case for the interface in an exit 12 message (test quality, low): a second-interface crash case in `checkReportedInterfaces`.
+5. A comment promised a refusal the check beside it did not assert (test quality, low): the one-interface `deploymentPair` unit now refuses a report for a second interface.
+6. An omission assertion that passed with no refusal (test quality, nit): the refusal is asserted to exist before it is asserted to omit the later interface.
+
 ## Undone
 
-Nothing is undone.
-Findings that need a story of their own: none.
+`check` does not name a collision between the report operations of two interfaces that serve their release at one path.
+eval-quality 4.7.0 refuses `duplicate-operation-signature` across the whole contract, so such a registry passes `check` (exit 0) and `run` exits 4 with the compile refusal.
+The reference and the CHANGELOG state the limit; Story 1.75 (Name a report-operation signature collision at check, before the run) closes it, with the route (eval-quality scoping the refusal per interface, or `check` calling the engine's own compile verdict) decided there.
 The `ledger` servers share one wrapper and the fixture's grader; a fixture whose grader serves a second path of its own would drop the wrapper, but nothing needs it.
