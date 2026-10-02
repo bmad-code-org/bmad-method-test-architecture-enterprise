@@ -1,0 +1,143 @@
+---
+title: "Story 1.63: Give a Bubblewrap target no route to the host's abstract sockets"
+type: 'feature'
+created: '2026-10-02'
+status: 'review'
+route: 'dispatch'
+review_loop_iteration: 0
+baseline_commit: '1da8097a'
+context:
+  - '{project-root}/_bmad-output/planning-artifacts/evaluate/epics.md (Build Rules For Every Story; Story 1.63)'
+  - '{project-root}/_bmad-output/planning-artifacts/evaluate/test-design-epic-1.md (the Story 1.63 section)'
+  - '{project-root}/_bmad-output/planning-artifacts/evaluate/ARCHITECTURE-SPINE.md (AD-8)'
+  - '{project-root}/_bmad-output/implementation-artifacts/evaluate/story-1.60.md (the Linux audit; the status shim marker)'
+  - '{project-root}/_bmad-output/implementation-artifacts/evaluate/story-1.62.md (the byte-identity golden)'
+  - '{project-root}/AGENTS.md'
+---
+
+<!-- markdownlint-disable MD033 -->
+
+<frozen-after-approval reason="human-owned intent; do not modify unless human renegotiates">
+
+## Intent
+
+**Problem:** A Bubblewrap target shares the host's network namespace so that a server it starts is reachable from the runtime. Abstract Unix sockets live in the network namespace, so any process of the target can connect to one the host serves (a desktop session's D-Bus is the known case) and ask a host service to run a job outside the sandbox. `bubblewrapIsolation()` empties `/run/user`, which closes the path-based socket only.
+
+**Approach:** Every process the runtime starts for a Bubblewrap target runs in a network namespace of its own (`--unshare-net`: a loopback and nothing else), so no abstract socket of the host exists for it. A started HTTP server stays reachable through a bridge the runtime owns, with no network path between the namespaces:
+
+1. The runtime makes a private bridge directory for the call (a `mkdtemp` beneath the temp directory, on the run's scratch list as the port directory is, listed in `checkPrivateDirectorySources`) and the server's Bubblewrap command binds it writable.
+2. The status shim (`confinement-status.cjs`), which already runs inside the namespace before the target, takes an optional `--bridge <socket path>` argument before the status file and, before it starts the target, listens on that Unix socket path. Each connection's first line is `<host> <port>\n` naming a loopback host (`127.0.0.1`, `::1` or `localhost`) and port inside the namespace; the shim connects there, answers `ok\n` or `fail\n`, and then copies bytes both ways. The listener never holds the shim's event loop open and closes when the target ends.
+3. The runtime listens on the address and port the server's caller expects, on the host, and for each connection connects to the bridge socket, sends the first line and copies bytes both ways once it reads `ok`. The server's readiness check (`accepts`) becomes the bridge's `ok` for the address and port the server reported or was given, so a server that has not bound yet is still "not ready", and a forwarder that listens before the server does is never mistaken for a ready server. A server that reports its port reports the port it bound inside the namespace; the runtime listens on the same number on the host when it is free and on a port the system gives otherwise, and the port the call is configured for is the one the runtime listens on.
+4. Only a call that names `portFile` (a started HTTP server) gets a bridge. A command target and a tool server run in a namespace with no bridge. The evaluation layer (`bubblewrapLayerArguments`: the adopter's HTTP port process) keeps the host's network, since it reaches the forwarded server over the host's loopback; the reference says so.
+
+The mechanism choice and its reasons go in the story record: a bridge with a runtime-owned relay was chosen because abstract sockets are per network namespace and no unprivileged mechanism available to a Bubblewrap run on the CI runners hides them while sharing the namespace (Landlock's abstract-socket scope needs a 6.12 kernel; a seccomp filter cannot read the address). `pasta` and `slirp4netns` are not installed by default.
+
+## Boundaries & Constraints
+
+**Always:** The new `--unshare-net` goes into the shared isolation vector the target and the probes use (`bubblewrapTargetArguments`, `probeMechanism`, `probeObserver`), so a host that cannot create the namespace is refused at selection (exit 12) as one that cannot start Bubblewrap is. The evaluation layer's vector keeps the host network. The shim keeps its contract (status file, signal forwarding, exit code, the `started` mark), and the `execve` of the shim stays recognizable to the audit's parser: the marker is the program and the status file's base name, which the new argument must not disturb. The audit lists nothing for the bridge: its directory is a write grant of the call, and its socket's creation is not a file access the audit reports. A connection from the target itself to the bridge socket reaches only its own namespace's loopback. The forwarder and the shim's listener close and remove their sockets when the call ends and on every error path, and the bridge directory is released with the call (a signal that ends the run removes it too). Any change to a Bubblewrap profile updates the byte-identity golden: `TEA_UPDATE_ISOLATION_GOLDEN=1 npm run test:isolation-primitives`, diff read. `CHANGELOG.md` under `[Unreleased]`. No eval-quality change, no new npm dependency, no native build, no new Linux package (no `socat`, `nsenter` or `pasta`). The bridge protocol and both halves are plain Node and are tested on macOS too, over Unix sockets, with no Bubblewrap.
+
+The reference (`docs/reference/tea-evaluate-cli.md`, the sentence that now says "Story 1.63 closes that route") states the closed route and only what the cases back: a Bubblewrap target and every process it starts has a loopback of its own and no route to the host's abstract sockets; an HTTP server it starts is reachable through the runtime's bridge; a Bubblewrap target has no network beyond that loopback, so a target that needs the host's network (a database on the host's loopback, an outside service) does not run under Bubblewrap and needs `"confinement": false`; the evaluation layer's processes keep the host's network; path-based Unix sockets that the read-only `/` still shows (`/run/dbus/system_bus_socket`, `/var/run/docker.sock`, an agent socket under `/tmp`) stay connectable, which is Story 1.82; macOS Seatbelt is unchanged (no abstract sockets there, its Mach services are a separate channel the profile does not close).
+
+Finding to append in this PR (RELAY.md standing rule, lane 2 range, next free number 1.82): **Story 1.82, give a Bubblewrap target no route to the host's path-based Unix sockets.** `--ro-bind / /` does not stop `connect()` to a socket file, so `/var/run/docker.sock` and the system bus remain a route to a host service that runs a job outside the sandbox. Acceptance criteria with revert checks in `epics.md`, a section in `test-design-epic-1.md`, a row in the Epic Dependencies table (renumber after the insert), a `backlog` row in `sprint-status.yaml`, and an entry at the end of lane 2 in the `epics.md` lane list and `sprint-status.yaml` `parallel_lanes`. Update the story count prose in `epics.md` and `test-design-epic-1.md`.
+
+**Never:** a shared network namespace for a target, a bridge any target process can reach in the host's namespace, a vendor-specific branch outside `cli/lib/agent-adapters.js`, a registry field (nobody needs one), a claim in the reference the cases do not back, a Windows change.
+
+## I/O & Edge-Case Matrix
+
+| Scenario                     | Input / State                                                                                     | Expected Output / Behavior                                                                             | Error Handling                    |
+| ---------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | --------------------------------- |
+| Abstract socket from target  | Linux, Bubblewrap; the runtime serves an abstract Unix socket; a target process connects to it    | the connection fails (`ECONNREFUSED`)                                                                  | n/a                               |
+| Same, isolation removed      | the same case with `--unshare-net` taken out of the vector                                        | the connection succeeds and the case fails                                                             | n/a                               |
+| Started HTTP server          | Linux, Bubblewrap; a server on a chosen port; a server that reports its port                      | each answers a request from the runtime through the bridge, the readiness check passes only once bound | n/a                               |
+| Server not yet bound         | the bridge's `fail` while the server has not bound                                                | not ready; the call waits and times out as before                                                      | the same timeout message as today |
+| Server that never starts     | the target exits before it binds                                                                  | the call fails as today (`account()`), the forwarder is closed                                         | no listener left on the host      |
+| Host port taken              | the port a server reported is in use on the host                                                  | the forwarder takes another port and the call is configured for it                                     | n/a                               |
+| Bridge protocol              | a first line naming a non-loopback host, a non-numeric port, a missing newline, an oversized line | refused by the shim's listener with `fail`, no outbound connection                                     | n/a                               |
+| Shim ends with the target    | the target exits or a signal ends it                                                              | the shim's listener is closed, exit code and `status` file behavior unchanged                          | n/a                               |
+| Command target, tool server  | Linux, Bubblewrap                                                                                 | runs with a loopback only; stdout, exit codes, status file unchanged                                   | n/a                               |
+| Host cannot create the netns | `--unshare-net` refused (probe)                                                                   | `selectConfinement` refuses (exit 12) naming Bubblewrap's message and the opt-out                      | exit 12                           |
+| macOS Seatbelt               | any run                                                                                           | no bridge, no change in behavior                                                                       | n/a                               |
+| Audit                        | a clean server target under the audited sandbox                                                   | `observedMounts` is empty (the bridge directory is a grant, the shim is the marker)                    | n/a                               |
+
+</frozen-after-approval>
+
+## Code Map
+
+- `cli/lib/evaluate/confinement.js`: `bubblewrapIsolation`, `bubblewrapTargetArguments`, `bubblewrapLayerArguments`, `probeMechanism`, `probeObserver`, `confinedCommandMechanism` (`wrap`, `run`).
+- `cli/lib/evaluate/confinement-status.cjs`: the shim; gains the `--bridge` listener, and is a module for the tests (`require`d, it starts nothing).
+- `cli/lib/evaluate/confinement-relay.js`: new; the host half of the bridge (`bridgeAccepts`, `startForwarder`).
+- `cli/lib/evaluate/http-target.js`: `callServer`, `accepts`, `createApiPort`: the bridged readiness check and the host forwarder.
+- `test/test-evaluate-run.js`, `test/test-evaluate-api.js`, `test/test-isolation-primitives.js`, `test/lib/isolation-golden.js`, `test/fixtures/isolation-primitives/golden.json`.
+- `docs/reference/tea-evaluate-cli.md`, `CHANGELOG.md`, `epics.md`, `test-design-epic-1.md`, `sprint-status.yaml`, `epic-1-context.md`.
+
+## Tasks & Acceptance
+
+**Execution:**
+
+- [x] Shim: the `--bridge` listener, with the protocol validated and tested over Unix sockets on every platform.
+- [x] Host forwarder and bridged readiness in `http-target.js`; the mechanism tells the server call whether it bridges.
+- [x] Vector: `--unshare-net` in the target vector and both probes; the layer vector unchanged; golden regenerated and its diff read.
+- [x] Linux integration cases (skipped off Linux or without Bubblewrap, named in the skip message): abstract socket refused, isolation removed lets it through (revert check), fixed-port and reporting servers answer through the bridge, audit stays empty.
+- [x] Static case comparing the reference's confinement section with the cases above.
+- [x] Reference, CHANGELOG, Story 1.82 appended, housekeeping rows (1.60 `done` in its sprint row and record, 1.63 `review`).
+
+**Acceptance Criteria:**
+
+- Given a Bubblewrap target on a Linux runner and a listener on an abstract Unix socket owned by the runtime, when the target connects to it, the connection fails while an HTTP service the target started answers the runtime; removing the isolation lets the connection through and fails the case.
+- The reference names what the audit and the sandbox still do not see, with no claim the mechanism cannot back.
+- `test:evaluate-run`, `test:evaluate-api`, `test:isolation-primitives`, `test:evaluate-confinement`, `npm test`, and the Linux CI job pass.
+
+## Implementation Notes
+
+**Mechanism choice (the decision record the Intent asks for).** A network namespace of the target's own (`--unshare-net`) with a bridge the runtime owns. Abstract Unix sockets are per network namespace, so only a target that does not share the host's namespace is cut off from them, and no unprivileged mechanism available to a Bubblewrap run on the CI runners hides them while sharing it: Landlock's abstract-socket scope needs a 6.12 kernel, which the runners do not have, and a seccomp filter cannot read the address a `connect()` names, so it cannot tell an abstract name from a path or a port. `pasta` and `slirp4netns`, which would give the namespace a route to the host, are not installed by default, and a route would defeat the purpose. The one thing the namespace takes away that an adopter needs, an HTTP server the runtime can reach, comes back through a Unix socket file: a path socket crosses network namespaces, because it is a file both sides open.
+
+**As built.**
+
+- `confinement-status.cjs` (the shim) takes `[--bridge <socket>] <status file> <target> [argument ...]`. Before it starts the target it listens on the socket (the target starts once the bridge listens, so a server that binds at once is never ahead of its bridge). A connection's first line is `<host> <port>\n`, a host of `127.0.0.1`, `::1` or `localhost` and a port from 1 to 65535 in decimal with no sign or leading zero; anything else, a line past 64 bytes or one that does not arrive in 5 s is answered `fail\n` and opens no connection. A valid line is connected inside the namespace, answered `ok\n` or `fail\n`, and spliced both ways (bytes that followed the line in the same write are kept, a half-closing client still reads its answer). The server is unreferenced and closes, with every connection, when the target ends or fails to start; a bridge that cannot listen ends the shim with 126 before the target runs. The file is a module for tests too (`require.main === module` guards `main`), and still requires nothing of the repository, since the sandbox grants it alone.
+- `confinement-relay.js` (new) is the runtime's half: `openBridge`, `bridgeAccepts` (the readiness check: `true`, or `ENOENT` while the shim has no socket yet, `ECONNREFUSED` while it does not listen or the port is not bound, `timeout`, `protocol`), `startForwarder` (listens on the address and port the call is configured for, forwards each connection through the bridge; a busy port falls back to one the system gives unless `strict`), and `bridgeHostOf` (the host the bridge names for the address eval-quality's policy canonicalized).
+- `confinement.js`: `--unshare-net` follows `--unshare-user` in the target's vector and in the one probe vector both probes share (`bubblewrapProbeArguments`); `bubblewrapLayerArguments` is unchanged. `targetSandbox().wrap(..., { bridge })` passes `--bridge <socket>` before the status file and refuses a socket that is not inside a directory the call may write. `confinedCommandMechanism` carries `bridges` (true under Bubblewrap), grants `dirname(request.bridge)` and passes the socket on; `confinedMcpMechanism` passes no bridge. The audit's marker (the program and the status file's base name) and its grants are untouched, and bind and connect are not traced, so the bridge adds nothing to `observedMounts`.
+- `http-target.js`: `createApiPort` makes a private `tea-evaluate-netbridge-*` directory per bridged call on the run's scratch list (its socket path is held to 100 bytes, which a Unix socket binds on every platform) and removes it with the call; `callServer` takes `bridge`, asks readiness of the bridge for the loopback host and the port the server reported or was given, then starts the forwarder (`port: bound` and not strict for a server that reports its port, the chosen port and strict otherwise), and returns the forwarder's port, which `configurationAt` hands the policy. `stop()` closes the forwarder, and a stop that lands while it starts closes it too.
+- Golden: `TEA_UPDATE_ISOLATION_GOLDEN=1 npm run test:isolation-primitives`, diff read. Every Bubblewrap target vector gained `--unshare-net` after `--unshare-user` (nine outputs, the audited call's inner command included) and one output was added, a bridged call (`confinement.targetSandbox.wrap.bubblewrap.bridge`). The layer vector's output did not change.
+
+**Reading of the spec.** The Intent says only a call that names `portFile` gets a bridge; the matrix lists a server on a chosen port too, and a chosen-port call names `portFile: null`. Every started server's call gets a bridge, which is what the matrix needs and what the abstract-socket route requires (a chosen-port server shares the namespace the same way). An address that is a loopback other than `127.0.0.1` or `::1` (a server bound to `127.0.0.2`) is refused with a message naming the bridge, since the shim connects only to the namespace's own two loopback names.
+
+## Revert Checks
+
+Each check applied one mutation to one source file in a scratch copy of the checkout, ran the case that must catch it, observed the failure and restored the file (22 mutations, all caught on macOS).
+
+- The shim: accepting any host; accepting a port with a leading zero (this one survived the first version of the case, since a five-digit port with a zero in front is six digits; the counting server now has a four-digit port); not closing its listener when the target ends; waiting for the first line with no ceiling; dropping the bytes that follow the first line; answering `ok` before the connection is made. Each fails `the bridge shim`.
+- The call: handing the policy the port the server bound in place of the forwarder's (`forward` not used); a request that names no bridge; leaving the call's bridge directory; dropping the loopback check on the address; not insisting on a chosen port; a `stop()` that leaves the forwarder listening (the suite then never exits on the open listener, and the run was ended). Each fails `the bridged server`.
+- The vector: no `--unshare-net` in the target's vector (fails `the network namespace units` and the golden), none in the probes, the layer's vector gaining it, `wrap` accepting a bridge socket outside the call's grants, `wrap` passing no `--bridge`, the mechanism not bridging, the mechanism not granting the bridge directory. Each fails `the network namespace units`.
+- The reference: keeping the old sentence, adding a sentence no case backs, dropping a claim. Each fails `the network reference`.
+
+Proven in CI only (no Linux here): taking `--unshare-net` out of the vector lets the abstract connection through, which fails the first assertion of `the abstract socket route` while its paired control (the same command with the flag stripped from the real vector) shows the case can see a connection; a readiness check made on the host in place of the bridge's answer times out in the confined pipeline for both handoffs.
+
+## Review
+
+**Round 1 (two subagent lenses, an adversarial code review and a test-quality review; each finding verified against the code).**
+
+Fixed, adversarial lens: (1) a medium: `bridgeHostOf` replaces a literal comparison, because eval-quality's policy canonicalizes `::1` to `0000:0000:0000:0000:0000:0000:0000:0001`, so an entry listing `::1` was refused on every Bubblewrap call (the forwarder listens on and the bridge names the normalized `::1`); (2) `splice` ended the peer with `destroy()` on a close, which dropped unflushed bytes (a half-closing client lost 128 KiB of 4 MiB in the reviewer's run), now `destroySoon()` for a close and `destroy()` for an error; (3) a refused line left the connection open until the sender closed, now cut a second after `fail`; (4) a stop between the accept and the forwarder's start now throws before the host port is bound; (5) the bridge directory prefix `tea-evaluate-bridge-` was also the sealed-brief relay's fallback prefix, now `tea-evaluate-netbridge-`, and the directory is on the scratch list before its real path is resolved.
+
+Skipped, adversarial lens: `parseArguments` with `--bridge` and no value eats the status file (only the runtime calls it, and the runtime always passes the socket); `account()` and `where()` name the forwarder's port after it started, not the port the server bound (the message still names the port the call was configured for, the one an adopter can act on).
+
+Fixed, test lens: a Linux case that waited on a `close` that never came when the child had already ended; a regex that matched before its line completed; `65_536 + port` was six digits (rarely the 65,536 to 65,535 boundary the row names), now the literals `65536` and `99999`; the never-binds case asserted nothing about the host port while the call waited, now it does at 500 ms; the forwarder keeping the free number, moving on a busy one and refusing on a strict one is a unit; `::1` is driven through the shim where the host has it; shim children are ended in a `finally`; `closeServer` closes held sockets; a held connection through a shim whose target exits is the case that shows the listener closes its connections (an open socket would hold the shim's event loop); the reference comparison names several cases per claim, matches `runCase` only on a line of its own, covers the whole reference for network namespace sentences and widened its keywords (socket, namespace, D-Bus, Mach); the incidental `options === undefined` assertions are relaxed; the never-binds timeout is 1500 ms.
+
+Skipped, test lens: the Linux case calls `selectConfinement` and throws on a refusal (on a Linux container that forbids user namespaces it fails and does not skip), which is what CI wants and what a developer on such a host wants to see.
+
+**Cannot be shown on a host with no network namespace.** The readiness check made through the bridge and the same check made on the host answer alike when the server's loopback is the host's, so reverting readiness to the host's `accepts` survives every host case; the ubuntu job's confined pipeline fails it (a host check never sees a server inside the namespace), for a server that reports its port and for one that is told it.
+
+## Gates
+
+`test:isolation-primitives` (golden regenerated, diff read), `test:evaluate-run`, `test:evaluate-confinement`, `test:evaluate-api`, `test:evaluate-mcp`, `test:evaluate-preflight`, `test:evaluate-arms`, `test:evaluate-private`, `test:evaluate-evaluators`, `test:evaluate-agents`, `test:evaluate-records`, `test:evaluate-aggregate`, `test:evaluate-held-inputs`, `test:evaluate-guidance`, `test:cli`, `test:doc-claims`, `test:doc-counts`, `test:changelog`, `test:direction`, `test:boundary`, `test:layering-boundary-lineage`, `test:shards`, `test:ci-coverage`, `test:release-metadata`, `lint`, `lint:md`, `format:check`, `docs:validate-links`, all green on macOS; no full `npm test` locally (CI runs it on eight shards).
+
+## Linux-only, unverified here
+
+Docker hangs on this host and macOS has no Bubblewrap, so none of this ran on Linux: `bwrap --unshare-user --unshare-net` creating the namespace and bringing up its loopback on the runners (a host that cannot is refused by the probe, which is tested with a stub `bwrap`); an abstract `connect()` from the new namespace answering `ECONNREFUSED`; the shim's listener on a Unix socket in a directory bound into the sandbox, reached by the runtime by path; the confined pipeline for a server that reports its port and one that is told it; `observedMounts` staying empty with the shim's socket created and unlinked in a granted directory; and the case `the abstract socket route`, which skips off Linux and without `bwrap` and `strace`. The first CI run exercises each.
+
+## Spec Change Log
+
+- The matrix table of the frozen block was re-padded by `prettier --write` (markdownlint's table rule and the format check both fail on the committed alignment); no word changed.
+
+## Review Triage Log
+
+Recorded under Review above.

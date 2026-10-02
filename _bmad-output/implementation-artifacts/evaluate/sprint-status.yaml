@@ -95,10 +95,10 @@ development_status:
   1-57-withhold-the-committed-evaluation-folder-from-a-confined-ta: done
   1-58-keep-the-bridges-admission-token-and-the-runs-private-direc: done
   1-59-let-a-confined-agent-target-keep-the-state-its-cli-writes: done
-  1-60-observe-every-confined-processs-file-access-beyond-node: review
+  1-60-observe-every-confined-processs-file-access-beyond-node: done
   1-61-teach-file-system-confinement-in-the-evaluate-skill: backlog
   1-62-share-one-sandbox-primitive-layer-across-teas-isolation-mod: done
-  1-63-give-a-bubblewrap-target-no-route-to-the-hosts-abstract-sockets: backlog
+  1-63-give-a-bubblewrap-target-no-route-to-the-hosts-abstract-sockets: review
   1-64-hold-the-release-across-the-witness-legs-and-the-trials: review
   1-65-ask-every-http-interface-of-a-deployment-which-release-it-r: done
   1-66-scrub-an-observation-in-every-letter-case: done
@@ -113,6 +113,7 @@ development_status:
   1-75-name-a-report-operation-signature-collision-at-check-before-the-run: backlog
   1-80-bring-a-partial-clone-project-its-tags-and-a-very-large-history-into-the-withheld-repository: backlog
   1-81-record-how-much-of-the-macos-audit-the-kernels-log-lost: backlog
+  1-82-give-a-bubblewrap-target-no-route-to-the-hosts-path-based-unix-sockets: backlog
   1-90-verify-the-baseline-manifests-file-digests: backlog
   1-91-keep-machine-paths-out-of-a-committed-baseline: backlog
   1-92-stop-tea-evaluate-ci-at-once-on-a-signal-while-an-engine-stage-runs: backlog
@@ -165,6 +166,7 @@ parallel_lanes:
     - 1-54-reclaim-auxiliary-scratch-after-a-killed-preflight
     - 1-80-bring-a-partial-clone-project-its-tags-and-a-very-large-history-into-the-withheld-repository
     - 1-81-record-how-much-of-the-macos-audit-the-kernels-log-lost
+    - 1-82-give-a-bubblewrap-target-no-route-to-the-hosts-path-based-unix-sockets
   lane-3-engine-releases-dogfood-and-epic-2:
     - 1-45-aggregate-development-strength-through-eval-quality
     - 2-1-compare-runs-and-accept-a-baseline

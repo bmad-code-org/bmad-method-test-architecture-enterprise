@@ -3,8 +3,11 @@
 /**
  * A listener on 127.0.0.1 that appends every line a connection sends to a
  * file, for Story 1.31's cases: a confined process can write nothing a test
- * could read, and the network is not confined, so a stub's leftover process
- * reports how its attempt ended here (`mutation/bin/verdict-leftover.js`).
+ * could read, and a Seatbelt process keeps the host's network, so a stub's
+ * leftover process reports how its attempt ended here
+ * (`mutation/bin/verdict-leftover.js`). A Bubblewrap process has a network
+ * namespace of its own (Story 1.63), so its report never arrives; the cases
+ * that read it accept no report there.
  *
  *   report-listener.cjs <lines file> <port file>
  *

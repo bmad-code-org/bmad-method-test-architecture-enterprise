@@ -131,6 +131,11 @@ function collectGeneratedOutputs() {
           status: statusDirectory,
         })
         .wrap('/fixture/bin/node', ['target.js', '--flag'], [privateDirectory], ['/opt/toolchain']);
+      // A started HTTP server's call carries the bridge's socket, in a directory the call may write (Story 1.63).
+      const bridgeDirectory = '/var/folders/ab/cd/T/tea-evaluate-netbridge-AbCdEf';
+      const bubblewrapBridgeWrapped = confinement
+        .targetSandbox({ confinement: bubblewrapConfinement, workspace, git, privateRoot, home: rootHome, status: statusDirectory })
+        .wrap('/fixture/bin/node', ['server.js'], [privateDirectory, bridgeDirectory], [], { bridge: `${bridgeDirectory}/bridge.sock` });
       const outputs = {
         'isolate.buildSandboxProfile': isolate.buildSandboxProfile(
           ['/proj/out/test-review.md', '/proj/out/verdict.json'],
@@ -214,6 +219,7 @@ function collectGeneratedOutputs() {
           },
         }),
         'confinement.targetSandbox.wrap.bubblewrap.audit': { ...bubblewrapAuditWrapped },
+        'confinement.targetSandbox.wrap.bubblewrap.bridge': { ...bubblewrapBridgeWrapped },
       };
       // The Node installation the runtime runs from is a read grant of every call, and the host's own.
       const nodeInstallation = confinement.nodeInstallRoot(process.execPath);

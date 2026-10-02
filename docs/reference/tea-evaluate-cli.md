@@ -291,6 +291,7 @@ No other process can answer on a port the service holds.
 A service that writes no port within `readyTimeoutMs`, or writes anything other than a port number, is a target that could not run (exit 12).
 The runtime reads the file without following a link and without waiting on it, so a link, a named pipe, a device or a file longer than 16 bytes in its place counts as anything other than a port number.
 The file's directory is on the run's list of private directories, so a signal that ends the run removes it.
+Under Bubblewrap the service runs in a network namespace of its own and the port it reports is the one it bound there (see [File-system confinement](#file-system-confinement)); the runtime's listener takes the same number on the host when it is free, and the call goes to the port the listener holds.
 
 Without `portFileEnvironmentKey`, the runtime chooses the port, for a service that cannot report its own.
 It takes a free port, releases it just before the service starts, and passes its number in `portEnvironmentKey`.
@@ -361,12 +362,12 @@ A completed `run` adds the contract, corpus, sealed brief and evaluator configur
 `preflight` and `run` confine every process they start, before any of them starts, through the mechanism the host provides:
 
 - macOS: Seatbelt, through `/usr/bin/sandbox-exec` and a profile the runtime generates for each call.
-- Linux: Bubblewrap, through `bwrap` on `PATH` (`apt-get install bubblewrap`), in an unprivileged user namespace with a read-only view of `/`, a process-id namespace and procfs of its own, and an empty `/run/user`.
+- Linux: Bubblewrap, through `bwrap` on `PATH` (`apt-get install bubblewrap`), in an unprivileged user namespace with a read-only view of `/`, a process-id namespace and procfs of its own, a network namespace of its own, and an empty `/run/user`.
   What a target leaves running ends with it, and killing the `bwrap` the runtime started ends what that process forked.
 
 Each mechanism also needs the observer its audit reads (see below): on macOS the kernel's sandbox reports through `/usr/bin/log stream`, which needs a session that may read the unified log; on Linux `strace` (`apt-get install strace`, version 6.1, which the design was verified against, or a later one that supports `--seccomp-bpf` and `--decode-pids=pidns`), which needs ptrace.
 
-The runtime first confines a trivial process through the mechanism, since a host can carry the executable and still refuse it (a kernel that forbids unprivileged user namespaces).
+The runtime first confines a trivial process through the mechanism, since a host can carry the executable and still refuse it (a kernel that forbids unprivileged user namespaces, or a container that forbids creating a network namespace).
 It then confirms the observer the same way: on macOS a sandboxed read of a probe file must come back through the log within five seconds, and on Linux a traced Bubblewrap run of a trivial reader must report the file it read.
 A host with neither mechanism, one whose mechanism refuses, or one whose observer cannot confirm itself stops the command with exit 12 and names the reason, since an audit that cannot see would report an empty list of observed mounts as evidence.
 `sandbox-exec` cannot apply a profile inside a Seatbelt sandbox that restricts anything, so a `tea-evaluate` started from a sandboxed shell (an agent's tool, say) is refused on macOS; run it from an unsandboxed terminal.
@@ -446,8 +447,15 @@ A registry entry names what its target legitimately reads outside the workspace 
 A tool-server entry and an HTTP entry (for its started service) take `systemPaths` the same way.
 The audit grants a process the system paths of the target it runs, so `check` refuses two entries that start the same target with different `systemPaths`.
 A Bubblewrap that fails before it starts the target (a refused bind, say) ends the call as an infrastructure error naming Bubblewrap's message, since no target ran.
-A Bubblewrap target shares the host's network namespace, so that a started HTTP service stays reachable, and with it any abstract Unix socket on the host, a desktop session's D-Bus among them.
-Story 1.63 closes that route.
+A Bubblewrap target and every process it starts run in a network namespace of their own with a loopback and nothing else, so the host's abstract Unix sockets, a desktop session's D-Bus among them, do not exist for them.
+A host that cannot create the network namespace is refused at selection (exit 12), as one that cannot start Bubblewrap is.
+An HTTP service the target starts stays reachable from the runtime through a bridge the runtime owns: the confined process serves a Unix socket in a private directory of the call, and the runtime listens on the address and port the call is configured for and forwards each connection through that socket, with no network path between the namespaces.
+A service that reports its port reports the one it bound inside the namespace; the runtime listens on the same number when the host has it free and on a port the system gives otherwise, and the call is configured for the port the runtime listens on.
+A command target and a tool server have a loopback only and no bridge.
+A Bubblewrap target has no network beyond that loopback, so a target that needs the host's network (a database on the host's loopback, an outside service) does not run under Bubblewrap and needs `"confinement": false`.
+The evaluation layer's processes keep the host's network, since the evaluation's HTTP port reaches the forwarded service over the host's loopback.
+Path-based Unix sockets that the read-only `/` still shows (`/run/dbus/system_bus_socket`, `/var/run/docker.sock`, an agent socket under `/tmp`) stay connectable, and Story 1.82 closes that route.
+macOS Seatbelt is unchanged: it has no abstract sockets, and its Mach services are a separate channel the profile does not close.
 
 A confined run's isolation manifests account for each forbidden input with a note naming the confinement that withheld it (`Withheld as well by macOS Seatbelt (sandbox-exec) file-system confinement: ...`, or `Linux Bubblewrap (bwrap)`); an opted-out run's note says the runtime does not sandbox the target's file system.
 `score` over an opted-out run says so in its summary line, and its `score.json` records the run's `confinement`, so an opted-out verdict is marked as one.
@@ -737,7 +745,7 @@ The isolation manifest records what the trials were granted and what the runtime
 For CLI targets, each issued step can report target use on one stderr line: `TEA_EVALUATE_USAGE_JSON:{"inputTokens":7,"outputTokens":11,"costUsd":"0.00125"}`. Token counts must be nonnegative safe integers and cost must be a nonnegative decimal string. `tea-skill-runner` translates supported agent CLI reports into this line while keeping the agent's answer on stdout. A malformed or repeated report stops the run with a target-report error. The sealed record stores the sum of that trial's issued step reports, and the isolation manifest stores the exact sum of its trials. Qualification and preflight calls do not count.
 When a target gives no complete report, the closed record and manifest schemas still hold zero for missing use. `run.json` lists the affected trial and step in `unreportedResourceUse`. An empty list means every issued target call reported use, including an explicit measured zero. API and MCP calls have no usage report contract and appear as unreported when issued.
 The observed mounts are the paths the confinement's audit saw the trials' targets open outside what they were granted (see [File-system confinement](#file-system-confinement)), none in a clean run and none in a run that opted out, which observes no file-system access.
-The runtime does not sandbox the network and observes no network access, so the network allowlist and the observed network targets are empty.
+The runtime observes no network access, so the network allowlist and the observed network targets are empty; a Bubblewrap target has a loopback and nothing else (see [File-system confinement](#file-system-confinement)), and a macOS target keeps the host's network.
 Each forbidden input's note says what the runtime hands the target and names the confinement that withheld the rest, or, in a run that opted out, that the runtime does not sandbox the target's file system.
 The evaluator configuration carries the `sealedBriefDigest` of the run's sealed brief, and `decodingParameters["tea.evaluatorKind"]`, the evaluation layer's kind.
 Its `modelSnapshot` and `systemPromptDigest` come from `policy/evaluator-conditions.json`, which an evaluation whose target or evaluator uses a model commits (`check` requires it, naming a model other than `none`, once a registry entry runs `tea-skill-runner`, which always runs an agent); under a sealed-brief agent they are the agent's `evaluator.modelSnapshot` and the digest of the runtime's evaluator template (see [The evaluation layer](#the-evaluation-layer)):

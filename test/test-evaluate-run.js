@@ -107,6 +107,16 @@
  *   in `systemPaths`; a platform with no mechanism exits 12 unless the
  *   evaluation opts out, which `run.json` records; the reference names each
  *   platform's mechanism under its exact heading.
+ * - The network of a Bubblewrap target (Story 1.63): the status shim's bridge
+ *   over Unix sockets on every host (the protocol's valid line and each
+ *   refusal, no outbound connection from a refused line, the listener ending
+ *   with the target on every path), the vectors and probes that carry
+ *   `--unshare-net` and the layer's that does not, a host that refuses the
+ *   namespace (exit 12), and, on a Linux host with Bubblewrap and strace
+ *   (the Linux CI job), an abstract Unix socket and a host loopback port that
+ *   a confined process cannot reach while a path socket it can, the same
+ *   commands reaching all three with the flag taken out; the reference's
+ *   network claims each name the case that backs them.
  *
  * Usage: node test/test-evaluate-run.js [--group=run|confinement|aggregate|held-inputs] [--only=<text in a case's name>]
  * CI runs the four groups as `test:evaluate-run`, `test:evaluate-confinement`, `test:evaluate-aggregate` and
@@ -117,6 +127,7 @@
 
 const crypto = require('node:crypto');
 const fs = require('node:fs');
+const http = require('node:http');
 const os = require('node:os');
 const path = require('node:path');
 const net = require('node:net');
@@ -132,6 +143,8 @@ const { recordObservation, createArtifactValidator } = require('../cli/lib/evalu
 const { RunDirectory, RunDirectoryError } = require('../cli/lib/evaluate/run-directory');
 const { readObservedMounts, runTrial, setRecommendation } = require('../cli/lib/evaluate/run');
 const { createRegistry } = require('../cli/lib/evaluate/registry');
+const { BRIDGE_HOSTS, bridgeAccepts, bridgeHostOf, startForwarder } = require('../cli/lib/evaluate/confinement-relay');
+const { executableOnPath } = require('../cli/lib/isolation-primitives');
 const {
   TRACE_CLONES,
   TRACE_PATH_SYSCALLS,
@@ -149,9 +162,11 @@ const {
   PLATFORM_ENV,
   confinedCommandMechanism,
   confinedMcpMechanism,
+  layerPrefix,
   makeAuditDirectory,
   makeTargetHome,
   nodeInstallRoot,
+  probeObserver,
   releaseTargetHome,
   selectConfinement,
   targetSandbox,
@@ -6321,8 +6336,8 @@ function checkPrivateDirectorySources() {
     'confinement-audit.js': 2,
     // Bubblewrap's status directory, granted to a target.
     'registry.js': 1,
-    // The file a started HTTP service reports its port in, granted to the target.
-    'http-target.js': 1,
+    // The file a started HTTP service reports its port in, and the directory of the bridge's socket (Story 1.63), each granted to the target.
+    'http-target.js': 2,
     // The bridge's directory (socket and token file) beneath the run's private parent, on Windows, and the fallback of a bridge opened with no parent.
     'bridge.js': 3,
     // `compare --accept` stages the new baseline under `runs/.compare-staging/` in the evaluation folder (already withheld from every
@@ -7272,6 +7287,832 @@ function checkBridgeTokenReference() {
   );
 }
 
+// ---------------------------------------------------------------- Story 1.63: no route to the host's abstract sockets
+
+/** Prints that a case that needs another host did not run, naming why, so a skipped case is never mistaken for a passing one. */
+function skipCase(label, reason) {
+  console.log(`  skipped the ${label} case: ${reason}`);
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** The directories of cases whose Unix sockets need a short path (a socket path holds about 100 bytes), removed when the suite ends. */
+const socketDirectories = [];
+
+/** A directory under `/tmp` for a Unix socket: the suite's own scratch directories are too deep for a socket path on macOS. */
+function socketDirectory() {
+  const directory = fs.realpathSync(fs.mkdtempSync(path.join('/tmp', 'tea-bs-')));
+  socketDirectories.push(directory);
+  return directory;
+}
+
+/**
+ * What a bridge socket yields for `payload`: every byte until the bridge closes the connection, or until `until` text has
+ * arrived, or `ms` pass. The client ends its side when the bridge ends its own, so a refusal closes at once.
+ */
+function exchange(socketPath, payload, { end = false, until = null, ms = 3000 } = {}) {
+  return new Promise((resolve) => {
+    const socket = net.connect({ path: socketPath, allowHalfOpen: true });
+    const chunks = [];
+    const text = () => Buffer.concat(chunks).toString('utf8');
+    const done = () => {
+      clearTimeout(timer);
+      socket.destroy();
+      resolve(text());
+    };
+    const timer = setTimeout(done, ms);
+    socket.on('data', (chunk) => {
+      chunks.push(chunk);
+      if (until !== null && text().length >= until.length) done();
+    });
+    socket.on('end', () => socket.end());
+    socket.on('close', done);
+    socket.on('error', (error) => {
+      chunks.push(Buffer.from(`<${error.code}>`));
+      done();
+    });
+    socket.on('connect', () => {
+      socket.write(payload);
+      if (end) socket.end();
+    });
+  });
+}
+
+/**
+ * A loopback TCP server that echoes what it reads and counts the connections it accepted. With `shortPort` its port has four
+ * digits (a port above 1023 needs no privilege), so a line that writes it with a leading zero is still a line of five digits.
+ */
+async function listenEchoing(host = '127.0.0.1', { shortPort = false } = {}) {
+  const server = net.createServer((socket) => {
+    server.accepted += 1;
+    server.sockets.add(socket);
+    socket.once('close', () => server.sockets.delete(socket));
+    socket.on('error', () => {});
+    socket.pipe(socket);
+  });
+  server.accepted = 0;
+  server.sockets = new Set();
+  const listenOn = (port) =>
+    new Promise((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(port, host, () => {
+        server.off('error', reject);
+        resolve();
+      });
+    });
+  for (let attempt = 0; shortPort && attempt < 50; attempt += 1) {
+    try {
+      await listenOn(2000 + Math.floor(Math.random() * 8000));
+      return server;
+    } catch (error) {
+      if (error.code !== 'EADDRINUSE') throw error;
+    }
+  }
+  await listenOn(0);
+  return server;
+}
+
+/** Closes a server and every connection it holds, which `net.Server` does not do on its own. */
+function closeServer(server) {
+  return new Promise((resolve) => {
+    server.close(resolve);
+    for (const socket of server.sockets ?? []) socket.destroy();
+    server.closeAllConnections?.();
+  });
+}
+
+/**
+ * The status shim started with `--bridge` in `directory`, its target a Node program (a process that idles until it is
+ * signalled by default). Resolves once the shim's socket exists, with the child and what it ended with.
+ */
+async function startBridgeShim(directory, { target = [process.execPath, '-e', 'setInterval(() => {}, 1000)'] } = {}) {
+  const bridge = path.join(directory, 'bridge.sock');
+  const status = path.join(directory, 'status.json');
+  const child = spawn(process.execPath, [CONFINEMENT_STATUS, '--bridge', bridge, status, ...target], {
+    stdio: ['ignore', 'ignore', 'pipe'],
+  });
+  let stderr = '';
+  child.stderr.on('data', (chunk) => (stderr += chunk));
+  const exited = new Promise((resolve) => child.once('exit', (code, signal) => resolve({ code, signal, stderr })));
+  const deadline = Date.now() + 10_000;
+  while (!fs.existsSync(bridge) && Date.now() < deadline && child.exitCode === null) await sleep(25);
+  return { child, bridge, status, exited };
+}
+
+/**
+ * The bridge half of the status shim (Story 1.63), driven over Unix sockets with no Bubblewrap on any host: a valid first
+ * line is answered `ok` and the bytes that follow it in the same write reach the port and come back; every refusal of the
+ * matrix (a host outside the loopback names, a port that is no decimal number from 1 to 65535, a missing newline, an oversized
+ * line, a line that never arrives) is answered `fail` with no outbound connection, which a counting server shows, and a port
+ * nothing listens on is `fail` too; the listener ends with the target on every path (an exit, a signal, a bridge that cannot
+ * listen) and the socket is removed, the target's exit code and the status file as before; the argument parser keeps the
+ * status file and the target apart from the option.
+ */
+async function checkBridgeShim() {
+  const counting = await listenEchoing('127.0.0.1', { shortPort: true });
+  const countedPort = counting.address().port;
+  const directory = socketDirectory();
+  const shims = [];
+  /** A shim of this case; every one is ended however the case ends, so no idle target keeps the suite running. */
+  const shimmed = async (where, options) => {
+    const started = await startBridgeShim(where, options);
+    shims.push(started);
+    return started;
+  };
+  /** The first `length` bytes a connection yields after it sends `payload`, or what it had at `ms`. */
+  const answerTo = (socketPath, payload, length) =>
+    new Promise((resolve) => {
+      const socket = net.connect({ path: socketPath, allowHalfOpen: true });
+      let received = '';
+      const done = () => {
+        clearTimeout(timer);
+        resolve({ received, socket });
+      };
+      const timer = setTimeout(done, 3000);
+      socket.on('data', (chunk) => {
+        received += chunk;
+        if (received.length >= length) done();
+      });
+      socket.on('error', done);
+      socket.on('connect', () => payload(socket));
+    });
+  const ipv6 = Object.values(os.networkInterfaces())
+    .flat()
+    .some((address) => address?.address === '::1');
+  const counting6 = ipv6 ? await listenEchoing('::1') : null;
+  try {
+    const shim = await shimmed(directory);
+    check(
+      shim.child.exitCode === null && fs.existsSync(shim.bridge),
+      `the shim with --bridge made no socket at ${shim.bridge}: ${JSON.stringify(await Promise.race([shim.exited, sleep(100)]))}`,
+    );
+    const started = fs.existsSync(shim.status) ? readJson(shim.status) : null;
+    check(started?.started === true, `the shim with --bridge wrote the status ${JSON.stringify(started)}; expected the start mark`);
+
+    // The bytes after the first line go to the port: the echo server returns them.
+    const answered = await exchange(shim.bridge, `127.0.0.1 ${countedPort}\nping`, { until: 'ok\nping' });
+    check(answered === 'ok\nping', `a valid first line with bytes after it was answered ${JSON.stringify(answered)}; expected "ok\\nping"`);
+    check(counting.accepted === 1, `the valid line made ${counting.accepted} connection(s) to the port; expected 1`);
+    const named = await exchange(shim.bridge, `localhost ${countedPort}\n`, { until: 'ok\n' });
+    check(
+      named === 'ok\n' && counting.accepted === 2,
+      `"localhost <port>" was answered ${JSON.stringify(named)} after ${counting.accepted} connection(s)`,
+    );
+    if (counting6 === null) {
+      skipCase('IPv6 loopback bridge line', 'this host has no ::1 address');
+    } else {
+      const sixth = await exchange(shim.bridge, `::1 ${counting6.address().port}\nping`, { until: 'ok\nping' });
+      check(
+        sixth === 'ok\nping' && counting6.accepted === 1,
+        `"::1 <port>" was answered ${JSON.stringify(sixth)} after ${counting6.accepted} connection(s)`,
+      );
+    }
+    // The first line arrives in two writes.
+    const split = await answerTo(
+      shim.bridge,
+      (socket) => {
+        socket.write('127.0.0.1 ');
+        setTimeout(() => socket.write(`${countedPort}\n`), 50);
+      },
+      3,
+    );
+    split.socket.destroy();
+    check(split.received === 'ok\n', `a first line sent in two writes was answered ${JSON.stringify(split.received)}; expected "ok\\n"`);
+    const accepted = counting.accepted;
+
+    // Refused lines: each is answered `fail`, the connection ends, and the counting server saw nothing more.
+    const filler = 'x'.repeat(100);
+    for (const [label, payload, end] of [
+      ['a host that is no loopback name (127.0.0.2)', `127.0.0.2 ${countedPort}\n`, false],
+      ['a mapped IPv4 address', `::ffff:127.0.0.1 ${countedPort}\n`, false],
+      ['the wildcard address', `0.0.0.0 ${countedPort}\n`, false],
+      ['a name that resolves to the loopback', `localhost.localdomain ${countedPort}\n`, false],
+      ['an empty host', ` ${countedPort}\n`, false],
+      ['a port that is not a number', '127.0.0.1 http\n', false],
+      ['a port with a letter after its digits', `127.0.0.1 ${countedPort}x\n`, false],
+      ['port zero', '127.0.0.1 0\n', false],
+      ['a port with a leading zero', `127.0.0.1 0${countedPort}\n`, false],
+      ['port 65536', '127.0.0.1 65536\n', false],
+      ['port 99999', '127.0.0.1 99999\n', false],
+      ['a port with a sign', `127.0.0.1 +${countedPort}\n`, false],
+      ['two spaces between the fields', `127.0.0.1  ${countedPort}\n`, false],
+      ['a carriage return before the newline', `127.0.0.1 ${countedPort}\r\n`, false],
+      ['a third field', `127.0.0.1 ${countedPort} extra\n`, false],
+      ['the host alone', '127.0.0.1\n', false],
+      ['no newline before the sender closes', `127.0.0.1 ${countedPort}`, true],
+      ['an oversized line with no newline', filler, false],
+      ['an oversized line with its newline', `127.0.0.1 ${countedPort}${' '.repeat(100)}\n`, false],
+      ['an empty line', '\n', false],
+    ]) {
+      const refused = await exchange(shim.bridge, payload, { end });
+      check(refused === 'fail\n', `${label} was answered ${JSON.stringify(refused)}; expected "fail\\n"`);
+    }
+    // A first line that never completes is refused at the listener's ceiling.
+    const silent = await exchange(shim.bridge, '127.0.0.1 ', { ms: 9000 });
+    check(
+      silent === 'fail\n',
+      `a first line that never completed was answered ${JSON.stringify(silent)}; expected "fail\\n" at the line's ceiling (5 s)`,
+    );
+    check(
+      counting.accepted === accepted,
+      `${counting.accepted - accepted} refused line(s) made an outbound connection to the port the line named`,
+    );
+    const free = await new Promise((resolve) => {
+      const probe = net.createServer();
+      probe.listen(0, '127.0.0.1', () => {
+        const { port } = probe.address();
+        probe.close(() => resolve(port));
+      });
+    });
+    const closed = await exchange(shim.bridge, `127.0.0.1 ${free}\n`);
+    check(closed === 'fail\n', `a port nothing listens on was answered ${JSON.stringify(closed)}; expected "fail\\n"`);
+
+    // A connection held open is closed when the target ends, and the shim ends as a signalled child does.
+    const held = await answerTo(shim.bridge, (socket) => socket.write(`127.0.0.1 ${countedPort}\n`), 3);
+    check(held.received === 'ok\n', `a connection held open was answered ${JSON.stringify(held.received)}; expected "ok\\n"`);
+    const heldClosed = new Promise((resolve) => {
+      held.socket.once('end', () => resolve(true));
+      held.socket.once('close', () => resolve(true));
+    });
+    shim.child.kill('SIGTERM');
+    const ended = await Promise.race([shim.exited, sleep(10_000).then(() => null)]);
+    check(
+      ended !== null && ended.signal === 'SIGTERM' && readJson(shim.status).signal === 'SIGTERM',
+      `a shim whose target was ended by SIGTERM ended as ${JSON.stringify(ended)} with the status ${JSON.stringify(fs.existsSync(shim.status) ? readJson(shim.status) : null)}`,
+    );
+    check(
+      (await Promise.race([heldClosed, sleep(3000).then(() => false)])) === true,
+      'a held bridge connection was still open after the shim ended',
+    );
+    check(!fs.existsSync(shim.bridge), 'the shim left its socket behind after its target was signalled');
+    held.socket.destroy();
+
+    // A target that exits by itself: its code is the shim's, the status file holds the start mark alone, the socket is gone,
+    // and a connection the listener holds does not keep the shim alive (an open socket would hold its event loop).
+    const exiting = await shimmed(socketDirectory(), {
+      target: [process.execPath, '-e', 'setTimeout(() => process.exit(7), 700)'],
+    });
+    const through = await answerTo(exiting.bridge, (socket) => socket.write(`127.0.0.1 ${countedPort}\n`), 3);
+    check(
+      through.received === 'ok\n',
+      `a connection held through a shim whose target exits was answered ${JSON.stringify(through.received)}`,
+    );
+    const exitedAs = await Promise.race([exiting.exited, sleep(10_000).then(() => null)]);
+    check(
+      exitedAs !== null && exitedAs.code === 7 && exitedAs.signal === null,
+      `a shim whose target exited 7 ended as ${JSON.stringify(exitedAs)}; expected exit 7 within the time of the target`,
+    );
+    check(
+      JSON.stringify(readJson(exiting.status)) === JSON.stringify({ started: true }) && !fs.existsSync(exiting.bridge),
+      `a shim whose target exited left the status ${JSON.stringify(fs.existsSync(exiting.status) ? readJson(exiting.status) : null)} and ${fs.existsSync(exiting.bridge) ? 'its socket' : 'no socket'}; expected the start mark and no socket`,
+    );
+    through.socket.destroy();
+
+    // A target that cannot start: the bridge is closed with it and the shim ends 127, as without a bridge.
+    const absent = await shimmed(socketDirectory(), { target: ['/nonexistent/tea-target'] });
+    const absentEnded = await Promise.race([absent.exited, sleep(10_000).then(() => null)]);
+    check(
+      absentEnded?.code === 127 && !fs.existsSync(absent.bridge),
+      `a shim whose target does not exist ended as ${JSON.stringify(absentEnded)} with ${fs.existsSync(absent.bridge) ? 'its socket left' : 'no socket'}; expected 127 and no socket`,
+    );
+
+    // A bridge that cannot listen ends the shim before the target runs, its reason on standard error.
+    const marker = path.join(tempDir('bridge-shim-marker'), 'target-ran');
+    const unlistened = spawnSync(
+      process.execPath,
+      [
+        CONFINEMENT_STATUS,
+        '--bridge',
+        path.join(directory, 'missing', 'bridge.sock'),
+        path.join(directory, 'unlistened-status.json'),
+        process.execPath,
+        '-e',
+        `require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'ran')`,
+      ],
+      { encoding: 'utf8', timeout: SPAWN_TIMEOUT_MS },
+    );
+    check(
+      unlistened.status === 126 && unlistened.stderr.includes('bridge ') && !fs.existsSync(marker),
+      `a shim whose bridge cannot listen ended ${unlistened.status} (target ran: ${fs.existsSync(marker)}): ${unlistened.stderr}`,
+    );
+
+    // The runtime's half keeps its own copy of the hosts the shim connects to; the two lists must not drift.
+    const listed = /const BRIDGE_HOSTS = Object\.freeze\(\[([^\]]*)\]\)/.exec(fs.readFileSync(CONFINEMENT_STATUS, 'utf8'));
+    const shimHosts = listed === null ? [] : [...listed[1].matchAll(/'([^']+)'/g)].map((match) => match[1]);
+    check(
+      JSON.stringify([...shimHosts].sort()) === JSON.stringify([...BRIDGE_HOSTS].sort()) && shimHosts.length > 0,
+      `the shim connects to ${JSON.stringify(shimHosts)} and the runtime forwards for ${JSON.stringify(BRIDGE_HOSTS)}`,
+    );
+  } finally {
+    for (const started of shims) {
+      if (started.child.exitCode === null && started.child.signalCode === null) {
+        started.child.kill('SIGTERM');
+        await Promise.race([started.exited, sleep(5000)]);
+        if (started.child.exitCode === null && started.child.signalCode === null) started.child.kill('SIGKILL');
+      }
+    }
+    await closeServer(counting);
+    if (counting6 !== null) await closeServer(counting6);
+  }
+}
+
+/**
+ * The network namespace of a Bubblewrap target (Story 1.63) as the vectors and the selection state it, on any host: the
+ * target's vector and both probes carry `--unshare-net` and the evaluation layer's does not; a host that refuses the
+ * namespace is refused at selection and by `run` with exit 12, naming Bubblewrap's words and the opt-out; a call that names
+ * a bridge passes its socket to the shim and grants the socket's directory, and only a socket inside a granted directory;
+ * the command mechanism bridges under Bubblewrap alone, a tool server's call names no bridge, and Seatbelt carries none.
+ */
+async function checkNetworkNamespaceUnits() {
+  const root = fs.realpathSync(tempDir('network-units'));
+  const folder = path.join(root, 'evals', 'verdict');
+  const workspace = path.join(root, 'workspace');
+  const status = path.join(root, 'status');
+  const bridgeDirectory = path.join(root, 'bridge');
+  for (const directory of [folder, workspace, status, bridgeDirectory]) fs.mkdirSync(directory, { recursive: true });
+  const bubblewrap = { mode: 'bubblewrap', executable: '/usr/bin/bwrap', evaluationFolder: folder };
+  const sandbox = targetSandbox({ confinement: bubblewrap, workspace, status });
+
+  const wrapped = sandbox.wrap('/bin/true', []);
+  const flags = wrapped.args.filter((argument) => argument === '--unshare-net').length;
+  check(
+    flags === 1 && wrapped.args.indexOf('--unshare-net') < wrapped.args.indexOf('--ro-bind') && !wrapped.args.includes('--bridge'),
+    `a Bubblewrap target's vector holds --unshare-net ${flags} time(s) and ${wrapped.args.includes('--bridge') ? 'a' : 'no'} bridge: ${wrapped.args.join(' ')}`,
+  );
+  const layer = layerPrefix(bubblewrap);
+  check(
+    !layer.includes('--unshare-net'),
+    `the evaluation layer's vector holds --unshare-net, which cuts off the host's loopback: ${layer.join(' ')}`,
+  );
+
+  // The host a bridge names is the namespace's own loopback, whichever spelling eval-quality's policy canonicalizes an address to.
+  for (const [address, host] of [
+    ['127.0.0.1', '127.0.0.1'],
+    ['::1', '::1'],
+    ['0000:0000:0000:0000:0000:0000:0000:0001', '::1'],
+    ['127.0.0.2', null],
+    ['10.0.0.5', null],
+    ['::2', null],
+    ['::ffff:7f00:1', null],
+    ['localhost', null],
+    ['', null],
+  ]) {
+    check(
+      bridgeHostOf(address) === host,
+      `the bridge names ${JSON.stringify(bridgeHostOf(address))} for ${JSON.stringify(address)}; expected ${JSON.stringify(host)}`,
+    );
+  }
+
+  // A call that names a bridge.
+  const socket = path.join(bridgeDirectory, 'bridge.sock');
+  const bridged = sandbox.wrap('/bin/true', [], [bridgeDirectory], [], { bridge: socket });
+  const at = bridged.args.indexOf('--bridge');
+  const bound = bridged.args.flatMap((argument, index) => (argument === '--bind' ? [bridged.args[index + 1]] : []));
+  check(
+    at > 0 &&
+      bridged.args[at + 1] === socket &&
+      bridged.args[at + 2] === bridged.statusFile &&
+      /confinement-status\.cjs$/.test(bridged.args[at - 1]) &&
+      bound.includes(bridgeDirectory) &&
+      bridged.args.slice(at + 3).join(' ') === '/bin/true',
+    `a bridged call's command is ${JSON.stringify(bridged.args.slice(-6))} with binds ${JSON.stringify(bound)}; expected the shim, --bridge, the socket, the status file and the target, the socket's directory bound`,
+  );
+  for (const [label, candidate, grants] of [
+    ['a socket outside every granted directory', path.join(root, 'elsewhere', 'bridge.sock'), [bridgeDirectory]],
+    ['a socket when the call grants no directory', socket, []],
+    ['a relative socket path', 'bridge.sock', [bridgeDirectory]],
+  ]) {
+    let refused = null;
+    try {
+      sandbox.wrap('/bin/true', [], grants, [], { bridge: candidate });
+    } catch (error) {
+      refused = error;
+    }
+    check(refused?.name === 'ConfinementError' && refused.message.includes('bridge'), `${label} was not refused: ${refused}`);
+  }
+  const seatbelt = targetSandbox({
+    confinement: { mode: 'seatbelt', executable: '/usr/bin/sandbox-exec', evaluationFolder: folder },
+    workspace,
+  });
+  const seatbeltWrapped = seatbelt.wrap('/bin/true', [], [bridgeDirectory], [], { bridge: socket });
+  check(!seatbeltWrapped.args.includes('--bridge') && seatbeltWrapped.statusFile === null, 'a Seatbelt call carried a bridge');
+
+  // The command mechanism asks for the bridge's directory and passes the socket on; the tool server's call names none.
+  const seen = [];
+  const fake = (mode) => ({
+    mode,
+    wrap: (target, args, writable, readable, options) => {
+      seen.push({ writable, options });
+      return { target, args, statusFile: null };
+    },
+    collect: async () => {},
+  });
+  const base = { run: async () => ({ exitCode: 0, stdout: '', stderr: '' }), callTool: async () => ({ result: {}, stderr: '' }) };
+  check(
+    confinedCommandMechanism(base, fake('bubblewrap')).bridges === true &&
+      confinedCommandMechanism(base, fake('seatbelt')).bridges === false,
+    'the command mechanism does not bridge under Bubblewrap alone',
+  );
+  const mechanism = confinedCommandMechanism(base, fake('bubblewrap'));
+  const signal = new AbortController().signal;
+  await mechanism.run({ target: '/bin/true', subcommandPath: [], argv: [], env: {}, bridge: socket }, signal);
+  await mechanism.run({ target: '/bin/true', subcommandPath: [], argv: [], env: {} }, signal);
+  await confinedMcpMechanism(base, fake('bubblewrap')).callTool({ target: '/bin/true', targetArgs: [], env: {} }, signal);
+  check(
+    seen.length === 3 &&
+      seen[0].writable.includes(bridgeDirectory) &&
+      seen[0].options.bridge === socket &&
+      !seen[1].writable.includes(bridgeDirectory) &&
+      seen[1].options?.bridge == null &&
+      seen[2].options?.bridge == null,
+    `the mechanisms passed ${JSON.stringify(seen)}; expected the bridge's directory and socket for the bridged call alone`,
+  );
+
+  // The probes carry the namespace: each Bubblewrap run the selection makes names it.
+  const stubs = tempDir('network-stubs');
+  const log = path.join(stubs, 'bwrap.log');
+  const stub = (name, body) => fs.writeFileSync(path.join(stubs, name), `#!/bin/sh\n${body}\n`, { mode: 0o755 });
+  stub('bwrap', `echo "$*" >> ${JSON.stringify(log)}\nwhile [ "$1" != "--" ]; do shift; done; shift; exec "$@"`);
+  const env = { PATH: stubs, [PLATFORM_ENV]: 'linux' };
+  selectConfinement({ evaluation: {}, folder, env, platform: 'linux' });
+  const lines = () => (fs.existsSync(log) ? fs.readFileSync(log, 'utf8').split('\n').filter(Boolean) : []);
+  check(
+    lines().length === 1 && lines()[0].includes('--unshare-net'),
+    `the mechanism probe ran Bubblewrap with ${JSON.stringify(lines())}; expected one run naming --unshare-net`,
+  );
+  stub('strace', 'while [ "$1" != "--" ]; do shift; done; shift; exec "$@"');
+  probeObserver({ mode: 'bubblewrap', executable: path.join(stubs, 'bwrap') }, env);
+  check(
+    lines().length === 2 && lines()[1].includes('--unshare-net'),
+    `the observer probe ran Bubblewrap with ${JSON.stringify(lines().slice(1))}; expected one run naming --unshare-net`,
+  );
+
+  // A host that cannot create the namespace is refused at selection, and a run there exits 12.
+  const refusing = tempDir('network-refusing');
+  fs.writeFileSync(
+    path.join(refusing, 'bwrap'),
+    `#!/bin/sh
+for argument in "$@"; do
+  if [ "$argument" = "--unshare-net" ]; then echo "bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted" >&2; exit 1; fi
+done
+while [ "$1" != "--" ]; do shift; done; shift; exec "$@"
+`,
+    { mode: 0o755 },
+  );
+  const refused = selectConfinement({ evaluation: {}, folder, env: { PATH: refusing, [PLATFORM_ENV]: 'linux' }, platform: 'linux' });
+  check(
+    refused.refusal?.includes('cannot confine a process on this host') &&
+      refused.refusal.includes('RTM_NEWADDR: Operation not permitted') &&
+      refused.refusal.includes('"confinement": false'),
+    `a host that refuses the network namespace was not refused naming Bubblewrap's words and the opt-out: ${JSON.stringify(refused)}`,
+  );
+  const project = makeProject('network-refused');
+  const ran = evaluate(['run', '--evaluation', project.folder], {
+    ...project.env,
+    PATH: `${refusing}${path.delimiter}${process.env.PATH}`,
+    [PLATFORM_ENV]: 'linux',
+  });
+  check(
+    ran.status === 12 && ran.output.includes('RTM_NEWADDR: Operation not permitted') && ran.output.includes('"confinement": false'),
+    `a run on a host that refuses the network namespace exited ${ran.status}; expected 12 naming Bubblewrap's message and the opt-out\n${ran.output}`,
+  );
+  check(runDirectoryOf(project.folder, 0) === null, 'a run refused for the network namespace wrote a run directory');
+}
+
+/** The probe a confined process runs: connects to what `kind` names and prints what happened. */
+const CONNECT_PROBE = `
+const net = require('node:net');
+const [kind, target] = process.argv.slice(1);
+const socket =
+  kind === 'tcp'
+    ? net.connect({ host: '127.0.0.1', port: Number(target) })
+    : net.connect({ path: kind === 'abstract' ? '\\0' + target : target });
+socket.on('connect', () => {
+  console.log('connected');
+  socket.destroy();
+});
+socket.on('error', (error) => console.log('refused ' + error.code));
+`;
+
+/** A command run to its end without blocking this process (the servers the cases start answer meanwhile). */
+function runToEnd(command, args, options = {}) {
+  return new Promise((resolve) => {
+    const child = spawn(command, args, { ...options, stdio: ['ignore', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (chunk) => (stdout += chunk));
+    child.stderr.on('data', (chunk) => (stderr += chunk));
+    const timer = setTimeout(() => child.kill('SIGKILL'), SPAWN_TIMEOUT_MS);
+    child.on('close', (status, signal) => {
+      clearTimeout(timer);
+      resolve({ status, signal, stdout, stderr });
+    });
+  });
+}
+
+/**
+ * The route to the host's abstract sockets, on a Linux host with Bubblewrap and strace only (Story 1.63; the Linux CI job
+ * proves it, a macOS host skips it). The runtime serves an abstract Unix socket, a loopback TCP port and a path-based
+ * socket; a confined process connects to each. The abstract socket and the TCP port are refused (`ECONNREFUSED`), the path
+ * socket the read-only `/` still shows is reached; the same commands with `--unshare-net` taken out of the real vector
+ * connect to all three, which is the revert check (a vector that lost the flag fails the first assertion, and a control that
+ * cannot connect proves the case vacuous). A command target's process has a loopback and nothing else, and its status file
+ * and exit code are as before. A service the target starts is reached through the bridge from the host (`bridgeAccepts`,
+ * `startForwarder`), asked about a port of the host's own loopback the target's namespace does not hold, and the target
+ * asking the bridge for that host port gets `fail`: a connection to the socket from inside reaches the namespace's loopback.
+ */
+async function checkAbstractSocketRoute() {
+  const label = 'abstract-socket route';
+  if (process.platform !== 'linux') {
+    skipCase(label, `Bubblewrap exists on Linux only, and this host is ${process.platform}; the Linux CI job runs it`);
+    return;
+  }
+  const absent = ['bwrap', 'strace'].filter((name) => executableOnPath(name, process.env) === null);
+  if (absent.length > 0) {
+    skipCase(label, `${absent.join(' and ')} not on PATH; the Linux CI job installs both`);
+    return;
+  }
+  const folder = tempDir('abstract-folder');
+  const confinement = selectConfinement({ evaluation: {}, folder });
+  if (confinement.refusal !== undefined) throw new Error(confinement.refusal);
+  const workspace = fs.realpathSync(tempDir('abstract-workspace'));
+  const sandbox = targetSandbox({ confinement, workspace, status: tempDir('abstract-status') });
+  const withoutNetwork = (wrapped) => ({ ...wrapped, args: wrapped.args.filter((argument) => argument !== '--unshare-net') });
+  const launch = (wrapped, options = {}) => runToEnd(wrapped.target, wrapped.args, { cwd: workspace, ...options });
+
+  const abstractName = `tea-evaluate-abstract-${crypto.randomBytes(6).toString('hex')}`;
+  const abstractServer = net.createServer((socket) => socket.end());
+  await new Promise((resolve, reject) => {
+    abstractServer.once('error', reject);
+    abstractServer.listen({ path: `\0${abstractName}` }, resolve);
+  });
+  const tcpServer = net.createServer((socket) => socket.end());
+  await new Promise((resolve) => tcpServer.listen(0, '127.0.0.1', resolve));
+  const pathSocket = path.join(socketDirectory(), 'host.sock');
+  const pathServer = net.createServer((socket) => socket.end());
+  await new Promise((resolve) => pathServer.listen(pathSocket, resolve));
+  const attempt = async (kind, target, { stripped = false } = {}) => {
+    const wrapped = sandbox.wrap(process.execPath, ['-e', CONNECT_PROBE, kind, target]);
+    const ran = await launch(stripped ? withoutNetwork(wrapped) : wrapped);
+    return ran.status === 0 ? ran.stdout.trim() : `exit ${ran.status}: ${ran.stderr.trim()}`;
+  };
+  try {
+    for (const [what, kind, target] of [
+      ['an abstract Unix socket the runtime serves', 'abstract', abstractName],
+      ["a TCP port on the host's loopback", 'tcp', String(tcpServer.address().port)],
+    ]) {
+      const refused = await attempt(kind, target);
+      check(
+        refused === 'refused ECONNREFUSED',
+        `a confined process connecting to ${what} got ${JSON.stringify(refused)}; expected refused ECONNREFUSED`,
+      );
+      const control = await attempt(kind, target, { stripped: true });
+      check(
+        control === 'connected',
+        `with --unshare-net taken out of the vector, a confined process connecting to ${what} got ${JSON.stringify(control)}; expected connected, since the case proves nothing otherwise`,
+      );
+    }
+    const reached = await attempt('path', pathSocket);
+    check(
+      reached === 'connected',
+      `a confined process connecting to a path-based socket the read-only / shows got ${JSON.stringify(reached)}; expected connected (Story 1.82 closes that)`,
+    );
+
+    // A command target runs with a loopback only; its output, exit code and status file are what they were.
+    const command = sandbox.wrap(process.execPath, ['-e', "console.log(Object.keys(require('node:os').networkInterfaces()).join(','))"]);
+    const listed = await launch(command);
+    check(
+      listed.status === 0 &&
+        listed.stdout.trim() === 'lo' &&
+        readJson(command.statusFile).started === true &&
+        readJson(command.statusFile).signal === undefined,
+      `a command target's interfaces were ${JSON.stringify(listed.stdout.trim())} (exit ${listed.status}); expected lo alone, exit 0 and a start mark`,
+    );
+    const failing = sandbox.wrap(process.execPath, ['-e', 'process.exit(5)']);
+    check((await launch(failing)).status === 5, 'a command target that exits 5 did not keep its exit code in its own namespace');
+
+    // A service the target starts is reached through the bridge; the target asking the bridge for a port of the host's
+    // loopback is told `fail`, since the shim connects inside its own namespace.
+    const bridgeDirectory = socketDirectory();
+    const bridge = path.join(bridgeDirectory, 'bridge.sock');
+    const service = `
+      const http = require('node:http');
+      const net = require('node:net');
+      const [bridge, hostPort] = process.argv.slice(1);
+      const server = http.createServer((request, response) => response.end('through the bridge'));
+      server.listen(0, '127.0.0.1', () => {
+        const asking = net.connect({ path: bridge });
+        let answer = '';
+        asking.on('data', (chunk) => (answer += chunk));
+        asking.on('close', () => console.log('LISTENING ' + server.address().port + ' ASKED ' + JSON.stringify(answer)));
+        asking.on('error', (error) => console.log('LISTENING ' + server.address().port + ' ASKED ' + error.code));
+        asking.on('connect', () => asking.write('127.0.0.1 ' + hostPort + '\\n'));
+      });
+      setInterval(() => {}, 1000);
+    `;
+    const served = sandbox.wrap(process.execPath, ['-e', service, bridge, String(tcpServer.address().port)], [bridgeDirectory], [], {
+      bridge,
+    });
+    const child = spawn(served.target, served.args, { cwd: workspace, stdio: ['ignore', 'pipe', 'pipe'] });
+    let output = '';
+    child.stdout.on('data', (chunk) => (output += chunk));
+    child.stderr.on('data', (chunk) => (output += chunk));
+    try {
+      const deadline = Date.now() + 20_000;
+      while (!/LISTENING \d+ ASKED .*\n/.test(output) && Date.now() < deadline && child.exitCode === null) await sleep(50);
+      const match = /LISTENING (\d+) ASKED (.*)\n/.exec(output);
+      check(
+        match !== null,
+        `a confined service behind a bridge printed ${JSON.stringify(output)}; expected its port and what the bridge answered it`,
+      );
+      if (match !== null) {
+        const inside = Number(match[1]);
+        check(
+          JSON.parse(match[2]) === 'fail\n',
+          `the service asking its own bridge for a port of the host's loopback was answered ${match[2]}; expected "fail\\n"`,
+        );
+        check(
+          (await bridgeAccepts(bridge, '127.0.0.1', inside)) === true &&
+            (await bridgeAccepts(bridge, '127.0.0.1', tcpServer.address().port)) === 'ECONNREFUSED',
+          'the bridge did not answer ok for the service port and fail for a port of the host only',
+        );
+        const forwarder = await startForwarder({ socketPath: bridge, address: '127.0.0.1', targetPort: inside, port: 0 });
+        try {
+          const body = await new Promise((resolve) => {
+            http
+              .get({ host: '127.0.0.1', port: forwarder.port, path: '/' }, (response) => {
+                let text = '';
+                response.on('data', (chunk) => (text += chunk));
+                response.on('end', () => resolve(text));
+              })
+              .on('error', (error) => resolve(`error ${error.code}`));
+          });
+          check(body === 'through the bridge', `a request through the forwarder to the confined service got ${JSON.stringify(body)}`);
+        } finally {
+          await forwarder.close();
+        }
+      }
+    } finally {
+      // A child that ended already has no close left to wait for (a shim that exited, a Bubblewrap that failed).
+      if (child.exitCode === null && child.signalCode === null) {
+        child.kill('SIGKILL');
+        await Promise.race([new Promise((resolve) => child.once('close', resolve)), sleep(10_000)]);
+      }
+    }
+  } finally {
+    for (const server of [abstractServer, tcpServer, pathServer]) await closeServer(server);
+  }
+}
+
+/**
+ * The reference's claims about the network (Story 1.63) held against the cases that back them: every claim is a sentence of
+ * the reference, names the cases that back it (each a case a suite runs), and every sentence that speaks of the network,
+ * namespaces, sockets, the bridge or Mach services is a claim of the table or one of the earlier stories' sentences listed
+ * beside it, so a sentence no case backs fails here. The old sentence that said a Bubblewrap target shares the host's
+ * network namespace is gone.
+ */
+function checkBridgeReference() {
+  const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
+  const heading = '### File-system confinement\n';
+  const start = reference.indexOf(heading);
+  check(start !== -1, 'the reference has no "### File-system confinement" section');
+  const next = start === -1 ? -1 : reference.indexOf('\n## ', start);
+  const section = start === -1 ? '' : reference.slice(start + heading.length, next === -1 ? undefined : next);
+  const sentencesOf = (text) =>
+    text
+      .split('\n')
+      .flatMap((line) => line.split(/(?<=\.) (?=[A-Z`])/))
+      .map((sentence) => sentence.replace(/^[-\s]+/, ''));
+  const claims = [
+    [
+      'Linux: Bubblewrap, through `bwrap` on `PATH` (`apt-get install bubblewrap`), in an unprivileged user namespace with a read-only view of `/`, a process-id namespace and procfs of its own, a network namespace of its own, and an empty `/run/user`.',
+      ['the network namespace units'],
+    ],
+    [
+      'The runtime first confines a trivial process through the mechanism, since a host can carry the executable and still refuse it (a kernel that forbids unprivileged user namespaces, or a container that forbids creating a network namespace).',
+      ['the network namespace units'],
+    ],
+    [
+      "A Bubblewrap target and every process it starts run in a network namespace of their own with a loopback and nothing else, so the host's abstract Unix sockets, a desktop session's D-Bus among them, do not exist for them.",
+      ['the abstract socket route', 'the network namespace units'],
+    ],
+    [
+      'A host that cannot create the network namespace is refused at selection (exit 12), as one that cannot start Bubblewrap is.',
+      ['the network namespace units'],
+    ],
+    [
+      'An HTTP service the target starts stays reachable from the runtime through a bridge the runtime owns: the confined process serves a Unix socket in a private directory of the call, and the runtime listens on the address and port the call is configured for and forwards each connection through that socket, with no network path between the namespaces.',
+      ['the bridged server', 'the bridge shim', 'the abstract socket route'],
+    ],
+    [
+      'A service that reports its port reports the one it bound inside the namespace; the runtime listens on the same number when the host has it free and on a port the system gives otherwise, and the call is configured for the port the runtime listens on.',
+      ['the bridged server'],
+    ],
+    [
+      'A command target and a tool server have a loopback only and no bridge.',
+      ['the abstract socket route', 'the network namespace units'],
+    ],
+    [
+      'A Bubblewrap target has no network beyond that loopback, so a target that needs the host\'s network (a database on the host\'s loopback, an outside service) does not run under Bubblewrap and needs `"confinement": false`.',
+      ['the abstract socket route'],
+    ],
+    [
+      "The evaluation layer's processes keep the host's network, since the evaluation's HTTP port reaches the forwarded service over the host's loopback.",
+      ['the network namespace units'],
+    ],
+    [
+      'Path-based Unix sockets that the read-only `/` still shows (`/run/dbus/system_bus_socket`, `/var/run/docker.sock`, an agent socket under `/tmp`) stay connectable, and Story 1.82 closes that route.',
+      ['the abstract socket route'],
+    ],
+    [
+      'macOS Seatbelt is unchanged: it has no abstract sockets, and its Mach services are a separate channel the profile does not close.',
+      ['the Seatbelt network and Mach services'],
+    ],
+    [
+      "Under Bubblewrap the service runs in a network namespace of its own and the port it reports is the one it bound there (see [File-system confinement](#file-system-confinement)); the runtime's listener takes the same number on the host when it is free, and the call goes to the port the listener holds.",
+      ['the bridged server'],
+    ],
+    [
+      "The runtime observes no network access, so the network allowlist and the observed network targets are empty; a Bubblewrap target has a loopback and nothing else (see [File-system confinement](#file-system-confinement)), and a macOS target keeps the host's network.",
+      ['the network namespace units', 'the Seatbelt network and Mach services'],
+    ],
+  ];
+  // The earlier stories' sentences of the section that mention a socket, the bridge or a namespace for their own reasons.
+  const earlier = [
+    "can neither read, write nor connect to a unix socket under the user's private root directory",
+    'Every other process the run starts to run your code or an agent',
+    'On Linux the runtime runs the Bubblewrap command under `strace -f',
+  ];
+  // The cases of this suite, and of the HTTP suite, whose runner lists each as `await runCase('<name>', ...)` on a line of its own.
+  const apiSource = fs.readFileSync(path.join(PROJECT_ROOT, 'test', 'test-evaluate-api.js'), 'utf8');
+  const caseNames = new Set([
+    ...CASES.map(({ name }) => name),
+    ...[...apiSource.matchAll(/^\s*await runCase\(['"]([^'"]+)['"], /gm)].map((match) => match[1]),
+  ]);
+  const whole = sentencesOf(reference);
+  for (const [sentence, backedBy] of claims) {
+    check(whole.includes(sentence), `the reference does not state: ${sentence}`);
+    for (const name of backedBy) {
+      check(caseNames.has(name), `the reference's claim "${sentence.slice(0, 60)}..." names the case "${name}", which no suite runs`);
+    }
+  }
+  const speaksOfNetwork = /network|abstract|loopback|forward|\bbridge\b|socket|namespace|D-Bus|\bMach\b/i;
+  const unbacked = sentencesOf(section)
+    .filter((sentence) => speaksOfNetwork.test(sentence))
+    .filter((sentence) => !claims.some(([claim]) => claim === sentence) && !earlier.some((prior) => sentence.startsWith(prior)));
+  check(unbacked.length === 0, `the reference's confinement section makes network claims no case backs: ${JSON.stringify(unbacked)}`);
+  // Outside the section, a sentence that says what a Bubblewrap target's network or namespace is must be a claim too.
+  const elsewhere = whole
+    .filter((sentence) => /network namespace|loopback and nothing else|forwarded service|bridge the runtime owns/i.test(sentence))
+    .filter((sentence) => !claims.some(([claim]) => claim === sentence));
+  check(
+    elsewhere.length === 0,
+    `the reference makes network claims outside the confinement section no case backs: ${JSON.stringify(elsewhere)}`,
+  );
+  check(
+    !/shares the host's network namespace/.test(reference) && !/Story 1\.63 closes that route/.test(reference),
+    "the reference still says a Bubblewrap target shares the host's network namespace",
+  );
+}
+
+/**
+ * A macOS target's network and Mach services are as before (Story 1.63): a Seatbelt target still reaches a TCP port on the
+ * host's loopback and still asks a Mach service (the directory service, through `dscl`) for an answer. A host without
+ * Seatbelt skips it.
+ */
+async function checkSeatbeltNetworkAndMach() {
+  const label = 'Seatbelt network and Mach services';
+  if (process.platform !== 'darwin') {
+    skipCase(label, `Seatbelt exists on macOS only, and this host is ${process.platform}`);
+    return;
+  }
+  const folder = tempDir('seatbelt-network-folder');
+  const confinement = selectConfinement({ evaluation: {}, folder });
+  if (confinement.refusal !== undefined) throw new Error(confinement.refusal);
+  const workspace = fs.realpathSync(tempDir('seatbelt-network-workspace'));
+  const sandbox = targetSandbox({ confinement, workspace });
+  const server = net.createServer((socket) => socket.end());
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const wrapped = sandbox.wrap(process.execPath, ['-e', CONNECT_PROBE, 'tcp', String(server.address().port)]);
+    const connected = await runToEnd(wrapped.target, wrapped.args, { cwd: workspace });
+    check(
+      connected.stdout.trim() === 'connected',
+      `a Seatbelt target connecting to the host's loopback got ${JSON.stringify(connected.stdout.trim())}; expected connected`,
+    );
+    const asked = sandbox.wrap('/usr/bin/dscl', ['.', '-read', '/Users/root', 'UniqueID']);
+    const answered = await runToEnd(asked.target, asked.args, { cwd: workspace });
+    check(
+      answered.status === 0 && /UniqueID: 0/.test(answered.stdout),
+      `a Seatbelt target asking the directory service through Mach got exit ${answered.status}: ${answered.stdout}${answered.stderr}`,
+    );
+  } finally {
+    await closeServer(server);
+  }
+}
+
 /**
  * Every case in run order with the group it belongs to. CI runs the groups as four scripts (`--group=run`, which is
  * `test:evaluate-run`, `--group=confinement`, which is `test:evaluate-confinement`, `--group=aggregate`, which is
@@ -7320,6 +8161,11 @@ const CASES = [
   { name: 'the held strength aggregate', body: checkHeldAggregate, group: 'held-inputs' },
   { name: 'the score input reference', body: checkScoreInputReference, group: 'held-inputs' },
   { name: "the bridge's admission token reference", body: checkBridgeTokenReference, group: 'confinement' },
+  { name: 'the bridge shim', body: checkBridgeShim, group: 'confinement' },
+  { name: 'the network namespace units', body: checkNetworkNamespaceUnits, group: 'confinement' },
+  { name: 'the abstract socket route', body: checkAbstractSocketRoute, group: 'confinement' },
+  { name: 'the Seatbelt network and Mach services', body: checkSeatbeltNetworkAndMach, group: 'confinement' },
+  { name: 'the network reference', body: checkBridgeReference, group: 'confinement' },
 ];
 const GROUPS = new Set(CASES.map(({ group }) => group));
 
@@ -7383,6 +8229,7 @@ async function main() {
     }
   } finally {
     scratch.removeAll();
+    for (const directory of socketDirectories) fs.rmSync(directory, { recursive: true, force: true });
   }
   if (failures.length > 0) {
     console.error(`${colors.red}${failures.length} of ${checks} tea-evaluate run check(s) failed:${colors.reset}`);

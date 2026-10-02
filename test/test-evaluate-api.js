@@ -68,6 +68,15 @@
  *   12; and `ApiRegistryEntry` and its
  *   `deployments` items carry the authorization fields at their JSON types
  *   alone, read from the schema, with the rules that are TeA's own kept.
+ * - The bridge to a Bubblewrap target's server (Story 1.63), over the real status
+ *   shim with no Bubblewrap: a call through the port is answered through the
+ *   runtime's forwarder, a server that reports a port the host holds is reached on
+ *   the port the runtime was given, a chosen port the forwarder cannot take is
+ *   refused, a server that has not bound is not ready and one that never binds
+ *   or exits before it binds ends the call with nothing listening, and an address
+ *   or temp directory no bridge can carry is refused; the confined pipeline runs
+ *   once for each handoff (a server that reports its port and one that is told
+ *   it), which on Linux is the bridge end to end.
  * - Units: the registry's HTTP policy, inventory, ceilings, secrets and
  *   targets; the arm's `api` record; the scrub of an HTTP answer and of a
  *   denial naming a lowercased secret; the scrub of a secret echoed in every
@@ -79,7 +88,7 @@
  *   seven characters left alone); a multi-byte answer past 64 KiB read
  *   whole; a gameability redirect to another spelling of the entry's host.
  *
- * Usage: node test/test-evaluate-api.js
+ * Usage: node test/test-evaluate-api.js [--only=<text in a case's name>]
  */
 
 'use strict';
@@ -88,6 +97,7 @@ const crypto = require('node:crypto');
 const acorn = require('acorn');
 const fs = require('node:fs');
 const http = require('node:http');
+const net = require('node:net');
 const os = require('node:os');
 const path = require('node:path');
 const { PassThrough } = require('node:stream');
@@ -107,6 +117,7 @@ const {
   portConfiguration,
   probeHttpPort,
 } = require('../cli/lib/evaluate/http-target');
+const { startForwarder } = require('../cli/lib/evaluate/confinement-relay');
 const { createRegistry, registryProblems } = require('../cli/lib/evaluate/registry');
 const { runTrial } = require('../cli/lib/evaluate/run');
 const { bridgeRouter } = require('../cli/lib/evaluate/sealed-brief-agent');
@@ -3994,32 +4005,55 @@ function checkSealedEvidence() {
  * The pipeline in a confined run (Story 1.31): with no log to write outside
  * its workspace, the target runs under the host's mechanism through check,
  * run and score, and the audit finds nothing it opened outside what it was
- * granted.
+ * granted. Under Bubblewrap the server runs in a network namespace of its own
+ * and the run reaches it through the bridge (Story 1.63), for a server that
+ * reports its port and for one that is told it; the audit lists nothing for
+ * the bridge, whose directory is a grant of the call.
  */
 async function checkConfinedPipeline() {
-  const project = makeProject('confined', { log: false });
-  const env = { ...project.env, GRADER_TOKEN: TOKEN };
-  const ran = evaluate(['run', '--evaluation', project.folder], env);
-  check(ran.status === 0, `a confined run over the HTTP fixture exited ${ran.status}; expected 0\n${ran.output}`);
-  const runDirectory = runDirectoryOf(project.folder);
-  if (runDirectory === null) {
-    check(false, 'the confined HTTP run wrote no run directory');
-    return;
+  // The fixture's server reports the port it bound; the second project drops that key, so the runtime chooses the port and the
+  // server is told it (Story 1.63: under Bubblewrap each handoff goes through the bridge, so each is a case of its own).
+  for (const [handoff, label, edit] of [
+    ['reports its port', 'confined', () => {}],
+    [
+      'is told its port',
+      'confined-told',
+      ({ folder }) =>
+        editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
+          delete evaluation.registry[0].server.portFileEnvironmentKey;
+        }),
+    ],
+  ]) {
+    const project = makeProject(label, { log: false, edit });
+    const env = { ...project.env, GRADER_TOKEN: TOKEN };
+    const ran = evaluate(['run', '--evaluation', project.folder], env);
+    check(ran.status === 0, `a confined run over the HTTP fixture whose server ${handoff} exited ${ran.status}; expected 0\n${ran.output}`);
+    const runDirectory = runDirectoryOf(project.folder);
+    if (runDirectory === null) {
+      check(false, `the confined HTTP run whose server ${handoff} wrote no run directory`);
+      continue;
+    }
+    const record = readJson(path.join(runDirectory, 'run.json'));
+    const confinement = process.platform === 'darwin' ? 'seatbelt' : 'bubblewrap';
+    check(
+      record.completed === true && record.confinement === confinement,
+      `a confined HTTP run whose server ${handoff} records ${JSON.stringify({ completed: record.completed, confinement: record.confinement })}`,
+    );
+    for (const set of fs.existsSync(path.join(runDirectory, 'trial-sets.json'))
+      ? readJson(path.join(runDirectory, 'trial-sets.json')).trialSets
+      : []) {
+      const manifest = readJson(path.join(runDirectory, set.isolationManifest));
+      check(
+        manifest.observedMounts.length === 0,
+        `a confined HTTP trial set whose server ${handoff} observed mounts ${JSON.stringify(manifest.observedMounts)}`,
+      );
+    }
+    const scored = evaluate(['score', '--evaluation', project.folder], env);
+    check(
+      scored.status === 0,
+      `score over the confined HTTP run whose server ${handoff} exited ${scored.status}; expected 0\n${scored.output}`,
+    );
   }
-  const record = readJson(path.join(runDirectory, 'run.json'));
-  const confinement = process.platform === 'darwin' ? 'seatbelt' : 'bubblewrap';
-  check(
-    record.completed === true && record.confinement === confinement,
-    `a confined HTTP run records ${JSON.stringify({ completed: record.completed, confinement: record.confinement })}`,
-  );
-  for (const set of fs.existsSync(path.join(runDirectory, 'trial-sets.json'))
-    ? readJson(path.join(runDirectory, 'trial-sets.json')).trialSets
-    : []) {
-    const manifest = readJson(path.join(runDirectory, set.isolationManifest));
-    check(manifest.observedMounts.length === 0, `a confined HTTP trial set observed mounts ${JSON.stringify(manifest.observedMounts)}`);
-  }
-  const scored = evaluate(['score', '--evaluation', project.folder], env);
-  check(scored.status === 0, `score over the confined HTTP run exited ${scored.status}; expected 0\n${scored.output}`);
 }
 
 /**
@@ -4146,8 +4180,390 @@ async function checkConfinedServiceReads() {
   );
 }
 
+// ---------------------------------------------------------------- the bridge to a Bubblewrap target's server (Story 1.63)
+
+/** The directories of cases whose Unix sockets need a short path, removed when the suite ends. */
+const shortDirectories = [];
+
+/** A directory under `/tmp` whose path leaves room for a Unix socket (a socket path holds about 100 bytes); the suite's scratch directories are too deep on macOS. */
+function shortDirectory() {
+  const directory = fs.realpathSync(fs.mkdtempSync(path.join('/tmp', 'tea-bt-')));
+  shortDirectories.push(directory);
+  return directory;
+}
+
+/** Whether a connection to `port` on the loopback is refused now: `true`, or what the attempt ended with. */
+function refusedAt(port) {
+  return new Promise((resolve) => {
+    const socket = net.connect({ host: '127.0.0.1', port });
+    socket.once('connect', () => {
+      socket.destroy();
+      resolve('connected');
+    });
+    socket.once('error', (error) => resolve(error.code === 'ECONNREFUSED' ? true : error.code));
+  });
+}
+
+/** One GET to the loopback: `{ status, body }`, the body parsed when it is JSON. */
+function getLoopback(port, pathname, headers = {}) {
+  return new Promise((resolve) => {
+    http
+      .get({ host: '127.0.0.1', port, path: pathname, headers }, (response) => {
+        let text = '';
+        response.on('data', (chunk) => (text += chunk));
+        response.on('end', () => {
+          let body = text;
+          try {
+            body = JSON.parse(text);
+          } catch {
+            // A body that is no JSON is returned as it is.
+          }
+          resolve({ status: response.statusCode, body });
+        });
+      })
+      .on('error', (error) => resolve({ status: null, body: error.code }));
+  });
+}
+
+/**
+ * The bridge to a started server whose network namespace is its own (Story 1.63), over the real status shim and the real
+ * HTTP port process with no Bubblewrap: a mechanism stands in for the confined one, starts the fixture's server through the
+ * shim with `--bridge` and asks nothing of the host's network (every host has one loopback, so a server's port inside the
+ * namespace and the port the runtime listens on can be told apart only when the system gives the runtime another). A call
+ * through `createApiPort` is answered through the forwarder, makes its bridge directory on the run's scratch list and removes
+ * it with the call, and a mechanism that does not bridge makes none. With `callServer` itself: a server that reports a
+ * port the host holds is reached on the port the runtime was given (not the reported one), which also answers a request;
+ * a chosen port the forwarder cannot take is refused as one another process holds; a server that has not bound is not
+ * ready, and one that never binds ends with the message it had before the bridge; one that exits before it binds ends the
+ * call with its exit and leaves nothing listening; an address that is no loopback name, and a temp directory too long for
+ * a socket path, are refused before anything starts. One thing a host cannot show: with no network namespace, the server's
+ * loopback and the host's are one, so a readiness check made on the host and one made through the bridge answer alike; the
+ * Linux job's confined pipeline (each handoff) is what holds the bridged readiness, since a check made on the host never
+ * sees a server inside the namespace.
+ */
+async function checkBridgedServer() {
+  const shim = path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate', 'confinement-status.cjs');
+  const { nodeCommandMechanism } = await loadAdapters();
+  const [entry] = readJson(path.join(FIXTURE, EVALUATION, 'evaluation.json')).registry;
+  const chosenEntry = { ...entry, server: (({ portFileEnvironmentKey, ...server }) => server)(entry.server) };
+  const request = {
+    probeId: 'bridged-1',
+    interfaceId: 'grader',
+    operationId: 'grade-answer',
+    kind: 'api',
+    method: 'GET',
+    pathTemplate: '/grade',
+    channels: { path: {}, query: { answer: 'forty-two' }, header: {}, body: { kind: 'absent' } },
+  };
+  const statusDirectory = scratch.make('bridged-status');
+  let started = 0;
+  /** The confined mechanism's bridging without Bubblewrap: the shim serves the bridge and starts the server. */
+  const bridging = (record = []) => ({
+    bridges: true,
+    run: (call, signal) => {
+      started += 1;
+      record.push({ ...call, directoryHeld: fs.existsSync(path.dirname(call.bridge)) });
+      return nodeCommandMechanism.run(
+        {
+          ...call,
+          target: process.execPath,
+          subcommandPath: [],
+          argv: [shim, '--bridge', call.bridge, path.join(statusDirectory, `status-${started}.json`), call.target, ...call.argv],
+        },
+        signal,
+      );
+    },
+  });
+  /** A project whose server logs where `project.log` says, with `policy` lines appended. */
+  const projectWith = (label, policy = []) =>
+    makeProject(label, {
+      edit: ({ root }) => {
+        if (policy.length > 0) fs.appendFileSync(path.join(root, 'rules', 'policy.txt'), `${policy.join('\n')}\n`);
+      },
+    });
+  const environmentOf = (project) => {
+    const values = { GRADER_LOG: project.log, GRADER_TOKEN: TOKEN };
+    return (names) => Object.fromEntries(names.filter((name) => values[name] !== undefined).map((name) => [name, values[name]]));
+  };
+  const serverOf = (project) => path.join(project.root, 'server', 'grader.js');
+  const listened = (project) => sessions(project).filter((line) => line.event === 'listen');
+  /** A `callServer` over `project`, its bridge in a short directory. */
+  const bridgedServer = (project, serverEntry, options = {}) => {
+    const directory = shortDirectory();
+    return callServer({
+      entry: serverEntry,
+      portFile: serverEntry.server.portFileEnvironmentKey === undefined ? null : path.join(directory, 'port'),
+      bridge: path.join(directory, 'sock'),
+      cwd: project.root,
+      target: serverOf(project),
+      environment: environmentOf(project)(serverEntry.server.environmentKeys),
+      mechanism: options.mechanism ?? bridging(),
+      maxOutputBytes: 1024 * 1024,
+      ...options.call,
+    });
+  };
+  const signal = () => new AbortController().signal;
+
+  // A call through the port: answered through the forwarder, its directories on the run's scratch list while it runs.
+  const project = projectWith('bridged-call');
+  const httpPort = await probeHttpPort(project.folder);
+  const temp = shortDirectory();
+  const scratchList = [];
+  const record = [];
+  const observation = await withEnvironment({ TMPDIR: temp }, () =>
+    createApiPort({
+      entries: [entry],
+      httpPort,
+      cwd: project.root,
+      targetOf: () => serverOf(project),
+      readEnvironment: environmentOf(project),
+      mechanism: {
+        ...bridging(record),
+        run: (call, mechanismSignal) => {
+          record.push({ onScratchList: scratchList.includes(path.dirname(call.bridge)) });
+          return bridging(record).run(call, mechanismSignal);
+        },
+      },
+      maxOutputBytes: 1024 * 1024,
+      scratch: scratchList,
+    })
+      .probe(request)
+      .catch((error) => error),
+  );
+  check(
+    observation?.kind === 'api' && observation.status === 200,
+    `a call through a bridged server was answered ${JSON.stringify(observation?.status ?? observation?.message)}; expected status 200`,
+  );
+  const [onList, bridgedCall] = record;
+  check(
+    onList?.onScratchList === true &&
+      bridgedCall?.directoryHeld === true &&
+      path.basename(bridgedCall.bridge) === 'sock' &&
+      path.dirname(bridgedCall.bridge).startsWith(path.join(temp, 'tea-evaluate-netbridge-')),
+    `the call's bridge was ${JSON.stringify(record)}; expected a socket in a tea-evaluate-netbridge-* directory under the temp directory, on the run's scratch list while the call ran`,
+  );
+  check(
+    scratchList.length === 0 && fs.readdirSync(temp).length === 0,
+    `a bridged call left ${JSON.stringify(scratchList)} on the scratch list and ${JSON.stringify(fs.readdirSync(temp))} in its temp directory`,
+  );
+  check(
+    listened(project).length === 1 &&
+      sessions(project).some((line) => line.event === 'request') &&
+      (await eventually(() => livingSessions(project).length === 0)),
+    `a bridged call's server logged ${JSON.stringify(sessions(project))}; expected one start, a request and an end with the call`,
+  );
+
+  // A mechanism that does not bridge makes no bridge: the server is started as before.
+  const plain = [];
+  const unbridged = await createApiPort({
+    entries: [entry],
+    httpPort,
+    cwd: project.root,
+    targetOf: () => serverOf(project),
+    readEnvironment: environmentOf(project),
+    mechanism: {
+      run: (call, mechanismSignal) => {
+        plain.push(call);
+        return nodeCommandMechanism.run(call, mechanismSignal);
+      },
+    },
+    maxOutputBytes: 1024 * 1024,
+    scratch: [],
+  })
+    .probe(request)
+    .catch((error) => error);
+  check(
+    unbridged?.status === 200 && plain.length === 1 && plain[0].bridge === undefined,
+    `a mechanism that does not bridge was handed ${JSON.stringify(plain.map((call) => call.bridge))} and answered ${JSON.stringify(unbridged?.status ?? unbridged?.message)}`,
+  );
+
+  // A server that reports a port the host holds: the runtime listens on another, the call goes there, and it answers.
+  const reporting = projectWith('bridged-report');
+  const reported = bridgedServer(reporting, entry);
+  const forwarded = await reported.start(signal(), '127.0.0.1').catch((error) => error);
+  const bound = listened(reporting)[0]?.port;
+  check(
+    Number.isInteger(forwarded) && Number.isInteger(bound) && forwarded !== bound && reported.isReady(),
+    `a server that bound ${bound} was ready on ${JSON.stringify(forwarded?.message ?? forwarded)}; expected the port the runtime listens on, another than the reported one, since the host holds it`,
+  );
+  if (Number.isInteger(forwarded)) {
+    const answered = await getLoopback(forwarded, '/policy', { authorization: `Bearer ${TOKEN}` });
+    check(
+      answered.status === 200 && answered.body?.ok === true,
+      `a request to the port the runtime listens on was answered ${JSON.stringify(answered)}; expected the server's /policy through the bridge`,
+    );
+  }
+  await reported.stop();
+  check(
+    !Number.isInteger(forwarded) || (await refusedAt(forwarded)) === true,
+    `the runtime still listened on port ${forwarded} after the call's server was stopped`,
+  );
+  check(await eventually(() => livingSessions(reporting).length === 0), 'a bridged server outlived its call');
+
+  // A chosen port the host's own namespace holds (here, the server itself) cannot be listened on twice: refused as taken.
+  const chosen = projectWith('bridged-chosen');
+  const chosenPort = await new Promise((resolve) => {
+    const probe = net.createServer();
+    probe.listen(0, '127.0.0.1', () => {
+      const { port } = probe.address();
+      probe.close(() => resolve(port));
+    });
+  });
+  const taken = bridgedServer(chosen, chosenEntry, { call: { port: chosenPort } });
+  const takenError = await taken.start(signal(), '127.0.0.1').catch((error) => error);
+  check(
+    String(takenError?.message).includes(`another process listens on 127.0.0.1 port ${chosenPort}, which was chosen for the server`),
+    `a chosen port the forwarder could not take gave ${takenError?.message ?? 'a ready server'}`,
+  );
+  await taken.stop();
+  check(await eventually(() => livingSessions(chosen).length === 0), 'a server whose bridge could not listen outlived its call');
+
+  // A server that has not bound is not ready; one that never binds ends at readyTimeoutMs with the message it always had.
+  const slow = projectWith('bridged-slow', ['start: delay 1200']);
+  const waiting = bridgedServer(slow, entry);
+  const began = Date.now();
+  const pending = waiting.start(signal(), '127.0.0.1').catch((error) => error);
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  const earlyReady = waiting.isReady();
+  const slowPort = await pending;
+  check(
+    earlyReady === false && Number.isInteger(slowPort) && Date.now() - began >= 1000 && listened(slow).length === 1,
+    `a server that binds after 1200ms was ready early (${earlyReady}) or ended as ${JSON.stringify(slowPort?.message ?? slowPort)} after ${Date.now() - began}ms`,
+  );
+  await waiting.stop();
+  const never = projectWith('bridged-never', ['start: delay 8000']);
+  const neverPort = await new Promise((resolve) => {
+    const probe = net.createServer();
+    probe.listen(0, '127.0.0.1', () => {
+      const { port } = probe.address();
+      probe.close(() => resolve(port));
+    });
+  });
+  const silent = bridgedServer(
+    never,
+    { ...chosenEntry, server: { ...chosenEntry.server, readyTimeoutMs: 1500 } },
+    { call: { port: neverPort } },
+  );
+  const pendingSilent = silent.start(signal(), '127.0.0.1').catch((error) => error);
+  // While the call waits for a server that has not bound, nothing listens on the port the call is configured for: a forwarder
+  // that listened before the server bound would answer here and be taken for the server.
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  check(
+    (await refusedAt(neverPort)) === true && silent.isReady() === false,
+    `something listened on the chosen port ${neverPort} while its server had not bound (ready: ${silent.isReady()})`,
+  );
+  const silentError = await pendingSilent;
+  check(
+    String(silentError?.message).endsWith(
+      `did not accept a connection on 127.0.0.1 port ${neverPort} within readyTimeoutMs (1500ms); the last attempt failed with ECONNREFUSED`,
+    ),
+    `a bridged server that never binds gave ${silentError?.message ?? 'a ready server'}`,
+  );
+  await silent.stop();
+  check(
+    (await refusedAt(neverPort)) === true,
+    `something listened on the chosen port ${neverPort} after a server that never bound was stopped`,
+  );
+  check(await eventually(() => livingSessions(never).length === 0), 'a bridged server that never bound outlived its call');
+
+  // A server that exits before it binds ends the call with its exit, and nothing listens on the host.
+  const failing = projectWith('bridged-failing', ['start: fail']);
+  const failingPort = await new Promise((resolve) => {
+    const probe = net.createServer();
+    probe.listen(0, '127.0.0.1', () => {
+      const { port } = probe.address();
+      probe.close(() => resolve(port));
+    });
+  });
+  const exiting = bridgedServer(failing, chosenEntry, { call: { port: failingPort } });
+  const exitError = await exiting.start(signal(), '127.0.0.1').catch((error) => error);
+  check(
+    String(exitError?.message).includes('exited 3 before it accepted a connection'),
+    `a bridged server that exits before it binds gave ${exitError?.message ?? 'a ready server'}`,
+  );
+  await exiting.stop();
+  check((await refusedAt(failingPort)) === true, `something listened on port ${failingPort} after a server that never started was stopped`);
+
+  // The forwarder keeps the number it is asked for when the host has it free, takes another when it may and refuses when it may not.
+  const freeNumber = await new Promise((resolve) => {
+    const probe = net.createServer();
+    probe.listen(0, '127.0.0.1', () => {
+      const { port } = probe.address();
+      probe.close(() => resolve(port));
+    });
+  });
+  const kept = await startForwarder({
+    socketPath: path.join(shortDirectory(), 'sock'),
+    address: '127.0.0.1',
+    targetPort: 9,
+    port: freeNumber,
+  });
+  check(kept.port === freeNumber, `a forwarder asked for the free port ${freeNumber} listened on ${kept.port}`);
+  const holder = net.createServer();
+  const heldNumber = await new Promise((resolve) => holder.listen(0, '127.0.0.1', () => resolve(holder.address().port)));
+  const moved = await startForwarder({
+    socketPath: path.join(shortDirectory(), 'sock'),
+    address: '127.0.0.1',
+    targetPort: 9,
+    port: heldNumber,
+  });
+  check(moved.port !== heldNumber && moved.port > 0, `a forwarder asked for the held port ${heldNumber} listened on ${moved.port}`);
+  const insisting = await startForwarder({
+    socketPath: path.join(shortDirectory(), 'sock'),
+    address: '127.0.0.1',
+    targetPort: 9,
+    port: heldNumber,
+    strict: true,
+  }).catch((error) => error);
+  check(insisting?.code === 'EADDRINUSE', `a strict forwarder asked for the held port ${heldNumber} gave ${insisting?.code ?? insisting}`);
+  await kept.close();
+  await moved.close();
+  check((await refusedAt(freeNumber)) === true, `a closed forwarder still listened on ${freeNumber}`);
+  await new Promise((resolve) => holder.close(resolve));
+
+  // An address no bridge reaches, and a temp directory too long for a socket path, are refused before anything starts.
+  let ran = 0;
+  const refusing = bridgedServer(projectWith('bridged-address'), entry, {
+    mechanism: { bridges: true, run: () => (ran += 1) && new Promise(() => {}) },
+  });
+  const addressError = await refusing.start(signal(), '10.0.0.5').catch((error) => error);
+  check(
+    String(addressError?.message).includes('network namespace of its own') &&
+      String(addressError.message).includes('10.0.0.5') &&
+      ran === 0,
+    `a bridged server asked to listen on a non-loopback address gave ${addressError?.message ?? 'a ready server'} (started ${ran})`,
+  );
+  const longTemp = path.join(shortDirectory(), 'x'.repeat(90));
+  fs.mkdirSync(longTemp);
+  const listLong = [];
+  const longError = await withEnvironment({ TMPDIR: longTemp }, () =>
+    createApiPort({
+      entries: [entry],
+      httpPort,
+      cwd: project.root,
+      targetOf: () => serverOf(project),
+      readEnvironment: environmentOf(project),
+      mechanism: { bridges: true, run: () => (ran += 1) && new Promise(() => {}) },
+      maxOutputBytes: 1024,
+      scratch: listLong,
+    })
+      .probe(request)
+      .catch((error) => error),
+  );
+  check(
+    String(longError?.message).includes('longer than 100 bytes') && String(longError.message).includes('TMPDIR') && ran === 0,
+    `a temp directory too long for a socket path gave ${longError?.message ?? 'an answer'}`,
+  );
+  check(
+    listLong.length === 0 && fs.readdirSync(longTemp).length === 0,
+    `a refused bridge directory stayed on the scratch list ${JSON.stringify(listLong)} or in ${JSON.stringify(fs.readdirSync(longTemp))}`,
+  );
+}
+
 /** Runs one case; an exception is a failed check, so the cases after it still run and every failure is reported. */
 async function runCase(name, body) {
+  const only = process.argv.find((value) => value.startsWith('--only='))?.slice('--only='.length);
+  if (only !== undefined && !name.includes(only)) return;
   try {
     await body();
   } catch (error) {
@@ -4175,6 +4591,7 @@ async function main() {
     await runCase("the confined started service's reads and HTTP port", checkConfinedServiceReads);
     await runCase('the denials', checkDenials);
     await runCase("a started service's port", checkPortReport);
+    await runCase('the bridged server', checkBridgedServer);
     await runCase('the sealed-brief agent', checkSealedBriefAgent);
     await runCase('the gameability arm', checkGameability);
     await runCase('the check rules', checkCheckRules);
@@ -4185,6 +4602,7 @@ async function main() {
     }
   } finally {
     scratch.removeAll();
+    for (const directory of shortDirectories) fs.rmSync(directory, { recursive: true, force: true });
   }
   return report();
 }
