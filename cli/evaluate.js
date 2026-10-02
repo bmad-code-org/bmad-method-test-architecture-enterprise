@@ -4,7 +4,12 @@
  *
  * Subcommands in this release:
  *   tea-evaluate check  --evaluation <path>   validate the folder; exit 10 on any authoring defect
- *   tea-evaluate digest --evaluation <path>   write corpus-index.json and print corpusDigest
+ *   tea-evaluate digest --evaluation <path> [--calibration-inputs]
+ *                                             write corpus-index.json and print corpusDigest; with
+ *                                             --calibration-inputs write nothing and print, as JSON, the values a
+ *                                             records harness copies into calibration-judgments.json: the labelled
+ *                                             file's digest, the scorer configuration digest and each labelled
+ *                                             item's label-free scorerInput
  *   tea-evaluate preflight --evaluation <path> [--from-working-tree]
  *                                             qualify the seeded probes in a disposable workspace, drive the
  *                                             preflight legs and take the verdict from eval-quality
@@ -38,7 +43,9 @@
  *   2-5 also ci: the exit of each stage it runs (compile, seal, the replay's preflight and score, a live check's
  *       preflight, run and score), passed through the same way; 2 is also a probe class below its strength floor
  *       on the release tier
- *   10  authoring defect: every finding is printed, one per line (digest: an indexed entry it cannot digest;
+ *   10  authoring defect: every finding is printed, one per line (digest: an indexed entry it cannot digest, and with
+ *       --calibration-inputs an evaluator that is not records, a contract with no rubric, an unusable labelled file
+ *       or a harness configuration that is absent, a link, not JSON or not an EvaluatorConfiguration;
  *       preflight: a leg the registry does not authorize, or a mutation whose find text does not occur
  *       exactly once)
  *   10  also compare: a run whose scores or members cannot be read as files the run wrote, a baseline holding a link
@@ -103,6 +110,7 @@ const { runScoreCommand } = require('./lib/evaluate/score');
 const { runCiCommand } = require('./lib/evaluate/ci');
 const { TIERS } = require('./lib/evaluate/ci-plan');
 const { escapeUnprintable, findingLine } = require('./lib/evaluate/finding-lines');
+const { calibrationInputsOf } = require('./lib/evaluate/records-calibration');
 
 const EXIT_CODES = {
   ok: 0,
@@ -135,8 +143,21 @@ async function runCheck(options) {
   return EXIT_CODES.authoring;
 }
 
+/** Prints the values a records harness copies into its judgments file; writes nothing under the folder. */
+async function runCalibrationInputs(folder) {
+  const { problems, inputs } = await calibrationInputsOf(folder);
+  if (inputs === null) {
+    for (const problem of problems) process.stdout.write(findingLine(problem.file, 'judge-calibration', problem.message));
+    process.stderr.write(`${NAME} digest --calibration-inputs: ${problems.length} authoring defect(s) in ${folder}\n`);
+    return EXIT_CODES.authoring;
+  }
+  process.stdout.write(`${JSON.stringify(inputs, null, 2)}\n`);
+  return EXIT_CODES.ok;
+}
+
 async function runDigest(options) {
   const folder = folderFrom(options);
+  if (options.calibrationInputs === true) return runCalibrationInputs(folder);
   const { index, corpusDigest, indexPath } = await writeCorpusIndex(folder);
   process.stderr.write(`${NAME} digest: wrote ${indexPath} (${index.length} file(s))\n`);
   process.stdout.write(`${corpusDigest}\n`);
@@ -220,8 +241,14 @@ function buildProgram(run) {
     .action((options) => run(runCheck, options));
   program
     .command('digest')
-    .description('Write corpus-index.json over corpus/, probes/ and mutations/, and print corpusDigest.')
+    .description(
+      'Write corpus-index.json over corpus/, probes/ and mutations/, and print corpusDigest; with --calibration-inputs, print the values a records harness copies instead.',
+    )
     .option('--evaluation <path>', 'the evaluation folder, or its evaluation.json')
+    .option(
+      '--calibration-inputs',
+      "print, and write nothing: the labelled file's digest, the scorer configuration digest and each item's scorerInput",
+    )
     .action((options) => run(runDigest, options));
   program
     .command('preflight')

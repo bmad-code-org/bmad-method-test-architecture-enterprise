@@ -26,6 +26,12 @@
  * call it, so they cannot disagree. A provenance defect is an authoring
  * defect (`EvaluatorLayerError`, exit 10). Low agreement is exit 11, and only
  * `run` computes agreement.
+ *
+ * `calibrationInputs` prints the values the harness must copy (Story 1.67):
+ * the labelled file's digest, the scorer configuration digest and each item's
+ * label-free `scorerInput`. It derives them with the functions the verification
+ * derives them with (`scorerInputFor`, `scorerConfigurationDigest`), so the
+ * output and the verification change together.
  */
 
 'use strict';
@@ -33,13 +39,25 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { CALIBRATION_PATH, calibrationObservation, calibrationOperationId, calibrationProblems, runCalibration } = require('./calibration');
-const { EvaluatorLayerError } = require('./evaluators');
+const {
+  CALIBRATION_PATH,
+  calibrationObservation,
+  calibrationOperationId,
+  calibrationProblems,
+  labelledDigest,
+  readCalibration,
+  runCalibration,
+} = require('./calibration');
+const { loadEngine } = require('./engine');
+const { EvaluatorLayerError, evaluatorOf } = require('./evaluators');
+const { createArtifactValidator } = require('./records');
+const { MANIFEST_NAME } = require('./folder');
 
 const JUDGMENTS_NAME = 'calibration-judgments.json';
 const CONFIGURATION_NAME = 'evaluator-configuration.json';
 const DIGEST_KEY = 'tea.judgeCalibrationDigest';
 const MINIMUM_KEY = 'tea.judgeCalibrationMinimumAgreement';
+const CONTRACT_NAME = 'contract.json';
 const JUDGMENTS_FIELDS = new Set(['schemaVersion', 'scorerConfigurationDigest', 'items']);
 const ITEM_FIELDS = new Set(['rubricId', 'criterionId', 'scorerInput', 'answer']);
 
@@ -68,6 +86,58 @@ function scorerConfiguration(configuration) {
   return scorer;
 }
 
+/** The configuration's digest as the judgments name it: over the configuration without its two calibration bindings. */
+function scorerConfigurationDigest(configuration, engine) {
+  return engine.digestArtifact(scorerConfiguration(configuration), 'EvaluatorConfiguration');
+}
+
+/**
+ * The label-free observation the runtime derives from a labelled item: what the harness hands its scorer, and what a judgments
+ * item's `scorerInput` must equal. The harness wrote JSON, so a member the observation leaves undefined is absent from what it can match.
+ */
+function scorerInputFor(item, criterion, contract) {
+  // eslint-disable-next-line unicorn/prefer-structured-clone -- structuredClone keeps undefined members
+  return JSON.parse(
+    JSON.stringify(
+      calibrationObservation({
+        criterion,
+        response: item.response,
+        responseKind: item.responseKind,
+        operationId: calibrationOperationId(contract, criterion),
+      }),
+    ),
+  );
+}
+
+/** The labelled criteria of a contract by `rubricId/criterionId`, each with its rubric. */
+function criteriaOf(contract) {
+  const criteria = new Map();
+  for (const rubric of contract.rubrics)
+    for (const criterion of rubric.criteria) criteria.set(`${rubric.id}/${criterion.id}`, { rubric, criterion });
+  return criteria;
+}
+
+/** The parsed `evaluator-configuration.json` of a records directory, never through a link; throws an `Error` saying why it cannot be read. */
+function readConfiguration(root) {
+  const file = path.join(root, CONFIGURATION_NAME);
+  if (!fs.lstatSync(file).isFile()) throw new Error('it is not a regular file');
+  return JSON.parse(fs.readFileSync(file, 'utf8'));
+}
+
+/** The real path of the records directory `evaluator.records` names, or null when it is not a directory the folder holds, reached through no link. */
+function recordsDirectory(folder, records) {
+  // The evaluation schema's rule: a POSIX path with no empty, "." or ".." segment.
+  if (records.split('/').some((segment) => ['', '.', '..'].includes(segment))) return null;
+  const spelled = path.join(fs.realpathSync(folder), ...records.split('/'));
+  let real;
+  try {
+    real = fs.realpathSync(path.join(folder, ...records.split('/')));
+  } catch {
+    return null;
+  }
+  return real === spelled && fs.statSync(real).isDirectory() ? real : null;
+}
+
 /** The judgments file's parsed value, or null when the records directory holds none; never through a link. */
 function readJudgments(root, spelled) {
   let stats;
@@ -89,7 +159,7 @@ function bindingProblems(configuration, spelled, labelled, evaluation, engine) {
   const parameters = isObject(configuration?.decodingParameters) ? configuration.decodingParameters : {};
   const problems = [];
   for (const [key, expected, what] of [
-    [DIGEST_KEY, engine.digestBytes(labelled.bytes), 'the digest of policy/judge-calibration.json'],
+    [DIGEST_KEY, labelledDigest(labelled, engine), 'the digest of policy/judge-calibration.json'],
     [MINIMUM_KEY, evaluation.judgeCalibration.minimumAgreement, "evaluation.json's judgeCalibration.minimumAgreement"],
   ]) {
     if (!Object.hasOwn(parameters, key))
@@ -114,18 +184,7 @@ function itemProblems(entry, index, item, { rubric, criterion }, contract) {
     );
     return problems;
   }
-  // The harness wrote JSON, so a member the observation leaves undefined is absent from what it can match.
-  // eslint-disable-next-line unicorn/prefer-structured-clone -- structuredClone keeps undefined members
-  const expected = JSON.parse(
-    JSON.stringify(
-      calibrationObservation({
-        criterion,
-        response: item.response,
-        responseKind: item.responseKind,
-        operationId: calibrationOperationId(contract, criterion),
-      }),
-    ),
-  );
+  const expected = scorerInputFor(item, criterion, contract);
   if (!sameJson(entry.scorerInput, expected)) {
     problems.push(
       `items[${index}].scorerInput is not the label-free observation the runtime derives from the labelled item${isObject(entry.scorerInput) && Object.hasOwn(entry.scorerInput, 'expectedLevel') ? '; it carries expectedLevel, the label, which the scorer must never see' : ''}`,
@@ -186,7 +245,7 @@ function verifyRecordsCalibration({ records, root, configuration, evaluation, co
   if (judgments.schemaVersion !== 1) add(`${file} schemaVersion must be 1`);
   let scorerDigest;
   try {
-    scorerDigest = engine.digestArtifact(scorerConfiguration(configuration), 'EvaluatorConfiguration');
+    scorerDigest = scorerConfigurationDigest(configuration, engine);
   } catch (error) {
     problems.push({
       file: configurationFile,
@@ -198,9 +257,7 @@ function verifyRecordsCalibration({ records, root, configuration, evaluation, co
       `${file} names scorerConfigurationDigest ${JSON.stringify(judgments.scorerConfigurationDigest)}, and the imported configuration without its calibration bindings digests to ${scorerDigest}, so the judgments are not from the scorer that produced the records`,
     );
   }
-  const criteria = new Map();
-  for (const rubric of contract.rubrics)
-    for (const criterion of rubric.criteria) criteria.set(`${rubric.id}/${criterion.id}`, { rubric, criterion });
+  const criteria = criteriaOf(contract);
   const labelledItems = labelled.value.items;
   if (judgments.items.length !== labelledItems.length)
     add(
@@ -236,4 +293,101 @@ async function calibrateImported({ records, root, configuration, labelled, evalu
   return runCalibration({ calibration: labelled, evaluation, contract, engine, writer, stop, judgeItem });
 }
 
-module.exports = { JUDGMENTS_NAME, calibrateImported, verifyRecordsCalibration };
+/**
+ * The values a `records` harness copies into its judgments file (Story 1.67), from the same functions the verification uses.
+ * The configuration needs no calibration bindings: the harness asks before it can bind the labelled file's digest.
+ *
+ * @param {object} options
+ * @param {string} options.folder the evaluation folder
+ * @param {object} options.evaluation `evaluation.json`
+ * @param {object|undefined} options.contract `contract.json`, when it parses to an object
+ * @param {object} options.engine
+ * @returns {Promise<{ problems: Array<{ file: string, message: string }>, inputs: object|null }>} each problem names the file it is in
+ */
+async function calibrationInputs({ folder, evaluation, contract, engine }) {
+  const refuse = (file, ...messages) => ({ problems: messages.map((message) => ({ file, message })), inputs: null });
+  const evaluator = evaluatorOf(evaluation);
+  if (evaluator?.kind !== 'records')
+    return refuse(
+      MANIFEST_NAME,
+      `evaluation.json's evaluator is ${isObject(evaluator) && typeof evaluator.kind === 'string' ? evaluator.kind : JSON.stringify(evaluator)}, and only a records evaluator imports a harness's calibration judgments`,
+    );
+  const root = typeof evaluator.records === 'string' ? recordsDirectory(folder, evaluator.records) : null;
+  if (root === null)
+    return refuse(
+      MANIFEST_NAME,
+      `evaluator.records names ${JSON.stringify(evaluator.records)}, which is not a directory the evaluation folder holds, reached through no link`,
+    );
+  if (!Array.isArray(contract?.rubrics) || contract.rubrics.length === 0)
+    return refuse(CONTRACT_NAME, `${CONTRACT_NAME} declares no rubric, so the harness has no calibration judgments to supply`);
+  let labelled;
+  try {
+    labelled = readCalibration(folder);
+  } catch (error) {
+    return refuse(CALIBRATION_PATH, `${CALIBRATION_PATH} cannot be read: ${error.message}`);
+  }
+  const unusable = calibrationProblems(evaluation, contract, labelled?.value, engine);
+  if (unusable.length > 0) return refuse(CALIBRATION_PATH, ...unusable);
+  const configurationFile = `${evaluator.records}/${CONFIGURATION_NAME}`;
+  let configuration;
+  try {
+    configuration = readConfiguration(root);
+  } catch (error) {
+    return refuse(
+      configurationFile,
+      `${configurationFile} cannot be read as JSON, so the scorer configuration digest cannot be taken: ${error.message}`,
+    );
+  }
+  const off = await createArtifactValidator()('evaluator-configuration', configuration);
+  if (off.length > 0)
+    return refuse(
+      configurationFile,
+      `${configurationFile} does not meet eval-quality's evaluator-configuration schema: ${off.slice(0, 10).join('; ')}`,
+    );
+  const criteria = criteriaOf(contract);
+  return {
+    problems: [],
+    inputs: {
+      calibrationDigest: labelledDigest(labelled, engine),
+      scorerConfigurationDigest: scorerConfigurationDigest(configuration, engine),
+      items: labelled.value.items.map((item) => ({
+        rubricId: item.rubricId,
+        criterionId: item.criterionId,
+        scorerInput: scorerInputFor(item, criteria.get(`${item.rubricId}/${item.criterionId}`).criterion, contract),
+      })),
+    },
+  };
+}
+
+/**
+ * `calibrationInputs` over an evaluation folder, reading `evaluation.json` and `contract.json` itself.
+ *
+ * @param {string} folder
+ * @returns {Promise<{ problems: Array<{ file: string, message: string }>, inputs: object|null }>}
+ */
+async function calibrationInputsOf(folder) {
+  const read = (name) => {
+    try {
+      const value = JSON.parse(fs.readFileSync(path.join(folder, name), 'utf8'));
+      return isObject(value) ? { value } : { fault: 'it is not a JSON object' };
+    } catch (error) {
+      return { fault: `it cannot be read as JSON: ${error.message}` };
+    }
+  };
+  const evaluation = read(MANIFEST_NAME);
+  if (evaluation.fault !== undefined)
+    return { problems: [{ file: MANIFEST_NAME, message: `${MANIFEST_NAME}: ${evaluation.fault}` }], inputs: null };
+  const contract = read(CONTRACT_NAME);
+  if (contract.fault !== undefined)
+    return { problems: [{ file: CONTRACT_NAME, message: `${CONTRACT_NAME}: ${contract.fault}` }], inputs: null };
+  return calibrationInputs({ folder, evaluation: evaluation.value, contract: contract.value, engine: await loadEngine() });
+}
+
+module.exports = {
+  JUDGMENTS_NAME,
+  calibrateImported,
+  calibrationInputsOf,
+  readConfiguration,
+  recordsDirectory,
+  verifyRecordsCalibration,
+};

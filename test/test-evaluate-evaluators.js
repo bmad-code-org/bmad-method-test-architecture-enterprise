@@ -3071,6 +3071,31 @@ async function checkRecordsEvaluator() {
     fs.writeFileSync(file, bytes);
   }
 
+  // A configuration that meets the schema and that eval-quality cannot digest (a number outside its canonical form) is an authoring defect.
+  const configurationFile = path.join(records, 'evaluator-configuration.json');
+  const configurationBytes = fs.readFileSync(configurationFile);
+  editJson(configurationFile, (value) => (value.decodingParameters['tea.harnessScale'] = 1e21));
+  const checkedUndigestible = evaluate(['check', '--evaluation', project.folder], project.env);
+  check(
+    checkedUndigestible.status === 0,
+    `check over a configuration eval-quality cannot digest exited ${checkedUndigestible.status}; expected 0\n${checkedUndigestible.output}`,
+  );
+  const undigestible = evaluate(['run', '--evaluation', project.folder], project.env);
+  check(
+    undigestible.status === 10 &&
+      undigestible.output.includes('records/evaluator-configuration.json cannot be digested as an EvaluatorConfiguration') &&
+      !undigestible.output.includes('RuntimeFault'),
+    `a configuration eval-quality cannot digest: run exited ${undigestible.status}; expected 10 saying it cannot be digested\n${undigestible.output}`,
+  );
+  const undigestibleDirectory = runDirectoryOf(project.folder);
+  check(
+    undigestibleDirectory !== runDirectory &&
+      !fs.existsSync(path.join(undigestibleDirectory, 'trial-sets')) &&
+      !fs.existsSync(path.join(undigestibleDirectory, 'evaluator-configuration.json')),
+    'the run over a configuration eval-quality cannot digest copied files into its run directory',
+  );
+  fs.writeFileSync(configurationFile, configurationBytes);
+
   // A record off its schema stops the run with exit 10, before any score call.
   editJson(path.join(records, 'P-002', 'record-1.json'), (record) => {
     delete record.findings;
@@ -3170,6 +3195,9 @@ async function harnessProject(label, { half = false, edit = () => {} } = {}) {
         editJson(path.join(folder, 'evaluation.json'), (evaluation) => (evaluation.judgeCalibration.minimumAgreement = 0.5));
       }
       edit(folder);
+      // Compact bytes, so a digest of the re-serialized value differs from the digest of the file.
+      const labelledFile = path.join(folder, 'policy', 'judge-calibration.json');
+      fs.writeFileSync(labelledFile, JSON.stringify(readJson(labelledFile)));
     },
   });
   const produced = evaluate(['run', '--evaluation', project.folder], project.env);
@@ -3265,6 +3293,8 @@ async function checkImportedRubricCalibration() {
   const ran = evaluate(['run', '--evaluation', project.folder], project.env);
   check(ran.status === 0, `a records run over verified calibration judgments exited ${ran.status}; expected 0\n${ran.output}`);
   const runDirectory = runDirectoryOf(project.folder);
+  if (ran.status === 0 && (runDirectory === null || runDirectory === project.harnessRun))
+    check(false, 'the records run exited 0 and left no run directory of its own');
   if (ran.status !== 0 || runDirectory === null || runDirectory === project.harnessRun) return;
   const reportFile = path.join(runDirectory, 'judge-calibration.json');
   check(fs.existsSync(reportFile), 'a calibrated records run wrote no judge-calibration.json');
@@ -3473,6 +3503,556 @@ async function checkImportedCalibrationChangesScoringVersion() {
       seen[0].bound[1] === 1 &&
       seen[2].bound[1] === 0.8,
     `the bindings across the variants are ${JSON.stringify(seen.map((entry) => entry.bound))}`,
+  );
+}
+
+// ------------------------------------------------- the calibration inputs a harness copies (Story 1.67)
+
+/** Every path under `directory` (links not followed) with a hash of what it holds and its modification time, so a write, a rewrite or a removal shows. */
+function snapshotOf(directory) {
+  const entries = {};
+  const walk = (current) => {
+    for (const name of fs.readdirSync(current).sort()) {
+      const file = path.join(current, name);
+      const stats = fs.lstatSync(file);
+      const relative = path.relative(directory, file);
+      // The modification time is part of what a write leaves, so a rewrite of the same bytes shows as well.
+      if (stats.isDirectory()) {
+        entries[relative] = `directory ${stats.mtimeMs}`;
+        walk(file);
+      } else
+        entries[relative] = stats.isSymbolicLink()
+          ? `link to ${fs.readlinkSync(file)}`
+          : `${sha256(fs.readFileSync(file))} ${stats.mtimeMs}`;
+    }
+  };
+  walk(directory);
+  return entries;
+}
+
+/** The observation the runtime hands a scorer for a stdout or stderr response, written out in full and derived from nothing in the runtime. */
+function literalObservation(channel, response, operationId = 'judge-request') {
+  return {
+    observationId: 'calibration',
+    sequence: 1,
+    operationId,
+    provenance: 'evaluator-chosen',
+    principal: null,
+    callInputs: {
+      path: null,
+      query: null,
+      header: null,
+      body: null,
+      argument: null,
+      option: null,
+      environment: null,
+      stdin: null,
+      arguments: null,
+    },
+    responseBody: null,
+    responseHeaders: null,
+    responseStatus: null,
+    stdout: channel === 'stdout' ? { kind: 'text', value: response } : { kind: 'absent' },
+    stderr: channel === 'stderr' ? { kind: 'text', value: response } : { kind: 'absent' },
+    exitCode: null,
+    artifacts: {},
+  };
+}
+
+/** Asks for the calibration inputs of the project's folder; the parsed document is `inputs` when the command printed one. */
+function askForInputs(project, args = []) {
+  const asked = evaluate(['digest', '--evaluation', project.folder, '--calibration-inputs', ...args], project.env);
+  let inputs;
+  try {
+    inputs = JSON.parse(asked.stdout);
+  } catch {
+    inputs = undefined;
+  }
+  return { ...asked, inputs };
+}
+
+/** The ask is refused with exit 10 and one finding under the judge-calibration rule that names `file` and says each of `says`; the folder is left as it was. */
+function checkInputsRefused(project, what, file, says) {
+  const before = snapshotOf(project.folder);
+  const asked = askForInputs(project);
+  check(asked.status === 10, `${what}: the ask exited ${asked.status}; expected 10\n${asked.output}`);
+  check(asked.inputs === undefined, `${what}: the refused ask printed a document\n${asked.stdout}`);
+  const lines = asked.stdout.split('\n').filter((line) => line.length > 0);
+  check(
+    lines.length > 0 && lines.every((line) => line.startsWith(`${file}: [judge-calibration] `)),
+    `${what}: the findings are not all ${file}: [judge-calibration] lines\n${asked.stdout}`,
+  );
+  for (const text of says) check(asked.stdout.includes(text), `${what}: the output does not say ${JSON.stringify(text)}\n${asked.stdout}`);
+  check(canonical(snapshotOf(project.folder)) === canonical(before), `${what}: the refused ask changed the evaluation folder`);
+}
+
+/** Runs `body` with `file` edited, and puts its bytes back. */
+function withBytes(file, edit, body) {
+  const bytes = fs.readFileSync(file);
+  try {
+    edit(file);
+    body();
+  } finally {
+    // The edit may have put a link in the file's place; writing through it would change its target.
+    fs.rmSync(file, { force: true });
+    fs.writeFileSync(file, bytes);
+  }
+}
+
+/**
+ * The harness binds its calibration after it asks, so a record or isolation manifest sealed against the configuration as it
+ * stood names another `evaluatorConfigurationDigest` than the one `run` computes, and `score` refuses it (exit 3) after `check`
+ * and `run` exited 0. `run` holds each imported file to the imported configuration's digest instead (exit 10, nothing copied).
+ */
+async function checkImportedFilesSealedAgainstTheConfiguration() {
+  const project = await harnessProject('records-sealed-against');
+  if (project === null) return;
+  const records = path.join(project.folder, 'records');
+  const configurationFile = path.join(records, 'evaluator-configuration.json');
+  const engine = await loadEngine();
+  // The binding changes after the records were sealed: the minimum moves with evaluation.json, so check and calibration still hold.
+  useRecords(project, { minimum: 0.5 });
+  const checked = evaluate(['check', '--evaluation', project.folder], project.env);
+  check(
+    checked.status === 0,
+    `check over records sealed against another configuration exited ${checked.status}; expected 0\n${checked.output}`,
+  );
+  const sealedAgainst = readJson(path.join(records, 'P-001', 'record-1.json')).evaluatorConfigurationDigest;
+  const finalDigest = engine.digestArtifact(readJson(configurationFile), 'EvaluatorConfiguration');
+  check(sealedAgainst !== finalDigest, 'the rebound configuration digests to the one the records name');
+  const files = ['P-001', 'P-002'].flatMap((probeId) =>
+    fs
+      .readdirSync(path.join(records, probeId))
+      .filter((name) => name.endsWith('.json'))
+      .map((name) => path.join(records, probeId, name)),
+  );
+  checkImportRefused(project, 'records sealed against an earlier configuration', 10, [
+    'evaluatorConfigurationDigest',
+    sealedAgainst,
+    finalDigest,
+    'sealed against another configuration',
+    'records/P-001/record-1.json carries evaluatorConfigurationDigest',
+  ]);
+  // Every record of a set is held, not its first alone: one later record is left behind, with every manifest and record before it fixed.
+  const laterRecord = path.join(records, 'P-002', 'record-3.json');
+  const manifest = path.join(records, 'P-002', 'isolation-manifest.json');
+  check(files.includes(laterRecord) && files.includes(manifest), 'the second probe holds no third record or no isolation manifest');
+  const staleManifest = fs.readFileSync(manifest);
+  for (const file of files.filter((candidate) => candidate !== laterRecord))
+    editJson(file, (value) => (value.evaluatorConfigurationDigest = finalDigest));
+  checkImportRefused(project, 'a later record of the second probe sealed against an earlier configuration', 10, [
+    'records/P-002/record-3.json carries evaluatorConfigurationDigest',
+    sealedAgainst,
+    finalDigest,
+  ]);
+  // Every record fixed leaves an isolation manifest behind: the manifests are held too.
+  editJson(laterRecord, (record) => (record.evaluatorConfigurationDigest = finalDigest));
+  fs.writeFileSync(manifest, staleManifest);
+  checkImportRefused(project, 'an isolation manifest sealed against an earlier configuration', 10, [
+    'records/P-002/isolation-manifest.json carries evaluatorConfigurationDigest',
+    sealedAgainst,
+    finalDigest,
+  ]);
+  // Every file sealed against the final configuration imports, and score accepts it.
+  editJson(manifest, (value) => (value.evaluatorConfigurationDigest = finalDigest));
+  commitAll(project.repository, project.folder, 'the records sealed against the final configuration');
+  const before = runNames(project.folder);
+  const ran = evaluate(['run', '--evaluation', project.folder], project.env);
+  check(ran.status === 0, `run over records sealed against the final configuration exited ${ran.status}\n${ran.output}`);
+  if (ran.status !== 0) return;
+  if (runNames(project.folder).every((name) => before.includes(name)))
+    return check(false, 'the records run exited 0 and left no run directory of its own');
+  const { evidence } = scoreRun(project, 'records sealed against the final configuration');
+  checkVotes('records sealed against the final configuration', evidence, 'P-001', 'passed-clean-control');
+  checkVotes('records sealed against the final configuration', evidence, 'P-002', 'caught');
+}
+
+/** The reference, the CLI header and the command's own help all describe the option, so the page cannot drop it unseen. */
+function checkCalibrationInputsDocumented() {
+  const page = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
+  for (const text of [
+    'npx tea-evaluate digest --evaluation evals/my-evaluation --calibration-inputs',
+    '`calibrationDigest`',
+    '`scorerConfigurationDigest`',
+    'bind `tea.judgeCalibrationDigest` in the configuration to its `calibrationDigest`',
+  ])
+    check(page.includes(text), `the reference does not say ${JSON.stringify(text)}`);
+  const header = fs.readFileSync(EVALUATE, 'utf8').split("'use strict';")[0];
+  check(
+    header.includes('tea-evaluate digest --evaluation <path> [--calibration-inputs]'),
+    "cli/evaluate.js's header does not list the option",
+  );
+  const help = evaluate(['digest', '--help']);
+  check(help.status === 0 && help.stdout.includes('--calibration-inputs'), `digest --help does not list the option\n${help.output}`);
+}
+
+async function checkCalibrationInputs() {
+  const project = await harnessProject('records-inputs');
+  if (project === null) return;
+  const records = path.join(project.folder, 'records');
+  const configurationFile = path.join(records, 'evaluator-configuration.json');
+  const judgmentsFile = path.join(records, JUDGMENTS_NAME);
+  const engine = await loadEngine();
+
+  // The harness writes its configuration first, with no bindings, and asks; the judgments file is written from the answer alone.
+  const handBuilt = readJson(judgmentsFile);
+  const bound = readJson(configurationFile);
+  const unbound = scorerConfigurationOf(bound);
+  writeJson(configurationFile, unbound);
+  fs.rmSync(judgmentsFile);
+  editJson(path.join(project.folder, 'evaluation.json'), (evaluation) => (evaluation.evaluator = { kind: 'records', records: 'records' }));
+  const before = snapshotOf(project.folder);
+  const asked = askForInputs(project);
+  check(asked.status === 0, `the ask exited ${asked.status}; expected 0\n${asked.output}`);
+  if (asked.inputs === undefined) return check(false, `the ask printed no JSON document\n${asked.stdout}`);
+  const { inputs } = asked;
+  check(canonical(snapshotOf(project.folder)) === canonical(before), 'the ask changed the evaluation folder');
+  // --evaluation names the folder or its evaluation.json alike.
+  const named = evaluate(['digest', '--evaluation', path.join(project.folder, 'evaluation.json'), '--calibration-inputs'], project.env);
+  check(
+    named.status === 0 && named.stdout === asked.stdout,
+    `the ask naming evaluation.json exited ${named.status}; expected the folder's answer`,
+  );
+  check(
+    canonical(Object.keys(inputs).sort()) === canonical(['calibrationDigest', 'items', 'scorerConfigurationDigest']),
+    `the document holds ${Object.keys(inputs)}; expected calibrationDigest, items and scorerConfigurationDigest only`,
+  );
+  check(!asked.stdout.includes('expectedLevel'), 'the output carries the label expectedLevel');
+  check(
+    inputs.items.every((item) => canonical(Object.keys(item).sort()) === canonical(['criterionId', 'rubricId', 'scorerInput'])),
+    `an item holds more or less than rubricId, criterionId and scorerInput: ${JSON.stringify(inputs.items.map(Object.keys))}`,
+  );
+  check(
+    inputs.calibrationDigest === sha256(fs.readFileSync(path.join(project.folder, 'policy', 'judge-calibration.json'))),
+    `calibrationDigest is ${inputs.calibrationDigest}, not the digest of the labelled file's bytes`,
+  );
+  check(
+    inputs.scorerConfigurationDigest === engine.digestArtifact(unbound, 'EvaluatorConfiguration') &&
+      inputs.scorerConfigurationDigest === handBuilt.scorerConfigurationDigest,
+    `scorerConfigurationDigest is ${inputs.scorerConfigurationDigest}; expected ${handBuilt.scorerConfigurationDigest}`,
+  );
+
+  // A hand-built literal, derived from nothing in the runtime, is what each scorerInput must be (a changed derivation fails here).
+  const labelled = readJson(path.join(project.folder, 'policy', 'judge-calibration.json')).items;
+  check(
+    canonical(inputs.items) ===
+      canonical(
+        labelled.map((item) => ({
+          rubricId: item.rubricId,
+          criterionId: item.criterionId,
+          scorerInput: literalObservation('stdout', item.response),
+        })),
+      ),
+    `the emitted items are ${JSON.stringify(inputs.items)}; expected the literal observations of the labelled responses`,
+  );
+  check(
+    canonical(inputs.items.map((item) => item.scorerInput)) === canonical(handBuilt.items.map((item) => item.scorerInput)),
+    'the emitted scorer inputs differ from the ones the harness fixture derived by hand',
+  );
+
+  // The configuration carrying the bindings digests as it does without them.
+  writeJson(configurationFile, bound);
+  const withBindings = askForInputs(project);
+  check(
+    withBindings.status === 0 &&
+      withBindings.inputs?.scorerConfigurationDigest === inputs.scorerConfigurationDigest &&
+      withBindings.inputs?.calibrationDigest === inputs.calibrationDigest,
+    `a configuration with its bindings asks ${withBindings.stdout}; expected the same digests`,
+  );
+
+  // The harness copies the values, answers, and binds the labelled file's digest: `check` accepts it, and `run` imports and scores it.
+  writeJson(judgmentsFile, {
+    schemaVersion: 1,
+    scorerConfigurationDigest: inputs.scorerConfigurationDigest,
+    items: inputs.items.map((item) => ({ ...item, answer: harnessScore(item.scorerInput) })),
+  });
+  writeJson(configurationFile, {
+    ...unbound,
+    decodingParameters: { ...unbound.decodingParameters, [DIGEST_BINDING]: inputs.calibrationDigest, [MINIMUM_BINDING]: 1 },
+  });
+  useRecords(project);
+  const checked = evaluate(['check', '--evaluation', project.folder], project.env);
+  check(checked.status === 0, `check over judgments built from the emitted inputs exited ${checked.status}\n${checked.output}`);
+  const ran = evaluate(['run', '--evaluation', project.folder], project.env);
+  check(ran.status === 0, `run over judgments built from the emitted inputs exited ${ran.status}\n${ran.output}`);
+  const runDirectory = runDirectoryOf(project.folder);
+  if (ran.status === 0 && (runDirectory === null || runDirectory === project.harnessRun))
+    check(false, 'the records run exited 0 and left no run directory of its own');
+  if (ran.status !== 0 || runDirectory === null || runDirectory === project.harnessRun) return;
+  check(fs.existsSync(path.join(runDirectory, 'judge-calibration.json')), 'the run wrote no judge-calibration.json');
+  const { evidence } = scoreRun(project, 'a records run over the emitted inputs');
+  checkVotes('a records run over the emitted inputs', evidence, 'P-001', 'passed-clean-control');
+  checkVotes('a records run over the emitted inputs', evidence, 'P-002', 'caught');
+
+  // The ask names an evaluation, and says so when it does not.
+  const unnamed = evaluate(['digest', '--calibration-inputs']);
+  check(
+    unnamed.status === 64 && unnamed.stdout === '',
+    `the ask with no --evaluation exited ${unnamed.status}; expected 64\n${unnamed.output}`,
+  );
+  checkInputsRefusals(project);
+  checkInputsKeepTheLabelledOrder(project);
+}
+
+function checkInputsRefusals(project) {
+  const records = path.join(project.folder, 'records');
+  const evaluationFile = path.join(project.folder, 'evaluation.json');
+  const labelledFile = path.join(project.folder, 'policy', 'judge-calibration.json');
+  const configurationFile = path.join(records, 'evaluator-configuration.json');
+  const contractFile = path.join(project.folder, 'contract.json');
+  const ok = askForInputs(project);
+  check(ok.status === 0 && ok.inputs !== undefined, `the restored harness project asks with exit ${ok.status}; expected 0\n${ok.output}`);
+
+  // Only a records evaluator has judgments to supply.
+  for (const [kind, evaluator] of [
+    ['deterministic', { kind: 'deterministic' }],
+    ['command', { kind: 'command', command: 'evaluator/rows.js', args: [], timeoutMs: 60_000 }],
+    ['sealed-brief-agent', { kind: 'sealed-brief-agent', agent: 'claude', timeoutMs: 30_000 }],
+  ])
+    withBytes(
+      evaluationFile,
+      () => editJson(evaluationFile, (evaluation) => (evaluation.evaluator = evaluator)),
+      () => checkInputsRefused(project, `a ${kind} evaluator`, 'evaluation.json', [`evaluator is ${kind}`]),
+    );
+  withBytes(
+    evaluationFile,
+    () => editJson(evaluationFile, (evaluation) => delete evaluation.evaluator),
+    () => checkInputsRefused(project, 'an evaluation naming no evaluator', 'evaluation.json', ['evaluator is deterministic']),
+  );
+  withBytes(
+    evaluationFile,
+    () => editJson(evaluationFile, (evaluation) => (evaluation.evaluator = 'records')),
+    () => checkInputsRefused(project, 'an evaluator that is a string', 'evaluation.json', ['evaluator is "records"']),
+  );
+  withBytes(
+    evaluationFile,
+    () => editJson(evaluationFile, (evaluation) => (evaluation.evaluator = { kind: 'records', records: 'nowhere' })),
+    () => checkInputsRefused(project, 'a records directory that is absent', 'evaluation.json', ['"nowhere"', 'not a directory']),
+  );
+  // A records directory reached through a link, one level down or at the top, is not the folder's own.
+  const outside = path.join(project.directory, 'outside-records');
+  fs.cpSync(records, outside, { recursive: true });
+  fs.mkdirSync(path.join(project.folder, 'nested'));
+  fs.symlinkSync(outside, path.join(project.folder, 'linked-records'));
+  fs.symlinkSync(outside, path.join(project.folder, 'nested', 'records'));
+  for (const [what, named] of [
+    ['a records directory that is a link', 'linked-records'],
+    ['a records directory under a link', 'linked-records/records'],
+    ['a records directory that is a nested link', 'nested/records'],
+  ])
+    withBytes(
+      evaluationFile,
+      () => editJson(evaluationFile, (evaluation) => (evaluation.evaluator = { kind: 'records', records: named })),
+      () => checkInputsRefused(project, what, 'evaluation.json', ['reached through no link']),
+    );
+  fs.rmSync(path.join(project.folder, 'linked-records'));
+  fs.rmSync(path.join(project.folder, 'nested'), { recursive: true });
+  // The evaluation schema's rule: no empty, "." or ".." segment, so a path out of the folder (or the folder itself) is no records directory.
+  for (const [what, named] of [
+    ['a records directory outside the folder', '../../../outside-records'],
+    ['a records directory spelled with a parent segment', 'records/../records'],
+    ['a records directory spelled empty', ''],
+    ['a records directory spelled as the folder', '.'],
+    ['a records directory with an empty segment', 'records//'],
+  ])
+    withBytes(
+      evaluationFile,
+      () => editJson(evaluationFile, (evaluation) => (evaluation.evaluator = { kind: 'records', records: named })),
+      () => checkInputsRefused(project, what, 'evaluation.json', ['reached through no link']),
+    );
+  withBytes(
+    evaluationFile,
+    () => fs.writeFileSync(evaluationFile, '[]'),
+    () => checkInputsRefused(project, 'an evaluation.json that is no object', 'evaluation.json', ['it is not a JSON object']),
+  );
+
+  // A contract with no rubric has nothing to calibrate.
+  withBytes(
+    contractFile,
+    () => editJson(contractFile, (contract) => (contract.rubrics = [])),
+    () => checkInputsRefused(project, 'a contract with no rubric', 'contract.json', ['declares no rubric']),
+  );
+
+  withBytes(
+    contractFile,
+    () => fs.writeFileSync(contractFile, 'not json'),
+    () => checkInputsRefused(project, 'a contract that is not JSON', 'contract.json', ['cannot be read as JSON']),
+  );
+
+  // The labelled file must be one `check` and `run` accept.
+  withBytes(
+    labelledFile,
+    () => fs.rmSync(labelledFile),
+    () => checkInputsRefused(project, 'an absent labelled file', 'policy/judge-calibration.json', ['is required']),
+  );
+  withBytes(
+    labelledFile,
+    () => fs.writeFileSync(labelledFile, 'not json'),
+    () => checkInputsRefused(project, 'a labelled file that is not JSON', 'policy/judge-calibration.json', ['cannot be read']),
+  );
+  withBytes(
+    labelledFile,
+    () => editJson(labelledFile, (labelled) => labelled.items.pop()),
+    () =>
+      checkInputsRefused(project, 'a labelled file that leaves a level uncovered', 'policy/judge-calibration.json', [
+        'R-101/RC-101 has no calibration item labelled at anchored level 3',
+      ]),
+  );
+  withBytes(
+    labelledFile,
+    () => editJson(labelledFile, (labelled) => (labelled.items[0].criterionId = 'RC-999')),
+    () =>
+      checkInputsRefused(project, 'a label naming an unknown criterion', 'policy/judge-calibration.json', [
+        'unknown rubric criterion R-101/RC-999',
+      ]),
+  );
+  withBytes(
+    labelledFile,
+    () => editJson(labelledFile, (labelled) => (labelled.items[0].expectedLevel = 9)),
+    () => checkInputsRefused(project, 'a label off the scale', 'policy/judge-calibration.json', ['expectedLevel 9']),
+  );
+  withBytes(
+    labelledFile,
+    () =>
+      editJson(labelledFile, (labelled) => {
+        labelled.items.pop();
+        labelled.items[0].expectedLevel = 9;
+      }),
+    () =>
+      checkInputsRefused(project, 'a labelled file with two faults', 'policy/judge-calibration.json', [
+        'expectedLevel 9',
+        'R-101/RC-101 has no calibration item labelled at anchored level 3',
+      ]),
+  );
+  const labelledTarget = path.join(project.folder, 'linked-labelled.json');
+  fs.copyFileSync(labelledFile, labelledTarget);
+  withBytes(
+    labelledFile,
+    () => {
+      fs.rmSync(labelledFile);
+      fs.symlinkSync(labelledTarget, labelledFile);
+    },
+    () =>
+      checkInputsRefused(project, 'a labelled file reached through a link', 'policy/judge-calibration.json', ['regular in-folder file']),
+  );
+  fs.rmSync(labelledTarget);
+
+  // The configuration is read as `check` reads it: a regular file, no link, JSON, an EvaluatorConfiguration.
+  withBytes(
+    configurationFile,
+    () => fs.rmSync(configurationFile),
+    () => checkInputsRefused(project, 'an absent configuration', 'records/evaluator-configuration.json', ['cannot be read as JSON']),
+  );
+  withBytes(
+    configurationFile,
+    () => fs.writeFileSync(configurationFile, 'not json'),
+    () =>
+      checkInputsRefused(project, 'a configuration that is not JSON', 'records/evaluator-configuration.json', ['cannot be read as JSON']),
+  );
+  const target = path.join(project.folder, 'linked-configuration.json');
+  fs.copyFileSync(configurationFile, target);
+  withBytes(
+    configurationFile,
+    () => {
+      fs.rmSync(configurationFile);
+      fs.symlinkSync(target, configurationFile);
+    },
+    () =>
+      checkInputsRefused(project, 'a configuration reached through a link', 'records/evaluator-configuration.json', [
+        'it is not a regular file',
+      ]),
+  );
+  fs.rmSync(target);
+  withBytes(
+    configurationFile,
+    () => writeJson(configurationFile, { not: 'an EvaluatorConfiguration' }),
+    () =>
+      checkInputsRefused(project, 'a configuration that is no EvaluatorConfiguration', 'records/evaluator-configuration.json', [
+        "does not meet eval-quality's evaluator-configuration schema",
+      ]),
+  );
+
+  // After every refusal the original files ask again.
+  const again = askForInputs(project);
+  check(
+    again.status === 0 && canonical(again.inputs) === canonical(ok.inputs),
+    `the restored project asks ${again.status} ${again.stdout}; expected the first answer`,
+  );
+}
+
+/** Two rubrics, two interaction steps, a criterion id both rubrics use and a json item, the labelled file in compact bytes. */
+function checkInputsKeepTheLabelledOrder(project) {
+  const second = {
+    ...RUBRIC,
+    id: 'R-102',
+    scaleLevels: RUBRIC.scaleLevels.slice(0, 2),
+    criteria: [
+      { id: 'RC-101', text: 'Is the first reading right?', evidence: '/interactions/judge-run/stderr' },
+      { id: 'RC-202', text: 'Is the review reading right?', evidence: '/interactions/review-run/stdout' },
+    ],
+  };
+  const item = (rubricId, criterionId, expectedLevel, response, responseKind) => ({
+    rubricId,
+    criterionId,
+    response,
+    ...(responseKind === undefined ? {} : { responseKind }),
+    expectedLevel,
+  });
+  const order = [
+    item('R-102', 'RC-202', 2, '{"reading":2}', 'json'),
+    item('R-101', 'RC-101', 3, 'first three'),
+    item('R-102', 'RC-101', 1, 'third one'),
+    item('R-101', 'RC-101', 1, 'fourth one'),
+    item('R-102', 'RC-202', 1, 'fifth one'),
+    item('R-102', 'RC-101', 2, 'sixth two'),
+    item('R-101', 'RC-101', 2, 'seventh two'),
+  ];
+  const expected = (labelled) => {
+    if (labelled.rubricId === 'R-101') return literalObservation('stdout', labelled.response);
+    if (labelled.criterionId === 'RC-101') return literalObservation('stderr', labelled.response);
+    const observation = literalObservation('stdout', labelled.response, 'review-request');
+    if (labelled.responseKind === 'json') observation.stdout = { kind: 'json', value: JSON.parse(labelled.response) };
+    return observation;
+  };
+  const contractFile = path.join(project.folder, 'contract.json');
+  const labelledFile = path.join(project.folder, 'policy', 'judge-calibration.json');
+  withBytes(
+    contractFile,
+    () =>
+      editJson(contractFile, (contract) => {
+        contract.rubrics.push(second);
+        contract.interactionPlan.push({
+          ...contract.interactionPlan[0],
+          stepId: 'review-run',
+          operationId: 'review-request',
+          after: 'judge-run',
+        });
+      }),
+    () =>
+      withBytes(
+        labelledFile,
+        () => fs.writeFileSync(labelledFile, JSON.stringify({ items: order })),
+        () => {
+          const asked = askForInputs(project);
+          check(asked.status === 0 && asked.inputs !== undefined, `the ask over two rubrics exited ${asked.status}\n${asked.output}`);
+          if (asked.inputs === undefined) return;
+          check(
+            asked.inputs.calibrationDigest === sha256(fs.readFileSync(labelledFile)),
+            'calibrationDigest over compact labelled bytes is not the digest of those bytes',
+          );
+          check(
+            canonical(asked.inputs.items) ===
+              canonical(
+                order.map((labelled) => ({
+                  rubricId: labelled.rubricId,
+                  criterionId: labelled.criterionId,
+                  scorerInput: expected(labelled),
+                })),
+              ),
+            `the items are ${JSON.stringify(asked.inputs.items)}`,
+          );
+        },
+      ),
   );
 }
 
@@ -4656,6 +5236,13 @@ const CASES = [
   { name: 'imported rubric scores below the minimum', body: checkImportedCalibrationBelowMinimum, group: 'records' },
   { name: 'imported calibration changes the scoring version', body: checkImportedCalibrationChangesScoringVersion, group: 'records' },
   { name: 'the reference names the scorer input', body: checkImportedCalibrationReferenceExample, group: 'records' },
+  { name: 'the emitted calibration inputs feed a harness', body: checkCalibrationInputs, group: 'records' },
+  { name: 'the calibration inputs are documented', body: checkCalibrationInputsDocumented, group: 'records' },
+  {
+    name: 'imported files sealed against the final configuration',
+    body: checkImportedFilesSealedAgainstTheConfiguration,
+    group: 'records',
+  },
 ];
 const GROUPS = new Set(CASES.map(({ group }) => group));
 
@@ -4714,6 +5301,16 @@ async function main() {
       await runCase('imported rubric scores calibrated', checkImportedRubricCalibration);
       await runCase('imported rubric scores below the minimum', checkImportedCalibrationBelowMinimum);
       await runCase('imported calibration changes the scoring version', checkImportedCalibrationChangesScoringVersion);
+      await runCase('the emitted calibration inputs feed a harness', checkCalibrationInputs);
+      await runCase('the calibration inputs are documented', checkCalibrationInputsDocumented);
+      await runCase('imported files sealed against the final configuration', checkImportedFilesSealedAgainstTheConfiguration);
+      return report();
+    }
+    // `--calibration-inputs-only` runs Story 1.67's case alone (its revert checks).
+    if (process.argv.includes('--calibration-inputs-only')) {
+      await runCase('the emitted calibration inputs feed a harness', checkCalibrationInputs);
+      await runCase('the calibration inputs are documented', checkCalibrationInputsDocumented);
+      await runCase('imported files sealed against the final configuration', checkImportedFilesSealedAgainstTheConfiguration);
       return report();
     }
     for (const { name, body, group: caseGroup } of CASES) {
