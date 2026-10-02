@@ -65,7 +65,9 @@
  * host's values for the keys a command entry permits beneath the request's
  * own, and scrubs every such value, every value a tool server's environment
  * carries, and every value an HTTP call's server and auth header carry, from
- * what comes back.
+ * what comes back, in whatever letter case it comes back (Story 1.66): the
+ * observation and a fault's message and cause scrub with one set of forms, and
+ * the matching is compiled once per set.
  */
 
 'use strict';
@@ -145,43 +147,158 @@ function escapingsOf(text) {
 }
 
 /**
+ * A text in each letter case a normalizer can give it: as it is, lower-cased,
+ * upper-cased, and both again under Turkish rules (a Turkish-locale server maps
+ * `I` to `ı` and `i` to `İ`). Matching compares letters by case folding
+ * (`foldedText`), so these add what folding does not equate: the Turkish
+ * mappings, and the escape digits of a letter, which differ with its case (a
+ * serializer writes `ü` with the escape of U+00FC and `Ü` with that of U+00DC).
+ */
+function caseVariants(text) {
+  return [text, text.toLowerCase(), text.toUpperCase(), text.toLocaleLowerCase('tr'), text.toLocaleUpperCase('tr')];
+}
+
+/**
  * Each secret in every form text can carry it in, longest first and each once:
  * its own body, each way one level of JSON escaping writes it
  * (`escapingsOf`), and each way a second level writes one of those, which is
  * how a message quoting a JSON frame, a `JSON.stringify` of the server's
- * answer, or a JSON string holding JSON holds it. The cause is never decoded:
+ * answer, or a JSON string holding JSON holds it. Each of those is held for
+ * every letter case `caseVariants` names, taken of the secret before it is
+ * escaped: a server that upper-cases `ü` and then writes it as an escape sends
+ * the digits of `Ü`, which differ from those of the escaping of `ü`. The array is frozen: the matching
+ * compiled from it (`matcherFor`) is kept with it. The cause is never decoded:
  * decoding would alter what a legitimate record says.
  */
 function secretForms(secrets) {
   const forms = new Set();
   for (const secret of secrets) {
-    forms.add(secret);
-    for (const once of escapingsOf(secret)) {
-      forms.add(once);
-      for (const twice of escapingsOf(once)) forms.add(twice);
+    for (const variant of caseVariants(secret)) {
+      forms.add(variant);
+      for (const once of escapingsOf(variant)) {
+        forms.add(once);
+        for (const twice of escapingsOf(once)) forms.add(twice);
+      }
     }
   }
-  return [...forms].sort((a, b) => b.length - a.length);
+  return Object.freeze([...forms].sort((a, b) => b.length - a.length));
 }
 
 /**
- * Whether a finite number is a secret: its text holds one, or, when its text is as long as a scrubbed value must be,
+ * `text` case-folded, each character on its own so the result does not depend
+ * on its neighbors (`toLowerCase` reads a capital sigma by its position): lower-cased,
+ * upper-cased and lower-cased again, which equates `K` and the Kelvin sign, `ς` and `σ`, `ſ` and `s`,
+ * `ı` and `I`, `ẞ`, `ß` and `SS`. A text of ASCII characters folds to its lower case, character for
+ * character. Otherwise a fold that changes the text's length comes with `starts` and `ends`, the original
+ * span each folded unit came from, so a match found in the folded text is replaced in the original (the
+ * map costs memory, so a caller that only asks whether a form occurs leaves it out).
+ *
+ * @returns {{ folded: string, starts: number[] | null, ends: number[] | null }}
+ */
+function foldedText(text, withMap = true) {
+  if (/^\p{ASCII}*$/u.test(text)) return { folded: text.toLowerCase(), starts: null, ends: null };
+  let folded = '';
+  const starts = [];
+  const ends = [];
+  for (let at = 0; at < text.length; ) {
+    const character = String.fromCodePoint(text.codePointAt(at));
+    const unit = character.toLowerCase().toUpperCase().toLowerCase();
+    folded += unit;
+    if (withMap) {
+      for (let index = 0; index < unit.length; index += 1) {
+        starts.push(at);
+        ends.push(at + character.length);
+      }
+    }
+    at += character.length;
+  }
+  return withMap ? { folded, starts, ends } : { folded, starts: null, ends: null };
+}
+
+/** What `matcherFor` gives an array that holds no form. */
+const NO_MATCHER = Object.freeze({ forms: [], heads: new Set(), longest: 0 });
+
+/** The compiled matching of each `secrets` array `scrub` has been given, so a walk over an observation folds the forms once. */
+const matchers = new WeakMap();
+
+/**
+ * The matching for `secrets` (the array `secretForms` returned), built once per
+ * array: its forms case-folded (`foldedText`) and each once, with the first
+ * unit each starts with and the length of the longest. A form that is empty
+ * matches everywhere and is left out. No regular expression is built over the
+ * forms: a pattern holding every form of a large secret (a credential file,
+ * a certificate chain) exceeds what the engine compiles.
+ */
+function matcherFor(secrets) {
+  let matcher = matchers.get(secrets);
+  if (matcher === undefined) {
+    const forms = [
+      ...new Set(secrets.filter((form) => typeof form === 'string' && form !== '').map((form) => foldedText(form, false).folded)),
+    ];
+    matcher =
+      forms.length === 0
+        ? NO_MATCHER
+        : { forms, heads: new Set(forms.map((form) => form[0])), longest: Math.max(...forms.map((form) => form.length)) };
+    matchers.set(secrets, matcher);
+  }
+  return matcher;
+}
+
+/** The spans of `folded` that hold a form, overlapping ones merged and adjacent ones kept apart, in order. */
+function secretSpans(folded, forms) {
+  const found = [];
+  for (const form of forms) {
+    for (let at = folded.indexOf(form); at !== -1; at = folded.indexOf(form, at + 1)) found.push([at, at + form.length]);
+  }
+  found.sort((x, y) => x[0] - y[0] || y[1] - x[1]);
+  const spans = [];
+  for (const [start, end] of found) {
+    const last = spans.at(-1);
+    if (last !== undefined && start < last[1]) last[1] = Math.max(last[1], end);
+    else spans.push([start, end]);
+  }
+  return spans;
+}
+
+/**
+ * Whether a finite number is a secret: its text holds one in some letter case, or, when its text is as long as a scrubbed value must be,
  * a secret read as a number equals it. The length floor keeps a secret such as `00000000` from redacting every 0.
  */
 function numberHoldsSecret(value, secrets) {
   const text = String(value);
-  return secrets.some(
-    (secret) => text.includes(secret) || (text.length >= MIN_SCRUBBED_VALUE_LENGTH && secret.trim() !== '' && Number(secret) === value),
-  );
+  const { forms } = matcherFor(secrets);
+  const { folded } = foldedText(text, false);
+  if (forms.some((form) => folded.includes(form))) return true;
+  return text.length >= MIN_SCRUBBED_VALUE_LENGTH && secrets.some((secret) => secret.trim() !== '' && Number(secret) === value);
+}
+
+/** `text` with each secret it holds, in whatever letter case, replaced; the text itself when it holds none. */
+function scrubText(text, secrets) {
+  const { forms } = matcherFor(secrets);
+  if (forms.length === 0) return text;
+  const { folded } = foldedText(text, false);
+  if (!forms.some((form) => folded.includes(form))) return text;
+  const { folded: mapped, starts, ends } = foldedText(text);
+  let scrubbed = '';
+  let kept = 0;
+  for (const [start, end] of secretSpans(mapped, forms)) {
+    const from = starts === null ? start : starts[start];
+    const to = ends === null ? end : ends[end - 1];
+    if (from < kept) continue;
+    scrubbed += text.slice(kept, from) + SCRUBBED;
+    kept = to;
+  }
+  return scrubbed + text.slice(kept);
 }
 
 /**
- * `value` with every string in `secrets` replaced, in strings and object keys
- * alike, walking arrays and objects; a finite number whose text holds a secret,
- * or that a secret read as a number equals, is replaced as a whole.
+ * `value` with every string in `secrets` replaced in whatever letter case it
+ * comes back, in strings and object keys alike, walking arrays and objects; a
+ * finite number whose text holds a secret, or that a secret read as a number
+ * equals, is replaced as a whole.
  */
 function scrub(value, secrets) {
-  if (typeof value === 'string') return secrets.reduce((text, secret) => text.split(secret).join(SCRUBBED), value);
+  if (typeof value === 'string') return scrubText(value, secrets);
   if (typeof value === 'number' && Number.isFinite(value) && numberHoldsSecret(value, secrets)) return SCRUBBED;
   if (Array.isArray(value)) return value.map((item) => scrub(item, secrets));
   if (value !== null && typeof value === 'object') {
@@ -208,20 +325,24 @@ function scrub(value, secrets) {
  * A text that may end in a cut (eval-quality quotes the first 200 characters of
  * a line that is no JSON-RPC message) scrubbed: every whole secret, and then
  * the leading part of one, at least `MIN_CUT_PREFIX_LENGTH` characters long,
- * that the cut left at its end.
+ * that the cut left at its end, in whatever letter case either comes back. Only
+ * the last stretch of the text that a form could fill is read, so a long text
+ * costs no more than a short one.
  */
 function scrubCutText(text, secrets) {
-  const scrubbed = scrub(text, secrets);
-  let cut = 0;
-  for (const secret of secrets) {
-    for (let length = secret.length - 1; length > cut && length >= MIN_CUT_PREFIX_LENGTH; length -= 1) {
-      if (scrubbed.endsWith(secret.slice(0, length))) {
-        cut = length;
-        break;
-      }
-    }
+  const scrubbed = scrubText(text, secrets);
+  const { forms, heads, longest } = matcherFor(secrets);
+  if (forms.length === 0) return scrubbed;
+  const window = scrubbed.length - Math.min(scrubbed.length, longest);
+  const { folded, starts } = foldedText(scrubbed.slice(window));
+  for (let at = 0; at < folded.length; at += 1) {
+    const from = starts === null ? at : starts[at];
+    if (scrubbed.length - window - from < MIN_CUT_PREFIX_LENGTH) break;
+    if (!heads.has(folded[at])) continue;
+    const tail = folded.slice(at);
+    if (forms.some((form) => form.length > tail.length && form.startsWith(tail))) return `${scrubbed.slice(0, window + from)}${SCRUBBED}`;
   }
-  return cut === 0 ? scrubbed : `${scrubbed.slice(0, -cut)}${SCRUBBED}`;
+  return scrubbed;
 }
 
 /**
@@ -378,6 +499,14 @@ function bodyValue(body) {
  * @returns {{ probe: (request: object, signal?: AbortSignal) => Promise<{ request: object, observation: object }> }}
  */
 function hostEnvironmentPort({ port, registry }) {
+  // The forms of a set of values, and the matching compiled over them (`matcherFor`), are built once per distinct set:
+  // a run makes thousands of calls over a few sets.
+  const formsOfValues = new Map();
+  const formsFor = (values) => {
+    const key = JSON.stringify(values);
+    if (!formsOfValues.has(key)) formsOfValues.set(key, secretForms(values));
+    return formsOfValues.get(key);
+  };
   return {
     /** Empties the private home the port's sandbox keeps, where it has one (`registry.js` `createProbePort`). */
     resetHome: () => port.resetHome?.(),
@@ -399,7 +528,7 @@ function hostEnvironmentPort({ port, registry }) {
       const values = [...Object.values(injected), ...Object.values(server), ...carried, ...principalValues].filter(
         (value) => value.length >= MIN_SCRUBBED_VALUE_LENGTH,
       );
-      const secrets = secretForms(values);
+      const secrets = formsFor(values);
       try {
         const observation = await port.probe(augmented, signal);
         return {
@@ -412,15 +541,15 @@ function hostEnvironmentPort({ port, registry }) {
         // A fault's message and cause can quote what the target sent: a denial names the host a redirect gave, which a
         // URL lowercases, and eval-quality reports a mechanism's own failure (a server that would not start, a refused
         // handshake, a malformed frame, a spawn error) as the cause, which can quote what the target printed,
-        // JSON-escaped or cut short. Both are kept scrubbed of every secret, in its own case and lowercased. What a
-        // process printed comes whole as the `captured` text, and is quoted from its end only once it is scrubbed, so
-        // the cut cannot leave a secret's end the scrub would not recognize.
-        const anyCase = secretForms([...values, ...values.map((value) => value.toLowerCase())]);
+        // JSON-escaped or cut short. Both are kept scrubbed of every secret with the set the observation is scrubbed
+        // with, in whatever letter case it comes back. What a process printed comes whole as the `captured` text, and is
+        // quoted from its end only once it is scrubbed, so the cut cannot leave a secret's end the scrub would not
+        // recognize.
         if (typeof error?.message === 'string') {
-          error.message = `${scrubCutText(error.message, anyCase)}${quotedCapture(error.captured, anyCase)}`;
+          error.message = `${scrubCutText(error.message, secrets)}${quotedCapture(error.captured, secrets)}`;
         }
         if (error?.cause !== undefined) {
-          error.scrubbedCause = `${scrubCutText(String(error.cause?.message ?? error.cause), anyCase)}${quotedCapture(error.cause?.captured, anyCase)}`;
+          error.scrubbedCause = `${scrubCutText(String(error.cause?.message ?? error.cause), secrets)}${quotedCapture(error.cause?.captured, secrets)}`;
         }
         throw error;
       }

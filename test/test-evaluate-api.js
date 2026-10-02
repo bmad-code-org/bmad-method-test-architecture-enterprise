@@ -70,7 +70,13 @@
  *   alone, read from the schema, with the rules that are TeA's own kept.
  * - Units: the registry's HTTP policy, inventory, ceilings, secrets and
  *   targets; the arm's `api` record; the scrub of an HTTP answer and of a
- *   denial naming a lowercased secret; a multi-byte answer past 64 KiB read
+ *   denial naming a lowercased secret; the scrub of a secret echoed in every
+ *   letter case (Story 1.66: lower, upper, capitalized and alternating, in
+ *   each byte format a serializer writes, in the observation, the keys, a
+ *   fault's message and cause and a cut text, for a secret with pattern
+ *   metacharacters, a letter whose case mapping changes its length, a dotted
+ *   capital I, a lone surrogate and a letter outside the BMP, with a value of
+ *   seven characters left alone); a multi-byte answer past 64 KiB read
  *   whole; a gameability redirect to another spelling of the entry's host.
  *
  * Usage: node test/test-evaluate-api.js
@@ -910,6 +916,39 @@ async function checkUnits() {
     check(
       !JSON.stringify(observation).includes(SECRET) && !JSON.stringify(observation).includes(TOKEN),
       `an HTTP call's secrets reached the observation: ${JSON.stringify(observation)}`,
+    );
+    // The same values echoed in another letter case (a header a server normalizes, a field it shouts, a URL a proxy lowercases)
+    // are scrubbed from the answer, the headers and the keys alike (Story 1.66); `checkLetterCases` holds the rest of the matrix.
+    const shouting = hostEnvironmentPort({
+      port: {
+        probe: async (request) => ({
+          ...request,
+          kind: 'api',
+          status: 200,
+          headers: { 'x-echo': TOKEN.toUpperCase(), 'x-title': `Grader-Token-Value-4567` },
+          body: {
+            kind: 'json',
+            value: { loud: SECRET.toUpperCase(), title: 'Grader-Secret-Value-0123', [TOKEN.toUpperCase()]: 'as a key' },
+          },
+        }),
+      },
+      registry,
+    });
+    const { observation: shouted } = await shouting.probe({
+      probeId: 'x',
+      interfaceId: 'grader',
+      operationId: 'grade-answer',
+      kind: 'api',
+    });
+    check(
+      shouted.headers['x-echo'] === '[redacted]' &&
+        shouted.headers['x-title'] === '[redacted]' &&
+        shouted.body.value.loud === '[redacted]' &&
+        shouted.body.value.title === '[redacted]' &&
+        shouted.body.value['[redacted]'] === 'as a key' &&
+        !JSON.stringify(shouted).toLowerCase().includes(SECRET) &&
+        !JSON.stringify(shouted).toLowerCase().includes(TOKEN),
+      `an HTTP call's secrets echoed in other letter cases reached the observation: ${JSON.stringify(shouted)}`,
     );
   });
 
@@ -1815,6 +1854,418 @@ async function checkPortProcess() {
   await eventually(() => written.includes('\n'));
   const echoed = written.includes('\n') ? JSON.parse(written.split('\n')[0])?.observation?.echoed : undefined;
   check(echoed === text, `a call cut inside a character was read as ${JSON.stringify(echoed)}; expected ${JSON.stringify(text)}`);
+}
+
+// ---------------------------------------------------------------- the scrub in every letter case
+
+/**
+ * The letter cases a normalizer gives an echoed value: a server that shouts a field, a proxy that lowercases a URL,
+ * a header normalizer that capitalizes each word, and a mix.
+ */
+const LETTER_CASES = {
+  original: (text) => text,
+  lowercased: (text) => text.toLowerCase(),
+  uppercased: (text) => text.toUpperCase(),
+  capitalized: (text) =>
+    text.toLowerCase().replaceAll(/(^|[^\p{L}\p{N}])(\p{L})/gu, (_, before, letter) => `${before}${letter.toUpperCase()}`),
+  'Turkish upper-cased': (text) => text.toLocaleUpperCase('tr'),
+  'Turkish lowercased': (text) => text.toLocaleLowerCase('tr'),
+  alternating: (text) =>
+    [...text].map((character, index) => (index % 2 === 0 ? character.toUpperCase() : character.toLowerCase())).join(''),
+};
+
+/** `text` as a JSON string body, as Python's `ensure_ascii` (every non-ASCII unit as `\uXXXX`, in lower- or upper-case hex), and with `/` written `\/` (PHP). */
+const asciiEscaped = (text, upper) =>
+  JSON.stringify(text)
+    .slice(1, -1)
+    .replaceAll(/[^ -~]/g, (unit) => {
+      const hex = unit.codePointAt(0).toString(16).padStart(4, '0');
+      return `\\u${upper ? hex.toUpperCase() : hex}`;
+    });
+/** The byte formats an echo reaches a record in, each derived from the echoed text alone. */
+const BYTE_FORMATS = {
+  plain: (text) => text,
+  'a JSON string body': (text) => JSON.stringify(text).slice(1, -1),
+  'ASCII-escaped, lower-case hex': (text) => asciiEscaped(text, false),
+  'ASCII-escaped, upper-case hex': (text) => asciiEscaped(text, true),
+  '<, > and & written \\u003c, \\u003e and \\u0026 (Go)': (text) =>
+    JSON.stringify(text)
+      .slice(1, -1)
+      .replaceAll(/[<>&]/g, (unit) => `\\u00${unit.codePointAt(0).toString(16)}`),
+  'slashes written \\/': (text) =>
+    JSON.stringify(text)
+      .slice(1, -1)
+      .replaceAll('/', String.raw`\/`),
+  'two levels of a JSON string body': (text) => JSON.stringify(JSON.stringify(text).slice(1, -1)).slice(1, -1),
+  'ASCII-escaped at the second of two levels': (text) => asciiEscaped(JSON.stringify(text).slice(1, -1), true),
+};
+/** The formats that write a letter beyond ASCII as `\uXXXX`. */
+const ESCAPES_LETTERS = (format) => format.includes('ASCII-escaped');
+
+/** Secrets that differ in every input the scrub derives from: metacharacters, a case mapping that changes length, a dotted capital I, a lone surrogate, a letter outside the BMP, a base64 value. */
+const LETTER_SECRETS = [
+  'grader-secret-value-0123',
+  'Grader-MixedCase-Secret-0123',
+  String.raw`a.b*c+d?e^f$g{h}(i)|j[k]\l-m/n<o>&p`,
+  'straße-Secret-ünï-0123',
+  'İstanbul-Key-0123',
+  'lone-\uD83D-surrogate-0123',
+  'tok-𐐨𐐀-secret-0123',
+  'Aw+/Zx9=Base64+Token/Value==',
+  'Grader-INDEX-index-0123',
+  'ΣΟΦΟΣ-Token-ΑΣ-Ὀδυσσεύς-0123',
+];
+
+/** A fake port that answers every request with `answer`, as the grader's HTTP port does. */
+const answering = (answer) => ({ probe: async (request) => ({ ...request, kind: 'api', ...answer }) });
+const API_REQUEST = { probeId: 'x', interfaceId: 'grader', operationId: 'grade-answer', kind: 'api' };
+const SCRUBBED_TEXT = '[redacted]';
+
+/** What a grader that echoes `echo` answers: in a header, a body field inside other text, a nested array and a key. */
+const echoingAnswer = (echo, key = echo) => ({
+  status: 200,
+  headers: { 'x-echo': echo, 'x-plain': 'ordinary' },
+  body: {
+    kind: 'json',
+    value: { field: `before ${echo} after`, nested: [{ again: 'ordinary' }, { again: echo }], [key]: 'as a key', plain: 'ordinary text' },
+  },
+});
+
+/**
+ * An echoed auth value is scrubbed whatever letter case it comes back in (Story 1.66): the observation, a fault's
+ * message and a fault's cause scrub with one set, a value under the minimum length stays in every case, and ordinary
+ * text that merely resembles a secret stays.
+ */
+async function checkLetterCases() {
+  const { scrub, scrubCutText, secretForms, quotedCapture } = require('../cli/lib/evaluate/arm');
+  const registryOf = (...secrets) => ({ apiSecrets: () => secrets });
+  const probe = (answer, ...secrets) =>
+    hostEnvironmentPort({ port: answering(answer), registry: registryOf(...secrets) }).probe(API_REQUEST);
+  const failure = async (build, ...secrets) => {
+    const fault = build();
+    const port = {
+      probe: async () => {
+        throw fault;
+      },
+    };
+    return hostEnvironmentPort({ port, registry: registryOf(...secrets) })
+      .probe(API_REQUEST)
+      .catch((error) => error);
+  };
+
+  for (const secret of LETTER_SECRETS) {
+    const label = JSON.stringify(secret);
+    for (const [caseName, change] of Object.entries(LETTER_CASES)) {
+      const echo = change(secret);
+      // The observation: a header, a body field, a nested element and a key, each holding the echo.
+      const { observation } = await probe(echoingAnswer(echo), secret);
+      const expected = { ...API_REQUEST, kind: 'api', ...echoingAnswer(SCRUBBED_TEXT) };
+      check(
+        JSON.stringify(observation) === JSON.stringify(expected),
+        `${label} echoed ${caseName} (${JSON.stringify(echo)}) left ${JSON.stringify(observation)}; expected ${JSON.stringify(expected)}`,
+      );
+      // Each byte format of the echo, in a text body: one record per format, so a later format is not judged by the first.
+      // An echo with a letter beyond ASCII in a case of its own (a word capitalized, every other letter shifted) that the
+      // serializer then writes as `\uXXXX` has other hex digits than any whole-secret case gives (`\u00fc`, `\u00dc`):
+      // Story 1.74 closes that corner, so the escaped formats are tried here for the cases that change every letter alike.
+      const unevenAndEscaped =
+        [...secret].some((character) => character.codePointAt(0) > 0x7f) &&
+        ![secret, secret.toLowerCase(), secret.toUpperCase()].includes(echo);
+      for (const [format, write] of Object.entries(BYTE_FORMATS)) {
+        if (unevenAndEscaped && ESCAPES_LETTERS(format)) continue;
+        const written = write(echo);
+        const { observation: sent } = await probe(
+          { status: 200, headers: {}, body: { kind: 'text', value: `pre ${written} post` } },
+          secret,
+        );
+        check(
+          sent.body?.value === `pre ${SCRUBBED_TEXT} post`,
+          `${label} echoed ${caseName} as ${format} (${JSON.stringify(written)}) left ${JSON.stringify(sent.body?.value)}`,
+        );
+      }
+      // The fault path: the message, the cause and the text a process printed, with the secret in the same case, and a
+      // leading part of it the printed text's end cut off.
+      const printed = `${'a'.repeat(100)}${echo}${'b'.repeat(20)}`;
+      const cutOff = `${'a'.repeat(100)}${[...echo].slice(0, 9).join('')}`;
+      const faulted = await failure(
+        () =>
+          Object.assign(new Error(`denied ${echo} for the call`), {
+            code: 'forbidden-target',
+            captured: printed,
+            cause: Object.assign(new Error(`cause ${echo} ended`), { captured: cutOff }),
+          }),
+        secret,
+      );
+      check(
+        faulted.message === `denied ${SCRUBBED_TEXT} for the call: ${'a'.repeat(100)}${SCRUBBED_TEXT}${'b'.repeat(20)}` &&
+          faulted.scrubbedCause === `cause ${SCRUBBED_TEXT} ended: ${'a'.repeat(100)}${SCRUBBED_TEXT}`,
+        `a fault quoting ${label} ${caseName} left the message ${JSON.stringify(faulted?.message)} and the cause ${JSON.stringify(faulted?.scrubbedCause)}`,
+      );
+    }
+    // A key, whatever its case: three keys that scrub to one name are numbered, the others keep theirs.
+    const keys = Object.values(LETTER_CASES).map((change) => change(secret));
+    const distinct = [...new Set(keys)];
+    const { observation: keyed } = await probe(
+      {
+        status: 200,
+        headers: {},
+        body: { kind: 'json', value: Object.fromEntries([...distinct.map((key, index) => [key, index]), ['plain', 'x']]) },
+      },
+      secret,
+    );
+    const numbered = [...distinct.keys()].map((index) => (index === 0 ? SCRUBBED_TEXT : `${SCRUBBED_TEXT}-${index + 1}`));
+    check(
+      JSON.stringify(Object.keys(keyed.body?.value ?? {})) === JSON.stringify([...numbered, 'plain']),
+      `${label} as ${distinct.length} object keys in different cases gave ${JSON.stringify(Object.keys(keyed.body?.value ?? {}))}`,
+    );
+  }
+
+  // A value under the minimum length stays in every case, in every byte format; one of the minimum length does not.
+  const SHORT = ['sevench', 'sh/rt-7', 'ünï-7ab'];
+  const BOUNDARY = 'eightchr';
+  check(
+    SHORT.every((short) => short.length === 7) && BOUNDARY.length === 8,
+    'the short values are not seven characters or the boundary value not eight',
+  );
+  for (const [caseName, change] of Object.entries(LETTER_CASES)) {
+    const bodies = [];
+    for (const short of SHORT) for (const write of Object.values(BYTE_FORMATS)) bodies.push(write(change(short)));
+    const answer = {
+      status: 200,
+      headers: { 'x-short': change(SHORT[0]) },
+      body: { kind: 'json', value: { shorts: bodies, [change(SHORT[1])]: 'a key', boundary: change(BOUNDARY), number: 1_234_567 } },
+    };
+    const { observation } = await probe(answer, ...SHORT, BOUNDARY);
+    const expected = {
+      ...API_REQUEST,
+      kind: 'api',
+      ...answer,
+      body: { kind: 'json', value: { ...answer.body.value, boundary: SCRUBBED_TEXT } },
+    };
+    check(
+      JSON.stringify(observation) === JSON.stringify(expected),
+      `a seven-character value echoed ${caseName} was scrubbed, or the eight-character one was not: ${JSON.stringify(observation)}`,
+    );
+    const faulted = await failure(
+      () => Object.assign(new Error(`seen ${change(SHORT[0])} and ${change(BOUNDARY)}`), { cause: new Error(`cause ${change(SHORT[2])}`) }),
+      ...SHORT,
+      BOUNDARY,
+    );
+    check(
+      faulted.message === `seen ${change(SHORT[0])} and ${SCRUBBED_TEXT}` && faulted.scrubbedCause === `cause ${change(SHORT[2])}`,
+      `a fault quoting a seven-character value ${caseName} gave ${JSON.stringify(faulted?.message)} and ${JSON.stringify(faulted?.scrubbedCause)}`,
+    );
+  }
+
+  // Text that merely resembles a secret stays: a value that differs in one character, spaces for dashes, a leading part
+  // of it (no cut text ends an observation), the secret's characters in another order, and a pattern's metacharacters.
+  const [plainSecret, , metaSecret, sharpSecret] = LETTER_SECRETS;
+  const resembling = [
+    'GRADER-SECRET-VALUE-0124',
+    'grader secret value 0123',
+    'GRADER-SECRET-VALUE',
+    'xgrader-secret-value-012',
+    'GRADER-SECRET-0123-VALUE',
+    'STRASSE-SECRET-ÜNÏ-0124',
+    'a-b-c-d-e-f-g-h-i-j-k-l-m-n-o-p',
+    'axb c d e f g h i j k l m n o p',
+    String.raw`a.b*c+d?e^f$g{h}(i)|j[k]\l-m/n<o>&`,
+    'v1x2x3-rcx1',
+    'a|b|c',
+  ];
+  const { observation: resembled } = await probe(
+    { status: 200, headers: { 'x-text': resembling[0] }, body: { kind: 'json', value: resembling } },
+    plainSecret,
+    metaSecret,
+    sharpSecret,
+    'v1.2.3-rc.1',
+    'a|b|c|d|e|f',
+  );
+  check(
+    JSON.stringify(resembled.body?.value) === JSON.stringify(resembling) && resembled.headers['x-text'] === resembling[0],
+    `text that merely resembles a secret came back ${JSON.stringify(resembled.body?.value)}`,
+  );
+
+  // Two secret sets on one port: each call is scrubbed with its own interface's secrets and not with another's.
+  const twoSets = hostEnvironmentPort({
+    port: {
+      probe: async (request) => ({
+        ...request,
+        kind: 'api',
+        status: 200,
+        headers: {},
+        body: { kind: 'text', value: `${'FIRST-SET-VALUE-1'} ${'second-set-value-2'}` },
+      }),
+    },
+    registry: { apiSecrets: (interfaceId) => (interfaceId === 'first' ? ['first-set-value-1'] : ['SECOND-SET-VALUE-2']) },
+  });
+  const asFirst = await twoSets.probe({ ...API_REQUEST, interfaceId: 'first' });
+  const asSecond = await twoSets.probe({ ...API_REQUEST, interfaceId: 'second' });
+  const asFirstAgain = await twoSets.probe({ ...API_REQUEST, interfaceId: 'first' });
+  check(
+    asFirst.observation.body.value === `${SCRUBBED_TEXT} second-set-value-2` &&
+      asSecond.observation.body.value === `FIRST-SET-VALUE-1 ${SCRUBBED_TEXT}` &&
+      asFirstAgain.observation.body.value === asFirst.observation.body.value,
+    `two secret sets on one port gave ${JSON.stringify([asFirst, asSecond, asFirstAgain].map((answer) => answer.observation.body.value))}`,
+  );
+
+  // A cut text: a leading part of a secret, four characters or more, at the end, in any case; shorter ones and ones that are
+  // not at the end stay; the longest cut wins whichever secret it leads.
+  const forms = secretForms(['grader-secret-value-0123', 'Second-Token-Value-4567']);
+  const cuts = [
+    ['log line GRADER-SECRET-VA', 'log line [redacted]'],
+    ['log line Grader-Secret-Value-012', 'log line [redacted]'],
+    ['log line gRaDeR-sE', 'log line [redacted]'],
+    ['log line GRAD', 'log line [redacted]'],
+    ['log line GRA', 'log line GRA'],
+    ['log line GRAD then more', 'log line GRAD then more'],
+    ['log line SECOND-TOKEN-V', 'log line [redacted]'],
+    ['log line second-', 'log line [redacted]'],
+    ['log line GRADER-SECRET-VALUE-0123 tail', 'log line [redacted] tail'],
+    ['GRADER-SECRET-VALUE-0123 and SECOND-TOK', '[redacted] and [redacted]'],
+  ];
+  for (const [text, expected] of cuts) {
+    check(
+      scrubCutText(text, forms) === expected,
+      `the cut text ${JSON.stringify(text)} gave ${JSON.stringify(scrubCutText(text, forms))}; expected ${JSON.stringify(expected)}`,
+    );
+  }
+  const astral = 'tok-𐐨𐐀-secret-0123';
+  const astralForms = secretForms([astral]);
+  for (const [name, change] of Object.entries(LETTER_CASES)) {
+    const echoed = change(astral);
+    // Every length of the leading part, in code units: a cut between a pair's surrogates leaves the first alone at the end.
+    for (let units = 4; units < echoed.length; units += 1) {
+      const text = `line ${echoed.slice(0, units)}`;
+      check(
+        scrubCutText(text, astralForms) === 'line [redacted]',
+        `the cut text ${JSON.stringify(text)} (${name}, ${units} units of a secret with letters outside the BMP) gave ${JSON.stringify(scrubCutText(text, astralForms))}`,
+      );
+    }
+  }
+  const sharpForms = secretForms(['straße-secret']);
+  for (const [text, expected] of [
+    ['line STRASS', 'line [redacted]'],
+    ['line StRaSsE-s', 'line [redacted]'],
+    ['line STRAẞE-SEC', 'line [redacted]'],
+    ['line STRA', 'line [redacted]'],
+    ['line STR', 'line STR'],
+  ]) {
+    check(
+      scrubCutText(text, sharpForms) === expected,
+      `the cut text ${JSON.stringify(text)} gave ${JSON.stringify(scrubCutText(text, sharpForms))}; expected ${JSON.stringify(expected)}`,
+    );
+  }
+  // A printed text is scrubbed whole before it is cut to its last 2000 characters, so the cut never splits a secret in another case.
+  const straddling = quotedCapture(`xxxxx${'SECOND-token-value-4567'}${'y'.repeat(1990)}`, forms);
+  check(
+    straddling === `: ...${SCRUBBED_TEXT}${'y'.repeat(1990)}`,
+    `a printed text whose cut falls inside a secret in another case was quoted as ${JSON.stringify(straddling.slice(0, 60))}`,
+  );
+  check(
+    quotedCapture('some output') === ': some output' && quotedCapture(undefined, forms) === '',
+    'quotedCapture changed for no secrets or no output',
+  );
+
+  // A number whose text holds a secret in another letter case: a secret of digits and `E`, read against the number's `e`.
+  const exponent = secretForms(['3456789E+25']);
+  check(
+    scrub({ big: 1.234_567_89e25, other: 1.2345e25, list: [1, 2.5e30] }, exponent).big === SCRUBBED_TEXT &&
+      scrub({ big: 1.234_567_89e25, other: 1.2345e25 }, exponent).other === 1.2345e25 &&
+      JSON.stringify(scrub([1, 2.5e30], exponent)) === JSON.stringify([1, 2.5e30]),
+    `a number holding 3456789E+25 gave ${JSON.stringify(scrub({ big: 1.234_567_89e25, other: 1.2345e25 }, exponent))}`,
+  );
+  // The same, over a hand-built array that holds the secret in the one case it was written in.
+  check(
+    scrub(1.234_567_89e25, ['3456789E+25']) === SCRUBBED_TEXT && scrub(1.2345e25, ['3456789E+25']) === 1.2345e25,
+    'a number holding 3456789E+25 was not read against a secret written with an upper-case E',
+  );
+  const laterNumber = scrub([7, 8, { n: 9.876_543_21e22 }], secretForms(['7654321E+22']));
+  check(
+    laterNumber[2].n === SCRUBBED_TEXT && laterNumber[0] === 7,
+    `a later number holding 7654321E+22 gave ${JSON.stringify(laterNumber)}`,
+  );
+
+  // A form that holds another is replaced whole, whichever of the two the array lists first.
+  check(
+    scrub('xx-ABCDEFGHIJ-xx', ['abcdefgh', 'abcdefghij']) === 'xx-[redacted]-xx' &&
+      scrub('xx-ABCDEFGHIJ-xx', ['abcdefghij', 'abcdefgh']) === 'xx-[redacted]-xx',
+    'a secret that holds another left its end in the text',
+  );
+
+  // Secrets that overlap in the text are replaced as one: the leftmost does not leave the rest of the longer one behind.
+  for (const secrets of [
+    ['abcdefgh', 'cdefghijklmnop'],
+    ['cdefghijklmnop', 'abcdefgh'],
+  ]) {
+    check(
+      scrub('xx ABCDEFGHIJKLMNOP yy', secrets) === 'xx [redacted] yy' &&
+        scrub('xx abcdefghijklmnop yy', secretForms(secrets)) === 'xx [redacted] yy',
+      `overlapping secrets ${JSON.stringify(secrets)} left ${JSON.stringify(scrub('xx ABCDEFGHIJKLMNOP yy', secrets))}`,
+    );
+  }
+  check(
+    scrub('abcdefghABCDEFGH', ['abcdefgh']) === '[redacted][redacted]' &&
+      scrub('ß-straße-secret', secretForms(['STRASSE-SECRET'])) === 'ß-[redacted]',
+    'two secrets side by side were merged, or a length-changing fold shifted the replaced span',
+  );
+
+  // A large secret scrubs and cuts without a pattern the engine cannot compile: a credential file with characters a serializer
+  // escapes, a long plain token and a very long one, on the success path and on a fault, which keeps its own message.
+  const credential = JSON.stringify({
+    type: 'service_account',
+    private_key: `-----BEGIN-----\n${'MIIEvQ+/='.repeat(150)}\n-----END-----`,
+    note: 'Ü<&>/é',
+  });
+  const longToken = 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9xYz_-'.repeat(60);
+  const veryLong = 'AbCdEfGhIj'.repeat(6000);
+  for (const [what, secret] of [
+    ['a credential file', credential],
+    ['a 2,520-character token', longToken],
+    ['a 60,000-character secret', veryLong],
+  ]) {
+    const started = Date.now();
+    const { observation: large } = await probe(
+      { status: 200, headers: { 'x-echo': secret.toUpperCase() }, body: { kind: 'text', value: `pre ${secret.toLowerCase()} post` } },
+      secret,
+    );
+    const fault = await failure(
+      () =>
+        Object.assign(new Error('server would not start'), {
+          cause: Object.assign(new Error(`cause ${secret.toUpperCase()}`), {
+            captured: `${'a'.repeat(50)}${secret.slice(0, 1000).toLowerCase()}`,
+          }),
+        }),
+      secret,
+    );
+    check(
+      large.headers['x-echo'] === SCRUBBED_TEXT &&
+        large.body.value === `pre ${SCRUBBED_TEXT} post` &&
+        fault.message === 'server would not start' &&
+        fault.scrubbedCause === `cause ${SCRUBBED_TEXT}: ${'a'.repeat(50)}${SCRUBBED_TEXT}`,
+      `${what} was not scrubbed whole: ${JSON.stringify(large.body?.value?.slice(0, 40))}, ${JSON.stringify(fault?.message?.slice(0, 80))}, ${JSON.stringify(fault?.scrubbedCause?.slice(0, 80))}`,
+    );
+    check(Date.now() - started < 20_000, `scrubbing ${what} took ${Date.now() - started} ms`);
+  }
+  check(
+    Object.isFrozen(secretForms(['abcdefgh'])),
+    'secretForms gave an array that can change after the matching compiled from it was kept with it',
+  );
+
+  // The forms stay a plain array of strings, longest first, and a form that is empty matches nothing.
+  const listed = secretForms(['grader-secret-value-0123']);
+  check(
+    Array.isArray(listed) &&
+      listed.every((form) => typeof form === 'string') &&
+      listed.every((form, index) => index === 0 || listed[index - 1].length >= form.length) &&
+      listed.includes('grader-secret-value-0123') &&
+      listed.includes('GRADER-SECRET-VALUE-0123'),
+    `secretForms gave ${JSON.stringify(listed)}`,
+  );
+  check(
+    scrub('abcdef', ['', 'cd']) === 'ab[redacted]ef' && scrub('abcdef', ['']) === 'abcdef' && scrub('abc', []) === 'abc',
+    'an empty form scrubbed ordinary text',
+  );
 }
 
 // ---------------------------------------------------------------- the pipeline
@@ -3538,10 +3989,17 @@ async function runCase(name, body) {
 
 async function main() {
   try {
+    if (process.argv.includes('--letter-cases-only')) {
+      // The scrub cases of Story 1.66 alone, which its revert checks run.
+      await runCase('the units', checkUnits);
+      await runCase('the scrub in every letter case', checkLetterCases);
+      return report();
+    }
     await runCase('the templates', checkTemplates);
     await runCase('the port, in process', checkPortUnits);
     await runCase('the conformance file', checkConformance);
     await runCase('the units', checkUnits);
+    await runCase('the scrub in every letter case', checkLetterCases);
     await runCase("an unsealed run's evidence", checkSealedEvidence);
     await runCase("the port's process", checkPortProcess);
     await runCase('the pipeline', checkPipeline);
@@ -3560,6 +4018,11 @@ async function main() {
   } finally {
     scratch.removeAll();
   }
+  return report();
+}
+
+/** Reports the failures, or that every check passed, as the exit code of the run. */
+function report() {
   if (failures.length > 0) {
     console.error(`${colors.red}${failures.length} of ${checks} tea-evaluate HTTP check(s) failed:${colors.reset}`);
     for (const failure of failures) console.error(`  - ${failure}`);
