@@ -16,7 +16,8 @@
  *   6. the clean arm runs again and must hold.
  *
  * Only that sequence yields `rollbackVerified: true`; the value is the cycle's
- * own conjunction of the digest equality and the clean rerun, never a constant.
+ * own conjunction of the digest equality and the clean rerun, and this module
+ * returns the cycle's evidence and states the flag nowhere.
  * A step that fails throws a `QualificationError` and the caller emits no probe.
  *
  * An arm is `scoreDocument`: the same projection `test/test-eval-replay.js`
@@ -30,12 +31,19 @@
 'use strict';
 
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 const { isDeepStrictEqual } = require('node:util');
 
 const { QUALIFICATION_EXITS, QualificationError, countOccurrences, runMutationCycle } = require('../../cli/lib/evaluate/mutation');
 const { loadEngine } = require('../../cli/lib/evaluate/engine');
+const {
+  WorkspaceRefusal,
+  cleanUpOnSignal,
+  makePrivateParent,
+  makeScratchDirectory,
+  removeScratchDirectory,
+} = require('../../cli/lib/evaluate/workspace');
+const { removeDeadPrivateParents } = require('./scratch-directories');
 const { projectTestDesignResult } = require('./test-design-result');
 
 /** The design's name inside the workspace; the mutation's `targetArtifact`, relative to the workspace root. */
@@ -51,8 +59,7 @@ const RE_EXECUTION_CAP = 0;
  * Whether one oracle holds on one scored run, or null when the run records no answer for it.
  *
  * A run the harness refused as unparseable never reached `documentMentions`, so a vocabulary oracle has no
- * reading there and the run is left out of that oracle's evidence rather than counted as a violation it did
- * not record.
+ * reading there and the run is left out of that oracle's evidence.
  *
  * @param {{kind: string, oracleId: string, risk: {id: string}|null}} entry the corpus entry the oracle was generated from
  * @param {object} result a projected run
@@ -106,8 +113,9 @@ function deriveReplaceExact(original, mutated) {
   let endBefore = before.length - tail;
   let endAfter = after.length - tail;
   const span = () => ({ find: before.slice(start, endBefore).join(''), replace: after.slice(start, endAfter).join('') });
-  while (countOccurrences(Buffer.from(original), Buffer.from(span().find)) !== 1) {
-    if (start === 0 && endBefore === before.length) {
+  // Each pass widens by a line on either side, so a span that is still not unique after every line has been added never will be.
+  for (let widened = 0; countOccurrences(Buffer.from(original), Buffer.from(span().find)) !== 1; widened += 1) {
+    if ((start === 0 && endBefore === before.length) || widened > before.length) {
       throw new QualificationError(
         QUALIFICATION_EXITS.authoring,
         'no replace-exact operator over whole lines reproduces the stored mutated design',
@@ -134,11 +142,13 @@ function scoreDocument({ text, entry, set, categories }) {
   return { verdict: holds === true ? 'held' : holds === false ? 'violated' : 'inconclusive', result };
 }
 
-/** A result as it reads back from disk: JSON drops the members a projection leaves undefined. */
-function asStored(result) {
-  if (result === undefined) return result;
-  // eslint-disable-next-line unicorn/prefer-structured-clone -- structuredClone keeps undefined members, which a stored result cannot hold
-  return JSON.parse(JSON.stringify(result));
+let reaped = false;
+
+/** Removes the private parents of runs that were killed, once per process, as the test suites do before they start. */
+function reapDeadWorkspaces() {
+  if (reaped) return;
+  reaped = true;
+  removeDeadPrivateParents();
 }
 
 /**
@@ -155,7 +165,7 @@ function asStored(result) {
  * @param {(arm: {phase: string, file: string, text: string, entry: object, set: object, categories: Set<string>}) => Promise<object>|object} [options.arm]
  *   one arm; `scoreDocument` by default
  * @param {(bytes: Uint8Array) => string} [options.digestBytes] eval-quality's own by default
- * @returns {Promise<{mutation: object, evidence: object, rollbackVerified: boolean}>}
+ * @returns {Promise<{mutation: object, evidence: object}>} the cycle's own evidence, `rollbackVerified` included
  * @throws {QualificationError} at the first step that fails; no qualified probe follows
  */
 async function qualifyTestDesignMutation({
@@ -196,7 +206,20 @@ async function qualifyTestDesignMutation({
     },
   };
 
-  const root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'tea-design-qualification-'));
+  reapDeadWorkspaces();
+  // The runtime's convention for a disposable directory: a pid-named parent under the user's private root,
+  // outside the checkout whatever TMPDIR is, removed by the end of the cycle and by an interrupting signal.
+  const scratch = [];
+  let parent;
+  let root;
+  try {
+    parent = makePrivateParent(scratch);
+    root = makeScratchDirectory(scratch, 'design-qualification-');
+  } catch (error) {
+    if (!(error instanceof WorkspaceRefusal)) throw error;
+    throw new QualificationError(QUALIFICATION_EXITS.infrastructure, `${mutationId}: ${error.message}`);
+  }
+  const releaseSignals = cleanUpOnSignal([{ directory: parent, top: parent, kind: 'directory', repository: null }], new AbortController());
   try {
     const file = path.join(root, TARGET_ARTIFACT);
     fs.writeFileSync(file, reference);
@@ -205,23 +228,6 @@ async function qualifyTestDesignMutation({
       return arm({ phase, file, text, entry, set, categories });
     };
     const evidence = await runMutationCycle({ root, mutation, runArm, reExecutionCap: RE_EXECUTION_CAP, digestBytes: digestOf });
-    if (evidence.rollbackVerified !== true) {
-      throw new QualificationError(
-        QUALIFICATION_EXITS.infrastructure,
-        `${mutationId}: the cycle ended without a verified rollback, so no probe may claim one`,
-        evidence,
-      );
-    }
-
-    // The mutation the cycle applied is the edit that yields the stored seeded design, byte for byte.
-    if (evidence.mutatedDigest !== sourceDigests[1]) {
-      throw new QualificationError(
-        QUALIFICATION_EXITS.infrastructure,
-        `${mutationId}: the mutated design digests to ${evidence.mutatedDigest}, not the stored seeded design's ${sourceDigests[1]}, so the mutated arm did not read the bytes the probe cites`,
-        evidence,
-      );
-    }
-
     // The evidence a probe cites is the evidence the cycle performed: every arm scored what the stored
     // run records for the document it read.
     const expectations = [
@@ -230,7 +236,7 @@ async function qualifyTestDesignMutation({
       ...evidence.rePasses.map((rePass, index) => [`re-pass-${index + 1}`, rePass, stored.baseline]),
     ];
     for (const [phase, performed, recorded] of expectations) {
-      if (!isDeepStrictEqual(asStored(performed.result), recorded)) {
+      if (!isDeepStrictEqual(performed.result, recorded)) {
         throw new QualificationError(
           QUALIFICATION_EXITS.infrastructure,
           `${mutationId}: the ${phase} arm scored a result that differs from the one the stored run records, so the stored evidence is not what the cycle performed; run npm run test:eval-replay`,
@@ -248,9 +254,10 @@ async function qualifyTestDesignMutation({
         evidence,
       );
     }
-    return { mutation, evidence, rollbackVerified: evidence.rollbackVerified };
+    return { mutation, evidence };
   } finally {
-    fs.rmSync(root, { recursive: true, force: true });
+    releaseSignals();
+    removeScratchDirectory(parent);
   }
 }
 

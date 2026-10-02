@@ -980,8 +980,14 @@ async function buildTestDesignProbes({ qualify = qualifyTestDesignMutation } = {
       }
       throw error;
     }
+    // The claim is read from the cycle's own evidence, and the evidence must carry the digests that make it:
+    // a restore that digests to the pre-mutation bytes, a mutation that changed them, and a rerun that held.
+    const performed = qualified?.evidence;
     assert(
-      qualified?.rollbackVerified === true,
+      performed?.rollbackVerified === true &&
+        performed.restoredDigest === performed.preDigest &&
+        performed.mutatedDigest !== performed.preDigest &&
+        performed.rePasses?.at(-1)?.verdict === 'held',
       `${oracleId} (${mutated.id}): the mutation cycle did not verify its rollback, so no probe may claim it`,
     );
 
@@ -1035,7 +1041,7 @@ async function buildTestDesignProbes({ qualify = qualifyTestDesignMutation } = {
         mutatedFailEvidence: fileReference(mutated.expectedPath),
         // The cycle's own conjunction of the restored digest and the clean rerun,
         // asserted true above; a literal here would claim a rollback nobody performed.
-        rollbackVerified: qualified.rollbackVerified,
+        rollbackVerified: performed.rollbackVerified,
       },
       expectedClean: false,
       defects: [
@@ -1909,24 +1915,17 @@ function firstDifference(expected, actual) {
 }
 
 /**
- * Every byte this generator digests comes through the certified corpus port,
- * resolved here before any builder runs because `digestOf` is synchronous and the
- * port is not.
+ * Builds every corpus, then writes them (or, in check mode, compares them with what is on disk).
+ *
+ * Every corpus is built and rendered before any file is touched, so a corpus that cannot be built (a
+ * mutation that did not qualify, say) rejects here and leaves the whole directory as it was.
+ *
+ * @returns {Promise<Array<{relativePath: string, reason: string, onDisk?: string, generated?: string}>>} the corpora that differ, in check mode
  */
-async function loadGeneratorCorpus() {
-  corpus = await loadCorpus(PROJECT_ROOT, corpusMembers());
-}
-
-async function main() {
-  const check = process.argv.slice(2).includes('--check');
-  const prettierConfig = await prettier.resolveConfig(path.join(PROBE_ROOT, 'test-review.probes.json'));
-  await loadGeneratorCorpus();
-
-  // Every corpus is built before any is written, so a corpus that cannot be built (a mutation that
-  // did not qualify, say) leaves the whole directory as it was.
+async function writeCorpora({ probeRoot, targetList, check, prettierConfig }) {
   const built = [];
-  for (const target of targets()) {
-    const filePath = path.join(PROBE_ROOT, target.relativePath);
+  for (const target of targetList) {
+    const filePath = path.join(probeRoot, target.relativePath);
     built.push({ target, filePath, generated: await render(await target.build(), filePath, prettierConfig) });
   }
 
@@ -1952,6 +1951,24 @@ async function main() {
       generated: difference.generated,
     });
   }
+  return stale;
+}
+
+/**
+ * Every byte this generator digests comes through the certified corpus port,
+ * resolved here before any builder runs because `digestOf` is synchronous and the
+ * port is not.
+ */
+async function loadGeneratorCorpus() {
+  corpus = await loadCorpus(PROJECT_ROOT, corpusMembers());
+}
+
+async function main() {
+  const check = process.argv.slice(2).includes('--check');
+  const prettierConfig = await prettier.resolveConfig(path.join(PROBE_ROOT, 'test-review.probes.json'));
+  await loadGeneratorCorpus();
+
+  const stale = await writeCorpora({ probeRoot: PROBE_ROOT, targetList: targets(), check, prettierConfig });
 
   // Computed before the staleness report below returns, so a stale corpus does
   // not hide an ungenerated one until somebody fixes the first.
@@ -1993,4 +2010,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { PROBE_SCHEMA_VERSION, GeneratorError, buildTestDesignProbes, loadGeneratorCorpus, targets };
+module.exports = { PROBE_SCHEMA_VERSION, GeneratorError, buildTestDesignProbes, loadGeneratorCorpus, targets, writeCorpora };
