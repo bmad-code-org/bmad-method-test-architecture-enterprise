@@ -747,6 +747,8 @@ async function runInWorkspaces({
     workspaces: { pristine: pristine.root },
     // seatbelt, bubblewrap or opt-out (Story 1.31).
     confinement: confinement.mode,
+    // The interface IDs of the entries that declare "network": "host" and keep the host's network under Bubblewrap (Story 1.63).
+    hostNetwork: [...registry.hostNetworkEntries],
     adopterTree: { repository: before.repository, unchanged: null },
     refused: [],
   };

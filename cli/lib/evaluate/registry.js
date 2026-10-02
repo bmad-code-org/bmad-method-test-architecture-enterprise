@@ -160,7 +160,7 @@ function registryProblems(entries) {
 
 /**
  * Every entry that starts the same target as an earlier one with other
- * `systemPaths`, as one line each. A confined run's audit grants a started
+ * `systemPaths` or another `network`, as one line each. A confined run's audit grants a started
  * process the system paths of the target it runs (`createProbePort`), since
  * the request eval-quality hands the mechanism names the target and not the
  * interface, so two entries over one target must declare the same paths or
@@ -178,12 +178,20 @@ function sharedTargetSystemPaths(entries) {
     if (typeof target !== 'string' || target.length === 0) continue;
     const key = path.posix.normalize(target);
     const paths = JSON.stringify([...new Set(Array.isArray(entry.systemPaths) ? entry.systemPaths : [])].sort());
+    const network = entry.network === 'host' ? 'host' : 'isolated';
     const earlier = declared.get(key);
-    if (earlier === undefined) declared.set(key, { index, paths });
-    else if (earlier.paths !== paths) {
-      problems.push(
-        `registry[${index}] starts the target ${JSON.stringify(target)} registry[${earlier.index}] starts with other systemPaths; a confined run grants a target's system paths to every entry that starts it, so declare the same paths on both`,
-      );
+    if (earlier === undefined) declared.set(key, { index, paths, network });
+    else {
+      if (earlier.paths !== paths) {
+        problems.push(
+          `registry[${index}] starts the target ${JSON.stringify(target)} registry[${earlier.index}] starts with other systemPaths; a confined run grants a target's system paths to every entry that starts it, so declare the same paths on both`,
+        );
+      }
+      if (earlier.network !== network) {
+        problems.push(
+          `registry[${index}] starts the target ${JSON.stringify(target)} registry[${earlier.index}] starts with another network; a confined run gives a target the network of every entry that starts it, so declare the same network on both`,
+        );
+      }
     }
   }
   return problems;
@@ -749,8 +757,11 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
       for (const entry of serverEntries) declare(targetPath(entry, options.projectRoot ?? registryRoot), entry);
       for (const entry of apiEntries) if (entry.server !== undefined) declare(serverTarget(entry), entry);
       const systemPathsOf = (target) => declared.get(target) ?? [];
-      commandMechanism = confinedCommandMechanism(commandMechanism, sandbox, systemPathsOf, scratch);
-      mcpMechanism = confinedMcpMechanism(mcpMechanism, sandbox, systemPathsOf, scratch);
+      const networkOf = networkResolver(registered, (entry) =>
+        isApiEntry(entry) ? serverTarget(entry) : targetPath(entry, options.projectRoot ?? registryRoot),
+      );
+      commandMechanism = confinedCommandMechanism(commandMechanism, sandbox, systemPathsOf, scratch, networkOf);
+      mcpMechanism = confinedMcpMechanism(mcpMechanism, sandbox, systemPathsOf, scratch, networkOf);
     }
     const commandAdapter = adapters.createCommandLineAdapter(policy, commandMechanism);
     const mcpAdapter = adapters.createMcpAdapter(mcpPolicy, mcpMechanism);
@@ -925,6 +936,13 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
     root: registryRoot,
     httpPort,
     confinement,
+    /** The interface IDs of the entries that declare `"network": "host"`, sorted: what a confined run records as keeping the host's network (Story 1.63). */
+    hostNetworkEntries: Object.freeze(
+      registered
+        .filter((entry) => entry?.network === 'host')
+        .map((entry) => entry.interfaceId)
+        .sort(),
+    ),
     /** The user's private root directory the run's parent sits beneath (`workspace.js` `makePrivateParent`), or `null` where none was made. */
     get privateRoot() {
       return scratch.privateRoot ?? null;
@@ -1128,6 +1146,26 @@ function registryFromEvaluation(evaluation, options) {
   return createRegistry(evaluation?.registry, { ...options, principalMappings: evaluation?.principalMappings });
 }
 
+/**
+ * The network each started target's call runs in under Bubblewrap (Story 1.63): `host` for the target of a command entry, a
+ * tool-server entry or an HTTP entry's started service that declares `"network": "host"`, `isolated` for every other target.
+ * A call finds its entry by its target, as `systemPathsOf` does.
+ *
+ * @param {object[]} entries the registry's entries
+ * @param {(entry: object) => string} targetOf the target a call of the entry starts (an HTTP entry's server)
+ * @returns {(target: string) => 'host' | 'isolated'}
+ */
+function networkResolver(entries, targetOf) {
+  const hostNetworked = new Set();
+  for (const entry of entries) {
+    if (entry.network !== 'host') continue;
+    // An HTTP entry that names no server starts nothing.
+    if (isApiEntry(entry) && entry.server === undefined) continue;
+    hostNetworked.add(targetOf(entry));
+  }
+  return (target) => (hostNetworked.has(target) ? 'host' : 'isolated');
+}
+
 module.exports = {
   API_REGISTRY_ENTRY_DEFINITION,
   MAX_OUTPUT_BYTES,
@@ -1140,6 +1178,7 @@ module.exports = {
   isMcpEntry,
   isRegistry,
   kindOf,
+  networkResolver,
   apiRegistryProblems,
   mcpRegistryProblems,
   observedText,

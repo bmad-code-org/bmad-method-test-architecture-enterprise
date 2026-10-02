@@ -23,7 +23,7 @@ inputDocuments:
 
 ## Overview
 
-This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and ninety-four stories, including H.1 (Stories 1.27 to 1.75, 1.80, 1.81, 1.90 to 1.100 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
+This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and ninety-six stories, including H.1 (Stories 1.27 to 1.75, 1.80 to 1.83, 1.90 to 1.100 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
 
 Evaluate is fully stacked. The stack runs system under test, then the evaluation (the mechanism that runs the system, collects evidence and makes judgments), then the Behavioral Evaluation Contract (what behavior matters, what evidence counts, how success and failure resolve), then eval-quality (contract sanity, evidence support, and whether the evaluation catches defects). TeA owns every layer above eval-quality, including each concern eval-quality states it leaves to the caller, so an adopter can evaluate any target end to end. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3 onward, Epic 2 and H.1 to close the plan gap audit; the Traceability section maps each audit item to the story that closes it.
 
@@ -150,7 +150,7 @@ None. Evaluate has no graphical interface.
 ### Epic 1: The Evaluate authoring loop
 
 An adopter describes a target, answers Evaluate's questions, chooses or builds the evaluation layer and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches the seeded defect, with the gaps named and closed. The epic closes by running Evaluate on `bmad-testarch-evaluate` itself, then proving the guidance on two more target kinds, on seeded weaknesses and on an evaluation framework its guides never name.
-Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.75, 1.80, 1.81, 1.90 to 1.100.
+Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.75, 1.80 to 1.83, 1.90 to 1.100.
 
 **FRs covered:** FR1 to FR10, FR13, FR14.
 
@@ -228,7 +228,7 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 60    | 1.60  | 1.31                         |
 | 61    | 1.61  | 1.31                         |
 | 62    | 1.62  | 1.31                         |
-| 63    | 1.63  | 1.31                         |
+| 63    | 1.63  | 1.31, 1.60                   |
 | 64    | 1.64  | 1.38, 1.65                   |
 | 65    | 1.65  | 1.38                         |
 | 66    | 1.66  | 1.11, 1.38                   |
@@ -243,23 +243,25 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 75    | 1.75  | 1.65                         |
 | 76    | 1.80  | 1.57                         |
 | 77    | 1.81  | 1.60                         |
-| 78    | 1.90  | 2.1                          |
-| 79    | 1.91  | 2.1                          |
-| 80    | 1.92  | 2.2                          |
-| 81    | 1.93  | 2.3                          |
-| 82    | 1.94  | 2.3                          |
-| 83    | 1.95  | 2.3                          |
-| 84    | 1.96  | 2.4                          |
-| 85    | 1.97  | 2.3, 2.4                     |
-| 86    | 1.98  | 1.24, 2.4                    |
-| 87    | 1.99  | 1.49                         |
-| 88    | 1.100 | 1.48, 1.99                   |
-| 89    | 2.1   | 1.16, 1.26, 1.45             |
-| 90    | 2.2   | 2.1                          |
-| 91    | 2.3   | 2.2                          |
-| 92    | 2.4   | 2.3                          |
-| 93    | 2.5   | 2.4                          |
-| 94    | H.1   | 2.5                          |
+| 78    | 1.82  | 1.63                         |
+| 79    | 1.83  | 1.63                         |
+| 80    | 1.90  | 2.1                          |
+| 81    | 1.91  | 2.1                          |
+| 82    | 1.92  | 2.2                          |
+| 83    | 1.93  | 2.3                          |
+| 84    | 1.94  | 2.3                          |
+| 85    | 1.95  | 2.3                          |
+| 86    | 1.96  | 2.4                          |
+| 87    | 1.97  | 2.3, 2.4                     |
+| 88    | 1.98  | 1.24, 2.4                    |
+| 89    | 1.99  | 1.49                         |
+| 90    | 1.100 | 1.48, 1.99                   |
+| 91    | 2.1   | 1.16, 1.26, 1.45             |
+| 92    | 2.2   | 2.1                          |
+| 93    | 2.3   | 2.2                          |
+| 94    | 2.4   | 2.3                          |
+| 95    | 2.5   | 2.4                          |
+| 96    | H.1   | 2.5                          |
 
 ### Parallel lanes (from 2026-10-01)
 
@@ -267,7 +269,7 @@ The table above gives every story's dependencies. Since Story 1.40 merged, the s
 
 **Lane 1: run integrity, scoring and evaluators** (main checkout): 1.41, 1.68, 1.43, 1.44, 1.67, 1.66, 1.65, 1.64, 1.69, 1.70, 1.71, 1.72, 1.73, 1.74, 1.75. Story 1.68 reads the files 1.41 changes, so it follows directly. Story 1.65 turns the single release report into a per-interface report and 1.64 adds call sites that 1.65 would otherwise rewrite, so 1.66, 1.65, 1.64 run in that order. Story 1.44 rewrites the `evaluate-learn` fixture's evaluator, which lane 3's 1.55 and 1.56 own, so those two wait for it. Story 1.69 reuses the module Story 1.68 builds and edits `run.js`, which 1.64 and 1.65 also edit, so it runs after them. Story 1.70 edits the promptfoo starter, fixture evaluator and guide section that Story 1.43 writes and no file the other lane 1 stories edit, so it joins the end. Stories 1.71 to 1.73 were appended from Story 1.44's final review and sit last: 1.71 edits `command-evaluator.js`, `frameworks.js`, the starters and the evaluator guide that Story 1.44 writes, 1.72 edits `agent-adapters.js`, `evaluators.js`, `run.js` and `sealed-brief-agent.js` and so runs after the other `run.js` editors (1.64, 1.65, 1.69), and 1.73 extends the probe and declaration that 1.71 bounds, so it follows 1.71. Story 1.74 was appended from Story 1.66's build; it edits `arm.js`, which no other lane 1 story after 1.66 edits, and joins the end. Story 1.75 was appended from Story 1.65's round 1 review; it extends the report rules that 1.65 writes in `check.js` and `release-report.js`, so it needs only 1.65 and joins the end.
 
-**Lane 2: confinement and process lifecycle** (own worktree): 1.62, 1.57, 1.58, 1.59, 1.60, 1.63, 1.61, 1.52, 1.53, 1.54, 1.80, 1.81. Story 1.62 goes first because it extracts the shared sandbox primitives the confinement stories build on. Story 1.60 may remove 1.63's premise, so 1.63 is re-read after it. Story 1.58 precedes 1.54, since both track the run's private scratch directories. Stories 1.52 to 1.54 touch the preflight and workspace modules the confinement stories also edit, so they run after them.
+**Lane 2: confinement and process lifecycle** (own worktree): 1.62, 1.57, 1.58, 1.59, 1.60, 1.63, 1.61, 1.52, 1.53, 1.54, 1.80, 1.81, 1.82, 1.83. Story 1.62 goes first because it extracts the shared sandbox primitives the confinement stories build on. Story 1.60 may remove 1.63's premise, so 1.63 is re-read after it. Story 1.58 precedes 1.54, since both track the run's private scratch directories. Stories 1.52 to 1.54 touch the preflight and workspace modules the confinement stories also edit, so they run after them. Stories 1.82 and 1.83 follow 1.63, whose vector, bridge and `network` field they build on.
 
 **Lane 3: engine releases, dogfood and Epic 2** (own worktree): 1.45, 2.1, 2.2, 2.3, 2.4, 1.47, 1.49, 1.48, 1.42, 1.50, 1.55, 1.56, 1.51, 1.46, 2.5, 1.90, 1.91, 1.92, 1.93, 1.94, 1.95, 1.96, 1.97, 1.98, 1.99, 1.100. Story 1.45 starts the longest serial chain (1.45, 2.1 to 2.5, then H.1), so it runs first, and 2.5 runs last because it baselines every fixture and so waits for each story that changes committed evidence bytes (1.42, 1.44, 1.50, 1.51, 1.55, 1.56). Stories 1.47, 1.49 and 1.48 regenerate the test-design probes, so they run together with 1.48 last. Stories 1.42 and 1.50 both change the HTTP probe port and run back to back. Story 1.46 records live runs of the Evaluate skill, so it follows the skill-guide stories in other lanes (1.43, 1.44, 1.61, 1.67, 1.70). Lane 3 owns every eval-quality release, because 1.42, 1.45, 1.50 and 1.55 each need a published engine and one publisher keeps the dependency pin and `package-lock.json` ordered. Stories 1.90 and 1.91 follow 2.5: 1.90 edits the baseline `check` and `compare` read, and 1.91 re-accepts the fixture baselines Stories 2.2 to 2.5 commit, so it waits for every one of them.
 
@@ -1702,11 +1704,13 @@ So that the authored evaluation runs confined on the first try and an observed m
 
 **Given** the skill's `references/harness.md`, `references/run.md` and `references/gaps.md`
 **When** `test:evaluate-guidance` reads them
-**Then** the harness guide teaches `systemPaths` with a tagged `evaluation.json` fragment the guidance test validates against the runtime schema, the run guide names each platform's mechanism, the exit-12 refusal and the `"confinement": false` opt-out with what `run.json` records, and the gaps guide maps an isolation violation from `observedMounts` to its repair; deleting any passage fails the test
+**Then** the harness guide teaches `systemPaths` and the entry's `network` (a Linux skill or agent target, or any target that calls a model or an outside service, declares `"network": "host"` until Story 1.83) with a tagged `evaluation.json` fragment the guidance test validates against the runtime schema, the run guide names each platform's mechanism, the exit-12 refusal, the `"confinement": false` opt-out and the network namespace with what `run.json` records (`confinement` and `hostNetwork`), and the gaps guide maps an isolation violation from `observedMounts` to its repair; deleting any passage fails the test
 **And** the change goes through `bmad-workflow-builder` with a clean Analyze gate (AD-16, AD-18).
 
-**Dependencies:** 1.31.
+**Dependencies:** 1.31, 1.63.
 **Gate:** builder Analyze, `test:evaluate-guidance`, `npm test`.
+
+(Amended 2026-10-02 in Story 1.63's first review round: Story 1.63 edits `harness.md` and `adapters.md` for the `network` declaration, and `run.md`, `gaps.md` and `ci.md` stay with this story, which teaches the same declaration there (the `ci-registry` example in `ci.md` gains `"network": "host"` and the sentence that a Linux skill or agent target's live checks need it) and reads the new `hostNetwork` field of `run.json` beside `confinement`. Editing `ci.md` invalidates the committed capture records of `test/fixtures/evaluate-ci-repos/`, so this story reruns the two live sessions as Story 2.4's record describes and regenerates `capture-record.json`.)
 
 ### Story 1.62: Share one sandbox primitive layer across TeA's isolation modules
 
@@ -1727,24 +1731,31 @@ So that a sandbox defect is fixed once and every caller gets the fix (AD-5, AD-7
 **Dependencies:** 1.31.
 **Gate:** `test:isolation-primitives`, `test:cli`, `test:atdd-isolation`, `test:evaluate-run`, `npm test`.
 
-### Story 1.63: Carry the audit over a channel the target cannot write
+### Story 1.63: Give a Bubblewrap target no route to the host's abstract sockets
 
-Added in Story 1.31 from its local review. The audit's report is a file the target's own processes append to, so a target that means to hide an ungranted read can rewrite the file to the same length or longer after it has run (Story 1.31 reads a file cut shorter than an earlier read, or longer than the runtime reads, as a violation naming the report, and grants only the report file, never its directory). Under Bubblewrap the target also shares the host's network namespace, which an HTTP service needs to be reachable, so a process it starts can connect to an abstract Unix socket such as a desktop session's D-Bus and ask the user's service manager to start a job outside the sandbox; Story 1.31 hides `/run/user`, which closes the path-based socket only.
+Added in Story 1.31 from its local review and amended 2026-10-02 after Story 1.60 merged. Story 1.31's audit report was a file the target's own processes appended to, which a target could rewrite to hide a line. Story 1.60 replaced it with the confining mechanism's own record (a runtime-owned `log stream` on macOS, `strace` outside the namespace on Linux), so no report file exists for a target to rewrite, and this story's first criterion (a channel the target cannot write) is met by that design and is dropped. What stands is the second: under Bubblewrap the target shares the host's network namespace, which an HTTP service needs to be reachable, so a process it starts can connect to an abstract Unix socket such as a desktop session's D-Bus and ask the user's service manager to start a job outside the sandbox; Story 1.31 hides `/run/user`, which closes the path-based socket only. The audit's one remaining channel gap, a target saturating the macOS log to lose its own report, is Story 1.81's.
 
-As an adopter reading `observedMounts`,
-I want the audit's lines to reach the runtime over a channel the target cannot rewrite,
-So that an empty `observedMounts` is evidence and not something the target could have arranged (AD-8).
+As an adopter running a Linux target under Bubblewrap,
+I want the target to have no route to the host's abstract sockets,
+So that a process it starts cannot ask a host service to run a job outside the sandbox (AD-8).
 
 **Acceptance Criteria:**
 
-**Given** a confined trial whose target reads an ungranted path
-**When** the audit reports it
-**Then** the runtime holds each line the moment it is sent (an inherited descriptor or a listener the runtime owns) and a target that rewrites, truncates or floods the report file changes nothing the runtime read; a run whose target rewrites the file to hide the line still lists the path in `observedMounts`, and reading the file again in place of the channel fails that case
-**And** a Bubblewrap target cannot reach a service manager through an abstract socket: the mechanism gives the target no route to the host's abstract sockets while a started HTTP service stays reachable from the runtime, which a case on a Linux runner asserts by starting a listener on an abstract address and attempting the connection from the target; removing the isolation lets the connection through and fails the case
+**Given** a Bubblewrap target whose entry keeps the default network (`"network": "isolated"`) on a Linux runner and a listener on an abstract Unix socket address owned by the runtime
+**When** the target attempts to connect to that address
+**Then** the connection fails while an HTTP service the target started stays reachable from the runtime; removing the isolation lets the connection through and fails the case, and an entry that declares `"network": "host"` reaches the address, which is the case's control
 **And** the reference names what the audit and the sandbox still do not see, with no claim the mechanism cannot back.
 
-**Dependencies:** 1.31.
-**Gate:** `test:evaluate-run`, `test:evaluate-api`, `npm test`, and the Linux CI job.
+**Dependencies:** 1.31, 1.60.
+**Gate:** `test:evaluate-run`, `test:evaluate-api`, `test:isolation-primitives`, `test:evaluate-confinement`, `npm test`, and the Linux CI job.
+
+(Amended 2026-10-02 in Story 1.63's build: the mechanism is a network namespace of the target's own (`--unshare-net`) with a bridge the runtime owns, because abstract sockets are per network namespace and no unprivileged mechanism available to a Bubblewrap run on the CI runners hides them while sharing the namespace.
+The Linux cases run in the ubuntu CI job alone, and the bridge's protocol, the host forwarder, the readiness semantics and the error paths are tested on every host over Unix sockets.
+The finding that path-based sockets stay connectable is Story 1.82.)
+
+(Amended 2026-10-02 in Story 1.63's first review round: the isolation is the default and a registry entry declares what it needs.
+Every entry, a command, a tool server or a started HTTP service, takes `network`, `"isolated"` by default or `"host"`; under Bubblewrap a `host` entry runs without `--unshare-net` and without a bridge, and Seatbelt accepts the field and ignores it.
+A skill or agent target on Linux calls its model provider and a started service may call a model, so the isolated default would cut them off, and `"confinement": false` would drop their file-system confinement too; the run records each entry that declares `host` as a route to the host's abstract sockets, which Story 1.83 closes by giving an isolated entry a route to the hosts it authorizes.)
 
 ### Story 1.64: Hold the release across the witness legs and the trials
 
@@ -2087,6 +2098,47 @@ So that an empty list is read together with how complete the channel was (AD-7).
 
 **Dependencies:** 1.60.
 **Gate:** `test:evaluate-confinement`, `test:evaluate-run`, `npm test`.
+
+### Story 1.82: Give a Bubblewrap target no route to the host's path-based Unix sockets
+
+Added 2026-10-02 in Story 1.63. Story 1.63 put every Bubblewrap target in a network namespace of its own, which hides the host's abstract Unix sockets. A path-based socket is a file, and the target's view of the file system is `--ro-bind / /`: a read-only mount stops writes, and a `connect()` to a socket file is no write, so a target can still connect to `/var/run/docker.sock`, the system bus at `/run/dbus/system_bus_socket` or an agent's socket under `/tmp`, and ask the host service behind it to run a job outside the sandbox. Story 1.31 hides `/run/user` only, which closes the user session's own sockets.
+
+As an adopter running a Linux target under Bubblewrap,
+I want the target to have no route to the host's path-based Unix sockets,
+So that a process it starts cannot ask a host service to run a job outside the sandbox (AD-8).
+
+**Acceptance Criteria:**
+
+**Given** a Bubblewrap target on a Linux runner, a listener the runtime serves on a Unix socket file under the temp directory outside the target's grants, and the host's existing `/run/dbus/system_bus_socket` and `/var/run/docker.sock` where present (root-owned, so a case connects to them and the runtime binds neither)
+**When** the target connects to each
+**Then** each connection fails while an HTTP service the target started stays reachable from the runtime through the bridge; removing the mechanism lets the connection through and fails the case
+**And** a socket the target's own grants hold (one in its workspace or in a private directory of the call, the bridge's socket included) stays connectable, a case that fails while the mechanism blocks every socket
+**And** the story's record states the mechanism chosen and the reasons the others were not: a view of the socket directories that leaves out a socket kept elsewhere, Landlock's rule on connecting to a socket path (a kernel the CI runners may not have), a seccomp filter that cannot read the address
+**And** `docs/reference/tea-evaluate-cli.md`'s `### File-system confinement` names the sockets a target cannot connect to and the ones it reaches, and drops the sentence that lists `/run/dbus/system_bus_socket`, `/var/run/docker.sock` and an agent socket as connectable; a case reading that section fails while the old sentence remains.
+
+**Dependencies:** 1.63.
+**Gate:** `test:evaluate-run`, `test:evaluate-confinement`, `test:evaluate-api`, `npm test`, and the Linux CI job.
+
+### Story 1.83: Give a confined Linux target a route to the hosts its registry entry authorizes
+
+Added 2026-10-02 in Story 1.63's first review round. Story 1.63 isolates every Bubblewrap target in a network namespace of its own and lets an entry declare `"network": "host"` where it needs the network, which the skill and agent targets do, since an agent CLI calls its model provider. An entry that declares `host` keeps the host's whole network and with it a route to the host's abstract Unix sockets, so the AD-8 gap stays open for exactly the targets that run an agent.
+
+As an adopter evaluating a skill or agent on Linux,
+I want a confined target to reach the hosts its registry entry authorizes and no other,
+So that an agent runs isolated, with a route to its model provider alone, and `network: host` retires (AD-8).
+
+**Acceptance Criteria:**
+
+**Given** a Bubblewrap target whose entry keeps the default network and authorizes one host and port (a loopback fixture standing in for a model provider)
+**When** the target connects to that host through the egress route the runtime gives it, and then to another host and to an abstract Unix socket the runtime serves
+**Then** the first connection reaches the fixture and the other two fail; the route is a runtime-owned egress proxy reached through the same bridge mechanism as a started service, so the namespace keeps a loopback and nothing else, and removing the proxy's host limit lets the second connection through, which fails the case
+**And** the proxy forwards a connection only for a host and port the entry authorizes, decided by eval-quality's `evaluateTarget` as the HTTP port's calls are, a refusal naming the host and the entry in the run's record, a case that sends a request for an unauthorized address
+**And** an entry that authorizes no host reaches none, and an entry that declares `"network": "host"` still runs as Story 1.63 left it until the field is removed from the schema in this story's last step, which leaves `check` refusing it with the entry named and a pointer to the authorization
+**And** the proxy's socket and its authorization are private to the call and removed with it on every path, a signal that ends the run included, a case that kills the run mid-call
+**And** `docs/reference/tea-evaluate-cli.md`, the skill's harness, adapters, ci and run guides and the `tea-skill-runner` section teach the authorization in place of `"network": "host"`, and a case reading each fails while the old declaration remains.
+
+**Dependencies:** 1.63.
+**Gate:** `test:evaluate-run`, `test:evaluate-api`, `test:evaluate-confinement`, `test:evaluate-guidance`, `npm test`, and the Linux CI job.
 
 ### Story 1.90: Verify the baseline manifest's file digests
 

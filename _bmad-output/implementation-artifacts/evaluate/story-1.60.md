@@ -2,7 +2,7 @@
 title: "Story 1.60: Observe every confined process's file access, beyond Node"
 type: 'feature'
 created: '2026-10-01'
-status: 'review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'ffdbd30475fd2cb0b9b6c1bd6c1ac80f93dc4e2b'

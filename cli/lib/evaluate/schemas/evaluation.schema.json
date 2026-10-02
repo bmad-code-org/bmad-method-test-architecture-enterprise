@@ -405,6 +405,10 @@
         "pattern": "^/[^\"\\\\\\u0000-\\u001f]*$"
       }
     },
+    "Network": {
+      "description": "The network a confined target's processes run in (Story 1.63). isolated, the default: under Linux Bubblewrap the entry's processes run in a network namespace of their own with a loopback and nothing else, so the host's abstract Unix sockets do not exist for them, and an HTTP service the runtime starts is reached through a bridge the runtime owns. host: the entry's processes keep the host's network, which a target needs to call a model provider, an outside service or a database on the host's loopback (a Linux skill or agent target does), and which leaves them a route to the host's abstract Unix sockets; the run records each entry that declares it. macOS Seatbelt has no network namespace: it accepts the field and ignores it.",
+      "enum": ["isolated", "host"]
+    },
     "RegistryEntry": {
       "description": "One command a run may spawn. interfaceId and executable key it the way eval-quality's command target policy keys an authorization; the pair is unique within the registry.",
       "type": "object",
@@ -497,7 +501,8 @@
             "maximum": 255
           }
         },
-        "systemPaths": { "$ref": "#/$defs/SystemPaths" }
+        "systemPaths": { "$ref": "#/$defs/SystemPaths" },
+        "network": { "$ref": "#/$defs/Network" }
       }
     },
     "McpRegistryEntry": {
@@ -562,7 +567,8 @@
           "type": "integer",
           "minimum": 1
         },
-        "systemPaths": { "$ref": "#/$defs/SystemPaths" }
+        "systemPaths": { "$ref": "#/$defs/SystemPaths" },
+        "network": { "$ref": "#/$defs/Network" }
       }
     },
     "ApiRegistryEntry": {
@@ -761,7 +767,8 @@
             }
           }
         },
-        "systemPaths": { "$ref": "#/$defs/SystemPaths" }
+        "systemPaths": { "$ref": "#/$defs/SystemPaths" },
+        "network": { "$ref": "#/$defs/Network" }
       }
     }
   }

@@ -231,7 +231,8 @@ jobs:
       # can create the namespace at all, not what cli/lib/atdd-isolation.js does
       # once the namespace exists, which is everything the isolation suites
       # actually test. tea-evaluate's confinement creates an unprivileged user
-      # namespace too (no network namespace), under the same restriction.
+      # namespace too, and a network namespace of its own for each target
+      # (Story 1.63), under the same restriction.
       - name: Allow bubblewrap to create its own network namespace
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 

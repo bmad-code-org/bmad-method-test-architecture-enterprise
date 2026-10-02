@@ -1388,7 +1388,7 @@ async function sealProbeTrials(context, sealing, { conditionArm, probe, trials, 
       wallClockSeconds: trials.reduce((total, trial) => total + trial.elapsedMs, 0) / 1000,
       costUsd: setUse.costUsd,
     },
-    forbiddenInputNote: forbiddenInputNote(registry.confinement),
+    forbiddenInputNote: forbiddenInputNote(registry.confinement, registry.hostNetworkEntries),
   });
   failures('IsolationManifest', await validate('isolation-manifest', manifest));
   const manifestFile = `${directory}/isolation-manifest.json`;

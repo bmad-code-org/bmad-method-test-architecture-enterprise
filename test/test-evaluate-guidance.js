@@ -1332,8 +1332,15 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
       "contract's `--skill-root` option",
       'disposable copy',
       'registry shape in the Skill runner section',
+      'declares `"network": "host"` on its entry on Linux',
     ])
       requireText(agentFallback, marker, 'adapters.md Agent fallback', failures);
+    requireText(
+      headingBody(adapterGuide, '## Skill runner'),
+      'on Linux declare `"network": "host"` on its registry entry',
+      'adapters.md Skill runner',
+      failures,
+    );
     const adapterRows = adapterGuide.match(/## Target kind to adapter mapping\n([\s\S]*?)(?:\n## |$)/)?.[1] ?? '';
     const expectedKinds = [
       'Skill',
@@ -2482,6 +2489,10 @@ function checkHarnessGuidance(guide, failures) {
     'A login the agent stored under the adopter',
     'cannot read the evaluation folder',
     'No other home is reachable from it',
+    'Declare `"network": "host"` on the registry entry of a skill or agent target',
+    'until Story 1.83 gives a confined target a route to the hosts its entry authorizes',
+    '`run.json` records under `hostNetwork`',
+    'macOS Seatbelt ignores the field',
   ])
     requireText(guide, marker, 'harness.md', failures);
   checkConfinedSkillExample(guide, failures);
