@@ -92,6 +92,7 @@ const BASE_ENV = Object.fromEntries(
   Object.entries(process.env).filter(
     ([name]) =>
       name !== ENGINE_CLI_ENV &&
+      name !== 'TEA_WINDOWS_JOB_OWNER_TEST_FAILURE' &&
       !name.startsWith('TEA_EVALUATE_SHIM_') &&
       name !== 'TEA_EVALUATE_WRAP_RUNPREFLIGHT' &&
       name !== 'TEA_STUB_SECRET',
@@ -183,8 +184,8 @@ function reap(pid) {
 // ---------------------------------------------------------------------------
 // tea-skill-runner
 
-function runRunner(args, { input = 'Say alpha.', cwd = PROJECT_ROOT } = {}) {
-  const result = spawnSync(process.execPath, [RUNNER, ...args], { cwd, input, encoding: 'utf8', env: BASE_ENV });
+function runRunner(args, { input = 'Say alpha.', cwd = PROJECT_ROOT, env = BASE_ENV, timeout } = {}) {
+  const result = spawnSync(process.execPath, [RUNNER, ...args], { cwd, input, encoding: 'utf8', env, timeout });
   if (result.error) throw result.error;
   return { status: result.status, stdout: result.stdout, stderr: result.stderr, output: `${result.stdout}${result.stderr}` };
 }
@@ -400,8 +401,147 @@ function startRunner(args, input, { detached = false } = {}) {
 
 /** The pids of the children of `pid`. */
 function childrenOf(pid) {
-  const listed = spawnSync('pgrep', ['-P', String(pid)], { encoding: 'utf8' });
-  return listed.stdout.split(/\s+/).filter(Boolean).map(Number);
+  const listed =
+    process.platform === 'win32'
+      ? spawnSync(
+          'powershell.exe',
+          ['-NoProfile', '-NonInteractive', '-Command', `(Get-CimInstance Win32_Process -Filter 'ParentProcessId=${pid}').ProcessId`],
+          {
+            encoding: 'utf8',
+            timeout: 10_000,
+          },
+        )
+      : spawnSync('pgrep', ['-P', String(pid)], { encoding: 'utf8' });
+  return String(listed.stdout ?? '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(Number);
+}
+
+/** Real-runner Windows cases use node as the agent executable, including on hosts that do not run .js files directly. */
+async function checkWindowsSupervision() {
+  if (process.platform !== 'win32') return;
+  const directory = tempDir('windows-job-owner');
+  const agentScript = path.join(directory, 'agent.cjs');
+  fs.writeFileSync(
+    agentScript,
+    `const fs = require('node:fs');
+const { spawn } = require('node:child_process');
+const [file, mode] = process.argv.slice(2);
+const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
+child.unref();
+fs.writeFileSync(file + '.tmp', JSON.stringify({ agent: process.pid, child: child.pid }));
+fs.renameSync(file + '.tmp', file);
+if (mode === 'wait') setInterval(() => {}, 1000);
+else process.stdout.write('windows agent answered\\n');\n`,
+  );
+  const options = ['--agent', 'custom', '--agent-cmd', process.execPath, '--agent-arg', agentScript];
+  const readPids = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
+
+  const normalFile = path.join(directory, 'normal.json');
+  let normal = null;
+  try {
+    const result = runRunner(['--skill-root', STUB_SKILL, ...options, '--agent-arg', normalFile, '--agent-arg', 'exit'], {
+      timeout: 30_000,
+    });
+    normal = fs.existsSync(normalFile) ? readPids(normalFile) : null;
+    check(
+      result.status === 0 && result.stdout.includes('windows agent answered'),
+      `a Windows agent exit returned ${result.status}; expected its answer\n${result.output}`,
+    );
+    check(normal !== null, 'the Windows agent that exited recorded no process IDs');
+    if (normal !== null) {
+      check(await processEnds(normal.agent, 10_000), `Windows agent ${normal.agent} survived its normal exit`);
+      check(await processEnds(normal.child, 10_000), `Windows agent child ${normal.child} survived its agent's exit beyond 10 s`);
+    }
+  } finally {
+    if (normal !== null) {
+      reap(normal.agent);
+      reap(normal.child);
+    }
+  }
+
+  const dualFile = path.join(directory, 'dual.json');
+  const dual = spawn(
+    process.execPath,
+    [RUNNER, '--skill-root', STUB_SKILL, ...options, '--agent-arg', dualFile, '--agent-arg', 'wait', '--timeout-ms', '120000'],
+    {
+      cwd: PROJECT_ROOT,
+      env: BASE_ENV,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    },
+  );
+  let dualStderr = '';
+  dual.stdout.resume();
+  dual.stderr.on('data', (chunk) => (dualStderr += chunk));
+  dual.stdin.end('Say alpha.');
+  const dualClosed = ended(dual);
+  let dualPids = null;
+  let supervisor = null;
+  let leader = null;
+  try {
+    const deadline = Date.now() + 20_000;
+    while (!fs.existsSync(dualFile) && Date.now() < deadline) await delay(50);
+    dualPids = fs.existsSync(dualFile) ? readPids(dualFile) : null;
+    [supervisor] = childrenOf(dual.pid);
+    [leader] = childrenOf(supervisor ?? 0);
+    check(
+      dualPids !== null && supervisor !== undefined && leader !== undefined,
+      'the Windows dual-kill case did not start the supervisor, leader, agent and child',
+    );
+    const killedAt = Date.now();
+    if (leader !== undefined) reap(leader);
+    if (supervisor !== undefined) reap(supervisor);
+    const ending = await Promise.race([dualClosed, delay(15_000).then(() => null)]);
+    check(
+      ending !== null && ending.code === EXIT_CODES['environment-transport'],
+      `a Windows runner whose leader and supervisor died ${ending === null ? 'waited over 15 s' : `exited ${ending.code}`}; expected a transport failure\n${dualStderr}`,
+    );
+    if (dualPids !== null) {
+      check(await processEnds(dualPids.agent, 10_000), `Windows agent ${dualPids.agent} survived the dual kill beyond 10 s`);
+      check(await processEnds(dualPids.child, 10_000), `Windows agent child ${dualPids.child} survived the dual kill beyond 10 s`);
+    }
+    check(Date.now() - killedAt < 15_000, 'the Windows dual-kill case exceeded its 15 s runner bound');
+  } finally {
+    reap(dual.pid);
+    if (leader !== null && leader !== undefined) reap(leader);
+    if (supervisor !== null && supervisor !== undefined) reap(supervisor);
+    if (dualPids !== null) {
+      reap(dualPids.agent);
+      reap(dualPids.child);
+    }
+    await Promise.race([dualClosed, delay(5000)]);
+  }
+
+  const failedFile = path.join(directory, 'failed.json');
+  const failed = runRunner(
+    [
+      '--skill-root',
+      STUB_SKILL,
+      ...options,
+      '--agent-arg',
+      failedFile,
+      '--agent-arg',
+      'exit',
+      '--env-pass',
+      'TEA_WINDOWS_JOB_OWNER_TEST_FAILURE',
+    ],
+    { env: { ...BASE_ENV, TEA_WINDOWS_JOB_OWNER_TEST_FAILURE: '1' }, timeout: 30_000 },
+  );
+  check(
+    failed.status === EXIT_CODES['environment-transport'] && failed.stderr.includes('Windows Job Object setup failed'),
+    `Windows Job Object setup failure returned ${failed.status}; expected transport failure naming setup\n${failed.output}`,
+  );
+  check(!fs.existsSync(failedFile), 'the Windows agent started after Job Object setup failed');
+}
+
+function checkWindowsRunnerReference() {
+  const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
+  const section = /^## tea-skill-runner\n([\s\S]*?)(?=^## |$(?![\s\S]))/m.exec(reference)?.[1] ?? '';
+  check(
+    section.includes('Windows Job Object') && section.includes('10 s') && section.includes('kill-on-close'),
+    'the tea-skill-runner reference must name Windows Job Object kill-on-close ownership and the 10 s process end bound',
+  );
 }
 
 /**
@@ -1673,9 +1813,17 @@ function checkRunnerRules() {
 
 async function main() {
   try {
+    if (process.env.TEA_EVALUATE_WINDOWS_ONLY === '1') {
+      check(process.platform === 'win32', 'the Windows CI preflight gate ran on a non-Windows host');
+      await checkWindowsSupervision();
+      checkWindowsRunnerReference();
+      return finishChecks();
+    }
     checkRunner();
     await checkRunnerProcesses();
     await checkSupervision();
+    await checkWindowsSupervision();
+    checkWindowsRunnerReference();
     checkPasses();
     checkRemovedEntry();
     checkShim();
@@ -1695,6 +1843,10 @@ async function main() {
   } finally {
     scratch.removeAll();
   }
+  return finishChecks();
+}
+
+function finishChecks() {
   if (failures.length > 0) {
     console.error(`${colors.red}${failures.length} of ${checks} tea-evaluate preflight check(s) failed:${colors.reset}`);
     for (const failure of failures) console.error(`  - ${failure}`);

@@ -1293,7 +1293,7 @@ The other options are those of TeA's own runners: `--agent-cmd`, `--agent-arg`, 
 A registry entry for the runner declares `infrastructureExitCodes` 3 to 6, and `check` holds it to that.
 On Linux the entry also declares `"network": "host"`, since the agent calls its model provider and the default network of a Bubblewrap target has a loopback only (see [File-system confinement](#file-system-confinement)).
 Its target is the bin name `tea-skill-runner`, which `npm exec` resolves from the evaluation's installed TeA, or a path to `skill-runner.js`.
-The agent runs in its own process group.
+On POSIX, the agent runs in its own process group.
 When the agent exits, every process left in that group receives `SIGKILL` at once.
 The group is also stopped when `--timeout-ms` runs out, when the runner's process group receives `SIGINT`, `SIGTERM`, `SIGHUP` or `SIGQUIT` (a terminal's Ctrl-C or `Ctrl-\` included), and when the runner or the supervisor process between it and the agent dies, by `SIGKILL` included.
 Stopping sends the group the signal received (`SIGTERM` for a timeout or a death), and the group `SIGKILL` 2 s later if it is still running.
@@ -1305,7 +1305,7 @@ The agent's standard input, output and error are pipes the group leader owns, an
 Once the agent exits, the leader copies what those pipes still hold and closes each one when it reaches its end, stays empty for 100 ms, or has been read for 2 s of the time the runner keeps up with it; output any process writes after that is lost.
 A process that leaves the group, such as a daemon that starts its own session, keeps running, and the runner does not wait for it.
 If the group leader has not ended 5 s after `--timeout-ms` runs out (it was stopped with `SIGSTOP`, say), the other kills it and the agent's group, and the runner exits 4.
-On Windows, which has no process groups, the timeout and the signals reach the agent alone, and nothing the agent started is stopped.
+On Windows, a PowerShell helper creates a Windows Job Object with kill-on-close ownership and assigns the guardian before the agent starts. The agent and its ordinary descendants inherit that job. The helper holds its sole job handle until the guardian closes their pipe after the agent exits, or the pipe closes when the guardian dies. Closing the handle stops every process in the job. If the helper cannot establish ownership, the agent never starts and the runner exits 4 with the setup failure. The Windows process integration gate requires the direct agent and its child to end within 10 s of normal agent exit or a dual leader and supervisor kill. The runner's transport failure remains bounded by its wall clock, 5 s backstop and 2 s grace period.
 Set every leg's `--timeout-ms` below the entry's `maxElapsedMs`, so the runner reports a timeout as exit 5.
 At the ceiling, the adapter kills the runner's process group, records the leg as a fault, and `preflight` exits 12.
 Exit 2 is left out on purpose: a usage error is a defect in the evaluation's own wiring, and its preflight and oracles see it as a failed run.
