@@ -439,15 +439,26 @@ else process.stdout.write('windows agent answered\\n');\n`,
   const readPids = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
 
   const normalFile = path.join(directory, 'normal.json');
+  const normalRunner = spawn(
+    process.execPath,
+    [RUNNER, '--skill-root', STUB_SKILL, ...options, '--agent-arg', normalFile, '--agent-arg', 'exit'],
+    { cwd: PROJECT_ROOT, env: BASE_ENV, stdio: ['pipe', 'pipe', 'pipe'] },
+  );
+  let normalStdout = '';
+  let normalStderr = '';
+  normalRunner.stdout.on('data', (chunk) => (normalStdout += chunk));
+  normalRunner.stderr.on('data', (chunk) => (normalStderr += chunk));
+  normalRunner.stdin.end('Say alpha.');
+  const normalClosed = ended(normalRunner);
   let normal = null;
+  let normalEnding = null;
   try {
-    const result = runRunner(['--skill-root', STUB_SKILL, ...options, '--agent-arg', normalFile, '--agent-arg', 'exit'], {
-      timeout: 30_000,
-    });
+    normalEnding = await Promise.race([normalClosed, delay(30_000).then(() => null)]);
+    if (normalEnding === null) normalRunner.kill('SIGKILL');
     normal = fs.existsSync(normalFile) ? readPids(normalFile) : null;
     check(
-      result.status === 0 && result.stdout.includes('windows agent answered'),
-      `a Windows agent exit returned ${result.status}; expected its answer\n${result.output}`,
+      normalEnding?.code === 0 && normalStdout.includes('windows agent answered'),
+      `a Windows runner whose agent exited ${normalEnding === null ? 'waited over 30 s' : `returned ${normalEnding.code}`}; expected its answer. Agent PID: ${normal?.agent ?? 'unrecorded'}; child PID: ${normal?.child ?? 'unrecorded'}\n${normalStdout}${normalStderr}`,
     );
     check(normal !== null, 'the Windows agent that exited recorded no process IDs');
     if (normal !== null) {
@@ -455,10 +466,13 @@ else process.stdout.write('windows agent answered\\n');\n`,
       check(await processEnds(normal.child, 10_000), `Windows agent child ${normal.child} survived its agent's exit beyond 10 s`);
     }
   } finally {
+    if (normalEnding === null) normalRunner.kill('SIGKILL');
+    if (normal === null && fs.existsSync(normalFile)) normal = readPids(normalFile);
     if (normal !== null) {
       reap(normal.agent);
       reap(normal.child);
     }
+    await Promise.race([normalClosed, delay(5000)]);
   }
 
   const dualFile = path.join(directory, 'dual.json');
