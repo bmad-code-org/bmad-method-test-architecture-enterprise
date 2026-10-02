@@ -304,6 +304,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `tea-evaluate run` scores the bytes of an evaluator qualification attempt that its runtime wrote (Story 1.69).
+  `run` qualifies a sealed-brief agent evaluator by scoring each attempt through `eval-quality score` over files it wrote into the run directory a moment before.
+  In a run that opted out of file-system confinement, a target's leftover process could rewrite the attempt's record, the contract, the policy, the probe, the preflight verdict, the manifest or the evaluator configuration, or substitute a well-formed artifact with altered votes for the staged one.
+  The votes that decide whether the evaluator qualifies then came from bytes the runtime never wrote.
+  `run` now reads those seven inputs once through the run directory writer, which hands back only the bytes the runtime wrote, and an input that is not those bytes exits 12 naming the file before any call.
+  After every attempt's call it reads each input again, names the first that changed, and requires the call to match an in-process score of the held bytes: the staged artifact byte for byte, and the call's exit and its `eval-quality:` lines (an Invalid attempt's included).
+  Any failure exits 12 naming the file or the mismatch, records no vote for the call and writes no `evaluator-qualification.json`.
+  The staged bytes the comparison accepted are the ones copied in and read for the vote.
+  The comparison only refuses, and the recorded argv of each attempt, run by hand with a fresh `--out`, still reproduces its evidence byte for byte.
+  The comparison moved from `score.js` to `cli/lib/evaluate/held-refusal.js` so `score` and `run` share it and its wording, and `score`'s behavior and text are unchanged.
+  `test:evaluate-boundaries` follows it there and refuses a re-score asked for in `score.js` or `run.js`.
+  The new `test:evaluate-held-attempts` script (`--group=held-attempts` of `test/test-evaluate-evaluators.js`, in the `npm test` chain of 109 steps) rewrites each input for the real engine's read, kept on a later attempt and a later probe and restored on a later attempt.
+  It also substitutes, reformats, links, removes and restages artifacts and exits, and a static read fails when `scoreAttempt` names an input without `score-inputs.js`.
+  The reference's `Score input integrity` and `Qualifying a sealed-brief agent` sections state the check.
 - The test-design contract reports whole-document coverage (Story 1.48, eval-quality's AD-20 rule 2 and AD-31).
   eval-quality's `whole-body` rule is satisfied when one oracle's direction and check both address every required response key of an operation at one step, and a parent pointer does not address a key.
   The test-design operation declares four, `design`, `riskRowCount`, `scoredRiskDescriptions` and `scoredRiskCount`, and every oracle read a subset, so the baseline reported a gap although the material oracles read the complete Markdown.

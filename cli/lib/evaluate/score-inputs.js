@@ -26,6 +26,8 @@
  *
  * The enumeration lives here once, so a later engine call routes through the
  * same hold.
+ * `holdAttemptInputs` (Story 1.69) holds the inputs of one evaluator attempt's score call the same way.
+ * It reads each through the run directory writer, which holds it to the digest the runtime wrote.
  */
 
 'use strict';
@@ -37,7 +39,24 @@ const path = require('node:path');
 const STRUCTURAL_EXIT = 4;
 const FAULT_EXIT = 5;
 const USAGE_EXIT = 64;
+/** Every diagnostic line of the eval-quality CLI starts with this. */
 const DIAGNOSTIC_PREFIX = 'eval-quality: ';
+
+/** The run directory's files that have one fixed name: the compiled contract, the policy, the preflight verdict and the evaluator configuration. */
+const RUN_FILES = Object.freeze({
+  contract: 'eval-contract.json',
+  policy: 'scoring-policy.json',
+  preflightVerdict: 'preflight-verdict.json',
+  evaluatorConfiguration: 'evaluator-configuration.json',
+});
+
+/** A held input that is not what the runtime wrote (Story 1.69); the message names the file. */
+class AttemptInputError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'AttemptInputError';
+  }
+}
 
 /** Opening for a read never waits on a FIFO and never follows a link. */
 const READ_REGULAR = fs.constants.O_RDONLY | (fs.constants.O_NONBLOCK ?? 0) | (fs.constants.O_NOFOLLOW ?? 0);
@@ -106,9 +125,20 @@ function scoreInputList({ runDirectory, index, record }) {
 /** What the held inputs of one `score` command are: the bytes the input check accepted. */
 class HeldInputs {
   #engine;
+  #read;
+  #accepted;
 
-  constructor({ engine, index, entries }) {
+  /**
+   * @param {object} options
+   * @param {((relative: string) => Buffer) | null} [options.read] reads a held input again after a call.
+   *   Null reads the input's file as a regular file.
+   *   An evaluator attempt's inputs are read through the run directory writer.
+   * @param {string} [options.accepted] what a held file was accepted as, for the message of a file that cannot be read again
+   */
+  constructor({ engine, index, entries, read = null, accepted = 'the regular file the input check accepted' }) {
     this.#engine = engine;
+    this.#read = read;
+    this.#accepted = accepted;
     this.index = index;
     this.entries = new Map(entries.map((entry) => [entry.relative, entry]));
   }
@@ -133,6 +163,33 @@ class HeldInputs {
     const entry = this.entries.get(relative);
     if (entry === undefined) throw new Error(`${relative} is not a score input of this run`);
     return entry;
+  }
+
+  /**
+   * The arguments of the `eval-quality score` call over one trial set's held inputs, in the order every call of the runtime
+   * gives them, each path spelled by `pathOf`; the isolation manifest is named only when the hold found one.
+   *
+   * @param {{ pathOf: (relative: string) => string, set: object, out: string }} options
+   * @returns {string[]}
+   */
+  scoreArguments({ pathOf, set, out }) {
+    const args = [];
+    for (const record of set.records) args.push('--record', pathOf(record));
+    args.push(
+      '--contract',
+      pathOf(this.index.contract),
+      '--probe',
+      pathOf(set.probe),
+      '--preflight-verdict',
+      pathOf(this.index.preflightVerdict),
+      '--policy',
+      pathOf(this.index.policy),
+      '--corpus-digest',
+      this.index.corpusDigest,
+    );
+    if (this.exists(set.isolationManifest)) args.push('--isolation-manifest', pathOf(set.isolationManifest));
+    args.push('--evaluator-configuration', pathOf(this.index.evaluatorConfiguration), '--out', out);
+    return args;
   }
 
   /** Whether anything was there at the check (a missing file is absent); the engine is handed a manifest only when there was. */
@@ -175,12 +232,9 @@ class HeldInputs {
       }
       let bytes;
       try {
-        bytes = regularFileBytes(entry.file);
+        bytes = this.#read === null ? regularFileBytes(entry.file) : this.#read(entry.relative);
       } catch (error) {
-        return {
-          relative: entry.relative,
-          message: `can no longer be read as the regular file the input check accepted: ${error.message}`,
-        };
+        return { relative: entry.relative, message: `can no longer be read as ${this.#accepted}: ${error.message}` };
       }
       const digest = this.#engine.digestBytes(bytes);
       if (digest !== entry.digest) {
@@ -290,4 +344,54 @@ function holdScoreInputs({ runDirectory, index, record, engine }) {
   return new HeldInputs({ engine, index, entries });
 }
 
-module.exports = { HeldInputs, holdScoreInputs, regularFileBytes, scoreInputList };
+/**
+ * The inputs of one evaluator attempt's `eval-quality score` call (Story 1.69), read once and held.
+ * They are the attempt's records and isolation manifest, the probe, and the run's contract, policy, preflight verdict and evaluator configuration.
+ * `read` is the run directory writer's `read`, which refuses a file that is not the bytes the runtime wrote.
+ * What is held is what the runtime wrote, and the check after the call reads each input the same way.
+ * A qualification has no `trial-sets.json` yet, so the index `reproduce` reads is built here from the names the run gives its files.
+ * The list is built by `scoreInputList` with no run directory and no `run.json` record: paths stay run-relative, and the digests come from the writer.
+ *
+ * @param {object} options
+ * @param {(relative: string) => Buffer} options.read
+ * @param {{ digestBytes: (bytes: Buffer) => string }} options.engine
+ * @param {string} options.corpusDigest
+ * @param {string} options.probeId
+ * @param {{ records: string[], manifestFile: string }} options.set the attempt's sealed set: its record files and isolation manifest, run-relative
+ * @returns {HeldInputs}
+ * @throws {AttemptInputError} naming the first input that is not what the runtime wrote
+ */
+function holdAttemptInputs({ read, engine, corpusDigest, probeId, set }) {
+  const index = {
+    ...RUN_FILES,
+    corpusDigest,
+    trialSets: [{ probeId, probe: attemptProbeFile(probeId), records: set.records, isolationManifest: set.manifestFile }],
+  };
+  const entries = scoreInputList({ runDirectory: '', index, record: {} }).map((input) => {
+    let bytes;
+    try {
+      bytes = read(input.relative);
+    } catch (error) {
+      throw new AttemptInputError(`${input.relative} is not what the runtime wrote: ${error.message}`);
+    }
+    return { ...input, exists: true, bytes, error: null, digest: engine.digestBytes(bytes) };
+  });
+  return new HeldInputs({ engine, index, entries, read, accepted: 'the file the runtime wrote' });
+}
+
+/** The probe file a run writes for `probeId`. */
+function attemptProbeFile(probeId) {
+  return `probes/${probeId}.probe.json`;
+}
+
+module.exports = {
+  AttemptInputError,
+  DIAGNOSTIC_PREFIX,
+  HeldInputs,
+  RUN_FILES,
+  attemptProbeFile,
+  holdAttemptInputs,
+  holdScoreInputs,
+  regularFileBytes,
+  scoreInputList,
+};

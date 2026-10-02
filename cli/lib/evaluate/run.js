@@ -112,6 +112,8 @@ const { bridgeRouter, runSealedBriefAgent } = require('./sealed-brief-agent');
 const { ZERO, addUsage } = require('./usage-report');
 const { forbiddenInputNote, layerPrefix } = require('./confinement');
 const { EngineStageError, runEngineStage } = require('./engine-cli');
+const { heldRefusal, stagedArtifact } = require('./held-refusal');
+const { AttemptInputError, RUN_FILES, attemptProbeFile, holdAttemptInputs } = require('./score-inputs');
 const { gitAccessOf, makeScratchDirectory, releaseScratchDirectory } = require('./workspace');
 
 const Ajv = AjvModule.default ?? AjvModule;
@@ -123,7 +125,7 @@ const PROBE_FILE = /\.probe\.json$/;
 const RUNNABLE_ROUTES = ['clean-control', 'controlled-mutation', 'historical', 'gameability'];
 const DENIAL_FAULT = 'forbidden-target';
 /** Where the scoring policy sits in the run directory. */
-const POLICY_FILE = 'scoring-policy.json';
+const POLICY_FILE = RUN_FILES.policy;
 /** The runtime-owned schema of `evaluator-qualification.json`. */
 const QUALIFICATION_SCHEMA = path.join(__dirname, 'schemas', 'evaluator-qualification.schema.json');
 /** The prefix of the lines eval-quality prints for an Invalid result, as `score` reports them. */
@@ -1441,39 +1443,61 @@ function expectedOutcome(arm) {
  * copied unchanged, and an attempt the engine reads as Invalid has no
  * artifact, so it is kept with the engine's exit code and its `invalid:`
  * lines. Any other exit is an engine that could not score (exit 12).
+ *
+ * The call is held to its inputs (Story 1.69, AD-7, AD-12).
+ * In a run that opted out of confinement a target's leftover process can rewrite a file between the runtime's write and the engine's read, or substitute the staged artifact.
+ * The votes would then come from bytes the runtime never wrote.
+ * The attempt's inputs are read once through the run directory writer (the bytes the runtime wrote, held to the digest it took).
+ * The call runs over their paths.
+ * Then the comparison `score` makes (`held-refusal.js`) refuses a call whose inputs changed, whose staged artifact is not the in-process score of the held bytes, or whose exit or `eval-quality:` lines are not the ones those bytes give: exit 12, no vote.
+ * The staged bytes the comparison accepted are the ones copied in and read, once.
  */
-function scoreAttempt(context, { probe, directory, set, corpusDigest }) {
-  const { writer, runDirectory, env, log, scratch, stop } = context;
-  const contractFile = 'eval-contract.json';
+async function scoreAttempt(context, { probe, directory, set, corpusDigest }) {
+  const { writer, runDirectory, env, log, scratch, stop, engine } = context;
+  let held;
+  try {
+    held = holdAttemptInputs({
+      read: (relative) => writer.read(relative),
+      engine,
+      corpusDigest,
+      probeId: probe.probeId,
+      set,
+    });
+  } catch (error) {
+    if (!(error instanceof AttemptInputError)) throw error;
+    throw stop({
+      stage: 'trial',
+      exitCode: 12,
+      message: `${probe.probeId}: ${error.message}; no engine call was made and no vote is recorded for the attempt`,
+    });
+  }
   const staging = makeScratchDirectory(scratch, 'tea-evaluate-qualification-');
   try {
     const produced = path.join(staging, 'evidence-artifact.json');
-    const args = [
-      '--record',
-      writer.pathOf(set.records[0]),
-      '--contract',
-      writer.pathOf(contractFile),
-      '--probe',
-      writer.pathOf(`probes/${probe.probeId}.probe.json`),
-      '--preflight-verdict',
-      writer.pathOf('preflight-verdict.json'),
-      '--policy',
-      writer.pathOf(POLICY_FILE),
-      '--corpus-digest',
-      corpusDigest,
-      '--isolation-manifest',
-      writer.pathOf(set.manifestFile),
-      '--evaluator-configuration',
-      writer.pathOf('evaluator-configuration.json'),
-      '--out',
-      produced,
-    ];
+    const [heldSet] = held.index.trialSets;
+    const args = held.scoreArguments({ pathOf: (relative) => writer.pathOf(relative), set: heldSet, out: produced });
     let result;
     try {
       result = runEngineStage('score', args, { runDirectory, recordPath: `${directory}/score.json`, writer, env, log });
     } catch (error) {
       if (!(error instanceof EngineStageError)) throw error;
       throw stop({ stage: 'trial', exitCode: 12, message: `${probe.probeId}: an evaluator attempt could not be scored: ${error.message}` });
+    }
+    const staged = stagedArtifact(produced);
+    if (staged.problem !== undefined) {
+      throw stop({
+        stage: 'trial',
+        exitCode: 12,
+        message: `${probe.probeId}: the staged evidence artifact of an evaluator attempt ${staged.problem}; no vote is recorded for the call`,
+      });
+    }
+    const refusal = await heldRefusal({ held, set: heldSet, staged, exitCode: result.exitCode, stderr: result.stderr });
+    if (refusal !== null) {
+      throw stop({
+        stage: 'trial',
+        exitCode: 12,
+        message: `${probe.probeId}: the score call of an evaluator attempt is not the one the held inputs stand behind: ${refusal}; no vote is recorded for the call, and its call record is ${directory}/score.json`,
+      });
     }
     if (result.exitCode === 3) {
       return {
@@ -1492,16 +1516,18 @@ function scoreAttempt(context, { probe, directory, set, corpusDigest }) {
       });
     }
     const evidence = `${directory}/evidence-artifact.json`;
-    if (!fs.existsSync(produced)) {
+    if (staged.bytes === null) {
       throw stop({
         stage: 'trial',
         exitCode: 12,
         message: `${probe.probeId}: eval-quality score exited ${result.exitCode} for an evaluator attempt and wrote no evidence artifact`,
       });
     }
+    // The bytes the comparison accepted are the bytes kept and read; the staging path is not read again.
+    writer.write(evidence, staged.bytes);
     let votes = [];
     try {
-      const artifact = JSON.parse(writer.copyIn(evidence, produced).toString('utf8'));
+      const artifact = JSON.parse(staged.bytes.toString('utf8'));
       votes = artifact.reducedProbeOutcomes.find((reduced) => reduced.probeId === probe.probeId).trialVotes;
     } catch {
       // Read as no vote below, with the artifact kept in the run directory for the reader.
@@ -1569,7 +1595,7 @@ async function qualifyEvaluator(context) {
           runId: `${invocationId}-${probe.probeId}-attempt-${attempt}`,
         });
         writeQualifiedProbe({ writer, stop }, probe);
-        const scored = scoreAttempt(context, { probe, directory, set, corpusDigest });
+        const scored = await scoreAttempt(context, { probe, directory, set, corpusDigest });
         probes[index].attempts.push({ attempt, ...scored, agrees: scored.outcome === expected });
       }
     }
@@ -1609,7 +1635,7 @@ async function qualificationProblems(report) {
 
 /** A probe the run qualified, written as the trial set's probe file; a seeded probe's file is the preflight's own, which it must equal. */
 function writeQualifiedProbe({ writer, stop }, probe) {
-  const probeFile = `probes/${probe.probeId}.probe.json`;
+  const probeFile = attemptProbeFile(probe.probeId);
   const probeBytes = Buffer.from(`${JSON.stringify(probe, null, 2)}\n`);
   if (!writer.has(probeFile)) writer.write(probeFile, probeBytes);
   else if (!writer.read(probeFile).equals(probeBytes)) {
@@ -1741,10 +1767,10 @@ async function completeRun(
     schemaVersion: TRIAL_SETS_SCHEMA_VERSION,
     invocationId,
     corpusDigest,
-    contract: 'eval-contract.json',
-    policy: 'scoring-policy.json',
-    preflightVerdict: 'preflight-verdict.json',
-    evaluatorConfiguration: 'evaluator-configuration.json',
+    contract: RUN_FILES.contract,
+    policy: RUN_FILES.policy,
+    preflightVerdict: RUN_FILES.preflightVerdict,
+    evaluatorConfiguration: RUN_FILES.evaluatorConfiguration,
     trialSets,
   });
   retractUnlessSealed.push(TRIAL_SETS_NAME, 'operation-phases.json');
@@ -1801,4 +1827,6 @@ module.exports = {
   // The audit's failure to confirm what a trial opened ends the trial with no record; its unit drives the mapping directly.
   readObservedMounts,
   setRecommendation,
+  // An evaluator attempt's score call; its unit drives the hold's refusal directly, which no engine call can race with.
+  scoreAttempt,
 };
