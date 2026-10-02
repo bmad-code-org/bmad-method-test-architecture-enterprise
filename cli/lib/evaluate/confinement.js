@@ -28,8 +28,8 @@
  *                namespace pass to every descendant and outlive the process
  *                that made them, a `setsid` child included), may write its
  *                workspace and the private directories the runtime hands it
- *                (the file a started HTTP server reports its port in, the audit
- *                report below) and nothing else, and can neither read nor write
+ *                (the file a started HTTP server reports its port in, its temp
+ *                and home directories) and nothing else, and can neither read nor write
  *                the evaluation folder (`contract.json`, `probes/`, `runs/`,
  *                `evaluator/`, everything under it), nor read or write the
  *                project's git directory, the worktree's own entry in it
@@ -56,17 +56,30 @@
  *                folder is held, and not `evaluator/` alone, since a folder
  *                with no `evaluator/` has nothing Bubblewrap could bind in
  *                its place and a process could make one.
- *   audit        each trial's Node processes load `confinement-guard.cjs`
- *                through NODE_OPTIONS, which appends every path they open
- *                outside what the trial was granted (its workspace, the system
- *                paths its registry entry declares in `systemPaths`, the Node
- *                installation and the operating system's own directories) to a
- *                report in a private directory. The trial's isolation manifest
- *                lists those paths as `observedMounts`, which eval-quality holds
- *                against the allowed mounts and records as an isolation
- *                violation. The report is written by the target's own processes,
- *                so it is an audit of what they did, and only Node processes
- *                write it; the enforcement is the mechanism above.
+ *   audit        what a trial's processes opened outside what the trial was
+ *                granted (its workspace, its temp and home directories, the
+ *                system paths its registry entry declares in `systemPaths`, the
+ *                Node installation and the operating system's own directories)
+ *                is reported by the mechanism itself, for every process the
+ *                target starts whatever its language or environment, and lists
+ *                as the isolation manifest's `observedMounts`, which
+ *                eval-quality holds against the allowed mounts and records as
+ *                an isolation violation (Story 1.60). Seatbelt reports each
+ *                read its profile allows outside the grants (`with report`) and
+ *                tags every file rule with a token of the sandbox (`with
+ *                message`), and a `/usr/bin/log stream` child the runtime owns
+ *                writes the kernel's reports of that token to a file beneath
+ *                the run's private parent; Bubblewrap runs under `strace -f
+ *                --seccomp-bpf`, started outside the namespace, whose trace
+ *                file sits beneath the same parent. Neither file is reachable
+ *                from the target, and no code runs in the target's address
+ *                space. A host that cannot observe refuses the run (exit 12).
+ *                The audit sees opens, directory listings, link reads and the
+ *                writes the mechanism refuses; not metadata probes, not the
+ *                execution of a binary, not an `io_uring` request, and, under
+ *                Seatbelt, not a read made after the trial's last read of the
+ *                log. The enforcement is the mechanism above; the audit
+ *                reports.
  *
  * `TEA_EVALUATE_CONFINEMENT_PLATFORM` names the platform the mechanism is
  * chosen for, in place of the host's, so a case can stand in for a platform
@@ -91,6 +104,21 @@ const {
   probeTrivialProcess,
   stderrTail,
 } = require('../isolation-primitives');
+const {
+  DARWIN_SYSTEM_ROOTS,
+  EXACT_GRANTS,
+  LOG_EXECUTABLE,
+  REQUESTED_ROOTS,
+  ReportStream,
+  SYSTEM_ROOTS,
+  auditToken,
+  nodeInstallRoot,
+  probeReportStream,
+  probeTrace,
+  readTrace,
+  straceCommand,
+  traceDecision,
+} = require('./confinement-audit');
 
 /** Each mechanism as a sentence names it. */
 const MECHANISM_NAMES = Object.freeze({ seatbelt: 'macOS Seatbelt (sandbox-exec)', bubblewrap: 'Linux Bubblewrap (bwrap)' });
@@ -98,11 +126,8 @@ const MECHANISM_NAMES = Object.freeze({ seatbelt: 'macOS Seatbelt (sandbox-exec)
 const SANDBOX_EXEC = '/usr/bin/sandbox-exec';
 const PLATFORM_ENV = 'TEA_EVALUATE_CONFINEMENT_PLATFORM';
 
-/** The preload every Node process of a trial loads, and the variable carrying its report path and grants. */
-const GUARD_PATH = path.join(__dirname, 'confinement-guard.cjs');
 /** What Bubblewrap starts in a target's place, so a signal that ends the target is not read as an exit code. */
 const STATUS_SHIM = path.join(__dirname, 'confinement-status.cjs');
-const AUDIT_ENV = 'TEA_EVALUATE_CONFINEMENT_AUDIT';
 
 /** What most often keeps a present mechanism from confining, named in the probe's refusal. */
 const PROBE_HINTS = Object.freeze({
@@ -111,9 +136,6 @@ const PROBE_HINTS = Object.freeze({
   bubblewrap:
     'Bubblewrap needs unprivileged user namespaces, which a container, a hardened kernel or an AppArmor restriction (kernel.apparmor_restrict_unprivileged_userns) can forbid',
 });
-
-/** How much of a report the runtime reads. */
-const REPORT_READ_BYTES = 4 * 1024 * 1024;
 
 /**
  * Device files a confined process may still write: the null and zero
@@ -171,12 +193,29 @@ function seatbeltLayerProfile(evaluationFolder) {
  * The user's private root directory is denied reads and writes and a `connect()`
  * to a unix socket under it (a denied read does not stop a connection), after
  * every allowance.
+ *
+ * With `audit` (`{ token, exempt }`), the kernel reports what the profile
+ * allows or refuses: every file rule that denies carries the sandbox's token
+ * (`with message`), and one rule, placed before every rule that follows it so
+ * that a later grant (the home, the git directory's own entry) overrides it,
+ * reports each `file-read-data` the profile allows outside `exempt` (the paths
+ * the sandbox may read, and the root directory itself) with the same token
+ * (`with report`). Without `audit` the profile is the one every earlier story
+ * generated, byte for byte.
  */
-function seatbeltTargetProfile({ workspace, writable, evaluationFolder, git = null, privateRoot = null, rootHome = null }) {
+function seatbeltTargetProfile({ workspace, writable, evaluationFolder, git = null, privateRoot = null, rootHome = null, audit = null }) {
   const allowed = [workspace, ...writable]
     .flatMap(spellings)
     .map((entry) => `(subpath "${assertProfileSafePath(entry, refuseUnsafePath)}")`);
+  const tagged = audit === null ? '' : ` (with message "${audit.token}")`;
+  // Seatbelt decides an operation by the rules that name it before the rules that name its wildcard, so the report rule
+  // (which names `file-read-data`) would override every later `file-read*` rule, whatever their order; an audited profile
+  // therefore names `file-read-data` in each rule that governs reads, which keeps the textual order (the last matching rule
+  // wins) the unaudited profile relies on.
+  const reads = audit === null ? 'file-read*' : 'file-read-data file-read*';
   const subpaths = (candidate) => spellings(candidate).map((entry) => `(subpath "${assertProfileSafePath(entry, refuseUnsafePath)}")`);
+  // A denial of reads and writes of `paths`; an audited profile names `file-read-data` and tags it (see `reads`).
+  const denials = (paths) => [`(deny ${reads} file-write*\n  ${paths.join('\n  ')}${tagged})`];
   const withheld = subpaths(evaluationFolder);
   // Git resolves the path of the worktree's metadata directory component by component (`lstat`), so the git directory
   // and its `worktrees/` answer a metadata request, which tells nothing a path does not already say.
@@ -185,11 +224,11 @@ function seatbeltTargetProfile({ workspace, writable, evaluationFolder, git = nu
     git === null
       ? []
       : [
-          `(deny file-read* file-write*\n  ${[...subpaths(git.directory), ...git.alternates.flatMap(subpaths)].join('\n  ')})`,
+          ...denials([...subpaths(git.directory), ...git.alternates.flatMap(subpaths)]),
           ...(git.metadata === null
             ? []
             : [
-                `(allow file-read*\n  ${subpaths(git.metadata).join('\n  ')})`,
+                `(allow ${reads}\n  ${subpaths(git.metadata).join('\n  ')})`,
                 `(allow file-read-metadata\n  ${[...literals(git.directory), ...literals(path.dirname(git.metadata))].join('\n  ')})`,
               ]),
         ];
@@ -197,7 +236,7 @@ function seatbeltTargetProfile({ workspace, writable, evaluationFolder, git = nu
     privateRoot === null
       ? []
       : [
-          `(deny file-read* file-write*\n  ${subpaths(privateRoot).join('\n  ')})`,
+          ...denials(subpaths(privateRoot)),
           `(deny network-outbound\n  ${spellings(privateRoot)
             .map((entry) => `(remote unix-socket (subpath "${assertProfileSafePath(entry, refuseUnsafePath)}"))`)
             .join('\n  ')})`,
@@ -222,18 +261,36 @@ function seatbeltTargetProfile({ workspace, writable, evaluationFolder, git = nu
     rootHome === null
       ? []
       : [
-          `(allow file-read* file-write*\n  ${subpaths(rootHome).join('\n  ')})`,
+          `(allow ${reads} file-write*\n  ${subpaths(rootHome).join('\n  ')})`,
           `(allow file-read-metadata\n  ${homeAncestors.flatMap(literals).join('\n  ')})`,
         ];
+  // What the sandbox may read is not reported; every other read the profile allows is (macOS reports by real path, so both spellings are named).
+  const reportRule =
+    audit === null
+      ? []
+      : [
+          `(allow file-read-data\n  (require-all\n    ${[
+            ...EXACT_GRANTS.map((entry) => `(require-not (literal "${entry}"))`),
+            ...audit.exempt
+              .flatMap(spellings)
+              .map((entry) => `(require-not (subpath "${assertProfileSafePath(entry, refuseUnsafePath)}"))`),
+          ].join('\n    ')})\n  (with report)${tagged})`,
+        ];
+  // A target's git tries to write the worktree's own entry and the private repository (the index lock of a `git status`), which
+  // the profile refuses and the target's git expects to fail; the refusal carries no token, so it is not an observed mount.
+  const quiet =
+    audit === null || (audit.quiet ?? []).length === 0 ? [] : [`(deny file-write*\n  ${audit.quiet.flatMap(subpaths).join('\n  ')})`];
   return [
     '(version 1)',
     '(allow default)',
-    '(deny file-write*)',
+    `(deny file-write*${tagged})`,
     `(allow file-write*\n  ${[...allowed, ...SEATBELT_DEVICE_WRITES].join('\n  ')})`,
+    ...reportRule,
     ...gitRules,
     ...privateRules,
     ...homeRules,
-    `(deny file-read* file-write*\n  ${withheld.join('\n  ')})`,
+    ...quiet,
+    ...denials(withheld),
     '',
   ].join('\n');
 }
@@ -351,6 +408,53 @@ function probeMechanism({ mode, executable }) {
   return `a trivial process under it ended ${probe.status === null ? `by ${probe.signal}` : `with exit ${probe.status}`}${probe.tail ? ` (${probe.tail})` : ''}`;
 }
 
+/** What most often keeps a present observer from confirming itself, named in the refusal. */
+const OBSERVER_HINTS = Object.freeze({
+  seatbelt:
+    "the audit reads the kernel's sandbox reports through /usr/bin/log stream, which needs a login session that may read the unified log",
+  bubblewrap:
+    'the audit runs the target under strace -f --seccomp-bpf --decode-pids=pidns (apt-get install strace, version 6.1 or later: the version the audit was verified against), which needs ptrace: a container whose seccomp profile forbids it or kernel.yama.ptrace_scope=3 refuses it',
+});
+
+/** The observers a selection has confirmed in this process, so a case that selects often probes once. */
+const confirmedObservers = new Map();
+
+/**
+ * The observer the audit reads this host's mechanism through, and whether it
+ * works here: `{ observer }` when a trivial read by a confined process came
+ * back through it, `{ failure }` with the reason otherwise (Story 1.60).
+ */
+function probeObserver(mechanism, env) {
+  // The probes make a directory in the temp directory; one that is missing or unwritable is the workspace step's to name, as
+  // for the mechanism's own probe, and the observer is then confirmed by the first call that runs (the trial's start on macOS,
+  // the start of the target in each call's trace on Linux), which a run that cannot make a workspace never reaches.
+  let tempUsable = true;
+  try {
+    fs.accessSync(os.tmpdir(), fs.constants.W_OK);
+  } catch {
+    tempUsable = false;
+  }
+  if (mechanism.mode === 'seatbelt') {
+    const key = `${mechanism.executable}|${LOG_EXECUTABLE}`;
+    if (!tempUsable) return { observer: { executable: LOG_EXECUTABLE } };
+    if (confirmedObservers.has(key)) return confirmedObservers.get(key);
+    const failure = probeReportStream({ sandboxExec: mechanism.executable, fail: (message) => new ConfinementError(message) });
+    if (failure !== null) return { failure };
+    return confirmedObservers.set(key, { observer: { executable: LOG_EXECUTABLE } }).get(key);
+  }
+  const strace = executableOnPath('strace', env);
+  if (strace === null) return { failure: 'strace is not on PATH' };
+  if (!tempUsable) return { observer: { executable: strace } };
+  const key = `${mechanism.executable}|${strace}`;
+  if (confirmedObservers.has(key)) return confirmedObservers.get(key);
+  const failure = probeTrace({
+    strace,
+    vector: [mechanism.executable, '--unshare-user', '--ro-bind', '/', '/', '--dev', '/dev', ...bubblewrapIsolation(), '--'],
+  });
+  if (failure !== null) return { failure };
+  return confirmedObservers.set(key, { observer: { executable: strace } }).get(key);
+}
+
 /**
  * The run's confinement: `{ mode: 'opt-out' }` for an evaluation that opts
  * out, the mechanism this host confines with, or `{ refusal }` saying why
@@ -404,14 +508,35 @@ function selectConfinement({ evaluation, folder, env = process.env, platform = p
       refusal: `the evaluation folder's path ${JSON.stringify(unsafe)} holds a quote, a backslash or a line break (or another control character), which no confinement profile can carry; move the folder, ${optOut}`,
     };
   }
-  // Every workspace, audit report and private directory a target is granted is made under the temp directory.
+  // Every workspace and private directory a target is granted is made under the temp directory.
   const unsafeTemp = spellings(temp).find((entry) => !isProfileSafePath(entry));
   if (unsafeTemp !== undefined) {
     return {
       refusal: `the temp directory ${JSON.stringify(unsafeTemp)} holds a quote, a backslash or a line break (or another control character), which no confinement profile can carry, and every workspace is made under it; point TMPDIR elsewhere, ${optOut}`,
     };
   }
+  // The audit observes through the mechanism, so a host that cannot observe cannot run: an empty list of observed
+  // mounts would then be what a broken observer returns, and not evidence.
+  const observed = probeObserver(mechanism, env);
+  if (observed.failure !== undefined) {
+    return {
+      refusal: `the audit of ${MECHANISM_NAMES[mechanism.mode]} cannot observe a confined process on this host: ${observed.failure}; ${OBSERVER_HINTS[mechanism.mode]}; run tea-evaluate where it works, ${optOut}`,
+    };
+  }
+  mechanism = { ...mechanism, observer: observed.observer };
   return { ...mechanism, evaluationFolder };
+}
+
+/**
+ * The one file of the user's own home every macOS process reads whatever `HOME` says: CoreFoundation reads the user's text
+ * encoding preference from the account's home directory (`getpwuid`), so a process under a private `HOME` still opens it.
+ */
+function darwinUserFiles() {
+  try {
+    return [path.join(os.userInfo().homedir, '.CFUserTextEncoding')];
+  } catch {
+    return [];
+  }
 }
 
 /** Whether the run confines its processes, as opposed to having opted out. */
@@ -434,9 +559,9 @@ function layerPrefix(confinement) {
 
 /**
  * What one workspace's target processes run under: `wrap` turns a target and
- * its arguments into the mechanism's command, `environment` adds the audit's
- * preload to a Node process's environment when the port audits, and
- * `observedMounts` reads the paths the audit reported.
+ * its arguments into the mechanism's command, and the audit (`confinement-audit.js`)
+ * says which paths those processes opened outside what the trial was granted
+ * (`observedMounts`).
  *
  * @param {object} options
  * @param {object} options.confinement `selectConfinement`'s answer for a run that confines
@@ -452,7 +577,9 @@ function layerPrefix(confinement) {
  *   name (`withTemporary`); beneath `privateRoot` it is the one directory of the root the target reaches (re-allowed after the
  *   root's denial in Seatbelt, bound into the root's empty file system in Bubblewrap, excepted from the audit's withholding),
  *   so no other home is reachable; refused inside the workspace or the evaluation folder; `null` where the run made none
- * @param {string|null} [options.report] the audit report's path, `null` for a port that does not audit
+ * @param {{ directory: string, barrierMs?: number }|null} [options.audit] the runtime-private directory (`makeAuditDirectory`) the audit keeps
+ *   its files in, which a target cannot reach; `null` for a port that does not audit. The confinement must carry the
+ *   `observer` its selection probed.
  * @param {string|null} [options.status] under Bubblewrap, a private directory where the status of a target a signal
  *   ended is written (`confinement-status.cjs`)
  */
@@ -462,7 +589,7 @@ function targetSandbox({
   git: gitAccess = null,
   privateRoot = null,
   home: initialHome = null,
-  report = null,
+  audit = null,
   status = null,
 }) {
   const git = gitAccess === null ? null : { metadata: null, view: null, alternates: [], ...gitAccess };
@@ -488,7 +615,7 @@ function targetSandbox({
       throw new ConfinementError(`the workspace ${workspace} is inside ${privateRoot}, which the confinement withholds from the target`);
     }
   }
-  // The sandbox's current home: `setHome` replaces it, and every wrap, audit and environment reads it when it is called.
+  // The sandbox's current home: `setHome` replaces it, and every wrap reads it when it is called.
   let home = null;
   // A home beneath the private root (the run's own parent holds it) is the one directory of the root the target may reach.
   let rootHome = null;
@@ -512,11 +639,37 @@ function targetSandbox({
   if (confinement.mode === 'bubblewrap' && (typeof status !== 'string' || status.length === 0)) {
     throw new ConfinementError('a target confined by Bubblewrap needs a status directory');
   }
+  if (audit !== null && (typeof audit?.directory !== 'string' || typeof confinement.observer?.executable !== 'string')) {
+    throw new ConfinementError('an audited target needs the private directory of its audit and the observer its confinement probed');
+  }
+  const observer = audit === null ? null : makeObserver({ confinement, audit, cwd: workspace });
   let calls = 0;
-  let reportSize = 0;
-  let tampered = false;
+  // What the sandbox may read, besides the system's own directories, for one call: the paths the call may write, its
+  // declared system paths, the private home and the worktree's own entry in the git directory and the private repository.
+  const readRoots = (granted) =>
+    [
+      workspace,
+      ...granted,
+      ...(home === null ? [] : [home]),
+      ...(git === null ? [] : [git.metadata, git.view].filter((entry) => typeof entry === 'string')),
+      nodeInstallRoot(process.execPath),
+      ...(confinement.mode === 'bubblewrap' ? [STATUS_SHIM] : []),
+      ...SYSTEM_ROOTS,
+      ...(confinement.mode === 'seatbelt' ? [...DARWIN_SYSTEM_ROOTS, ...darwinUserFiles()] : []),
+    ].flatMap(spellings);
+  // The worktree's own entry in the git directory and the private repository its git reads: a refused write there is git's own and is not audited.
+  const ownGitEntries = () => (git === null ? [] : [git.metadata, git.view].filter((entry) => typeof entry === 'string'));
+  // What the sandbox withholds and what it re-grants inside the withheld paths.
+  const withheldRoots = () => [
+    ...spellings(evaluationFolder),
+    ...(git === null ? [] : [git.directory, ...git.alternates].flatMap(spellings)),
+    ...(privateRoot === null ? [] : spellings(privateRoot)),
+  ];
+  const withheldExcept = () => [...(git?.metadata ? spellings(git.metadata) : []), ...(rootHome === null ? [] : spellings(rootHome))];
   return {
     mode: confinement.mode,
+    /** Whether this sandbox audits what its processes open. */
+    audited: observer !== null,
     /** The sandbox's current private home directory, which `HOME` and the XDG base directories name; `null` where there is none. */
     get home() {
       return home;
@@ -524,15 +677,25 @@ function targetSandbox({
     /** Points the sandbox at another home (after a reset made a new one); the calls made after it are confined to that one. */
     setHome: adoptHome,
     /**
-     * The command that runs `target args` confined, `writable` naming the
+     * The command that runs `target args` confined. `writable` names the
      * private directories this call's processes may write besides the
-     * workspace; under Bubblewrap, with the file the status shim writes a
-     * signal to, which `recordedStatus` reads.
+     * workspace and `readable` the system paths its registry entry declares;
+     * under Bubblewrap the command also carries the file the status shim
+     * writes a signal to, which `recordedStatus` reads, and, for an audited
+     * sandbox, `strace` and the trace file `collect` reads.
      */
-    wrap(target, args, writable = []) {
-      const grants = [...writable, ...(home === null || rootHome !== null ? [] : [home]), ...(report === null ? [] : [report])];
+    wrap(target, args, writable = [], readable = []) {
+      const grants = [...writable, ...(home === null || rootHome !== null ? [] : [home])];
       if (confinement.mode === 'seatbelt') {
-        const profile = seatbeltTargetProfile({ workspace, writable: grants, evaluationFolder, git, privateRoot, rootHome });
+        const profile = seatbeltTargetProfile({
+          workspace,
+          writable: grants,
+          evaluationFolder,
+          git,
+          privateRoot,
+          rootHome,
+          audit: observer === null ? null : { token: observer.token, exempt: readRoots([...grants, ...readable]), quiet: ownGitEntries() },
+        });
         return { target: confinement.executable, args: ['-p', profile, target, ...args], statusFile: null };
       }
       calls += 1;
@@ -549,102 +712,137 @@ function targetSandbox({
         privateRoot,
         rootHome,
       });
-      return { target: vector[0], args: [...vector.slice(1), process.execPath, STATUS_SHIM, statusFile, target, ...args], statusFile };
-    },
-    /**
-     * `env` with the audit's preload and its grants added, for a port that
-     * audits; `env` itself otherwise. `granted` names what this call's
-     * processes may reach besides the workspace and the report: the system
-     * paths its registry entry declares and the private directories it may
-     * write.
-     */
-    environment(env, granted = []) {
-      if (report === null) return env;
-      // The worktree's own entry in the git directory and the private repository it reads are the target's to open.
-      const own = git === null ? [] : [git.metadata, git.view].filter((entry) => typeof entry === 'string');
-      const grants = [workspace, ...(report === null ? [] : [report]), ...(home === null ? [] : [home]), ...granted, ...own].flatMap(
-        spellings,
-      );
+      const command = [vector[0], ...vector.slice(1), process.execPath, STATUS_SHIM, statusFile, target, ...args];
+      if (observer === null) return { target: command[0], args: command.slice(1), statusFile };
+      const file = path.join(audit.directory, `trace-${calls}-${crypto.randomBytes(6).toString('hex')}.txt`);
+      const traced = [...straceCommand(confinement.observer.executable, file), ...command];
       return {
-        ...env,
-        NODE_OPTIONS: [env?.NODE_OPTIONS, `--require ${JSON.stringify(GUARD_PATH)}`].filter(Boolean).join(' '),
-        [AUDIT_ENV]: JSON.stringify({
-          report,
-          granted: grants,
-          withheld: [
-            ...spellings(evaluationFolder),
-            ...(git === null ? [] : [git.directory, ...git.alternates].flatMap(spellings)),
-            ...(privateRoot === null ? [] : spellings(privateRoot)),
-          ],
-          ...(git?.metadata || rootHome !== null
-            ? { withheldExcept: [...(git?.metadata ? spellings(git.metadata) : []), ...(rootHome === null ? [] : spellings(rootHome))] }
-            : {}),
-        }),
+        target: traced[0],
+        args: traced.slice(1),
+        statusFile,
+        trace: {
+          file,
+          marker: { program: process.execPath, text: path.basename(statusFile) },
+          grants: {
+            read: readRoots([...grants, ...readable, statusFile]),
+            requested: REQUESTED_ROOTS.flatMap(spellings),
+            // The home is written whether it sits beneath the private root (bound into the vector on its own) or outside it.
+            write: [workspace, ...grants, ...(home === null ? [] : [home]), statusFile, ...ownGitEntries()].flatMap(spellings),
+            withheld: withheldRoots(),
+            withheldExcept: withheldExcept(),
+          },
+        },
       };
     },
-    /** The absolute paths the audit reported, each once, sorted; empty for a port that does not audit. */
     /**
-     * Reads the report once a confined call has ended, so a report cut back
-     * during that call is seen against what an earlier call left, and not
-     * only against the read `observedMounts` makes at the trial's end.
+     * Reads what a call's processes opened, once the call has ended: under
+     * Bubblewrap the call's trace, whose paths join the sandbox's; nothing to
+     * read under Seatbelt, whose reports `observedMounts` collects. `started`
+     * says whether the status shim ran; a call whose shim ran must have left
+     * its start in the trace, or the audit failed.
      */
-    settle() {
-      if (report === null) return;
-      const read = readConfinementReport(report, reportSize);
-      if (read.paths.includes(path.resolve(report))) tampered = true;
-      reportSize = Math.max(reportSize, read.size);
+    async collect(wrapped, { started = true } = {}) {
+      if (observer === null || wrapped?.trace === null || wrapped?.trace === undefined) return;
+      await observer.collect(wrapped.trace, started);
     },
-    observedMounts() {
-      if (report === null) return [];
-      const read = readConfinementReport(report, reportSize);
-      reportSize = Math.max(reportSize, read.size);
-      const paths = tampered && !read.paths.includes(path.resolve(report)) ? [...read.paths, path.resolve(report)].sort() : read.paths;
-      return paths;
+    /** Starts the audit's observer (Seatbelt's log stream), which must be reading before a target process runs. */
+    async start() {
+      if (observer !== null) await observer.start();
+    },
+    /**
+     * The absolute paths the audit reported, each once, sorted; empty for a
+     * port that does not audit. Under Seatbelt the read first waits until
+     * the stream has returned a read the runtime made after the trial's own
+     * (`confirm`), and an audit that cannot confirm itself throws.
+     */
+    async observedMounts() {
+      return observer === null ? [] : observer.observedMounts();
+    },
+    /** Ends the audit's observer. */
+    release() {
+      observer?.release();
     },
   };
 }
 
 /**
- * The paths an audit report names: one JSON object `{ path }` per line, each
- * path absolute. The report is the target's own processes' writing, so a
- * line that is not one is skipped, and only its first `REPORT_READ_BYTES`
- * are read.
- *
- * @param {string} report
- * @param {number} [previousSize] how long an earlier read found the report
- * @returns {{ paths: string[], size: number }}
+ * The observer of one audited sandbox: the mechanism-specific half of
+ * `confinement-audit.js`, holding what it has reported so far.
  */
-function readConfinementReport(report, previousSize = 0) {
-  let text;
-  let size = 0;
-  try {
-    const descriptor = fs.openSync(report, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
-    try {
-      size = fs.fstatSync(descriptor).size;
-      const buffer = Buffer.alloc(REPORT_READ_BYTES);
-      const read = fs.readSync(descriptor, buffer, 0, REPORT_READ_BYTES, 0);
-      text = buffer.subarray(0, read).toString('utf8');
-    } finally {
-      fs.closeSync(descriptor);
-    }
-  } catch {
-    // The runtime made the report before any process ran; one it cannot open now was replaced or removed.
-    return { paths: [path.resolve(report)], size: previousSize };
+function makeObserver({ confinement, audit, cwd }) {
+  const paths = new Set();
+  if (confinement.mode === 'seatbelt') {
+    const stream = new ReportStream({
+      directory: audit.directory,
+      token: auditToken(),
+      sandboxExec: confinement.executable,
+      fail: (message) => new ConfinementError(message),
+      logExecutable: confinement.observer.executable,
+    });
+    return {
+      token: stream.token,
+      async start() {
+        stream.spawnStream();
+        if (!(await stream.confirm())) {
+          throw new ConfinementError(
+            `the audit's log stream did not report the runtime's first read within the barrier${stream.said() ? ` (${stream.said()})` : ''}`,
+          );
+        }
+      },
+      collect: async () => {},
+      async observedMounts() {
+        const confirmed = await stream.confirm(audit.barrierMs);
+        stream.read();
+        const gone = stream.endedBecause();
+        if (gone !== null) throw new ConfinementError(`the audit's log stream ended during the trial: ${gone}`);
+        if (!confirmed && stream.paths.size === 0) {
+          throw new ConfinementError(
+            "the audit's log stream did not return a read the runtime made after the trial's own, so what the trial read is unconfirmed",
+          );
+        }
+        if (stream.lost && stream.paths.size === 0) {
+          throw new ConfinementError(
+            "the audit's log stream reported lost events and no read of the trial, so what the trial read is unconfirmed",
+          );
+        }
+        return [...stream.paths].sort();
+      },
+      release: () => stream.close(),
+    };
   }
-  const observed = new Set();
-  // A report the target's own processes made longer than the runtime reads, or shorter than a read already showed,
-  // was flooded or cut back; its own path is then the mount the trial is held to.
-  if (size > REPORT_READ_BYTES || size < previousSize) observed.add(path.resolve(report));
-  for (const line of text.split('\n')) {
-    if (line.length === 0) continue;
-    try {
-      const entry = JSON.parse(line);
-      if (typeof entry?.path === 'string' && path.isAbsolute(entry.path) && entry.path.length > 0) observed.add(path.normalize(entry.path));
-    } catch {
-      // A line cut off at the read limit, or written by the target itself.
-    }
-  }
-  return { paths: [...observed].sort(), size };
+  // A call whose trace cannot be trusted fails the audit for the rest of the sandbox's life: the mounts of the trial are then unknown.
+  let failure = null;
+  return {
+    token: null,
+    start: async () => {},
+    async collect(trace, started) {
+      try {
+        const reader = await readTrace(trace.file, {
+          marker: trace.marker,
+          cwd,
+          onAccess: (access) => {
+            const listed = traceDecision(access, trace.grants);
+            if (listed !== null) paths.add(listed);
+          },
+        });
+        fs.rmSync(trace.file, { force: true });
+        if (started && !reader.begun) {
+          throw new ConfinementError(
+            `the trace of a confined call holds no start of its target, so what its processes opened is unknown; strace reported nothing for ${trace.marker.text}`,
+          );
+        }
+      } catch (error) {
+        // Any trace the runtime cannot read or parse fails the audit, whoever awaits this call (a server's is not awaited).
+        failure = error;
+        throw error;
+      }
+    },
+    observedMounts: async () => {
+      if (failure !== null) throw failure;
+      return [...paths].sort();
+    },
+    release: () => {},
+  };
 }
 
 /**
@@ -793,6 +991,23 @@ function makeTargetHome(scratch) {
 }
 
 /**
+ * The private directory one audited sandbox keeps its files in (the log
+ * stream's output and the sentinels it reads under Seatbelt, each call's trace
+ * under Bubblewrap), joined to the run's `scratch`, beneath the run's private
+ * parent, which every target withholds, so no target can read, write or
+ * replace what the runtime reads of the audit. Its real path, so the paths
+ * the kernel reports match the paths the runtime wrote.
+ */
+function makeAuditDirectory(scratch) {
+  // Outside the private parent no target would be kept from reading it, so there is none to fall back to.
+  if (typeof scratch.privateParent !== 'string')
+    throw new ConfinementError("the audit needs the run's private parent directory, which the run has not made");
+  const directory = fs.realpathSync.native(fs.mkdtempSync(path.join(scratch.privateParent, 'tea-evaluate-audit-')));
+  scratch.push(directory);
+  return directory;
+}
+
+/**
  * Removes a private home the sandbox no longer uses (after a reset made a new
  * one, or when its trial ended). The home is renamed out of the way first, to a
  * name no sandbox grants, so a process an earlier arm left running, whose
@@ -824,11 +1039,6 @@ function releaseTemporary(scratch, directory) {
   if (at !== -1) scratch.splice(at, 1);
 }
 
-/** The call's own status file, which the shim writes and the audit therefore grants; nothing under Seatbelt. */
-function statusGrant(wrapped) {
-  return wrapped?.statusFile ? [wrapped.statusFile] : [];
-}
-
 /**
  * `env` with the temp-directory variables naming the call's own directory and,
  * for a sandbox with a private home, `HOME` naming it and the XDG base
@@ -855,25 +1065,29 @@ function confinedCommandMechanism(base, sandbox, systemPathsOf = () => [], scrat
     async run(request, signal) {
       const writable = typeof request.portFile === 'string' ? [path.dirname(request.portFile)] : [];
       const temporary = callTemporary(scratch);
+      let wrapped = null;
+      let started = false;
+      let read = false;
       try {
-        const wrapped = sandbox.wrap(request.target, [...request.subcommandPath, ...request.argv], [...writable, temporary]);
+        wrapped = sandbox.wrap(
+          request.target,
+          [...request.subcommandPath, ...request.argv],
+          [...writable, temporary],
+          systemPathsOf(request.target),
+        );
         const result = await base.run(
           {
             ...request,
             target: wrapped.target,
             subcommandPath: [],
             argv: wrapped.args,
-            env: sandbox.environment(withTemporary(request.env, temporary, sandbox.home ?? null), [
-              ...systemPathsOf(request.target),
-              ...writable,
-              temporary,
-              ...statusGrant(wrapped),
-            ]),
+            env: withTemporary(request.env, temporary, sandbox.home ?? null),
           },
           signal,
         );
         const status = recordedStatus(wrapped.statusFile);
-        sandbox.settle();
+        read = true;
+        started = status.started;
         if (!status.started) {
           // Bubblewrap exited before its shim ran: the exit code is its own, not a behavior of the target.
           const said = stderrTail(result?.stderr?.value ?? result?.stderr);
@@ -883,6 +1097,9 @@ function confinedCommandMechanism(base, sandbox, systemPathsOf = () => [], scrat
         }
         return status.signal === null ? result : { ...result, exitCode: -os.constants.signals[status.signal] };
       } finally {
+        // What the call's processes opened is read however the call ended; a call that never started has nothing to read.
+        if (wrapped !== null && !read) started = recordedStatus(wrapped.statusFile).started;
+        await sandbox.collect?.(wrapped, { started });
         releaseTemporary(scratch, temporary);
       }
     },
@@ -907,17 +1124,13 @@ function confinedMcpMechanism(base, sandbox, systemPathsOf = () => [], scratch =
       let wrapped = null;
       let status = null;
       try {
-        wrapped = sandbox.wrap(request.target, request.targetArgs, [temporary]);
+        wrapped = sandbox.wrap(request.target, request.targetArgs, [temporary], systemPathsOf(request.target));
         const result = await base.callTool(
           {
             ...request,
             target: wrapped.target,
             targetArgs: wrapped.args,
-            env: sandbox.environment(withTemporary(request.env, temporary, sandbox.home ?? null), [
-              ...systemPathsOf(request.target),
-              temporary,
-              ...statusGrant(wrapped),
-            ]),
+            env: withTemporary(request.env, temporary, sandbox.home ?? null),
           },
           signal,
         );
@@ -931,8 +1144,9 @@ function confinedMcpMechanism(base, sandbox, systemPathsOf = () => [], scratch =
         }
         return status.signal === null ? result : { ...result, exitCode: -os.constants.signals[status.signal] };
       } finally {
-        if (wrapped !== null && status === null) recordedStatus(wrapped.statusFile);
-        sandbox.settle();
+        // A call that threw before its status was read left the file behind: read it now, so a started target is still held to its trace.
+        if (wrapped !== null && status === null) status = recordedStatus(wrapped.statusFile);
+        await sandbox.collect?.(wrapped, { started: status?.started === true });
         releaseTemporary(scratch, temporary);
       }
     },
@@ -965,10 +1179,14 @@ module.exports = {
   forbiddenInputNote,
   layerPrefix,
   chmodDirectoryNoFollow,
+  makeAuditDirectory,
   makeTargetHome,
+  nodeInstallRoot,
+  probeObserver,
   releaseTargetHome,
   releaseTemporary,
   unlockDirectories,
   selectConfinement,
+  seatbeltTargetProfile,
   targetSandbox,
 };

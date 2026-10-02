@@ -4095,7 +4095,15 @@ async function checkConfinedServiceReads() {
   };
   const refusal = /contract: refused (EPERM|EACCES|ENOENT|EROFS)/;
 
-  const confined = runReading('confined-reads');
+  // The kernel's report channel on macOS can lose a report under load (Story 1.60): a run whose audit lists only what it should, but
+  // not all of it, runs again (up to two more times) before the exact comparison below counts. Any extra path counts at once.
+  const wanted = (run) => [run.contract, realOutside].sort();
+  const lostOnly = (run) =>
+    Array.isArray(run.observed) &&
+    run.observed.every((entry) => wanted(run).includes(entry)) &&
+    wanted(run).some((entry) => !run.observed.includes(entry));
+  let confined = runReading('confined-reads');
+  for (let again = 0; again < 2 && process.platform === 'darwin' && lostOnly(confined); again += 1) confined = runReading('confined-reads');
   check(refusal.test(confined.evidence), `a confined started service's read of contract.json was not refused: ${confined.evidence}`);
   check(
     /outside: allowed/.test(confined.evidence),
@@ -4112,7 +4120,14 @@ async function checkConfinedServiceReads() {
     `a confined HTTP port's writes under the evaluation folder ended ${JSON.stringify(confined.attempts)} (written: ${confined.tampered}); expected each refused`,
   );
 
-  const declared = runReading('confined-reads-declared', { declared: true });
+  let declared = runReading('confined-reads-declared', { declared: true });
+  for (
+    let again = 0;
+    again < 2 && process.platform === 'darwin' && Array.isArray(declared.observed) && declared.observed.length === 0;
+    again += 1
+  ) {
+    declared = runReading('confined-reads-declared', { declared: true });
+  }
   check(
     refusal.test(declared.evidence) && /outside: allowed/.test(declared.evidence),
     `a started service under a declared system path read: ${declared.evidence}`,

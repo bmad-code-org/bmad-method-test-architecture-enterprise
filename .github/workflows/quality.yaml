@@ -190,17 +190,19 @@ jobs:
       # runs, because "main" is mutable and a script that ends in `sudo mv` is
       # not something to pipe from a branch nobody reviews on every run.
       #
-      # Every shard installs actionlint and bubblewrap, whichever scripts the
-      # weights put on it. test:eval-ci-data, test:eval-replay,
+      # Every shard installs actionlint, bubblewrap and strace, whichever
+      # scripts the weights put on it. test:eval-ci-data, test:eval-replay,
       # test:probe-targets, test:doc-invocations and test:cli need actionlint;
       # the atdd isolation proofs, test:framework-scaffold-install-isolation,
       # test:transcript-harness, test:probe-targets, test:eval-schemas,
       # test:doc-invocations, test:cli and every test:evaluate-* suite that
       # runs tea-evaluate preflight or run need bubblewrap. test:cli needs both
       # because its eval:all reconciliation cases preflight every manifest
-      # suite, ci and atdd included. A shard missing either fails
-      # those scripts on the missing dependency, and a new weight can move any
-      # of them to any shard.
+      # suite, ci and atdd included. Every test:evaluate-* suite that
+      # runs a confined target also needs strace, the observer of
+      # tea-evaluate's audit under bubblewrap (Story 1.60). A shard missing any
+      # of the three fails those scripts on the missing dependency, and a new
+      # weight can move any of them to any shard.
       - name: Install actionlint
         run: |
           curl -sSfL -o download-actionlint.bash https://raw.githubusercontent.com/rhysd/actionlint/3795ba2f6cb243eeca54c9d22e5c531cb9dcfb4a/scripts/download-actionlint.bash
@@ -211,10 +213,12 @@ jobs:
       # bubblewrap is tea-atdd-red-check's linux isolation backend and
       # tea-evaluate's linux file-system confinement (Story 1.31: preflight and
       # run exit 12 on a Linux host without it), and is not preinstalled on this
-      # runner image. Installing it as its own step makes a failed install name
-      # itself before the shard starts.
-      - name: Install bubblewrap (the linux isolation backend of tea-atdd-red-check and tea-evaluate)
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap
+      # runner image. strace is the observer of tea-evaluate's audit under
+      # bubblewrap (Story 1.60: the same commands exit 12 without it). Installing
+      # them as their own step makes a failed install name itself before the
+      # shard starts.
+      - name: Install bubblewrap and strace (the linux isolation backend of tea-atdd-red-check and tea-evaluate, and the observer of tea-evaluate's audit)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap strace
 
       # Ubuntu 24.04+ ships kernel.apparmor_restrict_unprivileged_userns=1, which
       # blocks bwrap's --unshare-net from bringing up its own loopback interface

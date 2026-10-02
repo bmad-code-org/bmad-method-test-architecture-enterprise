@@ -59,25 +59,22 @@ function collectGeneratedOutputs() {
       const evaluationFolder = '/proj/evaluations/demo';
       const workspace = '/var/folders/ab/cd/T/tea-workspace';
       const privateDirectory = '/var/folders/ab/cd/T/tea-private';
-      const report = `${privateDirectory}/audit.jsonl`;
       const seatbeltConfinement = { mode: 'seatbelt', executable: '/usr/bin/sandbox-exec', evaluationFolder };
       const bubblewrapConfinement = { mode: 'bubblewrap', executable: '/usr/bin/bwrap', evaluationFolder };
-      const seatbeltTarget = confinement.targetSandbox({ confinement: seatbeltConfinement, workspace, report });
+      const seatbeltTarget = confinement.targetSandbox({ confinement: seatbeltConfinement, workspace });
       const bubblewrapTarget = confinement.targetSandbox({
         confinement: bubblewrapConfinement,
         workspace,
-        report,
         status: statusDirectory,
       });
       const bubblewrapWrapped = bubblewrapTarget.wrap('/fixture/bin/node', ['target.js', '--flag'], [privateDirectory]);
       // A workspace in a git repository also withholds the project's git directory, the worktree's own entry in it excepted (Story 1.57).
       const git = { directory: '/proj/.git', metadata: '/proj/.git/worktrees/tea-workspace' };
-      const seatbeltGitTarget = confinement.targetSandbox({ confinement: seatbeltConfinement, workspace, git, report });
+      const seatbeltGitTarget = confinement.targetSandbox({ confinement: seatbeltConfinement, workspace, git });
       const bubblewrapGitTarget = confinement.targetSandbox({
         confinement: bubblewrapConfinement,
         workspace,
         git,
-        report,
         status: statusDirectory,
       });
       const bubblewrapGitWrapped = bubblewrapGitTarget.wrap('/fixture/bin/node', ['target.js', '--flag'], [privateDirectory]);
@@ -87,7 +84,6 @@ function collectGeneratedOutputs() {
           confinement: bubblewrapConfinement,
           workspace,
           git: { ...git, alternates },
-          report,
           status: statusDirectory,
         })
         .wrap('/fixture/bin/node', ['target.js'], []);
@@ -96,21 +92,20 @@ function collectGeneratedOutputs() {
           confinement: bubblewrapConfinement,
           workspace,
           git: { directory: git.directory, metadata: null },
-          report,
           status: statusDirectory,
         })
         .wrap('/fixture/bin/node', ['target.js'], []);
       // The user's private root directory is withheld from every target, a git workspace's included (Story 1.58).
       const privateRoot = '/var/folders/ab/cd/T/tea-evaluate-p501';
-      const seatbeltPrivateTarget = confinement.targetSandbox({ confinement: seatbeltConfinement, workspace, git, privateRoot, report });
+      const seatbeltPrivateTarget = confinement.targetSandbox({ confinement: seatbeltConfinement, workspace, git, privateRoot });
       const bubblewrapPrivateWrapped = confinement
-        .targetSandbox({ confinement: bubblewrapConfinement, workspace, git, privateRoot, report, status: statusDirectory })
+        .targetSandbox({ confinement: bubblewrapConfinement, workspace, git, privateRoot, status: statusDirectory })
         .wrap('/fixture/bin/node', ['target.js', '--flag'], [privateDirectory]);
       // Every confined trial's private home is granted like the call's temp directory (Story 1.59).
       const home = '/var/folders/ab/cd/T/tea-evaluate-target-home-AbCdEf';
-      const seatbeltHomeTarget = confinement.targetSandbox({ confinement: seatbeltConfinement, workspace, git, privateRoot, home, report });
+      const seatbeltHomeTarget = confinement.targetSandbox({ confinement: seatbeltConfinement, workspace, git, privateRoot, home });
       const bubblewrapHomeWrapped = confinement
-        .targetSandbox({ confinement: bubblewrapConfinement, workspace, git, privateRoot, home, report, status: statusDirectory })
+        .targetSandbox({ confinement: bubblewrapConfinement, workspace, git, privateRoot, home, status: statusDirectory })
         .wrap('/fixture/bin/node', ['target.js', '--flag'], [privateDirectory]);
       // A home beneath the user's private root, the run's own parent holding it, is the one directory of the root a target reaches.
       const rootHome = `${privateRoot}/run-501-AbCdEf/tea-evaluate-target-home-AbCdEf`;
@@ -120,11 +115,22 @@ function collectGeneratedOutputs() {
         git,
         privateRoot,
         home: rootHome,
-        report,
       });
       const bubblewrapRootHomeWrapped = confinement
-        .targetSandbox({ confinement: bubblewrapConfinement, workspace, git, privateRoot, home: rootHome, report, status: statusDirectory })
+        .targetSandbox({ confinement: bubblewrapConfinement, workspace, git, privateRoot, home: rootHome, status: statusDirectory })
         .wrap('/fixture/bin/node', ['target.js', '--flag'], [privateDirectory]);
+      // An audited Bubblewrap sandbox runs the command under strace, outside the namespace (Story 1.60).
+      const bubblewrapAuditWrapped = confinement
+        .targetSandbox({
+          confinement: { ...bubblewrapConfinement, observer: { executable: '/usr/bin/strace' } },
+          workspace,
+          git,
+          privateRoot,
+          home: rootHome,
+          audit: { directory: `${privateRoot}/run-501-AbCdEf/tea-evaluate-audit-AbCdEf` },
+          status: statusDirectory,
+        })
+        .wrap('/fixture/bin/node', ['target.js', '--flag'], [privateDirectory], ['/opt/toolchain']);
       const outputs = {
         'isolate.buildSandboxProfile': isolate.buildSandboxProfile(
           ['/proj/out/test-review.md', '/proj/out/verdict.json'],
@@ -160,52 +166,61 @@ function collectGeneratedOutputs() {
         'confinement.layerPrefix.bubblewrap': confinement.layerPrefix(bubblewrapConfinement),
         'confinement.targetSandbox.wrap.seatbelt': seatbeltTarget.wrap('/fixture/bin/node', ['target.js', '--flag'], [privateDirectory]),
         'confinement.targetSandbox.wrap.bubblewrap': { ...bubblewrapWrapped },
-        'confinement.targetSandbox.environment': seatbeltTarget.environment({ PATH: '/usr/bin' }, [privateDirectory]),
         'confinement.targetSandbox.wrap.seatbelt.git': seatbeltGitTarget.wrap(
           '/fixture/bin/node',
           ['target.js', '--flag'],
           [privateDirectory],
         ),
         'confinement.targetSandbox.wrap.seatbelt.gitCopy': confinement
-          .targetSandbox({ confinement: seatbeltConfinement, workspace, git: { directory: git.directory, metadata: null }, report })
+          .targetSandbox({ confinement: seatbeltConfinement, workspace, git: { directory: git.directory, metadata: null } })
           .wrap('/fixture/bin/node', ['target.js'], []),
         'confinement.targetSandbox.wrap.bubblewrap.git': { ...bubblewrapGitWrapped },
         'confinement.targetSandbox.wrap.bubblewrap.gitCopy': { ...bubblewrapCopyGitWrapped },
         'confinement.targetSandbox.wrap.seatbelt.gitAlternates': confinement
-          .targetSandbox({ confinement: seatbeltConfinement, workspace, git: { ...git, alternates }, report })
+          .targetSandbox({ confinement: seatbeltConfinement, workspace, git: { ...git, alternates } })
           .wrap('/fixture/bin/node', ['target.js'], []),
         'confinement.targetSandbox.wrap.bubblewrap.gitAlternates': { ...bubblewrapAlternatesWrapped },
-        'confinement.targetSandbox.environment.git': seatbeltGitTarget.environment({ PATH: '/usr/bin' }, [privateDirectory]),
-        'confinement.targetSandbox.environment.gitAlternates': confinement
-          .targetSandbox({
-            confinement: seatbeltConfinement,
-            workspace,
-            git: { ...git, view: '/var/folders/ab/cd/T/tea-workspace-view', alternates },
-            report,
-          })
-          .environment({ PATH: '/usr/bin' }, [privateDirectory]),
         'confinement.targetSandbox.wrap.seatbelt.privateRoot': seatbeltPrivateTarget.wrap(
           '/fixture/bin/node',
           ['target.js', '--flag'],
           [privateDirectory],
         ),
         'confinement.targetSandbox.wrap.bubblewrap.privateRoot': { ...bubblewrapPrivateWrapped },
-        'confinement.targetSandbox.environment.privateRoot': seatbeltPrivateTarget.environment({ PATH: '/usr/bin' }, [privateDirectory]),
         'confinement.targetSandbox.wrap.seatbelt.home': seatbeltHomeTarget.wrap(
           '/fixture/bin/node',
           ['target.js', '--flag'],
           [privateDirectory],
         ),
         'confinement.targetSandbox.wrap.bubblewrap.home': { ...bubblewrapHomeWrapped },
-        'confinement.targetSandbox.environment.home': seatbeltHomeTarget.environment({ PATH: '/usr/bin' }, [privateDirectory]),
         'confinement.targetSandbox.wrap.seatbelt.rootHome': seatbeltRootHomeTarget.wrap(
           '/fixture/bin/node',
           ['target.js', '--flag'],
           [privateDirectory],
         ),
         'confinement.targetSandbox.wrap.bubblewrap.rootHome': { ...bubblewrapRootHomeWrapped },
-        'confinement.targetSandbox.environment.rootHome': seatbeltRootHomeTarget.environment({ PATH: '/usr/bin' }, [privateDirectory]),
+        // The audit (Story 1.60): Seatbelt's profile reports what it allows outside the grants and tags its refusals with the
+        // sandbox's token (a fixed one here, since the sandbox draws its own at random), and Bubblewrap's command runs under strace.
+        'confinement.seatbeltTargetProfile.audit': confinement.seatbeltTargetProfile({
+          workspace,
+          writable: [privateDirectory],
+          evaluationFolder,
+          git: { ...git, alternates: [] },
+          privateRoot,
+          rootHome,
+          audit: {
+            token: 'tea-evaluate-audit-0123456789abcdef',
+            exempt: [workspace, privateDirectory, '/usr/lib/node', rootHome],
+            quiet: [git.metadata, '/var/folders/ab/cd/T/tea-workspace-view'],
+          },
+        }),
+        'confinement.targetSandbox.wrap.bubblewrap.audit': { ...bubblewrapAuditWrapped },
       };
+      // The Node installation the runtime runs from is a read grant of every call, and the host's own.
+      const nodeInstallation = confinement.nodeInstallRoot(process.execPath);
+      const granted = [...bubblewrapAuditWrapped.trace.grants.read];
+      // It is listed before the system's own directories, which can include it (a node at /usr/bin/node).
+      granted[granted.indexOf(nodeInstallation)] = '<node-installation>';
+      outputs['confinement.targetSandbox.wrap.bubblewrap.audit'].trace.grants.read = granted;
       // The Bubblewrap status file's name carries a random token, its directory is made fresh and the node binary is the host's,
       // so each is named by role.
       const text = JSON.stringify(outputs)
@@ -216,8 +231,14 @@ function collectGeneratedOutputs() {
         .split(process.execPath)
         .join('<node>')
         .replaceAll(/status-(\d+)-[0-9a-f]{16}\.json/g, 'status-$1-<token>.json')
+        .replaceAll(/trace-(\d+)-[0-9a-f]{12}\.txt/g, 'trace-$1-<token>.txt')
         .replaceAll(path.join(__dirname, '..', '..', 'cli', 'lib', 'evaluate'), '<confinement-directory>');
-      return JSON.parse(text);
+      const normalized = JSON.parse(text);
+      // A path the host resolves through a link is granted under both spellings (`/var` and `/private/var` on macOS) and under one where
+      // it is no link, so the grants of the audited call are compared as sets.
+      const audited = normalized['confinement.targetSandbox.wrap.bubblewrap.audit'].trace.grants;
+      for (const name of ['read', 'write']) audited[name] = [...new Set(audited[name])];
+      return normalized;
     } finally {
       fs.rmSync(statusDirectory, { recursive: true, force: true });
     }

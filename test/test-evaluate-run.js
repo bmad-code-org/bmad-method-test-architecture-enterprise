@@ -108,7 +108,7 @@
  *   evaluation opts out, which `run.json` records; the reference names each
  *   platform's mechanism under its exact heading.
  *
- * Usage: node test/test-evaluate-run.js [--group=run|confinement|aggregate|held-inputs]
+ * Usage: node test/test-evaluate-run.js [--group=run|confinement|aggregate|held-inputs] [--only=<text in a case's name>]
  * CI runs the four groups as `test:evaluate-run`, `test:evaluate-confinement`, `test:evaluate-aggregate` and
  * `test:evaluate-held-inputs`; with no `--group` every case runs.
  */
@@ -130,13 +130,28 @@ const { uncommittedUnder } = require('../cli/lib/evaluate/preflight');
 const { judgeTrial } = require('../cli/lib/evaluate/evaluator');
 const { recordObservation, createArtifactValidator } = require('../cli/lib/evaluate/records');
 const { RunDirectory, RunDirectoryError } = require('../cli/lib/evaluate/run-directory');
-const { setRecommendation } = require('../cli/lib/evaluate/run');
+const { readObservedMounts, runTrial, setRecommendation } = require('../cli/lib/evaluate/run');
+const { createRegistry } = require('../cli/lib/evaluate/registry');
+const {
+  TRACE_CLONES,
+  TRACE_PATH_SYSCALLS,
+  TRACE_SYSCALLS,
+  TraceReader,
+  decodeString,
+  parseReportLine,
+  probeReportStream,
+  probeTrace,
+  splitArguments,
+  traceDecision,
+} = require('../cli/lib/evaluate/confinement-audit');
 const {
   MECHANISM_NAMES,
   PLATFORM_ENV,
   confinedCommandMechanism,
   confinedMcpMechanism,
+  makeAuditDirectory,
   makeTargetHome,
+  nodeInstallRoot,
   releaseTargetHome,
   selectConfinement,
   targetSandbox,
@@ -169,7 +184,6 @@ const ASSETS = path.join(PROJECT_ROOT, 'src', 'workflows', 'testarch', 'bmad-tes
 const CONDITIONS_SCHEMA = path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate', 'schemas', 'evaluator-conditions.schema.json');
 const WRAP_RUN_DIRECTORY = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'wrap-run-directory.cjs');
 const REPORT_LISTENER = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'report-listener.cjs');
-const CONFINEMENT_GUARD = path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate', 'confinement-guard.cjs');
 const CONFINEMENT_STATUS = path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate', 'confinement-status.cjs');
 const EVALUATION = path.join('evals', 'verdict');
 const TRIALS = 3;
@@ -194,6 +208,28 @@ const runtimeTemps = [];
 function check(condition, message) {
   checks += 1;
   if (!condition) failures.push(message);
+}
+
+/** The messages of checks that expect the kernel's report channel on macOS to deliver a report (Story 1.60), which can lose one. */
+const reportFailures = new Set();
+
+/** `check` for an expectation that a report arrived: a lossy case that fails only these checks runs again before they count. */
+function checkReport(condition, message) {
+  checks += 1;
+  if (condition) return;
+  failures.push(message);
+  reportFailures.add(message);
+}
+
+/**
+ * An audit's list held to the paths it should name: one that names a path nobody read fails at once, and one that lacks a
+ * path it should name fails as a lost report.
+ */
+function checkMounts(observed, expected, what) {
+  const extra = observed.filter((entry) => !expected.includes(entry));
+  check(extra.length === 0, `${what}: the audit listed ${JSON.stringify(extra)} beyond ${JSON.stringify(expected)}`);
+  const missing = expected.filter((entry) => !observed.includes(entry));
+  checkReport(missing.length === 0, `${what}: the audit did not list ${JSON.stringify(missing)}; it listed ${JSON.stringify(observed)}`);
 }
 
 function tempDir(label) {
@@ -266,7 +302,33 @@ function evaluate(args, env = {}, node = [], { timeout = SPAWN_TIMEOUT_MS } = {}
  * where it must not, which a confined run refuses (Story 1.31). `history`
  * makes further commits after the first, with the project and its folder.
  */
-function makeProject(label, { edit = () => {}, below = null, unconfined = false, history = () => {} } = {}) {
+let cachedGitToolchain = null;
+
+/**
+ * The directories of this host's `git` outside the system's own (Story 1.60): the confinement audits every process of a target,
+ * a `git` the fixture's target runs included, and a toolchain outside `/usr` is read from where it is installed, as an adopter
+ * declares it in `systemPaths` (a Homebrew prefix on macOS, the developer directory of a Command Line Tools or Xcode shim).
+ * Nothing on a host whose git lives under `/usr`, as CI's does.
+ */
+function gitToolchainPaths() {
+  if (cachedGitToolchain !== null) return cachedGitToolchain;
+  const found = spawnSync('which', ['git'], { encoding: 'utf8', env: BASE_ENV }).stdout.trim();
+  const paths = new Set();
+  if (found !== '') {
+    const real = fs.realpathSync(found);
+    const cellar = real.indexOf('/Cellar/');
+    if (cellar !== -1) paths.add(real.slice(0, cellar));
+    else if (!real.startsWith('/usr/') && !real.startsWith('/bin/')) paths.add(path.dirname(path.dirname(real)));
+    if (process.platform === 'darwin' && real.startsWith('/usr/bin/')) {
+      const developer = spawnSync('xcode-select', ['-p'], { encoding: 'utf8' }).stdout.trim();
+      for (const entry of [developer, '/Library/Developer', '/Library/Apple', '/Library/Preferences']) if (entry !== '') paths.add(entry);
+    }
+  }
+  cachedGitToolchain = [...paths].filter((entry) => fs.existsSync(entry));
+  return cachedGitToolchain;
+}
+
+function makeProject(label, { edit = () => {}, below = null, unconfined = false, history = () => {}, toolchain = false } = {}) {
   const repository = path.join(tempDir(label), 'repository');
   const project = below === null ? repository : path.join(repository, below);
   fs.cpSync(FIXTURE, project, { recursive: true, filter: (from) => path.basename(from) !== 'runs' });
@@ -277,6 +339,12 @@ function makeProject(label, { edit = () => {}, below = null, unconfined = false,
   }
   const folder = path.join(project, EVALUATION);
   if (unconfined) editJson(path.join(folder, 'evaluation.json'), (evaluation) => (evaluation.confinement = false));
+  // A case whose target runs `git` declares where this host installed it, when that is outside the system's directories.
+  if (toolchain && gitToolchainPaths().length > 0) {
+    editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
+      for (const entry of evaluation.registry) entry.systemPaths = [...(entry.systemPaths ?? []), ...gitToolchainPaths()];
+    });
+  }
   edit({ project, folder });
   const digested = evaluate(['digest', '--evaluation', folder]);
   if (digested.status !== 0) throw new Error(`digest failed for ${label}: ${digested.output}`);
@@ -3810,12 +3878,12 @@ async function checkConfinedEvaluationFolder() {
   );
   const realFolder = fs.realpathSync(probed.folder);
   const probedMounts = observedMountsOf(probedDirectory, 'P-001') ?? [];
-  check(
+  checkReport(
     [path.join(realFolder, 'contract.json'), path.join(realFolder, 'runs', 'tamper.txt')].every((entry) => probedMounts.includes(entry)),
     `the audit did not report the evaluation folder's paths the target reached for: ${JSON.stringify(probedMounts)}`,
   );
   const probedScore = evaluate(['score', '--evaluation', probed.folder], probed.env);
-  check(
+  checkReport(
     probedScore.status === 3 && probedScore.output.includes(`mount outside allowlist: ${path.join(realFolder, 'contract.json')}`),
     `score over a target that reached for the contract exited ${probedScore.status}; expected 3 with the isolation violation\n${probedScore.output}`,
   );
@@ -3861,18 +3929,14 @@ async function checkObservedMounts() {
     /ungranted-read: allowed/.test(trialStdout(observedDirectory, 'clean', 1)),
     'the target could not read the ungranted file, so the case proves nothing',
   );
-  const observedMounts = observedMountsOf(observedDirectory, 'P-001');
-  check(
-    JSON.stringify(observedMounts) === JSON.stringify([realOutside]),
-    `P-001's observed mounts are ${JSON.stringify(observedMounts)}; expected [${realOutside}]`,
-  );
+  checkMounts(observedMountsOf(observedDirectory, 'P-001'), [realOutside], "P-001's observed mounts after a target's read");
   const otherMounts = observedMountsOf(observedDirectory, 'P-002');
   check(
     JSON.stringify(otherMounts) === '[]',
     `P-002's trials read nothing ungranted, yet its manifest lists ${JSON.stringify(otherMounts)}`,
   );
   const observedScore = evaluate(['score', '--evaluation', observed.folder], observed.env);
-  check(
+  checkReport(
     observedScore.status === 3 && observedScore.output.includes(`mount outside allowlist: ${realOutside}`),
     `score over an observed ungranted mount exited ${observedScore.status}; expected 3 with eval-quality's isolation violation\n${observedScore.output}`,
   );
@@ -3890,6 +3954,1026 @@ async function checkObservedMounts() {
   check(
     declaredRun.status === 0 && JSON.stringify(declaredMounts) === '[]',
     `a read under a declared system path was reported (exit ${declaredRun.status}, observed ${JSON.stringify(declaredMounts)})\n${declaredRun.output}`,
+  );
+}
+
+/**
+ * The audit's parts on their own (Story 1.60): the strace trace parsed into path accesses, the decision that lists one,
+ * the kernel's sandbox reports parsed under the sandbox's token, and the two observers refusing what they cannot confirm.
+ */
+async function checkAuditParsers() {
+  const marker = { program: '/usr/local/bin/node', text: 'status-1-abcd.json' };
+  const accesses = [];
+  const reader = new TraceReader({ marker, cwd: '/work/ws', onAccess: (access) => accesses.push(access) });
+  const trace = [
+    // Bubblewrap's own setup, before the target's start: dropped, whatever it names, though it carries the target's command.
+    '12    execve("/usr/bin/bwrap", ["bwrap", "--", "/usr/local/bin/node", "/lib/confinement-status.cjs", "/tmp/status-1-abcd.json"], 0x1 /* 6 vars */) = 0',
+    '12    openat(3</proc>, "self/mountinfo", O_RDONLY|O_CLOEXEC) = 6</proc/12/mountinfo>',
+    '13    mount("none", "/newroot/etc/hostname", NULL, MS_RDONLY, NULL) = 0',
+    '14    execve("/usr/local/bin/node", ["/usr/local/bin/node", "/lib/confinement-status.cjs", "/tmp/status-1-abcd.json", "/bin/sh"], 0x1 /* 6 vars */) = 0',
+    // What the target does: a read outside the grants, a missing path, a relative open, a write the mechanism refused.
+    '15    openat(AT_FDCWD</work/ws>, "/opt/secret/notes.txt", O_RDONLY|O_CLOEXEC) = 3</opt/secret/notes.txt>',
+    '15    openat(AT_FDCWD</work/ws>, "/opt/secret/missing", O_RDONLY) = -1 ENOENT (No such file or directory)',
+    '15    openat(AT_FDCWD</work/ws>, "data/in.txt", O_RDONLY) = 4</work/ws/data/in.txt>',
+    '15    openat(AT_FDCWD</work/ws>, "/usr/bin/true", O_RDONLY|O_PATH) = 5</usr/bin/true>',
+    '15    execve("/opt/tool/bin/jq", ["jq", "."], 0x1 /* 6 vars */) = 0',
+    '15    openat(AT_FDCWD</work/ws>, "/etc/out.txt", O_WRONLY|O_CREAT|O_TRUNC, 0666) = -1 EROFS (Read-only file system)',
+    // A call split by another process's output, joined per pid; the path holds an escaped space and a quote.
+    String.raw`16    openat(AT_FDCWD</work/ws>, "/opt/a b\"c.txt", O_RDONLY <unfinished ...>`,
+    '17    chdir("/opt/dir") = 0',
+    '16    <... openat resumed>)             = 3</opt/a b"c.txt>',
+    // A process after `chdir` resolves a relative path of a call with no directory argument against it, and a child inherits it.
+    '17    mkdir("sub", 0777)                = -1 EROFS (Read-only file system)',
+    '17    clone(child_stack=NULL, flags=CLONE_CHILD_SETTID|SIGCHLD) = 18',
+    '18    unlink("gone")                    = -1 EROFS (Read-only file system)',
+    '18    readlinkat(AT_FDCWD</work/ws>, "/opt/lnk", "/x", 4096) = 2',
+    // An absolute path needs no directory: a descriptor strace cannot name leaves it readable.
+    '15    openat(7, "/opt/abs/secret", O_RDONLY) = 3</opt/abs/secret>',
+    // Non-ASCII bytes are escaped in a path and in a descriptor's annotation alike.
+    String.raw`15    openat(AT_FDCWD</work/ws>, "/work/ws/caf\303\251.txt", O_RDONLY) = 3</work/ws/caf\303\251.txt>`,
+    String.raw`15    openat(AT_FDCWD</work/w\303\251>, "rel.txt", O_RDONLY) = 3</work/w\303\251/rel.txt>`,
+    // A vforked child runs before its parent's `clone` returns, and a namespace's `clone` returns the namespace's own number,
+    // which `--decode-pids=pidns` names as strace sees it (22 here): the child's relative path waits for it.
+    '21    chdir("/opt/vf") = 0',
+    '21    clone(child_stack=0x1, flags=CLONE_VM|CLONE_VFORK|SIGCHLD <unfinished ...>',
+    '22    mkdir("child-rel", 0777) = -1 EROFS (Read-only file system)',
+    "21    <... clone resumed>) = 3 /* 22 in strace's PID NS */",
+    // A vforked child that changes directory before its parent's `clone` returns keeps that directory, and so does a thread
+    // another thread's `chdir` reached (`CLONE_FS` shares the directory), where a plain fork copies it.
+    '31    chdir("/opt/p") = 0',
+    '31    clone(child_stack=0x1, flags=CLONE_VM|CLONE_VFORK|SIGCHLD <unfinished ...>',
+    '32    chdir("/eval/runs") = 0',
+    '32    mkdir("y", 0777) = -1 EROFS (Read-only file system)',
+    "31    <... clone resumed>) = 5 /* 32 in strace's PID NS */",
+    "31    clone(child_stack=0x1, flags=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_THREAD|CLONE_SIGHAND) = 6 /* 33 in strace's PID NS */",
+    '31    chdir("/opt/q") = 0',
+    '33    rmdir("thread-rel") = -1 EROFS (Read-only file system)',
+    "31    clone(child_stack=NULL, flags=CLONE_CHILD_SETTID|SIGCHLD) = 7 /* 34 in strace's PID NS */",
+    '31    chdir("/opt/r") = 0',
+    '34    unlink("fork-rel") = -1 EROFS (Read-only file system)',
+    '35    mkdirat(AT_FDCWD, "bare", 0777) = -1 EROFS (Read-only file system)',
+
+    '15    --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=3, si_uid=1001, si_status=0} ---',
+    '15    utimensat(AT_FDCWD</work/ws>, NULL, NULL, 0) = 0',
+    '',
+  ];
+  for (const line of trace) reader.push(line);
+  reader.finish();
+  const seen = accesses.map((access) => `${access.kind} ${access.path}${access.ok ? '' : ` ${access.errno}`}`).sort();
+  const expectedAccesses = [
+    'read /opt/secret/notes.txt',
+    'read /opt/secret/missing ENOENT',
+    'read /work/ws/data/in.txt',
+    'read /opt/tool/bin/jq',
+    'write /etc/out.txt EROFS',
+    'read /opt/a b"c.txt',
+    'read /opt/abs/secret',
+    'read /work/ws/café.txt',
+    'read /work/wé/rel.txt',
+    'write /opt/vf/child-rel EROFS',
+    'write /eval/runs/y EROFS',
+    'write /opt/q/thread-rel EROFS',
+    'write /opt/q/fork-rel EROFS',
+    'write /work/ws/bare EROFS',
+    'write /opt/dir/sub EROFS',
+    'write /opt/dir/gone EROFS',
+    'read /opt/lnk',
+  ].sort();
+  check(JSON.stringify(seen) === JSON.stringify(expectedAccesses) && reader.begun, `the trace reader found ${JSON.stringify(seen)}`);
+  // The Node installation granted is the one above `bin/`, the directory itself at the file system's root, and no directory that
+  // holds the user's home (a node in `~/bin` would grant the home).
+  check(
+    nodeInstallRoot('/usr/local/bin/node') === '/usr/local' &&
+      nodeInstallRoot('/bin/node') === '/bin' &&
+      nodeInstallRoot(path.join(os.homedir(), 'bin', 'node')) === path.join(os.homedir(), 'bin'),
+    `the Node installation granted is ${JSON.stringify(['/usr/local/bin/node', '/bin/node', path.join(os.homedir(), 'bin', 'node')].map(nodeInstallRoot))}`,
+  );
+  check(
+    accesses.find((access) => access.path === '/opt/secret/notes.txt')?.real === '/opt/secret/notes.txt' &&
+      accesses.find((access) => access.path === '/work/ws/data/in.txt')?.real === '/work/ws/data/in.txt',
+    'an opened file keeps the real path strace printed',
+  );
+
+  const grants = {
+    read: ['/work/ws', '/usr', '/etc', '/proj', '/proj/.git/worktrees/w'],
+    requested: ['/usr', '/etc'],
+    write: ['/work/ws'],
+    withheld: ['/work/evals', '/proj/.git'],
+    withheldExcept: ['/proj/.git/worktrees/w'],
+  };
+  const decided = (access) => traceDecision({ ok: true, errno: null, real: access.path, ...access }, grants);
+  for (const [name, access, expected] of [
+    ['an ungranted read', { kind: 'read', path: '/opt/secret' }, '/opt/secret'],
+    ['a granted read', { kind: 'read', path: '/usr/lib/libc.so' }, null],
+    ['the root directory', { kind: 'read', path: '/' }, null],
+    // The operating system links its own files elsewhere (a stub resolver's `/etc/resolv.conf`), which no target can change.
+    ['a system file linked elsewhere', { kind: 'read', path: '/etc/resolv.conf', real: '/run/systemd/resolve/stub-resolv.conf' }, null],
+    ['a path under /proc that leads anywhere', { kind: 'read', path: '/proc/self/root/home/secret', real: '/home/secret' }, '/home/secret'],
+    ['a link that leads outside', { kind: 'read', path: '/work/ws/link', real: '/opt/secret' }, '/opt/secret'],
+    ['a missing ungranted path', { kind: 'read', path: '/opt/none', ok: false, errno: 'ENOENT' }, null],
+    ['a refused ungranted read', { kind: 'read', path: '/root', ok: false, errno: 'EACCES' }, '/root'],
+    [
+      'a missing withheld path',
+      { kind: 'read', path: '/work/evals/contract.json', ok: false, errno: 'ENOENT' },
+      '/work/evals/contract.json',
+    ],
+    ['a granted path under a withheld one', { kind: 'read', path: '/proj/.git/config' }, '/proj/.git/config'],
+    ['the excepted entry', { kind: 'read', path: '/proj/.git/worktrees/w/HEAD' }, null],
+    ['a write that landed', { kind: 'write', path: '/work/ws/out' }, null],
+    ['a refused write outside', { kind: 'write', path: '/etc/out', ok: false, errno: 'EROFS' }, '/etc/out'],
+    ['a refused write for another reason', { kind: 'write', path: '/etc/out', ok: false, errno: 'ENOSPC' }, null],
+    ['a refused write inside the workspace', { kind: 'write', path: '/work/ws/out', ok: false, errno: 'EACCES' }, null],
+    ['a refused write of a withheld path', { kind: 'write', path: '/work/evals/runs/x', ok: false, errno: 'ENOENT' }, '/work/evals/runs/x'],
+  ]) {
+    check(
+      decided(access) === expected,
+      `the decision for ${name} is ${JSON.stringify(decided(access))}; expected ${JSON.stringify(expected)}`,
+    );
+  }
+
+  // Paths the lexical reading gets wrong (Story 1.60, round 1): a process's own root or directory link leads anywhere in the
+  // namespace though it sits under the /proc grant, and a `..` after a link names another file than the collapsed path. Each
+  // line runs through the reader and the decision with a host that resolves the exec's path to the file the kernel opened.
+  const listed = (lines, resolveReal = () => null) => {
+    const found = [];
+    const walker = new TraceReader({
+      marker: null,
+      cwd: '/work/ws',
+      resolveReal,
+      onAccess: (access) => {
+        const entry = traceDecision(access, { ...grants, read: [...grants.read, '/proc', '/dev'] });
+        if (entry !== null) found.push(entry);
+      },
+    });
+    for (const line of lines) walker.push(line);
+    walker.finish();
+    return found;
+  };
+  for (const [name, lines, expected, resolveReal] of [
+    [
+      'an exec through /proc/self/root',
+      ['15    execve("/proc/self/root/home/x/tool", ["tool"], 0x1 /* 1 var */) = 0'],
+      ['/proc/self/root/home/x/tool'],
+    ],
+    [
+      'an exec through another process directory link',
+      ['15    execve("/proc/4242/cwd/tool", ["tool"], 0x1 /* 1 var */) = 0'],
+      ['/proc/4242/cwd/tool'],
+    ],
+    [
+      'a link read through /proc/self/root',
+      ['15    readlinkat(AT_FDCWD</work/ws>, "/proc/self/root/home/x/l", "/x", 4096) = 2'],
+      ['/proc/self/root/home/x/l'],
+    ],
+    [
+      'an exec through /proc/self/cwd and a `..`',
+      ['15    execve("/proc/self/cwd/../eval/tool", ["tool"], 0x1 /* 1 var */) = 0'],
+      ['/proc/self/eval/tool'],
+    ],
+    [
+      'an exec through a per-thread root link',
+      ['15    execve("/proc/self/task/77/root/work/eval/tool", ["tool"], 0x1 /* 1 var */) = 0'],
+      ['/proc/self/task/77/root/work/eval/tool'],
+    ],
+    [
+      'an exec through another process thread directory',
+      ['15    execve("/proc/4242/task/77/cwd/tool", ["tool"], 0x1 /* 1 var */) = 0'],
+      ['/proc/4242/task/77/cwd/tool'],
+    ],
+    [
+      'an exec of a /proc path with `..`, which the evaluator never resolves for the target',
+      ['15    execve("/proc/sys/kernel/../x/tool", ["tool"], 0x1 /* 1 var */) = 0'],
+      ['/proc/sys/x/tool'],
+      () => '/home/u/leak',
+    ],
+    [
+      'an exec with a `..` before the link',
+      ['15    execve("/proc/self/../self/root/home/victim/tool", ["tool"], 0x1 /* 1 var */) = 0'],
+      ['/proc/self/root/home/victim/tool'],
+    ],
+    [
+      'an exec with a `..` between a link and its siblings',
+      ['15    execve("/proc/self/fd/../root/home/victim/tool", ["tool"], 0x1 /* 1 var */) = 0'],
+      ['/proc/self/root/home/victim/tool'],
+    ],
+    [
+      'an exec that leaves /proc and returns',
+      ['15    execve("/proc/../proc/15/root/home/victim/tool", ["tool"], 0x1 /* 1 var */) = 0'],
+      ['/proc/15/root/home/victim/tool'],
+    ],
+    [
+      'an exec that climbs out of a thread directory',
+      ['15    execve("/proc/self/task/77/../../root/home/victim/tool", ["tool"], 0x1 /* 1 var */) = 0'],
+      ['/proc/self/root/home/victim/tool'],
+    ],
+    [
+      'an exec that starts in /dev and goes into /proc',
+      ['15    execve("/dev/../proc/self/root/home/victim/tool", ["tool"], 0x1 /* 1 var */) = 0'],
+      ['/proc/self/root/home/victim/tool'],
+      () => '/home/u/leak',
+    ],
+    [
+      'an exec through thread-self and `..`',
+      ['15    execve("/proc/thread-self/../../root/home/victim/tool", ["tool"], 0x1 /* 1 var */) = 0'],
+      ['/root/home/victim/tool'],
+    ],
+    ['an exec through /dev/stdin', ['15    execve("/dev/stdin/tool", ["tool"], 0x1 /* 1 var */) = 0'], ['/dev/stdin/tool']],
+    ['an exec through /dev/stdout', ['15    execve("/dev/stdout/tool", ["tool"], 0x1 /* 1 var */) = 0'], ['/dev/stdout/tool']],
+    ['an exec through /dev/stderr', ['15    execve("/dev/stderr/tool", ["tool"], 0x1 /* 1 var */) = 0'], ['/dev/stderr/tool']],
+    ['a bare exec of a descriptor link', ['15    execve("/proc/self/fd/9", ["tool"], 0x1 /* 1 var */) = 0'], ['/proc/self/fd/9']],
+    ['a bare exec of /dev/fd', ['15    execve("/dev/fd/9", ["tool"], 0x1 /* 1 var */) = 0'], ['/dev/fd/9']],
+    [
+      'a bare exec of a mapped file',
+      ['15    execve("/proc/4242/map_files/7f00-7f10", ["tool"], 0x1 /* 1 var */) = 0'],
+      ['/proc/4242/map_files/7f00-7f10'],
+    ],
+    [
+      'a bare exec of a thread descriptor',
+      ['15    execve("/proc/self/task/77/fd/9", ["tool"], 0x1 /* 1 var */) = 0'],
+      ['/proc/self/task/77/fd/9'],
+    ],
+    [
+      'an exec of a descriptor with an empty path',
+      ['15    execveat(3</home/victim/tool>, "", ["tool"], 0x1 /* 1 var */, AT_EMPTY_PATH) = 0'],
+      ['/home/victim/tool'],
+    ],
+    [
+      'a relative exec after a chdir through a process link',
+      [
+        '15    chdir("/home/victim") = 0',
+        '15    chdir("/proc/self/cwd/..") = 0',
+        '15    execve("victim/tool", ["tool"], 0x1 /* 1 var */) = 0',
+      ],
+      ['/proc/self/victim/tool'],
+    ],
+    [
+      'a relative exec after an fchdir to an ungranted directory',
+      ['15    fchdir(3</home/victim>) = 0', '15    execve("./tool", ["tool"], 0x1 /* 1 var */) = 0'],
+      ['/home/victim/tool'],
+    ],
+    ['a relative exec after an ordinary chdir', ['15    chdir("/usr/bin") = 0', '15    execve("true", ["tool"], 0x1 /* 1 var */) = 0'], []],
+    [
+      'a relative exec after leaving a process link by an absolute chdir',
+      ['15    chdir("/proc/self/cwd/..") = 0', '15    chdir("/usr/bin") = 0', '15    execve("true", ["tool"], 0x1 /* 1 var */) = 0'],
+      [],
+    ],
+    ['a re-exec of the process itself', ['15    execve("/proc/self/exe", ["tool"], 0x1 /* 1 var */) = 0'], []],
+    ['a read of a descriptor link', ['15    readlink("/proc/self/fd/1", "/dev/null", 4096) = 9'], []],
+    [
+      'an exec through a directory descriptor',
+      ['15    execve("/proc/self/fd/9/tool", ["tool"], 0x1 /* 1 var */) = 0'],
+      ['/proc/self/fd/9/tool'],
+    ],
+    ['an exec through /dev/fd', ['15    execve("/dev/fd/9/tool", ["tool"], 0x1 /* 1 var */) = 0'], ['/dev/fd/9/tool']],
+    [
+      'an exec through doubled slashes and a dot',
+      ['15    execve("/proc//self/./root/work/eval/tool", ["tool"], 0x1 /* 1 var */) = 0'],
+      ['/proc/self/root/work/eval/tool'],
+    ],
+    ['a write the mechanism allowed through /proc/self/cwd', ['15    mkdir("/proc/self/cwd/build", 0777) = 0'], []],
+    [
+      'an open that found nothing through /proc/self/cwd',
+      ['15    openat(AT_FDCWD</work/ws>, "/proc/self/cwd/missing", O_RDONLY) = -1 ENOENT (No such file or directory)'],
+      [],
+    ],
+    ['readlink of /proc/self/exe', ['15    readlink("/proc/self/exe", "/usr/bin/node", 4096) = 13'], []],
+    [
+      'an exec whose `..` follows a link into a system directory',
+      ['15    execve("/usr/lib/ssl/certs/../../../home/u/tool", ["tool"], 0x1 /* 1 var */) = 0'],
+      ['/home/u/tool'],
+      (raw) => (raw === '/usr/lib/ssl/certs/../../../home/u/tool' ? '/home/u/tool' : null),
+    ],
+    [
+      'an open whose `..` follows a link into a system directory',
+      ['15    openat(AT_FDCWD</work/ws>, "/usr/lib/ssl/certs/../../../home/u/secret", O_RDONLY) = 3</home/u/secret>'],
+      ['/home/u/secret'],
+    ],
+    [
+      'a relative open after a chdir into a linked directory',
+      ['15    chdir("/usr/lib/ssl/certs") = 0', '15    openat(AT_FDCWD, "../../../home/u/secret", O_RDONLY) = 3</home/u/secret>'],
+      ['/home/u/secret'],
+    ],
+    [
+      'a system file the system links elsewhere',
+      ['15    openat(AT_FDCWD</work/ws>, "/etc/resolv.conf", O_RDONLY) = 3</run/systemd/resolve/stub-resolv.conf>'],
+      [],
+    ],
+  ]) {
+    const found = listed(lines, resolveReal);
+    check(
+      JSON.stringify(found) === JSON.stringify(expected),
+      `${name} listed ${JSON.stringify(found)}; expected ${JSON.stringify(expected)}`,
+    );
+  }
+
+  // The kernel's reports: one line of the log per report, the sandbox's token on the second line of the message.
+  const token = 'tea-evaluate-audit-0123456789abcdef';
+  const line = (message, extra = {}) =>
+    JSON.stringify({ eventType: 'logEvent', processImagePath: '/kernel', eventMessage: message, ...extra });
+  for (const [name, text, expected] of [
+    [
+      'an allowed read',
+      line(`Sandbox: cat(7) allow file-read-data /opt/x\n${token}`),
+      { operation: 'file-read-data', denied: false, path: '/opt/x' },
+    ],
+    [
+      'a refused write',
+      line(`Sandbox: bash(8) deny(1) file-write-create /opt/new\n${token}`),
+      { operation: 'file-write-create', denied: true, path: '/opt/new' },
+    ],
+    [
+      'a duplicate',
+      line(`3 duplicate reports for Sandbox: ls(9) deny(1) file-read-data /opt/d\n${token}`),
+      { operation: 'file-read-data', denied: true, path: '/opt/d' },
+    ],
+    [
+      'a path holding a line break',
+      line(`Sandbox: cat(7) allow file-read-data /opt/a\nb\n${token}`),
+      { operation: 'file-read-data', denied: false, path: '/opt/a\nb' },
+    ],
+    [
+      'a process named with a parenthesis',
+      line(`Sandbox: weird(1)(7) allow file-read-data /opt/x\n${token}`),
+      { operation: 'file-read-data', denied: false, path: '/opt/x' },
+    ],
+    ['another sandbox', line('Sandbox: cat(7) allow file-read-data /opt/x\ntea-evaluate-audit-ffffffffffffffff'), null],
+    [
+      'a message of a process that is not the kernel',
+      line(`Sandbox: cat(7) allow file-read-data /opt/x\n${token}`, { processImagePath: '/usr/bin/logger' }),
+      null,
+    ],
+    ['a metadata operation', line(`Sandbox: stat(7) deny(1) file-read-metadata /opt/x\n${token}`), null],
+    ['a relative path', line(`Sandbox: cat(7) allow file-read-data opt/x\n${token}`), null],
+    ['the stream header', `Filtering the log data using "process == \\"kernel\\" AND composedMessage CONTAINS \\"${token}\\""`, null],
+    [
+      'a refused hard link',
+      line(`Sandbox: ln(9) deny(1) forbidden-link-priv<file-write*> /opt/src /work/dst\n${token}`),
+      { operation: 'forbidden-link-priv<file-write*>', denied: true, path: '/opt/src' },
+    ],
+    ['a loss event', JSON.stringify({ eventType: 'lossEvent' }), { lost: true }],
+  ]) {
+    const parsed = parseReportLine(text, token);
+    check(
+      JSON.stringify(parsed) === JSON.stringify(expected),
+      `the report line for ${name} parsed as ${JSON.stringify(parsed)}; expected ${JSON.stringify(expected)}`,
+    );
+  }
+  check(
+    JSON.stringify(splitArguments(String.raw`AT_FDCWD</a,b (c)>, "x, \"y\")", {flags=O_RDONLY|O_CLOEXEC, how=[1, 2]}, 0666) = 3`).args) ===
+      JSON.stringify(['AT_FDCWD</a,b (c)>', String.raw`"x, \"y\")"`, '{flags=O_RDONLY|O_CLOEXEC, how=[1, 2]}', '0666']) &&
+      decodeString(String.raw`"a\303\251\n\x41\""`) === 'aé\nA"',
+    "strace's arguments and escapes were not split and decoded",
+  );
+  // The parser acts on a syscall only if strace is told to report it: a name the parser handles that the filter lacks is a blind spot no canned line shows.
+  const handled = [...Object.keys(TRACE_PATH_SYSCALLS), ...TRACE_CLONES, 'chdir', 'fchdir'];
+  const unfiltered = handled.filter((name) => !TRACE_SYSCALLS.includes(name));
+  check(unfiltered.length === 0, `strace is not told to report ${unfiltered.join(', ')}, which the trace parser handles`);
+}
+
+/**
+ * The observers refuse what they cannot confirm (Story 1.60): a `log` that never reports the sentinel read (macOS), a `strace`
+ * that is missing, traces nothing or fails (Linux), and an audited sandbox whose observer stops or whose trace holds no start
+ * of the target; none of them returns an empty list of observed mounts.
+ */
+async function checkAuditRefusals() {
+  // An audit that cannot confirm what a trial opened ends the trial with no record (exit 12), whatever the platform: the error
+  // of the audit's read is the trial's, and an empty list is never put in its place.
+  const stopped = (details) => Object.assign(new Error(details.message), details);
+  let mapped = null;
+  try {
+    await readObservedMounts(
+      async () => {
+        throw new Error('the audit could not confirm');
+      },
+      { stop: stopped, label: 'trial-clean-1' },
+    );
+  } catch (error) {
+    mapped = error;
+  }
+  check(
+    mapped?.exitCode === 12 &&
+      mapped.stage === 'trial' &&
+      mapped.message.includes('trial-clean-1 yields no record: the audit could not confirm'),
+    `an audit whose read failed ended the trial as ${JSON.stringify(mapped?.message)}; expected no record, exit 12`,
+  );
+  check(
+    JSON.stringify(await readObservedMounts(async () => ['/a'], { stop: stopped, label: 'trial-clean-1' })) === '["/a"]',
+    'a successful audit read was changed',
+  );
+  // The audit's directory is made only beneath the run's private parent, which no target can reach.
+  let withoutParent = null;
+  try {
+    makeAuditDirectory([]);
+  } catch (error) {
+    withoutParent = error;
+  }
+  check(
+    withoutParent?.name === 'ConfinementError' && withoutParent.message.includes('private parent'),
+    `an audit directory was made with no private parent: ${withoutParent}`,
+  );
+  const bin = tempDir('audit-refusals');
+  const script = (name, body) => {
+    const file = path.join(bin, name);
+    fs.writeFileSync(file, `#!/bin/sh\n${body}\n`, { mode: 0o755 });
+    return file;
+  };
+  const silentLog = script('silent-log', 'sleep 30');
+  const endedLog = script('ended-log', 'echo "log: cannot read the unified log" >&2; exit 1');
+  const folder = tempDir('audit-refusals-folder');
+  const workspace = tempDir('audit-refusals-workspace');
+  const confinement = selectConfinement({ evaluation: {}, folder });
+  if (confinement.refusal !== undefined) throw new Error(confinement.refusal);
+
+  if (confinement.mode === 'seatbelt') {
+    const started = Date.now();
+    const silent = probeReportStream({ sandboxExec: confinement.executable, logExecutable: silentLog });
+    check(
+      typeof silent === 'string' && silent.includes('did not report a read the sandbox allowed') && Date.now() - started < 15_000,
+      `a log stream that never reports was confirmed or took too long: ${JSON.stringify(silent)} after ${Date.now() - started} ms`,
+    );
+    const ended = probeReportStream({ sandboxExec: confinement.executable, logExecutable: endedLog });
+    check(
+      typeof ended === 'string' && ended.includes('stream ended before it reported') && ended.includes('cannot read the unified log'),
+      `a log stream that ended was not refused with its own words: ${JSON.stringify(ended)}`,
+    );
+    const missing = probeReportStream({ sandboxExec: confinement.executable, logExecutable: path.join(bin, 'no-such-log') });
+    check(
+      typeof missing === 'string' && missing.includes('stream ended before it reported') && missing.includes('No such file'),
+      `a log executable that does not exist was not refused: ${JSON.stringify(missing)}`,
+    );
+    // The sandbox's own stream ends mid-trial: the read of its mounts fails, naming the stream.
+    const directory = fs.realpathSync(tempDir('audit-ended'));
+    const sandbox = targetSandbox({
+      confinement: { ...confinement, observer: { executable: endedLog } },
+      workspace,
+      audit: { directory },
+    });
+    let failure = null;
+    try {
+      await sandbox.start();
+    } catch (error) {
+      failure = error;
+    } finally {
+      sandbox.release();
+    }
+    check(
+      failure?.name === 'ConfinementError' && failure.message.includes('log stream ended'),
+      `a sandbox whose log stream ended before it started was not refused: ${failure}`,
+    );
+    // A stream that ends after the sandbox started (the target killed it, or the log stopped): the read of the mounts fails.
+    const live = targetSandbox({ confinement, workspace, audit: { directory: fs.realpathSync(tempDir('audit-killed')) } });
+    await live.start();
+    live.release();
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    let killed = null;
+    try {
+      await live.observedMounts();
+    } catch (error) {
+      killed = error;
+    }
+    check(
+      killed?.name === 'ConfinementError' && killed.message.includes('log stream ended'),
+      `a sandbox whose log stream was killed mid-trial returned its mounts: ${killed}`,
+    );
+
+    // A stream the host stalls (SIGSTOP) never returns the barrier's read: the mounts are unconfirmed, never an empty list.
+    const stalled = targetSandbox({
+      confinement,
+      workspace,
+      audit: { directory: fs.realpathSync(tempDir('audit-stalled')), barrierMs: 1500 },
+    });
+    await stalled.start();
+    const stalledToken = /with message "(tea-evaluate-audit-[0-9a-f]{16})"/.exec(stalled.wrap('/bin/true', []).args[1])[1];
+    const streamPids = () =>
+      spawnSync('pgrep', ['-f', `CONTAINS "${stalledToken}"`], { encoding: 'utf8' })
+        .stdout.split('\n')
+        .filter(Boolean)
+        .map(Number);
+    const frozen = streamPids();
+    for (const pid of frozen) process.kill(pid, 'SIGSTOP');
+    let unconfirmed = null;
+    try {
+      await stalled.observedMounts();
+    } catch (error) {
+      unconfirmed = error;
+    } finally {
+      for (const pid of frozen) process.kill(pid, 'SIGKILL');
+      stalled.release();
+    }
+    check(
+      frozen.length > 0 && unconfirmed?.name === 'ConfinementError' && unconfirmed.message.includes('did not return a read'),
+      `a sandbox whose log stream stalled returned its mounts (${frozen.length} stream process(es)): ${unconfirmed}`,
+    );
+    // A stream that reports lost events and no read leaves the trial unconfirmed.
+    const lossyLog = script('lossy-log', 'echo \'{"eventType":"lossEvent"}\'; exec /usr/bin/log "$@"');
+    const lossy = targetSandbox({
+      confinement: { ...confinement, observer: { executable: lossyLog } },
+      workspace,
+      audit: { directory: fs.realpathSync(tempDir('audit-lossy')) },
+    });
+    await lossy.start();
+    let lostEvents = null;
+    try {
+      await lossy.observedMounts();
+    } catch (error) {
+      lostEvents = error;
+    } finally {
+      lossy.release();
+    }
+    check(
+      lostEvents?.name === 'ConfinementError' && lostEvents.message.includes('lost events'),
+      `a sandbox whose log stream reported lost events and no read returned its mounts: ${lostEvents}`,
+    );
+    // The barrier is what makes the list complete: a stream that delivers a second late still lists the path read just before.
+    const slowLog = script('slow-log', '/usr/bin/log "$@" | (sleep 1; cat)');
+    const slowDirectory = fs.realpathSync(tempDir('audit-slow'));
+    const slow = targetSandbox({
+      confinement: { ...confinement, observer: { executable: slowLog } },
+      workspace,
+      status: tempDir('audit-slow-status'),
+      audit: { directory: slowDirectory },
+    });
+    await slow.start();
+    const slowToken = /with message "(tea-evaluate-audit-[0-9a-f]{16})"/.exec(slow.wrap('/bin/true', []).args[1])[1];
+    const slowFile = path.join(fs.realpathSync(tempDir('audit-slow-outside')), 'late.txt');
+    fs.writeFileSync(slowFile, 'late\n');
+    const slowWrapped = slow.wrap('/bin/cat', [slowFile]);
+    await new Promise((resolve) => spawn(slowWrapped.target, slowWrapped.args, { cwd: workspace, stdio: 'ignore' }).once('exit', resolve));
+    const slowMounts = await slow.observedMounts();
+    slow.release();
+    spawnSync('pkill', ['-f', slowToken]);
+    check(
+      JSON.stringify(slowMounts) === JSON.stringify([slowFile]),
+      `a read made just before the end of the trial was ${JSON.stringify(slowMounts)} through a slow log; expected [${slowFile}]`,
+    );
+
+    // The registry's release ends the audit: no `log stream` of this process outlives the trial's release.
+    const outstanding = () =>
+      spawnSync('ps', ['-axo', 'pid=,ppid=,command='], { encoding: 'utf8' })
+        .stdout.split('\n')
+        .filter((line) => new RegExp(String.raw`^\s*\d+\s+${process.pid}\s`).test(line) && line.includes('CONTAINS "tea-evaluate-audit-'))
+        .length;
+    const scratchList = [];
+    makePrivateParent(scratchList);
+    const registry = createRegistry(readJson(path.join(FIXTURE, 'evals', 'verdict', 'evaluation.json')).registry, {
+      root: FIXTURE,
+      scratch: scratchList,
+      confinement,
+    });
+    const before = outstanding();
+    const probePort = await registry.createProbePort({
+      cwd: workspace,
+      projectRoot: workspace,
+      workspace,
+      git: null,
+      privateRoot: scratchList.privateRoot,
+      audit: true,
+    });
+    const during = outstanding();
+    probePort.releaseHome();
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    const after = outstanding();
+    for (const directory of scratchList) fs.rmSync(directory, { recursive: true, force: true });
+    check(
+      during === before + 1 && after === before,
+      `the probe port's audit held ${during - before} log stream(s) and ${after - before} after its release; expected 1 and 0`,
+    );
+  }
+
+  // The Linux half needs no Linux: a `bwrap` that runs its command and a `strace` that is refused, traces nothing or confirms its
+  // probe stand in for the real ones on any host.
+  const stubBwrap = script('bwrap', 'while [ "$1" != "--" ]; do shift; done; shift; exec "$@"');
+  const absent = selectConfinement({
+    evaluation: {},
+    folder,
+    env: { PATH: path.dirname(stubBwrap), [PLATFORM_ENV]: 'linux' },
+    platform: 'linux',
+  });
+  check(
+    absent.refusal?.includes('strace is not on PATH') &&
+      absent.refusal.includes('version 6.1 or later') &&
+      absent.refusal.includes('"confinement": false'),
+    `a host with no strace was not refused naming it and the opt-out: ${JSON.stringify(absent.refusal)}`,
+  );
+  const vector = [stubBwrap, '--unshare-user', '--ro-bind', '/', '/', '--dev', '/dev', '--'];
+  const untraced = script('untraced-strace', 'while [ "$1" != "--" ]; do shift; done; shift; exec "$@"');
+  const failing = script('failing-strace', 'echo "strace: ptrace(PTRACE_TRACEME): Operation not permitted" >&2; exit 1');
+  const none = probeTrace({ strace: untraced, vector });
+  check(
+    typeof none === 'string' && none.includes('no read of the probe file'),
+    `a strace that traces nothing was confirmed: ${JSON.stringify(none)}`,
+  );
+  const refused = probeTrace({ strace: failing, vector });
+  check(
+    typeof refused === 'string' && refused.includes('exit 1') && refused.includes('Operation not permitted'),
+    `a strace that failed was not refused with its own words: ${JSON.stringify(refused)}`,
+  );
+  // An audited call whose trace holds no start of the target: the audit failed, so the call is refused.
+  const bubblewrap = {
+    mode: 'bubblewrap',
+    executable: stubBwrap,
+    evaluationFolder: path.resolve(folder),
+    observer: { executable: untraced },
+  };
+  const sandbox = targetSandbox({
+    confinement: bubblewrap,
+    workspace,
+    status: tempDir('audit-untraced-status'),
+    audit: { directory: fs.realpathSync(tempDir('audit-untraced')) },
+  });
+  const wrapped = sandbox.wrap(process.execPath, ['-e', '']);
+  spawnSync(wrapped.target, wrapped.args, { cwd: workspace, encoding: 'utf8', timeout: SPAWN_TIMEOUT_MS });
+  let failure = null;
+  try {
+    await sandbox.collect(wrapped, { started: true });
+  } catch (error) {
+    failure = error;
+  }
+  check(
+    failure?.name === 'ConfinementError' && failure.message.includes('holds no start of its target'),
+    `a call whose trace holds nothing was not refused: ${failure}`,
+  );
+  // The failure is the audit's for the rest of the sandbox's life: the trial's mounts are unknown, never an empty list.
+  let later = null;
+  try {
+    await sandbox.observedMounts();
+  } catch (error) {
+    later = error;
+  }
+  check(later === failure, `a sandbox whose call could not be traced returned its mounts: ${later}`);
+
+  // A call that throws after its target started is still held to its trace (a timed-out server, say): the status file names the
+  // start, whichever mechanism the call went through.
+  for (const kind of ['command', 'tool']) {
+    const statusFile = path.join(tempDir(`audit-threw-${kind}`), 'status-1.json');
+    fs.writeFileSync(statusFile, '{"started":true}\n');
+    const collected = [];
+    const fake = {
+      wrap: (target, args) => ({ target, args, statusFile }),
+      collect: async (_wrapped, options) => collected.push(options),
+    };
+    const failingBase = {
+      run: async () => {
+        throw new Error('the call timed out');
+      },
+      callTool: async () => {
+        throw new Error('the call timed out');
+      },
+    };
+    const mechanism = kind === 'command' ? confinedCommandMechanism(failingBase, fake) : confinedMcpMechanism(failingBase, fake);
+    try {
+      await (kind === 'command'
+        ? mechanism.run({ target: '/bin/true', subcommandPath: [], argv: [], env: {} }, new AbortController().signal)
+        : mechanism.callTool({ target: '/bin/true', targetArgs: [], env: {} }, new AbortController().signal));
+    } catch {
+      // The call's own failure.
+    }
+    check(
+      collected.length === 1 && collected[0].started === true && !fs.existsSync(statusFile),
+      `a ${kind} call that threw after its target started was collected as ${JSON.stringify(collected)}; expected one read of the trace with started true, and the status file removed`,
+    );
+  }
+
+  // A failed start of the audit ends the trial with no record, exit 12 (run.js maps the probe port's error, as it maps the read).
+  const trialDirectory = tempDir('audit-trial');
+  let trialStop = null;
+  try {
+    await runTrial({
+      arm: { slug: 'clean', conditionArm: 'clean', mutation: null, basis: null, probes: [] },
+      trialIndex: 1,
+      contract: {},
+      registry: {
+        targetProblems: () => [],
+        privateRoot: null,
+        createProbePort: async () => {
+          throw new Error("the audit's log stream ended before the trial's reads were confirmed");
+        },
+      },
+      pristine: null,
+      make: () => ({ root: trialDirectory, top: trialDirectory, directory: trialDirectory, kind: 'directory', provisioned: [] }),
+      discard: () => {},
+      engine: {},
+      writer: { writeJson: () => {} },
+      stop: (details) => Object.assign(new Error(details.message), details),
+      signal: undefined,
+      snapshot: { layer: { evaluator: { kind: 'deterministic' } } },
+      run: {},
+    });
+  } catch (error) {
+    trialStop = error;
+  }
+  check(
+    trialStop?.exitCode === 12 && trialStop.message.includes('yields no record') && trialStop.message.includes('log stream ended'),
+    `a trial whose audit could not start ended as ${JSON.stringify(trialStop?.message ?? trialStop)}; expected exit 12, no record`,
+  );
+}
+
+/**
+ * The real mechanism's audit over every kind of process this host runs (Story 1.60): a shell script's own processes and a
+ * process started with an empty environment are seen as a Node process is; what a clean script reads, a path declared in
+ * `systemPaths`, a path that does not exist, a metadata probe are not reported, the execution of an ungranted binary is; two sandboxes
+ * audited at once each list their own file; a burst of reads is reported.
+ */
+async function checkAuditMechanism() {
+  const folder = tempDir('audit-folder');
+  const workspace = fs.realpathSync(tempDir('audit-workspace'));
+  const outside = fs.realpathSync(tempDir('audit-outside'));
+  const confinement = selectConfinement({ evaluation: {}, folder });
+  if (confinement.refusal !== undefined) throw new Error(confinement.refusal);
+  fs.writeFileSync(path.join(outside, 'one.txt'), 'one\n');
+  fs.writeFileSync(path.join(outside, 'two.txt'), 'two\n');
+  fs.writeFileSync(path.join(workspace, 'own.txt'), 'own\n');
+  // A binary, whose execution is no read (a script would be read by its interpreter).
+  fs.copyFileSync(fs.realpathSync(['/usr/bin/true', '/bin/true'].find((entry) => fs.existsSync(entry))), path.join(outside, 'tool'));
+  fs.chmodSync(path.join(outside, 'tool'), 0o755);
+
+  const open = async ({ readable = [] } = {}) => {
+    const directory = fs.realpathSync(tempDir('audit-directory'));
+    const sandbox = targetSandbox({ confinement, workspace, status: tempDir('audit-status'), audit: { directory } });
+    await sandbox.start();
+    /** Runs a command confined and reads what it opened, once. */
+    const run = async (command, args, { env = { PATH: '/usr/bin:/bin' } } = {}) => {
+      const wrapped = sandbox.wrap(command, args, [], readable);
+      const ran = await new Promise((resolve) => {
+        const child = spawn(wrapped.target, wrapped.args, { cwd: workspace, env, stdio: ['ignore', 'pipe', 'pipe'] });
+        let stderr = '';
+        let stdout = '';
+        child.stderr.on('data', (chunk) => (stderr += chunk));
+        child.stdout.on('data', (chunk) => (stdout += chunk));
+        child.once('exit', (status) => resolve({ status, stderr, stdout }));
+      });
+      await sandbox.collect(wrapped, { started: true });
+      return ran;
+    };
+    return { sandbox, run };
+  };
+  const mountsOf = async ({ sandbox }) => {
+    try {
+      return await sandbox.observedMounts();
+    } finally {
+      sandbox.release();
+    }
+  };
+  const one = path.join(outside, 'one.txt');
+  const two = path.join(outside, 'two.txt');
+
+  // The kernel's report channel on macOS can lose a report (measured: about 1 in 400 reports under a saturated host, and a few
+  // in 1,600 under the load of this very suite), so a scenario that expects a report is repeated before it fails there;
+  // strace sees every syscall, and a scenario that expects nothing can only pass more often for a lost report, so those run once.
+  const attempts = process.platform === 'darwin' ? 6 : 1;
+  /**
+   * What a scenario found against what it should find: a path nobody read fails at once, one the audit should have listed
+   * is a lost report and may be retried; `allowed` names paths that may appear without being expected.
+   */
+  const judge = (observed, expected, what, allowed = []) => {
+    const extra = observed.filter((entry) => !expected.includes(entry) && !allowed.includes(entry));
+    if (extra.length > 0)
+      return { failure: `${what}: the audit listed ${JSON.stringify(extra)} beyond ${JSON.stringify(expected)}`, lost: false };
+    const missing = expected.filter((entry) => !observed.includes(entry));
+    return missing.length > 0
+      ? { failure: `${what}: the audit did not list ${JSON.stringify(missing)}; it listed ${JSON.stringify(observed)}`, lost: true }
+      : { failure: null, lost: false };
+  };
+  const eventually = async (scenario) => {
+    let result = null;
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      result = await scenario();
+      if (result.failure === null || !result.lost) break;
+      // The loss comes in windows of a second or two on a loaded host, so the next attempt waits one out.
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+    }
+    check(result.failure === null, result.failure);
+  };
+
+  // A shell script's own processes: an ungranted read, and a refused write that the mechanism answers EPERM or EROFS.
+  await eventually(async () => {
+    const shell = await open();
+    const shellRan = await shell.run('/bin/sh', ['-c', `cat ${one} >/dev/null; echo x >${path.join(outside, 'new.txt')}`]);
+    const mounts = await mountsOf(shell);
+    if (fs.existsSync(path.join(outside, 'new.txt'))) return { failure: 'a confined shell wrote outside its workspace', lost: false };
+    return judge(
+      mounts,
+      [one, path.join(outside, 'new.txt')],
+      `a shell's read and refused write (the shell exited ${shellRan.status}: ${shellRan.stderr})`,
+    );
+  });
+
+  // A process started with an empty environment, which no preload would have seen.
+  await eventually(async () => {
+    const cleared = await open();
+    await cleared.run('/bin/sh', [
+      '-c',
+      `env -i /bin/cat ${two} >/dev/null; env -i ${process.execPath} -e 'require("node:fs").readFileSync(process.argv[1])' ${one}`,
+    ]);
+    return judge(await mountsOf(cleared), [one, two], 'processes started with an empty environment');
+  });
+
+  // What a clean script does is no violation: system files, a listing of /, the date, its own workspace, a path that does not
+  // exist and a metadata probe.
+  const clean = await open();
+  const cleanRan = await clean.run('/bin/sh', [
+    '-c',
+    `cat /etc/hosts >/dev/null; ls / >/dev/null; date >/dev/null; cat ${path.join(workspace, 'own.txt')} >/dev/null; cat ${path.join(outside, 'missing.txt')} 2>/dev/null; stat ${one} >/dev/null`,
+  ]);
+  check(
+    JSON.stringify(await mountsOf(clean)) === '[]' && cleanRan.status === 0,
+    `the audit of a clean script listed observed mounts (the script exited ${cleanRan.status}: ${cleanRan.stderr})`,
+  );
+
+  // The audit never loosens the boundary: a read of the evaluation folder is refused as it is without one (a rule that names
+  // `file-read-data` for the report would otherwise override the denial of `file-read*`), and it is listed.
+  fs.writeFileSync(path.join(folder, 'contract.json'), '{}\n');
+  const contract = path.join(fs.realpathSync(folder), 'contract.json');
+  await eventually(async () => {
+    const refusedRead = await open();
+    const refusedRan = await refusedRead.run(process.execPath, [
+      '-e',
+      `try { require('node:fs').readFileSync(${JSON.stringify(contract)}); console.log('allowed'); } catch (error) { console.log('refused ' + error.code); }`,
+    ]);
+    const mounts = await mountsOf(refusedRead);
+    if (!refusedRan.stdout.trim().startsWith('refused')) {
+      return {
+        failure: `an audited sandbox's read of the evaluation folder's contract answered ${JSON.stringify(refusedRan.stdout.trim())}`,
+        lost: false,
+      };
+    }
+    return judge(mounts, [contract], "an audited sandbox's read of the evaluation folder's contract");
+  });
+
+  // The execution of an ungranted binary reads it, so it is listed (macOS also lists the directory the shell looked in).
+  await eventually(async () => {
+    const executed = await open();
+    await executed.run('/bin/sh', ['-c', path.join(outside, 'tool')]);
+    return judge(await mountsOf(executed), [path.join(outside, 'tool')], 'the execution of an ungranted binary', [outside]);
+  });
+
+  // A path declared in `systemPaths` is granted.
+  const declared = await open({ readable: [outside] });
+  await declared.run('/bin/sh', ['-c', `cat ${one} >/dev/null`]);
+  check(JSON.stringify(await mountsOf(declared)) === '[]', 'a read under a declared system path was reported');
+
+  // Two sandboxes at once: each lists its own file only, whatever the other read.
+  await eventually(async () => {
+    const [first, second] = await Promise.all([open(), open()]);
+    await Promise.all([first.run('/bin/sh', ['-c', `cat ${one} >/dev/null`]), second.run('/bin/sh', ['-c', `cat ${two} >/dev/null`])]);
+    const [firstMounts, secondMounts] = [await mountsOf(first), await mountsOf(second)];
+    const results = [
+      judge(firstMounts, [one], 'the first of two sandboxes audited at once'),
+      judge(secondMounts, [two], 'the second of two sandboxes audited at once'),
+    ];
+    const failed = results.filter((result) => result.failure !== null);
+    return {
+      failure: failed.map((result) => result.failure).join('; ') || null,
+      lost: failed.length > 0 && failed.every((result) => result.lost),
+    };
+  });
+
+  // A burst of reads: thousands of distinct ungranted files in one process are reported, most of them or all.
+  const files = path.join(outside, 'burst');
+  fs.mkdirSync(files);
+  for (let index = 0; index < 2000; index += 1) fs.writeFileSync(path.join(files, `f${index}.txt`), 'x');
+  const burst = await open();
+  await burst.run(process.execPath, [
+    '-e',
+    `const fs = require('node:fs'); for (let i = 0; i < 2000; i += 1) fs.readFileSync(${JSON.stringify(files)} + '/f' + i + '.txt');`,
+  ]);
+  const burstMounts = await mountsOf(burst);
+  check(
+    (process.platform === 'darwin' ? burstMounts.length >= 500 : burstMounts.length === 2000) &&
+      burstMounts.every((entry) => entry.startsWith(files)),
+    `a burst of 2000 reads listed ${burstMounts.length} paths; expected most of them (the kernel's log loses some of a burst on macOS)`,
+  );
+}
+
+/**
+ * A confined run whose target is a shell script (Story 1.60): the audit sees the script's own processes, which no preload
+ * could have, and `score` records the isolation violation; a clean script, a declared system path, a missing path and a
+ * metadata probe leave `observedMounts` empty; a process started with an empty environment and a refused write are seen too.
+ */
+async function checkShellTargetAudit() {
+  const outside = path.join(tempDir('shell-audit-outside'), 'host-notes.txt');
+  fs.writeFileSync(outside, 'a file no trial was granted\n');
+  const realOutside = fs.realpathSync(outside);
+  const shellProject = (label, act, touch, extra = () => {}) => {
+    const project = makeProject(label, {
+      edit: ({ folder }) =>
+        editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
+          evaluation.registry[0].target = 'bin/verdict.sh';
+          evaluation.registry[0].environmentKeys.push('VERDICT_SH');
+          extra(evaluation);
+        }),
+    });
+    const file = typeof touch === 'function' ? touch(project) : touch;
+    const ran = evaluate(['run', '--evaluation', project.folder], { ...project.env, VERDICT_SH: act, VERDICT_TOUCH: file });
+    return { ...project, ran, directory: runDirectoryOf(project.folder) };
+  };
+
+  // An ungranted read by a shell script: listed for both probes (every trial of the target runs the script), and score exits 3.
+  const read = shellProject('shell-audit-read', 'read', outside);
+  check(
+    read.ran.status === 0,
+    `a confined run whose shell target read an ungranted file exited ${read.ran.status}; expected 0\n${read.ran.output}`,
+  );
+  for (const probeId of ['P-001', 'P-002']) {
+    checkMounts(observedMountsOf(read.directory, probeId), [realOutside], `${probeId}'s observed mounts after a shell target's read`);
+  }
+  const readScore = evaluate(['score', '--evaluation', read.folder], read.env);
+  checkReport(
+    readScore.status === 3 && readScore.output.includes(`mount outside allowlist: ${realOutside}`),
+    `score over a shell target's ungranted read exited ${readScore.status}; expected 3 with eval-quality's isolation violation\n${readScore.output}`,
+  );
+
+  // The same read from a path declared in `systemPaths`, and what a clean script does: nothing is listed, and score does not exit 3.
+  const declared = shellProject('shell-audit-declared', 'read', outside, (evaluation) => {
+    evaluation.registry[0].systemPaths = [path.dirname(realOutside)];
+  });
+  check(
+    declared.ran.status === 0,
+    `a run whose shell target read under a declared system path exited ${declared.ran.status}\n${declared.ran.output}`,
+  );
+  checkMounts(observedMountsOf(declared.directory, 'P-001'), [], "a shell target's read under a declared system path");
+  const clean = shellProject('shell-audit-clean', 'clean', outside);
+  check(clean.ran.status === 0, `a clean shell target's run exited ${clean.ran.status}\n${clean.ran.output}`);
+  for (const probeId of ['P-001', 'P-002'])
+    checkMounts(observedMountsOf(clean.directory, probeId), [], `a clean shell target's ${probeId}`);
+  const cleanScore = clean.ran.status === 0 ? evaluate(['score', '--evaluation', clean.folder], clean.env) : clean.ran;
+  check(cleanScore.status !== 3, `score over a clean shell target exited 3\n${cleanScore.output}`);
+
+  // A process started with an empty environment, a refused write and a read of a withheld file.
+  fs.writeFileSync(`${outside}.node`, 'read by a process started with an empty environment, from Node\n');
+  const cleared = shellProject('shell-audit-cleared', 'cleared', outside);
+  check(
+    cleared.ran.status === 0,
+    `a run whose shell target started processes with an empty environment exited ${cleared.ran.status}\n${cleared.ran.output}`,
+  );
+  checkMounts(
+    observedMountsOf(cleared.directory, 'P-001'),
+    [realOutside, `${realOutside}.node`],
+    'processes started with an empty environment (cat reads the file, Node its neighbor)',
+  );
+  const target = path.join(tempDir('shell-audit-write'), 'written.txt');
+  const write = shellProject('shell-audit-write', 'write', target);
+  check(
+    write.ran.status === 0 && !fs.existsSync(target),
+    `a shell target's write outside its workspace exited ${write.ran.status} and the file ${fs.existsSync(target) ? 'was written' : 'was not written'}\n${write.ran.output}`,
+  );
+  checkMounts(
+    observedMountsOf(write.directory, 'P-001'),
+    [path.join(fs.realpathSync(path.dirname(target)), 'written.txt')],
+    "a shell target's refused write",
+  );
+  const withheld = shellProject('shell-audit-withheld', 'withheld', (project) => path.join(project.folder, 'contract.json'));
+  check(
+    withheld.ran.status === 0,
+    `a run whose shell target read the evaluation folder's contract exited ${withheld.ran.status}\n${withheld.ran.output}`,
+  );
+  checkMounts(
+    observedMountsOf(withheld.directory, 'P-001'),
+    [path.join(fs.realpathSync(withheld.folder), 'contract.json')],
+    "a shell target's read of the evaluation folder's contract",
+  );
+}
+
+/**
+ * A run whose observer cannot confirm itself, or fails during a trial, exits 12 with the cause, on any host (Story 1.60): the
+ * Linux mechanism is stood in for by a `bwrap` that runs its command unconfined and a `strace` that is refused, or that
+ * confirms the probe and then traces nothing, so the run reaches the refusal and the trial's failure end to end.
+ */
+async function checkObserverRefusalRun() {
+  const stubs = tempDir('observer-stubs');
+  const stub = (name, body) => fs.writeFileSync(path.join(stubs, name), `#!/bin/sh\n${body}\n`, { mode: 0o755 });
+  stub('bwrap', 'while [ "$1" != "--" ]; do shift; done; shift; exec "$@"');
+  const environment = (project) => ({ ...project.env, PATH: `${stubs}${path.delimiter}${process.env.PATH}`, [PLATFORM_ENV]: 'linux' });
+
+  stub('strace', 'echo "strace: ptrace(PTRACE_TRACEME): Operation not permitted" >&2; exit 1');
+  const refused = makeProject('observer-refused');
+  const refusedRun = evaluate(['run', '--evaluation', refused.folder], environment(refused));
+  check(
+    refusedRun.status === 12 &&
+      refusedRun.output.includes('cannot observe a confined process on this host') &&
+      refusedRun.output.includes('Operation not permitted') &&
+      refusedRun.output.includes('"confinement": false'),
+    `a run on a host whose strace is refused exited ${refusedRun.status}; expected 12 naming the cause and the opt-out\\n${refusedRun.output}`,
+  );
+  check(runDirectoryOf(refused.folder, 0) === null, 'a run refused for its observer wrote a run directory');
+
+  // The probe passes (the stub traces the reader it is asked about) and every real call is traced by nothing.
+  stub(
+    'strace',
+    String.raw`out=""; prev=""
+for a in "$@"; do if [ "$prev" = "-o" ]; then out="$a"; fi; prev="$a"; done
+case "$prev" in
+  */tea-evaluate-observer-probe-*) printf '1 openat(AT_FDCWD</>, "%s", O_RDONLY) = 3<%s>\n' "$prev" "$prev" > "$out"; exit 0 ;;
+esac
+while [ "$1" != "--" ]; do shift; done; shift; exec "$@"`,
+  );
+  const untraced = makeProject('observer-untraced');
+  const untracedRun = evaluate(['run', '--evaluation', untraced.folder], environment(untraced));
+  check(
+    untracedRun.status === 12 &&
+      untracedRun.output.includes('holds no start of its target') &&
+      untracedRun.output.includes('yields no record'),
+    `a run whose observer traced nothing exited ${untracedRun.status}; expected 12 with no record for the trial\\n${untracedRun.output}`,
   );
 }
 
@@ -3949,7 +5033,7 @@ async function checkPlatformRefusal() {
 async function checkLeftoverProcess() {
   for (const confined of [true, false]) {
     const label = confined ? 'confinement-leftover' : 'confinement-leftover-open';
-    const project = makeProject(label, { unconfined: !confined });
+    const project = makeProject(label, { unconfined: !confined, toolchain: true });
     const marker = path.join(tempDir(`${label}-marker`), 'leftover');
     const listener = reportListener(label);
     let reported;
@@ -4056,7 +5140,7 @@ async function checkEvaluatorSwap() {
       // The row-converting evaluator's trials carry the audit's observed mounts too: the refused swap is one.
       const swapped = path.join(fs.realpathSync(project.folder), 'evaluator', 'impl.js');
       const mounts = observedMountsOf(runDirectory, 'P-001') ?? [];
-      check(
+      checkReport(
         namespaced || mounts.includes(swapped),
         `a confined run's P-001 does not list the swap it refused as an observed mount: ${JSON.stringify(mounts)}`,
       );
@@ -4385,23 +5469,23 @@ async function checkHomeReach({ made, sibling, parent, root, folder, workspace }
       `a confined target could not resolve and use its home's path: ${JSON.stringify(['module', 'realpath', 'mkdir-p', 'cd-pwd'].map((name) => [name, reached[name]]))}`,
     );
     // The same use of the home is no isolation violation for the audit.
-    const auditReport = path.join(tempDir('home-reach-audit'), 'report.jsonl');
-    fs.writeFileSync(auditReport, '');
-    const audited = targetSandbox({ confinement, workspace, privateRoot: root, home: made, status, report: auditReport });
-    const auditScript =
-      "const fs = require('node:fs'); const home = process.argv[1]; require(home + '/m/index.js'); fs.realpathSync(home); fs.mkdirSync(home + '/.config/y', { recursive: true }); fs.writeFileSync(home + '/.config/y/z', '1');";
-    const walked = audited.wrap(process.execPath, ['-e', auditScript, made]);
-    const walk = spawnSync(walked.target, walked.args, {
-      encoding: 'utf8',
-      timeout: SPAWN_TIMEOUT_MS,
-      cwd: workspace,
-      env: audited.environment({ PATH: process.env.PATH }, walked.statusFile === null ? [] : [walked.statusFile]),
-    });
-    audited.settle();
-    check(
-      walk.status === 0 && audited.observedMounts().length === 0,
-      `a confined Node process that loaded a module from its home and wrote it exited ${walk.status} with observed mounts ${JSON.stringify(audited.observedMounts())}\n${walk.stderr}`,
-    );
+    const auditDirectory = fs.realpathSync(tempDir('home-reach-audit'));
+    const audited = targetSandbox({ confinement, workspace, privateRoot: root, home: made, status, audit: { directory: auditDirectory } });
+    await audited.start();
+    try {
+      const auditScript =
+        "const fs = require('node:fs'); const home = process.argv[1]; require(home + '/m/index.js'); fs.realpathSync(home); fs.mkdirSync(home + '/.config/y', { recursive: true }); fs.writeFileSync(home + '/.config/y/z', '1');";
+      const walked = audited.wrap(process.execPath, ['-e', auditScript, made]);
+      const walk = spawnSync(walked.target, walked.args, { encoding: 'utf8', timeout: SPAWN_TIMEOUT_MS, cwd: workspace });
+      await audited.collect(walked, { started: true });
+      const mounts = await audited.observedMounts();
+      check(
+        walk.status === 0 && mounts.length === 0,
+        `a confined Node process that loaded a module from its home and wrote it exited ${walk.status} with observed mounts ${JSON.stringify(mounts)}\n${walk.stderr}`,
+      );
+    } finally {
+      audited.release();
+    }
     for (const name of ['sibling-read', 'sibling-write', 'peer-read', 'parent-write', 'socket']) {
       check(closed.test(reached[name] ?? ''), `a confined target with its own home reached ${name}: ${JSON.stringify(reached[name])}`);
     }
@@ -4543,14 +5627,20 @@ async function checkTargetHomeUnits() {
   const bound = (wrapped) => wrapped.args.flatMap((argument, index) => (argument === '--bind' ? [wrapped.args[index + 1]] : []));
   check(bound(build('bubblewrap', { home }).wrap('/bin/true', [])).includes(home), 'the Bubblewrap vector binds no home');
   check(!bound(build('bubblewrap', {}).wrap('/bin/true', [])).includes(home), 'a Bubblewrap vector for a sandbox with no home binds it');
-  const audit = (extra) => {
-    const report = path.join(root, 'report.jsonl');
-    fs.writeFileSync(report, '');
-    const env = build('seatbelt', { report, ...extra }).environment({ PATH: '/bin' }, []);
-    return JSON.parse(env.TEA_EVALUATE_CONFINEMENT_AUDIT ?? '{}');
-  };
-  check(audit({ home }).granted?.includes(home) === true, "the audit's grants do not name the home");
-  check(audit({}).granted?.includes(home) === false, "the audit's grants name a home the sandbox has none of");
+  // The audit's report rule exempts the home with the other read grants, and only when the sandbox has one (Story 1.60).
+  const auditedProfile = (extra) =>
+    targetSandbox({
+      confinement: { ...modes.seatbelt, observer: { executable: '/usr/bin/log' } },
+      workspace,
+      audit: { directory: root },
+      ...extra,
+    }).wrap('/bin/true', []).args[1];
+  const reportRule = (text) => text.slice(text.indexOf('(allow file-read-data'), text.indexOf('(with report)'));
+  check(
+    reportRule(auditedProfile({ home })).includes(`(require-not (subpath "${home}"))`),
+    "the audit's report rule does not exempt the home",
+  );
+  check(!reportRule(auditedProfile({})).includes(home), "the audit's report rule exempts a home the sandbox has none of");
 
   // A home beneath the private root (the run's own parent holds it) is the one exception to the root's withholding: the
   // Seatbelt allowance comes after the root's denial, which the last matching rule overrides, and the Bubblewrap bind comes
@@ -4567,16 +5657,38 @@ async function checkTargetHomeUnits() {
   const rootArguments = build('bubblewrap', { privateRoot, home: rootHome }).wrap('/bin/true', []).args;
   const at = (...words) =>
     rootArguments.findIndex((argument, index) => words.every((word, offset) => rootArguments[index + offset] === word));
+  // The trace's grants name the home beneath the root too, where the vector binds it on its own: a write inside the home that the
+  // file system refuses (a read-only directory a tool left) is no isolation violation.
+  const tracedHome = targetSandbox({
+    confinement: { ...modes.bubblewrap, observer: { executable: '/usr/bin/strace' } },
+    workspace,
+    status,
+    privateRoot,
+    home: rootHome,
+    audit: { directory: root },
+  }).wrap('/bin/true', []);
+  check(
+    tracedHome.trace.grants.write.includes(rootHome) && tracedHome.trace.grants.read.includes(rootHome),
+    `the trace's grants for a home beneath the private root are ${JSON.stringify(tracedHome.trace.grants)}`,
+  );
   check(
     at('--tmpfs', privateRoot) !== -1 &&
       at('--bind', rootHome, rootHome) > at('--tmpfs', privateRoot) &&
       at('--remount-ro', privateRoot) > at('--bind', rootHome, rootHome),
     `the Bubblewrap vector does not bind the home beneath the private root between the root's empty file system and its remount: ${rootArguments.join(' ')}`,
   );
-  const rootAudit = audit({ privateRoot, home: rootHome });
+  // The report rule comes before the home's re-grant, which overrides it, so the home is no violation, and the root's
+  // denial after it carries the token, so a refused read of the root is reported.
+  const auditedRoot = auditedProfile({ privateRoot, home: rootHome });
+  const token = /\(with message "(tea-evaluate-audit-[0-9a-f]{16})"\)/.exec(auditedRoot)?.[1];
   check(
-    rootAudit.withheld?.includes(privateRoot) && rootAudit.withheldExcept?.includes(rootHome) && rootAudit.granted?.includes(rootHome),
-    `the audit does not withhold the private root and except the home beneath it: ${JSON.stringify(rootAudit)}`,
+    token !== undefined &&
+      auditedRoot.indexOf('(with report)') <
+        auditedRoot.indexOf(`(allow file-read-data file-read* file-write*\n  (subpath "${rootHome}")`) &&
+      auditedRoot.includes(`(deny file-read-data file-read* file-write*\n  (subpath "${privateRoot}")`) &&
+      auditedRoot.includes(`(subpath "${privateRoot}") (with message "${token}"))`) &&
+      !auditedProfile({ privateRoot }).includes(`(with message "${token}")`),
+    `the audited profile does not report before the home's re-grant and tag the root's denial with the sandbox's own token:\n${auditedRoot}`,
   );
 
   // The home is made beneath the run's private parent, where the sandbox withholds every other home.
@@ -4600,6 +5712,15 @@ async function checkTargetHomeUnits() {
     check(
       ['.config', '.cache', path.join('.local', 'share')].every((name) => fs.statSync(path.join(made, name)).isDirectory()),
       'the private home holds no XDG base directories',
+    );
+    // The audit's directory is made beside the home beneath the run's private parent, which every target withholds, so no target can
+    // read, write or replace what the runtime reads of the audit (Story 1.60).
+    const auditDirectory = makeAuditDirectory(scratch);
+    check(
+      path.dirname(auditDirectory) === fs.realpathSync(parent) &&
+        path.basename(auditDirectory).startsWith('tea-evaluate-audit-') &&
+        scratch.includes(auditDirectory),
+      `the audit's directory ${auditDirectory} is not a directory of the run's private parent listed in scratch`,
     );
     await checkHomeReach({ made, sibling, parent, root: scratch.privateRoot, folder, workspace });
 
@@ -4669,8 +5790,6 @@ async function checkTargetHomeUnits() {
   const environments = {};
   const fake = (extra) => ({
     wrap: (target, args) => ({ target, args, statusFile: null }),
-    environment: (env) => env,
-    settle: () => {},
     ...extra,
   });
   for (const [what, sandboxHome] of [
@@ -4711,6 +5830,8 @@ async function checkTargetHomeUnits() {
   }
   for (const kind of ['command', 'tool']) {
     const withHome = environments[`${kind} with a home`];
+    // No preload is loaded into a target's processes any more (Story 1.60).
+    check(withHome.NODE_OPTIONS === undefined, `a confined ${kind} call's environment carries NODE_OPTIONS ${withHome.NODE_OPTIONS}`);
     check(
       withHome.HOME === home &&
         withHome.XDG_CONFIG_HOME === path.join(home, '.config') &&
@@ -4773,166 +5894,62 @@ async function checkConfinementUnits() {
     );
   }
 
-  const root = fs.realpathSync(tempDir('confinement-units-guard'));
-  const workspace = path.join(root, 'workspace');
-  const project = path.join(root, 'project');
-  const withheld = path.join(project, 'evals', 'verdict');
-  fs.mkdirSync(workspace);
-  fs.mkdirSync(withheld, { recursive: true });
-  fs.mkdirSync(path.join(root, 'outside'));
-  fs.writeFileSync(path.join(root, 'outside', 'secret.txt'), 'outside every grant\n');
-  fs.writeFileSync(path.join(root, 'outside', 'touched.txt'), 'its times changed through a link-level call\n');
-  fs.writeFileSync(path.join(withheld, 'contract.json'), '{}\n');
-  fs.writeFileSync(path.join(workspace, 'own.txt'), 'the workspace\n');
-  fs.symlinkSync(path.join(root, 'outside', 'secret.txt'), path.join(workspace, 'link.txt'));
-  const report = path.join(root, 'report', 'report.jsonl');
-  fs.mkdirSync(path.dirname(report));
-  const audited = spawnSync(
-    process.execPath,
-    [
-      '--require',
-      CONFINEMENT_GUARD,
-      '-e',
-      `const fs = require('node:fs'); const [touched, ...read] = process.argv.slice(1); for (const file of read) fs.readFileSync(file); fs.lutimesSync(touched, new Date(), new Date());`,
-      path.join(root, 'outside', 'touched.txt'),
-      path.join(workspace, 'own.txt'),
-      path.join(workspace, 'link.txt'),
-      path.join(withheld, 'contract.json'),
-    ],
-    {
-      encoding: 'utf8',
-      timeout: SPAWN_TIMEOUT_MS,
-      env: {
-        ...BASE_ENV,
-        // The project is granted, as a system path declared over it would be; the evaluation folder inside it is withheld.
-        TEA_EVALUATE_CONFINEMENT_AUDIT: JSON.stringify({
-          report,
-          granted: [workspace, path.dirname(report), project],
-          withheld: [withheld],
-        }),
-      },
-    },
-  );
-  const reported = fs.existsSync(report)
-    ? fs
-        .readFileSync(report, 'utf8')
-        .trim()
-        .split('\n')
-        .map((line) => JSON.parse(line).path)
-        .sort()
-    : [];
-  check(
-    audited.status === 0 &&
-      JSON.stringify(reported) ===
-        JSON.stringify(
-          [
-            path.join(root, 'outside', 'secret.txt'),
-            path.join(root, 'outside', 'touched.txt'),
-            path.join(withheld, 'contract.json'),
-          ].sort(),
-        ),
-    `the audit reported ${JSON.stringify(reported)}; expected the link's real target, the file lutimes wrote and the withheld contract under a granted project\n${audited.stderr}`,
-  );
-  // The preload's one pure helper, read in a process of its own, since this file loads no .cjs module (test:direction).
-  const installRoots = spawnSync(
-    process.execPath,
-    [
-      '-e',
-      `const { nodeInstallRoot } = require(${JSON.stringify(CONFINEMENT_GUARD)}); process.stdout.write(JSON.stringify(['/bin/node', '/usr/local/bin/node'].map(nodeInstallRoot)));`,
-    ],
-    { encoding: 'utf8', timeout: SPAWN_TIMEOUT_MS },
-  ).stdout;
-  check(
-    installRoots === JSON.stringify(['/bin', '/usr/local']),
-    `the audit's Node installations for /bin/node and /usr/local/bin/node are ${installRoots}; expected ["/bin","/usr/local"]`,
-  );
-
   // The Bubblewrap vector: a process-id namespace of its own with its own procfs (no `/proc/<pid>/root` into the runtime's
-  // mounts), ending with its parent, and no user service manager; only the report file and this call's own status file
-  // are writable, not the directories they sit in, and the target's status file name cannot be guessed.
+  // mounts), ending with its parent, and no user service manager; only this call's own status file is writable, not the
+  // directory it sits in, and the target's status file name cannot be guessed. An audited sandbox runs the same vector under
+  // `strace` outside the namespace, writing a trace file the vector never binds (Story 1.60).
   const unitRoot = fs.realpathSync(tempDir('confinement-units-bwrap'));
   const unitWorkspace = path.join(unitRoot, 'workspace');
-  const unitReport = path.join(unitRoot, 'audit', 'report.jsonl');
+  const unitAudit = path.join(unitRoot, 'audit');
   const unitStatus = path.join(unitRoot, 'status');
   fs.mkdirSync(unitWorkspace);
-  fs.mkdirSync(path.dirname(unitReport));
+  fs.mkdirSync(unitAudit);
   fs.mkdirSync(unitStatus);
-  fs.writeFileSync(unitReport, '');
-  const unitSandbox = targetSandbox({
-    confinement: { mode: 'bubblewrap', executable: '/usr/bin/bwrap', evaluationFolder: folder },
-    workspace: unitWorkspace,
-    report: unitReport,
-    status: unitStatus,
-  });
+  const bubblewrap = { mode: 'bubblewrap', executable: '/usr/bin/bwrap', evaluationFolder: folder };
+  const unitSandbox = targetSandbox({ confinement: bubblewrap, workspace: unitWorkspace, status: unitStatus });
   const wrapped = unitSandbox.wrap('/bin/true', []);
-  const bound = wrapped.args.flatMap((argument, index) => (argument === '--bind' ? [wrapped.args[index + 1]] : []));
+  const bound = (call) => call.args.flatMap((argument, index) => (argument === '--bind' ? [call.args[index + 1]] : []));
   check(
     ['--unshare-pid', '--proc', '--die-with-parent', '--new-session'].every((flag) => wrapped.args.includes(flag)),
     `the Bubblewrap vector lacks its process namespace, procfs, die-with-parent or session: ${wrapped.args.join(' ')}`,
   );
   check(
-    bound.includes(unitReport) &&
-      bound.includes(wrapped.statusFile) &&
-      !bound.includes(path.dirname(unitReport)) &&
-      !bound.includes(unitStatus) &&
-      /^status-1-[0-9a-f]{16}\.json$/.test(path.basename(wrapped.statusFile)),
-    `the Bubblewrap vector binds ${JSON.stringify(bound)}; expected the workspace, the report file and the status file of the call, no directory of either`,
+    bound(wrapped).includes(wrapped.statusFile) &&
+      !bound(wrapped).includes(unitStatus) &&
+      /^status-1-[0-9a-f]{16}\.json$/.test(path.basename(wrapped.statusFile)) &&
+      wrapped.target === '/usr/bin/bwrap' &&
+      wrapped.trace === undefined,
+    `the Bubblewrap vector binds ${JSON.stringify(bound(wrapped))}; expected the workspace and the status file of the call, no directory of it, and no tracer for a sandbox that does not audit`,
   );
-  // A report flooded past what the runtime reads, or cut shorter than an earlier read found it, names itself as the mount.
-  fs.writeFileSync(unitReport, `${JSON.stringify({ path: '/etc/hostname' })}\n`);
-  const first = unitSandbox.observedMounts();
-  fs.writeFileSync(unitReport, '');
-  const cut = unitSandbox.observedMounts();
-  fs.writeFileSync(unitReport, Buffer.alloc(5 * 1024 * 1024, 0x20));
-  const flooded = unitSandbox.observedMounts();
-  check(
-    first.includes('/etc/hostname') && !first.includes(unitReport) && cut.includes(unitReport) && flooded.includes(unitReport),
-    `the audit report's tampering reads ${JSON.stringify({ first, cut, flooded })}; expected the report's own path once it is cut or flooded`,
-  );
-
-  // A report cut back during a call is seen when that call ends, against what an earlier call left, and stays seen;
-  // a report replaced by a directory, or removed, is tampering too.
-  const settleReport = path.join(unitRoot, 'audit', 'settle.jsonl');
-  fs.writeFileSync(settleReport, '');
-  const settling = targetSandbox({
-    confinement: { mode: 'bubblewrap', executable: '/usr/bin/bwrap', evaluationFolder: folder },
+  const traced = targetSandbox({
+    confinement: { ...bubblewrap, observer: { executable: '/usr/bin/strace' } },
     workspace: unitWorkspace,
-    report: settleReport,
     status: unitStatus,
-  });
-  fs.writeFileSync(settleReport, `${JSON.stringify({ path: '/etc/hostname' })}\n`);
-  settling.settle();
-  fs.writeFileSync(settleReport, '');
-  settling.settle();
-  fs.writeFileSync(settleReport, `${JSON.stringify({ path: '/etc/os-release-and-a-name-longer-than-the-first' })}\n`);
+    audit: { directory: unitAudit },
+  }).wrap('/bin/true', []);
+  const bwrapAt = traced.args.indexOf('/usr/bin/bwrap');
   check(
-    settling.observedMounts().includes(settleReport),
-    `a report cut back in one call and refilled before the trial's end is not held against the trial: ${JSON.stringify(settling.observedMounts())}`,
+    traced.target === '/usr/bin/strace' &&
+      traced.args[0] === '-f' &&
+      traced.args.includes('--seccomp-bpf') &&
+      traced.args.includes('--decode-pids=pidns') &&
+      traced.args[traced.args.indexOf('-o') + 1] === traced.trace.file &&
+      path.dirname(traced.trace.file) === unitAudit &&
+      traced.args[bwrapAt - 1] === '--' &&
+      bwrapAt > 0 &&
+      !traced.args.slice(bwrapAt).includes(traced.trace.file) &&
+      !traced.args.slice(bwrapAt).includes(unitAudit),
+    `an audited Bubblewrap call is ${JSON.stringify([traced.target, ...traced.args])}; expected strace -f --seccomp-bpf outside the namespace, its trace in the audit directory and neither bound into the namespace`,
   );
-  fs.rmSync(settleReport);
-  fs.mkdirSync(settleReport);
+  let unobserved = null;
+  try {
+    targetSandbox({ confinement: bubblewrap, workspace: unitWorkspace, status: unitStatus, audit: { directory: unitAudit } });
+  } catch (error) {
+    unobserved = error;
+  }
   check(
-    targetSandbox({
-      confinement: { mode: 'bubblewrap', executable: '/usr/bin/bwrap', evaluationFolder: folder },
-      workspace: unitWorkspace,
-      report: settleReport,
-      status: unitStatus,
-    })
-      .observedMounts()
-      .includes(settleReport),
-    'a report replaced by a directory is not held against the trial',
-  );
-  fs.rmSync(settleReport, { recursive: true });
-  check(
-    targetSandbox({
-      confinement: { mode: 'bubblewrap', executable: '/usr/bin/bwrap', evaluationFolder: folder },
-      workspace: unitWorkspace,
-      report: settleReport,
-      status: unitStatus,
-    })
-      .observedMounts()
-      .includes(settleReport),
-    'a report removed by the target is not held against the trial',
+    unobserved?.name === 'ConfinementError' && unobserved.message.includes('observer'),
+    `an audited sandbox over a confinement that carries no observer was not refused: ${unobserved}`,
   );
 
   // A Bubblewrap that fails before its shim runs is not a target that exited with Bubblewrap's code; one whose shim ran is.
@@ -4943,7 +5960,7 @@ async function checkConfinementUnits() {
     try {
       outcome = await confinedCommandMechanism(
         { run: async () => ({ exitCode: 1, stderr: { kind: 'text', value: 'bwrap: cannot bind\n' } }) },
-        { wrap: (target, args) => ({ target, args, statusFile: statusOfCall }), environment: (env) => env, settle: () => {} },
+        { wrap: (target, args) => ({ target, args, statusFile: statusOfCall }) },
       ).run({ target: '/bin/true', subcommandPath: [], argv: [], env: {} }, new AbortController().signal);
     } catch (error) {
       outcome = error;
@@ -4967,8 +5984,6 @@ async function checkConfinementUnits() {
     },
     {
       wrap: (target, args, writable) => ({ target, args: [...args, ...writable], statusFile }),
-      environment: (env) => env,
-      settle: () => {},
     },
   );
   await mechanism.callTool({ target: '/bin/true', targetArgs: [], env: {} }, new AbortController().signal);
@@ -4997,7 +6012,7 @@ async function checkConfinementUnits() {
     try {
       outcome = await confinedMcpMechanism(
         { callTool: async () => ({ isError: true, exitCode: engineExit }) },
-        { wrap: (target, args) => ({ target, args, statusFile: endedStatus }), environment: (env) => env, settle: () => {} },
+        { wrap: (target, args) => ({ target, args, statusFile: endedStatus }) },
       ).callTool({ target: '/bin/true', targetArgs: [], env: {} }, new AbortController().signal);
     } catch (error) {
       outcome = error;
@@ -5029,6 +6044,7 @@ async function checkConfinementUnits() {
 function withheldHistoryProject(label, { unconfined = false } = {}) {
   return makeProject(label, {
     unconfined,
+    toolchain: true,
     // A file outside the folder holding the contract's bytes: content the folder shares with the rest of the tree.
     edit: ({ project, folder }) => {
       fs.mkdirSync(path.join(project, 'docs'), { recursive: true });
@@ -5126,7 +6142,7 @@ async function checkWithheldHistoryRun() {
   // The audit side: the target's attempts on the project's git directory are reported, and its own worktree's entry is not.
   const projectGit = fs.realpathSync(path.join(project.repository, '.git'));
   const observed = observedMountsOf(runDirectory, 'P-001') ?? [];
-  check(
+  checkReport(
     ['HEAD', 'config', 'objects'].every((name) => observed.includes(path.join(projectGit, name))),
     `the audit did not report the target's attempts on the project's git directory: ${JSON.stringify(observed)}`,
   );
@@ -5135,7 +6151,7 @@ async function checkWithheldHistoryRun() {
     `the audit reported the target's read of its own worktree's metadata: ${JSON.stringify(observed)}`,
   );
   const audited = evaluate(['score', '--evaluation', project.folder], project.env);
-  check(
+  checkReport(
     audited.status === 3 && audited.output.includes(`mount outside allowlist: ${path.join(projectGit, 'HEAD')}`),
     `score over a target that reached for the project's git directory exited ${audited.status}; expected 3 with the isolation violation\n${audited.output}`,
   );
@@ -5194,7 +6210,7 @@ async function checkWithheldHistoryRun() {
   // The same stub in the workspaces a leg, a mutation and a qualification run in: the project's git directory is refused in
   // each when the run confines, and each worktree of an opt-out run still names the adopter's common directory.
   for (const context of ['pristine', 'mutated-M-001', 'qualify-clean', 'qualify-P-002', 'trial-mutated-M-001-1']) {
-    const confined = makeProject(`withheld-context-${context}`);
+    const confined = makeProject(`withheld-context-${context}`, { toolchain: true });
     const contextRan = evaluate(['run', '--evaluation', confined.folder], {
       ...confined.env,
       VERDICT_WHEN: context,
@@ -5297,10 +6313,14 @@ function checkPrivateDirectorySources() {
   const allowed = {
     // The private parent, the scratch fallback for a list without one, and a staged copy.
     'workspace.js': 3,
-    // A target's own temp directory per call, and the sandbox's private home beneath the run's private parent (Story 1.59), both granted to the target.
-    'confinement.js': 2,
-    // The audit report's directory and Bubblewrap's status directory, both granted to a target.
-    'registry.js': 2,
+    // A target's own temp directory per call (granted to it), the sandbox's private home beneath the run's private parent (Story 1.59, granted to
+    // it) and the audit's directory beneath the same parent, which no target can reach (Story 1.60).
+    'confinement.js': 3,
+    // The two probes that confirm an observer before a run starts: each makes a directory in the system temp directory, runs one trivial process
+    // and removes it at once; no target is ever granted either.
+    'confinement-audit.js': 2,
+    // Bubblewrap's status directory, granted to a target.
+    'registry.js': 1,
     // The file a started HTTP service reports its port in, granted to the target.
     'http-target.js': 1,
     // The bridge's directory (socket and token file) beneath the run's private parent, on Windows, and the fallback of a bridge opened with no parent.
@@ -6202,6 +7222,22 @@ function checkConfinementReference() {
       section.includes('A run that opts out of confinement keeps the host environment and makes no home'),
     "the reference's confinement section does not say a confined trial gets a private home that HOME and the XDG base directories name, over any host value, empty for the next trial, and that an opt-out run has none",
   );
+  // Story 1.60: the audit is the mechanism's, for every process, and the passages that said only Node processes write it are gone.
+  check(
+    section.includes('through the mechanism itself and for every process the target starts, whatever its language or environment') &&
+      section.includes('`/usr/bin/log stream`') &&
+      section.includes('`strace -f --seccomp-bpf --decode-pids=pidns`') &&
+      section.includes('no code runs inside the target') &&
+      section.includes('cannot confirm itself stops the command with exit 12') &&
+      section.includes('`io_uring`') &&
+      section.includes("the kernel's reports are lossy") &&
+      !/covers Node processes alone/.test(section) &&
+      !/the one file of the audit a target may write/.test(section) &&
+      !/Every Node process of the trial loads/.test(section) &&
+      !section.includes('confinement-guard') &&
+      !section.includes('NODE_OPTIONS'),
+    "the reference's confinement section does not say the audit is the mechanism's for every process of the target (the log stream on macOS, strace on Linux, no code in the target, exit 12 for an observer that cannot confirm itself, what it does not see), or still describes the Node preload and its report file",
+  );
 }
 
 /**
@@ -6257,17 +7293,22 @@ const CASES = [
   { name: 'the conditions and the set recommendation', body: checkConditionsAndSetRecommendation, group: 'run' },
   { name: 'the clean-only runs', body: checkCleanOnlyAndNewest, group: 'run' },
   { name: 'the subdirectory digest', body: checkSubdirectoryDigest, group: 'run' },
-  { name: 'the confined evaluation folder', body: checkConfinedEvaluationFolder, group: 'confinement' },
-  { name: 'the observed mounts', body: checkObservedMounts, group: 'confinement' },
+  { name: 'the confined evaluation folder', body: checkConfinedEvaluationFolder, group: 'confinement', lossy: true },
+  { name: 'the observed mounts', body: checkObservedMounts, group: 'confinement', lossy: true },
   { name: 'the platform refusal', body: checkPlatformRefusal, group: 'confinement' },
   { name: 'the leftover process', body: checkLeftoverProcess, group: 'confinement' },
-  { name: 'the evaluator swap', body: checkEvaluatorSwap, group: 'confinement' },
+  { name: 'the evaluator swap', body: checkEvaluatorSwap, group: 'confinement', lossy: true },
   { name: 'the confinement refusals', body: checkConfinementRefusals, group: 'confinement' },
   { name: "a confined target's temp directory", body: checkTargetTemp, group: 'confinement' },
   { name: "a confined target's private home", body: checkTargetHome, group: 'confinement' },
   { name: "the private home's units", body: checkTargetHomeUnits, group: 'confinement' },
   { name: 'the confinement units', body: checkConfinementUnits, group: 'confinement' },
-  { name: "a confined target's git history", body: checkWithheldHistoryRun, group: 'confinement' },
+  { name: 'the shell target audit', body: checkShellTargetAudit, group: 'confinement', lossy: true },
+  { name: "the audit's parsers and decision", body: checkAuditParsers, group: 'confinement' },
+  { name: "the audit's refusals", body: checkAuditRefusals, group: 'confinement' },
+  { name: "the observer's refusal of a run", body: checkObserverRefusalRun, group: 'confinement' },
+  { name: "the audit's mechanism", body: checkAuditMechanism, group: 'confinement' },
+  { name: "a confined target's git history", body: checkWithheldHistoryRun, group: 'confinement', lossy: true },
   { name: 'the withheld git history units', body: checkWithheldHistoryUnits, group: 'confinement' },
   { name: 'the withheld git history edges', body: checkWithheldHistoryEdges, group: 'confinement' },
   { name: "the probe ports' git access", body: checkProbePortGitAccess, group: 'confinement' },
@@ -6282,12 +7323,28 @@ const CASES = [
 ];
 const GROUPS = new Set(CASES.map(({ group }) => group));
 
-/** Runs one case; an exception is a failed check, so the cases after it still run and every failure is reported. */
-async function runCase(name, body) {
-  try {
-    await body();
-  } catch (error) {
-    check(false, `${name} could not finish: ${error.stack ?? error}`);
+/**
+ * Runs one case; an exception is a failed check, so the cases after it still run and every failure is reported. A `lossy`
+ * case expects the confinement's audit to report a path, and on macOS the kernel's report channel can lose a report under load
+ * (Story 1.60), so a case whose every failure is a missing report (`checkReport`) runs again, up to two more times, before
+ * those failures count; a failure of any other check counts at once, and each attempt that is dropped is printed.
+ */
+async function runCase(name, body, lossy = false) {
+  const attempts = lossy && process.platform === 'darwin' ? 3 : 1;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const failuresBefore = failures.length;
+    const checksBefore = checks;
+    try {
+      await body();
+    } catch (error) {
+      check(false, `${name} could not finish: ${error.stack ?? error}`);
+    }
+    const fresh = failures.slice(failuresBefore);
+    if (fresh.length === 0 || attempt === attempts || !fresh.every((message) => reportFailures.has(message))) return;
+    console.error(`${name}: attempt ${attempt} lost a report of the kernel's log (${fresh.length} missing); running it again`);
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    failures.length = failuresBefore;
+    checks = checksBefore;
   }
 }
 
@@ -6297,8 +7354,15 @@ function requestedGroup() {
   return argument === undefined ? null : argument.slice('--group='.length);
 }
 
+/** The `--only=<text>` argument's value: with it, only the cases whose name holds the text run (a development aid). */
+function requestedCase() {
+  const argument = process.argv.find((value) => value.startsWith('--only='));
+  return argument === undefined ? null : argument.slice('--only='.length);
+}
+
 async function main() {
   const group = requestedGroup();
+  const only = requestedCase();
   if (group !== null && !GROUPS.has(group)) {
     console.error(
       `${colors.red}unknown --group ${JSON.stringify(group)}:${colors.reset} expected one of ${[...GROUPS].map((name) => `--group=${name}`).join(', ')}`,
@@ -6309,8 +7373,8 @@ async function main() {
     if (process.argv.includes('--usage-only')) {
       await runCase('target usage reports', checkTargetUsageReports);
     } else {
-      for (const { name, body, group: caseGroup } of CASES) {
-        if (group === null || caseGroup === group) await runCase(name, body);
+      for (const { name, body, group: caseGroup, lossy } of CASES) {
+        if ((group === null || caseGroup === group) && (only === null || name.includes(only))) await runCase(name, body, lossy === true);
       }
     }
     for (const { label, directory } of runtimeTemps) {
