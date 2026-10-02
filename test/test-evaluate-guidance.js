@@ -2796,7 +2796,6 @@ function checkCiGuidance(guide, failures, assets = ciAssets()) {
     "Declare the runner's credential keys as `permittedEnvironmentKeys`",
     'registry `environmentKeys`',
     'Keys carry names alone.',
-    'the target\'s registry entry to declare `"network": "host"`',
     'the same names as the CI secrets to add',
     "Keep the template's `enforcement` values",
   ])

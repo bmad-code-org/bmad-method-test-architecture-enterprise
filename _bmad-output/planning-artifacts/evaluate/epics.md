@@ -1710,7 +1710,7 @@ So that the authored evaluation runs confined on the first try and an observed m
 **Dependencies:** 1.31, 1.63.
 **Gate:** builder Analyze, `test:evaluate-guidance`, `npm test`.
 
-(Amended 2026-10-02 in Story 1.63's first review round: Story 1.63 edits `harness.md`, `adapters.md` and `ci.md` for the `network` declaration, and `run.md` and `gaps.md` stay with this story, which teaches the same declaration there and reads the new `hostNetwork` field of `run.json` beside `confinement`.)
+(Amended 2026-10-02 in Story 1.63's first review round: Story 1.63 edits `harness.md` and `adapters.md` for the `network` declaration, and `run.md`, `gaps.md` and `ci.md` stay with this story, which teaches the same declaration there (the `ci-registry` example in `ci.md` gains `"network": "host"` and the sentence that a Linux skill or agent target's live checks need it) and reads the new `hostNetwork` field of `run.json` beside `confinement`. Editing `ci.md` invalidates the committed capture records of `test/fixtures/evaluate-ci-repos/`, so this story reruns the two live sessions as Story 2.4's record describes and regenerates `capture-record.json`.)
 
 ### Story 1.62: Share one sandbox primitive layer across TeA's isolation modules
 

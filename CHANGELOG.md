@@ -194,7 +194,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Declare it on those entries on Linux until Story 1.83 gives a confined target a route to the hosts its entry authorizes; without it the target cannot reach its provider.
   A `host` entry runs without `--unshare-net` and a started service is reached directly with no bridge; it keeps a route to the host's abstract Unix sockets, so `run.json` lists each such entry under `hostNetwork` and the isolation manifest's notes name them.
   `check` refuses another value, and two entries that start one target must declare the same network. macOS Seatbelt accepts the field and ignores it.
-  The harness, adapters and ci guides of the Evaluate skill and the reference teach the declaration, and the skill's starter `evaluation.json` declares it for its `tea-skill-runner` entry.
+  The harness and adapters guides of the Evaluate skill and the reference teach the declaration, and the skill's starter `evaluation.json` declares it for its `tea-skill-runner` entry.
 - A deployment-routed historical probe holds the pre-fix deployment to its release across the witness legs and the trials (Story 1.64, AD-7, AD-8).
   `run` asks the pre-fix deployment which release each of its HTTP interfaces runs at three points: before the qualification arms, after the witness legs and after the last trial of the arm `historical:<pre-fix release>`; `preflight` runs no trial and asks at the first two.
   The two later points go through the same port, policy and refusal as the first, each interface in sorted order, the first answer that refuses stopping the asking; the post-fix deployment is reached by the qualification arms alone and is asked before the arms only.

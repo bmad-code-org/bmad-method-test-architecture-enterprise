@@ -968,7 +968,7 @@ Added in Story 1.31. Levels: guidance. File: `test/test-evaluate-guidance.js` (`
 | The guides teach the `network` declaration | Read the harness, run and gaps passages naming `"network": "host"` for a Linux skill or agent target, the namespace and `hostNetwork` in `run.json` | Guidance | P1  | Deleting a passage fails the test    |
 | The run and gaps guides teach confinement  | Read the passages naming each mechanism, the exit-12 refusal, the opt-out and the observed mount                                                    | Guidance | P1  | Deleting a passage fails the test    |
 
-Amended 2026-10-02 in Story 1.63's first review round: Story 1.63 teaches the `network` declaration in `harness.md`, `adapters.md` and `ci.md`; this story teaches it in `run.md` and `gaps.md` (no edit of the exit-table rows of `gaps.md`) and keeps the harness passage when it edits that guide.
+Amended 2026-10-02 in Story 1.63's first review round: Story 1.63 teaches the `network` declaration in `harness.md` and `adapters.md`; this story teaches it in `run.md`, `gaps.md` (no edit of the exit-table rows) and `ci.md`, where the `ci-registry` example gains it and the two live capture sessions of `test/fixtures/evaluate-ci-repos/` rerun, since a `ci.md` edit invalidates their records; it keeps the harness passage when it edits that guide.
 
 ### Story 1.62: Share one sandbox primitive layer across TeA's isolation modules
 
