@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "evaluationId": "verdict-mutation",
   "requirements": {
     "path": "requirements.md",
@@ -56,6 +56,8 @@
     "zero-action": 1
   },
   "operationPhases": {
-    "judge-request": "outcome"
+    "verdict": {
+      "judge-request": "outcome"
+    }
   }
 }

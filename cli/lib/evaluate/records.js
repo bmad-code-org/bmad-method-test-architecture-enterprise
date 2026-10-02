@@ -252,6 +252,7 @@ function isolationManifest({
 function recordObservation({
   observationId,
   sequence,
+  interfaceId,
   operationId,
   callInputs,
   stdout = { kind: 'absent' },
@@ -267,6 +268,7 @@ function recordObservation({
   return {
     observationId,
     sequence,
+    interfaceId,
     operationId,
     provenance,
     principal,

@@ -123,7 +123,7 @@ const { spawn, spawnSync } = require('node:child_process');
 
 const { ENGINE_CLI_ENV, engineCliPath, loadEngine } = require('../cli/lib/evaluate/engine');
 const { createArtifactValidator } = require('../cli/lib/evaluate/records');
-const { calibrationObservation, calibrationOperationId, runCalibration } = require('../cli/lib/evaluate/calibration');
+const { calibrationObservation, calibrationStepPair, runCalibration } = require('../cli/lib/evaluate/calibration');
 const { registryFromEvaluation } = require('../cli/lib/evaluate/registry');
 const { runTrial, scoreAttempt } = require('../cli/lib/evaluate/run');
 const { hostEnvironmentPort } = require('../cli/lib/evaluate/arm');
@@ -3858,7 +3858,7 @@ async function writeHarnessJudgments(project, edit = () => {}) {
       criterion,
       response: item.response,
       responseKind: item.responseKind,
-      operationId: calibrationOperationId(contract, criterion),
+      ...calibrationStepPair(contract, criterion),
     });
     return { rubricId: item.rubricId, criterionId: item.criterionId, scorerInput, answer: harnessScore(scorerInput) };
   });
@@ -4111,7 +4111,7 @@ function checkImportedCalibrationReferenceExample() {
   const derived = calibrationObservation({
     criterion,
     response: 'Response at level 1',
-    operationId: calibrationOperationId(contract, criterion),
+    ...calibrationStepPair(contract, criterion),
   });
   check(derived.operationId === 'judge-request', `the verdict contract's plan gives step judge-run the operation ${derived.operationId}`);
   check(

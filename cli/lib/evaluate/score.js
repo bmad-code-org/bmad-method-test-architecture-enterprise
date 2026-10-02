@@ -136,7 +136,7 @@ const {
   removeScratchDirectory,
 } = require('./workspace');
 const { writePartitionViews } = require('./partition');
-const { writeInterpretation } = require('./interpret');
+const { phaseOf, writeInterpretation } = require('./interpret');
 
 const Ajv = AjvModule.default ?? AjvModule;
 
@@ -234,10 +234,16 @@ function combinedExit(codes) {
   return SEVERITY.find((code) => codes.includes(code)) ?? 0;
 }
 
+/** The phase map as sorted `[interfaceId, operationId, phase]` triples, or null when it is not a nested object. */
 function phaseEntries(value) {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? JSON.stringify(Object.entries(value).sort(([left], [right]) => left.localeCompare(right)))
-    : null;
+  const isObject = (candidate) => candidate !== null && typeof candidate === 'object' && !Array.isArray(candidate);
+  if (!isObject(value)) return null;
+  const triples = [];
+  for (const [interfaceId, byOperation] of Object.entries(value)) {
+    if (!isObject(byOperation)) return null;
+    for (const [operationId, phase] of Object.entries(byOperation)) triples.push([interfaceId, operationId, phase]);
+  }
+  return JSON.stringify(triples.sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right))));
 }
 
 /** A run snapshots the checked phase map before taking records. Refuse old or edited snapshots. */
@@ -245,20 +251,25 @@ function phaseSnapshotProblems(run, contract) {
   const phases = run.operationPhases;
   if (phases === null || typeof phases !== 'object' || Array.isArray(phases)) return ['run.json carries no operationPhases snapshot'];
   const problems = [];
-  const interfaces = new Map();
+  const declared = new Set();
   for (const iface of contract.permittedInterfaces) {
     for (const operation of iface.operations) {
-      const id = operation.operationId;
-      const previous = interfaces.get(id);
-      if (previous !== undefined && previous !== iface.logicalId)
-        problems.push(`operation ${id} occurs on interfaces ${previous} and ${iface.logicalId}`);
-      interfaces.set(id, iface.logicalId);
-      if (!Object.hasOwn(phases, id)) problems.push(`operation ${id} has no phase in run.json`);
+      declared.add(JSON.stringify([iface.logicalId, operation.operationId]));
+      if (phaseOf(phases, iface.logicalId, operation.operationId) === undefined)
+        problems.push(`operation ${operation.operationId} of interface ${iface.logicalId} has no phase in run.json`);
     }
   }
-  for (const [id, phase] of Object.entries(phases)) {
-    if (!interfaces.has(id)) problems.push(`run.json classifies undeclared operation ${id}`);
-    if (phase !== 'process' && phase !== 'outcome') problems.push(`run.json gives operation ${id} unknown phase ${JSON.stringify(phase)}`);
+  for (const [interfaceId, byOperation] of Object.entries(phases)) {
+    if (byOperation === null || typeof byOperation !== 'object' || Array.isArray(byOperation)) {
+      problems.push(`run.json classifies interface ${interfaceId} with a value that is not an object of phases`);
+      continue;
+    }
+    for (const [operationId, phase] of Object.entries(byOperation)) {
+      if (!declared.has(JSON.stringify([interfaceId, operationId])))
+        problems.push(`run.json classifies undeclared operation ${operationId} of interface ${interfaceId}`);
+      if (phase !== 'process' && phase !== 'outcome')
+        problems.push(`run.json gives operation ${operationId} of interface ${interfaceId} unknown phase ${JSON.stringify(phase)}`);
+    }
   }
   return problems;
 }
@@ -397,11 +408,11 @@ async function inputFindings({ folder, runDirectory, index, record, engine, held
         const observedIds = new Set(sealed.observations.map((observation) => observation.observationId));
         if (record.operationPhases && typeof record.operationPhases === 'object') {
           for (const observation of sealed.observations) {
-            if (!Object.hasOwn(record.operationPhases, observation.operationId))
+            if (phaseOf(record.operationPhases, observation.interfaceId, observation.operationId) === undefined)
               add(
                 relative,
                 'operation-phases',
-                `observation ${observation.observationId} names unclassified operation ${observation.operationId}`,
+                `observation ${observation.observationId} names unclassified operation ${observation.operationId} of interface ${observation.interfaceId}`,
               );
           }
         }

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "tea-routing-controls-behavioral",
@@ -1439,6 +1439,7 @@
   "interactionPlan": [
     {
       "stepId": "good-or-covering-what-matters",
+      "interfaceId": "tea-routing-runner",
       "operationId": "route-intent",
       "after": null,
       "cardinality": "exactly-one",
@@ -1459,6 +1460,7 @@
     },
     {
       "stepId": "measured-some-nfrs-planned-none",
+      "interfaceId": "tea-routing-runner",
       "operationId": "route-intent",
       "after": null,
       "cardinality": "exactly-one",
@@ -1479,6 +1481,7 @@
     },
     {
       "stepId": "thin-coverage-on-payments",
+      "interfaceId": "tea-routing-runner",
       "operationId": "route-intent",
       "after": null,
       "cardinality": "exactly-one",
@@ -1499,6 +1502,7 @@
     },
     {
       "stepId": "story-half-done",
+      "interfaceId": "tea-routing-runner",
       "operationId": "route-intent",
       "after": null,
       "cardinality": "exactly-one",
@@ -1519,6 +1523,7 @@
     },
     {
       "stepId": "run-and-fix-ci-failures",
+      "interfaceId": "tea-routing-runner",
       "operationId": "route-intent",
       "after": null,
       "cardinality": "exactly-one",
@@ -1539,6 +1544,7 @@
     },
     {
       "stepId": "write-production-code",
+      "interfaceId": "tea-routing-runner",
       "operationId": "route-intent",
       "after": null,
       "cardinality": "exactly-one",
@@ -1559,6 +1565,7 @@
     },
     {
       "stepId": "penetration-test-staging",
+      "interfaceId": "tea-routing-runner",
       "operationId": "route-intent",
       "after": null,
       "cardinality": "exactly-one",
@@ -1579,6 +1586,7 @@
     },
     {
       "stepId": "hire-a-qa-lead",
+      "interfaceId": "tea-routing-runner",
       "operationId": "route-intent",
       "after": null,
       "cardinality": "exactly-one",

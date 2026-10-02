@@ -1,29 +1,60 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "evaluationId": "pantry-summary",
   "targetKind": "agent",
   "interface": "cli",
-  "operationPhases": { "summarize": "outcome" },
+  "operationPhases": {
+    "pantry-cli": {
+      "summarize": "outcome"
+    }
+  },
   "registry": [
     {
       "interfaceId": "pantry-cli",
       "executable": "node",
       "target": "target/summarizer.js",
-      "subcommandPaths": [[]],
+      "subcommandPaths": [
+        []
+      ],
       "artifacts": {},
       "environmentKeys": [],
       "maxElapsedMs": 30000,
-      "infrastructureExitCodes": [3, 4, 5, 6]
+      "infrastructureExitCodes": [
+        3,
+        4,
+        5,
+        6
+      ]
     }
   ],
-  "launch": { "root": ".." },
-  "workspace": { "kind": "copy", "provision": [] },
-  "arms": ["clean", "mutated"],
+  "launch": {
+    "root": ".."
+  },
+  "workspace": {
+    "kind": "copy",
+    "provision": []
+  },
+  "arms": [
+    "clean",
+    "mutated"
+  ],
   "trials": 3,
-  "tiers": ["pr"],
-  "strengthFloor": { "defect": 1, "zero-action": 1 },
-  "heldOutProbes": ["P-003"],
-  "evaluator": { "kind": "command", "command": "evaluator/autoevals-exact.mjs", "timeoutMs": 30000, "environmentKeys": [] },
+  "tiers": [
+    "pr"
+  ],
+  "strengthFloor": {
+    "defect": 1,
+    "zero-action": 1
+  },
+  "heldOutProbes": [
+    "P-003"
+  ],
+  "evaluator": {
+    "kind": "command",
+    "command": "evaluator/autoevals-exact.mjs",
+    "timeoutMs": 30000,
+    "environmentKeys": []
+  },
   "requirements": {
     "path": "requirements.md",
     "digest": "sha256:c31b832a8d49d1c5d0ff590bf124e07062e13975de2976f235b00be1f87a299a"

@@ -87,7 +87,7 @@ const { callLabel, causeNote, faultRecord, hostEnvironmentPort, persistableReque
 const { observeFrameworks, runCommandEvaluator } = require('./command-evaluator');
 const { observationProblems, observedVersions, versionsRecord } = require('./frameworks');
 const { corpusDigestOf } = require('./corpus-index');
-const { calibrationObservation, calibrationOperationId, readCalibration, runCalibration } = require('./calibration');
+const { calibrationObservation, calibrationStepPair, readCalibration, runCalibration } = require('./calibration');
 const { expectedSchemaVersion, loadEngine } = require('./engine');
 const { evaluateOracles, judgeTrial, oraclesOfBehaviors } = require('./evaluator');
 const {
@@ -1038,8 +1038,7 @@ async function runTrialSets(given) {
     const { layer } = snapshot;
     const judgeItem = async ({ rubric, criterion, response, responseKind }) => {
       const stepId = /^\/interactions\/([^/]+)/.exec(criterion.evidence)?.[1];
-      const operationId = calibrationOperationId(contract, criterion);
-      const observation = calibrationObservation({ criterion, response, responseKind, operationId });
+      const observation = calibrationObservation({ criterion, response, responseKind, ...calibrationStepPair(contract, criterion) });
       if (kind === 'deterministic') {
         const result = await judgeRubrics({
           contract,
@@ -1184,11 +1183,9 @@ async function runTrialSets(given) {
   writeArtifact(engine, writer, 'evaluator-configuration.json', configuration, 'EvaluatorConfiguration');
 
   const stepCeilingMs = (contract.interactionPlan ?? []).reduce((total, step) => {
-    const operation = (contract.permittedInterfaces ?? [])
-      .flatMap((iface) => iface.operations ?? [])
-      .find((candidate) => candidate.operationId === step.operationId);
-    const interfaceId = (contract.permittedInterfaces ?? []).find((iface) => (iface.operations ?? []).includes(operation))?.logicalId;
-    return total + registry.ceilingMs(interfaceId, operation);
+    const iface = (contract.permittedInterfaces ?? []).find((candidate) => candidate.logicalId === step.interfaceId);
+    const operation = (iface?.operations ?? []).find((candidate) => candidate.operationId === step.operationId);
+    return total + registry.ceilingMs(iface?.logicalId, operation);
   }, 0);
   // A sealed-brief agent's own calls count against the contract's budget in each trial, beside the plan's steps.
   const callsPerTrial =

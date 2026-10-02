@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "evaluationId": "answer-grade",
   "targetKind": "ai-feature",
   "interface": "api",
@@ -65,6 +65,8 @@
     "kind": "deterministic"
   },
   "operationPhases": {
-    "grade-answer": "outcome"
+    "answer-grade": {
+      "grade-answer": "outcome"
+    }
   }
 }

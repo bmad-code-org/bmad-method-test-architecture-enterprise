@@ -77,21 +77,26 @@ function calibrationProjection(criterion, response, responseKind) {
   }
 }
 
-function calibrationObservation({ criterion, response, responseKind, operationId }) {
+function calibrationObservation({ criterion, response, responseKind, interfaceId, operationId }) {
   return recordObservation({
     observationId: 'calibration',
     sequence: 1,
+    interfaceId,
     operationId,
     callInputs: {},
     ...calibrationProjection(criterion, response, responseKind),
   });
 }
 
-/** The operation id the contract's interaction plan gives the step a criterion reads, else `calibration`. */
-function calibrationOperationId(contract, criterion) {
+/**
+ * The interface and operation the contract's interaction plan gives the step a criterion reads, else `calibration` for both.
+ * An operation ID is scoped to its interface, so the pair is the identity.
+ */
+function calibrationStepPair(contract, criterion) {
   const stepId = /^\/interactions\/([^/]+)/.exec(criterion.evidence)?.[1];
   const plan = Array.isArray(contract?.interactionPlan) ? contract.interactionPlan : [];
-  return plan.find((step) => step !== null && typeof step === 'object' && step.stepId === stepId)?.operationId ?? 'calibration';
+  const step = plan.find((candidate) => candidate !== null && typeof candidate === 'object' && candidate.stepId === stepId);
+  return { interfaceId: step?.interfaceId ?? 'calibration', operationId: step?.operationId ?? 'calibration' };
 }
 
 function calibrationProblems(evaluation, contract, calibration, engine) {
@@ -154,6 +159,7 @@ function calibrationProblems(evaluation, contract, calibration, engine) {
           criterion,
           response: item.response,
           responseKind: item.responseKind,
+          interfaceId: 'calibration',
           operationId: 'calibration',
         });
         const stepId = criterion.evidence.split('/')[2];
@@ -269,7 +275,7 @@ async function runCalibration({ calibration, evaluation, contract, engine, write
 module.exports = {
   CALIBRATION_PATH,
   calibrationObservation,
-  calibrationOperationId,
+  calibrationStepPair,
   calibrationProblems,
   calibrationShortfalls,
   labelledDigest,

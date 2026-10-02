@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "tea-trace-behavioral",
@@ -2688,6 +2688,7 @@
   "interactionPlan": [
     {
       "stepId": "trace-seeded-tenant-data-export",
+      "interfaceId": "tea-trace-runner",
       "operationId": "trace-fixture-set",
       "after": null,
       "cardinality": "exactly-one",
@@ -2708,6 +2709,7 @@
     },
     {
       "stepId": "trace-clean-api-token-lifecycle",
+      "interfaceId": "tea-trace-runner",
       "operationId": "trace-fixture-set",
       "after": null,
       "cardinality": "exactly-one",

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "evaluationId": "promptfoo-summary",
   "requirements": {
     "path": "requirements.md",
@@ -48,6 +48,8 @@
     "timeoutMs": 60000
   },
   "operationPhases": {
-    "summarize": "outcome"
+    "summarizer": {
+      "summarize": "outcome"
+    }
   }
 }

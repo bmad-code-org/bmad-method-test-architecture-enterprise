@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "evaluationId": "records-workflow",
   "requirements": {
     "path": "requirements.md",
@@ -51,7 +51,9 @@
     "zero-action": 1
   },
   "operationPhases": {
-    "create": "process",
-    "read-back": "outcome"
+    "records": {
+      "create": "process",
+      "read-back": "outcome"
+    }
   }
 }

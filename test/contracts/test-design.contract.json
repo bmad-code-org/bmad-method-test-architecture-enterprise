@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "tea-test-design-behavioral",
@@ -1558,6 +1558,7 @@
   "interactionPlan": [
     {
       "stepId": "design-seeded-offline-order-capture",
+      "interfaceId": "tea-test-design-runner",
       "operationId": "design-fixture-set",
       "after": null,
       "cardinality": "exactly-one",
@@ -1581,6 +1582,7 @@
     },
     {
       "stepId": "design-clean-last-sync-indicator",
+      "interfaceId": "tea-test-design-runner",
       "operationId": "design-fixture-set",
       "after": null,
       "cardinality": "exactly-one",

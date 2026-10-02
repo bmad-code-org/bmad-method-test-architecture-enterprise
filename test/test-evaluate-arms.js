@@ -393,7 +393,7 @@ function checkVotes(what, evidence, probeId, state) {
 /** A materialized probe admitted by eval-quality's own qualification gate with no failure code. */
 function checkQualifies(engine, what, probe, contract) {
   const home = engine.resolveHomeOperation(probe.defectSignature, contract.permittedInterfaces);
-  const admission = engine.qualifyProbe(probe, home);
+  const admission = engine.qualifyProbe(probe, home?.operation ?? null);
   check(
     admission.qualified === true && admission.failures.length === 0,
     `${what}: qualifyProbe refuses ${probe.probeId}: ${JSON.stringify(admission.failures)}`,
@@ -1524,7 +1524,7 @@ function withLedger({ pre, post }, edit = () => {}) {
     editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
       const { server, ...deployed } = evaluation.registry[0];
       evaluation.registry.push({ ...deployed, interfaceId: LEDGER, port: LEDGER_PORT, deployments: [pre, post].map(authorizing) });
-      evaluation.operationPhases[LEDGER_REPORT.operationId] = 'outcome';
+      evaluation.operationPhases[LEDGER] = { [LEDGER_REPORT.operationId]: 'outcome' };
     });
     editJson(path.join(folder, 'contract.json'), (contract) => {
       const [grader] = contract.permittedInterfaces;
@@ -2895,7 +2895,7 @@ async function checkDeploymentUnits() {
         route: 'historical',
         deployments: { preFix, fix: { ...fix, reports: { grader: { operationId: 'report-version', pointer: '/release' } } } },
       },
-      /deployments\.fix\.reports\.grader\.operationId names "report-version", which no interface of the contract declares/,
+      /deployments\.fix\.reports\.grader\.operationId names "report-version", which interface "grader" of the contract does not declare/,
     ],
     [
       {
@@ -2946,7 +2946,7 @@ async function checkDeploymentUnits() {
     ],
     [
       { preFix: bothInterfaces(preFix, bothReports), fix: bothInterfaces(fix, { grader: REPORT, ledger: { ...REPORT } }) },
-      /deployments\.fix\.reports\.ledger\.operationId names "report-release", which the contract declares on interface "grader"/,
+      /deployments\.fix\.reports\.ledger\.operationId names "report-release", which interface "ledger" of the contract does not declare/,
     ],
     [
       { preFix: bothInterfaces(preFix, { ...bothReports, status: ledgerReport }), fix: bothInterfaces(fix, bothReports) },
@@ -2994,7 +2994,7 @@ async function checkDeploymentUnits() {
       'a registry that is unread',
       null,
       { ledger: { ...REPORT } },
-      [/reports\.ledger\.operationId names "report-release", which the contract declares on interface "grader"/],
+      [/reports\.ledger\.operationId names "report-release", which interface "ledger" of the contract does not declare/],
     ],
     ['no interface left without a report', ['grader'], { grader: REPORT }, []],
     [
@@ -3005,8 +3005,7 @@ async function checkDeploymentUnits() {
         /reports\.grader\.pointer/,
         /reports\.grader\.operationId names "grade-answer", which requires input/,
         /reports\.ledger\.pointer/,
-        /reports\.ledger\.operationId names "grade-answer", which the contract declares on interface "grader"/,
-        /reports\.ledger\.operationId names "grade-answer", which requires input/,
+        /reports\.ledger\.operationId names "grade-answer", which interface "ledger" of the contract does not declare/,
       ],
     ],
     ['an entry that is no object', ['grader'], { grader: 'report-release' }, []],
@@ -3110,36 +3109,33 @@ async function checkDeploymentUnits() {
       /which is not an operation of an api interface/,
     ],
     [
-      'an operation two interfaces declare',
-      (edited) => {
-        const second = structuredClone(edited.permittedInterfaces[0]);
-        second.logicalId = 'grader-second';
-        edited.permittedInterfaces.push(second);
-      },
-      /which 2 interfaces of the contract declare/,
-    ],
-    [
       'an operation of another interface than the one its key names',
       (edited) => {
         edited.permittedInterfaces[0].logicalId = 'status';
       },
-      /which the contract declares on interface "status"/,
+      /which interface "grader" of the contract does not declare/,
     ],
   ]) {
     const pair = reportedOver(edit);
     check(expected.test(pair.unaddressable ?? ''), `deploymentPair over ${what} gave ${JSON.stringify(pair)}; expected ${expected}`);
   }
-  // An operation declared on both a cli and an api interface is the ambiguity the contract has.
-  const both = reportedOver((edited) => {
-    const second = structuredClone(edited.permittedInterfaces[0]);
-    second.logicalId = 'runner';
-    second.kind = 'cli';
-    edited.permittedInterfaces.push(second);
-  });
-  check(
-    /which 2 interfaces of the contract declare/.test(both.unaddressable ?? ''),
-    `deploymentPair over a twice-declared operation gave ${JSON.stringify(both)}`,
-  );
+  // An operation ID is scoped to its interface (Story 1.42): one declared on a cli and on another api interface too is
+  // looked up in the interface the report is keyed by, so it stays addressable.
+  for (const [what, kind] of [
+    ['a cli interface', 'cli'],
+    ['another api interface', 'api'],
+  ]) {
+    const shared = reportedOver((edited) => {
+      const second = structuredClone(edited.permittedInterfaces[0]);
+      second.logicalId = 'runner';
+      second.kind = kind;
+      edited.permittedInterfaces.push(second);
+    });
+    check(
+      shared.unaddressable === undefined,
+      `deploymentPair over an operation ${what} also declares gave ${JSON.stringify(shared)}; expected it addressable`,
+    );
+  }
   const empty = deploymentPair({ route: 'historical', deployments: { preFix, fix } }, [graderEntry], {});
   check(
     /the contract declares no interfaces/.test(empty.unaddressable ?? ''),

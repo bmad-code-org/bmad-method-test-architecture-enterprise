@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "test-review-json-stdin-v1",
@@ -886,6 +886,7 @@
   "interactionPlan": [
     {
       "stepId": "missing",
+      "interfaceId": "review-cli",
       "operationId": "review",
       "after": null,
       "cardinality": "exactly-one",
@@ -905,6 +906,7 @@
     },
     {
       "stepId": "disabled",
+      "interfaceId": "review-cli",
       "operationId": "review",
       "after": null,
       "cardinality": "exactly-one",
@@ -924,6 +926,7 @@
     },
     {
       "stepId": "it-skip",
+      "interfaceId": "review-cli",
       "operationId": "review",
       "after": null,
       "cardinality": "exactly-one",
@@ -943,6 +946,7 @@
     },
     {
       "stepId": "strict",
+      "interfaceId": "review-cli",
       "operationId": "review",
       "after": null,
       "cardinality": "exactly-one",
@@ -962,6 +966,7 @@
     },
     {
       "stepId": "match",
+      "interfaceId": "review-cli",
       "operationId": "review",
       "after": null,
       "cardinality": "exactly-one",
@@ -981,6 +986,7 @@
     },
     {
       "stepId": "to-be",
+      "interfaceId": "review-cli",
       "operationId": "review",
       "after": null,
       "cardinality": "exactly-one",
@@ -1000,6 +1006,7 @@
     },
     {
       "stepId": "dangling",
+      "interfaceId": "review-cli",
       "operationId": "review",
       "after": null,
       "cardinality": "exactly-one",
@@ -1019,6 +1026,7 @@
     },
     {
       "stepId": "empty",
+      "interfaceId": "review-cli",
       "operationId": "review",
       "after": null,
       "cardinality": "exactly-one",
@@ -1035,6 +1043,7 @@
     },
     {
       "stepId": "invalid-json",
+      "interfaceId": "review-cli",
       "operationId": "review",
       "after": null,
       "cardinality": "exactly-one",
@@ -1051,6 +1060,7 @@
     },
     {
       "stepId": "wrong-file-type",
+      "interfaceId": "review-cli",
       "operationId": "review",
       "after": null,
       "cardinality": "exactly-one",
@@ -1067,6 +1077,7 @@
     },
     {
       "stepId": "extra",
+      "interfaceId": "review-cli",
       "operationId": "review",
       "after": null,
       "cardinality": "exactly-one",
@@ -1083,6 +1094,7 @@
     },
     {
       "stepId": "missing-action",
+      "interfaceId": "review-cli",
       "operationId": "review",
       "after": null,
       "cardinality": "exactly-one",
@@ -1099,6 +1111,7 @@
     },
     {
       "stepId": "wrong-action",
+      "interfaceId": "review-cli",
       "operationId": "review",
       "after": null,
       "cardinality": "exactly-one",
@@ -1115,6 +1128,7 @@
     },
     {
       "stepId": "missing-file",
+      "interfaceId": "review-cli",
       "operationId": "review",
       "after": null,
       "cardinality": "exactly-one",
@@ -1131,6 +1145,7 @@
     },
     {
       "stepId": "unreadable",
+      "interfaceId": "review-cli",
       "operationId": "review",
       "after": null,
       "cardinality": "exactly-one",

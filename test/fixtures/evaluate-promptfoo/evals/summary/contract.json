@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "tea-evaluate-promptfoo-summary-fixture",
@@ -281,6 +281,7 @@
   "interactionPlan": [
     {
       "stepId": "summarize",
+      "interfaceId": "summarizer",
       "operationId": "summarize",
       "after": null,
       "cardinality": "exactly-one",

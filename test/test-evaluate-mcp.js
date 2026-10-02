@@ -703,6 +703,13 @@ async function checkUnits() {
     !Object.hasOwn(answeredCall.result, 'exitCode') && answeredCall.bridge.observations[0]?.exitCode === null,
     `an answered bridge call gave ${JSON.stringify(answeredCall.result)} and ${JSON.stringify(answeredCall.bridge.observations[0])}`,
   );
+  // Story 1.42: a tool call names the interface its tool belongs to, in the record's observation and in the persisted call.
+  check(
+    answeredCall.bridge.observations[0]?.interfaceId === 'grader' &&
+      answeredCall.bridge.observations[0]?.operationId === 'grade-answer' &&
+      answeredCall.bridge.calls[0]?.interfaceId === 'grader',
+    `an answered bridge call recorded ${JSON.stringify(answeredCall.bridge.observations[0])} and ${JSON.stringify(answeredCall.bridge.calls[0])}; expected the observation to carry interfaceId "grader"`,
+  );
 
   // A plan literal carrying an own __proto__ key, which eval-quality's parser drops, stops the arm before anything is sent.
   const polluted = structuredClone(contract);

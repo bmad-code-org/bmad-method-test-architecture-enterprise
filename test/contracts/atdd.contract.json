@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "tea-atdd-behavioral",
@@ -470,6 +470,7 @@
   "interactionPlan": [
     {
       "stepId": "tea-atdd-runner-run",
+      "interfaceId": "tea-atdd-runner",
       "operationId": "generate-red-phase-tests",
       "after": null,
       "cardinality": "exactly-one",

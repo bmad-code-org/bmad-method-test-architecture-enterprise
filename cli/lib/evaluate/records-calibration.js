@@ -42,7 +42,7 @@ const path = require('node:path');
 const {
   CALIBRATION_PATH,
   calibrationObservation,
-  calibrationOperationId,
+  calibrationStepPair,
   calibrationProblems,
   labelledDigest,
   readCalibration,
@@ -103,7 +103,7 @@ function scorerInputFor(item, criterion, contract) {
         criterion,
         response: item.response,
         responseKind: item.responseKind,
-        operationId: calibrationOperationId(contract, criterion),
+        ...calibrationStepPair(contract, criterion),
       }),
     ),
   );

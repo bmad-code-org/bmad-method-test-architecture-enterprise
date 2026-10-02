@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "evaluationId": "atdd-red-phase",
   "requirements": {
     "path": "requirements.md",
@@ -53,6 +53,8 @@
     "zero-action": 1
   },
   "operationPhases": {
-    "generate-red-phase-tests": "outcome"
+    "tea-atdd-runner": {
+      "generate-red-phase-tests": "outcome"
+    }
   }
 }

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "tea-ci-behavioral",
@@ -1704,6 +1704,7 @@
   "interactionPlan": [
     {
       "stepId": "ci-full-meridian-storefront",
+      "interfaceId": "tea-ci-runner",
       "operationId": "generate-pipeline",
       "after": null,
       "cardinality": "exactly-one",
@@ -1724,6 +1725,7 @@
     },
     {
       "stepId": "ci-minimal-lantern-audit-log",
+      "interfaceId": "tea-ci-runner",
       "operationId": "generate-pipeline",
       "after": null,
       "cardinality": "exactly-one",
@@ -1744,6 +1746,7 @@
     },
     {
       "stepId": "ci-evaluation-plan-quarry-grader",
+      "interfaceId": "tea-ci-runner",
       "operationId": "generate-pipeline",
       "after": null,
       "cardinality": "exactly-one",

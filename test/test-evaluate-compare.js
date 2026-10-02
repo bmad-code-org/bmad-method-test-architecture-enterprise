@@ -612,7 +612,7 @@ async function main() {
       const runDirectory = path.join(folder, 'runs', secondId);
       const phasesFile = path.join(runDirectory, 'operation-phases.json');
       const phases = read(phasesFile);
-      phases['undeclared-operation'] = 'process';
+      phases[Object.keys(phases)[0]]['undeclared-operation'] = 'process';
       writeJson(phasesFile, phases);
       const record = read(path.join(runDirectory, 'run.json'));
       writeJson(path.join(runDirectory, 'run.json'), {

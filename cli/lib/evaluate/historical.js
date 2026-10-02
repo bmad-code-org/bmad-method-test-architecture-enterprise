@@ -591,7 +591,16 @@ async function holdToReport({ contract, report, interfaceId, reached, side, port
   const interfaceNote = `its ${JSON.stringify(interfaceId)} interface`;
   let answer;
   try {
-    answer = await reportedRelease({ contract, report, port, registry, label: reportLabel({ point, side, interfaceId }), seed, signal });
+    answer = await reportedRelease({
+      contract,
+      report,
+      interfaceId,
+      port,
+      registry,
+      label: reportLabel({ point, side, interfaceId }),
+      seed,
+      signal,
+    });
   } catch (error) {
     if (error?.code === DENIAL_FAULT) {
       return {

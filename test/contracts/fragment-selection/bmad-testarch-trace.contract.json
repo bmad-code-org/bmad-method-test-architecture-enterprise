@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "tea-fragment-selection-trace",
@@ -353,6 +353,7 @@
   "interactionPlan": [
     {
       "stepId": "trace-go-service-no-js",
+      "interfaceId": "tea-fragment-selection-runner",
       "operationId": "select-fragments",
       "after": null,
       "cardinality": "exactly-one",
@@ -373,6 +374,7 @@
     },
     {
       "stepId": "trace-mobile-epic",
+      "interfaceId": "tea-fragment-selection-runner",
       "operationId": "select-fragments",
       "after": null,
       "cardinality": "exactly-one",

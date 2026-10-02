@@ -56,7 +56,7 @@ const { spawnSync } = require('node:child_process');
 const AjvModule = require('ajv/dist/2020');
 
 const { buildCorpusIndex, writeCorpusIndex } = require('../cli/lib/evaluate/corpus-index');
-const { calibrationObservation, calibrationOperationId } = require('../cli/lib/evaluate/calibration');
+const { calibrationObservation, calibrationStepPair } = require('../cli/lib/evaluate/calibration');
 const { engineCliPath, engineSchemaPath, loadEngine, ENGINE_CLI_ENV } = require('../cli/lib/evaluate/engine');
 const { resolveEvaluationFolder } = require('../cli/lib/evaluate/folder');
 const { createRegistry, registryFromEvaluation } = require('../cli/lib/evaluate/registry');
@@ -117,25 +117,67 @@ function editJson(folder, relative, edit) {
   fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
 }
 
+const PHASE_INTERFACE = 'tea-atdd-runner';
+const PHASE_OPERATION = 'generate-red-phase-tests';
+
+/** Declares the valid fixture's operation on a second interface too, phased as `secondPhase`, with a registry entry to serve it. */
+function declareOnSecondInterface(folder, secondPhase = 'process') {
+  editJson(folder, 'contract.json', (value) => {
+    const other = structuredClone(value.permittedInterfaces[0]);
+    other.logicalId = 'second-interface';
+    value.permittedInterfaces.push(other);
+  });
+  editJson(folder, 'evaluation.json', (value) => {
+    value.registry.push({ ...structuredClone(value.registry[0]), interfaceId: 'second-interface' });
+    value.operationPhases['second-interface'] = { [PHASE_OPERATION]: secondPhase };
+  });
+}
+
+/** Story 1.42: `operationPhases` classifies each interface-operation pair, and `check` covers exactly the contract's pairs. */
 function checkOperationPhaseCoverage() {
   for (const [label, mutate, named] of [
-    ['absent', (folder) => editJson(folder, 'evaluation.json', (value) => delete value.operationPhases), 'generate-red-phase-tests'],
-    ['missing', (folder) => editJson(folder, 'evaluation.json', (value) => (value.operationPhases = {})), 'generate-red-phase-tests'],
-    ['unknown', (folder) => editJson(folder, 'evaluation.json', (value) => (value.operationPhases.undeclared = 'process')), 'undeclared'],
+    ['absent', (folder) => editJson(folder, 'evaluation.json', (value) => delete value.operationPhases), PHASE_OPERATION],
+    ['empty', (folder) => editJson(folder, 'evaluation.json', (value) => (value.operationPhases = {})), PHASE_OPERATION],
     [
-      'invalid',
-      (folder) => editJson(folder, 'evaluation.json', (value) => (value.operationPhases['generate-red-phase-tests'] = 'setup')),
-      'generate-red-phase-tests',
+      'an interface with no operations classified',
+      (folder) => editJson(folder, 'evaluation.json', (value) => (value.operationPhases[PHASE_INTERFACE] = {})),
+      `${PHASE_OPERATION} of interface ${PHASE_INTERFACE}`,
     ],
     [
-      'ambiguous',
-      (folder) =>
-        editJson(folder, 'contract.json', (value) => {
-          const other = structuredClone(value.permittedInterfaces[0]);
-          other.logicalId = 'second-interface';
-          value.permittedInterfaces.push(other);
-        }),
-      'generate-red-phase-tests',
+      'an undeclared operation',
+      (folder) => editJson(folder, 'evaluation.json', (value) => (value.operationPhases[PHASE_INTERFACE].undeclared = 'process')),
+      `operation undeclared of interface ${PHASE_INTERFACE}`,
+    ],
+    [
+      'an undeclared interface',
+      (folder) => editJson(folder, 'evaluation.json', (value) => (value.operationPhases.undeclared = { [PHASE_OPERATION]: 'process' })),
+      `operation ${PHASE_OPERATION} of interface undeclared`,
+    ],
+    [
+      'an unknown phase',
+      (folder) => editJson(folder, 'evaluation.json', (value) => (value.operationPhases[PHASE_INTERFACE][PHASE_OPERATION] = 'setup')),
+      `operation ${PHASE_OPERATION} of interface ${PHASE_INTERFACE} has unknown phase`,
+    ],
+    [
+      'a flat phase map',
+      (folder) => editJson(folder, 'evaluation.json', (value) => (value.operationPhases = { [PHASE_OPERATION]: 'outcome' })),
+      `phase map entry ${PHASE_OPERATION} must be an object`,
+    ],
+    [
+      'a reused operation ID whose second interface has no phase',
+      (folder) => {
+        declareOnSecondInterface(folder);
+        editJson(folder, 'evaluation.json', (value) => delete value.operationPhases['second-interface']);
+      },
+      `${PHASE_OPERATION} of interface second-interface has no phase`,
+    ],
+    [
+      'a reused operation ID whose second interface classifies no operation',
+      (folder) => {
+        declareOnSecondInterface(folder);
+        editJson(folder, 'evaluation.json', (value) => (value.operationPhases['second-interface'] = {}));
+      },
+      `${PHASE_OPERATION} of interface second-interface has no phase`,
     ],
   ]) {
     const folder = copyValid();
@@ -145,6 +187,30 @@ function checkOperationPhaseCoverage() {
     check(result.output.includes(named), `${label} operation phase did not name ${named}\n${result.output}`);
     check(result.output.includes('operation-phases'), `${label} operation phase did not name its rule\n${result.output}`);
   }
+  // A version 1 evaluation.json carries the flat map, and the version refusal comes before any rule reads it.
+  const flat = copyValid();
+  editJson(flat, 'evaluation.json', (value) => {
+    value.schemaVersion = 1;
+    value.operationPhases = { [PHASE_OPERATION]: 'outcome' };
+  });
+  const flatResult = runCli(['check', '--evaluation', flat]);
+  check(flatResult.status === 10, `a version 1 evaluation.json exited ${flatResult.status}, expected 10\n${flatResult.output}`);
+  check(
+    flatResult.output.includes('schema-version'),
+    `a version 1 evaluation.json was not refused on its schema version\n${flatResult.output}`,
+  );
+  // Both interfaces of a contract that reuses one operation ID are covered exactly: the contract checks clean.
+  const both = copyValid();
+  declareOnSecondInterface(both);
+  const accepted = runCli(['check', '--evaluation', both]);
+  check(
+    !accepted.output.includes('operation-phases'),
+    `a reused operation ID with a phase on each interface drew an operation-phases finding\n${accepted.output}`,
+  );
+  check(
+    accepted.status === 0,
+    `a reused operation ID with a phase on each interface exited ${accepted.status}, expected 0\n${accepted.output}`,
+  );
   const repeated = copyValid();
   editJson(repeated, 'contract.json', (value) =>
     value.permittedInterfaces[0].operations.push(structuredClone(value.permittedInterfaces[0].operations[0])),
@@ -152,7 +218,7 @@ function checkOperationPhaseCoverage() {
   const result = runCli(['check', '--evaluation', repeated]);
   check(
     !result.output.includes('[operation-phases]'),
-    `an operation repeated on the same interface was reported as cross-interface ambiguity\n${result.output}`,
+    `an operation repeated on the same interface was reported as a phase finding\n${result.output}`,
   );
 }
 
@@ -363,7 +429,7 @@ function plantApiHistorical(folder, deployments) {
       }
     });
     editJson(folder, 'evaluation.json', (value) => {
-      for (const id of others) value.operationPhases[reportOf(id).operationId] = 'outcome';
+      for (const id of others) value.operationPhases[id] = { [reportOf(id).operationId]: 'outcome' };
     });
   }
   fs.rmSync(path.join(folder, 'mutations'), { recursive: true });
@@ -372,6 +438,26 @@ function plantApiHistorical(folder, deployments) {
 /** The findings `check` printed, one per line naming a file and a rule. */
 function findingsOf(stdout) {
   return stdout.split('\n').filter((line) => /^\S+: \[[a-z-]+\] /.test(line));
+}
+
+/**
+ * Story 1.42: an operation ID two interfaces declare is looked up inside the interface the report is keyed by, so a
+ * deployment report naming it draws no historical finding.
+ */
+function checkReportOperationReusedAcrossInterfaces() {
+  const folder = copyApi();
+  plantApiHistorical(folder, DEPLOYMENTS);
+  editJson(folder, 'contract.json', (value) => {
+    const other = structuredClone(value.permittedInterfaces[0]);
+    other.logicalId = 'status';
+    value.permittedInterfaces.push(other);
+  });
+  editJson(folder, 'evaluation.json', (value) => (value.operationPhases.status = structuredClone(value.operationPhases.grader)));
+  const result = runCli(['check', '--evaluation', folder]);
+  check(
+    historicalFindingsOf(result.stdout).length === 0,
+    `a report operation declared on two interfaces drew a historical finding\n${result.output}`,
+  );
 }
 
 /** The findings of the historical rule among `findingsOf`. */
@@ -987,10 +1073,10 @@ const DEFECT_CASES = [
     name: 'an unknown evaluation.json schemaVersion',
     file: 'evaluation.json',
     rule: 'schema-version',
-    plant: (folder) => editJson(folder, 'evaluation.json', (value) => (value.schemaVersion = 2)),
+    plant: (folder) => editJson(folder, 'evaluation.json', (value) => (value.schemaVersion = 3)),
     expect: (output) => [
       [output.includes(`${TEA_MANIFEST.name} ${TEA_MANIFEST.version}`), 'the message does not name the installed TeA version'],
-      [output.includes('knows schemaVersion 1'), 'the message does not name the versions the runtime knows'],
+      [output.includes('knows schemaVersion 2'), 'the message does not name the versions the runtime knows'],
     ],
   },
   {
@@ -1617,7 +1703,7 @@ const HARDENING_CASES = [
     expect: (output, stdout) => [
       [
         output.includes(
-          'deployments.preFix.reports.grader.operationId names "report-version", which no interface of the contract declares',
+          'deployments.preFix.reports.grader.operationId names "report-version", which interface "grader" of the contract does not declare',
         ),
         'the finding does not name the undeclared operation',
       ],
@@ -1711,7 +1797,7 @@ const HARDENING_CASES = [
         ];
         value.permittedInterfaces.push(other);
       });
-      editJson(folder, 'evaluation.json', (value) => (value.operationPhases['report-status'] = 'outcome'));
+      editJson(folder, 'evaluation.json', (value) => (value.operationPhases.status = { 'report-status': 'outcome' }));
       // The interface the contract declares and the registry lacks, named by the post-fix deployment's second report.
       editJson(
         folder,
@@ -1773,9 +1859,9 @@ const HARDENING_CASES = [
     expect: (output, stdout) => [
       [
         output.includes(
-          'deployments.preFix.reports.ledger.operationId names "report-release", which the contract declares on interface "grader"',
+          'deployments.preFix.reports.ledger.operationId names "report-release", which interface "ledger" of the contract does not declare',
         ),
-        'the finding does not name the interface the operation belongs to',
+        'the finding does not name the interface the operation is looked up in',
       ],
       [findingsOf(stdout).length === 1, 'the operation of another interface is not the only finding'],
     ],
@@ -1798,7 +1884,7 @@ const HARDENING_CASES = [
     ],
   },
   {
-    name: 'a deployment-routed probe whose report names an operation of a cli interface',
+    name: 'a deployment-routed probe whose report names an operation only a cli interface declares',
     file: 'probes/P-002.probe.json',
     rule: 'historical',
     copy: copyApi,
@@ -1816,42 +1902,16 @@ const HARDENING_CASES = [
       });
     },
     expect: (output, stdout) => [
-      [output.includes('which is not an operation of an api interface'), 'the finding does not name the interface kind'],
+      [
+        output.includes('which interface "grader" of the contract does not declare'),
+        'the finding does not name the interface the operation is looked up in',
+      ],
       [
         // The planted cli interface is no valid contract, so engine-schema findings come with it; the historical ones are the
-        // probe's own, one for each deployment, each naming the kind.
+        // probe's own, one for each deployment, each naming the interface the report is keyed by.
         historicalFindingsOf(stdout).length === 2 &&
-          historicalFindingsOf(stdout).every((line) => line.includes('which is not an operation of an api interface')),
-        'the interface kind is not the only historical finding, once for each deployment',
-      ],
-    ],
-  },
-  {
-    name: 'a deployment-routed probe whose report names an operation two interfaces declare',
-    file: 'probes/P-002.probe.json',
-    rule: 'historical',
-    copy: copyApi,
-    plant: (folder) => {
-      plantApiHistorical(folder, DEPLOYMENTS);
-      editJson(folder, 'contract.json', (value) => {
-        const other = structuredClone(value.permittedInterfaces[0]);
-        other.logicalId = 'status';
-        value.permittedInterfaces.push(other);
-      });
-    },
-    expect: (output, stdout) => [
-      [
-        output.includes('deployments.preFix.reports.grader.operationId names "report-release", which 2 interfaces of the contract declare'),
-        'the finding does not name the operation both interfaces declare',
-      ],
-      [
-        output.includes('deployments.fix.reports.grader.operationId names "report-release", which 2 interfaces of the contract declare'),
-        'the finding does not name the operation for the post-fix deployment',
-      ],
-      [
-        historicalFindingsOf(stdout).length === 2 &&
-          historicalFindingsOf(stdout).every((line) => line.includes('which 2 interfaces of the contract declare')),
-        'the twice-declared operation is not the only historical finding, once for each deployment',
+          historicalFindingsOf(stdout).every((line) => line.includes('which interface "grader" of the contract does not declare')),
+        'the keyed interface is not the only historical finding, once for each deployment',
       ],
     ],
   },
@@ -2517,7 +2577,7 @@ async function plantRecordsRubric(
         criterion,
         response: item.response,
         responseKind: item.responseKind,
-        operationId: calibrationOperationId(contract, criterion),
+        ...calibrationStepPair(contract, criterion),
       }),
       answer: item.expectedLevel,
     })),
@@ -3403,7 +3463,11 @@ const CLEAN_CASES = [
       const api = structuredClone(example.permittedInterfaces.find((candidate) => candidate.logicalId === 'thing-api'));
       api.operations = [api.operations[0]];
       editJson(folder, 'contract.json', (value) => value.permittedInterfaces.push(api));
-      editJson(folder, 'evaluation.json', (value) => (value.operationPhases[api.operations[0].operationId] = 'outcome'));
+      editJson(
+        folder,
+        'evaluation.json',
+        (value) => (value.operationPhases[api.logicalId] = { [api.operations[0].operationId]: 'outcome' }),
+      );
       editJson(folder, 'probes/P-002.probe.json', (value) => {
         value.defects[0].manifestationWitness = {
           legId: 'manifest-api',
@@ -3816,6 +3880,7 @@ async function main() {
     checkUsage();
     await checkDefectCases();
     checkOperationPhaseCoverage();
+    checkReportOperationReusedAcrossInterfaces();
     checkSymlinkRefused();
     checkForgedFindingLine();
     await checkRuntimeUnits();

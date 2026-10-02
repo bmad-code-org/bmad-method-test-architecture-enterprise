@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "evaluationId": "verdict-ci",
   "requirements": {
     "path": "requirements.md",
@@ -55,6 +55,8 @@
     "defect": 1
   },
   "operationPhases": {
-    "judge-request": "outcome"
+    "verdict": {
+      "judge-request": "outcome"
+    }
   }
 }

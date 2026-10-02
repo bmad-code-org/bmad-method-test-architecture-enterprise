@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "tea-fragment-selection-test-design",
@@ -636,6 +636,7 @@
   "interactionPlan": [
     {
       "stepId": "test-design-system-level",
+      "interfaceId": "tea-fragment-selection-runner",
       "operationId": "select-fragments",
       "after": null,
       "cardinality": "exactly-one",
@@ -656,6 +657,7 @@
     },
     {
       "stepId": "test-design-epic-level",
+      "interfaceId": "tea-fragment-selection-runner",
       "operationId": "select-fragments",
       "after": null,
       "cardinality": "exactly-one",
@@ -676,6 +678,7 @@
     },
     {
       "stepId": "test-design-epic-with-nfrs",
+      "interfaceId": "tea-fragment-selection-runner",
       "operationId": "select-fragments",
       "after": null,
       "cardinality": "exactly-one",
@@ -696,6 +699,7 @@
     },
     {
       "stepId": "test-design-pact-consumer-is-a-frontend",
+      "interfaceId": "tea-fragment-selection-runner",
       "operationId": "select-fragments",
       "after": null,
       "cardinality": "exactly-one",
@@ -716,6 +720,7 @@
     },
     {
       "stepId": "test-design-backend-junit",
+      "interfaceId": "tea-fragment-selection-runner",
       "operationId": "select-fragments",
       "after": null,
       "cardinality": "exactly-one",

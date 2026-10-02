@@ -11,6 +11,7 @@ const { suite } = require('./lib/evaluate-story-121');
 
 const read = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
 const test = suite('tea-evaluate-interpret');
+const PHASES = { notes: { step: 'process', result: 'outcome' } };
 const findingKeys = new Set([
   'findingType',
   'findingId',
@@ -29,10 +30,10 @@ const findingKeys = new Set([
 
 try {
   const observations = [
-    { observationId: 'late', sequence: 7, operationId: 'step', provenance: 'evaluator-chosen' },
-    { observationId: 'first', sequence: 3, operationId: 'result', provenance: 'baseline' },
-    { observationId: 'last', sequence: 12, operationId: 'result', provenance: 'evaluator-chosen' },
-    { observationId: 'low', sequence: 1, operationId: 'step', provenance: 'baseline' },
+    { observationId: 'late', sequence: 7, interfaceId: 'notes', operationId: 'step', provenance: 'evaluator-chosen' },
+    { observationId: 'first', sequence: 3, interfaceId: 'notes', operationId: 'result', provenance: 'baseline' },
+    { observationId: 'last', sequence: 12, interfaceId: 'notes', operationId: 'result', provenance: 'evaluator-chosen' },
+    { observationId: 'low', sequence: 1, interfaceId: 'notes', operationId: 'step', provenance: 'baseline' },
   ];
   const finding = (id, severity, observationIds, oracleId = 'O-001') => ({
     findingId: id,
@@ -53,7 +54,7 @@ try {
         finding('F-004', 'low', ['late'], null),
       ],
     },
-    { step: 'process', result: 'outcome' },
+    PHASES,
     new Map([['O-001', { direction: { evidenceTargets: ['/interactions/result/stdout'] } }]]),
   );
   assert.equal(projected.firstMaterialError.sequence, 3);
@@ -75,7 +76,7 @@ try {
   assert.deepEqual(
     projectTrial(
       { trialIndex: 6, observations, findings: [finding('F-009', 'material', ['late', 'low'])] },
-      { step: 'process' },
+      { notes: { step: 'process' } },
       new Map(),
     ).findings[0].citations.map(({ observationId, phase }) => [observationId, phase]),
     [
@@ -85,16 +86,25 @@ try {
   );
   assert.throws(
     () =>
-      projectTrial({ trialIndex: 4, observations, findings: [finding('F-006', 'material', ['absent'])] }, { step: 'process' }, new Map()),
+      projectTrial(
+        { trialIndex: 4, observations, findings: [finding('F-006', 'material', ['absent'])] },
+        { notes: { step: 'process' } },
+        new Map(),
+      ),
     /F-006 cites observation absent/,
   );
   assert.throws(
-    () => projectTrial({ trialIndex: 4, observations, findings: [finding('F-006', 'material', ['last'])] }, { step: 'process' }, new Map()),
-    /last names unclassified operation result/,
+    () =>
+      projectTrial(
+        { trialIndex: 4, observations, findings: [finding('F-006', 'material', ['last'])] },
+        { notes: { step: 'process' } },
+        new Map(),
+      ),
+    /last names unclassified operation result of interface notes/,
   );
   const criticalOnly = projectTrial(
     { trialIndex: 5, observations, findings: [finding('F-007', 'critical', ['last']), finding('F-008', 'low', ['low'])] },
-    { step: 'process', result: 'outcome' },
+    PHASES,
     new Map(),
   );
   assert.equal(criticalOnly.firstMaterialError.sequence, 12);
@@ -102,7 +112,7 @@ try {
   const production = { outcomes: [{ oracleId: 'O-001' }], reducedProbeOutcomes: [], strength: { vector: {} }, productionVerdict: 'PASS' };
   assert.deepEqual(engineProjection(production), production);
   assert.equal(
-    projectTrial({ trialIndex: 3, observations, findings: [finding('F-005', 'low', ['low'])] }, { step: 'process' }, new Map())
+    projectTrial({ trialIndex: 3, observations, findings: [finding('F-005', 'low', ['low'])] }, { notes: { step: 'process' } }, new Map())
       .firstMaterialError,
     null,
   );
@@ -126,7 +136,7 @@ try {
   const run = test.latest(project.folder);
   const manifest = path.join(project.folder, 'evaluation.json');
   const currentManifest = read(manifest);
-  currentManifest.operationPhases['judge-request'] = 'process';
+  currentManifest.operationPhases.verdict['judge-request'] = 'process';
   fs.writeFileSync(manifest, `${JSON.stringify(currentManifest, null, 2)}\n`);
   const scored = test.cli(project.folder, 'score', ['--run', path.basename(run)], project.env);
   assert.equal(scored.status, 0, scored.output);
@@ -154,7 +164,7 @@ try {
   assert.equal(pointer.digest, sha256(pointer.path));
   assert.equal(pointer.floorsDigest, sha256(pointer.floors));
   let sawFirstMaterialError = false;
-  assert.equal(read(path.join(run, 'run.json')).operationPhases['judge-request'], 'outcome');
+  assert.equal(read(path.join(run, 'run.json')).operationPhases.verdict['judge-request'], 'outcome');
   assert.deepEqual(
     interpretation.probes.map(({ probeId }) => probeId),
     index.trialSets.map(({ probeId }) => probeId),
@@ -203,9 +213,10 @@ try {
               findingId: first.findingId,
               observationId: first.observation.observationId,
               sequence: first.observation.sequence,
+              interfaceId: first.observation.interfaceId,
               operationId: first.observation.operationId,
               provenance: first.observation.provenance,
-              phase: runSnapshot.operationPhases[first.observation.operationId],
+              phase: runSnapshot.operationPhases[first.observation.interfaceId][first.observation.operationId],
             }
           : null,
       );
@@ -228,9 +239,10 @@ try {
             return {
               observationId,
               sequence: observed.sequence,
+              interfaceId: observed.interfaceId,
               operationId: observed.operationId,
               provenance: observed.provenance,
-              phase: runSnapshot.operationPhases[observed.operationId],
+              phase: runSnapshot.operationPhases[observed.interfaceId][observed.operationId],
             };
           }),
         );
@@ -267,7 +279,7 @@ try {
     ...interpretationArgs,
     trialSets: [{ ...index.trialSets[0], records: [path.basename(multiRecord)] }],
     scores: [scores[0]],
-    operationPhases: { step: 'process', result: 'outcome' },
+    operationPhases: PHASES,
   });
   const multiView = read(path.join(run, 'interpretation.json'));
   assert.deepEqual(
@@ -305,7 +317,7 @@ try {
   const tamperRunFile = path.join(run, 'run.json');
   const untampered = fs.readFileSync(tamperRunFile);
   const tampered = JSON.parse(untampered.toString('utf8'));
-  tampered.operationPhases['judge-request'] = 'process';
+  tampered.operationPhases.verdict['judge-request'] = 'process';
   fs.writeFileSync(tamperRunFile, `${JSON.stringify(tampered, null, 2)}\n`);
   const scoreDirectories = fs.readdirSync(path.join(run, 'scores')).length;
   const tamperScore = test.cli(project.folder, 'score', ['--run', path.basename(run)], project.env);
