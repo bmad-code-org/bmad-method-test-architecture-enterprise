@@ -1022,6 +1022,8 @@ module.exports = {
   LOG_EXECUTABLE,
   ReportStream,
   SYSTEM_ROOTS,
+  TRACE_CLONES: CLONES,
+  TRACE_PATH_SYSCALLS: SYSCALLS,
   TRACE_SYSCALLS,
   TraceReader,
   auditToken,

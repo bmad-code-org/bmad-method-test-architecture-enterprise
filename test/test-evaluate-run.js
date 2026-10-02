@@ -133,6 +133,9 @@ const { RunDirectory, RunDirectoryError } = require('../cli/lib/evaluate/run-dir
 const { readObservedMounts, runTrial, setRecommendation } = require('../cli/lib/evaluate/run');
 const { createRegistry } = require('../cli/lib/evaluate/registry');
 const {
+  TRACE_CLONES,
+  TRACE_PATH_SYSCALLS,
+  TRACE_SYSCALLS,
   TraceReader,
   decodeString,
   parseReportLine,
@@ -4321,6 +4324,10 @@ async function checkAuditParsers() {
       decodeString(String.raw`"a\303\251\n\x41\""`) === 'aé\nA"',
     "strace's arguments and escapes were not split and decoded",
   );
+  // The parser acts on a syscall only if strace is told to report it: a name the parser handles that the filter lacks is a blind spot no canned line shows.
+  const handled = [...Object.keys(TRACE_PATH_SYSCALLS), ...TRACE_CLONES, 'chdir', 'fchdir'];
+  const unfiltered = handled.filter((name) => !TRACE_SYSCALLS.includes(name));
+  check(unfiltered.length === 0, `strace is not told to report ${unfiltered.join(', ')}, which the trace parser handles`);
 }
 
 /**
