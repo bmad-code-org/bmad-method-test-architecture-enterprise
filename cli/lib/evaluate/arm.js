@@ -537,7 +537,8 @@ function hostEnvironmentPort({ port, registry }) {
       const injected = registered ? registry.hostEnvironment(request.interfaceId, [], request.executable) : {};
       const channels = request?.channels ?? {};
       const environment = { ...injected, ...channels.environment };
-      if (registered && process.platform === 'win32' && request.executable === 'tea-skill-runner') {
+      const windowsRunner = registered && process.platform === 'win32' && request.executable === 'tea-skill-runner';
+      if (windowsRunner) {
         for (const key of Object.keys(environment)) {
           if (key.toUpperCase() === 'SYSTEMROOT') delete environment[key];
         }
@@ -552,7 +553,10 @@ function hostEnvironmentPort({ port, registry }) {
       // An HTTP call's server starts with the host's values for its entry's keys, and its auth header carries one.
       const carried = request?.kind === 'api' ? registry.apiSecrets(request.interfaceId) : [];
       const principalValues = typeof registry.principalSecrets === 'function' ? registry.principalSecrets() : [];
-      const values = [...Object.values(injected), ...Object.values(server), ...carried, ...principalValues].filter(
+      const injectedSecrets = Object.entries(injected)
+        .filter(([key]) => !windowsRunner || key.toUpperCase() !== 'SYSTEMROOT')
+        .map(([, value]) => value);
+      const values = [...injectedSecrets, ...Object.values(server), ...carried, ...principalValues].filter(
         (value) => value.length >= MIN_SCRUBBED_VALUE_LENGTH,
       );
       const secrets = formsFor(values);

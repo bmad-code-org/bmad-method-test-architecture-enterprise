@@ -210,9 +210,18 @@ function guard([command, ...args]) {
           }),
         );
         trace('guardian-report-written', 'agent PID report failure on fd3');
-        agent.kill('SIGKILL');
-        job.stdin.end();
-        process.exit(0);
+        if (GROUPS) {
+          try {
+            process.kill(-process.pid, 'SIGKILL');
+          } catch {
+            agent.kill('SIGKILL');
+            process.exit(0);
+          }
+        } else {
+          agent.kill('SIGKILL');
+          job.stdin.end();
+          process.exit(0);
+        }
       }
     }
     if (stopping) agent.kill('SIGTERM');

@@ -55,7 +55,8 @@ name: Quality & Validation
 jobs:
   windows-agent-supervision:
     runs-on: windows-latest
-    timeout-minutes: 25
+    # Both probes and the matrix can use about 29 minutes at their individual setup and cleanup bounds.
+    timeout-minutes: 35
     steps:
       - name: Checkout
         uses: actions/checkout@v5

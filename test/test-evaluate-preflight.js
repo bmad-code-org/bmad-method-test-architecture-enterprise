@@ -434,7 +434,7 @@ async function checkWindowsSupervision() {
   );
   const carried = await hostEnvironmentPort({
     registry: runnerRegistry,
-    port: { probe: async () => ({ stderr: '' }) },
+    port: { probe: async () => ({ stderr: process.env.SystemRoot }) },
   }).probe({
     kind: 'cli',
     interfaceId: runnerEntry.interfaceId,
@@ -445,6 +445,10 @@ async function checkWindowsSupervision() {
     carried.request.channels.environment.SystemRoot === process.env.SystemRoot &&
       Object.keys(carried.request.channels.environment).filter((key) => key.toUpperCase() === 'SYSTEMROOT').length === 1,
     `the target overrode the host SystemRoot: ${JSON.stringify(carried.request.channels.environment)}`,
+  );
+  check(
+    carried.observation.stderr === process.env.SystemRoot,
+    `the infrastructure-only SystemRoot changed the observed stderr: ${JSON.stringify(carried.observation.stderr)}`,
   );
   // Match the guardian's separate Job Object setup bound, with room for
   // process startup and the supervisor's missing-report backstop.
@@ -625,6 +629,7 @@ const ready = setInterval(() => {
   const shadowFile = path.join(shadowDirectory, 'agent.json');
   const shadowHelper = path.join(shadowDirectory, 'powershell.exe');
   const compileScript = path.join(shadowDirectory, 'compile.ps1');
+  fs.cpSync(path.join(PROJECT_ROOT, STUB_SKILL), path.join(shadowDirectory, 'skill'), { recursive: true });
   fs.writeFileSync(
     compileScript,
     `$ErrorActionPreference = 'Stop'
@@ -658,7 +663,7 @@ class FakePowerShell {
       [
         RUNNER,
         '--skill-root',
-        STUB_SKILL,
+        'skill',
         ...options,
         '--agent-arg',
         shadowFile,
@@ -693,11 +698,13 @@ class FakePowerShell {
       check(!fs.existsSync(shadowMarker), 'the guardian executed a project-local fake powershell.exe');
     } finally {
       shadowRun.kill('SIGKILL');
+      await Promise.race([shadowClosed, delay(5000)]);
+      if (shadowPids === null && fs.existsSync(shadowFile)) shadowPids = readPids(shadowFile);
+      if (fs.existsSync(`${shadowFile}.entry`)) reap(Number(fs.readFileSync(`${shadowFile}.entry`, 'utf8')));
       if (shadowPids !== null) {
         reap(shadowPids.agent);
         reap(shadowPids.child);
       }
-      await Promise.race([shadowClosed, delay(5000)]);
       endCase('project-local helper shadow');
     }
   }
@@ -1044,6 +1051,74 @@ function checkWindowsRunnerReference() {
 async function checkSupervision() {
   if (process.platform === 'win32') return;
   const long = ['--timeout-ms', '1200000'];
+
+  // A closed guardian PID pipe must kill the entire POSIX group, including a child the agent started.
+  const pidFailureDirectory = tempDir('guardian-pid-report-failure');
+  const pidFailureFile = path.join(pidFailureDirectory, 'pids.json');
+  const pidFailureAgent = path.join(pidFailureDirectory, 'agent.cjs');
+  const pidFailurePreload = path.join(pidFailureDirectory, 'preload.cjs');
+  fs.writeFileSync(
+    pidFailureAgent,
+    `const fs = require('node:fs');
+const child = require('node:child_process').spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
+fs.writeFileSync(process.argv[2], JSON.stringify({ agent: process.pid, child: child.pid }));
+setInterval(() => {}, 1000);
+`,
+  );
+  fs.writeFileSync(
+    pidFailurePreload,
+    `if (process.argv[2] === '--agent-guardian') {
+  const fs = require('node:fs');
+  const original = fs.writeSync;
+  fs.writeSync = (fd, ...args) => {
+    if (fd === 5) {
+      const wait = new Int32Array(new SharedArrayBuffer(4));
+      const deadline = Date.now() + 3000;
+      while (!fs.existsSync(process.env.TEA_PID_FAILURE_FILE) && Date.now() < deadline) Atomics.wait(wait, 0, 0, 50);
+    }
+    return original(fd, ...args);
+  };
+}
+`,
+  );
+  const pidFailureGuardian = spawn(process.execPath, [SUPERVISOR, '--agent-guardian', process.execPath, pidFailureAgent, pidFailureFile], {
+    cwd: PROJECT_ROOT,
+    detached: true,
+    env: { ...BASE_ENV, NODE_OPTIONS: `--require=${pidFailurePreload}`, TEA_PID_FAILURE_FILE: pidFailureFile },
+    stdio: ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'],
+  });
+  let pidFailureReport = '';
+  pidFailureGuardian.stdio[3].on('data', (chunk) => (pidFailureReport += chunk));
+  const pidFailureClosed = ended(pidFailureGuardian);
+  let pidFailurePids = null;
+  try {
+    const ending = await Promise.race([pidFailureClosed, delay(10_000).then(() => null)]);
+    pidFailurePids = fs.existsSync(pidFailureFile) ? readJson(pidFailureFile) : null;
+    check(
+      ending?.signal === 'SIGKILL' && pidFailureReport.includes('could not report the agent PID'),
+      `a POSIX guardian with closed PID pipe ${ending === null ? 'waited over 10 s' : `ended ${ending.signal ?? ending.code}`}; expected its failure report and group kill: ${pidFailureReport}`,
+    );
+    check(pidFailurePids !== null, 'the POSIX closed-PID-pipe agent did not record its child before the failed report');
+    if (pidFailurePids !== null) {
+      check(await processEnds(pidFailurePids.agent), `POSIX agent ${pidFailurePids.agent} survived a failed PID report`);
+      check(await processEnds(pidFailurePids.child), `POSIX agent child ${pidFailurePids.child} survived a failed PID report`);
+    }
+  } finally {
+    if (pidFailureGuardian.exitCode === null && pidFailureGuardian.signalCode === null && pidFailureGuardian.pid > 0) {
+      try {
+        process.kill(-pidFailureGuardian.pid, 'SIGKILL');
+      } catch {
+        // The guardian group already ended.
+      }
+    }
+    if (pidFailurePids === null && fs.existsSync(pidFailureFile)) pidFailurePids = readJson(pidFailureFile);
+    if (pidFailurePids !== null) {
+      reap(pidFailurePids.agent);
+      reap(pidFailurePids.child);
+    }
+    pidFailureGuardian.stdio[4].destroy();
+    await Promise.race([pidFailureClosed, delay(1000)]);
+  }
 
   // The runner's whole group killed, as a cancelled CI job or `timeout -s KILL` kills it.
   const groupPid = path.join(tempDir('group-kill'), 'pid');

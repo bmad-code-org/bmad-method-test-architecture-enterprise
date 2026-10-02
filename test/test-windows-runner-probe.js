@@ -95,7 +95,16 @@ async function probe() {
   console.log('Windows runner probe passed');
 }
 
-probe().catch((error) => {
-  fs.writeSync(2, `${error.stack ?? error}\n`);
-  process.exitCode = 1;
-});
+probe()
+  .catch((error) => {
+    fs.writeSync(2, `${error.stack ?? error}\n`);
+    process.exitCode = 1;
+  })
+  .finally(() => {
+    try {
+      fs.rmSync(directory, { recursive: true, force: true });
+    } catch (error) {
+      fs.writeSync(2, `[Windows runner probe] temp cleanup failed: ${error.message}\n`);
+      process.exitCode = 1;
+    }
+  });
