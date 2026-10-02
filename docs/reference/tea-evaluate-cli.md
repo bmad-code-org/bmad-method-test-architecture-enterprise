@@ -561,6 +561,7 @@ The qualification names a pre-fix and a post-fix deployment: the release identif
 
 - `release`: the identifier the deployment runs, as you name your releases (a version, a tag, a build id): a letter or digit, then letters, digits, `.`, `_`, `+` or `-`, at most 128 characters.
   The run asks each deployment which release each of its HTTP interfaces runs (see `reports`) and refuses the probe when an answer is another identifier, so name the release each deployment reports.
+  The pre-fix deployment is asked again after the witness legs and after the trials, so a release that changes while the run measures it refuses the probe too.
   `check` refuses one release for both deployments.
 - `reports`: how each HTTP interface of the registry reports the release its origin runs, an object keyed by interface ID whose values are `{ "operationId", "pointer" }`, both required.
   The run asks the origin of every HTTP interface of the registry which release it runs: `reports` names one report for each, and each request goes to that interface's own origin.
@@ -588,22 +589,34 @@ Once both deployments are allowed, and before either arm runs, the runtime sends
 It refuses the probe when that string is not the declared `release`, naming both identifiers and the interface, so the digests a qualified probe records name the releases every origin of each deployment reported before the arms ran.
 A request the policy denies, and an answer with no string at the pointer (a status other than 2xx, a body the port reads as no JSON, or anything but a string at the pointer), refuse the probe too, the reason naming eval-quality's denial, or the pointer and what it found; in each case no arm runs.
 The first answer that refuses the probe stops the asking: a refusal needs one finding, so the interfaces after it and, after a pre-fix refusal, the post-fix deployment stay unasked.
-A probe that qualifies has sent each deployment exactly one report request per HTTP interface.
+Qualifying a probe sends each of its two deployments exactly one report request per HTTP interface before the arms, so two probes on one pre-fix release send each of its origins two.
 A reported identifier is quoted in the refusal as JSON writes it, with each character outside printable ASCII escaped and at most 160 characters.
 The report call is no trial: it records no evidence artifact and counts against no trial budget.
+The run asks the pre-fix deployment which release each of its HTTP interfaces runs at three points: before the qualification arms, after the witness legs and after the trials.
+`preflight` runs no trial, so it asks at the first two.
+The witness legs and the trials of the arm `historical:<release>` reach the pre-fix deployment after the qualification, so a deployment redeployed in between would otherwise be measured under the identifier the probe declares, and the digests a qualified probe records would name a release the legs and trials never ran against.
+Each later point asks every HTTP interface through the same port, policy and refusal as the first, the interfaces in sorted order of their IDs and the first answer that refuses stopping the asking; the post-fix deployment is reached by the qualification arms alone and is asked before the arms only.
+The asking before the arms is once per probe, and each later point asks once per pre-fix release (the legs) or per arm (the trials), whatever the number of probes on it.
+A deployment that keeps its release is therefore asked, at each of its origins, once per probe before the arms and once at each later point: an arm of N probes sends each pre-fix origin N + 2 requests in a `run` (N + 1 in a `preflight`) and each post-fix origin N requests, so an arm of one probe sends the pre-fix origins three and the post-fix origins one.
+The point after the legs comes before `eval-quality preflight` reads the run directory: a pre-fix release that changed refuses every probe on it, which leaves `probes.json` and `observations.json` (each leg's own file under `observations/` stays), so no witness measured under another release reaches the verdict.
+The point after the trials comes after the arm's last trial and before any trial set is sealed: a changed release refuses every probe on the arm, no trial set of them is sealed, and the trials' own evidence stays in the run directory, since each trial ran.
+A refusal at a later point names the point (`after the witness legs` or `after the trials`), the side, the interface, the identifier reported or what was found, and the declared release.
+`run.json`'s `releases` keeps what each interface reported before the arms, and a later refusal is recorded in `refused`.
+A pre-fix deployment that cannot answer at a later point stops the run with exit 12, naming the point.
+When the engine refused the plan before any leg ran, nothing reached a deployment since the qualification and the point after the legs asks nothing.
 A call that reaches no answer (a refused or reset connection, an ended process) or passes a ceiling of the registry entry (the answer's size, its time, its redirects) stops the run with exit 12 as it does for any call, and so does a contract violation of the port.
 No worktree is made, so the route needs no git history: it runs from a `copy` workspace and under `--from-working-tree` alike.
 
 `preflight` qualifies the probe against the two deployments, before any leg runs, once each has reported the release every origin runs (`run.json`'s `releases` records, for each qualified probe, each side's declared identifier and the identifier each HTTP interface reported, keyed by interface ID): the interaction plan once against the pre-fix deployment, where the oracles of the probe's behaviors must be violated (`fail-before.json`, naming the release and its origins), and once against the post-fix one, where they must hold (`pass-after.json`).
 No server starts for a call to a deployment, and the evidence of a leg or trial that reached one names its origins.
-The qualified probe records `artifactDigest` as `sha256:` and the SHA-256 of the pre-fix release identifier, and `fixCommitDigest` as the same over the post-fix one.
-Each defect's manifestation-witness leg reaches the pre-fix deployment, and `run` runs the probe's trials on the arm `historical:<release>`, named by the pre-fix release, each trial's HTTP calls reaching the pre-fix deployment; `run.json`'s `deployments` names the arm's origins.
+The qualified probe records `artifactDigest` as `sha256:` and the SHA-256 of the pre-fix release identifier, and `fixCommitDigest` as the same over the post-fix one; the two later points hold the legs and trials to the release those digests name.
+Each defect's manifestation-witness leg reaches the pre-fix deployment, and `run` runs the probe's trials on the arm `historical:<release>`, named by the pre-fix release, each trial's HTTP calls reaching the pre-fix deployment; `run.json`'s `deployments` names the arm's origins (a route whose probes were all refused after the legs has no arm and leaves it; an arm refused after the trials stays, since its trials ran).
 One arm runs one target, so two probes on one arm label at two targets (a worktree and a deployment, or two sets of pre-fix origins) exit 10, as do two labels that differ only in letter case, whose trial directories would meet on a case-insensitive file system.
 `check` refuses every such boundary first (neither boundary, deployments beside a `fixCommit`, one deployment, one release for both, a registry entry that is not an HTTP entry, origins off the registry's HTTP interfaces, a shared origin, `reports` that leave an HTTP interface of the registry without a report or name an interface it does not serve over HTTP, or a report that names an undeclared operation, an operation declared on another interface than its key, one the contract marks as changing state, one that needs an input, or a pointer that is no JSON pointer); the runtime refuses the same boundaries again with exit 12, as defence in depth.
 
 ### Either route
 
-A refused probe is listed in `run.json`'s `refused` and in `runs/<invocationId>/refused/<probeId>.json`, stays out of the probe list `eval-quality preflight` reads and out of the trial sets, and the rest of the run goes on; a refusal alone does not fail the run, though a run whose every probe was refused has nothing to seal and exits 12.
+A refused probe is listed in `run.json`'s `refused` and in `runs/<invocationId>/refused/<probeId>.json`, stays out of the probe list `eval-quality preflight` reads (unless a deployment's release changed after the trials, when the verdict had read the probe already, and its `probes/<probeId>.probe.json` stays) and out of the trial sets, and the rest of the run goes on; a refusal alone does not fail the run, though a run whose every probe was refused, at qualification, after the witness legs or after the trials, has nothing to seal and exits 12.
 Either qualification arm going the other way exits 11, since the probe does not straddle the fix; an arm that cannot run exits 12, and one the registry refuses 10.
 The qualified probe records `oracleStableAcrossRevisions` as true: both arms are judged by the one compiled contract the run read before any arm ran.
 
@@ -652,7 +665,10 @@ The steps run in order, each stopping the run with its own exit:
    A leg that cannot run at all (a budget exceeded, a process that fails to start) is written there too and exits 12, as does any other failure that stops the legs.
    A leg that exits one of its entry's `infrastructureExitCodes` is an observation like any other: the CLI's verdict reads it (a control leg that exits non-zero fails `clean-control`, exit 3), which AD-10 classifies as infrastructure from the persisted verdict.
    A qualification arm step that exits one stops the cycle with exit 12, since an arm has no verdict to classify it.
-7. `eval-quality preflight --contract contract.json --probes probes.json --observations observations.json --run-id <invocationId>` over the files in the run directory, `probes.json` holding the qualified probes.
+   Once the legs have run, the pre-fix deployment of each historical arm is asked again which release each of its HTTP interfaces runs (see [Against deployments](#against-deployments)).
+   A release that changed refuses every probe on that pre-fix release: the probes leave `probes.json` and the observations the CLI reads, and the arm leaves `run.json`'s `deployments`.
+   A deployment that cannot answer stops the run with exit 12, naming the point.
+7. `eval-quality preflight --contract contract.json --probes probes.json --observations observations.json --run-id <invocationId>` over the files in the run directory, `probes.json` holding the qualified probes that remain.
    Its `preflight-verdict.json` is the verdict, and its exit code is the command's exit code, verbatim: 0 when the preflight passed, 3 when it failed.
 
 `runPreflight` computes a verdict of its own, and `preflight` discards it: every verdict comes from the CLI over files you can rerun by hand from the run directory.
@@ -698,6 +714,7 @@ The steps run in order in one invocation, each stopping the run with its own exi
    A trial step that exits one of its registry entry's `infrastructureExitCodes`, or that a signal from outside stops (hang-up, interrupt, quit, kill or terminate), is a target that could not run: the trial yields no record and the run exits 12 (a qualification arm step stops its cycle the same way).
    A command step that crashes by a signal of its own (an abort, a segmentation fault) is an observation its oracles judge, and its record keeps the negative exit code; a tool server whose process ends the session during a call is an observation the same way, recorded with its exit code on the `exit-code` channel; a signal from outside stops either kind of step with exit 12 (see [The registry](#the-registry)).
    Your project is read again after every trial and every evaluator attempt (exit 12 on any change, with no trial set written).
+   After the last trial of a deployment arm, the pre-fix deployment is asked once more which release each of its HTTP interfaces runs (see [Against deployments](#against-deployments)); a changed release refuses every probe on the arm before any trial set is sealed.
 5. Every selected probe has its trial set, or the run exits 12, and the run directory holds exactly what the runtime wrote (see [The run directory](#the-run-directory)).
 6. One trial set per probe under `trial-sets/<probeId>/`: `record-<n>.json` per trial and `isolation-manifest.json`, with `evaluator-configuration.json` for the whole run, each checked against the schema eval-quality publishes before it is written, and each written as eval-quality's canonical serialization; the contract and sealed-brief digests they carry were taken when `compile` and `seal` wrote those files, before any target ran.
 7. `trial-sets.json`, the index `score` reads.

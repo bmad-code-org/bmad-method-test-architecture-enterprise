@@ -1000,6 +1000,11 @@ Added 2026-09-30 in Story 1.38. Levels: integration over real eval-quality, stat
 
 Amended 2026-10-01 in Story 1.65's build: each point asks every interface of the pre-fix deployment, so the request log of each of its origins shows three report requests, and the cases put the changed release on the second interface's origin as well as the first.
 
+Amended 2026-10-02 in Story 1.64's build: the cases redeploy a pre-fix server on a signal the run sends (a test wrapper around the fixture's grader that changes the release it reports after a counted request) and read every server's request log.
+The row "The later requests go through the port and the policy" reads: after the witness legs, the pre-fix grader redirects its report request to a host the registry does not authorize (eval-quality's `host-not-authorized` denies the hop) and the refusal names the point and that reason; an answer with no string is the second interface's origin reporting nothing (404); the unreachable row is a process that ends on the request (exit 12 naming the point); the secret row is a later answer that reports the auth value upper-cased.
+A policy cannot deny the one report operation after allowing it once, so the redirect stands in for the denial; dropping the denial's refusal at a later point exits 0 with no refusal, which the case catches.
+Each point is exercised at the first interface's origin, at the second interface's origin (the first asked and kept first) and over an arm that holds two probes, and a run whose only probe is refused after the legs or after the trials exits 12 with nothing sealed.
+
 ### Story 1.65: Ask every HTTP interface of a deployment which release it runs
 
 Added 2026-09-30 in Story 1.38. Levels: integration over real eval-quality, contract, unit, static. Files: `test/test-evaluate-arms.js` (`test:evaluate-arms`), `test/test-evaluate-check.js` (`test:evaluate-check`).

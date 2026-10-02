@@ -100,6 +100,7 @@ const {
   recordedEvaluatorModel,
 } = require('./evaluators');
 const { degenerateArm } = require('./gameability');
+const { holdDeployment, recordRefusal } = require('./historical');
 const { JudgeError, answerNonce, judgeConfigurationFor, judgeRubrics, recordedJudgeModel } = require('./judge');
 const { EvaluatorError, judgmentFromRows, setRecommendationOf, trialRecommendation } = require('./judgment-rows');
 const { QualificationError, applyReplaceExact } = require('./mutation');
@@ -983,6 +984,8 @@ async function runTrialSets(given) {
       mutatedDigest: null,
       basis: route.workspace,
       deployment: route.deployment,
+      // A deployment arm is asked again after its last trial which release it runs (Story 1.64).
+      route: route.deployment === null ? null : route,
       probes: qualified.filter((entry) => entry.historical?.preFix === preFix).map((entry) => entry.probe),
     });
   }
@@ -997,13 +1000,14 @@ async function runTrialSets(given) {
     });
   }
   const refusedIds = new Set(run.refused.map((refusal) => refusal.probeId));
-  if (arms.length === 0) {
-    throw stop({
+  // A run whose every probe is refused has no arm and nothing to score, at qualification, after the legs or after the trials.
+  const noArm = () =>
+    stop({
       stage: 'trial',
       exitCode: 12,
       message: `every probe was refused (${run.refused.map((refusal) => `${refusal.file}: ${refusal.reason}`).join('; ')}), so the run has no arm to run and nothing to score`,
     });
-  }
+  if (arms.length === 0) throw noArm();
 
   // The digests of the compiled contract and the sealed brief as the stages
   // wrote them, taken before any target ran.
@@ -1217,8 +1221,30 @@ async function runTrialSets(given) {
       // Read after every trial, so a target that writes into the project stops the run at once.
       treeUnchanged('trials');
     }
+    // The trials reached the pre-fix deployment after the legs did, so it is asked once more which release it runs. A release
+    // that changed refuses every probe on the arm before any trial set is sealed; the trials' evidence stays, since each ran.
+    if (arm.route !== null && arm.route !== undefined) {
+      const held = await holdDeployment({
+        route: arm.route,
+        point: 'trials',
+        contract,
+        registry,
+        stop,
+        seed: run.seed,
+        signal: context.signal,
+      });
+      if (held.refused !== undefined) {
+        for (const { probeId, file } of arm.route.members) {
+          recordRefusal({ run, writer, writeRun: context.writeRun, log }, { probeId, file, reason: held.refused });
+          refusedIds.add(probeId);
+        }
+        arm.refused = true;
+      }
+    }
   }
-  const armed = new Set(arms.flatMap((arm) => arm.probes.map((probe) => probe.probeId)));
+  const sealable = arms.filter((arm) => arm.refused !== true);
+  if (sealable.length === 0) throw noArm();
+  const armed = new Set(sealable.flatMap((arm) => arm.probes.map((probe) => probe.probeId)));
   // A refused probe runs on no arm by design, and run.json names it with its reason.
   const unarmed = snapshot.probeIds.filter((probeId) => !armed.has(probeId) && !refusedIds.has(probeId));
   if (unarmed.length > 0) {
@@ -1237,7 +1263,7 @@ async function runTrialSets(given) {
   const recordDigests = {};
   const manifestDigests = {};
   const unreportedResourceUse = [];
-  for (const arm of arms) {
+  for (const arm of sealable) {
     for (const trial of arm.trials) {
       if (trial.unreportedSteps.length > 0) {
         unreportedResourceUse.push({ conditionArm: arm.conditionArm, trialIndex: trial.trialIndex, stepIds: trial.unreportedSteps });
@@ -1267,7 +1293,7 @@ async function runTrialSets(given) {
   }
 
   return completeRun(context, {
-    arms,
+    arms: sealable,
     trialSets,
     recordDigests,
     manifestDigests,
