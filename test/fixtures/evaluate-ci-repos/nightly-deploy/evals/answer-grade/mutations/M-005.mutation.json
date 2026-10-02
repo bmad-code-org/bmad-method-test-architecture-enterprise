@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "mutationId": "M-005",
+  "mutationSource": "case normalization reversed in adopter grading code",
+  "targetArtifact": "server/grade.mjs",
+  "operator": {
+    "kind": "replace-exact",
+    "find": "const answer = payload.answer.toLowerCase();",
+    "replace": "const answer = payload.answer.toUpperCase();",
+    "occurrences": 1
+  },
+  "expectedObservableFailure": "uppercase restricted term passes in HTTP response body"
+}

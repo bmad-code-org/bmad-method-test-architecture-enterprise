@@ -1,0 +1,23 @@
+name: deploy
+on:
+  schedule:
+    - cron: '47 3 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  production:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm test
+      - run: ./deploy.sh production
+        env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+          GRADER_MODEL_KEY: ${{ secrets.GRADER_MODEL_KEY }}

@@ -1139,6 +1139,7 @@ A tier holds only the checks placed on it, so a pipeline triggered by a merge ru
 ### The plan
 
 `ci/evaluation-ci-plan.json` is platform-neutral and meets the runtime's own schema (`cli/lib/evaluate/schemas/evaluation-ci-plan.schema.json`).
+The last stage of `bmad-testarch-evaluate` writes it from an inspection of the adopter's repository, starting each check at the default tier and recording in `placement.reason` the file or answer behind every placement, and sets `evaluation.json` `tiers` to the tiers the plan uses.
 Each check carries:
 
 | Field         | Meaning                                                                                                                                                                                                                                                                                                                                           |

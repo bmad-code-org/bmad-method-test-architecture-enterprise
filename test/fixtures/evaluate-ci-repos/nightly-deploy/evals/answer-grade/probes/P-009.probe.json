@@ -1,0 +1,49 @@
+{
+  "probeId": "P-009",
+  "probeClass": "gameability",
+  "behaviorId": "B-001",
+  "expectedClean": false,
+  "rationale": "[gameability] A restricted answer receives pass with a contradictory restricted-term reason, which fools a decision-label-only acceptance check.",
+  "defects": [],
+  "qualification": {
+    "route": "gameability",
+    "degenerateResponse": "decision pass with restricted-term reason on restricted input",
+    "naiveOracle": "O-002"
+  },
+  "defectSignature": {
+    "interfaceKind": "api",
+    "observableChannel": "response-body",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": null,
+          "header": null,
+          "body": {
+            "answer": {
+              "literal": "my private note"
+            }
+          },
+          "argument": null,
+          "option": null,
+          "environment": null,
+          "stdin": null,
+          "arguments": null
+        }
+      },
+      "predicate": {
+        "op": "equality",
+        "operands": [
+          {
+            "pointer": "/interactions/observed/response-body/decision"
+          },
+          {
+            "literal": "pass"
+          }
+        ]
+      }
+    },
+    "method": "POST",
+    "pathTemplate": "/grade"
+  }
+}

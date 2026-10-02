@@ -1,0 +1,280 @@
+{
+  "schemaVersion": 1,
+  "checks": [
+    {
+      "id": "check",
+      "tier": "pr",
+      "trigger": [
+        "pull-request"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "check",
+        "--evaluation",
+        "evals/answer-grade"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/checks/check/stdout"
+      ],
+      "placement": {
+        "tier": "pr",
+        "defaultTier": "pr",
+        "reason": ".github/workflows/ci.yml runs on pull_request and CONTRIBUTING.md requires the test check on every pull request; the check needs no secret and calls no model."
+      }
+    },
+    {
+      "id": "compile",
+      "tier": "pr",
+      "trigger": [
+        "pull-request"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "evals/answer-grade",
+        "--tier",
+        "pr"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/checks/compile/eval-contract.json"
+      ],
+      "placement": {
+        "tier": "pr",
+        "defaultTier": "pr",
+        "reason": ".github/workflows/ci.yml runs on pull_request; compiling the contract needs no secret and calls no model."
+      }
+    },
+    {
+      "id": "seal",
+      "tier": "pr",
+      "trigger": [
+        "pull-request"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "evals/answer-grade",
+        "--tier",
+        "pr"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/checks/seal/sealed-evaluator-brief.json"
+      ],
+      "placement": {
+        "tier": "pr",
+        "defaultTier": "pr",
+        "reason": ".github/workflows/ci.yml runs on pull_request; sealing the brief needs no secret and calls no model."
+      }
+    },
+    {
+      "id": "api-conformance",
+      "tier": "pr",
+      "trigger": [
+        "pull-request"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "evals/answer-grade",
+        "--tier",
+        "pr"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/checks/api-conformance/stdout"
+      ],
+      "placement": {
+        "tier": "pr",
+        "defaultTier": "pr",
+        "reason": "The evaluation declares an HTTP target (interface api, POST to the local grader), and .github/workflows/ci.yml runs on pull_request; the check needs no secret."
+      }
+    },
+    {
+      "id": "gameability",
+      "tier": "pr",
+      "trigger": [
+        "pull-request"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "evals/answer-grade",
+        "--tier",
+        "pr"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/replay/scores"
+      ],
+      "placement": {
+        "tier": "pr",
+        "defaultTier": "pr",
+        "reason": ".github/workflows/ci.yml runs on pull_request; the gameability arm (probe P-009) is deterministic and CAP-11 requires it on every pull request. CONTRIBUTING.md says pull requests from forks run without any secret."
+      }
+    },
+    {
+      "id": "oracle-agreement",
+      "tier": "pr",
+      "trigger": [
+        "pull-request"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "evals/answer-grade",
+        "--tier",
+        "pr"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "baseline/scores"
+      ],
+      "placement": {
+        "tier": "pr",
+        "defaultTier": "pr",
+        "reason": ".github/workflows/ci.yml runs on pull_request; oracle-versus-scorer agreement is deterministic and reads baseline/, which is pending acceptance."
+      }
+    },
+    {
+      "id": "replay",
+      "tier": "pr",
+      "trigger": [
+        "pull-request"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "evals/answer-grade",
+        "--tier",
+        "pr"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/replay/preflight-verdict.json",
+        "runs/<invocationId>/replay/scores"
+      ],
+      "placement": {
+        "tier": "pr",
+        "defaultTier": "pr",
+        "reason": ".github/workflows/ci.yml runs on pull_request; replay is deterministic and reads baseline/, which is pending acceptance."
+      }
+    },
+    {
+      "id": "preflight-live",
+      "tier": "merge",
+      "trigger": [
+        "merge"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "preflight",
+        "--evaluation",
+        "evals/answer-grade"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/checks/preflight-live/stdout"
+      ],
+      "placement": {
+        "tier": "merge",
+        "defaultTier": "merge",
+        "reason": "The target needs no secret (the registry's server.environmentKeys is empty; app/server/grade.mjs applies app/rules/policy.json), and .github/workflows/ci.yml has a merge_group trigger and CONTRIBUTING.md says merges go through the merge queue, so the merge tier has an event."
+      }
+    },
+    {
+      "id": "twin-run",
+      "tier": "scheduled",
+      "trigger": [
+        "schedule",
+        "manual-dispatch"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "evals/answer-grade",
+        "--tier",
+        "scheduled"
+      ],
+      "enforcement": "warn",
+      "evidence": [
+        "runs/<invocationId>/checks/twin-run/stdout"
+      ],
+      "placement": {
+        "tier": "scheduled",
+        "defaultTier": "scheduled",
+        "reason": ".github/workflows/nightly.yml runs on schedule (02:17 UTC) and workflow_dispatch, and .github/workflows/deploy.yml ships main every night at 03:47 UTC (docs/DEPLOYING.md), so a defect reaches learners within 24 hours and the one critical behavior (B-001) justifies a nightly live run. No workflow has a tag or release trigger, so no release entry exists."
+      }
+    },
+    {
+      "id": "held-out",
+      "tier": "scheduled",
+      "trigger": [
+        "schedule",
+        "manual-dispatch"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "evals/answer-grade",
+        "--tier",
+        "scheduled"
+      ],
+      "enforcement": "warn",
+      "evidence": [
+        "runs/<invocationId>/checks/held-out/stdout"
+      ],
+      "placement": {
+        "tier": "scheduled",
+        "defaultTier": "scheduled",
+        "reason": ".github/workflows/nightly.yml runs on schedule (02:17 UTC) and workflow_dispatch, and .github/workflows/deploy.yml ships main every night at 03:47 UTC (docs/DEPLOYING.md), so a defect reaches learners within 24 hours and the one critical behavior (B-001) justifies a nightly live run. No workflow has a tag or release trigger, so no release entry exists."
+      }
+    },
+    {
+      "id": "strength-comparison",
+      "tier": "scheduled",
+      "trigger": [
+        "schedule",
+        "manual-dispatch"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "evals/answer-grade",
+        "--tier",
+        "scheduled"
+      ],
+      "enforcement": "warn",
+      "evidence": [
+        "runs/<invocationId>/checks/strength-comparison/stdout"
+      ],
+      "placement": {
+        "tier": "scheduled",
+        "defaultTier": "scheduled",
+        "reason": ".github/workflows/nightly.yml runs on schedule (02:17 UTC) and workflow_dispatch, and .github/workflows/deploy.yml ships main every night at 03:47 UTC (docs/DEPLOYING.md), so a defect reaches learners within 24 hours and the one critical behavior (B-001) justifies a nightly live run. No workflow has a tag or release trigger, so no release entry exists."
+      }
+    }
+  ]
+}

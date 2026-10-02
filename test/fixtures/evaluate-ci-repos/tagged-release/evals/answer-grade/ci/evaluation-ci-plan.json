@@ -1,0 +1,277 @@
+{
+  "schemaVersion": 1,
+  "checks": [
+    {
+      "id": "check",
+      "tier": "pr",
+      "trigger": [
+        "pull-request"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "check",
+        "--evaluation",
+        "evals/answer-grade"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/checks/check/stdout"
+      ],
+      "placement": {
+        "tier": "pr",
+        "defaultTier": "pr",
+        "reason": ".github/workflows/ci.yml runs on pull_request and CONTRIBUTING.md names the test check as required; the check needs no secret and calls no model, and fork pull requests run without any secret, so the deterministic set stays on pr."
+      }
+    },
+    {
+      "id": "compile",
+      "tier": "pr",
+      "trigger": [
+        "pull-request"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "evals/answer-grade",
+        "--tier",
+        "pr"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/checks/compile/eval-contract.json"
+      ],
+      "placement": {
+        "tier": "pr",
+        "defaultTier": "pr",
+        "reason": ".github/workflows/ci.yml runs on pull_request and CONTRIBUTING.md names the test check as required; the check needs no secret and calls no model, and fork pull requests run without any secret, so the deterministic set stays on pr."
+      }
+    },
+    {
+      "id": "seal",
+      "tier": "pr",
+      "trigger": [
+        "pull-request"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "evals/answer-grade",
+        "--tier",
+        "pr"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/checks/seal/sealed-evaluator-brief.json"
+      ],
+      "placement": {
+        "tier": "pr",
+        "defaultTier": "pr",
+        "reason": ".github/workflows/ci.yml runs on pull_request and CONTRIBUTING.md names the test check as required; the check needs no secret and calls no model, and fork pull requests run without any secret, so the deterministic set stays on pr."
+      }
+    },
+    {
+      "id": "api-conformance",
+      "tier": "pr",
+      "trigger": [
+        "pull-request"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "evals/answer-grade",
+        "--tier",
+        "pr"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/checks/api-conformance/stdout"
+      ],
+      "placement": {
+        "tier": "pr",
+        "defaultTier": "pr",
+        "reason": ".github/workflows/ci.yml runs on pull_request and CONTRIBUTING.md names the test check as required; the check needs no secret and calls no model, and fork pull requests run without any secret, so the deterministic set stays on pr."
+      }
+    },
+    {
+      "id": "gameability",
+      "tier": "pr",
+      "trigger": [
+        "pull-request"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "evals/answer-grade",
+        "--tier",
+        "pr"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/replay/scores"
+      ],
+      "placement": {
+        "tier": "pr",
+        "defaultTier": "pr",
+        "reason": ".github/workflows/ci.yml runs on pull_request and CONTRIBUTING.md names the test check as required; the check needs no secret and calls no model, and fork pull requests run without any secret, so the deterministic set stays on pr."
+      }
+    },
+    {
+      "id": "oracle-agreement",
+      "tier": "pr",
+      "trigger": [
+        "pull-request"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "evals/answer-grade",
+        "--tier",
+        "pr"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "baseline/scores"
+      ],
+      "placement": {
+        "tier": "pr",
+        "defaultTier": "pr",
+        "reason": ".github/workflows/ci.yml runs on pull_request and CONTRIBUTING.md names the test check as required; the check needs no secret and calls no model, and fork pull requests run without any secret, so the deterministic set stays on pr."
+      }
+    },
+    {
+      "id": "replay",
+      "tier": "pr",
+      "trigger": [
+        "pull-request"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "evals/answer-grade",
+        "--tier",
+        "pr"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/replay/preflight-verdict.json",
+        "runs/<invocationId>/replay/scores"
+      ],
+      "placement": {
+        "tier": "pr",
+        "defaultTier": "pr",
+        "reason": ".github/workflows/ci.yml runs on pull_request and CONTRIBUTING.md names the test check as required; the check needs no secret and calls no model, and fork pull requests run without any secret, so the deterministic set stays on pr."
+      }
+    },
+    {
+      "id": "preflight-live",
+      "tier": "release",
+      "trigger": [
+        "release"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "preflight",
+        "--evaluation",
+        "evals/answer-grade"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/checks/preflight-live/stdout"
+      ],
+      "placement": {
+        "tier": "release",
+        "defaultTier": "merge",
+        "reason": "The target is the local app/server/grade.mjs stub and needs no secret, so the default is merge. CONTRIBUTING.md says pull requests are squash merged with no merge queue and nothing runs after a merge to main except the next release, and no workflow has a merge_group or main push trigger, so the merge tier has no event. .github/workflows/release.yml (push of v* tags) is the only event for a live check."
+      }
+    },
+    {
+      "id": "twin-run",
+      "tier": "release",
+      "trigger": [
+        "release"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "evals/answer-grade",
+        "--tier",
+        "release"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/checks/twin-run/stdout"
+      ],
+      "placement": {
+        "tier": "release",
+        "defaultTier": "release",
+        "reason": "docs/RELEASING.md says the tag is the only release gate with no staging environment and no scheduled job, and no workflow has a schedule trigger, so there is no scheduled entry; .github/workflows/release.yml on v* tags is the home. A shipped defect stays in the registry about six weeks, and B-001 is critical."
+      }
+    },
+    {
+      "id": "held-out",
+      "tier": "release",
+      "trigger": [
+        "release"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "evals/answer-grade",
+        "--tier",
+        "release"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/checks/held-out/stdout"
+      ],
+      "placement": {
+        "tier": "release",
+        "defaultTier": "release",
+        "reason": "docs/RELEASING.md says the tag is the only release gate and no scheduled job exists, so the held-out partition (P-011 to P-013) runs in .github/workflows/release.yml on v* tags. The evaluator is deterministic against the local stub, so the run needs no secret and costs no model calls."
+      }
+    },
+    {
+      "id": "strength-comparison",
+      "tier": "release",
+      "trigger": [
+        "release"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "evals/answer-grade",
+        "--tier",
+        "release"
+      ],
+      "enforcement": "warn",
+      "evidence": [
+        "runs/<invocationId>/checks/strength-comparison/stdout"
+      ],
+      "placement": {
+        "tier": "release",
+        "defaultTier": "release",
+        "reason": "docs/RELEASING.md says the tag is the only release gate and no scheduled job exists, so the comparison against the baseline runs in .github/workflows/release.yml on v* tags; a strength regression is a warning under AD-10."
+      }
+    }
+  ]
+}

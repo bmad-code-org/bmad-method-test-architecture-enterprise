@@ -2365,6 +2365,155 @@ function checkCommittedLiveTiers() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// The plans the ci stage wrote for two repositories (Story 2.4, R2-16)
+
+const REPOSITORIES = {
+  'tagged-release': { root: 'test/fixtures/evaluate-ci-repos/tagged-release', folder: 'evals/answer-grade' },
+  'nightly-deploy': { root: 'test/fixtures/evaluate-ci-repos/nightly-deploy', folder: 'evals/answer-grade' },
+};
+const AI_FEATURE = 'test/fixtures/evaluate-authoring/ai-feature/evaluation';
+
+/** The `id@tier` of every live check a plan places. */
+function livePlacements(plan) {
+  return new Set(plan.checks.filter((item) => planModule.LIVE_CHECKS.includes(item.id)).map((item) => `${item.id}@${item.placement.tier}`));
+}
+
+/** The repository files a reason cites: tokens that name a file the repository holds. */
+function citedFiles(reason, repository) {
+  return [...new Set(reason.match(/[.\w/-]+\.(?:yml|yaml|md|json|mjs|toml)\b/g) ?? [])].filter((token) =>
+    fs.existsSync(path.join(ROOT, repository, token)),
+  );
+}
+
+/**
+ * What two repositories' plans must show (the second Story 2.4 criterion): a live check placed differently, and a reason
+ * that cites a file of its own repository for every placement that differs. A stage that ignored the inspection and wrote
+ * AD-10's default table for both fails the first rule; a reason that names no file of its repository fails the second.
+ */
+function planDifferences([first, second]) {
+  const problems = [];
+  const live = [first, second].map((side) => livePlacements(side.plan));
+  const differing = [...live[0]].filter((item) => !live[1].has(item)).map((item) => [0, item]);
+  differing.push(...[...live[1]].filter((item) => !live[0].has(item)).map((item) => [1, item]));
+  if (differing.length === 0) problems.push('the two plans place every live check alike');
+  for (const [side, placement] of differing) {
+    const [id, tier] = placement.split('@');
+    const check = [first, second][side].plan.checks.find((item) => item.id === id && item.placement.tier === tier);
+    if (citedFiles(check.placement.reason ?? '', [first, second][side].repository).length === 0)
+      problems.push(`${placement} in ${[first, second][side].repository} gives a reason that cites no file of that repository`);
+  }
+  return problems;
+}
+
+function checkRepositoryPlans() {
+  const loaded = Object.entries(REPOSITORIES).map(([name, { root, folder }]) => {
+    const evaluation = path.join(ROOT, root, folder);
+    const result = planModule.readPlan(evaluation);
+    assert.deepEqual(result.findings, [], `${name}: the committed plan fails validation`);
+    assert.ok(result.plan, `${name}: no plan was committed`);
+    // The same validation `check` runs, through the real CLI.
+    const checked = cli(evaluation, 'check');
+    assert.equal(checked.status, 0, `${name}: ${checked.output}`);
+    // Every placement, default ones included, records the reason the inspection gave.
+    for (const item of result.plan.checks)
+      assert.ok(item.placement.reason?.trim(), `${name}: ${item.id} on ${item.placement.tier} records no placement.reason`);
+    // evaluation.json names the tiers the plan uses.
+    const evaluationJson = read(path.join(evaluation, 'evaluation.json'));
+    assert.deepEqual(
+      [...evaluationJson.tiers].sort(),
+      [...new Set(result.plan.checks.map((item) => item.placement.tier))].sort(),
+      `${name}: evaluation.json tiers differ from the plan's tiers`,
+    );
+    // The repository carries the Story 1.24 AI-feature evaluation: every file but the launch root, the tiers and the keys the stage sets.
+    const source = path.join(ROOT, AI_FEATURE);
+    for (const relative of [
+      'contract.json',
+      'requirements.md',
+      'corpus-index.json',
+      'evaluator/mapping.json',
+      'policy/scoring-policy.json',
+    ]) {
+      assert.deepEqual(
+        fs.readFileSync(path.join(evaluation, relative)),
+        fs.readFileSync(path.join(source, relative)),
+        `${name}: ${relative} differs from the AI-feature evaluation`,
+      );
+    }
+    for (const directory of ['probes', 'mutations']) {
+      assert.deepEqual(
+        fs.readdirSync(path.join(evaluation, directory)).sort(),
+        fs.readdirSync(path.join(source, directory)).sort(),
+        `${name}: ${directory}`,
+      );
+    }
+    const sourceJson = read(path.join(source, 'evaluation.json'));
+    const strip = (value) => {
+      const copy = structuredClone(value);
+      delete copy.tiers;
+      delete copy.launch;
+      for (const entry of copy.registry) delete entry.server?.environmentKeys;
+      return copy;
+    };
+    assert.deepEqual(
+      strip(evaluationJson),
+      strip(sourceJson),
+      `${name}: evaluation.json differs from the AI-feature evaluation beyond tiers, launch and keys`,
+    );
+    assert.equal(evaluationJson.launch.root, '../../app', `${name}: the evaluation launches the repository's own app`);
+    assert.ok(fs.existsSync(path.join(ROOT, root, 'app', 'server', 'grade.mjs')), `${name}: the app is missing`);
+    return { repository: root, plan: result.plan };
+  });
+
+  // The repositories keep the facts the plans were inspected from, so the committed placements stay meaningful.
+  const workflows = (root) =>
+    fs
+      .readdirSync(path.join(ROOT, root, '.github', 'workflows'))
+      .map((name) => [name, fs.readFileSync(path.join(ROOT, root, '.github', 'workflows', name), 'utf8')]);
+  const [tagged, nightly] = Object.values(REPOSITORIES).map(({ root }) => workflows(root));
+  assert.ok(
+    tagged.some(([, text]) => /tags:\s*\['v\*'\]/.test(text)),
+    'tagged-release releases on tags',
+  );
+  assert.ok(
+    !tagged.some(([, text]) => /schedule:|GRADER_MODEL_KEY/.test(text)),
+    'tagged-release has no schedule and no model secret in CI',
+  );
+  assert.ok(
+    nightly.some(([, text]) => /schedule:/.test(text) && /secrets\.GRADER_MODEL_KEY/.test(text)),
+    'nightly-deploy runs a scheduled job with a model secret',
+  );
+  assert.ok(!nightly.some(([, text]) => /tags:/.test(text)), 'nightly-deploy has no tag release');
+
+  assert.deepEqual(planDifferences(loaded), [], 'the committed plans do not differ as the inspection of their repositories requires');
+
+  // The revert check: a stage that ignores the inspection and writes the default table for both repositories fails the assertion.
+  const template = read(
+    path.join(ROOT, 'src', 'workflows', 'testarch', 'bmad-testarch-evaluate', 'assets', 'evaluation-ci-plan.template.json'),
+  );
+  const defaults = {
+    checks: template.checks
+      .filter((item) => item.placement.tier !== 'merge' || item.id === 'preflight-live')
+      .map((item) => ({ ...item, placement: { ...item.placement, reason: 'AD-10 default' } })),
+  };
+  const same = planDifferences(loaded.map(({ repository }) => ({ repository, plan: defaults })));
+  assert.ok(same.includes('the two plans place every live check alike'), 'identical default plans passed the difference assertion');
+  // A differing placement whose reason names no file of its repository fails too.
+  const unreasoned = structuredClone(loaded);
+  for (const item of unreasoned[0].plan.checks) item.placement.reason = 'a reason that cites nothing';
+  assert.ok(
+    planDifferences(unreasoned).some((problem) => problem.includes('cites no file')),
+    'a reason citing no file passed',
+  );
+  // A file of the other repository does not count.
+  const foreign = structuredClone(loaded);
+  for (const item of foreign[0].plan.checks) item.placement.reason = '.github/workflows/nightly.yml has a schedule trigger';
+  assert.ok(
+    planDifferences(foreign).some((problem) => problem.includes('cites no file')),
+    'a file of the other repository passed',
+  );
+}
+
 async function main() {
   const cases = [
     ['the committed plans and baselines', checkFixturePlans],
@@ -2390,6 +2539,7 @@ async function main() {
     ['the gameability arm', checkGameability],
     ['the fixture adopters', checkFixtureTiers],
     ['the committed live tiers', checkCommittedLiveTiers],
+    ['the plans of two repositories', checkRepositoryPlans],
     ['the live tiers', checkLiveTiers],
     ['the strength floor', checkStrengthFloors],
     ['a weak target', checkWeakProject],

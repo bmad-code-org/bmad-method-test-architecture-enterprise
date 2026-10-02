@@ -1,0 +1,10 @@
+{
+  "name": "answer-grader",
+  "version": "0.0.0",
+  "private": true,
+  "description": "An answer grading service: POST /grade accepts an answer and returns a decision and a reason.",
+  "scripts": {
+    "test": "node --test app/grade.test.mjs",
+    "smoke": "node app/smoke.mjs"
+  }
+}

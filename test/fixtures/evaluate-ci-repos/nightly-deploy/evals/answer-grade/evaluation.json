@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "evaluationId": "answer-grade",
+  "targetKind": "ai-feature",
+  "interface": "api",
+  "registry": [
+    {
+      "kind": "api",
+      "interfaceId": "answer-grade",
+      "scheme": "http",
+      "host": "127.0.0.1",
+      "addresses": [
+        "127.0.0.1"
+      ],
+      "methods": [
+        "POST"
+      ],
+      "safeMethods": [],
+      "maxRedirects": 0,
+      "maxElapsedMs": 30000,
+      "maxRequestBytes": 65536,
+      "maxResponseBytes": 1048576,
+      "server": {
+        "target": "server/grade.mjs",
+        "targetArgs": [],
+        "environmentKeys": [],
+        "portEnvironmentKey": "PORT",
+        "readyTimeoutMs": 20000
+      }
+    }
+  ],
+  "launch": {
+    "root": "../../app"
+  },
+  "workspace": {
+    "kind": "copy",
+    "provision": []
+  },
+  "arms": [
+    "clean",
+    "mutated",
+    "gameability"
+  ],
+  "trials": 3,
+  "tiers": [
+    "pr",
+    "merge",
+    "scheduled"
+  ],
+  "strengthFloor": {
+    "defect": 1,
+    "zero-action": 1,
+    "gameability": 1
+  },
+  "heldOutProbes": [
+    "P-011",
+    "P-012",
+    "P-013"
+  ],
+  "requirements": {
+    "path": "requirements.md",
+    "digest": "sha256:89b719a834523f0e0c354c6f9e29f70d6adfb42cd8b470d68f6ba45d83cdbb6f"
+  },
+  "evaluator": {
+    "kind": "deterministic"
+  },
+  "operationPhases": {
+    "grade-answer": "outcome"
+  }
+}

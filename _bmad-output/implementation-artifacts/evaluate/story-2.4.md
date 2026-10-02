@@ -1,0 +1,153 @@
+---
+title: 'Story 2.4: Finish the evaluation with its CI stage'
+type: 'feature'
+created: '2026-10-01'
+status: 'in-review'
+route: 'dispatch'
+review_loop_iteration: 0
+baseline_commit: '0d43d45fd501b1dec2f500e60394c2e7386f8243'
+context:
+  - '{project-root}/_bmad-output/planning-artifacts/evaluate/epics.md (Build Rules For Every Story; Story 2.4)'
+  - '{project-root}/_bmad-output/planning-artifacts/evaluate/test-design-epic-2.md (Story 2.4, R2-16)'
+  - '{project-root}/_bmad-output/planning-artifacts/evaluate/ARCHITECTURE-SPINE.md (AD-10, AD-11, AD-12, AD-20)'
+  - '{project-root}/_bmad-output/implementation-artifacts/evaluate/story-2.3.md'
+  - '{project-root}/AGENTS.md'
+---
+
+<!-- markdownlint-disable MD033 -->
+
+<frozen-after-approval reason="human-owned intent; do not modify unless human renegotiates">
+
+## Intent
+
+**Problem:** Evaluate's last stage is a placeholder (`references/ci.md`), so an evaluation ends locally working and unenforced, and nothing teaches the stage to derive each check's tier from the adopter's own repository (R2-16).
+
+**Approach:** `/bmad-workflow-builder` Edit fills `references/ci.md` with four inspection headings (existing CI, merge flow, release flow, risk profile), the placement rules, the opt-in `eval-quality-gates` rule and the hand-off to `bmad-testarch-ci` in edit mode, and adds an `assets/evaluation-ci-plan.template.json`. Two fixture repositories under `test/fixtures/evaluate-ci-repos/` carry the Story 1.24 AI-feature evaluation, and a live maintainer session through the local Claude Code CLI runs the stage on each; the two captured plans are committed. The guidance test asserts the headings, placement rules and template, and `test:evaluate-ci` validates both plans and asserts their live placements differ with file-citing reasons.
+
+## Boundaries & Constraints
+
+**Always:**
+
+- The guide points at the runtime's schema and `ci-plan.js` and copies neither; the template and every tagged plan example validate through `planFindings`.
+- Commands an adopter runs use `npm exec --prefix {tea_evaluations_folder} -- tea-evaluate ...` (AD-20); a bare `npx tea-evaluate` is never written. TeA's own package uses `node cli/evaluate.js`.
+- Plans are captured from a real maintainer session through the local Claude Code CLI. A plan that cannot be produced honestly is reported.
+- Skill edits go through the builder Edit process, then Analyze with zero critical and zero high findings.
+
+**Never:**
+
+- Edits to `bmad-testarch-ci`'s steps or templates, the plan schema, `ci-plan.js`, `ci.js` or the CLI; builder Edit on `bmad-testarch-ci`.
+- Re-accepting fixture baselines (Story 1.91), stale-lock or takeover logic, a vendor dependency as the system under test.
+
+</frozen-after-approval>
+
+## Code Map
+
+- `src/workflows/testarch/bmad-testarch-evaluate/references/ci.md` -- the placeholder this story fills.
+- `src/workflows/testarch/bmad-testarch-evaluate/assets/evaluation-ci-plan.template.json` (new), `assets/README.md` -- the plan template and its description.
+- `src/workflows/testarch/bmad-testarch-evaluate/SKILL.md` -- Stage 12 becomes available; "through Stage 11" and "Stage 12 CI wiring is pending" move.
+- `cli/lib/evaluate/ci-plan.js`, `schemas/evaluation-ci-plan.schema.json` -- imported by tests, unchanged.
+- `test/test-evaluate-guidance.js` -- `checkCiGuidance`, the stage-12 assertions.
+- `test/test-evaluate-ci.js` -- the repository-plans case.
+- `test/fixtures/evaluate-ci-repos/<repo>/` (new, two repositories) -- workflows, contributing notes, `app/`, `evals/` with the evaluation and its captured `ci/evaluation-ci-plan.json`.
+- `docs/how-to/workflows/setup-ci.md`, `src/workflows/testarch/bmad-testarch-ci/SKILL.md` -- the sentence that Evaluate's CI stage invokes the workflow in edit mode.
+- `CHANGELOG.md`, `sprint-status.yaml`, `story-2.3.md`, `epics.md`, `test-design-epic-2.md` -- records.
+
+## Tasks & Acceptance
+
+**Execution:**
+
+- [x] `references/ci.md`, `assets/evaluation-ci-plan.template.json`, `assets/README.md`, `SKILL.md` -- builder Edit then Analyze
+- [x] `test/test-evaluate-guidance.js` -- headings, placement rules, template, examples, revert checks
+- [x] `test/fixtures/evaluate-ci-repos/` -- two repositories and two live-captured plans
+- [x] `test/test-evaluate-ci.js` -- validate both plans, assert differing live placement and file-citing reasons
+- [x] docs, CHANGELOG, records
+
+**Acceptance Criteria:**
+
+- Given the Evaluate skill, when the guide is read, then each inspection heading exists with a worked example and each placement rule is present (revert: removing a heading or rule fails `test:evaluate-guidance`).
+- Given the plan template and every tagged plan example, when validated, then the runtime schema and placement rules accept them (revert: template drift fails).
+- Given the two repositories, when the committed plans are read, then both validate, a live check is placed differently, and each differing reason cites a file of its own repository (revert: the default table in both plans fails `test:evaluate-ci`).
+
+## Implementation Notes
+
+- **The guide.** `references/ci.md` has four inspection headings (existing CI, merge flow, release flow, risk profile), each with a worked example, then `## Place each check` (the default-tier table, the `placement` fields, the `defaultTier` convention), `## Keep the deterministic checks on pr`, `## Place the live checks` (skill and agent targets, credential keys, enforcement, two plan examples), `## Offer eval-quality-gates` (opt-in, never rewrites a section, one `gate` check each), `## Write the plan` (template, validation, first baseline) and `## Hand the plan to the CI skill`. The runtime's schema and `ci-plan.js` are named by their installed path and copied nowhere. Rendering belongs to `bmad-testarch-ci`'s step 03b and is restated nowhere. The `defaultTier` convention: a check the table lists on two tiers has one entry per tier, each with its own tier as default, and `preflight-live` for a target that needs no secret defaults to `merge` on every entry. With neither a schedule nor a release event the live set goes on `scheduled` with the trigger `["manual-dispatch"]`.
+- **The template.** `assets/evaluation-ci-plan.template.json` lists each check once per tier it can run on (eighteen entries: seven `pr`, `preflight-live` on `merge`, and `preflight-live`, `twin-run`, `held-out`, `judge-calibration` and `strength-comparison` on each of `scheduled` and `release`), every `reason` empty, `warn` only where the runtime allows it. The runtime accepts it as it stands, because it asks for a reason only on a moved check. Story 1.96 closes that.
+- **SKILL.md.** Stage 12 is available: the Goal, the activation announcement and the placeholder rule are gone, the resume sentence reads `ci/evaluation-ci-plan.json`, and the Stage 12 line names the plan. `bmad-testarch-ci`'s `SKILL.md` and `docs/how-to/workflows/setup-ci.md` carry back the sentence that Evaluate's CI stage invokes the workflow in edit mode (create mode when there is no pipeline file). `generate-contracts.js --check` stayed green; those files are not contract sources.
+- **The fixture repositories.** `test/fixtures/evaluate-ci-repos/tagged-release` (CI on pull requests, publish on `v*` tags with only `NPM_TOKEN`, no merge queue, no schedule, no model secret) and `nightly-deploy` (merge queue, `nightly.yml` on a schedule with `GRADER_MODEL_KEY`, `deploy.yml` nightly, no tag release). Each holds `app/` (the Story 1.24 target, server and rules byte for byte, plus a real `grade.test.mjs`), `evals/answer-grade/` (the Story 1.24 evaluation without its authoring replay bundle, launching `../../app`), `evals/package.json` (AD-20), a lockfile and the workflows. The first live sessions found real fixture defects (a failing `npm test`, a smoke script that exited 1, a `ci` versus `test` check name, a push trigger that contradicted `CONTRIBUTING.md`, no lockfile for `npm ci`); each was fixed in the fixture and the affected session was run again.
+- **The live sessions.** `claude -p` (claude-sonnet-5-5, the local Claude Code CLI, no API key) ran in a scratch copy of each repository with the installed skill, the private runtime linked as `evals/node_modules`, `acceptEdits` and the tools Read, Write, Edit, Glob, Grep and Bash. The prompt asks for Stage 12 and names no placement. The committed plans are the files each session wrote, copied by hand with the `evaluation.json` it edited (`tiers`). The session that produced `tagged-release` ran 79 s over 16 turns, `nightly-deploy` 61 s over 10. Sessions ran against the guide text before the second Analyze pass; that pass only trimmed restatement, added the re-entry path and the `manual-dispatch` wiring, none of which a fresh run with a release event or a schedule reads.
+- **The placements.** `tagged-release`: the seven `pr` checks, then `preflight-live` (default `merge`, no merge event), `twin-run`, `held-out` and `strength-comparison` (`warn`) on `release`, each reason citing `docs/RELEASING.md`, `CONTRIBUTING.md` or `.github/workflows/release.yml`. `nightly-deploy`: the seven `pr` checks, `preflight-live` on `merge` (`merge_group` in `ci.yml`), and `twin-run`, `held-out` and `strength-comparison` on `scheduled` (`warn`), citing `.github/workflows/nightly.yml` and `docs/DEPLOYING.md`. `judge-calibration` is out of both (no rubric). The live placements differ in `twin-run`, `held-out`, `strength-comparison` and `preflight-live`.
+- **`checkCiGuidance`** (in `test/test-evaluate-guidance.js`): headings, per-heading markers, the table equal to `DEFAULT_TIERS`, placement markers, the two `ci-plan` examples and the `gate-check` example through `planFindings` (the deviation example stripped of its reason must raise `placement-reason`), the registry example through `evaluation.schema.json`, the gates example against the gate names the installed `eval-quality-gates --help` lists with the existing section untouched, the template (every default entry, the right trigger, empty reasons, `<evaluation-folder>` present), no rendering rule restated, no bare `tea-evaluate` or `npx` command. Fourteen in-test negative cases fail when one rule, heading, example or spelling changes.
+- **`checkRepositoryPlans`** (in `test/test-evaluate-ci.js`): both plans through `readPlan` and the real `check` CLI, a non-blank `reason` on every placement, `evaluation.json` `tiers` equal to the plan's tiers, the evaluation equal to the Story 1.24 one but for `launch`, `tiers` and keys, the repository facts that make the placements meaningful, and `planDifferences`. Its own revert cases: identical default plans, a differing reason that cites nothing, and a reason that cites the other repository's file.
+
+### Gate summary
+
+All run in this checkout before the push: `test:evaluate-guidance`, `test:evaluate-ci` (full), `test:evaluate-ci-render`, `test:evaluate-check`, `test:doc-invocation-entry`, `test:doc-invocations`, `test:doc-counts`, `test:doc-claims`, `test:doc-claim-sources`, `test:contract-sources`, `test:probe-sources`, `test:probe-corpus`, `test:probe-targets`, `test:eval-schemas`, `test:eval-ci-data`, `test:eval-replay`, `test:shards`, `test:ci-coverage`, `test:suite-manifest`, plus `test:evaluate-boundaries`, `test:evaluate-authoring`, `test:evaluate-gap-loop`, `test:changelog`, `test:bmad-output-gated`, `test:schemas`, `test:tea-workflow-descriptions`, `test:release-metadata`, `test:contracts`, `test:contract-oracles`, `test:eval-quality-corpus`, `node tools/generate-contracts.js --check`, `node tools/generate-probes.js --check`, `npm run docs:validate-links`, `npm run format:check`, `npm run lint` and `npm run lint:md`. No new chained script, so `package.json`, the shard weights and the README counts did not move. The full `npm test` is left to CI, as the owner directed. One batch run of `test:evaluate-check` exited non-zero with no output while other lanes loaded the machine; the same script then passed three times in a row (995 checks), so the failure did not reproduce and is recorded here for the reviewer.
+
+### Revert observations
+
+Each mutation was applied to one file of a scratch copy of the tree (node_modules linked) and run against the named test; the working tree was never touched. Each row exits 1 under the named test; the first column is the mutation.
+
+| Mutation                                                          | Test                     | Observed                                                                                                     |
+| ----------------------------------------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| guide: remove the merge flow heading                              | `test:evaluate-guidance` | ci.md lacks exact heading ## Inspect the merge flow                                                          |
+| guide: remove the risk profile worked example                     | `test:evaluate-guidance` | ci.md ## Inspect the risk profile lacks "Worked example."                                                    |
+| guide: move held-out off its default tiers                        | `test:evaluate-guidance` | ci.md default tiers differ from the runtime's DEFAULT_TIERS: Expected values to be strictly deep-equal:      |
+| guide: drop the never-on-pr rule                                  | `test:evaluate-guidance` | ci.md live placement lacks "Never place a live check on `pr`"                                                |
+| guide: drop the skill and agent live tier rule                    | `test:evaluate-guidance` | ci.md live placement lacks "A skill or agent target always needs the runner's model credentials, so its l... |
+| guide: drop the permittedEnvironmentKeys rule                     | `test:evaluate-guidance` | ci.md live placement lacks "Declare the runner's credential keys as `permittedEnvironmentKeys`"              |
+| guide: drop the pr floor for gameability, freshness and agreement | `test:evaluate-guidance` | ci.md pr placement lacks "No inspection moves them"                                                          |
+| guide: drop the edit-mode hand-off                                | `test:evaluate-guidance` | ci.md hand-off lacks "Invoke `bmad-testarch-ci` in edit mode"                                                |
+| guide: drop the never-rewrite gate rule                           | `test:evaluate-guidance` | ci.md gates lacks "add a section for each adopted gate and never rewrite, reorder or reformat a section t... |
+| guide: drop the gate check rule                                   | `test:evaluate-guidance` | ci.md gates lacks "joins the plan as a `gate` check on `pr`"                                                 |
+| guide: restate a rendering rule                                   | `test:evaluate-guidance` | ci.md restates a rendering rule of bmad-testarch-ci: if: always()                                            |
+| guide: write a bare npx command                                   | `test:evaluate-guidance` | ci.md writes a bare tea-evaluate command: npx tea-evaluate compare --evaluation <evaluation-folder> --acc... |
+| guide: corrupt the deviation example (tier outside the schema)    | `test:evaluate-guidance` | ci.md ci-plan example 1 fails the runtime: [{"file":"ci/evaluation-ci-plan.json","rule":"schema","message... |
+| guide: empty the deviation reason                                 | `test:evaluate-guidance` | ci.md ci-plan example 1 fails the runtime: [{"file":"ci/evaluation-ci-plan.json","rule":"placement-reason... |
+| guide: rewrite an existing gates section                          | `test:evaluate-guidance` | ci.md gates example rewrites the existing licences section                                                   |
+| guide: gate check led by the wrong tool                           | `test:evaluate-guidance` | ci.md gate-check example fails the runtime: [{"file":"ci/evaluation-ci-plan.json","rule":"command","messa... |
+| template: a check off its default tier                            | `test:evaluate-guidance` | assets/evaluation-ci-plan.template.json fails the runtime: [{"file":"ci/evaluation-ci-plan.json","rule":"... |
+| template: drop a default entry                                    | `test:evaluate-guidance` | assets/evaluation-ci-plan.template.json lacks strength-comparison on release                                 |
+| template: ship a reason                                           | `test:evaluate-guidance` | template check on pr ships a reason the stage did not write                                                  |
+| template: a live check on pr                                      | `test:evaluate-guidance` | assets/evaluation-ci-plan.template.json fails the runtime: [{"file":"ci/evaluation-ci-plan.json","rule":"... |
+| template: wrong trigger for a tier                                | `test:evaluate-guidance` | template check on pr has the wrong trigger                                                                   |
+| assets README: drop the template line                             | `test:evaluate-guidance` | assets/README.md lacks "`evaluation-ci-plan.template.json` becomes `ci/evaluation-ci-plan.json`"             |
+| skill: Stage 12 reported pending again                            | `test:evaluate-guidance` | SKILL.md does not enable every stage through Stage 12                                                        |
+| skill: Stage 12 reference removed                                 | `test:evaluate-guidance` | SKILL.md's stage list is ["inspection","intake","corpus","contract","oracles","adapters","evaluator","mut... |
+| ci.md back to a placeholder                                       | `test:evaluate-guidance` | references/ci.md is still a placeholder                                                                      |
+| plans: a differing live placement cites no file                   | `test:evaluate-ci`       | AssertionError [ERR_ASSERTION]: the committed plans do not differ as the inspection of their repositories... |
+| plans: a placement leaves its reason empty                        | `test:evaluate-ci`       | AssertionError [ERR_ASSERTION]: nightly-deploy: check on pr records no placement.reason                      |
+| plans: tagged-release gains the nightly live set                  | `test:evaluate-ci`       | AssertionError [ERR_ASSERTION]: tagged-release: evaluation.json tiers differ from the plan's tiers           |
+| plans: evaluation.json tiers disagree                             | `test:evaluate-ci`       | AssertionError [ERR_ASSERTION]: tagged-release: evaluation.json tiers differ from the plan's tiers           |
+| plans: a plan breaks the runtime schema                           | `test:evaluate-ci`       | AssertionError [ERR_ASSERTION]: nightly-deploy: the committed plan fails validation                          |
+| plans: a deterministic check placed off pr                        | `test:evaluate-ci`       | AssertionError [ERR_ASSERTION]: tagged-release: the committed plan fails validation                          |
+| repository: the tagged-release repository gains a schedule        | `test:evaluate-ci`       | AssertionError [ERR_ASSERTION]: tagged-release has no schedule and no model secret in CI                     |
+| repository: the AI-feature evaluation drifts                      | `test:evaluate-ci`       | AssertionError [ERR_ASSERTION]: tagged-release: contract.json differs from the AI-feature evaluation         |
+| plans: both repositories write the same placements                | `test:evaluate-ci`       | the committed plans do not differ as the inspection of their repositories requires                           |
+
+The first draft of the "both repositories write the default table" mutation was a no-op (the nightly plan holds no `release` entry to remove) and passed; it was replaced by one that writes the nightly placements into both repositories, which fails. The 34 rows run over the working tree after the second Analyze pass.
+
+### Builder Analyze
+
+Two passes of the five lenses over the whole skill, reports kept outside the skill folder. Pass 1: 0 critical, 0 high. Pass 2 (after the fixes): 0 critical, 0 high. The path scanner's three highs are the builder's own `.memlog.md` at the skill root, the `_bmad` mention in Conventions and an example `../` in `adapters.md`, none from this story.
+
+| Finding                                                                                                                                  | Disposition                                                                                                       |
+| ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Examples read as one repository; `defaultTier` convention contradicted by the template (three lenses)                                    | Fixed: examples are separate repositories, one entry per tier with its own tier as default                        |
+| No pipeline file; manual dispatch has no tier; installed package paths unresolvable                                                      | Fixed: create mode, `scheduled` with `["manual-dispatch"]`, `{tea_evaluations_folder}/node_modules/...` paths     |
+| Resume ignores the plan; no home for the inspection facts; first baseline left red                                                       | Fixed: resume reads the plan, a `## CI` section of the inspection record, an accept step before the hand-off      |
+| Gate configuration source unnamed; registry sentence reads as a write step; no route-back; no re-entry                                   | Fixed                                                                                                             |
+| Restated rules, dead missing-guide branch, README procedure copy                                                                         | Trimmed                                                                                                           |
+| Cut the four inspection worked examples, the table, the gates config pair                                                                | Skipped: the acceptance criteria require the examples, and tests hold the table and the pair to the runtime       |
+| `trigger` per tier, `evaluation.json` `tiers`, left-over placeholder, inapplicable check, reason on every entry unchecked by the runtime | New Story 1.96                                                                                                    |
+| Scaffold command for the plan and a workflow fact pre-pass                                                                               | Skipped: a copied template validated by `check` is the pattern every stage uses, and nobody needs a generator yet |
+| Live-run cost arithmetic, `AD-n` identifiers in the guide                                                                                | Skipped: low severity; every guide of the skill cites its AD                                                      |
+
+## Findings
+
+- **Fixed in this pull request:** the stale "through Stage 11" wording in `SKILL.md`; the missing sentence in `bmad-testarch-ci` and its how-to; five defects of the first fixture drafts (listed above); the `JSON.parse(JSON.stringify())` clone the first lint run flagged.
+- **New story:** Story 1.96 (the derivable fields of a plan), end of lane 3, in `epics.md`, `test-design-epic-1.md`, the Epic Dependencies table and the lane list, `sprint-status.yaml` and the story count (eighty-seven).
+- **Undone:** the baselines of both repositories (no scored run exists in them; the plans say so and the guide asks for the accept step), and the pipeline files (`bmad-testarch-ci` renders them, proved by Story 2.3). Story 2.5 owns TeA's own `pr` tier.
+
+## Spec Change Log
+
+## Review Triage Log

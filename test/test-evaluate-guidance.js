@@ -1,8 +1,8 @@
 /**
  * Guards the Evaluate skill's stage list: `SKILL.md` names twelve stages, in
  * order, each pointing at an existing `references/<stage>.md` guide. Stories
- * 1.12 to 1.14, 1.23 and 2.4 extend this file as those guides gain real
- * content and craft.
+ * 1.12 to 1.26 and 2.4 extend this file as those guides gain real content and
+ * craft; Story 2.4 fills the ci guide.
  */
 
 'use strict';
@@ -2633,6 +2633,280 @@ function checkGapsGuidance(guide, engine, failures) {
     failures.push('gaps.md must digest the corpus before check');
 }
 
+/** The gate names the installed eval-quality-gates binary lists, read from its own help text. */
+function installedGateNames() {
+  const packagePath = require.resolve('eval-quality/package.json');
+  const manifest = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
+  const binary = path.join(path.dirname(packagePath), manifest.bin['eval-quality-gates']);
+  const run = spawnSync(process.execPath, [binary, '--help'], { encoding: 'utf8' });
+  return [...run.stdout.matchAll(/^ {2}([a-z]+(?:-[a-z]+)*) {2,}every /gm)].map((match) => match[1]);
+}
+
+/** The ci stage guide (Story 2.4): inspection headings, placement rules, the plan template and the tagged plan examples. */
+function checkCiGuidance(guide, failures) {
+  const plan = require('../cli/lib/evaluate/ci-plan');
+  const INSPECTIONS = [
+    [
+      '## Inspect existing CI',
+      [
+        'Worked example.',
+        'platform',
+        'workflow',
+        'events that start it',
+        'checks the adopter requires before merge',
+        'which events receive which secrets',
+        'in one message',
+        'its hand-off uses create mode',
+      ],
+    ],
+    [
+      '## Inspect the merge flow',
+      ['Worked example.', 'branch protection', 'merge queue', 'review', '`merge_group`', 'the `merge` tier has no event'],
+    ],
+    [
+      '## Inspect the release flow',
+      [
+        'Worked example.',
+        'tag-triggered publish workflows',
+        'deploy workflows',
+        'cadence',
+        'release event',
+        'place the live set on `scheduled` with the `trigger` `["manual-dispatch"]`',
+      ],
+    ],
+    [
+      '## Inspect the risk profile',
+      [
+        'Worked example.',
+        'severities',
+        'cost of one live trial',
+        'reach of a missed defect',
+        '`critical` behaviors justify blocking `release`',
+      ],
+    ],
+  ];
+  for (const heading of [
+    ...INSPECTIONS.map(([name]) => name),
+    '## Place each check',
+    '## Keep the deterministic checks on pr',
+    '## Place the live checks',
+    '## Offer eval-quality-gates',
+    '## Write the plan',
+    '## Hand the plan to the CI skill',
+  ])
+    requireHeading(guide, heading, 'ci.md', failures);
+  for (const [heading, markers] of INSPECTIONS)
+    for (const marker of markers) requireText(headingBody(guide, heading), marker, `ci.md ${heading}`, failures);
+
+  // The default table is the runtime's own: every row equals DEFAULT_TIERS.
+  const rows = tableRows(guide, '## Place each check', ['Check id', 'Default tier', 'Needs a secret or a live target'], failures);
+  const tableDefaults = Object.fromEntries(
+    rows.map((row) => [row[0].replaceAll('`', ''), row[1].split(',').map((tier) => tier.replaceAll('`', '').trim())]),
+  );
+  try {
+    assert.deepStrictEqual(tableDefaults, structuredClone(plan.DEFAULT_TIERS));
+  } catch (error) {
+    failures.push(`ci.md default tiers differ from the runtime's DEFAULT_TIERS: ${error.message}`);
+  }
+  for (const row of rows)
+    if ((row[2] === 'No') !== plan.DETERMINISTIC_CHECKS.includes(row[0].replaceAll('`', '')))
+      failures.push(`ci.md secret column disagrees with the runtime for ${row[0]}`);
+
+  for (const marker of [
+    '`placement`: the chosen `tier`, the `defaultTier` from this table and a `reason`',
+    'Write the `reason` for every check, default placements included',
+    "name the file or the adopter's answer the placement came from",
+    'Record `defaultTier` as the tier the table gives the check for this adopter',
+    'is a deviation: the runtime refuses it without a reason',
+    "each entry's `defaultTier` is its own tier",
+    'lists every deviation with its reason',
+    '`preflight-live` defaults to `merge` when the target needs no secret',
+  ])
+    requireText(headingBody(guide, '## Place each check'), marker, 'ci.md placement rules', failures);
+  for (const marker of [
+    'the gameability arm (`gameability`), contract-source freshness (part of `check`) and oracle-versus-scorer agreement (`oracle-agreement`) on `pr`',
+    'No inspection moves them',
+    'CAP-11 requires them on every pull request',
+    'tea-evaluate compare --evaluation <evaluation-folder> --accept',
+  ])
+    requireText(headingBody(guide, '## Keep the deterministic checks on pr'), marker, 'ci.md pr placement', failures);
+  const live = headingBody(guide, '## Place the live checks');
+  for (const marker of [
+    'the held-out partition (`held-out`) on `scheduled` and `release`',
+    'judge calibration (`judge-calibration`) on `scheduled` and `release` whenever the contract declares a rubric',
+    'Never place a live check on `pr`',
+    "A skill or agent target always needs the runner's model credentials, so its live tiers are `scheduled`, `release` and manual dispatch only",
+    '`schedule` and `manual-dispatch` for `scheduled`',
+    "Declare the runner's credential keys as `permittedEnvironmentKeys`",
+    'registry `environmentKeys`',
+    'Keys carry names alone.',
+    'the same names as the CI secrets to add',
+    "Keep the template's `enforcement` values",
+    'a strength regression on `strength-comparison`',
+    'the strength floor on `twin-run` and `held-out` on `scheduled`',
+  ])
+    requireText(live, marker, 'ci.md live placement', failures);
+  const gates = headingBody(guide, '## Offer eval-quality-gates');
+  for (const marker of [
+    'is opt-in',
+    'add only the ones the adopter adopts',
+    'eval-quality-gates --help',
+    'never guess a section',
+    'add a section for each adopted gate and never rewrite, reorder or reformat a section that exists',
+    'adopt it as it stands',
+    'joins the plan as a `gate` check on `pr`',
+    'its `command` is led by `eval-quality-gates`',
+  ])
+    requireText(gates, marker, 'ci.md gates', failures);
+  const write = headingBody(guide, '## Write the plan');
+  for (const marker of [
+    'assets/evaluation-ci-plan.template.json',
+    '<evaluation-folder>/ci/evaluation-ci-plan.json',
+    'fill every `reason`',
+    'set `evaluation.json` `tiers` to the tiers the plan places a check on',
+    'repair every `ci-plan` finding',
+    'leave `<invocationId>` literal',
+    '`judge-calibration` when the contract declares no rubric',
+    'Keep the one `preflight-live` set that fits',
+    '`api-conformance` for an evaluation that declares no HTTP target',
+    'edit it in place',
+    'tea-evaluate compare --evaluation <evaluation-folder> --accept',
+    'An adopter who declines leaves the stage pending',
+    'before the hand-off',
+  ])
+    requireText(write, marker, 'ci.md write the plan', failures);
+  const handoff = headingBody(guide, '## Hand the plan to the CI skill');
+  for (const marker of [
+    'Invoke `bmad-testarch-ci` in edit mode',
+    'steps-c/step-03b-render-evaluation-plans.md',
+    'The rendering rules belong to its `steps-c/step-03b-render-evaluation-plans.md`',
+    'or in create mode when the inspection found no pipeline file',
+    'Stage 12 is complete when the plan passes `check`',
+    'the secrets the live tiers need',
+  ])
+    requireText(handoff, marker, 'ci.md hand-off', failures);
+
+  // Rendering belongs to the CI skill, and an adopter never runs the unclaimed registry name.
+  for (const forbidden of ['if: always()', 'upload-artifact', 'continue-on-error', 'actions/checkout'])
+    if (guide.includes(forbidden)) failures.push(`ci.md restates a rendering rule of bmad-testarch-ci: ${forbidden}`);
+  const prose = guide.replaceAll(/```[\s\S]*?```/g, '');
+  for (const [, span] of prose.matchAll(/`([^`\n]+)`/g)) {
+    if (!/\btea-evaluate\b/.test(span)) continue;
+    const adopter = span.includes('npm exec --prefix {tea_evaluations_folder} -- tea-evaluate');
+    const local = span.startsWith('node cli/evaluate.js');
+    if (!adopter && !local && span !== 'npx tea-evaluate') failures.push(`ci.md writes a bare tea-evaluate command: ${span}`);
+  }
+  requireText(
+    guide,
+    'A bare `npx tea-evaluate` fetches an unclaimed registry name, so never write it for an adopter.',
+    'ci.md AD-20',
+    failures,
+  );
+  requireText(guide, "Inside TeA's own package, run `node cli/evaluate.js` from the repository root.", 'ci.md TeA command', failures);
+  requireText(guide, 'name the missing prerequisite and return to its stage before inspecting CI', 'ci.md prerequisites', failures);
+  requireText(
+    guide,
+    "as a `## CI` section of the run's inspection record at `{test_artifacts}/evaluate/<evaluationId>/inspection-record.md`",
+    'ci.md working state',
+    failures,
+  );
+  const installed = '{tea_evaluations_folder}/node_modules/bmad-method-test-architecture-enterprise/cli/lib/evaluate';
+  for (const pointer of [`${installed}/schemas/evaluation-ci-plan.schema.json`, `${installed}/ci-plan.js`])
+    requireText(guide, pointer, 'ci.md runtime pointer', failures);
+
+  // The plan examples meet the runtime's schema and placement rules, and the first one is a deviation that carries its reason.
+  const plans = taggedExamples(guide, 'ci-plan');
+  if (plans.length !== 2) failures.push(`ci.md needs two tagged ci-plan examples; found ${plans.length}`);
+  for (const [index, example] of plans.entries()) {
+    const found = plan.planFindings(example);
+    if (found.length > 0) failures.push(`ci.md ci-plan example ${index + 1} fails the runtime: ${JSON.stringify(found)}`);
+    for (const check of example.checks ?? [])
+      if (!check.placement?.reason?.trim()) failures.push(`ci.md ci-plan example ${index + 1} leaves ${check.id} without a reason`);
+  }
+  const deviation = plans[0]?.checks?.find((check) => check.placement.tier !== check.placement.defaultTier);
+  if (deviation === undefined) failures.push('ci.md has no ci-plan example that deviates from the default tier');
+  else {
+    const stripped = structuredClone(plans[0]);
+    for (const check of stripped.checks) delete check.placement.reason;
+    if (!plan.planFindings(stripped).some((item) => item.rule === 'placement-reason'))
+      failures.push('ci.md deviation example does not exercise the runtime reason rule');
+    if (!deviation.trigger.some((name) => ['schedule', 'manual-dispatch', 'release'].includes(name)))
+      failures.push('ci.md deviation example names a trigger no live tier uses');
+  }
+  if (plans[0] && plans[1] && JSON.stringify(plans[0]) === JSON.stringify(plans[1]))
+    failures.push('ci.md two ci-plan examples are identical, so the guide does not show a placement that differs');
+
+  // The credential keys sit in a registry entry the runtime accepts.
+  const registries = taggedExamples(guide, 'ci-registry');
+  if (registries.length !== 1 || !(registries[0]?.environmentKeys?.length > 0))
+    failures.push('ci.md needs one registry example that declares credential keys');
+  else {
+    const validate = new Ajv({ strict: false, allErrors: true }).compile(
+      JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'cli', 'lib', 'evaluate', 'schemas', 'evaluation.schema.json'), 'utf8')),
+    );
+    const starter = JSON.parse(fs.readFileSync(ASSET('evaluation.json'), 'utf8'));
+    if (!validate({ ...starter, registry: registries }))
+      failures.push(`ci.md registry example fails the runtime schema: ${JSON.stringify(validate.errors)}`);
+    if (registries[0].environmentKeys.some((key) => /[a-z]|=/.test(key)))
+      failures.push('ci.md registry example names a value or a non-key');
+  }
+
+  // The gate example: a gate the installed binary lists, a section added beside untouched ones, a check led by the binary.
+  const names = installedGateNames();
+  if (names.length < 8) failures.push(`the installed eval-quality-gates lists ${names.length} gates; expected eight or more`);
+  const [before] = taggedExamples(guide, 'gates-config-before');
+  const [after] = taggedExamples(guide, 'gates-config-after');
+  const [gatePlan] = taggedExamples(guide, 'gate-check');
+  if (!before || !after || !gatePlan) failures.push('ci.md lacks the gates-config-before, gates-config-after or gate-check example');
+  else {
+    const added = Object.keys(after).filter((key) => !(key in before));
+    for (const key of Object.keys(before))
+      if (JSON.stringify(after[key]) !== JSON.stringify(before[key]))
+        failures.push(`ci.md gates example rewrites the existing ${key} section`);
+    if (added.length !== 1 || !names.includes(added[0]))
+      failures.push(`ci.md gates example adds ${JSON.stringify(added)}, not one gate the binary lists`);
+    const found = plan.planFindings(gatePlan);
+    if (found.length > 0) failures.push(`ci.md gate-check example fails the runtime: ${JSON.stringify(found)}`);
+    const check = gatePlan.checks?.[0];
+    if (
+      check?.kind !== 'gate' ||
+      check.id !== added[0] ||
+      check.command?.[0] !== 'eval-quality-gates' ||
+      check.command[1] !== added[0] ||
+      check.placement?.tier !== 'pr'
+    )
+      failures.push('ci.md gate-check example is not the adopted gate as a pr gate check');
+  }
+
+  // The plan template: valid at the defaults, every check present with a reason field to fill, the paths left for the stage.
+  const template = JSON.parse(fs.readFileSync(ASSET('evaluation-ci-plan.template.json'), 'utf8'));
+  const templateFindings = plan.planFindings(template);
+  if (templateFindings.length > 0)
+    failures.push(`assets/evaluation-ci-plan.template.json fails the runtime: ${JSON.stringify(templateFindings)}`);
+  const present = new Set(template.checks.map((check) => `${check.id}:${check.placement.tier}`));
+  for (const [id, tiers] of Object.entries(plan.DEFAULT_TIERS))
+    for (const tier of id === 'preflight-live' ? ['merge', 'scheduled', 'release'] : tiers)
+      if (!present.has(`${id}:${tier}`)) failures.push(`assets/evaluation-ci-plan.template.json lacks ${id} on ${tier}`);
+  for (const check of template.checks) {
+    if (check.placement.tier !== check.placement.defaultTier)
+      failures.push(`template ${check.id} on ${check.tier} leaves its default tier`);
+    if (check.placement.reason !== '') failures.push(`template ${check.id} on ${check.tier} ships a reason the stage did not write`);
+    if (!check.command.includes('<evaluation-folder>'))
+      failures.push(`template ${check.id} on ${check.tier} names no <evaluation-folder> to replace`);
+    if (check.kind !== 'evaluate') failures.push(`template ${check.id} is not an evaluate check`);
+  }
+  const triggerOf = { pr: ['pull-request'], merge: ['merge'], scheduled: ['schedule', 'manual-dispatch'], release: ['release'] };
+  for (const check of template.checks)
+    if (JSON.stringify(check.trigger) !== JSON.stringify(triggerOf[check.tier]))
+      failures.push(`template ${check.id} on ${check.tier} has the wrong trigger`);
+  requireText(
+    fs.readFileSync(ASSET('README.md'), 'utf8'),
+    '`evaluation-ci-plan.template.json` becomes `ci/evaluation-ci-plan.json`',
+    'assets/README.md',
+    failures,
+  );
+}
+
 async function main() {
   const failures = [];
   let skillContent;
@@ -2672,15 +2946,17 @@ async function main() {
     }
   }
 
-  // Stage 12 remains a placeholder; the stop and verdict boundaries apply.
-  if (!workflowSection.includes('stop')) {
-    failures.push("SKILL.md's Workflow section has no rule to stop on a placeholder stage guide");
-  }
+  // The verdict boundary applies to every stage.
   if (!workflowSection.includes('never compute a verdict')) {
     failures.push("SKILL.md's Workflow section has no rule against computing a verdict outside eval-quality's CLI");
   }
-  if (!skillContent.includes('through Stage 11') || !skillContent.includes('Stage 12 CI wiring is pending'))
-    failures.push('SKILL.md does not enable stages 8 through 11 and stop at Stage 12');
+  if (
+    !skillContent.includes('finish it with the CI plan that enforces it') ||
+    /Stage 12 CI wiring is pending|completes through Stage 11/.test(skillContent)
+  )
+    failures.push('SKILL.md does not enable every stage through Stage 12');
+  requireText(skillContent, '`<evaluation-folder>/ci/evaluation-ci-plan.json`, and any', 'SKILL.md resume', failures);
+  if (/Placeholder\./.test(fs.readFileSync(REFERENCE('ci'), 'utf8'))) failures.push('references/ci.md is still a placeholder');
   if (!/^description:.*scored behavioral evaluations and repair gaps/m.test(skillContent))
     failures.push('SKILL.md discovery description omits scoring or gap repair');
   const stage6 = headingBody(skillContent, '### Stage 6: Adapters');
@@ -2754,6 +3030,7 @@ async function main() {
     ['harness', (guide, found) => checkHarnessGuidance(guide, found)],
     ['run', (guide, found) => checkRunGuidance(guide, found)],
     ['gaps', (guide, found) => checkGapsGuidance(guide, engine, found)],
+    ['ci', (guide, found) => checkCiGuidance(guide, found)],
   ]) {
     try {
       const guide = fs.readFileSync(REFERENCE(name), 'utf8');
@@ -3001,6 +3278,76 @@ async function main() {
             'keeps what each probe printed',
           ),
       ],
+      [
+        'ci default tier corruption',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace(/^(\| `held-out`\s+\| )`scheduled`, `release`/m, '$1`pr`, `release`'),
+      ],
+      ['ci live rule removal', 'ci', checkCiGuidance, (text) => text.replace('Never place a live check on `pr`.', '')],
+      ['ci pr placement removal', 'ci', checkCiGuidance, (text) => text.replace('No inspection moves them.', '')],
+      [
+        'ci inspection example removal',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace('Worked example. `CONTRIBUTING.md`', 'Note. `CONTRIBUTING.md`'),
+      ],
+      [
+        'ci deviation example reason removal',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace(/"reason": "The target needs no secret, but CONTRIBUTING.md[^"]*"/, '"reason": ""'),
+      ],
+      [
+        'ci deviation example tier corruption',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace('"defaultTier": "merge"', '"defaultTier": "nightly"'),
+      ],
+      [
+        'ci gates config rewrite',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace('"allowlist": ["MIT", "ISC"] }\n}', '"allowlist": ["MIT"] }\n}'),
+      ],
+      [
+        'ci gate check command corruption',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace('["eval-quality-gates", "lockfile-age"]', '["lockfile-age"]'),
+      ],
+      [
+        'ci bare command',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace('`npm exec --prefix {tea_evaluations_folder} -- tea-evaluate compare', '`tea-evaluate compare'),
+      ],
+      [
+        'ci rendering rule restated',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace('render one job per tier.', 'render one job per tier with `if: always()`.'),
+      ],
+      [
+        'ci manual dispatch wiring removal',
+        'ci',
+        checkCiGuidance,
+        (text) =>
+          text.replaceAll('place the live set on `scheduled` with the `trigger` `["manual-dispatch"]`', 'place the live set somewhere'),
+      ],
+      ['ci re-entry removal', 'ci', checkCiGuidance, (text) => text.replace('edit it in place', 'start again')],
+      [
+        'ci prerequisite route-back removal',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace('return to its stage before inspecting CI', 'go on'),
+      ],
+      [
+        'ci hand-off removal',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace('Invoke `bmad-testarch-ci` in edit mode', 'Tell the adopter about the CI skill'),
+      ],
       ['gaps loop removal', 'gaps', (text, found) => checkGapsGuidance(text, engine, found), (text) => text.replace(/^4\. Rerun.*\n/m, '')],
     ];
     for (const [label, file, check, corrupt] of negativeCases) {
@@ -3062,7 +3409,7 @@ async function main() {
     process.exit(1);
   }
   console.log(
-    `evaluate-guidance: ${EXPECTED_STAGES.length} stages, eleven worked guides, 36 engine-valid tagged probes, seven runtime-valid mutations, contract examples, and valid templates`,
+    `evaluate-guidance: ${EXPECTED_STAGES.length} stages, twelve worked guides, 36 engine-valid tagged probes, seven runtime-valid mutations, contract examples, and valid templates`,
   );
 }
 

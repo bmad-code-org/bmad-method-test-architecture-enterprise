@@ -1,0 +1,11 @@
+{
+  "path": "/grade",
+  "query": {},
+  "body": {
+    "answer": 42
+  },
+  "expect": {
+    "status": 400,
+    "error": "answer must be a string"
+  }
+}

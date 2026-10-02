@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "mutationId": "M-001",
+  "mutationSource": "restricted term removed from adopter policy",
+  "targetArtifact": "rules/policy.json",
+  "operator": {
+    "kind": "replace-exact",
+    "find": "[\"unsafe\", \"private\"]",
+    "replace": "[\"unsafe\"]",
+    "occurrences": 1
+  },
+  "expectedObservableFailure": "private answer passes in HTTP response body"
+}

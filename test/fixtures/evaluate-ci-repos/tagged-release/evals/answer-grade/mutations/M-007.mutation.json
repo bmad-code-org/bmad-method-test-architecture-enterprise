@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "mutationId": "M-007",
+  "mutationSource": "malformed array response becomes accepted grade",
+  "targetArtifact": "server/grade.mjs",
+  "operator": {
+    "kind": "replace-exact",
+    "find": "response.writeHead(400).end(JSON.stringify({ error: 'answer must be a string' }));",
+    "replace": "response.writeHead(200).end(JSON.stringify({ decision: 'pass', reason: 'accepted' }));",
+    "occurrences": 1
+  },
+  "expectedObservableFailure": "non-string answer gets pass/accepted in HTTP response body"
+}
