@@ -25,6 +25,16 @@ npm exec --prefix {tea_evaluations_folder} -- tea-evaluate preflight --evaluatio
 
 Inside TeA, run `node cli/evaluate.js` from the repository root for every `tea-evaluate` subcommand, retaining its arguments. Run compile and seal through `./node_modules/.bin/eval-quality` from that same root. For example, `node cli/evaluate.js preflight --evaluation <evaluation-folder>` and `./node_modules/.bin/eval-quality compile --in <evaluation-folder>/contract.json --out <evaluation-folder>/compiled-contract.json` use the repository's one local eval-quality installation. The Stage 6 sequence uses this same branch before the first preflight.
 
+## Run confined
+
+`preflight` and `run` confine every process they start, before any of them starts, through the mechanism the host provides: Seatbelt through `/usr/bin/sandbox-exec` on macOS and Bubblewrap through `bwrap` on Linux (`apt-get install bubblewrap`). Each mechanism also needs the observer its audit reads: `/usr/bin/log stream` on macOS, and `strace` on Linux (`apt-get install strace`, version 6.1 or later, which needs ptrace). The runtime first confines a trivial process and confirms the observer. A host with neither mechanism, a mechanism the host refuses (a kernel that forbids unprivileged user namespaces, a container that forbids a network namespace), an observer that cannot confirm itself, a temp directory inside the evaluation folder, or an evaluation folder or temp directory whose path holds a quote, a backslash or a control character stops the command with exit 12 and names the reason. A `tea-evaluate` started from inside a Seatbelt sandbox, such as an agent's tool on macOS, is refused as well, since `sandbox-exec` cannot apply a profile there; start it from an unsandboxed terminal. Repair the named host condition and rerun `preflight`.
+
+Set `"confinement": false` in `evaluation.json` to run the targets unconfined. `run.json` then records `"confinement": "opt-out"`, the run observes no file-system access, so its `observedMounts` are empty and carry no evidence, the target can reach the evaluation folder, and `score` says so in its summary. Use the opt-out for a target that must write outside its workspace, commit or read the project's git directory, or for a project whose history the runtime cannot pack (a partial clone), and record the adopter's reason in the evaluation notes.
+
+On Linux an entry that keeps the default `"network": "isolated"` runs its processes in a network namespace of their own with a loopback and nothing else, and an HTTP service the target starts stays reachable from the runtime through a bridge the runtime owns. An entry that declares `"network": "host"` keeps the host's network and with it a route to the host's abstract Unix sockets. macOS Seatbelt ignores the field.
+
+`run.json` records what the targets ran under. `confinement` is `seatbelt`, `bubblewrap` or `opt-out`. `hostNetwork` lists the interface ID of every entry that declares `"network": "host"` and is `[]` when none does. Read both before reading a verdict, and tell the adopter which entries keep the host's network. Only a `bubblewrap` run isolates the entries `hostNetwork` leaves out; under `seatbelt` and `opt-out` every entry keeps the host's network.
+
 ## Run development and score
 
 ```sh

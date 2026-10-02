@@ -23,7 +23,7 @@ inputDocuments:
 
 ## Overview
 
-This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and ninety-six stories, including H.1 (Stories 1.27 to 1.75, 1.80 to 1.83, 1.90 to 1.100 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
+This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and ninety-seven stories, including H.1 (Stories 1.27 to 1.75, 1.80 to 1.84, 1.90 to 1.100 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
 
 Evaluate is fully stacked. The stack runs system under test, then the evaluation (the mechanism that runs the system, collects evidence and makes judgments), then the Behavioral Evaluation Contract (what behavior matters, what evidence counts, how success and failure resolve), then eval-quality (contract sanity, evidence support, and whether the evaluation catches defects). TeA owns every layer above eval-quality, including each concern eval-quality states it leaves to the caller, so an adopter can evaluate any target end to end. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3 onward, Epic 2 and H.1 to close the plan gap audit; the Traceability section maps each audit item to the story that closes it.
 
@@ -150,7 +150,7 @@ None. Evaluate has no graphical interface.
 ### Epic 1: The Evaluate authoring loop
 
 An adopter describes a target, answers Evaluate's questions, chooses or builds the evaluation layer and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches the seeded defect, with the gaps named and closed. The epic closes by running Evaluate on `bmad-testarch-evaluate` itself, then proving the guidance on two more target kinds, on seeded weaknesses and on an evaluation framework its guides never name.
-Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.75, 1.80 to 1.83, 1.90 to 1.100.
+Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.75, 1.80 to 1.84, 1.90 to 1.100.
 
 **FRs covered:** FR1 to FR10, FR13, FR14.
 
@@ -245,23 +245,24 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 77    | 1.81  | 1.60                         |
 | 78    | 1.82  | 1.63                         |
 | 79    | 1.83  | 1.63                         |
-| 80    | 1.90  | 2.1                          |
-| 81    | 1.91  | 2.1                          |
-| 82    | 1.92  | 2.2                          |
-| 83    | 1.93  | 2.3                          |
-| 84    | 1.94  | 2.3                          |
-| 85    | 1.95  | 2.3                          |
-| 86    | 1.96  | 2.4                          |
-| 87    | 1.97  | 2.3, 2.4                     |
-| 88    | 1.98  | 1.24, 2.4                    |
-| 89    | 1.99  | 1.49                         |
-| 90    | 1.100 | 1.48, 1.99                   |
-| 91    | 2.1   | 1.16, 1.26, 1.45             |
-| 92    | 2.2   | 2.1                          |
-| 93    | 2.3   | 2.2                          |
-| 94    | 2.4   | 2.3                          |
-| 95    | 2.5   | 2.4                          |
-| 96    | H.1   | 2.5                          |
+| 80    | 1.84  | 1.61                         |
+| 81    | 1.90  | 2.1                          |
+| 82    | 1.91  | 2.1                          |
+| 83    | 1.92  | 2.2                          |
+| 84    | 1.93  | 2.3                          |
+| 85    | 1.94  | 2.3                          |
+| 86    | 1.95  | 2.3                          |
+| 87    | 1.96  | 2.4                          |
+| 88    | 1.97  | 2.3, 2.4                     |
+| 89    | 1.98  | 1.24, 2.4                    |
+| 90    | 1.99  | 1.49                         |
+| 91    | 1.100 | 1.48, 1.99                   |
+| 92    | 2.1   | 1.16, 1.26, 1.45             |
+| 93    | 2.2   | 2.1                          |
+| 94    | 2.3   | 2.2                          |
+| 95    | 2.4   | 2.3                          |
+| 96    | 2.5   | 2.4                          |
+| 97    | H.1   | 2.5                          |
 
 ### Parallel lanes (from 2026-10-01)
 
@@ -269,7 +270,7 @@ The table above gives every story's dependencies. Since Story 1.40 merged, the s
 
 **Lane 1: run integrity, scoring and evaluators** (main checkout): 1.41, 1.68, 1.43, 1.44, 1.67, 1.66, 1.65, 1.64, 1.69, 1.70, 1.71, 1.72, 1.73, 1.74, 1.75. Story 1.68 reads the files 1.41 changes, so it follows directly. Story 1.65 turns the single release report into a per-interface report and 1.64 adds call sites that 1.65 would otherwise rewrite, so 1.66, 1.65, 1.64 run in that order. Story 1.44 rewrites the `evaluate-learn` fixture's evaluator, which lane 3's 1.55 and 1.56 own, so those two wait for it. Story 1.69 reuses the module Story 1.68 builds and edits `run.js`, which 1.64 and 1.65 also edit, so it runs after them. Story 1.70 edits the promptfoo starter, fixture evaluator and guide section that Story 1.43 writes and no file the other lane 1 stories edit, so it joins the end. Stories 1.71 to 1.73 were appended from Story 1.44's final review and sit last: 1.71 edits `command-evaluator.js`, `frameworks.js`, the starters and the evaluator guide that Story 1.44 writes, 1.72 edits `agent-adapters.js`, `evaluators.js`, `run.js` and `sealed-brief-agent.js` and so runs after the other `run.js` editors (1.64, 1.65, 1.69), and 1.73 extends the probe and declaration that 1.71 bounds, so it follows 1.71. Story 1.74 was appended from Story 1.66's build; it edits `arm.js`, which no other lane 1 story after 1.66 edits, and joins the end. Story 1.75 was appended from Story 1.65's round 1 review; it extends the report rules that 1.65 writes in `check.js` and `release-report.js`, so it needs only 1.65 and joins the end.
 
-**Lane 2: confinement and process lifecycle** (own worktree): 1.62, 1.57, 1.58, 1.59, 1.60, 1.63, 1.61, 1.52, 1.53, 1.54, 1.80, 1.81, 1.82, 1.83. Story 1.62 goes first because it extracts the shared sandbox primitives the confinement stories build on. Story 1.60 may remove 1.63's premise, so 1.63 is re-read after it. Story 1.58 precedes 1.54, since both track the run's private scratch directories. Stories 1.52 to 1.54 touch the preflight and workspace modules the confinement stories also edit, so they run after them. Stories 1.82 and 1.83 follow 1.63, whose vector, bridge and `network` field they build on.
+**Lane 2: confinement and process lifecycle** (own worktree): 1.62, 1.57, 1.58, 1.59, 1.60, 1.63, 1.61, 1.52, 1.53, 1.54, 1.80, 1.81, 1.82, 1.83, 1.84. Story 1.62 goes first because it extracts the shared sandbox primitives the confinement stories build on. Story 1.60 may remove 1.63's premise, so 1.63 is re-read after it. Story 1.58 precedes 1.54, since both track the run's private scratch directories. Stories 1.52 to 1.54 touch the preflight and workspace modules the confinement stories also edit, so they run after them. Stories 1.82 and 1.83 follow 1.63, whose vector, bridge and `network` field they build on. Story 1.84 was appended from Story 1.61's build and follows 1.61, whose guides it extends; it joins the end, where its two live sessions can wait for the owner.
 
 **Lane 3: engine releases, dogfood and Epic 2** (own worktree): 1.45, 2.1, 2.2, 2.3, 2.4, 1.47, 1.49, 1.48, 1.42, 1.50, 1.55, 1.56, 1.51, 1.46, 2.5, 1.90, 1.91, 1.92, 1.93, 1.94, 1.95, 1.96, 1.97, 1.98, 1.99, 1.100. Story 1.45 starts the longest serial chain (1.45, 2.1 to 2.5, then H.1), so it runs first, and 2.5 runs last because it baselines every fixture and so waits for each story that changes committed evidence bytes (1.42, 1.44, 1.50, 1.51, 1.55, 1.56). Stories 1.47, 1.49 and 1.48 regenerate the test-design probes, so they run together with 1.48 last. Stories 1.42 and 1.50 both change the HTTP probe port and run back to back. Story 1.46 records live runs of the Evaluate skill, so it follows the skill-guide stories in other lanes (1.43, 1.44, 1.61, 1.67, 1.70). Lane 3 owns every eval-quality release, because 1.42, 1.45, 1.50 and 1.55 each need a published engine and one publisher keeps the dependency pin and `package-lock.json` ordered. Stories 1.90 and 1.91 follow 2.5: 1.90 edits the baseline `check` and `compare` read, and 1.91 re-accepts the fixture baselines Stories 2.2 to 2.5 commit, so it waits for every one of them.
 
@@ -1705,12 +1706,18 @@ So that the authored evaluation runs confined on the first try and an observed m
 **Given** the skill's `references/harness.md`, `references/run.md` and `references/gaps.md`
 **When** `test:evaluate-guidance` reads them
 **Then** the harness guide teaches `systemPaths` and the entry's `network` (a Linux skill or agent target, or any target that calls a model or an outside service, declares `"network": "host"` until Story 1.83) with a tagged `evaluation.json` fragment the guidance test validates against the runtime schema, the run guide names each platform's mechanism, the exit-12 refusal, the `"confinement": false` opt-out and the network namespace with what `run.json` records (`confinement` and `hostNetwork`), and the gaps guide maps an isolation violation from `observedMounts` to its repair; deleting any passage fails the test
+**And** `references/ci.md` and the AD-10 exit-table rows of `references/gaps.md` stay byte-identical, which `test:evaluate-ci` (the capture records' digest of `ci.md`) and the dogfood mutations M-001 and M-002 (`replace-exact` on those rows) hold
 **And** the change goes through `bmad-workflow-builder` with a clean Analyze gate (AD-16, AD-18).
 
 **Dependencies:** 1.31, 1.63.
 **Gate:** builder Analyze, `test:evaluate-guidance`, `npm test`.
 
-(Amended 2026-10-02 in Story 1.63's first review round: Story 1.63 edits `harness.md` and `adapters.md` for the `network` declaration, and `run.md`, `gaps.md` and `ci.md` stay with this story, which teaches the same declaration there (the `ci-registry` example in `ci.md` gains `"network": "host"` and the sentence that a Linux skill or agent target's live checks need it) and reads the new `hostNetwork` field of `run.json` beside `confinement`. Editing `ci.md` invalidates the committed capture records of `test/fixtures/evaluate-ci-repos/`, so this story reruns the two live sessions as Story 2.4's record describes and regenerates `capture-record.json`.)
+(Amended 2026-10-02 in Story 1.63's first review round: Story 1.63 edits `harness.md` and `adapters.md` for the `network` declaration, and `run.md` and `gaps.md` stay with this story, which teaches the same declaration there and reads the new `hostNetwork` field of `run.json` beside `confinement`; it keeps the harness passage when it edits that guide.)
+
+(Amended 2026-10-02 in Story 1.61's build: the `ci.md` part of the earlier amendment is dropped and becomes Story 1.84.
+The `ci-registry` example in `ci.md` is covered by the committed capture records of `test/fixtures/evaluate-ci-repos/`, which pin the SHA-256 of `references/ci.md`, `SKILL.md` and `assets/evaluation-ci-plan.template.json`, so an edit to `ci.md` fails `test:evaluate-ci` until both live `claude -p` sessions rerun and `capture-record.json` is regenerated, and the auto-mode classifier denies those sessions.
+This story leaves `ci.md` byte-identical to `main`, which `test:evaluate-ci` holds, and gives the `ci.md` part and the sessions to Story 1.84.
+The `gaps.md` exit-table rows that the dogfood mutations M-001 and M-002 replace stay byte-stable; the isolation-violation mapping is a section of its own.)
 
 ### Story 1.62: Share one sandbox primitive layer across TeA's isolation modules
 
@@ -2130,6 +2137,31 @@ So that an agent runs isolated, with a route to its model provider alone, and `n
 
 **Dependencies:** 1.63.
 **Gate:** `test:evaluate-run`, `test:evaluate-api`, `test:evaluate-confinement`, `test:evaluate-guidance`, `npm test`, and the Linux CI job.
+
+### Story 1.84: Teach a Linux skill target's network declaration in the CI guide and rerun its live sessions
+
+Added 2026-10-02 in Story 1.61's build, from the `ci.md` part of Story 1.61's earlier amendment.
+Story 1.63 made every Bubblewrap target run in a network namespace of its own and gave each registry entry a `network` declaration; the `ci-registry` example in `references/ci.md` is a `tea-skill-runner` entry with `RESERVATION_MODEL_KEY`, which on Linux needs `"network": "host"` to reach its model provider, and the guide's live-check passages never say so.
+Editing `ci.md` invalidates the committed capture records of `test/fixtures/evaluate-ci-repos/`, which pin the SHA-256 of `references/ci.md`, `SKILL.md` and `assets/evaluation-ci-plan.template.json`, so the edit needs both live capture sessions rerun as Story 2.4's record describes (`claude -p`, `claude-sonnet-5-5`, `acceptEdits` plus Read, Write, Edit, Glob, Grep and Bash, in scratch copies of `tagged-release` and `nightly-deploy` with the installed skill, `_bmad/tea/config.yaml`, `evals/node_modules/.bin/tea-evaluate` linked to `cli/evaluate.js` and `tiers` reset to the AI-feature evaluation's, one scored run with no baseline and the prompt `capture-record.json` holds).
+The auto-mode classifier denied launching those sessions twice in Story 1.63, so the story waits for the owner to run them or to add a permission rule.
+
+As an adopter wiring continuous proof for a Linux skill target,
+I want the CI guide's registry example and live-check note to declare the target's network,
+So that the plan's live checks reach the model provider on a Linux runner (CAP-11).
+
+**Acceptance Criteria:**
+
+**Given** `references/ci.md`, its tagged `ci-registry` example and the two capture records
+**When** the guide is edited and both live sessions rerun
+**Then** the `ci-registry` example declares `"network": "host"` and validates against the runtime schema, and the guide states that on Linux the live checks also need the target's registry entry to declare `"network": "host"`; `checkCiGuidance` holds the sentence as a marker, and deleting either the declaration or the sentence fails `test:evaluate-guidance`
+**And** each `capture-record.json` is regenerated from its session's output and pins the new digests of `ci.md`, `SKILL.md` and the plan template, and `test:evaluate-ci` is green; keeping the old records beside the edited guide fails it with "references/ci.md changed since the live session read it"
+**And** the story's record states each session's prompt, model, tools and outcome.
+**And** the change goes through `bmad-workflow-builder` with a clean Analyze gate (AD-16, AD-18).
+
+(If Story 1.83 has merged first and its `ci.md` edit teaches the host authorization in place of `"network": "host"`, this story's declaration is that authorization and the story is amended at its build.)
+
+**Dependencies:** 1.61.
+**Gate:** builder Analyze, `test:evaluate-guidance`, `test:evaluate-ci`, `npm test`.
 
 ### Story 1.90: Verify the baseline manifest's file digests
 

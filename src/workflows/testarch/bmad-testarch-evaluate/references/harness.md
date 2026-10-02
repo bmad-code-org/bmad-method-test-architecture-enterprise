@@ -50,3 +50,31 @@ The home keeps its state across the calls of one trial or arm, so an agent's ses
 ```
 
 This entry is the working [source fixture: evaluation.json](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/evaluate/preflight/evaluation.json) that runs confined with no `confinement` field and declares `"network": "host"`, as an agent entry does. Add the agent's credential names to `environmentKeys` for a real agent.
+
+## Declare what a confined target reads
+
+A confined target reads the whole host except the evaluation folder, the project's git directory and the user's private root. The audit lists every path it opens outside what the trial was granted: the workspace, the call's temp directory, the private home, the Node installation the runtime runs from and the operating system's own directories. Each listed path becomes an `observedMounts` entry of the trial set's isolation manifest, and `score` then exits 3 (Invalid) with one `mount outside allowlist` reason per path. Executing a binary reads it, so a toolchain the target runs in is listed too.
+
+List what the target legitimately reads in its registry entry's `systemPaths`: absolute host paths, each free of quotes, backslashes and control characters, such as a language installation, a rules directory or a cache. A command, tool-server or HTTP entry takes the field, and an HTTP entry's list covers the service it starts. Ask the adopter to confirm each path before declaring it and name the narrowest directory that holds it, such as one language installation or one rules directory. The list grants reads only; a confined target writes nothing outside its workspace and its private directories, and the audit lists every access to the evaluation folder, the project's git directory or the user's private root even under a declared path. Two entries that start the same target declare the same `systemPaths` and the same `network`, or `check` exits 10.
+
+<!-- example:evaluation-fragment -->
+
+```json
+{
+  "registry": [
+    {
+      "interfaceId": "verdict",
+      "executable": "verdict",
+      "target": "bin/verdict.js",
+      "subcommandPaths": [[]],
+      "artifacts": {},
+      "environmentKeys": [],
+      "maxElapsedMs": 20000,
+      "infrastructureExitCodes": [3],
+      "systemPaths": ["/opt/verdict-rules"]
+    }
+  ]
+}
+```
+
+This `evaluation.json` fragment declares the one directory the `verdict` target reads beyond the system. It keeps the default network and runs confined. Merge its `registry` entry into the evaluation's registry, then run `check` and rerun development.
