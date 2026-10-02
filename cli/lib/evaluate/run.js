@@ -85,7 +85,7 @@ const AjvModule = require('ajv/dist/2020');
 const { admissionRefusal, armVerdict, referenceTo } = require('./admission');
 const { callLabel, causeNote, faultRecord, hostEnvironmentPort, persistableRequest, reasonNote, runArm } = require('./arm');
 const { observeFrameworks, runCommandEvaluator } = require('./command-evaluator');
-const { observationProblems, observedVersions, versionsRecord } = require('./frameworks');
+const { effectiveProbeTimeoutMs, observationProblems, observedVersions, versionsRecord } = require('./frameworks');
 const { corpusDigestOf } = require('./corpus-index');
 const { calibrationObservation, calibrationStepPair, readCalibration, runCalibration } = require('./calibration');
 const { expectedSchemaVersion, loadEngine } = require('./engine');
@@ -1192,8 +1192,11 @@ async function runTrialSets(given) {
     (contract.interactionPlan ?? []).length + (kind === 'sealed-brief-agent' ? (contract.budgets?.maxToolCalls ?? 0) : 0);
   // The evaluator's wall clock counts toward a trial's ceiling beside the plan's. A command evaluator's trial also
   // reads its declared frameworks twice (before the launch and after the evaluator), each probe bounded by the
-  // evaluator's timeout and run in turn; an empty declaration adds nothing.
-  const probePassesMs = kind === 'command' ? 2 * layer.frameworks.length * layer.evaluator.timeoutMs : 0;
+  // probe's effective timeout and run in turn; an empty declaration adds nothing.
+  const probePassesMs =
+    kind === 'command'
+      ? 2 * layer.frameworks.reduce((total, framework) => total + effectiveProbeTimeoutMs(framework, layer.evaluator), 0)
+      : 0;
   const trialCeilingMs = stepCeilingMs + (convertsRows(kind) ? layer.evaluator.timeoutMs : 0) + probePassesMs;
   // The digest of the bytes the runtime wrote to a run-directory file, which `score` holds each file to.
   const bytesDigest = (file) => engine.digestBytes(writer.read(file));

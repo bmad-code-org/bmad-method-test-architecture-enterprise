@@ -1279,7 +1279,12 @@ function checkFrameworks(report, folder, layer, untracked) {
   const declaration = parseInto(report, folder, FRAMEWORKS_PATH);
   if (declaration === undefined) return;
   const shape = declarationProblems(declaration);
-  for (const problem of shape) report.add(FRAMEWORKS_PATH, 'schema', problem);
+  for (const problem of shape)
+    report.add(
+      FRAMEWORKS_PATH,
+      /^frameworks\[\d+\]\.probe\.probeTimeoutMs must be an integer from 1 to 60000$/.test(problem) ? 'evaluator' : 'schema',
+      problem,
+    );
   if (shape.length > 0) return;
   const frameworks = declaredFrameworks(declaration);
   for (const { package: name, probe } of frameworks) {

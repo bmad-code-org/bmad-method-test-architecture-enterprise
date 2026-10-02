@@ -15,6 +15,9 @@
  *   hang           never exits
  *   noisy          5000 characters on each of stdout and stderr, then exit 1
  *
+ * `--hang-at <n> --counter <file>` hangs on the nth launch while other
+ * launches report the installed version. This locates a timed read within a run.
+ *
  * `--flip-at <n> --counter <file>` makes the n-th launch and every later one
  * print version 9.9.9, as an installed package that changes at an exact
  * observation of the run (Story 1.44's calibration cases).
@@ -60,14 +63,15 @@ if (mode === 'noisy') {
   process.stderr.write('y'.repeat(5000));
   process.exit(1);
 }
-if (mode === 'hang') setInterval(() => {}, 1000);
 const flipAt = Number(flag('--flip-at', 0));
+const hangAt = Number(flag('--hang-at', 0));
 let launch = 0;
-if (flipAt > 0) {
+if (flipAt > 0 || hangAt > 0) {
   const counter = flag('--counter');
   launch = (fs.existsSync(counter) ? Number(fs.readFileSync(counter, 'utf8')) : 0) + 1;
   fs.writeFileSync(counter, String(launch));
 }
+if (mode === 'hang' || (hangAt > 0 && launch === hangAt)) setInterval(() => {}, 1000);
 let directory = __dirname;
 let manifest = null;
 for (;;) {

@@ -37,6 +37,8 @@ const VERSIONS_SCHEMA_VERSION = VERSIONS_SCHEMA.properties.schemaVersion.const;
 
 const FRAMEWORKS_PATH = 'evaluator/frameworks.json';
 const LEARNED_PATH = 'evaluator/LEARNED.md';
+const DEFAULT_PROBE_TIMEOUT_MS = 10_000;
+const MAX_PROBE_TIMEOUT_MS = 60_000;
 /** The `LEARNED.md` section whose `` `package@version` `` tokens record the installed versions. */
 const LEARNED_SECTION = '## Framework and installed version';
 /** The heading as a whole line: a longer heading (`### ...`) or the words inside a sentence are no section. */
@@ -108,25 +110,41 @@ function declarationProblems(declaration) {
       continue;
     }
     for (const key of Object.keys(probe)) {
-      if (key !== 'command' && key !== 'args') problems.push(`${at}.probe has the unknown property ${JSON.stringify(key)}`);
+      if (key !== 'command' && key !== 'args' && key !== 'probeTimeoutMs')
+        problems.push(`${at}.probe has the unknown property ${JSON.stringify(key)}`);
     }
     if (!isEvaluatorPath(probe.command)) problems.push(`${at}.probe.command must be a path of an executable under evaluator/`);
     if (probe.args !== undefined && (!Array.isArray(probe.args) || probe.args.some((argument) => typeof argument !== 'string'))) {
       problems.push(`${at}.probe.args must be a list of strings`);
     }
+    if (
+      probe.probeTimeoutMs !== undefined &&
+      (!Number.isInteger(probe.probeTimeoutMs) || probe.probeTimeoutMs < 1 || probe.probeTimeoutMs > MAX_PROBE_TIMEOUT_MS)
+    ) {
+      problems.push(`${at}.probe.probeTimeoutMs must be an integer from 1 to ${MAX_PROBE_TIMEOUT_MS}`);
+    }
   }
   return problems;
 }
 
-/** The declared dependencies, each `{ package, version, probe: { command, args } }`, sorted by package. */
+/** The declared dependencies, each with package, version and probe settings, sorted by package. */
 function declaredFrameworks(declaration) {
   return declaration.frameworks
     .map((entry) => ({
       package: entry.package,
       version: entry.version,
-      probe: { command: entry.probe.command, args: [...(entry.probe.args ?? [])] },
+      probe: {
+        command: entry.probe.command,
+        args: [...(entry.probe.args ?? [])],
+        ...(entry.probe.probeTimeoutMs === undefined ? {} : { probeTimeoutMs: entry.probe.probeTimeoutMs }),
+      },
     }))
     .sort((left, right) => (left.package < right.package ? -1 : left.package > right.package ? 1 : 0));
+}
+
+/** The wall clock applied to a framework's version probe. */
+function effectiveProbeTimeoutMs(framework, evaluator) {
+  return Math.min(framework.probe.probeTimeoutMs ?? DEFAULT_PROBE_TIMEOUT_MS, evaluator.timeoutMs);
 }
 
 /**
@@ -282,7 +300,7 @@ function head(text) {
 
 /**
  * The run artifact `framework-versions.json`: what the declaration expects and
- * what each probe reported, with the diagnostics when the observation does not
+ * what each probe reported and its effective timeout, with the diagnostics when the observation does not
  * meet the declaration, so an exit 12 on a missing or different package leaves
  * the versions that were seen.
  *
@@ -293,11 +311,13 @@ function versionsRecord(frameworks, entries, problems) {
     schemaVersion: VERSIONS_SCHEMA_VERSION,
     frameworks: frameworks.map((framework) => {
       const entry = entries.find((candidate) => candidate.package === framework.package);
+      if (entry === undefined) throw new Error(`missing framework probe entry for ${framework.package}`);
       return {
         package: framework.package,
         declaredVersion: framework.version,
-        observed: entry?.observed ?? null,
-        ...(entry?.fault
+        effectiveProbeTimeoutMs: entry.effectiveProbeTimeoutMs,
+        observed: entry.observed,
+        ...(entry.fault
           ? {
               fault: entry.fault,
               stdout: head(entry.stdout),
@@ -311,10 +331,13 @@ function versionsRecord(frameworks, entries, problems) {
 }
 
 module.exports = {
+  DEFAULT_PROBE_TIMEOUT_MS,
+  MAX_PROBE_TIMEOUT_MS,
   FRAMEWORKS_PATH,
   LEARNED_PATH,
   declarationProblems,
   declaredFrameworks,
+  effectiveProbeTimeoutMs,
   learnedProblems,
   observationProblems,
   observedVersions,

@@ -2320,6 +2320,12 @@ function checkEvaluatorGuidance(guide, failures) {
     '`framework-versions.json` in the run directory keeps the declared and observed versions, and the output of any probe that failed.',
     'every backticked `package@version` there is read as a record',
     'before the first trial, before each launch of the evaluator and after each trial',
+    '`probe.probeTimeoutMs` is optional and defaults to 10,000 ms (10 seconds)',
+    'integers from 1 to 60,000 ms (60 seconds)',
+    'The effective bound is the smaller of that value and `evaluator.timeoutMs`',
+    'multiply its effective bound by one initial read plus two reads per trial plus two reads per calibration launch',
+    'then sum those products across frameworks',
+    "A hanging probe costs one effective probe timeout plus the supervisor's cleanup grace",
     'missing, installed at a version other than the declared one, or changed during the run ends the run with exit 12 and seals no record for the affected trial',
     '`framework-versions.json`',
     'scoring version',
@@ -2416,6 +2422,7 @@ function checkEvaluatorGuidance(guide, failures) {
       declaration.frameworks[0].package !== packageName ||
       declaration.frameworks[0].probe.command !== 'evaluator/installed-version.mjs' ||
       declaration.frameworks[0].probe.args.join(',') !== packageName ||
+      declaration.frameworks[0].probe.probeTimeoutMs !== 10_000 ||
       declarationProblems(declaration).length === 0 ||
       declarationProblems(filled).length > 0
     )
