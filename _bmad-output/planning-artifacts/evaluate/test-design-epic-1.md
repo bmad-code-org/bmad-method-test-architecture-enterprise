@@ -38,7 +38,7 @@ inputDocuments:
 
 ## Executive Summary
 
-**Scope:** full epic-level test design for Stories 1.1 to 1.74, 1.80, 1.90 to 1.98 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.74, 1.80, 1.90 to 1.98. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
+**Scope:** full epic-level test design for Stories 1.1 to 1.75, 1.80, 1.90 to 1.98 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.75, 1.80, 1.90 to 1.98. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
 
 **Risk summary:**
 
@@ -991,16 +991,33 @@ Added 2026-09-30 in Story 1.38. Levels: integration over real eval-quality, stat
 | The later requests go through the port and the policy | A report operation the policy denies after the first request, and an answer with no string; assert each refusal and reason     | Integration                        | P1  | Sending them outside the port exits 0 with no refusal                    |
 | The reference states the three points                 | Read `### Against deployments` under its heading                                                                               | Static                             | P2  | Removing the sentence fails the read                                     |
 
+Amended 2026-10-01 in Story 1.65's build: each point asks every interface of the pre-fix deployment, so the request log of each of its origins shows three report requests, and the cases put the changed release on the second interface's origin as well as the first.
+
 ### Story 1.65: Ask every HTTP interface of a deployment which release it runs
 
 Added 2026-09-30 in Story 1.38. Levels: integration over real eval-quality, contract, unit, static. Files: `test/test-evaluate-arms.js` (`test:evaluate-arms`), `test/test-evaluate-check.js` (`test:evaluate-check`).
 
-| AC                                                       | Test                                                                                                                                         | Level                              | P   | Revert check                                                   |
-| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | --- | -------------------------------------------------------------- |
-| A second origin on another release refuses               | Two HTTP interfaces, two fixture servers per deployment; the second origin reports another release; assert the refusal and each server's log | Integration over real eval-quality | P0  | Asking the first interface alone lets the probe qualify        |
-| `check` and `deploymentPair` hold a report per interface | A report missing for an interface and one for an interface the registry does not serve, each exit 10 under `historical`; the unit's exit 12  | Contract, unit                     | P1  | Dropping the rule leaves an origin unasked                     |
-| The probe schema carries a report per interface          | A missing report and one with an extra or empty field under `schema`; a one-interface registry keeps its single report valid                 | Contract                           | P1  | Dropping the field lets a probe through with an origin unasked |
-| The reference states that every origin is asked          | Read `### Against deployments` under its heading                                                                                             | Static                             | P2  | Removing the sentence fails the read                           |
+| AC                                                       | Test                                                                                                                                          | Level                              | P   | Revert check                                                                       |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | --- | ---------------------------------------------------------------------------------- |
+| A second origin on another release refuses               | Two HTTP interfaces, two fixture servers per deployment; the second origin reports another release; assert the refusal and each server's log  | Integration over real eval-quality | P0  | Asking the first interface alone lets the probe qualify                            |
+| `check` and `deploymentPair` hold a report per interface | A report missing for an interface and one for an interface the registry does not serve, each exit 10 under `historical`; the unit's exit 12   | Contract, unit                     | P1  | Dropping the rule leaves an origin unasked                                         |
+| The probe schema carries a report per interface          | A missing report and one with an extra or empty field under `schema`; a one-interface registry keeps its single report valid                  | Contract                           | P1  | Dropping the field lets a probe through with an origin unasked                     |
+| The reference states that every origin is asked          | Read `### Against deployments` under its heading                                                                                              | Static                             | P2  | Removing the sentence fails the read                                               |
+| `check` holds a report to the interface its key names    | A report keyed by the second interface that names the operation of the first; assert the finding names the interface the operation belongs to | Contract, unit                     | P1  | Dropping the rule lets the run ask an interface for an operation it does not serve |
+
+Amended 2026-10-01 in Story 1.65's build: the two-interface registry, contract and policy live in the test's own project copy (`withLedger` over `makeDeploymentProject`), and `test/fixtures/evaluate-api` keeps its bytes.
+The second interface is `ledger`, which sorts after `grader`, so each comparison falls on a later element.
+Its servers are the fixture's grader behind a path prefix (`/ledger`), because eval-quality refuses two `api` operations that share a method and a path template and the grader answers `/release` alone.
+There are four loopback servers, one per interface and deployment, each with its own request log.
+The cases read the logs: every server receives one report request when each origin runs the declared release; the second pre-fix origin on another release refuses the probe naming `ledger` with the first origin asked once and the post-fix servers unasked; both pre-fix origins on another release refuse naming `grader` with the `reports` keys written `ledger` first, so the asking is in sorted order and the second origin stays unasked; the second post-fix origin on another release refuses naming the post-fix side after every earlier origin was asked once; a report operation of `ledger` the policy denies, an answer with no string at the pointer and the auth value echoed upper-cased each refuse naming `ledger`.
+`check` cases name a report missing for the second interface (post-fix) and for the first (pre-fix), a report keyed by an interface the registry does not serve over HTTP, an operation of the first interface under the second key, and the schema cases for a missing, empty or old-shaped `reports` and an entry with a missing, extra or empty field; two clean cases keep a registry of one HTTP interface with one report and a registry of two with two valid.
+`deploymentPair` and `reportsProblems` units cover the same rules.
+`test-evaluate-arms.js --reported-interfaces-only` runs the interface cases alone for the revert checks.
+
+Amended 2026-10-02 in Story 1.65's round 1 review: the `ledger` servers run the grader's `release: object` policy and `ledger` reports at `/release/name`, so a pointer read from the wrong interface's report finds an object or nothing (revert: reading the first interface's pointer for each fails 9 of 155 checks, 0 of 152 before).
+A second-interface crash case asserts the exit 12 message names the `ledger` interface (revert: dropping the interface from the could-not-answer message fails 1), and the one-interface `deploymentPair` unit refuses a report for the second interface (revert: dropping the unserved-key rule fails 2).
+The could-not-be-built message has no case, since `reportsProblems` refuses every operation the request cannot be built from.
+Story 1.75 closes the collision of report paths across interfaces.
 
 ### Story 1.66: Scrub an observation in every letter case
 
@@ -1119,6 +1136,19 @@ Added 2026-10-01 in Story 1.44's final review. Levels: integration over real eva
 | A changed digest under one version is a changed dependency    | Patch one file inside the fixture package, then edit its lockfile entry, between runs; assert a different digest each time; change it before a launch and after a trial; assert exit 12 and no sealed record        | Integration                        | P0  | Comparing versions alone at either recheck lets the patched package judge                   |
 | The shipped probe reports both sources                        | Run `installed-version.mjs` over the fixture package for `lockfile` and `tree`; patch one file and assert the `tree` digest differs with the version fixed                                                          | Integration                        | P1  | A probe that reports the version alone fails the patched-file case                          |
 | The guide teaches when to declare it                          | Assert the evaluator guide's framework-version section names both sources, when to declare `installState` and when the version suffices, by exact section                                                           | Guidance                           | P2  | Removing either teaching or a source fails the assertion                                    |
+
+### Story 1.75: Name a report-operation signature collision at check, before the run
+
+Added 2026-10-02 in Story 1.65's round 1 review. Levels: contract, static. File: `test/test-evaluate-check.js` (`test:evaluate-check`).
+The story picks its route (AC 4). Under the `check` route the rows below hold as written. Under the eval-quality route the engine compiles both operations, so the first two rows become one clean case at exit 0 and the static row reads the limit sentence as removed.
+
+| AC                                                       | Test                                                                                                                                                           | Level    | P   | Revert check                                                     |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | --- | ---------------------------------------------------------------- |
+| Interfaces that share a report path are named at `check` | A registry of two HTTP interfaces whose report operations share method and path template, a `historical` probe naming both; assert exit 10 and both interfaces | Contract | P0  | Reverting the rule makes `check` exit 0                          |
+| The finding names the operations                         | The same registry; assert the finding names both operation IDs and the shared method and path template                                                         | Contract | P1  | A finding that names the interfaces alone fails the assertion    |
+| Distinct report paths pass                               | A registry whose two report operations differ in path; assert exit 0                                                                                           | Contract | P1  | A rule that flags any two report operations fails the clean case |
+| The reference no longer states the limit                 | Read `### Against deployments` under its heading and fail when the limit sentence is present                                                                   | Static   | P2  | Restoring the sentence fails the read                            |
+| The route is recorded                                    | Read the story record under its heading and assert it names the chosen route and the reason                                                                    | Static   | P2  | A record that names no route fails the read                      |
 
 ### Story 1.80: Bring a partial-clone project, its tags and a very large history into the withheld repository
 

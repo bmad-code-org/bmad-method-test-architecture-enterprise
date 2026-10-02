@@ -58,9 +58,12 @@
  *   Story 1.32: it names neither or both of `fixCommit` and `deployments`, one deployment without the
  *   other, one release for both, a deployment beside a registry entry that is not an HTTP entry, or origins
  *   that are not an http or https origin for each HTTP interface of the registry and no other.
- *   Story 1.38: a deployment's `report` names an operation the contract does not declare on an `api` interface
+ *   Story 1.38: a deployment's report names an operation the contract does not declare on an `api` interface
  *   the registry serves, one it marks as changing state, one that needs an input (a path parameter or a
  *   required key in any channel), or a pointer that is no RFC 6901 JSON pointer.
+ *   Story 1.65: a deployment's `reports` leaves an HTTP interface of the registry without a report, names an
+ *   interface the registry does not serve over HTTP, or keys a report by an interface other than the one its
+ *   operation belongs to.
  * - `judge` (Story 1.9): the contract declares a rubric and `evaluation.json` has no `judge`, or
  *   `policy/evaluator-conditions.json` names no `judge.modelSnapshot`; the contract declares no rubric and
  *   either file carries a `judge` block, which nothing would use; or `judge` names an agent adapter TeA
@@ -132,7 +135,7 @@ const { readPlan } = require('./ci-plan');
 const { MANIFEST_NAME } = require('./folder');
 const { addFormats } = require('./formats');
 const { HTTP_PORT_MODULE, originTarget, sharedOrigin } = require('./http-target');
-const { reportProblems } = require('./release-report');
+const { reportsProblems } = require('./release-report');
 const {
   apiRegistryProblems,
   kindOf,
@@ -842,10 +845,11 @@ function checkProbeAgainstRegistry(report, relative, probe, context, registry) {
  * one (`sharedOrigin`); a deployment-routed probe reaches its target over
  * HTTP alone, so every registry entry is an HTTP entry; and each
  * deployment names an http or https origin for every HTTP interface of the
- * registry and no other; and each deployment's `report` (Story 1.38) names an
- * operation of an `api` interface of the contract that needs no input, with a
- * JSON pointer (`reportProblems`). Whether an origin is one the registry's
- * policy authorizes is eval-quality's to decide at run time.
+ * registry and no other; and each deployment's `reports` (Stories 1.38 and 1.65)
+ * holds one report for every HTTP interface of the registry and for no other,
+ * each naming an operation of that `api` interface of the contract that needs
+ * no input, with a JSON pointer (`reportsProblems`). Whether an origin is one
+ * the registry's policy authorizes is eval-quality's to decide at run time.
  */
 function historicalBoundaryProblems(qualification, registry, contract) {
   const { fixCommit, deployments } = qualification ?? {};
@@ -891,7 +895,7 @@ function historicalBoundaryProblems(qualification, registry, contract) {
     : null;
   for (const side of named) {
     problems.push(
-      ...reportProblems({ report: deployments[side]?.report, contract, interfaces: httpInterfaces, where: `deployments.${side}.report` }),
+      ...reportsProblems({ reports: deployments[side]?.reports, contract, interfaces: httpInterfaces, where: `deployments.${side}` }),
     );
   }
   if (!Array.isArray(registry)) return problems;

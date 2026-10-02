@@ -1,11 +1,13 @@
 /**
- * How a deployment reports its release (Story 1.38, AD-1, AD-8): each
- * `Deployment` of a deployment-routed historical probe names `report`, an
- * operation of the contract's `api` interface and an RFC 6901 JSON pointer
- * into the JSON body of its answer. Before either qualification arm the
- * runtime sends that request to each deployment through the evaluation's HTTP
- * port and reads the string at the pointer, so the digests a qualified probe
- * records name the releases the run measured.
+ * How a deployment reports its release (Stories 1.38 and 1.65, AD-1, AD-8):
+ * each `Deployment` of a deployment-routed historical probe names `reports`,
+ * an object keyed by the ID of each HTTP interface of the registry, whose
+ * value is an operation of that interface's `api` contract entry and an
+ * RFC 6901 JSON pointer into the JSON body of its answer. Before either
+ * qualification arm the runtime sends each deployment one such request per
+ * interface through the evaluation's HTTP port, each to that interface's own
+ * origin, and reads the string at the pointer, so the digests a qualified
+ * probe records name the releases the run measured at every origin.
  *
  * The request is built as an arm builds an `api` step with no bound inputs:
  * `runArm` runs a plan of that one step over the contract, so the method, path
@@ -38,22 +40,25 @@ function isJsonPointer(text) {
 }
 
 /**
- * What is wrong with one deployment's `report`: its operation is not one
- * operation of an `api` interface of the contract that the registry serves
- * over HTTP, it is marked as changing state (the request reads a release and
- * goes to a live deployment before any arm runs), the request would need an
- * input (a path parameter or a required key in any channel), since nothing
- * binds one, or its pointer is no JSON pointer. A `report` that is not an
- * object with both string fields is the schema's finding.
+ * What is wrong with one entry of a deployment's `reports`: its operation is
+ * not one operation of an `api` interface of the contract, it belongs to
+ * another interface than the one the entry is keyed by (the request goes to
+ * the origin of the interface its operation belongs to, so the key would
+ * name an origin the run never asks), it is marked as changing state (the
+ * request reads a release and goes to a live deployment before any arm runs),
+ * the request would need an input (a path parameter or a required key in any
+ * channel), since nothing binds one, or its pointer is no JSON pointer. An
+ * entry that is not an object with both string fields is the schema's
+ * finding.
  *
  * @param {object} options
- * @param {unknown} options.report the deployment's `report`
+ * @param {unknown} options.report the entry's `{ operationId, pointer }`
+ * @param {string} options.interfaceId the interface the entry is keyed by
  * @param {object} [options.contract] the contract the probe's evaluation declares
- * @param {string[]|null} options.interfaces the registry's HTTP interface IDs, or null when the registry is unread
- * @param {string} options.where how the finding names the field (`deployments.preFix.report`)
+ * @param {string} options.where how the finding names the entry (`deployments.preFix.reports.grader`)
  * @returns {string[]}
  */
-function reportProblems({ report, contract, interfaces, where }) {
+function reportProblems({ report, interfaceId, contract, where }) {
   if (report === null || typeof report !== 'object' || typeof report.operationId !== 'string' || typeof report.pointer !== 'string') {
     return [];
   }
@@ -82,9 +87,9 @@ function reportProblems({ report, contract, interfaces, where }) {
     return problems;
   }
   const [{ iface, operation }] = declaring;
-  if (interfaces !== null && !interfaces.includes(iface.logicalId)) {
+  if (iface.logicalId !== interfaceId) {
     problems.push(
-      `${where}.operationId names ${JSON.stringify(report.operationId)} of interface ${JSON.stringify(iface.logicalId)}, which the registry does not serve over HTTP (${JSON.stringify(interfaces)}); the request goes to the origin the deployment names for that interface`,
+      `${where}.operationId names ${JSON.stringify(report.operationId)}, which the contract declares on interface ${JSON.stringify(iface.logicalId)}; the request goes to the origin of the interface its operation belongs to, so key the report by that interface or name an operation of ${JSON.stringify(interfaceId)}`,
     );
   }
   if (operation.stateChangeMarker === true) {
@@ -97,6 +102,44 @@ function reportProblems({ report, contract, interfaces, where }) {
     problems.push(
       `${where}.operationId names ${JSON.stringify(report.operationId)}, which ${PATH_PARAMETER.test(operation.pathTemplate ?? '') ? `has the path parameter in ${JSON.stringify(operation.pathTemplate)}` : `requires input in its ${needs.join(' and ')} channel`}; the report request is sent with no bound inputs, so name an operation that needs none`,
     );
+  }
+  return problems;
+}
+
+/**
+ * What is wrong with a deployment's whole `reports`: an HTTP interface of the
+ * registry with no entry (its origin would go unasked, and the run would
+ * measure it under an identifier it never reported), an entry for an
+ * interface the registry does not serve over HTTP, and every finding of
+ * `reportProblems` for each entry, interfaces in sorted order. A `reports`
+ * that is not an object is the schema's finding.
+ *
+ * @param {object} options
+ * @param {unknown} options.reports the deployment's `reports`
+ * @param {object} [options.contract] the contract the probe's evaluation declares
+ * @param {string[]|null} options.interfaces the registry's HTTP interface IDs, or null when the registry is unread
+ * @param {string} options.where how the finding names the field (`deployments.preFix`)
+ * @returns {string[]}
+ */
+function reportsProblems({ reports, contract, interfaces, where }) {
+  if (reports === null || typeof reports !== 'object' || Array.isArray(reports)) return [];
+  const problems = [];
+  const named = Object.keys(reports).sort();
+  if (interfaces !== null) {
+    const missing = [...interfaces].sort().filter((id) => !Object.hasOwn(reports, id));
+    if (missing.length > 0) {
+      problems.push(
+        `${where}.reports names ${JSON.stringify(named)} and no report for ${missing.map((id) => JSON.stringify(id)).join(', ')}; the run asks the origin of every HTTP interface of the registry (${interfaces.map((id) => JSON.stringify(id)).join(', ')}) which release it runs, so name one report for each`,
+      );
+    }
+    for (const id of named.filter((name) => !interfaces.includes(name))) {
+      problems.push(
+        `${where}.reports.${id} names an interface the registry does not serve over HTTP (${JSON.stringify(interfaces)}); name a report for each HTTP interface of the registry and no other`,
+      );
+    }
+  }
+  for (const id of named) {
+    problems.push(...reportProblems({ report: reports[id], interfaceId: id, contract, where: `${where}.reports.${id}` }));
   }
   return problems;
 }
@@ -124,8 +167,8 @@ function quotedIdentifier(text) {
 }
 
 /**
- * Sends one deployment its report request through `port` and reads the string
- * at the pointer. The answer is a 2xx status with a JSON body (one the port
+ * Sends one deployment one of its report requests through `port` and reads
+ * the string at the pointer. The answer is a 2xx status with a JSON body (one the port
  * reads as JSON, which takes an `application/json` or `+json` content type)
  * that holds a string at `report.pointer`; any other answer leaves `unread`
  * with the pointer and what was found. A fault the port throws (a policy
@@ -137,7 +180,7 @@ function quotedIdentifier(text) {
  * @param {{ operationId: string, pointer: string }} options.report
  * @param {{ probe: Function }} options.port the port `createProbePort({ deployment })` returned
  * @param {object} options.registry the registry, for the host environment and the secrets to scrub
- * @param {string} options.label names the request (`report-pre-fix`)
+ * @param {string} options.label names the request (`report-pre-fix-grader`)
  * @param {string} [options.seed]
  * @param {AbortSignal} [options.signal]
  * @returns {Promise<{ reported: string } | { unread: string }>}
@@ -184,4 +227,4 @@ async function reportedRelease({ contract, report, port, registry, label, seed, 
   return { reported: found };
 }
 
-module.exports = { isJsonPointer, quotedIdentifier, reportProblems, reportedRelease };
+module.exports = { isJsonPointer, quotedIdentifier, reportProblems, reportedRelease, reportsProblems };

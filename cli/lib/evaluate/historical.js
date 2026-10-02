@@ -36,12 +36,14 @@
  * Each origin must be one the registry's HTTP policy authorizes, which
  * eval-quality's `evaluateTarget` decides before any arm runs; a deployment it
  * does not authorize refuses the probe with its reason. Each deployment also
- * names `report` (Story 1.38), an operation of the contract's `api` interface
- * and a JSON pointer into its answer: before either arm the runtime sends that
- * request to each deployment through the evaluation's HTTP port and refuses
- * the probe when the string at the pointer is not the declared `release`, or
- * when the request is denied or its answer holds no string there
- * (`release-report.js`). The fail-before arm
+ * names `reports` (Stories 1.38 and 1.65), one report for every HTTP interface
+ * of the registry: an operation of that interface's `api` entry in the contract
+ * and a JSON pointer into its answer. Before either arm the runtime sends each
+ * deployment one request per interface, the pre-fix deployment first and the
+ * interfaces in sorted order, each through the evaluation's HTTP port to that
+ * interface's own origin, and refuses the probe at the first one whose string at
+ * the pointer is not the declared `release`, or whose request is denied or whose
+ * answer holds no string there (`release-report.js`). The fail-before arm
  * runs against the pre-fix deployment and the pass-after arm against the
  * post-fix one, with the same verdicts required and the same evidence files;
  * the qualified probe records `artifactDigest` as the digest of the pre-fix
@@ -60,7 +62,7 @@ const { ArmError, causeNote, faultRecord, hostEnvironmentPort, reasonNote, runAr
 const { DeploymentUnreachable, isApiEntry, originKey, originTarget, sharedOrigin } = require('./http-target');
 const { expectedSchemaVersion } = require('./engine');
 const { evaluateOracles, oraclesOfBehaviors } = require('./evaluator');
-const { quotedIdentifier, reportProblems, reportedRelease } = require('./release-report');
+const { quotedIdentifier, reportedRelease, reportsProblems } = require('./release-report');
 const { WorkspaceRefusal, gitAccessOf, isDirectory, runGit, trackedTreeDigest } = require('./workspace');
 
 /** The eval-quality fault a command-line adapter throws when its policy refuses a request. */
@@ -436,10 +438,11 @@ async function qualifyHistoricalProbe({
  * deployments beside a `fixCommit`, one deployment without the other, one
  * release for both, a registry entry that is not an HTTP entry, origins that
  * are not an http or https origin for each HTTP interface of the registry and
- * no other, a pre-fix origin reaching a post-fix one, or a deployment with no
- * `report` or one `reportProblems` refuses. `check` refuses each first, so
- * this guard is defence in depth: reaching one here stops the qualification
- * with exit 12.
+ * no other, a pre-fix origin reaching a post-fix one, or a deployment whose
+ * `reports` `reportsProblems` refuses (an HTTP interface with no report, a
+ * report for an interface not served over HTTP, or an entry the contract does
+ * not bear out). `check` refuses each first, so this guard is defence in depth:
+ * reaching one here stops the qualification with exit 12.
  *
  * @param {object} qualification the committed probe's `qualification`
  * @param {object[]} registry the evaluation's registry entries
@@ -488,16 +491,28 @@ function deploymentPair(qualification, registry, contract) {
     };
   }
   for (const side of ['preFix', 'fix']) {
-    const { report } = deployments[side];
-    if (report === null || typeof report !== 'object' || typeof report.operationId !== 'string' || typeof report.pointer !== 'string') {
+    const { reports } = deployments[side];
+    if (reports === null || typeof reports !== 'object' || Array.isArray(reports)) {
+      return { unaddressable: `its ${side} deployment names no reports, so the run cannot ask it which release it runs` };
+    }
+    const [problem] = reportsProblems({ reports, contract, interfaces: wanted, where: `deployments.${side}` });
+    if (problem !== undefined) return { unaddressable: problem };
+    const unshaped = wanted.find(
+      (id) =>
+        reports[id] === null ||
+        typeof reports[id] !== 'object' ||
+        typeof reports[id].operationId !== 'string' ||
+        typeof reports[id].pointer !== 'string',
+    );
+    if (unshaped !== undefined) {
       return {
-        unaddressable: `its ${side} deployment names no report (an operationId and a pointer), so the run cannot ask it which release it runs`,
+        unaddressable: `its ${side} deployment names no report (an operationId and a pointer) for ${unshaped}, so the run cannot ask it which release that interface runs`,
       };
     }
-    const [problem] = reportProblems({ report, contract, interfaces: wanted, where: `deployments.${side}.report` });
-    if (problem !== undefined) return { unaddressable: problem };
     if (!Array.isArray(contract?.permittedInterfaces)) {
-      return { unaddressable: `the contract declares no interfaces, so ${report.operationId} is no operation the run can send` };
+      return {
+        unaddressable: `the contract declares no interfaces, so the reports of its ${side} deployment name no operation the run can send`,
+      };
     }
   }
   return { preFix: deployments.preFix, fix: deployments.fix };
@@ -520,28 +535,31 @@ function routeIdentity(historical) {
 }
 
 /**
- * Sends one deployment its report request (Story 1.38) and holds the release
- * it reports to the one the probe declares. A reported identifier other than
- * the declared `release`, a request eval-quality's policy denies, and an
- * answer with no string at the pointer (a status other than 2xx, a body the
- * port reads as no JSON, or anything but a string at the pointer) each refuse
- * the probe, naming the side, the declared release and what was found. A call
- * that reaches no answer or passes a ceiling of the registry entry, a
- * deployment the port could not reach or hear from in time, stops the run with
- * exit 12 as it does for any call, and so does a request the run cannot build.
- * The call is no trial: it records no evidence artifact.
+ * Sends one deployment the report request of one HTTP interface (Stories 1.38
+ * and 1.65) and holds the release it reports to the one the probe declares. A
+ * reported identifier other than the declared `release`, a request
+ * eval-quality's policy denies, and an answer with no string at the pointer (a
+ * status other than 2xx, a body the port reads as no JSON, or anything but a
+ * string at the pointer) each refuse the probe, naming the side, the
+ * interface, the declared release and what was found. A call that reaches no
+ * answer or passes a ceiling of the registry entry, a deployment the port
+ * could not reach or hear from in time, stops the run with exit 12 as it does
+ * for any call, and so does a request the run cannot build. The call is no
+ * trial: it records no evidence artifact.
  *
  * @returns {Promise<{ reported: string } | { refused: string }>}
  */
-async function holdToReport({ contract, report, reached, side, port, registry, file, stop, seed, signal }) {
+async function holdToReport({ contract, report, interfaceId, reached, side, port, registry, file, stop, seed, signal }) {
   const { release } = reached;
+  const subject = `the ${side} deployment ${release}`;
+  const interfaceNote = `its ${JSON.stringify(interfaceId)} interface`;
   let answer;
   try {
-    answer = await reportedRelease({ contract, report, port, registry, label: `report-${side}`, seed, signal });
+    answer = await reportedRelease({ contract, report, port, registry, label: `report-${side}-${interfaceId}`, seed, signal });
   } catch (error) {
     if (error?.code === DENIAL_FAULT) {
       return {
-        refused: `the ${side} deployment ${release} was denied the release report request ${report.operationId}${reasonNote(error)}: ${error.message}`,
+        refused: `${subject} was denied the release report request ${report.operationId} for ${interfaceNote}${reasonNote(error)}: ${error.message}`,
       };
     }
     throw stop({
@@ -549,17 +567,17 @@ async function holdToReport({ contract, report, reached, side, port, registry, f
       exitCode: 12,
       message: `${file}: ${
         error instanceof ArmError
-          ? `the release report request ${report.operationId} for the ${side} deployment ${release} could not be built or recorded`
-          : `the ${side} deployment ${release} could not answer the release report request ${report.operationId}`
+          ? `the release report request ${report.operationId} for ${interfaceNote} of the ${side} deployment ${release} could not be built or recorded`
+          : `${subject} could not answer the release report request ${report.operationId} for ${interfaceNote}`
       }: ${error?.message ?? error}${causeNote(error)}`,
     });
   }
   if (answer.unread !== undefined) {
-    return { refused: `the ${side} deployment ${release} did not report its release through ${report.operationId}: ${answer.unread}` };
+    return { refused: `${subject} did not report its release through ${report.operationId} for ${interfaceNote}: ${answer.unread}` };
   }
   if (answer.reported !== release) {
     return {
-      refused: `the ${side} deployment reports release ${quotedIdentifier(answer.reported)} where the probe declares ${JSON.stringify(release)}, so the run would measure it under an identifier it does not run`,
+      refused: `the ${side} deployment's ${JSON.stringify(interfaceId)} interface reports release ${quotedIdentifier(answer.reported)} where the probe declares ${JSON.stringify(release)}, so the run would measure it under an identifier it does not run`,
     };
   }
   return { reported: answer.reported };
@@ -569,8 +587,9 @@ async function holdToReport({ contract, report, reached, side, port, registry, f
  * Qualifies one deployment-routed historical probe: each deployment is first
  * held to the registry's HTTP policy (a deployment eval-quality does not
  * authorize refuses the probe, with its reason; one whose host does not
- * resolve is unreachable, exit 12), then asked which release it runs
- * (`holdToReport`: a release other than the declared one refuses the probe),
+ * resolve is unreachable, exit 12), then asked which release each of its HTTP
+ * interfaces runs (`holdToReport`: a release other than the declared one at any
+ * origin refuses the probe),
  * then the plan runs once against the pre-fix deployment, where the oracles
  * of the probe's behaviors must be violated, and once against the post-fix
  * one, where they must hold (exit 11 otherwise). No workspace is made: every
@@ -633,23 +652,30 @@ async function qualifyDeploymentProbe({
       deployment: reached[revision],
     }));
   }
-  // Each deployment is asked which release it runs before either arm, so a release redeployed since the probe was
-  // authored refuses the probe here, where the arms would measure it under the identifier the probe declares.
+  // Each deployment is asked which release each of its HTTP interfaces runs before either arm, the pre-fix deployment
+  // first and its interfaces in sorted order, so a release redeployed since the probe was authored, at any origin,
+  // refuses the probe here, where the arms would measure it under the identifier the probe declares. The first answer
+  // that refuses stops the asking, since a refusal needs one finding.
   for (const { revision } of PHASES) {
-    const held = await holdToReport({
-      contract,
-      report: deployments[revision].report,
-      reached: reached[revision],
-      side: revision === 'fix' ? 'post-fix' : 'pre-fix',
-      port: ports[revision],
-      registry,
-      file,
-      stop,
-      seed,
-      signal,
-    });
-    if (held.refused !== undefined) return held;
-    reached[revision].reported = held.reported;
+    const { reports } = deployments[revision];
+    reached[revision].reported = {};
+    for (const interfaceId of Object.keys(reports).sort()) {
+      const held = await holdToReport({
+        contract,
+        report: reports[interfaceId],
+        interfaceId,
+        reached: reached[revision],
+        side: revision === 'fix' ? 'post-fix' : 'pre-fix',
+        port: ports[revision],
+        registry,
+        file,
+        stop,
+        seed,
+        signal,
+      });
+      if (held.refused !== undefined) return held;
+      reached[revision].reported[interfaceId] = held.reported;
+    }
   }
   const phases = [];
   for (const { phase, revision, expected, meaning } of PHASES) {
