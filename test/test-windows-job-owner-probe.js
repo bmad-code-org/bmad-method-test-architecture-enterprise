@@ -32,47 +32,82 @@ ${typeDefinition}
 Write-Output "add-type-done elapsed-ms=$([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() - $started)"
 `,
 );
-const addTypeStartedAt = Date.now();
-const addType = spawnSync(
-  'powershell.exe',
-  ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', addTypeFile],
-  {
-    env: minimalEnv,
-    encoding: 'utf8',
-    timeout: 120_000,
-  },
-);
-const addTypeResult = {
-  elapsedMs: Date.now() - addTypeStartedAt,
-  status: addType.status,
-  signal: addType.signal,
-  error: addType.error?.message,
-  stdout: addType.stdout,
-  stderr: addType.stderr,
-};
 fs.writeFileSync(agentFile, "process.stdout.write('probe agent answered\\n');\n");
 
-const guardian = spawn(process.execPath, [supervisorFile, '--agent-guardian', process.execPath, agentFile], {
-  stdio: ['pipe', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe'],
-  env: minimalEnv,
-  windowsHide: true,
-});
-let stdout = '';
-let stderr = '';
-let report = '';
-let agentPidText = '';
-let exit = null;
-guardian.stdout.setEncoding('utf8').on('data', (chunk) => (stdout += chunk));
-guardian.stderr.setEncoding('utf8').on('data', (chunk) => (stderr += chunk));
-guardian.stdio[3].setEncoding('utf8').on('data', (chunk) => (report += chunk));
-guardian.stdio[5].setEncoding('utf8').on('data', (chunk) => (agentPidText += chunk));
-guardian.stdio[4].on('error', () => {});
-guardian.once('exit', (code, signal) => (exit = { code, signal }));
-guardian.stdin.end();
-
-const closed = new Promise((resolve) => guardian.once('close', (code, signal) => resolve({ code, signal })));
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const measureAddType = () =>
+  new Promise((resolve) => {
+    const startedAt = Date.now();
+    const child = spawn(
+      'powershell.exe',
+      ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', addTypeFile],
+      {
+        env: minimalEnv,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        windowsHide: true,
+      },
+    );
+    let stdout = '';
+    let stderr = '';
+    let exit = null;
+    let settled = false;
+    let error = null;
+    let timer;
+    let drainTimer;
+    const finishMeasure = (timedOut) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      clearTimeout(drainTimer);
+      child.stdout?.destroy();
+      child.stderr?.destroy();
+      resolve({
+        elapsedMs: Date.now() - startedAt,
+        status: exit?.code ?? null,
+        signal: exit?.signal ?? null,
+        timedOut,
+        error,
+        stdout,
+        stderr,
+      });
+    };
+    child.stdout?.setEncoding('utf8').on('data', (chunk) => (stdout += chunk));
+    child.stderr?.setEncoding('utf8').on('data', (chunk) => (stderr += chunk));
+    child.once('error', (spawnError) => {
+      error = spawnError.message;
+      finishMeasure(false);
+    });
+    child.once('exit', (code, signal) => {
+      exit = { code, signal };
+      drainTimer = setTimeout(() => finishMeasure(false), 1000);
+    });
+    child.once('close', () => finishMeasure(false));
+    timer = setTimeout(() => {
+      child.kill('SIGKILL');
+      finishMeasure(true);
+    }, 120_000);
+  });
+
 const finish = async () => {
+  const addTypeResult = await measureAddType();
+  const guardian = spawn(process.execPath, [supervisorFile, '--agent-guardian', process.execPath, agentFile], {
+    stdio: ['pipe', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe'],
+    env: minimalEnv,
+    windowsHide: true,
+  });
+  let stdout = '';
+  let stderr = '';
+  let report = '';
+  let agentPidText = '';
+  let exit = null;
+  guardian.stdout.setEncoding('utf8').on('data', (chunk) => (stdout += chunk));
+  guardian.stderr.setEncoding('utf8').on('data', (chunk) => (stderr += chunk));
+  guardian.stdio[3].setEncoding('utf8').on('data', (chunk) => (report += chunk));
+  guardian.stdio[5].setEncoding('utf8').on('data', (chunk) => (agentPidText += chunk));
+  guardian.stdio[4].on('error', () => {});
+  guardian.once('exit', (code, signal) => (exit = { code, signal }));
+  guardian.stdin.end();
+  const closed = new Promise((resolve) => guardian.once('close', (code, signal) => resolve({ code, signal })));
   let timer;
   const ending = await Promise.race([
     closed,
@@ -100,7 +135,7 @@ const finish = async () => {
   }
   const agentPid = Number(agentPidText.trim());
   const succeeded =
-    addType.status === 0 &&
+    addTypeResult.status === 0 &&
     ending?.code === 0 &&
     outcome?.status === 0 &&
     stdout.includes('probe agent answered') &&
