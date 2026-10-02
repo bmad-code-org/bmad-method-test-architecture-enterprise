@@ -4931,7 +4931,10 @@ async function checkBridgedServerStandIn() {
       longScratch.length === 0,
     `a call with a ${Buffer.byteLength(longTemp)}-byte TMPDIR was answered ${JSON.stringify(longAnswer?.status ?? longAnswer?.message)} with the bridge ${JSON.stringify(longCalls[0]?.bridge)}; expected a socket under /tmp and the call to work`,
   );
-  check(!fs.readdirSync('/tmp').some((name) => name.startsWith('tea-nb-')), 'a bridge directory was left under /tmp');
+  check(
+    longCalls[0]?.bridge !== undefined && !fs.existsSync(path.dirname(longCalls[0].bridge)),
+    `the call's own bridge directory ${JSON.stringify(longCalls[0]?.bridge && path.dirname(longCalls[0].bridge))} was left under /tmp`,
+  );
   const tooLong = [];
   let tooLongError = null;
   try {
