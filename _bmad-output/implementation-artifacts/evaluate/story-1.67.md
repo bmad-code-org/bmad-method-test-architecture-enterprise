@@ -153,6 +153,11 @@ Green on the final tree: `test:evaluate-records` 321, `test:evaluate-evaluators`
 Measured weight, same machine in the same hour: `test:evaluate-records` 119.9 seconds against 88.0 at `35a02492`, +31.9 seconds locally (round 0 added 14.7; the sealed-against case, one more harness run, adds about 17); at the 1.9 local-to-CI ratio about +60 seconds, so `tools/test-shard-weights.json`'s `test:evaluate-records` 120.2 becomes about 181.
 No other weight changed.
 
+### Gates after review round 2
+
+Green: `test:evaluate-records` 330, `test:evaluate-check` 987, `test:evaluate-run` 571, `test:evaluate-guidance`, `test:evaluate-boundaries`, `test:direction`, `test:schema-versions`, `test:doc-counts`, `test:changelog`, `lint`, `lint:md`, `format:check`, `docs:validate-links`.
+Measured weight, other lanes' suites running alongside, two runs each: `test:evaluate-records` 130.0 and 133.8 seconds (131.9) against 92.8 and 90.1 (91.4) at `35a02492`, +40.5 seconds locally, a ratio of 1.44.
+
 ## Build review
 
 Builder Analyze (delta, five lenses) found 0 critical, 0 high, 6 medium and 4 low.
@@ -209,6 +214,20 @@ Suites that import records or plant a records evaluator ran against the fix (see
 Test: `checkImportedFilesSealedAgainstTheConfiguration` (group `records`): `check` 0 and `run` 10 for records sealed against the earlier configuration (naming `records/P-001/record-1.json`, both digests, nothing copied), then 10 for an isolation manifest left behind, then `run` 0 and `score` 0 once every file names the final digest.
 Reverts: the whole comparison removed, 12 of 191 `--calibration-inputs-only` checks fail (the sealed-against-old-configuration run exits 0, which is what leads to `score` exit 3); the manifest comparison removed, 5 fail; the record comparison removed, 1 fails (the refusal no longer names the record).
 
+### Review round 2
+
+- R2-1: `engine.digestArtifact` throws eval-quality's `RuntimeFault non-canonicalizable-value` for a configuration that meets the schema and passes `check` (a number such as `1e21`, a lone surrogate); the throw was no `EvaluatorLayerError`, so `run` exited 12 with a raw stack for an authoring defect.
+  Reproduced first: a no-rubric records project whose configuration gains `decodingParameters["tea.harnessScale"] = 1e21` gave `check` 0 and `run` 12.
+  `importRecords` now wraps the digest and throws `records/evaluator-configuration.json cannot be digested as an EvaluatorConfiguration: <reason>` (the wording `records-calibration.js` uses), so `run` exits 10 with nothing copied; the case lives in `checkRecordsEvaluator` (group `records`), which already holds the no-rubric project, so it adds no run.
+  Revert (the `try`/`catch` removed): the case fails, `run` exits 12.
+- R2-3: the sealed-against case now leaves one later record behind (`records/P-002/record-3.json`) with every other record and manifest fixed, and expects the refusal to name it; then the second probe's manifest is held the same way.
+  Revert (only the first record of each set compared): 5 of 197 `--calibration-inputs-only` checks fail.
+- R2-4: `harnessProject` writes `policy/judge-calibration.json` as compact bytes before the harness's own run, so a digest of the re-serialized value differs from the digest of the file.
+  Reverts: the labelled digest taken from `JSON.stringify(labelled.value, null, 2)` at the `bindingProblems` site, 19 of 92 `--imported-calibration-only` checks fail (a verified records run exits 10); at the `runCalibration` site, 19 of 92 fail (the harness configuration binds another digest than the file's bytes).
+- R2-5: `checkImportedFilesSealedAgainstTheConfiguration` also fails when its final `run` exits 0 with no run directory of its own, so the guard of T5 is in the three cases (`checkImportedRubricCalibration`, `checkCalibrationInputs` and this one).
+- R2-2: the header comment of `records-evaluator.js` lists the configuration-digest check among the run's checks and no longer leaves the configuration digest to eval-quality.
+- CHANGELOG and the reference's exit 10 row name the refusal.
+
 ### A2 to A5
 
 - A2, A3: the guide says the printed values hold for the contract, the configuration and the labelled file ("any of them"), and that any other `judge-calibration` finding "says what to fix".
@@ -222,7 +241,7 @@ Reverts: the whole comparison removed, 12 of 191 `--calibration-inputs-only` che
 - T2: the order case adds a second interaction step with its own operation, a `json` item and a criterion on that step. Reverts: `responseKind` dropped, 1 fails; `calibrationOperationId` returning the first step's operation, 1 fails.
 - T3: two rubrics share the criterion id `RC-101` on different channels. Revert (lookup by criterion id alone): 14 of 23 checks fail (the ask exits 1).
 - T4: a linked labelled file is refused (`regular in-folder file`) and a labelled file with two faults prints both messages. Reverts: the link followed, 4 fail; only the first problem printed, 1 fails. The missing `judgeCalibration.minimumAgreement` case (optional) was not added.
-- T5: `checkImportedRubricCalibration` and the new case now fail when `run` exits 0 without a run directory of its own; the guard has no separate revert, since no fixture makes `run` exit 0 with no new directory.
+- T5: `checkImportedRubricCalibration`, `checkCalibrationInputs` and (R2-5) the sealed-against case now fail when `run` exits 0 without a run directory of its own; the guard has no separate revert, since no fixture makes `run` exit 0 with no new directory.
 - T6: the AC 1 note above is corrected.
 
 ## Verification

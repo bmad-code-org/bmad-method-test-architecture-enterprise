@@ -18,9 +18,13 @@
  * configuration's `sealedBriefDigest` is the brief this run sealed (so the
  * harness evaluated this contract's brief), and every record of a set
  * carries one `runId` and the arm the run qualified the probe on
- * (`conditionArm` is a label eval-quality never compares with anything).
- * Agreement on the contract and configuration digests is eval-quality's to
- * judge (AD-1). The records directory must resolve inside the evaluation
+ * (`conditionArm` is a label eval-quality never compares with anything), and
+ * the configuration is one eval-quality can digest.
+ * Every record's and isolation manifest's `evaluatorConfigurationDigest` must
+ * equal the digest of the imported configuration, bindings included, so a
+ * harness that bound its calibration after sealing learns it at `run`;
+ * agreement on the contract digest stays eval-quality's to judge (AD-1).
+ * The records directory must resolve inside the evaluation
  * folder, through no link.
  *
  * When the contract declares a rubric, the harness also writes
@@ -108,7 +112,12 @@ async function importRecords({ folder, evaluator, probes, sealedBriefDigest, val
   }
 
   // Each record and manifest names the digest of this configuration, bindings included, and `score` holds them to it.
-  const configurationDigest = engine.digestArtifact(configuration, 'EvaluatorConfiguration');
+  let configurationDigest;
+  try {
+    configurationDigest = engine.digestArtifact(configuration, 'EvaluatorConfiguration');
+  } catch (error) {
+    throw new EvaluatorLayerError(`${spell(CONFIGURATION_NAME)} cannot be digested as an EvaluatorConfiguration: ${error.message}`);
+  }
   const sealedAgainst = (value, spelled) => {
     if (value.evaluatorConfigurationDigest !== configurationDigest) {
       throw new EvaluatorLayerError(

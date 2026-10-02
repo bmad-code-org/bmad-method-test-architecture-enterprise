@@ -3071,6 +3071,31 @@ async function checkRecordsEvaluator() {
     fs.writeFileSync(file, bytes);
   }
 
+  // A configuration that meets the schema and that eval-quality cannot digest (a number outside its canonical form) is an authoring defect.
+  const configurationFile = path.join(records, 'evaluator-configuration.json');
+  const configurationBytes = fs.readFileSync(configurationFile);
+  editJson(configurationFile, (value) => (value.decodingParameters['tea.harnessScale'] = 1e21));
+  const checkedUndigestible = evaluate(['check', '--evaluation', project.folder], project.env);
+  check(
+    checkedUndigestible.status === 0,
+    `check over a configuration eval-quality cannot digest exited ${checkedUndigestible.status}; expected 0\n${checkedUndigestible.output}`,
+  );
+  const undigestible = evaluate(['run', '--evaluation', project.folder], project.env);
+  check(
+    undigestible.status === 10 &&
+      undigestible.output.includes('records/evaluator-configuration.json cannot be digested as an EvaluatorConfiguration') &&
+      !undigestible.output.includes('RuntimeFault'),
+    `a configuration eval-quality cannot digest: run exited ${undigestible.status}; expected 10 saying it cannot be digested\n${undigestible.output}`,
+  );
+  const undigestibleDirectory = runDirectoryOf(project.folder);
+  check(
+    undigestibleDirectory !== runDirectory &&
+      !fs.existsSync(path.join(undigestibleDirectory, 'trial-sets')) &&
+      !fs.existsSync(path.join(undigestibleDirectory, 'evaluator-configuration.json')),
+    'the run over a configuration eval-quality cannot digest copied files into its run directory',
+  );
+  fs.writeFileSync(configurationFile, configurationBytes);
+
   // A record off its schema stops the run with exit 10, before any score call.
   editJson(path.join(records, 'P-002', 'record-1.json'), (record) => {
     delete record.findings;
@@ -3170,6 +3195,9 @@ async function harnessProject(label, { half = false, edit = () => {} } = {}) {
         editJson(path.join(folder, 'evaluation.json'), (evaluation) => (evaluation.judgeCalibration.minimumAgreement = 0.5));
       }
       edit(folder);
+      // Compact bytes, so a digest of the re-serialized value differs from the digest of the file.
+      const labelledFile = path.join(folder, 'policy', 'judge-calibration.json');
+      fs.writeFileSync(labelledFile, JSON.stringify(readJson(labelledFile)));
     },
   });
   const produced = evaluate(['run', '--evaluation', project.folder], project.env);
@@ -3605,21 +3633,35 @@ async function checkImportedFilesSealedAgainstTheConfiguration() {
     'sealed against another configuration',
     'records/P-001/record-1.json carries evaluatorConfigurationDigest',
   ]);
-  // Records rewritten to the final digest leave the isolation manifests behind: the manifests are held too.
-  for (const file of files.filter((candidate) => !candidate.endsWith('isolation-manifest.json')))
-    editJson(file, (record) => (record.evaluatorConfigurationDigest = finalDigest));
+  // Every record of a set is held, not its first alone: one later record is left behind, with every manifest and record before it fixed.
+  const laterRecord = path.join(records, 'P-002', 'record-3.json');
+  const manifest = path.join(records, 'P-002', 'isolation-manifest.json');
+  check(files.includes(laterRecord) && files.includes(manifest), 'the second probe holds no third record or no isolation manifest');
+  const staleManifest = fs.readFileSync(manifest);
+  for (const file of files.filter((candidate) => candidate !== laterRecord))
+    editJson(file, (value) => (value.evaluatorConfigurationDigest = finalDigest));
+  checkImportRefused(project, 'a later record of the second probe sealed against an earlier configuration', 10, [
+    'records/P-002/record-3.json carries evaluatorConfigurationDigest',
+    sealedAgainst,
+    finalDigest,
+  ]);
+  // Every record fixed leaves an isolation manifest behind: the manifests are held too.
+  editJson(laterRecord, (record) => (record.evaluatorConfigurationDigest = finalDigest));
+  fs.writeFileSync(manifest, staleManifest);
   checkImportRefused(project, 'an isolation manifest sealed against an earlier configuration', 10, [
-    'isolation-manifest.json carries evaluatorConfigurationDigest',
+    'records/P-002/isolation-manifest.json carries evaluatorConfigurationDigest',
     sealedAgainst,
     finalDigest,
   ]);
   // Every file sealed against the final configuration imports, and score accepts it.
-  for (const file of files.filter((candidate) => candidate.endsWith('isolation-manifest.json')))
-    editJson(file, (manifest) => (manifest.evaluatorConfigurationDigest = finalDigest));
+  editJson(manifest, (value) => (value.evaluatorConfigurationDigest = finalDigest));
   commitAll(project.repository, project.folder, 'the records sealed against the final configuration');
+  const before = runNames(project.folder);
   const ran = evaluate(['run', '--evaluation', project.folder], project.env);
   check(ran.status === 0, `run over records sealed against the final configuration exited ${ran.status}\n${ran.output}`);
   if (ran.status !== 0) return;
+  if (runNames(project.folder).every((name) => before.includes(name)))
+    return check(false, 'the records run exited 0 and left no run directory of its own');
   const { evidence } = scoreRun(project, 'records sealed against the final configuration');
   checkVotes('records sealed against the final configuration', evidence, 'P-001', 'passed-clean-control');
   checkVotes('records sealed against the final configuration', evidence, 'P-002', 'caught');
