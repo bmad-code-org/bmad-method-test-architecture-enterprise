@@ -202,7 +202,7 @@ function foldedText(text, withMap = true) {
   const ends = [];
   for (let at = 0; at < text.length; ) {
     const character = String.fromCodePoint(text.codePointAt(at));
-    const unit = character.toLowerCase().toUpperCase().toLowerCase();
+    const unit = character === '\u0130' ? 'i' : character.toLowerCase().toUpperCase().toLowerCase();
     folded += unit;
     if (withMap) {
       for (let index = 0; index < unit.length; index += 1) {
@@ -284,7 +284,11 @@ function scrubText(text, secrets) {
   for (const [start, end] of secretSpans(mapped, forms)) {
     const from = starts === null ? start : starts[start];
     const to = ends === null ? end : ends[end - 1];
-    if (from < kept) continue;
+    if (from < kept) {
+      // The span starts inside the character the one before it ended on (`ß` folds to `ss`): the run is one replacement.
+      kept = to;
+      continue;
+    }
     scrubbed += text.slice(kept, from) + SCRUBBED;
     kept = to;
   }

@@ -1870,6 +1870,10 @@ const LETTER_CASES = {
     text.toLowerCase().replaceAll(/(^|[^\p{L}\p{N}])(\p{L})/gu, (_, before, letter) => `${before}${letter.toUpperCase()}`),
   'Turkish upper-cased': (text) => text.toLocaleUpperCase('tr'),
   'Turkish lowercased': (text) => text.toLocaleLowerCase('tr'),
+  'Turkish capitalized': (text) =>
+    text
+      .toLocaleLowerCase('tr')
+      .replaceAll(/(^|[^\p{L}\p{N}])(\p{L})/gu, (_, before, letter) => `${before}${letter.toLocaleUpperCase('tr')}`),
   alternating: (text) =>
     [...text].map((character, index) => (index % 2 === 0 ? character.toUpperCase() : character.toLowerCase())).join(''),
 };
@@ -1914,7 +1918,19 @@ const LETTER_SECRETS = [
   'Aw+/Zx9=Base64+Token/Value==',
   'Grader-INDEX-index-0123',
   'ΣΟΦΟΣ-Token-ΑΣ-Ὀδυσσεύς-0123',
+  'admin-index-token',
+  'münich-key-0123',
+  'key-token-value-𐐨',
 ];
+
+/**
+ * Whether an echo holds a letter beyond ASCII in a case of its own: not the secret as it was sent, nor its lower, upper or
+ * Turkish case alone (Turkish capitals turn the `i` of an ASCII secret into `İ` word by word). A serializer that then writes
+ * that letter as `\\uXXXX` has other hex digits than any whole-text case gives; Story 1.74 closes that corner.
+ */
+const unevenBeyondAscii = (secret, echo) =>
+  [...echo].some((character) => character.codePointAt(0) > 0x7f) &&
+  ![secret, secret.toLowerCase(), secret.toUpperCase(), secret.toLocaleLowerCase('tr'), secret.toLocaleUpperCase('tr')].includes(echo);
 
 /** A fake port that answers every request with `answer`, as the grader's HTTP port does. */
 const answering = (answer) => ({ probe: async (request) => ({ ...request, kind: 'api', ...answer }) });
@@ -1968,20 +1984,22 @@ async function checkLetterCases() {
       // An echo with a letter beyond ASCII in a case of its own (a word capitalized, every other letter shifted) that the
       // serializer then writes as `\uXXXX` has other hex digits than any whole-secret case gives (`\u00fc`, `\u00dc`):
       // Story 1.74 closes that corner, so the escaped formats are tried here for the cases that change every letter alike.
-      const unevenAndEscaped =
-        [...secret].some((character) => character.codePointAt(0) > 0x7f) &&
-        ![secret, secret.toLowerCase(), secret.toUpperCase()].includes(echo);
+      const unevenAndEscaped = unevenBeyondAscii(secret, echo);
       for (const [format, write] of Object.entries(BYTE_FORMATS)) {
         if (unevenAndEscaped && ESCAPES_LETTERS(format)) continue;
         const written = write(echo);
-        const { observation: sent } = await probe(
-          { status: 200, headers: {}, body: { kind: 'text', value: `pre ${written} post` } },
-          secret,
-        );
-        check(
-          sent.body?.value === `pre ${SCRUBBED_TEXT} post`,
-          `${label} echoed ${caseName} as ${format} (${JSON.stringify(written)}) left ${JSON.stringify(sent.body?.value)}`,
-        );
+        // In the middle of a text, at its end and at its start, so a span that ends on the last character is read too.
+        for (const [where, around] of [
+          ['in the middle', (text) => `pre ${text} post`],
+          ['at the end', (text) => `pre ${text}`],
+          ['at the start', (text) => `${text} post`],
+        ]) {
+          const { observation: sent } = await probe({ status: 200, headers: {}, body: { kind: 'text', value: around(written) } }, secret);
+          check(
+            sent.body?.value === around(SCRUBBED_TEXT),
+            `${label} echoed ${caseName} as ${format} (${JSON.stringify(written)}) ${where} of a text left ${JSON.stringify(sent.body?.value)}`,
+          );
+        }
       }
       // The fault path: the message, the cause and the text a process printed, with the secret in the same case, and a
       // leading part of it the printed text's end cut off.
@@ -2018,6 +2036,35 @@ async function checkLetterCases() {
       JSON.stringify(Object.keys(keyed.body?.value ?? {})) === JSON.stringify([...numbered, 'plain']),
       `${label} as ${distinct.length} object keys in different cases gave ${JSON.stringify(Object.keys(keyed.body?.value ?? {}))}`,
     );
+  }
+
+  // One port holds every secret above, an ASCII decoy first: a value that is not first in its set, a letter beyond ASCII
+  // included, is scrubbed in every case as it is when it stands alone.
+  const answered = { current: null };
+  const crowded = hostEnvironmentPort({
+    port: { probe: async (request) => ({ ...request, kind: 'api', ...answered.current }) },
+    registry: registryOf('decoy-first-secret-99', ...LETTER_SECRETS),
+  });
+  for (const secret of LETTER_SECRETS) {
+    for (const [caseName, change] of Object.entries(LETTER_CASES)) {
+      const echo = change(secret);
+      answered.current = echoingAnswer(echo);
+      const { observation: shared } = await crowded.probe(API_REQUEST);
+      check(
+        JSON.stringify(shared) === JSON.stringify({ ...API_REQUEST, kind: 'api', ...echoingAnswer(SCRUBBED_TEXT) }),
+        `${JSON.stringify(secret)} echoed ${caseName} among ${LETTER_SECRETS.length + 1} secrets on one port left ${JSON.stringify(shared)}`,
+      );
+      const uneven = unevenBeyondAscii(secret, echo);
+      for (const [format, write] of Object.entries(BYTE_FORMATS)) {
+        if (uneven && ESCAPES_LETTERS(format)) continue;
+        answered.current = { status: 200, headers: {}, body: { kind: 'text', value: `pre ${write(echo)} post` } };
+        const { observation: sent } = await crowded.probe(API_REQUEST);
+        check(
+          sent.body?.value === `pre ${SCRUBBED_TEXT} post`,
+          `${JSON.stringify(secret)} echoed ${caseName} as ${format} among ${LETTER_SECRETS.length + 1} secrets on one port left ${JSON.stringify(sent.body?.value)}`,
+        );
+      }
+    }
   }
 
   // A value under the minimum length stays in every case, in every byte format; one of the minimum length does not.
@@ -2109,6 +2156,51 @@ async function checkLetterCases() {
     `two secret sets on one port gave ${JSON.stringify([asFirst, asSecond, asFirstAgain].map((answer) => answer.observation.body.value))}`,
   );
 
+  // Sets that share a value, or differ only in how a comma splits their values, are told apart whole: a key built from part of
+  // the values would give one set the other's forms.
+  const shared = 'shared-server-value-1';
+  const sets = {
+    a: [shared, 'first-auth-token-AAAA'],
+    b: [shared, 'second-auth-token-BBBB'],
+    e: ['first-auth-token-AAAA', shared],
+    f: ['second-auth-token-BBBB', shared],
+    c: ['abcdefgh,ijklmnop'],
+    d: ['abcdefgh', 'ijklmnop'],
+  };
+  const echoes = {
+    a: ['SHARED-SERVER-VALUE-1 FIRST-AUTH-TOKEN-AAAA SECOND-AUTH-TOKEN-BBBB', `${SCRUBBED_TEXT} ${SCRUBBED_TEXT} SECOND-AUTH-TOKEN-BBBB`],
+    b: ['SHARED-SERVER-VALUE-1 FIRST-AUTH-TOKEN-AAAA SECOND-AUTH-TOKEN-BBBB', `${SCRUBBED_TEXT} FIRST-AUTH-TOKEN-AAAA ${SCRUBBED_TEXT}`],
+    e: ['SHARED-SERVER-VALUE-1 FIRST-AUTH-TOKEN-AAAA SECOND-AUTH-TOKEN-BBBB', `${SCRUBBED_TEXT} ${SCRUBBED_TEXT} SECOND-AUTH-TOKEN-BBBB`],
+    f: ['SHARED-SERVER-VALUE-1 FIRST-AUTH-TOKEN-AAAA SECOND-AUTH-TOKEN-BBBB', `${SCRUBBED_TEXT} FIRST-AUTH-TOKEN-AAAA ${SCRUBBED_TEXT}`],
+    c: ['ABCDEFGH,IJKLMNOP and ABCDEFGH and IJKLMNOP', `${SCRUBBED_TEXT} and ABCDEFGH and IJKLMNOP`],
+    d: ['ABCDEFGH,IJKLMNOP and ABCDEFGH and IJKLMNOP', `${SCRUBBED_TEXT},${SCRUBBED_TEXT} and ${SCRUBBED_TEXT} and ${SCRUBBED_TEXT}`],
+  };
+  for (const order of [
+    ['a', 'b', 'a'],
+    ['b', 'a', 'b'],
+    ['e', 'f', 'e'],
+    ['f', 'e', 'f'],
+    ['c', 'd', 'c'],
+    ['d', 'c', 'd'],
+  ]) {
+    let current = null;
+    const port = hostEnvironmentPort({
+      port: {
+        probe: async (request) => ({ ...request, kind: 'api', status: 200, headers: {}, body: { kind: 'text', value: current } }),
+      },
+      registry: { apiSecrets: (interfaceId) => sets[interfaceId] },
+    });
+    const gave = [];
+    for (const id of order) {
+      current = echoes[id][0];
+      gave.push([id, (await port.probe({ ...API_REQUEST, interfaceId: id })).observation.body.value]);
+    }
+    check(
+      gave.every(([id, value]) => value === echoes[id][1]),
+      `secret sets visited in the order ${order.join(', ')} on one port gave ${JSON.stringify(gave)}`,
+    );
+  }
+
   // A cut text: a leading part of a secret, four characters or more, at the end, in any case; shorter ones and ones that are
   // not at the end stay; the longest cut wins whichever secret it leads.
   const forms = secretForms(['grader-secret-value-0123', 'Second-Token-Value-4567']);
@@ -2123,6 +2215,9 @@ async function checkLetterCases() {
     ['log line second-', 'log line [redacted]'],
     ['log line GRADER-SECRET-VALUE-0123 tail', 'log line [redacted] tail'],
     ['GRADER-SECRET-VALUE-0123 and SECOND-TOK', '[redacted] and [redacted]'],
+    ['Straße: GRADER-SE', 'Straße: [redacted]'],
+    ['Straße ß Straße GRADER-SE', 'Straße ß Straße [redacted]'],
+    ['İstanbul: Second-Tok', 'İstanbul: [redacted]'],
   ];
   for (const [text, expected] of cuts) {
     check(
@@ -2204,6 +2299,21 @@ async function checkLetterCases() {
       `overlapping secrets ${JSON.stringify(secrets)} left ${JSON.stringify(scrub('xx ABCDEFGHIJKLMNOP yy', secrets))}`,
     );
   }
+  // Two secrets that meet inside one character a fold expands (`ß` is `ss`, the Greek iota with a diaeresis and a tonos is three
+  // units) are one run: no character of either survives.
+  const accent = '\u0308\u0301';
+  for (const [text, secrets] of [
+    ['abcdefgßxyzwvut', ['abcdefgs', 'sxyzwvut']],
+    ['zzzzzzzßqqqqqqqqq', ['zzzzzzzs', 'sqqqqqqqqq']],
+    ['sabcdefgßabcdefgs', ['sabcdefgs']],
+    ['ABCDEFGSSXYZWVUT', ['abcdefgß', 'ßxyzwvut']],
+    [`abcdefgΐxyzwvut`, ['abcdefgι', `${accent}xyzwvut`]],
+  ]) {
+    check(
+      scrub(text, secretForms(secrets)) === SCRUBBED_TEXT,
+      `secrets ${JSON.stringify(secrets)} meeting inside a character left ${JSON.stringify(scrub(text, secretForms(secrets)))} of ${JSON.stringify(text)}`,
+    );
+  }
   check(
     scrub('abcdefghABCDEFGH', ['abcdefgh']) === '[redacted][redacted]' &&
       scrub('ß-straße-secret', secretForms(['STRASSE-SECRET'])) === 'ß-[redacted]',
@@ -2261,6 +2371,12 @@ async function checkLetterCases() {
       listed.includes('grader-secret-value-0123') &&
       listed.includes('GRADER-SECRET-VALUE-0123'),
     `secretForms gave ${JSON.stringify(listed)}`,
+  );
+  // The order holds where the forms differ in length: the escaped forms of this secret are longer than its plain ones.
+  const unequal = secretForms(['straße-Secret-ünï-0123']);
+  check(
+    unequal.every((form, index) => index === 0 || unequal[index - 1].length >= form.length) && unequal[0].length > unequal.at(-1).length,
+    `secretForms of a secret with escapable letters is not longest first: ${JSON.stringify(unequal.map((form) => form.length))}`,
   );
   check(
     scrub('abcdef', ['', 'cd']) === 'ab[redacted]ef' && scrub('abcdef', ['']) === 'abcdef' && scrub('abc', []) === 'abc',

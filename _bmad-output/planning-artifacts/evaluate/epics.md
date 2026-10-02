@@ -1802,7 +1802,7 @@ The third criterion's revert is reworded.
 The fault path has no set of its own any more (`anyCase` is gone), and the matching is case-insensitive by construction, so rebuilding a lowercased set and handing it to the new scrub leaks nothing.
 What fails is the fault path scrubbing with the earlier case-sensitive code while the observation uses the new matching; that lets the uppercased echo through the fault's message, its cause or both, which the case catches.
 The comparison folds the text and the forms by case (no regular expression is built over the forms, since a pattern holding every form of a large secret exceeds what the engine compiles), the forms are built once per distinct set of values on a port and folded once per `secrets` array, and secrets that overlap in a text are replaced as one span.
-A secret holding a letter beyond ASCII that the target changes unevenly (one word capitalized, the rest not) and then writes as `\uXXXX` is not matched, since the escape digits of a letter differ with its case; Story 1.74 closes it.)
+A secret holding a letter beyond ASCII that the target changes unevenly (one word capitalized, the rest not) and then writes as `\uXXXX` is not matched (this includes an ASCII secret that a Turkish-locale capitalizer echoes as `Admin-İndex-Token`), since the escape digits of a letter differ with its case; Story 1.74 closes it.)
 
 ### Story 1.67: Emit the label-free calibration inputs a records harness feeds its scorer
 
@@ -1967,7 +1967,7 @@ So that no evidence artifact holds a value the host injected (AD-4, AD-8).
 
 **Acceptance Criteria:**
 
-**Given** an `api` registry entry whose auth value holds letters beyond ASCII (a Latin letter with a diaeresis, a Greek and a Cyrillic letter, and a letter outside the BMP, which escapes as a surrogate pair) and a fake port that echoes it capitalized per word and alternating, written with every non-ASCII character as `\uXXXX` in lower- and upper-case hex, as one level and as the second of two levels of JSON escaping
+**Given** an `api` registry entry whose auth value holds letters beyond ASCII (a Latin letter with a diaeresis, a Greek and a Cyrillic letter, and a letter outside the BMP, which escapes as a surrogate pair, and an ASCII value that a Turkish-locale capitalizer turns into `Admin-İndex-Token`) and a fake port that echoes it capitalized per word and alternating, written with every non-ASCII character as `\uXXXX` in lower- and upper-case hex, as one level and as the second of two levels of JSON escaping
 **When** the call goes through `hostEnvironmentPort`
 **Then** the observation holds `[redacted]` in each place, a `test:evaluate-api` case beside Story 1.66's matrix; matching only the escapes of the whole-text cases leaves the echo in, which the case catches
 **And** a fault's message and cause quoting the echo scrub with the same matching, and a cut text ending in the leading part of such an echo (four or more characters, cut inside an escape too) is replaced, a `test:evaluate-api` case; a cut text matched against the whole-text cases leaves the leading part in

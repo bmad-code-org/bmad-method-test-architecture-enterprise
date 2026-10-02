@@ -211,6 +211,51 @@ It reported four defects against the first build, a single `iu` pattern per secr
 - The memo `formsFor` keeps the plain JSON of the values in a `Map` for the life of the port; the values are already in the registry's process memory.
 - Unobserved by design: nothing asserts the folded forms are built once per array (see Revert observations).
 
+## Review round 1
+
+Two Opus lenses reported on PR #292 (code and test quality). Each finding was reproduced first, fixed, and revert-checked on a scratch copy of the tree (`cp -c`, `node_modules` included); the working tree was never mutated.
+The unmodified copy passes `--letter-cases-only` 3,630 checks; the counts below are failed checks of that run.
+
+### Code
+
+- A1 (medium): a Turkish-locale per-word capitalizer leaks an ASCII secret.
+  Reproduced: `scrub('x Admin-İndex-Token y', secretForms(['admin-index-token']))` returned the text unchanged, because the fold turns `İ` into `i` and a combining dot while the forms hold plain `i`.
+  Fix: `foldedText` folds U+0130 to `i` (one unit for one unit).
+  A secret that holds `İ` still matches: its own fold is `i`, its `toLowerCase` variant keeps the combining dot and matches an echo that decomposes the `İ`, and its Turkish lower-case variant is plain `i` (checked on `İstanbul-key` against `İstanbul-key`, `İSTANBUL-KEY`, the decomposed form and `istanbul-key`; the `İstanbul-Key-0123` cells of the matrix stay green).
+  Tests: a `Turkish capitalized` entry in `LETTER_CASES` and the secret `admin-index-token`; they run through the observation, every byte format, the fault path and the keys.
+  Revert (U+0130 folded by the generic path): 24 fail.
+  The new cell showed one more corner, now stated in the reference, the plan and Story 1.74: an ASCII secret that the capitalizer echoes with an `İ` and a serializer then writes as `\u0130` has other escape digits than any whole-text case; the escaped formats are skipped for it, as they are for the mixed-case non-ASCII secrets (`unevenBeyondAscii`).
+- A2 (low): two secret spans that meet inside one expanded character were dropped (`if (from < kept) continue;`).
+  Reproduced: `scrub('abcdefgßxyzwvut', secretForms(['abcdefgs','sxyzwvut']))` gave `[redacted]xyzwvut`, `scrub('zzzzzzzßqqqqqqqqq', secretForms(['zzzzzzzs','sqqqqqqqqq']))` left nine of ten characters, and a secret that starts and ends with `s`, echoed twice with `ß` between, did the same.
+  Fix: a span that starts inside the character the previous one ended on extends the replacement (`kept = to`) and emits no second `[redacted]`.
+  The overlap checks add those three, the same with the secrets in the forms' upper case (`ABCDEFGSSXYZWVUT`) and a three-unit fold (the Greek iota with a diaeresis and a tonos, between a secret ending in `ι` and one starting with the two combining marks); each yields exactly one `[redacted]`.
+  Revert (the span skipped as before): 4 fail.
+  A candidate `Math.max(kept, to)` is not needed: the merged spans are in order and disjoint in folded units, so `to` never falls short of `kept`; a mutation to the other form could not fail, and the code keeps the plain assignment.
+
+### Tests (each survived a mutation; each now fails it)
+
+- T1: two secret sets on one port.
+  The cases: two interfaces that share a server value and differ in the auth value, in both positions (`[shared, first]`, `[shared, second]` and `[first, shared]`, `[second, shared]`), and `['abcdefgh,ijklmnop']` against `['abcdefgh', 'ijklmnop']`; each pair on one port in both orders and a repeat, each set's own values uppercased and scrubbed, the other set's value left.
+  Reverts: memo key from the first value 2 fail, from the last value 2, from the length and the first value 2, the values joined by a comma 2.
+- T2: a value that is not first in its set.
+  The matrix runs again on one port that holds every secret behind an ASCII decoy (observation, then every byte format).
+  Revert (case variants taken of the first secret only): 75 fail.
+- T3: `münich-key-0123` joins the matrix; the upper-cased by ASCII-escaped cells need the upper-case variant.
+  Revert (variant dropped): 12 fail.
+- T4: `key-token-value-𐐨` ends in a letter outside the BMP; every echo is placed in the middle of a text, at its end and at its start (the matrix did one position).
+  Reverts: `ends.push(at + 1)` 185 fail; the span end taken from the start of the last unit 185.
+- T5: cut texts after a length-changing fold: `Straße: GRADER-SE`, `Straße ß Straße GRADER-SE`, `İstanbul: Second-Tok`.
+  The code was right here (`scrubCutText` maps the cut through `starts`); the mutation `window + at` returned `Straße: G[redacted]`.
+  Revert: 2 fail.
+- T6: the longest-first assertion runs on `straße-Secret-ünï-0123`, whose escaped forms are longer than the plain ones.
+  Revert (sort removed): 1 fails.
+
+### Gates after review round 1
+
+Green: `--letter-cases-only` 3,630 checks, `test:evaluate-api` 3,907, `test:evaluate-arms` 570, `test:evaluate-boundaries` 427, `test:evaluate-guidance`, `test:schema-versions`, `test:schemas`, `test:boundary`, `test:direction`, `test:doc-counts`, `test:shards` 117, `test:ci-coverage`, `test:changelog`, `lint`, `lint:md`, `format:check`, `docs:validate-links`.
+Measured weight of `test:evaluate-api`, other lanes' suites running alongside: 115 and 112 seconds with the round's cases (mean 113.5) against 111.5 and 107.3 at `5268045b` (mean 109.4), +4.1 seconds locally (the one-port matrix and the three text positions add about 3 seconds of the group's 4); at the 1.9 local-to-CI ratio about +8 seconds, so `test:evaluate-api` 175.9 becomes about 184.
+`tools/test-shard-weights.json` stays untouched; `test:evaluate-arms` is unchanged by this round.
+
 ## Verification
 
 **Commands:**
