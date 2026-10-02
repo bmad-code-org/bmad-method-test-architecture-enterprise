@@ -98,7 +98,7 @@ development_status:
   1-60-observe-every-confined-processs-file-access-beyond-node: review
   1-61-teach-file-system-confinement-in-the-evaluate-skill: backlog
   1-62-share-one-sandbox-primitive-layer-across-teas-isolation-mod: done
-  1-63-carry-the-audit-over-a-channel-the-target-cannot-write: backlog
+  1-63-give-a-bubblewrap-target-no-route-to-the-hosts-abstract-sockets: backlog
   1-64-hold-the-release-across-the-witness-legs-and-the-trials: review
   1-65-ask-every-http-interface-of-a-deployment-which-release-it-r: done
   1-66-scrub-an-observation-in-every-letter-case: done
@@ -158,7 +158,7 @@ parallel_lanes:
     - 1-58-keep-the-bridges-admission-token-and-the-runs-private-direc
     - 1-59-let-a-confined-agent-target-keep-the-state-its-cli-writes
     - 1-60-observe-every-confined-processs-file-access-beyond-node
-    - 1-63-carry-the-audit-over-a-channel-the-target-cannot-write
+    - 1-63-give-a-bubblewrap-target-no-route-to-the-hosts-abstract-sockets
     - 1-61-teach-file-system-confinement-in-the-evaluate-skill
     - 1-52-stop-agent-descendants-on-windows
     - 1-53-bound-an-agent-whose-guardian-is-stopped

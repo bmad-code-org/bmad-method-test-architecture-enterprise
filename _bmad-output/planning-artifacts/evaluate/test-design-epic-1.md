@@ -977,15 +977,14 @@ Added in Story 1.31 from its local review. Levels: unit, static. Files: a new st
 | No module keeps its own copy of a shared primitive  | The static test scans the three modules for a local executable lookup, profile-path check, containment or probe   | Static | P1  | Restoring a local copy in any one module fails the gate        |
 | One refusal of unsafe path characters for all three | Each module refuses each quote, backslash, line-break and control character a profile cannot carry                | Unit   | P1  | Reverting one caller to its own check lets a character through |
 
-### Story 1.63: Carry the audit over a channel the target cannot write
+### Story 1.63: Give a Bubblewrap target no route to the host's abstract sockets
 
-Added in Story 1.31 from its local review. Levels: integration. Files: `test/test-evaluate-run.js` (`test:evaluate-run`), `test/test-evaluate-api.js` (`test:evaluate-api`), the verdict fixture.
+Added in Story 1.31 from its local review; amended 2026-10-02 after Story 1.60 removed the report file (the rewritten-report case is dropped). Levels: integration, static. Files: `test/test-evaluate-run.js` (`test:evaluate-run`), `test/test-evaluate-api.js` (`test:evaluate-api`).
 
-| AC                                                       | Test                                                                                                                          | Level       | P   | Revert check                                            |
-| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ----------- | --- | ------------------------------------------------------- |
-| A rewritten report hides nothing                         | A confined target reads an ungranted path, then rewrites, truncates and pads the report file; `observedMounts` still lists it | Integration | P0  | Reading the file in place of the channel drops the path |
-| No route to a service manager through an abstract socket | On Linux, a listener on an abstract address is unreachable from the target while a started HTTP service answers the runtime   | Integration | P1  | Removing the isolation lets the connection through      |
-| The reference claims only what it can back               | The reference's confinement section is compared with the mechanism's behavior in the cases above                              | Static      | P2  | A claim the cases do not back fails the comparison      |
+| AC                                                       | Test                                                                                                                        | Level       | P   | Revert check                                       |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ----------- | --- | -------------------------------------------------- |
+| No route to a service manager through an abstract socket | On Linux, a listener on an abstract address is unreachable from the target while a started HTTP service answers the runtime | Integration | P1  | Removing the isolation lets the connection through |
+| The reference claims only what it can back               | The reference's confinement section is compared with the mechanism's behavior in the cases above                            | Static      | P2  | A claim the cases do not back fails the comparison |
 
 ### Story 1.64: Hold the release across the witness legs and the trials
 

@@ -70,7 +70,7 @@ An adopter describes a target (agent, skill, workflow, tool-use system, AI featu
 - Story 1.60: Observe every confined process's file access, beyond Node
 - Story 1.61: Teach file-system confinement in the Evaluate skill
 - Story 1.62: Share one sandbox primitive layer across TeA's isolation modules
-- Story 1.63: Carry the audit over a channel the target cannot write
+- Story 1.63: Give a Bubblewrap target no route to the host's abstract sockets
 - Story 1.64: Hold the release across the witness legs and the trials
 - Story 1.65: Ask every HTTP interface of a deployment which release it runs
 - Story 1.66: Scrub an observation in every letter case

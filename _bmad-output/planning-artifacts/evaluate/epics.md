@@ -228,7 +228,7 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 60    | 1.60  | 1.31                         |
 | 61    | 1.61  | 1.31                         |
 | 62    | 1.62  | 1.31                         |
-| 63    | 1.63  | 1.31                         |
+| 63    | 1.63  | 1.31, 1.60                   |
 | 64    | 1.64  | 1.38, 1.65                   |
 | 65    | 1.65  | 1.38                         |
 | 66    | 1.66  | 1.11, 1.38                   |
@@ -1727,23 +1727,22 @@ So that a sandbox defect is fixed once and every caller gets the fix (AD-5, AD-7
 **Dependencies:** 1.31.
 **Gate:** `test:isolation-primitives`, `test:cli`, `test:atdd-isolation`, `test:evaluate-run`, `npm test`.
 
-### Story 1.63: Carry the audit over a channel the target cannot write
+### Story 1.63: Give a Bubblewrap target no route to the host's abstract sockets
 
-Added in Story 1.31 from its local review. The audit's report is a file the target's own processes append to, so a target that means to hide an ungranted read can rewrite the file to the same length or longer after it has run (Story 1.31 reads a file cut shorter than an earlier read, or longer than the runtime reads, as a violation naming the report, and grants only the report file, never its directory). Under Bubblewrap the target also shares the host's network namespace, which an HTTP service needs to be reachable, so a process it starts can connect to an abstract Unix socket such as a desktop session's D-Bus and ask the user's service manager to start a job outside the sandbox; Story 1.31 hides `/run/user`, which closes the path-based socket only.
+Added in Story 1.31 from its local review and amended 2026-10-02 after Story 1.60 merged. Story 1.31's audit report was a file the target's own processes appended to, which a target could rewrite to hide a line. Story 1.60 replaced it with the confining mechanism's own record (a runtime-owned `log stream` on macOS, `strace` outside the namespace on Linux), so no report file exists for a target to rewrite, and this story's first criterion (a channel the target cannot write) is met by that design and is dropped. What stands is the second: under Bubblewrap the target shares the host's network namespace, which an HTTP service needs to be reachable, so a process it starts can connect to an abstract Unix socket such as a desktop session's D-Bus and ask the user's service manager to start a job outside the sandbox; Story 1.31 hides `/run/user`, which closes the path-based socket only. The audit's one remaining channel gap, a target saturating the macOS log to lose its own report, is Story 1.81's.
 
-As an adopter reading `observedMounts`,
-I want the audit's lines to reach the runtime over a channel the target cannot rewrite,
-So that an empty `observedMounts` is evidence and not something the target could have arranged (AD-8).
+As an adopter running a Linux target under Bubblewrap,
+I want the target to have no route to the host's abstract sockets,
+So that a process it starts cannot ask a host service to run a job outside the sandbox (AD-8).
 
 **Acceptance Criteria:**
 
-**Given** a confined trial whose target reads an ungranted path
-**When** the audit reports it
-**Then** the runtime holds each line the moment it is sent (an inherited descriptor or a listener the runtime owns) and a target that rewrites, truncates or floods the report file changes nothing the runtime read; a run whose target rewrites the file to hide the line still lists the path in `observedMounts`, and reading the file again in place of the channel fails that case
-**And** a Bubblewrap target cannot reach a service manager through an abstract socket: the mechanism gives the target no route to the host's abstract sockets while a started HTTP service stays reachable from the runtime, which a case on a Linux runner asserts by starting a listener on an abstract address and attempting the connection from the target; removing the isolation lets the connection through and fails the case
+**Given** a Bubblewrap target on a Linux runner and a listener on an abstract Unix socket address owned by the runtime
+**When** the target attempts to connect to that address
+**Then** the connection fails while an HTTP service the target started stays reachable from the runtime; removing the isolation lets the connection through and fails the case
 **And** the reference names what the audit and the sandbox still do not see, with no claim the mechanism cannot back.
 
-**Dependencies:** 1.31.
+**Dependencies:** 1.31, 1.60.
 **Gate:** `test:evaluate-run`, `test:evaluate-api`, `npm test`, and the Linux CI job.
 
 ### Story 1.64: Hold the release across the witness legs and the trials
