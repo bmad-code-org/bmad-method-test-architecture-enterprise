@@ -289,6 +289,44 @@
         }
       ],
       "oracles": ["O-015"]
+    },
+    {
+      "id": "B-016",
+      "description": "seeded-offline-order-capture: the runner's projection of the document has exactly its four keys, each of its declared type, and they agree. The design is non-blank, the scored descriptions are empty exactly when the scored count is zero, and a scored row implies a nonzero row count.",
+      "severity": "material",
+      "observableSuccessCriterion": "The runner's projection of the written document has its four declared keys, a non-blank design and counts that agree with its scored descriptions.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "seeded-offline-order-capture/projection-coherent"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "unscoreable-deliverable"
+        }
+      ],
+      "oracles": ["O-016"]
+    },
+    {
+      "id": "B-017",
+      "description": "clean-last-sync-indicator: the runner's projection of the document has exactly its four keys, each of its declared type, and they agree. The design is non-blank, the scored descriptions are empty exactly when the scored count is zero, and a scored row implies a nonzero row count.",
+      "severity": "material",
+      "observableSuccessCriterion": "The runner's projection of the written document has its four declared keys, a non-blank design and counts that agree with its scored descriptions.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "clean-last-sync-indicator/projection-coherent"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "unscoreable-deliverable"
+        }
+      ],
+      "oracles": ["O-017"]
     }
   ],
   "oracles": [
@@ -1039,6 +1077,306 @@
                     }
                   ]
                 }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-016",
+      "polarity": "expects-hold",
+      "commentary": "seeded-offline-order-capture: the runner's projection of the document has exactly its four keys, each of its declared type, and they agree. The design is non-blank, the scored descriptions are empty exactly when the scored count is zero, and a scored row implies a nonzero row count.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The runner's whole projection of the test design document written for seeded-offline-order-capture: its design, its row count, its scored descriptions and its scored count.",
+        "negativeDomain": "A projection with a missing, extra or mistyped key, a blank design, a scored count that disagrees with its scored descriptions about being empty, or a scored row it never counted.",
+        "evidenceTargets": [
+          "/interactions/design-seeded-offline-order-capture/stdout/design",
+          "/interactions/design-seeded-offline-order-capture/stdout/riskRowCount",
+          "/interactions/design-seeded-offline-order-capture/stdout/scoredRiskDescriptions",
+          "/interactions/design-seeded-offline-order-capture/stdout/scoredRiskCount"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "shape",
+            "operands": [
+              {
+                "pointer": "/interactions/design-seeded-offline-order-capture/stdout"
+              }
+            ],
+            "descriptor": {
+              "requiredKeys": ["design", "riskRowCount", "scoredRiskDescriptions", "scoredRiskCount"],
+              "permittedKeys": ["design", "riskRowCount", "scoredRiskDescriptions", "scoredRiskCount"],
+              "types": {
+                "design": "string",
+                "riskRowCount": "number",
+                "scoredRiskDescriptions": "array",
+                "scoredRiskCount": "number"
+              }
+            }
+          },
+          {
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/design-seeded-offline-order-capture/stdout/design"
+              }
+            ],
+            "pattern": "^\\s*\\S[\\s\\S]*$"
+          },
+          {
+            "op": "any",
+            "operands": [
+              {
+                "op": "all",
+                "operands": [
+                  {
+                    "op": "equality",
+                    "operands": [
+                      {
+                        "pointer": "/interactions/design-seeded-offline-order-capture/stdout/scoredRiskCount"
+                      },
+                      {
+                        "literal": 0
+                      }
+                    ]
+                  },
+                  {
+                    "op": "count-tolerance",
+                    "operands": [
+                      {
+                        "pointer": "/interactions/design-seeded-offline-order-capture/stdout/scoredRiskDescriptions"
+                      }
+                    ],
+                    "expected": 0,
+                    "tolerance": 0,
+                    "relative": false
+                  }
+                ]
+              },
+              {
+                "op": "all",
+                "operands": [
+                  {
+                    "op": "not",
+                    "operands": [
+                      {
+                        "op": "equality",
+                        "operands": [
+                          {
+                            "pointer": "/interactions/design-seeded-offline-order-capture/stdout/scoredRiskCount"
+                          },
+                          {
+                            "literal": 0
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "op": "not",
+                    "operands": [
+                      {
+                        "op": "count-tolerance",
+                        "operands": [
+                          {
+                            "pointer": "/interactions/design-seeded-offline-order-capture/stdout/scoredRiskDescriptions"
+                          }
+                        ],
+                        "expected": 0,
+                        "tolerance": 0,
+                        "relative": false
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "any",
+            "operands": [
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/design-seeded-offline-order-capture/stdout/scoredRiskCount"
+                  },
+                  {
+                    "literal": 0
+                  }
+                ]
+              },
+              {
+                "op": "not",
+                "operands": [
+                  {
+                    "op": "equality",
+                    "operands": [
+                      {
+                        "pointer": "/interactions/design-seeded-offline-order-capture/stdout/riskRowCount"
+                      },
+                      {
+                        "literal": 0
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-017",
+      "polarity": "expects-hold",
+      "commentary": "clean-last-sync-indicator: the runner's projection of the document has exactly its four keys, each of its declared type, and they agree. The design is non-blank, the scored descriptions are empty exactly when the scored count is zero, and a scored row implies a nonzero row count.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The runner's whole projection of the test design document written for clean-last-sync-indicator: its design, its row count, its scored descriptions and its scored count.",
+        "negativeDomain": "A projection with a missing, extra or mistyped key, a blank design, a scored count that disagrees with its scored descriptions about being empty, or a scored row it never counted.",
+        "evidenceTargets": [
+          "/interactions/design-clean-last-sync-indicator/stdout/design",
+          "/interactions/design-clean-last-sync-indicator/stdout/riskRowCount",
+          "/interactions/design-clean-last-sync-indicator/stdout/scoredRiskDescriptions",
+          "/interactions/design-clean-last-sync-indicator/stdout/scoredRiskCount"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "shape",
+            "operands": [
+              {
+                "pointer": "/interactions/design-clean-last-sync-indicator/stdout"
+              }
+            ],
+            "descriptor": {
+              "requiredKeys": ["design", "riskRowCount", "scoredRiskDescriptions", "scoredRiskCount"],
+              "permittedKeys": ["design", "riskRowCount", "scoredRiskDescriptions", "scoredRiskCount"],
+              "types": {
+                "design": "string",
+                "riskRowCount": "number",
+                "scoredRiskDescriptions": "array",
+                "scoredRiskCount": "number"
+              }
+            }
+          },
+          {
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/design-clean-last-sync-indicator/stdout/design"
+              }
+            ],
+            "pattern": "^\\s*\\S[\\s\\S]*$"
+          },
+          {
+            "op": "any",
+            "operands": [
+              {
+                "op": "all",
+                "operands": [
+                  {
+                    "op": "equality",
+                    "operands": [
+                      {
+                        "pointer": "/interactions/design-clean-last-sync-indicator/stdout/scoredRiskCount"
+                      },
+                      {
+                        "literal": 0
+                      }
+                    ]
+                  },
+                  {
+                    "op": "count-tolerance",
+                    "operands": [
+                      {
+                        "pointer": "/interactions/design-clean-last-sync-indicator/stdout/scoredRiskDescriptions"
+                      }
+                    ],
+                    "expected": 0,
+                    "tolerance": 0,
+                    "relative": false
+                  }
+                ]
+              },
+              {
+                "op": "all",
+                "operands": [
+                  {
+                    "op": "not",
+                    "operands": [
+                      {
+                        "op": "equality",
+                        "operands": [
+                          {
+                            "pointer": "/interactions/design-clean-last-sync-indicator/stdout/scoredRiskCount"
+                          },
+                          {
+                            "literal": 0
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "op": "not",
+                    "operands": [
+                      {
+                        "op": "count-tolerance",
+                        "operands": [
+                          {
+                            "pointer": "/interactions/design-clean-last-sync-indicator/stdout/scoredRiskDescriptions"
+                          }
+                        ],
+                        "expected": 0,
+                        "tolerance": 0,
+                        "relative": false
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "any",
+            "operands": [
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/design-clean-last-sync-indicator/stdout/scoredRiskCount"
+                  },
+                  {
+                    "literal": 0
+                  }
+                ]
+              },
+              {
+                "op": "not",
+                "operands": [
+                  {
+                    "op": "equality",
+                    "operands": [
+                      {
+                        "pointer": "/interactions/design-clean-last-sync-indicator/stdout/riskRowCount"
+                      },
+                      {
+                        "literal": 0
+                      }
+                    ]
+                  }
+                ]
               }
             ]
           }

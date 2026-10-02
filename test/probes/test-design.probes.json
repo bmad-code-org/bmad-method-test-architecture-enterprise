@@ -1884,7 +1884,7 @@
     "commitDigest": "sha256:00f06b2839e96dcfc03eb00291a9456f424054edd03c5e7f620d901b5c9289bc",
     "probeClass": "zero-action",
     "artifactDigest": "sha256:72772123c507e0bb6334a29475086e4cccc5cf08b7af1030bb3bf6b76a69221a",
-    "rationale": "clean-last-sync-indicator is the corpus's control: its epic describes a feature whose genuine risk set is small, and ground-truth.json caps a correct run at 3 reported risks. clean-correct-run is that run, and all 5 oracles this contract states for the set hold on it. AD-7 keeps a clean control out of the strength vector; what it establishes is that the contract does not fire where there is nothing to find.",
+    "rationale": "clean-last-sync-indicator is the corpus's control: its epic describes a feature whose genuine risk set is small, and ground-truth.json caps a correct run at 3 reported risks. clean-correct-run is that run, and all 6 oracles this contract states for the set hold on it. AD-7 keeps a clean control out of the strength vector; what it establishes is that the contract does not fire where there is nothing to find.",
     "qualification": {
       "route": "clean-control",
       "baselinePassEvidence": {
@@ -2790,7 +2790,7 @@
     "implementationDigest": "sha256:00f06b2839e96dcfc03eb00291a9456f424054edd03c5e7f620d901b5c9289bc",
     "artifactDigest": "sha256:f0e475508a6601e6457bd3d037a10e283cf78a0eb7adfdd4298009560bd94e96",
     "commitDigest": "sha256:00f06b2839e96dcfc03eb00291a9456f424054edd03c5e7f620d901b5c9289bc",
-    "rationale": "A document with seeded-correct-run's mentions map and seeded-generic-register's grounding block satisfies every one of the 10 oracles this contract states for seeded-offline-order-capture and reports nothing the epic supports. Its register rows describe risks the epic neither supports nor rules out, and a mitigation section names every material risk's deciding vocabulary in prose, so O-001 counts parsed risk rows, the 5 material-vocabulary oracles find their tokens somewhere in the body, and the 4 unsupported-vocabulary oracles find no ruled-out vocabulary. Nothing in this contract rejects that document. seeded-generic-register records what the row-scoped reading does with a register like it: 0 of 5 material risks matched a register row in an admitted category. This probe is the record that the contract scores the gamed document clean.",
+    "rationale": "A document with seeded-correct-run's mentions map and seeded-generic-register's grounding block satisfies every one of the 11 oracles this contract states for seeded-offline-order-capture and reports nothing the epic supports. Its register rows describe risks the epic neither supports nor rules out, and a mitigation section names every material risk's deciding vocabulary in prose, so O-001 counts parsed risk rows, the 5 material-vocabulary oracles find their tokens somewhere in the body, the 4 unsupported-vocabulary oracles find no ruled-out vocabulary, and O-016 finds the projection of that document coherent. Nothing in this contract rejects that document. seeded-generic-register records what the row-scoped reading does with a register like it: 0 of 5 material risks matched a register row in an admitted category. This probe is the record that the contract scores the gamed document clean.",
     "qualification": {
       "route": "gameability",
       "degenerateResponse": "A test design document whose register rows carry well-formed identifiers, correct arithmetic and a band for each score, describing risks the epic neither supports nor rules out, beside a mitigation section that names every material risk's deciding vocabulary in prose.",
@@ -3169,6 +3169,139 @@
                           }
                         ]
                       }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "shape",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/stdout"
+                    }
+                  ],
+                  "descriptor": {
+                    "requiredKeys": ["design", "riskRowCount", "scoredRiskDescriptions", "scoredRiskCount"],
+                    "permittedKeys": ["design", "riskRowCount", "scoredRiskDescriptions", "scoredRiskCount"],
+                    "types": {
+                      "design": "string",
+                      "riskRowCount": "number",
+                      "scoredRiskDescriptions": "array",
+                      "scoredRiskCount": "number"
+                    }
+                  }
+                },
+                {
+                  "op": "regex",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/stdout/design"
+                    }
+                  ],
+                  "pattern": "^\\s*\\S[\\s\\S]*$"
+                },
+                {
+                  "op": "any",
+                  "operands": [
+                    {
+                      "op": "all",
+                      "operands": [
+                        {
+                          "op": "equality",
+                          "operands": [
+                            {
+                              "pointer": "/interactions/observed/stdout/scoredRiskCount"
+                            },
+                            {
+                              "literal": 0
+                            }
+                          ]
+                        },
+                        {
+                          "op": "count-tolerance",
+                          "operands": [
+                            {
+                              "pointer": "/interactions/observed/stdout/scoredRiskDescriptions"
+                            }
+                          ],
+                          "expected": 0,
+                          "tolerance": 0,
+                          "relative": false
+                        }
+                      ]
+                    },
+                    {
+                      "op": "all",
+                      "operands": [
+                        {
+                          "op": "not",
+                          "operands": [
+                            {
+                              "op": "equality",
+                              "operands": [
+                                {
+                                  "pointer": "/interactions/observed/stdout/scoredRiskCount"
+                                },
+                                {
+                                  "literal": 0
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "op": "not",
+                          "operands": [
+                            {
+                              "op": "count-tolerance",
+                              "operands": [
+                                {
+                                  "pointer": "/interactions/observed/stdout/scoredRiskDescriptions"
+                                }
+                              ],
+                              "expected": 0,
+                              "tolerance": 0,
+                              "relative": false
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "any",
+                  "operands": [
+                    {
+                      "op": "equality",
+                      "operands": [
+                        {
+                          "pointer": "/interactions/observed/stdout/scoredRiskCount"
+                        },
+                        {
+                          "literal": 0
+                        }
+                      ]
+                    },
+                    {
+                      "op": "not",
+                      "operands": [
+                        {
+                          "op": "equality",
+                          "operands": [
+                            {
+                              "pointer": "/interactions/observed/stdout/riskRowCount"
+                            },
+                            {
+                              "literal": 0
+                            }
+                          ]
+                        }
+                      ]
                     }
                   ]
                 }

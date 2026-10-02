@@ -113,7 +113,7 @@ const { DEFAULT_AGENT: CI_DEFAULT_AGENT } = require('../cli/ci-runner');
 // The routing probes name the oracle they game by the pointer it reads, which is
 // how they stay attached to the right oracle when a case is added to the corpus
 // and every id after it shifts.
-const { ROUTING_CONTRACTS } = require('./generate-contracts');
+const { ROUTING_CONTRACTS, projectionCoherenceExpression, TEST_DESIGN_PROJECTION_KEYS } = require('./generate-contracts');
 const {
   buildPrompt: buildTestDesignPrompt,
   designArtifactPaths: testDesignArtifactPaths,
@@ -820,6 +820,11 @@ function testDesignOracleIndex(contract, sets) {
     for (const risk of set.materialRisks ?? []) entries.push({ set, kind: 'material-vocabulary', risk });
     for (const risk of set.unsupportedRisks ?? []) entries.push({ set, kind: 'unsupported-vocabulary', risk });
   }
+  // The projection-coherence oracles follow every per-set oracle, one per set, so the numbering above does not shift.
+  // They guard the runner's projection, which no document can make incoherent, so no stored run evidences a defect
+  // for them and they carry no probe of their own. They stay in the index so the contract is checked against the corpus
+  // and the gameability probe records that its degenerate document satisfies them too.
+  for (const set of sets) entries.push({ set, kind: 'projection-coherence', risk: null });
   assert(
     entries.length === contract.oracles.length,
     `test-design.contract.json states ${contract.oracles.length} oracle(s) and the corpus accounts for ${entries.length}; run node tools/generate-contracts.js`,
@@ -828,7 +833,16 @@ function testDesignOracleIndex(contract, sets) {
     const oracleId = `O-${pad(position + 1)}`;
     const oracle = contract.oracles.find((candidate) => candidate.id === oracleId);
     assert(oracle, `test-design.contract.json states no ${oracleId}`);
-    const field = entry.kind === 'run-measured' ? 'riskRowCount' : entry.kind === 'material-vocabulary' ? 'design' : null;
+    if (entry.kind === 'projection-coherence') {
+      const root = testDesignStdoutPointer(`design-${entry.set.id}`);
+      assert(
+        JSON.stringify(oracle.direction.evidenceTargets) === JSON.stringify(TEST_DESIGN_PROJECTION_KEYS.map((key) => `${root}/${key}`)) &&
+          JSON.stringify(oracle.check) === JSON.stringify(projectionCoherenceExpression(root)),
+        `${oracleId} does not read the four keys of ${entry.set.id}'s projection the way the corpus places a projection-coherence oracle there`,
+      );
+      return { ...entry, oracleId, oracle, pointer: root, behaviorId: soleBehaviorFor(contract, oracleId), probed: false };
+    }
+    const field = testDesignEvidenceField(entry.kind);
     const pointer = testDesignStdoutPointer(`design-${entry.set.id}`, field);
     assert(
       oracle.direction.evidenceTargets.length === 1 &&
@@ -839,8 +853,20 @@ function testDesignOracleIndex(contract, sets) {
       (oracle.check.op === 'not') === (entry.kind !== 'material-vocabulary'),
       `${oracleId} is a "${oracle.check.op}" check and the corpus places a ${entry.kind} oracle there`,
     );
-    return { ...entry, oracleId, oracle, pointer, behaviorId: soleBehaviorFor(contract, oracleId) };
+    return { ...entry, oracleId, oracle, pointer, behaviorId: soleBehaviorFor(contract, oracleId), probed: true };
   });
+}
+
+/**
+ * The key of the runner's projection a probe's repointed check reads from, or null for the stdout root.
+ *
+ * The unsupported-vocabulary and projection-coherence checks read several keys under the root, so a repoint
+ * moves the root and the field is null for both.
+ */
+function testDesignEvidenceField(kind) {
+  if (kind === 'run-measured') return 'riskRowCount';
+  if (kind === 'material-vocabulary') return 'design';
+  return null;
 }
 
 /**
@@ -958,7 +984,7 @@ async function buildTestDesignProbes({ qualify = qualifyTestDesignMutation } = {
     );
     const mutated = violating[0];
     const legId = kind === 'run-measured' ? `manifest-${set.id}-register` : `manifest-${risk.id}`;
-    const legField = kind === 'run-measured' ? 'riskRowCount' : kind === 'material-vocabulary' ? 'design' : null;
+    const legField = testDesignEvidenceField(kind);
     const legPointer = testDesignStdoutPointer(legId, legField);
 
     // AD-8: the claim is earned in a disposable copy. The reference design is copied, the clean arm
@@ -1106,7 +1132,9 @@ async function buildTestDesignProbes({ qualify = qualifyTestDesignMutation } = {
   };
   // One workspace at a time, in the contract's order.
   const probes = [];
-  for (const [position, entry] of index.entries()) probes.push(await buildProbe(entry, position));
+  for (const entry of index) {
+    if (entry.probed) probes.push(await buildProbe(entry, probes.length));
+  }
 
   // The gameability probe, against the seeded set, whose oracles are the ones a
   // degenerate document has something to gain from.
@@ -1136,7 +1164,7 @@ async function buildTestDesignProbes({ qualify = qualifyTestDesignMutation } = {
     schemaVersion: PROBE_SCHEMA_VERSION,
     parentDigest: null,
     revisionCount: 0,
-    probeId: `P-${pad(index.length + 1)}`,
+    probeId: `P-${pad(probes.length + 1)}`,
     probeClass: 'gameability',
     behaviorId: gamed.behaviorId,
     systemId: `tea-test-design-${seededSet.id}`,
@@ -1149,9 +1177,10 @@ async function buildTestDesignProbes({ qualify = qualifyTestDesignMutation } = {
       'register rows describe risks the epic neither supports nor rules out, and a mitigation section names every material ' +
       `risk's deciding vocabulary in prose, so ${seededEntries[0].oracleId} counts parsed risk rows, the ` +
       `${seededEntries.filter((entry) => entry.kind === 'material-vocabulary').length} material-vocabulary oracles find ` +
-      `their tokens somewhere in the body, and the ` +
+      `their tokens somewhere in the body, the ` +
       `${seededEntries.filter((entry) => entry.kind === 'unsupported-vocabulary').length} unsupported-vocabulary oracles ` +
-      `find no ruled-out vocabulary. Nothing in this contract rejects that document. ${generic[0].id} records what the ` +
+      `find no ruled-out vocabulary, and ${seededEntries.find((entry) => entry.kind === 'projection-coherence').oracleId} finds the projection ` +
+      `of that document coherent. Nothing in this contract rejects that document. ${generic[0].id} records what the ` +
       `row-scoped reading does with a register like it: ${generic[0].result.grounding.matched} of ` +
       `${generic[0].result.grounding.declared} material risks matched a register row in an admitted category. This probe is ` +
       'the record that the contract scores the gamed document clean.',
@@ -1184,14 +1213,7 @@ async function buildTestDesignProbes({ qualify = qualifyTestDesignMutation } = {
         predicate: {
           op: 'all',
           operands: seededEntries.map((entry) =>
-            repointed(
-              entry.oracle.check,
-              entry.pointer,
-              testDesignStdoutPointer(
-                'observed',
-                entry.kind === 'run-measured' ? 'riskRowCount' : entry.kind === 'material-vocabulary' ? 'design' : null,
-              ),
-            ),
+            repointed(entry.oracle.check, entry.pointer, testDesignStdoutPointer('observed', testDesignEvidenceField(entry.kind))),
           ),
         },
       },

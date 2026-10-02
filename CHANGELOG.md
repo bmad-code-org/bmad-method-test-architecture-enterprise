@@ -295,6 +295,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The test-design contract reports whole-document coverage (Story 1.48, AD-20, AD-31).
+  eval-quality's `whole-body` rule is satisfied when one oracle's direction and check both address every required response key of an operation at one step, and a parent pointer does not address a key.
+  The test-design operation declares four, `design`, `riskRowCount`, `scoredRiskDescriptions` and `scoredRiskCount`, and every oracle read a subset, so the baseline reported a gap although the material oracles read the complete Markdown.
+  The engine's reading is right, so the fix is in the contract: `tools/generate-contracts.js` appends one `projection-coherence` oracle per fixture set (`O-016` and `O-017`, after the existing fifteen, whose numbers hold) that names all four key pointers in its direction and its check.
+  The check states that the projection has exactly its four declared keys, each of its declared type, that `design` holds a non-blank document, that `scoredRiskCount` is zero exactly when `scoredRiskDescriptions` is empty and that `riskRowCount` is not zero whenever `scoredRiskCount` is not.
+  The expression vocabulary has no operator that compares two numbers read from evidence, so those are the strongest relations it can state.
+  `test:contract-oracles` plants incoherent projections, one per claim, and compares the oracle with its harness-side scorer.
+  It also scores the zero-action probe through eval-quality against the real contract, against the contract without the oracles and against versions where the oracle reads only the scored descriptions or every key but one, so the engine's own coverage function holds the criterion.
+  `test/probes/expected-strength.json` drops `whole-body` from the test-design coverage gaps, and every probe verdict and exit code is unchanged.
+  The gameability probe's signature now also requires the new oracle, and the oracles carry no defect probe because no document makes the projection incoherent.
+  The same gap remains for the routing, test-review and trace contracts and is Story 1.100.
+  No eval-quality change and no release.
+- `test/probes/README.md` states that the test-design probe corpus is scored (Story 1.48). `test:probe-corpus` has scored it since its evidence source was wired, the README said it was unscored, and it now records why the projection oracles have no probe.
 - The test-design probe corpus claims `rollbackVerified: true` only for a mutation it qualified (Story 1.49, AD-8).
   Before, `tools/generate-probes.js` wrote the claim as a constant for each test-design controlled-mutation probe because the reference design and the seeded design sit side by side on disk, which proves no rollback.
   Now each of the fourteen probes is qualified in a disposable workspace through the runtime's `runMutationCycle`: the clean arm scores a copy of the reference design, the one exact `replace-exact` edit that yields the stored seeded design is applied, the mutated arm scores it, the original bytes are restored and their digest compared, and the clean arm scores again.

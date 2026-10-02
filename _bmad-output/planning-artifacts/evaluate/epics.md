@@ -23,7 +23,7 @@ inputDocuments:
 
 ## Overview
 
-This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and ninety-two stories, including H.1 (Stories 1.27 to 1.75, 1.80, 1.90 to 1.99 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
+This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and ninety-three stories, including H.1 (Stories 1.27 to 1.75, 1.80, 1.90 to 1.100 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
 
 Evaluate is fully stacked. The stack runs system under test, then the evaluation (the mechanism that runs the system, collects evidence and makes judgments), then the Behavioral Evaluation Contract (what behavior matters, what evidence counts, how success and failure resolve), then eval-quality (contract sanity, evidence support, and whether the evaluation catches defects). TeA owns every layer above eval-quality, including each concern eval-quality states it leaves to the caller, so an adopter can evaluate any target end to end. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3 onward, Epic 2 and H.1 to close the plan gap audit; the Traceability section maps each audit item to the story that closes it.
 
@@ -150,7 +150,7 @@ None. Evaluate has no graphical interface.
 ### Epic 1: The Evaluate authoring loop
 
 An adopter describes a target, answers Evaluate's questions, chooses or builds the evaluation layer and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches the seeded defect, with the gaps named and closed. The epic closes by running Evaluate on `bmad-testarch-evaluate` itself, then proving the guidance on two more target kinds, on seeded weaknesses and on an evaluation framework its guides never name.
-Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.75, 1.80, 1.90 to 1.99.
+Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.75, 1.80, 1.90 to 1.100.
 
 **FRs covered:** FR1 to FR10, FR13, FR14.
 
@@ -252,12 +252,13 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 84    | 1.97  | 2.3, 2.4                     |
 | 85    | 1.98  | 1.24, 2.4                    |
 | 86    | 1.99  | 1.49                         |
-| 87    | 2.1   | 1.16, 1.26, 1.45             |
-| 88    | 2.2   | 2.1                          |
-| 89    | 2.3   | 2.2                          |
-| 90    | 2.4   | 2.3                          |
-| 91    | 2.5   | 2.4                          |
-| 92    | H.1   | 2.5                          |
+| 87    | 1.100 | 1.48, 1.99                   |
+| 88    | 2.1   | 1.16, 1.26, 1.45             |
+| 89    | 2.2   | 2.1                          |
+| 90    | 2.3   | 2.2                          |
+| 91    | 2.4   | 2.3                          |
+| 92    | 2.5   | 2.4                          |
+| 93    | H.1   | 2.5                          |
 
 ### Parallel lanes (from 2026-10-01)
 
@@ -267,7 +268,7 @@ The table above gives every story's dependencies. Since Story 1.40 merged, the s
 
 **Lane 2: confinement and process lifecycle** (own worktree): 1.62, 1.57, 1.58, 1.59, 1.60, 1.63, 1.61, 1.52, 1.53, 1.54, 1.80. Story 1.62 goes first because it extracts the shared sandbox primitives the confinement stories build on. Story 1.60 may remove 1.63's premise, so 1.63 is re-read after it. Story 1.58 precedes 1.54, since both track the run's private scratch directories. Stories 1.52 to 1.54 touch the preflight and workspace modules the confinement stories also edit, so they run after them.
 
-**Lane 3: engine releases, dogfood and Epic 2** (own worktree): 1.45, 2.1, 2.2, 2.3, 2.4, 1.47, 1.49, 1.48, 1.42, 1.50, 1.55, 1.56, 1.51, 1.46, 2.5, 1.90, 1.91, 1.92, 1.93, 1.94, 1.95, 1.96, 1.97, 1.98, 1.99. Story 1.45 starts the longest serial chain (1.45, 2.1 to 2.5, then H.1), so it runs first, and 2.5 runs last because it baselines every fixture and so waits for each story that changes committed evidence bytes (1.42, 1.44, 1.50, 1.51, 1.55, 1.56). Stories 1.47, 1.49 and 1.48 regenerate the test-design probes, so they run together with 1.48 last. Stories 1.42 and 1.50 both change the HTTP probe port and run back to back. Story 1.46 records live runs of the Evaluate skill, so it follows the skill-guide stories in other lanes (1.43, 1.44, 1.61, 1.67, 1.70). Lane 3 owns every eval-quality release, because 1.42, 1.45, 1.48, 1.50 and 1.55 each need a published engine and one publisher keeps the dependency pin and `package-lock.json` ordered. Stories 1.90 and 1.91 follow 2.5: 1.90 edits the baseline `check` and `compare` read, and 1.91 re-accepts the fixture baselines Stories 2.2 to 2.5 commit, so it waits for every one of them.
+**Lane 3: engine releases, dogfood and Epic 2** (own worktree): 1.45, 2.1, 2.2, 2.3, 2.4, 1.47, 1.49, 1.48, 1.42, 1.50, 1.55, 1.56, 1.51, 1.46, 2.5, 1.90, 1.91, 1.92, 1.93, 1.94, 1.95, 1.96, 1.97, 1.98, 1.99, 1.100. Story 1.45 starts the longest serial chain (1.45, 2.1 to 2.5, then H.1), so it runs first, and 2.5 runs last because it baselines every fixture and so waits for each story that changes committed evidence bytes (1.42, 1.44, 1.50, 1.51, 1.55, 1.56). Stories 1.47, 1.49 and 1.48 regenerate the test-design probes, so they run together with 1.48 last. Stories 1.42 and 1.50 both change the HTTP probe port and run back to back. Story 1.46 records live runs of the Evaluate skill, so it follows the skill-guide stories in other lanes (1.43, 1.44, 1.61, 1.67, 1.70). Lane 3 owns every eval-quality release, because 1.42, 1.45, 1.50 and 1.55 each need a published engine and one publisher keeps the dependency pin and `package-lock.json` ordered. Stories 1.90 and 1.91 follow 2.5: 1.90 edits the baseline `check` and `compare` read, and 1.91 re-accepts the fixture baselines Stories 2.2 to 2.5 commit, so it waits for every one of them.
 
 Rules the lanes share:
 
@@ -1439,22 +1440,24 @@ So that an example risk cannot change the design's score or fire an exclusion or
 
 ### Story 1.48: Report whole-document coverage for a structured design artifact
 
-Added in Story 1.27's review. The test-design contract reads the complete Markdown from the runner's structured stdout, yet eval-quality reports its `whole-body` coverage rule unsatisfied because the Markdown is nested under `/design`.
+Added in Story 1.27's review. The test-design contract reads the complete Markdown from the runner's structured stdout, yet eval-quality reports its `whole-body` coverage rule unsatisfied. The rule asks for one oracle whose direction and check both address every required response key of an operation at one step (AD-20 rule 2, AD-31), and a parent pointer does not address a key. The operation declares four keys (`design`, `riskRowCount`, `scoredRiskDescriptions`, `scoredRiskCount`) and every oracle read a subset.
+
+Amended 2026-10-02 when the story was built: the plan assumed an engine change that treated a nested complete-body field as whole-body coverage. The engine's truth table deliberately reports oracles that each read a different key as unsatisfied, so the gap is in the contract. The repair is TeA-side with no eval-quality change and no release, and the criteria below say what the repair is held by.
 
 As a maintainer interpreting test-design strength,
-I want the engine's coverage result to reflect the complete document read by the material-risk oracles,
+I want the engine's coverage result to reflect that an oracle reads the complete projection the runner emits, the whole Markdown included,
 So that the baseline reports the coverage this contract actually exercises.
 
 **Acceptance Criteria:**
 
-**Given** the Story 1.27 contract and its parser-derived stdout
-**When** eval-quality inspects coverage
-**Then** it reports whole-document coverage satisfied only when an oracle actually reads the entire original Markdown; the result remains unsatisfied when the oracle reads only scored-risk descriptions
-**And** the criterion is held by two contract fixtures with the same artifact and different evidence targets; reverting the coverage handling makes their expected results agree incorrectly
-**And** any engine change ships in a published eval-quality release before TeA updates its resolved dependency; the regenerated strength baseline retains the same probe outcomes and `npm test` passes.
+**Given** the test-design contract and its parser-derived stdout
+**When** eval-quality scores the contract and reports its coverage
+**Then** it reports `whole-body` satisfied because one oracle per plan step names all four key pointers, the complete original Markdown among them, in both its direction and its check; the result remains unsatisfied when the oracle reads only the scored-risk descriptions or omits any one key
+**And** the criterion is held by contract fixtures scored through the published engine's coverage function: the real contract (satisfied) and the same contract with the oracle's evidence targets and check reduced to `/scoredRiskDescriptions` (unsatisfied); restoring the contract without the oracle makes the first report unsatisfied and widening the reduced oracle to every key makes the second report satisfied, so the pair cannot both agree
+**And** the oracle's check can fail for a real defect (a blank design, a scored count and a description list that disagree about being empty, a scored row the register never counted, a missing, extra or mistyped key), the harness scorer mirrors it, the existing oracle ids keep their numbers, and the regenerated strength baseline retains every probe verdict and exit code; `npm test` passes.
 
 **Dependencies:** 1.27.
-**Gate:** engine release and export check when needed, `npm test`, suite-only staged preflight.
+**Gate:** `node tools/generate-contracts.js --check`, `npm test`, suite-only staged preflight. No engine release.
 
 ### Story 1.49: Prove test-design mutation rollback before claiming it
 
@@ -2243,6 +2246,25 @@ So that no corpus claims rollback from two stored files (CAP-7, AD-8).
 
 **Dependencies:** 1.49.
 **Gate:** `test:test-design-qualification` and the new per-corpus suites, `test:probe-sources`, `test:probe-corpus`, `npm test`.
+
+### Story 1.100: Report whole-body coverage for the routing, test-review and trace contracts
+
+Added 2026-10-02 in Story 1.48's build. Story 1.48 closed the `whole-body` rule for test-design by adding one oracle per plan step that names every required response key in its direction and its check, because eval-quality reads the rule as designed: for every operation declaring more than one required response key, one oracle addresses all of them at one step. The strength baseline still lists `whole-body` for four more contracts. `tea-routing-intents` and `tea-routing-controls` declare `action` and `reason` for `route-intent` and each oracle reads one of them. `test-review` declares twenty-three required keys for its verdict artifact and `trace` twenty-two for its summary, and the oracles of each read a few. The same repair applies, with a different cost per contract: two keys are cheap to read together, and a twenty-three key declaration needs either an oracle that reads every key it declares or a declaration that lists only the keys the contract depends on.
+
+As a maintainer interpreting TeA's contract strength,
+I want each of those contracts to either read the whole response it declares or declare only what it reads,
+So that `whole-body` is satisfied by evidence the oracles examine or is not a gap the contract owes.
+
+**Acceptance Criteria:**
+
+**Given** the routing, test-review and trace contracts and their baseline
+**When** eval-quality scores each contract and reports its coverage
+**Then** `whole-body` is satisfied for each by an oracle whose direction and check both name every required key of the operation at one step and whose check can fail for a real defect; a contract narrows its required-key declaration only for a key the runner or workflow does not always emit, shown from that output, and never to satisfy the rule, with each choice and its reason recorded in `test/contracts/README.md`
+**And** each contract carries fixtures scored through the published engine as Story 1.48's do: the contract as shipped (satisfied), the contract without the repair (unsatisfied) and variants whose oracle drops one key in each channel (unsatisfied), so reverting the repair makes the pair agree
+**And** the regenerated strength baseline retains every probe verdict and exit code for these suites, `node tools/generate-contracts.js --check` and `node tools/generate-probes.js --check` pass, and `npm test` passes.
+
+**Dependencies:** 1.48, 1.99 (both regenerate the test-review, trace and routing corpora, so the order keeps their diffs apart).
+**Gate:** `node tools/generate-contracts.js --check`, `node tools/generate-probes.js --check`, `test:contract-oracles`, `test:probe-corpus`, `npm test`, suite-only staged preflight for each suite.
 
 ## Epic 2: Continuous proof in CI
 
