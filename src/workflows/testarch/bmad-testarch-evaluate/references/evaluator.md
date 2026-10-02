@@ -177,19 +177,20 @@ Install the declared version exactly (`npm install --save-exact <package>@<versi
     {
       "package": "acme-evals",
       "version": "1.2.3",
-      "probe": { "command": "evaluator/installed-version.mjs", "args": ["acme-evals"] }
+      "probe": { "command": "evaluator/installed-version.mjs", "args": ["acme-evals"], "probeTimeoutMs": 10000 }
     }
   ]
 }
 ```
 
 For a framework in another language, write the probe in that language.
-The run launches it with only the base environment and the evaluator's `environmentKeys`, in an empty private working directory, under the run's confinement and the evaluator's timeout, so it activates no virtual environment.
+The run launches it with only the base environment and the evaluator's `environmentKeys`, in an empty private working directory and under the run's confinement, so it activates no virtual environment. `probe.probeTimeoutMs` is optional and defaults to 10,000 ms (10 seconds). `tea-evaluate check` accepts integers from 1 to 60,000 ms (60 seconds). The effective bound is the smaller of that value and `evaluator.timeoutMs`; the command evaluator keeps its own timeout. `framework-versions.json` records each probe's effective bound.
 It must find the same installation the wrapper uses, by a path relative to its own file or a pinned interpreter, and read installed metadata (in Python, `importlib.metadata.version`) without importing or running the framework.
 It prints the package string exactly as `frameworks.json` declares it, which is limited to letters, digits, `.`, `_`, `-`, `~` and an optional `@scope/`.
 The version starts with a digit, so a probe for an ecosystem that reports `v1.2.3` prints `1.2.3`.
 
 `tea-evaluate run` reads the installed versions before the first trial, before each launch of the evaluator and after each trial.
+For each framework, multiply its effective bound by one initial read plus two reads per trial plus two reads per calibration launch, then sum those products across frameworks. A hanging probe costs one effective probe timeout plus the supervisor's cleanup grace because the run stops at the first unreadable read.
 A package that is missing, installed at a version other than the declared one, or changed during the run ends the run with exit 12 and seals no record for the affected trial.
 Either reinstall the declared version or make the deliberate upgrade below.
 The observed versions join the evaluator configuration, so a changed version changes the scoring version, and `framework-versions.json` in the run directory keeps the declared and observed versions, and the output of any probe that failed.

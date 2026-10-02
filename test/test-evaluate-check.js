@@ -2666,6 +2666,19 @@ function plantFrameworks(folder, { frameworks = [FRAMEWORK_ENTRY], declaration, 
 
 /** Story 1.44's refusals: a declaration that is absent, malformed or inconsistent with LEARNED.md, each exit 10. */
 const FRAMEWORK_CASES = [
+  ...[0, 60_001, 1.5, '10000'].map((probeTimeoutMs) => ({
+    name: `a probe timeout outside the allowed integer range: ${JSON.stringify(probeTimeoutMs)}`,
+    file: 'evaluator/frameworks.json',
+    rule: 'evaluator',
+    plant: (folder) =>
+      plantFrameworks(folder, {
+        frameworks: [{ ...FRAMEWORK_ENTRY, probe: { ...FRAMEWORK_ENTRY.probe, probeTimeoutMs } }],
+        learned: learnedRecord('acme-evals@1.2.3'),
+      }),
+    expect: (output) => [
+      [output.includes('frameworks[0].probe.probeTimeoutMs must be an integer from 1 to 60000'), 'the invalid probe bound was not named'],
+    ],
+  })),
   {
     name: 'a command evaluator with no evaluator/frameworks.json',
     file: 'evaluator/frameworks.json',
@@ -2733,6 +2746,11 @@ const FRAMEWORK_CASES = [
       'a probe with a property the declaration does not define',
       { frameworks: [{ ...FRAMEWORK_ENTRY, probe: { command: 'evaluator/probe.js', extra: true } }] },
       'frameworks[0].probe has the unknown property "extra"',
+    ],
+    [
+      'an unknown probe property whose name mentions the timeout field',
+      { frameworks: [{ ...FRAMEWORK_ENTRY, probe: { ...FRAMEWORK_ENTRY.probe, 'x.probe.probeTimeoutMs': 10 } }] },
+      'frameworks[0].probe has the unknown property "x.probe.probeTimeoutMs"',
     ],
     [
       'a backslash in the probe path',
@@ -3328,6 +3346,14 @@ EVALUATOR_CASES.push(
 
 /** Story 1.17's legitimate evaluator folders: each exits 0, a rubric under a non-deterministic kind with no judge included. */
 const EVALUATOR_CLEAN_CASES = [
+  ...[1, 60_000].map((probeTimeoutMs) => ({
+    name: `a command evaluator with a ${probeTimeoutMs}ms probe timeout`,
+    plant: (folder) =>
+      plantFrameworks(folder, {
+        frameworks: [{ ...FRAMEWORK_ENTRY, probe: { ...FRAMEWORK_ENTRY.probe, probeTimeoutMs } }],
+        learned: learnedRecord('acme-evals@1.2.3'),
+      }),
+  })),
   {
     name: 'a command evaluator whose declaration and LEARNED.md agree on an installed framework',
     plant: (folder) => plantFrameworks(folder, { learned: learnedRecord('acme-evals@1.2.3') }),

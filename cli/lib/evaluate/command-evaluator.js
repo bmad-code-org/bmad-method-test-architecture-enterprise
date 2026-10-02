@@ -44,7 +44,7 @@
 const path = require('node:path');
 
 const { buildMinimalEnv, runSupervised } = require('../run-agent');
-const { readProbeAnswer, stderrNote } = require('./frameworks');
+const { DEFAULT_PROBE_TIMEOUT_MS, effectiveProbeTimeoutMs, readProbeAnswer, stderrNote } = require('./frameworks');
 const { EvaluatorError, readAnswer } = require('./judgment-rows');
 const { releaseScratchDirectory, makeScratchDirectory } = require('./workspace');
 
@@ -53,13 +53,13 @@ const { releaseScratchDirectory, makeScratchDirectory } = require('./workspace')
  * the evaluator itself starts: through `spawnPrefix` when the run confines it,
  * under the supervisor, with an empty private working directory in `scratch`
  * removed afterwards, the base environment plus `evaluator.environmentKeys`,
- * and `evaluator.timeoutMs` as its wall clock. The evaluator's launch and a
+ * and a supplied timeout (the evaluator's by default) as its wall clock. The evaluator's launch and a
  * framework's version probe (`observeFrameworks`) both go through it, so a
  * probe sees what the evaluator sees.
  *
  * @returns {Promise<object>} `runSupervised`'s report: the outcome and the streams
  */
-async function launchExecutable({ folder, evaluator, command, args, input, scratch, env, spawnPrefix }) {
+async function launchExecutable({ folder, evaluator, command, args, input, scratch, env, spawnPrefix, timeoutMs = evaluator.timeoutMs }) {
   const executable = path.join(folder, ...command.split('/'));
   const cwd = makeScratchDirectory(scratch, 'tea-evaluate-command-');
   try {
@@ -69,7 +69,7 @@ async function launchExecutable({ folder, evaluator, command, args, input, scrat
       input,
       cwd,
       env: buildMinimalEnv(evaluator.environmentKeys ?? [], env),
-      timeout: evaluator.timeoutMs,
+      timeout: timeoutMs,
     });
   } finally {
     releaseScratchDirectory(scratch, cwd);
@@ -82,9 +82,10 @@ async function launchExecutable({ folder, evaluator, command, args, input, scrat
  * (`launchExecutable`) and reads the `{ package, version }` it prints
  * (`frameworks.js`). A probe that cannot start, outlives the timeout, exits
  * other than 0 or prints another shape yields no observation for that
- * dependency and a `fault` naming why, with what it printed. Nothing is
- * thrown for a dependency that is missing: the caller compares the entries
- * with the declaration.
+ * dependency and a `fault` naming why, with what it printed. After the first
+ * fault, later probes do not start; each still gets an entry naming its
+ * effective bound. Nothing is thrown for a dependency that is missing: the
+ * caller compares the entries with the declaration.
  *
  * @param {object} options
  * @param {string} options.folder the evaluation folder
@@ -98,15 +99,40 @@ async function launchExecutable({ folder, evaluator, command, args, input, scrat
  */
 async function observeFrameworks({ folder, evaluator, frameworks, scratch, env = process.env, spawnPrefix = [] }) {
   const entries = [];
+  let earlierFault = false;
   for (const framework of frameworks) {
     const { command, args } = framework.probe;
     const label = `the version probe of ${framework.package} (${command})`;
-    const ended = await launchExecutable({ folder, evaluator, command, args, input: '', scratch, env, spawnPrefix });
+    const effectiveTimeoutMs = effectiveProbeTimeoutMs(framework, evaluator);
+    if (earlierFault) {
+      entries.push({
+        package: framework.package,
+        effectiveProbeTimeoutMs: effectiveTimeoutMs,
+        observed: null,
+        fault: 'not probed because an earlier framework probe failed',
+        stdout: '',
+        stderr: '',
+      });
+      continue;
+    }
+    const ended = await launchExecutable({
+      folder,
+      evaluator,
+      command,
+      args,
+      input: '',
+      scratch,
+      env,
+      spawnPrefix,
+      timeoutMs: effectiveTimeoutMs,
+    });
     const { outcome, stdout, stderr } = ended;
-    const entry = { package: framework.package, observed: null, fault: null, stdout, stderr };
+    const entry = { package: framework.package, effectiveProbeTimeoutMs: effectiveTimeoutMs, observed: null, fault: null, stdout, stderr };
     if (outcome.spawnError) entry.fault = `${label} could not start: ${outcome.spawnError.message}`;
-    else if (outcome.timedOut) entry.fault = `${label} was still running at the evaluator's ${evaluator.timeoutMs}ms timeout`;
-    else if (outcome.failure) entry.fault = `${label} did not finish: ${outcome.failure}`;
+    else if (outcome.timedOut) {
+      const requestedTimeoutMs = framework.probe.probeTimeoutMs ?? DEFAULT_PROBE_TIMEOUT_MS;
+      entry.fault = `${label} was still running at its ${effectiveTimeoutMs}ms probe timeout${effectiveTimeoutMs < requestedTimeoutMs ? ' (capped by evaluator.timeoutMs)' : ''}`;
+    } else if (outcome.failure) entry.fault = `${label} did not finish: ${outcome.failure}`;
     else if (outcome.status === 0) {
       const answer = readProbeAnswer(framework.package, stdout);
       if ('fault' in answer) entry.fault = `${label}: ${answer.fault}`;
@@ -115,6 +141,7 @@ async function observeFrameworks({ folder, evaluator, frameworks, scratch, env =
       entry.fault = `${label} ${outcome.signal ? `was killed by signal ${outcome.signal}` : `exited ${outcome.status}`}${stderrNote(stderr)}`;
     }
     entries.push(entry);
+    earlierFault = entry.fault !== null;
   }
   return entries;
 }

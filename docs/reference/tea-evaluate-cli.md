@@ -907,7 +907,7 @@ In a confined run no process of the run can write under `evaluator/` at all (see
     {
       "package": "acme-evals",
       "version": "1.2.3",
-      "probe": { "command": "evaluator/installed-version.mjs", "args": ["acme-evals"] }
+      "probe": { "command": "evaluator/installed-version.mjs", "args": ["acme-evals"], "probeTimeoutMs": 10000 }
     }
   ]
 }
@@ -917,9 +917,9 @@ In a confined run no process of the run can write under `evaluator/` at all (see
 An evaluator with no framework dependency declares `"frameworks": []`.
 `check` refuses an absent or malformed declaration and runs no probe.
 It also reads `evaluator/LEARNED.md`: its `## Framework and installed version` section holds one backticked `package@version` for each declared package, and a different version, a missing one or a package the declaration omits exits 10 under `evaluator`.
-`run` launches each probe as it launches the evaluator (the base environment and `environmentKeys`, an empty private working directory, the run's confinement, `timeoutMs`), and reads the versions before the first trial, before each launch of the evaluator and after each trial, calibration included.
+`probe.probeTimeoutMs` is optional and defaults to 10,000 ms. `check` accepts integer values from 1 to 60,000 ms. The effective bound is the smaller of that value and `evaluator.timeoutMs`; the evaluator keeps its own timeout. `run` launches each probe as it launches the evaluator (the base environment and `environmentKeys`, an empty private working directory, and the run's confinement), and reads the versions before the first trial, before each launch of the evaluator and after each trial, calibration included. After a probe faults, later declared probes are skipped.
 A package that is missing, installed at a version other than the declared one, or changed during the run exits 12 and seals no record for the affected trial; before any trial it also leaves no `evaluator/` directory in the run.
-`framework-versions.json` in the run directory records the declared and observed versions, with each failed probe's diagnostics and output, and the observed versions join `decodingParameters["tea.evaluatorFrameworks"]` and `run.json`'s `evaluator`.
+`framework-versions.json` in the run directory records the declared and observed versions and each probe's applied `effectiveProbeTimeoutMs`, with diagnostics and output for a failed or skipped probe. Historical schema version 1 artifacts without that field remain valid. The observed versions join `decodingParameters["tea.evaluatorFrameworks"]` and `run.json`'s `evaluator`.
 An upgrade therefore changes the configuration digest and the scoring version only when `frameworks.json` and `LEARNED.md` are updated to it, and `score` reads the recorded configuration.
 The artifact holds the reading taken before the first trial; a change during the run is named in the stopped trial's evaluator `.json` fault beside it.
 The declaration binds the packages it lists, at the version their own `package.json` reports: a package it omits (a plugin, a transitive dependency) or a local patch to a file inside one is outside the observation.

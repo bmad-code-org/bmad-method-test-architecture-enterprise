@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:tea:evaluate:schema:evaluator-frameworks",
   "title": "evaluator/frameworks.json",
-  "description": "The installed frameworks a command evaluator depends on (Story 1.44, AD-21): per framework its package, the one exact version expected and a version probe, a tracked executable under evaluator/ that prints { package, version } for the installed package. An evaluator with no installed framework dependency declares an empty list. tea-evaluate check refuses a declaration off this schema and run observes each installed version through its probe. The tea-evaluate runtime owns this schema.",
+  "description": "The installed frameworks a command evaluator depends on (Stories 1.44 and 1.71, AD-21): per framework its package, the one exact version expected and a version probe, a tracked executable under evaluator/ that prints { package, version } for the installed package. A probe may set probeTimeoutMs from 1 to 60000; an omitted value defaults to 10000 and evaluator.timeoutMs caps it. An evaluator with no installed framework dependency declares an empty list. tea-evaluate check refuses a declaration off this schema and run observes each installed version through its probe. The tea-evaluate runtime owns this schema.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schemaVersion", "frameworks"],
@@ -27,7 +27,8 @@
             "required": ["command"],
             "properties": {
               "command": { "type": "string", "pattern": "^evaluator/(?:(?!\\.{1,2}/)[^/\\\\]+/)*(?!\\.{1,2}$)[^/\\\\]+$" },
-              "args": { "type": "array", "items": { "type": "string" } }
+              "args": { "type": "array", "items": { "type": "string" } },
+              "probeTimeoutMs": { "type": "integer", "minimum": 1, "maximum": 60000 }
             }
           }
         }

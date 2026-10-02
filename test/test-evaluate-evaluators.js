@@ -5324,12 +5324,12 @@ function declareFramework(folder, { version, learned = version, probe = SHIPPED_
 /** A command-evaluator project whose evaluator depends on the isolated package, declared at `declared` and installed at `installed`. */
 function frameworkProject(
   label,
-  { declared = '1.0.0', installed = declared, mode = 'rows', args = [], unconfined = false, environmentKeys, probe, extra } = {},
+  { declared = '1.0.0', installed = declared, mode = 'rows', args = [], timeoutMs, unconfined = false, environmentKeys, probe, extra } = {},
 ) {
   return makeProject(label, {
     unconfined,
     edit: ({ folder, repository }) => {
-      useCommandEvaluator(folder, { mode, args: typeof args === 'function' ? args(repository) : args, environmentKeys });
+      useCommandEvaluator(folder, { mode, args: typeof args === 'function' ? args(repository) : args, timeoutMs, environmentKeys });
       fs.copyFileSync(VERSION_PROBE, path.join(folder, 'evaluator', 'installed-version.mjs'));
       fs.chmodSync(path.join(folder, 'evaluator', 'installed-version.mjs'), 0o755);
       fs.appendFileSync(path.join(repository, '.gitignore'), 'node_modules/\n');
@@ -5362,7 +5362,7 @@ function checkProbePassesInCeiling() {
       writeJson(path.join(folder, 'evaluator', 'frameworks.json'), {
         schemaVersion: 1,
         frameworks: [
-          { package: FRAMEWORK, version: '1.0.0', probe: SHIPPED_PROBE },
+          { package: FRAMEWORK, version: '1.0.0', probe: { ...SHIPPED_PROBE, probeTimeoutMs: 25_000 } },
           { package: 'probe-fw-two', version: '2.0.0', probe: { command: 'evaluator/installed-version.mjs', args: ['probe-fw-two'] } },
         ],
       });
@@ -5378,8 +5378,26 @@ function checkProbePassesInCeiling() {
   if (ran.status !== 0 || runDirectory === null) return;
   const manifest = readJson(path.join(runDirectory, 'trial-sets', 'P-001', 'isolation-manifest.json'));
   check(
-    manifest.resourceCeilings.maxWallClockMinutes === ((30_000 + 60_000 + 2 * 2 * 60_000) * TRIALS) / 60_000,
-    `a command run declaring two frameworks: the manifest allows ${manifest.resourceCeilings.maxWallClockMinutes} minutes; expected ${((30_000 + 60_000 + 240_000) * TRIALS) / 60_000}`,
+    manifest.resourceCeilings.maxWallClockMinutes === ((30_000 + 60_000 + 2 * (25_000 + 10_000)) * TRIALS) / 60_000,
+    `a command run declaring two frameworks: the manifest allows ${manifest.resourceCeilings.maxWallClockMinutes} minutes; expected ${((30_000 + 60_000 + 70_000) * TRIALS) / 60_000}`,
+  );
+
+  const capped = frameworkProject('framework-capped-probe-ceiling', {
+    timeoutMs: 3000,
+    probe: { ...SHIPPED_PROBE, probeTimeoutMs: 60_000 },
+  });
+  const cappedRun = evaluate(['run', '--evaluation', capped.folder], capped.env);
+  check(cappedRun.status === 0, `a successful evaluator-capped run exited ${cappedRun.status}\n${cappedRun.output}`);
+  const cappedDirectory = runDirectoryOf(capped.folder);
+  if (cappedRun.status !== 0 || cappedDirectory === null) return;
+  const cappedManifest = readJson(path.join(cappedDirectory, 'trial-sets', 'P-001', 'isolation-manifest.json'));
+  check(
+    cappedManifest.resourceCeilings.maxWallClockMinutes === ((30_000 + 3000 + 2 * 3000) * TRIALS) / 60_000,
+    `a successful capped run allows ${cappedManifest.resourceCeilings.maxWallClockMinutes} minutes; expected two 3,000ms probe reads per trial`,
+  );
+  check(
+    readJson(path.join(cappedDirectory, 'framework-versions.json')).frameworks[0].effectiveProbeTimeoutMs === 3000,
+    'a successful capped run did not record its 3,000ms effective probe bound',
   );
 }
 
@@ -5409,7 +5427,10 @@ async function checkInstalledFrameworks() {
   const observed = [{ package: FRAMEWORK, version: '1.0.0' }];
   check(
     canonical(readJson(path.join(firstRun, 'framework-versions.json'))) ===
-      canonical({ schemaVersion: 1, frameworks: [{ package: FRAMEWORK, declaredVersion: '1.0.0', observed: observed[0] }] }),
+      canonical({
+        schemaVersion: 1,
+        frameworks: [{ package: FRAMEWORK, declaredVersion: '1.0.0', effectiveProbeTimeoutMs: 10_000, observed: observed[0] }],
+      }),
     `framework-versions.json is ${fs.readFileSync(path.join(firstRun, 'framework-versions.json'), 'utf8')}`,
   );
   const versionsProblems = schemaProblems('framework-versions');
@@ -5424,13 +5445,17 @@ async function checkInstalledFrameworks() {
   );
   const firstRecord = readJson(path.join(firstRun, 'run.json'));
   check(
+    firstRecord.evaluatorConfigurationDigest === 'sha256:13d3e8c6a106d3dc802b2d2e57b39e8e4c149e31cfbdb0981eb163fcd081d4a2',
+    `the legacy declaration changed its Story 1.44 configuration digest to ${firstRecord.evaluatorConfigurationDigest}`,
+  );
+  check(
     canonical(firstRecord.evaluator.frameworks) === canonical(observed),
     "run.json's evaluator does not record the observed frameworks",
   );
   // A trial reads the declared framework twice beside the evaluator's launch, so the manifest's wall-clock ceiling holds both probe passes.
   const probedManifest = readJson(path.join(firstRun, 'trial-sets', 'P-001', 'isolation-manifest.json'));
   check(
-    probedManifest.resourceCeilings.maxWallClockMinutes === ((30_000 + 60_000 + 2 * 1 * 60_000) * TRIALS) / 60_000,
+    probedManifest.resourceCeilings.maxWallClockMinutes === ((30_000 + 60_000 + 2 * 1 * 10_000) * TRIALS) / 60_000,
     `a command run declaring one framework: the manifest allows ${probedManifest.resourceCeilings.maxWallClockMinutes} minutes; expected the plan step, the evaluator and two probe passes per trial`,
   );
   const firstScore = scoreRun(project, 'the run with the declared framework');
@@ -5666,6 +5691,133 @@ function checkInstalledFrameworksCalibration() {
   }
 }
 
+/** A hanging probe has its own wall clock at every read, including calibration; the evaluator's shorter clock still caps it. */
+function checkFrameworkProbeTimeouts() {
+  const versionsProblems = schemaProblems('framework-versions');
+  check(
+    versionsProblems({
+      schemaVersion: 1,
+      frameworks: [{ package: FRAMEWORK, declaredVersion: '1.0.0', observed: { package: FRAMEWORK, version: '1.0.0' } }],
+    }).length === 0,
+    'the version 1 framework artifact schema rejected a historical row without effectiveProbeTimeoutMs',
+  );
+  const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
+  for (const marker of ['`probe.probeTimeoutMs`', '10,000 ms', '60,000 ms', '`evaluator.timeoutMs`', '`effectiveProbeTimeoutMs`'])
+    check(reference.includes(marker), `the public Evaluate CLI reference omits ${marker}`);
+  const only = process.argv.find((value) => value.startsWith('--only='))?.slice('--only='.length) ?? '';
+  const cases = [
+    ['initial', 1, false, 450, 15_000],
+    ['before trial', 2, false, 450, 15_000],
+    ['after trial', 3, false, 450, 15_000],
+    ['before calibration', 2, true, 450, 15_000],
+    ['after calibration', 3, true, 450, 15_000],
+    ['evaluator cap', 1, false, 60_000, 3000],
+    ['omitted field', 1, false, undefined, 30_000],
+  ];
+  for (const [label, hangAt, calibration, declaredTimeoutMs, evaluatorTimeoutMs] of cases) {
+    if (only !== '' && label !== only) continue;
+    const counter = path.join(scratch.make(`framework-timeout-${label.replaceAll(' ', '-')}`), 'reads.txt');
+    const project = frameworkProject(`framework-timeout-${label.replaceAll(' ', '-')}`, {
+      timeoutMs: evaluatorTimeoutMs,
+      probe: {
+        command: 'evaluator/probe.js',
+        args: ['--package', FRAMEWORK, '--hang-at', String(hangAt), '--counter', counter],
+        ...(declaredTimeoutMs === undefined ? {} : { probeTimeoutMs: declaredTimeoutMs }),
+      },
+      extra: calibration ? ({ folder }) => addRubric(folder) : undefined,
+    });
+    const started = performance.now();
+    const ran = evaluate(['run', '--evaluation', project.folder], project.env);
+    const elapsedMs = performance.now() - started;
+    const effectiveMs = Math.min(declaredTimeoutMs ?? 10_000, evaluatorTimeoutMs);
+    const runDirectory = runDirectoryOf(project.folder);
+    check(
+      fs.existsSync(counter) && Number(fs.readFileSync(counter, 'utf8')) === hangAt,
+      `${label}: the probe did not hang at its intended read ${hangAt}`,
+    );
+    check(
+      ran.status === 12 && ran.output.includes(`still running at its ${effectiveMs}ms probe timeout`),
+      `${label}: a hanging probe exited ${ran.status}; expected 12 naming ${effectiveMs}ms\n${ran.output}`,
+    );
+    if (label === 'evaluator cap')
+      check(ran.output.includes('capped by evaluator.timeoutMs'), `${label}: the fault omitted the evaluator cap hint\n${ran.output}`);
+    check(
+      elapsedMs < effectiveMs + 9000,
+      `${label}: a hanging probe took ${Math.round(elapsedMs)}ms; expected its ${effectiveMs}ms bound plus 9,000ms of startup and supervisor cleanup`,
+    );
+    checkNoSealedRecord(`${label} probe timeout`, runDirectory);
+    const artifact = runDirectory === null ? null : readJson(path.join(runDirectory, 'framework-versions.json'));
+    check(
+      artifact?.frameworks[0]?.effectiveProbeTimeoutMs === effectiveMs && schemaProblems('framework-versions')(artifact).length === 0,
+      `${label}: framework-versions.json does not record the effective ${effectiveMs}ms bound: ${JSON.stringify(artifact)}`,
+    );
+    if (label === 'omitted field')
+      check(
+        artifact?.frameworks[0]?.observed === null &&
+          artifact.frameworks[0].fault?.includes(`still running at its ${effectiveMs}ms probe timeout`),
+        `${label}: the initial artifact did not keep the null observation and timeout fault: ${JSON.stringify(artifact)}`,
+      );
+  }
+
+  const firstCounter = path.join(scratch.make('framework-first-fault'), 'first.txt');
+  const secondCounter = path.join(scratch.make('framework-second-skipped'), 'second.txt');
+  const two = frameworkProject('framework-stop-after-first-fault', {
+    timeoutMs: 15_000,
+    probe: {
+      command: 'evaluator/probe.js',
+      args: ['--package', FRAMEWORK, '--hang-at', '1', '--counter', firstCounter],
+      probeTimeoutMs: 450,
+    },
+    extra: ({ folder, repository }) => {
+      writeJson(path.join(repository, 'node_modules', 'probe-fw-two', 'package.json'), { name: 'probe-fw-two', version: '2.0.0' });
+      writeJson(path.join(folder, 'evaluator', 'frameworks.json'), {
+        schemaVersion: 1,
+        frameworks: [
+          {
+            package: FRAMEWORK,
+            version: '1.0.0',
+            probe: {
+              command: 'evaluator/probe.js',
+              args: ['--package', FRAMEWORK, '--hang-at', '1', '--counter', firstCounter],
+              probeTimeoutMs: 450,
+            },
+          },
+          {
+            package: 'probe-fw-two',
+            version: '2.0.0',
+            probe: {
+              command: 'evaluator/probe.js',
+              args: ['--package', 'probe-fw-two', '--hang-at', '1', '--counter', secondCounter],
+              probeTimeoutMs: 800,
+            },
+          },
+        ],
+      });
+      fs.writeFileSync(
+        path.join(folder, 'evaluator', 'LEARNED.md'),
+        `# Learned evaluation framework\n\n## Framework and installed version\n\n- Installed package and version: \`${FRAMEWORK}@1.0.0\`, \`probe-fw-two@2.0.0\`\n`,
+      );
+    },
+  });
+  const twoRun = evaluate(['run', '--evaluation', two.folder], two.env);
+  const twoDirectory = runDirectoryOf(two.folder);
+  const twoArtifact = twoDirectory === null ? null : readJson(path.join(twoDirectory, 'framework-versions.json'));
+  check(
+    twoRun.status === 12 && fs.existsSync(firstCounter) && !fs.existsSync(secondCounter),
+    `a fault in the first framework still launched the second probe: exit ${twoRun.status}, second counter exists ${fs.existsSync(secondCounter)}\n${twoRun.output}`,
+  );
+  checkNoSealedRecord('a first framework probe fault', twoDirectory);
+  check(
+    schemaProblems('framework-versions')(twoArtifact).length === 0 &&
+      twoArtifact?.frameworks.length === 2 &&
+      twoArtifact.frameworks[0].effectiveProbeTimeoutMs === 450 &&
+      twoArtifact.frameworks[1].effectiveProbeTimeoutMs === 800 &&
+      twoArtifact.frameworks[1].observed === null &&
+      twoArtifact.frameworks[1].fault?.includes('not probed because an earlier framework probe failed'),
+    `a first probe fault left an incomplete artifact: ${JSON.stringify(twoArtifact)}`,
+  );
+}
+
 /**
  * `run` reads the declaration from the layer's own bytes (`readFrameworks`), and
  * refuses what `check` refuses (Story 1.44): an absent or malformed
@@ -5808,6 +5960,13 @@ async function checkFrameworkProbeShapes() {
   for (const [what, declaration, valid] of [
     ['the empty list', { schemaVersion: 1, frameworks: [] }, true],
     ['one framework', { schemaVersion: 1, frameworks: [entry] }, true],
+    ['minimum probe timeout', { schemaVersion: 1, frameworks: [{ ...entry, probe: { ...entry.probe, probeTimeoutMs: 1 } }] }, true],
+    ['maximum probe timeout', { schemaVersion: 1, frameworks: [{ ...entry, probe: { ...entry.probe, probeTimeoutMs: 60_000 } }] }, true],
+    ...[0, 60_001, 1.5, '10000'].map((probeTimeoutMs) => [
+      `invalid probe timeout ${JSON.stringify(probeTimeoutMs)}`,
+      { schemaVersion: 1, frameworks: [{ ...entry, probe: { ...entry.probe, probeTimeoutMs } }] },
+      false,
+    ]),
     ['a scoped package', { schemaVersion: 1, frameworks: [{ ...entry, package: '@acme/evals' }] }, true],
     ['another schema version', { schemaVersion: 2, frameworks: [] }, false],
     ['a wildcard version', { schemaVersion: 1, frameworks: [{ ...entry, version: '1.x' }] }, false],
@@ -5842,7 +6001,7 @@ async function checkFrameworkProbeShapes() {
     scratch: [],
   });
   check(
-    hung[0].observed === null && hung[0].fault?.includes("was still running at the evaluator's 1500ms timeout"),
+    hung[0].observed === null && hung[0].fault?.includes('was still running at its 1500ms probe timeout'),
     `a probe that never exits: the entry is ${JSON.stringify(hung[0])}`,
   );
   fs.writeFileSync(path.join(root, 'evaluator', 'not-executable.js'), '#!/usr/bin/env node\n');
@@ -5906,6 +6065,7 @@ const CASES = [
   { name: 'the installed framework versions bind the configuration', body: checkInstalledFrameworks, group: 'agents' },
   { name: 'the installed framework versions held during the run', body: checkInstalledFrameworksMidRun, group: 'agents' },
   { name: 'the installed framework versions held around calibration', body: checkInstalledFrameworksCalibration, group: 'agents' },
+  { name: 'framework probes stop at their effective timeout at every read', body: checkFrameworkProbeTimeouts, group: 'agents' },
   { name: 'the direction gate', body: checkDirectionGate, group: 'evaluators' },
   { name: 'the reference names the denial reasons', body: checkReferenceNamesDenialReasons, group: 'evaluators' },
   { name: 'the reference qualifies the sealed-brief agent', body: checkReferenceQualifiesSealedBriefAgent, group: 'evaluators' },
@@ -6011,6 +6171,14 @@ async function main() {
       await runCase('the installed framework versions bind the configuration', checkInstalledFrameworks);
       await runCase('the installed framework versions held during the run', checkInstalledFrameworksMidRun);
       await runCase('the installed framework versions held around calibration', checkInstalledFrameworksCalibration);
+      return report();
+    }
+    if (process.argv.includes('--probe-timeouts-only')) {
+      await runCase('framework probes stop at their effective timeout at every read', checkFrameworkProbeTimeouts);
+      return report();
+    }
+    if (process.argv.includes('--probe-ceiling-only')) {
+      await runCase('the probe passes are inside the trial ceiling', checkProbePassesInCeiling);
       return report();
     }
     // `--imported-calibration-only` runs Story 1.40's cases alone (its revert checks).
