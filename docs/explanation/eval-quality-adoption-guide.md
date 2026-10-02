@@ -32,7 +32,7 @@ TEA's state today, as `test/evals/suite-manifest.json` registers it:
 | Behavioral eval, `teach-me-testing` | One case, two turns, against a real vendor: turn 1 plays a full first session with a seeded wrong quiz answer and the review it triggers, turn 2 is a fresh process proving progress persisted | `test/eval-teach-me-testing.js`            |
 | Evaluate-authored eval, `evaluate`  | Evaluate's own suite: two gap-guide class swaps, one held out, and two clean controls, five trials each through the skill runner; `tea-evaluate` runs it and `eval:all` skips it               | `test/evaluations/bmad-testarch-evaluate/` |
 | Behavioral Evaluation Contracts     | Sixteen, all compiling, all generated, every oracle evaluated against stored evidence                                                                                                          | `test/contracts/`                          |
-| Replay corpus                       | 123 stored outputs scored with no model call: 3 selections, 13 atdd reports, 10 verdicts, 15 trace pairs, 29 nfr reports, 21 ci runs, 12 test-design documents, 20 replies                     | `test/replay/`                             |
+| Replay corpus                       | 141 stored outputs scored with no model call: 3 selections, 13 atdd reports, 10 verdicts, 15 trace pairs, 29 nfr reports, 37 ci runs, 14 test-design documents, 20 replies                     | `test/replay/`                             |
 
 All eleven of TEA's skills now have a real suite. The eleventh, `bmad-testarch-evaluate`, is covered by the suite Evaluate authored and ran on itself in Story 1.16, registered in `test/evals/suite-manifest.json` as `evalType: evaluate-authored`.
 
@@ -239,14 +239,14 @@ Every harness supports the same three:
 
 ### Replay the scorers without a model
 
-A harness is mostly scoring logic, and scoring logic is code that needs its own regression test. `test/replay/` holds 123 stored outputs and `npm run test:eval-replay` scores them with no model call and no network. Two rules make the corpus worth having:
+A harness is mostly scoring logic, and scoring logic is code that needs its own regression test. `test/replay/` holds 141 stored outputs and `npm run test:eval-replay` scores them with no model call and no network. Two rules make the corpus worth having:
 
 - **Derive each expected result by hand from the ground truth**, before running the code under test. A result generated from the scorer proves the scorer agrees with itself.
 - **Carry a scorer version.** A parser or scorer change either reproduces every stored result or bumps `SCORER_VERSION` in an edit somebody has to review. `--accept` refuses to re-record until that bump happens.
 
 Deriving by hand is not ceremony. Writing the `trace` parser-rejection case by hand found a defect: `readMatrix` closed a criterion section only at the next criterion-shaped heading, so a `### Gap Analysis` heading left the last section open and a test cited beneath it was recorded as that criterion's evidence. The derivation gave 10 citations and the code gave 11.
 
-Two of the 123 stored outputs are real captures. The other 121 are constructed, because the only real outputs this repository has banked from live runs are both unscoreable.
+3 of the 141 stored outputs are real captures, 12 are captured reports and the other 126 are constructed.
 
 ## 5. Express the skill as a contract
 

@@ -1453,15 +1453,8 @@ async function runCase(set, options, agent, runIndex, categories) {
       }
     }
 
-    const design = readDesign(observation.artifacts.design);
+    const design = readObservedDesign(observation.artifacts.design, observation.stdout);
     if (!design.ok) return design;
-    const projection = observation.stdout;
-    if (!projection || projection.kind === 'absent') {
-      return { ok: false, failureClass: 'environment-missing-artifact', reason: 'no scored-risk projection was returned' };
-    }
-    if (projection.kind !== 'json' || JSON.stringify(projection.value) !== JSON.stringify(scoredRiskProjection(design.design))) {
-      return { ok: false, failureClass: 'environment-parser', reason: 'the scored-risk projection disagrees with the design document' };
-    }
 
     return {
       ok: true,
@@ -1472,6 +1465,27 @@ async function runCase(set, options, agent, runIndex, categories) {
   } finally {
     fs.rmSync(workspace.dir, { recursive: true, force: true });
   }
+}
+
+/**
+ * The design a run wrote, read only when the runner's stdout projection agrees with it.
+ *
+ * The runner derives the projection from the same parser, so a disagreement means the
+ * runner and the harness read different documents or different rules.
+ *
+ * @param {object} artifact The tagged design artifact off the observation.
+ * @param {object} projection The tagged stdout off the observation.
+ */
+function readObservedDesign(artifact, projection) {
+  const design = readDesign(artifact);
+  if (!design.ok) return design;
+  if (!projection || projection.kind === 'absent') {
+    return { ok: false, failureClass: 'environment-missing-artifact', reason: 'no scored-risk projection was returned' };
+  }
+  if (projection.kind !== 'json' || JSON.stringify(projection.value) !== JSON.stringify(scoredRiskProjection(design.design))) {
+    return { ok: false, failureClass: 'environment-parser', reason: 'the scored-risk projection disagrees with the design document' };
+  }
+  return design;
 }
 
 function preflight({ agents, agentCmd }) {
@@ -2010,6 +2024,7 @@ module.exports = {
   readRisks,
   readCoverage,
   readDesign,
+  readObservedDesign,
   scoreRun,
   documentMentions,
   signatureOf,

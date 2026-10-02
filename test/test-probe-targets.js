@@ -103,6 +103,9 @@ const { RUNNER_CAPABILITIES: TEST_DESIGN_RUNNER_DECLARED_CAPABILITIES } = requir
 const {
   RUNNER_CAPABILITIES: TEST_DESIGN_HARNESS_DECLARED_CAPABILITIES,
   THRESHOLDS: TEST_DESIGN_THRESHOLDS,
+  readDesign: readTestDesignForProjection,
+  readObservedDesign: readObservedTestDesign,
+  scoredRiskProjection,
 } = require('./eval-test-design');
 const {
   EXIT_CODES: NFR_EXIT_CODES,
@@ -1573,6 +1576,55 @@ function checkTestDesignHarnessSmoke(runDir) {
     'the three scored risks are counted and the Document guard is excluded',
     JSON.stringify(generic.record?.runners?.[0]?.measurements?.ungroundedRisks),
   );
+
+  // The browser-risk document with a labeled reference example appended. The runner derives its
+  // projection and the harness reads it back; the example's rows (a duplicate R-001, an R-099 with an
+  // out-of-scale factor, a score-9 browser risk and a coverage row linking R-099) belong to no register,
+  // so the run scores as the browser case does: six rows, one invented risk, every link resolved.
+  const reference = runTestDesignHarness(runDir, 'reference-table', SEEDED_DESIGN_CASE);
+  const referenceMeasurements = reference.record?.runners?.[0]?.measurements;
+  assert(reference.status === 1, 'a design with a labeled reference example is scored, not refused', `exit ${reference.status}`);
+  assert(
+    reference.record?.failureClass === 'quality' &&
+      JSON.stringify(recordedFailures(reference)) === JSON.stringify(['1 risk(s) the epic rules out in as many words']),
+    'the only failure is the one scored browser risk, with no projection refusal',
+    JSON.stringify(recordedFailures(reference)),
+  );
+  assert(
+    referenceMeasurements?.ungroundedRisks === 1 &&
+      Math.abs(referenceMeasurements?.riskPrecision - 5 / 6) < 1e-9 &&
+      referenceMeasurements?.scaleComplianceAccuracy === 1 &&
+      referenceMeasurements?.riskLinkResolutionAccuracy === 1,
+    'the reference rows join no precision, scale or link figure',
+    JSON.stringify(referenceMeasurements),
+  );
+}
+
+/** The harness refuses a runner projection that disagrees with the document it reads back. */
+function checkTestDesignProjectionAgreement() {
+  console.log('\ntest-design runner projection and harness agreement');
+  const design = fs.readFileSync(
+    path.join(__dirname, 'replay', 'test-design', 'seeded-z-reference-table-scored-risk', 'design.md'),
+    'utf8',
+  );
+  const artifact = { kind: 'text', value: design };
+  const agreed = readTestDesignForProjection(artifact);
+  assert(agreed.ok, 'the reference-example design reads');
+  if (!agreed.ok) return;
+  const projection = scoredRiskProjection(agreed.design);
+  assert(
+    projection.riskRowCount === 6 && projection.scoredRiskCount === 5,
+    'the projection counts the six register rows and five scored rows only',
+    JSON.stringify(projection),
+  );
+  assert(readObservedTestDesign(artifact, { kind: 'json', value: projection }).ok, 'the harness accepts the projection the parser derives');
+  const withReferenceRows = { ...projection, riskRowCount: projection.riskRowCount + 2 };
+  const refused = readObservedTestDesign(artifact, { kind: 'json', value: withReferenceRows });
+  assert(
+    !refused.ok && refused.failureClass === 'environment-parser' && /disagrees/.test(refused.reason),
+    'a projection that counts the reference rows is refused',
+    JSON.stringify(refused),
+  );
 }
 
 /** The reservations fixture's default port, the one its own playwright.config.ts falls back to. */
@@ -2300,6 +2352,7 @@ async function main() {
     checkCiHarnessSmoke(runDir);
     checkTraceHarnessSmoke(runDir);
     checkTestDesignHarnessSmoke(runDir);
+    checkTestDesignProjectionAgreement();
     await checkAtddHarnessSmoke(runDir);
   } finally {
     fs.rmSync(runDir, { recursive: true, force: true });

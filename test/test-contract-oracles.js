@@ -966,20 +966,128 @@ async function checkTestDesignOracles(evaluator) {
   const referenceCoverage = '\n| Test Level | Risk Link |\n| --- | --- |\n| Unit | R-099 |\n';
   const guardRegister = register('The local queue is checked before upload.', 1, 2, 2, 'Document');
   const scoredRegister = register(marker, 2, 2, 4, 'Test');
+  const referenceTableCount = (reference) =>
+    (reference.match(/\| Risk ID \|/g) ?? []).length + (reference.match(/\| Test Level \|/g) ?? []).length;
   const referenceFixture = (label, registerDocument, reference, mentioned) => ({
     label,
     document: registerDocument + reference,
     mentioned,
     riskRowCount: 1,
-    // Every table in the labeled section is a reference table, the coverage table included.
-    referenceTables: reference.includes('| Test Level |') ? 2 : 1,
+    // Every table the label covers is a reference table, a coverage table included.
+    referenceTables: referenceTableCount(reference),
   });
+  // One section per branch of the context rule: each heading position, each lead-in word, and the
+  // reach of a lead-in over later tables. Deleting a branch leaves its section's rows in the register.
   const referenceSections = {
-    'a reference heading': `\n## Appendix: Scoring Reference\n\n${referenceRows}${referenceCoverage}`,
+    'a Reference last word under an appendix heading': `\n## Appendix: Scoring Reference\n\n${referenceRows}${referenceCoverage}`,
+    'an Example first word with a register noun': `\n## Example Register\n\n${referenceRows}`,
+    'an Example last word': `\n### Worked Example\n\n${referenceRows}`,
+    'an Illustration heading': `\n## Illustration\n\n${referenceRows}`,
+    'an Illustration last word after other words': `\n## Another Illustration\n\n${referenceRows}`,
+    'a plural Examples first word before a colon': `\n## Examples: another epic\n\n${referenceRows}`,
+    'a plural Illustrations first word before a spaced dash': `\n## Illustrations - another epic\n\n${referenceRows}`,
+    'a Worked example first word before a colon': `\n## Worked example: another epic\n\n${referenceRows}`,
+    'a plural Examples heading': `\n## Examples\n\n${referenceRows}`,
+    'a plural References last word': `\n## Appendix: References\n\n${referenceRows}`,
+    'a plural Illustrations last word': `\n## Worked Illustrations\n\n${referenceRows}`,
+    'an Example first word before a colon': `\n## Example: a checkout register\n\n${referenceRows}`,
+    'an Example first word before a spaced dash': `\n## Example - a checkout register\n\n${referenceRows}`,
     'a worked example whose headings copy the register band': `\n## Worked Example\n\n### High-Priority Risks (Score ≥6)\n\n${referenceRows}`,
-    'a lead-in paragraph under the register heading': `\n**Example:** the register of another epic.\n\n${referenceRows}`,
-    'a closing example word in the heading': `\n### High Risks (Example)\n\n${referenceRows}`,
+    'a closing example word in a band heading': `\n### High Risks (Example)\n\n${referenceRows}`,
+    'a bold Example lead-in': `\n**Example:** the register of another epic.\n\n${referenceRows}`,
+    'a Worked example lead-in': `\nWorked example: the register of another epic.\n\n${referenceRows}`,
+    'an Illustration lead-in': `\nIllustration: the register of another epic.\n\n${referenceRows}`,
+    'a lead-in that covers a risk table and a coverage table': `\n**Example:** another epic.\n\n${referenceRows}${referenceCoverage}`,
+    'a lead-in that covers two risk tables': `\n**Example:** another epic.\n\n${referenceRows}\n${referenceRows}`,
+    'a lead-in followed by an explanatory sentence': `\n**Example:** another epic.\n\n${referenceRows}\nThe next table continues it.\n\n${referenceRows}`,
+    'a lead-in followed by an HTML comment': `\n**Example:** another epic.\n\n${referenceRows}\n<!-- the same example continues -->\n\n${referenceRows}`,
   };
+  const registerWith = (heading, lead = '') =>
+    scoredRegister.replace('### Risk Register (Score 1-9)\n\n', `${heading}\n\n${lead ? `${lead}\n\n` : ''}`);
+  const negative = (label, document, shapeClean = true) => ({
+    label,
+    document,
+    mentioned: true,
+    riskRowCount: 1,
+    referenceTables: 0,
+    shapeClean,
+  });
+  // Registers a labeled reference must never swallow. Each is a title, a domain name, a story title or a
+  // citation that carries a label word without labeling anything.
+  const registerCases = [
+    negative(
+      'a Reference: citation above the register',
+      registerWith('### Risk Register (Score 1-9)', 'Reference: PRD section 4.2 and the architecture document.'),
+    ),
+    negative(
+      'a References: citation above the register',
+      registerWith('### Risk Register (Score 1-9)', 'References: PRD FR-12 and the architecture spine, section 3.'),
+    ),
+    negative(
+      'a Reference documents lead-in',
+      registerWith('### Risk Register (Score 1-9)', 'Reference documents for this assessment are the PRD and the epic.'),
+    ),
+    negative('a Sample payloads lead-in', registerWith('### Risk Register (Score 1-9)', 'Sample payloads were captured on the bench.')),
+    negative('an Example-driven lead-in', registerWith('### Risk Register (Score 1-9)', 'Example-driven scoring was used for every row.')),
+    negative('a Referenced by lead-in', registerWith('### Risk Register (Score 1-9)', 'Referenced by the PRD, the register:')),
+    negative(
+      'a Sample prose paragraph under a band heading',
+      registerWith('### High Risks: Score 1-9', 'Sample handling is the riskiest area.'),
+    ),
+    negative(
+      'a Sample domain in the title and the heading',
+      registerWith('### Sample Intake Risks (Score 1-9)').replace('Epic 7', 'Epic 4 - Sample Intake'),
+    ),
+    negative(
+      'a Reference domain in the title and a Risks heading',
+      registerWith('## Reference Data Risks (Score 1-9)').replace('Epic 7', 'Epic 2 - Reference Data'),
+    ),
+    negative('a Reference domain heading', registerWith('## Reference Data High Risks (Score 1-9)')),
+    negative('a story heading that mentions a reference', registerWith('### Story 7.1: Distinguish reference risk tables (Score 1-9)')),
+    negative('a story heading that ends in sample', registerWith('### Story 7.1: Upload a lab sample (Score 1-9)')),
+    negative('an Example-driven heading', registerWith('## Example-driven Risks (Score 1-9)')),
+    negative('a Reference first word before a register noun', registerWith('## Reference Register Risks (Score 1-9)')),
+    negative(
+      'a label lead-in that a later heading ends',
+      scoredRegister.replace(
+        '### Risk Register (Score 1-9)',
+        '### Notes\n\n**Example:** the shape of a note.\n\n### Risk Register (Score 1-9)',
+      ),
+    ),
+    negative(
+      'a label lead-in inside a list item that ends before the register',
+      scoredRegister.replace('| Risk ID |', '- Example: a note in a list item.\n\n| Risk ID |'),
+    ),
+    negative(
+      'a deeper labeled heading that a later shallower heading ends',
+      scoredRegister.replace(
+        '### Risk Register (Score 1-9)',
+        '## Appendix\n\n### Worked Example\n\nProse only.\n\n## Risk Register (Score 1-9)',
+      ),
+    ),
+    negative('a letterless heading', registerWith('## 3.1'), false),
+    negative('a Register: User Preferences heading', registerWith('## Risk Register: User Preferences (Score 1-9)')),
+    negative(
+      'a title that ends in Example above the register',
+      scoredRegister.replace('# Test Design: Epic 7', '# Test Design: Epic 7 Example'),
+      false,
+    ),
+    negative(
+      'a title that begins with Reference over a band heading',
+      scoredRegister.replace('# Test Design: Epic 7', '# Reference Data: Sync Design'),
+    ),
+    negative(
+      'a title heading directly above the register',
+      `# Checkout Example\n\n${scoredRegister.split('\n\n').slice(2).join('\n\n')}`,
+      false,
+    ),
+    negative(
+      'a level-two title with no level-one heading',
+      `## Checkout Example\n\n${scoredRegister.split('\n\n').slice(2).join('\n\n')}`,
+      false,
+    ),
+    negative('a level-two Reference title with a band heading', scoredRegister.replace('# Test Design: Epic 7', '## Reference Data Sync')),
+  ];
   const referenceExamples = [
     ...Object.entries(referenceSections).flatMap(([name, reference]) => [
       // The ruled-out category is in the reference table only: the register has a guard row.
@@ -987,20 +1095,7 @@ async function checkTestDesignOracles(evaluator) {
       // The same category is also a scored register row above the guard band.
       referenceFixture(`same category in ${name} and a scored register row`, scoredRegister, reference, true),
     ]),
-    {
-      label: 'a feature title that names a reference does not label its register',
-      document: scoredRegister.replace('# Test Design: Epic 7', '# Reference Data: Sync Design'),
-      mentioned: true,
-      riskRowCount: 1,
-      referenceTables: 0,
-    },
-    {
-      label: 'a story heading that mentions a reference does not label its register',
-      document: scoredRegister.replace('### Risk Register (Score 1-9)', '### Story 7.1: Distinguish reference risk tables (Score 1-9)'),
-      mentioned: true,
-      riskRowCount: 1,
-      referenceTables: 0,
-    },
+    ...registerCases,
   ];
   const examples = [
     { label: 'Document guard', document: register(marker, 1, 2, 2, 'Document'), mentioned: false },
@@ -1296,6 +1391,7 @@ async function checkTestDesignOracles(evaluator) {
       assert(read.design.risks.length === example.riskRowCount, `${example.label}: only register rows are parsed`);
     }
     if (example.referenceTables !== undefined) {
+      const shapeClean = example.shapeClean !== false;
       assert(
         read.design.referenceTables.length === example.referenceTables,
         `${example.label}: ${example.referenceTables} labeled reference table(s) leave the register`,
@@ -1303,9 +1399,9 @@ async function checkTestDesignOracles(evaluator) {
       assert(scored.shape.rows === example.riskRowCount, `${example.label}: the harness counts the register rows only`);
       assert(
         scoredRiskProjection(read.design).riskRowCount === scored.shape.rows,
-        `${example.label}: the runner projection and the harness count the same register rows`,
+        `${example.label}: the parser's scoredRiskProjection and the harness count the same register rows`,
       );
-      assert(scored.shapeFailures.length === 0, `${example.label}: reference rows add no duplicate id or scale failure`);
+      if (shapeClean) assert(scored.shapeFailures.length === 0, `${example.label}: reference rows add no duplicate id or scale failure`);
       assert(scored.links.dangling.length === 0, `${example.label}: a reference coverage row maps no risk`);
     }
     if (example.riskHeading) {
@@ -1356,7 +1452,7 @@ async function checkTestDesignOracles(evaluator) {
   const mappedDocument =
     guardRegister +
     '\n## Test Coverage Plan\n\n### P1 (High)\n\n| Test Level | Risk Link |\n| --- | --- |\n| E2E | R-001 |\n' +
-    referenceSections['a reference heading'];
+    referenceSections['a Reference last word under an appendix heading'];
   const mappedRead = readTestDesign({ kind: 'text', value: mappedDocument });
   assert(mappedRead.ok, 'reference coverage: the document parses');
   if (mappedRead.ok) {
@@ -1390,6 +1486,77 @@ async function checkTestDesignOracles(evaluator) {
     assert(
       JSON.stringify(extendedFields) === JSON.stringify(shippedFields),
       'the runner projection of the extended document carries the same row count and scored descriptions',
+    );
+  }
+  // Real registers whose headings and lead-ins carry label-looking words stay whole in the shipped example.
+  const shippedVariants = {
+    'a band renamed to a Sample domain': shipped.replace('### Medium Risks: Score 3 to 4', '### Sample Handling Risks: Score 3 to 4'),
+    'every band renamed to a Reference domain': shipped
+      .replace('### High Risks: Score 6 or Greater', '### Reference Data High Risks')
+      .replace('### Medium Risks: Score 3 to 4', '### Reference Data Medium Risks')
+      .replace('### Low Risks: Score 1 to 2', '### Reference Data Low Risks'),
+    'a References citation above the high band': shipped.replace(
+      '### High Risks: Score 6 or Greater\n',
+      '### High Risks: Score 6 or Greater\n\nReferences: PRD FR-12 and the architecture spine, section 3.\n',
+    ),
+    'a coverage section that names a sample domain': shipped.replace('### P0: Critical', '### P0 (Critical): Checkout Samples'),
+  };
+  for (const [name, document] of Object.entries(shippedVariants)) {
+    const variant = readTestDesign({ kind: 'text', value: document });
+    assert(
+      variant.ok &&
+        variant.design.risks.length === 7 &&
+        variant.design.coverage.length === shippedRead.design.coverage.length &&
+        variant.design.referenceTables.length === 0,
+      `the shipped worked example keeps its register and coverage map with ${name}`,
+    );
+  }
+  // A document whose only register-shaped table is a labeled reference has no register, and says why.
+  const referenceOnly = readTestDesign({
+    kind: 'text',
+    value: `# Test Design: Epic 7\n\n## Appendix: Scoring Reference\n\n${referenceRows}`,
+  });
+  assert(
+    !referenceOnly.ok && referenceOnly.reason.endsWith('outside the tables it labels as reference examples'),
+    'a document with only a labeled reference table is refused and the reason names the exclusion',
+  );
+  const plainOnly = readTestDesign({ kind: 'text', value: '# Test Design: Epic 7\n\nNo table here.\n' });
+  assert(
+    !plainOnly.ok && !plainOnly.reason.includes('reference examples'),
+    'a document with no table at all is refused without naming a reference',
+  );
+  // Material vocabulary is document-wide, and a reference table is part of the document: the words of a
+  // material risk that appear only in a labeled reference table still count, in the harness and the oracle.
+  const materialRisk = seeded.materialRisks[0];
+  const materialSpec = specs.find(
+    (spec) => spec.setId === seeded.id && spec.kind === 'material-vocabulary' && spec.riskId === materialRisk.id,
+  );
+  const materialWords = materialRisk.anyOf.map((group) => group[0]).join(' ');
+  for (const [name, document, expected] of [
+    ['absent from the whole document', guardRegister, false],
+    [
+      'present only in a labeled reference table',
+      `${guardRegister}\n## Appendix: Scoring Reference\n\n${referenceRows.replace(marker, materialWords)}`,
+      true,
+    ],
+  ]) {
+    const read = readTestDesign({ kind: 'text', value: document });
+    assert(read.ok, `material vocabulary ${name}: the document parses`);
+    if (!read.ok) continue;
+    const scored = scoreTestDesignRun(seeded, read.design, categories);
+    const results = evaluateOracles(evaluator, contract, {
+      [testDesignStepId(seeded)]: observation({
+        operationId: TEST_DESIGN_OPERATION,
+        exitCode: 0,
+        stdout: { kind: 'json', value: scoredRiskProjection(read.design) },
+        artifacts: { design: { kind: 'text', value: document } },
+      }),
+    });
+    assert(scored.mentions[materialRisk.id] === expected, `material vocabulary ${name}: the harness mention is ${expected}`);
+    assert(
+      agrees(results.get(materialSpec.id), expected),
+      `material vocabulary ${name}: ${materialSpec.id} is ${expected}`,
+      describe(results.get(materialSpec.id)),
     );
   }
   // Every oracle but the shape one has to have been seen failing somewhere, or this

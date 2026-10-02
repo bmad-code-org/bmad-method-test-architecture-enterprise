@@ -251,3 +251,54 @@ if (!process.env.DOC_COUNT_SOURCES_TEA_INDEX_CSV) {
     }
   }
 }
+
+/**
+ * The replay corpus's own counts (docs/explanation/eval-quality-adoption-guide.md, the
+ * Replay corpus row and the replay section, and docs/explanation/eval-quality-roadmap.md),
+ * read from `test/replay/<suite>/<case>/expected.json` so that a new stored case cannot
+ * leave a sentence stale.
+ *
+ * Every case directory has to carry an `expected.json` that names one known origin;
+ * anything else throws, because a count that skipped a case would be a wrong number.
+ */
+const REPLAY_ROOT = path.join(__dirname, '..', 'replay');
+const REPLAY_ORIGINS = new Set(['constructed', 'captured', 'real-capture']);
+
+function replayCases() {
+  const cases = [];
+  for (const suiteEntry of fs.readdirSync(REPLAY_ROOT, { withFileTypes: true })) {
+    if (!suiteEntry.isDirectory()) continue;
+    const suiteRoot = path.join(REPLAY_ROOT, suiteEntry.name);
+    for (const caseEntry of fs.readdirSync(suiteRoot, { withFileTypes: true })) {
+      if (!caseEntry.isDirectory()) continue;
+      const expectedPath = path.join(suiteRoot, caseEntry.name, 'expected.json');
+      if (!fs.existsSync(expectedPath))
+        refuse(`${path.relative(REPLAY_ROOT, expectedPath)} does not exist, so the replay case count would skip a case`);
+      const origin = JSON.parse(fs.readFileSync(expectedPath, 'utf8')).storedOutput?.origin;
+      if (!REPLAY_ORIGINS.has(origin)) {
+        refuse(
+          `${path.relative(REPLAY_ROOT, expectedPath)} names the origin ${JSON.stringify(origin)}; the replay counts know ${[...REPLAY_ORIGINS].join(', ')}`,
+        );
+      }
+      cases.push({ suite: suiteEntry.name, origin });
+    }
+  }
+  return cases;
+}
+
+const replay = replayCases();
+const replaySuite = (suite) => replay.filter((entry) => entry.suite === suite).length;
+const replayOrigin = (origin) => replay.filter((entry) => entry.origin === origin).length;
+
+exports.REPLAY_TOTAL = replay.length;
+exports.REPLAY_FRAGMENT_SELECTION = replaySuite('fragment-selection');
+exports.REPLAY_ATDD = replaySuite('atdd');
+exports.REPLAY_TEST_REVIEW = replaySuite('test-review');
+exports.REPLAY_TEST_DESIGN = replaySuite('test-design');
+exports.REPLAY_TRACE = replaySuite('trace');
+exports.REPLAY_ROUTING = replaySuite('bmad-tea-routing');
+exports.REPLAY_NFR = replaySuite('nfr');
+exports.REPLAY_CI = replaySuite('ci');
+exports.REPLAY_REAL_CAPTURES = replayOrigin('real-capture');
+exports.REPLAY_CAPTURED = replayOrigin('captured');
+exports.REPLAY_CONSTRUCTED = replayOrigin('constructed');

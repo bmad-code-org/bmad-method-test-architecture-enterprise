@@ -9,10 +9,13 @@ const MarkdownIt = require('markdown-it');
 const RISK_ID_PATTERN = /^R-\d{3}$/;
 const RISK_REFERENCE_PATTERN = /R-\d{3}/g;
 const markdown = new MarkdownIt();
-/** The words that call a section or a table a reference, an example, a sample or an illustration. */
-const REFERENCE_WORD_PATTERN = /^(?:references?|examples?|samples?|illustrations?|illustrative)$/i;
-/** A paragraph that opens by calling the table after it a reference, an example, a sample or an illustration. */
-const REFERENCE_LEAD_PATTERN = /^(?:worked\s+)?(?:references?|examples?|samples?|illustrations?|illustrative)\b/i;
+/** A heading that ends with one of the words that call a section a reference or an example. */
+const LABEL_LAST_WORD_PATTERN = /^(?:examples?|illustrations?|references?)$/i;
+/** A heading that opens with Example or Illustration and then takes a colon or a spaced dash, or names a register or table. */
+const LABEL_FIRST_WORD_PATTERN =
+  /^(?:worked\s+)?(?:examples?|illustrations?)(?:\s*:|\s+[-\u2013\u2014](?:\s|$)|\s+(?:registers?|tables?)\b)/i;
+/** A paragraph that opens `Example:`, `Worked example:` or `Illustration:`, bold or plain. */
+const LABEL_LEAD_PATTERN = /^(?:worked\s+)?(?:examples?|illustrations?)\s*:/i;
 
 /** The visible text of a heading or table cell, including inline code and link labels. */
 function inlineText(token) {
@@ -24,49 +27,56 @@ function inlineText(token) {
 }
 
 /**
- * Whether a heading names its own section a reference example: its first or its last
- * word is one of the reference words.
+ * Whether a heading names its own section a reference or an example.
  *
- * The position matters because a story or feature title can mention the word without
- * being one: `### Story 1.47: Distinguish reference risk tables` sits above real
- * coverage rows.
+ * A heading labels in two positions only. Its last word is Example, Illustration or
+ * Reference (`Appendix: Scoring Reference`, `Worked Example`, `High Risks (Example)`),
+ * or its first word is Example or Illustration and a colon, a spaced dash or the word
+ * Register or Table follows (`Example: a checkout register`, `Example Register`). A
+ * heading that is the single word Example is covered by the last-word position. A first-word Reference never labels, because `Reference Data
+ * Risks` names a domain. Domain titles such as `Sample Intake Risks`, `Story 7.1: Upload
+ * a lab sample` and `Risk Register: User Preferences` carry no label word in either
+ * position. Sample and Illustrative are not label words: both name real features.
+ *
+ * Known limit: a heading that ends with the word for another reason
+ * (`### Story 7.2: Upload an example`) reads as a label, because position alone cannot
+ * tell it from `Worked Example`. The cost of reading it as one is a loud refusal or a
+ * coverage row the scorer reports unmapped, and the repair is a rename.
  */
 function isReferenceHeading(heading) {
-  const words = String(heading ?? '')
-    .split(/[^A-Za-z]+/)
-    .filter(Boolean);
-  return words.length > 0 && (REFERENCE_WORD_PATTERN.test(words[0]) || REFERENCE_WORD_PATTERN.test(words.at(-1)));
+  const text = String(heading ?? '').trim();
+  const words = text.split(/[^A-Za-z]+/).filter(Boolean);
+  if (words.length === 0) return false;
+  return LABEL_LAST_WORD_PATTERN.test(words.at(-1)) || LABEL_FIRST_WORD_PATTERN.test(text.replace(/^[^A-Za-z]+/, ''));
 }
 
 /**
- * The label that makes a table a reference example, or null when the table is part of the design.
- *
  * THE CONTEXT RULE. The scored register is the set of risk tables a design states as
  * its own, and a reference table is one the document labels as an example of something
- * else. The label is read from two places a reader would look: an enclosing heading
- * below the title that begins or ends with a reference word, or a paragraph directly
- * above the table that opens with one.
+ * else. The label comes from two places a reader would look.
+ *
+ * - An enclosing heading that labels itself (see {@link isReferenceHeading}). Any
+ *   enclosing label counts, so a labeled appendix that copies the register's band
+ *   headings stays a reference. The document's first heading is its title, at any
+ *   level, and is never a label: a design for "Reference Data Sync" keeps its register.
+ * - A paragraph that opens `Example:`, `Worked example:` or `Illustration:`. It labels
+ *   every table that follows it up to the next heading, whatever sits between them (a
+ *   coverage table after a risk table, a second risk table, an explanatory sentence, an
+ *   HTML comment). `Reference:` and `References:` open citations, so they label nothing.
  *
  * The shipped worked example, `bmad-testarch-test-design/resources/test-design-epic-3.example.md`,
- * shows the shape this rule reads. Its register is the three band tables under
- * `## Risk Assessment` (`### High Risks: Score 6 or Greater`, `### Medium Risks: Score 3 to 4`,
- * `### Low Risks: Score 1 to 2`), none of which carries a reference word. A table is a
- * reference when `## Appendix: Scoring Reference`, `### Worked Example` or a lead-in such as
- * `**Example:** a register for a checkout epic` sits above it, and it stays one when its own
- * headings copy the register's (`### High Risks: Score 6 or Greater` under an example section),
- * because any enclosing label counts.
+ * shows the register this rule keeps: the three band tables under `## Risk Assessment`
+ * (`### High Risks: Score 6 or Greater`, `### Medium Risks: Score 3 to 4`,
+ * `### Low Risks: Score 1 to 2`), none of whose headings or lead-ins labels anything.
  *
- * The title heading is not a label. A design for a feature called "Reference Data Sync"
- * must keep its register, so only headings of level two and below are read.
- *
- * @param {string[]} headings Enclosing headings by level, index 0 being the title level.
- * @param {string} lead The text of the paragraph directly above the table, or an empty string.
+ * @param {string[]} headings The enclosing headings by level.
+ * @param {boolean[]} labelled Whether each enclosing heading labels itself, by level.
+ * @param {string|null} lead The label paragraph in scope, or null.
  * @returns {string|null}
  */
-function referenceLabelOf(headings, lead) {
-  const heading = headings.slice(1).find((text) => text && isReferenceHeading(text));
-  if (heading) return heading;
-  return REFERENCE_LEAD_PATTERN.test(lead) ? lead : null;
+function referenceLabelOf(headings, labelled, lead) {
+  const heading = headings.find((_, level) => labelled[level]);
+  return heading ?? lead;
 }
 
 /**
@@ -86,7 +96,10 @@ function parseTables(text) {
   const tokens = markdown.parse(text, {});
   const tables = [];
   let headings = [];
-  const listHeadings = [];
+  let labelled = [];
+  let lead = null;
+  let titleSeen = false;
+  const listScopes = [];
   let quoteDepth = 0;
   for (let index = 0; index < tokens.length; index += 1) {
     const token = tokens[index];
@@ -100,22 +113,31 @@ function parseTables(text) {
     }
     if (quoteDepth > 0) continue;
     if (token.type === 'list_item_open') {
-      listHeadings.push([...headings]);
+      listScopes.push({ headings: [...headings], labelled: [...labelled], lead });
       continue;
     }
     if (token.type === 'list_item_close') {
-      headings = listHeadings.pop();
+      ({ headings, labelled, lead } = listScopes.pop());
       continue;
     }
     if (token.type === 'heading_open') {
       const level = Number.parseInt(token.tag.slice(1), 10);
+      const text = inlineText(tokens[index + 1]);
       headings.length = Math.min(headings.length, level - 1);
-      headings[level - 1] = inlineText(tokens[index + 1]);
+      headings[level - 1] = text;
+      // The first heading is the document's title, at whatever level it is written.
+      labelled[level - 1] = titleSeen && isReferenceHeading(text);
+      titleSeen = true;
+      lead = null;
+      continue;
+    }
+    if (token.type === 'paragraph_open' && tokens[index + 1]?.type === 'inline') {
+      const text = inlineText(tokens[index + 1]);
+      if (LABEL_LEAD_PATTERN.test(text)) lead = text;
       continue;
     }
     if (token.type !== 'table_open') continue;
-    const lead = tokens[index - 1]?.type === 'paragraph_close' && tokens[index - 2]?.type === 'inline' ? inlineText(tokens[index - 2]) : '';
-    const table = { headings: headings.filter(Boolean), header: [], rows: [], reference: referenceLabelOf(headings, lead) };
+    const table = { headings: headings.filter(Boolean), header: [], rows: [], reference: referenceLabelOf(headings, labelled, lead) };
     let row = null;
     let inHeader = false;
     while (++index < tokens.length && tokens[index].type !== 'table_close') {

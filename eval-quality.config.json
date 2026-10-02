@@ -343,6 +343,90 @@
           "module": "test/lib/doc-count-sources.js",
           "export": "ADVISORY_OBSERVATIONS_MAX_ITEMS"
         }
+      },
+      "replayTotal": {
+        "kind": "module",
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "REPLAY_TOTAL"
+        }
+      },
+      "replayFragmentSelection": {
+        "kind": "module",
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "REPLAY_FRAGMENT_SELECTION"
+        }
+      },
+      "replayAtdd": {
+        "kind": "module",
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "REPLAY_ATDD"
+        }
+      },
+      "replayTestReview": {
+        "kind": "module",
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "REPLAY_TEST_REVIEW"
+        }
+      },
+      "replayTestDesign": {
+        "kind": "module",
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "REPLAY_TEST_DESIGN"
+        }
+      },
+      "replayTrace": {
+        "kind": "module",
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "REPLAY_TRACE"
+        }
+      },
+      "replayRouting": {
+        "kind": "module",
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "REPLAY_ROUTING"
+        }
+      },
+      "replayNfr": {
+        "kind": "module",
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "REPLAY_NFR"
+        }
+      },
+      "replayCi": {
+        "kind": "module",
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "REPLAY_CI"
+        }
+      },
+      "replayRealCaptures": {
+        "kind": "module",
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "REPLAY_REAL_CAPTURES"
+        }
+      },
+      "replayCaptured": {
+        "kind": "module",
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "REPLAY_CAPTURED"
+        }
+      },
+      "replayConstructed": {
+        "kind": "module",
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "REPLAY_CONSTRUCTED"
+        }
       }
     },
     "entries": [
@@ -445,6 +529,71 @@
           "match": "capped at (\\w+) items"
         },
         "counts": ["advisoryObservationsMaxItems"]
+      },
+      {
+        "file": "docs/explanation/eval-quality-adoption-guide.md",
+        "claim": "the replay corpus row: the stored output total and its per-suite breakdown",
+        "pattern": {
+          "match": "(\\d+) stored outputs scored with no model call: (\\d+) selections, (\\d+) atdd reports, (\\d+) verdicts, (\\d+) trace pairs, (\\d+) nfr reports, (\\d+) ci runs, (\\d+) test-design documents, (\\d+) replies"
+        },
+        "counts": [
+          "replayTotal",
+          "replayFragmentSelection",
+          "replayAtdd",
+          "replayTestReview",
+          "replayTrace",
+          "replayNfr",
+          "replayCi",
+          "replayTestDesign",
+          "replayRouting"
+        ],
+        "rendering": "digits"
+      },
+      {
+        "file": "docs/explanation/eval-quality-adoption-guide.md",
+        "claim": "the replay section's stored output total",
+        "pattern": {
+          "match": "`test/replay/` holds (\\d+) stored outputs"
+        },
+        "counts": ["replayTotal"],
+        "rendering": "digits"
+      },
+      {
+        "file": "docs/explanation/eval-quality-adoption-guide.md",
+        "claim": "how many stored outputs are real captures, captured and constructed",
+        "pattern": {
+          "match": "(\\d+) of the (\\d+) stored outputs are real captures, (\\d+) are captured reports and the other (\\d+) are constructed\\."
+        },
+        "counts": ["replayRealCaptures", "replayTotal", "replayCaptured", "replayConstructed"],
+        "rendering": "digits"
+      },
+      {
+        "file": "docs/explanation/eval-quality-roadmap.md",
+        "claim": "the replay corpus size and its per-suite breakdown",
+        "pattern": {
+          "match": "score (\\d+) stored cases with no model call and no network: (\\d+) fragment-selection outputs, (\\d+) `atdd` reports, (\\d+) `test-review` verdicts, (\\d+) `test-design` documents, (\\d+) `trace` artifact pairs, (\\d+) `bmad-tea-routing` replies, (\\d+) `nfr` reports, and (\\d+) `ci` runs under `test/replay/`"
+        },
+        "counts": [
+          "replayTotal",
+          "replayFragmentSelection",
+          "replayAtdd",
+          "replayTestReview",
+          "replayTestDesign",
+          "replayTrace",
+          "replayRouting",
+          "replayNfr",
+          "replayCi"
+        ],
+        "rendering": "digits"
+      },
+      {
+        "file": "docs/explanation/eval-quality-roadmap.md",
+        "claim": "how many stored outputs are real captures, captured and constructed",
+        "pattern": {
+          "match": "(\\d+) of the (\\d+) stored outputs are real captures, (\\d+) are captured reports and (\\d+) are constructed\\."
+        },
+        "counts": ["replayRealCaptures", "replayTotal", "replayCaptured", "replayConstructed"],
+        "rendering": "digits"
       }
     ]
   },
