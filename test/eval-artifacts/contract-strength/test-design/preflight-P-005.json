@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "runId": "live-test-design-P-005",
+  "fixtureDigest": "sha256:660ab2a11fc3928fe618886b04f6e600b0161ed8e74e41dd88b824ec47cadc59",
+  "passed": false,
+  "checks": [
+    {
+      "kind": "interface-present",
+      "operationId": "design-fixture-set",
+      "outcome": "satisfied",
+      "note": null
+    },
+    {
+      "kind": "input-sensitivity",
+      "operationId": "design-fixture-set",
+      "outcome": "satisfied",
+      "note": null
+    },
+    {
+      "kind": "seeded-faults-scoped",
+      "operationId": "design-fixture-set",
+      "outcome": "satisfied",
+      "note": "D-005"
+    },
+    {
+      "kind": "seeded-fault-fired",
+      "operationId": "design-fixture-set",
+      "outcome": "failed",
+      "note": "D-005: the manifestation witness resolved false on its own fault leg"
+    }
+  ]
+}

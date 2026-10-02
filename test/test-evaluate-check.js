@@ -199,6 +199,12 @@ function checkOperationPhaseCoverage() {
     flatResult.output.includes('schema-version'),
     `a version 1 evaluation.json was not refused on its schema version\n${flatResult.output}`,
   );
+  check(
+    flatResult.output.includes('migrate the file: nest operationPhases by interface and then operation') &&
+      flatResult.output.includes('set schemaVersion 2') &&
+      !flatResult.output.includes('install the TeA release'),
+    `a version 1 evaluation.json was not pointed to the migration\n${flatResult.output}`,
+  );
   // Both interfaces of a contract that reuses one operation ID are covered exactly: the contract checks clean.
   const both = copyValid();
   declareOnSecondInterface(both);
@@ -210,6 +216,42 @@ function checkOperationPhaseCoverage() {
   check(
     accepted.status === 0,
     `a reused operation ID with a phase on each interface exited ${accepted.status}, expected 0\n${accepted.output}`,
+  );
+  // A step is attributed to the interface it names: a second interface with the same operation ID and a tighter ceiling
+  // draws no skill-runner finding for the first interface's step, and a step on it is held to its own infrastructure codes.
+  const tight = copyValid();
+  declareOnSecondInterface(tight);
+  editJson(tight, 'contract.json', (value) => {
+    value.interactionPlan[0].inputBinding.option = {
+      ...value.interactionPlan[0].inputBinding.option,
+      'skill-root': { literal: 'skill' },
+      'timeout-ms': { literal: '5000' },
+    };
+  });
+  editJson(tight, 'evaluation.json', (value) => {
+    for (const entry of value.registry) Object.assign(entry, { target: 'tea-skill-runner', infrastructureExitCodes: [3, 4, 5, 6] });
+    value.registry[1].maxElapsedMs = 1000;
+  });
+  const tightResult = runCli(['check', '--evaluation', tight]);
+  check(
+    !/interactionPlan\[\d+\] hands/.test(tightResult.output),
+    `a second interface with a tighter ceiling drew a finding for the first interface's step\n${tightResult.output}`,
+  );
+  const second = copyValid();
+  declareOnSecondInterface(second);
+  editJson(second, 'evaluation.json', (value) => (value.registry[1].infrastructureExitCodes = [3, 4, 5, 6, 9]));
+  editJson(second, 'contract.json', (value) => {
+    const [step] = value.interactionPlan;
+    value.interactionPlan.push({ ...structuredClone(step), stepId: 'second-run', interfaceId: 'second-interface' });
+  });
+  plantGameability(second, {
+    response: (degenerate) => (degenerate.steps['second-run'] = { stdout: '', stderr: '', exitCode: 9 }),
+  });
+  const secondResult = runCli(['check', '--evaluation', second]);
+  check(
+    secondResult.output.includes('step second-run exits 9, which its registry entry declares as an infrastructure exit code') &&
+      !secondResult.output.includes('step tea-atdd-runner-run exits'),
+    `a gameability answer for a step on the second interface was not held to that interface's codes\n${secondResult.output}`,
   );
   const repeated = copyValid();
   editJson(repeated, 'contract.json', (value) =>
@@ -1083,6 +1125,7 @@ const DEFECT_CASES = [
     expect: (output) => [
       [output.includes(`${TEA_MANIFEST.name} ${TEA_MANIFEST.version}`), 'the message does not name the installed TeA version'],
       [output.includes('knows schemaVersion 2'), 'the message does not name the versions the runtime knows'],
+      [output.includes('install the TeA release that introduced this version'), 'a newer version does not point to a newer release'],
     ],
   },
   {

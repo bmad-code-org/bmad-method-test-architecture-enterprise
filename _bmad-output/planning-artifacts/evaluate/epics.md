@@ -23,7 +23,7 @@ inputDocuments:
 
 ## Overview
 
-This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and ninety-nine stories, including H.1 (Stories 1.27 to 1.75, 1.80 to 1.84, 1.90 to 1.102 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
+This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and one hundred stories, including H.1 (Stories 1.27 to 1.75, 1.80 to 1.84, 1.90 to 1.103 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
 
 Evaluate is fully stacked. The stack runs system under test, then the evaluation (the mechanism that runs the system, collects evidence and makes judgments), then the Behavioral Evaluation Contract (what behavior matters, what evidence counts, how success and failure resolve), then eval-quality (contract sanity, evidence support, and whether the evaluation catches defects). TeA owns every layer above eval-quality, including each concern eval-quality states it leaves to the caller, so an adopter can evaluate any target end to end. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3 onward, Epic 2 and H.1 to close the plan gap audit; the Traceability section maps each audit item to the story that closes it.
 
@@ -150,7 +150,7 @@ None. Evaluate has no graphical interface.
 ### Epic 1: The Evaluate authoring loop
 
 An adopter describes a target, answers Evaluate's questions, chooses or builds the evaluation layer and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches the seeded defect, with the gaps named and closed. The epic closes by running Evaluate on `bmad-testarch-evaluate` itself, then proving the guidance on two more target kinds, on seeded weaknesses and on an evaluation framework its guides never name.
-Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.75, 1.80 to 1.84, 1.90 to 1.102.
+Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.75, 1.80 to 1.84, 1.90 to 1.103.
 
 **FRs covered:** FR1 to FR10, FR13, FR14.
 
@@ -259,12 +259,13 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 91    | 1.100 | 1.48, 1.99                   |
 | 92    | 1.101 | 1.42                         |
 | 93    | 1.102 | 1.42                         |
-| 94    | 2.1   | 1.16, 1.26, 1.45             |
-| 95    | 2.2   | 2.1                          |
-| 96    | 2.3   | 2.2                          |
-| 97    | 2.4   | 2.3                          |
-| 98    | 2.5   | 2.4                          |
-| 99    | H.1   | 2.5                          |
+| 94    | 1.103 | 1.42                         |
+| 95    | 2.1   | 1.16, 1.26, 1.45             |
+| 96    | 2.2   | 2.1                          |
+| 97    | 2.3   | 2.2                          |
+| 98    | 2.4   | 2.3                          |
+| 99    | 2.5   | 2.4                          |
+| 100   | H.1   | 2.5                          |
 
 ### Parallel lanes (from 2026-10-01)
 
@@ -274,7 +275,7 @@ The table above gives every story's dependencies. Since Story 1.40 merged, the s
 
 **Lane 2: confinement and process lifecycle** (own worktree): 1.62, 1.57, 1.58, 1.59, 1.60, 1.63, 1.61, 1.52, 1.53, 1.54, 1.80, 1.81, 1.82, 1.83, 1.84. Story 1.62 goes first because it extracts the shared sandbox primitives the confinement stories build on. Story 1.60 may remove 1.63's premise, so 1.63 is re-read after it. Story 1.58 precedes 1.54, since both track the run's private scratch directories. Stories 1.52 to 1.54 touch the preflight and workspace modules the confinement stories also edit, so they run after them. Stories 1.82 and 1.83 follow 1.63, whose vector, bridge and `network` field they build on. Story 1.84 was appended from Story 1.61's build and follows 1.61, whose guides it extends; it joins the end, where its two live sessions can wait for the owner.
 
-**Lane 3: engine releases, dogfood and Epic 2** (own worktree): 1.45, 2.1, 2.2, 2.3, 2.4, 1.47, 1.49, 1.48, 1.42, 1.50, 1.55, 1.56, 1.51, 1.46, 2.5, 1.90, 1.91, 1.92, 1.93, 1.94, 1.95, 1.96, 1.97, 1.98, 1.99, 1.100, 1.101, 1.102. Story 1.45 starts the longest serial chain (1.45, 2.1 to 2.5, then H.1), so it runs first, and 2.5 runs last because it baselines every fixture and so waits for each story that changes committed evidence bytes (1.42, 1.44, 1.50, 1.51, 1.55, 1.56). Stories 1.47, 1.49 and 1.48 regenerate the test-design probes, so they run together with 1.48 last. Stories 1.42 and 1.50 both change the HTTP probe port and run back to back. Story 1.46 records live runs of the Evaluate skill, so it follows the skill-guide stories in other lanes (1.43, 1.44, 1.61, 1.67, 1.70). Lane 3 owns every eval-quality release, because 1.42, 1.45, 1.50 and 1.55 each need a published engine and one publisher keeps the dependency pin and `package-lock.json` ordered. Stories 1.90 and 1.91 follow 2.5: 1.90 edits the baseline `check` and `compare` read, and 1.91 re-accepts the fixture baselines Stories 2.2 to 2.5 commit, so it waits for every one of them.
+**Lane 3: engine releases, dogfood and Epic 2** (own worktree): 1.45, 2.1, 2.2, 2.3, 2.4, 1.47, 1.49, 1.48, 1.42, 1.50, 1.55, 1.56, 1.51, 1.46, 2.5, 1.90, 1.91, 1.92, 1.93, 1.94, 1.95, 1.96, 1.97, 1.98, 1.99, 1.100, 1.101, 1.102, 1.103. Story 1.45 starts the longest serial chain (1.45, 2.1 to 2.5, then H.1), so it runs first, and 2.5 runs last because it baselines every fixture and so waits for each story that changes committed evidence bytes (1.42, 1.44, 1.50, 1.51, 1.55, 1.56). Stories 1.47, 1.49 and 1.48 regenerate the test-design probes, so they run together with 1.48 last. Stories 1.42 and 1.50 both change the HTTP probe port and run back to back. Story 1.46 records live runs of the Evaluate skill, so it follows the skill-guide stories in other lanes (1.43, 1.44, 1.61, 1.67, 1.70). Lane 3 owns every eval-quality release, because 1.42, 1.45, 1.50 and 1.55 each need a published engine and one publisher keeps the dependency pin and `package-lock.json` ordered. Stories 1.90 and 1.91 follow 2.5: 1.90 edits the baseline `check` and `compare` read, and 1.91 re-accepts the fixture baselines Stories 2.2 to 2.5 commit, so it waits for every one of them.
 
 Rules the lanes share:
 
@@ -2443,6 +2444,25 @@ So that an operation pair means one operation and no later stage reports a diffe
 
 **Dependencies:** 1.42.
 **Gate:** the engine's `npm run validate` and `check:ad5-registry`, `npm view eval-quality version`, then `npm test`, `npm run test:release-metadata` and the engine check in TeA.
+
+### Story 1.103: Prove the Story 1.42 review fixes against their mutants
+
+Added 2026-10-02 in Story 1.42's merge. The Story 1.42 review round (adversarial and mutation lens, 53 mutants, 15 survivors) produced tests and a guard fix for the survivors, and the weekly usage limit ended the work before the mutation check that proves each new test fails on its mutant could run. The tests pass and the suites are green, but no mutation run has shown that each one kills the mutant it was written for.
+
+As a maintainer of the Evaluate runtime,
+I want each test added for a surviving mutant shown to fail on that mutant,
+So that the two-interface attribution of Story 1.42 stays protected at every lookup site (AD-23).
+
+**Acceptance Criteria:**
+
+**Given** the review round's list of surviving mutants in `story-1.42.md` (the phase snapshot and unclassified-observation findings in `score.js`, the `degenerateAnswer` and `armPortFor` lookups in `sealed-brief-agent.js`, the calibration observation and step ceiling in `run.js`, `calibration.js` and `arm.js`, and the option-set and gameability lookups in `check.js`)
+**When** each mutant is applied in a disposable copy and the suites that read it run
+**Then** every one fails a named test, and a mutant that still survives gets a test that fails on it in the same pull request
+**And** the Story 2.4 capture-record guard fails when a `migrations` entry names a false `from` digest, when the entry is absent and when `evaluation.json` changes by anything but the declared migration
+**And** a lookup site that no test can reach from a compiled contract is recorded in the story record as unreachable with the engine rule that makes it so.
+
+**Dependencies:** 1.42.
+**Gate:** `npm run test:evaluate-check`, `test:evaluate-interpret`, `test:evaluate-arms`, `test:evaluate-agents`, `test:evaluate-mcp`, `test:evaluate-run`, `test:evaluate-records`, `test:evaluate-calibration`, `test:evaluate-ci`, `test:evaluate-compare`, then `npm test`.
 
 ## Epic 2: Continuous proof in CI
 

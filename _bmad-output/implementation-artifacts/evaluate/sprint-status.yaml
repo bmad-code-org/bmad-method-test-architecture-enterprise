@@ -129,6 +129,7 @@ development_status:
   1-100-report-whole-body-coverage-for-the-routing-test-review-and-trace-contracts: backlog
   1-101-name-a-stale-stamp-on-every-artifact-score-reads: backlog
   1-102-refuse-a-duplicate-interface-identifier-at-compile: backlog
+  1-103-prove-the-story-1-42-review-fixes-against-their-mutants: backlog
   epic-1-retrospective: optional
 
   epic-2: in-progress
@@ -202,6 +203,7 @@ parallel_lanes:
     - 1-100-report-whole-body-coverage-for-the-routing-test-review-and-trace-contracts
     - 1-101-name-a-stale-stamp-on-every-artifact-score-reads
     - 1-102-refuse-a-duplicate-interface-identifier-at-compile
+    - 1-103-prove-the-story-1-42-review-fixes-against-their-mutants
 owner_handoff:
   - key: h-1-accept-the-dogfood-baseline-and-turn-its-pr-replay-green
     owner: Murat

@@ -471,6 +471,10 @@ async function checkCalibrationDisagreementAcrossEvaluators() {
       if (kind === 'command') {
         const observation = call.input.observations[0];
         check(observation.principal === null, 'command calibration observation omitted its principal');
+        check(
+          observation.interfaceId === 'verdict' && observation.operationId === 'judge-request',
+          `command calibration observation named ${observation.interfaceId}/${observation.operationId}; expected the plan step's pair verdict/judge-request`,
+        );
         check(observation.callInputs?.path === null, 'command calibration observation omitted total call inputs');
         check(observation.responseHeaders === null, 'command calibration observation omitted response headers');
         check(observation.responseStatus === null, 'command calibration observation omitted response status');

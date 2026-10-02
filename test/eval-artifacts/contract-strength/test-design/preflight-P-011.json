@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "runId": "live-test-design-P-011",
+  "fixtureDigest": "sha256:3b0d25fccfce9d519d105e38f9be22ef6f504136cabd7316c56a8405609f8dce",
+  "passed": true,
+  "checks": [
+    {
+      "kind": "interface-present",
+      "operationId": "design-fixture-set",
+      "outcome": "satisfied",
+      "note": null
+    },
+    {
+      "kind": "input-sensitivity",
+      "operationId": "design-fixture-set",
+      "outcome": "satisfied",
+      "note": null
+    }
+  ]
+}

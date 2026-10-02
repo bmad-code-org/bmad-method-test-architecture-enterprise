@@ -38,7 +38,7 @@ inputDocuments:
 
 ## Executive Summary
 
-**Scope:** full epic-level test design for Stories 1.1 to 1.75, 1.80 to 1.84, 1.90 to 1.102 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.75, 1.80 to 1.84, 1.90 to 1.102. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
+**Scope:** full epic-level test design for Stories 1.1 to 1.75, 1.80 to 1.84, 1.90 to 1.103 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.75, 1.80 to 1.84, 1.90 to 1.103. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
 
 **Risk summary:**
 
@@ -1397,6 +1397,16 @@ Added 2026-10-02 in Story 1.42. Levels: engine unit, compile contract, registry 
 | A repeated identifier is named at compile | A contract with two interfaces sharing a `logicalId` fails `compile` with the new code naming the identifier and both positions; distinct identifiers compile | Engine unit        | P0  | Removing the rule compiles the contract or reports another failure |
 | The misleading seal fault is gone         | A repeated identifier that also declares one operation ID on each interface fails at `compile`, and `seal` is never reached                                   | Engine unit        | P0  | Restoring the old order reports `schema-parse-failure` from `seal` |
 | The registry and TeA follow               | `check:ad5-registry` lists the code in the spine table; a TeA evaluation folder with a repeated identifier exits 10 through `check`                           | Registry, contract | P1  | An unlisted code fails the registry check                          |
+
+### Story 1.103: Prove the Story 1.42 review fixes against their mutants
+
+Added 2026-10-02 in Story 1.42's merge. Levels: mutation, integration over real eval-quality, contract. Files: the Evaluate suites named in the story gate and `test/test-evaluate-ci.js`.
+
+| AC                                             | Test                                                                                                                                                    | Level    | P   | Revert check                                                               |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | --- | -------------------------------------------------------------------------- |
+| Each survivor's test kills its mutant          | Apply each listed mutant in a /tmp copy and run the suites that read the site; record the failing test per mutant                                       | Mutation | P0  | A mutant that still passes every suite has no test and is added in this PR |
+| The capture-record guard rejects a false entry | Set a `migrations` entry's `from` to a wrong digest, remove the entry, and change `evaluation.json` beyond the declared migration; each fails the suite | Contract | P0  | A guard that checks only the entry's shape passes the false `from`         |
+| Unreachable sites are recorded with the reason | Read the story record for each site no compiled contract reaches and the engine rule that blocks it                                                     | Record   | P2  | An unexplained untested site fails the review                              |
 
 ## The Dogfood Proof (AD-15)
 

@@ -630,7 +630,6 @@ function infrastructureObservation(stepId, exitCode, callInputs = {}) {
   return {
     observationId: `${stepId}-infrastructure`,
     sequence: 1,
-    interfaceId: 'infrastructure',
     operationId: stepId,
     provenance: 'baseline',
     principal: null,
@@ -1890,7 +1889,9 @@ function schemaVersionMessage(version) {
   return (
     `evaluation.json schemaVersion ${JSON.stringify(version ?? null)} is not known to the installed TeA ` +
     `(${TEA_MANIFEST.name} ${TEA_MANIFEST.version}), which knows schemaVersion ${KNOWN_EVALUATION_SCHEMA_VERSIONS.join(', ')}; ` +
-    'install the TeA release that introduced this version, or later'
+    (Number.isInteger(version) && version < Math.min(...KNOWN_EVALUATION_SCHEMA_VERSIONS)
+      ? 'migrate the file: nest operationPhases by interface and then operation ({ interfaceId: { operationId: phase } }) and set schemaVersion 2'
+      : 'install the TeA release that introduced this version, or later')
   );
 }
 

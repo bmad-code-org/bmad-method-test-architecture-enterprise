@@ -7,8 +7,10 @@ const path = require('node:path');
 
 const { engineProjection, phaseOf, projectTrial, writeInterpretation } = require('../cli/lib/evaluate/interpret');
 const { createArtifactValidator } = require('../cli/lib/evaluate/records');
+const { createRegistry } = require('../cli/lib/evaluate/registry');
 const { RunDirectory } = require('../cli/lib/evaluate/run-directory');
-const { buildProject, API_INTERFACE, CLI_INTERFACE, OPERATION_ID } = require('./lib/evaluate-reused-operation');
+const { bridgeRouter } = require('../cli/lib/evaluate/sealed-brief-agent');
+const { buildProject, API_INTERFACE, CLI_INTERFACE, CLI_STEP: CLI_STEP_ID, OPERATION_ID } = require('./lib/evaluate-reused-operation');
 const { scratchDirectories } = require('./lib/scratch-directories');
 const { suite } = require('./lib/evaluate-story-121');
 
@@ -138,6 +140,104 @@ async function checkReusedOperation() {
     assert.ok(cited >= 2, 'the run produced a finding for each interface');
     assert.deepEqual([...citedOn.process], [`P-003:${CLI_INTERFACE}`], 'the process partition holds only the command route');
     assert.deepEqual([...citedOn.outcome], [`P-002:${API_INTERFACE}`], 'the outcome partition holds only the HTTP route');
+
+    // The trial ceiling sums each step's own interface: the command's maxElapsedMs and the service's plus its ready timeout.
+    const evaluationFile = read(path.join(folder, 'evaluation.json'));
+    const entryOf = (id) => evaluationFile.registry.find((entry) => entry.interfaceId === id);
+    const expectedMinutes =
+      (entryOf(CLI_INTERFACE).maxElapsedMs + entryOf(API_INTERFACE).maxElapsedMs + entryOf(API_INTERFACE).server.readyTimeoutMs) / 60_000;
+    const manifestFile = path.join(run, index.trialSets[0].isolationManifest);
+    assert.equal(
+      read(manifestFile).resourceCeilings.maxWallClockMinutes,
+      expectedMinutes,
+      "the trial ceiling follows each step's own interface",
+    );
+
+    // Score reads the phase snapshot by pair: each tampering below is refused before the engine runs, then undone.
+    const runJsonFile = path.join(run, 'run.json');
+    const phaseFile = path.join(run, 'operation-phases.json');
+    const originals = new Map([runJsonFile, phaseFile, path.join(run, recordPaths[0])].map((file) => [file, fs.readFileSync(file)]));
+    const restore = () => {
+      for (const [file, bytes] of originals) fs.writeFileSync(file, bytes);
+    };
+    const refuses = (what, pattern) => {
+      const before = fs.readdirSync(path.join(run, 'scores')).length;
+      const refused = test.cli(folder, 'score', ['--run', path.basename(run)], env);
+      assert.equal(refused.status, 10, `${what}: ${refused.output}`);
+      assert.match(refused.output, pattern, `${what}: ${refused.output}`);
+      assert.equal(fs.readdirSync(path.join(run, 'scores')).length, before, `${what}: the scorer ran`);
+      restore();
+    };
+    const rewritePhases = (edit) => {
+      const recorded = read(runJsonFile);
+      edit(recorded.operationPhases);
+      fs.writeFileSync(phaseFile, `${JSON.stringify(recorded.operationPhases, null, 2)}\n`);
+      recorded.artifacts.operationPhases = sha256Of(phaseFile);
+      fs.writeFileSync(runJsonFile, `${JSON.stringify(recorded, null, 2)}\n`);
+    };
+    // The two interfaces' phases swapped in run.json alone differ from the sealed file, though every operation ID and phase recurs.
+    const swapped = read(runJsonFile);
+    [swapped.operationPhases[API_INTERFACE][OPERATION_ID], swapped.operationPhases[CLI_INTERFACE][OPERATION_ID]] = [
+      swapped.operationPhases[CLI_INTERFACE][OPERATION_ID],
+      swapped.operationPhases[API_INTERFACE][OPERATION_ID],
+    ];
+    fs.writeFileSync(runJsonFile, `${JSON.stringify(swapped, null, 2)}\n`);
+    refuses('run.json phases swapped between interfaces', /operationPhases differs from the sealed operation-phases\.json/);
+    // Pairs no record observes, so only the snapshot's own rules can refuse them.
+    rewritePhases((phases) => delete phases[API_INTERFACE]['report-release']);
+    refuses('a snapshot without the report pair', /operation report-release of interface grader has no phase in run\.json/);
+    rewritePhases((phases) => (phases[API_INTERFACE]['report-release'] = 'setup'));
+    refuses('a snapshot with an unknown phase', /operation report-release of interface grader unknown phase "setup"/);
+    rewritePhases((phases) => (phases[CLI_INTERFACE]['ghost-operation'] = 'process'));
+    refuses('a snapshot with an undeclared pair', /run\.json classifies undeclared operation ghost-operation of interface grader-cli/);
+    // A record whose observation names a pair the snapshot does not classify.
+    const ghostFile = path.join(run, recordPaths[0]);
+    const ghost = read(ghostFile);
+    ghost.observations[0].operationId = 'ghost-operation';
+    fs.writeFileSync(ghostFile, `${JSON.stringify(ghost, null, 2)}\n`);
+    const ghostRun = read(runJsonFile);
+    ghostRun.artifacts.records[recordPaths[0]] = sha256Of(ghostFile);
+    fs.writeFileSync(runJsonFile, `${JSON.stringify(ghostRun, null, 2)}\n`);
+    refuses('an observation of an unclassified pair', /names unclassified operation ghost-operation of interface/);
+
+    // A gameability call is answered from the step of its own interface when two interfaces of one kind share an operation ID.
+    const twin = structuredClone(read(path.join(run, index.contract)));
+    const [, command] = twin.permittedInterfaces;
+    const second = structuredClone(command);
+    second.logicalId = 'grader-cli-b';
+    second.operations[0].invocation.executable = 'grader-cli-b';
+    twin.permittedInterfaces.push(second);
+    twin.interactionPlan.push({ ...structuredClone(planned.get(CLI_STEP_ID)), stepId: 'grade-run-cli-b', interfaceId: 'grader-cli-b' });
+    const twinRegistry = createRegistry(
+      [...evaluationFile.registry, { ...entryOf(CLI_INTERFACE), interfaceId: 'grader-cli-b', executable: 'grader-cli-b' }],
+      { root: project.root },
+    );
+    const trap = {
+      probe() {
+        throw new Error('a gameability router launched the target');
+      },
+    };
+    const twinRouter = bridgeRouter({
+      contract: twin,
+      registry: twinRegistry,
+      port: trap,
+      degenerate: {
+        [CLI_STEP_ID]: { stdout: 'verdict: first\n', stderr: '', exitCode: 0 },
+        'grade-run-cli-b': { stdout: 'verdict: second\n', stderr: '', exitCode: 0 },
+      },
+      label: 'trial-1',
+      taken: new Set(),
+      firstSequence: 1,
+      budget: 4,
+      nonce: crypto.randomBytes(16).toString('hex'),
+    });
+    const answers = [];
+    for (const [name, executable] of [
+      [CLI_INTERFACE, CLI_INTERFACE],
+      ['grader-cli-b', 'grader-cli-b'],
+    ])
+      answers.push(JSON.parse((await twinRouter.handle({ name, kind: 'cli' }, { arguments: [executable], stdin: 'x' })).text).stdout);
+    assert.deepEqual(answers, ['verdict: first\n', 'verdict: second\n'], 'each interface is answered from its own step');
 
     // A sealed record of the prior schema version is refused with the engine's named stamp finding, and nothing is scored.
     const [firstRecord] = recordPaths;
