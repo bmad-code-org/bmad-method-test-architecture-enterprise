@@ -999,6 +999,12 @@ function checkEngineAbsent() {
       result.stderr.includes(ENGINE_ABSENT_MESSAGE),
       `${subcommand} with the engine absent did not name the missing package\n${result.stderr}`,
     );
+    // The message tells the adopter which release to install: the peer range the package declares.
+    const peerRange = JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'package.json'), 'utf8')).peerDependencies['eval-quality'];
+    check(
+      result.stderr.includes(`eval-quality@"${peerRange}"`),
+      `${subcommand} with the engine absent did not name the declared peer range ${peerRange}\n${result.stderr}`,
+    );
   }
   for (const [label, expression] of [
     ['a record builder', "require('./cli/lib/evaluate/records').sealedRunRecord({})"],
