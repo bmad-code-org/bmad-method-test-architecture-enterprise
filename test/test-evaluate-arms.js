@@ -1416,7 +1416,7 @@ const LEDGER_PORT = 41_000;
 /**
  * How each deployment reports its release at `ledger`: that interface's own copy of the contract's report operation.
  * The `ledger` servers run the grader's `release: object` policy, which answers `{ release: { name } }`, so the pointer
- * differs from the `grader` one and a pointer read from the wrong interface's report finds nothing.
+ * differs from the `grader` one and a pointer read from the wrong interface's report finds an object or nothing, and no string.
  */
 const LEDGER_REPORT = Object.freeze({ operationId: 'report-ledger-release', pointer: '/release/name' });
 /** The path prefix the `ledger` servers answer under, and so the path of the `ledger` report operation. */

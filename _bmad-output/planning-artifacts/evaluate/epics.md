@@ -2013,7 +2013,7 @@ So that I learn it before the run, at exit 10, with the interfaces and operation
 **And** the finding names the colliding operation IDs and the shared method and path template, a `test:evaluate-check` case on the same registry; a finding that names the interfaces alone fails it
 **And** a registry whose two report operations differ in path passes `check` with exit 0, a clean case; a rule that flags any two report operations fails it
 **And** the route is the story's decision, recorded in its record with the reason: eval-quality scoping the duplicate-signature refusal per interface (then the engine compiles both operations and the case above becomes a clean case), or TeA's `check` calling the engine's own compile verdict for the report operations (AD-1: TeA computes no verdict of its own, so the finding quotes the engine's)
-**And** the reference's `### Against deployments` replaces the sentence that `check` does not yet name the collision with the behavior, and the case reading the section fails when the limit sentence returns.
+**And** the reference's `### Against deployments` replaces the sentence that `check` exits 0 for such a registry with the behavior, and the case reading the section fails when the limit sentence returns.
 
 **Dependencies:** 1.65.
 **Gate:** `test:evaluate-check`, `npm test`, engine check.

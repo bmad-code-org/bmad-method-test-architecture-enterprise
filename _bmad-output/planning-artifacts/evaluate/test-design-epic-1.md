@@ -1139,7 +1139,8 @@ Added 2026-10-01 in Story 1.44's final review. Levels: integration over real eva
 
 ### Story 1.75: Name a report-operation signature collision at check, before the run
 
-Added 2026-10-02 in Story 1.65's round 1 review. Levels: contract, integration over real eval-quality, static. File: `test/test-evaluate-check.js` (`test:evaluate-check`).
+Added 2026-10-02 in Story 1.65's round 1 review. Levels: contract, static. File: `test/test-evaluate-check.js` (`test:evaluate-check`).
+The story picks its route (AC 4). Under the `check` route the rows below hold as written. Under the eval-quality route the engine compiles both operations, so the first two rows become one clean case at exit 0 and the static row reads the limit sentence as removed.
 
 | AC                                                       | Test                                                                                                                                                           | Level    | P   | Revert check                                                     |
 | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | --- | ---------------------------------------------------------------- |
@@ -1147,6 +1148,7 @@ Added 2026-10-02 in Story 1.65's round 1 review. Levels: contract, integration o
 | The finding names the operations                         | The same registry; assert the finding names both operation IDs and the shared method and path template                                                         | Contract | P1  | A finding that names the interfaces alone fails the assertion    |
 | Distinct report paths pass                               | A registry whose two report operations differ in path; assert exit 0                                                                                           | Contract | P1  | A rule that flags any two report operations fails the clean case |
 | The reference no longer states the limit                 | Read `### Against deployments` under its heading and fail when the limit sentence is present                                                                   | Static   | P2  | Restoring the sentence fails the read                            |
+| The route is recorded                                    | Read the story record under its heading and assert it names the chosen route and the reason                                                                    | Static   | P2  | A record that names no route fails the read                      |
 
 ### Story 1.80: Bring a partial-clone project, its tags and a very large history into the withheld repository
 

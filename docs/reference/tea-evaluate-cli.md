@@ -558,7 +558,7 @@ The qualification names a pre-fix and a post-fix deployment: the release identif
   A registry of one HTTP interface names one report.
   Each interface's report operation needs a method and a path template that no other `api` operation of the contract uses, because eval-quality refuses a duplicate operation signature across interfaces.
   Services that serve their release at the same path need distinct paths (for example a path prefix their proxy strips), or they cannot each be asked.
-  `check` does not yet name this collision: `run` exits 4 with the compile refusal.
+  `check` exits 0 for such a registry, and `run` exits 4 with the compile refusal.
   `operationId` names an operation the contract declares on the `api` interface its key names, which the registry serves over HTTP; `check` refuses an operation declared on another interface and names the interface it belongs to.
   It is a permitted operation of the contract like any other, so `operationPhases` in `evaluation.json` names its phase, and adding it changes the compiled contract.
   The request reads a release and goes to each live deployment before any arm runs, so `check` refuses an operation the contract marks as changing state.
