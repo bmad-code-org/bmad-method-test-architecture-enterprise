@@ -2299,6 +2299,15 @@ async function checkLetterCases() {
     [`İ${dot}${dot}ndex-token-0001`, 'index-token-0001', '[redacted]'],
     [`line ${'a'.repeat(30)} Admi${dot}n-İndex-To`, 'admin-index-token', `line ${'a'.repeat(30)} [redacted]`],
     [`x ${`i${dot}`.repeat(8)}-ke`, 'iiiiiiii-key', 'x [redacted]'],
+    // An `i` carries more dots than the stretch read has spare: the stretch widens by the dots it holds.
+    [`line abcdefghi${dot.repeat(20)}`, 'abcdefghijklmnop', 'line [redacted]'],
+    [`x ${`i${dot.repeat(7)}`.repeat(8)}-ke`, 'iiiiiiii-key', 'x [redacted]'],
+    // A secret that opens with the dot is found after an `i` that absorbs it, and verbatim.
+    [`ai${dot}abcdefgh`, `${dot}abcdefgh`, `ai${dot}[redacted]`],
+    [`x ${dot}abcdefgh y`, `${dot}abcdefgh`, 'x [redacted] y'],
+    // A remainder under the floor, or a form of dots alone, matches nothing: ordinary text stays.
+    ['abcdefgh abcdefg a aaa', `${dot.repeat(7)}a`, 'abcdefgh abcdefg a aaa'],
+    ['abcdefgh a aaa', dot.repeat(8), 'abcdefgh a aaa'],
   ]) {
     const done =
       text.startsWith('line ') || text.endsWith('-ke') ? scrubCutText(text, secretForms([secret])) : scrub(text, secretForms([secret]));
@@ -2307,6 +2316,12 @@ async function checkLetterCases() {
       `${JSON.stringify(text)} against ${JSON.stringify(secret)} gave ${JSON.stringify(done)}; expected ${JSON.stringify(expected)}`,
     );
   }
+
+  // A megabyte of combining dots widens the stretch read to the whole text; it still scrubs in well under the bound.
+  const dots = performance.now();
+  scrubCutText(dot.repeat(1_000_000), secretForms(['abcdefghijklmnop']));
+  scrubCutText('ordinary text line\n'.repeat(55_000), secretForms(['abcdefghijklmnop']));
+  check(performance.now() - dots < 5000, `a megabyte of combining dots took ${Math.round(performance.now() - dots)} ms to cut-scrub`);
 
   // Secrets that overlap in the text are replaced as one: the leftmost does not leave the rest of the longer one behind.
   for (const secrets of [

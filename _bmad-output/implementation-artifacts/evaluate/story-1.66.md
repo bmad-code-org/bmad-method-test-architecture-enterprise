@@ -268,8 +268,7 @@ Regressions and material defects only, from the coordinator's second review of P
   The forms fold through the same function, so the sequence folds the same way inside a form.
   Brute force over the installed Node (every code point; every base letter of U+0020 to U+024F with one and two of five combining marks; 200,000 random strings over `i`, `I`, `İ`, `ı`, U+0307, `s`, `ß`, `ẞ`, `k`, the Kelvin sign, `σ`, `ς`, `Σ`, `ǰ`): `fold(x)`, `fold(lower(x))` and `fold(upper(x))` agree for every one.
   After the fix `İ` followed by two marks was the one sequence that disagreed, which the loop over every following mark closed; no other base letter and combining mark sequence folds inconsistently (the first run found only U+0130 with U+0307).
-  The cut's stretch (the last `longest` units) is still enough although a fold can now drop a unit: only an `i` drops one, and the forms of a secret with an `i` hold its `İ` variants as escapes of six units or more.
-  A doubling loop for the stretch was written first and removed once a mutation (the doubling off) could not fail, for that reason.
+  Round 2 argued that the cut's stretch (the last `longest` units) stays enough although a fold can drop a unit; round 3 shows the argument false (R3-1).
   Tests: `İİ-key-token-01` joins `LETTER_SECRETS`; unit checks on the three echoes above, on `İ` followed by two marks, and on a cut text of eight dotted `i` units against `iiiiiiii-key`, each giving one `[redacted]`.
   Revert observations (scratch copy, failed checks of `--letter-cases-only`, 3,881 in all): the round 1 fold restored 30 (the alternating cell and the unit checks); only one mark absorbed 1; the span end ignoring the absorbed mark 185; the round 1 fold and U+0130 folded generically 49.
 - R2-2 (low): the Story 1.74 first AC's Test cell in `test-design-epic-1.md` now names the ASCII value a Turkish-locale capitalizer echoes as `Admin-İndex-Token`, as the AC in `epics.md` does.
@@ -279,6 +278,30 @@ Regressions and material defects only, from the coordinator's second review of P
 
 Green: `--letter-cases-only` 3,881 checks, `test:evaluate-api` 4,158, `test:evaluate-mcp` 226, `lint`, `lint:md`, `format:check`, `test:doc-counts`, `test:changelog`, `docs:validate-links`.
 `test:evaluate-arms` was not rerun: `arm.js` changed in `foldedText` only.
+
+## Review round 3
+
+Two lows from the regression check of round 2.
+
+- R3-1 (low): the cut's stretch was `longest` original units, and an `i` absorbs any number of combining dots, each costing one original unit inside the stretch, so enough dots push the start of a cut prefix out of it.
+  Reproduced: secret `abcdefghijklmnop` (longest form 22 units), cut text `line abcdefghi` followed by 20 dots came back unchanged (13 dots redacted); secret `iiiiiiii-key` with 7 dots on each `i` and a text ending `-ke` came back unchanged (6 dots per `i` redacted).
+  Fix: `scrubCutText` walks back from the end of the text until it has covered `longest` folded units, a combining dot costing none (every dot counts as free, which can only widen the stretch), and folds that stretch.
+  The reviewer's fixed-point loop over the dots in the stretch would iterate once per `longest` units on a text of dots (about 45,000 times on a megabyte); the backward walk is one pass.
+  A megabyte of dots folds the whole text (272 ms measured, with its span map); a megabyte of ordinary text 1 ms; a megabyte of dotted `i` 31 ms.
+  Tests: both counterexamples, and a timed megabyte of dots and of ordinary text (bound 5 seconds).
+  Revert observations (failed checks of `--letter-cases-only`, 3,888 in all): the stretch fixed at the longest form 2; the walk counting a dot as a unit 2.
+- R3-2 (low): a secret that starts with U+0307 was not found when the text put an `i` right before it, although the text held the secret verbatim: `scrub('ai̇abcdefgh', secretForms(['̇abcdefgh']))` returned the input, because the text's `i` absorbs the mark while the form keeps it as its own first unit.
+  Fix: `matcherFor` adds, for each folded form that opens with dots, the form without them, and only when what is left has the eight characters a scrubbed value must have; the original form stays, so a text that holds the dot after another letter still matches.
+  The floor matters: without it a secret of seven dots and an `a` becomes the form `a` and redacts every `a` of ordinary text.
+  A secret of dots alone adds nothing.
+  The match after an absorbed dot leaves that dot in the text (it belongs to the preceding `i`): `ai̇[redacted]`.
+  Tests: the absorbed case, the verbatim case, a remainder under the floor and a form of dots alone (ordinary text unchanged).
+  Revert observations: no dot-less form 1; the dot-less form without the floor 1 (it redacts every `a` of the ordinary text); the dot-less form replacing the form 1 (the verbatim text keeps the dot).
+
+### Gates after review round 3
+
+Green: `--letter-cases-only` 3,888 checks, `test:evaluate-api` 4,165, `test:evaluate-mcp` 226, `lint`, `lint:md`, `format:check`, `test:doc-counts`, `test:changelog`, `docs:validate-links`.
+`test:evaluate-api` took 110 seconds (108 and 112 in the earlier rounds on a similar load, 109.4 at `5268045b`), so its weight did not move by 5 seconds; `tools/test-shard-weights.json` untouched.
 
 ## Verification
 

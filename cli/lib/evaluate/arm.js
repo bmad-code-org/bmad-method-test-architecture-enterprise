@@ -234,8 +234,16 @@ const matchers = new WeakMap();
 function matcherFor(secrets) {
   let matcher = matchers.get(secrets);
   if (matcher === undefined) {
+    const folded = secrets.filter((form) => typeof form === 'string' && form !== '').map((form) => foldedText(form, false).folded);
+    // A text folds an `i` and the combining dot after it to one unit, so a form that opens with the dot is also found without it,
+    // when what is left is as long as a value that is scrubbed at all (the floor that keeps a short remainder from matching text).
     const forms = [
-      ...new Set(secrets.filter((form) => typeof form === 'string' && form !== '').map((form) => foldedText(form, false).folded)),
+      ...new Set(
+        folded.flatMap((form) => {
+          const rest = form.replace(/^\u0307+/, '');
+          return rest !== form && rest.length >= MIN_SCRUBBED_VALUE_LENGTH ? [form, rest] : [form];
+        }),
+      ),
     ];
     matcher =
       forms.length === 0
@@ -339,10 +347,13 @@ function scrubCutText(text, secrets) {
   const scrubbed = scrubText(text, secrets);
   const { forms, heads, longest } = matcherFor(secrets);
   if (forms.length === 0) return scrubbed;
-  // A fold can drop units (an `i` with its combining dot is one), which a text reaches only through an `i`; the forms of a
-  // secret with an `i` hold its `İ` variants, each `İ` written as an escape (six units or more) for the one unit it adds to the
-  // text, so the longest form always exceeds what the stretch read can lose.
-  const window = scrubbed.length - Math.min(scrubbed.length, longest);
+  // A fold drops the combining dots an `i` carries (any number of them), so the stretch read is widened by every dot it holds:
+  // walking back from the end, a dot costs no folded unit and any other character costs one, until the longest form is covered.
+  let window = scrubbed.length;
+  for (let covered = 0; window > 0 && covered < longest; ) {
+    window -= 1;
+    if (scrubbed[window] !== '\u0307') covered += 1;
+  }
   const { folded, starts } = foldedText(scrubbed.slice(window));
   for (let at = 0; at < folded.length; at += 1) {
     const from = starts === null ? at : starts[at];
