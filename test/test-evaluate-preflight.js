@@ -442,29 +442,37 @@ else process.stdout.write('windows agent answered\\n');\n`,
     while (!fs.existsSync(file) && Date.now() < deadline) await delay(50);
     return fs.existsSync(file) ? readPids(file) : null;
   };
-  const observeWindowsProcess = (pid) => {
-    if (!Number.isSafeInteger(pid) || pid <= 0) return { error: `invalid PID ${pid}` };
+  const observeWindowsTree = (runnerPid, pids) => {
     const query = spawnSync(
       'powershell.exe',
       [
         '-NoProfile',
         '-NonInteractive',
         '-Command',
-        `$item = Get-CimInstance Win32_Process -Filter 'ProcessId = ${pid}' -ErrorAction Stop; if ($null -eq $item) { 'ABSENT' } else { "$($item.ProcessId):$($item.ParentProcessId):$($item.Name)" }`,
+        '$items = @(Get-CimInstance Win32_Process -ErrorAction Stop | Select-Object ProcessId, ParentProcessId, Name, HandleCount); ConvertTo-Json -InputObject $items -Compress',
       ],
-      { encoding: 'utf8', timeout: 10_000 },
+      { encoding: 'utf8', timeout: 10_000, maxBuffer: 4 * 1024 * 1024 },
     );
-    const stdout = query.stdout?.trim();
-    const match = /^(\d+):(\d+):(.+)$/.exec(stdout ?? '');
-    return {
-      status: query.status,
-      alive: match === null ? (stdout === 'ABSENT' ? false : null) : Number(match[1]) === pid,
-      parentPid: match === null ? null : Number(match[2]),
-      name: match?.[3] ?? null,
-      stdout,
-      stderr: query.stderr?.trim(),
-      error: query.error?.message,
-    };
+    if (query.status !== 0) return { status: query.status, error: query.error?.message, stderr: query.stderr?.trim() };
+    try {
+      const rows = JSON.parse(query.stdout.trim());
+      const included = new Set([runnerPid]);
+      let size;
+      do {
+        size = included.size;
+        for (const row of rows) if (included.has(row.ParentProcessId)) included.add(row.ProcessId);
+      } while (included.size !== size);
+      const processInfo = (pid) => rows.find((row) => row.ProcessId === pid) ?? null;
+      return {
+        status: query.status,
+        runner: processInfo(runnerPid),
+        agent: processInfo(pids?.agent),
+        child: processInfo(pids?.child),
+        tree: rows.filter((row) => included.has(row.ProcessId)),
+      };
+    } catch (error) {
+      return { status: query.status, error: error.message, stdout: query.stdout.slice(0, 500) };
+    }
   };
 
   const normalFile = path.join(directory, 'normal.json');
@@ -482,14 +490,20 @@ else process.stdout.write('windows agent answered\\n');\n`,
   let normal = null;
   let normalEnding = null;
   try {
-    normalEnding = await Promise.race([normalClosed, delay(30_000).then(() => null)]);
-    normal = fs.existsSync(normalFile) ? readPids(normalFile) : null;
-    const agentAtTimeout = normalEnding === null && normal !== null ? observeWindowsProcess(normal.agent) : null;
-    const childAtTimeout = normalEnding === null && normal !== null ? observeWindowsProcess(normal.child) : null;
+    const deadline = Date.now() + 30_000;
+    normal = await waitForPids(normalFile);
+    const pidFileSeenAt = Date.now();
+    const atPidFile = observeWindowsTree(normalRunner.pid, normal);
+    const firstSampleMs = Date.now() - pidFileSeenAt;
+    await delay(Math.max(0, 2000 - firstSampleMs));
+    const afterTwoSeconds = observeWindowsTree(normalRunner.pid, normal);
+    const secondSampleMs = Date.now() - pidFileSeenAt;
+    normalEnding = await Promise.race([normalClosed, delay(Math.max(0, deadline - Date.now())).then(() => null)]);
+    const atTimeout = normalEnding === null ? observeWindowsTree(normalRunner.pid, normal) : null;
     if (normalEnding === null) normalRunner.kill('SIGKILL');
     check(
       normalEnding?.code === 0 && normalStdout.includes('windows agent answered'),
-      `a Windows runner whose agent exited ${normalEnding === null ? 'waited over 30 s' : `returned ${normalEnding.code}`}; expected its answer. Agent PID: ${normal?.agent ?? 'unrecorded'}; child PID: ${normal?.child ?? 'unrecorded'}; agent before runner kill: ${JSON.stringify(agentAtTimeout)}; child before runner kill: ${JSON.stringify(childAtTimeout)}; child belongs to recorded agent: ${childAtTimeout?.parentPid === normal?.agent}\n${normalStdout}${normalStderr}`,
+      `a Windows runner whose agent exited ${normalEnding === null ? 'waited over 30 s' : `returned ${normalEnding.code}`}; expected its answer. Agent PID: ${normal?.agent ?? 'unrecorded'}; child PID: ${normal?.child ?? 'unrecorded'}; first CIM sample (${firstSampleMs} ms after PID file): ${JSON.stringify(atPidFile)}; second CIM sample (${secondSampleMs} ms after PID file): ${JSON.stringify(afterTwoSeconds)}; before runner kill: ${JSON.stringify(atTimeout)}\n${normalStdout}${normalStderr}`,
     );
     check(normal !== null, 'the Windows agent that exited recorded no process IDs');
     if (normal !== null) {
