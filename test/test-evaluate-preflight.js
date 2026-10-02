@@ -423,6 +423,10 @@ function childrenOf(pid) {
 /** Real-runner Windows cases use node as the agent executable, including on hosts that do not run .js files directly. */
 async function checkWindowsSupervision() {
   if (process.platform !== 'win32') return;
+  // Match the guardian's separate Job Object setup bound, with room for
+  // process startup and the supervisor's missing-report backstop.
+  const windowsSetupMs = 90_000;
+  const startupWaitMs = windowsSetupMs + 20_000;
   const directory = tempDir('windows-job-owner');
   const agentScript = path.join(directory, 'agent.cjs');
   const childScript = path.join(directory, 'child.cjs');
@@ -463,9 +467,11 @@ const ready = setInterval(() => {
   };
   const options = ['--agent', 'custom', '--agent-cmd', process.execPath, '--agent-arg', agentScript];
   const readPids = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
-  const waitForPids = async (file) => {
-    const deadline = Date.now() + 20_000;
-    while (!fs.existsSync(file) && Date.now() < deadline) await delay(50);
+  const waitForPids = async (file, closed) => {
+    const deadline = Date.now() + startupWaitMs;
+    let runnerClosed = false;
+    closed.then(() => (runnerClosed = true));
+    while (!fs.existsSync(file) && !runnerClosed && Date.now() < deadline) await delay(50);
     return fs.existsSync(file) ? readPids(file) : null;
   };
   const observeEndBy = async (pid, deadline) => {
@@ -539,8 +545,8 @@ const ready = setInterval(() => {
   let normal = null;
   let normalEnding = null;
   try {
-    const deadline = Date.now() + 30_000;
-    normal = await waitForPids(normalFile);
+    const deadline = Date.now() + windowsSetupMs + 30_000;
+    normal = await waitForPids(normalFile, normalClosed);
     const normalPidCheck =
       normal === null
         ? Promise.resolve(null)
@@ -560,7 +566,7 @@ const ready = setInterval(() => {
     if (normalEnding === null) normalRunner.kill('SIGKILL');
     check(
       normalEnding?.code === 0 && normalStdout.includes('windows agent answered'),
-      `a Windows runner whose agent exited ${normalEnding === null ? 'waited over 30 s' : `returned ${normalEnding.code}`}; expected its answer. Agent PID: ${normal?.agent ?? 'unrecorded'}; child PID: ${normal?.child ?? 'unrecorded'}; first PID and heartbeat sample (${firstSampleMs} ms after PID file): ${JSON.stringify(atPidFile)}; second sample (${secondSampleMs} ms after PID file): ${JSON.stringify(afterTwoSeconds)}; before runner kill: ${JSON.stringify(atTimeout)}\n${normalStdout}${normalStderr}`,
+      `a Windows runner whose agent exited ${normalEnding === null ? `waited over ${(windowsSetupMs + 30_000) / 1000} s` : `returned ${normalEnding.code}`}; expected its answer. Agent PID: ${normal?.agent ?? 'unrecorded'}; child PID: ${normal?.child ?? 'unrecorded'}; first PID and heartbeat sample (${firstSampleMs} ms after PID file): ${JSON.stringify(atPidFile)}; second sample (${secondSampleMs} ms after PID file): ${JSON.stringify(afterTwoSeconds)}; before runner kill: ${JSON.stringify(atTimeout)}\n${normalStdout}${normalStderr}`,
     );
     check(normal !== null, 'the Windows agent that exited recorded no process IDs');
     const normalPidsEnded = await normalPidCheck;
@@ -603,7 +609,7 @@ const ready = setInterval(() => {
   let supervisor = null;
   let leader = null;
   try {
-    dualPids = await waitForPids(dualFile);
+    dualPids = await waitForPids(dualFile, dualClosed);
     [supervisor] = childrenOf(dual.pid);
     [leader] = childrenOf(supervisor ?? 0);
     check(
@@ -661,7 +667,7 @@ const ready = setInterval(() => {
   let ownerAgentVerified = false;
   let ownerChildVerified = false;
   try {
-    ownerPids = await waitForPids(ownerFile);
+    ownerPids = await waitForPids(ownerFile, ownerClosed);
     if (ownerPids !== null) {
       [ownerSupervisor] = childrenOf(ownerRun.pid);
       [ownerLeader] = childrenOf(ownerSupervisor);
@@ -719,7 +725,7 @@ const ready = setInterval(() => {
   const timeoutClosed = ended(timeoutRun);
   let timeoutPids = null;
   try {
-    timeoutPids = await waitForPids(timeoutFile);
+    timeoutPids = await waitForPids(timeoutFile, timeoutClosed);
     check(timeoutPids !== null, 'the Windows timeout case recorded no agent and child PIDs');
     const ending = await Promise.race([timeoutClosed, delay(40_000).then(() => null)]);
     check(
@@ -777,12 +783,12 @@ const ready = setInterval(() => {
     let failedPids = null;
     let failedEnding = null;
     try {
-      failedEnding = await Promise.race([failedClosed, delay(30_000).then(() => null)]);
+      failedEnding = await Promise.race([failedClosed, delay(startupWaitMs + 5000).then(() => null)]);
       if (failedEnding === null) failedRunner.kill('SIGKILL');
       failedPids = fs.existsSync(failedFile) ? readPids(failedFile) : null;
       check(
         failedEnding?.code === EXIT_CODES['environment-transport'] && failedStderr.includes(failureDetail),
-        `Windows Job Object ${failureMode} setup failure ${failedEnding === null ? 'waited over 30 s' : `returned ${failedEnding.code}`}; expected transport failure naming ${failureDetail}. Agent PID: ${failedPids?.agent ?? 'unrecorded'}; child PID: ${failedPids?.child ?? 'unrecorded'}\n${failedStdout}${failedStderr}`,
+        `Windows Job Object ${failureMode} setup failure ${failedEnding === null ? `waited over ${(startupWaitMs + 5000) / 1000} s` : `returned ${failedEnding.code}`}; expected transport failure naming ${failureDetail}. Agent PID: ${failedPids?.agent ?? 'unrecorded'}; child PID: ${failedPids?.child ?? 'unrecorded'}\n${failedStdout}${failedStderr}`,
       );
       check(
         failedPids === null,
@@ -838,14 +844,14 @@ const ready = setInterval(() => {
   const setupRaceClosed = ended(setupRace);
   let setupRacePids = null;
   try {
-    const ending = await Promise.race([setupRaceClosed, delay(110_000).then(() => null)]);
+    const ending = await Promise.race([setupRaceClosed, delay(windowsSetupMs + 20_000).then(() => null)]);
     setupRacePids = fs.existsSync(setupRaceFile) ? readPids(setupRaceFile) : null;
     const setupTrace = fs.existsSync(setupRaceTrace) ? fs.readFileSync(setupRaceTrace, 'utf8') : '';
     const readyAt = Number(/^(\d+) node \d+ leader-agent-ready\b/m.exec(setupTrace)?.[1]);
     const timedAt = Number(/^(\d+) node \d+ leader-wallclock-timeout\b/m.exec(setupTrace)?.[1]);
     check(
       ending?.code === EXIT_CODES['environment-timeout'],
-      `a Windows runner with delayed Job Object readiness ${ending === null ? 'waited over 110 s' : `returned ${ending.code}`}; expected timeout\n${setupRaceStderr}\n${setupTrace}`,
+      `a Windows runner with delayed Job Object readiness ${ending === null ? `waited over ${(windowsSetupMs + 20_000) / 1000} s` : `returned ${ending.code}`}; expected timeout\n${setupRaceStderr}\n${setupTrace}`,
     );
     check(
       setupTrace.includes('guardian-agent-spawned') && Number.isFinite(readyAt) && Number.isFinite(timedAt) && timedAt - readyAt >= 500,
@@ -865,10 +871,18 @@ const ready = setInterval(() => {
 
 function checkWindowsRunnerReference() {
   const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
+  const supervisor = fs.readFileSync(path.join(PROJECT_ROOT, 'cli', 'lib', 'agent-supervisor.js'), 'utf8');
   const section = /^## tea-skill-runner\n([\s\S]*?)(?=^## |$(?![\s\S]))/m.exec(reference)?.[1] ?? '';
+  const setupBoundText = /const WINDOWS_SETUP_MS = ([\d_]+);/.exec(supervisor)?.[1] ?? '';
+  const setupBound = Number(setupBoundText.replaceAll('_', ''));
   check(
-    section.includes('Windows Job Object') && section.includes('10 s') && section.includes('kill-on-close'),
-    'the tea-skill-runner reference must name Windows Job Object kill-on-close ownership and the 10 s process end bound',
+    section.includes('Windows Job Object') &&
+      section.includes('kill-on-close') &&
+      section.includes('10 s') &&
+      setupBound === 90_000 &&
+      section.includes('The guardian allows 90 s for setup') &&
+      section.includes('wall clock starts when the guardian reports the actual agent PID'),
+    'the tea-skill-runner reference and supervisor must agree on Windows Job Object ownership, its 90 s setup bound, wall clock readiness and the 10 s process end bound',
   );
 }
 

@@ -61,7 +61,11 @@
  * Windows has no process groups: the leader stays in the supervisor's
  * console. Before the guardian starts the agent, a PowerShell helper assigns
  * the guardian to a kill-on-close Job Object. Ordinary descendants inherit
- * the job, whose sole handle closes when the guardian's pipe closes.
+ * the job, whose sole handle closes when the guardian's pipe closes. Setup
+ * has its own 90 s bound; the agent's wall clock starts when the guardian
+ * reports the actual agent PID. The supervisor's startup backstop runs 105 s
+ * from its own start, allowing for cold Node startup before the guardian's
+ * setup timer begins.
  *
  * Usage (from `run-agent.js` only):
  *   node agent-supervisor.js <runnerPid> <timeoutMs> <command> [args...]
@@ -118,8 +122,11 @@ const DRAIN_MS = 2000;
 /** How long past the wall clock the supervisor waits for the leader: its grace period and some slack. */
 const BACKSTOP_MS = 5000;
 
-/** Job Object setup has its own bound before the agent's wall clock starts. */
-const WINDOWS_SETUP_MS = process.env.TEA_WINDOWS_JOB_TRACE ? 90_000 : 15_000;
+/** Cold Windows PowerShell startup took 25.8 s in CI; setup has a separate 90 s bound. */
+const WINDOWS_SETUP_MS = 90_000;
+
+/** Allows cold Node startup before the guardian's own setup timer begins. */
+const WINDOWS_STARTUP_SLACK_MS = 15_000;
 
 /** How often the supervisor checks that the runner is alive. */
 const POLL_MS = 100;
@@ -664,7 +671,7 @@ function supervise([runnerPidArgument, timeoutArgument, command, ...args]) {
     if (overdue) {
       const failure =
         overduePhase === 'setup'
-          ? `the agent's group leader gave no report ${BACKSTOP_MS}ms past the Windows Job Object setup bound`
+          ? `the agent's group leader gave no report ${WINDOWS_STARTUP_SLACK_MS}ms past the Windows Job Object setup bound`
           : `the agent's group leader gave no report ${BACKSTOP_MS}ms past the agent's ${timeout}ms wall clock`;
       return fail(failure);
     }
@@ -700,7 +707,7 @@ function supervise([runnerPidArgument, timeoutArgument, command, ...args]) {
   });
   if (GROUPS) after(timeout + BACKSTOP_MS, () => backstop('agent'));
   else
-    after(WINDOWS_SETUP_MS + BACKSTOP_MS, () => {
+    after(WINDOWS_SETUP_MS + WINDOWS_STARTUP_SLACK_MS, () => {
       if (!ready) backstop('setup');
     });
 

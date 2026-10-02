@@ -23,7 +23,9 @@
  *   group leader owns and copies, so a process the agent leaves outside its
  *   group (in a new session, say) cannot hold this runner's pipes open. On
  *   Windows, which has no process groups, a kill-on-close Job Object owns the
- *   guardian, agent and ordinary descendants through the turn.
+ *   guardian, agent and ordinary descendants through the turn. Windows Job
+ *   Object setup has a 90 s bound; --timeout-ms starts after the guardian
+ *   reports the agent's actual PID.
  * - options.spawnPrefix wraps the agent command for filesystem isolation
  *   (sandbox-exec/bwrap from isolate.js); with the chmod fallback it is empty.
  * - Each adapter's argv is responsible for scoping tool access and approval
@@ -303,7 +305,8 @@ function runAgent(prompt, options = {}) {
   // spawnSync gets no timeout of its own: its timer counts time the runner
   // spends suspended (Ctrl-Z), and on expiry it closes the pipes before reading
   // what they hold, the agent's reply included. The group leader owns the wall
-  // clock, and the supervisor the backstop past it.
+  // clock, and the supervisor the backstop past it. On Windows the guardian's
+  // Job Object setup has a separate 90 s bound before that clock starts.
   const result = spawnSync(process.execPath, invocation.supervisorArgs, {
     cwd: invocation.cwd,
     encoding: 'utf8',
