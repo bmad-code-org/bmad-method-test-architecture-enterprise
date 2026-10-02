@@ -138,7 +138,7 @@ function checkWiring() {
 function goodManifest() {
   return {
     bin: { 'tea-evaluate': 'cli/evaluate.js' },
-    peerDependencies: { 'eval-quality': '>=4.7.0' },
+    peerDependencies: { 'eval-quality': '>=5.0.0' },
     peerDependenciesMeta: { 'eval-quality': { optional: true } },
   };
 }
@@ -163,6 +163,7 @@ function checkManifestMatrix() {
     ['a peer floor of 4.4.0', (manifest) => (manifest.peerDependencies['eval-quality'] = '>=4.4.0')],
     ['a peer floor of 4.5.0', (manifest) => (manifest.peerDependencies['eval-quality'] = '>=4.5.0')],
     ['a peer floor of 4.6.0', (manifest) => (manifest.peerDependencies['eval-quality'] = '>=4.6.0')],
+    ['a peer floor of 4.7.0', (manifest) => (manifest.peerDependencies['eval-quality'] = '>=4.7.0')],
     ['a caret range admitting 3.x', (manifest) => (manifest.peerDependencies['eval-quality'] = '^3.4.0 || ^4.0.0')],
     ['a peer range admitting every version', (manifest) => (manifest.peerDependencies['eval-quality'] = '*')],
     ['an invalid peer range', (manifest) => (manifest.peerDependencies['eval-quality'] = 'not-a-range')],
@@ -175,12 +176,12 @@ function checkManifestMatrix() {
     check(checkManifest(manifest, PROJECT_ROOT).length > 0, `checkManifest accepts a manifest with ${label}`);
   }
 
-  for (const range of ['>=4.7.0', '^4.7.0', '>=4.8.0', '4.7.0', '>=4.7.0 <6']) {
+  for (const range of ['>=5.0.0', '^5.0.0', '>=5.1.0', '5.0.0', '>=5.0.0 <7']) {
     const manifest = goodManifest();
     manifest.peerDependencies['eval-quality'] = range;
     check(
       checkManifest(manifest, PROJECT_ROOT).length === 0,
-      `checkManifest refuses the peer range ${range}, whose floor is 4.7.0 or later`,
+      `checkManifest refuses the peer range ${range}, whose floor is 5.0.0 or later`,
     );
   }
 

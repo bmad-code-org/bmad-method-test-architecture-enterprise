@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "evaluationId": "grader-tool-server",
   "requirements": {
     "path": "requirements.md",
@@ -46,6 +46,8 @@
     "zero-action": 1
   },
   "operationPhases": {
-    "grade-answer": "outcome"
+    "grader": {
+      "grade-answer": "outcome"
+    }
   }
 }

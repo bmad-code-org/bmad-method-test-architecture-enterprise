@@ -57,6 +57,23 @@ try {
     engine,
   );
   assert.match(unreachable.join('; '), /response does not reach \/interactions\/judge-run\/stdout\/example/);
+  // Story 1.42: the observation the check resolves a response against names an interface beside its operation.
+  const seen = [];
+  const spying = {
+    ...engine,
+    makeResolveOperand: (observations, ...rest) => {
+      seen.push(...Object.values(observations));
+      return engine.makeResolveOperand(observations, ...rest);
+    },
+  };
+  calibrationProblems(
+    { evaluator: { kind: 'command' }, judgeCalibration: { minimumAgreement: 1 } },
+    { rubrics: [{ id: 'R-101', criteria: [nestedCriterion], scaleLevels: [{ level: 0 }] }] },
+    { items: [{ rubricId: 'R-101', criterionId: 'RC-101', response: '{"example":"accepted"}', expectedLevel: 0 }] },
+    spying,
+  );
+  assert.equal(seen.length, 1);
+  assert.equal(typeof seen[0].interfaceId, 'string', 'the calibration observation names no interface');
 
   const project = test.project(
     'judge',

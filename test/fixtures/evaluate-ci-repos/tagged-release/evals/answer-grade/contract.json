@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "parentDigest": "sha256:5b7218c116a3974fd8b3a47a1f4e38ab322153a072e47a1d229cfa49275c55e8",
   "revisionCount": 1,
   "contractId": "answer-grade-contract-v1",
@@ -545,6 +545,7 @@
   "interactionPlan": [
     {
       "stepId": "valid-boundary",
+      "interfaceId": "answer-grade",
       "operationId": "grade-answer",
       "after": null,
       "cardinality": "exactly-one",
@@ -561,6 +562,7 @@
     },
     {
       "stepId": "restricted",
+      "interfaceId": "answer-grade",
       "operationId": "grade-answer",
       "after": null,
       "cardinality": "exactly-one",
@@ -577,6 +579,7 @@
     },
     {
       "stepId": "short",
+      "interfaceId": "answer-grade",
       "operationId": "grade-answer",
       "after": null,
       "cardinality": "exactly-one",
@@ -593,6 +596,7 @@
     },
     {
       "stepId": "strict-boundary",
+      "interfaceId": "answer-grade",
       "operationId": "grade-answer",
       "after": null,
       "cardinality": "exactly-one",
@@ -613,6 +617,7 @@
     },
     {
       "stepId": "strict-short",
+      "interfaceId": "answer-grade",
       "operationId": "grade-answer",
       "after": null,
       "cardinality": "exactly-one",
@@ -633,6 +638,7 @@
     },
     {
       "stepId": "missing",
+      "interfaceId": "answer-grade",
       "operationId": "grade-answer",
       "after": null,
       "cardinality": "exactly-one",
@@ -649,6 +655,7 @@
     },
     {
       "stepId": "nonstring",
+      "interfaceId": "answer-grade",
       "operationId": "grade-answer",
       "after": null,
       "cardinality": "exactly-one",

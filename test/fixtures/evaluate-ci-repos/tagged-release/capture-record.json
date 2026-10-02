@@ -17,5 +17,12 @@
     "evals/answer-grade/ci/evaluation-ci-plan.json": "sha256:3a7d749780556aec33cc0b74c3b2c0439709738cc663381fc3889253157335c0",
     "evals/answer-grade/evaluation.json": "sha256:1e70cc7f70a9143b264b6e83f2e2f4444a51564951c64e5ae4cd9834c8e688ad"
   },
-  "scratchSetup": "The scratch copy left out this record and any plan, reset the tiers of evaluation.json to the Story 1.24 evaluation's, and held one scored run of the evaluation (tea-evaluate run, then score) and no baseline until the session accepted the latest run at the maintainer's word; neither the run nor the baseline is committed."
+  "scratchSetup": "The scratch copy left out this record and any plan, reset the tiers of evaluation.json to the Story 1.24 evaluation's, and held one scored run of the evaluation (tea-evaluate run, then score) and no baseline until the session accepted the latest run at the maintainer's word; neither the run nor the baseline is committed.",
+  "migrations": [
+    {
+      "file": "evals/answer-grade/evaluation.json",
+      "story": "1.42",
+      "change": "eval-quality 5.0.0 names an operation by its interface and operation ID: schemaVersion 1 to 2, and operationPhases keyed by interface and then operation. The live session wrote neither field, and its tiers are untouched."
+    }
+  ]
 }

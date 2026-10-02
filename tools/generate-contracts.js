@@ -667,6 +667,7 @@ function buildTestReviewContract() {
     interactionPlan: [
       {
         stepId: 'review-corpus',
+        interfaceId: 'tea-test-review',
         operationId: 'review-test-files',
         after: null,
         cardinality: 'exactly-one',
@@ -1329,6 +1330,7 @@ async function buildFragmentSelectionContract(spec) {
     siblingGroups: { operations: [], parameters: [] },
     interactionPlan: evals.cases.map((entry) => ({
       stepId: entry.id,
+      interfaceId: 'tea-fragment-selection-runner',
       operationId: 'select-fragments',
       after: null,
       cardinality: 'exactly-one',
@@ -2360,6 +2362,7 @@ function buildTraceContract() {
     siblingGroups: { operations: [], parameters: [] },
     interactionPlan: sets.map((set) => ({
       stepId: traceStepId(set),
+      interfaceId: TRACE_INTERFACE,
       operationId: TRACE_OPERATION,
       after: null,
       cardinality: 'exactly-one',
@@ -2869,6 +2872,7 @@ function buildNfrContract() {
     siblingGroups: { operations: [], parameters: [] },
     interactionPlan: sets.map((set) => ({
       stepId: nfrStepId(set),
+      interfaceId: NFR_INTERFACE,
       operationId: NFR_OPERATION,
       after: null,
       cardinality: 'exactly-one',
@@ -3363,6 +3367,7 @@ function buildCiContract() {
     siblingGroups: { operations: [], parameters: [] },
     interactionPlan: sets.map((set) => ({
       stepId: ciStepId(set),
+      interfaceId: CI_INTERFACE,
       operationId: CI_OPERATION,
       after: null,
       cardinality: 'exactly-one',
@@ -3590,6 +3595,7 @@ function buildAtddContract() {
     interactionPlan: [
       {
         stepId: `${ATDD_INTERFACE}-run`,
+        interfaceId: ATDD_INTERFACE,
         operationId: ATDD_OPERATION,
         after: null,
         cardinality: 'exactly-one',
@@ -3971,6 +3977,7 @@ const ROUTING_CONTRACTS = [
 async function routingPlanStep(item) {
   return {
     stepId: item.id,
+    interfaceId: ROUTING_INTERFACE,
     operationId: ROUTING_OPERATION,
     after: null,
     cardinality: 'exactly-one',
@@ -4619,6 +4626,7 @@ function buildTestDesignContract() {
     siblingGroups: { operations: [], parameters: [] },
     interactionPlan: sets.map((set) => ({
       stepId: testDesignStepId(set),
+      interfaceId: TEST_DESIGN_INTERFACE,
       operationId: TEST_DESIGN_OPERATION,
       after: null,
       cardinality: 'exactly-one',

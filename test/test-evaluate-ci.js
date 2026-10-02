@@ -2528,6 +2528,32 @@ const DIGEST = /^sha256:[0-9a-f]{64}$/;
  * each with a digest that still matches, the digest of the repository files it read, and a model, a session and a prompt that
  * names no placement. `bytes` is the repository as committed; a revert case changes one of its entries.
  */
+const EVALUATION_FILE = 'evals/answer-grade/evaluation.json';
+
+/**
+ * The bytes a live session wrote before Story 1.42 moved `evaluation.json` to schema 2: `schemaVersion` back to 1 and
+ * `operationPhases` flattened from `{ interfaceId: { operationId: phase } }` to `{ operationId: phase }`, serialized as the
+ * session left it. `null` when the file is not a schema 2 file with nested phases, or an operation ID repeats across interfaces.
+ */
+function reverseSchema2Migration(buffer) {
+  let value;
+  try {
+    value = JSON.parse(buffer.toString('utf8'));
+  } catch {
+    return null;
+  }
+  if (value?.schemaVersion !== 2 || value.operationPhases === null || typeof value.operationPhases !== 'object') return null;
+  const flat = {};
+  for (const byOperation of Object.values(value.operationPhases)) {
+    if (byOperation === null || typeof byOperation !== 'object') return null;
+    for (const [operationId, phase] of Object.entries(byOperation)) {
+      if (Object.hasOwn(flat, operationId)) return null;
+      flat[operationId] = phase;
+    }
+  }
+  return Buffer.from(`${JSON.stringify({ ...value, schemaVersion: 1, operationPhases: flat }, null, 2)}\n`);
+}
+
 function captureProblems(name, record, bytes) {
   const problems = [];
   if (!(record.model ?? '').startsWith('claude-')) problems.push(`${name}: the capture record names no model`);
@@ -2543,11 +2569,25 @@ function captureProblems(name, record, bytes) {
     else if (sha(fs.readFileSync(path.join(SKILL_ROOT, relative))) !== digest)
       problems.push(`${name}: ${relative} changed since the live session read it; run the session again`);
   }
+  // A file the session wrote and Story 1.42 migrated is held to the session's digest through the declared migration: the
+  // bytes the session wrote are rebuilt by reversing it, so the digest in `wrote` is never retyped and the migration is
+  // the only edit the file may carry.
+  const migrated = new Set();
+  for (const migration of record.migrations ?? []) {
+    if (migration?.file !== EVALUATION_FILE || migration.story !== '1.42' || migrated.has(migration.file))
+      problems.push(`${name}: the capture record declares a migration of ${migration?.file} the tests do not know`);
+    migrated.add(migration?.file);
+  }
   for (const relative of WROTE_KEYS) {
     const digest = record.wrote?.[relative];
+    let written = bytes.get(relative) ?? Buffer.alloc(0);
+    if (migrated.has(relative)) {
+      const rebuilt = reverseSchema2Migration(written);
+      if (rebuilt === null) problems.push(`${name}: ${relative} is not a schema 2 file the declared migration could have produced`);
+      else written = rebuilt;
+    }
     if (!DIGEST.test(digest ?? '')) problems.push(`${name}: wrote holds no digest for ${relative}`);
-    else if (sha(bytes.get(relative) ?? Buffer.alloc(0)) !== digest)
-      problems.push(`${name}: ${relative} is not the file the live session wrote`);
+    else if (sha(written) !== digest) problems.push(`${name}: ${relative} is not the file the live session wrote`);
   }
   if (!DIGEST.test(record.repositoryRead ?? '')) problems.push(`${name}: the capture record digests no repository file`);
   else if (repositoryReadDigest(bytes) !== record.repositoryRead)
@@ -2865,6 +2905,34 @@ function checkRepositoryPlans() {
     assert.ok(
       captureProblems(side.name, record, changedRepository).some((problem) => problem.includes('a repository file changed')),
       `${side.name}: a changed repository file passed`,
+    );
+    // Story 1.42: the schema 2 migration is the only edit the session's evaluation.json may carry.
+    const unmigrated = structuredClone(record);
+    delete unmigrated.migrations;
+    assert.ok(
+      captureProblems(side.name, unmigrated, side.repository.bytes).some((problem) =>
+        problem.includes('is not the file the live session wrote'),
+      ),
+      `${side.name}: a migrated evaluation.json with no declared migration passed`,
+    );
+    const evaluationBytes = side.repository.bytes.get(EVALUATION_FILE);
+    const retiered = new Map(side.repository.bytes);
+    retiered.set(EVALUATION_FILE, Buffer.from(evaluationBytes.toString('utf8').replace('"pr"', '"merge"')));
+    assert.ok(
+      captureProblems(side.name, record, retiered).some((problem) => problem.includes('is not the file the live session wrote')),
+      `${side.name}: an edit to evaluation.json beyond the declared migration passed`,
+    );
+    const asWritten = new Map(side.repository.bytes);
+    asWritten.set(EVALUATION_FILE, reverseSchema2Migration(evaluationBytes));
+    assert.ok(
+      captureProblems(side.name, record, asWritten).some((problem) => problem.includes('declared migration could have produced')),
+      `${side.name}: a declared migration over a file that was never migrated passed`,
+    );
+    const unknown = structuredClone(record);
+    unknown.migrations.push({ file: 'evals/answer-grade/ci/evaluation-ci-plan.json', story: '1.42', change: 'none' });
+    assert.ok(
+      captureProblems(side.name, unknown, side.repository.bytes).some((problem) => problem.includes('the tests do not know')),
+      `${side.name}: a migration of the plan passed`,
     );
     const undigested = structuredClone(record);
     delete undigested.repositoryRead;

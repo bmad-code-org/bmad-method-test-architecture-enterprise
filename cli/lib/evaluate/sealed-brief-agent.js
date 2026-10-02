@@ -395,10 +395,12 @@ function answerKind(answer) {
  * as a call of the same kind, as a shortcut target answers every request
  * alike; `undefined` when the response answers no call of that kind.
  */
-function degenerateAnswer({ contract, degenerate, operationId, kind }) {
+function degenerateAnswer({ contract, degenerate, interfaceId, operationId, kind }) {
   const plan = contract.interactionPlan ?? [];
   const ofKind = (candidate) => Object.hasOwn(degenerate, candidate.stepId) && answerKind(degenerate[candidate.stepId]) === kind;
-  const step = plan.find((candidate) => candidate.operationId === operationId && ofKind(candidate)) ?? plan.find(ofKind);
+  const step =
+    plan.find((candidate) => candidate.interfaceId === interfaceId && candidate.operationId === operationId && ofKind(candidate)) ??
+    plan.find(ofKind);
   return step === undefined ? undefined : degenerate[step.stepId];
 }
 
@@ -459,9 +461,9 @@ function bridgeRouter({
   };
 
   /** The port one call goes through: the trial's, or on a gameability arm one answering from the degenerate response. */
-  async function armPortFor(kind, operationId) {
+  async function armPortFor(kind, interfaceId, operationId) {
     if (degenerate === null) return port;
-    return degeneratePort({ registry, answer: degenerateAnswer({ contract, degenerate, operationId, kind }), kind });
+    return degeneratePort({ registry, answer: degenerateAnswer({ contract, degenerate, interfaceId, operationId, kind }), kind });
   }
 
   /**
@@ -531,7 +533,7 @@ function bridgeRouter({
       channels: call.channels,
     };
     // A gameability arm's call goes through the same adapter and authorizations as a real arm's, so it is denied alike.
-    const sent = await send(await armPortFor('cli', operationId), request, entry);
+    const sent = await send(await armPortFor('cli', tool.name, operationId), request, entry);
     if (sent.answer !== undefined) return sent.answer;
     const { observation } = sent;
     const registryEntry = registry.targetFor(tool.name, call.executable);
@@ -556,6 +558,7 @@ function bridgeRouter({
     const recorded = recordObservation({
       observationId: probeId,
       sequence,
+      interfaceId: tool.name,
       operationId,
       callInputs: call.callInputs,
       stdout: observation.stdout,
@@ -597,7 +600,7 @@ function bridgeRouter({
       channels: { arguments: toolArguments },
     };
     // The registry's MCP authorization for the arm's copy decides the call, through eval-quality's MCP adapter, before any server starts.
-    const sent = await send(await armPortFor('mcp', operationId), request, entry);
+    const sent = await send(await armPortFor('mcp', tool.name, operationId), request, entry);
     if (sent.answer !== undefined) return sent.answer;
     const { observation } = sent;
     // A signal from outside that ended the server's session stops the run as it does a command call; any other code is
@@ -616,6 +619,7 @@ function bridgeRouter({
     const recorded = recordObservation({
       observationId: probeId,
       sequence,
+      interfaceId: tool.name,
       operationId,
       callInputs: { arguments: toolArguments },
       responseBody: bodyValue(observation.result),
@@ -662,7 +666,7 @@ function bridgeRouter({
     };
     // The registry's HTTP policy for the arm's copy decides the call, through the evaluation's port and eval-quality's
     // evaluateTarget, before any request is sent or any server starts.
-    const sent = await send(await armPortFor('api', operationId), request, entry);
+    const sent = await send(await armPortFor('api', tool.name, operationId), request, entry);
     if (sent.answer !== undefined) return sent.answer;
     const { observation } = sent;
     if (degenerate === null) unreportedSteps.push(probeId);
@@ -675,6 +679,7 @@ function bridgeRouter({
     const recorded = recordObservation({
       observationId: probeId,
       sequence,
+      interfaceId: tool.name,
       operationId,
       callInputs: {
         path: Object.keys(call.pathValues).length === 0 ? null : call.pathValues,

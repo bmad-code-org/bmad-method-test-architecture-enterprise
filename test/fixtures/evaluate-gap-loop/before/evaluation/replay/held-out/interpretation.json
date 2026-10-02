@@ -1,11 +1,19 @@
 {
-  "scoreInvocationId": "20260929T030324999Z-1496a7f7",
+  "scoreInvocationId": "20261002T155009220Z-9bf49ae6",
+  "strengthAggregate": {
+    "status": "copied",
+    "reason": null,
+    "path": "runs/20261002T154941955Z-9183b477/scores/20261002T155009220Z-9bf49ae6/strength-aggregate.json",
+    "digest": "sha256:97120020a484e77a60cebb50e2ccabfa29f2fefff797f1f9406962c3a88f839e",
+    "floors": "runs/20261002T154941955Z-9183b477/scores/20261002T155009220Z-9bf49ae6/strength-floors.json",
+    "floorsDigest": "sha256:e84700d449bc14f307e48810dc166fab364dfdaa20ea30a2dbc492fe81c913c6"
+  },
   "probes": [
     {
       "probeId": "P-010",
-      "evidence": "runs/20260929T030250916Z-0f88894a/scores/20260929T030324999Z-1496a7f7/P-010/evidence-artifact.json",
+      "evidence": "runs/20261002T154941955Z-9183b477/scores/20261002T155009220Z-9bf49ae6/P-010/evidence-artifact.json",
       "scoreExitCode": 0,
-      "scoreRecord": "runs/20260929T030250916Z-0f88894a/scores/20260929T030324999Z-1496a7f7/P-010/score.json",
+      "scoreRecord": "runs/20261002T154941955Z-9183b477/scores/20261002T155009220Z-9bf49ae6/P-010/score.json",
       "scoreFailure": null,
       "trials": [
         {
@@ -37,6 +45,7 @@
                 {
                   "observationId": "trial-1-missing",
                   "sequence": 1,
+                  "interfaceId": "review-cli",
                   "operationId": "review",
                   "provenance": "evaluator-chosen",
                   "phase": "outcome"
@@ -44,6 +53,7 @@
                 {
                   "observationId": "trial-1-dangling",
                   "sequence": 7,
+                  "interfaceId": "review-cli",
                   "operationId": "review",
                   "provenance": "evaluator-chosen",
                   "phase": "outcome"
@@ -69,6 +79,7 @@
             "findingId": "F-001",
             "observationId": "trial-1-missing",
             "sequence": 1,
+            "interfaceId": "review-cli",
             "operationId": "review",
             "provenance": "evaluator-chosen",
             "phase": "outcome"
@@ -103,6 +114,7 @@
                 {
                   "observationId": "trial-2-missing",
                   "sequence": 1,
+                  "interfaceId": "review-cli",
                   "operationId": "review",
                   "provenance": "evaluator-chosen",
                   "phase": "outcome"
@@ -110,6 +122,7 @@
                 {
                   "observationId": "trial-2-dangling",
                   "sequence": 7,
+                  "interfaceId": "review-cli",
                   "operationId": "review",
                   "provenance": "evaluator-chosen",
                   "phase": "outcome"
@@ -135,6 +148,7 @@
             "findingId": "F-001",
             "observationId": "trial-2-missing",
             "sequence": 1,
+            "interfaceId": "review-cli",
             "operationId": "review",
             "provenance": "evaluator-chosen",
             "phase": "outcome"
@@ -169,6 +183,7 @@
                 {
                   "observationId": "trial-3-missing",
                   "sequence": 1,
+                  "interfaceId": "review-cli",
                   "operationId": "review",
                   "provenance": "evaluator-chosen",
                   "phase": "outcome"
@@ -176,6 +191,7 @@
                 {
                   "observationId": "trial-3-dangling",
                   "sequence": 7,
+                  "interfaceId": "review-cli",
                   "operationId": "review",
                   "provenance": "evaluator-chosen",
                   "phase": "outcome"
@@ -201,6 +217,7 @@
             "findingId": "F-001",
             "observationId": "trial-3-missing",
             "sequence": 1,
+            "interfaceId": "review-cli",
             "operationId": "review",
             "provenance": "evaluator-chosen",
             "phase": "outcome"
@@ -1390,9 +1407,9 @@
     },
     {
       "probeId": "P-011",
-      "evidence": "runs/20260929T030250916Z-0f88894a/scores/20260929T030324999Z-1496a7f7/P-011/evidence-artifact.json",
+      "evidence": "runs/20261002T154941955Z-9183b477/scores/20261002T155009220Z-9bf49ae6/P-011/evidence-artifact.json",
       "scoreExitCode": 0,
-      "scoreRecord": "runs/20260929T030250916Z-0f88894a/scores/20260929T030324999Z-1496a7f7/P-011/score.json",
+      "scoreRecord": "runs/20261002T154941955Z-9183b477/scores/20261002T155009220Z-9bf49ae6/P-011/score.json",
       "scoreFailure": null,
       "trials": [
         {
@@ -1424,6 +1441,7 @@
                 {
                   "observationId": "trial-1-disabled",
                   "sequence": 2,
+                  "interfaceId": "review-cli",
                   "operationId": "review",
                   "provenance": "evaluator-chosen",
                   "phase": "outcome"
@@ -1431,6 +1449,7 @@
                 {
                   "observationId": "trial-1-it-skip",
                   "sequence": 3,
+                  "interfaceId": "review-cli",
                   "operationId": "review",
                   "provenance": "evaluator-chosen",
                   "phase": "outcome"
@@ -1456,6 +1475,7 @@
             "findingId": "F-001",
             "observationId": "trial-1-disabled",
             "sequence": 2,
+            "interfaceId": "review-cli",
             "operationId": "review",
             "provenance": "evaluator-chosen",
             "phase": "outcome"
@@ -1490,6 +1510,7 @@
                 {
                   "observationId": "trial-2-disabled",
                   "sequence": 2,
+                  "interfaceId": "review-cli",
                   "operationId": "review",
                   "provenance": "evaluator-chosen",
                   "phase": "outcome"
@@ -1497,6 +1518,7 @@
                 {
                   "observationId": "trial-2-it-skip",
                   "sequence": 3,
+                  "interfaceId": "review-cli",
                   "operationId": "review",
                   "provenance": "evaluator-chosen",
                   "phase": "outcome"
@@ -1522,6 +1544,7 @@
             "findingId": "F-001",
             "observationId": "trial-2-disabled",
             "sequence": 2,
+            "interfaceId": "review-cli",
             "operationId": "review",
             "provenance": "evaluator-chosen",
             "phase": "outcome"
@@ -1556,6 +1579,7 @@
                 {
                   "observationId": "trial-3-disabled",
                   "sequence": 2,
+                  "interfaceId": "review-cli",
                   "operationId": "review",
                   "provenance": "evaluator-chosen",
                   "phase": "outcome"
@@ -1563,6 +1587,7 @@
                 {
                   "observationId": "trial-3-it-skip",
                   "sequence": 3,
+                  "interfaceId": "review-cli",
                   "operationId": "review",
                   "provenance": "evaluator-chosen",
                   "phase": "outcome"
@@ -1588,6 +1613,7 @@
             "findingId": "F-001",
             "observationId": "trial-3-disabled",
             "sequence": 2,
+            "interfaceId": "review-cli",
             "operationId": "review",
             "provenance": "evaluator-chosen",
             "phase": "outcome"
@@ -2777,9 +2803,9 @@
     },
     {
       "probeId": "P-012",
-      "evidence": "runs/20260929T030250916Z-0f88894a/scores/20260929T030324999Z-1496a7f7/P-012/evidence-artifact.json",
+      "evidence": "runs/20261002T154941955Z-9183b477/scores/20261002T155009220Z-9bf49ae6/P-012/evidence-artifact.json",
       "scoreExitCode": 0,
-      "scoreRecord": "runs/20260929T030250916Z-0f88894a/scores/20260929T030324999Z-1496a7f7/P-012/score.json",
+      "scoreRecord": "runs/20261002T154941955Z-9183b477/scores/20261002T155009220Z-9bf49ae6/P-012/score.json",
       "scoreFailure": null,
       "trials": [
         {
@@ -2812,6 +2838,7 @@
                 {
                   "observationId": "trial-1-strict",
                   "sequence": 4,
+                  "interfaceId": "review-cli",
                   "operationId": "review",
                   "provenance": "evaluator-chosen",
                   "phase": "outcome"
@@ -2819,6 +2846,7 @@
                 {
                   "observationId": "trial-1-match",
                   "sequence": 5,
+                  "interfaceId": "review-cli",
                   "operationId": "review",
                   "provenance": "evaluator-chosen",
                   "phase": "outcome"
@@ -2826,6 +2854,7 @@
                 {
                   "observationId": "trial-1-to-be",
                   "sequence": 6,
+                  "interfaceId": "review-cli",
                   "operationId": "review",
                   "provenance": "evaluator-chosen",
                   "phase": "outcome"
@@ -2849,6 +2878,7 @@
             "findingId": "F-001",
             "observationId": "trial-1-strict",
             "sequence": 4,
+            "interfaceId": "review-cli",
             "operationId": "review",
             "provenance": "evaluator-chosen",
             "phase": "outcome"
@@ -2884,6 +2914,7 @@
                 {
                   "observationId": "trial-2-strict",
                   "sequence": 4,
+                  "interfaceId": "review-cli",
                   "operationId": "review",
                   "provenance": "evaluator-chosen",
                   "phase": "outcome"
@@ -2891,6 +2922,7 @@
                 {
                   "observationId": "trial-2-match",
                   "sequence": 5,
+                  "interfaceId": "review-cli",
                   "operationId": "review",
                   "provenance": "evaluator-chosen",
                   "phase": "outcome"
@@ -2898,6 +2930,7 @@
                 {
                   "observationId": "trial-2-to-be",
                   "sequence": 6,
+                  "interfaceId": "review-cli",
                   "operationId": "review",
                   "provenance": "evaluator-chosen",
                   "phase": "outcome"
@@ -2921,6 +2954,7 @@
             "findingId": "F-001",
             "observationId": "trial-2-strict",
             "sequence": 4,
+            "interfaceId": "review-cli",
             "operationId": "review",
             "provenance": "evaluator-chosen",
             "phase": "outcome"
@@ -2956,6 +2990,7 @@
                 {
                   "observationId": "trial-3-strict",
                   "sequence": 4,
+                  "interfaceId": "review-cli",
                   "operationId": "review",
                   "provenance": "evaluator-chosen",
                   "phase": "outcome"
@@ -2963,6 +2998,7 @@
                 {
                   "observationId": "trial-3-match",
                   "sequence": 5,
+                  "interfaceId": "review-cli",
                   "operationId": "review",
                   "provenance": "evaluator-chosen",
                   "phase": "outcome"
@@ -2970,6 +3006,7 @@
                 {
                   "observationId": "trial-3-to-be",
                   "sequence": 6,
+                  "interfaceId": "review-cli",
                   "operationId": "review",
                   "provenance": "evaluator-chosen",
                   "phase": "outcome"
@@ -2993,6 +3030,7 @@
             "findingId": "F-001",
             "observationId": "trial-3-strict",
             "sequence": 4,
+            "interfaceId": "review-cli",
             "operationId": "review",
             "provenance": "evaluator-chosen",
             "phase": "outcome"
@@ -4182,9 +4220,9 @@
     },
     {
       "probeId": "P-013",
-      "evidence": "runs/20260929T030250916Z-0f88894a/scores/20260929T030324999Z-1496a7f7/P-013/evidence-artifact.json",
+      "evidence": "runs/20261002T154941955Z-9183b477/scores/20261002T155009220Z-9bf49ae6/P-013/evidence-artifact.json",
       "scoreExitCode": 0,
-      "scoreRecord": "runs/20260929T030250916Z-0f88894a/scores/20260929T030324999Z-1496a7f7/P-013/score.json",
+      "scoreRecord": "runs/20261002T154941955Z-9183b477/scores/20261002T155009220Z-9bf49ae6/P-013/score.json",
       "scoreFailure": null,
       "trials": [
         {
@@ -4222,6 +4260,7 @@
                 {
                   "observationId": "trial-1-empty",
                   "sequence": 8,
+                  "interfaceId": "review-cli",
                   "operationId": "review",
                   "provenance": "evaluator-chosen",
                   "phase": "outcome"
@@ -4229,6 +4268,7 @@
                 {
                   "observationId": "trial-1-invalid-json",
                   "sequence": 9,
+                  "interfaceId": "review-cli",
                   "operationId": "review",
                   "provenance": "evaluator-chosen",
                   "phase": "outcome"
@@ -4236,6 +4276,7 @@
                 {
                   "observationId": "trial-1-wrong-file-type",
                   "sequence": 10,
+                  "interfaceId": "review-cli",
                   "operationId": "review",
                   "provenance": "evaluator-chosen",
                   "phase": "outcome"
@@ -4243,6 +4284,7 @@
                 {
                   "observationId": "trial-1-extra",
                   "sequence": 11,
+                  "interfaceId": "review-cli",
                   "operationId": "review",
                   "provenance": "evaluator-chosen",
                   "phase": "outcome"
@@ -4250,6 +4292,7 @@
                 {
                   "observationId": "trial-1-missing-action",
                   "sequence": 12,
+                  "interfaceId": "review-cli",
                   "operationId": "review",
                   "provenance": "evaluator-chosen",
                   "phase": "outcome"
@@ -4257,6 +4300,7 @@
                 {
                   "observationId": "trial-1-wrong-action",
                   "sequence": 13,
+                  "interfaceId": "review-cli",
                   "operationId": "review",
                   "provenance": "evaluator-chosen",
                   "phase": "outcome"
@@ -4264,6 +4308,7 @@
                 {
                   "observationId": "trial-1-missing-file",
                   "sequence": 14,
+                  "interfaceId": "review-cli",
                   "operationId": "review",
                   "provenance": "evaluator-chosen",
                   "phase": "outcome"
@@ -4271,6 +4316,7 @@
                 {
                   "observationId": "trial-1-unreadable",
                   "sequence": 15,
+                  "interfaceId": "review-cli",
                   "operationId": "review",
                   "provenance": "evaluator-chosen",
                   "phase": "outcome"
@@ -4304,6 +4350,7 @@
             "findingId": "F-001",
             "observationId": "trial-1-empty",
             "sequence": 8,
+            "interfaceId": "review-cli",
             "operationId": "review",
             "provenance": "evaluator-chosen",
             "phase": "outcome"
@@ -4344,6 +4391,7 @@
                 {
                   "observationId": "trial-2-empty",
                   "sequence": 8,
+                  "interfaceId": "review-cli",
                   "operationId": "review",
                   "provenance": "evaluator-chosen",
                   "phase": "outcome"
@@ -4351,6 +4399,7 @@
                 {
                   "observationId": "trial-2-invalid-json",
                   "sequence": 9,
+                  "interfaceId": "review-cli",
                   "operationId": "review",
                   "provenance": "evaluator-chosen",
                   "phase": "outcome"
@@ -4358,6 +4407,7 @@
                 {
                   "observationId": "trial-2-wrong-file-type",
                   "sequence": 10,
+                  "interfaceId": "review-cli",
                   "operationId": "review",
                   "provenance": "evaluator-chosen",
                   "phase": "outcome"
@@ -4365,6 +4415,7 @@
                 {
                   "observationId": "trial-2-extra",
                   "sequence": 11,
+                  "interfaceId": "review-cli",
                   "operationId": "review",
                   "provenance": "evaluator-chosen",
                   "phase": "outcome"
@@ -4372,6 +4423,7 @@
                 {
                   "observationId": "trial-2-missing-action",
                   "sequence": 12,
+                  "interfaceId": "review-cli",
                   "operationId": "review",
                   "provenance": "evaluator-chosen",
                   "phase": "outcome"
@@ -4379,6 +4431,7 @@
                 {
                   "observationId": "trial-2-wrong-action",
                   "sequence": 13,
+                  "interfaceId": "review-cli",
                   "operationId": "review",
                   "provenance": "evaluator-chosen",
                   "phase": "outcome"
@@ -4386,6 +4439,7 @@
                 {
                   "observationId": "trial-2-missing-file",
                   "sequence": 14,
+                  "interfaceId": "review-cli",
                   "operationId": "review",
                   "provenance": "evaluator-chosen",
                   "phase": "outcome"
@@ -4393,6 +4447,7 @@
                 {
                   "observationId": "trial-2-unreadable",
                   "sequence": 15,
+                  "interfaceId": "review-cli",
                   "operationId": "review",
                   "provenance": "evaluator-chosen",
                   "phase": "outcome"
@@ -4426,6 +4481,7 @@
             "findingId": "F-001",
             "observationId": "trial-2-empty",
             "sequence": 8,
+            "interfaceId": "review-cli",
             "operationId": "review",
             "provenance": "evaluator-chosen",
             "phase": "outcome"
@@ -4466,6 +4522,7 @@
                 {
                   "observationId": "trial-3-empty",
                   "sequence": 8,
+                  "interfaceId": "review-cli",
                   "operationId": "review",
                   "provenance": "evaluator-chosen",
                   "phase": "outcome"
@@ -4473,6 +4530,7 @@
                 {
                   "observationId": "trial-3-invalid-json",
                   "sequence": 9,
+                  "interfaceId": "review-cli",
                   "operationId": "review",
                   "provenance": "evaluator-chosen",
                   "phase": "outcome"
@@ -4480,6 +4538,7 @@
                 {
                   "observationId": "trial-3-wrong-file-type",
                   "sequence": 10,
+                  "interfaceId": "review-cli",
                   "operationId": "review",
                   "provenance": "evaluator-chosen",
                   "phase": "outcome"
@@ -4487,6 +4546,7 @@
                 {
                   "observationId": "trial-3-extra",
                   "sequence": 11,
+                  "interfaceId": "review-cli",
                   "operationId": "review",
                   "provenance": "evaluator-chosen",
                   "phase": "outcome"
@@ -4494,6 +4554,7 @@
                 {
                   "observationId": "trial-3-missing-action",
                   "sequence": 12,
+                  "interfaceId": "review-cli",
                   "operationId": "review",
                   "provenance": "evaluator-chosen",
                   "phase": "outcome"
@@ -4501,6 +4562,7 @@
                 {
                   "observationId": "trial-3-wrong-action",
                   "sequence": 13,
+                  "interfaceId": "review-cli",
                   "operationId": "review",
                   "provenance": "evaluator-chosen",
                   "phase": "outcome"
@@ -4508,6 +4570,7 @@
                 {
                   "observationId": "trial-3-missing-file",
                   "sequence": 14,
+                  "interfaceId": "review-cli",
                   "operationId": "review",
                   "provenance": "evaluator-chosen",
                   "phase": "outcome"
@@ -4515,6 +4578,7 @@
                 {
                   "observationId": "trial-3-unreadable",
                   "sequence": 15,
+                  "interfaceId": "review-cli",
                   "operationId": "review",
                   "provenance": "evaluator-chosen",
                   "phase": "outcome"
@@ -4548,6 +4612,7 @@
             "findingId": "F-001",
             "observationId": "trial-3-empty",
             "sequence": 8,
+            "interfaceId": "review-cli",
             "operationId": "review",
             "provenance": "evaluator-chosen",
             "phase": "outcome"

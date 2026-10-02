@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "tea-evaluate-tool-use-agent-fixture",
@@ -200,6 +200,7 @@
   "interactionPlan": [
     {
       "stepId": "call-tool",
+      "interfaceId": "calling-agent",
       "operationId": "call-weather-tool",
       "after": null,
       "cardinality": "exactly-one",

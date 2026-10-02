@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "tea-fragment-selection-ci",
@@ -384,6 +384,7 @@
   "interactionPlan": [
     {
       "stepId": "ci-gitlab-python",
+      "interfaceId": "tea-fragment-selection-runner",
       "operationId": "select-fragments",
       "after": null,
       "cardinality": "exactly-one",
@@ -404,6 +405,7 @@
     },
     {
       "stepId": "ci-pact-consumer-pipeline",
+      "interfaceId": "tea-fragment-selection-runner",
       "operationId": "select-fragments",
       "after": null,
       "cardinality": "exactly-one",

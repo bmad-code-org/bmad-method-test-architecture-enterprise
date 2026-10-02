@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "tea-fragment-selection-nfr",
@@ -359,6 +359,7 @@
   "interactionPlan": [
     {
       "stepId": "nfr-backend-junit-no-browser",
+      "interfaceId": "tea-fragment-selection-runner",
       "operationId": "select-fragments",
       "after": null,
       "cardinality": "exactly-one",
@@ -379,6 +380,7 @@
     },
     {
       "stepId": "nfr-browser-automation-cli",
+      "interfaceId": "tea-fragment-selection-runner",
       "operationId": "select-fragments",
       "after": null,
       "cardinality": "exactly-one",

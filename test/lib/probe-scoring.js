@@ -241,6 +241,7 @@ async function testReviewEvidence(contract) {
         recordObservation({
           observationId,
           sequence: 1,
+          interfaceId: step.interfaceId,
           operationId: step.operationId,
           callInputs: { option: { files: reviewedFiles, json: 'verdict.json', agent: 'claude' } },
           stdout: body.stdout,
@@ -464,6 +465,7 @@ async function traceEvidence(contract) {
         recordObservation({
           observationId: leg.observationId,
           sequence: index + 1,
+          interfaceId: leg.step.interfaceId,
           operationId: leg.step.operationId,
           callInputs: { option: { agent: 'claude' }, stdin: { prompt: leg.prompt } },
           stdout: { kind: 'text', value: '' },
@@ -602,6 +604,7 @@ async function testDesignEvidence(contract) {
         recordObservation({
           observationId: leg.observationId,
           sequence: index + 1,
+          interfaceId: leg.step.interfaceId,
           operationId: leg.step.operationId,
           callInputs: { option: { agent: 'claude', 'design-path': leg.designPath }, stdin: { prompt: leg.prompt } },
           ...testDesignEvidenceChannels(designByCase.get(leg.caseId), 'full', leg.epicNum),
@@ -775,6 +778,7 @@ async function nfrEvidence(contract) {
         recordObservation({
           observationId: leg.observationId,
           sequence: index + 1,
+          interfaceId: leg.step.interfaceId,
           operationId: leg.step.operationId,
           callInputs: { option: { agent: 'claude' }, stdin: { prompt: leg.prompt } },
           stdout: { kind: 'text', value: '' },
@@ -928,6 +932,7 @@ async function ciEvidence(contract) {
         recordObservation({
           observationId: leg.observationId,
           sequence: index + 1,
+          interfaceId: leg.step.interfaceId,
           operationId: leg.step.operationId,
           callInputs: { option: { agent: 'claude' }, stdin: { prompt: leg.prompt } },
           stdout: { kind: 'text', value: '' },
@@ -1009,6 +1014,7 @@ async function fragmentSelectionEvidence(contract, workflow) {
         recordObservation({
           observationId,
           sequence: 1,
+          interfaceId: step.interfaceId,
           operationId: step.operationId,
           callInputs: { option: { agent: 'claude' }, stdin: { prompt: `The prompt the selection harness assembles for ${first.id}.` } },
           stdout: body.stdout,
@@ -1142,6 +1148,7 @@ async function routingEvidence(contract) {
         return recordObservation({
           observationId: `${caseId}-run`,
           sequence: index + 1,
+          interfaceId: planStep.interfaceId,
           operationId: planStep.operationId,
           // The plan binds standard input as a literal, and a literal is compared
           // with deepEquals, so this has to be the prompt itself rather than a

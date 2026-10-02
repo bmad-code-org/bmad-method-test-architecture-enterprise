@@ -77,13 +77,13 @@ development_status:
   1-39-tell-a-captured-value-too-large-to-launch-from-a-target-tha: done
   1-40-calibrate-rubric-scores-imported-from-harness-records: done
   1-41-confine-score-output-during-concurrent-run-directory-changes: done
-  1-42-attribute-reused-operation-ids-to-their-interfaces: backlog
+  1-42-attribute-reused-operation-ids-to-their-interfaces: review
   1-43-keep-ungraded-framework-errors-out-of-target-findings: done
   1-44-record-installed-framework-versions-in-evaluator-provenance: done
   1-45-aggregate-development-strength-through-eval-quality: done
   1-46-close-the-dogfood-suites-coverage-gaps: backlog
   1-47-distinguish-reference-risk-tables-from-the-scored-register: done
-  1-48-report-whole-document-coverage-for-a-structured-design-artifact: review
+  1-48-report-whole-document-coverage-for-a-structured-design-artifact: done
   1-49-prove-test-design-mutation-rollback-before-claiming-it: done
   1-50-send-malformed-raw-http-bodies-through-an-api-probe: backlog
   1-51-isolate-interaction-plans-by-evaluation-partition: backlog
@@ -127,6 +127,9 @@ development_status:
   1-98-the-ai-feature-evaluation-passes-its-own-ci-tiers: backlog
   1-99-prove-mutation-rollback-for-the-test-review-trace-nfr-and-ci-probe-corpora: backlog
   1-100-report-whole-body-coverage-for-the-routing-test-review-and-trace-contracts: backlog
+  1-101-name-a-stale-stamp-on-every-artifact-score-reads: backlog
+  1-102-refuse-a-duplicate-interface-identifier-at-compile: backlog
+  1-103-prove-the-story-1-42-review-fixes-against-their-mutants: backlog
   epic-1-retrospective: optional
 
   epic-2: in-progress
@@ -198,6 +201,9 @@ parallel_lanes:
     - 1-98-the-ai-feature-evaluation-passes-its-own-ci-tiers
     - 1-99-prove-mutation-rollback-for-the-test-review-trace-nfr-and-ci-probe-corpora
     - 1-100-report-whole-body-coverage-for-the-routing-test-review-and-trace-contracts
+    - 1-101-name-a-stale-stamp-on-every-artifact-score-reads
+    - 1-102-refuse-a-duplicate-interface-identifier-at-compile
+    - 1-103-prove-the-story-1-42-review-fixes-against-their-mutants
 owner_handoff:
   - key: h-1-accept-the-dogfood-baseline-and-turn-its-pr-replay-green
     owner: Murat

@@ -3467,9 +3467,9 @@ async function checkPolicyParser() {
           contract.permittedInterfaces.push(second);
         });
         editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
-          for (const [operationId, phase] of Object.entries({ ...evaluation.operationPhases })) {
-            evaluation.operationPhases[`${operationId}-second`] = phase;
-          }
+          evaluation.operationPhases['grader-second'] = Object.fromEntries(
+            Object.entries(evaluation.operationPhases.grader).map(([operationId, phase]) => [`${operationId}-second`, phase]),
+          );
           const { kind, maxRedirects, maxElapsedMs, maxRequestBytes, maxResponseBytes } = evaluation.registry[0];
           evaluation.registry.push({
             kind,

@@ -162,7 +162,12 @@ const { CorpusIndexError, INDEX_NAME, corpusIndexProblem } = require('./corpus-i
 
 const Ajv = AjvModule.default ?? AjvModule;
 
-const KNOWN_EVALUATION_SCHEMA_VERSIONS = [1];
+const KNOWN_EVALUATION_SCHEMA_VERSIONS = [2];
+
+function isPlainObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
 const CONTRACT_NAME = 'contract.json';
 const POLICY_NAME = 'policy/scoring-policy.json';
 const CONDITIONS_NAME = 'policy/evaluator-conditions.json';
@@ -449,7 +454,7 @@ function optionSetsByOperation(contract) {
       }
       const steps = Array.isArray(contract.interactionPlan) ? contract.interactionPlan : [];
       for (const [stepIndex, step] of steps.entries()) {
-        if (step?.operationId !== operation?.operationId) continue;
+        if (step?.interfaceId !== iface?.logicalId || step?.operationId !== operation?.operationId) continue;
         sets.push({ ...key, where: `interactionPlan[${stepIndex}]`, option: step?.inputBinding?.option ?? {} });
       }
     }
@@ -1108,7 +1113,7 @@ function checkGameability(report, folder, relative, probe, context, behaviors, r
     const step = plan.find((candidate) => candidate?.stepId === stepId);
     const operation = (Array.isArray(context.contract?.permittedInterfaces) ? context.contract.permittedInterfaces : [])
       .flatMap((iface) => (Array.isArray(iface?.operations) ? iface.operations.map((candidate) => ({ iface, operation: candidate })) : []))
-      .find((candidate) => candidate.operation?.operationId === step?.operationId);
+      .find((candidate) => candidate.iface?.logicalId === step?.interfaceId && candidate.operation?.operationId === step?.operationId);
     const answer = response.steps[stepId];
     const stepKind = operation?.iface?.kind;
     const answerKind = answeredKind(answer);
@@ -1801,11 +1806,13 @@ function checkPrincipalMappings(report, evaluation, registry, contract) {
   const interfaces = Array.isArray(contract.permittedInterfaces) ? contract.permittedInterfaces : [];
   const operations = new Map(
     interfaces.flatMap((iface) =>
-      Array.isArray(iface?.operations) ? iface.operations.map((operation) => [operation.operationId, iface]) : [],
+      Array.isArray(iface?.operations)
+        ? iface.operations.map((operation) => [JSON.stringify([iface.logicalId, operation.operationId]), iface])
+        : [],
     ),
   );
   for (const [stepIndex, step] of Array.isArray(contract.interactionPlan) ? contract.interactionPlan.entries() : []) {
-    const iface = operations.get(step?.operationId);
+    const iface = operations.get(JSON.stringify([step?.interfaceId, step?.operationId]));
     if (iface === undefined) continue;
     for (const [channel, values] of Object.entries(step?.inputBinding ?? {})) {
       if (values === null || typeof values !== 'object') continue;
@@ -1882,7 +1889,9 @@ function schemaVersionMessage(version) {
   return (
     `evaluation.json schemaVersion ${JSON.stringify(version ?? null)} is not known to the installed TeA ` +
     `(${TEA_MANIFEST.name} ${TEA_MANIFEST.version}), which knows schemaVersion ${KNOWN_EVALUATION_SCHEMA_VERSIONS.join(', ')}; ` +
-    'install the TeA release that introduced this version, or later'
+    (Number.isInteger(version) && version < Math.min(...KNOWN_EVALUATION_SCHEMA_VERSIONS)
+      ? 'migrate the file: nest operationPhases by interface and then operation ({ interfaceId: { operationId: phase } }) and set schemaVersion 2'
+      : 'install the TeA release that introduced this version, or later')
   );
 }
 
@@ -1948,34 +1957,46 @@ function checkRequirements(report, folder, evaluation, contract, engine) {
   }
 }
 
-/** A sealed observation has operationId but no interfaceId, so IDs must identify one operation. */
+/**
+ * An operation ID is scoped to its interface, so `operationPhases` classifies each interface-operation pair as
+ * `{ interfaceId: { operationId: phase } }`. The map covers exactly the pairs the contract declares.
+ */
 function checkOperationPhases(report, evaluation, contract) {
   if (!contract || !Array.isArray(contract.permittedInterfaces)) return;
   const phases = evaluation.operationPhases === undefined ? {} : evaluation.operationPhases;
   if (!phases || typeof phases !== 'object' || Array.isArray(phases)) return;
-  const operations = new Map();
+  const declared = new Map();
   for (const iface of contract.permittedInterfaces) {
-    if (!iface || !Array.isArray(iface.operations)) continue;
+    if (!iface || !Array.isArray(iface.operations) || typeof iface.logicalId !== 'string') continue;
+    const operations = declared.get(iface.logicalId) ?? new Set();
+    declared.set(iface.logicalId, operations);
     for (const operation of iface.operations) {
       const id = operation?.operationId;
       if (typeof id !== 'string') continue;
-      const previous = operations.get(id);
-      if (previous === undefined) operations.set(id, iface.logicalId);
-      else if (previous !== iface.logicalId) {
+      operations.add(id);
+      if (!Object.hasOwn(phases, iface.logicalId) || !isPlainObject(phases[iface.logicalId]) || !Object.hasOwn(phases[iface.logicalId], id))
+        report.add(MANIFEST_NAME, 'operation-phases', `contract operation ${id} of interface ${iface.logicalId} has no phase`);
+    }
+  }
+  for (const [interfaceId, byOperation] of Object.entries(phases)) {
+    if (!isPlainObject(byOperation)) {
+      report.add(MANIFEST_NAME, 'operation-phases', `phase map entry ${interfaceId} must be an object of operation phases`);
+      continue;
+    }
+    for (const [id, phase] of Object.entries(byOperation)) {
+      if (!declared.get(interfaceId)?.has(id))
         report.add(
           MANIFEST_NAME,
           'operation-phases',
-          `operation ${id} occurs in interfaces ${previous} and ${iface.logicalId}; sealed observations cannot distinguish them`,
+          `phase names operation ${id} of interface ${interfaceId}, which the contract does not declare`,
         );
-      }
-      if (!Object.hasOwn(phases, id)) report.add(MANIFEST_NAME, 'operation-phases', `contract operation ${id} has no phase`);
+      if (phase !== 'process' && phase !== 'outcome')
+        report.add(
+          MANIFEST_NAME,
+          'operation-phases',
+          `operation ${id} of interface ${interfaceId} has unknown phase ${JSON.stringify(phase)}`,
+        );
     }
-  }
-  for (const id of Object.keys(phases)) {
-    if (!operations.has(id))
-      report.add(MANIFEST_NAME, 'operation-phases', `phase names operation ${id}, which the contract does not declare`);
-    if (phases[id] !== 'process' && phases[id] !== 'outcome')
-      report.add(MANIFEST_NAME, 'operation-phases', `operation ${id} has unknown phase ${JSON.stringify(phases[id])}`);
   }
 }
 

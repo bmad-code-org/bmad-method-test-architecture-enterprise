@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "bmad-testarch-evaluate",
@@ -325,6 +325,7 @@
   "interactionPlan": [
     {
       "stepId": "classify-exits",
+      "interfaceId": "evaluate-skill",
       "operationId": "run-skill",
       "after": null,
       "cardinality": "exactly-one",
@@ -360,6 +361,7 @@
     },
     {
       "stepId": "classify-web-app",
+      "interfaceId": "evaluate-skill",
       "operationId": "run-skill",
       "after": null,
       "cardinality": "exactly-one",

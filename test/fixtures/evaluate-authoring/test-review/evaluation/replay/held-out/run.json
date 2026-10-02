@@ -1,69 +1,72 @@
 {
-  "invocationId": "20260929T013608696Z-4571b7ff",
+  "invocationId": "20261002T154709535Z-a5dc33b5",
+  "seed": "20261002T154709535Z-a5dc33b5",
   "command": "run",
   "teaVersion": "1.27.2",
-  "evalQualityVersion": "4.3.0",
+  "evalQualityVersion": "5.0.0",
   "commit": null,
-  "dirty": true,
+  "dirty": false,
   "evaluationFolder": {
-    "dirty": true
+    "dirty": false
   },
   "workspace": {
     "kind": "copy",
     "commit": null,
     "tree": null,
     "treeDigest": "sha256:9cb516043229d05f84345e971bb8935d2fe525312b991662630c69d722c0d5ca",
-    "dirty": true
+    "dirty": false
   },
   "workspaces": {
-    "pristine": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-pristine-i3FhCd/target",
-    "mutated:M-005": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-005-X8GEMy/target",
-    "mutated:M-006": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-006-UkoDCZ/target",
-    "mutated:M-007": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-007-53TLjI/target",
-    "mutated:M-008": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-008-oLUyUs/target"
+    "pristine": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-pristine-821bfcb6-02ef-4452-ba4f-ace397c46a69/target",
+    "mutated:M-005": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-005-f7dddb63-410b-4049-85ba-b787fb3cb325/target",
+    "mutated:M-006": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-006-ad1f8d47-5b75-4985-aa67-9c29704ca644/target",
+    "mutated:M-007": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-007-b03bfc11-a8c7-4a6e-8095-a723c8e977d0/target",
+    "mutated:M-008": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-008-f3401575-cda3-4448-9a38-bdf2cfc7bd23/target"
   },
+  "confinement": "seatbelt",
+  "hostNetwork": [],
   "adopterTree": {
-    "repository": "/Users/murat/opensource/_wt/evaluate-1.24-final",
+    "repository": null,
     "unchanged": true
   },
   "refused": [],
   "artifacts": {
-    "contract": "sha256:32004abb96f245d86b678749ef41c932fb21625e7878fcf68fee32fabf05109b",
-    "operationPhases": "sha256:3cb94327f9a182c7af4568a9f68ec88352302b5a2a743ca18a58aca8b0e0781e",
-    "evaluatorConfiguration": "sha256:273f1054e0e1502ce6b6ca672f49857734e7f2205d6930e0d2fde6906d1248bf",
-    "preflightVerdict": "sha256:4033e8819e2e463e5ecbbe5f1272939bf36bdeab6940a000ec1d078d1e243745",
+    "contract": "sha256:7ce89161e66a9bd2b87e731920bc4f94ed8e5d19593c51cbe444e5319c58ec0d",
+    "operationPhases": "sha256:0250e2d877c200e1cf7b444af622636a603e4ec5d35264f711f6c3b66e5af06d",
+    "evaluatorConfiguration": "sha256:5e3287842f1e12c27917ea213ad6c38ea7d2e1c37b42a27a2e2165dee0fcaa7d",
+    "preflightVerdict": "sha256:90a7fcb3b3a9d3b3db51897819a1e8ad482f56eacc03d18c3c547cd0302f09af",
     "probes": {
-      "P-010": "sha256:d2ebe0f0d06d5a6780db3b54e344ad5fef046fad61038616e560734f1eb7d5bf",
-      "P-011": "sha256:04f419d1bf6a995139f86df394670cfb7c7f078c61711aaac23d07a9e1915864",
-      "P-012": "sha256:46f5d3ce63f722445f94c74dba16d9c13e3f7e1cc4c66d12260b80778833d57a",
-      "P-013": "sha256:238150b9dbae012b9dfd188776c5b5669dc604f85b2a589b52b0afccd4c58191"
+      "P-010": "sha256:61c62c169688daa30b242f3c90902d48cd56816581e28f129f273029bb523dfd",
+      "P-011": "sha256:f84dc7cbdbfbcd50ba17eb09f380a52994bcf12bd11ef16f330f9bfc23050c50",
+      "P-012": "sha256:e4a0be131f71854cefe9519272b482c73f21e7e25a05e4061cc5a64471517f42",
+      "P-013": "sha256:cbeb680bd030a55e1f5c8bd16050cbb85e9600f5930d21fc69914c04bca4d6a5"
     },
     "records": {
-      "trial-sets/P-010/record-1.json": "sha256:b9458dbc465444cba5f3d7ee11b8b1b26593e1a083fb4b60536500e382c308f2",
-      "trial-sets/P-010/record-2.json": "sha256:c61953ec712a4b80a3caa8de034c09cace1f333fea6ea940784e6f396a29cbac",
-      "trial-sets/P-010/record-3.json": "sha256:5eb50d00fb74975bf41781bb11cf3f1dbe0a589e227317acaaf1448d30ce08b5",
-      "trial-sets/P-011/record-1.json": "sha256:cc8d8b7a677beabc5b15ed61b736e9d7cb60796d787b4c469aeaa5d0fbe2b053",
-      "trial-sets/P-011/record-2.json": "sha256:f9f9daba441cf25c95eb0eb5dff92a814e1569297f0a8a792d49820c43d98e8c",
-      "trial-sets/P-011/record-3.json": "sha256:121078b7239f63a18b99fc5cefcfa4b02b649e04ce43b7c058ae5637f823b6fe",
-      "trial-sets/P-012/record-1.json": "sha256:fe830f9b5eb8413b07c80c69e100a01f3f2567970deeac6cbdfdb0e432cec4ab",
-      "trial-sets/P-012/record-2.json": "sha256:f25198978227ed0dd98b9b36cb203deb7b9154abb43c659ad2652adba54251ff",
-      "trial-sets/P-012/record-3.json": "sha256:4e801a22ab345213c4e453374ea56d3da318804b3f5411ff7b89a845eb332f5a",
-      "trial-sets/P-013/record-1.json": "sha256:2b000e937d8ac9f7d58ce29d93e31f5a0f1c2938d7e090480b46d8a5376c416c",
-      "trial-sets/P-013/record-2.json": "sha256:d207ccede0e29ae6362371016d621066cb59abb2568e45112871f96d0fab7c01",
-      "trial-sets/P-013/record-3.json": "sha256:b71b4edd551527cac0ff43368f1186ace2a6063234e46f43c60af3600a9a9932"
+      "trial-sets/P-010/record-1.json": "sha256:bc77dcaa372055a4feaa6bb7456c15883139bf43d5a847b884d83068b34e540d",
+      "trial-sets/P-010/record-2.json": "sha256:0dbfba2420724fbf34fafce6c49af04f355af14e2bc416cedad784032704dd8f",
+      "trial-sets/P-010/record-3.json": "sha256:bf550941298d68666013db4a9574d02df0224a21ec5de31e364388b11300a2c7",
+      "trial-sets/P-011/record-1.json": "sha256:488cc3e5290f776c42350aad19b0553c1965586846ecdcd399867345966ab13e",
+      "trial-sets/P-011/record-2.json": "sha256:9ff54e5eabedccf3c085e7a79c405f4c1cbd82b03564911af1a4e339c5689bdb",
+      "trial-sets/P-011/record-3.json": "sha256:725bf3d63f6ba38e5707bb9af9f5c6a922660f4cf5ac13629a03ab0f40402289",
+      "trial-sets/P-012/record-1.json": "sha256:c36d1f4822d262362b6ec9d4d4240b2e8693fa7c0895fc94f63230b00689bd84",
+      "trial-sets/P-012/record-2.json": "sha256:16a272769b2504b485ba733eba33029bfbed785346352dde61e6ebce810fc612",
+      "trial-sets/P-012/record-3.json": "sha256:303a932de1e2274faa4c94120e064f02d0a631712c49a90fbaec2198e84daa82",
+      "trial-sets/P-013/record-1.json": "sha256:9a5259ff41fc8696c1e8dbf039b3044e1d237d179d5700db92c8e6deb6842f18",
+      "trial-sets/P-013/record-2.json": "sha256:82dcf35fe0cb2521c95bde1be7e6095277734978eb347f345c44cb6de2f13310",
+      "trial-sets/P-013/record-3.json": "sha256:7c49701bc69788a5475482b18251d141173a39773eded363b6f80e340639ce38"
     },
     "isolationManifests": {
-      "P-010": "sha256:48e3ee7befb734b87c28556fc54df19ce93c2000992fe66d8370786ff631d813",
-      "P-011": "sha256:4b41119e39217c1d84aac925f0eef4794efa297d933cb53f9dfd9228623c152b",
-      "P-012": "sha256:c3308e7b6daaa661eefeb98a2cb3c212f68a816d9001bdc28fe73beda7238359",
-      "P-013": "sha256:273ba28200dd886a21fd52377d2f0f38ae248001d26789e669aaa0c1807a30f5"
+      "P-010": "sha256:a8fc5b23c934a5222e91143af86cdc90ea2ab5e3895b4d1b2d6be86402d69037",
+      "P-011": "sha256:9e92be6d3a1b6b813a862528e45f20dcc14df6256d1e45ab26353c7442510ebe",
+      "P-012": "sha256:4b18dcffefea2cce2fadf49154ba0e150eecc89f8d5a3067c871ff4575387b23",
+      "P-013": "sha256:d8f6a3360a1987d20e7b1434e4eafe111c8ee5ba335fcdfc3eaf812495d3d902"
     }
   },
-  "contractDigest": "sha256:d0f61d28b3a2a1538f9720da385efe81041b5202ca0b9315b02534284abf3ca9",
+  "contractDigest": "sha256:61bdc82b0e4b2f039ad94722ca726c6544cc6eac336e307c179b28c152352146",
   "corpusDigest": "sha256:f65a177e55c374d2f0362f21f23d118daa1ed37c748e17b2b355826690e52706",
   "policyDigest": "sha256:3e6a40f97ee68a2f82473c8b98ab14f4e7ccc0b3eb4557325f11be67b92fed09",
-  "sealedBriefDigest": "sha256:1df1a1aa396049e3c83757e3dfba56debca03517d250e95491b5da85e2e24348",
-  "evaluatorConfigurationDigest": "sha256:17f40426a92895696a16e47c9bee7338c0a0704c844a7fceed51abf3bde5aee5",
+  "sealedBriefDigest": "sha256:6e9a3879b86c4fc024bd773ae46ec0ed8488caafc4c04d036663b24e5e59be22",
+  "evaluatorConfigurationDigest": "sha256:ff12292fdf0f0896f5644abc257e30ec903e1fc1d2be01a8c91483f85441666c",
   "partition": "held-out",
   "heldOutProbes": [
     "P-010",
@@ -72,7 +75,9 @@
     "P-013"
   ],
   "operationPhases": {
-    "review": "outcome"
+    "review-cli": {
+      "review": "outcome"
+    }
   },
   "runner": [
     {
@@ -100,12 +105,278 @@
     ]
   },
   "trialCount": 3,
-  "startedAt": "2026-09-29T01:36:08.300Z",
-  "durationMs": 30202,
+  "unreportedResourceUse": [
+    {
+      "conditionArm": "mutated:M-005",
+      "trialIndex": 1,
+      "stepIds": [
+        "missing",
+        "disabled",
+        "it-skip",
+        "strict",
+        "match",
+        "to-be",
+        "dangling",
+        "empty",
+        "invalid-json",
+        "wrong-file-type",
+        "extra",
+        "missing-action",
+        "wrong-action",
+        "missing-file",
+        "unreadable",
+        "typed-file"
+      ]
+    },
+    {
+      "conditionArm": "mutated:M-005",
+      "trialIndex": 2,
+      "stepIds": [
+        "missing",
+        "disabled",
+        "it-skip",
+        "strict",
+        "match",
+        "to-be",
+        "dangling",
+        "empty",
+        "invalid-json",
+        "wrong-file-type",
+        "extra",
+        "missing-action",
+        "wrong-action",
+        "missing-file",
+        "unreadable",
+        "typed-file"
+      ]
+    },
+    {
+      "conditionArm": "mutated:M-005",
+      "trialIndex": 3,
+      "stepIds": [
+        "missing",
+        "disabled",
+        "it-skip",
+        "strict",
+        "match",
+        "to-be",
+        "dangling",
+        "empty",
+        "invalid-json",
+        "wrong-file-type",
+        "extra",
+        "missing-action",
+        "wrong-action",
+        "missing-file",
+        "unreadable",
+        "typed-file"
+      ]
+    },
+    {
+      "conditionArm": "mutated:M-006",
+      "trialIndex": 1,
+      "stepIds": [
+        "missing",
+        "disabled",
+        "it-skip",
+        "strict",
+        "match",
+        "to-be",
+        "dangling",
+        "empty",
+        "invalid-json",
+        "wrong-file-type",
+        "extra",
+        "missing-action",
+        "wrong-action",
+        "missing-file",
+        "unreadable",
+        "typed-file"
+      ]
+    },
+    {
+      "conditionArm": "mutated:M-006",
+      "trialIndex": 2,
+      "stepIds": [
+        "missing",
+        "disabled",
+        "it-skip",
+        "strict",
+        "match",
+        "to-be",
+        "dangling",
+        "empty",
+        "invalid-json",
+        "wrong-file-type",
+        "extra",
+        "missing-action",
+        "wrong-action",
+        "missing-file",
+        "unreadable",
+        "typed-file"
+      ]
+    },
+    {
+      "conditionArm": "mutated:M-006",
+      "trialIndex": 3,
+      "stepIds": [
+        "missing",
+        "disabled",
+        "it-skip",
+        "strict",
+        "match",
+        "to-be",
+        "dangling",
+        "empty",
+        "invalid-json",
+        "wrong-file-type",
+        "extra",
+        "missing-action",
+        "wrong-action",
+        "missing-file",
+        "unreadable",
+        "typed-file"
+      ]
+    },
+    {
+      "conditionArm": "mutated:M-007",
+      "trialIndex": 1,
+      "stepIds": [
+        "missing",
+        "disabled",
+        "it-skip",
+        "strict",
+        "match",
+        "to-be",
+        "dangling",
+        "empty",
+        "invalid-json",
+        "wrong-file-type",
+        "extra",
+        "missing-action",
+        "wrong-action",
+        "missing-file",
+        "unreadable",
+        "typed-file"
+      ]
+    },
+    {
+      "conditionArm": "mutated:M-007",
+      "trialIndex": 2,
+      "stepIds": [
+        "missing",
+        "disabled",
+        "it-skip",
+        "strict",
+        "match",
+        "to-be",
+        "dangling",
+        "empty",
+        "invalid-json",
+        "wrong-file-type",
+        "extra",
+        "missing-action",
+        "wrong-action",
+        "missing-file",
+        "unreadable",
+        "typed-file"
+      ]
+    },
+    {
+      "conditionArm": "mutated:M-007",
+      "trialIndex": 3,
+      "stepIds": [
+        "missing",
+        "disabled",
+        "it-skip",
+        "strict",
+        "match",
+        "to-be",
+        "dangling",
+        "empty",
+        "invalid-json",
+        "wrong-file-type",
+        "extra",
+        "missing-action",
+        "wrong-action",
+        "missing-file",
+        "unreadable",
+        "typed-file"
+      ]
+    },
+    {
+      "conditionArm": "mutated:M-008",
+      "trialIndex": 1,
+      "stepIds": [
+        "missing",
+        "disabled",
+        "it-skip",
+        "strict",
+        "match",
+        "to-be",
+        "dangling",
+        "empty",
+        "invalid-json",
+        "wrong-file-type",
+        "extra",
+        "missing-action",
+        "wrong-action",
+        "missing-file",
+        "unreadable",
+        "typed-file"
+      ]
+    },
+    {
+      "conditionArm": "mutated:M-008",
+      "trialIndex": 2,
+      "stepIds": [
+        "missing",
+        "disabled",
+        "it-skip",
+        "strict",
+        "match",
+        "to-be",
+        "dangling",
+        "empty",
+        "invalid-json",
+        "wrong-file-type",
+        "extra",
+        "missing-action",
+        "wrong-action",
+        "missing-file",
+        "unreadable",
+        "typed-file"
+      ]
+    },
+    {
+      "conditionArm": "mutated:M-008",
+      "trialIndex": 3,
+      "stepIds": [
+        "missing",
+        "disabled",
+        "it-skip",
+        "strict",
+        "match",
+        "to-be",
+        "dangling",
+        "empty",
+        "invalid-json",
+        "wrong-file-type",
+        "extra",
+        "missing-action",
+        "wrong-action",
+        "missing-file",
+        "unreadable",
+        "typed-file"
+      ]
+    }
+  ],
+  "startedAt": "2026-10-02T15:47:09.030Z",
+  "durationMs": 28914,
   "completed": true,
   "outcome": {
     "stage": "trial",
     "exitCode": 0,
-    "message": "4 trial set(s) of 3 trial(s) sealed over mutated:M-005, mutated:M-006, mutated:M-007, mutated:M-008; score them with tea-evaluate score --run 20260929T013608696Z-4571b7ff"
+    "message": "4 trial set(s) of 3 trial(s) sealed over mutated:M-005, mutated:M-006, mutated:M-007, mutated:M-008; score them with tea-evaluate score --run 20261002T154709535Z-a5dc33b5"
   }
 }

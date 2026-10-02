@@ -396,6 +396,7 @@ Mark a write operation as a state change and plan a read-back after it. The work
       "value": [
         {
           "stepId": "read-back",
+          "interfaceId": "records",
           "operationId": "read-back",
           "after": "create",
           "cardinality": "exactly-one",
@@ -412,6 +413,7 @@ Mark a write operation as a state change and plan a read-back after it. The work
         },
         {
           "stepId": "create",
+          "interfaceId": "records",
           "operationId": "create",
           "after": null,
           "cardinality": "exactly-one",
@@ -436,7 +438,7 @@ Pair the marker with a read-back operation and a step whose `after` names the wr
 
 ## Interaction-plan design
 
-Set `cardinality` per step, identify `testData.principals` when authorization matters, and set `probeStepBound` high enough for every planned step. The worked workflow has two required steps, an operator principal, and a bound of two. `after` orders a dependent step. A `captured` binding reads a prior observation from the same trial. A missing or unsendable capture leaves the dependent step unissued and must appear in preflight.
+Name each step's `interfaceId` and `operationId`: an operation ID is unique only within its interface, so two interfaces may declare the same one and the step says which it means. A sibling group's operation members are `{ interfaceId, operationId }` pairs, and `evaluation.json` classifies every pair under `operationPhases` as `{ interfaceId: { operationId: phase } }`. Set `cardinality` per step, identify `testData.principals` when authorization matters, and set `probeStepBound` high enough for every planned step. The worked workflow has two required steps, an operator principal, and a bound of two. `after` orders a dependent step. A `captured` binding reads a prior observation from the same trial. A missing or unsendable capture leaves the dependent step unissued and must appear in preflight.
 
 <!-- example:contract-patch -->
 
@@ -449,6 +451,7 @@ Set `cardinality` per step, identify `testData.principals` when authorization ma
       "value": [
         {
           "stepId": "read-back",
+          "interfaceId": "records",
           "operationId": "read-back",
           "after": "create",
           "cardinality": "exactly-one",
@@ -465,6 +468,7 @@ Set `cardinality` per step, identify `testData.principals` when authorization ma
         },
         {
           "stepId": "create",
+          "interfaceId": "records",
           "operationId": "create",
           "after": null,
           "cardinality": "exactly-one",
@@ -559,7 +563,7 @@ The starter skeleton and the source repository's [contract fill](https://github.
 
 ```json
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "tea-evaluate-contract-starter",
@@ -794,6 +798,7 @@ The starter skeleton and the source repository's [contract fill](https://github.
   "interactionPlan": [
     {
       "stepId": "answer-run",
+      "interfaceId": "stub-skill",
       "operationId": "answer-request",
       "after": null,
       "cardinality": "exactly-one",

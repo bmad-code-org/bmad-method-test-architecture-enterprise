@@ -15,13 +15,13 @@
     "degenerateResponse": "decision pass with restricted-term reason on restricted input",
     "naiveOracleSatisfiedEvidence": {
       "storage": "public",
-      "path": "runs/20260929T015026071Z-cd62054f/qualification/P-009/naive-oracle-satisfied.json",
+      "path": "runs/20261002T154804523Z-186fe7af/qualification/P-009/naive-oracle-satisfied.json",
       "privateRef": null,
       "digest": "sha256:3769e5362a697001ea6189afe4c94ed4c38fd611ed69b48c73a462fbec9df706"
     },
     "disciplinedOracleRejectedEvidence": {
       "storage": "public",
-      "path": "runs/20260929T015026071Z-cd62054f/qualification/P-009/disciplined-oracle-rejected.json",
+      "path": "runs/20261002T154804523Z-186fe7af/qualification/P-009/disciplined-oracle-rejected.json",
       "privateRef": null,
       "digest": "sha256:4f90625842235c704c5e595e7622c9d92f35a341cf895887eb1bd494df5806c8"
     }

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "evaluationId": "calling-agent-tool-use",
   "requirements": {
     "path": "requirements.md",
@@ -48,6 +48,8 @@
     "timeoutMs": 30000
   },
   "operationPhases": {
-    "call-weather-tool": "process"
+    "calling-agent": {
+      "call-weather-tool": "process"
+    }
   }
 }

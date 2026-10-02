@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "tea-evaluate-preflight-fixture",
@@ -226,6 +226,7 @@
   "interactionPlan": [
     {
       "stepId": "answer-run",
+      "interfaceId": "stub-skill",
       "operationId": "answer-request",
       "after": null,
       "cardinality": "exactly-one",

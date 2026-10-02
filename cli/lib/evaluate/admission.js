@@ -54,12 +54,13 @@ function referenceTo(folder, writer, file, digestBytes) {
 async function admissionRefusal({ candidate, contract, engine, validate }) {
   const problems = await validate('probe', candidate);
   if (problems.length > 0) return `the qualified probe does not meet eval-quality's probe schema: ${problems.join('; ')}`;
-  // A clean control carries no signature, and a canary's is null: neither has a home operation.
+  // A clean control carries no signature, and a canary's is null: neither has a home operation. The home is the declaring
+  // interface and its operation; qualification reads the operation.
   const home =
     candidate.expectedClean || candidate.defectSignature === null
       ? null
       : engine.resolveHomeOperation(candidate.defectSignature, contract.permittedInterfaces);
-  const admission = engine.qualifyProbe(candidate, home);
+  const admission = engine.qualifyProbe(candidate, home?.operation ?? null);
   if (admission.qualified) return null;
   return `eval-quality's qualification gate refuses the qualified probe: ${admission.failures.map((failure) => `${failure.code} (${failure.detail})`).join('; ')}`;
 }

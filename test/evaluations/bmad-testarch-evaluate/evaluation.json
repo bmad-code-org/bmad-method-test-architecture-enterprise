@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "evaluationId": "bmad-testarch-evaluate",
   "requirements": {
     "path": "requirements.md",
@@ -8,7 +8,9 @@
   "targetKind": "skill",
   "interface": "cli",
   "operationPhases": {
-    "run-skill": "outcome"
+    "evaluate-skill": {
+      "run-skill": "outcome"
+    }
   },
   "registry": [
     {

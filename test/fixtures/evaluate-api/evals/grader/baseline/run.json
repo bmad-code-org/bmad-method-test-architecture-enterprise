@@ -1,9 +1,9 @@
 {
-  "invocationId": "20261001T171731277Z-10ab5418",
-  "seed": "20261001T171731277Z-10ab5418",
+  "invocationId": "20261002T154406424Z-e7b6b963",
+  "seed": "20261002T154406424Z-e7b6b963",
   "command": "run",
   "teaVersion": "1.27.2",
-  "evalQualityVersion": "4.7.0",
+  "evalQualityVersion": "5.0.0",
   "commit": null,
   "dirty": false,
   "evaluationFolder": {
@@ -17,47 +17,50 @@
     "dirty": false
   },
   "workspaces": {
-    "pristine": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-pristine-aee9694d-3710-4137-9911-088602efa4c6/target",
-    "mutated:M-001": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-001-92cdca5d-0450-48f0-993d-b2174b1cf6e5/target"
+    "pristine": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-pristine-31c188a4-64e6-4739-a388-f6127b3e1b9f/target",
+    "mutated:M-001": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-001-69dbb73b-f77e-4d8f-93df-c0d801ca9704/target"
   },
   "confinement": "seatbelt",
+  "hostNetwork": [],
   "adopterTree": {
-    "repository": null,
+    "repository": "/private/tmp/tea-reaccept-1h3O1p/evaluate-api",
     "unchanged": true
   },
   "refused": [],
   "artifacts": {
-    "contract": "sha256:dd8d79a6624ea5188cc1a03ee27419bde6d51de6eda7ac908a461fb743f03715",
-    "operationPhases": "sha256:e0ab3efd65cffe054a50ca571d822b8e8d0642dfc0ca9ced2b778eda2b1bf8e7",
-    "evaluatorConfiguration": "sha256:221152e1d05c3de7dd6532c92f81017d9fb3c40dab860244d0307bcac8e0296d",
-    "preflightVerdict": "sha256:f58bd01c3a67dc70fa58084243b8937a30b407e11c0120b3b0b4ddb1910d3f97",
+    "contract": "sha256:2cb17505cabb47535905fe537fbf4b456773d99e1c2a803ce71bbf8c809bca0e",
+    "operationPhases": "sha256:9a43bec805733114afeeda862fd2b8fd739f3022e0fb59e03c52ed9400f4eb31",
+    "evaluatorConfiguration": "sha256:5870ba7922fbf279f0e99a7b364530a25dfe78c803d860d134b8ca7955b7fb0a",
+    "preflightVerdict": "sha256:a7e46c7db5fc1306090a351665c5607676d07861ba2915a9e3b8f1863de7e969",
     "probes": {
-      "P-001": "sha256:6c7d5cb78027c177cdbe4e3729dbf9774199b579e6fce77b6613ac264713528c",
-      "P-002": "sha256:84a16a1b432d54391cecfd18f7a238f77fe5747b9ed76cec3567524ff12a3fed"
+      "P-001": "sha256:a3b9865a694bb25fe77a24d4560f606c5c13eb6ec961b24931a536b196c9b251",
+      "P-002": "sha256:486d1a5bdd1ef3fd62e80536d82fcf07bf7fcede640c339bb0d7fb2dd89da03b"
     },
     "records": {
-      "trial-sets/P-001/record-1.json": "sha256:3627e0a159d90e750e95a314bfd0c6c4fb6467eb0f9f8cc1e9d6d324cb5d1e96",
-      "trial-sets/P-001/record-2.json": "sha256:0b34e37b7ae30ceb552cdf078d1755932a6fd9fb4cc4f2a7f5866fa54caf23e4",
-      "trial-sets/P-001/record-3.json": "sha256:5ce9964936c773b7b2e24c2678f7f94044bf8ef7da9b4d700886ae50fbd895b1",
-      "trial-sets/P-002/record-1.json": "sha256:6b296bab4bf5cac9b2e65071182fd68542cd2d8056c719740471628fb0c053f6",
-      "trial-sets/P-002/record-2.json": "sha256:78caa111e6a23701d2db25c536de71c8a2c0d5334d706290dfb5662916e308eb",
-      "trial-sets/P-002/record-3.json": "sha256:67f067374bbc49345e66ac06c670dbc69920341cb1676cb4decc1659fe1de0b3"
+      "trial-sets/P-001/record-1.json": "sha256:1debb3d1e7689d44994c08e20424d041e3dcb9276dc00f8ed0fdffbaa562b0c0",
+      "trial-sets/P-001/record-2.json": "sha256:b39e647dd32e6862821c86e9c4563738973298fc9ee6703d9f39898ab333fb6a",
+      "trial-sets/P-001/record-3.json": "sha256:8a86ea0be70bac1aa14fd96e3f8071fd8caf3ca7c8556cf08aeb81c6e8a2f62b",
+      "trial-sets/P-002/record-1.json": "sha256:b712e9e762376a9e50f7d2536091237d1e3cdcdf810906545fbffc2b65ebb3b9",
+      "trial-sets/P-002/record-2.json": "sha256:a30f99ca9821b5b915dc0b3ab8b41e7a82c95d44edfcc721273eb5228f46eefa",
+      "trial-sets/P-002/record-3.json": "sha256:45a1fb52242ba9a6c0d25781fda0c6eda8791ed6e945860f9df6b9de0c192a19"
     },
     "isolationManifests": {
-      "P-001": "sha256:f6ab9d99ed7aa8591655b5409c99c462c21d65e3a4403dc44d6a1a82a47bfe61",
-      "P-002": "sha256:a90f0a5d07c0480045845c0dfd1b59dc4e439054a460b86f7cf2834660dbc590"
+      "P-001": "sha256:2e05baf360c7fd85060bda9b5b91c4de3c596fe4a357c67a58ca533bd6d574a5",
+      "P-002": "sha256:6e7ac61321b26ba0c9ac3ae5c98b2d72cff5c97dd30e148211f9aa30d6be00bb"
     }
   },
-  "contractDigest": "sha256:de6db83af787daa1625798e88683d8d56dd108dd31340559f6d5b120a00b2d13",
+  "contractDigest": "sha256:b0c3cd45626f6de1999dcc8514fd38dd83b2452a988b09ef5e20c3b294e2258c",
   "corpusDigest": "sha256:68ddfc02ab8e9f5aaca1bcd33d36b41be1144f75917b7138be782b43c210b39c",
   "policyDigest": "sha256:b8e7911479c9824a6333ca80d55e0b4eefb6e0f114181f756639d5d8f88f7ce4",
-  "sealedBriefDigest": "sha256:515fa13b4dc83c7f38283c8c9eb7e988925ea38b6a1180f66df0db33b0e22bf7",
-  "evaluatorConfigurationDigest": "sha256:389c6d8428976e17a4d89a5bcaf8e925ccfa35d1a2eda604fe91a0a23f706acd",
+  "sealedBriefDigest": "sha256:23edb6601af0b1cc395507a4f23174813e019d73009ba65fd0460c89ac4c9e3e",
+  "evaluatorConfigurationDigest": "sha256:e68537f436d41a8afa1acd9d087f11d027fb6377d0cde719b655ebbfb2154b6c",
   "partition": "both",
   "heldOutProbes": [],
   "operationPhases": {
-    "grade-answer": "outcome",
-    "report-release": "outcome"
+    "grader": {
+      "grade-answer": "outcome",
+      "report-release": "outcome"
+    }
   },
   "runner": [
     {
@@ -141,12 +144,12 @@
       ]
     }
   ],
-  "startedAt": "2026-10-01T17:17:30.936Z",
-  "durationMs": 4347,
+  "startedAt": "2026-10-02T15:44:05.776Z",
+  "durationMs": 5362,
   "completed": true,
   "outcome": {
     "stage": "trial",
     "exitCode": 0,
-    "message": "2 trial set(s) of 3 trial(s) sealed over clean, mutated:M-001; score them with tea-evaluate score --run 20261001T171731277Z-10ab5418"
+    "message": "2 trial set(s) of 3 trial(s) sealed over clean, mutated:M-001; score them with tea-evaluate score --run 20261002T154406424Z-e7b6b963"
   }
 }

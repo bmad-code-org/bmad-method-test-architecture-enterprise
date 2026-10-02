@@ -1,3 +1,5 @@
 {
-  "judge-request": "outcome"
+  "verdict": {
+    "judge-request": "outcome"
+  }
 }

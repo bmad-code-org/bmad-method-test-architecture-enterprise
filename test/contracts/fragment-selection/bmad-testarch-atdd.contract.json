@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "tea-fragment-selection-atdd",
@@ -467,6 +467,7 @@
   "interactionPlan": [
     {
       "stepId": "atdd-frontend-playwright",
+      "interfaceId": "tea-fragment-selection-runner",
       "operationId": "select-fragments",
       "after": null,
       "cardinality": "exactly-one",
@@ -487,6 +488,7 @@
     },
     {
       "stepId": "atdd-backend-pytest",
+      "interfaceId": "tea-fragment-selection-runner",
       "operationId": "select-fragments",
       "after": null,
       "cardinality": "exactly-one",
@@ -507,6 +509,7 @@
     },
     {
       "stepId": "atdd-fullstack-pact",
+      "interfaceId": "tea-fragment-selection-runner",
       "operationId": "select-fragments",
       "after": null,
       "cardinality": "exactly-one",

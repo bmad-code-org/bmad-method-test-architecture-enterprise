@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "tea-nfr-behavioral",
@@ -739,6 +739,7 @@
   "interactionPlan": [
     {
       "stepId": "nfr-gapped-harbor-billing-ledger",
+      "interfaceId": "tea-nfr-runner",
       "operationId": "audit-evidence-bundle",
       "after": null,
       "cardinality": "exactly-one",
@@ -759,6 +760,7 @@
     },
     {
       "stepId": "nfr-clean-atlas-notification-relay",
+      "interfaceId": "tea-nfr-runner",
       "operationId": "audit-evidence-bundle",
       "after": null,
       "cardinality": "exactly-one",

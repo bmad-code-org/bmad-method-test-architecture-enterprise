@@ -21,7 +21,7 @@
   "properties": {
     "schemaVersion": {
       "description": "The evaluation.json format version. tea-evaluate check refuses a version the installed runtime does not know before it validates anything else.",
-      "const": 1
+      "const": 2
     },
     "evaluationId": {
       "description": "Kebab-case identifier; the evaluation folder is named after it.",
@@ -54,10 +54,14 @@
       "enum": ["cli", "api", "mcp"]
     },
     "operationPhases": {
-      "description": "Phase of every permitted contract operation. Operation IDs must be unique across interfaces because sealed observations name only operationId.",
+      "description": "Phase of every permitted contract operation, keyed by interface and then operation ID (`{ interfaceId: { operationId: phase } }`), because an operation ID is scoped to its interface and a sealed observation names both.",
       "type": "object",
       "propertyNames": { "minLength": 1 },
-      "additionalProperties": { "enum": ["process", "outcome"] }
+      "additionalProperties": {
+        "type": "object",
+        "propertyNames": { "minLength": 1 },
+        "additionalProperties": { "enum": ["process", "outcome"] }
+      }
     },
     "registry": {
       "description": "The execution-target registry: every command a run may spawn (a RegistryEntry), every stdio MCP tool server it may start (an McpRegistryEntry, kind mcp) and every HTTP target it may reach (an ApiRegistryEntry, kind api). The runtime builds eval-quality's default-deny CommandTargetPolicy, McpTargetPolicy and ProbeTargetPolicy from these entries for the workspace each call runs in, so a target the registry does not name is denied before a process starts or a request is sent.",

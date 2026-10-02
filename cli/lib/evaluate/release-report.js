@@ -69,28 +69,16 @@ function reportProblems({ report, interfaceId, contract, where }) {
     );
   }
   if (!Array.isArray(contract?.permittedInterfaces)) return problems;
-  const declaring = contract.permittedInterfaces.flatMap((iface) =>
-    (Array.isArray(iface?.operations) ? iface.operations : [])
-      .filter((operation) => operation?.operationId === report.operationId)
-      .map((operation) => ({ iface, operation })),
+  // An operation ID is scoped to its interface, so the entry's key names the interface the operation is looked up in.
+  const iface = contract.permittedInterfaces.find((candidate) => candidate?.logicalId === interfaceId);
+  const operation = (Array.isArray(iface?.operations) ? iface.operations : []).find(
+    (candidate) => candidate?.operationId === report.operationId,
   );
-  if (declaring.length > 1) {
+  if (operation === undefined || iface.kind !== 'api') {
     problems.push(
-      `${where}.operationId names ${JSON.stringify(report.operationId)}, which ${declaring.length} interfaces of the contract declare`,
+      `${where}.operationId names ${JSON.stringify(report.operationId)}, which ${operation === undefined ? `interface ${JSON.stringify(interfaceId)} of the contract does not declare` : 'is not an operation of an api interface'}; a deployment reports its release through an operation of the contract's api interface`,
     );
     return problems;
-  }
-  if (declaring.length === 0 || declaring[0].iface?.kind !== 'api') {
-    problems.push(
-      `${where}.operationId names ${JSON.stringify(report.operationId)}, which ${declaring.length === 0 ? 'no interface of the contract declares' : 'is not an operation of an api interface'}; a deployment reports its release through an operation of the contract's api interface`,
-    );
-    return problems;
-  }
-  const [{ iface, operation }] = declaring;
-  if (iface.logicalId !== interfaceId) {
-    problems.push(
-      `${where}.operationId names ${JSON.stringify(report.operationId)}, which the contract declares on interface ${JSON.stringify(iface.logicalId)}; the request goes to the origin of the interface its operation belongs to, so key the report by that interface or name an operation of ${JSON.stringify(interfaceId)}`,
-    );
   }
   if (operation.stateChangeMarker === true) {
     problems.push(
@@ -178,6 +166,7 @@ function quotedIdentifier(text) {
  * @param {object} options
  * @param {object} options.contract the authored contract
  * @param {{ operationId: string, pointer: string }} options.report
+ * @param {string} options.interfaceId the interface the report's operation is declared on
  * @param {{ probe: Function }} options.port the port `createProbePort({ deployment })` returned
  * @param {object} options.registry the registry, for the host environment and the secrets to scrub
  * @param {string} options.label names the request (`report-pre-fix-grader`)
@@ -185,10 +174,11 @@ function quotedIdentifier(text) {
  * @param {AbortSignal} [options.signal]
  * @returns {Promise<{ reported: string } | { unread: string }>}
  */
-async function reportedRelease({ contract, report, port, registry, label, seed, signal }) {
+async function reportedRelease({ contract, report, interfaceId, port, registry, label, seed, signal }) {
   const plan = [
     {
       stepId: REPORT_STEP,
+      interfaceId,
       operationId: report.operationId,
       after: null,
       cardinality: 'exactly-one',

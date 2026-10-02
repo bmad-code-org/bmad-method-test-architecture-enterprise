@@ -123,7 +123,7 @@ const { spawn, spawnSync } = require('node:child_process');
 
 const { ENGINE_CLI_ENV, engineCliPath, loadEngine } = require('../cli/lib/evaluate/engine');
 const { createArtifactValidator } = require('../cli/lib/evaluate/records');
-const { calibrationObservation, calibrationOperationId, runCalibration } = require('../cli/lib/evaluate/calibration');
+const { calibrationObservation, calibrationStepPair, runCalibration } = require('../cli/lib/evaluate/calibration');
 const { registryFromEvaluation } = require('../cli/lib/evaluate/registry');
 const { runTrial, scoreAttempt } = require('../cli/lib/evaluate/run');
 const { hostEnvironmentPort } = require('../cli/lib/evaluate/arm');
@@ -471,6 +471,10 @@ async function checkCalibrationDisagreementAcrossEvaluators() {
       if (kind === 'command') {
         const observation = call.input.observations[0];
         check(observation.principal === null, 'command calibration observation omitted its principal');
+        check(
+          observation.interfaceId === 'verdict' && observation.operationId === 'judge-request',
+          `command calibration observation named ${observation.interfaceId}/${observation.operationId}; expected the plan step's pair verdict/judge-request`,
+        );
         check(observation.callInputs?.path === null, 'command calibration observation omitted total call inputs');
         check(observation.responseHeaders === null, 'command calibration observation omitted response headers');
         check(observation.responseStatus === null, 'command calibration observation omitted response status');
@@ -3858,7 +3862,7 @@ async function writeHarnessJudgments(project, edit = () => {}) {
       criterion,
       response: item.response,
       responseKind: item.responseKind,
-      operationId: calibrationOperationId(contract, criterion),
+      ...calibrationStepPair(contract, criterion),
     });
     return { rubricId: item.rubricId, criterionId: item.criterionId, scorerInput, answer: harnessScore(scorerInput) };
   });
@@ -4111,9 +4115,12 @@ function checkImportedCalibrationReferenceExample() {
   const derived = calibrationObservation({
     criterion,
     response: 'Response at level 1',
-    operationId: calibrationOperationId(contract, criterion),
+    ...calibrationStepPair(contract, criterion),
   });
-  check(derived.operationId === 'judge-request', `the verdict contract's plan gives step judge-run the operation ${derived.operationId}`);
+  check(
+    derived.interfaceId === 'verdict' && derived.operationId === 'judge-request',
+    `the verdict contract's plan gives step judge-run the operation ${derived.operationId} on interface ${derived.interfaceId}`,
+  );
   check(
     canonical(JSON.parse(example)) === canonical(derived),
     `the reference's scorer input is ${example}; the runtime derives ${JSON.stringify(derived)}`,
@@ -4230,6 +4237,7 @@ function literalObservation(channel, response, operationId = 'judge-request') {
   return {
     observationId: 'calibration',
     sequence: 1,
+    interfaceId: 'verdict',
     operationId,
     provenance: 'evaluator-chosen',
     principal: null,

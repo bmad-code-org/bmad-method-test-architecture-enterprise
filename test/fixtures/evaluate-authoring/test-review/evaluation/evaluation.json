@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "evaluationId": "test-review-json-stdin",
   "targetKind": "test-review-mechanism",
   "interface": "cli",
@@ -58,6 +58,8 @@
     "digest": "sha256:de391b0a728e38c617617b5512b0f4dfb96f8f4e14d289fc8d5b22d2cfad58eb"
   },
   "operationPhases": {
-    "review": "outcome"
+    "review-cli": {
+      "review": "outcome"
+    }
   }
 }

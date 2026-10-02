@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "tea-evaluate-mcp-fixture",
@@ -187,6 +187,7 @@
   "interactionPlan": [
     {
       "stepId": "grade-run",
+      "interfaceId": "grader",
       "operationId": "grade-answer",
       "after": null,
       "cardinality": "exactly-one",

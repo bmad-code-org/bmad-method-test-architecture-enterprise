@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "tea-routing-intents-behavioral",
@@ -2468,6 +2468,7 @@
   "interactionPlan": [
     {
       "stepId": "epic-risk-before-tests",
+      "interfaceId": "tea-routing-runner",
       "operationId": "route-intent",
       "after": null,
       "cardinality": "exactly-one",
@@ -2488,6 +2489,7 @@
     },
     {
       "stepId": "no-framework-yet",
+      "interfaceId": "tea-routing-runner",
       "operationId": "route-intent",
       "after": null,
       "cardinality": "exactly-one",
@@ -2508,6 +2510,7 @@
     },
     {
       "stepId": "pipeline-quality-gates",
+      "interfaceId": "tea-routing-runner",
       "operationId": "route-intent",
       "after": null,
       "cardinality": "exactly-one",
@@ -2528,6 +2531,7 @@
     },
     {
       "stepId": "acceptance-tests-before-code",
+      "interfaceId": "tea-routing-runner",
       "operationId": "route-intent",
       "after": null,
       "cardinality": "exactly-one",
@@ -2548,6 +2552,7 @@
     },
     {
       "stepId": "implemented-feature-no-tests",
+      "interfaceId": "tea-routing-runner",
       "operationId": "route-intent",
       "after": null,
       "cardinality": "exactly-one",
@@ -2568,6 +2573,7 @@
     },
     {
       "stepId": "review-existing-tests",
+      "interfaceId": "tea-routing-runner",
       "operationId": "route-intent",
       "after": null,
       "cardinality": "exactly-one",
@@ -2588,6 +2594,7 @@
     },
     {
       "stepId": "nfr-evidence-on-hand",
+      "interfaceId": "tea-routing-runner",
       "operationId": "route-intent",
       "after": null,
       "cardinality": "exactly-one",
@@ -2608,6 +2615,7 @@
     },
     {
       "stepId": "trace-criteria-to-tests",
+      "interfaceId": "tea-routing-runner",
       "operationId": "route-intent",
       "after": null,
       "cardinality": "exactly-one",
@@ -2628,6 +2636,7 @@
     },
     {
       "stepId": "learn-testing-properly",
+      "interfaceId": "tea-routing-runner",
       "operationId": "route-intent",
       "after": null,
       "cardinality": "exactly-one",
@@ -2648,6 +2657,7 @@
     },
     {
       "stepId": "release-gate-sequence",
+      "interfaceId": "tea-routing-runner",
       "operationId": "route-intent",
       "after": null,
       "cardinality": "exactly-one",
@@ -2668,6 +2678,7 @@
     },
     {
       "stepId": "prove-refund-agent-behavior",
+      "interfaceId": "tea-routing-runner",
       "operationId": "route-intent",
       "after": null,
       "cardinality": "exactly-one",

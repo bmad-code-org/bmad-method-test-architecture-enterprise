@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "tea-evaluate-workflow-fixture",
@@ -355,6 +355,7 @@
   "interactionPlan": [
     {
       "stepId": "read-back",
+      "interfaceId": "records",
       "operationId": "read-back",
       "after": "create",
       "cardinality": "exactly-one",
@@ -371,6 +372,7 @@
     },
     {
       "stepId": "create",
+      "interfaceId": "records",
       "operationId": "create",
       "after": null,
       "cardinality": "exactly-one",

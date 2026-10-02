@@ -1,6 +1,18 @@
 /** Trace scored findings to the sealed observations and contract pointers they cite. */
 'use strict';
 
+/**
+ * The phase `phases` (`{ interfaceId: { operationId: phase } }`) gives one interface-qualified operation, or `undefined`.
+ * An operation ID is scoped to its interface, so the lookup needs both.
+ */
+function phaseOf(phases, interfaceId, operationId) {
+  const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+  if (!isObject(phases) || !Object.hasOwn(phases, interfaceId)) return;
+  const byOperation = phases[interfaceId];
+  if (!isObject(byOperation) || !Object.hasOwn(byOperation, operationId)) return;
+  return byOperation[operationId];
+}
+
 function projectTrial(record, phases, oracles) {
   const observations = new Map(record.observations.map((observation) => [observation.observationId, observation]));
   const findings = record.findings.map((finding) => {
@@ -10,14 +22,18 @@ function projectTrial(record, phases, oracles) {
         throw new Error(
           `finding ${finding.findingId} cites observation ${observationId}, which trial ${record.trialIndex} does not contain`,
         );
-      if (!Object.hasOwn(phases, observation.operationId))
-        throw new Error(`observation ${observationId} names unclassified operation ${observation.operationId}`);
+      const phase = phaseOf(phases, observation.interfaceId, observation.operationId);
+      if (phase === undefined)
+        throw new Error(
+          `observation ${observationId} names unclassified operation ${observation.operationId} of interface ${observation.interfaceId}`,
+        );
       return {
         observationId,
         sequence: observation.sequence,
+        interfaceId: observation.interfaceId,
         operationId: observation.operationId,
         provenance: observation.provenance,
-        phase: phases[observation.operationId],
+        phase,
       };
     });
     const oracle = finding.oracleId === null ? null : oracles.get(finding.oracleId);
@@ -114,4 +130,4 @@ function writeInterpretation({
   writer.replaceJson('interpretation.json', { scoreInvocationId, strengthAggregate: strengthAggregatePointer(strengthAggregate), probes });
 }
 
-module.exports = { engineProjection, projectTrial, strengthAggregatePointer, writeInterpretation };
+module.exports = { engineProjection, phaseOf, projectTrial, strengthAggregatePointer, writeInterpretation };

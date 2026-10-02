@@ -1,13 +1,13 @@
 {
   "stage": "compile",
-  "cli": "/Users/murat/opensource/bmad-method-test-architecture-enterprise/node_modules/eval-quality/dist/cli/main.js",
+  "cli": "/Users/murat/opensource/_wt/evaluate-lane3/node_modules/eval-quality/dist/cli/main.js",
   "substituted": false,
   "argv": [
     "compile",
     "--in",
-    "/Users/murat/opensource/bmad-method-test-architecture-enterprise/test/fixtures/evaluate-gap-loop/before/evaluation/runs/20260929T030250916Z-0f88894a/contract.json",
+    "/private/tmp/tea-replay-36A2is/before/evaluation/runs/20261002T154941955Z-9183b477/contract.json",
     "--out",
-    "/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-engine-BufThQ/eval-contract.json"
+    "/tmp/tea-evaluate-p501/run-7750-KZT1Ms/tea-evaluate-engine-lRyp2X/eval-contract.json"
   ],
   "exitCode": 0,
   "signal": null,

@@ -1,4 +1,6 @@
 {
-  "grade-answer": "outcome",
-  "report-release": "outcome"
+  "grader": {
+    "grade-answer": "outcome",
+    "report-release": "outcome"
+  }
 }

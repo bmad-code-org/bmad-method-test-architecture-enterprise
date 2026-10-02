@@ -2,7 +2,7 @@
   "conditionArm": "clean",
   "trialIndex": 2,
   "workspace": "trial-clean-2",
-  "elapsedMs": 1089,
+  "elapsedMs": 1100,
   "oracles": [
     {
       "oracleId": "O-001",

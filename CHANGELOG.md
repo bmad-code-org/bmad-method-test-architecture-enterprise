@@ -190,6 +190,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- BREAKING: `tea-evaluate` needs eval-quality 5.0.0 and attributes every observation to its interface (Story 1.42, AD-5, AD-23).
+  The peer floor moves from `>=4.7.0` to `>=5.0.0`, and the lockfile resolves 5.0.0. eval-quality 5.0.0 names an operation by the pair of its interface and its operation ID, so two interfaces of one contract may declare the same operation ID.
+  Every sealed observation the runtime records carries `interfaceId` beside `operationId`, on the command, tool-call and HTTP routes and on a sealed-brief agent's calls, and every interaction plan step names its `interfaceId`.
+  `evaluation.json` moves to `schemaVersion` 2, where `operationPhases` classifies each interface-operation pair as `{ interfaceId: { operationId: phase } }`. `check` exits 10 for a missing pair, an undeclared pair, an unknown phase and a version 1 file, and no longer refuses a contract that reuses an operation ID across interfaces.
+  `interpretation.json` gives every citation its `interfaceId` and the phase of that exact pair, so process and outcome findings stay apart when operation IDs match.
+  Migrate an existing evaluation: add `interfaceId` to each plan step and restamp the contract at the engine's contract version 6, nest `operationPhases` by interface and set `schemaVersion` 2 in `evaluation.json`, then run again and `compare --accept`. A sealed run record of version 6, a contract of version 5 and a preflight verdict of version 1 are refused by name, and a stored baseline is not comparable with a run on 5.0.0.
+  A `records` harness writes `interfaceId` on each observation and in each calibration judgment's `scorerInput`.
 - A registry entry takes `network`, `"isolated"` (the default) or `"host"` (Story 1.63).
   A command, tool-server or HTTP entry whose target needs the network declares `"network": "host"`, since a Linux Bubblewrap target with the default has a loopback only: a skill or agent target (`tea-skill-runner`, any agent CLI) calls its model provider, and a service may call a model or an outside service.
   Declare it on those entries on Linux until Story 1.83 gives a confined target a route to the hosts its entry authorizes; without it the target cannot reach its provider.

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "tea-fragment-selection-framework",
@@ -468,6 +468,7 @@
   "interactionPlan": [
     {
       "stepId": "framework-mobile-scaffold",
+      "interfaceId": "tea-fragment-selection-runner",
       "operationId": "select-fragments",
       "after": null,
       "cardinality": "exactly-one",
@@ -488,6 +489,7 @@
     },
     {
       "stepId": "framework-greenfield-playwright-utils",
+      "interfaceId": "tea-fragment-selection-runner",
       "operationId": "select-fragments",
       "after": null,
       "cardinality": "exactly-one",
@@ -508,6 +510,7 @@
     },
     {
       "stepId": "framework-python-backend",
+      "interfaceId": "tea-fragment-selection-runner",
       "operationId": "select-fragments",
       "after": null,
       "cardinality": "exactly-one",

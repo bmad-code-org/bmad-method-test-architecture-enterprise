@@ -12,7 +12,7 @@ A gameability probe gives a degenerate answer such as "always decline" or a succ
 
 ## Separate process from outcome
 
-In `interpretation.json`, `process` and `outcome` list findings by the operation phases captured at run time. `firstMaterialError` names the lowest-sequence cited observation of a `material` or `critical` finding, with its operation and phase. Example: a bad validation response at sequence 3 precedes an incorrect final reservation at sequence 7. Repair the validation probe or oracle at sequence 3, then verify both observations after rerun. The interpretation copies engine outcomes and traces citations; it does not score claims or semantic checkpoints. A judgment checkpoint belongs in an anchored rubric criterion judged by a calibrated judge.
+In `interpretation.json`, `process` and `outcome` list findings by the operation phases captured at run time. Every citation names its `interfaceId` beside its `operationId`, because two interfaces may declare one operation ID and each carries its own phase. `firstMaterialError` names the lowest-sequence cited observation of a `material` or `critical` finding, with its interface, operation and phase. Example: a bad validation response at sequence 3 precedes an incorrect final reservation at sequence 7. Repair the validation probe or oracle at sequence 3, then verify both observations after rerun. The interpretation copies engine outcomes and traces citations; it does not score claims or semantic checkpoints. A judgment checkpoint belongs in an anchored rubric criterion judged by a calibrated judge.
 
 ## Read held-out results
 

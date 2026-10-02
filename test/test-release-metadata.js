@@ -6,7 +6,7 @@
  * - the package is not marked private
  * - publishConfig.access remains public
  * - the active stable-release step transports large changelog notes outside argv
- * - the `tea-evaluate` bin and the optional `eval-quality` peer (floor 4.7.0)
+ * - the `tea-evaluate` bin and the optional `eval-quality` peer (floor 5.0.0)
  *   are declared, and package-lock.json's root entry carries the same
  *
  * Usage: node test/test-release-metadata.js
@@ -92,11 +92,11 @@ if (!marketplacePlugin) {
 }
 
 // Evaluate's runtime: the bin, and eval-quality as an optional peer no older
-// than 4.7.0. The lockfile's root entry mirrors package.json, so a manifest
+// than 5.0.0. The lockfile's root entry mirrors package.json, so a manifest
 // edit that skipped `npm install` is caught here too.
 const EVALUATE_BIN = 'tea-evaluate';
 const ENGINE_PACKAGE = 'eval-quality';
-const ENGINE_FLOOR = '4.7.0';
+const ENGINE_FLOOR = '5.0.0';
 const lockRoot = packageLock.packages?.[''] ?? {};
 
 const evaluateBin = packageJson.bin?.[EVALUATE_BIN];
@@ -124,6 +124,13 @@ if (lockRoot.peerDependencies?.[ENGINE_PACKAGE] !== peerRange) {
 }
 if (lockRoot.peerDependenciesMeta?.[ENGINE_PACKAGE]?.optional !== packageJson.peerDependenciesMeta?.[ENGINE_PACKAGE]?.optional) {
   errors.push(`package-lock.json root peerDependenciesMeta["${ENGINE_PACKAGE}"] does not match package.json.`);
+}
+// The lockfile pins the engine Evaluate's own suites run against, so it must resolve a release at or above the floor.
+const lockedEngine = packageLock.packages?.[`node_modules/${ENGINE_PACKAGE}`]?.version;
+if (typeof lockedEngine !== 'string' || !semver.valid(lockedEngine) || semver.lt(lockedEngine, ENGINE_FLOOR)) {
+  errors.push(
+    `package-lock.json node_modules/${ENGINE_PACKAGE} resolves ${JSON.stringify(lockedEngine ?? null)}; it must resolve ${ENGINE_FLOOR} or later.`,
+  );
 }
 
 if (releaseStep?.run) {

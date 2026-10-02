@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "tea-fragment-selection-automate",
@@ -669,6 +669,7 @@
   "interactionPlan": [
     {
       "stepId": "automate-playwright-ui-utils-on",
+      "interfaceId": "tea-fragment-selection-runner",
       "operationId": "select-fragments",
       "after": null,
       "cardinality": "exactly-one",
@@ -689,6 +690,7 @@
     },
     {
       "stepId": "automate-backend-pytest",
+      "interfaceId": "tea-fragment-selection-runner",
       "operationId": "select-fragments",
       "after": null,
       "cardinality": "exactly-one",
@@ -709,6 +711,7 @@
     },
     {
       "stepId": "automate-mobile-maestro",
+      "interfaceId": "tea-fragment-selection-runner",
       "operationId": "select-fragments",
       "after": null,
       "cardinality": "exactly-one",
@@ -729,6 +732,7 @@
     },
     {
       "stepId": "automate-pact-consumer",
+      "interfaceId": "tea-fragment-selection-runner",
       "operationId": "select-fragments",
       "after": null,
       "cardinality": "exactly-one",
@@ -749,6 +753,7 @@
     },
     {
       "stepId": "automate-backend-junit",
+      "interfaceId": "tea-fragment-selection-runner",
       "operationId": "select-fragments",
       "after": null,
       "cardinality": "exactly-one",

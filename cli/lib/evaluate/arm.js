@@ -579,13 +579,21 @@ function hostEnvironmentPort({ port, registry }) {
   };
 }
 
-/** Each operation the contract declares, by operation identifier, with its interface; an identifier two interfaces share is ambiguous. */
-function operationsById(contract) {
+/** The key one interface-qualified operation is indexed under: an operation identifier is scoped to its interface. */
+function pairKey(interfaceId, operationId) {
+  return JSON.stringify([interfaceId, operationId]);
+}
+
+/**
+ * Each operation the contract declares, by `(interfaceId, operationId)`, with its interface. Two interfaces may declare
+ * one operation identifier; one interface declaring it twice is ambiguous and the engine's compile refuses it.
+ */
+function operationsByPair(contract) {
   const index = new Map();
   for (const iface of contract.permittedInterfaces ?? []) {
     for (const operation of iface.operations ?? []) {
-      const known = index.get(operation.operationId);
-      index.set(operation.operationId, known === undefined ? { iface, operation } : { ambiguous: true });
+      const key = pairKey(iface.logicalId, operation.operationId);
+      index.set(key, index.has(key) ? { ambiguous: true } : { iface, operation });
     }
   }
   return index;
@@ -859,7 +867,7 @@ function orderedSteps(plan) {
  * @param {AbortSignal} [options.signal]
  * @returns {Promise<{ steps: object[], stepObservations: Record<string, object> }>}
  *   `steps` holds, in the order the plan ran, each issued step's persistable request and the port's observation, and
- *   each step the arm did not issue as `{ stepId, operationId, skipped }` with the reason; `stepObservations` the record
+ *   each step the arm did not issue as `{ stepId, interfaceId, operationId, skipped }` with the reason; `stepObservations` the record
  *   observations by step
  * @throws {ArmError}
  */
@@ -876,7 +884,7 @@ async function runArm({
   // An arm is independent of the arms before it on a shared port, so its target starts with an empty private home; the
   // steps of this arm share it.
   port.resetHome?.();
-  const operations = operationsById(contract);
+  const operations = operationsByPair(contract);
   const plan = contract.interactionPlan ?? [];
   const declared = new Set(plan.map((step) => step.stepId));
   const steps = [];
@@ -893,10 +901,10 @@ async function runArm({
   };
   let sequence = 0;
   for (const step of orderedSteps(plan)) {
-    const found = operations.get(step.operationId);
+    const found = operations.get(pairKey(step.interfaceId, step.operationId));
     if (found === undefined || found.ambiguous) {
       throw new ArmError(
-        `interaction plan step ${step.stepId} names operation ${step.operationId}, which ${found === undefined ? 'no interface declares' : 'two interfaces declare'}`,
+        `interaction plan step ${step.stepId} names operation ${step.operationId} on interface ${step.interfaceId}, which ${found === undefined ? 'that interface does not declare' : 'that interface declares twice'}`,
       );
     }
     const { iface, operation } = found;
@@ -974,7 +982,7 @@ async function runArm({
     // Decided once the request is built, so a binding or an operation the run cannot send stops the arm whatever the
     // target printed: a step cannot run after a step that never ran, a captured value the earlier observation lacks
     // leaves nothing to send, and one the request cannot carry as printed would send the target something else.
-    const skip = (skipped) => steps.push({ stepId: step.stepId, operationId: step.operationId, skipped });
+    const skip = (skipped) => steps.push({ stepId: step.stepId, interfaceId: step.interfaceId, operationId: step.operationId, skipped });
     if (typeof step.after === 'string' && declared.has(step.after) && !issued.has(step.after)) {
       skip({ reason: 'after-step-not-issued', after: step.after });
       continue;
@@ -1031,6 +1039,7 @@ async function runArm({
       stepObservations[step.stepId] = recordObservation({
         observationId: request.probeId,
         sequence,
+        interfaceId: iface.logicalId,
         operationId: operation.operationId,
         callInputs: recordedCallInputs,
         principal: principalLabels[0] ?? null,
@@ -1056,6 +1065,7 @@ async function runArm({
       stepObservations[step.stepId] = recordObservation({
         observationId: request.probeId,
         sequence,
+        interfaceId: iface.logicalId,
         operationId: operation.operationId,
         callInputs: recordedCallInputs,
         principal: principalLabels[0] ?? null,
@@ -1093,6 +1103,7 @@ async function runArm({
     stepObservations[step.stepId] = recordObservation({
       observationId: request.probeId,
       sequence,
+      interfaceId: iface.logicalId,
       operationId: operation.operationId,
       callInputs: recordedCallInputs,
       principal: principalLabels[0] ?? null,

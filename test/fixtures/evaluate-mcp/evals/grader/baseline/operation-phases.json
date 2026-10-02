@@ -1,3 +1,5 @@
 {
-  "grade-answer": "outcome"
+  "grader": {
+    "grade-answer": "outcome"
+  }
 }
