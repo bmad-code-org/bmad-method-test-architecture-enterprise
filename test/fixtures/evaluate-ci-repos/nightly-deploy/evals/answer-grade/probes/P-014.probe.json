@@ -92,13 +92,29 @@
         }
       },
       "predicate": {
-        "op": "equality",
+        "op": "all",
         "operands": [
           {
-            "pointer": "/interactions/observed/response-body/decision"
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/observed/response-status"
+              },
+              {
+                "literal": 200
+              }
+            ]
           },
           {
-            "literal": "pass"
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/observed/response-body/decision"
+              },
+              {
+                "literal": "pass"
+              }
+            ]
           }
         ]
       }

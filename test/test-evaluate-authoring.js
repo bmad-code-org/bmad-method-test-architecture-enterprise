@@ -444,6 +444,17 @@ function runReplay(folder, runName, out, expectedProbeIds, heldOutOnly) {
       const source = readJson(path.join(folder, 'probes/P-014.probe.json'));
       const raw = source.defects[0].manifestationWitness.inputs.body;
       assert.deepEqual(source.defectSignature.condition.selector.inputBinding.body, raw, 'P-014 selector binds the witness bytes');
+      const predicate = source.defectSignature.condition.predicate;
+      assert.equal(predicate.op, 'all', 'P-014 requires every defect-signature condition');
+      assert.ok(
+        predicate.operands.some(
+          (operand) =>
+            operand.op === 'equality' &&
+            operand.operands[0]?.pointer === '/interactions/observed/response-status' &&
+            operand.operands[1]?.literal === 200,
+        ),
+        'P-014 only matches HTTP 200',
+      );
       assert.equal(raw.contentType, 'application/json', 'P-014 declares the corpus content type');
       assert.deepEqual(
         Buffer.from(raw.base64, 'base64'),

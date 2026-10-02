@@ -24,15 +24,15 @@
       "expectedObservableFailure": "private answer passes in HTTP response body",
       "baselinePassEvidence": {
         "storage": "public",
-        "path": "runs/20261002T210321664Z-57c4fa54/qualification/P-005/baseline-pass.json",
+        "path": "runs/20261002T223329843Z-c1997103/qualification/P-005/baseline-pass.json",
         "privateRef": null,
-        "digest": "sha256:082912fc28c4c9cbc2bac4c178ade8e102d9f1a9ed8abe2c506e2879a94612f0"
+        "digest": "sha256:ddbeee135214f017ef365aa4dc9445617d2c245e6405d475994dd14423910893"
       },
       "mutatedFailEvidence": {
         "storage": "public",
-        "path": "runs/20261002T210321664Z-57c4fa54/qualification/P-005/mutated-fail.json",
+        "path": "runs/20261002T223329843Z-c1997103/qualification/P-005/mutated-fail.json",
         "privateRef": null,
-        "digest": "sha256:c48ed123ccb8dc251d186755d01589e193d48c1a97277d5e6b39611cc825513e"
+        "digest": "sha256:77fa5cdf1f230341bdfcf5983a56c4d65e305d084f39211162ca74420ba0a170"
       },
       "rollbackVerified": true
     },
@@ -46,9 +46,9 @@
         "oracleEvidence": [
           {
             "storage": "public",
-            "path": "runs/20261002T210321664Z-57c4fa54/qualification/P-005/mutated-fail.json",
+            "path": "runs/20261002T223329843Z-c1997103/qualification/P-005/mutated-fail.json",
             "privateRef": null,
-            "digest": "sha256:c48ed123ccb8dc251d186755d01589e193d48c1a97277d5e6b39611cc825513e"
+            "digest": "sha256:77fa5cdf1f230341bdfcf5983a56c4d65e305d084f39211162ca74420ba0a170"
           }
         ],
         "source": "controlled-mutation",
@@ -172,15 +172,15 @@
       "expectedObservableFailure": "valid answer receives too-short in HTTP response body",
       "baselinePassEvidence": {
         "storage": "public",
-        "path": "runs/20261002T210321664Z-57c4fa54/qualification/P-006/baseline-pass.json",
+        "path": "runs/20261002T223329843Z-c1997103/qualification/P-006/baseline-pass.json",
         "privateRef": null,
-        "digest": "sha256:dcd777e77c804fc47168a5f3fc6737ee410d4659d6e10f17ea26b4b658dc8848"
+        "digest": "sha256:cd0e79b7b0f4c984e1a8540fdd962543e278d25238b42599ec1f09aa8424bc7a"
       },
       "mutatedFailEvidence": {
         "storage": "public",
-        "path": "runs/20261002T210321664Z-57c4fa54/qualification/P-006/mutated-fail.json",
+        "path": "runs/20261002T223329843Z-c1997103/qualification/P-006/mutated-fail.json",
         "privateRef": null,
-        "digest": "sha256:705bce55df192049eb4a4d16b3388b26d08659eb32610e801093a4870c87e22c"
+        "digest": "sha256:09dad071e1349b898a9bd7b6ca14ae47d8bbd0e578acb4bcfbe7664a387e3791"
       },
       "rollbackVerified": true
     },
@@ -194,9 +194,9 @@
         "oracleEvidence": [
           {
             "storage": "public",
-            "path": "runs/20261002T210321664Z-57c4fa54/qualification/P-006/mutated-fail.json",
+            "path": "runs/20261002T223329843Z-c1997103/qualification/P-006/mutated-fail.json",
             "privateRef": null,
-            "digest": "sha256:705bce55df192049eb4a4d16b3388b26d08659eb32610e801093a4870c87e22c"
+            "digest": "sha256:09dad071e1349b898a9bd7b6ca14ae47d8bbd0e578acb4bcfbe7664a387e3791"
           }
         ],
         "source": "controlled-mutation",
@@ -320,15 +320,15 @@
       "expectedObservableFailure": "malformed answer receives HTTP 200 and a grade-like response body",
       "baselinePassEvidence": {
         "storage": "public",
-        "path": "runs/20261002T210321664Z-57c4fa54/qualification/P-007/baseline-pass.json",
+        "path": "runs/20261002T223329843Z-c1997103/qualification/P-007/baseline-pass.json",
         "privateRef": null,
-        "digest": "sha256:1aa81cd8d5167429a81294bb3ec39551d9e2a06255485dc03cc3d91b38b475b1"
+        "digest": "sha256:2e7b941164542cdc9e21cd4495ed46e4de0fb85ed89f295ba62cb92b5b03bf53"
       },
       "mutatedFailEvidence": {
         "storage": "public",
-        "path": "runs/20261002T210321664Z-57c4fa54/qualification/P-007/mutated-fail.json",
+        "path": "runs/20261002T223329843Z-c1997103/qualification/P-007/mutated-fail.json",
         "privateRef": null,
-        "digest": "sha256:d11bb522204b79c4c1c23eade5ed133ed7b812053cf1c65fc0f8b8c12d71b6f6"
+        "digest": "sha256:d00c88640b477eeda9e315114c5308f621351a10a28a9fb02ff128c13c3df85e"
       },
       "rollbackVerified": true
     },
@@ -342,9 +342,9 @@
         "oracleEvidence": [
           {
             "storage": "public",
-            "path": "runs/20261002T210321664Z-57c4fa54/qualification/P-007/mutated-fail.json",
+            "path": "runs/20261002T223329843Z-c1997103/qualification/P-007/mutated-fail.json",
             "privateRef": null,
-            "digest": "sha256:d11bb522204b79c4c1c23eade5ed133ed7b812053cf1c65fc0f8b8c12d71b6f6"
+            "digest": "sha256:d00c88640b477eeda9e315114c5308f621351a10a28a9fb02ff128c13c3df85e"
           }
         ],
         "source": "controlled-mutation",
@@ -468,15 +468,15 @@
       "expectedObservableFailure": "strict answer below doubled minimum passes in HTTP response body",
       "baselinePassEvidence": {
         "storage": "public",
-        "path": "runs/20261002T210321664Z-57c4fa54/qualification/P-008/baseline-pass.json",
+        "path": "runs/20261002T223329843Z-c1997103/qualification/P-008/baseline-pass.json",
         "privateRef": null,
-        "digest": "sha256:67cdc8cbab834a63f12516deea71413d4f423943c740285cd51e1b2561dc93f1"
+        "digest": "sha256:c9328d8c20a2cd80655a41684fecd088b5e71f08b8f540d141c7dd9ba7e8d769"
       },
       "mutatedFailEvidence": {
         "storage": "public",
-        "path": "runs/20261002T210321664Z-57c4fa54/qualification/P-008/mutated-fail.json",
+        "path": "runs/20261002T223329843Z-c1997103/qualification/P-008/mutated-fail.json",
         "privateRef": null,
-        "digest": "sha256:c0967a51ca082b328022095255fe6eed9d4523de2944682de3c00883351fd3b5"
+        "digest": "sha256:488336be82a69c18e3e22a821cdf9b204cd9ff959f277e7a3a7eaffa2dacd0a0"
       },
       "rollbackVerified": true
     },
@@ -490,9 +490,9 @@
         "oracleEvidence": [
           {
             "storage": "public",
-            "path": "runs/20261002T210321664Z-57c4fa54/qualification/P-008/mutated-fail.json",
+            "path": "runs/20261002T223329843Z-c1997103/qualification/P-008/mutated-fail.json",
             "privateRef": null,
-            "digest": "sha256:c0967a51ca082b328022095255fe6eed9d4523de2944682de3c00883351fd3b5"
+            "digest": "sha256:488336be82a69c18e3e22a821cdf9b204cd9ff959f277e7a3a7eaffa2dacd0a0"
           }
         ],
         "source": "controlled-mutation",
@@ -624,15 +624,15 @@
       "expectedObservableFailure": "private answer passes in HTTP response body",
       "baselinePassEvidence": {
         "storage": "public",
-        "path": "runs/20261002T210321664Z-57c4fa54/qualification/P-010/baseline-pass.json",
+        "path": "runs/20261002T223329843Z-c1997103/qualification/P-010/baseline-pass.json",
         "privateRef": null,
-        "digest": "sha256:36822682f8b894bf1a1e95c55b2a2657b942352b07dc1845468daa31500e2bea"
+        "digest": "sha256:07229c71238d2d6bd93b334ec286932f934cd184cebeb0ccdcd3abc3284178f7"
       },
       "mutatedFailEvidence": {
         "storage": "public",
-        "path": "runs/20261002T210321664Z-57c4fa54/qualification/P-010/mutated-fail.json",
+        "path": "runs/20261002T223329843Z-c1997103/qualification/P-010/mutated-fail.json",
         "privateRef": null,
-        "digest": "sha256:871788570fa368aa530004a8a3420aa23d4449cf0de51f0fe25a4547a806cd47"
+        "digest": "sha256:e4b8f3fd222245758dc83606e492c7d8d980d1a24594dd5ffe1681b0554a8d51"
       },
       "rollbackVerified": true
     },
@@ -646,9 +646,9 @@
         "oracleEvidence": [
           {
             "storage": "public",
-            "path": "runs/20261002T210321664Z-57c4fa54/qualification/P-010/mutated-fail.json",
+            "path": "runs/20261002T223329843Z-c1997103/qualification/P-010/mutated-fail.json",
             "privateRef": null,
-            "digest": "sha256:871788570fa368aa530004a8a3420aa23d4449cf0de51f0fe25a4547a806cd47"
+            "digest": "sha256:e4b8f3fd222245758dc83606e492c7d8d980d1a24594dd5ffe1681b0554a8d51"
           }
         ],
         "source": "controlled-mutation",
@@ -772,15 +772,15 @@
       "expectedObservableFailure": "malformed JSON receives HTTP 200 and a passing grade",
       "baselinePassEvidence": {
         "storage": "public",
-        "path": "runs/20261002T210321664Z-57c4fa54/qualification/P-014/baseline-pass.json",
+        "path": "runs/20261002T223329843Z-c1997103/qualification/P-014/baseline-pass.json",
         "privateRef": null,
-        "digest": "sha256:e73bd63edf9d66b4a9e48064f4730c297cc44865952624d2811e8f44c1cd1af0"
+        "digest": "sha256:370dcee7e2551b9849f015de9532d5530b5d6a7e9405ce666a2a5404ca5619d0"
       },
       "mutatedFailEvidence": {
         "storage": "public",
-        "path": "runs/20261002T210321664Z-57c4fa54/qualification/P-014/mutated-fail.json",
+        "path": "runs/20261002T223329843Z-c1997103/qualification/P-014/mutated-fail.json",
         "privateRef": null,
-        "digest": "sha256:96649397b607ab84f0a526f78b64f1bfcdf1aa4241ecd6c746a2ee7e9f4ed0ff"
+        "digest": "sha256:eed56fe1e8653e1cf1e8dc6680094cbd79064d4c74431e576976c00009507992"
       },
       "rollbackVerified": true
     },
@@ -794,9 +794,9 @@
         "oracleEvidence": [
           {
             "storage": "public",
-            "path": "runs/20261002T210321664Z-57c4fa54/qualification/P-014/mutated-fail.json",
+            "path": "runs/20261002T223329843Z-c1997103/qualification/P-014/mutated-fail.json",
             "privateRef": null,
-            "digest": "sha256:96649397b607ab84f0a526f78b64f1bfcdf1aa4241ecd6c746a2ee7e9f4ed0ff"
+            "digest": "sha256:eed56fe1e8653e1cf1e8dc6680094cbd79064d4c74431e576976c00009507992"
           }
         ],
         "source": "controlled-mutation",
@@ -881,13 +881,29 @@
           }
         },
         "predicate": {
-          "op": "equality",
+          "op": "all",
           "operands": [
             {
-              "pointer": "/interactions/observed/response-body/decision"
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/observed/response-status"
+                },
+                {
+                  "literal": 200
+                }
+              ]
             },
             {
-              "literal": "pass"
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/observed/response-body/decision"
+                },
+                {
+                  "literal": "pass"
+                }
+              ]
             }
           ]
         }

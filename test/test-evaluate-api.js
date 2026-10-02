@@ -723,6 +723,16 @@ async function checkPortUnits() {
       rawValid.observation?.status === 200 && service.received[0]?.bodyBase64 === Buffer.from('{"ok":true}').toString('base64'),
       'raw valid JSON changed before the target received it',
     );
+    const binaryBytes = Buffer.from([0x00, 0x80, 0xff, 0x41]);
+    const binaryBody = { kind: 'raw', base64: binaryBytes.toString('base64'), contentType: 'application/octet-stream' };
+    const binaryRaw = await counted('binary raw body', () => port.probe(request('POST', '/raw', { body: binaryBody })));
+    check(
+      binaryRaw.observation?.status === 200 &&
+        service.received[0]?.bodyBase64 === binaryBody.base64 &&
+        service.received[0]?.contentType === binaryBody.contentType &&
+        service.received[0]?.contentLength === String(binaryBytes.byteLength),
+      `binary raw bytes changed on the wire: ${JSON.stringify(service.received)}`,
+    );
     const emptyRawRequest = request('POST', '/raw', { body: { kind: 'raw', base64: '', contentType: 'application/json' } });
     const emptyRaw = await counted('empty raw body', () => port.probe(emptyRawRequest));
     check(
@@ -820,14 +830,41 @@ async function checkPortUnits() {
       port.probe(request('POST', '/raw', { header: { 'Content-Length': '1' }, body: rawBody })),
     );
     check(framed.error?.code === 'schema-parse-failure' && framed.sends === 0, 'caller framing changed the raw byte count');
-    const rawOversize = await counted('raw body past its cap', () =>
+    const rawAtCapBytes = Buffer.alloc(64, 0x80);
+    const rawAtCap = await counted('raw body at its cap', () =>
       port.probe(
         request('POST', '/raw', {
-          body: { kind: 'raw', base64: Buffer.alloc(65).toString('base64'), contentType: 'application/octet-stream' },
+          body: { kind: 'raw', base64: rawAtCapBytes.toString('base64'), contentType: 'application/octet-stream' },
         }),
       ),
     );
-    check(rawOversize.error?.code === 'budget-exhausted' && rawOversize.sends === 0, 'raw bytes passed maxRequestBytes');
+    check(
+      rawAtCap.observation?.status === 200 &&
+        service.received[0]?.bodyBase64 === rawAtCapBytes.toString('base64') &&
+        service.received[0]?.contentLength === '64',
+      'a 64-byte raw body failed at maxRequestBytes 64',
+    );
+    const oversizedBase64 = Buffer.alloc(65).toString('base64');
+    const originalBufferFrom = Buffer.from;
+    let portDecodedOversize = false;
+    Buffer.from = function (...args) {
+      if (args[0] === oversizedBase64 && args[1] === 'base64') {
+        portDecodedOversize = true;
+      }
+      return originalBufferFrom.apply(this, args);
+    };
+    let rawOversize;
+    try {
+      rawOversize = await counted('raw body past its cap', () =>
+        port.probe(request('POST', '/raw', { body: { kind: 'raw', base64: oversizedBase64, contentType: 'application/octet-stream' } })),
+      );
+    } finally {
+      Buffer.from = originalBufferFrom;
+    }
+    check(
+      rawOversize.error?.code === 'budget-exhausted' && rawOversize.sends === 0 && !portDecodedOversize,
+      'the port decoded 65 raw bytes before rejecting maxRequestBytes 64',
+    );
     const rawPreserved = await counted('307 raw redirect', () => port.probe(request('POST', '/raw-307', { body: rawBody })));
     check(
       rawPreserved.observation?.status === 200 &&

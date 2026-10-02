@@ -266,7 +266,10 @@ export default function createHttpProbePort({ policy, targets, auth = {}, transp
     let droppedBody = false;
     let body;
     if (request.channels.body.kind === 'json') body = Buffer.from(JSON.stringify(request.channels.body.value));
-    if (request.channels.body.kind === 'raw') body = Buffer.from(request.channels.body.base64, 'base64');
+    const rawBase64 = request.channels.body.kind === 'raw' ? request.channels.body.base64 : undefined;
+    // The parser has checked canonical base64. Its decoded byte count needs no allocation before the policy cap.
+    const rawByteLength =
+      rawBase64 === undefined ? undefined : (rawBase64.length / 4) * 3 - (rawBase64.endsWith('==') ? 2 : rawBase64.endsWith('=') ? 1 : 0);
     const declaredHeaders = { ...request.channels.header };
     const contentTypeNames = Object.keys(declaredHeaders).filter((name) => name.toLowerCase() === 'content-type');
     if (request.channels.body.kind === 'raw') {
@@ -282,8 +285,8 @@ export default function createHttpProbePort({ policy, targets, auth = {}, transp
       if (Object.keys(declaredHeaders).some((name) => ['content-length', 'transfer-encoding'].includes(name.toLowerCase()))) {
         throw new RuntimeFault('schema-parse-failure', 'ProbeRequest', 'a raw body uses framing computed from its decoded bytes');
       }
-      if (body.byteLength === 0) declaredHeaders['transfer-encoding'] = 'chunked';
-      else declaredHeaders['content-length'] = String(body.byteLength);
+      if (rawByteLength === 0) declaredHeaders['transfer-encoding'] = 'chunked';
+      else declaredHeaders['content-length'] = String(rawByteLength);
     } else if (body !== undefined && contentTypeNames.length === 0) {
       declaredHeaders['content-type'] = 'application/json';
     }
@@ -387,9 +390,11 @@ export default function createHttpProbePort({ policy, targets, auth = {}, transp
           if (signal?.aborted) throw new RuntimeFault('aborted', 'ProbeRequest', 'the request was aborted');
           if (cap.signal.aborted) throw capped(`the exchange passed maxElapsedMs (${initialAuthorization.maxElapsedMs}ms)`);
         }
-        if (body !== undefined && body.byteLength > authorization.maxRequestBytes) {
-          throw capped(`the request body of ${body.byteLength} bytes passes maxRequestBytes (${authorization.maxRequestBytes})`);
+        const bodyByteLength = body?.byteLength ?? (droppedBody ? undefined : rawByteLength);
+        if (bodyByteLength !== undefined && bodyByteLength > authorization.maxRequestBytes) {
+          throw capped(`the request body of ${bodyByteLength} bytes passes maxRequestBytes (${authorization.maxRequestBytes})`);
         }
+        if (body === undefined && !droppedBody && rawBase64 !== undefined) body = Buffer.from(rawBase64, 'base64');
         if (hop === 0 && prepare !== undefined) {
           try {
             await whileActive(() => prepare({ scheme, host, port, address: decision.canonicalAddress, method }, exchange));

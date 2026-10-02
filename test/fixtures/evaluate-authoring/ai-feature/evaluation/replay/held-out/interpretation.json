@@ -1,19 +1,19 @@
 {
-  "scoreInvocationId": "20261002T210530355Z-cd012923",
+  "scoreInvocationId": "20261002T223542915Z-8f10f8fc",
   "strengthAggregate": {
     "status": "copied",
     "reason": null,
-    "path": "runs/20261002T210500587Z-7ca5bf43/scores/20261002T210530355Z-cd012923/strength-aggregate.json",
-    "digest": "sha256:eb3f312410cc27c12c9b75e77f542fe7db2c99dd8996c712d497fb8d3f22a739",
-    "floors": "runs/20261002T210500587Z-7ca5bf43/scores/20261002T210530355Z-cd012923/strength-floors.json",
+    "path": "runs/20261002T223512663Z-cb8d3d50/scores/20261002T223542915Z-8f10f8fc/strength-aggregate.json",
+    "digest": "sha256:1c87880388ac6bcca4dfcfcdaf4337e437f810649d1e71f9990065ea6ab8dddf",
+    "floors": "runs/20261002T223512663Z-cb8d3d50/scores/20261002T223542915Z-8f10f8fc/strength-floors.json",
     "floorsDigest": "sha256:e84700d449bc14f307e48810dc166fab364dfdaa20ea30a2dbc492fe81c913c6"
   },
   "probes": [
     {
       "probeId": "P-011",
-      "evidence": "runs/20261002T210500587Z-7ca5bf43/scores/20261002T210530355Z-cd012923/P-011/evidence-artifact.json",
+      "evidence": "runs/20261002T223512663Z-cb8d3d50/scores/20261002T223542915Z-8f10f8fc/P-011/evidence-artifact.json",
       "scoreExitCode": 0,
-      "scoreRecord": "runs/20261002T210500587Z-7ca5bf43/scores/20261002T210530355Z-cd012923/P-011/score.json",
+      "scoreRecord": "runs/20261002T223512663Z-cb8d3d50/scores/20261002T223542915Z-8f10f8fc/P-011/score.json",
       "scoreFailure": null,
       "trials": [
         {
@@ -858,9 +858,9 @@
     },
     {
       "probeId": "P-012",
-      "evidence": "runs/20261002T210500587Z-7ca5bf43/scores/20261002T210530355Z-cd012923/P-012/evidence-artifact.json",
+      "evidence": "runs/20261002T223512663Z-cb8d3d50/scores/20261002T223542915Z-8f10f8fc/P-012/evidence-artifact.json",
       "scoreExitCode": 0,
-      "scoreRecord": "runs/20261002T210500587Z-7ca5bf43/scores/20261002T210530355Z-cd012923/P-012/score.json",
+      "scoreRecord": "runs/20261002T223512663Z-cb8d3d50/scores/20261002T223542915Z-8f10f8fc/P-012/score.json",
       "scoreFailure": null,
       "trials": [
         {
@@ -1705,9 +1705,9 @@
     },
     {
       "probeId": "P-013",
-      "evidence": "runs/20261002T210500587Z-7ca5bf43/scores/20261002T210530355Z-cd012923/P-013/evidence-artifact.json",
+      "evidence": "runs/20261002T223512663Z-cb8d3d50/scores/20261002T223542915Z-8f10f8fc/P-013/evidence-artifact.json",
       "scoreExitCode": 0,
-      "scoreRecord": "runs/20261002T210500587Z-7ca5bf43/scores/20261002T210530355Z-cd012923/P-013/score.json",
+      "scoreRecord": "runs/20261002T223512663Z-cb8d3d50/scores/20261002T223542915Z-8f10f8fc/P-013/score.json",
       "scoreFailure": null,
       "trials": [
         {

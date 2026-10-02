@@ -1,6 +1,6 @@
 {
-  "invocationId": "20261002T210500587Z-7ca5bf43",
-  "seed": "20261002T210500587Z-7ca5bf43",
+  "invocationId": "20261002T223512663Z-cb8d3d50",
+  "seed": "20261002T223512663Z-cb8d3d50",
   "command": "run",
   "teaVersion": "1.27.2",
   "evalQualityVersion": "6.0.0",
@@ -17,10 +17,10 @@
     "dirty": false
   },
   "workspaces": {
-    "pristine": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-pristine-6544af7f-4c5c-4b53-9f6f-fec77cee3997/target",
-    "mutated:M-005": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-005-88c39b0b-1fee-4292-8cc3-17ef7a441291/target",
-    "mutated:M-006": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-006-99820afb-fc33-49f8-b731-9fe2e2329f8d/target",
-    "mutated:M-007": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-007-62f5b90f-63aa-458e-8dcc-efd9ad08b10a/target"
+    "pristine": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-pristine-a8c719b4-a722-4804-95c8-484901db35b4/target",
+    "mutated:M-005": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-005-4335ba8e-682f-45fc-8c0f-5a41ad4c8fb0/target",
+    "mutated:M-006": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-006-198f6d79-4af9-4df5-9f3a-879ba77489e0/target",
+    "mutated:M-007": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-007-ad4dd586-333d-40ce-9def-462dc6c3f0b9/target"
   },
   "confinement": "seatbelt",
   "hostNetwork": [],
@@ -33,31 +33,31 @@
     "contract": "sha256:be52715bc36a52e551194ba3d904b74c4a315ecadc009a2b2bd5fc2ebbcc0b6d",
     "operationPhases": "sha256:d1f72d746d2017b00c471b144b21ac6fb7b75a3c110de59f6a871f908dc863d4",
     "evaluatorConfiguration": "sha256:cecf436ade6a881889efa5f1fc612f62ff1f8dbf4fe0b6ffcdd8317772046493",
-    "preflightVerdict": "sha256:153b9d097102eb51d52fe0510bb6f99049b24f626fe86d13c8851d21c6e38dc4",
+    "preflightVerdict": "sha256:eef7babf5c71191252488cdecc60c404806a50eb04a2947f273d675234c75c35",
     "probes": {
-      "P-011": "sha256:f21eada968dc5dd783cdde6c5e8ed8243dd9c08c1974ff061d1cafe37557b3fb",
-      "P-012": "sha256:514a17f60b516f0ea36c47a03ee0cc54d747074f24698300bb30c3fa7ed3d284",
-      "P-013": "sha256:bebc8e0318379ad52e46c007b38ac04053e8f98061b9c30f74d8002e70c534a3"
+      "P-011": "sha256:9f16e9e9758b027a4de046199a6cbacc2e576cc642f7d0527bbfe220fe634e50",
+      "P-012": "sha256:6e62f98bd1380cb1c6b4b5352c96a73b76e5ae7f53c6b09b88be043e0ebcc68d",
+      "P-013": "sha256:764002ec0277a6bc704fd944f6c71a4916741a619e8ab0b7caf728a8785d3b70"
     },
     "records": {
-      "trial-sets/P-011/record-1.json": "sha256:40df6b5995cdfc9ae614b680c2717ae35e06862f11435e7ed118b95b3284d90e",
-      "trial-sets/P-011/record-2.json": "sha256:d3e3f9e20c27adcb243c08f2502ae00f09dd54d8ef6558c6a67f3a35d2913810",
-      "trial-sets/P-011/record-3.json": "sha256:0acd2f82c989679d2f078391507995da9d861d71ed4ecb921cfa6ceaa167fd90",
-      "trial-sets/P-012/record-1.json": "sha256:2bae1494d395131917cfd3243a9ea88c60e07af3c18a31a14b8012a631819184",
-      "trial-sets/P-012/record-2.json": "sha256:cfc976ca9775dd64477cfd12145c3dd42f9dd0e5e0a2e67fd52622db29aa664a",
-      "trial-sets/P-012/record-3.json": "sha256:943d914ab1a8ee414a8412c7887c8cec45261c857eff31dedc0a7e50cd172d33",
-      "trial-sets/P-013/record-1.json": "sha256:644d714fbfe7934723aba3c7d2962868ee2a26eb267568ffb2eec533091a8521",
-      "trial-sets/P-013/record-2.json": "sha256:4c39ccbfbd7c486a146c7ad1b9566f26e7fa32e7ae33eb469e4fe9264eb28828",
-      "trial-sets/P-013/record-3.json": "sha256:ee94924ce1dc63741e6fc85cdf237ad4504c48a6723b298753b58097a9340ebc"
+      "trial-sets/P-011/record-1.json": "sha256:8ba37dfa666a23a4b3de9dd49557f88e0c15e3e1c6debceed0f1d38b06f7a3ae",
+      "trial-sets/P-011/record-2.json": "sha256:d89d5c61fdb2b80022654700f3aa68275d3843d65e5c7730e83cb0a2f707e4e0",
+      "trial-sets/P-011/record-3.json": "sha256:6feed62117bde0e43c2f5ec0aa38d76816c41897ea893427d35a97e3510e7a45",
+      "trial-sets/P-012/record-1.json": "sha256:c6a9b195a461f48a3ecfd7edecafba2a2ffa6cecd5c35a8e821ef57124323fb9",
+      "trial-sets/P-012/record-2.json": "sha256:d095a0342bef6636d0e01aaa1084009754d0e762a27a699ebf76910cbbe97ef6",
+      "trial-sets/P-012/record-3.json": "sha256:8d139164f75e190f643a99560c97cbcb1e1ca06bed218f3cc5b251e8ef8a4ef0",
+      "trial-sets/P-013/record-1.json": "sha256:e24932f2d77e8e963cb9edf98e1bcb97b268ab2a1892d515b069cfeb7f50992f",
+      "trial-sets/P-013/record-2.json": "sha256:1256fb326cfec50f3d33db1aa227138a10909b5adf0fb77579c62b7c6a2500c1",
+      "trial-sets/P-013/record-3.json": "sha256:d862a61d8622946c9d8724c38626954861638a980265fd077a142f67ec867f2d"
     },
     "isolationManifests": {
-      "P-011": "sha256:31a108f4d433af03593a49f713fcb8d6e9471084173ed3ec050528515383c05b",
-      "P-012": "sha256:4dd1ae8eb7e74fedf5262d88c1a84f4b76b75fda8968b9f98255c4bf0fc4eb53",
-      "P-013": "sha256:ab0bc298a11e426caf3c1a8198688b37756b28665fa575e01476c880f64040a5"
+      "P-011": "sha256:982839ab971ffa951c6744f552014dc1361033748597c27a9e6ab54963613a10",
+      "P-012": "sha256:57b33efec64c130fdcde899923d6fe70cd1a5ebba82af1de1466281d708a9d2e",
+      "P-013": "sha256:75adaec94bb29a379cfec0c7d2fcae5789910a811e31a14517be525807e501ee"
     }
   },
   "contractDigest": "sha256:633761ad3c1e5466c303d7b780f2d1c53855dff08f23b0fdfb685be544a86281",
-  "corpusDigest": "sha256:ede94d415a729daa87004caa8351963bb6b467ce62ba67df232fce5db1f2741b",
+  "corpusDigest": "sha256:09054ffa3100be0696994c6e5801014fe4d1d21685225515970d699d5af2f47f",
   "policyDigest": "sha256:6ef9cc6a776f78bef0445cfdce5e459f6268f289e32f889b8e34a9ba154f3f3c",
   "sealedBriefDigest": "sha256:2136bbf3d5fc9e5c2db280d2ade0d09e05d91cda56819e8f68eeebc10f6acc84",
   "evaluatorConfigurationDigest": "sha256:8f4465edec83d14dd83bad2e7e67b33e0a98530cc7e67bc2c28e325e434a9a41",
@@ -88,7 +88,7 @@
         "target": "server/grade.mjs",
         "targetArgs": []
       },
-      "httpProbePortDigest": "sha256:812ecb853ca0890f137a59ecce7564580cc463d84ed943b558541c9ea4a0d555"
+      "httpProbePortDigest": "sha256:968cdfc242ab2342e970a70c7db85e8d91a1bc39d21e3be6584bb30eba3aaac7"
     }
   ],
   "evaluator": {
@@ -237,12 +237,12 @@
       ]
     }
   ],
-  "startedAt": "2026-10-02T21:05:00.003Z",
-  "durationMs": 30044,
+  "startedAt": "2026-10-02T22:35:12.058Z",
+  "durationMs": 30545,
   "completed": true,
   "outcome": {
     "stage": "trial",
     "exitCode": 0,
-    "message": "3 trial set(s) of 3 trial(s) sealed over mutated:M-005, mutated:M-006, mutated:M-007; score them with tea-evaluate score --run 20261002T210500587Z-7ca5bf43"
+    "message": "3 trial set(s) of 3 trial(s) sealed over mutated:M-005, mutated:M-006, mutated:M-007; score them with tea-evaluate score --run 20261002T223512663Z-cb8d3d50"
   }
 }
