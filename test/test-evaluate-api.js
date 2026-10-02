@@ -2306,6 +2306,8 @@ async function checkLetterCases() {
     [`ai${dot}abcdefgh`, `${dot}abcdefgh`, `ai${dot}[redacted]`],
     [`x ${dot}abcdefgh y`, `${dot}abcdefgh`, 'x [redacted] y'],
     // A remainder under the floor, or a form of dots alone, matches nothing: ordinary text stays.
+    // The floor counts the remainder's units as written: eight, folding to seven.
+    [`xi${dot}IfIİI${dot}bIy`, `${dot}IfIİI${dot}bI`, `xi${dot}[redacted]y`],
     ['abcdefgh abcdefg a aaa', `${dot.repeat(7)}a`, 'abcdefgh abcdefg a aaa'],
     ['abcdefgh a aaa', dot.repeat(8), 'abcdefgh a aaa'],
   ]) {

@@ -234,14 +234,16 @@ const matchers = new WeakMap();
 function matcherFor(secrets) {
   let matcher = matchers.get(secrets);
   if (matcher === undefined) {
-    const folded = secrets.filter((form) => typeof form === 'string' && form !== '').map((form) => foldedText(form, false).folded);
+    const given = secrets.filter((form) => typeof form === 'string' && form !== '');
     // A text folds an `i` and the combining dot after it to one unit, so a form that opens with the dot is also found without it,
-    // when what is left is as long as a value that is scrubbed at all (the floor that keeps a short remainder from matching text).
+    // when what is left is as long as a value that is scrubbed at all. The floor counts the units as written, as the filter on
+    // the injected values does (a fold can shorten them), and keeps a short remainder from matching ordinary text.
     const forms = [
       ...new Set(
-        folded.flatMap((form) => {
+        given.flatMap((form) => {
           const rest = form.replace(/^\u0307+/, '');
-          return rest !== form && rest.length >= MIN_SCRUBBED_VALUE_LENGTH ? [form, rest] : [form];
+          const kept = [foldedText(form, false).folded];
+          return rest !== form && rest.length >= MIN_SCRUBBED_VALUE_LENGTH ? [...kept, foldedText(rest, false).folded] : kept;
         }),
       ),
     ];

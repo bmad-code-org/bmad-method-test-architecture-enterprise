@@ -2,7 +2,7 @@
 title: 'Story 1.66: Scrub an observation in every letter case'
 type: 'bugfix'
 created: '2026-10-01'
-status: 'review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '5268045b'
@@ -302,6 +302,20 @@ Two lows from the regression check of round 2.
 
 Green: `--letter-cases-only` 3,888 checks, `test:evaluate-api` 4,165, `test:evaluate-mcp` 226, `lint`, `lint:md`, `format:check`, `test:doc-counts`, `test:changelog`, `docs:validate-links`.
 `test:evaluate-api` took 110 seconds (108 and 112 in the earlier rounds on a similar load, 109.4 at `5268045b`), so its weight did not move by 5 seconds; `tools/test-shard-weights.json` untouched.
+
+## Review round 4
+
+- R4-1 (low): round 3's floor for the dot-less form counted the folded remainder, while the value filter (`hostEnvironmentPort`) counts the units as written.
+  A fold turns `I` and a dot into one unit, so a remainder of eight units can fold to seven, the dot-less form was dropped, and a secret that opens with a dot leaked whole whenever an `i` came right before it.
+  Reproduced: with `s` the dot followed by `IfIİİbI` (remainder of 8 units, folding to 7), `scrub('xi' + s + 'y', secretForms([s]))` returned the text unchanged.
+  Fix: `matcherFor` strips the leading dots from the form as written, checks the floor there, then folds both the form and the remainder.
+  A dots-only secret and a remainder under eight units as written still add nothing (checked: the ordinary text rows stay unchanged); a folded form under eight units is already used for a secret without the leading dot, so no match is allowed that such a secret does not get.
+  Test: the row `xi` + dot + `IfIİI` + dot + `bIy` against the secret dot + `IfIİI` + dot + `bI` gives `xi` + dot + `[redacted]y`.
+  Revert observations (failed checks of `--letter-cases-only`, 3,889 in all): the floor on the folded remainder 1; no floor 1.
+
+### Gates after review round 4
+
+Green: `--letter-cases-only` 3,889 checks, `test:evaluate-api` 4,166 (108 seconds), `test:evaluate-mcp` 226, `lint`, `lint:md`, `format:check`, `test:doc-counts`, `test:changelog`, `docs:validate-links`.
 
 ## Verification
 
