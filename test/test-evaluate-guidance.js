@@ -2838,14 +2838,18 @@ function checkCiGuidance(guide, failures, assets = ciAssets()) {
     'tea-evaluate compare --evaluation <evaluation-folder> --accept',
     'An adopter who declines leaves the baseline an open item',
     'With no accepted baseline, skip the tier runs and record that in the `## CI` section',
-    'and `gaps.md` lists the repair for each exit',
+    "and Stage 11's guide lists the repair for each exit",
     'tea-evaluate ci --evaluation <evaluation-folder> --tier <tier>',
     'for each tier that can run on this machine',
     'show the adopter each exit',
-    'A blocking exit goes back to the stage that owns it',
+    'A blocking exit names the stage that owns its repair',
     'an oracle that disagrees with its scorer returns to Stage 5',
     'a strength floor on a class with no eligible probe returns to Stage 3 or Stage 8',
-    "The hand-off still proceeds, and the `## CI` section records every tier's exit",
+    'Record the exit and that stage in the `## CI` section, tell the adopter, and carry on with the hand-off',
+    'Record every tier the plan places a check on, with its exit or the reason it was not run',
+    'derive `tiers` again',
+    'or a single entry moved off its default',
+    'the `merge` entry when the target needs no secret, the `scheduled` and `release` entries when it does',
   ])
     requireText(write, marker, 'ci.md write the plan', failures);
   const handoff = headingBody(guide, '## Hand the plan to the CI skill');
@@ -2859,6 +2863,8 @@ function checkCiGuidance(guide, failures, assets = ciAssets()) {
     'a declined baseline or a missing `bmad-testarch-ci` stays a named open item in the `## CI` section and does not reopen the stage',
     'Stage 12 is complete when the plan passes `check`',
     'the secrets the live tiers need',
+    'every tier that exited non-zero with the stage that owns its repair',
+    "whether a publish or deploy job waits for the evaluation job, which is the adopter's to wire",
   ])
     requireText(handoff, marker, 'ci.md hand-off', failures);
   for (const marker of [
@@ -3587,13 +3593,13 @@ async function main() {
         'ci blocking exit route removal',
         'ci',
         checkCiGuidance,
-        (text) => text.replace('A blocking exit goes back to the stage that owns it', 'A blocking exit is noted'),
+        (text) => text.replace('A blocking exit names the stage that owns its repair', 'A blocking exit is noted'),
       ],
       [
         'ci tier exit record removal',
         'ci',
         checkCiGuidance,
-        (text) => text.replace(", and the `## CI` section records every tier's exit", ''),
+        (text) => text.replace(' Record every tier the plan places a check on, with its exit or the reason it was not run.', ''),
       ],
       [
         'ci judge calibration claim reversed',

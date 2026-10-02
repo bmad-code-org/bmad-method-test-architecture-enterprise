@@ -21,7 +21,7 @@
       "placement": {
         "tier": "pr",
         "defaultTier": "pr",
-        "reason": "Deterministic and needs no secret, so it keeps its pr default. .github/workflows/ci.yml runs on pull_request and CONTRIBUTING.md names the pull request as the merge path; this check also holds contract-source freshness."
+        "reason": "Deterministic, needs no secret and calls no model; CAP-11 puts it on every pull request, and .github/workflows/ci.yml runs on pull_request."
       }
     },
     {
@@ -46,7 +46,7 @@
       "placement": {
         "tier": "pr",
         "defaultTier": "pr",
-        "reason": "Deterministic and needs no secret; CAP-11 puts it on every pull request. .github/workflows/ci.yml runs on pull_request, CONTRIBUTING.md makes the test check required, and fork pull requests run without a secret."
+        "reason": "Deterministic, needs no secret and calls no model; CAP-11 puts it on every pull request, and .github/workflows/ci.yml runs on pull_request."
       }
     },
     {
@@ -71,7 +71,7 @@
       "placement": {
         "tier": "pr",
         "defaultTier": "pr",
-        "reason": "Deterministic and needs no secret; CAP-11 puts it on every pull request. .github/workflows/ci.yml runs on pull_request, CONTRIBUTING.md makes the test check required, and fork pull requests run without a secret."
+        "reason": "Deterministic, needs no secret and calls no model; CAP-11 puts it on every pull request, and .github/workflows/ci.yml runs on pull_request."
       }
     },
     {
@@ -96,7 +96,7 @@
       "placement": {
         "tier": "pr",
         "defaultTier": "pr",
-        "reason": "The evaluation declares an http target (evaluation.json interface api, adapter/http-probe-port.conformance.mjs), so the conformance check has a target. Deterministic and needs no secret; CAP-11 puts it on every pull request. .github/workflows/ci.yml runs on pull_request, CONTRIBUTING.md makes the test check required, and fork pull requests run without a secret."
+        "reason": "Deterministic, needs no secret and calls no model; CAP-11 puts it on every pull request, and .github/workflows/ci.yml runs on pull_request. The evaluation declares an HTTP target (POST /grade), so the check applies."
       }
     },
     {
@@ -121,7 +121,7 @@
       "placement": {
         "tier": "pr",
         "defaultTier": "pr",
-        "reason": "The gameability arm is deterministic and needs no secret. Deterministic and needs no secret; CAP-11 puts it on every pull request. .github/workflows/ci.yml runs on pull_request, CONTRIBUTING.md makes the test check required, and fork pull requests run without a secret."
+        "reason": "Deterministic, needs no secret and calls no model; CAP-11 puts it on every pull request, and .github/workflows/ci.yml runs on pull_request. Probe P-009 takes the gameability route."
       }
     },
     {
@@ -146,7 +146,7 @@
       "placement": {
         "tier": "pr",
         "defaultTier": "pr",
-        "reason": "Oracle versus scorer agreement is deterministic and needs no secret. Deterministic and needs no secret; CAP-11 puts it on every pull request. .github/workflows/ci.yml runs on pull_request, CONTRIBUTING.md makes the test check required, and fork pull requests run without a secret. It reads baseline/, accepted by the maintainer."
+        "reason": "Deterministic, needs no secret and calls no model; CAP-11 puts it on every pull request, and .github/workflows/ci.yml runs on pull_request."
       }
     },
     {
@@ -172,7 +172,7 @@
       "placement": {
         "tier": "pr",
         "defaultTier": "pr",
-        "reason": "Deterministic and needs no secret; CAP-11 puts it on every pull request. .github/workflows/ci.yml runs on pull_request, CONTRIBUTING.md makes the test check required, and fork pull requests run without a secret. It reads baseline/, accepted by the maintainer."
+        "reason": "Deterministic, needs no secret and calls no model; CAP-11 puts it on every pull request, and .github/workflows/ci.yml runs on pull_request."
       }
     },
     {
@@ -195,7 +195,7 @@
       "placement": {
         "tier": "merge",
         "defaultTier": "merge",
-        "reason": "The target needs no secret: evaluation.json registry environmentKeys is empty and server/grade.mjs launches locally. The live preflight keeps its merge default. CONTRIBUTING.md says CI holds no model credentials and caps nothing on the post-merge run; the whole scored run took about 75 seconds (runs/*/interpretation.json durationMs 75190), so no cost or time reason moves it. ci.yml lists no push trigger today, so the post-merge event is added through bmad-testarch-ci."
+        "reason": "The target (app/server/grade.mjs) needs no secret: evaluation.json registry environmentKeys is empty. A post-merge event exists in the push to main; CONTRIBUTING.md squash merges and no merge queue do not move it, and no cap on post-merge run time is stated. The preflight runs a local stub in seconds."
       }
     },
     {
@@ -220,7 +220,7 @@
       "placement": {
         "tier": "release",
         "defaultTier": "release",
-        "reason": "No workflow has a schedule trigger, so no scheduled entry exists. .github/workflows/release.yml runs on push of v* tags and docs/RELEASING.md says the tag is the only release gate. A shipped defect stays in the registry about six weeks, and the contract declares a critical behavior, so the tag blocks."
+        "reason": "The repository has no schedule trigger (.github/workflows has none; docs/RELEASING.md: \"no scheduled job\"), so no scheduled entry exists. The tag push of v* that starts .github/workflows/release.yml is the release gate (docs/RELEASING.md). The target is a local stub, so a live run makes no model call and costs no credits (evaluation.json registry, app/DESCRIPTION.md)."
       }
     },
     {
@@ -245,7 +245,7 @@
       "placement": {
         "tier": "release",
         "defaultTier": "release",
-        "reason": "No workflow has a schedule trigger, so no scheduled entry exists. The held-out partition (P-011, P-012, P-013) runs at the v* tag in .github/workflows/release.yml, the only release gate in docs/RELEASING.md."
+        "reason": "The repository has no schedule trigger (.github/workflows has none; docs/RELEASING.md: \"no scheduled job\"), so no scheduled entry exists. The tag push of v* that starts .github/workflows/release.yml is the release gate (docs/RELEASING.md). Contract declares a critical behavior (B-001), so a blocking release gate is justified; consumers pin versions and a shipped defect stays about six weeks (docs/RELEASING.md)."
       }
     },
     {
@@ -270,7 +270,7 @@
       "placement": {
         "tier": "release",
         "defaultTier": "release",
-        "reason": "No workflow has a schedule trigger, so no scheduled entry exists. The comparison against baseline/ runs at the v* tag in .github/workflows/release.yml; a strength regression warns per AD-10."
+        "reason": "The repository has no schedule trigger (.github/workflows has none; docs/RELEASING.md: \"no scheduled job\"), so no scheduled entry exists. The tag push of v* that starts .github/workflows/release.yml is the release gate (docs/RELEASING.md). Strength regression against the baseline is a warning class (AD-10)."
       }
     }
   ]

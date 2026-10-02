@@ -1187,14 +1187,15 @@ Added 2026-10-01 in Story 2.3's second review. Levels: static. Files: `test/test
 
 Added 2026-10-01 in Story 2.4's build. Levels: unit, integration. Files: `cli/lib/evaluate/ci-plan.js`, `cli/lib/evaluate/check.js`, `test/test-evaluate-ci.js` (`test:evaluate-ci`), `test/test-evaluate-check.js` (`test:evaluate-check`), `references/ci.md`.
 
-| AC                                            | Test                                                                                                                | Level       | P   | Revert check                                        |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ----------- | --- | --------------------------------------------------- |
-| A trigger its tier does not use exits 10      | A plan copy names `schedule` on a `pr` check; `check` and `ci` exit 10 with rule `trigger`                          | Integration | P1  | Removing the rule leaves the plan valid             |
-| `tiers` equal the plan's tiers                | A copy whose `evaluation.json` lists a tier the plan does not use, and one that omits a used tier, exit 10          | Integration | P1  | Removing the rule leaves both valid                 |
-| A left-over `<evaluation-folder>` exits 10    | A copy keeps the placeholder in a `command` and in an `evidence` path; `<invocationId>` in the template stays valid | Unit        | P1  | Removing the rule passes the placeholder            |
-| An inapplicable or missing check exits 10     | `api-conformance` over the MCP fixture; a rubric contract with no `judge-calibration` on one live tier              | Integration | P1  | Removing the rule passes both                       |
-| A check with no reason exits 10               | A copy empties one default placement's `reason`; `check` and `ci` exit 10 with rule `placement-reason`              | Integration | P1  | Removing the rule passes the plan                   |
-| Committed plans and the template keep passing | `test:evaluate-ci` over both repository plans, the three fixture plans and the template                             | Integration | P1  | A rule that rejects a committed plan fails its case |
+| AC                                                                 | Test                                                                                                                | Level       | P   | Revert check                                        |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- | ----------- | --- | --------------------------------------------------- |
+| A trigger its tier does not use exits 10                           | A plan copy names `schedule` on a `pr` check; `check` and `ci` exit 10 with rule `trigger`                          | Integration | P1  | Removing the rule leaves the plan valid             |
+| `tiers` equal the plan's tiers                                     | A copy whose `evaluation.json` lists a tier the plan does not use, and one that omits a used tier, exit 10          | Integration | P1  | Removing the rule leaves both valid                 |
+| A left-over `<evaluation-folder>` exits 10                         | A copy keeps the placeholder in a `command` and in an `evidence` path; `<invocationId>` in the template stays valid | Unit        | P1  | Removing the rule passes the placeholder            |
+| An inapplicable or missing check exits 10                          | `api-conformance` over the MCP fixture; a rubric contract with no `judge-calibration` on one live tier              | Integration | P1  | Removing the rule passes both                       |
+| A preflight-live default that disagrees with the registry exits 10 | A copy sets `defaultTier` to `scheduled` for a no-secret target; `check` exits 10 with rule `placement-default`     | Integration | P1  | Removing the rule passes the plan                   |
+| A check with no reason exits 10                                    | A copy empties one default placement's `reason`; `check` and `ci` exit 10 with rule `placement-reason`              | Integration | P1  | Removing the rule passes the plan                   |
+| Committed plans and the template keep passing                      | `test:evaluate-ci` over both repository plans, the three fixture plans and the template                             | Integration | P1  | A rule that rejects a committed plan fails its case |
 
 ### Story 1.97: Gate an existing publish or deploy job on the evaluation job
 

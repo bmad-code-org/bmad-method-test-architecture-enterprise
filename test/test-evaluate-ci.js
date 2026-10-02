@@ -2647,19 +2647,29 @@ function checkRepositoryPlans() {
     ['oracle-agreement', 'oracle-agreement'],
     ['held-out', 'held-out'],
     ['replay', 'replay'],
+    ['api-conformance', 'api-conformance'],
+    ['strength-comparison', 'strength-comparison'],
+    ['compile', 'compile'],
   ]) {
     for (const side of [0, 1]) {
       const sides = synthetic();
       sides[side].plan.checks = sides[side].plan.checks.filter((item) => item.id !== drop);
       const found = planProblems(sides[side].name, sides[side].plan, sides[side].repository, sides[side].required);
       assert.ok(
-        found.some(
-          (problem) =>
-            problem.includes(`drops ${label}`) || problem.includes(`${label} is missing`) || problem.includes(`${label} is not on pr`),
-        ),
+        found.includes(`${sides[side].name}: the plan drops ${label}`),
         `side ${side}: dropping ${label} passed: ${JSON.stringify(found)}`,
       );
     }
+  }
+  // A reason that names a real file beside one the repository lacks fails the plan, on each side.
+  for (const side of [0, 1]) {
+    const sides = synthetic();
+    sides[side].plan.checks[0].placement.reason += ' See .github/workflows/missing.yml.';
+    const found = planProblems(sides[side].name, sides[side].plan, sides[side].repository, sides[side].required);
+    assert.ok(
+      found.some((problem) => problem.includes('cites .github/workflows/missing.yml, which the repository does not hold')),
+      `side ${side}: a reason citing a missing file passed: ${JSON.stringify(found)}`,
+    );
   }
   const reduced = synthetic()[0];
   reduced.plan.checks = reduced.plan.checks.filter((item) => item.placement.tier === 'pr' || item.id === 'preflight-live');
