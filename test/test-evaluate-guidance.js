@@ -20,6 +20,7 @@ const { calibrationProblems } = require('../cli/lib/evaluate/calibration');
 const { declarationProblems } = require('../cli/lib/evaluate/frameworks');
 
 const Ajv = AjvModule.default ?? AjvModule;
+const { planEntryShapeProblems } = require('./lib/evaluate-plan-shape');
 
 const SKILL_ROOT = path.join(__dirname, '..', 'src', 'workflows', 'testarch', 'bmad-testarch-evaluate');
 const SKILL_MD_PATH = path.join(SKILL_ROOT, 'SKILL.md');
@@ -2649,29 +2650,8 @@ function installedGateNames() {
   return [...run.stdout.matchAll(/^ {2}([a-z]+(?:-[a-z]+)*) {2,}every /gm)].map((match) => match[1]);
 }
 
-/** The events a tier's checks name, which the template and every plan example follow. */
-const CI_TRIGGER_OF = { pr: ['pull-request'], merge: ['merge'], scheduled: ['schedule', 'manual-dispatch'], release: ['release'] };
 /** A repository file a reason cites. */
 const CI_FILE_TOKEN = /[.\w/-]+\.(?:yml|yaml|md|json|mjs)\b/g;
-
-/**
- * The shape every entry of a plan the guide or the template shows keeps: the trigger of its tier, a `--tier` argument equal
- * to its tier, evidence that names its own check, and `warn` exactly where the runtime allows it.
- */
-function ciEntryShapeProblems(entry, label, plan) {
-  const problems = [];
-  const where = `${label} ${entry.id} on ${entry.placement?.tier}`;
-  if (JSON.stringify(entry.trigger) !== JSON.stringify(CI_TRIGGER_OF[entry.placement?.tier]))
-    problems.push(`${where} has the wrong trigger`);
-  const tierAt = entry.command?.indexOf('--tier') ?? -1;
-  if (tierAt !== -1 && entry.command[tierAt + 1] !== entry.placement?.tier) problems.push(`${where} runs another tier in its command`);
-  for (const evidence of entry.evidence ?? [])
-    if (evidence.includes('/checks/') && !evidence.includes(`/checks/${entry.id}/`))
-      problems.push(`${where} names another check's evidence: ${evidence}`);
-  const warns = entry.kind === 'evaluate' && plan.WARN_ALLOWED[entry.id]?.includes(entry.placement?.tier);
-  if (entry.enforcement !== (warns ? 'warn' : 'block')) problems.push(`${where} records enforcement ${entry.enforcement}`);
-  return problems;
-}
 
 /** The paragraph that starts with `Worked example.` in a section. */
 function workedExample(body) {
@@ -2878,6 +2858,58 @@ function checkCiGuidance(guide, failures, assets = ciAssets()) {
   ])
     requireText(guide, marker, 'ci.md orientation', failures);
 
+  // Round 2: the rules the first markers left unread, one sentence each.
+  const roundTwo = [
+    [
+      '## Inspect the merge flow',
+      [
+        'Squash merges and the absence of a queue are therefore no reason to move a `merge` check.',
+        'The reason to move one is cost or risk the adopter states',
+        'Every repository has a post-merge event',
+      ],
+    ],
+    [
+      '## Inspect the release flow',
+      [
+        "or the deploy workflow's own trigger, a nightly one included",
+        'A repository with none of these gets a published release from step-03b, and the reason says so.',
+        'A `scheduled` run gates nothing unless the deploy waits for it.',
+      ],
+    ],
+    [
+      '## Inspect the risk profile',
+      [
+        'When severity and cost do not justify a scheduled run, delete the scheduled entries and say why in the `reason` of the release entries.',
+      ],
+    ],
+    [
+      '## Place each check',
+      [
+        '`preflight-live` defaults to `merge` when the target needs no secret and to `scheduled` and `release` otherwise.',
+        '`replay`) needs no secret and calls no model.',
+        'needs a live target, a model judge or a run to compare.',
+      ],
+    ],
+    [
+      '## Place the live checks',
+      [
+        'Without a schedule trigger in the repository, say so in the `reason` and put the set on `release`.',
+        'places the live set twice at its defaults: on `scheduled` for `.github/workflows/nightly.yml`, and on `release` for the trigger of the deploy workflow in `.github/workflows/deploy.yml`',
+      ],
+    ],
+    [
+      '## Write the plan',
+      [
+        'and set `trigger` to match the tier',
+        'a tier that differs from its default with no reason, a deterministic check placed off `pr`, a live check on `pr`, and a command not led by its tool are authoring defects',
+        'show the adopter the latest clean scored run and, once they confirm it, accept it',
+        '(`pr` always, and each live tier whose target launches here and whose credentials exist)',
+      ],
+    ],
+  ];
+  for (const [heading, markers] of roundTwo)
+    for (const marker of markers) requireText(headingBody(guide, heading), marker, `ci.md ${heading} (round 2)`, failures);
+
   // Rendering belongs to the CI skill, and an adopter never runs the unclaimed registry name.
   const prose = guide.replaceAll(/```[\s\S]*?```/g, '');
   for (const forbidden of [
@@ -2902,6 +2934,10 @@ function checkCiGuidance(guide, failures, assets = ciAssets()) {
     'every gate',
     'Show the adopter nothing',
     'optional step',
+    'a missing merge queue',
+    'may run on `pr`',
+    'may need a secret',
+    'may be moved off `pr`',
   ]) {
     if (prose.includes(forbidden)) failures.push(`ci.md carries a phrase that reverses a rule: ${forbidden}`);
   }
@@ -2931,11 +2967,27 @@ function checkCiGuidance(guide, failures, assets = ciAssets()) {
     const found = plan.planFindings(example);
     if (found.length > 0) failures.push(`ci.md ci-plan example ${index + 1} fails the runtime: ${JSON.stringify(found)}`);
     for (const entry of example.checks ?? []) {
-      for (const problem of ciEntryShapeProblems(entry, `ci.md ci-plan example ${index + 1}`, plan)) failures.push(problem);
+      for (const problem of planEntryShapeProblems(entry, `ci.md ci-plan example ${index + 1}`)) failures.push(problem);
       if ((entry.placement?.reason?.match(CI_FILE_TOKEN) ?? []).length === 0)
         failures.push(`ci.md ci-plan example ${index + 1} gives ${entry.id} a reason that cites no file`);
     }
   }
+  for (const entry of plans[1]?.checks ?? []) {
+    const reason = entry.placement?.reason ?? '';
+    const anchors = {
+      scheduled: ['.github/workflows/nightly.yml', '.github/workflows/deploy.yml'],
+      release: ['.github/workflows/deploy.yml', '.github/workflows/nightly.yml'],
+    }[entry.placement?.tier];
+    if (anchors === undefined || !reason.includes(anchors[0]) || reason.includes(anchors[1]))
+      failures.push(`ci.md second ci-plan example anchors ${entry.id} on ${entry.placement?.tier} to the wrong workflow`);
+  }
+  for (const entry of plans[0]?.checks ?? [])
+    if (
+      entry.placement?.defaultTier === 'merge' &&
+      entry.placement.tier !== 'merge' &&
+      /merge queue|no queue|squash/i.test(entry.placement.reason ?? '')
+    )
+      failures.push('ci.md first ci-plan example moves a merge check for the lack of a queue, which the merge-flow section rules out');
   const deviation = plans[0]?.checks?.find((entry) => entry.placement.tier !== entry.placement.defaultTier);
   if (deviation === undefined) failures.push('ci.md has no ci-plan example that deviates from the default tier');
   else {
@@ -2991,7 +3043,7 @@ function checkCiGuidance(guide, failures, assets = ciAssets()) {
       entry.placement?.tier !== 'pr'
     )
       failures.push('ci.md gate-check example is not the adopted gate as a pr gate check');
-    for (const problem of ciEntryShapeProblems(entry ?? { placement: {} }, 'ci.md gate-check example', plan)) failures.push(problem);
+    for (const problem of planEntryShapeProblems(entry ?? { placement: {} }, 'ci.md gate-check example')) failures.push(problem);
   }
 
   // The plan template: valid at the defaults, every default present with its shape, the reasons left for the stage.
@@ -3009,7 +3061,7 @@ function checkCiGuidance(guide, failures, assets = ciAssets()) {
     if (entry.placement.reason !== '') failures.push(`${where} ships a reason the stage did not write`);
     if (!entry.command.includes('<evaluation-folder>')) failures.push(`${where} names no <evaluation-folder> to replace`);
     if (entry.kind !== 'evaluate') failures.push(`${where} is not an evaluate check`);
-    for (const problem of ciEntryShapeProblems(entry, 'template', plan)) failures.push(problem);
+    for (const problem of planEntryShapeProblems(entry, 'template')) failures.push(problem);
   }
   requireText(readme, '`evaluation-ci-plan.template.json` becomes `ci/evaluation-ci-plan.json`', 'assets/README.md', failures);
 }
@@ -3625,6 +3677,81 @@ async function main() {
         checkCiGuidance,
         (text) => text.replace('stays a named open item in the `## CI` section and does not reopen the stage', 'reopens the stage'),
       ],
+      ['ci nightly release event dropped', 'ci', checkCiGuidance, (text) => text.replace(', a nightly one included', '')],
+      [
+        'ci published release fallback dropped',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace(' A repository with none of these gets a published release from step-03b, and the reason says so.', ''),
+      ],
+      [
+        'ci merge move reason reversed',
+        'ci',
+        checkCiGuidance,
+        (text) =>
+          text.replace('The reason to move one is cost or risk the adopter states', 'The reason to move one is a missing merge queue'),
+      ],
+      [
+        'ci tier runs limited to pr',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace('(`pr` always, and each live tier whose target launches here and whose credentials exist)', '(`pr` only)'),
+      ],
+      [
+        'ci live set placed twice sentence dropped',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace(/The same evaluation in a repository that deploys nightly[^\n]*\n/, ''),
+      ],
+      [
+        'ci second example release reason names the nightly workflow',
+        'ci',
+        checkCiGuidance,
+        (text) =>
+          text.replace(
+            '.github/workflows/deploy.yml ships main to production on its own schedule',
+            '.github/workflows/nightly.yml ships main to production on its own schedule',
+          ),
+      ],
+      [
+        'ci no-schedule rule dropped',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace(' Without a schedule trigger in the repository, say so in the `reason` and put the set on `release`.', ''),
+      ],
+      [
+        'ci preflight secret default dropped',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace(' and to `scheduled` and `release` otherwise', ''),
+      ],
+      ['ci trigger match dropped', 'ci', checkCiGuidance, (text) => text.replace(', and set `trigger` to match the tier', '')],
+      [
+        'ci deterministic set may need a secret',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace('`replay`) needs no secret and calls no model.', '`replay`) may need a secret.'),
+      ],
+      [
+        'ci baseline accepted unseen',
+        'ci',
+        checkCiGuidance,
+        (text) =>
+          text.replace(
+            'show the adopter the latest clean scored run and, once they confirm it, accept it with',
+            'accept the latest run with',
+          ),
+      ],
+      [
+        'ci reversal beside an intact marker',
+        'ci',
+        checkCiGuidance,
+        (text) =>
+          text.replace(
+            'Never place a live check on `pr`.',
+            'Never place a live check on `pr`. The one exception is `preflight-live`, which may run on `pr`.',
+          ),
+      ],
       ['ci working state removal', 'ci', checkCiGuidance, (text) => text.replace(', and end the section with the hand-off status', '')],
       ['ci re-entry removal', 'ci', checkCiGuidance, (text) => text.replace('edit it in place', 'start again')],
       [
@@ -3676,6 +3803,17 @@ async function main() {
           void (assets.template.checks.find((entry) => entry.id === 'held-out' && entry.tier === 'release').evidence = [
             'runs/<invocationId>/checks/twin-run/stdout',
           ]),
+      ],
+      [
+        'ci template tier argument dropped',
+        (assets) => {
+          const entry = assets.template.checks.find((item) => item.id === 'twin-run' && item.tier === 'scheduled');
+          entry.command = entry.command.slice(0, 4);
+        },
+      ],
+      [
+        'ci template gameability evidence moved',
+        (assets) => void (assets.template.checks.find((item) => item.id === 'gameability').evidence = ['baseline/scores']),
       ],
       [
         'ci template entry dropped',

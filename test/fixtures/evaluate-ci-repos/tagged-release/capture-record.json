@@ -11,6 +11,8 @@
     "SKILL.md": "sha256:cec124e76838a0eff52aec6d8a99e936fc73388889a212d560821c07afb0fb26",
     "assets/evaluation-ci-plan.template.json": "sha256:3d65dbfa3b3f53ddc73aa1b38032162f596ae5773aef0b45e9dd46b26819add4"
   },
+  "repositoryRead": "sha256:5f23015435e658424852396fab1bf51d7eb621adb3f756b9fb2addae5d0af404",
+  "notDigested": "bmad-testarch-ci step 03b: the sessions render no pipeline file, so what they wrote does not depend on it.",
   "wrote": {
     "evals/answer-grade/ci/evaluation-ci-plan.json": "sha256:3a7d749780556aec33cc0b74c3b2c0439709738cc663381fc3889253157335c0",
     "evals/answer-grade/evaluation.json": "sha256:1e70cc7f70a9143b264b6e83f2e2f4444a51564951c64e5ae4cd9834c8e688ad"

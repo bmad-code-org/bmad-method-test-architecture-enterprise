@@ -1212,11 +1212,11 @@ Added 2026-10-01 in Story 2.4's first review. Levels: static, contract, replay. 
 
 Added 2026-10-01 in Story 2.4's first review. Levels: integration. Files: `test/fixtures/evaluate-authoring/ai-feature/evaluation/`, `test/fixtures/evaluate-ci-repos/*/evals/answer-grade/`, `test/test-evaluate-ci.js`, `test/test-evaluate-authoring.js`.
 
-| AC                                        | Test                                                                                              | Level       | P   | Revert check                                       |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------- | ----------- | --- | -------------------------------------------------- |
-| `pr` exits 0 once accepted                | `test:evaluate-ci` runs `ci --tier pr` over a copy of each repository with its committed baseline | Integration | P0  | Restoring a disagreeing oracle exits 11            |
-| The zero-action floors are met or removed | `ci --tier release` and `--tier scheduled` over each repository                                   | Integration | P0  | Restoring the floor with no eligible probe exits 2 |
-| The Story 1.24 proof stays valid          | `test:evaluate-authoring` over the changed bytes                                                  | Integration | P1  | A drifted replay bundle fails it                   |
+| AC                                                                           | Test                                                                                              | Level       | P   | Revert check                                       |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ----------- | --- | -------------------------------------------------- |
+| `pr` exits 0 once accepted                                                   | `test:evaluate-ci` runs `ci --tier pr` over a copy of each repository with its committed baseline | Integration | P0  | Restoring a disagreeing oracle exits 11            |
+| Every class without an eligible probe has its floor removed or a probe added | `ci --tier release` and `--tier scheduled` over each repository (release exits 2 in both today)   | Integration | P0  | Restoring the floor with no eligible probe exits 2 |
+| The Story 1.24 proof stays valid                                             | `test:evaluate-authoring` over the changed bytes                                                  | Integration | P1  | A drifted replay bundle fails it                   |
 
 ## The Dogfood Proof (AD-15)
 

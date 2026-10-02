@@ -644,6 +644,27 @@ function checkStepSentences() {
       'release is the event of the repository release or deploy workflow',
       "`release` is the event the repository's existing release or deploy workflow starts on, read from its workflows (a `push` of a tag pattern, `release` of type `published`, or the deploy workflow's own trigger)",
     ],
+    ['pull-request is pull_request', '`pull-request` is `pull_request`'],
+    ['manual-dispatch is workflow_dispatch', '`manual-dispatch` is `workflow_dispatch`'],
+    [
+      'jobs are limited by an event guard',
+      "Limit the evaluation job with an `if:` on the event when the workflow carries more events than the tier's checks name.",
+    ],
+    [
+      'new events guard the earlier jobs',
+      'When an event is new to the workflow, give each job that existed before an `if:` limiting it to the events it already ran on',
+    ],
+    [
+      'tiers that share an event are told apart',
+      "When two tiers' triggers resolve to the same GitHub event, limit each job with a guard that tells them apart",
+    ],
+    ['a branch push is told apart by its ref', "`github.ref == 'refs/heads/<default branch>'` for a branch push"],
+    ['a tag push is told apart by its ref', "`startsWith(github.ref, 'refs/tags/')` (or the tag pattern) for a tag push"],
+    ['a cron is told apart by its schedule', "`github.event.schedule == '<its cron>'` for each cron"],
+    [
+      'one tier takes workflow_dispatch',
+      'give `workflow_dispatch` to the one tier whose `trigger` names it and guard the others out of it',
+    ],
     ['release falls back to a published release', 'and `release` of type `published` when they name none'],
   ])
     check(step.includes(clause), `${STEP} lacks the trigger clause for ${label}`);
