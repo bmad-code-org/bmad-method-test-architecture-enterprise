@@ -454,11 +454,12 @@ else process.stdout.write('windows agent answered\\n');\n`,
   let normalEnding = null;
   try {
     normalEnding = await Promise.race([normalClosed, delay(30_000).then(() => null)]);
-    if (normalEnding === null) normalRunner.kill('SIGKILL');
     normal = fs.existsSync(normalFile) ? readPids(normalFile) : null;
+    const childAliveAtTimeout = normalEnding === null && normal !== null ? !(await processEnds(normal.child, 0)) : null;
+    if (normalEnding === null) normalRunner.kill('SIGKILL');
     check(
       normalEnding?.code === 0 && normalStdout.includes('windows agent answered'),
-      `a Windows runner whose agent exited ${normalEnding === null ? 'waited over 30 s' : `returned ${normalEnding.code}`}; expected its answer. Agent PID: ${normal?.agent ?? 'unrecorded'}; child PID: ${normal?.child ?? 'unrecorded'}\n${normalStdout}${normalStderr}`,
+      `a Windows runner whose agent exited ${normalEnding === null ? 'waited over 30 s' : `returned ${normalEnding.code}`}; expected its answer. Agent PID: ${normal?.agent ?? 'unrecorded'}; child PID: ${normal?.child ?? 'unrecorded'}; child alive before runner kill: ${childAliveAtTimeout ?? 'not timed out'}\n${normalStdout}${normalStderr}`,
     );
     check(normal !== null, 'the Windows agent that exited recorded no process IDs');
     if (normal !== null) {
