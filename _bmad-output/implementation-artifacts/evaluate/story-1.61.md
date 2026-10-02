@@ -31,7 +31,7 @@ The Evaluate skill's guides now teach file-system confinement, each passage veri
 2. The `ci.md` part (the `ci-registry` example gains `"network": "host"` and the sentence that on Linux the live checks need it, the matching marker in `checkCiGuidance`, and the rerun of both sessions with regenerated `capture-record.json`) is Story 1.84, appended in this PR: `epics.md` section with acceptance criteria and revert checks (dependency 1.61), `test-design-epic-1.md` section, Epic Dependencies row (later rows renumbered, 97 stories), a `backlog` row in `sprint-status.yaml`, and the end of lane 2 in the `epics.md` lane list and `parallel_lanes`.
 3. Story 1.61's criterion and test-design section no longer name `ci.md` or the live sessions. The criterion gains an `And` that holds `ci.md` and the two exit-table rows byte-stable, with the revert checks named. The amendment says why.
 4. The `gaps.md` exit-table rows that M-001 and M-002 replace are byte-stable: the new section sits before `## Map AD-10 exits and classes to repairs`, and `test:evaluate-guidance` asserts both `find` strings still occur once. No offline suite applies the dogfood mutations, so that occurrence check is the holder.
-5. Lane 2 runs Story 1.83 before 1.84, and 1.83's criterion would edit the ci guide. Story 1.83's criterion now leaves `ci.md` to Story 1.84, which depends on 1.61 and 1.83 and teaches whichever declaration is current, so one rerun of the live sessions covers both.
+5. Lane 2 runs Story 1.83 before 1.84, and 1.83's criterion would edit the ci guide. Story 1.83's criterion now leaves `ci.md` to Story 1.84, which depends on 1.61 and 1.83 and teaches the authorization 1.83 introduces in place of `"network": "host"` (1.83 removes that field from the schema), so one rerun of the live sessions covers the edit.
 
 ## Skill gate (AD-16, AD-18)
 
@@ -100,9 +100,13 @@ Fixed:
 - T3: the `eval-quality records each one as an isolation violation` marker joins `checkIsolationViolationGuidance`.
 - C1: `epics.md`, `test-design-epic-1.md` and this record name `test:evaluate-guidance` (the occurrence check) as the holder of the two exit-table rows, with the matching revert check.
 - C2: Story 1.63's two round notes are restored to `origin/main` verbatim in `epics.md` and `test-design-epic-1.md`; the 1.61 notes say they supersede the `ci.md` clauses.
-- C3: Story 1.83's criterion and test-design row leave the ci guide to Story 1.84; 1.84 gains the dependency on 1.83 (section, Epic Dependencies row, test-design) and teaches whichever declaration is current.
+- C3: Story 1.83's criterion and test-design row leave the ci guide to Story 1.84; 1.84 gains the dependency on 1.83 (section, Epic Dependencies row, test-design) and teaches the authorization 1.83 introduces.
 
 Skipped: none.
 
 The builder Analyze delta over the changed sentences found 0 critical, 0 high, 0 medium and 3 low (sentence length, a Bubblewrap-only condition in a dense paragraph, a URL that resolves once the docs reach `main`).
 Its path-standards script again flags `/usr/bin/sandbox-exec`, `/usr/bin/log` and the example path `/opt/verdict-rules` as high; they are system binaries and an example value the tests require, so they stay.
+
+## Round 2 review
+
+One Opus regression lens at a373aae4 confirmed the round 1 fixes against the code (17 mutants killed, gates green) and found one material defect: after C3 made 1.84 depend on 1.83, its criterion still required a `"network": "host"` example that 1.83 removes from the schema. Fixed in `epics.md` and `test-design-epic-1.md`: 1.84 teaches the authorization 1.83 introduces. No further rounds, per the owner's limit instruction.

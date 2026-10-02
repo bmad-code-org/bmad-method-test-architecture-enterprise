@@ -2134,7 +2134,7 @@ So that an agent runs isolated, with a route to its model provider alone, and `n
 **And** the proxy forwards a connection only for a host and port the entry authorizes, decided by eval-quality's `evaluateTarget` as the HTTP port's calls are, a refusal naming the host and the entry in the run's record, a case that sends a request for an unauthorized address
 **And** an entry that authorizes no host reaches none, and an entry that declares `"network": "host"` still runs as Story 1.63 left it until the field is removed from the schema in this story's last step, which leaves `check` refusing it with the entry named and a pointer to the authorization
 **And** the proxy's socket and its authorization are private to the call and removed with it on every path, a signal that ends the run included, a case that kills the run mid-call
-**And** `docs/reference/tea-evaluate-cli.md`, the skill's harness, adapters and run guides and the `tea-skill-runner` section teach the authorization in place of `"network": "host"`, and a case reading each fails while the old declaration remains; the ci guide is Story 1.84's, which teaches whichever declaration is current, since editing it needs the two live capture sessions rerun
+**And** `docs/reference/tea-evaluate-cli.md`, the skill's harness, adapters and run guides and the `tea-skill-runner` section teach the authorization in place of `"network": "host"`, and a case reading each fails while the old declaration remains; the ci guide is Story 1.84's, which teaches the authorization, since editing it needs the two live capture sessions rerun
 
 **Dependencies:** 1.63.
 **Gate:** `test:evaluate-run`, `test:evaluate-api`, `test:evaluate-confinement`, `test:evaluate-guidance`, `npm test`, and the Linux CI job.
@@ -2154,12 +2154,12 @@ So that the plan's live checks reach the model provider on a Linux runner (CAP-1
 
 **Given** `references/ci.md`, its tagged `ci-registry` example and the two capture records
 **When** the guide is edited and both live sessions rerun
-**Then** the `ci-registry` example declares `"network": "host"` and validates against the runtime schema, and the guide states that on Linux the live checks also need the target's registry entry to declare `"network": "host"`; `checkCiGuidance` holds the sentence as a marker, and deleting either the declaration or the sentence fails `test:evaluate-guidance`
+**Then** the `ci-registry` example authorizes the model provider's host and port in the form Story 1.83 introduced and validates against the runtime schema, and the guide states that on Linux the live checks also need the target's registry entry to carry that authorization; `checkCiGuidance` holds the sentence as a marker, and deleting either the authorization or the sentence fails `test:evaluate-guidance`
 **And** each `capture-record.json` is regenerated from its session's output and pins the new digests of `ci.md`, `SKILL.md` and the plan template, and `test:evaluate-ci` is green; keeping the old records beside the edited guide fails it with "references/ci.md changed since the live session read it"
 **And** the story's record states each session's prompt, model, tools and outcome.
 **And** the change goes through `bmad-workflow-builder` with a clean Analyze gate (AD-16, AD-18).
 
-(Lane 2 runs Story 1.83 first. Story 1.83 leaves `ci.md` to this story, so this story teaches whichever declaration is current at its build, `"network": "host"` or the authorization 1.83 introduces, and one rerun of the live sessions covers both.)
+(Lane 2 runs Story 1.83 first. Story 1.83 removes `"network": "host"` from the schema and leaves `ci.md` to this story, so the example teaches the authorization 1.83 introduces, and one rerun of the live sessions covers the edit.)
 
 **Dependencies:** 1.61, 1.83.
 **Gate:** builder Analyze, `test:evaluate-guidance`, `test:evaluate-ci`, `npm test`.
