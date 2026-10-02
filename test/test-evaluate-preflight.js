@@ -437,6 +437,35 @@ else process.stdout.write('windows agent answered\\n');\n`,
   );
   const options = ['--agent', 'custom', '--agent-cmd', process.execPath, '--agent-arg', agentScript];
   const readPids = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
+  const waitForPids = async (file) => {
+    const deadline = Date.now() + 20_000;
+    while (!fs.existsSync(file) && Date.now() < deadline) await delay(50);
+    return fs.existsSync(file) ? readPids(file) : null;
+  };
+  const observeWindowsProcess = (pid) => {
+    if (!Number.isSafeInteger(pid) || pid <= 0) return { error: `invalid PID ${pid}` };
+    const query = spawnSync(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        `$item = Get-CimInstance Win32_Process -Filter 'ProcessId = ${pid}' -ErrorAction Stop; if ($null -eq $item) { 'ABSENT' } else { "$($item.ProcessId):$($item.ParentProcessId):$($item.Name)" }`,
+      ],
+      { encoding: 'utf8', timeout: 10_000 },
+    );
+    const stdout = query.stdout?.trim();
+    const match = /^(\d+):(\d+):(.+)$/.exec(stdout ?? '');
+    return {
+      status: query.status,
+      alive: match === null ? (stdout === 'ABSENT' ? false : null) : Number(match[1]) === pid,
+      parentPid: match === null ? null : Number(match[2]),
+      name: match?.[3] ?? null,
+      stdout,
+      stderr: query.stderr?.trim(),
+      error: query.error?.message,
+    };
+  };
 
   const normalFile = path.join(directory, 'normal.json');
   const normalRunner = spawn(
@@ -455,11 +484,12 @@ else process.stdout.write('windows agent answered\\n');\n`,
   try {
     normalEnding = await Promise.race([normalClosed, delay(30_000).then(() => null)]);
     normal = fs.existsSync(normalFile) ? readPids(normalFile) : null;
-    const childAliveAtTimeout = normalEnding === null && normal !== null ? !(await processEnds(normal.child, 0)) : null;
+    const agentAtTimeout = normalEnding === null && normal !== null ? observeWindowsProcess(normal.agent) : null;
+    const childAtTimeout = normalEnding === null && normal !== null ? observeWindowsProcess(normal.child) : null;
     if (normalEnding === null) normalRunner.kill('SIGKILL');
     check(
       normalEnding?.code === 0 && normalStdout.includes('windows agent answered'),
-      `a Windows runner whose agent exited ${normalEnding === null ? 'waited over 30 s' : `returned ${normalEnding.code}`}; expected its answer. Agent PID: ${normal?.agent ?? 'unrecorded'}; child PID: ${normal?.child ?? 'unrecorded'}; child alive before runner kill: ${childAliveAtTimeout ?? 'not timed out'}\n${normalStdout}${normalStderr}`,
+      `a Windows runner whose agent exited ${normalEnding === null ? 'waited over 30 s' : `returned ${normalEnding.code}`}; expected its answer. Agent PID: ${normal?.agent ?? 'unrecorded'}; child PID: ${normal?.child ?? 'unrecorded'}; agent before runner kill: ${JSON.stringify(agentAtTimeout)}; child before runner kill: ${JSON.stringify(childAtTimeout)}; child belongs to recorded agent: ${childAtTimeout?.parentPid === normal?.agent}\n${normalStdout}${normalStderr}`,
     );
     check(normal !== null, 'the Windows agent that exited recorded no process IDs');
     if (normal !== null) {
@@ -495,9 +525,7 @@ else process.stdout.write('windows agent answered\\n');\n`,
   let supervisor = null;
   let leader = null;
   try {
-    const deadline = Date.now() + 20_000;
-    while (!fs.existsSync(dualFile) && Date.now() < deadline) await delay(50);
-    dualPids = fs.existsSync(dualFile) ? readPids(dualFile) : null;
+    dualPids = await waitForPids(dualFile);
     [supervisor] = childrenOf(dual.pid);
     [leader] = childrenOf(supervisor ?? 0);
     check(
