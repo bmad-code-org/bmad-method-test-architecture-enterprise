@@ -4113,7 +4113,10 @@ function checkImportedCalibrationReferenceExample() {
     response: 'Response at level 1',
     ...calibrationStepPair(contract, criterion),
   });
-  check(derived.operationId === 'judge-request', `the verdict contract's plan gives step judge-run the operation ${derived.operationId}`);
+  check(
+    derived.interfaceId === 'verdict' && derived.operationId === 'judge-request',
+    `the verdict contract's plan gives step judge-run the operation ${derived.operationId} on interface ${derived.interfaceId}`,
+  );
   check(
     canonical(JSON.parse(example)) === canonical(derived),
     `the reference's scorer input is ${example}; the runtime derives ${JSON.stringify(derived)}`,
@@ -4230,6 +4233,7 @@ function literalObservation(channel, response, operationId = 'judge-request') {
   return {
     observationId: 'calibration',
     sequence: 1,
+    interfaceId: 'verdict',
     operationId,
     provenance: 'evaluator-chosen',
     principal: null,
