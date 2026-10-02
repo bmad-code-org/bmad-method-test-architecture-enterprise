@@ -2,7 +2,7 @@
 title: 'Story 1.47: Distinguish reference risk tables from the scored register'
 type: 'bugfix'
 created: '2026-10-01'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'fdd1ed5b9a6b5e376abfdc41e40e235c39688d54'

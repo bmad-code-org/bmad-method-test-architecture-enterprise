@@ -33,6 +33,18 @@ oracle, so `behaviorId` is read out of the generated contract rather than chosen
 refuses a probe whose behavior discharges more than one. A probe that restates a plant nobody can
 detect is worthless, and that check is what keeps one out.
 
+## The test-design mutations are qualified in a disposable copy
+
+A controlled-mutation probe carries `rollbackVerified: true`, and for the test-design corpus
+the generator earns it. Each of its fourteen probes is run through `runMutationCycle` over a
+temporary workspace: the clean arm scores a copy of the reference design, the one exact edit that
+yields the stored seeded design is applied, the mutated arm scores it, the original bytes are restored
+and their digest compared, and the clean arm scores again. Each arm is the projection
+`test/lib/test-design-result.js` stores for the replay corpus, and its result must equal the stored
+run's, so the evidence a probe cites is what the cycle performed. A failed step stops the generator
+before it writes anything. `npm run test:test-design-qualification` plants each failure. The test-review,
+trace, nfr and ci corpora still state the claim from two stored files; Story 1.99 qualifies them.
+
 ## The routing corpora carry no defect probe
 
 `tea-routing-intents.probes.json` and `tea-routing-controls.probes.json` ship a gameability probe and

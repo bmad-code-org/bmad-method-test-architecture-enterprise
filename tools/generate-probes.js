@@ -121,6 +121,11 @@ const {
   TEST_DESIGN_OPERATION,
 } = require('../test/eval-test-design');
 const { DEFAULT_AGENT: TEST_DESIGN_DEFAULT_AGENT } = require('../cli/test-design-runner');
+// A test-design controlled-mutation probe claims `rollbackVerified` only from a
+// performed mutation cycle in a disposable copy (AD-8), which this module runs
+// through the runtime's own `runMutationCycle`.
+const { QualificationError } = require('../cli/lib/evaluate/mutation');
+const { qualifyTestDesignMutation, testDesignOracleHolds } = require('../test/lib/test-design-qualification');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const CONTRACT_ROOT = path.join(PROJECT_ROOT, 'test', 'contracts');
@@ -793,22 +798,6 @@ function testDesignRunPassed(result) {
 }
 
 /**
- * Whether one oracle holds on one stored run, or null when the run records no
- * answer for it.
- *
- * A run the harness refused as unparseable never reached `documentMentions`, so a
- * vocabulary oracle has no recorded reading there and the run is left out of that
- * oracle's evidence rather than counted as a violation it did not record.
- */
-function testDesignOracleHolds(entry, result) {
-  if (entry.kind === 'run-measured') return result.unmeasurable === undefined && result.shape.rows > 0;
-  if (result.unmeasurable !== undefined) return null;
-  const mentioned = result.mentions[entry.risk.id];
-  assert(typeof mentioned === 'boolean', `a stored run records no mention of ${entry.risk.id}, which ${entry.oracleId} reads`);
-  return entry.kind === 'material-vocabulary' ? mentioned : !mentioned;
-}
-
-/**
  * Every oracle `test-design.contract.json` states, paired with the corpus entry
  * `tools/generate-contracts.js` generated it from.
  *
@@ -874,7 +863,7 @@ function testDesignOracleIndex(contract, sets) {
  * reference run and the grounding block of the generic register, and no oracle in
  * this contract can hold those two apart.
  */
-function buildTestDesignProbes() {
+async function buildTestDesignProbes({ qualify = qualifyTestDesignMutation } = {}) {
   const contract = loadContract('test-design.contract.json');
   const groundTruth = JSON.parse(fs.readFileSync(path.join(TEST_DESIGN_FIXTURE_ROOT, 'ground-truth.json'), 'utf8'));
   const sets = groundTruth.fixtureSets ?? [];
@@ -908,7 +897,9 @@ function buildTestDesignProbes() {
     referenceOf.set(set.id, found[0]);
   }
 
-  const probes = index.map((entry, position) => {
+  const categories = new Set(groundTruth.riskCategories ?? []);
+
+  const buildProbe = async (entry, position) => {
     const { set, kind, risk, oracleId, oracle, pointer, behaviorId } = entry;
     const seeded = (set.materialRisks ?? []).length > 0;
     const reference = referenceOf.get(set.id);
@@ -966,6 +957,34 @@ function buildTestDesignProbes() {
     const legField = kind === 'run-measured' ? 'riskRowCount' : kind === 'material-vocabulary' ? 'design' : null;
     const legPointer = testDesignStdoutPointer(legId, legField);
 
+    // AD-8: the claim is earned in a disposable copy. The reference design is copied, the clean arm
+    // scored, the one exact mutation that yields the stored seeded design applied, the mutated arm
+    // scored, the original bytes restored, their digest compared and the clean arm run again. A step
+    // that fails stops the generator, so no probe carries a rollback claim the cycle did not perform.
+    let qualified;
+    try {
+      qualified = await qualify({
+        mutationId: `M-${pad(position + 1)}`,
+        referencePath: path.join(PROJECT_ROOT, reference.designPath),
+        mutatedPath: path.join(PROJECT_ROOT, mutated.designPath),
+        entry,
+        set,
+        categories,
+        stored: { baseline: reference.result, mutated: mutated.result },
+      });
+    } catch (error) {
+      if (error instanceof QualificationError) {
+        throw new GeneratorError(
+          `${oracleId} (${mutated.id}): the mutation could not be qualified (AD-10 exit ${error.exitCode}), so no probe is emitted: ${error.message}`,
+        );
+      }
+      throw error;
+    }
+    assert(
+      qualified?.rollbackVerified === true,
+      `${oracleId} (${mutated.id}): the mutation cycle did not verify its rollback, so no probe may claim it`,
+    );
+
     const authored = {
       'run-measured': {
         operator: 'write-no-risk-register',
@@ -1014,10 +1033,9 @@ function buildTestDesignProbes() {
         expectedObservableFailure: authored.failure,
         baselinePassEvidence: fileReference(reference.expectedPath),
         mutatedFailEvidence: fileReference(mutated.expectedPath),
-        // Both documents are stored side by side and neither is produced by
-        // editing the other in place, so there is nothing to roll back. The corpus
-        // the runs were staged from is digested before and after every live run.
-        rollbackVerified: true,
+        // The cycle's own conjunction of the restored digest and the clean rerun,
+        // asserted true above; a literal here would claim a rollback nobody performed.
+        rollbackVerified: qualified.rollbackVerified,
       },
       expectedClean: false,
       defects: [
@@ -1071,7 +1089,10 @@ function buildTestDesignProbes() {
         },
       },
     };
-  });
+  };
+  // One workspace at a time, in the contract's order.
+  const probes = [];
+  for (const [position, entry] of index.entries()) probes.push(await buildProbe(entry, position));
 
   // The gameability probe, against the seeded set, whose oracles are the ones a
   // degenerate document has something to gain from.
@@ -1887,18 +1908,30 @@ function firstDifference(expected, actual) {
   return { line: expectedLines.length + 1, onDisk: '(end of file)', generated: actualLines[expectedLines.length] ?? '(end of file)' };
 }
 
+/**
+ * Every byte this generator digests comes through the certified corpus port,
+ * resolved here before any builder runs because `digestOf` is synchronous and the
+ * port is not.
+ */
+async function loadGeneratorCorpus() {
+  corpus = await loadCorpus(PROJECT_ROOT, corpusMembers());
+}
+
 async function main() {
   const check = process.argv.slice(2).includes('--check');
   const prettierConfig = await prettier.resolveConfig(path.join(PROBE_ROOT, 'test-review.probes.json'));
-  // Every byte this generator digests comes through the certified corpus port,
-  // resolved here because the builders below are synchronous and the port is not.
-  corpus = await loadCorpus(PROJECT_ROOT, corpusMembers());
+  await loadGeneratorCorpus();
 
-  const stale = [];
+  // Every corpus is built before any is written, so a corpus that cannot be built (a mutation that
+  // did not qualify, say) leaves the whole directory as it was.
+  const built = [];
   for (const target of targets()) {
     const filePath = path.join(PROBE_ROOT, target.relativePath);
-    const generated = await render(await target.build(), filePath, prettierConfig);
+    built.push({ target, filePath, generated: await render(await target.build(), filePath, prettierConfig) });
+  }
 
+  const stale = [];
+  for (const { target, filePath, generated } of built) {
     if (!check) {
       fs.mkdirSync(path.dirname(filePath), { recursive: true });
       fs.writeFileSync(filePath, generated, 'utf8');
@@ -1955,9 +1988,9 @@ if (require.main === module) {
   main()
     .then((code) => process.exit(code))
     .catch((error) => {
-      console.error(error instanceof GeneratorError ? `❌ ${error.message}` : error);
+      console.error(error instanceof GeneratorError || error instanceof QualificationError ? `❌ ${error.message}` : error);
       process.exit(2);
     });
 }
 
-module.exports = { PROBE_SCHEMA_VERSION, targets };
+module.exports = { PROBE_SCHEMA_VERSION, GeneratorError, buildTestDesignProbes, loadGeneratorCorpus, targets };
