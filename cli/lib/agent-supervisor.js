@@ -128,6 +128,9 @@ const WINDOWS_SETUP_MS = 90_000;
 /** Allows cold Node startup before the guardian's own setup timer begins. */
 const WINDOWS_STARTUP_SLACK_MS = 15_000;
 
+/** A Windows leader cannot wait indefinitely for its supervisor's lifeline pipe to drain. */
+const WINDOWS_LIFELINE_WRITE_MS = 2000;
+
 /** How often the supervisor checks that the runner is alive. */
 const POLL_MS = 100;
 
@@ -488,11 +491,42 @@ function lead([supervisorArgument, timeoutArgument, command, ...args]) {
     detached: GROUPS,
   });
   trace('leader-guardian-spawned', `pid=${agent.pid}`);
-  if (agent.pid !== undefined) {
+  if (GROUPS && agent.pid !== undefined) {
     trace('leader-guardian-pid-write-start', `pid=${agent.pid}`);
     const error = write(LIFELINE_FD, `agent ${agent.pid}\n`);
     trace('leader-guardian-pid-write-end', error ? `error=${error.message}` : `pid=${agent.pid}`);
   }
+  const failWindowsLifeline = (stage, error) => {
+    trace('leader-lifeline-write-fail', `${stage}: ${error.message}`);
+    agent.stdio[4].end();
+    agent.kill('SIGKILL');
+    lifeline.destroy();
+    process.exit(0);
+  };
+  const sendWindowsLine = (line, stage, done = () => {}, end = false) => {
+    let completed = false;
+    const timer = setTimeout(() => {
+      if (completed) return;
+      completed = true;
+      failWindowsLifeline(stage, new Error(`the supervisor lifeline did not drain within ${WINDOWS_LIFELINE_WRITE_MS}ms`));
+    }, WINDOWS_LIFELINE_WRITE_MS);
+    const complete = (error) => {
+      if (completed) return;
+      completed = true;
+      clearTimeout(timer);
+      if (error) return failWindowsLifeline(stage, error);
+      trace('leader-lifeline-write-done', stage);
+      done();
+    };
+    trace('leader-lifeline-write-start', stage);
+    try {
+      if (end) lifeline.end(line, complete);
+      else lifeline.write(line, complete);
+    } catch (error) {
+      complete(error);
+    }
+  };
+  if (!GROUPS && agent.pid !== undefined) sendWindowsLine(`agent ${agent.pid}\n`, 'guardian-pid');
   let guardianReport = '';
   let completeAfterGuardianExit = null;
   let agentPid = null;
@@ -565,10 +599,14 @@ function lead([supervisorArgument, timeoutArgument, command, ...args]) {
     if (GROUPS && agent.pid !== undefined) signalGroup('SIGKILL');
     input.destroy();
     agent.stdin.destroy();
-    // Straight to the runner, so a supervisor suspended with it cannot hold the report back.
-    write(LEADER_REPORT_FD, JSON.stringify(outcome));
-    write(LIFELINE_FD, REPORTED);
+    const drainOutputs = () => {
+      let open = outputs.length;
+      for (const output of outputs) output.close(() => --open === 0 && process.exit(0));
+    };
     if (GROUPS) {
+      // Straight to the runner, so a supervisor suspended with it cannot hold the report back.
+      write(LEADER_REPORT_FD, JSON.stringify(outcome));
+      write(LIFELINE_FD, REPORTED);
       // The supervisor has nothing left to do, and a stopped one would keep
       // the runner waiting. It is killed only while it is still this
       // process's parent, so a reused pid is never hit.
@@ -577,9 +615,20 @@ function lead([supervisorArgument, timeoutArgument, command, ...args]) {
       } catch {
         // The supervisor is already gone.
       }
+      drainOutputs();
+    } else {
+      // Flush the acknowledgement before the FD4 report, so a closing leader
+      // cannot make the supervisor write a second JSON report.
+      sendWindowsLine(
+        REPORTED,
+        'reported',
+        () => {
+          write(LEADER_REPORT_FD, JSON.stringify(outcome));
+          drainOutputs();
+        },
+        true,
+      );
     }
-    let open = outputs.length;
-    for (const output of outputs) output.close(() => --open === 0 && process.exit(0));
   };
 
   // The agent's wall clock starts after the guardian confirms its real PID.
@@ -593,8 +642,7 @@ function lead([supervisorArgument, timeoutArgument, command, ...args]) {
     wallClockStarted = true;
     if (GROUPS) return;
     trace('leader-agent-ready', `pid=${pid} timeout=${timeoutArgument}`);
-    write(LIFELINE_FD, 'ready\n');
-    trace('leader-supervisor-ready-written', `pid=${pid}`);
+    sendWindowsLine('ready\n', 'agent-ready', () => trace('leader-supervisor-ready-written', `pid=${pid}`));
     after(Number(timeoutArgument), () => {
       if (settled) return;
       trace('leader-wallclock-timeout', `agentPid=${agentPid}`);
