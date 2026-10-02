@@ -15,6 +15,63 @@ const mapping = JSON.parse(fs.readFileSync(path.join(directory, 'mapping.json'),
 const mappedKeys = Object.keys(mapping.keys);
 const knownKeys = new Set(mappedKeys);
 
+// The assertion types that run no adopter code and call no model. Each is also admitted with a `not-` prefix.
+export const ALLOWED_ASSERTION_TYPES = [
+  'contains',
+  'icontains',
+  'contains-all',
+  'contains-any',
+  'icontains-all',
+  'icontains-any',
+  'equals',
+  'starts-with',
+  'regex',
+  'is-json',
+];
+// promptfoo runs a `file://` value as code when the path before its first colon, once resolved, ends in one of these.
+// Its own tests are `.js`, `.cjs`, `.mjs`, `.ts`, `.cts` and `.mts` without regard to case, and `.py` and `.rb` exactly.
+// The guard takes all of them without regard to case.
+const CODE_EXTENSIONS = ['.js', '.cjs', '.mjs', '.ts', '.cts', '.mts', '.py', '.rb'];
+const QUOTED_LIMIT = 200;
+const REPAIR = 'an assertion that needs code belongs in a command evaluator you own';
+
+function quoted(text) {
+  return JSON.stringify(String(text).slice(0, QUOTED_LIMIT));
+}
+
+function loadsCode(reference, { packages }) {
+  if (packages && reference.startsWith('package:')) return true;
+  if (!reference.startsWith('file://')) return false;
+  const fileReference = reference.slice('file://'.length);
+  const colon = fileReference.indexOf(':');
+  const target = path.resolve('/', colon === -1 ? fileReference : fileReference.slice(0, colon)).toLowerCase();
+  return CODE_EXTENSIONS.some((extension) => target.endsWith(extension));
+}
+
+// promptfoo has already run the assertion when this refuses it: a code reference or a transform ran, and a model-graded type called its model.
+function refuseAssertion(assertion) {
+  const { type } = assertion ?? {};
+  const base = typeof type === 'string' && type.startsWith('not-') ? type.slice('not-'.length) : type;
+  const named = typeof type === 'string' ? quoted(type) : '(none)';
+  if (typeof base !== 'string' || !ALLOWED_ASSERTION_TYPES.includes(base)) {
+    throw new Error(
+      `promptfoo assertion type ${named} is refused: only assertions that run no adopter code and call no model are admitted (${ALLOWED_ASSERTION_TYPES.join(', ')}, each also with a not- prefix); ${REPAIR}`,
+    );
+  }
+  const { value } = assertion;
+  const references = Array.isArray(value) ? value.map((item) => [item, false]) : [[value, true]];
+  for (const [reference, packages] of references) {
+    if (typeof reference === 'string' && loadsCode(reference, { packages })) {
+      throw new Error(`promptfoo assertion ${named} is refused: its value ${quoted(reference)} loads adopter code; ${REPAIR}`);
+    }
+  }
+  if (assertion.transform !== undefined && assertion.transform !== null) {
+    throw new Error(
+      `promptfoo assertion ${named} is refused: its transform rewrites the output, so the assertion would grade text the target did not produce; ${REPAIR}`,
+    );
+  }
+}
+
 function assertionKey(assertion) {
   const metric = assertion?.metric;
   return typeof metric === 'string' && knownKeys.has(metric) ? metric : undefined;
@@ -50,6 +107,7 @@ export function rowsFromResults(results, observation) {
   };
   const rows = [];
   for (const result of results) {
+    for (const assertion of Array.isArray(result.testCase?.assert) ? result.testCase.assert : []) refuseAssertion(assertion);
     const graded = result.gradingResult !== undefined && result.gradingResult !== null;
     if (result.response?.output !== undefined && (typeof result.response.output !== 'string' || result.response.output !== gradedOutput)) {
       throw new Error('promptfoo output differs from the cited stdout observation');

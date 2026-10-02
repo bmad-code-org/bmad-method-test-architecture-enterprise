@@ -1692,6 +1692,7 @@ function checkPromptfooTemplateIdentity(destination, evaluation, env) {
     [['0', 'exit-code', ['empty']]],
   );
   checkPromptfooFailureBoundary(run, selected);
+  checkPromptfooRefusals(run, selected, destination, evaluation);
 }
 
 // An ungraded framework row stops the evaluation; a graded row keeps its meaning (Story 1.43).
@@ -1812,7 +1813,218 @@ function checkPromptfooFailureBoundary(run, selected) {
   refuse(withComponents([grade(pears, true), { assertion: apples }, grade(shellfish, true)]), 'a grade with no pass', /boolean pass/);
 }
 
+// The starter refuses an assertion that runs adopter code or calls a model (Story 1.70). Every case runs the rendered
+// starter, through `--map-results` payloads and once through promptfoo itself.
+function checkPromptfooRefusals(run, selected, destination, evaluation) {
+  const guide = headingBody(fs.readFileSync(REFERENCE('evaluator'), 'utf8'), FAILURE_BOUNDARY);
+  const [refusedExample] = taggedExamples(guide, 'promptfoo-refused');
+  assert.ok(refusedExample, 'the failure boundary section lost its refused example');
+  const refused = (payload, label, ...mentions) => {
+    const result = run(['--map-results'], payload);
+    assert.notStrictEqual(result.status, 0, `promptfoo template accepted ${label}`);
+    assert.match(result.stderr, /is refused:/, `${label} lost its refusal`);
+    for (const mention of mentions) assert.ok(result.stderr.includes(mention), `${label} lost ${mention}: ${result.stderr.slice(0, 300)}`);
+    assert.ok(!result.stdout.includes('"rows"'), `promptfoo template printed rows for ${label}`);
+  };
+  const admitted = (payload, label) => {
+    const result = run(['--map-results'], payload);
+    assert.strictEqual(result.status, 0, `promptfoo template refused ${label}: ${result.stderr.slice(0, 300)}`);
+    return JSON.parse(result.stdout).rows;
+  };
+  const output = selected.stdout.value.slice(0, -1);
+  const pears = { metric: 'required-pears', type: 'contains', value: 'pears' };
+  const apples = { metric: 'required-apples', type: 'contains', value: 'apples' };
+  const graded = (assertions, passes = assertions.map(() => true)) => ({
+    response: { output },
+    testCase: { assert: assertions },
+    gradingResult: {
+      pass: passes.every(Boolean),
+      componentResults: assertions.map((assertion, index) => ({ assertion, pass: passes[index], reason: 'graded' })),
+    },
+  });
+  const payload = (...results) => ({ observation: selected, results });
+  // The one assertion under test is the third of three in a result, and also the only assertion of a second result.
+  const everywhere = (assertion, label, expectation, ...mentions) => {
+    for (const [where, results] of [
+      ['third assertion', [graded([apples, pears, assertion])]],
+      ['second result', [graded([pears]), graded([{ ...assertion, metric: 'required-apples' }])]],
+    ]) {
+      if (expectation === 'refused') refused(payload(...results), `${label} (${where})`, ...mentions);
+      else admitted(payload(...results), `${label} (${where})`);
+    }
+  };
+
+  // The guide's own example.
+  refused(refusedExample, 'the guide refused example', '"contains"', '"file://boom.py"', 'loads adopter code');
+
+  // The guide names the starter's allow-list, and the starter exports it.
+  const listing = guide.match(/The starter admits the assertion types (.+?), each also with a `not-` prefix/)?.[1] ?? '';
+  const guideTypes = [...listing.matchAll(/`([^`]+)`/g)].map((match) => match[1]);
+  const exported = spawnSync(
+    process.execPath,
+    [
+      '--input-type=module',
+      '-e',
+      `import(${JSON.stringify(require('node:url').pathToFileURL(destination).href)}).then((m) => console.log(JSON.stringify(m.ALLOWED_ASSERTION_TYPES)))`,
+    ],
+    { encoding: 'utf8' },
+  );
+  assert.strictEqual(exported.status, 0, `the rendered starter did not load: ${exported.stderr}`);
+  const starterTypes = JSON.parse(exported.stdout);
+  assert.deepStrictEqual(guideTypes, starterTypes, 'the guide and the starter list different assertion types');
+  assert.strictEqual(starterTypes.length, 10, 'the starter allow-list changed size');
+
+  // A type outside the list, with its `not-` form, wherever it sits.
+  for (const type of [
+    'javascript',
+    'not-javascript',
+    'python',
+    'ruby',
+    'webhook',
+    'llm-rubric',
+    'g-eval',
+    'factuality',
+    'levenshtein',
+    'word-count',
+    'assert-set',
+    'not-not-contains',
+  ]) {
+    everywhere({ metric: 'forbidden-shellfish', type, value: 'x' }, `type ${type}`, 'refused', `"${type}"`);
+  }
+  refused(payload(graded([{ metric: 'required-pears', value: 'x' }])), 'an assertion without a type', '(none)');
+
+  // Each listed type and its `not-` form keeps its graded pass and graded fail.
+  for (const type of starterTypes) {
+    for (const form of [type, `not-${type}`]) {
+      for (const passed of [true, false]) {
+        const [row] = admitted(
+          payload(graded([{ metric: 'required-pears', type: form, value: 'pears' }], [passed])),
+          `${form} graded ${passed}`,
+        );
+        assert.strictEqual(row.outcome, passed ? 'pass' : 'fail', `${form} graded ${passed} mapped to ${row.outcome}`);
+        if (!passed) assert.strictEqual(row.quote, selected.stdout.value, `${form} graded fail did not quote the observed stdout`);
+      }
+    }
+  }
+
+  // A value that loads code, as a string and as an array element; data files and literal strings stay admitted.
+  const value = (reference) => ({ metric: 'forbidden-shellfish', type: 'contains', value: reference });
+  const element = (reference) => ({ metric: 'forbidden-shellfish', type: 'not-contains-any', value: ['pears', reference] });
+  for (const reference of [
+    'file://boom.py',
+    'file://boom.rb',
+    'file://x.mjs:pick',
+    'file://boom.py:fn',
+    'file://x.PY',
+    'file://boom.py/',
+    'file://./a/../boom.py',
+    'file://boom.ts',
+  ]) {
+    everywhere(value(reference), `string value ${reference}`, 'refused', '"contains"', JSON.stringify(reference), 'loads adopter code');
+    everywhere(element(reference), `array element ${reference}`, 'refused', JSON.stringify(reference), 'loads adopter code');
+  }
+  everywhere(value('package:pkg:fn'), 'a package: string value', 'refused', '"package:pkg:fn"', 'loads adopter code');
+  for (const reference of [
+    'file://list.json',
+    'file://words.txt',
+    'file://x.py.txt',
+    'file://x.pyc',
+    'file://dir.py/data.json',
+    'package',
+    'Package:x',
+  ]) {
+    everywhere(value(reference), `string value ${reference}`, 'admitted');
+    everywhere(element(reference), `array element ${reference}`, 'admitted');
+  }
+  everywhere(element('package:x:y'), 'a package: array element', 'admitted');
+
+  // A transform, however it behaves; a null one is a YAML key left empty.
+  for (const transform of ["output.replace('pears', 'figs')", 'output.notAFunction()', '', 0, false]) {
+    everywhere(
+      { ...value('pears'), transform },
+      `transform ${JSON.stringify(transform)}`,
+      'refused',
+      '"contains"',
+      'its transform rewrites the output',
+    );
+  }
+  everywhere({ ...value('pears'), transform: null }, 'a null transform', 'admitted');
+
+  // The refusal is the diagnostic whatever else is wrong with the result.
+  const bad = { metric: 'required-pears', type: 'javascript', value: 'x' };
+  const ungraded = { response: { output }, testCase: { assert: [pears, bad] }, error: 'framework could not grade' };
+  const incomplete = graded([pears, bad]);
+  incomplete.gradingResult.componentResults.pop();
+  for (const [what, result, other] of [
+    ['an ungraded row', ungraded, 'ungraded framework error'],
+    ['an incomplete grade set', incomplete, 'incomplete'],
+    ['a different output', { ...graded([pears, bad]), response: { output: 'another output' } }, 'output differs'],
+  ]) {
+    const refusal = run(['--map-results'], payload(result));
+    assert.match(refusal.stderr, /type "javascript" is refused:/, `${what} hid the refusal`);
+    assert.ok(!refusal.stderr.includes(other), `${what} replaced the refusal with ${other}`);
+  }
+
+  // A quoted value is capped at 200 characters.
+  const long = run(['--map-results'], payload(graded([value(`file://${'x'.repeat(500)}.py`)])));
+  assert.ok(
+    long.stderr.includes(`"file://${'x'.repeat(193)}"`) && !long.stderr.includes('x'.repeat(194)),
+    'the quoted value was not capped',
+  );
+
+  // promptfoo itself: a raising Python file as the value of an assertion. The file sits in the project and its absolute
+  // path is the reference, since the starter runs promptfoo in a temporary directory and copies only asserts.yaml.
+  const code = path.join(evaluation, 'boom.py');
+  const assertionsFile = path.join(evaluation, 'evaluator', 'asserts.yaml');
+  const original = fs.readFileSync(assertionsFile, 'utf8');
+  try {
+    fs.writeFileSync(code, "def get_assert(output, context):\n    raise RuntimeError('deliberate assertion error')\n");
+    const assertions = YAML.parse(original);
+    assertions[1].value = `file://${code}`;
+    fs.writeFileSync(
+      assertionsFile,
+      YAML.stringify(
+        assertions.map((assertion, index) => ({
+          ...assertion,
+          metric: ['required-apples', 'required-pears', 'forbidden-shellfish'][index],
+        })),
+      ),
+    );
+    const live = run(['--stdout-prefix=Selected summary:'], {
+      observations: [{ observationId: 'decoy', stdout: { kind: 'text', value: 'Decoy summary: apples, pears\n' } }, selected],
+    });
+    assert.notStrictEqual(live.status, 0, `promptfoo template turned a raising Python value into rows: ${live.stdout}`);
+    assert.ok(
+      live.stderr.includes('is refused:') && live.stderr.includes('"contains"') && live.stderr.includes('loads adopter code'),
+      `the live refusal lost its diagnostic: ${live.stderr.slice(0, 400)}`,
+    );
+    assert.ok(!live.stdout.includes('"rows"'), 'the live refusal printed rows');
+  } finally {
+    fs.writeFileSync(assertionsFile, original);
+    fs.rmSync(code, { force: true });
+  }
+}
+
 const FAILURE_BOUNDARY = '## Separate ungraded framework errors from graded target failures';
+// What the guide's failure-boundary section says about the assertions the starter refuses (Story 1.70).
+const REFUSAL_MARKERS = [
+  'A graded result still stops the trial when its assertion runs code or calls a model',
+  'neither `error` nor the shape of the result separates a crash from a failure',
+  'The starter admits the assertion types',
+  'each also with a `not-` prefix',
+  'Any other type stops the trial: `javascript`, `python`, `ruby`, `webhook`, and a model-graded type such as `llm-rubric` or `factuality`.',
+  'An admitted type also stops the trial when its `value` loads code',
+  'ends in `.js`, `.cjs`, `.mjs`, `.ts`, `.cts`, `.mts`, `.py` or `.rb` in any letter case',
+  'an element of an array `value` that is such a reference',
+  'a string `value` that starts with `package:`',
+  'A `file://` reference to a `.json`, `.yaml`, `.yml` or `.txt` file is data and stays admitted',
+  'a `package:` string inside an array `value`',
+  'An assertion that carries a `transform` (any value other than null) stops the trial as well',
+  'the row would grade text the target did not produce',
+  'belongs in a `command` evaluator you own, where a crash exits non-zero',
+  'promptfoo has already run the code when the wrapper refuses the result',
+  'The refusal names the assertion type and the reason',
+];
 const FRAMEWORK_VERSIONS = '## Declare the installed framework versions';
 
 function checkEvaluatorGuidance(guide, failures) {
@@ -1951,18 +2163,29 @@ function checkEvaluatorGuidance(guide, failures) {
     'seals no record',
     'each exactly once',
     'even when another assertion graded',
-    "With promptfoo 0.123.1 a thrown `javascript` assertion or a crashing code file arrives graded `pass: false` and still becomes a target `fail` row until Story 1.70; an ungraded row arises when promptfoo cannot grade at all, for example when an assertion's `transform` fails.",
+    ...REFUSAL_MARKERS,
   ])
     requireText(boundary, marker, `evaluator.md ${FAILURE_BOUNDARY}`, failures);
   const ungradedExamples = taggedExamples(boundary, 'promptfoo-ungraded');
   const gradedExamples = taggedExamples(boundary, 'promptfoo-graded-fail');
-  if (ungradedExamples.length !== 1 || gradedExamples.length !== 1)
-    failures.push(`evaluator.md ${FAILURE_BOUNDARY} needs one promptfoo-ungraded and one promptfoo-graded-fail example`);
+  const refusedExamples = taggedExamples(boundary, 'promptfoo-refused');
+  if (ungradedExamples.length !== 1 || gradedExamples.length !== 1 || refusedExamples.length !== 1)
+    failures.push(
+      `evaluator.md ${FAILURE_BOUNDARY} needs one promptfoo-ungraded, one promptfoo-graded-fail and one promptfoo-refused example`,
+    );
   else if (
     ungradedExamples[0].results?.some((result) => result.gradingResult !== undefined) ||
     gradedExamples[0].results?.some((result) => result.gradingResult?.pass !== false)
   )
     failures.push(`evaluator.md ${FAILURE_BOUNDARY} examples no longer separate the ungraded row from the graded failure`);
+  else if (
+    refusedExamples[0].results?.some(
+      (result) =>
+        result.gradingResult?.pass !== false ||
+        !result.testCase?.assert?.some((assertion) => String(assertion.value).startsWith('file://')),
+    )
+  )
+    failures.push(`evaluator.md ${FAILURE_BOUNDARY} refused example is no longer a graded failure of a code-file value`);
   const versions = headingBody(guide, FRAMEWORK_VERSIONS);
   for (const marker of [
     '`evaluator/frameworks.json`',
@@ -2582,7 +2805,8 @@ function checkGapsGuidance(guide, engine, failures) {
     failures.push('gaps.md AD-10 exit mapping changed');
   requireText(guide, '`ci --tier pr` exits 13 on drift', 'gaps.md exit 13', failures);
   requireText(guide, 'run `tea-evaluate compare --accept` once the adopter confirms', 'gaps.md exit 13 accept', failures);
-  requireText(guide, 'a framework result with no grade; see `evaluator.md`', 'gaps.md exit 12', failures);
+  requireText(guide, 'a framework result with no grade', 'gaps.md exit 12', failures);
+  requireText(guide, 'an assertion that runs adopter code or calls a model; see `evaluator.md`', 'gaps.md exit 12', failures);
   // Story 1.44: an installed framework that is missing, different or changed is the same class, with its two recoveries.
   requireText(
     guide,
@@ -3403,6 +3627,48 @@ async function main() {
         'evaluator',
         (text, found) => checkEvaluatorGuidance(text, found),
         (text) => text.replace('evaluator infrastructure failure (exit 12)', 'a finding'),
+      ],
+      [
+        'evaluator refusal allow-list removal',
+        'evaluator',
+        (text, found) => checkEvaluatorGuidance(text, found),
+        (text) => text.replace('The starter admits the assertion types', 'The starter admits some assertion types'),
+      ],
+      [
+        'evaluator refusal refused types removal',
+        'evaluator',
+        (text, found) => checkEvaluatorGuidance(text, found),
+        (text) =>
+          text.replace('Any other type stops the trial: `javascript`, `python`, `ruby`, `webhook`,', 'Any other type is a finding:'),
+      ],
+      [
+        'evaluator refusal value guard removal',
+        'evaluator',
+        (text, found) => checkEvaluatorGuidance(text, found),
+        (text) =>
+          text.replace('An admitted type also stops the trial when its `value` loads code', 'An admitted type never stops the trial'),
+      ],
+      [
+        'evaluator refusal transform removal',
+        'evaluator',
+        (text, found) => checkEvaluatorGuidance(text, found),
+        (text) =>
+          text.replace(
+            'An assertion that carries a `transform` (any value other than null) stops the trial as well',
+            'A transform is fine',
+          ),
+      ],
+      [
+        'evaluator refusal command route removal',
+        'evaluator',
+        (text, found) => checkEvaluatorGuidance(text, found),
+        (text) => text.replace('belongs in a `command` evaluator you own, where a crash exits non-zero', 'belongs elsewhere'),
+      ],
+      [
+        'evaluator refusal example removal',
+        'evaluator',
+        (text, found) => checkEvaluatorGuidance(text, found),
+        (text) => text.replace('<!-- example:promptfoo-refused -->', ''),
       ],
       [
         'evaluator framework versions heading removal',

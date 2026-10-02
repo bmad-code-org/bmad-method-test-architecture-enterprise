@@ -1350,7 +1350,7 @@ So that an assertion crash cannot appear as a caught target defect (CAP-13, AD-1
 **Dependencies:** 1.20, 1.23.
 **Gate:** skill gates, `npm test`, engine check.
 
-The installed promptfoo grades a thrown assertion as a failing component, so a thrown `javascript` assertion or a crashing code file stays a target `fail` row here; Story 1.70 closes it (added 2026-10-01).
+The installed promptfoo grades a thrown assertion as a failing component, so a thrown `javascript` assertion or a crashing code file stays a target `fail` row here; Story 1.70 closes it (added 2026-10-01; closed in Story 1.70's build, 2026-10-02: both evaluators now refuse such an assertion).
 
 ### Story 1.44: Record installed framework versions in evaluator provenance
 
@@ -1933,6 +1933,15 @@ So that code that throws, or that rewrites the output it grades, cannot appear a
 
 **Dependencies:** 1.43.
 **Gate:** skill gates, `npm test`, engine check.
+
+Amended 2026-10-02 in Story 1.70's build: the installed promptfoo 0.123.1 was read and run before the code-loading list was final (`evaluation-framework-facts.md`, the Story 1.70 check).
+The criteria above hold with these changes.
+The code-file test takes the resolved path before the first colon of a `file://` reference and refuses `.js`, `.cjs`, `.mjs`, `.ts`, `.cts`, `.mts`, `.py` and `.rb`, case-insensitively; the three TypeScript extensions come from the installed `JAVASCRIPT_EXTENSIONS`, and the match runs on the resolved path because promptfoo resolves it first (`file://boom.py/` and `file://./a/../boom.py` run the file).
+The `package:` guard applies to a string `value` only: an element of an array `value` goes to promptfoo's data loader, so a code file there is ungraded (and refused by the wrapper all the same) and a `package:` element is a literal substring that stays admitted.
+A `transform` is refused when it holds any value other than `null` or `undefined`; a key left empty in YAML is inert.
+`contextTransform`, `provider` and `rubricPrompt` on an allow-listed type are inert, so the guard names only `transform`.
+`AssertionTypeSchema` ends in a `custom()` member that accepts any string, so the allow-list is checked against its two enumerating members, `BaseAssertionTypesSchema` and `NotPrefixedAssertionTypesSchema`, and every installed type outside the list is checked to be refused.
+A failing `transform`, the one source of an ungraded result among admitted assertions, is refused, so the end-to-end ungraded case rewrites the result after promptfoo returns (an object `value` on `contains` is ungraded in promptfoo, and the real shape is held by a unit).
 
 ### Story 1.71: Bound a framework version probe with its own timeout
 

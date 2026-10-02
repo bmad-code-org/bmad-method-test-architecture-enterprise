@@ -14,8 +14,19 @@ const FIXTURE = path.join(__dirname, 'fixtures', 'evaluate-promptfoo');
 const EVALUATION = path.join('evals', 'summary');
 const EVALUATOR = path.join(FIXTURE, EVALUATION, 'evaluator');
 const CLI = path.join(ROOT, 'cli', 'evaluate.js');
+const STARTER = path.join(
+  ROOT,
+  'src',
+  'workflows',
+  'testarch',
+  'bmad-testarch-evaluate',
+  'assets',
+  'evaluators',
+  'promptfoo-assertions.mjs',
+);
 const failures = [];
 const UNGRADED = 'ungraded framework error';
+const REFUSED = 'is refused:';
 const projects = [];
 let checks = 0;
 const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== ENGINE_CLI_ENV && !key.startsWith('GIT_')));
@@ -256,11 +267,12 @@ syncBuiltinESMExports();
   }
 }
 
-function promptfooResult(assertionFile, stdout, expectedStatus = 0) {
+function promptfooResult(assertionFile, stdout, expectedStatus = 0, companions = []) {
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-promptfoo-shape-'));
   try {
     fs.writeFileSync(path.join(temporary, 'outputs.json'), JSON.stringify([stdout]));
     fs.copyFileSync(path.join(EVALUATOR, assertionFile), path.join(temporary, 'asserts.yaml'));
+    for (const companion of companions) fs.copyFileSync(path.join(EVALUATOR, companion), path.join(temporary, companion));
     const result = command(
       path.join(ROOT, 'node_modules', '.bin', 'promptfoo'),
       [
@@ -419,50 +431,58 @@ function resultShapes() {
   check(typeof errored?.error === 'string', 'installed promptfoo did not emit the deterministic assertion error');
   if (errored) {
     check(errored.testCase?.assert?.[0]?.metric === 'required-pears', 'the error assertion lost its oracle identity');
-    // The installed promptfoo grades a thrown assertion as a failing component, so this result is graded.
-    const gradedRows = mapResults([errored], observation);
+    // The installed promptfoo grades a thrown assertion as a failing component: the result carries a grade, and the
+    // wrapper refuses it for its assertion type, so the crash text cannot become a target `fail` row.
     check(
-      gradedRows.length === 1 && gradedRows[0].outcome === 'fail' && gradedRows[0].key === 'required-pears',
-      `a graded failing component lost its failure row: ${JSON.stringify(gradedRows)}`,
+      errored.gradingResult?.pass === false && errored.gradingResult.componentResults?.[0]?.pass === false,
+      'the thrown JavaScript assertion no longer arrives as a graded failing component',
     );
-    check(gradedRows[0]?.quote === stdout && gradedRows[0]?.quoteChannel === 'stdout', 'a graded failure did not cite observed stdout');
-    const judgment = judgmentFromRows({
-      contract: read(path.join(FIXTURE, EVALUATION, 'contract.json')),
-      mapping: read(path.join(EVALUATOR, 'mapping.json')),
-      answer: { rows: gradedRows },
-      probeId: 'P-002',
-      behaviorIds: ['B-002'],
-    });
-    check(
-      judgment.findings.length === 1 && judgment.findings[0].oracleId === 'O-002',
-      'a graded failing component did not become a scored defect finding',
-    );
+    refuseResults([errored], observation, [REFUSED, '"javascript"'], undefined, UNGRADED);
     const withoutGrade = structuredClone(errored);
     delete withoutGrade.gradingResult;
     delete withoutGrade.response;
-    refuseResults([withoutGrade], observation, [UNGRADED, 'Custom function threw error']);
-    const unidentified = structuredClone(withoutGrade);
-    delete unidentified.testCase.assert[0].metric;
-    refuseResults([unidentified], observation, 'unknown, or repeated assertion metadata');
-    const unknownType = structuredClone(withoutGrade);
-    unknownType.testCase.assert[0].type = 'equals';
-    refuseResults([unknownType], observation, 'metric conflicts with its type and value');
-    const noError = structuredClone(withoutGrade);
-    delete noError.error;
-    refuseResults([noError], observation, [UNGRADED, 'no error reported']);
+    refuseResults([withoutGrade], observation, [REFUSED, '"javascript"'], undefined, UNGRADED);
   }
-  // promptfoo returns no grade at all when an assertion's transform throws: the shape Story 1.43 refuses.
+  // A code file as an allow-listed assertion's value, and a transform, arrive graded too (a graded failure for text the
+  // target never produced); the wrapper refuses both for what they run.
+  const crashing = promptfooResult('asserts-code-file.yaml', stdout, 100, ['boom.py']);
+  check(
+    crashing?.gradingResult?.pass === false && crashing.gradingResult.reason?.includes('deliberate assertion error'),
+    `installed promptfoo did not grade a raising Python value as a failure: ${JSON.stringify(crashing?.gradingResult)?.slice(0, 300)}`,
+  );
+  if (crashing)
+    refuseResults([crashing], observation, [REFUSED, '"contains"', '"file://boom.py"', 'loads adopter code'], undefined, UNGRADED);
+  const rewritten = promptfooResult('asserts-transform.yaml', stdout, 100);
+  check(
+    rewritten?.gradingResult?.pass === false && stdout.includes('pears') && rewritten.testCase?.assert?.[0]?.transform !== undefined,
+    'installed promptfoo did not grade the rewritten output of a transform as a failure for an output that holds the value',
+  );
+  if (rewritten) refuseResults([rewritten], observation, [REFUSED, '"contains"', 'its transform rewrites the output'], undefined, UNGRADED);
+  // promptfoo returns no grade at all when an allow-listed assertion has no usable value: the shape Story 1.43 refuses.
+  // The fixture maps assertions by type and value, so the assertion list is set to the keyed one before the import:
+  // the refusal under test is the ungraded result.
   const ungradedReal = promptfooResult('asserts-ungraded.yaml', stdout, 100);
   check(
     ungradedReal !== null &&
       (ungradedReal.gradingResult === undefined || ungradedReal.gradingResult === null) &&
       typeof ungradedReal.error === 'string' &&
-      ungradedReal.error.includes('Transform failed'),
-    `installed promptfoo did not return an ungraded row for a failing transform: ${JSON.stringify(ungradedReal)?.slice(0, 300)}`,
+      ungradedReal.error.includes('must have a string or number value'),
+    `installed promptfoo did not return an ungraded row for an object value: ${JSON.stringify(ungradedReal)?.slice(0, 300)}`,
   );
   if (ungradedReal) {
     check(ungradedReal.testCase?.assert?.[0]?.metric === 'required-pears', 'the ungraded assertion lost its oracle identity');
-    refuseResults([ungradedReal], observation, [UNGRADED, 'Transform failed']);
+    ungradedReal.testCase.assert[0].value = 'pears';
+    refuseResults([ungradedReal], observation, [UNGRADED, 'must have a string or number value']);
+    const unidentified = structuredClone(ungradedReal);
+    unidentified.testCase.assert[0].value = 'unmapped';
+    delete unidentified.testCase.assert[0].metric;
+    refuseResults([unidentified], observation, 'unknown, or repeated assertion metadata');
+    const unknownType = structuredClone(ungradedReal);
+    unknownType.testCase.assert[0].type = 'equals';
+    refuseResults([unknownType], observation, 'metric conflicts with its type and value');
+    const noError = structuredClone(ungradedReal);
+    delete noError.error;
+    refuseResults([noError], observation, [UNGRADED, 'no error reported']);
     // The diagnostic carries the first 200 characters of the first line and nothing after them.
     const long = structuredClone(ungradedReal);
     long.error = 'x'.repeat(500);
@@ -470,6 +490,324 @@ function resultShapes() {
     long.error = `first line\n${'y'.repeat(50)}`;
     refuseResults([long], observation, [UNGRADED, '(first line)'], undefined, 'y'.repeat(50));
   }
+}
+
+// The import functions of both evaluators: the fixture's own and the skill's starter beside a copy of the fixture's
+// mapping.json (the starter reads it). A child process imports the module and runs every case of a batch, which keeps
+// the test free of a computed import and costs one process start for thousands of cases.
+function evaluatorFiles() {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-promptfoo-starter-'));
+  projects.push(directory);
+  fs.copyFileSync(STARTER, path.join(directory, 'promptfoo-assertions.mjs'));
+  fs.copyFileSync(path.join(EVALUATOR, 'mapping.json'), path.join(directory, 'mapping.json'));
+  return { fixture: path.join(EVALUATOR, 'promptfoo.mjs'), starter: path.join(directory, 'promptfoo-assertions.mjs') };
+}
+
+const BATCH_DRIVER = `
+import fs from 'node:fs';
+import { pathToFileURL } from 'node:url';
+const evaluator = await import(pathToFileURL(process.env.TEA_BATCH_MODULE).href);
+const { batches, observation } = JSON.parse(fs.readFileSync(0, 'utf8'));
+const outcomes = batches.map((results) => {
+  try {
+    return { rows: evaluator.rowsFromResults(results, observation) };
+  } catch (error) {
+    return { message: error.message };
+  }
+});
+process.stdout.write(JSON.stringify({ outcomes, allowed: evaluator.ALLOWED_ASSERTION_TYPES }));
+`;
+
+// One refusal message (empty when the results import) and the rows, for each list of results, in one child process.
+function importBatch(file, batches, observation = OBSERVATION) {
+  const result = command(process.execPath, ['--input-type=module', '-e', BATCH_DRIVER], {
+    env: { ...env, TEA_BATCH_MODULE: file },
+    input: JSON.stringify({ batches, observation }),
+    maxBuffer: 256 * 1024 * 1024,
+  });
+  check(result.status === 0, `the batch import of ${path.basename(file)} exited ${result.status}: ${result.output.slice(0, 300)}`);
+  if (result.status !== 0) return { outcomes: batches.map(() => ({ message: 'batch failed' })), allowed: [] };
+  return JSON.parse(result.stdout);
+}
+
+const OUTPUT = 'Summary for List pantry: apples, pears';
+const OBSERVATION = observed(`${OUTPUT}\n`);
+const APPLES = { type: 'contains', value: 'apples', metric: 'required-apples' };
+const PEARS = { type: 'contains', value: 'pears', metric: 'required-pears' };
+const SHELLFISH = { type: 'not-contains', value: 'shellfish', metric: 'forbidden-shellfish' };
+
+function resultOf(assertions, extra = {}) {
+  return { response: { output: OUTPUT }, testCase: { assert: assertions }, ...extra };
+}
+
+function gradedOf(assertions, passes = assertions.map(() => true)) {
+  return resultOf(assertions, {
+    gradingResult: {
+      pass: passes.every(Boolean),
+      componentResults: assertions.map((assertion, index) => ({ assertion, pass: passes[index], reason: 'graded' })),
+    },
+  });
+}
+
+// One assertion placed first, third of three, in a second result after a graded first one and as the third assertion of
+// a second result, so a refusal is tried beyond the first element.
+function placements(assertion) {
+  return [
+    ['first', [resultOf([assertion])]],
+    ['third assertion', [resultOf([APPLES, PEARS, assertion])]],
+    ['second result', [gradedOf([PEARS]), resultOf([assertion])]],
+    ['second result, third assertion', [gradedOf([APPLES, PEARS, SHELLFISH]), resultOf([APPLES, PEARS, assertion])]],
+  ];
+}
+
+// Each case is [value, refused as a string value, refused as an element of an array value]. The verdicts follow the
+// installed promptfoo 0.123.1: a string `file://` value splits at its first colon and the resolved path runs as code when it
+// ends in `.js`, `.cjs`, `.mjs`, `.ts`, `.cts` or `.mts` (any case), `.py` or `.rb`; any other extension is data or an
+// error; an array element is read as data only, and a `package:` element is a literal string.
+const REFERENCES = [
+  ['file://boom.py', true, true],
+  ['file://boom.rb', true, true],
+  ['file://boom.js', true, true],
+  ['file://boom.cjs', true, true],
+  ['file://boom.mjs', true, true],
+  ['file://boom.ts', true, true],
+  ['file://boom.cts', true, true],
+  ['file://boom.mts', true, true],
+  ['file://x.mjs:pick', true, true],
+  ['file://boom.py:fn', true, true],
+  ['file://boom.py:fn:more', true, true],
+  ['file://x.PY', true, true],
+  ['file://x.Rb', true, true],
+  ['file://x.MJS', true, true],
+  ['file://dir/sub/boom.py', true, true],
+  ['file:///absolute/boom.py', true, true],
+  ['file://boom.py/', true, true],
+  ['file://./sub/../boom.py', true, true],
+  ['file://.py', true, true],
+  ['package:pkg:fn', true, false],
+  ['package:x:y', true, false],
+  ['package:', true, false],
+  ['file://list.json', false, false],
+  ['file://list.yaml', false, false],
+  ['file://list.yml', false, false],
+  ['file://words.txt', false, false],
+  ['file://x.py.txt', false, false],
+  ['file://x.pyc', false, false],
+  ['file://x.pyx', false, false],
+  ['file://x.rbx', false, false],
+  ['file://x.jsx', false, false],
+  ['file://dir.py/data.json', false, false],
+  ['file://dir.js/words.txt', false, false],
+  ['file://boom.py.', false, false],
+  ['file://boom', false, false],
+  ['file://xpy', false, false],
+  ['file://x.json:boom.py', false, false],
+  ['FILE://boom.py', false, false],
+  ['file:/boom.py', false, false],
+  [' file://boom.py', false, false],
+  ['pears', false, false],
+  ['package', false, false],
+  ['packages:x', false, false],
+  ['Package:x', false, false],
+  [' package:x', false, false],
+  ['a package: reference', false, false],
+];
+
+const TRANSFORMS = [
+  ["output.replace('pears', 'figs')", true],
+  ['output.notAFunction()', true],
+  ['file://rewrite.js', true],
+  ['', true],
+  [0, true],
+  [false, true],
+  [null, false],
+  [undefined, false],
+];
+
+const named = (type) => (typeof type === 'string' ? JSON.stringify(type) : '(none)');
+const refused = (message) => message.includes(REFUSED);
+
+// Every case of one evaluator: [label, results, verify(outcome)], run in one batch.
+function guardCases() {
+  const cases = [];
+  const add = (label, results, verify) => cases.push([label, results, verify]);
+  // A type outside the allow-list, by itself, in each placement.
+  const types = [
+    'javascript',
+    'python',
+    'ruby',
+    'webhook',
+    'not-javascript',
+    'llm-rubric',
+    'g-eval',
+    'factuality',
+    'levenshtein',
+    'word-count',
+    'assert-set',
+    'not-not-contains',
+    'Contains',
+    'not-',
+    '',
+    5,
+    null,
+    undefined,
+  ];
+  for (const type of types) {
+    for (const [where, results] of placements({ type, value: 'x', metric: 'forbidden-shellfish' })) {
+      add(
+        `type ${String(type)} (${where})`,
+        results,
+        ({ message = '' }) =>
+          refused(message) &&
+          message.includes(`type ${named(type)}`) &&
+          message.includes('contains, icontains') &&
+          message.includes('command evaluator'),
+      );
+    }
+  }
+  // A value that loads code, as a string and as an element of an array, for a type and its `not-` form.
+  for (const [reference, asString, asElement] of REFERENCES) {
+    for (const [type, value, expected] of [
+      ['contains', reference, asString],
+      ['not-icontains', reference, asString],
+      ['contains-any', ['pears', reference], asElement],
+      ['not-contains-all', [reference], asElement],
+    ]) {
+      for (const [where, results] of placements({ type, value, metric: 'forbidden-shellfish' })) {
+        add(
+          `${type} with ${JSON.stringify(value)} (${where}) should be ${expected ? 'refused' : 'admitted'}`,
+          results,
+          ({ message = '' }) =>
+            expected
+              ? refused(message) &&
+                message.includes(`assertion ${named(type)}`) &&
+                message.includes('loads adopter code') &&
+                message.includes(JSON.stringify(reference))
+              : !refused(message),
+        );
+      }
+    }
+  }
+  // A transform.
+  for (const [transform, expected] of TRANSFORMS) {
+    for (const type of ['contains', 'not-regex']) {
+      for (const [where, results] of placements({ type, value: 'pears', metric: 'forbidden-shellfish', transform })) {
+        add(
+          `${type} with transform ${JSON.stringify(transform)} (${where}) should be ${expected ? 'refused' : 'admitted'}`,
+          results,
+          ({ message = '' }) =>
+            expected
+              ? refused(message) && message.includes(`assertion ${named(type)}`) && message.includes('its transform rewrites the output')
+              : !refused(message),
+        );
+      }
+    }
+  }
+  // The refusal is the diagnostic whatever else is wrong with the result.
+  const bad = { type: 'javascript', value: 'x', metric: 'required-pears' };
+  const incomplete = gradedOf([PEARS, bad]);
+  incomplete.gradingResult.componentResults.pop();
+  for (const [what, result, other] of [
+    ['an ungraded row', resultOf([PEARS, bad], { error: 'framework could not grade' }), UNGRADED],
+    ['a graded output that differs from stdout', resultOf([PEARS, bad], { response: { output: 'another output' } }), 'output differs'],
+    ['an incomplete grade set', incomplete, 'incomplete'],
+    ['an unknown metric', resultOf([{ ...PEARS, metric: 'nobody' }, bad]), 'metadata'],
+    ['a repeated assertion', resultOf([PEARS, PEARS, bad]), 'repeated'],
+  ]) {
+    add(
+      `${what} hid the refusal`,
+      [result],
+      ({ message = '' }) => refused(message) && message.includes('"javascript"') && !message.includes(other),
+    );
+  }
+  // Results without assertions to refuse keep their own messages.
+  add('an empty assertion list changed its message', [resultOf([])], ({ message = '' }) => message !== '' && !refused(message));
+  add('a result without a test case changed its message', [{ response: { output: OUTPUT } }], ({ message = '' }) => !refused(message));
+  // The diagnostic quotes a value, and names a type, at most 200 characters.
+  add(
+    'the quoted value was not capped at 200 characters',
+    [resultOf([{ type: 'contains', value: `file://${'x'.repeat(500)}.py`, metric: 'required-pears' }])],
+    ({ message = '' }) => message.includes(`"file://${'x'.repeat(193)}"`) && !message.includes('x'.repeat(194)),
+  );
+  add(
+    'the named type was not capped at 200 characters',
+    [resultOf([{ type: 'y'.repeat(300), value: 'x', metric: 'required-pears' }])],
+    ({ message = '' }) => message.includes(`"${'y'.repeat(200)}"`) && !message.includes('y'.repeat(201)),
+  );
+  return cases;
+}
+
+// Every listed type, and its `not-` form, is one the installed promptfoo defines; every type it defines outside the list is refused.
+async function allowList(files) {
+  const installed = await import('promptfoo');
+  const base = installed.BaseAssertionTypesSchema.options;
+  // AssertionTypeSchema ends in a custom() member that accepts any value, so its safeParse cannot tell a real type from a
+  // made-up one. Its two enumerating members do: the base enumeration, and the pipe that adds the `not-` prefix.
+  const defined = (type) => installed.BaseAssertionTypesSchema.safeParse(type).success;
+  const negated = (type) => {
+    const parsed = installed.NotPrefixedAssertionTypesSchema.safeParse(type);
+    return parsed.success ? parsed.data : undefined;
+  };
+  check(!defined('not-a-real-type') && negated('not-a-real-type') === undefined, 'the installed type enumeration accepted a made-up type');
+  const exported = {};
+  for (const label of ['fixture', 'starter']) {
+    const file = files[label];
+    const cases = guardCases();
+    const listed = [];
+    const probes = [];
+    const forms = (types) => types.flatMap((type) => [type, `not-${type}`]);
+    // The exported list, by an empty batch first.
+    const { allowed } = importBatch(file, []);
+    exported[label] = allowed;
+    listed.push(...allowed);
+    const outside = forms(base.filter((type) => !allowed.includes(type)));
+    const inside = forms(allowed);
+    for (const form of outside)
+      probes.push([
+        `${label}: ${form} was not refused`,
+        [resultOf([{ type: form, value: 'x', metric: 'required-pears' }])],
+        ({ message = '' }) => refused(message) && message.includes(JSON.stringify(form)),
+      ]);
+    for (const form of inside)
+      probes.push([
+        `${label}: the listed type ${form} was refused`,
+        [resultOf([{ type: form, value: 'pears', metric: 'required-pears' }])],
+        ({ message = '' }) => !refused(message),
+      ]);
+    // The starter maps the graded pass and the graded fail of every listed type and its `not-` form.
+    if (label === 'starter') {
+      for (const form of inside) {
+        for (const passed of [true, false]) {
+          probes.push([
+            `starter: ${form} graded ${passed}`,
+            [gradedOf([{ type: form, value: 'pears', metric: 'required-pears' }], [passed])],
+            ({ rows = [] }) =>
+              rows.length === 1 &&
+              rows[0].key === 'required-pears' &&
+              rows[0].outcome === (passed ? 'pass' : 'fail') &&
+              (passed ? rows[0].quote === undefined : rows[0].quote === `${OUTPUT}\n` && rows[0].quoteChannel === 'stdout'),
+          ]);
+        }
+      }
+    }
+    const all = [...cases, ...probes];
+    const { outcomes } = importBatch(
+      file,
+      all.map(([, results]) => results),
+    );
+    for (const [index, [description, , verify]] of all.entries()) {
+      check(verify(outcomes[index]), `${label}: ${description}: ${JSON.stringify(outcomes[index]).slice(0, 220)}`);
+    }
+    check(listed.length === 10 && new Set(listed).size === 10, `${label}: the allow-list changed size: ${listed.join(', ')}`);
+    for (const type of listed) {
+      check(defined(type), `${label}: ${type} is not an assertion type of the installed promptfoo`);
+      check(negated(type) === `not-${type}`, `${label}: the installed promptfoo does not define ${type} with a not- prefix`);
+    }
+  }
+  check(
+    JSON.stringify(exported.fixture) === JSON.stringify(exported.starter),
+    `the fixture and the starter list different assertion types: ${exported.fixture} against ${exported.starter}`,
+  );
 }
 
 function project(edit = () => {}) {
@@ -543,34 +881,43 @@ function sealedRecords(run) {
   return fs.readdirSync(run, { recursive: true }).filter((name) => name === 'trial-sets.json' || name.split(path.sep)[0] === 'trial-sets');
 }
 
-function ungradedRuns() {
+function refusedRuns() {
   const hook = 'const rows = rowsFromResults(results, observation);';
-  // The first case needs no rewrite: promptfoo itself returns no grade for an assertion whose transform throws.
-  for (const [label, grading, message] of [
-    ['an ungraded row with an error (a failing transform)', null, UNGRADED],
+  // The first three cases need no rewrite: promptfoo itself grades each of these assertions, and the wrapper refuses them.
+  // The last three rewrite the results after promptfoo returns. No assertion the fixture admits makes promptfoo return a
+  // result it cannot grade (a transform did, and is refused), and its grade checks need a result it does not return.
+  for (const [label, edit, messages] of [
+    ['a thrown JavaScript assertion', ['--error'], [REFUSED, '"javascript"']],
+    ['a raising Python file as the value', ['--code-file'], [REFUSED, '"contains"', '"file://boom.py"', 'loads adopter code']],
+    ['a rewriting transform', ['--transform'], [REFUSED, '"contains"', 'its transform rewrites the output']],
+    [
+      'an ungraded row with an error',
+      'for (const result of results) {\n      result.gradingResult = null;\n      result.error = "promptfoo could not grade this output";\n    }',
+      [UNGRADED, 'promptfoo could not grade this output'],
+    ],
     [
       'a partial grade set',
       'for (const result of results) result.gradingResult.componentResults.splice(1);',
-      'incomplete multi-assertion grade',
+      ['incomplete multi-assertion grade'],
     ],
     [
       'a grade without a boolean pass',
       'for (const result of results) delete result.gradingResult.componentResults[1].pass;',
-      'without a boolean pass',
+      ['without a boolean pass'],
     ],
   ]) {
     const folder = project((evaluation) => {
-      if (grading === null) {
+      if (Array.isArray(edit)) {
         const manifest = path.join(evaluation, 'evaluation.json');
         const evaluationJson = read(manifest);
-        evaluationJson.evaluator.args = ['--ungraded'];
+        evaluationJson.evaluator.args = edit;
         fs.writeFileSync(manifest, `${JSON.stringify(evaluationJson, null, 2)}\n`);
         return;
       }
       const file = path.join(evaluation, 'evaluator', 'promptfoo.mjs');
       const source = fs.readFileSync(file, 'utf8');
-      check(source.includes(hook), 'the fixture evaluator lost the hook the ungraded-run cases rewrite');
-      fs.writeFileSync(file, source.replace(hook, `${grading}\n    ${hook}`));
+      check(source.includes(hook), 'the fixture evaluator lost the hook the rewritten-run cases use');
+      fs.writeFileSync(file, source.replace(hook, `${edit}\n    ${hook}`));
     });
     for (const subcommand of ['preflight']) {
       const prepared = command(process.execPath, [CLI, subcommand, '--evaluation', folder]);
@@ -581,8 +928,8 @@ function ungradedRuns() {
     const run = latestRun(folder);
     const diagnostic = path.join(run, 'evaluator', 'clean', 'trial-1.stderr');
     const stderr = fs.existsSync(diagnostic) ? fs.readFileSync(diagnostic, 'utf8') : '';
-    check(stderr.includes(message), `${label}: the evaluator diagnostic did not name ${message}: ${stderr}`);
-    if (grading === null) check(stderr.includes('Transform failed'), `${label}: the diagnostic lost the framework error: ${stderr}`);
+    for (const message of messages)
+      check(stderr.includes(message), `${label}: the evaluator diagnostic did not name ${message}: ${stderr}`);
     const records = sealedRecords(run);
     check(records.length === 0, `${label}: run sealed trial records ${records.join(', ')}`);
   }
@@ -612,8 +959,9 @@ function degenerate() {
     directEvaluator();
     childInvocation();
     resultShapes();
+    await allowList(evaluatorFiles());
     pipeline();
-    ungradedRuns();
+    refusedRuns();
     degenerate();
     process.stdout.write(`promptfoo ${installed.version}: ${checks} checks, ${failures.length} failures\n`);
   } catch (error) {

@@ -1,4 +1,4 @@
 - type: contains
-  value: pears
+  value:
+    word: pears
   metric: required-pears
-  transform: "output.notAFunction()"
