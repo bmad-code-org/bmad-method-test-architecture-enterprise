@@ -15,8 +15,8 @@
  *   digests the evidence records agree, the stored designs hold their bytes, and
  *   `git status` of the whole checkout is what it was.
  * - The workspace: every cycle's directory lies outside the checkout and is gone
- *   afterwards, whether the cycle qualified or stopped, and a SIGTERM mid-cycle
- *   removes it before the process ends.
+ *   afterwards, whether the cycle qualified or stopped. A signal ends a cycle by
+ *   its default action, and the next cycle reclaims the dead process's parent.
  * - Each failing step, planted one at a time, stops the cycle with AD-10's exit
  *   and no qualified result: a clean arm that fails (11), a mutated arm that
  *   holds or is inconclusive (11), a restore that cannot be written (12), a
@@ -779,21 +779,21 @@ async function checkSignals() {
     }
     const file = /READY (.+)\n/.exec(printed())?.[1];
     check(file !== undefined, `the ${signal} child never reached its mutated arm`);
+    // The parent must exist while its cycle is alive. After the child is dead any process that reaps (another copy of
+    // this suite, a generator, a suite sharing the private root) may already have removed it.
+    const parent = file === undefined ? null : path.dirname(path.dirname(file));
+    check(parent !== null && fs.existsSync(parent), `the ${signal} child's cycle has no private parent while it runs`);
     child.kill(signal);
     const result = await endedWithin(child, ended, 30_000);
     check(result.signal === signal, `a cycle sent ${signal} ended by ${result.signal ?? `exit ${result.code}`}; the signal must end it`);
 
     // Dead processes' parents: the one the killed cycle left, and one planted under a pid known to be dead.
-    const left = file === undefined ? [] : [path.dirname(path.dirname(file))];
+    const left = parent === null ? [] : [parent];
     const dead = spawnSync(process.execPath, ['-e', '']);
     const planted = path.join(privateRootIn(privateRootBase()), `run-${dead.pid}-planted`);
     fs.mkdirSync(planted);
     fs.writeFileSync(path.join(planted, 'design.md'), 'x');
     left.push(planted);
-    check(
-      left.every((directory) => fs.existsSync(directory)),
-      `a cycle sent ${signal} left no parent, so the reap has nothing to remove`,
-    );
     const next = qualifyingChild(`reaper-${signal}`, '');
     const reaped = await endedWithin(next.child, next.ended, 60_000);
     check(reaped.code === 0, `the cycle after the ${signal} one ended with ${reaped.signal ?? `exit ${reaped.code}`}; expected 0`);

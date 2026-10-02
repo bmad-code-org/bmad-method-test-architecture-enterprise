@@ -125,6 +125,11 @@ Round 2 (two Opus regression lenses over 76c9c877) found seven items, all fixed:
 - 6, redundant empty-document guards: one bounded loop (`widened <= before.length`) and one throw; a case pins the bound with two repeated lines that become three.
 - 7, record corrections (the suite is 201 checks and 1.4 s, so its shard weight is 1.4): this section, the byte-equality statements, the signal rows, the exports and the measurements below.
 
+Round 3 (one bounded reviewer over 3090b45e) found two items, both fixed:
+
+- The signal case asserted that the killed child had left a parent after the child was dead, so any process that reaps at that moment (another copy of the suite, a generator, a suite sharing `/tmp/tea-evaluate-p<uid>`) removed it and the case failed: 18 of 36 runs under six parallel suites and six parallel `--check` loops. The case now asserts the parent exists before `child.kill`, while its cycle is alive, and keeps only the after-reaper "gone" checks. The same load passes 36 of 36, and dropping the reap still fails the case in a solo run.
+- The suite header said a SIGTERM mid-cycle removes the workspace before the process ends. It now says a signal ends the cycle by its default action and the next cycle reclaims the dead process's parent.
+
 ## Design Notes
 
 A mutation here is a byte edit of a stored document, and the stored seeded designs were written by hand as one-edit variants of the reference, so deriving the operator from the pair is exact by construction. Taking a diff as the operator means the probe's mutation cannot disagree with its mutated evidence.
