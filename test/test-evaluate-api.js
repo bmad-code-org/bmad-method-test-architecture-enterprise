@@ -1919,6 +1919,7 @@ const LETTER_SECRETS = [
   'Grader-INDEX-index-0123',
   'ΣΟΦΟΣ-Token-ΑΣ-Ὀδυσσεύς-0123',
   'admin-index-token',
+  'İİ-key-token-01',
   'münich-key-0123',
   'key-token-value-𐐨',
 ];
@@ -2287,6 +2288,25 @@ async function checkLetterCases() {
       scrub('xx-ABCDEFGHIJ-xx', ['abcdefghij', 'abcdefgh']) === 'xx-[redacted]-xx',
     'a secret that holds another left its end in the text',
   );
+
+  // `İ` lower-cases to `i` and a combining dot above, so an echo that spells it both ways (the capital, or `i` and the mark)
+  // is one letter to the scrub: each spelling, mixed in one text, matches the secret written with a plain `i`.
+  const dot = 'İ'.toLowerCase().slice(1);
+  for (const [text, secret, expected] of [
+    [`x i${dot}ndex-token-0001 y`, 'index-token-0001', 'x [redacted] y'],
+    [`Admi${dot}n-İndex-Token`, 'admin-index-token', '[redacted]'],
+    [`İi${dot}-kEy-tOkEn-01`, 'İİ-key-token-01', '[redacted]'],
+    [`İ${dot}${dot}ndex-token-0001`, 'index-token-0001', '[redacted]'],
+    [`line ${'a'.repeat(30)} Admi${dot}n-İndex-To`, 'admin-index-token', `line ${'a'.repeat(30)} [redacted]`],
+    [`x ${`i${dot}`.repeat(8)}-ke`, 'iiiiiiii-key', 'x [redacted]'],
+  ]) {
+    const done =
+      text.startsWith('line ') || text.endsWith('-ke') ? scrubCutText(text, secretForms([secret])) : scrub(text, secretForms([secret]));
+    check(
+      done === expected,
+      `${JSON.stringify(text)} against ${JSON.stringify(secret)} gave ${JSON.stringify(done)}; expected ${JSON.stringify(expected)}`,
+    );
+  }
 
   // Secrets that overlap in the text are replaced as one: the leftmost does not leave the rest of the longer one behind.
   for (const secrets of [

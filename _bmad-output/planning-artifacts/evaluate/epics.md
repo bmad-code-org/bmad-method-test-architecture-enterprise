@@ -1796,7 +1796,7 @@ So that no evidence artifact holds a value the host injected (AD-4, AD-8).
 **Gate:** `test:evaluate-api`, `test:evaluate-arms`, `npm test`.
 
 (Amended 2026-10-01 in Story 1.66's build: the scrub matches in every letter case by case folding (lower, upper, capitalized per word and mixed), so a normalizer that capitalizes each word or mixes cases is covered; the observation, a fault's message and cause, a cut text's leading part (`scrubCutText`), a number's text (`numberHoldsSecret`) and an object key all use it.
-The secret's forms also hold its lower-case, upper-case and Turkish-rule mappings, taken before each form is escaped, for the mappings case folding does not reach (`ß` to `SS`, `İ` to `i` and a combining dot, `ı` and `I`).
+The secret's forms also hold its lower-case, upper-case and Turkish-rule mappings, taken before each form is escaped, for the mappings case folding does not reach (`ß` to `SS`, `ı` and `I`); the fold reads `İ` and `i` with a combining dot as one `i`.
 The first criterion's revert reads as written: the case-sensitive scrub leaves the capitalized and mixed echoes in as well.
 The third criterion's revert is reworded.
 The fault path has no set of its own any more (`anyCase` is gone), and the matching is case-insensitive by construction, so rebuilding a lowercased set and handing it to the new scrub leaks nothing.

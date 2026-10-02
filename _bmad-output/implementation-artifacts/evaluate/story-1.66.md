@@ -83,7 +83,7 @@ context:
 - `cli/lib/evaluate/arm.js`: one case-folded comparison for the observation and the fault path.
   `secretForms(values)` still returns a longest-first array of strings, now frozen.
   Each secret is taken in five cases (`caseVariants`: as it is, `toLowerCase()`, `toUpperCase()`, and `toLocaleLowerCase('tr')` and `toLocaleUpperCase('tr')`), and each case in the body, every first-level escaping and every second-level escaping `escapingsOf` writes.
-  `foldedText(text)` folds a text one character at a time (`toLowerCase().toUpperCase().toLowerCase()`, so `K` and the Kelvin sign, `ς` and `σ`, `ſ` and `s`, `ı` and `I`, `ẞ`, `ß` and `SS` meet, and a capital sigma is read without its neighbors); an ASCII text folds to its lower case in one call, and any other text also returns the original span of each folded unit, because a fold can change the length.
+  `foldedText(text)` folds a text one character at a time (`toLowerCase().toUpperCase().toLowerCase()`, with `İ` and `i` plus a combining dot above both one `i`, so `K` and the Kelvin sign, `ς` and `σ`, `ſ` and `s`, `ı` and `I`, `ẞ`, `ß` and `SS` meet, and a capital sigma is read without its neighbors); an ASCII text folds to its lower case in one call, and any other text also returns the original span of each folded unit, because a fold can change the length.
   `matcherFor(secrets)` folds the forms once per array (a `WeakMap` keyed on the array), drops empty forms and keeps the first unit of each and the longest length.
   `scrub` finds every occurrence of every folded form in the folded string (`indexOf`), merges overlapping spans (adjacent ones stay apart), maps the spans back to the original text and replaces each with `[redacted]`; a string that holds no form comes back as it was.
   `scrubCutText` scrubs whole forms, then reads only the last stretch of the text a form could fill (the longest folded form's length) and replaces from the longest suffix, four characters or more, that is a proper leading part of some folded form.
@@ -221,7 +221,8 @@ The unmodified copy passes `--letter-cases-only` 3,630 checks; the counts below 
 - A1 (medium): a Turkish-locale per-word capitalizer leaks an ASCII secret.
   Reproduced: `scrub('x Admin-İndex-Token y', secretForms(['admin-index-token']))` returned the text unchanged, because the fold turns `İ` into `i` and a combining dot while the forms hold plain `i`.
   Fix: `foldedText` folds U+0130 to `i` (one unit for one unit).
-  A secret that holds `İ` still matches: its own fold is `i`, its `toLowerCase` variant keeps the combining dot and matches an echo that decomposes the `İ`, and its Turkish lower-case variant is plain `i` (checked on `İstanbul-key` against `İstanbul-key`, `İSTANBUL-KEY`, the decomposed form and `istanbul-key`; the `İstanbul-Key-0123` cells of the matrix stay green).
+  A secret that holds `İ` matches too: its own fold is `i`, and its Turkish lower-case variant is plain `i`.
+  Round 2 found that this fold alone left the decomposed spelling (`i` and a combining dot above, what `toLowerCase` makes of `İ`) folding to two units, which broke an echo that mixes both spellings; see Review round 2.
   Tests: a `Turkish capitalized` entry in `LETTER_CASES` and the secret `admin-index-token`; they run through the observation, every byte format, the fault path and the keys.
   Revert (U+0130 folded by the generic path): 24 fail.
   The new cell showed one more corner, now stated in the reference, the plan and Story 1.74: an ASCII secret that the capitalizer echoes with an `İ` and a serializer then writes as `\u0130` has other escape digits than any whole-text case; the escaped formats are skipped for it, as they are for the mixed-case non-ASCII secrets (`unevenBeyondAscii`).
@@ -255,6 +256,29 @@ The unmodified copy passes `--letter-cases-only` 3,630 checks; the counts below 
 Green: `--letter-cases-only` 3,630 checks, `test:evaluate-api` 3,907, `test:evaluate-arms` 570, `test:evaluate-boundaries` 427, `test:evaluate-guidance`, `test:schema-versions`, `test:schemas`, `test:boundary`, `test:direction`, `test:doc-counts`, `test:shards` 117, `test:ci-coverage`, `test:changelog`, `lint`, `lint:md`, `format:check`, `docs:validate-links`.
 Measured weight of `test:evaluate-api`, other lanes' suites running alongside: 115 and 112 seconds with the round's cases (mean 113.5) against 111.5 and 107.3 at `5268045b` (mean 109.4), +4.1 seconds locally (the one-port matrix and the three text positions add about 3 seconds of the group's 4); at the 1.9 local-to-CI ratio about +8 seconds, so `test:evaluate-api` 175.9 becomes about 184.
 `tools/test-shard-weights.json` stays untouched; `test:evaluate-arms` is unchanged by this round.
+
+## Review round 2
+
+Regressions and material defects only, from the coordinator's second review of PR #292.
+
+- R2-1 (medium, a regression of round 1's A1): the fold of `İ` to a single `i` left its decomposed spelling, `i` and U+0307 (what `toLowerCase` makes of `İ`), folding to `i` and the mark, so an echo that mixes both spellings matched no form.
+  Reproduced through `scrub(text, secretForms([secret]))`, each `[redacted]` before round 1 and a leak after it: secret `İİ-key-token-01` echoed `İi̇-kEy-tOkEn-01` (the alternating cell), `index-token-0001` echoed `i̇ndex-token-0001`, and `admin-index-token` echoed `Admi̇n-İndex-Token`.
+  The matrix stayed green because its only `İ` secret held one `İ`.
+  Fix: in `foldedText`, an `i` unit followed by U+0307 absorbs every mark that follows it, so `İ`, and `i` with the mark all give one unit `i`, and the span map (`starts`, `ends`) covers the absorbed marks.
+  The forms fold through the same function, so the sequence folds the same way inside a form.
+  Brute force over the installed Node (every code point; every base letter of U+0020 to U+024F with one and two of five combining marks; 200,000 random strings over `i`, `I`, `İ`, `ı`, U+0307, `s`, `ß`, `ẞ`, `k`, the Kelvin sign, `σ`, `ς`, `Σ`, `ǰ`): `fold(x)`, `fold(lower(x))` and `fold(upper(x))` agree for every one.
+  After the fix `İ` followed by two marks was the one sequence that disagreed, which the loop over every following mark closed; no other base letter and combining mark sequence folds inconsistently (the first run found only U+0130 with U+0307).
+  The cut's stretch (the last `longest` units) is still enough although a fold can now drop a unit: only an `i` drops one, and the forms of a secret with an `i` hold its `İ` variants as escapes of six units or more.
+  A doubling loop for the stretch was written first and removed once a mutation (the doubling off) could not fail, for that reason.
+  Tests: `İİ-key-token-01` joins `LETTER_SECRETS`; unit checks on the three echoes above, on `İ` followed by two marks, and on a cut text of eight dotted `i` units against `iiiiiiii-key`, each giving one `[redacted]`.
+  Revert observations (scratch copy, failed checks of `--letter-cases-only`, 3,881 in all): the round 1 fold restored 30 (the alternating cell and the unit checks); only one mark absorbed 1; the span end ignoring the absorbed mark 185; the round 1 fold and U+0130 folded generically 49.
+- R2-2 (low): the Story 1.74 first AC's Test cell in `test-design-epic-1.md` now names the ASCII value a Turkish-locale capitalizer echoes as `Admin-İndex-Token`, as the AC in `epics.md` does.
+- Reference: the `İ` sentence says an echo that mixes `İ` and `i` with a combining dot matches.
+
+### Gates after review round 2
+
+Green: `--letter-cases-only` 3,881 checks, `test:evaluate-api` 4,158, `test:evaluate-mcp` 226, `lint`, `lint:md`, `format:check`, `test:doc-counts`, `test:changelog`, `docs:validate-links`.
+`test:evaluate-arms` was not rerun: `arm.js` changed in `foldedText` only.
 
 ## Verification
 
