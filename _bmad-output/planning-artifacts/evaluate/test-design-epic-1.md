@@ -38,7 +38,7 @@ inputDocuments:
 
 ## Executive Summary
 
-**Scope:** full epic-level test design for Stories 1.1 to 1.75, 1.80, 1.90 to 1.99 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.75, 1.80, 1.90 to 1.99. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
+**Scope:** full epic-level test design for Stories 1.1 to 1.75, 1.80, 1.81, 1.90 to 1.99 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.75, 1.80, 1.81, 1.90 to 1.99. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
 
 **Risk summary:**
 
@@ -943,12 +943,19 @@ Added in Story 1.31. Levels: integration, unit, guidance. Files: `test/test-eval
 
 ### Story 1.60: Observe every confined process's file access, beyond Node
 
-Added in Story 1.31. Levels: integration over real eval-quality. File: `test/test-evaluate-run.js` (`test:evaluate-run`).
+Added in Story 1.31. Levels: unit, integration over real eval-quality. Files: `test/test-evaluate-run.js` (`test:evaluate-confinement`, group `confinement`, and `test:evaluate-run`), `test/test-isolation-primitives.js` with its golden.
 
-| AC                                          | Test                                                                                                    | Level                              | P   | Revert check                                         |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ---------------------------------- | --- | ---------------------------------------------------- |
-| A non-Node target's ungranted read reported | A shell target reads a file outside its workspace; assert `observedMounts` lists it and `score` exits 3 | Integration over real eval-quality | P0  | The Node preload alone leaves `observedMounts` empty |
-| A clean shell target reports nothing        | A shell target that stays in its workspace; assert empty `observedMounts`                               | Integration                        | P1  | A noisy audit fails the assertion                    |
+| AC                                                                       | Test                                                                                                                                                                                    | Level                              | P   | Revert check                                                                                              |
+| ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | --- | --------------------------------------------------------------------------------------------------------- |
+| A shell target's ungranted read is reported                              | A `sh` script `cat`s a file outside its workspace; assert `observedMounts` lists it and `score` exits 3 with `mount outside allowlist`                                                  | Integration over real eval-quality | P0  | Removing the observer, or restoring the Node preload alone, leaves `observedMounts` empty                 |
+| Every process is seen                                                    | Processes started with an empty environment (`env -i cat`, `env -i node`), a refused write and a read of the evaluation folder's contract are listed                                    | Integration                        | P0  | A preload that only Node processes load lists none of the non-Node ones                                   |
+| A clean target reports nothing                                           | A shell script that reads system files, lists `/`, runs `date`, uses its home and workspace, reads a missing path and `stat`s an ungranted file; an executed ungranted binary is listed | Integration                        | P1  | A grant removed from the system list, or a metadata probe reported, lists a path                          |
+| A declared system path is granted                                        | The same ungranted read with its directory in `systemPaths`, and in the sandbox's `readable` list                                                                                       | Integration, unit                  | P1  | Ignoring `readable` lists the path                                                                        |
+| A host that cannot observe refuses                                       | A `log` that reports nothing or exits, a missing, failing or untracing `strace`, a sandbox whose stream ended and a call whose trace holds no start                                     | Unit, integration                  | P0  | A probe that passes on an empty answer lets a run start with an audit that cannot see                     |
+| Attribution is by token                                                  | Two audited sandboxes at once read different files; each lists its own                                                                                                                  | Integration                        | P0  | Attributing by process name, or sharing one token, lists both files in both                               |
+| The trace and the report rules parse as strace and the kernel print them | Canned strace lines (setup before the start, unfinished and resumed calls, relative paths, escapes, `O_PATH`, `chdir` and `clone`) and canned log lines                                 | Unit                               | P1  | Reading the setup lines, or skipping the resumed half, changes the listed paths                           |
+| The vectors and profiles are what the golden holds                       | The audited Seatbelt profile (report rule before the re-grants, tagged denials) and the audited Bubblewrap command (strace outside, trace unbound)                                      | Unit, golden                       | P1  | Moving the report rule after the home's re-grant, or binding the trace into the namespace, fails the case |
+| The reference states the audit                                           | Read `### File-system confinement` for the mechanism-level audit and what it does not see                                                                                               | Reference                          | P1  | Restoring the sentence that only Node processes write the audit fails the case                            |
 
 ### Story 1.61: Teach file-system confinement in the Evaluate skill
 
@@ -1165,6 +1172,16 @@ Added 2026-10-01 in Story 1.57. Levels: integration over real eval-quality, stat
 | Tags reach the target                 | A project with a lightweight and an annotated tag; the stub runs `git tag -l` and `git describe --tags`; assert both listed and no remote, URL or hook copied    | Integration | P1  | Dropping the tag copy lists nothing               |
 | A very large history builds           | A stub `git` on `PATH` prints more than six million ids for the walk; assert the run completes and the walk is read as a stream                                  | Integration | P1  | A walk that buffers all output fails with ENOBUFS |
 | The reference drops the three limits  | Read `### File-system confinement` by its exact heading                                                                                                          | Static      | P2  | Leaving either limit fails the case               |
+
+### Story 1.81: Record how much of the macOS audit the kernel's log lost
+
+Added 2026-10-01 in Story 1.60. Levels: unit, integration. Files: `test/test-evaluate-run.js` (`test:evaluate-confinement`, group `confinement`, and `test:evaluate-run`).
+
+| AC                                             | Test                                                                                                                          | Level       | P   | Revert check                                                |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ----------- | --- | ----------------------------------------------------------- |
+| A trial records the canaries sent and received | A stub `log` that drops every fourth report; assert the trial's entry in `run.json` holds the counts and the summary names it | Integration | P0  | Sending no canaries leaves a trial with no counts to record |
+| A lossless trial records `complete`            | A real `log` on a quiet host and a Linux trial: no loss, no read; assert `complete`                                           | Integration | P1  | Recording `complete` for every trial fails the lossy case   |
+| The reference states the lossy channel         | Read `### File-system confinement` for the measurements and the `run.json` field                                              | Reference   | P1  | Removing the passage fails the case                         |
 
 ### Story 1.90: Verify the baseline manifest's file digests
 

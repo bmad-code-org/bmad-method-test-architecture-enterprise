@@ -106,11 +106,19 @@ const UNSAFE_CHARACTERS = [
   ['a delete', '\u007F'],
 ];
 
-/** A PATH directory holding a `bwrap` that confines nothing and exits 0, so a probe of it passes on any host. */
+/**
+ * A PATH directory holding a `bwrap` that confines nothing and exits 0, so a probe of it passes on any host, and a
+ * `strace` that writes a trace holding a read of the last argument, so the audit's probe of it passes too (Story 1.60).
+ */
 function withStubMechanism(body) {
   const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-isolation-stub-'));
   try {
     fs.writeFileSync(path.join(bin, 'bwrap'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+    fs.writeFileSync(
+      path.join(bin, 'strace'),
+      '#!/bin/sh\nout=""; prev=""\nfor a in "$@"; do if [ "$prev" = "-o" ]; then out="$a"; fi; prev="$a"; done\nprintf \'1 openat(AT_FDCWD</>, "%s", O_RDONLY) = 3<%s>\\n\' "$prev" "$prev" > "$out"\nexit 0\n',
+      { mode: 0o755 },
+    );
     return body(bin);
   } finally {
     fs.rmSync(bin, { recursive: true, force: true });

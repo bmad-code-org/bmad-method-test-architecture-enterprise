@@ -56,6 +56,7 @@ const {
   confinedCommandMechanism,
   confinedMcpMechanism,
   confines,
+  makeAuditDirectory,
   makeTargetHome,
   releaseTargetHome,
   targetSandbox,
@@ -696,11 +697,12 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
    * the one private home directory the port makes beneath that parent, which
    * `HOME` and the XDG base directories name, which the target may read and
    * write and which the run removes; `resetHome()` empties it for an
-   * independent arm or leg; with `options.audit` the port's Node
-   * processes also report the paths they open outside what was granted, which
-   * `observedMounts()` reads, and which is empty otherwise.
+   * independent arm or leg; with `options.audit` the mechanism reports the
+   * paths every process of the port opens outside what was granted
+   * (`confinement-audit.js`), which `observedMounts()` reads (async) and which
+   * is empty otherwise; `releaseHome()` ends the audit and removes the home.
    *
-   * @returns {Promise<{port: {probe: Function}, policy: object, mcpPolicy: object, observedMounts: () => string[], releaseHome: () => void, resetHome: () => void}>}
+   * @returns {Promise<{port: {probe: Function}, policy: object, mcpPolicy: object, observedMounts: () => Promise<string[]>, releaseHome: () => void, resetHome: () => void}>}
    */
   async function createProbePort(options) {
     const policy = commandTargetPolicy(options);
@@ -713,14 +715,8 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
     let sandbox = null;
     let home = null;
     if (confines(confinement)) {
-      let report = null;
-      if (options.audit === true) {
-        const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-evaluate-confinement-'));
-        scratch.push(directory);
-        report = path.join(directory, 'report.jsonl');
-        // The one file the target may write of its audit, so it cannot delete, replace or link it.
-        fs.writeFileSync(report, '', { mode: 0o600 });
-      }
+      // An audited port's observer keeps its files in a private directory no target can reach (`makeAuditDirectory`).
+      const audit = options.audit === true ? { directory: makeAuditDirectory(scratch) } : null;
       // Bubblewrap forks the command it confines, so a private directory carries the signal that ended a target.
       let status = null;
       if (confinement.mode === 'bubblewrap') {
@@ -734,9 +730,15 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
         privateRoot: options.privateRoot ?? null,
         // One private home per sandbox, beneath the run's private parent; an opt-out run makes none and keeps the host's environment.
         home: (home = makeTargetHome(scratch)),
-        report,
+        audit,
         status,
       });
+      try {
+        await sandbox.start();
+      } catch (error) {
+        sandbox.release();
+        throw error;
+      }
       // Each started target's own declared system paths, which its audit grants.
       const declared = new Map();
       const declare = (target, entry) => {
@@ -788,9 +790,17 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
     };
     // The trial's private home goes when its trial ends; one that cannot be removed stays in `scratch` for the run's end.
     const releaseHome = () => {
+      sandbox?.release();
       if (home !== null) releaseTargetHome(scratch, home);
     };
-    return { port, policy, mcpPolicy, observedMounts: () => sandbox?.observedMounts() ?? [], releaseHome, resetHome };
+    return {
+      port,
+      policy,
+      mcpPolicy,
+      observedMounts: async () => (sandbox === null ? [] : await sandbox.observedMounts()),
+      releaseHome,
+      resetHome,
+    };
   }
 
   /**

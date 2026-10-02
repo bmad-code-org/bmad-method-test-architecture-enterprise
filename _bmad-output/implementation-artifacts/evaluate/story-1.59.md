@@ -2,7 +2,7 @@
 title: 'Story 1.59: Let a confined agent target keep the state its CLI writes'
 type: 'feature'
 created: '2026-10-01'
-status: 'review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'd930f170e4b281b01ad70edf6d71381308393314'
