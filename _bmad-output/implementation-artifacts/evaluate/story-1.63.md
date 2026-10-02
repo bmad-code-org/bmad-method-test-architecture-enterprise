@@ -2,7 +2,7 @@
 title: "Story 1.63: Give a Bubblewrap target no route to the host's abstract sockets"
 type: 'feature'
 created: '2026-10-02'
-status: 'review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '1da8097a'
