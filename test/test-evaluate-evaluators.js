@@ -89,13 +89,27 @@
  *   no record; the probe runs with the evaluator's environment and a private
  *   working directory, 1 + 2 times per trial; a configuration unit holds the
  *   tree fixed and changes only the observed version.
+ * - Held attempt inputs (Story 1.69, `--group=held-attempts`): the score call of
+ *   each qualification attempt over a run that opted out of confinement, with
+ *   the race engine (`test/fixtures/evaluate/race-engine.js`) over real
+ *   eval-quality. An unchanged qualification scores as before and each
+ *   attempt's recorded argv reproduces its evidence byte for byte; each of the
+ *   seven inputs rewritten for the engine's read (kept, and restored), an
+ *   artifact with altered votes, reindented, with a repeated key, restaged
+ *   from an earlier attempt or removed, and an exit or Invalid reason the held
+ *   bytes do not give exit 12 on a later attempt and a later probe, naming the
+ *   file, with no vote and no report. A call that exits 7 still stops the run,
+ *   the hold is driven over a real run directory writer, and a static read
+ *   fails when `scoreAttempt` names an input without `score-inputs.js`.
  * - Framework neutrality: an import of an unlisted package under `cli/`
  *   fails `eval-quality-gates dependency-direction` in a copy of the tree.
  * - Units: the row conversion, the command-line call reading, the bridged
  *   run's configuration bytes, and an api operation's path template kept
  *   from the agent.
  *
- * Usage: node test/test-evaluate-evaluators.js
+ * Usage: node test/test-evaluate-evaluators.js [--group=<name>]
+ *
+ * The revert checks of Story 1.69 run its cases alone with `--held-attempts-only`, narrowed with `--only=<text>`, which keeps the cases whose name has the text.
  */
 
 'use strict';
@@ -110,7 +124,7 @@ const { ENGINE_CLI_ENV, engineCliPath, loadEngine } = require('../cli/lib/evalua
 const { createArtifactValidator } = require('../cli/lib/evaluate/records');
 const { calibrationObservation, calibrationOperationId, runCalibration } = require('../cli/lib/evaluate/calibration');
 const { registryFromEvaluation } = require('../cli/lib/evaluate/registry');
-const { runTrial } = require('../cli/lib/evaluate/run');
+const { runTrial, scoreAttempt } = require('../cli/lib/evaluate/run');
 const { hostEnvironmentPort } = require('../cli/lib/evaluate/arm');
 const { AGENT_ADAPTERS, bridgedArgsRefused } = require('../cli/lib/agent-adapters');
 const { runSupervised } = require('../cli/lib/run-agent');
@@ -2253,6 +2267,34 @@ async function checkQualificationUnexpectedState() {
 }
 
 /**
+ * P-003, a second probe of mutation M-001 whose signature selects on no standard input, beside P-002, which selects on it.
+ * Each probe's witness names the request of its own leg, so neither fires on the other's leg (eval-quality scopes them).
+ */
+function addSecondMutatedProbe(folder) {
+  const witnessing = (probe, request) => {
+    const witness = probe.defects[0].manifestationWitness;
+    witness.inputs.stdin.value = request;
+    witness.relation = {
+      op: 'all',
+      operands: [
+        { op: 'containment', operands: [{ pointer: `/interactions/${witness.legId}/stdout` }, { literal: 'verdict: rejected' }] },
+        { op: 'containment', operands: [{ pointer: `/interactions/${witness.legId}/stdout` }, { literal: `request: ${request}` }] },
+      ],
+    };
+  };
+  const first = readJson(path.join(folder, 'probes', 'P-002.probe.json'));
+  const second = structuredClone(first);
+  second.probeId = 'P-003';
+  second.defects[0].defectId = 'D-002';
+  second.defects[0].manifestationWitness.legId = 'manifest-lenient-3';
+  second.defectSignature.condition.selector.inputBinding.stdin = null;
+  witnessing(first, 'Judge the request.');
+  witnessing(second, 'Judge the second request.');
+  writeJson(path.join(folder, 'probes', 'P-002.probe.json'), first);
+  writeJson(path.join(folder, 'probes', 'P-003.probe.json'), second);
+}
+
+/**
  * Story 1.34: an arm's agreement is the lowest among its probes. P-003 is a second probe of mutation M-001 whose
  * signature selects on no standard input, so the stub that omits stdin on every even run still trips it; P-002 selects on
  * standard input and reads as Invalid on the second attempt. The arm reports P-002's 0.5, not P-003's 1.
@@ -2260,30 +2302,7 @@ async function checkQualificationUnexpectedState() {
 async function checkQualificationLowestProbe() {
   const project = makeQualifiedProject('qualify-lowest-probe', {
     mode: 'alternating-stdin',
-    edit: ({ folder }) => {
-      // Each probe's witness names the request of its own leg, so neither fires on the other's leg (eval-quality scopes them).
-      const witnessing = (probe, request) => {
-        const witness = probe.defects[0].manifestationWitness;
-        witness.inputs.stdin.value = request;
-        witness.relation = {
-          op: 'all',
-          operands: [
-            { op: 'containment', operands: [{ pointer: `/interactions/${witness.legId}/stdout` }, { literal: 'verdict: rejected' }] },
-            { op: 'containment', operands: [{ pointer: `/interactions/${witness.legId}/stdout` }, { literal: `request: ${request}` }] },
-          ],
-        };
-      };
-      const first = readJson(path.join(folder, 'probes', 'P-002.probe.json'));
-      const second = structuredClone(first);
-      second.probeId = 'P-003';
-      second.defects[0].defectId = 'D-002';
-      second.defects[0].manifestationWitness.legId = 'manifest-lenient-3';
-      second.defectSignature.condition.selector.inputBinding.stdin = null;
-      witnessing(first, 'Judge the request.');
-      witnessing(second, 'Judge the second request.');
-      writeJson(path.join(folder, 'probes', 'P-002.probe.json'), first);
-      writeJson(path.join(folder, 'probes', 'P-003.probe.json'), second);
-    },
+    edit: ({ folder }) => addSecondMutatedProbe(folder),
   });
   const ran = evaluate(['run', '--evaluation', project.folder], project.env);
   check(ran.status === 11, `an arm with a probe at 0.5 exited ${ran.status}; expected 11\n${ran.output}`);
@@ -2420,6 +2439,561 @@ async function checkQualificationHoldsAdopterTree() {
     'a run stopped in its qualification wrote trial sets',
   );
   check(directory !== null && recordFiles(directory).length === 0, 'a run stopped in its qualification wrote a trial record');
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Story 1.69: the inputs of an evaluator attempt's score call are held
+
+/** The attempt `evaluator-qualification/` keeps for a probe on an arm, run-relative. */
+function attemptDirectory(arm, attempt, probeId) {
+  return `evaluator-qualification/${arm}/attempt-${attempt}/${probeId}`;
+}
+
+/**
+ * `run` over `project` with the race engine in the engine's place, so each attempt's `eval-quality score` call is logged
+ * (one line per call, in order) and the attack `env` names happens around it.
+ */
+function raceRun(label, project, env = {}) {
+  const directory = scratch.make(`${label}-race`);
+  const log = path.join(directory, 'calls.jsonl');
+  // The stub numbers its runs from the counter, and which attempts omit stdin follows the number: every run starts from one.
+  fs.rmSync(project.counter, { force: true });
+  const ran = evaluate(['run', '--evaluation', project.folder], {
+    ...project.env,
+    [ENGINE_CLI_ENV]: RACE_ENGINE,
+    TEA_RACE_LOG: log,
+    TEA_RACE_TARGET: directory,
+    TEA_RACE_SENTINEL: path.join(directory, 'sentinel.txt'),
+    ...env,
+  });
+  return { ran, calls: captures(log), runDirectory: runDirectoryOf(project.folder), directory };
+}
+
+/**
+ * A call the run refused: exit 12 naming `says`, the engine called `calls` times (the refused call was the last), no
+ * evidence artifact for the refused attempt, no `evaluator-qualification.json`, no trial set and no run that says it completed.
+ */
+function checkAttemptRefused(what, raced, { says, calls, attempt }) {
+  const { ran, runDirectory } = raced;
+  check(ran.status === 12, `${what}: run exited ${ran.status}; expected 12\n${ran.output}`);
+  check(
+    says.test(ran.output) && ran.output.includes('no vote is recorded for the call'),
+    `${what}: the stop does not read ${says} and say no vote is recorded:\n${ran.output}`,
+  );
+  check(raced.calls.length === calls, `${what}: the engine was called ${raced.calls.length} time(s); expected ${calls}`);
+  check(runDirectory !== null, `${what}: the run kept no run directory`);
+  if (runDirectory === null) return;
+  check(
+    !fs.existsSync(path.join(runDirectory, attempt, 'evidence-artifact.json')),
+    `${what}: evidence was copied for the refused attempt (${attempt})`,
+  );
+  check(fs.existsSync(path.join(runDirectory, attempt, 'score.json')), `${what}: the refused call left no call record in ${attempt}`);
+  check(!fs.existsSync(path.join(runDirectory, 'evaluator-qualification.json')), `${what}: the run wrote a qualification report`);
+  check(!fs.existsSync(path.join(runDirectory, 'trial-sets.json')), `${what}: the run wrote trial sets`);
+  check(readJson(path.join(runDirectory, 'run.json')).completed !== true, `${what}: the stopped run says it completed`);
+}
+
+/** The attacks over the clean and mutated arms' fourth call: the mutated arm's second attempt of P-002, a later attempt of a later arm. */
+const HELD_ATTEMPT_LATER = { arm: 'mutated-M-001', attempt: 2, probeId: 'P-002', nth: 4 };
+
+/** The run-relative file each input kind of the later attempt's call is. */
+function heldAttemptFiles({ arm, attempt, probeId }) {
+  const directory = attemptDirectory(arm, attempt, probeId);
+  return {
+    contract: 'eval-contract.json',
+    preflight: 'preflight-verdict.json',
+    configuration: 'evaluator-configuration.json',
+    policy: 'scoring-policy.json',
+    probe: `probes/${probeId}.probe.json`,
+    record: `${directory}/record-1.json`,
+    manifest: `${directory}/isolation-manifest.json`,
+  };
+}
+
+/** Each attempt's recorded `score` argv run again by hand with a fresh `--out` writes the evidence the run kept, byte for byte. */
+function checkAttemptsReproduce(what, runDirectory) {
+  let reproduced = 0;
+  for (const arm of ['clean', 'mutated-M-001']) {
+    for (const attempt of [1, 2]) {
+      const probeId = arm === 'clean' ? 'P-001' : 'P-002';
+      const directory = path.join(runDirectory, attemptDirectory(arm, attempt, probeId));
+      const call = readJson(path.join(directory, 'score.json'));
+      const kept = path.join(directory, 'evidence-artifact.json');
+      if (!fs.existsSync(kept)) continue;
+      const out = path.join(scratch.make(`${what}-reproduce`), 'evidence-artifact.json');
+      const argv = [...call.argv];
+      argv[argv.indexOf('--out') + 1] = out;
+      const direct = spawnSync(process.execPath, [engineCliPath(BASE_ENV), ...argv], {
+        encoding: 'utf8',
+        timeout: SPAWN_TIMEOUT_MS,
+        killSignal: 'SIGKILL',
+      });
+      check(
+        direct.status === call.exitCode,
+        `${what}: ${arm}/attempt ${attempt} run by hand exited ${direct.status}; recorded ${call.exitCode}`,
+      );
+      check(
+        fs.existsSync(out) && fs.readFileSync(out).equals(fs.readFileSync(kept)),
+        `${what}: ${arm}/attempt ${attempt} run by hand did not write the evidence the run kept`,
+      );
+      check(
+        call.argv
+          .filter((argument, at) =>
+            [
+              '--record',
+              '--contract',
+              '--probe',
+              '--preflight-verdict',
+              '--policy',
+              '--isolation-manifest',
+              '--evaluator-configuration',
+            ].includes(call.argv[at - 1]),
+          )
+          .every((file) => file.startsWith(runDirectory)),
+        `${what}: ${arm}/attempt ${attempt}'s recorded argv names a file outside the run directory`,
+      );
+      reproduced += 1;
+    }
+  }
+  check(reproduced === 4, `${what}: ${reproduced} attempt(s) were reproduced by hand; expected 4`);
+}
+
+/**
+ * Story 1.69: an evaluator attempt's score call is held to its inputs. A qualification of a sealed-brief agent over a run
+ * that opted out of confinement, with the race engine standing in for eval-quality's CLI over the real one: a clean run
+ * scores as before (its recorded argv reproduces each attempt's evidence byte for byte), and every attack on the later
+ * attempt's call (the fourth) exits 12 with the engine called four times and no vote recorded for it.
+ */
+async function checkHeldAttempts() {
+  const project = makeQualifiedProject('held-attempts', { mode: 'normal' });
+  const keep = scratch.make('held-attempts-keep');
+  const clean = raceRun('held-attempts-clean', project, { TEA_RACE_KEEP: keep });
+  check(
+    clean.ran.status === 0,
+    `an unchanged qualification under the race engine exited ${clean.ran.status}; expected 0\n${clean.ran.output}`,
+  );
+  check(
+    clean.calls.length === 4,
+    `an unchanged qualification called the engine ${clean.calls.length} time(s); expected 4 (two attempts on two arms)`,
+  );
+  if (clean.runDirectory !== null) {
+    checkQualificationReport('the unchanged qualification', clean.runDirectory, QUALIFICATION);
+    checkAttemptsReproduce('the unchanged qualification', clean.runDirectory);
+  }
+
+  const later = HELD_ATTEMPT_LATER;
+  const files = heldAttemptFiles(later);
+  const attempt = attemptDirectory(later.arm, later.attempt, later.probeId);
+  const attack = (what, mode, extra = {}) =>
+    raceRun(`held-attempts-${what}`, project, { TEA_RACE_MODE: mode, TEA_RACE_NTH: String(later.nth), TEA_RACE_KEEP: keep, ...extra });
+  const refusal = /is not the one the held inputs stand behind/;
+  for (const kind of Object.keys(files)) {
+    // The file is rewritten before the engine's read and kept: the check after the call names it, whatever the engine made of it.
+    const kept = attack(`rewrite-${kind}`, `rewrite-${kind}`);
+    checkAttemptRefused(`the ${kind} rewritten and kept`, kept, {
+      says: new RegExp(`${files[kind].replaceAll('.', String.raw`\.`)} can no longer be read as the file the runtime wrote`),
+      calls: later.nth,
+      attempt,
+    });
+    // The file is rewritten for the engine's read and put back before the check: only the comparison with the held bytes refuses it.
+    const restored = attack(`restore-${kind}`, `restore-${kind}`);
+    checkAttemptRefused(`the ${kind} rewritten for the call and restored`, restored, { says: refusal, calls: later.nth, attempt });
+  }
+
+  // The staged artifact is another well-formed artifact, in other bytes, or one the held bytes do not give.
+  checkAttemptRefused('an artifact with altered votes', attack('forge-votes', 'forge-votes'), {
+    says: /differs from the one the verified inputs produce/,
+    calls: later.nth,
+    attempt,
+  });
+  checkAttemptRefused('the same artifact reformatted', attack('reformat-artifact', 'reformat-artifact'), {
+    says: /differs from the one the verified inputs produce/,
+    calls: later.nth,
+    attempt,
+  });
+  checkAttemptRefused('the same artifact with a repeated last key', attack('duplicate-key-artifact', 'duplicate-key-artifact'), {
+    says: /differs from the one the verified inputs produce/,
+    calls: later.nth,
+    attempt,
+  });
+  checkAttemptRefused("an earlier attempt's artifact staged", attack('stage-stashed', 'stage-stashed', { TEA_RACE_STASH_DIR: keep }), {
+    says: /differs from the one the verified inputs produce/,
+    calls: later.nth,
+    attempt,
+  });
+  checkAttemptRefused('a link staged in place of the artifact', attack('stage-link', 'stage-link'), {
+    says: /is a link or a non-file entry/,
+    calls: later.nth,
+    attempt,
+  });
+  checkAttemptRefused('the staged artifact removed', attack('unstage', 'restore-and-unstage'), {
+    says: /the call staged no evidence artifact, and the verified inputs produce one/,
+    calls: later.nth,
+    attempt,
+  });
+  // The artifact is the one the held bytes give; the call's own exit (3, over a rewritten preflight verdict) is not.
+  checkAttemptRefused('an exit the held bytes do not give', attack('rescore', 'restore-and-rescore', { TEA_RACE_KIND: 'preflight' }), {
+    says: /the call exited 3 where the verified inputs give 0/,
+    calls: later.nth,
+    attempt,
+  });
+}
+
+/**
+ * Story 1.69: the same comparison on a later probe of an arm and a later attempt, and on an Invalid attempt. The mutated
+ * arm holds P-002 (which the stub's second attempt leaves Invalid, since it omits stdin) and P-003, so the calls run clean
+ * P-001 twice, then the mutated arm's P-002 and P-003 in each attempt.
+ */
+async function checkHeldAttemptsLaterProbes() {
+  const project = makeQualifiedProject('held-attempts-probes', {
+    mode: 'alternating-stdin',
+    edit: ({ folder }) => addSecondMutatedProbe(folder),
+  });
+  const keep = scratch.make('held-attempts-probes-keep');
+  const attack = (what, mode, nth, extra = {}) =>
+    raceRun(`held-attempts-probes-${what}`, project, { TEA_RACE_MODE: mode, TEA_RACE_NTH: String(nth), TEA_RACE_KEEP: keep, ...extra });
+  const probe3 = heldAttemptFiles({ arm: 'mutated-M-001', attempt: 1, probeId: 'P-003' });
+  checkAttemptRefused('a record of the later probe of the arm rewritten and kept', attack('record', 'rewrite-record', 4), {
+    says: new RegExp(`${probe3.record.replaceAll('.', String.raw`\.`)} can no longer be read as the file the runtime wrote`),
+    calls: 4,
+    attempt: attemptDirectory('mutated-M-001', 1, 'P-003'),
+  });
+  checkAttemptRefused('altered votes on the later probe of the later attempt', attack('votes', 'forge-votes', 6), {
+    says: /differs from the one the verified inputs produce/,
+    calls: 6,
+    attempt: attemptDirectory('mutated-M-001', 2, 'P-003'),
+  });
+  // An attempt the held bytes read as Invalid (exit 3, no artifact, its invalid lines): a rewrite for the engine's read that
+  // gives another Invalid reason and is put back changes only the lines. The unattacked run finds which call that is.
+  const unattacked = raceRun('held-attempts-probes-clean', project, { TEA_RACE_KEEP: keep });
+  check(
+    unattacked.ran.status === 11,
+    `the unattacked run exited ${unattacked.ran.status}; expected 11 (P-002 agrees at 0.5)\n${unattacked.ran.output}`,
+  );
+  const report = unattacked.runDirectory === null ? null : readJson(path.join(unattacked.runDirectory, 'evaluator-qualification.json'));
+  // The calls run arm by arm, attempt by attempt, and probe by probe within an attempt.
+  const order = (report?.arms ?? []).flatMap((arm) =>
+    Array.from({ length: report.attempts }, (_, index) => index + 1).flatMap((number) =>
+      arm.probes.map((probe) => ({
+        ...probe.attempts.find((attempt) => attempt.attempt === number),
+        arm: arm.conditionArm.replace(':', '-'),
+        probeId: probe.probeId,
+      })),
+    ),
+  );
+  const invalid = order.findIndex((attempt) => attempt.exitCode === 3);
+  check(
+    invalid !== -1 && order.filter((attempt) => attempt.exitCode === 3).length === 1,
+    `the unattacked run has ${order.filter((attempt) => attempt.exitCode === 3).length} Invalid attempt(s); expected 1`,
+  );
+  if (invalid === -1) return;
+  const at = order[invalid];
+  checkAttemptRefused(
+    'another Invalid reason for an Invalid attempt',
+    attack('reason', 'restore-and-unstage', invalid + 1, { TEA_RACE_KIND: 'configuration' }),
+    {
+      says: /diagnostics differ from those the verified inputs give/,
+      calls: invalid + 1,
+      attempt: attemptDirectory(at.arm, at.attempt, at.probeId),
+    },
+  );
+  // An earlier attempt's artifact staged over the Invalid call, where the held bytes give no artifact at all.
+  checkAttemptRefused(
+    'an artifact staged over an Invalid attempt',
+    attack('invalid-stash', 'stage-stashed', invalid + 1, { TEA_RACE_STASH_DIR: keep }),
+    {
+      says: /not the result of the verified inputs, which produce no artifact/,
+      calls: invalid + 1,
+      attempt: attemptDirectory(at.arm, at.attempt, at.probeId),
+    },
+  );
+}
+
+/** A call that exits a code the CLI does not document stops the run as before: exit 12, the engine called once more, no vote. */
+async function checkHeldAttemptsUndocumentedExit() {
+  const project = makeQualifiedProject('held-attempts-exit', { mode: 'normal' });
+  const raced = raceRun('held-attempts-exit', project, { TEA_RACE_MODE: 'exit-7', TEA_RACE_NTH: '4' });
+  const { ran, runDirectory } = raced;
+  check(ran.status === 12, `an attempt whose score call exited 7 stopped the run with ${ran.status}; expected 12\n${ran.output}`);
+  check(
+    /an evaluator attempt could not be scored: .*exited 7, which is no exit the CLI documents/.test(ran.output),
+    `the stop does not say the call could not be scored:\n${ran.output}`,
+  );
+  check(raced.calls.length === 4, `the run called the engine ${raced.calls.length} time(s); expected 4, the last of them exiting 7`);
+  check(
+    runDirectory !== null &&
+      !fs.existsSync(path.join(runDirectory, 'evaluator-qualification.json')) &&
+      !fs.existsSync(path.join(runDirectory, attemptDirectory('mutated-M-001', 2, 'P-002'), 'evidence-artifact.json')),
+    'a call that exited 7 left a qualification report or evidence for its attempt',
+  );
+}
+
+/**
+ * The attempt's inputs are held through the run directory writer: a file that is not the bytes the runtime wrote at the hold
+ * is refused by name before any call, and the check after a call reads each input through the same writer and names the
+ * first one that changed, whichever position it holds in the list. The hold is reached by nothing a call can race with, since
+ * the runtime verifies the run directory just before sealing the attempt's record, so it is driven here over a real run
+ * directory writer.
+ */
+async function checkHeldAttemptInputsUnit() {
+  const { RunDirectory } = require('../cli/lib/evaluate/run-directory');
+  const { attemptProbeFile, holdAttemptInputs } = require('../cli/lib/evaluate/score-inputs');
+  const engine = await loadEngine();
+  const root = scratch.make('held-attempt-unit');
+  const runs = path.join(root, 'runs');
+  fs.mkdirSync(runs);
+  const probeId = 'P-002';
+  const names = {
+    contract: 'eval-contract.json',
+    preflight: 'preflight-verdict.json',
+    configuration: 'evaluator-configuration.json',
+    policy: 'scoring-policy.json',
+    probe: attemptProbeFile(probeId),
+    record: 'evaluator-qualification/mutated-M-001/attempt-1/P-002/record-1.json',
+    manifest: 'evaluator-qualification/mutated-M-001/attempt-1/P-002/isolation-manifest.json',
+  };
+  check(names.probe === 'probes/P-002.probe.json', `the attempt's probe file is ${names.probe}`);
+  const corpusDigest = `sha256:${'a'.repeat(64)}`;
+  const hold = (writer) =>
+    holdAttemptInputs({
+      read: (relative) => writer.read(relative),
+      engine,
+      corpusDigest,
+      probeId,
+      records: [names.record],
+      manifest: names.manifest,
+    });
+  const make = (label) => {
+    const writer = RunDirectory.create(runs, label);
+    for (const [kind, relative] of Object.entries(names)) writer.write(relative, `{"kind":"${kind}"}\n`);
+    return writer;
+  };
+
+  const writer = make('unit-clean');
+  try {
+    const held = hold(writer);
+    check(
+      JSON.stringify([...held.entries.keys()]) ===
+        JSON.stringify([names.contract, names.preflight, names.configuration, names.policy, names.probe, names.record, names.manifest]),
+      `the attempt's inputs are ${JSON.stringify([...held.entries.keys()])}`,
+    );
+    check(held.changedSince() === null, 'a run directory nobody wrote reads as changed');
+    const [set] = held.index.trialSets;
+    const args = held.scoreArguments({ pathOf: (relative) => writer.pathOf(relative), set, out: '/scratch/out.json' });
+    check(
+      JSON.stringify(args) ===
+        JSON.stringify([
+          '--record',
+          writer.pathOf(names.record),
+          '--contract',
+          writer.pathOf(names.contract),
+          '--probe',
+          writer.pathOf(names.probe),
+          '--preflight-verdict',
+          writer.pathOf(names.preflight),
+          '--policy',
+          writer.pathOf(names.policy),
+          '--corpus-digest',
+          corpusDigest,
+          '--isolation-manifest',
+          writer.pathOf(names.manifest),
+          '--evaluator-configuration',
+          writer.pathOf(names.configuration),
+          '--out',
+          '/scratch/out.json',
+        ]),
+      `the attempt's call arguments are ${JSON.stringify(args)}`,
+    );
+  } finally {
+    writer.close();
+  }
+
+  // Every record of the attempt's set is held and handed to the call, in order.
+  const second = 'evaluator-qualification/mutated-M-001/attempt-1/P-002/record-2.json';
+  const several = make('unit-several');
+  try {
+    several.write(second, '{"kind":"second record"}\n');
+    const held = holdAttemptInputs({
+      read: (relative) => several.read(relative),
+      engine,
+      corpusDigest,
+      probeId,
+      records: [names.record, second],
+      manifest: names.manifest,
+    });
+    const [set] = held.index.trialSets;
+    const args = held.scoreArguments({ pathOf: (relative) => several.pathOf(relative), set, out: '/scratch/out.json' });
+    check(
+      JSON.stringify(args.filter((argument, at) => args[at - 1] === '--record')) ===
+        JSON.stringify([several.pathOf(names.record), several.pathOf(second)]) && held.entries.has(second),
+      `an attempt of two records hands the call ${JSON.stringify(args)}`,
+    );
+  } finally {
+    several.close();
+  }
+
+  // `scoreAttempt` turns a hold the writer refuses into exit 12 before any engine call.
+  const refused = make('unit-stop');
+  try {
+    fs.writeFileSync(refused.pathOf(names.configuration), '{"rewritten":true}\n');
+    const calls = path.join(scratch.make('held-attempt-unit-calls'), 'shim.jsonl');
+    let stopped = null;
+    try {
+      await scoreAttempt(
+        {
+          writer: refused,
+          runDirectory: refused.root,
+          env: { ...BASE_ENV, [ENGINE_CLI_ENV]: ENGINE_SHIM, TEA_EVALUATE_SHIM_LOG: calls },
+          log: () => {},
+          scratch,
+          engine,
+          stop: (outcome) => Object.assign(new Error(outcome.message), outcome),
+        },
+        {
+          probe: { probeId },
+          directory: 'evaluator-qualification/mutated-M-001/attempt-1/P-002',
+          set: { records: [names.record], manifestFile: names.manifest },
+          corpusDigest,
+        },
+      );
+    } catch (error) {
+      stopped = error;
+    }
+    check(
+      stopped?.exitCode === 12 &&
+        stopped.stage === 'trial' &&
+        stopped.message.startsWith(`${probeId}: ${names.configuration} is not what the runtime wrote`) &&
+        stopped.message.includes('no engine call was made and no vote is recorded for the attempt'),
+      `a hold the writer refuses stopped scoreAttempt with ${stopped === null ? 'nothing' : JSON.stringify({ ...stopped, message: stopped.message })}`,
+    );
+    check(!fs.existsSync(calls), 'scoreAttempt called the engine after the hold was refused');
+  } finally {
+    refused.close();
+  }
+
+  for (const [kind, relative] of Object.entries(names)) {
+    // After the hold: the check names this file, and only this one.
+    const after = make(`unit-after-${kind}`);
+    try {
+      const held = hold(after);
+      fs.writeFileSync(after.pathOf(relative), '{"rewritten":true}\n');
+      const changed = held.changedSince();
+      check(
+        changed?.relative === relative && /can no longer be read as the file the runtime wrote/.test(changed.message),
+        `the ${kind} rewritten after the hold is reported as ${JSON.stringify(changed)}`,
+      );
+    } finally {
+      after.close();
+    }
+    // Before the hold: the hold itself refuses it, naming the file, so no call is made.
+    for (const [how, change] of [
+      ['rewritten', (file) => fs.writeFileSync(file, '{"rewritten":true}\n')],
+      [
+        'swapped for a link',
+        (file) => {
+          fs.rmSync(file);
+          fs.symlinkSync(path.join(root, 'elsewhere.json'), file);
+        },
+      ],
+      ['removed', (file) => fs.rmSync(file)],
+    ]) {
+      const before = make(`unit-before-${kind}-${how.replaceAll(' ', '-')}`);
+      try {
+        change(before.pathOf(relative));
+        let thrown = null;
+        try {
+          hold(before);
+        } catch (error) {
+          thrown = error;
+        }
+        check(
+          thrown !== null && thrown.message.startsWith(`${relative} is not what the runtime wrote`),
+          `the ${kind} ${how} before the hold: the hold ${thrown === null ? 'went through' : `threw ${JSON.stringify(thrown.message)}`}`,
+        );
+      } finally {
+        before.close();
+      }
+    }
+  }
+}
+
+/** The text of `scoreAttempt` in `cli/lib/evaluate/run.js`, with comments removed. */
+function scoreAttemptSource(source) {
+  const start = source.indexOf('\nasync function scoreAttempt(');
+  const end = source.indexOf('\n}\n', start);
+  if (start === -1 || end === -1) return null;
+  return source
+    .slice(start, end + 2)
+    .replaceAll(/\/\*[\s\S]*?\*\//g, '')
+    .replaceAll(/^\s*\/\/.*$/gm, '');
+}
+
+/**
+ * Why `scoreAttempt`, as written in `source`, reads or names a score input without `score-inputs.js` (empty when it does
+ * not): it must build its inputs and its call's arguments through the module, and may name no input file, probe path, call flag,
+ * or file system call of its own.
+ */
+function scoreAttemptProblems(source) {
+  const body = scoreAttemptSource(source);
+  if (body === null) return ['scoreAttempt is not found in run.js'];
+  const problems = [];
+  const forbidden = [
+    [/eval-contract|preflight-verdict|evaluator-configuration|scoring-policy|POLICY_FILE|RUN_FILES/, 'names a run input file'],
+    [/\.probe\.json|probes\//, 'names the probe file'],
+    [/isolation-manifest|record-\d/, 'names a record or manifest file'],
+    [/['"`]--[a-z-]+['"`]/, 'spells a flag of the call'],
+    [/writer\.pathOf\((?!relative\))/, 'hands the engine a path it chose'],
+    [/\b(?:fs|readFileSync|existsSync|openSync)\b|copyIn\(/, 'reads a file itself, or reads the staged artifact again'],
+    [/set\.records\[|\.records\[0\]/, 'picks a record itself'],
+  ];
+  for (const [pattern, reason] of forbidden) if (pattern.test(body)) problems.push(`${reason} (${pattern})`);
+  for (const required of ['holdAttemptInputs(', 'held.scoreArguments(', 'heldRefusal(', 'writer.write(evidence, staged.bytes)']) {
+    if (!body.includes(required)) problems.push(`does not call ${required}`);
+  }
+  return problems;
+}
+
+/** Story 1.69: a static read of `scoreAttempt`, with each way of reading an input without the module planted. */
+function checkScoreAttemptRoutesThroughTheModule() {
+  const source = fs.readFileSync(path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate', 'run.js'), 'utf8');
+  for (const problem of scoreAttemptProblems(source)) check(false, `scoreAttempt ${problem}`);
+  const plants = [
+    ['a contract path of its own', "const contractFile = 'eval-contract.json';", 'names a run input file'],
+    ['the policy constant', 'const policy = POLICY_FILE;', 'names a run input file'],
+    ['a probe path of its own', 'const probeFile = `probes/${probe.probeId}.probe.json`;', 'names the probe file'],
+    ['a manifest path of its own', "const manifestFile = 'x/isolation-manifest.json';", 'names a record or manifest file'],
+    ['a flag of the call', "args.push('--record', 'x');", 'spells a flag of the call'],
+    ['a path the attempt chose', "const file = writer.pathOf('anything');", 'hands the engine a path it chose'],
+    ['a direct read', 'const bytes = fs.readFileSync(file);', 'reads a file itself'],
+    ['a second read of the staged artifact', 'const again = writer.copyIn(`${directory}/again.json`, produced);', 'reads a file itself'],
+    ['a record picked by hand', 'const record = set.records[0];', 'picks a record itself'],
+  ];
+  for (const [name, line, says] of plants) {
+    const planted = source.replace(
+      '\nasync function scoreAttempt(context, { probe, directory, set, corpusDigest }) {',
+      (head) => `${head}\n  ${line}`,
+    );
+    check(planted !== source, `the plant for ${name} did not land in scoreAttempt`);
+    check(
+      scoreAttemptProblems(planted).some((problem) => problem.startsWith(says)),
+      `the static read of scoreAttempt did not refuse ${name}`,
+    );
+  }
+  const unrouted = source.replace('held.scoreArguments(', 'argumentsOf(');
+  check(
+    scoreAttemptProblems(unrouted).some((problem) => problem.includes('does not call held.scoreArguments(')),
+    'the static read of scoreAttempt did not refuse a call built without the module',
+  );
+  const reread = source.replace('writer.write(evidence, staged.bytes)', 'writer.copyIn(evidence, produced)');
+  check(
+    scoreAttemptProblems(reread).some((problem) => problem.includes('does not call writer.write(evidence, staged.bytes)')),
+    'the static read of scoreAttempt did not refuse a staged artifact copied by a second read',
+  );
+  const unheld = source.replace('holdAttemptInputs(', 'holdInputs(');
+  check(
+    scoreAttemptProblems(unheld).some((problem) => problem.includes('does not call holdAttemptInputs(')),
+    'the static read of scoreAttempt did not refuse inputs held without the module',
+  );
 }
 
 async function checkSealedBriefAgentEdges() {
@@ -5188,10 +5762,11 @@ async function checkFrameworkProbeShapes() {
 }
 
 /**
- * Every case in run order with the group it belongs to. CI runs the groups as four scripts (`--group=evaluators`,
- * `--group=agents`, `--group=private`, the cases that run confined sealed-brief agents and signal-ended runs over the run's
- * private directories (Story 1.58), and `--group=records`) so no one runner carries the whole file's wall time; with no
- * `--group` every case runs.
+ * Every case in run order with the group it belongs to. CI runs the groups as five scripts (`--group=evaluators`,
+ * `--group=agents`, `--group=held-attempts`, the cases that hold an evaluator attempt's score call to its inputs over
+ * real eval-quality (Story 1.69), `--group=private`, the cases that run confined sealed-brief agents and signal-ended runs
+ * over the run's private directories (Story 1.58), and `--group=records`) so no one runner carries the whole file's wall
+ * time; with no `--group` every case runs.
  */
 const CASES = [
   { name: 'the units', body: checkUnits, group: 'evaluators' },
@@ -5231,6 +5806,11 @@ const CASES = [
   { name: 'the other arms are not qualified', body: checkQualificationSkipsOtherArms, group: 'agents' },
   { name: 'a qualification attempt holds the adopter tree', body: checkQualificationHoldsAdopterTree, group: 'agents' },
   { name: 'the sealed-brief agent edges', body: checkSealedBriefAgentEdges, group: 'agents' },
+  { name: "an evaluator attempt's call is held to its inputs", body: checkHeldAttempts, group: 'held-attempts' },
+  { name: 'a later probe, a later attempt and an Invalid attempt are held', body: checkHeldAttemptsLaterProbes, group: 'held-attempts' },
+  { name: 'a call with an undocumented exit still stops the run', body: checkHeldAttemptsUndocumentedExit, group: 'held-attempts' },
+  { name: "an evaluator attempt's inputs are held through the writer", body: checkHeldAttemptInputsUnit, group: 'held-attempts' },
+  { name: 'scoreAttempt routes its inputs through score-inputs.js', body: checkScoreAttemptRoutesThroughTheModule, group: 'held-attempts' },
   { name: 'the records evaluator', body: checkRecordsEvaluator, group: 'records' },
   { name: 'imported rubric scores calibrated', body: checkImportedRubricCalibration, group: 'records' },
   { name: 'imported rubric scores below the minimum', body: checkImportedCalibrationBelowMinimum, group: 'records' },
@@ -5244,6 +5824,8 @@ const CASES = [
     group: 'records',
   },
 ];
+/** Story 1.69's cases, for `--held-attempts-only` (the revert checks, which can narrow them with `--only=<text>`). */
+const HELD_ATTEMPT_CASES = CASES.filter(({ group }) => group === 'held-attempts');
 const GROUPS = new Set(CASES.map(({ group }) => group));
 
 /** Runs one case; an exception is a failed check, so the cases after it still run and every failure is reported. */
@@ -5282,6 +5864,12 @@ async function main() {
       await runCase('an arm agrees as its lowest probe', checkQualificationLowestProbe);
       await runCase('the other arms are not qualified', checkQualificationSkipsOtherArms);
       await runCase('a qualification attempt holds the adopter tree', checkQualificationHoldsAdopterTree);
+      return report();
+    }
+    // `--held-attempts-only` runs Story 1.69's cases alone (its revert checks); `--only=<text>` keeps those whose name has the text.
+    if (process.argv.includes('--held-attempts-only')) {
+      const only = process.argv.find((value) => value.startsWith('--only='))?.slice('--only='.length) ?? '';
+      for (const { name, body } of HELD_ATTEMPT_CASES) if (name.includes(only)) await runCase(name, body);
       return report();
     }
     // `--frameworks-only` runs Story 1.44's cases alone (its revert checks), the configuration unit included.

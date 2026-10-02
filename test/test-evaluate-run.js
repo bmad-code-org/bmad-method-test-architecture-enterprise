@@ -3034,6 +3034,18 @@ function checkScoreInputReference() {
       'the exits the held bytes give a refused or unusable call',
     ],
     [/the call's stdout and its other stderr text are recorded as they came and are not compared/, 'what the comparison leaves out'],
+    // Story 1.69: `run` holds the call it makes for each attempt of a sealed-brief agent evaluator's qualification.
+    [
+      /`run` holds the call it makes for each attempt of a sealed-brief agent evaluator's qualification/,
+      "that `run` holds an evaluator attempt's score call",
+    ],
+    [/reads the attempt's inputs once through the run directory writer/, "the attempt's inputs read once through the run directory writer"],
+    [/before any call is made/, 'that an input that is not what the runtime wrote stops the run before any call'],
+    [/no `evidence-artifact\.json` under the attempt's directory and no `evaluator-qualification\.json`/, 'what a refused attempt leaves'],
+    [
+      /The staged bytes the comparison accepted are the bytes copied into the run directory and read for the vote/,
+      'that the staged bytes are copied and read once',
+    ],
   ]) {
     check(pattern.test(section), `the reference's score input integrity section does not name ${what}`);
   }
@@ -3046,6 +3058,13 @@ function checkScoreInputReference() {
   ]) {
     check(!pattern.test(reference), `the reference still carries ${what}`);
   }
+  const qualifying = reference.slice(reference.indexOf('### Qualifying a sealed-brief agent\n'));
+  check(
+    /The call is held to the bytes the runtime wrote, the way `score` holds its inputs \(see \[Score input integrity\]/.test(
+      qualifying.slice(0, qualifying.search(/^### (?!Qualifying)/m)),
+    ),
+    "the reference's qualification section does not say an attempt's score call is held to the bytes the runtime wrote",
+  );
   const passedRow = reference.split('\n').find((line) => /^\| 3-5\s+\|/.test(line)) ?? '';
   check(
     /Score input integrity/.test(passedRow) && /exit and reason lines are what the held inputs produce/.test(passedRow),
@@ -3054,7 +3073,10 @@ function checkScoreInputReference() {
   const exitRow = reference.split('\n').find((line) => /^\| 12\s+\| infrastructure:/.test(line)) ?? '';
   check(
     /an input that changed or appeared while a call ran/.test(exitRow) &&
-      /a call whose staged artifact, exit or `eval-quality:` diagnostic lines the held inputs do not reproduce/.test(exitRow),
+      /a call whose staged artifact, exit or `eval-quality:` diagnostic lines the held inputs do not reproduce/.test(exitRow) &&
+      /an input that changed or was not the bytes the runtime wrote, or a staged artifact, exit or `eval-quality:` line the held bytes do not give/.test(
+        exitRow,
+      ),
     "the reference's exit 12 row does not name an input that changed during a call, or a call whose artifact, exit or diagnostic lines the held inputs do not reproduce",
   );
 }

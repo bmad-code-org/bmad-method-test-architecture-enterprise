@@ -1890,13 +1890,21 @@ So that a process writing the run directory during qualification cannot move the
 
 **Given** a run that opted out of confinement, qualifying a sealed-brief agent evaluator
 **When** a process rewrites an attempt's record, the contract, the policy, the probe, the preflight verdict, the manifest or the evaluator configuration after the runtime wrote it and before or during the attempt's `eval-quality score` call (the Story 1.41 engine shim, over real eval-quality)
-**Then** `run` exits 12 naming the changed file and records no vote from that call; removing the post-call re-read leaves the file unnamed, and removing it and the comparison records votes from the rewritten bytes, a `test:evaluate-evaluators` case
-**And** a rewrite restored before the check, a well-formed staged artifact with altered votes, and a call whose exit or Invalid reason the held bytes do not give (the staged artifact removed or an earlier one staged), exit 12 the same way; removing the in-process comparison with the held bytes records the altered votes for both, a `test:evaluate-evaluators` case each
-**And** an unchanged qualification scores as before, and its recorded argv with a fresh `--out` still reproduces the attempt's evidence byte for byte
-**And** `scoreAttempt` reads the bytes it holds through `cli/lib/evaluate/score-inputs.js`, the module Story 1.68 builds, so the enumeration of score inputs stays in one place; a static test fails if `scoreAttempt` names those files without it.
+**Then** `run` exits 12 naming the changed file and records no vote from that call; removing the post-call re-read leaves the file unnamed (the in-process comparison still refuses it), and removing that and the comparison records votes from the rewritten bytes for a record, the policy or a probe while a contract, preflight verdict, configuration or manifest rewrite goes Invalid with no evidence and the run exits 11 (amended 2026-10-02 to the behavior observed), a `test:evaluate-held-attempts` case
+**And** a rewrite restored before the check, a well-formed staged artifact with altered votes, and a call whose exit or Invalid reason the held bytes do not give (the staged artifact removed or an earlier one staged), exit 12 the same way; removing the in-process comparison with the held bytes records the altered votes for both, a `test:evaluate-held-attempts` case each
+**And** an unchanged qualification scores as before, and its recorded argv with a fresh `--out` still reproduces the attempt's evidence byte for byte, a `test:evaluate-held-attempts` case
+**And** `scoreAttempt` reads the bytes it holds through `cli/lib/evaluate/score-inputs.js`, the module Story 1.68 builds, so the enumeration of score inputs stays in one place; a static test in `test:evaluate-held-attempts` fails if `scoreAttempt` names those files without it.
 
 **Dependencies:** 1.68.
 **Gate:** `npm test`, engine check.
+
+Amended 2026-10-02 in Story 1.69's build, where the build departs from the plan text: `scoreAttempt` holds the attempt's seven inputs (the contract, the preflight verdict, the evaluator configuration, the policy, the probe, the attempt's record and its isolation manifest) through `holdAttemptInputs` in `cli/lib/evaluate/score-inputs.js`, reading each through the run directory writer (`writer.read`, held to the digest the runtime wrote), so an input that is not what the runtime wrote at the hold stops the run with exit 12 naming the file before any engine call, and the check after the call reads through the writer too.
+The comparison Story 1.68 built (`heldRefusal`, `diagnosticLines`, `stagedArtifact`) moved from `score.js` to `cli/lib/evaluate/held-refusal.js`, because `score.js` requires `run.js`; `score` and `scoreAttempt` both call it, and the call's argv comes from `HeldInputs.scoreArguments` for both.
+Every outcome of a call that ran is compared, exit 3 included (an Invalid attempt whose held bytes give a verdict, or whose `invalid:` lines differ from the held bytes' lines, exits 12); a call that could not run, was killed or exited a code the CLI does not document stops as before.
+The staged bytes the comparison accepted are the bytes copied into `evidence-artifact.json` and read for the vote (the earlier `copyIn` read the staging path a second time).
+`test:evaluate-boundaries` follows `heldRefusal` to `held-refusal.js` (the one file that asks for `reproduce`, once) and keeps `score.js`'s `heldAggregateRefusal` as the one that asks for `reproduceAggregate`; it plants a `reproduce` call in `score.js` and in `run.js`.
+The cases run as their own script, `test:evaluate-held-attempts` (`--group=held-attempts` of `test/test-evaluate-evaluators.js`), since `test:evaluate-agents` already weighs 323 seconds in CI; it joins the `npm test` chain, which counts 109 steps.
+The hold-time refusal has no end-to-end case: the runtime verifies the run directory just before sealing the attempt's record and nothing a call can race with runs between the verify and the hold, so the hold is driven over a real run directory writer in a unit.
 
 ### Story 1.70: Refuse promptfoo assertions that run adopter code or call a model
 

@@ -53,6 +53,11 @@
  *   artifact is the same parsed value in other bytes (indented, with its top
  *   keys in reverse order, or with a repeated last key, which the engine's lexical
  *   scanner refuses).
+ * - `restore-and-rescore`: the input `TEA_RACE_KIND` names is rewritten for the real call and put back, and then a second
+ *   call over the restored inputs stages the artifact the held bytes give, so only the first call's exit and diagnostics disagree.
+ * - `exit-<code>`: the call exits that code whatever the real call did and left staged.
+ * - `forge-votes`: the staged artifact keeps everything but its probe's first trial vote, whose state is flipped between
+ *   `caught` and `missed`.
  * - `stage-stashed`: after the real call the evidence artifact an earlier
  *   score kept for the probe (`TEA_RACE_STASH_DIR/<probe>/evidence-artifact.json`)
  *   is copied to `--out`, whether or not the call staged one.
@@ -60,7 +65,13 @@
  * `TEA_RACE_PROBE`, when set, limits those modes to the call that scores that
  * probe.
  *
- * Every other stage passes through untouched, so the `aggregate-strength` call
+ * Story 1.69 reuses them over the `eval-quality score` call `tea-evaluate run` makes for each attempt of a sealed-brief agent evaluator's qualification.
+ * Its records lie under `evaluator-qualification/` and not `trial-sets/`, and the run directory is found from either.
+ * `TEA_RACE_NTH`, when set, limits the modes to the n-th `score` call the log holds (counting from 1), so a later attempt can be attacked and the earlier ones scored as they are.
+ * `TEA_RACE_KEEP`, when set, names a directory the staged artifact of every call that was not attacked is copied to (`<dir>/<probe>/evidence-artifact.json`).
+ * `TEA_RACE_STASH_DIR` can then name it for `restore-and-restage` and `stage-stashed`.
+ *
+ * Every other stage passes through untouched (the `compile`, `seal` and `preflight` of a `run` included), so the `aggregate-strength` call
  * `tea-evaluate score` makes after the probe loop (Story 1.45) does not reach
  * `TEA_RACE_LOG`, which counts `score` calls alone. It is appended to
  * `TEA_RACE_AGGREGATE_LOG` when that names a file, and `TEA_RACE_AGGREGATE`
@@ -97,6 +108,10 @@ const { engineCliPath } = require('../../../cli/lib/evaluate/engine');
 const argv = process.argv.slice(2);
 const value = (flag) => argv[argv.indexOf(flag) + 1];
 
+if (argv[0] !== 'score' && argv[0] !== 'aggregate-strength') {
+  // A stage the attacks do not act on (`compile`, `seal` and `preflight` of a `run`, Story 1.69) runs as it is.
+  process.exit(spawnSync(process.execPath, [engineCliPath({}), ...argv], { stdio: 'inherit' }).status ?? 5);
+}
 if (argv[0] !== 'score') {
   if (process.env.TEA_RACE_AGGREGATE_LOG) fs.appendFileSync(process.env.TEA_RACE_AGGREGATE_LOG, `${JSON.stringify(argv)}\n`);
   const aggregateMode = argv[0] === 'aggregate-strength' ? (process.env.TEA_RACE_AGGREGATE ?? '') : '';
@@ -165,7 +180,16 @@ const stash = process.env.TEA_RACE_STASH;
 const out = value('--out');
 const probe = path.basename(value('--probe')).replace(/\.probe\.json$/, '');
 const record = value('--record');
-const runDirectory = record.slice(0, record.indexOf(`${path.sep}trial-sets${path.sep}`));
+// The records of a trial set lie under `trial-sets/`, those of a qualification attempt under `evaluator-qualification/`.
+const recordsAt = [`${path.sep}trial-sets${path.sep}`, `${path.sep}evaluator-qualification${path.sep}`]
+  .map((marker) => record.indexOf(marker))
+  .find((at) => at !== -1);
+if (recordsAt === undefined) throw new Error(`the record ${record} lies under neither trial-sets/ nor evaluator-qualification/`);
+if (process.env.TEA_RACE_NTH !== undefined && !Number.isInteger(Number(process.env.TEA_RACE_NTH))) {
+  throw new Error(`TEA_RACE_NTH is ${process.env.TEA_RACE_NTH}; expected a call number`);
+}
+const runDirectory = record.slice(0, recordsAt);
+const callNumber = fs.readFileSync(process.env.TEA_RACE_LOG, 'utf8').split('\n').filter((line) => line.length > 0).length;
 const scores = path.join(runDirectory, 'scores');
 // The invocation `score` is making now is the newest; names sort by start time.
 const invocation = fs.existsSync(scores)
@@ -197,11 +221,13 @@ const INPUTS = {
   // The first record becomes bytes that are no JSON, which the engine refuses with a fault and no artifact.
   unreadable: ['--record', null],
 };
-// `restore-and-unstage` and `restore-and-restage` rewrite the input `TEA_RACE_KIND` names, put it back after the call, and
+// `restore-and-unstage`, `restore-and-restage` and `restore-and-rescore` rewrite the input `TEA_RACE_KIND` names, put it back after the call, and
 // then remove the staged artifact or put an earlier one in its place.
-const attack = /^restore-and-(?:unstage|restage)$/.test(mode) ? ['', 'restore', process.env.TEA_RACE_KIND] : /^(rewrite|restore)-(.+)$/.exec(mode);
+const attack = /^restore-and-(?:unstage|restage|rescore)$/.test(mode) ? ['', 'restore', process.env.TEA_RACE_KIND] : /^(rewrite|restore)-(.+)$/.exec(mode);
 const inputKind = attack !== null && Object.hasOwn(INPUTS, attack[2]) ? attack[2] : null;
-const attacking = process.env.TEA_RACE_PROBE === undefined || process.env.TEA_RACE_PROBE === probe;
+const attacking =
+  (process.env.TEA_RACE_PROBE === undefined || process.env.TEA_RACE_PROBE === probe) &&
+  (process.env.TEA_RACE_NTH === undefined || Number(process.env.TEA_RACE_NTH) === callNumber);
 let original = null;
 let inputFile = null;
 if (inputKind !== null && attacking && argv.includes(INPUTS[inputKind][0])) {
@@ -217,6 +243,14 @@ if (inputKind !== null && attacking && argv.includes(INPUTS[inputKind][0])) {
 
 const real = spawnSync(process.execPath, [engineCliPath({}), ...argv], { stdio: 'inherit' });
 if (attack?.[1] === 'restore' && original !== null) fs.writeFileSync(inputFile, original);
+if (mode === 'restore-and-rescore' && attacking) {
+  // The artifact is the one the restored inputs give, staged by a second call whose own exit and streams are dropped, so
+  // only the first call's exit and diagnostics are left to disagree with the held bytes.
+  fs.rmSync(out, { force: true });
+  spawnSync(process.execPath, [engineCliPath({}), ...argv], { stdio: 'ignore' });
+}
+
+let forcedExit = null;
 
 /** Moves `entry` aside and leaves a link to the target in its place, once. */
 function swap(entry) {
@@ -277,14 +311,27 @@ if (mode === 'swap-scores') {
   // The last duplicate wins when parsed, so the value is the same and the bytes are not.
   const text = fs.readFileSync(out, 'utf8').trimEnd();
   fs.writeFileSync(out, `${text.slice(0, -1)},"schemaVersion":${JSON.parse(text).schemaVersion}}\n`);
+} else if (/^exit-\d+$/.test(mode) && attacking) {
+  forcedExit = Number(mode.slice('exit-'.length));
+} else if (mode === 'forge-votes' && attacking) {
+  // The trial votes a qualification reads are altered; every other field is the engine's own.
+  const artifact = JSON.parse(fs.readFileSync(out, 'utf8'));
+  const [vote] = artifact.reducedProbeOutcomes.find((reduced) => reduced.probeId === probe).trialVotes;
+  vote.state = vote.state === 'caught' ? 'missed' : 'caught';
+  fs.writeFileSync(out, `${JSON.stringify(artifact)}\n`);
 } else if (mode === 'forge-outcomes' && attacking) {
   const artifact = JSON.parse(fs.readFileSync(out, 'utf8'));
   artifact.reducedProbeOutcomes[0].caught = !artifact.reducedProbeOutcomes[0].caught;
   fs.writeFileSync(out, `${JSON.stringify(artifact)}\n`);
-} else if (mode === 'stage-link') {
+} else if (mode === 'stage-link' && attacking) {
   const valid = path.join(target, 'valid-artifact.json');
   fs.renameSync(out, valid);
   fs.symlinkSync(valid, out);
 }
 
-process.exitCode = real.status ?? 5;
+if (process.env.TEA_RACE_KEEP && !(mode !== '' && attacking) && fs.existsSync(out)) {
+  fs.mkdirSync(path.join(process.env.TEA_RACE_KEEP, probe), { recursive: true });
+  fs.copyFileSync(out, path.join(process.env.TEA_RACE_KEEP, probe, 'evidence-artifact.json'));
+}
+
+process.exitCode = forcedExit ?? real.status ?? 5;
