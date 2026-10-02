@@ -23,7 +23,7 @@ inputDocuments:
 
 ## Overview
 
-This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and ninety-two stories, including H.1 (Stories 1.27 to 1.75, 1.80, 1.90 to 1.99 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
+This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and ninety-three stories, including H.1 (Stories 1.27 to 1.75, 1.80, 1.81, 1.90 to 1.99 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
 
 Evaluate is fully stacked. The stack runs system under test, then the evaluation (the mechanism that runs the system, collects evidence and makes judgments), then the Behavioral Evaluation Contract (what behavior matters, what evidence counts, how success and failure resolve), then eval-quality (contract sanity, evidence support, and whether the evaluation catches defects). TeA owns every layer above eval-quality, including each concern eval-quality states it leaves to the caller, so an adopter can evaluate any target end to end. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3 onward, Epic 2 and H.1 to close the plan gap audit; the Traceability section maps each audit item to the story that closes it.
 
@@ -150,7 +150,7 @@ None. Evaluate has no graphical interface.
 ### Epic 1: The Evaluate authoring loop
 
 An adopter describes a target, answers Evaluate's questions, chooses or builds the evaluation layer and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches the seeded defect, with the gaps named and closed. The epic closes by running Evaluate on `bmad-testarch-evaluate` itself, then proving the guidance on two more target kinds, on seeded weaknesses and on an evaluation framework its guides never name.
-Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.75, 1.80, 1.90 to 1.99.
+Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.75, 1.80, 1.81, 1.90 to 1.99.
 
 **FRs covered:** FR1 to FR10, FR13, FR14.
 
@@ -242,22 +242,23 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 74    | 1.74  | 1.66                         |
 | 75    | 1.75  | 1.65                         |
 | 76    | 1.80  | 1.57                         |
-| 77    | 1.90  | 2.1                          |
-| 78    | 1.91  | 2.1                          |
-| 79    | 1.92  | 2.2                          |
-| 80    | 1.93  | 2.3                          |
-| 81    | 1.94  | 2.3                          |
-| 82    | 1.95  | 2.3                          |
-| 83    | 1.96  | 2.4                          |
-| 84    | 1.97  | 2.3, 2.4                     |
-| 85    | 1.98  | 1.24, 2.4                    |
-| 86    | 1.99  | 1.49                         |
-| 87    | 2.1   | 1.16, 1.26, 1.45             |
-| 88    | 2.2   | 2.1                          |
-| 89    | 2.3   | 2.2                          |
-| 90    | 2.4   | 2.3                          |
-| 91    | 2.5   | 2.4                          |
-| 92    | H.1   | 2.5                          |
+| 77    | 1.81  | 1.60                         |
+| 78    | 1.90  | 2.1                          |
+| 79    | 1.91  | 2.1                          |
+| 80    | 1.92  | 2.2                          |
+| 81    | 1.93  | 2.3                          |
+| 82    | 1.94  | 2.3                          |
+| 83    | 1.95  | 2.3                          |
+| 84    | 1.96  | 2.4                          |
+| 85    | 1.97  | 2.3, 2.4                     |
+| 86    | 1.98  | 1.24, 2.4                    |
+| 87    | 1.99  | 1.49                         |
+| 88    | 2.1   | 1.16, 1.26, 1.45             |
+| 89    | 2.2   | 2.1                          |
+| 90    | 2.3   | 2.2                          |
+| 91    | 2.4   | 2.3                          |
+| 92    | 2.5   | 2.4                          |
+| 93    | H.1   | 2.5                          |
 
 ### Parallel lanes (from 2026-10-01)
 
@@ -265,7 +266,7 @@ The table above gives every story's dependencies. Since Story 1.40 merged, the s
 
 **Lane 1: run integrity, scoring and evaluators** (main checkout): 1.41, 1.68, 1.43, 1.44, 1.67, 1.66, 1.65, 1.64, 1.69, 1.70, 1.71, 1.72, 1.73, 1.74, 1.75. Story 1.68 reads the files 1.41 changes, so it follows directly. Story 1.65 turns the single release report into a per-interface report and 1.64 adds call sites that 1.65 would otherwise rewrite, so 1.66, 1.65, 1.64 run in that order. Story 1.44 rewrites the `evaluate-learn` fixture's evaluator, which lane 3's 1.55 and 1.56 own, so those two wait for it. Story 1.69 reuses the module Story 1.68 builds and edits `run.js`, which 1.64 and 1.65 also edit, so it runs after them. Story 1.70 edits the promptfoo starter, fixture evaluator and guide section that Story 1.43 writes and no file the other lane 1 stories edit, so it joins the end. Stories 1.71 to 1.73 were appended from Story 1.44's final review and sit last: 1.71 edits `command-evaluator.js`, `frameworks.js`, the starters and the evaluator guide that Story 1.44 writes, 1.72 edits `agent-adapters.js`, `evaluators.js`, `run.js` and `sealed-brief-agent.js` and so runs after the other `run.js` editors (1.64, 1.65, 1.69), and 1.73 extends the probe and declaration that 1.71 bounds, so it follows 1.71. Story 1.74 was appended from Story 1.66's build; it edits `arm.js`, which no other lane 1 story after 1.66 edits, and joins the end. Story 1.75 was appended from Story 1.65's round 1 review; it extends the report rules that 1.65 writes in `check.js` and `release-report.js`, so it needs only 1.65 and joins the end.
 
-**Lane 2: confinement and process lifecycle** (own worktree): 1.62, 1.57, 1.58, 1.59, 1.60, 1.63, 1.61, 1.52, 1.53, 1.54, 1.80. Story 1.62 goes first because it extracts the shared sandbox primitives the confinement stories build on. Story 1.60 may remove 1.63's premise, so 1.63 is re-read after it. Story 1.58 precedes 1.54, since both track the run's private scratch directories. Stories 1.52 to 1.54 touch the preflight and workspace modules the confinement stories also edit, so they run after them.
+**Lane 2: confinement and process lifecycle** (own worktree): 1.62, 1.57, 1.58, 1.59, 1.60, 1.63, 1.61, 1.52, 1.53, 1.54, 1.80, 1.81. Story 1.62 goes first because it extracts the shared sandbox primitives the confinement stories build on. Story 1.60 may remove 1.63's premise, so 1.63 is re-read after it. Story 1.58 precedes 1.54, since both track the run's private scratch directories. Stories 1.52 to 1.54 touch the preflight and workspace modules the confinement stories also edit, so they run after them.
 
 **Lane 3: engine releases, dogfood and Epic 2** (own worktree): 1.45, 2.1, 2.2, 2.3, 2.4, 1.47, 1.49, 1.48, 1.42, 1.50, 1.55, 1.56, 1.51, 1.46, 2.5, 1.90, 1.91, 1.92, 1.93, 1.94, 1.95, 1.96, 1.97, 1.98, 1.99. Story 1.45 starts the longest serial chain (1.45, 2.1 to 2.5, then H.1), so it runs first, and 2.5 runs last because it baselines every fixture and so waits for each story that changes committed evidence bytes (1.42, 1.44, 1.50, 1.51, 1.55, 1.56). Stories 1.47, 1.49 and 1.48 regenerate the test-design probes, so they run together with 1.48 last. Stories 1.42 and 1.50 both change the HTTP probe port and run back to back. Story 1.46 records live runs of the Evaluate skill, so it follows the skill-guide stories in other lanes (1.43, 1.44, 1.61, 1.67, 1.70). Lane 3 owns every eval-quality release, because 1.42, 1.45, 1.48, 1.50 and 1.55 each need a published engine and one publisher keeps the dependency pin and `package-lock.json` ordered. Stories 1.90 and 1.91 follow 2.5: 1.90 edits the baseline `check` and `compare` read, and 1.91 re-accepts the fixture baselines Stories 2.2 to 2.5 commit, so it waits for every one of them.
 
@@ -1676,11 +1677,15 @@ So that an ungranted read by any process of the target becomes the isolation vio
 
 **Given** a confined run whose target is a shell script that reads a file outside its workspace, not declared in `systemPaths`
 **When** the trial completes
-**Then** that path appears in the trial set's `observedMounts` and `score` exits 3 with eval-quality's `mount outside allowlist` reason, on macOS and on Linux; reverting to the Node preload leaves `observedMounts` empty, which the case catches
-**And** a clean shell target reports nothing, so its manifest's `observedMounts` is empty.
+**Then** that path appears in the trial set's `observedMounts` and `score` exits 3 with eval-quality's `mount outside allowlist` reason, on macOS and on Linux; the audit is the mechanism's own (Seatbelt's reports read through `log stream`, `strace -f --seccomp-bpf` outside Bubblewrap) and sits where no target can write it, so removing it leaves `observedMounts` empty, which the case catches, and a process started with an empty environment, a write the mechanism refused and a read of a withheld file are listed as well
+**And** a clean shell target reports nothing, so its manifest's `observedMounts` is empty, and neither does a read under a declared `systemPaths` entry, a path that does not exist or a metadata probe, while the execution of an ungranted binary is listed as the read it is
+**And** a host whose observer cannot confirm itself (a log that never reports a read the sandbox allowed, no `strace`, a refused ptrace) exits 12 naming the cause and the `"confinement": false` opt-out, and an observer that fails during a trial leaves the trial with no record (exit 12), so an empty `observedMounts` is never what a broken observer returns
+**And** two audited sandboxes running at once each list their own reads only, and `docs/reference/tea-evaluate-cli.md`'s `### File-system confinement` describes the audit by mechanism and names what it does not see; a case reading that section fails while the passage saying only Node processes write the audit remains.
+
+Amended 2026-10-01 in Story 1.60: the spike measured the mechanism on this host. Seatbelt's `(allow ... (with report))` and `(with message ...)` make the kernel report an allowed read and a refusal under a token of the sandbox, which attributes each report exactly; reports written by a `log stream` child straight to a file lost none in 3,000 at a quiet host's pace, one to five in 1,600 on a host saturated by other work, and 7 to 20 percent of a burst of 40,000 a second. Linux has no equivalent in the kernel without privilege, so the Bubblewrap command runs under `strace -f --seccomp-bpf` started outside the namespace (a new Linux dependency, `strace`, installed beside `bubblewrap`). Both report files sit beneath the withheld private root, so the audit's report file is no longer writable by a target, which removes the premise of Story 1.63's first criterion (the abstract-socket criterion stands). The Node preload and `confinement-guard.cjs` are deleted. The macOS channel is the kernel's log, which loses reports without a trace when the host is saturated (the reference states the measurements); no mechanism without privilege is lossless there, so the criterion holds as stated on Linux and as a measured best effort on macOS, and Story 1.81 records the loss per trial.
 
 **Dependencies:** 1.31.
-**Gate:** `test:evaluate-run`, `npm test`.
+**Gate:** `test:evaluate-confinement` (the audit's cases), `test:evaluate-run`, `test:isolation-primitives`, `npm test`, and the Linux CI job.
 
 ### Story 1.61: Teach file-system confinement in the Evaluate skill
 
@@ -2039,6 +2044,25 @@ So that a confined run needs neither an opt-out nor a changed target (AD-7, AD-8
 
 **Dependencies:** 1.57.
 **Gate:** `test:evaluate-confinement`, `npm test`.
+
+### Story 1.81: Record how much of the macOS audit the kernel's log lost
+
+Added 2026-10-01 in Story 1.60. macOS reports each ungranted read through the kernel's sandbox log, which loses reports without a trace when the host is saturated or a target reads tens of thousands of files a second: Story 1.60's spike saw none lost in 3,000 reports at a quiet 440 a second, one to five in 1,600 on a saturated host, and 7 to 20 percent of a burst of 40,000 a second. An empty `observedMounts` from a macOS run therefore means only that no report arrived. Linux's `strace` trace loses none.
+
+As an adopter reading `observedMounts` from a macOS run,
+I want each trial to record how many of the audit's own canary reads the log delivered,
+So that an empty list is read together with how complete the channel was (AD-7).
+
+**Acceptance Criteria:**
+
+**Given** a macOS trial whose audit sends a canary read every 50 ms through the sandbox's own token, a read of a file beneath the audit directory that no target can reach
+**When** the trial ends
+**Then** the trial's entry in `run.json` records the canaries sent and the canaries the log delivered, and the run's summary names every trial that lost one with the counts; a case that runs a stub `log` which drops a fraction of the reports leaves a recorded loss and names the trial, and a case that restores the unconditional `complete` leaves no loss to name and fails
+**And** a trial that lost no canary and listed no read records `complete`, and a Linux trial records `complete` with no canaries sent, since `strace` reports every traced syscall of the call
+**And** `docs/reference/tea-evaluate-cli.md`'s `### File-system confinement` states that macOS reports are lossy, with the measurements above, and names the field `run.json` records; a case reading that section fails while either is missing.
+
+**Dependencies:** 1.60.
+**Gate:** `test:evaluate-confinement`, `test:evaluate-run`, `npm test`.
 
 ### Story 1.90: Verify the baseline manifest's file digests
 

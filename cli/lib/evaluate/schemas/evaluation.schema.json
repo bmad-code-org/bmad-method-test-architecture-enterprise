@@ -397,7 +397,7 @@
   ],
   "$defs": {
     "SystemPaths": {
-      "description": "Absolute host paths outside the workspace that this entry's processes read and a confined run does not report (Story 1.31): a toolchain or cache the target reads, such as a language installation. The confinement's audit lists every other path a target's Node process opens outside its workspace, the Node installation and the operating system's own directories as the isolation manifest's observedMounts, which eval-quality records as an isolation violation. Reads only: a confined target writes nothing outside its workspace, and nothing under the evaluation folder is readable whatever this lists.",
+      "description": "Absolute host paths outside the workspace that this entry's processes read and a confined run does not report (Story 1.31): a toolchain or cache the target reads, such as a language installation. The confinement's audit lists every other path any process of a target opens outside its workspace, the Node installation and the operating system's own directories as the isolation manifest's observedMounts, which eval-quality records as an isolation violation. Reads only: a confined target writes nothing outside its workspace, and nothing under the evaluation folder is readable whatever this lists.",
       "type": "array",
       "uniqueItems": true,
       "items": {

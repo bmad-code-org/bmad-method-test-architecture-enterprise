@@ -533,7 +533,7 @@ async function runTrial(context) {
       evidence: { workspace: null, degenerateResponse: arm.degenerate.response },
       port: null,
       mounts: [],
-      observedMounts: () => [],
+      observedMounts: async () => [],
       toolCalls: [],
     });
   }
@@ -562,15 +562,21 @@ async function runTrial(context) {
     if (problems.length > 0)
       throw stop({ stage: 'trial', exitCode: 12, message: `${label}: the registry cannot launch: ${problems.join('; ')}` });
     // The trial's port audits what its target processes open outside what they were granted (`confinement.js`).
-    const probePort = await registry.createProbePort({
-      cwd: workspace.root,
-      projectRoot: workspace.root,
-      workspace: workspace.top,
-      git: gitAccessOf(workspace),
-      privateRoot: registry.privateRoot,
-      deployment: arm.deployment ?? null,
-      audit: true,
-    });
+    let probePort;
+    try {
+      probePort = await registry.createProbePort({
+        cwd: workspace.root,
+        projectRoot: workspace.root,
+        workspace: workspace.top,
+        git: gitAccessOf(workspace),
+        privateRoot: registry.privateRoot,
+        deployment: arm.deployment ?? null,
+        audit: true,
+      });
+    } catch (error) {
+      // The audit's observer could not start (Story 1.60): a trial no audit watches yields no record.
+      throw stop({ stage: 'trial', exitCode: 12, message: `${label} yields no record: ${error?.message ?? error}` });
+    }
     const { port: adapter, observedMounts } = probePort;
     releaseHome = probePort.releaseHome;
     const port = hostEnvironmentPort({ port: adapter, registry });
@@ -616,6 +622,19 @@ async function runTrial(context) {
   } finally {
     releaseHome();
     discard(workspace);
+  }
+}
+
+/**
+ * What the confinement's audit saw the trial's processes open outside what they were granted (Story 1.60). An audit
+ * that cannot confirm what it saw (its observer ended, or never reported a read the runtime made) leaves the trial with
+ * no record, exit 12: an empty list is never what a broken observer returns.
+ */
+async function readObservedMounts(observedMounts, { stop, label }) {
+  try {
+    return await observedMounts();
+  } catch (error) {
+    throw stop({ stage: 'trial', exitCode: 12, message: `${label} yields no record: ${error?.message ?? error}` });
   }
 }
 
@@ -684,7 +703,7 @@ async function concludeTrial(context, facts) {
     judgeCalled: judged.called,
     elapsedMs,
     mounts,
-    observedMounts: observedMounts(),
+    observedMounts: await readObservedMounts(observedMounts, { stop, label }),
     toolCalls,
     resourceUse: executed.resourceUse ?? ZERO,
     unreportedSteps: executed.unreportedSteps ?? [],
@@ -844,7 +863,7 @@ async function concludeWithRows(context, facts) {
     elapsedMs,
     mounts,
     // Read after the agent's own calls through the bridge, which ran in the trial's workspace too.
-    observedMounts: observedMounts(),
+    observedMounts: await readObservedMounts(observedMounts, { stop, label }),
     toolCalls: [...toolCalls, ...bridged],
     resourceUse,
     unreportedSteps: [...(executed.unreportedSteps ?? []), ...(router?.unreportedSteps ?? [])],
@@ -1753,5 +1772,7 @@ module.exports = {
   // A trial's denial cannot be reached through the pipeline, whose qualification runs the same plan under the same
   // policy first, so its unit drives one trial directly.
   runTrial,
+  // The audit's failure to confirm what a trial opened ends the trial with no record; its unit drives the mapping directly.
+  readObservedMounts,
   setRecommendation,
 };

@@ -49,6 +49,7 @@ const path = require('node:path');
 const { createHash, randomUUID } = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 
+const { killLiveStreams } = require('./confinement-audit');
 const { unlockDirectories } = require('./confinement');
 const { digest } = require('./digest');
 const { cliObservation } = require('./registry');
@@ -512,7 +513,7 @@ function heldPrivateRoot(root) {
  * for the run (the engine's, the qualification's, an evaluator's, a judge's,
  * the bridge's configuration, token and socket, the score's) is made beneath
  * the parent by `makeScratchDirectory`. A directory the target is deliberately
- * granted (its temp directory, the audit report, the status and port
+ * granted (its temp directory, the status and port
  * directories, the workspace) stays in the run's temp directory.
  *
  * @param {string[]} scratch
@@ -1512,6 +1513,8 @@ function cleanUpOnSignal(workspaces, controller, { onSignal = () => {} } = {}) {
       release();
       controller.abort();
       onSignal(name);
+      // A signal ends the process before its `exit` event, so the audit's log streams are ended here.
+      killLiveStreams();
       for (const workspace of workspaces) {
         try {
           removeWorkspace(workspace);

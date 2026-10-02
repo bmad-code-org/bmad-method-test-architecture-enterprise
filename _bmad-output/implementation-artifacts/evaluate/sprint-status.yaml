@@ -94,8 +94,8 @@ development_status:
   1-56-prove-malformed-cli-refusal-against-a-controlled-defect: backlog
   1-57-withhold-the-committed-evaluation-folder-from-a-confined-ta: done
   1-58-keep-the-bridges-admission-token-and-the-runs-private-direc: done
-  1-59-let-a-confined-agent-target-keep-the-state-its-cli-writes: review
-  1-60-observe-every-confined-processs-file-access-beyond-node: backlog
+  1-59-let-a-confined-agent-target-keep-the-state-its-cli-writes: done
+  1-60-observe-every-confined-processs-file-access-beyond-node: review
   1-61-teach-file-system-confinement-in-the-evaluate-skill: backlog
   1-62-share-one-sandbox-primitive-layer-across-teas-isolation-mod: done
   1-63-carry-the-audit-over-a-channel-the-target-cannot-write: backlog
@@ -112,6 +112,7 @@ development_status:
   1-74-scrub-an-echo-whose-letters-change-case-unevenly-and-reach-the-evidence-as-escapes: backlog
   1-75-name-a-report-operation-signature-collision-at-check-before-the-run: backlog
   1-80-bring-a-partial-clone-project-its-tags-and-a-very-large-history-into-the-withheld-repository: backlog
+  1-81-record-how-much-of-the-macos-audit-the-kernels-log-lost: backlog
   1-90-verify-the-baseline-manifests-file-digests: backlog
   1-91-keep-machine-paths-out-of-a-committed-baseline: backlog
   1-92-stop-tea-evaluate-ci-at-once-on-a-signal-while-an-engine-stage-runs: backlog
@@ -162,6 +163,7 @@ parallel_lanes:
     - 1-53-bound-an-agent-whose-guardian-is-stopped
     - 1-54-reclaim-auxiliary-scratch-after-a-killed-preflight
     - 1-80-bring-a-partial-clone-project-its-tags-and-a-very-large-history-into-the-withheld-repository
+    - 1-81-record-how-much-of-the-macos-audit-the-kernels-log-lost
   lane-3-engine-releases-dogfood-and-epic-2:
     - 1-45-aggregate-development-strength-through-eval-quality
     - 2-1-compare-runs-and-accept-a-baseline
