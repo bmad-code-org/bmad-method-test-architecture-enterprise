@@ -2,7 +2,7 @@
 title: 'Story 1.65: Ask every HTTP interface of a deployment which release it runs'
 type: 'feature'
 created: '2026-10-01'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '9ef51270'
@@ -245,3 +245,9 @@ The fix applies their six items:
 eval-quality 4.7.0 refuses `duplicate-operation-signature` across the whole contract, so such a registry passes `check` (exit 0) and `run` exits 4 with the compile refusal.
 The reference and the CHANGELOG state the limit; Story 1.75 (Name a report-operation signature collision at check, before the run) closes it, with the route (eval-quality scoping the refusal per interface, or `check` calling the engine's own compile verdict) decided there.
 The `ledger` servers share one wrapper and the fixture's grader; a fixture whose grader serves a second path of its own would drop the wrapper, but nothing needs it.
+
+## Round 2 (2026-10-02)
+
+Two Opus lenses (adversarial with plan consistency, test quality) found lows only: Story 1.75's test plan lacked its route-decision row, and a `LEDGER_REPORT` comment named one of the two ways a wrong-interface pointer fails.
+Chain shard 2/8 failed once at 2c16dc30 on `test:doc-claims`: a sentence saying `check` "does not yet" name the collision reads as a time-sensitive claim, so the reference now states what `check` and `run` do today.
+All fixed in 789d97d7. CI 15/15 on that head, CodeRabbit posted no thread.
