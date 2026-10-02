@@ -449,6 +449,7 @@ const TRACE_SYSCALLS = Object.freeze([
   'mknod',
   'mknodat',
   'chdir',
+  'fchdir',
   'clone',
   'clone3',
   'fork',
@@ -658,11 +659,49 @@ function hostRealPath(raw) {
 }
 
 /**
- * A path through one of a process's own links to a directory (its root, its working directory, a directory descriptor, a mapped
- * file, the same per thread), which leads to any file of the namespace whatever the system's grants say. Tested on the path as
- * the process spelled it, `//` and `.` collapsed and `..` kept, since a `..` after the link would move it out of the pattern.
+ * A process's own links to a directory or file: its root, its working directory, a descriptor, a mapped file, the same per
+ * thread, and the standard descriptors. A path through one leads to any file of the namespace whatever the system's grants say.
  */
-const REENTRY = /^(?:\/proc\/(?:self|thread-self|\d+)(?:\/task\/\d+)?\/(?:root|cwd|fd\/\d+|map_files\/[^/]+)|\/dev\/fd\/\d+)\//;
+const PROCESS_LINK =
+  /^\/(?:proc\/(?:self|thread-self|\d+)(?:\/task\/\d+)?\/(?:root|cwd|fd\/\d+|map_files\/[^/]+)|dev\/(?:fd\/\d+|stdin|stdout|stderr))$/;
+
+/** Whether a path lies in the kernel's own file systems, whose paths lead anywhere a process can reach. */
+const kernelFs = (candidate) => /^\/(?:proc|dev)(?:\/|$)/.test(candidate);
+
+/**
+ * Reads a path the way the kernel's own lexical part does, component by component: `..` pops, `.` and empty parts vanish.
+ * `crossed` says a process link was passed with components still to follow (so the path leaves the file system the grants see),
+ * `atLink` that the path ends at one, and `collapsed` is the path with every `..` applied. A link is no directory the grants
+ * can judge by name, and a `..` before or after one must not hide it.
+ */
+function walkLinks(raw) {
+  const stack = [];
+  let crossed = false;
+  const parts = raw.split('/');
+  for (const [index, part] of parts.entries()) {
+    if (part === '' || part === '.') continue;
+    if (part === '..') {
+      stack.pop();
+      continue;
+    }
+    stack.push(part);
+    if (PROCESS_LINK.test(`/${stack.join('/')}`) && parts.slice(index + 1).some((rest) => rest !== '' && rest !== '.')) crossed = true;
+  }
+  const collapsed = `/${stack.join('/')}`;
+  return { collapsed, crossed, atLink: PROCESS_LINK.test(collapsed) };
+}
+
+/**
+ * Whether a path names a file through a process link: it crossed one, or it starts in (or collapses into) the kernel's file
+ * systems and holds a `..` (the link may sit anywhere the `..` reaches), or an exec names a link itself (an exec through a
+ * descriptor or a mapped file runs the file it leads to).
+ */
+function throughProcessLink(raw, { exec = false } = {}) {
+  const walked = walkLinks(raw);
+  const dotdot = raw.split('/').includes('..');
+  const kernel = kernelFs(raw) || kernelFs(walked.collapsed);
+  return { walked, reentry: walked.crossed || (kernel && dotdot) || (exec && walked.atLink), kernel };
+}
 
 class TraceReader {
   /**
@@ -726,6 +765,12 @@ class TraceReader {
       if (ok && target !== null) this.timeline.push({ kind: 'chdir', pid, target });
       return;
     }
+    if (name === 'fchdir') {
+      // The descriptor's annotation names the directory the process moved to.
+      const target = annotatedPath(args[0]);
+      if (ok && target !== undefined && path.isAbsolute(target)) this.timeline.push({ kind: 'chdir', pid, target });
+      return;
+    }
     if (CLONES.has(name)) {
       const event = this.pendingClones.get(pid) ?? this.timeline[this.timeline.push(this.cloneEvent(pid, text)) - 1];
       this.pendingClones.delete(pid);
@@ -744,8 +789,16 @@ class TraceReader {
     const opened = syscall.kind === 'open' && ok && result[2] !== undefined ? decodeAnnotation(result[2]) : null;
     for (const spec of syscall.paths) {
       const argument = decodeString(args[spec.path]);
+      if (argument === '' && name === 'execveat') {
+        // An exec of a descriptor (`AT_EMPTY_PATH`) runs the file the descriptor's annotation names, which an `O_PATH` open left no record of.
+        const file = annotatedPath(args[spec.dir]);
+        if (ok && file !== undefined && path.isAbsolute(file)) {
+          this.onAccess({ kind: 'read', path: file, real: file, ok, errno: null, annotated: true, dotdot: false, reentry: false });
+        }
+        continue;
+      }
       if (argument === null || argument === '') continue;
-      const emit = (base) => {
+      const emit = (base, crossedBase = false) => {
         const raw = path.isAbsolute(argument) ? argument : `${base}/${argument}`;
         const absolute = path.resolve(raw);
         // A `..` after a link leaves the lexical path, which collapses it, naming another file than the kernel opened: an opened
@@ -753,11 +806,12 @@ class TraceReader {
         // directories and the workspace is the target's (`/` is bound read-only into the namespace).
         const dotdot = raw.split('/').includes('..');
         const annotated = opened !== null && path.isAbsolute(opened);
-        const spelled = raw.replaceAll(/\/+/g, '/').replaceAll(/\/\.(?=\/|$)/g, '');
-        // A link a process reaches through its own `/proc` entry is not the evaluator's: the path is listed, never resolved here.
-        const reentry = !annotated && REENTRY.test(spelled);
+        const through = throughProcessLink(raw, { exec: name === 'execve' || name === 'execveat' });
+        // A path through a process link is not the evaluator's to resolve: it is listed, never resolved here, and neither is one
+        // that starts in the kernel's file systems.
+        const reentry = !annotated && (through.reentry || crossedBase);
         let real = annotated ? opened : absolute;
-        if (!annotated && dotdot && !reentry && !/^\/(?:proc|dev\/fd)\//.test(spelled)) real = this.resolveReal(raw) ?? absolute;
+        if (!annotated && dotdot && !reentry && !through.kernel) real = this.resolveReal(raw) ?? absolute;
         this.onAccess({
           kind: spec.kind ?? kind,
           path: absolute,
@@ -805,16 +859,28 @@ class TraceReader {
   finish() {
     const cells = new Map();
     const cellOf = (pid) => {
-      if (!cells.has(pid)) cells.set(pid, { cwd: this.cwd });
+      if (!cells.has(pid)) cells.set(pid, { cwd: this.cwd, crossed: false });
       return cells.get(pid);
     };
     for (const event of this.timeline) {
       if (event.kind === 'chdir') {
         const cell = cellOf(event.pid);
-        cell.cwd = path.resolve(cell.cwd, event.target);
+        const absolute = path.isAbsolute(event.target);
+        const raw = absolute ? event.target : `${cell.cwd}/${event.target}`;
+        const through = throughProcessLink(raw);
+        // A directory reached through a process link (`/proc/self/cwd/..`) is no directory the grants can judge by name: what is
+        // read relative to it afterwards is listed, until a `chdir` to an absolute path leaves it.
+        cell.crossed = (absolute ? false : cell.crossed) || through.reentry;
+        cell.cwd = through.walked.collapsed;
       } else if (event.kind === 'clone') {
-        if (event.child !== null) cells.set(event.child, event.shares ? cellOf(event.pid) : { cwd: cellOf(event.pid).cwd });
-      } else event.emit(cellOf(event.pid).cwd);
+        if (event.child !== null) {
+          const parent = cellOf(event.pid);
+          cells.set(event.child, event.shares ? parent : { cwd: parent.cwd, crossed: parent.crossed });
+        }
+      } else {
+        const cell = cellOf(event.pid);
+        event.emit(cell.cwd, cell.crossed);
+      }
     }
     this.timeline = [];
   }

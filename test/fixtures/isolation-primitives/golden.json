@@ -540,7 +540,7 @@
       "-s",
       "4096",
       "-e",
-      "trace=?execve,?execveat,?open,?openat,?openat2,?creat,?readlink,?readlinkat,?mkdir,?mkdirat,?rmdir,?unlink,?unlinkat,?rename,?renameat,?renameat2,?link,?linkat,?symlink,?symlinkat,?truncate,?chmod,?fchmodat,?fchmodat2,?chown,?lchown,?fchownat,?utimes,?utimensat,?futimesat,?mknod,?mknodat,?chdir,?clone,?clone3,?fork,?vfork",
+      "trace=?execve,?execveat,?open,?openat,?openat2,?creat,?readlink,?readlinkat,?mkdir,?mkdirat,?rmdir,?unlink,?unlinkat,?rename,?renameat,?renameat2,?link,?linkat,?symlink,?symlinkat,?truncate,?chmod,?fchmodat,?fchmodat2,?chown,?lchown,?fchownat,?utimes,?utimensat,?futimesat,?mknod,?mknodat,?chdir,?fchdir,?clone,?clone3,?fork,?vfork",
       "-o",
       "/var/folders/ab/cd/T/tea-evaluate-p501/run-501-AbCdEf/tea-evaluate-audit-AbCdEf/trace-1-<token>.txt",
       "--",

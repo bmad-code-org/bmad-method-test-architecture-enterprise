@@ -4140,9 +4140,82 @@ async function checkAuditParsers() {
     [
       'an exec of a /proc path with `..`, which the evaluator never resolves for the target',
       ['15    execve("/proc/sys/kernel/../x/tool", ["tool"], 0x1 /* 1 var */) = 0'],
-      [],
+      ['/proc/sys/x/tool'],
       () => '/home/u/leak',
     ],
+    [
+      'an exec with a `..` before the link',
+      ['15    execve("/proc/self/../self/root/home/victim/tool", ["tool"], 0x1 /* 1 var */) = 0'],
+      ['/proc/self/root/home/victim/tool'],
+    ],
+    [
+      'an exec with a `..` between a link and its siblings',
+      ['15    execve("/proc/self/fd/../root/home/victim/tool", ["tool"], 0x1 /* 1 var */) = 0'],
+      ['/proc/self/root/home/victim/tool'],
+    ],
+    [
+      'an exec that leaves /proc and returns',
+      ['15    execve("/proc/../proc/15/root/home/victim/tool", ["tool"], 0x1 /* 1 var */) = 0'],
+      ['/proc/15/root/home/victim/tool'],
+    ],
+    [
+      'an exec that climbs out of a thread directory',
+      ['15    execve("/proc/self/task/77/../../root/home/victim/tool", ["tool"], 0x1 /* 1 var */) = 0'],
+      ['/proc/self/root/home/victim/tool'],
+    ],
+    [
+      'an exec that starts in /dev and goes into /proc',
+      ['15    execve("/dev/../proc/self/root/home/victim/tool", ["tool"], 0x1 /* 1 var */) = 0'],
+      ['/proc/self/root/home/victim/tool'],
+      () => '/home/u/leak',
+    ],
+    [
+      'an exec through thread-self and `..`',
+      ['15    execve("/proc/thread-self/../../root/home/victim/tool", ["tool"], 0x1 /* 1 var */) = 0'],
+      ['/root/home/victim/tool'],
+    ],
+    ['an exec through /dev/stdin', ['15    execve("/dev/stdin/tool", ["tool"], 0x1 /* 1 var */) = 0'], ['/dev/stdin/tool']],
+    ['an exec through /dev/stdout', ['15    execve("/dev/stdout/tool", ["tool"], 0x1 /* 1 var */) = 0'], ['/dev/stdout/tool']],
+    ['an exec through /dev/stderr', ['15    execve("/dev/stderr/tool", ["tool"], 0x1 /* 1 var */) = 0'], ['/dev/stderr/tool']],
+    ['a bare exec of a descriptor link', ['15    execve("/proc/self/fd/9", ["tool"], 0x1 /* 1 var */) = 0'], ['/proc/self/fd/9']],
+    ['a bare exec of /dev/fd', ['15    execve("/dev/fd/9", ["tool"], 0x1 /* 1 var */) = 0'], ['/dev/fd/9']],
+    [
+      'a bare exec of a mapped file',
+      ['15    execve("/proc/4242/map_files/7f00-7f10", ["tool"], 0x1 /* 1 var */) = 0'],
+      ['/proc/4242/map_files/7f00-7f10'],
+    ],
+    [
+      'a bare exec of a thread descriptor',
+      ['15    execve("/proc/self/task/77/fd/9", ["tool"], 0x1 /* 1 var */) = 0'],
+      ['/proc/self/task/77/fd/9'],
+    ],
+    [
+      'an exec of a descriptor with an empty path',
+      ['15    execveat(3</home/victim/tool>, "", ["tool"], 0x1 /* 1 var */, AT_EMPTY_PATH) = 0'],
+      ['/home/victim/tool'],
+    ],
+    [
+      'a relative exec after a chdir through a process link',
+      [
+        '15    chdir("/home/victim") = 0',
+        '15    chdir("/proc/self/cwd/..") = 0',
+        '15    execve("victim/tool", ["tool"], 0x1 /* 1 var */) = 0',
+      ],
+      ['/proc/self/victim/tool'],
+    ],
+    [
+      'a relative exec after an fchdir to an ungranted directory',
+      ['15    fchdir(3</home/victim>) = 0', '15    execve("./tool", ["tool"], 0x1 /* 1 var */) = 0'],
+      ['/home/victim/tool'],
+    ],
+    ['a relative exec after an ordinary chdir', ['15    chdir("/usr/bin") = 0', '15    execve("true", ["tool"], 0x1 /* 1 var */) = 0'], []],
+    [
+      'a relative exec after leaving a process link by an absolute chdir',
+      ['15    chdir("/proc/self/cwd/..") = 0', '15    chdir("/usr/bin") = 0', '15    execve("true", ["tool"], 0x1 /* 1 var */) = 0'],
+      [],
+    ],
+    ['a re-exec of the process itself', ['15    execve("/proc/self/exe", ["tool"], 0x1 /* 1 var */) = 0'], []],
+    ['a read of a descriptor link', ['15    readlink("/proc/self/fd/1", "/dev/null", 4096) = 9'], []],
     [
       'an exec through a directory descriptor',
       ['15    execve("/proc/self/fd/9/tool", ["tool"], 0x1 /* 1 var */) = 0'],

@@ -420,7 +420,7 @@ A write the mechanism refuses is listed, and so is every access to the evaluatio
 A read of a path that does not exist and a metadata probe (`stat`, `access`) are not listed.
 The execution of a binary reads it, so an ungranted binary is listed like any ungranted file (macOS also lists the directory the shell looked in); declare the toolchain a target runs in `systemPaths`.
 The audit does not see file access through `io_uring` (Linux), and on macOS it does not see a process that reads after the trial's last read of the log.
-On Linux a binary is judged by the path it was started by, and a link in the workspace that leads to a binary outside the grants is not followed.
+On Linux a binary is judged by the path it was started by, and a link in the workspace that leads to a binary outside the grants is not followed. An exec or link read through a process's own links under `/proc` or `/dev` (its root, working directory, a descriptor or a mapped file, with or without a `..`, and an exec of a descriptor itself) is listed, since the path leads anywhere the process can reach.
 On macOS the kernel's reports are lossy: the log lost none of 3,000 reports at a quiet host's 440 a second, one to five of 1,600 on a host saturated by other work, and 7 to 20 percent of a burst of 40,000 a second, each without a trace.
 A target that reads one ungranted file while the host is saturated can therefore be missed, and an empty `observedMounts` from a macOS run means that no report arrived; in every measured burst most reports arrived.
 Linux's trace holds every traced syscall of the call.
