@@ -115,9 +115,9 @@ P-007 through P-015 seed a ruled-out risk, and the oracle that catches each one 
 of the risk's vocabulary anywhere in the body, including a paragraph explaining why the risk does not
 apply.
 P-016 is the gameability probe and it is the weakness this contract has no way to close: a document
-with the reference run's mentions map and the generic register's grounding block satisfies all eleven
-oracles the contract states for the seeded set while reporting nothing the epic supports.
-Its defect signature is the conjunction of those eleven checks, because nothing expressible over a
+with the reference run's mentions map and the generic register's grounding block satisfies all ten
+oracles the contract states for the seeded set over the stdout projection while reporting nothing the epic supports.
+Its defect signature is the conjunction of those ten checks, because nothing expressible over a
 markdown body separates that document from a correct one.
 What separates them is the row-scoped scorer, which matches each declared risk against one register
 row in an admitted category.
@@ -127,7 +127,7 @@ is written for them. A defect probe needs a stored run whose document makes the 
 runner derives its projection from the document with one function, so no document makes the projection
 incoherent. These oracles guard the runner against a projection it should never emit, which
 `test/test-contract-oracles.js` proves with planted projections, and they hold the contract's `whole-body`
-coverage. `tools/generate-probes.js` checks them against the corpus and fails when the contract states any
+coverage. `O-016` and `O-017` also read the design artifact beside stdout, which a defect signature cannot address, so they are outside P-016's conjunction. `tools/generate-probes.js` checks them against the corpus and fails when the contract states any
 other oracle past the per-set ones.
 
 This corpus is generated, byte-checked and scored by the deterministic gate.

@@ -1441,7 +1441,7 @@ So that an example risk cannot change the design's score or fire an exclusion or
 
 ### Story 1.48: Report whole-document coverage for a structured design artifact
 
-Added in Story 1.27's review. The test-design contract reads the complete Markdown from the runner's structured stdout, yet eval-quality reports its `whole-body` coverage rule unsatisfied. The rule asks for one oracle whose direction and check both address every required response key of an operation at one step (AD-20 rule 2, AD-31), and a parent pointer does not address a key. The operation declares four keys (`design`, `riskRowCount`, `scoredRiskDescriptions`, `scoredRiskCount`) and every oracle read a subset.
+Added in Story 1.27's review. The test-design contract reads the complete Markdown from the runner's structured stdout, yet eval-quality reports its `whole-body` coverage rule unsatisfied. The rule asks for one oracle whose direction and check both address every required response key of an operation at one step (eval-quality's AD-20 rule 2 and AD-31), and a parent pointer does not address a key. The operation declares four keys (`design`, `riskRowCount`, `scoredRiskDescriptions`, `scoredRiskCount`) and every oracle read a subset.
 
 Amended 2026-10-02 when the story was built: the plan assumed an engine change that treated a nested complete-body field as whole-body coverage. The engine's truth table deliberately reports oracles that each read a different key as unsatisfied, so the gap is in the contract. The repair is TeA-side with no eval-quality change and no release, and the criteria below say what the repair is held by.
 
@@ -1453,9 +1453,9 @@ So that the baseline reports the coverage this contract actually exercises.
 
 **Given** the test-design contract and its parser-derived stdout
 **When** eval-quality scores the contract and reports its coverage
-**Then** it reports `whole-body` satisfied because one oracle per plan step names all four key pointers, the complete original Markdown among them, in both its direction and its check; the result remains unsatisfied when the oracle reads only the scored-risk descriptions or omits any one key
+**Then** it reports `whole-body` satisfied because one oracle per plan step names all four key pointers, and the design artifact its `design` must equal, in both its direction and its check; the result remains unsatisfied when the oracle reads only the scored-risk descriptions or omits any one key
 **And** the criterion is held by contract fixtures scored through the published engine's coverage function: the real contract (satisfied) and the same contract with the oracle's evidence targets and check reduced to `/scoredRiskDescriptions` (unsatisfied); restoring the contract without the oracle makes the first report unsatisfied and widening the reduced oracle to every key makes the second report satisfied, so the pair cannot both agree
-**And** the oracle's check can fail for a real defect (a blank design, a scored count and a description list that disagree about being empty, a scored row the register never counted, a missing, extra or mistyped key), the harness scorer mirrors it, the existing oracle ids keep their numbers, and the regenerated strength baseline retains every probe verdict and exit code; `npm test` passes.
+**And** the oracle's check can fail for a real defect (a design that is blank or is not the document the run wrote, a scored count and a description list that disagree about being empty, a scored row the register never counted, a missing, extra or mistyped key), the harness scorer mirrors it, and the existing oracle ids keep their numbers; exact count equality and `riskRowCount >= scoredRiskCount` need an enumeration the vocabulary makes too large, so the harness asserts them on every stored projection instead; the regenerated strength baseline retains every probe verdict and exit code; `npm test` passes.
 
 **Dependencies:** 1.27.
 **Gate:** `node tools/generate-contracts.js --check`, `npm test`, suite-only staged preflight. No engine release.
@@ -2273,21 +2273,21 @@ So that no corpus claims rollback from two stored files (CAP-7, AD-8).
 
 ### Story 1.100: Report whole-body coverage for the routing, test-review and trace contracts
 
-Added 2026-10-02 in Story 1.48's build. Story 1.48 closed the `whole-body` rule for test-design by adding one oracle per plan step that names every required response key in its direction and its check, because eval-quality reads the rule as designed: for every operation declaring more than one required response key, one oracle addresses all of them at one step. The strength baseline still lists `whole-body` for four more contracts. `tea-routing-intents` and `tea-routing-controls` declare `action` and `reason` for `route-intent` and each oracle reads one of them. `test-review` declares twenty-three required keys for its verdict artifact and `trace` twenty-two for its summary, and the oracles of each read a few. The same repair applies, with a different cost per contract: two keys are cheap to read together, and a twenty-three key declaration needs either an oracle that reads every key it declares or a declaration that lists only the keys the contract depends on.
+Added 2026-10-02 in Story 1.48's build. Story 1.48 closed the `whole-body` rule for test-design by adding one oracle per plan step that names every required response key in its direction and its check, because eval-quality reads the rule as designed: for every operation declaring more than one required response key, one oracle addresses all of them at one step. The strength baseline still lists `whole-body` for four more contracts. `tea-routing-intents` and `tea-routing-controls` declare `action` and `reason` for `route-intent` and each oracle reads one of them. `test-review` declares twenty-three required keys for its verdict artifact and `trace` twenty-two for its summary, and the oracles of each read a few. The same repair applies, with a different cost per contract: two keys are cheap to read together, and a twenty-three key declaration needs an oracle that reads every key it declares, after the declaration is corrected to the keys the runner or workflow always emits.
 
 As a maintainer interpreting TeA's contract strength,
-I want each of those contracts to either read the whole response it declares or declare only what it reads,
-So that `whole-body` is satisfied by evidence the oracles examine or is not a gap the contract owes.
+I want each of those contracts to declare a key as required only when the runner or workflow always emits it, and to read every required key in one oracle,
+So that `whole-body` is satisfied by evidence the oracles examine.
 
 **Acceptance Criteria:**
 
 **Given** the routing, test-review and trace contracts and their baseline
 **When** eval-quality scores each contract and reports its coverage
-**Then** `whole-body` is satisfied for each by an oracle whose direction and check both name every required key of the operation at one step and whose check can fail for a real defect; a contract narrows its required-key declaration only for a key the runner or workflow does not always emit, shown from that output, and never to satisfy the rule, with each choice and its reason recorded in `test/contracts/README.md`
+**Then** `whole-body` is satisfied for each by an oracle whose direction and check both name every required key of the operation at one step and whose check can fail for a real defect; a contract narrows its required-key declaration only for a key the runner or workflow does not always emit, shown from that output, with each choice and its reason recorded in `test/contracts/README.md`
 **And** each contract carries fixtures scored through the published engine as Story 1.48's do: the contract as shipped (satisfied), the contract without the repair (unsatisfied) and variants whose oracle drops one key in each channel (unsatisfied), so reverting the repair makes the pair agree
 **And** the regenerated strength baseline retains every probe verdict and exit code for these suites, `node tools/generate-contracts.js --check` and `node tools/generate-probes.js --check` pass, and `npm test` passes.
 
-**Dependencies:** 1.48, 1.99 (both regenerate the test-review, trace and routing corpora, so the order keeps their diffs apart).
+**Dependencies:** 1.48, 1.99. 1.48 sets the oracle pattern and its fixtures; 1.99 regenerates the test-review and trace corpora this story also regenerates.
 **Gate:** `node tools/generate-contracts.js --check`, `node tools/generate-probes.js --check`, `test:contract-oracles`, `test:probe-corpus`, `npm test`, suite-only staged preflight for each suite.
 
 ## Epic 2: Continuous proof in CI

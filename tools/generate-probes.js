@@ -113,7 +113,7 @@ const { DEFAULT_AGENT: CI_DEFAULT_AGENT } = require('../cli/ci-runner');
 // The routing probes name the oracle they game by the pointer it reads, which is
 // how they stay attached to the right oracle when a case is added to the corpus
 // and every id after it shifts.
-const { ROUTING_CONTRACTS, projectionCoherenceExpression, TEST_DESIGN_PROJECTION_KEYS } = require('./generate-contracts');
+const { ROUTING_CONTRACTS, projectionCoherenceExpression, projectionCoherenceTargets } = require('./generate-contracts');
 const {
   buildPrompt: buildTestDesignPrompt,
   designArtifactPaths: testDesignArtifactPaths,
@@ -836,7 +836,7 @@ function testDesignOracleIndex(contract, sets) {
     if (entry.kind === 'projection-coherence') {
       const root = testDesignStdoutPointer(`design-${entry.set.id}`);
       assert(
-        JSON.stringify(oracle.direction.evidenceTargets) === JSON.stringify(TEST_DESIGN_PROJECTION_KEYS.map((key) => `${root}/${key}`)) &&
+        JSON.stringify(oracle.direction.evidenceTargets) === JSON.stringify(projectionCoherenceTargets(root)) &&
           JSON.stringify(oracle.check) === JSON.stringify(projectionCoherenceExpression(root)),
         `${oracleId} does not read the four keys of ${entry.set.id}'s projection the way the corpus places a projection-coherence oracle there`,
       );
@@ -1140,7 +1140,8 @@ async function buildTestDesignProbes({ qualify = qualifyTestDesignMutation } = {
   // degenerate document has something to gain from.
   const seededSet = sets.find((set) => (set.materialRisks ?? []).length > 0);
   assert(seededSet, 'no test-design fixture set declares a material risk, so no document can be gamed against one');
-  const seededEntries = index.filter((entry) => entry.set.id === seededSet.id);
+  const seededEntries = index.filter((entry) => entry.set.id === seededSet.id && entry.probed);
+  const projectionEntry = index.find((entry) => entry.set.id === seededSet.id && entry.kind === 'projection-coherence');
   const gamed = seededEntries.find((entry) => entry.kind === 'material-vocabulary');
   assert(gamed, `${seededSet.id} states no material-vocabulary oracle, so a prose mention gains a document nothing`);
   const reference = referenceOf.get(seededSet.id);
@@ -1173,14 +1174,15 @@ async function buildTestDesignProbes({ qualify = qualifyTestDesignMutation } = {
     commitDigest: corpusDigest,
     rationale:
       `A document with ${reference.id}'s mentions map and ${generic[0].id}'s grounding block satisfies every one of the ` +
-      `${seededEntries.length} oracles this contract states for ${seededSet.id} and reports nothing the epic supports. Its ` +
+      `${seededEntries.length} oracles this contract states for ${seededSet.id} over the stdout projection and reports nothing the epic supports. Its ` +
       'register rows describe risks the epic neither supports nor rules out, and a mitigation section names every material ' +
       `risk's deciding vocabulary in prose, so ${seededEntries[0].oracleId} counts parsed risk rows, the ` +
       `${seededEntries.filter((entry) => entry.kind === 'material-vocabulary').length} material-vocabulary oracles find ` +
       `their tokens somewhere in the body, the ` +
       `${seededEntries.filter((entry) => entry.kind === 'unsupported-vocabulary').length} unsupported-vocabulary oracles ` +
-      `find no ruled-out vocabulary, and ${seededEntries.find((entry) => entry.kind === 'projection-coherence').oracleId} finds the projection ` +
-      `of that document coherent. Nothing in this contract rejects that document. ${generic[0].id} records what the ` +
+      `find no ruled-out vocabulary. ${projectionEntry.oracleId} reads the design artifact beside stdout, which a defect signature cannot ` +
+      'address, so it is outside that conjunction, and the projection of that document is coherent because the runner derives it from the document. ' +
+      `Nothing in this contract rejects that document. ${generic[0].id} records what the ` +
       `row-scoped reading does with a register like it: ${generic[0].result.grounding.matched} of ` +
       `${generic[0].result.grounding.declared} material risks matched a register row in an admitted category. This probe is ` +
       'the record that the contract scores the gamed document clean.',

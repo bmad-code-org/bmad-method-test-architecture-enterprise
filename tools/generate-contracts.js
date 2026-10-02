@@ -4195,20 +4195,43 @@ const TEST_DESIGN_PROJECTION_TYPES = {
 const NON_BLANK_PATTERN = String.raw`^\s*\S[\s\S]*$`;
 
 /**
- * The runner's projection read whole, as a check over all four of its keys.
+ * The interaction-rooted pointer of the design artifact one step wrote, from that step's stdout root.
+ *
+ * @param {string} root The interaction-rooted pointer of the step's stdout.
+ */
+function testDesignArtifactPointer(root) {
+  return `${root.slice(0, -'/stdout'.length)}/artifact/design`;
+}
+
+/**
+ * Every pointer the projection-coherence oracle of one step addresses, in both its direction and its check:
+ * the four keys of the stdout projection and the design artifact the runner reads the Markdown from.
+ *
+ * @param {string} root The interaction-rooted pointer of the step's stdout.
+ */
+function projectionCoherenceTargets(root) {
+  return [...TEST_DESIGN_PROJECTION_KEYS.map((key) => `${root}/${key}`), testDesignArtifactPointer(root)];
+}
+
+/**
+ * The runner's projection read whole, as a check over all four of its keys and the artifact its `design`
+ * must equal.
  *
  * eval-quality's `whole-body` rule asks for one oracle whose direction and check both address every
- * required response key of an operation at one step, and a parent pointer does not address a key. The
- * expression vocabulary has no operator that compares two numbers read from evidence, so each relation
- * between the keys is stated in the strongest form the vocabulary carries:
+ * required response key of an operation at one step, and a parent pointer does not address a key.
+ * `equality` takes two evidence pointers, but the vocabulary has no ordering between two evidence values
+ * and no pointer to a collection's length, so exact count equality and `>=` between the counts need an
+ * enumeration over the declared cardinality bound (200), which costs 60 to 68 KB of JSON per oracle. The
+ * relations below are the ones the vocabulary states without it, and `test/test-contract-oracles.js`
+ * asserts the two it leaves out on every stored projection instead.
  *
  * - The projection has exactly the four declared keys, each of its declared type. Without this conjunct an
  *   absent number reads as "not zero" under `not(equality(...))` and a missing key would pass.
- * - `design` holds a document with a non-blank character, the string the material oracles read.
+ * - `design` equals the design artifact the run wrote, the complete original Markdown, and has a
+ *   non-blank character.
  * - `scoredRiskCount` and `scoredRiskDescriptions` agree on whether any scored row exists: the count is
  *   zero exactly when the list is empty.
- * - `riskRowCount` is not zero whenever `scoredRiskCount` is not, so the rows the register counts include
- *   the scored ones.
+ * - `riskRowCount` is not zero whenever `scoredRiskCount` is not.
  *
  * Each conjunct fails for a projection no correct runner emits, and `projectionIsCoherent` is the same
  * predicate in JavaScript, which `test/test-contract-oracles.js` holds against the evaluated oracle.
@@ -4238,6 +4261,7 @@ function projectionCoherenceExpression(root) {
           types: { ...TEST_DESIGN_PROJECTION_TYPES },
         },
       },
+      { op: 'deep-equality', operands: [{ pointer: `${root}/design` }, { pointer: testDesignArtifactPointer(root) }] },
       { op: 'regex', operands: [{ pointer: `${root}/design` }], pattern: NON_BLANK_PATTERN },
       {
         op: 'any',
@@ -4261,9 +4285,10 @@ function projectionCoherenceExpression(root) {
  * The JavaScript twin of `projectionCoherenceExpression`.
  *
  * @param {unknown} projection What the runner wrote to stdout.
+ * @param {unknown} artifactText The text of the design artifact the run wrote.
  * @returns {boolean}
  */
-function projectionIsCoherent(projection) {
+function projectionIsCoherent(projection, artifactText) {
   if (projection === null || typeof projection !== 'object' || Array.isArray(projection)) return false;
   const keys = Object.keys(projection);
   const kindOf = (value) => (Array.isArray(value) ? 'array' : typeof value);
@@ -4275,7 +4300,10 @@ function projectionIsCoherent(projection) {
   if (!shaped) return false;
   const { design, riskRowCount, scoredRiskDescriptions, scoredRiskCount } = projection;
   return (
-    /\S/.test(design) && (scoredRiskCount === 0) === (scoredRiskDescriptions.length === 0) && (scoredRiskCount === 0 || riskRowCount !== 0)
+    design === artifactText &&
+    /\S/.test(design) &&
+    (scoredRiskCount === 0) === (scoredRiskDescriptions.length === 0) &&
+    (scoredRiskCount === 0 || riskRowCount !== 0)
   );
 }
 
@@ -4414,21 +4442,22 @@ function testDesignOracleSpecs(groundTruth) {
       oracle: {
         polarity: 'expects-hold',
         commentary:
-          `${set.id}: the runner's projection of the document has exactly its four keys, each of its declared type, and they agree. The design is ` +
-          'non-blank, the scored descriptions are empty exactly when the scored count is zero, and a scored row implies a nonzero row count.',
+          `${set.id}: the runner's projection of the document has exactly its four keys, each of its declared type, and they agree. The design equals ` +
+          'the design artifact and is non-blank, the scored descriptions are empty exactly when the scored count is zero, and a scored row implies a nonzero row count.',
         direction: {
           polarity: 'expects-hold',
           relation: 'all',
-          scope: `The runner's whole projection of the test design document written for ${set.id}: its design, its row count, its scored descriptions and its scored count.`,
+          scope: `The runner's whole projection of the test design document written for ${set.id}: its design, its row count, its scored descriptions and its scored count, and the design artifact its design is read from.`,
           negativeDomain:
-            'A projection with a missing, extra or mistyped key, a blank design, a scored count that disagrees with its scored descriptions about being empty, or a scored row it never counted.',
-          evidenceTargets: TEST_DESIGN_PROJECTION_KEYS.map((key) => testDesignStdoutPointer(testDesignStepId(set), key)),
+            'A projection with a missing, extra or mistyped key, a design that is blank or is not the document the run wrote, a scored count that disagrees with its scored descriptions about being empty, or a scored row it never counted.',
+          evidenceTargets: projectionCoherenceTargets(root),
         },
         check: projectionCoherenceExpression(root),
       },
       // The harness reads the same document through the same parser, so a projection the runner built from
-      // it is coherent whenever the harness scored the run. The second argument is that projection.
-      scorer: (_scored, projection) => projectionIsCoherent(projection),
+      // it is coherent whenever the harness scored the run. The second and third arguments are that projection
+      // and the design artifact the run wrote.
+      scorer: (_scored, projection, artifactText) => projectionIsCoherent(projection, artifactText),
     });
   }
   return specs;
@@ -4459,7 +4488,7 @@ const TEST_DESIGN_BEHAVIORS = {
     risk: 'unscoreable-deliverable',
     requirement: 'projection-coherent',
     success:
-      "The runner's projection of the written document has its four declared keys, a non-blank design and counts that agree with its scored descriptions.",
+      "The runner's projection of the written document has its four declared keys, a design equal to the document and counts that agree with its scored descriptions.",
   },
 };
 
@@ -4751,6 +4780,8 @@ module.exports = {
   testDesignOracleSpecs,
   testDesignStepId,
   projectionCoherenceExpression,
+  projectionCoherenceTargets,
+  testDesignArtifactPointer,
   projectionIsCoherent,
   TEST_DESIGN_PROJECTION_KEYS,
   TEST_DESIGN_PROJECTION_TYPES,

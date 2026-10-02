@@ -292,9 +292,9 @@
     },
     {
       "id": "B-016",
-      "description": "seeded-offline-order-capture: the runner's projection of the document has exactly its four keys, each of its declared type, and they agree. The design is non-blank, the scored descriptions are empty exactly when the scored count is zero, and a scored row implies a nonzero row count.",
+      "description": "seeded-offline-order-capture: the runner's projection of the document has exactly its four keys, each of its declared type, and they agree. The design equals the design artifact and is non-blank, the scored descriptions are empty exactly when the scored count is zero, and a scored row implies a nonzero row count.",
       "severity": "material",
-      "observableSuccessCriterion": "The runner's projection of the written document has its four declared keys, a non-blank design and counts that agree with its scored descriptions.",
+      "observableSuccessCriterion": "The runner's projection of the written document has its four declared keys, a design equal to the document and counts that agree with its scored descriptions.",
       "requirementLinks": [
         {
           "scheme": "tea-eval-ground-truth",
@@ -311,9 +311,9 @@
     },
     {
       "id": "B-017",
-      "description": "clean-last-sync-indicator: the runner's projection of the document has exactly its four keys, each of its declared type, and they agree. The design is non-blank, the scored descriptions are empty exactly when the scored count is zero, and a scored row implies a nonzero row count.",
+      "description": "clean-last-sync-indicator: the runner's projection of the document has exactly its four keys, each of its declared type, and they agree. The design equals the design artifact and is non-blank, the scored descriptions are empty exactly when the scored count is zero, and a scored row implies a nonzero row count.",
       "severity": "material",
-      "observableSuccessCriterion": "The runner's projection of the written document has its four declared keys, a non-blank design and counts that agree with its scored descriptions.",
+      "observableSuccessCriterion": "The runner's projection of the written document has its four declared keys, a design equal to the document and counts that agree with its scored descriptions.",
       "requirementLinks": [
         {
           "scheme": "tea-eval-ground-truth",
@@ -1086,17 +1086,18 @@
     {
       "id": "O-016",
       "polarity": "expects-hold",
-      "commentary": "seeded-offline-order-capture: the runner's projection of the document has exactly its four keys, each of its declared type, and they agree. The design is non-blank, the scored descriptions are empty exactly when the scored count is zero, and a scored row implies a nonzero row count.",
+      "commentary": "seeded-offline-order-capture: the runner's projection of the document has exactly its four keys, each of its declared type, and they agree. The design equals the design artifact and is non-blank, the scored descriptions are empty exactly when the scored count is zero, and a scored row implies a nonzero row count.",
       "direction": {
         "polarity": "expects-hold",
         "relation": "all",
-        "scope": "The runner's whole projection of the test design document written for seeded-offline-order-capture: its design, its row count, its scored descriptions and its scored count.",
-        "negativeDomain": "A projection with a missing, extra or mistyped key, a blank design, a scored count that disagrees with its scored descriptions about being empty, or a scored row it never counted.",
+        "scope": "The runner's whole projection of the test design document written for seeded-offline-order-capture: its design, its row count, its scored descriptions and its scored count, and the design artifact its design is read from.",
+        "negativeDomain": "A projection with a missing, extra or mistyped key, a design that is blank or is not the document the run wrote, a scored count that disagrees with its scored descriptions about being empty, or a scored row it never counted.",
         "evidenceTargets": [
           "/interactions/design-seeded-offline-order-capture/stdout/design",
           "/interactions/design-seeded-offline-order-capture/stdout/riskRowCount",
           "/interactions/design-seeded-offline-order-capture/stdout/scoredRiskDescriptions",
-          "/interactions/design-seeded-offline-order-capture/stdout/scoredRiskCount"
+          "/interactions/design-seeded-offline-order-capture/stdout/scoredRiskCount",
+          "/interactions/design-seeded-offline-order-capture/artifact/design"
         ]
       },
       "check": {
@@ -1119,6 +1120,17 @@
                 "scoredRiskCount": "number"
               }
             }
+          },
+          {
+            "op": "deep-equality",
+            "operands": [
+              {
+                "pointer": "/interactions/design-seeded-offline-order-capture/stdout/design"
+              },
+              {
+                "pointer": "/interactions/design-seeded-offline-order-capture/artifact/design"
+              }
+            ]
           },
           {
             "op": "regex",
@@ -1236,17 +1248,18 @@
     {
       "id": "O-017",
       "polarity": "expects-hold",
-      "commentary": "clean-last-sync-indicator: the runner's projection of the document has exactly its four keys, each of its declared type, and they agree. The design is non-blank, the scored descriptions are empty exactly when the scored count is zero, and a scored row implies a nonzero row count.",
+      "commentary": "clean-last-sync-indicator: the runner's projection of the document has exactly its four keys, each of its declared type, and they agree. The design equals the design artifact and is non-blank, the scored descriptions are empty exactly when the scored count is zero, and a scored row implies a nonzero row count.",
       "direction": {
         "polarity": "expects-hold",
         "relation": "all",
-        "scope": "The runner's whole projection of the test design document written for clean-last-sync-indicator: its design, its row count, its scored descriptions and its scored count.",
-        "negativeDomain": "A projection with a missing, extra or mistyped key, a blank design, a scored count that disagrees with its scored descriptions about being empty, or a scored row it never counted.",
+        "scope": "The runner's whole projection of the test design document written for clean-last-sync-indicator: its design, its row count, its scored descriptions and its scored count, and the design artifact its design is read from.",
+        "negativeDomain": "A projection with a missing, extra or mistyped key, a design that is blank or is not the document the run wrote, a scored count that disagrees with its scored descriptions about being empty, or a scored row it never counted.",
         "evidenceTargets": [
           "/interactions/design-clean-last-sync-indicator/stdout/design",
           "/interactions/design-clean-last-sync-indicator/stdout/riskRowCount",
           "/interactions/design-clean-last-sync-indicator/stdout/scoredRiskDescriptions",
-          "/interactions/design-clean-last-sync-indicator/stdout/scoredRiskCount"
+          "/interactions/design-clean-last-sync-indicator/stdout/scoredRiskCount",
+          "/interactions/design-clean-last-sync-indicator/artifact/design"
         ]
       },
       "check": {
@@ -1269,6 +1282,17 @@
                 "scoredRiskCount": "number"
               }
             }
+          },
+          {
+            "op": "deep-equality",
+            "operands": [
+              {
+                "pointer": "/interactions/design-clean-last-sync-indicator/stdout/design"
+              },
+              {
+                "pointer": "/interactions/design-clean-last-sync-indicator/artifact/design"
+              }
+            ]
           },
           {
             "op": "regex",

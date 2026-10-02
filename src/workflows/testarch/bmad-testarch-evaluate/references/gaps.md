@@ -44,7 +44,7 @@ The discipline keys come from installed `DISCIPLINE_RULES`. The preflight keys c
 | Discipline rule                | Concrete repair                                                                                                                                                  |
 | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `success-indicator-separation` | Add a probe and oracle that read independent success evidence, not the target's success claim alone.                                                             |
-| `whole-body`                   | Add an oracle check on the full response body and a mutation outside the expected keyword.                                                                       |
+| `whole-body`                   | Add one oracle whose direction and check both name every required response key pointer (a parent pointer does not count) and a mutation outside the keyword.     |
 | `malformed-input`              | For each operation declaring a request key, bind `type-violating` on a step input and address that step with an oracle check; qualify a malformed request probe. |
 | `per-record`                   | Add a multi-record probe and per-record oracle evidence pointers.                                                                                                |
 | `sibling-cross-check`          | Add a probe whose sibling fields disagree and an oracle that compares them.                                                                                      |

@@ -989,23 +989,15 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
       const edited = structuredClone(patch.base === 'workflow' ? workflowContract : patch.base === 'numeric' ? numericContract : contract);
       for (const edit of patch.patches ?? [patch]) setJsonPointer(edited, edit.path, edit.value);
       if (index === 1) {
-        const response = spawnSync(
-          process.execPath,
-          [
-            path.join(__dirname, '..', 'cli', 'skill-runner.js'),
-            '--agent',
-            'custom',
-            '--agent-cmd',
-            './agent.js',
-            '--skill-root',
-            'skill',
-            '--timeout-ms',
-            '30000',
-          ],
-          { cwd: path.join(__dirname, 'fixtures', 'evaluate', 'stub-agent'), input: 'Say alpha.', encoding: 'utf8' },
+        const descriptor = edited.permittedInterfaces[0].operations[0].responseDescriptor;
+        assert.ok(descriptor.requiredKeys.length > 1, 'the whole-body example declares more than one required key');
+        const keyPointers = descriptor.requiredKeys.map((key) => '/interactions/answer-run/stdout/' + key);
+        assert.deepStrictEqual(edited.oracles[0].direction.evidenceTargets, keyPointers);
+        assert.deepStrictEqual(
+          edited.oracles[0].check.operands.map((operand) => operand.operands[0].pointer),
+          keyPointers,
         );
-        assert.strictEqual(response.status, 0, response.stderr);
-        assert.strictEqual(edited.oracles[0].check.operands[1].operands[1].literal, response.stdout);
+        assert.ok(!keyPointers.includes('/interactions/answer-run/stdout'), 'a parent pointer does not address a key');
       }
       if (index === 2) {
         assert.strictEqual(edited.permittedInterfaces[0].operations[0].invocation.executable, 'numeric-amount');
