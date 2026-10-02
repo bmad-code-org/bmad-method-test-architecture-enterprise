@@ -82,7 +82,7 @@ development_status:
   1-44-record-installed-framework-versions-in-evaluator-provenance: done
   1-45-aggregate-development-strength-through-eval-quality: done
   1-46-close-the-dogfood-suites-coverage-gaps: backlog
-  1-47-distinguish-reference-risk-tables-from-the-scored-register: backlog
+  1-47-distinguish-reference-risk-tables-from-the-scored-register: review
   1-48-report-whole-document-coverage-for-a-structured-design-artifact: backlog
   1-49-prove-test-design-mutation-rollback-before-claiming-it: backlog
   1-50-send-malformed-raw-http-bodies-through-an-api-probe: backlog
@@ -127,7 +127,7 @@ development_status:
   2-1-compare-runs-and-accept-a-baseline: done
   2-2-plan-ci-tiers-and-run-them-with-tea-evaluate-ci: done
   2-3-render-evaluation-plans-in-bmad-testarch-ci: done
-  2-4-finish-the-evaluation-with-its-ci-stage: review
+  2-4-finish-the-evaluation-with-its-ci-stage: done
   2-5-tea-runs-its-pr-tier-and-documents-evaluate: backlog
   epic-2-retrospective: optional
 parallel_lanes:

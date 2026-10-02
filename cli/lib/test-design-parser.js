@@ -9,6 +9,13 @@ const MarkdownIt = require('markdown-it');
 const RISK_ID_PATTERN = /^R-\d{3}$/;
 const RISK_REFERENCE_PATTERN = /R-\d{3}/g;
 const markdown = new MarkdownIt();
+/** A heading that ends with one of the words that call a section a reference or an example. */
+const LABEL_LAST_WORD_PATTERN = /^(?:examples?|illustrations?|references?)$/i;
+/** A heading that opens with Example or Illustration (after an optional Worked), then takes an optional number or letter and a colon or spaced dash, or names a register or table (after an optional Risk). */
+const LABEL_FIRST_WORD_PATTERN =
+  /^(?:worked\s+)?(?:examples?|illustrations?)(?:(?:\s+(?:\d+|[a-z]))?(?:\s*:|\s+[-\u2013\u2014](?:\s|$))|(?:\s+risk)?\s+(?:registers?|tables?)\b)/i;
+/** A paragraph that opens `Example:`, `Worked example:` or `Illustration:`, bold or plain. */
+const LABEL_LEAD_PATTERN = /^(?:worked\s+)?(?:examples?|illustrations?)\s*:/i;
 
 /** The visible text of a heading or table cell, including inline code and link labels. */
 function inlineText(token) {
@@ -20,7 +27,71 @@ function inlineText(token) {
 }
 
 /**
- * Every GFM table in the document, with the headings it sits under.
+ * Whether a heading names its own section a reference or an example.
+ *
+ * A heading labels in two positions only.
+ *
+ * - Its last word is Example(s), Illustration(s) or Reference(s) (`Appendix: Scoring Reference`,
+ *   `Worked Example`, `High Risks (Example)`, `Appendix: References`). A heading that is
+ *   the single word `Reference` labels here too. A `## References` heading labels its
+ *   tables; a `References:` citation line labels nothing.
+ * - Its first word is Example(s) or Illustration(s), after an optional `Worked`, and one of these
+ *   follows: a colon or a spaced dash, optionally after one number or one letter
+ *   (`Example: a checkout register`, `Example 1: checkout`, `Example A - checkout`), or
+ *   the word Register or Table, optionally after `Risk` (`Example Register`,
+ *   `Example Risk Register`). Leading numbering such as `3.` is skipped.
+ *
+ * A first-word Reference before other words labels nothing, because `Reference Data
+ * Risks` names a domain. Domain titles such as `Sample Intake Risks`, `Story 7.1: Upload
+ * a lab sample` and `Risk Register: User Preferences` carry no label word in either
+ * position. Sample and Illustrative are not label words: both name real features.
+ *
+ * Known limit: a heading that ends with the word for another reason
+ * (`### Story 7.2: Upload an example`) reads as a label, because position alone cannot
+ * tell it from `Worked Example`. The register or coverage rows under it leave the counts
+ * with no refusal, and the scored run names the excluded tables in its output; the repair
+ * is a rename.
+ */
+function isReferenceHeading(heading) {
+  const text = String(heading ?? '').trim();
+  const words = text.split(/[^A-Za-z]+/).filter(Boolean);
+  if (words.length === 0) return false;
+  return LABEL_LAST_WORD_PATTERN.test(words.at(-1)) || LABEL_FIRST_WORD_PATTERN.test(text.replace(/^[^A-Za-z]+/, ''));
+}
+
+/**
+ * THE CONTEXT RULE. The scored register is the set of risk tables a design states as
+ * its own, and a reference table is one the document labels as an example of something
+ * else. The label comes from two places a reader would look.
+ *
+ * - An enclosing heading that labels itself (see {@link isReferenceHeading}). Any
+ *   enclosing label counts, so a labeled appendix that copies the register's band
+ *   headings stays a reference. The document's first heading is its title, at any
+ *   level, and is never a label: a design for "Reference Data Sync" keeps its register.
+ * - A paragraph that opens `Example:`, `Worked example:` or `Illustration:`. It labels
+ *   every table that follows it up to the next heading, or up to the end of the list item
+ *   that holds it, whatever sits between them (a coverage table after a risk table, a
+ *   second risk table, an explanatory sentence, an HTML comment). `Reference:` and
+ *   `References:` open citations, so they label nothing; so does `For example:`.
+ *
+ * The shipped worked example, `bmad-testarch-test-design/resources/test-design-epic-3.example.md`,
+ * shows the register this rule keeps: the three band tables under `## Risk Assessment`
+ * (`### High Risks: Score 6 or Greater`, `### Medium Risks: Score 3 to 4`,
+ * `### Low Risks: Score 1 to 2`), none of whose headings or lead-ins labels anything.
+ *
+ * @param {string[]} headings The enclosing headings by level.
+ * @param {boolean[]} labelled Whether each enclosing heading labels itself, by level.
+ * @param {string|null} lead The label paragraph in scope, or null.
+ * @returns {string|null}
+ */
+function referenceLabelOf(headings, labelled, lead) {
+  const level = labelled.findIndex((flag, index) => flag && headings[index] !== undefined);
+  return level === -1 ? lead : headings[level];
+}
+
+/**
+ * Every GFM table in the document, with the headings it sits under and whether the
+ * document labels it a reference example (see {@link referenceLabelOf}).
  *
  * Markdown block tokens exclude fenced and indented code, including code in
  * lists. Blockquote contents are examples; list headings apply only inside their
@@ -29,13 +100,16 @@ function inlineText(token) {
  * qualifies by its column names; its headings determine the priority of its rows.
  *
  * @param {string} text
- * @returns {Array<{headings: string[], header: string[], rows: string[][]}>}
+ * @returns {Array<{headings: string[], header: string[], rows: string[][], reference: string|null}>}
  */
 function parseTables(text) {
   const tokens = markdown.parse(text, {});
   const tables = [];
   let headings = [];
-  const listHeadings = [];
+  let labelled = [];
+  let lead = null;
+  let titleSeen = false;
+  const listScopes = [];
   let quoteDepth = 0;
   for (let index = 0; index < tokens.length; index += 1) {
     const token = tokens[index];
@@ -49,21 +123,32 @@ function parseTables(text) {
     }
     if (quoteDepth > 0) continue;
     if (token.type === 'list_item_open') {
-      listHeadings.push([...headings]);
+      listScopes.push({ headings: [...headings], labelled: [...labelled], lead });
       continue;
     }
     if (token.type === 'list_item_close') {
-      headings = listHeadings.pop();
+      ({ headings, labelled, lead } = listScopes.pop());
       continue;
     }
     if (token.type === 'heading_open') {
       const level = Number.parseInt(token.tag.slice(1), 10);
+      const text = inlineText(tokens[index + 1]);
       headings.length = Math.min(headings.length, level - 1);
-      headings[level - 1] = inlineText(tokens[index + 1]);
+      labelled.length = Math.min(labelled.length, level - 1);
+      headings[level - 1] = text;
+      // The first heading is the document's title, at whatever level it is written.
+      labelled[level - 1] = titleSeen && isReferenceHeading(text);
+      titleSeen = true;
+      lead = null;
+      continue;
+    }
+    if (token.type === 'paragraph_open' && tokens[index + 1]?.type === 'inline') {
+      const text = inlineText(tokens[index + 1]);
+      if (LABEL_LEAD_PATTERN.test(text)) lead = text;
       continue;
     }
     if (token.type !== 'table_open') continue;
-    const table = { headings: headings.filter(Boolean), header: [], rows: [] };
+    const table = { headings: headings.filter(Boolean), header: [], rows: [], reference: referenceLabelOf(headings, labelled, lead) };
     let row = null;
     let inHeader = false;
     while (++index < tokens.length && tokens[index].type !== 'table_close') {
@@ -173,7 +258,9 @@ function integerCell(value) {
  * A table qualifies when it names a risk id column and a score column. Probability
  * and impact are read when present and recorded as null when they are not, because
  * a register that dropped them is a defect the scale and arithmetic checks should
- * report rather than a table this parser should skip.
+ * report rather than a table this parser should skip. A table the document labels a
+ * reference example is not the register, so its rows join no count, oracle or
+ * precision figure.
  */
 function readRisks(tables) {
   const risks = [];
@@ -184,6 +271,7 @@ function readRisks(tables) {
   // caller can fail on them.
   const unscored = [];
   for (const table of tables) {
+    if (table.reference) continue;
     const idColumn = columnIndex(table.header, ['Risk ID', 'RiskID', 'ID']);
     const scoreColumn = columnIndex(table.header, ['Score', 'Risk Score']);
     if (
@@ -227,11 +315,13 @@ function readRisks(tables) {
  * is how both the template and the shipped example spell a priority section
  * (`### P0 (Critical)` and `### P0: Critical` respectively). A coverage table
  * outside any such section carries no priority, which is itself scored: a risk
- * covered only from there has no priority to order.
+ * covered only from there has no priority to order. A coverage table the document
+ * labels a reference example maps no risk.
  */
 function readCoverage(tables) {
   const rows = [];
   for (const table of tables) {
+    if (table.reference) continue;
     const levelColumn = columnIndex(table.header, ['Test Level', 'Level']);
     if (levelColumn === -1) continue;
     const linkColumn = columnIndex(table.header, ['Risk Link', 'Risk', 'Risk ID']);
@@ -253,7 +343,7 @@ function readCoverage(tables) {
 }
 
 /** The design a run that wrote none is scored against: no risk row and no coverage row. */
-const EMPTY_DESIGN = Object.freeze({ risks: [], unscoredTables: [], coverage: [], text: '' });
+const EMPTY_DESIGN = Object.freeze({ risks: [], unscoredTables: [], coverage: [], referenceTables: [], text: '' });
 
 /**
  * One produced document as the two collections the scorer reads.
@@ -276,10 +366,21 @@ function readDesign(artifact) {
     return {
       ok: false,
       failureClass: 'environment-parser',
-      reason: 'the test design document carries no table with a risk id column and a score column',
+      reason: `the test design document carries no table with a risk id column and a score column${
+        tables.some((table) => table.reference) ? ' outside the tables it labels as reference examples' : ''
+      }`,
     };
   }
-  return { ok: true, design: { risks, unscoredTables: risks.unscoredTables ?? [], coverage: readCoverage(tables), text: artifact.value } };
+  return {
+    ok: true,
+    design: {
+      risks,
+      unscoredTables: risks.unscoredTables ?? [],
+      coverage: readCoverage(tables),
+      referenceTables: tables.filter((table) => table.reference).map((table) => ({ label: table.reference, rows: table.rows.length })),
+      text: artifact.value,
+    },
+  };
 }
 
 /** The runner's machine-readable view of the same parsed risk rows the scorer uses. */

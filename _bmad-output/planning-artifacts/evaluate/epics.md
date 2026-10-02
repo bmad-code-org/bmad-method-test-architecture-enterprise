@@ -1431,7 +1431,7 @@ So that an example risk cannot change the design's score or fire an exclusion or
 **When** the harness and contract evaluate it
 **Then** the reference rows do not affect register counts, unsupported-risk oracles, risk precision, or coverage mapping; the scored register still does, and the parser's context rule is documented against a real test-design document
 **And** a fixture with the same excluded category in the reference table and in a scored register row proves the distinction in both the harness and contract; reverting the context rule makes the reference-only fixture fail
-**And** `test:contract-oracles`, `test:eval-replay`, the staged test-design preflight and `npm test` pass with the contract, runner projection, and scorer in agreement.
+**And** `test:contract-oracles`, `test:eval-replay`, `test:probe-targets`, the staged test-design preflight and `npm test` pass with the contract, runner projection, and scorer in agreement; the reference agreement is held by the runner stub case through the real runner and harness (`test:probe-targets`), the projection-versus-harness row count (`test:contract-oracles`) and the stored replay case, and the staged preflight, which sends cached live outputs that carry no labeled table, is a no-regression run.
 
 **Dependencies:** 1.27.
 **Gate:** `npm test`, suite-only staged preflight.

@@ -1,0 +1,81 @@
+{
+  "$comment": [
+    "seeded-z-browser-risk-scored with a labeled reference example appended: its register rows repeat R-001, add an out-of-scale R-099 and score the browser risk the epic rules out at 9, and its coverage row links R-099.",
+    "None of those rows is the design's own, so the stored result equals the browser case's: six register rows, no shape failure, no dangling link, and O-009 fires on R-006 only."
+  ],
+  "id": "seeded-z-reference-table-scored-risk",
+  "suite": "test-design",
+  "scorerVersion": 16,
+  "storedOutput": {
+    "origin": "constructed",
+    "design": "design.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/test-design-eval/ground-truth.json",
+    "fixtureSet": "seeded-offline-order-capture",
+    "scoringInputsDigest": "sha256:963962660c273f960aff6e4c02361691190a06c7f824dd78deca3382e85ac0c9"
+  },
+  "derivation": [
+    "R-006 is the scored browser risk, exactly as in seeded-z-browser-risk-scored.",
+    "The appendix tables sit under `## Appendix: Scoring Reference` and `### Worked Example: Register For Another Epic`. Their register rows and coverage row are reference rows, so the six register rows, the five coverage rows and every check are those of the browser case.",
+    "Read as register rows they would add a duplicate R-001, an R-099 with an out-of-scale factor and a dangling link, and would score the browser risk twice."
+  ],
+  "result": {
+    "mentions": {
+      "sec-unencrypted-offline-queue": true,
+      "data-sync-conflict-overwrite": true,
+      "tech-uncapped-retry-loop": true,
+      "perf-backlog-sync-budget": true,
+      "ops-no-release-kill-switch": true,
+      "payment-gateway-failure": false,
+      "cross-tenant-data-leak": false,
+      "browser-and-accessibility-regression": true,
+      "data-residency-compliance": false
+    },
+    "shape": {
+      "rows": 6,
+      "wellFormedIds": 6,
+      "validCategories": 6,
+      "inScale": 6,
+      "arithmeticOk": 6,
+      "banded": 6,
+      "bandOk": 6,
+      "arithmeticTotal": 6
+    },
+    "shapeFailures": [],
+    "links": {
+      "total": 5,
+      "resolved": 5,
+      "dangling": []
+    },
+    "grounding": {
+      "declared": 5,
+      "matched": 5,
+      "missed": [],
+      "topSeverityMissed": 0
+    },
+    "ungrounded": [
+      {
+        "unsupportedId": "browser-and-accessibility-regression",
+        "rowId": "R-006"
+      }
+    ],
+    "ceiling": {
+      "maxRisks": 8,
+      "excess": 0
+    },
+    "unscoredRiskTables": [],
+    "coverage": {
+      "evaluated": 5,
+      "satisfied": 5,
+      "failures": []
+    },
+    "ordering": {
+      "pairs": 9,
+      "resolvable": 9,
+      "satisfied": 9,
+      "flattened": false,
+      "failures": []
+    }
+  }
+}
