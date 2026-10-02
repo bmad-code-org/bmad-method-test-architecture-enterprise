@@ -4981,6 +4981,23 @@ async function checkBridgedServerStandIn() {
     port: holder.port,
   });
   check(moved.port !== holder.port && moved.port > 0, `a forwarder asked for the held port ${holder.port} listened on ${moved.port}`);
+  // A port the host refuses for another reason than a holder (here a number no port is): a forwarder that may not insist falls
+  // back to one the system gives, and a strict one rejects.
+  const refusedPort = await relay.startForwarder({
+    socketPath: path.join(shortDirectory(), 'b'),
+    address: '127.0.0.1',
+    targetPort: 9,
+    port: 70_000,
+  });
+  check(refusedPort.port > 0 && refusedPort.port < 65_536, `a forwarder asked for a port the host refuses listened on ${refusedPort.port}`);
+  await refusedPort.close();
+  const refusedStrict = await relay
+    .startForwarder({ socketPath: path.join(shortDirectory(), 'b'), address: '127.0.0.1', targetPort: 9, port: 70_000, strict: true })
+    .catch((error) => error);
+  check(
+    refusedStrict instanceof Error,
+    `a strict forwarder asked for a port the host refuses gave ${JSON.stringify(refusedStrict?.port ?? refusedStrict)}`,
+  );
   const insisting = await relay
     .startForwarder({ socketPath: path.join(shortDirectory(), 'b'), address: '127.0.0.1', targetPort: 9, port: holder.port, strict: true })
     .catch((error) => error);

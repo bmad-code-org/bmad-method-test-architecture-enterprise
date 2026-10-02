@@ -196,9 +196,10 @@ async function bridgeAccepts(socketPath, host, port, timeoutMs = BRIDGE_ANSWER_M
 /**
  * Listens on `address` at `port` and connects every connection through the
  * bridge at `socketPath` to `address:targetPort` inside the namespace. With a
- * `port` another process holds, a forwarder that may not insist (`strict`
- * false) listens on a port the system gives instead; a strict one rejects with
- * the listen error.
+ * `port` the host refuses (another process holds it, or a port below 1024 the
+ * user may not bind), a forwarder that may not insist (`strict` false) listens
+ * on a port the system gives instead; a strict one rejects with the listen
+ * error.
  *
  * @param {object} options
  * @param {string} options.socketPath the bridge's Unix socket
@@ -239,7 +240,9 @@ async function startForwarder({ socketPath, address, targetPort, port, strict = 
   try {
     server = await listenOn(port);
   } catch (error) {
-    if (strict || error.code !== 'EADDRINUSE') throw error;
+    // A server in its own namespace can bind a port the host refuses (EACCES below 1024, a port another process holds): a
+    // forwarder that may not insist takes one the system gives, whatever the refusal was.
+    if (strict) throw error;
     server = await listenOn(0);
   }
   return {

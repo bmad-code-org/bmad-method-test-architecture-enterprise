@@ -59,7 +59,8 @@ Declare the runner's credential keys as `permittedEnvironmentKeys` through the t
   "artifacts": {},
   "environmentKeys": ["RESERVATION_MODEL_KEY"],
   "maxElapsedMs": 60000,
-  "infrastructureExitCodes": [3, 4, 5, 6]
+  "infrastructureExitCodes": [3, 4, 5, 6],
+  "network": "host"
 }
 ```
 

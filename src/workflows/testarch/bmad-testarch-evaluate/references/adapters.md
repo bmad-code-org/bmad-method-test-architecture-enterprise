@@ -56,6 +56,8 @@ If the adopter has a command that accepts a prompt without an interactive sessio
 }
 ```
 
+The fixture command makes no network call; a real agent command that calls its model provider adds `"network": "host"` to this entry on Linux.
+
 ## Tool-use calling agent
 
 Evaluate the agent's decision through `cli`. Have its stdout carry the tool-call trajectory, including chosen tool, arguments and result handling, so an oracle can read it. [source fixture: contract.json](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/test/fixtures/evaluate-tool-use-agent/evals/tool-use/contract.json) declares that observation. The fixture uses the same command registry entry as the preceding agent example; keep this separate classification in `evaluation.json.targetKind: "tool-use"` when the question is tool selection.
@@ -74,6 +76,8 @@ Evaluate the agent's decision through `cli`. Have its stdout carry the tool-call
   "infrastructureExitCodes": [3]
 }
 ```
+
+The fixture command makes no network call; a real agent command that calls its model provider adds `"network": "host"` to this entry on Linux.
 
 ## Tool server over MCP
 

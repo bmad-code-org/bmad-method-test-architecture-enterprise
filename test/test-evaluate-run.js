@@ -142,7 +142,7 @@ const { judgeTrial } = require('../cli/lib/evaluate/evaluator');
 const { recordObservation, createArtifactValidator } = require('../cli/lib/evaluate/records');
 const { RunDirectory, RunDirectoryError } = require('../cli/lib/evaluate/run-directory');
 const { readObservedMounts, runTrial, setRecommendation } = require('../cli/lib/evaluate/run');
-const { createRegistry, registryProblems } = require('../cli/lib/evaluate/registry');
+const { createRegistry, networkResolver, registryProblems } = require('../cli/lib/evaluate/registry');
 const { BRIDGE_HOSTS, bridgeAccepts, bridgeHostOf, startForwarder } = require('../cli/lib/evaluate/confinement-relay');
 const { executableOnPath } = require('../cli/lib/isolation-primitives');
 const {
@@ -8063,6 +8063,45 @@ async function checkNetworkField() {
     `two entries that agree on the network were refused: ${JSON.stringify(alike)}`,
   );
 
+  // Each kind of entry hands its calls its own network: a tool server and a started HTTP service that declare host, and a
+  // command that keeps the default, over a fake Bubblewrap sandbox that records the network each wrap is asked for.
+  const kinds = [
+    { kind: 'cli', interfaceId: 'plain', target: 'bin/plain.js' },
+    { kind: 'mcp', interfaceId: 'tools', target: 'bin/tools.js', network: 'host' },
+    { kind: 'api', interfaceId: 'service', server: { target: 'server/service.js' }, network: 'host' },
+    { kind: 'api', interfaceId: 'deployed', port: 80 },
+    { kind: 'api', interfaceId: 'deployed-host', port: 81, network: 'host' },
+  ];
+  const targetOfEntry = (entry) => (entry.kind === 'api' ? entry.server.target : entry.target);
+  const networkOf = networkResolver(kinds, targetOfEntry);
+  const wrapped = [];
+  const recording = {
+    mode: 'bubblewrap',
+    wrap: (target, args, writable, readable, options) => (wrapped.push([target, options?.network]), { target, args, statusFile: null }),
+    collect: async () => {},
+  };
+  const control = new AbortController().signal;
+  const runner = { run: async () => ({ exitCode: 0, stdout: '', stderr: '' }), callTool: async () => ({ result: {}, stderr: '' }) };
+  const commands = confinedCommandMechanism(runner, recording, () => [], [], networkOf);
+  const tools = confinedMcpMechanism(runner, recording, () => [], [], networkOf);
+  for (const target of ['bin/plain.js', 'server/service.js']) {
+    await commands.run({ target, subcommandPath: [], argv: [], env: {} }, control);
+  }
+  await tools.callTool({ target: 'bin/tools.js', targetArgs: [], env: {} }, control);
+  check(
+    JSON.stringify(wrapped) ===
+      JSON.stringify([
+        ['bin/plain.js', 'isolated'],
+        ['server/service.js', 'host'],
+        ['bin/tools.js', 'host'],
+      ]),
+    `the calls of a default command, a host HTTP service and a host tool server asked for ${JSON.stringify(wrapped)}; expected isolated, host and host`,
+  );
+  check(
+    networkOf('port-80') === 'isolated' && networkOf('server/other.js') === 'isolated',
+    'a target no entry starts, or an HTTP entry that starts nothing, was given the host network',
+  );
+
   const bubblewrap = { mode: 'bubblewrap', executable: '/usr/bin/bwrap', evaluationFolder: '/eval' };
   const seatbelt = { mode: 'seatbelt', executable: '/usr/bin/sandbox-exec', evaluationFolder: '/eval' };
   const noted = forbiddenInputNote(bubblewrap, ['assistant', 'grader']);
@@ -8456,7 +8495,7 @@ function checkBridgeReference() {
     ],
     [
       'An entry that declares `"network": "host"` keeps the host\'s network under Bubblewrap, and its started service, if it has one, is reached directly with no bridge.',
-      ['the abstract socket route', 'the network namespace units', 'the bridged server, stood in'],
+      ['the abstract socket route', 'the network namespace units', 'the network field', 'the bridged server, stood in'],
     ],
     [
       'A Linux skill or agent target (`tea-skill-runner` or any agent CLI), or any target that calls a model or an outside service, declares `"network": "host"` until Story 1.83 gives a confined target a route to the hosts its entry authorizes.',

@@ -757,14 +757,9 @@ function createRegistry(entries, { root, httpPort, scratch = [], principalMappin
       for (const entry of serverEntries) declare(targetPath(entry, options.projectRoot ?? registryRoot), entry);
       for (const entry of apiEntries) if (entry.server !== undefined) declare(serverTarget(entry), entry);
       const systemPathsOf = (target) => declared.get(target) ?? [];
-      // An entry that declares `"network": "host"` keeps the host's network under Bubblewrap; every other target is isolated.
-      const hostNetworked = new Set();
-      for (const entry of commandEntries)
-        if (entry.network === 'host') hostNetworked.add(targetPath(entry, options.projectRoot ?? registryRoot));
-      for (const entry of serverEntries)
-        if (entry.network === 'host') hostNetworked.add(targetPath(entry, options.projectRoot ?? registryRoot));
-      for (const entry of apiEntries) if (entry.server !== undefined && entry.network === 'host') hostNetworked.add(serverTarget(entry));
-      const networkOf = (target) => (hostNetworked.has(target) ? 'host' : 'isolated');
+      const networkOf = networkResolver(registered, (entry) =>
+        isApiEntry(entry) ? serverTarget(entry) : targetPath(entry, options.projectRoot ?? registryRoot),
+      );
       commandMechanism = confinedCommandMechanism(commandMechanism, sandbox, systemPathsOf, scratch, networkOf);
       mcpMechanism = confinedMcpMechanism(mcpMechanism, sandbox, systemPathsOf, scratch, networkOf);
     }
@@ -1151,6 +1146,26 @@ function registryFromEvaluation(evaluation, options) {
   return createRegistry(evaluation?.registry, { ...options, principalMappings: evaluation?.principalMappings });
 }
 
+/**
+ * The network each started target's call runs in under Bubblewrap (Story 1.63): `host` for the target of a command entry, a
+ * tool-server entry or an HTTP entry's started service that declares `"network": "host"`, `isolated` for every other target.
+ * A call finds its entry by its target, as `systemPathsOf` does.
+ *
+ * @param {object[]} entries the registry's entries
+ * @param {(entry: object) => string} targetOf the target a call of the entry starts (an HTTP entry's server)
+ * @returns {(target: string) => 'host' | 'isolated'}
+ */
+function networkResolver(entries, targetOf) {
+  const hostNetworked = new Set();
+  for (const entry of entries) {
+    if (entry.network !== 'host') continue;
+    // An HTTP entry that names no server starts nothing.
+    if (isApiEntry(entry) && entry.server === undefined) continue;
+    hostNetworked.add(targetOf(entry));
+  }
+  return (target) => (hostNetworked.has(target) ? 'host' : 'isolated');
+}
+
 module.exports = {
   API_REGISTRY_ENTRY_DEFINITION,
   MAX_OUTPUT_BYTES,
@@ -1163,6 +1178,7 @@ module.exports = {
   isMcpEntry,
   isRegistry,
   kindOf,
+  networkResolver,
   apiRegistryProblems,
   mcpRegistryProblems,
   observedText,
