@@ -447,15 +447,41 @@ const ready = setInterval(() => {
   fs.writeFileSync(file + '.tmp', JSON.stringify({ agent: process.pid, child: child.pid }));
   fs.renameSync(file + '.tmp', file);
   if (mode === 'wait') setInterval(() => {}, 1000);
-  else process.stdout.write('windows agent answered\\n');
+  else {
+    fs.writeFileSync(file + '.exit.tmp', String(Date.now()));
+    fs.renameSync(file + '.exit.tmp', file + '.exit');
+    process.stdout.write('windows agent answered\\n');
+  }
 }, 10);\n`,
   );
+  const progress = (phase) => fs.writeSync(2, `[Windows preflight] ${phase}\n`);
   const options = ['--agent', 'custom', '--agent-cmd', process.execPath, '--agent-arg', agentScript];
   const readPids = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
   const waitForPids = async (file) => {
     const deadline = Date.now() + 20_000;
     while (!fs.existsSync(file) && Date.now() < deadline) await delay(50);
     return fs.existsSync(file) ? readPids(file) : null;
+  };
+  const observeEndBy = async (pid, deadline) => {
+    if (!Number.isSafeInteger(pid) || pid <= 0) return null;
+    while (Date.now() <= deadline) {
+      try {
+        process.kill(pid, 0);
+      } catch (error) {
+        if (error.code === 'ESRCH') return Date.now();
+      }
+      await delay(Math.min(50, Math.max(1, deadline - Date.now())));
+    }
+    return null;
+  };
+  const observeBothBy = async (pids, deadline) => {
+    const [agentEndedAt, childEndedAt] = await Promise.all([observeEndBy(pids.agent, deadline), observeEndBy(pids.child, deadline)]);
+    return { deadline, agentEndedAt, childEndedAt };
+  };
+  const waitForExitMarker = async (file) => {
+    const deadline = Date.now() + 20_000;
+    while (!fs.existsSync(file) && Date.now() < deadline) await delay(50);
+    return fs.existsSync(file) ? Number(fs.readFileSync(file, 'utf8')) : null;
   };
   const observeWindowsPids = (pids, heartbeatFile) => {
     const observedAt = Date.now();
@@ -491,6 +517,7 @@ const ready = setInterval(() => {
     };
   };
 
+  progress('normal exit: begin');
   const normalFile = path.join(directory, 'normal.json');
   const normalRunner = spawn(
     process.execPath,
@@ -508,6 +535,13 @@ const ready = setInterval(() => {
   try {
     const deadline = Date.now() + 30_000;
     normal = await waitForPids(normalFile);
+    const normalPidCheck =
+      normal === null
+        ? Promise.resolve(null)
+        : (async () => {
+            const exitAt = await waitForExitMarker(`${normalFile}.exit`);
+            return exitAt === null ? null : { exitAt, ...(await observeBothBy(normal, exitAt + 10_000)) };
+          })();
     const pidFileSeenAt = Date.now();
     const heartbeatFile = `${normalFile}.heartbeat`;
     const atPidFile = observeWindowsPids(normal, heartbeatFile);
@@ -523,10 +557,15 @@ const ready = setInterval(() => {
       `a Windows runner whose agent exited ${normalEnding === null ? 'waited over 30 s' : `returned ${normalEnding.code}`}; expected its answer. Agent PID: ${normal?.agent ?? 'unrecorded'}; child PID: ${normal?.child ?? 'unrecorded'}; first PID and heartbeat sample (${firstSampleMs} ms after PID file): ${JSON.stringify(atPidFile)}; second sample (${secondSampleMs} ms after PID file): ${JSON.stringify(afterTwoSeconds)}; before runner kill: ${JSON.stringify(atTimeout)}\n${normalStdout}${normalStderr}`,
     );
     check(normal !== null, 'the Windows agent that exited recorded no process IDs');
-    if (normal !== null) {
-      check(await processEnds(normal.agent, 10_000), `Windows agent ${normal.agent} survived its normal exit`);
-      check(await processEnds(normal.child, 10_000), `Windows agent child ${normal.child} survived its agent's exit beyond 10 s`);
-    }
+    const normalPidsEnded = await normalPidCheck;
+    check(
+      Number.isFinite(normalPidsEnded?.agentEndedAt),
+      `Windows agent ${normal?.agent ?? 'unrecorded'} did not finish by 10 s after its exit marker: ${JSON.stringify(normalPidsEnded)}`,
+    );
+    check(
+      Number.isFinite(normalPidsEnded?.childEndedAt),
+      `Windows agent child ${normal?.child ?? 'unrecorded'} did not finish by the same 10 s deadline: ${JSON.stringify(normalPidsEnded)}`,
+    );
   } finally {
     if (normalEnding === null) normalRunner.kill('SIGKILL');
     if (normal === null && fs.existsSync(normalFile)) normal = readPids(normalFile);
@@ -535,8 +574,10 @@ const ready = setInterval(() => {
       reap(normal.child);
     }
     await Promise.race([normalClosed, delay(5000)]);
+    progress('normal exit: end');
   }
 
+  progress('dual kill: begin');
   const dualFile = path.join(directory, 'dual.json');
   const dual = spawn(
     process.execPath,
@@ -566,15 +607,21 @@ const ready = setInterval(() => {
     const killedAt = Date.now();
     if (leader !== undefined) reap(leader);
     if (supervisor !== undefined) reap(supervisor);
+    const dualPidCheck = dualPids === null ? Promise.resolve(null) : observeBothBy(dualPids, killedAt + 10_000);
     const ending = await Promise.race([dualClosed, delay(15_000).then(() => null)]);
     check(
       ending !== null && ending.code === EXIT_CODES['environment-transport'],
       `a Windows runner whose leader and supervisor died ${ending === null ? 'waited over 15 s' : `exited ${ending.code}`}; expected a transport failure\n${dualStderr}`,
     );
-    if (dualPids !== null) {
-      check(await processEnds(dualPids.agent, 10_000), `Windows agent ${dualPids.agent} survived the dual kill beyond 10 s`);
-      check(await processEnds(dualPids.child, 10_000), `Windows agent child ${dualPids.child} survived the dual kill beyond 10 s`);
-    }
+    const dualPidsEnded = await dualPidCheck;
+    check(
+      Number.isFinite(dualPidsEnded?.agentEndedAt),
+      `Windows agent ${dualPids?.agent ?? 'unrecorded'} survived the dual kill beyond 10 s: ${JSON.stringify(dualPidsEnded)}`,
+    );
+    check(
+      Number.isFinite(dualPidsEnded?.childEndedAt),
+      `Windows agent child ${dualPids?.child ?? 'unrecorded'} survived the same 10 s deadline: ${JSON.stringify(dualPidsEnded)}`,
+    );
     check(Date.now() - killedAt < 15_000, 'the Windows dual-kill case exceeded its 15 s runner bound');
   } finally {
     reap(dual.pid);
@@ -585,8 +632,10 @@ const ready = setInterval(() => {
       reap(dualPids.child);
     }
     await Promise.race([dualClosed, delay(5000)]);
+    progress('dual kill: end');
   }
 
+  progress('helper death: begin');
   const ownerFile = path.join(directory, 'owner-death.json');
   const ownerRun = spawn(
     process.execPath,
@@ -629,8 +678,10 @@ const ready = setInterval(() => {
       if (pid !== null && pid !== undefined) reap(pid);
     }
     await Promise.race([ownerClosed, delay(5000)]);
+    progress('helper death: end');
   }
 
+  progress('wall clock timeout: begin');
   const timeoutFile = path.join(directory, 'timeout.json');
   const timeoutRun = spawn(
     process.execPath,
@@ -663,6 +714,7 @@ const ready = setInterval(() => {
       reap(timeoutPids.child);
     }
     await Promise.race([timeoutClosed, delay(5000)]);
+    progress('wall clock timeout: end');
   }
 
   for (const [failureMode, failureDetail] of [
@@ -670,6 +722,7 @@ const ready = setInterval(() => {
     ['assign', 'AssignProcessToJobObject failed'],
     ['after-assign', 'forced failure after Job Object assignment'],
   ]) {
+    progress(`setup failure ${failureMode}: begin`);
     const failedFile = path.join(directory, `failed-${failureMode}.json`);
     const failedRunner = spawn(
       process.execPath,
@@ -723,9 +776,11 @@ const ready = setInterval(() => {
         reap(failedPids.child);
       }
       await Promise.race([failedClosed, delay(5000)]);
+      progress(`setup failure ${failureMode}: end`);
     }
   }
 
+  progress('setup race: begin');
   const setupRaceFile = path.join(directory, 'setup-race.json');
   const setupRace = spawn(
     process.execPath,
@@ -767,6 +822,7 @@ const ready = setInterval(() => {
       reap(setupRacePids.child);
     }
     await Promise.race([setupRaceClosed, delay(5000)]);
+    progress('setup race: end');
   }
 }
 
