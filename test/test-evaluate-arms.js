@@ -59,7 +59,11 @@
  *   (`method-not-authorized`), an answer with a number, an object, nothing or
  *   text at the pointer, a 503 and a pointer that finds a boolean are each a
  *   refusal with its reason and no arm; a deployment whose process ends on the
- *   report request exits 12. Two probes on one arm label at two pre-fix origins, or
+ *   report request exits 12. A deployment that reports the registry's auth
+ *   value in another letter case (upper-cased on the pre-fix side, capitalized inside
+ *   a longer identifier on the post-fix side, lowercased beside an upper-cased copy;
+ *   Story 1.66) is refused with the identifier quoted `[redacted]`, and no file under
+ *   the run directory and no output holds the value in any case. Two probes on one arm label at two pre-fix origins, or
  *   on two labels that differ only in letter case, exit 10; an authorized
  *   pre-fix host that does not resolve exits 12 with no refusal; `check`
  *   refuses an origin with a path and origins naming another interface in
@@ -1475,6 +1479,42 @@ async function checkReportedReleases() {
   ]);
   check(!lengthyRun.refusal?.reason.includes(long), 'a refusal quoted the whole of a 401-character release');
 
+  // A release that echoes the registry's auth value in another letter case (a proxy that lowercases what it reports, a
+  // service that upper-cases it) is scrubbed as the observation is, so the refusal quotes `[redacted]` and no artifact of
+  // the run holds the value in any case. The secret sits on the pre-fix side in one case and on the post-fix side in
+  // another, so a comparison that read only the first deployment would miss the second, and inside a longer identifier.
+  const secretLetters = GRADER_TOKEN.toUpperCase();
+  const capitalized = GRADER_TOKEN.replaceAll(/(^|-)([a-z])/g, (_, dash, letter) => `${dash}${letter.toUpperCase()}`);
+  for (const [what, preRelease, fixRelease, quotedPre, quotedFix] of [
+    ['upper-cased on the pre-fix side', secretLetters, FIX_RELEASE, '"[redacted]"', null],
+    ['capitalized inside an identifier on the post-fix side', PRE_RELEASE, `grader-${capitalized}-2`, null, '"grader-[redacted]-2"'],
+    [
+      'lowercased beside an upper-cased copy on the pre-fix side',
+      `${GRADER_TOKEN}/${secretLetters}`,
+      FIX_RELEASE,
+      '"[redacted]/[redacted]"',
+      null,
+    ],
+  ]) {
+    const echoPre = await startDeployment(`pre-fix-echo-${quotedPre === null ? 'quiet' : 'secret'}`, 'lenient', preRelease);
+    const echoPost = await startDeployment(`post-fix-echo-${quotedFix === null ? 'quiet' : 'secret'}`, 'strict', fixRelease);
+    const echoed = runReport(`report-echo-${what.replaceAll(/\W+/g, '-')}`, {
+      command: 'preflight',
+      preFix: echoPre,
+      fix: echoPost,
+      authorized: [echoPre, echoPost],
+    });
+    const side = quotedPre === null ? 'post-fix' : 'pre-fix';
+    held(`a run whose ${side} deployment reports the auth value ${what}`, echoed, [
+      `the ${side} deployment reports release ${quotedPre ?? quotedFix} where the probe declares`,
+    ]);
+    const leaked = textUnder(echoed.directory).filter(({ text }) => text.toLowerCase().includes(GRADER_TOKEN.toLowerCase()));
+    check(
+      leaked.length === 0 && !echoed.ran.output.toLowerCase().includes(GRADER_TOKEN.toLowerCase()),
+      `a run whose ${side} deployment reports the auth value ${what} left it in ${JSON.stringify(leaked.map(({ file }) => file))} or the output`,
+    );
+  }
+
   // eval-quality's policy decides the report request as it decides every call: a report operation whose method the
   // registry does not authorize is denied before anything is sent, and the refusal carries eval-quality's reason.
   const beforeDenial = snapshot(pre, post);
@@ -1556,6 +1596,16 @@ async function checkReportedReleases() {
 /** A file a run may not have written, parsed, or null. */
 function readIfWritten(file) {
   return fs.existsSync(file) ? readJson(file) : null;
+}
+
+/** Every file under `directory` with its text, relative to it; none when the directory is absent. */
+function textUnder(directory) {
+  if (directory === null || !fs.existsSync(directory)) return [];
+  return fs.readdirSync(directory, { recursive: true, withFileTypes: true }).flatMap((entry) => {
+    if (!entry.isFile()) return [];
+    const file = path.join(entry.parentPath, entry.name);
+    return [{ file: path.relative(directory, file), text: fs.readFileSync(file, 'utf8') }];
+  });
 }
 
 /** The text of one `###` section of the reference's `## Historical probes`, by its exact heading; empty when it is gone. */
@@ -2950,6 +3000,17 @@ async function runCase(name, body) {
 
 async function main() {
   try {
+    if (process.argv.includes('--reported-releases-only')) {
+      // The cases of Story 1.38's release report request alone, which the revert checks of Stories 1.38 and 1.66 run.
+      await runCase('the reported releases', async () => {
+        try {
+          await checkReportedReleases();
+        } finally {
+          stopDeployments();
+        }
+      });
+      return finish();
+    }
     await runCase('the units', checkUnits);
     await runCase('the gameability arm', checkGameability);
     await runCase('the historical arm', checkHistorical);
@@ -2971,6 +3032,11 @@ async function main() {
     stopDeployments();
     scratch.removeAll();
   }
+  return finish();
+}
+
+/** Reports the failures, or that every check passed, as the exit code of the run. */
+function finish() {
   if (failures.length > 0) {
     console.error(`${colors.red}${failures.length} of ${checks} tea-evaluate arms check(s) failed:${colors.reset}`);
     for (const failure of failures) console.error(`  - ${failure}`);
