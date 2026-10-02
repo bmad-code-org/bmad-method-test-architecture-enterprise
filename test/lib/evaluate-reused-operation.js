@@ -86,7 +86,9 @@ function commandProbe() {
   witness.legId = 'manifest-cli-lenient';
   witness.interfaceId = CLI_INTERFACE;
   witness.operationId = OPERATION_ID;
-  witness.relation = JSON.parse(JSON.stringify(witness.relation).replace('/interactions/manifest-lenient/', '/interactions/manifest-cli-lenient/'));
+  witness.relation = JSON.parse(
+    JSON.stringify(witness.relation).replace('/interactions/manifest-lenient/', '/interactions/manifest-cli-lenient/'),
+  );
   probe.defectSignature.invocation.executable = CLI_INTERFACE;
   return probe;
 }
