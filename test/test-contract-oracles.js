@@ -158,6 +158,7 @@ const {
   readDesign: readTestDesign,
   bandFor: testDesignBandFor,
   scoredRiskProjection,
+  referenceExclusionNote,
   scoreRun: scoreTestDesignRun,
   loadGroundTruth: loadTestDesignGroundTruth,
   TEST_DESIGN_OPERATION,
@@ -983,6 +984,12 @@ async function checkTestDesignOracles(evaluator) {
     'an Example first word with a register noun': `\n## Example Register\n\n${referenceRows}`,
     'an Example last word': `\n### Worked Example\n\n${referenceRows}`,
     'an Illustration heading': `\n## Illustration\n\n${referenceRows}`,
+    'a numbered Example first word before a colon': `\n## Example 1: checkout\n\n${referenceRows}`,
+    'a lettered Example first word before a spaced dash': `\n## Example A - checkout\n\n${referenceRows}`,
+    'an Example first word before Risk Register': `\n## Example Risk Register\n\n${referenceRows}`,
+    'an Example first word before Table': `\n## Example Table\n\n${referenceRows}`,
+    'a numbered heading before an Example colon': `\n## 3. Example: another epic\n\n${referenceRows}`,
+    'a single-word Reference heading': `\n## Reference\n\n${referenceRows}`,
     'an Illustration last word after other words': `\n## Another Illustration\n\n${referenceRows}`,
     'a plural Examples first word before a colon': `\n## Examples: another epic\n\n${referenceRows}`,
     'a plural Illustrations first word before a spaced dash': `\n## Illustrations - another epic\n\n${referenceRows}`,
@@ -1065,6 +1072,12 @@ async function checkTestDesignOracles(evaluator) {
         '## Appendix\n\n### Worked Example\n\nProse only.\n\n## Risk Register (Score 1-9)',
       ),
     ),
+    negative(
+      'a For example: lead-in above the register',
+      registerWith('### Risk Register (Score 1-9)', 'For example: checkout is the riskiest flow.'),
+    ),
+    negative('a heading that ends in Illustrative', registerWith('## Risk Register Illustrative'), false),
+    negative('a Reference first word before other words', registerWith('## Reference Risk Register (Score 1-9)')),
     negative('a letterless heading', registerWith('## 3.1'), false),
     negative('a Register: User Preferences heading', registerWith('## Risk Register: User Preferences (Score 1-9)')),
     negative(
@@ -1088,6 +1101,32 @@ async function checkTestDesignOracles(evaluator) {
     ),
     negative('a level-two Reference title with a band heading', scoredRegister.replace('# Test Design: Epic 7', '## Reference Data Sync')),
   ];
+  const registerTable = scoredRegister.split('\n\n').slice(2).join('\n\n');
+  // A lower-level heading ends the deeper headings before it. Each document leaves a hole at a level a
+  // stale label once pointed at, and the labeled heading after the hole has to be found anyway.
+  const levelCases = [
+    {
+      label: 'a labeled heading after a later level-one heading leaves a hole',
+      document: `# T\n\n## Risks (Score 1-9)\n\n${registerTable}\n## Appendix: Scoring Reference\n\n# Part Two\n\n### Worked Example\n\n${referenceRows}`,
+      mentioned: true,
+      riskRowCount: 1,
+      referenceTables: 1,
+    },
+    {
+      label: 'a second labeled heading after a shallower heading cut the first',
+      document: `# T\n\n### Worked Example\n\n#### A\n\n${referenceRows}\n## Risks (Score 1-9)\n\n${registerTable}\n#### Example\n\n${referenceRows}`,
+      mentioned: true,
+      riskRowCount: 1,
+      referenceTables: 2,
+    },
+    {
+      label: 'a no-H1 document whose later heading labels',
+      document: `## Test Design\n\n### Risk Register (Score 1-9)\n\n${guardRegister.split('\n\n').slice(2).join('\n\n')}\n## Appendix: Scoring Reference\n\n${referenceRows}`,
+      mentioned: false,
+      riskRowCount: 1,
+      referenceTables: 1,
+    },
+  ];
   const referenceExamples = [
     ...Object.entries(referenceSections).flatMap(([name, reference]) => [
       // The ruled-out category is in the reference table only: the register has a guard row.
@@ -1096,6 +1135,7 @@ async function checkTestDesignOracles(evaluator) {
       referenceFixture(`same category in ${name} and a scored register row`, scoredRegister, reference, true),
     ]),
     ...registerCases,
+    ...levelCases,
   ];
   const examples = [
     { label: 'Document guard', document: register(marker, 1, 2, 2, 'Document'), mentioned: false },
@@ -1511,6 +1551,31 @@ async function checkTestDesignOracles(evaluator) {
       `the shipped worked example keeps its register and coverage map with ${name}`,
     );
   }
+  // A labeled heading after a level-one heading that cut the labeled one before it: the copy of the high
+  // band's table is a reference, and the shipped register keeps its seven rows.
+  const highBandTable = shipped
+    .slice(shipped.indexOf('### High Risks'), shipped.indexOf('### Medium Risks'))
+    .split('\n')
+    .filter((line) => line.startsWith('|'))
+    .join('\n');
+  const holed = readTestDesign({
+    kind: 'text',
+    value: `${shipped}\n## Appendix: Scoring Reference\n\n# Part Two\n\n### Worked Example\n\n${highBandTable}\n`,
+  });
+  assert(
+    holed.ok && holed.design.risks.length === 7,
+    'a labeled heading after a hole left by a level-one heading still excludes its table',
+  );
+  assert(holed.ok && holed.design.referenceTables.length === 1, 'the copy of the high band after the hole is one reference table');
+  // The note a reader of a run sees names each excluded table and its rows.
+  assert(
+    holed.ok &&
+      referenceExclusionNote(holed.design.referenceTables) ===
+        'the parser left out 1 table(s) the document labels as reference examples: "Worked Example" (3 rows)',
+    'the exclusion note names the label and the row count',
+    holed.ok ? referenceExclusionNote(holed.design.referenceTables) : '',
+  );
+  assert(referenceExclusionNote(shippedRead.design.referenceTables) === '', 'a design with no reference table has no exclusion note');
   // A document whose only register-shaped table is a labeled reference has no register, and says why.
   const referenceOnly = readTestDesign({
     kind: 'text',

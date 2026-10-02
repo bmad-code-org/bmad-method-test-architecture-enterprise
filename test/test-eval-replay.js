@@ -100,11 +100,11 @@
  * the parser, so a green run here proves nothing about what a live agent emits."
  * The same sentence applies here, and harder. This suite proves the scorers are
  * deterministic and that they reproduce recorded history. It proves nothing about
- * whether they handle real agent output correctly. One hundred thirty-five of the one
- * hundred forty cases produce a number and one hundred twenty of those are
- * constructed. Fifteen carry captured bytes: twelve from the ATDD fixture corpus, two
- * from the CLI parser fixtures and one from a live eval:ci run over the evaluation-plan
- * project. The test-review captures score as measured misses because their reports
+ * whether they handle real agent output correctly. Almost every case produces a number and
+ * almost every one of those is constructed. The cases that carry captured bytes come
+ * from the ATDD fixture corpus, from the CLI parser fixtures and from a live eval:ci
+ * run over the evaluation-plan project; the corpus counts live in
+ * test/lib/doc-count-sources.js, which counts the cases and their origins. The test-review captures score as measured misses because their reports
  * document no finding. A verdict whose findings array is empty is a
  * reviewer that named nothing. The routing replay corpus also preserves all four
  * successful clarification branches, and every routing replay remains constructed.
