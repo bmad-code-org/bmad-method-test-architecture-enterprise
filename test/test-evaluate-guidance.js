@@ -2307,12 +2307,20 @@ function checkHarnessGuidance(guide, failures) {
     'A login the agent stored under the adopter',
     'cannot read the evaluation folder',
     'No other home is reachable from it',
-    'Declare `"network": "host"` on the registry entry of a skill or agent target',
-    'until Story 1.83 gives a confined target a route to the hosts its entry authorizes',
-    '`run.json` records under `hostNetwork`',
-    'macOS Seatbelt ignores the field',
   ])
     requireText(guide, marker, 'harness.md', failures);
+  // Story 1.61 names the `network` declaration in the criterion: its passage is held under its own heading.
+  const confinedTarget = headingBody(guide, '## Run a skill or agent target confined');
+  for (const marker of [
+    'On Linux a confined target also runs in a network namespace of its own with a loopback and nothing else, which cuts an agent off from its model provider.',
+    'Declare `"network": "host"` on the registry entry of a skill or agent target',
+    ', and of any target that calls a model, an outside service or a database on the host,',
+    'until Story 1.83 gives a confined target a route to the hosts its entry authorizes',
+    '`run.json` records under `hostNetwork`',
+    '; every other entry keeps the default, `"network": "isolated"`',
+    'macOS Seatbelt ignores the field',
+  ])
+    requireText(confinedTarget, marker, 'harness.md ## Run a skill or agent target confined', failures);
   checkConfinedSkillExample(guide, failures);
   // Story 1.61: what a confined target reads outside its workspace, the audit's list of the rest, and the one fragment that declares it.
   const reads = headingBody(guide, '## Declare what a confined target reads');
@@ -2322,7 +2330,7 @@ function checkHarnessGuidance(guide, failures) {
     "the Node installation the runtime runs from and the operating system's own directories",
     "`observedMounts` entry of the trial set's isolation manifest",
     '`score` then exits 3 (Invalid) with one `mount outside allowlist` reason per path',
-    'Executing a binary reads it, so a toolchain the target runs in is listed too',
+    'Executing a binary reads it, so a toolchain outside those grants is listed too',
     '`systemPaths`: absolute host paths',
     "A command, tool-server or HTTP entry takes the field, and an HTTP entry's list covers the service it starts",
     'Ask the adopter to confirm each path before declaring it',
@@ -2332,9 +2340,9 @@ function checkHarnessGuidance(guide, failures) {
     "the audit lists every access to the evaluation folder, the project's git directory or the user's private root even under a declared path",
     'Two entries that start the same target declare the same `systemPaths` and the same `network`, or `check` exits 10',
     "the workspace, the call's temp directory, the private home, the Node installation",
-    'each free of quotes, backslashes and control characters',
+    'each free of double quotes, backslashes and control characters',
     'such as a language installation, a rules directory or a cache',
-    'This `evaluation.json` fragment declares the one directory the `verdict` target reads beyond the system',
+    'This `evaluation.json` fragment declares `/opt/verdict-rules`, the one directory the `verdict` target reads beyond the system',
     "Merge its `registry` entry into the evaluation's registry",
     'It keeps the default network and runs confined',
     'then run `check` and rerun development',
@@ -2440,9 +2448,9 @@ function checkRunGuidance(guide, failures) {
     '`strace` on Linux (`apt-get install strace`, version 6.1 or later, which needs ptrace)',
     'a mechanism the host refuses (a kernel that forbids unprivileged user namespaces',
     'an observer that cannot confirm itself',
-    'or an evaluation folder or temp directory whose path holds a quote, a backslash or a control character',
+    'or an evaluation folder or temp directory whose path holds a double quote, a backslash or a control character',
     'the run observes no file-system access',
-    "Use the opt-out for a target that must write outside its workspace, commit or read the project's git directory, or for a project whose history the runtime cannot pack (a partial clone)",
+    "Use the opt-out for a target that must write outside its workspace, commit or read the project's git directory, or for a project whose history exceeds about six million objects (fetch a partial clone's full history first: clone again without `--filter`)",
     'On Linux an entry that keeps the default `"network": "isolated"`',
     '`run.json` records what the targets ran under',
     "tell the adopter which entries keep the host's network",
@@ -2461,7 +2469,7 @@ function checkRunGuidance(guide, failures) {
     'the target can reach the evaluation folder, and `score` says so in its summary',
     "record the adopter's reason in the evaluation notes",
     'a network namespace of their own with a loopback and nothing else',
-    'an HTTP service the target starts stays reachable from the runtime through a bridge the runtime owns',
+    'an HTTP service the target starts stays reachable from the runtime through a bridge the runtime owns, provided the service listens on `127.0.0.1` or `::1`, since any other address stops the call',
     'An entry that declares `"network": "host"` keeps the host\'s network and with it a route to the host\'s abstract Unix sockets',
     'macOS Seatbelt ignores the field',
     '`confinement` is `seatbelt`, `bubblewrap` or `opt-out`',
@@ -2529,6 +2537,7 @@ function checkIsolationViolationGuidance(guide, failures) {
   const body = headingBody(guide, heading);
   for (const marker of [
     '`observedMounts` entry of `runs/<invocationId>/trial-sets/<probeId>/isolation-manifest.json`',
+    'eval-quality records each one as an isolation violation',
     'so `score` exits 3 (Invalid) with one `mount outside allowlist: <path>` reason per path',
     'rerun from `check` as the loop below describes',
     'Leave the manifest as the run wrote it',
@@ -2543,7 +2552,7 @@ function checkIsolationViolationGuidance(guide, failures) {
     'Declare `"network": "host"` on its entry, confirm `run.json` lists the entry under `hostNetwork`, and rerun',
     "the entry then keeps a route to the host's abstract Unix sockets until Story 1.83",
     "An exit 12 that names file-system confinement or its audit is a host or project condition: repair it as the run guide's `## Run confined` describes",
-    "find each further cause (a project history too large to pack, a partial clone) in the CLI reference's `### File-system confinement`",
+    'find each further cause (a project history too large to pack, a partial clone) in the [Evaluate CLI reference](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/docs/reference/tea-evaluate-cli.md#file-system-confinement)',
   ])
     requireText(body, marker, `gaps.md ${heading}`, failures);
   const rows = tableRows(guide, heading, ['Observed path', 'Cause', 'Concrete repair'], failures);

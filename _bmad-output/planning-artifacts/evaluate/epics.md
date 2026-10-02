@@ -245,7 +245,7 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 77    | 1.81  | 1.60                         |
 | 78    | 1.82  | 1.63                         |
 | 79    | 1.83  | 1.63                         |
-| 80    | 1.84  | 1.61                         |
+| 80    | 1.84  | 1.61, 1.83                   |
 | 81    | 1.90  | 2.1                          |
 | 82    | 1.91  | 2.1                          |
 | 83    | 1.92  | 2.2                          |
@@ -1706,18 +1706,19 @@ So that the authored evaluation runs confined on the first try and an observed m
 **Given** the skill's `references/harness.md`, `references/run.md` and `references/gaps.md`
 **When** `test:evaluate-guidance` reads them
 **Then** the harness guide teaches `systemPaths` and the entry's `network` (a Linux skill or agent target, or any target that calls a model or an outside service, declares `"network": "host"` until Story 1.83) with a tagged `evaluation.json` fragment the guidance test validates against the runtime schema, the run guide names each platform's mechanism, the exit-12 refusal, the `"confinement": false` opt-out and the network namespace with what `run.json` records (`confinement` and `hostNetwork`), and the gaps guide maps an isolation violation from `observedMounts` to its repair; deleting any passage fails the test
-**And** `references/ci.md` and the AD-10 exit-table rows of `references/gaps.md` stay byte-identical, which `test:evaluate-ci` (the capture records' digest of `ci.md`) and the dogfood mutations M-001 and M-002 (`replace-exact` on those rows) hold
+**And** `references/ci.md` and the AD-10 exit-table rows of `references/gaps.md` stay byte-identical, which `test:evaluate-ci` (the capture records' digest of `ci.md`) and `test:evaluate-guidance` (the occurrence check of the `find` strings the dogfood mutations M-001 and M-002 replace) hold
 **And** the change goes through `bmad-workflow-builder` with a clean Analyze gate (AD-16, AD-18).
 
 **Dependencies:** 1.31, 1.63.
 **Gate:** builder Analyze, `test:evaluate-guidance`, `npm test`.
 
-(Amended 2026-10-02 in Story 1.63's first review round: Story 1.63 edits `harness.md` and `adapters.md` for the `network` declaration, and `run.md` and `gaps.md` stay with this story, which teaches the same declaration there and reads the new `hostNetwork` field of `run.json` beside `confinement`; it keeps the harness passage when it edits that guide.)
+(Amended 2026-10-02 in Story 1.63's first review round: Story 1.63 edits `harness.md` and `adapters.md` for the `network` declaration, and `run.md`, `gaps.md` and `ci.md` stay with this story, which teaches the same declaration there (the `ci-registry` example in `ci.md` gains `"network": "host"` and the sentence that a Linux skill or agent target's live checks need it) and reads the new `hostNetwork` field of `run.json` beside `confinement`. Editing `ci.md` invalidates the committed capture records of `test/fixtures/evaluate-ci-repos/`, so this story reruns the two live sessions as Story 2.4's record describes and regenerates `capture-record.json`.)
 
 (Amended 2026-10-02 in Story 1.61's build: the `ci.md` part of the earlier amendment is dropped and becomes Story 1.84.
 The `ci-registry` example in `ci.md` is covered by the committed capture records of `test/fixtures/evaluate-ci-repos/`, which pin the SHA-256 of `references/ci.md`, `SKILL.md` and `assets/evaluation-ci-plan.template.json`, so an edit to `ci.md` fails `test:evaluate-ci` until both live `claude -p` sessions rerun and `capture-record.json` is regenerated, and the auto-mode classifier denies those sessions.
 This story leaves `ci.md` byte-identical to `main`, which `test:evaluate-ci` holds, and gives the `ci.md` part and the sessions to Story 1.84.
-The `gaps.md` exit-table rows that the dogfood mutations M-001 and M-002 replace stay byte-stable; the isolation-violation mapping is a section of its own.)
+The `gaps.md` exit-table rows that the dogfood mutations M-001 and M-002 replace stay byte-stable, which the occurrence check in `test:evaluate-guidance` holds; the isolation-violation mapping is a section of its own.
+This amendment supersedes the `ci.md` clauses of the note above.)
 
 ### Story 1.62: Share one sandbox primitive layer across TeA's isolation modules
 
@@ -2133,7 +2134,7 @@ So that an agent runs isolated, with a route to its model provider alone, and `n
 **And** the proxy forwards a connection only for a host and port the entry authorizes, decided by eval-quality's `evaluateTarget` as the HTTP port's calls are, a refusal naming the host and the entry in the run's record, a case that sends a request for an unauthorized address
 **And** an entry that authorizes no host reaches none, and an entry that declares `"network": "host"` still runs as Story 1.63 left it until the field is removed from the schema in this story's last step, which leaves `check` refusing it with the entry named and a pointer to the authorization
 **And** the proxy's socket and its authorization are private to the call and removed with it on every path, a signal that ends the run included, a case that kills the run mid-call
-**And** `docs/reference/tea-evaluate-cli.md`, the skill's harness, adapters, ci and run guides and the `tea-skill-runner` section teach the authorization in place of `"network": "host"`, and a case reading each fails while the old declaration remains.
+**And** `docs/reference/tea-evaluate-cli.md`, the skill's harness, adapters and run guides and the `tea-skill-runner` section teach the authorization in place of `"network": "host"`, and a case reading each fails while the old declaration remains; the ci guide is Story 1.84's, which teaches whichever declaration is current, since editing it needs the two live capture sessions rerun
 
 **Dependencies:** 1.63.
 **Gate:** `test:evaluate-run`, `test:evaluate-api`, `test:evaluate-confinement`, `test:evaluate-guidance`, `npm test`, and the Linux CI job.
@@ -2158,9 +2159,9 @@ So that the plan's live checks reach the model provider on a Linux runner (CAP-1
 **And** the story's record states each session's prompt, model, tools and outcome.
 **And** the change goes through `bmad-workflow-builder` with a clean Analyze gate (AD-16, AD-18).
 
-(If Story 1.83 has merged first and its `ci.md` edit teaches the host authorization in place of `"network": "host"`, this story's declaration is that authorization and the story is amended at its build.)
+(Lane 2 runs Story 1.83 first. Story 1.83 leaves `ci.md` to this story, so this story teaches whichever declaration is current at its build, `"network": "host"` or the authorization 1.83 introduces, and one rerun of the live sessions covers both.)
 
-**Dependencies:** 1.61.
+**Dependencies:** 1.61, 1.83.
 **Gate:** builder Analyze, `test:evaluate-guidance`, `test:evaluate-ci`, `npm test`.
 
 ### Story 1.90: Verify the baseline manifest's file digests

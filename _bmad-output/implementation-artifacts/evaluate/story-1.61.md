@@ -30,7 +30,8 @@ The Evaluate skill's guides now teach file-system confinement, each passage veri
 1. `references/ci.md` stays byte-identical to `main`. Editing it invalidates the committed capture records in `test/fixtures/evaluate-ci-repos/` (they pin the SHA-256 of `ci.md`, `SKILL.md` and the plan template), and rerunning the two live `claude -p` sessions that Story 2.4's record describes is denied by the auto-mode classifier. This story neither edits `ci.md` nor runs those sessions.
 2. The `ci.md` part (the `ci-registry` example gains `"network": "host"` and the sentence that on Linux the live checks need it, the matching marker in `checkCiGuidance`, and the rerun of both sessions with regenerated `capture-record.json`) is Story 1.84, appended in this PR: `epics.md` section with acceptance criteria and revert checks (dependency 1.61), `test-design-epic-1.md` section, Epic Dependencies row (later rows renumbered, 97 stories), a `backlog` row in `sprint-status.yaml`, and the end of lane 2 in the `epics.md` lane list and `parallel_lanes`.
 3. Story 1.61's criterion and test-design section no longer name `ci.md` or the live sessions. The criterion gains an `And` that holds `ci.md` and the two exit-table rows byte-stable, with the revert checks named. The amendment says why.
-4. The `gaps.md` exit-table rows that M-001 and M-002 replace are byte-stable: the new section sits before `## Map AD-10 exits and classes to repairs`, and the guidance test asserts both `find` strings still occur once.
+4. The `gaps.md` exit-table rows that M-001 and M-002 replace are byte-stable: the new section sits before `## Map AD-10 exits and classes to repairs`, and `test:evaluate-guidance` asserts both `find` strings still occur once. No offline suite applies the dogfood mutations, so that occurrence check is the holder.
+5. Lane 2 runs Story 1.83 before 1.84, and 1.83's criterion would edit the ci guide. Story 1.83's criterion now leaves `ci.md` to Story 1.84, which depends on 1.61 and 1.83 and teaches whichever declaration is current, so one rerun of the live sessions covers both.
 
 ## Skill gate (AD-16, AD-18)
 
@@ -82,3 +83,26 @@ Run locally: `test:evaluate-guidance`, `test:evaluate-ci` (ci.md untouched), `te
 `docs:validate-links` and `docs:build` are not run: no file under `docs/` changed.
 The full `npm test` chain and `test:evaluate-arms` run in CI on eight shards.
 Builder Analyze: 0 critical, 0 high.
+
+## Round 1 review
+
+Three Opus lenses (accuracy, test quality, compliance) returned 11 findings. Each was verified against current code or the plan files first.
+
+Fixed:
+
+- A1: the audit grants the operating system's directories and the whole Node installation prefix, so `harness.md` now says a toolchain outside those grants is listed (`confinement-audit.js` `SYSTEM_ROOTS`, `nodeInstallRoot`).
+- A2: the opt-out for a partial clone is reworded. A partial clone is refused with a fetch-the-full-history message (`workspace.js`), and a history is unpackable above about six million objects; `run.md` says both.
+- A3: `run.md` now says an isolated HTTP service must listen on `127.0.0.1` or `::1`, since any other address stops the call (`http-target.js`, `confinement-relay.js` `bridgeHostOf`).
+- A4: `gaps.md` links the CLI reference by URL as `evaluator.md` does, since `docs/` is not shipped in an installed skill.
+- A5: the refused character is a double quote only (schema pattern `^/[^"\\\u0000-\u001f]*$`); both guides say "double quote".
+- T1: the `network` passage under `## Run a skill or agent target confined` is held by markers scoped to that heading, including the model-call clause, the namespace sentence and the default-network clause.
+- T2: `harness.md` names `/opt/verdict-rules` beside the fragment and the test marks it, so the fragment comment's claim holds.
+- T3: the `eval-quality records each one as an isolation violation` marker joins `checkIsolationViolationGuidance`.
+- C1: `epics.md`, `test-design-epic-1.md` and this record name `test:evaluate-guidance` (the occurrence check) as the holder of the two exit-table rows, with the matching revert check.
+- C2: Story 1.63's two round notes are restored to `origin/main` verbatim in `epics.md` and `test-design-epic-1.md`; the 1.61 notes say they supersede the `ci.md` clauses.
+- C3: Story 1.83's criterion and test-design row leave the ci guide to Story 1.84; 1.84 gains the dependency on 1.83 (section, Epic Dependencies row, test-design) and teaches whichever declaration is current.
+
+Skipped: none.
+
+The builder Analyze delta over the changed sentences found 0 critical, 0 high, 0 medium and 3 low (sentence length, a Bubblewrap-only condition in a dense paragraph, a URL that resolves once the docs reach `main`).
+Its path-standards script again flags `/usr/bin/sandbox-exec`, `/usr/bin/log` and the example path `/opt/verdict-rules` as high; they are system binaries and an example value the tests require, so they stay.
