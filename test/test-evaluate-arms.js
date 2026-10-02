@@ -43,9 +43,10 @@
  *   P-004 names two deployments of the grader the test starts itself, the
  *   pre-fix one lenient and the post-fix one strict, each logging its own
  *   requests. The deployments' logs show the release report request of
- *   Story 1.38 first at each deployment, then the fail-before arm, the witness
- *   leg and every trial of `historical:<pre-fix release>` at the pre-fix
- *   deployment, in that order, and the pass-after arm alone at the post-fix
+ *   Story 1.38 first at each deployment, then the fail-before arm and the
+ *   witness leg of `historical:<pre-fix release>` at the pre-fix deployment, a
+ *   second report request after the leg, every trial and a third report request
+ *   after them (Story 1.64), in that order, and the pass-after arm alone at the post-fix
  *   one, and no call to a deployment starts the workspace's service; the
  *   probe records the digests of the two release identifiers, `run.json`
  *   records each side's declared release and the release each interface reported, `qualifyProbe`
@@ -83,8 +84,9 @@
  *   interface, `ledger`, in the test's own project and four loopback servers
  *   (one per interface and deployment, each with its own request log). A
  *   probe whose deployments each name a report for both interfaces sends each
- *   server exactly one report request and records what each interface
- *   reported in `run.json`'s `releases`. The pre-fix deployment's second
+ *   server one report request before the arms (the pre-fix servers two more, after
+ *   the witness legs and after the trials, Story 1.64) and records what each
+ *   interface reported in `run.json`'s `releases`. The pre-fix deployment's second
  *   origin, the post-fix deployment's second origin, a second interface's
  *   request the policy denies, one whose answer holds no string and one that
  *   reports the auth value in another letter case each refuse the probe naming
@@ -93,6 +95,26 @@
  *   deployment unasked after a pre-fix refusal). `--reported-interfaces-only`
  *   runs these cases, the `deploymentPair` and `reportsProblems` units and the
  *   read of the reference alone, for the revert checks.
+ * - Held releases (Story 1.64): the pre-fix deployment is asked which release each
+ *   interface runs at three points, before the arms, after the witness legs and
+ *   after the last trial. The cases redeploy one pre-fix server on a signal the run
+ *   itself sends (a wrapper around the fixture's grader that changes the release it
+ *   reports after a counted request, `wrapped`), and read the request log of
+ *   every server: a release that changes after the witness legs, at the first or the
+ *   second interface and over two probes of one arm, refuses each probe naming the
+ *   point, the interface and both identifiers, with the probes and the observations
+ *   of their legs gone from what the CLI reads and no trial run; a release that
+ *   changes while the trials run, at either interface and over two probes of one
+ *   arm, refuses each probe with every trial's evidence kept and no trial set sealed
+ *   (`score` names them as refused); a redirect to an unauthorized host, an answer
+ *   with no string, a process that ends and an echoed secret each meet the later
+ *   point as they meet the first (a refusal with eval-quality's reason, a refusal
+ *   with the pointer's finding, exit 12, `[redacted]`); a run whose only probe is
+ *   refused at a later point exits 12 as when it was refused at the qualification. The
+ *   units hold the request labels of the three points apart and the reports a
+ *   deployment is asked for to the ones its probes declare, each once, in sorted order.
+ *   `--held-releases-only` runs these cases and the read of the reference alone, for
+ *   the revert checks.
  * - Rubric: a contract declaring R-101, judged by the stub judge through the
  *   `custom` agent adapter: one judge call per trial (six over two arms of
  *   three), a `judgeResults` entry per criterion in every record, the judge's
@@ -123,7 +145,14 @@ const { spawn, spawnSync } = require('node:child_process');
 const { ENGINE_CLI_ENV, loadAdapters, loadEngine } = require('../cli/lib/evaluate/engine');
 const { AGENT_ADAPTERS } = require('../cli/lib/agent-adapters');
 const { qualifyGameabilityProbes, syntheticPort } = require('../cli/lib/evaluate/gameability');
-const { deploymentPair, historicalRevisions, qualifyHistoricalProbe, routeIdentity } = require('../cli/lib/evaluate/historical');
+const {
+  deploymentPair,
+  historicalRevisions,
+  qualifyHistoricalProbe,
+  reportEntries,
+  reportLabel,
+  routeIdentity,
+} = require('../cli/lib/evaluate/historical');
 const { isJsonPointer, quotedIdentifier, reportProblems, reportsProblems } = require('../cli/lib/evaluate/release-report');
 const {
   DeploymentUnreachable,
@@ -993,13 +1022,52 @@ const DEPLOYMENT_READY_MS = 20_000;
  */
 const LIFELINE = "process.stdin.on('end', () => process.exit(0)).resume(); require(process.argv[1]);";
 /**
- * The same service under a path prefix (Story 1.65): the fixture's grader answers `/release` alone, and eval-quality
- * refuses two `api` operations that share a method and a path template, so a second HTTP interface of one project
- * needs a path of its own. The wrapper cuts `prefix` from each request's path before the grader sees it, and a path
- * outside the prefix is answered 404, so a request that reached the wrong interface's origin finds no release.
+ * The grader behind a wrapper around `http.createServer`. The fixture's grader answers `/release` with the
+ * `GRADER_RELEASE` it reads from its environment on each request, so the wrapper can change what a running
+ * deployment reports.
+ *
+ * With `prefix` (Story 1.65), the service answers under a path prefix alone: eval-quality refuses two `api`
+ * operations that share a method and a path template, so a second HTTP interface of one project needs a path of its
+ * own. The wrapper cuts `prefix` from each request's path before the grader sees it, and a path outside the prefix
+ * is answered 404, so a request that reached the wrong interface's origin finds no release.
+ *
+ * With `change` (Story 1.64), the deployment is redeployed on a signal the run sends: once `count` requests whose
+ * path, as the wrapper receives it (the prefix included), is `path` have been answered, every later `/release`
+ * request meets the change `to`, which is `{ release }` (another release, or none when null: the grader then
+ * answers 404), `{ redirect: true }` (a 302 to `localhost`, a host the registry does not authorize) or
+ * `{ crash: true }` (the process ends). A request the wrapper answers itself is not in the grader's own log.
+ * Every wrapped server leaves out the `Date` header, so two requests answered alike are alike in every field of the
+ * observation: eval-quality's `seeded-faults-scoped` check drops a clean leg that repeats a witness leg's request and
+ * answer, and reads one that differs only in a header as another question.
  */
-const prefixed = (prefix) =>
-  `const http = require('node:http'); const create = http.createServer; http.createServer = (handler) => create((request, response) => { request.url = request.url.startsWith(${JSON.stringify(`${prefix}/`)}) ? request.url.slice(${prefix.length}) : '/outside-the-prefix'; handler(request, response); }); ${LIFELINE}`;
+const wrapped = ({ prefix = null, change = null }) => {
+  const trigger =
+    change === null || change.path === null
+      ? ''
+      : `if (request.url === ${JSON.stringify(change.path)} && ++seen === ${change.count}) response.on('finish', () => { changed = true; ${
+          'release' in change.to
+            ? change.to.release === null
+              ? 'delete process.env.GRADER_RELEASE;'
+              : `process.env.GRADER_RELEASE = ${JSON.stringify(change.to.release)};`
+            : ''
+        } });
+        if (changed && request.url.endsWith('/release')) {
+          ${
+            change.to.redirect === true
+              ? "response.writeHead(302, { location: 'http://localhost:' + request.socket.localPort + request.url }).end(); return;"
+              : ''
+          }
+          ${change.to.crash === true ? 'process.exit(1);' : ''}
+        }`;
+  const cut =
+    prefix === null
+      ? ''
+      : `request.url = request.url.startsWith(${JSON.stringify(`${prefix}/`)}) ? request.url.slice(${prefix.length}) : '/outside-the-prefix';`;
+  return `const http = require('node:http'); const create = http.createServer; let seen = 0; let changed = false; http.createServer = (handler) => create((request, response) => { response.sendDate = false; ${trigger} ${cut} handler(request, response); }); ${LIFELINE}`;
+};
+
+/** A `change` that never happens, for a server that needs the wrapper's `Date` header alone. */
+const STEADY = Object.freeze({ path: null, count: 0, to: Object.freeze({}) });
 
 /** Every deployment server the test started, each stopped by the case that wants it gone and all of them as the route's cases end. */
 const deploymentServers = [];
@@ -1011,19 +1079,24 @@ const deploymentServers = [];
  * port the system chooses and reporting it, with its own request log, and
  * answering the release report request with `release`. `policy` adds lines to
  * its policy file (how it answers that request, or where it crashes). With
- * `prefix`, it answers under that path prefix alone (`prefixed`).
+ * `prefix`, it answers under that path prefix alone, and with `change` it is
+ * redeployed on a signal (`wrapped`).
  */
-async function startDeployment(label, mode, release, policy = '', prefix = null) {
+async function startDeployment(label, mode, release, policy = '', prefix = null, change = null) {
   const directory = scratch.make(`deployment-${label}`);
   fs.mkdirSync(path.join(directory, 'rules'));
   fs.writeFileSync(path.join(directory, 'rules', 'policy.txt'), `mode: ${mode}\n${policy}`);
   const portFile = path.join(directory, 'port');
   const log = path.join(directory, 'requests.jsonl');
-  const child = spawn(process.execPath, ['-e', prefix === null ? LIFELINE : prefixed(prefix), GRADER, '--policy=rules/policy.txt'], {
-    cwd: directory,
-    env: { PATH: process.env.PATH, PORT: '0', PORT_FILE: portFile, GRADER_LOG: log, GRADER_TOKEN, GRADER_RELEASE: release },
-    stdio: ['pipe', 'ignore', 'ignore'],
-  });
+  const child = spawn(
+    process.execPath,
+    ['-e', prefix === null && change === null ? LIFELINE : wrapped({ prefix, change }), GRADER, '--policy=rules/policy.txt'],
+    {
+      cwd: directory,
+      env: { PATH: process.env.PATH, PORT: '0', PORT_FILE: portFile, GRADER_LOG: log, GRADER_TOKEN, GRADER_RELEASE: release },
+      stdio: ['pipe', 'ignore', 'ignore'],
+    },
+  );
   deploymentServers.push(child);
   const deadline = Date.now() + DEPLOYMENT_READY_MS;
   while (!(fs.existsSync(portFile) && /^\d+\n$/.test(fs.readFileSync(portFile, 'utf8')))) {
@@ -1175,13 +1248,21 @@ async function checkDeploymentRoute() {
   if (runDirectory === null) check(false, 'the deployment-routed run wrote no run directory');
   else {
     // Each routing, read from the deployments' own request logs: the release report request reached each deployment
-    // first, then the fail-before arm, the witness leg and every trial reached the pre-fix deployment, in that order,
-    // and the pass-after arm alone reached the post-fix one.
+    // first, then the fail-before arm and the witness leg reached the pre-fix deployment, which was asked its release
+    // again after the leg, then every trial and a last report request after them (Story 1.64), and the pass-after arm
+    // alone reached the post-fix one.
     const planned = '/grade?answer=forty-two';
-    const expectedPre = ['/release', planned, '/grade?answer=witness-answer', ...Array.from({ length: TRIALS }, () => planned)];
+    const expectedPre = [
+      '/release',
+      planned,
+      '/grade?answer=witness-answer',
+      '/release',
+      ...Array.from({ length: TRIALS }, () => planned),
+      '/release',
+    ];
     check(
       JSON.stringify(requestsTo(pre).map((request) => request.path)) === JSON.stringify(expectedPre),
-      `the pre-fix deployment received ${JSON.stringify(requestsTo(pre))}; expected the release report request, the fail-before arm, the witness leg and ${TRIALS} trials, ${JSON.stringify(expectedPre)}`,
+      `the pre-fix deployment received ${JSON.stringify(requestsTo(pre))}; expected the release report request, the fail-before arm, the witness leg, a report request after it, ${TRIALS} trials and a report request after them, ${JSON.stringify(expectedPre)}`,
     );
     check(
       JSON.stringify(requestsTo(post).map((request) => request.path)) === JSON.stringify(['/release', planned]),
@@ -1473,7 +1554,7 @@ function runReport(label, { command = 'run', preFix, fix, authorized, edit, ledg
   const directory = runDirectoryOf(project.folder);
   const record = directory === null ? null : readIfWritten(path.join(directory, 'run.json'));
   const file = directory === null ? null : readIfWritten(path.join(directory, 'refused', 'P-004.json'));
-  return { ran, directory, record, refusal: record?.refused?.[0] ?? null, file };
+  return { ran, directory, record, refusal: record?.refused?.[0] ?? null, file, project };
 }
 
 /**
@@ -1750,18 +1831,20 @@ async function checkReportedInterfaces() {
       }),
     `run.json records the releases ${JSON.stringify(qualified.record?.releases)}; expected what each interface of each deployment reported`,
   );
+  // The pre-fix deployment is asked at three points (Story 1.64), each interface in turn: before the arms, after the
+  // witness legs and after the last trial, with the arm, the witness leg and the three trials between the requests.
+  // The post-fix deployment is reached by the qualification alone and is asked once.
   const gotQualified = received(beforeQualified);
+  const witness = '/grade?answer=witness-answer';
   check(
-    gotQualified.preLedger.length === 1 &&
-      gotQualified.preLedger[0] === '/release' &&
-      gotQualified.postLedger.length === 1 &&
-      gotQualified.postLedger[0] === '/release' &&
-      gotQualified.preGrader.filter((path) => path === '/release').length === 1 &&
-      gotQualified.postGrader.filter((path) => path === '/release').length === 1 &&
-      gotQualified.preGrader[0] === '/release' &&
-      gotQualified.postGrader[0] === '/release' &&
-      gotQualified.postGrader.includes(planned),
-    `a qualified run's report requests reached the servers as ${JSON.stringify(gotQualified)}; expected one to each of the four, the pre-fix and post-fix grader ones before their arms`,
+    JSON.stringify(gotQualified) ===
+      JSON.stringify({
+        preGrader: ['/release', planned, witness, '/release', planned, planned, planned, '/release'],
+        preLedger: ['/release', '/release', '/release'],
+        postGrader: ['/release', planned],
+        postLedger: ['/release'],
+      }),
+    `a qualified run's report requests reached the servers as ${JSON.stringify(gotQualified)}; expected the pre-fix servers asked three times each (before the arms, after the witness legs, after the trials, the pre-fix grader's between its arm, leg and trials) and the post-fix ones once`,
   );
   check(
     JSON.stringify(sealedProbes(qualified.directory)?.sort()) === '["P-001","P-004"]',
@@ -1905,6 +1988,415 @@ async function checkReportedInterfaces() {
   );
 }
 
+/** The cases of Story 1.64, with every deployment server they started stopped as they end. */
+async function checkHeld() {
+  try {
+    await checkHeldReleases();
+  } finally {
+    stopDeployments();
+  }
+}
+
+/**
+ * A second historical probe on the pre-fix release of P-004 (an `edit` for `makeDeploymentProject`, run after
+ * `withLedger`, so the copy carries both interfaces' reports): the arm `historical:<pre-fix release>` then holds two
+ * probes, each with a witness leg of its own.
+ */
+function withSecondProbe({ folder, probe }) {
+  const second = structuredClone(probe);
+  second.probeId = 'P-005';
+  const [defect] = second.defects;
+  // A defect ID names one defect of the corpus: two probes that share one make eval-quality's `seeded-faults-scoped` check read each other's witness leg as a clean leg, which fails the verdict on some orders of the legs.
+  defect.defectId = 'D-002';
+  const witness = defect.manifestationWitness;
+  witness.relation.operands[0].pointer = witness.relation.operands[0].pointer.replace(witness.legId, 'manifest-pre-fix-second');
+  witness.legId = 'manifest-pre-fix-second';
+  writeJson(path.join(folder, 'probes', 'P-005.probe.json'), second);
+}
+
+/**
+ * The pre-fix deployment held to its release across the witness legs and the trials (Story 1.64): the deployment is
+ * asked which release each interface runs after the legs and after the last trial, through the same port, policy and
+ * refusal as before the arms. Each case redeploys one pre-fix server on a signal the run itself sends (the witness
+ * leg's request, the third plan call, the report request before it: `wrapped`), and reads the request log of every
+ * server, a baseline taken before the run, since the shared servers keep earlier cases' lines.
+ */
+async function checkHeldReleases() {
+  const preGrader = await startDeployment('held-pre-grader', 'lenient', PRE_RELEASE, '', null, STEADY);
+  const preLedger = await startDeployment('held-pre-ledger', 'lenient', PRE_RELEASE, 'release: object\n', LEDGER_PREFIX);
+  const postGrader = await startDeployment('held-post-grader', 'strict', FIX_RELEASE);
+  const postLedger = await startDeployment('held-post-ledger', 'strict', FIX_RELEASE, 'release: object\n', LEDGER_PREFIX);
+  const shared = { preGrader, preLedger, postGrader, postLedger };
+  const planned = '/grade?answer=forty-two';
+  const witness = '/grade?answer=witness-answer';
+  const changed = 'grader-9.9.9';
+  /** What each of four servers received since `before`, by name, as paths; `servers` overrides the shared ones. */
+  const baseline = (servers) => new Map(Object.values(servers).map((server) => [server, requestsTo(server).length]));
+  const received = (before, servers) =>
+    Object.fromEntries(
+      Object.entries(servers).map(([name, server]) => [
+        name,
+        requestsTo(server)
+          .slice(before.get(server) ?? 0)
+          .map((request) => request.path),
+      ]),
+    );
+  /**
+   * Runs a project over the four servers (`servers` replacing shared ones) and reads its run directory: the exit
+   * status, `run.json`, the probe list and observations the CLI read, the trials that ran and the sealed probes.
+   */
+  const over = (label, { command = 'run', servers: replaced = {}, edit } = {}) => {
+    const servers = { ...shared, ...replaced };
+    const before = baseline(servers);
+    const result = runReport(label, {
+      command,
+      preFix: servers.preGrader,
+      fix: servers.postGrader,
+      authorized: [servers.preGrader, servers.postGrader],
+      ledger: { pre: servers.preLedger, post: servers.postLedger },
+      edit,
+    });
+    const { directory } = result;
+    const read = (name) => (directory === null ? null : readIfWritten(path.join(directory, name)));
+    const trials =
+      directory === null || !fs.existsSync(path.join(directory, 'trials')) ? [] : fs.readdirSync(path.join(directory, 'trials'));
+    return {
+      ...result,
+      servers: received(before, servers),
+      probes: read('probes.json')?.map((probe) => probe.probeId) ?? null,
+      observed: read('observations.json')?.map((observation) => observation.probeId) ?? null,
+      trials,
+      sealed: sealedProbes(directory),
+    };
+  };
+  /**
+   * The refusals of a run: each probe's record and file, the reason naming `reasons`, and the probe left out of every
+   * trial set. A probe refused after the legs also leaves the probe list, its qualified file and the observations of
+   * its witness legs; one refused after the trials keeps what the preflight verdict already read.
+   */
+  const refusedAt = (what, run, probeIds, reasons, { afterTrials = false } = {}) => {
+    check(run.ran.status === 0, `${what} exited ${run.ran.status}; expected 0\n${run.ran.output}`);
+    const recorded = run.record?.refused ?? [];
+    check(
+      JSON.stringify(recorded.map((refusal) => refusal.probeId).sort()) === JSON.stringify(probeIds) &&
+        recorded.every((refusal) => reasons.every((reason) => refusal.reason.includes(reason))),
+      `${what}: run.json records the refusals ${JSON.stringify(recorded)}; expected ${JSON.stringify(probeIds)}, each reason naming ${JSON.stringify(reasons)}`,
+    );
+    for (const probeId of probeIds) {
+      const file = run.directory === null ? null : readIfWritten(path.join(run.directory, 'refused', `${probeId}.json`));
+      check(
+        file !== null && JSON.stringify(file) === JSON.stringify(recorded.find((refusal) => refusal.probeId === probeId)),
+        `${what}: refused/${probeId}.json reads ${JSON.stringify(file)}`,
+      );
+      const qualifiedFile = run.directory !== null && fs.existsSync(path.join(run.directory, 'probes', `${probeId}.probe.json`));
+      const listed = (run.probes ?? []).includes(probeId);
+      check(
+        qualifiedFile === afterTrials && listed === afterTrials,
+        `${what}: probes/${probeId}.probe.json is ${qualifiedFile ? 'written' : 'absent'} and probes.json ${listed ? 'lists' : 'omits'} it; expected ${afterTrials ? 'both, as the verdict read them' : 'neither'}`,
+      );
+      check(run.sealed === null || !run.sealed.includes(probeId), `${what} sealed a trial set for ${probeId}`);
+    }
+    const legIds = (run.observed ?? []).filter((legId) => legId.startsWith('manifest-pre-fix'));
+    check(
+      afterTrials ? legIds.length === probeIds.length : legIds.length === 0,
+      `${what} holds the witness legs ${JSON.stringify(legIds)} in observations.json; expected ${afterTrials ? 'those of every probe, as the verdict read them' : 'none of a refused probe'}`,
+    );
+  };
+
+  // The release changes once the witness legs ran, at the first interface's origin, over two probes of one arm: the
+  // pre-fix grader answers another release after both witness legs. Both probes are refused naming the point, the
+  // interface and both identifiers, each in its own file; the probes leave `probes.json` and the observations of
+  // their legs leave `observations.json` before the CLI reads them; no trial runs; the clean control seals. The two
+  // probes name one report, so the pre-fix grader is asked once after the legs, and the refusal stops the asking
+  // before the second interface's origin.
+  const legsGrader = await startDeployment('held-legs-grader', 'lenient', PRE_RELEASE, '', null, {
+    path: witness,
+    count: 2,
+    to: { release: changed },
+  });
+  const legs = over('held-legs-first', { servers: { preGrader: legsGrader }, edit: withSecondProbe });
+  refusedAt(
+    'a run whose pre-fix deployment changes its release after the witness legs',
+    legs,
+    ['P-004', 'P-005'],
+    [
+      `after the witness legs, the pre-fix deployment's "grader" interface reports release "${changed}" where the probe declares "${PRE_RELEASE}"`,
+    ],
+  );
+  check(
+    JSON.stringify({ probes: legs.probes, trials: legs.trials, sealed: legs.sealed }) ===
+      JSON.stringify({ probes: [], trials: ['clean'], sealed: ['P-001'] }) && (legs.observed ?? []).length === 4,
+    `a run whose pre-fix deployment changes its release after the witness legs left ${JSON.stringify({ probes: legs.probes, observed: legs.observed, trials: legs.trials, sealed: legs.sealed })}; expected no probe in probes.json, the four legs of the other witnesses and controls in observations.json, the clean arm's trials alone and the clean control alone sealed`,
+  );
+  check(
+    JSON.stringify(legs.servers) ===
+      JSON.stringify({
+        preGrader: ['/release', planned, '/release', planned, witness, witness, '/release'],
+        preLedger: ['/release', '/release'],
+        postGrader: ['/release', planned, '/release', planned],
+        postLedger: ['/release', '/release'],
+      }),
+    `a run whose pre-fix deployment changes its release after the witness legs sent ${JSON.stringify(legs.servers)}; expected the pre-fix grader asked after both legs once (both probes name one report), nothing after it, and the ledger origin unasked after the legs`,
+  );
+
+  // The same at the second interface's origin, on a lone probe, and `preflight` alone: the first interface keeps its
+  // release and is asked first, so the second origin's change is the finding.
+  const legsLedger = await startDeployment('held-legs-ledger', 'lenient', PRE_RELEASE, 'release: object\n', LEDGER_PREFIX, {
+    path: `${LEDGER_PREFIX}/release`,
+    count: 1,
+    to: { release: changed },
+  });
+  // The probe names its reports with `ledger` first, so the order of the asking is the sorted one and no order of the keys.
+  const legsSecond = over('held-legs-second', {
+    command: 'preflight',
+    servers: { preLedger: legsLedger },
+    edit: ({ probe }) => {
+      const { reports } = probe.qualification.deployments.preFix;
+      probe.qualification.deployments.preFix.reports = { [LEDGER]: reports[LEDGER], grader: reports.grader };
+    },
+  });
+  refusedAt(
+    'a run whose pre-fix second interface changes its release after the witness legs',
+    legsSecond,
+    ['P-004'],
+    [
+      `after the witness legs, the pre-fix deployment's "ledger" interface reports release "${changed}" where the probe declares "${PRE_RELEASE}"`,
+    ],
+  );
+  check(
+    JSON.stringify(legsSecond.servers) ===
+      JSON.stringify({
+        preGrader: ['/release', planned, witness, '/release'],
+        preLedger: ['/release', '/release'],
+        postGrader: ['/release', planned],
+        postLedger: ['/release'],
+      }) && legsSecond.observed?.length === 4,
+    `a run whose pre-fix second interface changes its release after the witness legs sent ${JSON.stringify(legsSecond.servers)} and left ${JSON.stringify(legsSecond.observed)} in observations.json; expected the first interface asked, then the second, and the four legs of the other witnesses and controls alone`,
+  );
+
+  // The release changes while the trials run, at the first interface's origin: the pre-fix grader answers another
+  // release once the second trial's plan call was answered (the qualification arm was the first call), so the last
+  // trial runs under it. All three trials ran, their evidence stays, no trial set of the probe is sealed, and the
+  // second interface's origin is unasked at that point, since the first answer refused.
+  const trialsGrader = await startDeployment('held-trials-grader', 'lenient', PRE_RELEASE, '', null, {
+    path: planned,
+    count: 3,
+    to: { release: changed },
+  });
+  const trialsFirst = over('held-trials-first', { servers: { preGrader: trialsGrader } });
+  refusedAt(
+    'a run whose pre-fix deployment changes its release while the trials run',
+    trialsFirst,
+    ['P-004'],
+    [
+      `after the trials, the pre-fix deployment's "grader" interface reports release "${changed}" where the probe declares "${PRE_RELEASE}"`,
+    ],
+    { afterTrials: true },
+  );
+  check(
+    JSON.stringify(trialsFirst.servers) ===
+      JSON.stringify({
+        preGrader: ['/release', planned, witness, '/release', planned, planned, planned, '/release'],
+        preLedger: ['/release', '/release'],
+        postGrader: ['/release', planned],
+        postLedger: ['/release'],
+      }) && JSON.stringify(trialsFirst.sealed) === '["P-001"]',
+    `a run whose pre-fix deployment changes its release while the trials run sent ${JSON.stringify(trialsFirst.servers)} and sealed ${JSON.stringify(trialsFirst.sealed)}; expected every request of the three points, the second interface asked twice, and the clean control alone sealed`,
+  );
+  // `score` reads the run as it is: the refused probe is named with its reason and not scored, the clean control is.
+  const scored = evaluate(['score', '--evaluation', trialsFirst.project.folder], trialsFirst.project.env);
+  check(
+    scored.status === 0 &&
+      scored.output.includes('P-004: refused by the run, so not scored: after the trials, the pre-fix deployment') &&
+      scored.output.includes('P-001: eval-quality score exited 0'),
+    `score over a run that refused P-004 after the trials exited ${scored.status}; expected 0, P-004 named as refused and not scored, and P-001 scored\n${scored.output}`,
+  );
+  const trialFiles = (run) =>
+    run.directory === null || !fs.existsSync(path.join(run.directory, 'trials', `historical-${PRE_RELEASE}`))
+      ? []
+      : fs.readdirSync(path.join(run.directory, 'trials', `historical-${PRE_RELEASE}`)).sort();
+  check(
+    JSON.stringify(trialFiles(trialsFirst)) === JSON.stringify(['trial-1.json', 'trial-2.json', 'trial-3.json']) &&
+      !fs.existsSync(path.join(trialsFirst.directory, 'trial-sets', 'P-004')),
+    `a run whose pre-fix deployment changes its release while the trials run left the trial evidence ${JSON.stringify(trialFiles(trialsFirst))} and ${fs.existsSync(path.join(trialsFirst.directory, 'trial-sets', 'P-004')) ? 'a' : 'no'} trial set; expected the three trials' evidence and no trial set of P-004`,
+  );
+
+  // The same at the second interface's origin, on an arm that holds two probes: the pre-fix ledger answers another
+  // release at the third report request (before the arms for each probe, after the legs, after the trials), so the
+  // first interface is asked and keeps its release, and both probes of the arm are refused.
+  const trialsLedger = await startDeployment('held-trials-ledger', 'lenient', PRE_RELEASE, 'release: object\n', LEDGER_PREFIX, {
+    path: `${LEDGER_PREFIX}/release`,
+    count: 3,
+    to: { release: changed },
+  });
+  const trialsSecond = over('held-trials-second', { servers: { preLedger: trialsLedger }, edit: withSecondProbe });
+  refusedAt(
+    'a run whose pre-fix second interface changes its release while the trials run',
+    trialsSecond,
+    ['P-004', 'P-005'],
+    [
+      `after the trials, the pre-fix deployment's "ledger" interface reports release "${changed}" where the probe declares "${PRE_RELEASE}"`,
+    ],
+    { afterTrials: true },
+  );
+  check(
+    JSON.stringify(trialsSecond.servers.preGrader) ===
+      JSON.stringify(['/release', planned, '/release', planned, witness, witness, '/release', planned, planned, planned, '/release']) &&
+      JSON.stringify(trialsSecond.servers.preLedger) === JSON.stringify(['/release', '/release', '/release', '/release']) &&
+      JSON.stringify(trialFiles(trialsSecond)) === JSON.stringify(['trial-1.json', 'trial-2.json', 'trial-3.json']) &&
+      JSON.stringify(trialsSecond.sealed) === '["P-001"]',
+    `a run whose pre-fix second interface changes its release while the trials run sent ${JSON.stringify(trialsSecond.servers)}, left the trials ${JSON.stringify(trialFiles(trialsSecond))} and sealed ${JSON.stringify(trialsSecond.sealed)}; expected the first interface asked at every point and the second at four requests, the three trials and the clean control alone sealed`,
+  );
+
+  // A run whose every probe is refused after a later point has no arm and nothing to score, as when every probe was refused
+  // at the qualification (exit 12 naming the refusals): here the pre-fix deployment is the only arm, redeployed after the
+  // legs (the arm never runs) or while the trials run (the arm ran and is dropped).
+  const alone = ({ folder }) => {
+    fs.rmSync(path.join(folder, 'probes', 'P-001.probe.json'));
+    editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
+      evaluation.arms = ['historical'];
+    });
+  };
+  for (const [point, change] of [
+    ['witness legs', { path: witness, count: 1, to: { release: changed } }],
+    ['trials', { path: planned, count: 3, to: { release: changed } }],
+  ]) {
+    const only = await startDeployment(`held-alone-${point.replace(' ', '-')}`, 'lenient', PRE_RELEASE, '', null, change);
+    const stopped = over(`held-alone-${point.replace(' ', '-')}`, { servers: { preGrader: only }, edit: alone });
+    check(
+      stopped.ran.status === 12 &&
+        stopped.ran.output.includes('every probe was refused') &&
+        stopped.ran.output.includes(`after the ${point}, the pre-fix deployment's "grader" interface reports release "${changed}"`) &&
+        stopped.sealed === null,
+      `a run whose only probe is refused after the ${point} exited ${stopped.ran.status} and sealed ${JSON.stringify(stopped.sealed)}; expected 12 naming the refusal, as when every probe was refused at the qualification, and no trial set\n${stopped.ran.output}`,
+    );
+  }
+
+  // A request the policy denies at a later point: the pre-fix grader redirects its report request to another host once
+  // the witness leg ran, a hop eval-quality's policy denies, so the refusal names eval-quality's reason and the point.
+  const redirecting = await startDeployment('held-legs-redirect', 'lenient', PRE_RELEASE, '', null, {
+    path: witness,
+    count: 1,
+    to: { redirect: true },
+  });
+  const denied = over('held-legs-denied', {
+    command: 'preflight',
+    servers: { preGrader: redirecting },
+    edit: ({ folder }) => editJson(path.join(folder, 'evaluation.json'), (evaluation) => (evaluation.registry[0].maxRedirects = 1)),
+  });
+  refusedAt(
+    'a run whose pre-fix report request is denied after the witness legs',
+    denied,
+    ['P-004'],
+    [
+      'after the witness legs, the pre-fix deployment grader-1.4.2 was denied the release report request report-release for its "grader" interface',
+      'host-not-authorized',
+    ],
+  );
+
+  // An answer with no string at the pointer at a later point: the pre-fix ledger stops reporting a release.
+  const silent = await startDeployment('held-legs-silent', 'lenient', PRE_RELEASE, 'release: object\n', LEDGER_PREFIX, {
+    path: `${LEDGER_PREFIX}/release`,
+    count: 1,
+    to: { release: null },
+  });
+  const unread = over('held-legs-unread', { command: 'preflight', servers: { preLedger: silent } });
+  refusedAt(
+    'a run whose pre-fix second interface reports nothing after the witness legs',
+    unread,
+    ['P-004'],
+    [
+      `after the witness legs, the pre-fix deployment ${PRE_RELEASE} did not report its release through report-ledger-release for its "ledger" interface`,
+      'status 404',
+    ],
+  );
+
+  // A deployment that stops answering after the legs stops the run with exit 12, naming the point and the interface.
+  const crashing = await startDeployment('held-legs-crash', 'lenient', PRE_RELEASE, '', null, {
+    path: witness,
+    count: 1,
+    to: { crash: true },
+  });
+  const crashed = over('held-legs-crash', { command: 'preflight', servers: { preGrader: crashing } });
+  check(
+    crashed.ran.status === 12 &&
+      crashed.ran.output.includes(
+        `after the witness legs, the pre-fix deployment ${PRE_RELEASE} could not answer the release report request report-release for its "grader" interface`,
+      ) &&
+      JSON.stringify(crashed.record?.refused) === '[]',
+    `a pre-fix deployment that ends its process on the report request after the witness legs exited ${crashed.ran.status} with the refusals ${JSON.stringify(crashed.record?.refused)}; expected 12, the point and the interface named, and no refusal\n${crashed.ran.output}`,
+  );
+
+  // A later answer that reports the registry's auth value in another letter case is quoted `[redacted]`, and no file
+  // of the run holds the value in any case.
+  const echoing = await startDeployment('held-legs-echo', 'lenient', PRE_RELEASE, 'release: object\n', LEDGER_PREFIX, {
+    path: `${LEDGER_PREFIX}/release`,
+    count: 1,
+    to: { release: GRADER_TOKEN.toUpperCase() },
+  });
+  const echoed = over('held-legs-echo', { command: 'preflight', servers: { preLedger: echoing } });
+  refusedAt(
+    'a run whose pre-fix second interface reports the auth value upper-cased after the witness legs',
+    echoed,
+    ['P-004'],
+    [
+      `after the witness legs, the pre-fix deployment's "ledger" interface reports release "[redacted]" where the probe declares "${PRE_RELEASE}"`,
+    ],
+  );
+  const leaked = textUnder(echoed.directory).filter(({ text }) => text.toLowerCase().includes(GRADER_TOKEN.toLowerCase()));
+  check(
+    leaked.length === 0 && !echoed.ran.output.toLowerCase().includes(GRADER_TOKEN.toLowerCase()),
+    `a run whose pre-fix second interface reports the auth value upper-cased after the witness legs left it in ${JSON.stringify(leaked.map(({ file }) => file))} or the output`,
+  );
+}
+
+/**
+ * The units of the three points (Story 1.64): a request label names its point, so no two requests of a run share
+ * one whatever the interface is called, and the reports a deployment is asked for are the ones its probes declare,
+ * each once, in sorted interface order.
+ */
+function checkHeldUnits() {
+  const labels = [];
+  for (const point of ['arms', 'legs', 'trials']) {
+    for (const side of ['pre-fix', 'post-fix']) {
+      for (const interfaceId of ['grader', 'ledger', 'legs', 'trials', 'after-legs-grader', 'pre-fix-grader', 'x']) {
+        labels.push(reportLabel({ point, side, interfaceId }));
+      }
+    }
+  }
+  check(
+    new Set(labels).size === labels.length,
+    `the report request labels repeat: ${JSON.stringify(labels.filter((label, index) => labels.indexOf(label) !== index))}; expected one label for each point, side and interface`,
+  );
+  check(
+    reportLabel({ point: 'arms', side: 'pre-fix', interfaceId: 'grader' }) === 'report-pre-fix-grader',
+    'the label of the first point is no longer the one Story 1.65 named: report-<side>-<interfaceId>',
+  );
+  const grader = { operationId: 'report-release', pointer: '/release' };
+  const ledger = { operationId: 'report-ledger-release', pointer: '/release/name' };
+  check(
+    JSON.stringify(reportEntries([{ ledger, grader }])) ===
+      JSON.stringify([
+        { interfaceId: 'grader', report: grader },
+        { interfaceId: 'ledger', report: ledger },
+      ]),
+    "one probe's reports are not asked in sorted interface order",
+  );
+  check(
+    reportEntries([
+      { grader, ledger },
+      { ledger: { ...ledger }, grader: { ...grader } },
+    ]).length === 2,
+    'two probes that declare the same reports are asked once for each interface',
+  );
+  const other = { operationId: 'report-release', pointer: '/version' };
+  check(
+    JSON.stringify(reportEntries([{ grader }, { grader: other }, { grader }]).map((entry) => entry.report.pointer)) ===
+      JSON.stringify(['/release', '/version']),
+    'a probe that names another pointer for an interface is not asked for it, or a repeated report is asked twice',
+  );
+}
+
 /** A file a run may not have written, parsed, or null. */
 function readIfWritten(file) {
   return fs.existsSync(file) ? readJson(file) : null;
@@ -1966,6 +2458,13 @@ function checkHistoricalReference() {
       "The run asks the origin of every HTTP interface of the registry which release it runs: `reports` names one report for each, and each request goes to that interface's own origin.",
     ),
     'the reference\'s "### Against deployments" section does not state that the origin of every HTTP interface is asked which release it runs',
+  );
+  // Story 1.64: the pre-fix deployment is asked at three points.
+  check(
+    deployments.includes(
+      'The run asks the pre-fix deployment which release each of its HTTP interfaces runs at three points: before the qualification arms, after the witness legs and after the trials.',
+    ),
+    'the reference\'s "### Against deployments" section does not state the three points at which the pre-fix deployment is asked which release it runs',
   );
   check(
     !deployments.includes("asks the deployment's other interfaces nothing") && !deployments.includes('One operation reports one interface'),
@@ -3407,7 +3906,14 @@ async function checkConfinedDeploymentRoute(confinement) {
     `a confined deployment-routed qualification ran ${JSON.stringify([failBefore?.origins, failBefore?.verdict, passAfter?.origins, passAfter?.verdict])}`,
   );
   const planned = '/grade?answer=forty-two';
-  const expectedPre = ['/release', planned, '/grade?answer=witness-answer', ...Array.from({ length: TRIALS }, () => planned)];
+  const expectedPre = [
+    '/release',
+    planned,
+    '/grade?answer=witness-answer',
+    '/release',
+    ...Array.from({ length: TRIALS }, () => planned),
+    '/release',
+  ];
   check(
     JSON.stringify(requestsTo(pre).map((request) => request.path)) === JSON.stringify(expectedPre),
     `the confined run's pre-fix deployment received ${JSON.stringify(requestsTo(pre))}; expected ${JSON.stringify(expectedPre)}`,
@@ -3430,6 +3936,15 @@ async function runCase(name, body) {
 
 async function main() {
   try {
+    if (process.argv.includes('--held-releases-only')) {
+      // The cases of Story 1.64's release asked after the witness legs and after the trials alone, which its revert
+      // checks run: the cases over the redeployed pre-fix servers, the units of the three points, and the read of the
+      // reference.
+      await runCase('the held releases', checkHeld);
+      await runCase('the units of the three points', checkHeldUnits);
+      await runCase('the historical reference', checkHistoricalReference);
+      return finish();
+    }
     if (process.argv.includes('--reported-interfaces-only')) {
       // The cases of Story 1.65's report request per HTTP interface alone, which its revert checks run: the cases over
       // four servers, the `deploymentPair` and `reportsProblems` units and the read of the reference.
@@ -3458,6 +3973,8 @@ async function main() {
     await runCase('the historical refusals', checkHistoricalRefusals);
     await runCase('the deployment route', checkDeployments);
     await runCase('the reported interfaces', checkInterfaces);
+    await runCase('the held releases', checkHeld);
+    await runCase('the units of the three points', checkHeldUnits);
     await runCase('the deployment units', checkDeploymentUnits);
     await runCase('the historical reference', checkHistoricalReference);
     await runCase('the rubric judge', checkRubric);

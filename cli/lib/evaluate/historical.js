@@ -51,6 +51,14 @@
  * witness leg and the trials of the arm `historical:<pre-fix release>` reach
  * the pre-fix deployment (`deploymentRoute`). No worktree is made, so the
  * route needs no git history.
+ *
+ * The pre-fix deployment is asked which release each interface runs at two
+ * more points (Story 1.64), since the legs and the trials reach it after the
+ * qualification: after the witness legs and after the last trial of the arm.
+ * `holdInterfaces` is the one loop over a deployment's interfaces that the
+ * three points share, and `holdToReport` the one derivation of a request and
+ * of a refusal. The post-fix deployment is reached only by the qualification
+ * arms, so it is asked once.
  */
 
 'use strict';
@@ -535,37 +543,62 @@ function routeIdentity(historical) {
 }
 
 /**
+ * The three points at which the pre-fix deployment is asked which release each
+ * HTTP interface runs (Story 1.64). `text` is how a refusal names the point
+ * (the first point's refusals name none, as Story 1.38 worded them), `stage` the
+ * stage an unreachable deployment stops the run in, and `label` the part of the
+ * request label that keeps the three points' requests apart.
+ */
+const POINTS = {
+  arms: { text: null, stage: 'qualification', label: '' },
+  legs: { text: 'after the witness legs', stage: 'leg', label: 'after-legs-' },
+  trials: { text: 'after the trials', stage: 'trial', label: 'after-trials-' },
+};
+
+/**
+ * The label of one report request. It names the point before the side, so an
+ * interface ID (a kebab-case slug, any slug) cannot make the label of one
+ * point equal the label of another: `report-pre-fix-<id>` never starts with
+ * `report-after-`.
+ */
+function reportLabel({ point, side, interfaceId }) {
+  return `report-${POINTS[point].label}${side}-${interfaceId}`;
+}
+
+/**
  * Sends one deployment the report request of one HTTP interface (Stories 1.38
  * and 1.65) and holds the release it reports to the one the probe declares. A
  * reported identifier other than the declared `release`, a request
  * eval-quality's policy denies, and an answer with no string at the pointer (a
  * status other than 2xx, a body the port reads as no JSON, or anything but a
  * string at the pointer) each refuse the probe, naming the side, the
- * interface, the declared release and what was found. A call that reaches no
- * answer or passes a ceiling of the registry entry, a deployment the port
- * could not reach or hear from in time, stops the run with exit 12 as it does
- * for any call, and so does a request the run cannot build. The call is no
- * trial: it records no evidence artifact.
+ * interface, the declared release and what was found, and at a later point
+ * (Story 1.64) the point. A call that reaches no answer or passes a ceiling of
+ * the registry entry, a deployment the port could not reach or hear from in
+ * time, stops the run with exit 12 as it does for any call, and so does a
+ * request the run cannot build. The call is no trial: it records no evidence
+ * artifact.
  *
  * @returns {Promise<{ reported: string } | { refused: string }>}
  */
-async function holdToReport({ contract, report, interfaceId, reached, side, port, registry, file, stop, seed, signal }) {
+async function holdToReport({ contract, report, interfaceId, reached, side, port, registry, file, stop, seed, signal, point = 'arms' }) {
   const { release } = reached;
+  const at = POINTS[point].text === null ? '' : `${POINTS[point].text}, `;
   const subject = `the ${side} deployment ${release}`;
   const interfaceNote = `its ${JSON.stringify(interfaceId)} interface`;
   let answer;
   try {
-    answer = await reportedRelease({ contract, report, port, registry, label: `report-${side}-${interfaceId}`, seed, signal });
+    answer = await reportedRelease({ contract, report, port, registry, label: reportLabel({ point, side, interfaceId }), seed, signal });
   } catch (error) {
     if (error?.code === DENIAL_FAULT) {
       return {
-        refused: `${subject} was denied the release report request ${report.operationId} for ${interfaceNote}${reasonNote(error)}: ${error.message}`,
+        refused: `${at}${subject} was denied the release report request ${report.operationId} for ${interfaceNote}${reasonNote(error)}: ${error.message}`,
       };
     }
     throw stop({
-      stage: 'qualification',
+      stage: POINTS[point].stage,
       exitCode: 12,
-      message: `${file}: ${
+      message: `${file}: ${at}${
         error instanceof ArmError
           ? `the release report request ${report.operationId} for ${interfaceNote} of the ${side} deployment ${release} could not be built or recorded`
           : `${subject} could not answer the release report request ${report.operationId} for ${interfaceNote}`
@@ -573,14 +606,99 @@ async function holdToReport({ contract, report, interfaceId, reached, side, port
     });
   }
   if (answer.unread !== undefined) {
-    return { refused: `${subject} did not report its release through ${report.operationId} for ${interfaceNote}: ${answer.unread}` };
+    return { refused: `${at}${subject} did not report its release through ${report.operationId} for ${interfaceNote}: ${answer.unread}` };
   }
   if (answer.reported !== release) {
     return {
-      refused: `the ${side} deployment's ${JSON.stringify(interfaceId)} interface reports release ${quotedIdentifier(answer.reported)} where the probe declares ${JSON.stringify(release)}, so the run would measure it under an identifier it does not run`,
+      refused: `${at}the ${side} deployment's ${JSON.stringify(interfaceId)} interface reports release ${quotedIdentifier(answer.reported)} where the probe declares ${JSON.stringify(release)}, so the run would measure it under an identifier it does not run`,
     };
   }
   return { reported: answer.reported };
+}
+
+/**
+ * The reports one deployment is asked at one point, as `{ interfaceId, report }`
+ * entries in sorted interface-ID order. Several probes of one arm name the
+ * same pre-fix deployment and may each name a report of an interface; an entry
+ * every probe names alike is asked once, so a probe set that agrees sends one
+ * request per interface, and one that names another operation or pointer for
+ * an interface is asked for each.
+ *
+ * @param {object[]} reportsOf the `reports` objects of the probes on the deployment
+ * @returns {{ interfaceId: string, report: { operationId: string, pointer: string } }[]}
+ */
+function reportEntries(reportsOf) {
+  const seen = new Set();
+  const entries = [];
+  for (const reports of reportsOf) {
+    for (const interfaceId of Object.keys(reports)) {
+      const key = JSON.stringify([interfaceId, reports[interfaceId].operationId, reports[interfaceId].pointer]);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      entries.push({ interfaceId, report: reports[interfaceId] });
+    }
+  }
+  return entries.sort((a, b) => (a.interfaceId < b.interfaceId ? -1 : a.interfaceId > b.interfaceId ? 1 : 0));
+}
+
+/**
+ * Asks one deployment which release each of its HTTP interfaces runs, at one
+ * point, through `holdToReport`: the entries in the order `reportEntries`
+ * gives, the first answer that refuses stopping the asking (a refusal needs
+ * one finding). The qualification and the two later points all ask through
+ * here, so the request, the pointer read and the refusal text have one
+ * derivation.
+ *
+ * @returns {Promise<{ reported: Record<string, string> } | { refused: string }>}
+ */
+async function holdInterfaces({ entries, ...asked }) {
+  const reported = {};
+  for (const { interfaceId, report } of entries) {
+    const held = await holdToReport({ ...asked, report, interfaceId });
+    if (held.refused !== undefined) return held;
+    reported[interfaceId] = held.reported;
+  }
+  return { reported };
+}
+
+/**
+ * Asks the pre-fix deployment of a route (`deploymentRoute`) which release each
+ * of its HTTP interfaces runs at a later point (Story 1.64), through the
+ * route's port: the reports are the ones the probes on the route declare, and
+ * a refusal refuses every one of them.
+ *
+ * @param {object} options
+ * @param {{ deployment: object, port: object, members: { probeId: string, file: string, reports: object }[] }} options.route
+ * @param {'legs'|'trials'} options.point
+ * @returns {Promise<{ reported: Record<string, string> } | { refused: string }>}
+ */
+function holdDeployment({ route, point, contract, registry, stop, seed, signal }) {
+  return holdInterfaces({
+    entries: reportEntries(route.members.map((member) => member.reports)),
+    contract,
+    reached: route.deployment,
+    side: 'pre-fix',
+    port: route.port,
+    registry,
+    file: route.members.map((member) => member.file).join(', '),
+    stop,
+    seed,
+    signal,
+    point,
+  });
+}
+
+/**
+ * Records the refusal of one historical probe as every historical refusal is
+ * recorded: in `run.json`'s `refused` and in `refused/<probeId>.json`. The
+ * rest of the run goes on without the probe (AD-8).
+ */
+function recordRefusal({ run, writer, writeRun, log }, { probeId, file, reason }) {
+  const refusal = { probeId, file, route: 'historical', reason };
+  run.refused.push(refusal);
+  writer.writeJson(`refused/${probeId}.json`, refusal);
+  writeRun();
+  log(`${file}: refused: ${reason}`);
 }
 
 /**
@@ -599,7 +717,7 @@ async function holdToReport({ contract, report, interfaceId, reached, side, port
  * `fixCommitDigest` as the digest of the post-fix one, each a release the
  * deployment reported.
  *
- * @returns {Promise<{ probe: object, historical: { fix: string, preFix: string, deployments: object } } | { refused: string }>}
+ * @returns {Promise<{ probe: object, historical: { fix: string, preFix: string, deployments: object, preFixReports: object } } | { refused: string }>}
  */
 async function qualifyDeploymentProbe({
   folder,
@@ -657,25 +775,20 @@ async function qualifyDeploymentProbe({
   // refuses the probe here, where the arms would measure it under the identifier the probe declares. The first answer
   // that refuses stops the asking, since a refusal needs one finding.
   for (const { revision } of PHASES) {
-    const { reports } = deployments[revision];
-    reached[revision].reported = {};
-    for (const interfaceId of Object.keys(reports).sort()) {
-      const held = await holdToReport({
-        contract,
-        report: reports[interfaceId],
-        interfaceId,
-        reached: reached[revision],
-        side: revision === 'fix' ? 'post-fix' : 'pre-fix',
-        port: ports[revision],
-        registry,
-        file,
-        stop,
-        seed,
-        signal,
-      });
-      if (held.refused !== undefined) return held;
-      reached[revision].reported[interfaceId] = held.reported;
-    }
+    const held = await holdInterfaces({
+      entries: reportEntries([deployments[revision].reports]),
+      contract,
+      reached: reached[revision],
+      side: revision === 'fix' ? 'post-fix' : 'pre-fix',
+      port: ports[revision],
+      registry,
+      file,
+      stop,
+      seed,
+      signal,
+    });
+    if (held.refused !== undefined) return held;
+    reached[revision].reported = held.reported;
   }
   const phases = [];
   for (const { phase, revision, expected, meaning } of PHASES) {
@@ -720,7 +833,16 @@ async function qualifyDeploymentProbe({
     stop,
   });
   log(`${file}: qualified; it fails at the deployment of ${reached.preFix.release} and passes at the deployment of ${reached.fix.release}`);
-  return { probe: candidate, historical: { fix: reached.fix.release, preFix: reached.preFix.release, deployments: reached } };
+  return {
+    probe: candidate,
+    historical: {
+      fix: reached.fix.release,
+      preFix: reached.preFix.release,
+      deployments: reached,
+      // The reports the pre-fix deployment is asked for again after the witness legs and after the trials (Story 1.64).
+      preFixReports: deployments.preFix.reports,
+    },
+  };
 }
 
 /**
@@ -754,7 +876,9 @@ async function historicalRoute({ preFix, make, registry, stop, log }) {
  * the qualification reached, through a port whose HTTP calls reach its
  * origins over the authorization eval-quality allowed there, beside the
  * pristine workspace (no server starts, so nothing runs there for an HTTP
- * call). The trials of its arm reach the same deployment.
+ * call). The trials of its arm reach the same deployment. `members` lists the
+ * probes on the route (the caller adds each), whose declared reports the
+ * later asks of the deployment send (Story 1.64).
  */
 async function deploymentRoute({ deployment, pristine, registry, log }) {
   const { port } = await registry.createProbePort({
@@ -766,7 +890,7 @@ async function deploymentRoute({ deployment, pristine, registry, log }) {
     deployment,
   });
   log(`pre-fix deployment of ${deployment.release}: ${Object.values(deployment.origins).join(', ')}`);
-  return { label: `historical:${deployment.release}`, cwd: pristine.root, port, workspace: null, deployment };
+  return { label: `historical:${deployment.release}`, cwd: pristine.root, port, workspace: null, deployment, members: [] };
 }
 
 module.exports = {
@@ -774,7 +898,11 @@ module.exports = {
   deploymentRoute,
   historicalRevisions,
   historicalRoute,
+  holdDeployment,
   qualifyDeploymentProbe,
   qualifyHistoricalProbe,
+  recordRefusal,
+  reportEntries,
+  reportLabel,
   routeIdentity,
 };

@@ -40,7 +40,9 @@
  *      another release than the one it declares or whose report request is
  *      denied or answered with no string at the pointer, is refused with its
  *      reason (`run.json`'s `refused` and `refused/<probeId>.json`) and left
- *      out of everything after, which does not fail the run;
+ *      out of everything after, which does not fail the run (the pre-fix
+ *      deployment is asked again after the legs, step 8, and after the last
+ *      trial of its arm, `run.js`);
  *   6. the adopter's project read again and compared with its reading before
  *      the workspaces were made (exit 12 on any change);
  *   7. one mutated workspace per mutation, reproducing the pristine one, its
@@ -56,7 +58,11 @@
  *      and each observation is written under `observations/` with the
  *      workspace and working directory it ran in; a leg the adapter refuses or
  *      cannot run is written under `faults/` and ends the run (exit 10 for a
- *      denial, 12 otherwise);
+ *      denial, 12 otherwise). The pre-fix deployment of each historical arm
+ *      is then asked again which release each of its HTTP interfaces runs
+ *      (Story 1.64), and a release that changed refuses every probe on that
+ *      pre-fix release before the CLI reads the run directory: the probes
+ *      leave `probes.json` and `observations.json`;
  *   9. the adopter's project read again (exit 12 on any change, with the
  *      probe list removed), then `eval-quality preflight --observations ...
  *      --run-id <invocationId>` over the persisted files, whose exit code is
@@ -94,8 +100,10 @@ const {
   deploymentRoute,
   historicalRevisions,
   historicalRoute,
+  holdDeployment,
   qualifyDeploymentProbe,
   qualifyHistoricalProbe,
+  recordRefusal,
   routeIdentity,
 } = require('./historical');
 const { QualificationError, applyReplaceExact, qualifiedProbe, runMutationCycle } = require('./mutation');
@@ -278,6 +286,28 @@ function recordingPort({ pristine, routes = new Map(), registry, writer }) {
     }
   };
   return { port: { probe }, observations, calls: () => sequence, fault: () => fault };
+}
+
+/**
+ * Asks each pre-fix deployment of a historical route which release each of its
+ * HTTP interfaces runs, after the legs (Story 1.64), and returns one refusal
+ * per probe of every route whose deployment no longer holds the release its
+ * probes declare, with the legs of that probe.
+ *
+ * @param {object} options
+ * @param {Map<string, object>} options.routes the historical routes by pre-fix release
+ * @returns {Promise<{ release: string, probeId: string, file: string, reason: string, legIds: string[] }[]>}
+ */
+async function holdAfterLegs({ routes, contract, registry, seed, stop, signal }) {
+  const refusals = [];
+  for (const release of [...routes.keys()].sort()) {
+    const route = routes.get(release);
+    if (route.deployment === null || route.deployment === undefined) continue;
+    const held = await holdDeployment({ route, point: 'legs', contract, registry, stop, seed, signal });
+    if (held.refused === undefined) continue;
+    for (const { probeId, file, legIds } of route.members) refusals.push({ release, probeId, file, reason: held.refused, legIds });
+  }
+  return refusals;
 }
 
 /**
@@ -813,13 +843,7 @@ async function runInWorkspaces({
     for (const { file, probe } of seeded) {
       if (probe.qualification.route === 'historical') {
         // A refused probe runs nowhere; the rest of the run goes on without it (AD-8).
-        const refuse = (reason) => {
-          const refusal = { probeId: probe.probeId, file, route: 'historical', reason };
-          run.refused.push(refusal);
-          writer.writeJson(`refused/${probe.probeId}.json`, refusal);
-          writeRun();
-          log(`${file}: refused: ${reason}`);
-        };
+        const refuse = (reason) => recordRefusal({ run, writer, writeRun, log }, { probeId: probe.probeId, file, reason });
         // A probe naming no fixCommit takes the deployment route, where one naming neither boundary is unaddressable.
         if (probe.qualification.deployments !== undefined || probe.qualification.fixCommit === undefined) {
           const deployments = deploymentPair(probe.qualification, evaluation.registry ?? [], contract);
@@ -850,7 +874,7 @@ async function runInWorkspaces({
             signal,
           });
           if (historical.refused === undefined) {
-            qualified.push(historical);
+            qualified.push({ ...historical, file });
             // The release each deployment reported at each HTTP interface, beside the one the probe declares.
             run.releases ??= {};
             run.releases[probe.probeId] = Object.fromEntries(
@@ -989,8 +1013,15 @@ async function runInWorkspaces({
       }
       writeRun();
     }
+    const legIds = [];
     for (const defect of entry.probe.defects) {
-      if (defect.manifestationWitness !== null) routes.set(defect.manifestationWitness.legId, route);
+      if (defect.manifestationWitness === null) continue;
+      routes.set(defect.manifestationWitness.legId, route);
+      legIds.push(defect.manifestationWitness.legId);
+    }
+    // What the later asks of a pre-fix deployment need: the probes on its route, the reports each declares, the legs it ran.
+    if (entry.historical?.preFixReports !== undefined) {
+      route.members.push({ probeId: entry.probe.probeId, file: entry.file, reports: entry.historical.preFixReports, legIds });
     }
   }
 
@@ -999,7 +1030,7 @@ async function runInWorkspaces({
   // (a leg fault, a tree change, an engine stage that could not run, an
   // interrupting signal) removes it, so no qualified probe outlives a run
   // that failed.
-  const probes = qualified.map((entry) => entry.probe);
+  let probes = qualified.map((entry) => entry.probe);
   const probesPath = writer.writeJson('probes.json', probes);
   retractOnSignal.push('probes.json');
   let settled = false;
@@ -1043,7 +1074,31 @@ async function runInWorkspaces({
       // contract and probes, so it reports that refusal with its own exit below.
       log(`runPreflight refused the plan: ${error.message}`);
     }
-    const observationsPath = writer.writeJson('observations.json', recorder.observations);
+    // The legs reached each pre-fix deployment after the qualification asked it, so it is asked again before anything reads
+    // what the legs measured. A refused probe leaves the probe list and the observations the CLI reads (Story 1.64).
+    let observations = recorder.observations;
+    const refusals = await holdAfterLegs({
+      routes: historicalByRevision,
+      contract,
+      registry,
+      seed: run.seed,
+      stop,
+      signal,
+    });
+    if (refusals.length > 0) {
+      for (const { probeId, file, reason } of refusals) recordRefusal({ run, writer, writeRun, log }, { probeId, file, reason });
+      const refusedIds = new Set(refusals.map((refusal) => refusal.probeId));
+      // Every probe on the route is refused, so no arm runs there: the route leaves the run.
+      for (const { release } of refusals) historicalByRevision.delete(release);
+      for (let index = qualified.length - 1; index >= 0; index -= 1) {
+        if (refusedIds.has(qualified[index].probe.probeId)) qualified.splice(index, 1);
+      }
+      probes = qualified.map((entry) => entry.probe);
+      writer.replaceJson('probes.json', probes);
+      const dropped = new Set(refusals.flatMap((refusal) => refusal.legIds));
+      observations = observations.filter((observation) => !dropped.has(observation.probeId));
+    }
+    const observationsPath = writer.writeJson('observations.json', observations);
     treeUnchanged('legs');
     // The CLI reads the run directory next: it must hold what the runtime wrote, and nothing else.
     writer.verify('after the legs');
