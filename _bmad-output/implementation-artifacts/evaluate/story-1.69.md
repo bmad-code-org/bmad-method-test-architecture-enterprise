@@ -2,7 +2,7 @@
 title: 'Story 1.69: Hold the inputs of an evaluator attempt's score call'
 type: 'bugfix'
 created: '2026-10-02'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '1af1940a'
