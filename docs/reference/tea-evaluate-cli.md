@@ -364,15 +364,18 @@ A completed `run` adds the contract, corpus, sealed brief and evaluator configur
 - Linux: Bubblewrap, through `bwrap` on `PATH` (`apt-get install bubblewrap`), in an unprivileged user namespace with a read-only view of `/`, a process-id namespace and procfs of its own, and an empty `/run/user`.
   What a target leaves running ends with it, and killing the `bwrap` the runtime started ends what that process forked.
 
+Each mechanism also needs the observer its audit reads (see below): on macOS the kernel's sandbox reports through `/usr/bin/log stream`, which needs a session that may read the unified log; on Linux `strace` (`apt-get install strace`, version 6.1, which the design was verified against, or a later one that supports `--seccomp-bpf` and `--decode-pids=pidns`), which needs ptrace.
+
 The runtime first confines a trivial process through the mechanism, since a host can carry the executable and still refuse it (a kernel that forbids unprivileged user namespaces).
-A host with neither mechanism, or one whose mechanism refuses, stops the command with exit 12 and names the reason.
+It then confirms the observer the same way: on macOS a sandboxed read of a probe file must come back through the log within five seconds, and on Linux a traced Bubblewrap run of a trivial reader must report the file it read.
+A host with neither mechanism, one whose mechanism refuses, or one whose observer cannot confirm itself stops the command with exit 12 and names the reason, since an audit that cannot see would report an empty list of observed mounts as evidence.
 `sandbox-exec` cannot apply a profile inside a Seatbelt sandbox that restricts anything, so a `tea-evaluate` started from a sandboxed shell (an agent's tool, say) is refused on macOS; run it from an unsandboxed terminal.
 A temp directory (`TMPDIR`) inside the evaluation folder, or an evaluation folder or temp directory whose path holds a quote, a backslash or a line break (or another control character), is refused the same way, since no profile can carry it.
 Set `"confinement": false` in `evaluation.json` to run the targets unconfined instead; `run.json` then records `"confinement": "opt-out"`, and a confined run records `"seatbelt"` or `"bubblewrap"`.
 
 Each target runs confined, and so does every process it starts, one still running after the target exits, one started with `setsid` and one left behind by a killed target included. A confined process:
 
-- writes its workspace's checkout and nothing else, apart from the private directories the runtime hands it (the file a started HTTP service reports its port in, the audit report below, a temp directory of its own for each call, which `TMPDIR`, `TMP` and `TEMP` name and which is removed when the call ends, and one private home directory for the trial, described below);
+- writes its workspace's checkout and nothing else, apart from the private directories the runtime hands it (the file a started HTTP service reports its port in, a temp directory of its own for each call, which `TMPDIR`, `TMP` and `TEMP` name and which is removed when the call ends, and one private home directory for the trial, described below);
 - can neither read nor write anything under the evaluation folder: `contract.json`, `probes/`, `mutations/`, `corpus/`, `evaluator/`, `runs/` and the rest; Seatbelt answers `EPERM`, and Bubblewrap covers the folder with an empty read-only file system, so a read answers `ENOENT` and a write `EROFS`;
 - can neither read, write nor connect to a unix socket under the user's private root directory, beneath which every run's private parent holds the evaluation layer's private directories: the bridge's configuration, token file and socket, and the working directories of an evaluator and the judge (see [The bridge's admission token](#the-bridges-admission-token)); Seatbelt answers `EPERM`, and Bubblewrap covers the directory with an empty read-only file system;
 - reads the rest of the host, since Node, git and your toolchain read from the system, and nothing of the project's git directory but its own worktree's entry in it: Seatbelt answers `EPERM`, and Bubblewrap covers the git directory with an empty file system, the worktree's entry bound back in read-only.
@@ -407,11 +410,22 @@ A run that opts out of confinement keeps the host environment and makes no home.
 Every other process the run starts to run your code or an agent (a `command` evaluator, a sealed-brief agent and the bridge relay it starts, the rubric judge, the evaluation's HTTP port) runs with the evaluation folder read-only, `evaluator/` and `runs/` included, so no process of the run can swap a file of the evaluation layer between the runtime's re-read of it and the evaluator's launch (see [The evaluation layer](#the-evaluation-layer)), or rewrite the run's evidence.
 An evaluator that writes a cache beside itself under `evaluator/` fails its write in a confined run; it may write its working directory, your home directory and the rest of the host.
 
-Each trial also audits what its targets open.
-Every Node process of the trial loads TeA's audit through `NODE_OPTIONS` (`--require` of `cli/lib/evaluate/confinement-guard.cjs`), which reports each path the process hands Node's `fs` functions to open, read, list or write outside what the trial was granted: its workspace, the Node installation it runs from, the operating system's own directories (`/System`, `/usr`, `/bin`, `/sbin`, `/dev`, `/etc`, `/lib` and their like), and the `systemPaths` of the target's registry entry.
-A path is judged and reported by its real path, so a link in the workspace that leads outside it reports the path it leads to.
-A read of a path that does not exist, and a metadata probe (`stat`, `access`), are not reported; a write outside the grants and every access to the evaluation folder, the project's git directory (its worktree's own entry excepted) or your private root directory are reported, refused or not, all three even under a declared system path.
-The module loader's own lookups (`require` and `import` resolve paths through Node's internal bindings) are not seen.
+Each trial also audits what its targets open, through the mechanism itself and for every process the target starts, whatever its language or environment: a shell script, a Python program, a native binary and a Node process started with an empty environment are seen alike.
+On macOS the Seatbelt profile reports each read it allows outside the grants and tags each refusal with a token of the sandbox (git's own index lock excepted), and a `/usr/bin/log stream` child the runtime owns writes the kernel's reports of that token to a file.
+On Linux the runtime runs the Bubblewrap command under `strace -f --seccomp-bpf --decode-pids=pidns`, started outside the namespace, and reads the trace when the call ends, which ends every process the call left running; `--seccomp-bpf` stops a process only at the file syscalls, so a process that makes few of them runs at about its untraced speed.
+Both files sit beneath the run's private parent, which every target withholds, and no code runs inside the target, so no target can read, rewrite, truncate or signal what the runtime reads of the audit.
+The audit lists a path once, by its real path, when a process opens it, lists a directory or reads a link outside what the trial was granted: its workspace, its temp and home directories, the Node installation the runtime runs from, the operating system's own directories (`/System`, `/usr`, `/bin`, `/sbin`, `/dev`, `/etc`, `/lib` and their like, and on macOS the zone data, logging filter and system interpreters' library directories under `/private/var/db/timezone`, `/Library/Preferences/Logging`, `/Library/Perl`, `/Library/Python` and `/Library/Ruby`) and the `systemPaths` of the target's registry entry.
+A link in the workspace that leads outside it reports the path it leads to, while a file under the operating system's own directories (`/usr`, `/etc`, `/lib` and their like, not `/proc`) is judged by the path the process asked for, so a system file the operating system links elsewhere (a stub resolver's `/etc/resolv.conf`) is not listed.
+A write the mechanism refuses is listed, and so is every access to the evaluation folder, the project's git directory (its worktree's own entry excepted) or your private root directory, refused or not, even under a declared system path.
+A read of a path that does not exist and a metadata probe (`stat`, `access`) are not listed.
+The execution of a binary reads it, so an ungranted binary is listed like any ungranted file (macOS also lists the directory the shell looked in); declare the toolchain a target runs in `systemPaths`.
+The audit does not see file access through `io_uring` (Linux), and on macOS it does not see a process that reads after the trial's last read of the log.
+On Linux a binary is judged by the path it was started by, and a link in the workspace that leads to a binary outside the grants is not followed.
+On macOS the kernel's reports are lossy: the log lost none of 3,000 reports at a quiet host's 440 a second, one to five of 1,600 on a host saturated by other work, and 7 to 20 percent of a burst of 40,000 a second, each without a trace.
+A target that reads one ungranted file while the host is saturated can therefore be missed, and an empty `observedMounts` from a macOS run means that no report arrived; in every measured burst most reports arrived.
+Linux's trace holds every traced syscall of the call.
+No run records the loss yet; Story 1.81 adds a per-trial count to `run.json`.
+A run whose observer fails (the log stream ended, or a read the runtime made never came back through it, or the trace of a call holds no start of its target) leaves the trial with no record and exits 12.
 The trial set's isolation manifest lists the reported paths as `observedMounts`; none is an allowed mount, so `score` exits 3 (Invalid) with eval-quality's isolation violation, one `mount outside allowlist` reason per path.
 A registry entry names what its target legitimately reads outside the workspace as absolute `systemPaths`:
 
@@ -431,13 +445,9 @@ A registry entry names what its target legitimately reads outside the workspace 
 
 A tool-server entry and an HTTP entry (for its started service) take `systemPaths` the same way.
 The audit grants a process the system paths of the target it runs, so `check` refuses two entries that start the same target with different `systemPaths`.
-The audit is written by the target's own processes and covers Node processes alone; the mechanism is what refuses, whatever the process.
-The report file is the one file of the audit a target may write.
-The runtime reads the report when each confined call ends, and a report it cannot open or one cut shorter than an earlier read found it counts against the trial for the rest of the run.
 A Bubblewrap that fails before it starts the target (a refused bind, say) ends the call as an infrastructure error naming Bubblewrap's message, since no target ran.
-A report cut shorter than an earlier read found it, or padded past what the runtime reads, is listed as its own path in `observedMounts`; a target that rewrites the file to the same length can still hide a line from it.
 A Bubblewrap target shares the host's network namespace, so that a started HTTP service stays reachable, and with it any abstract Unix socket on the host, a desktop session's D-Bus among them.
-Story 1.63 moves the audit onto a channel the runtime holds and closes that route.
+Story 1.63 closes that route.
 
 A confined run's isolation manifests account for each forbidden input with a note naming the confinement that withheld it (`Withheld as well by macOS Seatbelt (sandbox-exec) file-system confinement: ...`, or `Linux Bubblewrap (bwrap)`); an opted-out run's note says the runtime does not sandbox the target's file system.
 `score` over an opted-out run says so in its summary line, and its `score.json` records the run's `confinement`, so an opted-out verdict is marked as one.
@@ -957,9 +967,9 @@ A run removes its own parent when it ends, an interrupting signal included; the 
 
 The confinement withholds the run's private directories from every target and every process a target leaves running, those started before a directory was made included, so the token is unreadable to a confined target, which can neither take the bridge's one admission nor read an evaluator's or a judge's working files.
 It withholds the root, so a process left running by an earlier run, or a target of a run in progress elsewhere, cannot reach the parent of a run made after its sandbox was built, whatever temp directory either run uses.
-Seatbelt denies each read and write under the root and each connection to a unix socket under it (`EPERM`), Bubblewrap covers it with an empty read-only file system, and the audit reports a Node process that opens it.
+Seatbelt denies each read and write under the root and each connection to a unix socket under it (`EPERM`), Bubblewrap covers it with an empty read-only file system, and the audit reports a process that opens it.
 The agent's own connection and every process of the evaluation layer keep their access, since those processes are not confined as a target is.
-The directories a target is granted (its workspace, its temp directory, the audit report, the status and port files) are not under the root.
+The directories a target is granted (its workspace, its temp directory, the status and port files) are not under the root.
 A run with `"confinement": false` leaves the private directories as readable to its targets as any other directory of the host.
 
 ### Qualifying a sealed-brief agent

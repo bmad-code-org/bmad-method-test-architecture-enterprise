@@ -117,7 +117,7 @@
     "target": "/usr/bin/sandbox-exec",
     "args": [
       "-p",
-      "(version 1)\n(allow default)\n(deny file-write*)\n(allow file-write*\n  (subpath \"/var/folders/ab/cd/T/tea-workspace\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-workspace\")\n  (subpath \"/var/folders/ab/cd/T/tea-private\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-private\")\n  (subpath \"/var/folders/ab/cd/T/tea-private/audit.jsonl\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-private/audit.jsonl\")\n  (literal \"/dev/null\")\n  (literal \"/dev/zero\")\n  (literal \"/dev/tty\")\n  (literal \"/dev/stdout\")\n  (literal \"/dev/stderr\")\n  (literal \"/dev/dtracehelper\")\n  (subpath \"/dev/fd\"))\n(deny file-read* file-write*\n  (subpath \"/proj/evaluations/demo\"))\n",
+      "(version 1)\n(allow default)\n(deny file-write*)\n(allow file-write*\n  (subpath \"/var/folders/ab/cd/T/tea-workspace\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-workspace\")\n  (subpath \"/var/folders/ab/cd/T/tea-private\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-private\")\n  (literal \"/dev/null\")\n  (literal \"/dev/zero\")\n  (literal \"/dev/tty\")\n  (literal \"/dev/stdout\")\n  (literal \"/dev/stderr\")\n  (literal \"/dev/dtracehelper\")\n  (subpath \"/dev/fd\"))\n(deny file-read* file-write*\n  (subpath \"/proj/evaluations/demo\"))\n",
       "/fixture/bin/node",
       "target.js",
       "--flag"
@@ -149,9 +149,6 @@
       "/private/var/folders/ab/cd/T/tea-private",
       "/private/var/folders/ab/cd/T/tea-private",
       "--bind",
-      "/private/var/folders/ab/cd/T/tea-private/audit.jsonl",
-      "/private/var/folders/ab/cd/T/tea-private/audit.jsonl",
-      "--bind",
       "<status>/status-1-<token>.json",
       "<status>/status-1-<token>.json",
       "--tmpfs",
@@ -168,16 +165,11 @@
     ],
     "statusFile": "<status>/status-1-<token>.json"
   },
-  "confinement.targetSandbox.environment": {
-    "PATH": "/usr/bin",
-    "NODE_OPTIONS": "--require \"<confinement-directory>/confinement-guard.cjs\"",
-    "TEA_EVALUATE_CONFINEMENT_AUDIT": "{\"report\":\"/var/folders/ab/cd/T/tea-private/audit.jsonl\",\"granted\":[\"/var/folders/ab/cd/T/tea-workspace\",\"/private/var/folders/ab/cd/T/tea-workspace\",\"/var/folders/ab/cd/T/tea-private/audit.jsonl\",\"/private/var/folders/ab/cd/T/tea-private/audit.jsonl\",\"/var/folders/ab/cd/T/tea-private\",\"/private/var/folders/ab/cd/T/tea-private\"],\"withheld\":[\"/proj/evaluations/demo\"]}"
-  },
   "confinement.targetSandbox.wrap.seatbelt.git": {
     "target": "/usr/bin/sandbox-exec",
     "args": [
       "-p",
-      "(version 1)\n(allow default)\n(deny file-write*)\n(allow file-write*\n  (subpath \"/var/folders/ab/cd/T/tea-workspace\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-workspace\")\n  (subpath \"/var/folders/ab/cd/T/tea-private\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-private\")\n  (subpath \"/var/folders/ab/cd/T/tea-private/audit.jsonl\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-private/audit.jsonl\")\n  (literal \"/dev/null\")\n  (literal \"/dev/zero\")\n  (literal \"/dev/tty\")\n  (literal \"/dev/stdout\")\n  (literal \"/dev/stderr\")\n  (literal \"/dev/dtracehelper\")\n  (subpath \"/dev/fd\"))\n(deny file-read* file-write*\n  (subpath \"/proj/.git\"))\n(allow file-read*\n  (subpath \"/proj/.git/worktrees/tea-workspace\"))\n(allow file-read-metadata\n  (literal \"/proj/.git\")\n  (literal \"/proj/.git/worktrees\"))\n(deny file-read* file-write*\n  (subpath \"/proj/evaluations/demo\"))\n",
+      "(version 1)\n(allow default)\n(deny file-write*)\n(allow file-write*\n  (subpath \"/var/folders/ab/cd/T/tea-workspace\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-workspace\")\n  (subpath \"/var/folders/ab/cd/T/tea-private\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-private\")\n  (literal \"/dev/null\")\n  (literal \"/dev/zero\")\n  (literal \"/dev/tty\")\n  (literal \"/dev/stdout\")\n  (literal \"/dev/stderr\")\n  (literal \"/dev/dtracehelper\")\n  (subpath \"/dev/fd\"))\n(deny file-read* file-write*\n  (subpath \"/proj/.git\"))\n(allow file-read*\n  (subpath \"/proj/.git/worktrees/tea-workspace\"))\n(allow file-read-metadata\n  (literal \"/proj/.git\")\n  (literal \"/proj/.git/worktrees\"))\n(deny file-read* file-write*\n  (subpath \"/proj/evaluations/demo\"))\n",
       "/fixture/bin/node",
       "target.js",
       "--flag"
@@ -188,7 +180,7 @@
     "target": "/usr/bin/sandbox-exec",
     "args": [
       "-p",
-      "(version 1)\n(allow default)\n(deny file-write*)\n(allow file-write*\n  (subpath \"/var/folders/ab/cd/T/tea-workspace\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-workspace\")\n  (subpath \"/var/folders/ab/cd/T/tea-private/audit.jsonl\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-private/audit.jsonl\")\n  (literal \"/dev/null\")\n  (literal \"/dev/zero\")\n  (literal \"/dev/tty\")\n  (literal \"/dev/stdout\")\n  (literal \"/dev/stderr\")\n  (literal \"/dev/dtracehelper\")\n  (subpath \"/dev/fd\"))\n(deny file-read* file-write*\n  (subpath \"/proj/.git\"))\n(deny file-read* file-write*\n  (subpath \"/proj/evaluations/demo\"))\n",
+      "(version 1)\n(allow default)\n(deny file-write*)\n(allow file-write*\n  (subpath \"/var/folders/ab/cd/T/tea-workspace\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-workspace\")\n  (literal \"/dev/null\")\n  (literal \"/dev/zero\")\n  (literal \"/dev/tty\")\n  (literal \"/dev/stdout\")\n  (literal \"/dev/stderr\")\n  (literal \"/dev/dtracehelper\")\n  (subpath \"/dev/fd\"))\n(deny file-read* file-write*\n  (subpath \"/proj/.git\"))\n(deny file-read* file-write*\n  (subpath \"/proj/evaluations/demo\"))\n",
       "/fixture/bin/node",
       "target.js"
     ],
@@ -218,9 +210,6 @@
       "--bind",
       "/private/var/folders/ab/cd/T/tea-private",
       "/private/var/folders/ab/cd/T/tea-private",
-      "--bind",
-      "/private/var/folders/ab/cd/T/tea-private/audit.jsonl",
-      "/private/var/folders/ab/cd/T/tea-private/audit.jsonl",
       "--bind",
       "<status>/status-1-<token>.json",
       "<status>/status-1-<token>.json",
@@ -267,9 +256,6 @@
       "/private/var/folders/ab/cd/T/tea-workspace",
       "/private/var/folders/ab/cd/T/tea-workspace",
       "--bind",
-      "/private/var/folders/ab/cd/T/tea-private/audit.jsonl",
-      "/private/var/folders/ab/cd/T/tea-private/audit.jsonl",
-      "--bind",
       "<status>/status-1-<token>.json",
       "<status>/status-1-<token>.json",
       "--tmpfs",
@@ -293,7 +279,7 @@
     "target": "/usr/bin/sandbox-exec",
     "args": [
       "-p",
-      "(version 1)\n(allow default)\n(deny file-write*)\n(allow file-write*\n  (subpath \"/var/folders/ab/cd/T/tea-workspace\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-workspace\")\n  (subpath \"/var/folders/ab/cd/T/tea-private/audit.jsonl\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-private/audit.jsonl\")\n  (literal \"/dev/null\")\n  (literal \"/dev/zero\")\n  (literal \"/dev/tty\")\n  (literal \"/dev/stdout\")\n  (literal \"/dev/stderr\")\n  (literal \"/dev/dtracehelper\")\n  (subpath \"/dev/fd\"))\n(deny file-read* file-write*\n  (subpath \"/proj/.git\")\n  (subpath \"/proj/shared/objects\"))\n(allow file-read*\n  (subpath \"/proj/.git/worktrees/tea-workspace\"))\n(allow file-read-metadata\n  (literal \"/proj/.git\")\n  (literal \"/proj/.git/worktrees\"))\n(deny file-read* file-write*\n  (subpath \"/proj/evaluations/demo\"))\n",
+      "(version 1)\n(allow default)\n(deny file-write*)\n(allow file-write*\n  (subpath \"/var/folders/ab/cd/T/tea-workspace\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-workspace\")\n  (literal \"/dev/null\")\n  (literal \"/dev/zero\")\n  (literal \"/dev/tty\")\n  (literal \"/dev/stdout\")\n  (literal \"/dev/stderr\")\n  (literal \"/dev/dtracehelper\")\n  (subpath \"/dev/fd\"))\n(deny file-read* file-write*\n  (subpath \"/proj/.git\")\n  (subpath \"/proj/shared/objects\"))\n(allow file-read*\n  (subpath \"/proj/.git/worktrees/tea-workspace\"))\n(allow file-read-metadata\n  (literal \"/proj/.git\")\n  (literal \"/proj/.git/worktrees\"))\n(deny file-read* file-write*\n  (subpath \"/proj/evaluations/demo\"))\n",
       "/fixture/bin/node",
       "target.js"
     ],
@@ -321,9 +307,6 @@
       "/private/var/folders/ab/cd/T/tea-workspace",
       "/private/var/folders/ab/cd/T/tea-workspace",
       "--bind",
-      "/private/var/folders/ab/cd/T/tea-private/audit.jsonl",
-      "/private/var/folders/ab/cd/T/tea-private/audit.jsonl",
-      "--bind",
       "<status>/status-1-<token>.json",
       "<status>/status-1-<token>.json",
       "--tmpfs",
@@ -350,21 +333,11 @@
     ],
     "statusFile": "<status>/status-1-<token>.json"
   },
-  "confinement.targetSandbox.environment.git": {
-    "PATH": "/usr/bin",
-    "NODE_OPTIONS": "--require \"<confinement-directory>/confinement-guard.cjs\"",
-    "TEA_EVALUATE_CONFINEMENT_AUDIT": "{\"report\":\"/var/folders/ab/cd/T/tea-private/audit.jsonl\",\"granted\":[\"/var/folders/ab/cd/T/tea-workspace\",\"/private/var/folders/ab/cd/T/tea-workspace\",\"/var/folders/ab/cd/T/tea-private/audit.jsonl\",\"/private/var/folders/ab/cd/T/tea-private/audit.jsonl\",\"/var/folders/ab/cd/T/tea-private\",\"/private/var/folders/ab/cd/T/tea-private\",\"/proj/.git/worktrees/tea-workspace\"],\"withheld\":[\"/proj/evaluations/demo\",\"/proj/.git\"],\"withheldExcept\":[\"/proj/.git/worktrees/tea-workspace\"]}"
-  },
-  "confinement.targetSandbox.environment.gitAlternates": {
-    "PATH": "/usr/bin",
-    "NODE_OPTIONS": "--require \"<confinement-directory>/confinement-guard.cjs\"",
-    "TEA_EVALUATE_CONFINEMENT_AUDIT": "{\"report\":\"/var/folders/ab/cd/T/tea-private/audit.jsonl\",\"granted\":[\"/var/folders/ab/cd/T/tea-workspace\",\"/private/var/folders/ab/cd/T/tea-workspace\",\"/var/folders/ab/cd/T/tea-private/audit.jsonl\",\"/private/var/folders/ab/cd/T/tea-private/audit.jsonl\",\"/var/folders/ab/cd/T/tea-private\",\"/private/var/folders/ab/cd/T/tea-private\",\"/proj/.git/worktrees/tea-workspace\",\"/var/folders/ab/cd/T/tea-workspace-view\",\"/private/var/folders/ab/cd/T/tea-workspace-view\"],\"withheld\":[\"/proj/evaluations/demo\",\"/proj/.git\",\"/proj/shared/objects\"],\"withheldExcept\":[\"/proj/.git/worktrees/tea-workspace\"]}"
-  },
   "confinement.targetSandbox.wrap.seatbelt.privateRoot": {
     "target": "/usr/bin/sandbox-exec",
     "args": [
       "-p",
-      "(version 1)\n(allow default)\n(deny file-write*)\n(allow file-write*\n  (subpath \"/var/folders/ab/cd/T/tea-workspace\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-workspace\")\n  (subpath \"/var/folders/ab/cd/T/tea-private\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-private\")\n  (subpath \"/var/folders/ab/cd/T/tea-private/audit.jsonl\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-private/audit.jsonl\")\n  (literal \"/dev/null\")\n  (literal \"/dev/zero\")\n  (literal \"/dev/tty\")\n  (literal \"/dev/stdout\")\n  (literal \"/dev/stderr\")\n  (literal \"/dev/dtracehelper\")\n  (subpath \"/dev/fd\"))\n(deny file-read* file-write*\n  (subpath \"/proj/.git\"))\n(allow file-read*\n  (subpath \"/proj/.git/worktrees/tea-workspace\"))\n(allow file-read-metadata\n  (literal \"/proj/.git\")\n  (literal \"/proj/.git/worktrees\"))\n(deny file-read* file-write*\n  (subpath \"/var/folders/ab/cd/T/tea-evaluate-p501\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-evaluate-p501\"))\n(deny network-outbound\n  (remote unix-socket (subpath \"/var/folders/ab/cd/T/tea-evaluate-p501\"))\n  (remote unix-socket (subpath \"/private/var/folders/ab/cd/T/tea-evaluate-p501\")))\n(deny file-read* file-write*\n  (subpath \"/proj/evaluations/demo\"))\n",
+      "(version 1)\n(allow default)\n(deny file-write*)\n(allow file-write*\n  (subpath \"/var/folders/ab/cd/T/tea-workspace\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-workspace\")\n  (subpath \"/var/folders/ab/cd/T/tea-private\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-private\")\n  (literal \"/dev/null\")\n  (literal \"/dev/zero\")\n  (literal \"/dev/tty\")\n  (literal \"/dev/stdout\")\n  (literal \"/dev/stderr\")\n  (literal \"/dev/dtracehelper\")\n  (subpath \"/dev/fd\"))\n(deny file-read* file-write*\n  (subpath \"/proj/.git\"))\n(allow file-read*\n  (subpath \"/proj/.git/worktrees/tea-workspace\"))\n(allow file-read-metadata\n  (literal \"/proj/.git\")\n  (literal \"/proj/.git/worktrees\"))\n(deny file-read* file-write*\n  (subpath \"/var/folders/ab/cd/T/tea-evaluate-p501\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-evaluate-p501\"))\n(deny network-outbound\n  (remote unix-socket (subpath \"/var/folders/ab/cd/T/tea-evaluate-p501\"))\n  (remote unix-socket (subpath \"/private/var/folders/ab/cd/T/tea-evaluate-p501\")))\n(deny file-read* file-write*\n  (subpath \"/proj/evaluations/demo\"))\n",
       "/fixture/bin/node",
       "target.js",
       "--flag"
@@ -396,9 +369,6 @@
       "/private/var/folders/ab/cd/T/tea-private",
       "/private/var/folders/ab/cd/T/tea-private",
       "--bind",
-      "/private/var/folders/ab/cd/T/tea-private/audit.jsonl",
-      "/private/var/folders/ab/cd/T/tea-private/audit.jsonl",
-      "--bind",
       "<status>/status-1-<token>.json",
       "<status>/status-1-<token>.json",
       "--tmpfs",
@@ -426,16 +396,11 @@
     ],
     "statusFile": "<status>/status-1-<token>.json"
   },
-  "confinement.targetSandbox.environment.privateRoot": {
-    "PATH": "/usr/bin",
-    "NODE_OPTIONS": "--require \"<confinement-directory>/confinement-guard.cjs\"",
-    "TEA_EVALUATE_CONFINEMENT_AUDIT": "{\"report\":\"/var/folders/ab/cd/T/tea-private/audit.jsonl\",\"granted\":[\"/var/folders/ab/cd/T/tea-workspace\",\"/private/var/folders/ab/cd/T/tea-workspace\",\"/var/folders/ab/cd/T/tea-private/audit.jsonl\",\"/private/var/folders/ab/cd/T/tea-private/audit.jsonl\",\"/var/folders/ab/cd/T/tea-private\",\"/private/var/folders/ab/cd/T/tea-private\",\"/proj/.git/worktrees/tea-workspace\"],\"withheld\":[\"/proj/evaluations/demo\",\"/proj/.git\",\"/var/folders/ab/cd/T/tea-evaluate-p501\",\"/private/var/folders/ab/cd/T/tea-evaluate-p501\"],\"withheldExcept\":[\"/proj/.git/worktrees/tea-workspace\"]}"
-  },
   "confinement.targetSandbox.wrap.seatbelt.home": {
     "target": "/usr/bin/sandbox-exec",
     "args": [
       "-p",
-      "(version 1)\n(allow default)\n(deny file-write*)\n(allow file-write*\n  (subpath \"/var/folders/ab/cd/T/tea-workspace\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-workspace\")\n  (subpath \"/var/folders/ab/cd/T/tea-private\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-private\")\n  (subpath \"/var/folders/ab/cd/T/tea-evaluate-target-home-AbCdEf\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-evaluate-target-home-AbCdEf\")\n  (subpath \"/var/folders/ab/cd/T/tea-private/audit.jsonl\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-private/audit.jsonl\")\n  (literal \"/dev/null\")\n  (literal \"/dev/zero\")\n  (literal \"/dev/tty\")\n  (literal \"/dev/stdout\")\n  (literal \"/dev/stderr\")\n  (literal \"/dev/dtracehelper\")\n  (subpath \"/dev/fd\"))\n(deny file-read* file-write*\n  (subpath \"/proj/.git\"))\n(allow file-read*\n  (subpath \"/proj/.git/worktrees/tea-workspace\"))\n(allow file-read-metadata\n  (literal \"/proj/.git\")\n  (literal \"/proj/.git/worktrees\"))\n(deny file-read* file-write*\n  (subpath \"/var/folders/ab/cd/T/tea-evaluate-p501\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-evaluate-p501\"))\n(deny network-outbound\n  (remote unix-socket (subpath \"/var/folders/ab/cd/T/tea-evaluate-p501\"))\n  (remote unix-socket (subpath \"/private/var/folders/ab/cd/T/tea-evaluate-p501\")))\n(deny file-read* file-write*\n  (subpath \"/proj/evaluations/demo\"))\n",
+      "(version 1)\n(allow default)\n(deny file-write*)\n(allow file-write*\n  (subpath \"/var/folders/ab/cd/T/tea-workspace\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-workspace\")\n  (subpath \"/var/folders/ab/cd/T/tea-private\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-private\")\n  (subpath \"/var/folders/ab/cd/T/tea-evaluate-target-home-AbCdEf\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-evaluate-target-home-AbCdEf\")\n  (literal \"/dev/null\")\n  (literal \"/dev/zero\")\n  (literal \"/dev/tty\")\n  (literal \"/dev/stdout\")\n  (literal \"/dev/stderr\")\n  (literal \"/dev/dtracehelper\")\n  (subpath \"/dev/fd\"))\n(deny file-read* file-write*\n  (subpath \"/proj/.git\"))\n(allow file-read*\n  (subpath \"/proj/.git/worktrees/tea-workspace\"))\n(allow file-read-metadata\n  (literal \"/proj/.git\")\n  (literal \"/proj/.git/worktrees\"))\n(deny file-read* file-write*\n  (subpath \"/var/folders/ab/cd/T/tea-evaluate-p501\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-evaluate-p501\"))\n(deny network-outbound\n  (remote unix-socket (subpath \"/var/folders/ab/cd/T/tea-evaluate-p501\"))\n  (remote unix-socket (subpath \"/private/var/folders/ab/cd/T/tea-evaluate-p501\")))\n(deny file-read* file-write*\n  (subpath \"/proj/evaluations/demo\"))\n",
       "/fixture/bin/node",
       "target.js",
       "--flag"
@@ -470,9 +435,6 @@
       "/private/var/folders/ab/cd/T/tea-evaluate-target-home-AbCdEf",
       "/private/var/folders/ab/cd/T/tea-evaluate-target-home-AbCdEf",
       "--bind",
-      "/private/var/folders/ab/cd/T/tea-private/audit.jsonl",
-      "/private/var/folders/ab/cd/T/tea-private/audit.jsonl",
-      "--bind",
       "<status>/status-1-<token>.json",
       "<status>/status-1-<token>.json",
       "--tmpfs",
@@ -500,16 +462,11 @@
     ],
     "statusFile": "<status>/status-1-<token>.json"
   },
-  "confinement.targetSandbox.environment.home": {
-    "PATH": "/usr/bin",
-    "NODE_OPTIONS": "--require \"<confinement-directory>/confinement-guard.cjs\"",
-    "TEA_EVALUATE_CONFINEMENT_AUDIT": "{\"report\":\"/var/folders/ab/cd/T/tea-private/audit.jsonl\",\"granted\":[\"/var/folders/ab/cd/T/tea-workspace\",\"/private/var/folders/ab/cd/T/tea-workspace\",\"/var/folders/ab/cd/T/tea-private/audit.jsonl\",\"/private/var/folders/ab/cd/T/tea-private/audit.jsonl\",\"/var/folders/ab/cd/T/tea-evaluate-target-home-AbCdEf\",\"/private/var/folders/ab/cd/T/tea-evaluate-target-home-AbCdEf\",\"/var/folders/ab/cd/T/tea-private\",\"/private/var/folders/ab/cd/T/tea-private\",\"/proj/.git/worktrees/tea-workspace\"],\"withheld\":[\"/proj/evaluations/demo\",\"/proj/.git\",\"/var/folders/ab/cd/T/tea-evaluate-p501\",\"/private/var/folders/ab/cd/T/tea-evaluate-p501\"],\"withheldExcept\":[\"/proj/.git/worktrees/tea-workspace\"]}"
-  },
   "confinement.targetSandbox.wrap.seatbelt.rootHome": {
     "target": "/usr/bin/sandbox-exec",
     "args": [
       "-p",
-      "(version 1)\n(allow default)\n(deny file-write*)\n(allow file-write*\n  (subpath \"/var/folders/ab/cd/T/tea-workspace\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-workspace\")\n  (subpath \"/var/folders/ab/cd/T/tea-private\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-private\")\n  (subpath \"/var/folders/ab/cd/T/tea-private/audit.jsonl\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-private/audit.jsonl\")\n  (literal \"/dev/null\")\n  (literal \"/dev/zero\")\n  (literal \"/dev/tty\")\n  (literal \"/dev/stdout\")\n  (literal \"/dev/stderr\")\n  (literal \"/dev/dtracehelper\")\n  (subpath \"/dev/fd\"))\n(deny file-read* file-write*\n  (subpath \"/proj/.git\"))\n(allow file-read*\n  (subpath \"/proj/.git/worktrees/tea-workspace\"))\n(allow file-read-metadata\n  (literal \"/proj/.git\")\n  (literal \"/proj/.git/worktrees\"))\n(deny file-read* file-write*\n  (subpath \"/var/folders/ab/cd/T/tea-evaluate-p501\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-evaluate-p501\"))\n(deny network-outbound\n  (remote unix-socket (subpath \"/var/folders/ab/cd/T/tea-evaluate-p501\"))\n  (remote unix-socket (subpath \"/private/var/folders/ab/cd/T/tea-evaluate-p501\")))\n(allow file-read* file-write*\n  (subpath \"/var/folders/ab/cd/T/tea-evaluate-p501/run-501-AbCdEf/tea-evaluate-target-home-AbCdEf\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-evaluate-p501/run-501-AbCdEf/tea-evaluate-target-home-AbCdEf\"))\n(allow file-read-metadata\n  (literal \"/var/folders/ab/cd/T/tea-evaluate-p501/run-501-AbCdEf\")\n  (literal \"/private/var/folders/ab/cd/T/tea-evaluate-p501/run-501-AbCdEf\")\n  (literal \"/var/folders/ab/cd/T/tea-evaluate-p501\")\n  (literal \"/private/var/folders/ab/cd/T/tea-evaluate-p501\"))\n(deny file-read* file-write*\n  (subpath \"/proj/evaluations/demo\"))\n",
+      "(version 1)\n(allow default)\n(deny file-write*)\n(allow file-write*\n  (subpath \"/var/folders/ab/cd/T/tea-workspace\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-workspace\")\n  (subpath \"/var/folders/ab/cd/T/tea-private\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-private\")\n  (literal \"/dev/null\")\n  (literal \"/dev/zero\")\n  (literal \"/dev/tty\")\n  (literal \"/dev/stdout\")\n  (literal \"/dev/stderr\")\n  (literal \"/dev/dtracehelper\")\n  (subpath \"/dev/fd\"))\n(deny file-read* file-write*\n  (subpath \"/proj/.git\"))\n(allow file-read*\n  (subpath \"/proj/.git/worktrees/tea-workspace\"))\n(allow file-read-metadata\n  (literal \"/proj/.git\")\n  (literal \"/proj/.git/worktrees\"))\n(deny file-read* file-write*\n  (subpath \"/var/folders/ab/cd/T/tea-evaluate-p501\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-evaluate-p501\"))\n(deny network-outbound\n  (remote unix-socket (subpath \"/var/folders/ab/cd/T/tea-evaluate-p501\"))\n  (remote unix-socket (subpath \"/private/var/folders/ab/cd/T/tea-evaluate-p501\")))\n(allow file-read* file-write*\n  (subpath \"/var/folders/ab/cd/T/tea-evaluate-p501/run-501-AbCdEf/tea-evaluate-target-home-AbCdEf\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-evaluate-p501/run-501-AbCdEf/tea-evaluate-target-home-AbCdEf\"))\n(allow file-read-metadata\n  (literal \"/var/folders/ab/cd/T/tea-evaluate-p501/run-501-AbCdEf\")\n  (literal \"/private/var/folders/ab/cd/T/tea-evaluate-p501/run-501-AbCdEf\")\n  (literal \"/var/folders/ab/cd/T/tea-evaluate-p501\")\n  (literal \"/private/var/folders/ab/cd/T/tea-evaluate-p501\"))\n(deny file-read* file-write*\n  (subpath \"/proj/evaluations/demo\"))\n",
       "/fixture/bin/node",
       "target.js",
       "--flag"
@@ -541,9 +498,6 @@
       "/private/var/folders/ab/cd/T/tea-private",
       "/private/var/folders/ab/cd/T/tea-private",
       "--bind",
-      "/private/var/folders/ab/cd/T/tea-private/audit.jsonl",
-      "/private/var/folders/ab/cd/T/tea-private/audit.jsonl",
-      "--bind",
       "<status>/status-1-<token>.json",
       "<status>/status-1-<token>.json",
       "--tmpfs",
@@ -574,9 +528,141 @@
     ],
     "statusFile": "<status>/status-1-<token>.json"
   },
-  "confinement.targetSandbox.environment.rootHome": {
-    "PATH": "/usr/bin",
-    "NODE_OPTIONS": "--require \"<confinement-directory>/confinement-guard.cjs\"",
-    "TEA_EVALUATE_CONFINEMENT_AUDIT": "{\"report\":\"/var/folders/ab/cd/T/tea-private/audit.jsonl\",\"granted\":[\"/var/folders/ab/cd/T/tea-workspace\",\"/private/var/folders/ab/cd/T/tea-workspace\",\"/var/folders/ab/cd/T/tea-private/audit.jsonl\",\"/private/var/folders/ab/cd/T/tea-private/audit.jsonl\",\"/var/folders/ab/cd/T/tea-evaluate-p501/run-501-AbCdEf/tea-evaluate-target-home-AbCdEf\",\"/private/var/folders/ab/cd/T/tea-evaluate-p501/run-501-AbCdEf/tea-evaluate-target-home-AbCdEf\",\"/var/folders/ab/cd/T/tea-private\",\"/private/var/folders/ab/cd/T/tea-private\",\"/proj/.git/worktrees/tea-workspace\"],\"withheld\":[\"/proj/evaluations/demo\",\"/proj/.git\",\"/var/folders/ab/cd/T/tea-evaluate-p501\",\"/private/var/folders/ab/cd/T/tea-evaluate-p501\"],\"withheldExcept\":[\"/proj/.git/worktrees/tea-workspace\",\"/var/folders/ab/cd/T/tea-evaluate-p501/run-501-AbCdEf/tea-evaluate-target-home-AbCdEf\",\"/private/var/folders/ab/cd/T/tea-evaluate-p501/run-501-AbCdEf/tea-evaluate-target-home-AbCdEf\"]}"
+  "confinement.seatbeltTargetProfile.audit": "(version 1)\n(allow default)\n(deny file-write* (with message \"tea-evaluate-audit-0123456789abcdef\"))\n(allow file-write*\n  (subpath \"/var/folders/ab/cd/T/tea-workspace\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-workspace\")\n  (subpath \"/var/folders/ab/cd/T/tea-private\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-private\")\n  (literal \"/dev/null\")\n  (literal \"/dev/zero\")\n  (literal \"/dev/tty\")\n  (literal \"/dev/stdout\")\n  (literal \"/dev/stderr\")\n  (literal \"/dev/dtracehelper\")\n  (subpath \"/dev/fd\"))\n(allow file-read-data\n  (require-all\n    (require-not (literal \"/\"))\n    (require-not (subpath \"/var/folders/ab/cd/T/tea-workspace\"))\n    (require-not (subpath \"/private/var/folders/ab/cd/T/tea-workspace\"))\n    (require-not (subpath \"/var/folders/ab/cd/T/tea-private\"))\n    (require-not (subpath \"/private/var/folders/ab/cd/T/tea-private\"))\n    (require-not (subpath \"/usr/lib/node\"))\n    (require-not (subpath \"/var/folders/ab/cd/T/tea-evaluate-p501/run-501-AbCdEf/tea-evaluate-target-home-AbCdEf\"))\n    (require-not (subpath \"/private/var/folders/ab/cd/T/tea-evaluate-p501/run-501-AbCdEf/tea-evaluate-target-home-AbCdEf\")))\n  (with report) (with message \"tea-evaluate-audit-0123456789abcdef\"))\n(deny file-read-data file-read* file-write*\n  (subpath \"/proj/.git\") (with message \"tea-evaluate-audit-0123456789abcdef\"))\n(allow file-read-data file-read*\n  (subpath \"/proj/.git/worktrees/tea-workspace\"))\n(allow file-read-metadata\n  (literal \"/proj/.git\")\n  (literal \"/proj/.git/worktrees\"))\n(deny file-read-data file-read* file-write*\n  (subpath \"/var/folders/ab/cd/T/tea-evaluate-p501\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-evaluate-p501\") (with message \"tea-evaluate-audit-0123456789abcdef\"))\n(deny network-outbound\n  (remote unix-socket (subpath \"/var/folders/ab/cd/T/tea-evaluate-p501\"))\n  (remote unix-socket (subpath \"/private/var/folders/ab/cd/T/tea-evaluate-p501\")))\n(allow file-read-data file-read* file-write*\n  (subpath \"/var/folders/ab/cd/T/tea-evaluate-p501/run-501-AbCdEf/tea-evaluate-target-home-AbCdEf\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-evaluate-p501/run-501-AbCdEf/tea-evaluate-target-home-AbCdEf\"))\n(allow file-read-metadata\n  (literal \"/var/folders/ab/cd/T/tea-evaluate-p501/run-501-AbCdEf\")\n  (literal \"/private/var/folders/ab/cd/T/tea-evaluate-p501/run-501-AbCdEf\")\n  (literal \"/var/folders/ab/cd/T/tea-evaluate-p501\")\n  (literal \"/private/var/folders/ab/cd/T/tea-evaluate-p501\"))\n(deny file-write*\n  (subpath \"/proj/.git/worktrees/tea-workspace\")\n  (subpath \"/var/folders/ab/cd/T/tea-workspace-view\")\n  (subpath \"/private/var/folders/ab/cd/T/tea-workspace-view\"))\n(deny file-read-data file-read* file-write*\n  (subpath \"/proj/evaluations/demo\") (with message \"tea-evaluate-audit-0123456789abcdef\"))\n",
+  "confinement.targetSandbox.wrap.bubblewrap.audit": {
+    "target": "/usr/bin/strace",
+    "args": [
+      "-f",
+      "--seccomp-bpf",
+      "--decode-pids=pidns",
+      "-y",
+      "-qq",
+      "-s",
+      "4096",
+      "-e",
+      "trace=?execve,?execveat,?open,?openat,?openat2,?creat,?readlink,?readlinkat,?mkdir,?mkdirat,?rmdir,?unlink,?unlinkat,?rename,?renameat,?renameat2,?link,?linkat,?symlink,?symlinkat,?truncate,?chmod,?fchmodat,?fchmodat2,?chown,?lchown,?fchownat,?utimes,?utimensat,?futimesat,?mknod,?mknodat,?chdir,?clone,?clone3,?fork,?vfork",
+      "-o",
+      "/var/folders/ab/cd/T/tea-evaluate-p501/run-501-AbCdEf/tea-evaluate-audit-AbCdEf/trace-1-<token>.txt",
+      "--",
+      "/usr/bin/bwrap",
+      "--unshare-user",
+      "--ro-bind",
+      "/",
+      "/",
+      "--dev",
+      "/dev",
+      "--unshare-pid",
+      "--proc",
+      "/proc",
+      "--die-with-parent",
+      "--new-session",
+      "--unsetenv",
+      "NODE_V8_COVERAGE",
+      "--tmpfs",
+      "/run/user",
+      "--bind",
+      "/private/var/folders/ab/cd/T/tea-workspace",
+      "/private/var/folders/ab/cd/T/tea-workspace",
+      "--bind",
+      "/private/var/folders/ab/cd/T/tea-private",
+      "/private/var/folders/ab/cd/T/tea-private",
+      "--bind",
+      "<status>/status-1-<token>.json",
+      "<status>/status-1-<token>.json",
+      "--tmpfs",
+      "/proj/.git",
+      "--ro-bind",
+      "/proj/.git/worktrees/tea-workspace",
+      "/proj/.git/worktrees/tea-workspace",
+      "--remount-ro",
+      "/proj/.git",
+      "--tmpfs",
+      "/private/var/folders/ab/cd/T/tea-evaluate-p501",
+      "--bind",
+      "/private/var/folders/ab/cd/T/tea-evaluate-p501/run-501-AbCdEf/tea-evaluate-target-home-AbCdEf",
+      "/private/var/folders/ab/cd/T/tea-evaluate-p501/run-501-AbCdEf/tea-evaluate-target-home-AbCdEf",
+      "--remount-ro",
+      "/private/var/folders/ab/cd/T/tea-evaluate-p501",
+      "--tmpfs",
+      "/proj/evaluations/demo",
+      "--remount-ro",
+      "/proj/evaluations/demo",
+      "--",
+      "<node>",
+      "<confinement-directory>/confinement-status.cjs",
+      "<status>/status-1-<token>.json",
+      "/fixture/bin/node",
+      "target.js",
+      "--flag"
+    ],
+    "statusFile": "<status>/status-1-<token>.json",
+    "trace": {
+      "file": "/var/folders/ab/cd/T/tea-evaluate-p501/run-501-AbCdEf/tea-evaluate-audit-AbCdEf/trace-1-<token>.txt",
+      "marker": {
+        "program": "<node>",
+        "text": "status-1-<token>.json"
+      },
+      "grants": {
+        "read": [
+          "/var/folders/ab/cd/T/tea-workspace",
+          "/private/var/folders/ab/cd/T/tea-workspace",
+          "/var/folders/ab/cd/T/tea-private",
+          "/private/var/folders/ab/cd/T/tea-private",
+          "/opt/toolchain",
+          "<status>/status-1-<token>.json",
+          "/var/folders/ab/cd/T/tea-evaluate-p501/run-501-AbCdEf/tea-evaluate-target-home-AbCdEf",
+          "/private/var/folders/ab/cd/T/tea-evaluate-p501/run-501-AbCdEf/tea-evaluate-target-home-AbCdEf",
+          "/proj/.git/worktrees/tea-workspace",
+          "<node-installation>",
+          "<confinement-directory>/confinement-status.cjs",
+          "/System",
+          "/usr",
+          "/bin",
+          "/sbin",
+          "/dev",
+          "/etc",
+          "/private/etc",
+          "/lib",
+          "/lib32",
+          "/lib64",
+          "/libx32",
+          "/proc",
+          "/sys"
+        ],
+        "requested": [
+          "/System",
+          "/usr",
+          "/bin",
+          "/sbin",
+          "/etc",
+          "/private/etc",
+          "/lib",
+          "/lib32",
+          "/lib64",
+          "/libx32"
+        ],
+        "write": [
+          "/var/folders/ab/cd/T/tea-workspace",
+          "/private/var/folders/ab/cd/T/tea-workspace",
+          "/var/folders/ab/cd/T/tea-private",
+          "/private/var/folders/ab/cd/T/tea-private",
+          "/var/folders/ab/cd/T/tea-evaluate-p501/run-501-AbCdEf/tea-evaluate-target-home-AbCdEf",
+          "/private/var/folders/ab/cd/T/tea-evaluate-p501/run-501-AbCdEf/tea-evaluate-target-home-AbCdEf",
+          "<status>/status-1-<token>.json",
+          "/proj/.git/worktrees/tea-workspace"
+        ],
+        "withheld": [
+          "/proj/evaluations/demo",
+          "/proj/.git",
+          "/var/folders/ab/cd/T/tea-evaluate-p501",
+          "/private/var/folders/ab/cd/T/tea-evaluate-p501"
+        ],
+        "withheldExcept": [
+          "/proj/.git/worktrees/tea-workspace",
+          "/var/folders/ab/cd/T/tea-evaluate-p501/run-501-AbCdEf/tea-evaluate-target-home-AbCdEf",
+          "/private/var/folders/ab/cd/T/tea-evaluate-p501/run-501-AbCdEf/tea-evaluate-target-home-AbCdEf"
+        ]
+      }
+    }
   }
 }

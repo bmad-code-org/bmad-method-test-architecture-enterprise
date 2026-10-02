@@ -84,8 +84,9 @@ jobs:
       # actionlint on PATH (test:eval-ci-data's lint half) and a working
       # bubblewrap isolation backend (the atdd preflight path, and
       # tea-evaluate's file-system confinement, which every test:evaluate-*
-      # suite that runs preflight or run needs), and neither was installed
-      # here.
+      # suite that runs preflight or run needs) and strace (the observer of
+      # that confinement's audit under bubblewrap, Story 1.60), and none of
+      # them was installed here.
       #
       # The actionlint version installed floats to latest rather than
       # pinned, for the same reason quality.yaml's own Install actionlint
@@ -100,8 +101,8 @@ jobs:
           bash download-actionlint.bash
           sudo mv ./actionlint /usr/local/bin/
 
-      - name: Install bubblewrap (the linux isolation backend of tea-atdd-red-check and tea-evaluate)
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap
+      - name: Install bubblewrap and strace (the linux isolation backend of tea-atdd-red-check and tea-evaluate, and the observer of tea-evaluate's audit)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap strace
 
       # Ubuntu 24.04+ ships kernel.apparmor_restrict_unprivileged_userns=1,
       # which blocks bwrap's --unshare-net from bringing up its own loopback
