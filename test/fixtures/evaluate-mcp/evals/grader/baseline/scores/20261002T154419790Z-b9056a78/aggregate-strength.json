@@ -1,0 +1,23 @@
+{
+  "stage": "aggregate-strength",
+  "cli": "/Users/murat/opensource/_wt/evaluate-lane3/node_modules/eval-quality/dist/cli/main.js",
+  "substituted": false,
+  "argv": [
+    "aggregate-strength",
+    "--evidence",
+    "/private/tmp/tea-reaccept-PMj4Ra/evaluate-mcp/evals/grader/runs/20261002T154416884Z-54130882/scores/20261002T154419790Z-b9056a78/P-001/evidence-artifact.json",
+    "--evidence",
+    "/private/tmp/tea-reaccept-PMj4Ra/evaluate-mcp/evals/grader/runs/20261002T154416884Z-54130882/scores/20261002T154419790Z-b9056a78/P-002/evidence-artifact.json",
+    "--floors",
+    "/private/tmp/tea-reaccept-PMj4Ra/evaluate-mcp/evals/grader/runs/20261002T154416884Z-54130882/scores/20261002T154419790Z-b9056a78/strength-floors.json",
+    "--policy",
+    "/private/tmp/tea-reaccept-PMj4Ra/evaluate-mcp/evals/grader/runs/20261002T154416884Z-54130882/scoring-policy.json",
+    "--out",
+    "/tmp/tea-evaluate-p501/run-30400-X1qd24/tea-evaluate-aggregate-En6aq6/strength-aggregate.json"
+  ],
+  "exitCode": 0,
+  "signal": null,
+  "error": null,
+  "stdout": "",
+  "stderr": ""
+}

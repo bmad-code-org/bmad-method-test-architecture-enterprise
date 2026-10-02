@@ -1190,6 +1190,7 @@ async function checkRunAndScore() {
     interactionPlan: [
       {
         stepId: 'reviewer-step',
+        interfaceId: 'principal-cli',
         operationId: 'send-identity',
         after: null,
         cardinality: 'exactly-one',
@@ -1197,6 +1198,7 @@ async function checkRunAndScore() {
       },
       {
         stepId: 'operator-step',
+        interfaceId: 'principal-cli',
         operationId: 'send-identity',
         after: null,
         cardinality: 'exactly-one',
@@ -2416,6 +2418,7 @@ async function checkUnits() {
     'judge-run': recordObservation({
       observationId: 'trial-1-judge-run',
       sequence: 1,
+      interfaceId: 'verdict',
       operationId: 'judge-request',
       callInputs: { stdin: { prompt: 'Judge the request.' } },
       stdout: { kind: 'text', value: stdout },
@@ -2490,6 +2493,7 @@ async function checkUnits() {
   const second = recordObservation({
     observationId: 'trial-1-judge-run-2',
     sequence: 2,
+    interfaceId: 'verdict',
     operationId: 'judge-request',
     callInputs: { stdin: { prompt: 'Judge the request.' } },
     stdout: { kind: 'text', value: 'verdict: rejected\n' },

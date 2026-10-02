@@ -373,6 +373,7 @@ function observationsFromSteps(steps) {
         recordObservation({
           observationId: step.observation.probeId,
           sequence: index + 1,
+          interfaceId: step.observation.interfaceId,
           operationId: step.observation.operationId,
           callInputs: {},
           stdout: step.observation.stdout,
@@ -878,6 +879,7 @@ async function replayRun(folder, runName, out, expectedVerdict, generated) {
       for (const [index, step] of observedSteps.entries()) {
         const observation = record.observations[index];
         assert.equal(observation.observationId, step.observation.probeId);
+        assert.equal(observation.interfaceId, step.observation.interfaceId);
         assert.equal(observation.operationId, step.observation.operationId);
         assert.deepEqual(observation.stdout, step.observation.stdout);
         assert.deepEqual(observation.stderr, step.observation.stderr);

@@ -1,0 +1,23 @@
+{
+  "stage": "aggregate-strength",
+  "cli": "/Users/murat/opensource/_wt/evaluate-lane3/node_modules/eval-quality/dist/cli/main.js",
+  "substituted": false,
+  "argv": [
+    "aggregate-strength",
+    "--evidence",
+    "/private/tmp/tea-reaccept-1h3O1p/evaluate-api/evals/grader/runs/20261002T154406424Z-e7b6b963/scores/20261002T154411464Z-14fb13db/P-001/evidence-artifact.json",
+    "--evidence",
+    "/private/tmp/tea-reaccept-1h3O1p/evaluate-api/evals/grader/runs/20261002T154406424Z-e7b6b963/scores/20261002T154411464Z-14fb13db/P-002/evidence-artifact.json",
+    "--floors",
+    "/private/tmp/tea-reaccept-1h3O1p/evaluate-api/evals/grader/runs/20261002T154406424Z-e7b6b963/scores/20261002T154411464Z-14fb13db/strength-floors.json",
+    "--policy",
+    "/private/tmp/tea-reaccept-1h3O1p/evaluate-api/evals/grader/runs/20261002T154406424Z-e7b6b963/scoring-policy.json",
+    "--out",
+    "/tmp/tea-evaluate-p501/run-22437-6miDbx/tea-evaluate-aggregate-YGREcg/strength-aggregate.json"
+  ],
+  "exitCode": 0,
+  "signal": null,
+  "error": null,
+  "stdout": "",
+  "stderr": ""
+}

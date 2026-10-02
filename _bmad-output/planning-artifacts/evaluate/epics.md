@@ -23,7 +23,7 @@ inputDocuments:
 
 ## Overview
 
-This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and ninety-six stories, including H.1 (Stories 1.27 to 1.75, 1.80 to 1.83, 1.90 to 1.100 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
+This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and ninety-eight stories, including H.1 (Stories 1.27 to 1.75, 1.80 to 1.83, 1.90 to 1.102 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
 
 Evaluate is fully stacked. The stack runs system under test, then the evaluation (the mechanism that runs the system, collects evidence and makes judgments), then the Behavioral Evaluation Contract (what behavior matters, what evidence counts, how success and failure resolve), then eval-quality (contract sanity, evidence support, and whether the evaluation catches defects). TeA owns every layer above eval-quality, including each concern eval-quality states it leaves to the caller, so an adopter can evaluate any target end to end. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3 onward, Epic 2 and H.1 to close the plan gap audit; the Traceability section maps each audit item to the story that closes it.
 
@@ -150,7 +150,7 @@ None. Evaluate has no graphical interface.
 ### Epic 1: The Evaluate authoring loop
 
 An adopter describes a target, answers Evaluate's questions, chooses or builds the evaluation layer and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches the seeded defect, with the gaps named and closed. The epic closes by running Evaluate on `bmad-testarch-evaluate` itself, then proving the guidance on two more target kinds, on seeded weaknesses and on an evaluation framework its guides never name.
-Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.75, 1.80 to 1.83, 1.90 to 1.100.
+Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.75, 1.80 to 1.83, 1.90 to 1.102.
 
 **FRs covered:** FR1 to FR10, FR13, FR14.
 
@@ -256,12 +256,14 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 88    | 1.98  | 1.24, 2.4                    |
 | 89    | 1.99  | 1.49                         |
 | 90    | 1.100 | 1.48, 1.99                   |
-| 91    | 2.1   | 1.16, 1.26, 1.45             |
-| 92    | 2.2   | 2.1                          |
-| 93    | 2.3   | 2.2                          |
-| 94    | 2.4   | 2.3                          |
-| 95    | 2.5   | 2.4                          |
-| 96    | H.1   | 2.5                          |
+| 91    | 1.101 | 1.42                         |
+| 92    | 1.102 | 1.42                         |
+| 93    | 2.1   | 1.16, 1.26, 1.45             |
+| 94    | 2.2   | 2.1                          |
+| 95    | 2.3   | 2.2                          |
+| 96    | 2.4   | 2.3                          |
+| 97    | 2.5   | 2.4                          |
+| 98    | H.1   | 2.5                          |
 
 ### Parallel lanes (from 2026-10-01)
 
@@ -271,7 +273,7 @@ The table above gives every story's dependencies. Since Story 1.40 merged, the s
 
 **Lane 2: confinement and process lifecycle** (own worktree): 1.62, 1.57, 1.58, 1.59, 1.60, 1.63, 1.61, 1.52, 1.53, 1.54, 1.80, 1.81, 1.82, 1.83. Story 1.62 goes first because it extracts the shared sandbox primitives the confinement stories build on. Story 1.60 may remove 1.63's premise, so 1.63 is re-read after it. Story 1.58 precedes 1.54, since both track the run's private scratch directories. Stories 1.52 to 1.54 touch the preflight and workspace modules the confinement stories also edit, so they run after them. Stories 1.82 and 1.83 follow 1.63, whose vector, bridge and `network` field they build on.
 
-**Lane 3: engine releases, dogfood and Epic 2** (own worktree): 1.45, 2.1, 2.2, 2.3, 2.4, 1.47, 1.49, 1.48, 1.42, 1.50, 1.55, 1.56, 1.51, 1.46, 2.5, 1.90, 1.91, 1.92, 1.93, 1.94, 1.95, 1.96, 1.97, 1.98, 1.99, 1.100. Story 1.45 starts the longest serial chain (1.45, 2.1 to 2.5, then H.1), so it runs first, and 2.5 runs last because it baselines every fixture and so waits for each story that changes committed evidence bytes (1.42, 1.44, 1.50, 1.51, 1.55, 1.56). Stories 1.47, 1.49 and 1.48 regenerate the test-design probes, so they run together with 1.48 last. Stories 1.42 and 1.50 both change the HTTP probe port and run back to back. Story 1.46 records live runs of the Evaluate skill, so it follows the skill-guide stories in other lanes (1.43, 1.44, 1.61, 1.67, 1.70). Lane 3 owns every eval-quality release, because 1.42, 1.45, 1.50 and 1.55 each need a published engine and one publisher keeps the dependency pin and `package-lock.json` ordered. Stories 1.90 and 1.91 follow 2.5: 1.90 edits the baseline `check` and `compare` read, and 1.91 re-accepts the fixture baselines Stories 2.2 to 2.5 commit, so it waits for every one of them.
+**Lane 3: engine releases, dogfood and Epic 2** (own worktree): 1.45, 2.1, 2.2, 2.3, 2.4, 1.47, 1.49, 1.48, 1.42, 1.50, 1.55, 1.56, 1.51, 1.46, 2.5, 1.90, 1.91, 1.92, 1.93, 1.94, 1.95, 1.96, 1.97, 1.98, 1.99, 1.100, 1.101, 1.102. Story 1.45 starts the longest serial chain (1.45, 2.1 to 2.5, then H.1), so it runs first, and 2.5 runs last because it baselines every fixture and so waits for each story that changes committed evidence bytes (1.42, 1.44, 1.50, 1.51, 1.55, 1.56). Stories 1.47, 1.49 and 1.48 regenerate the test-design probes, so they run together with 1.48 last. Stories 1.42 and 1.50 both change the HTTP probe port and run back to back. Story 1.46 records live runs of the Evaluate skill, so it follows the skill-guide stories in other lanes (1.43, 1.44, 1.61, 1.67, 1.70). Lane 3 owns every eval-quality release, because 1.42, 1.45, 1.50 and 1.55 each need a published engine and one publisher keeps the dependency pin and `package-lock.json` ordered. Stories 1.90 and 1.91 follow 2.5: 1.90 edits the baseline `check` and `compare` read, and 1.91 re-accepts the fixture baselines Stories 2.2 to 2.5 commit, so it waits for every one of them.
 
 Rules the lanes share:
 
@@ -1328,8 +1330,10 @@ So that process and outcome findings keep their correct phase (AD-23).
 **Then** every citation includes `interfaceId` and the phase of that exact pair; process and outcome references stay separate even when operation IDs match, and removing interface identity makes an integration assertion fail
 **And** a record from the prior schema version is refused with a named compatibility finding, while the runtime's engine floor and lockfile name the published eval-quality version that carries interface identity; accepting a prior record or lowering the floor fails the integration and release-metadata checks
 
-**Dependencies:** 1.22 and a published eval-quality release carrying interface identity in sealed observations.
+**Dependencies:** 1.22 and a published eval-quality release carrying interface identity in sealed observations (eval-quality 5.0.0, below).
 **Gate:** `npm test`, `npm run test:release-metadata`, engine check.
+
+**Decision (2026-10-02, lane 3).** eval-quality 4.7.0 did not carry interface identity, so lane 3 owned an engine change and a major release before this story built. The engine's `Observation` and `InteractionStep` gained a required `interfaceId`, a sibling-group operation member became an `{ interfaceId, operationId }` pair, and every lookup the plan index, selection, the probe witness match, the finding map and coverage make became a pair lookup, which removes the `operation-identifier-collision` ladder row. Qualifying only the observation or only the step was turned down: the first leaves two steps naming one operation ambiguous in selection and the second leaves an evaluator-chosen observation with no derivable interface. The change landed as three engine pull requests and one release: stamps read before parse (eval-quality #173), `PreflightCheck.interfaceId` and preflight verdict 2 (#174), interface identity (#175), and 5.0.0 (#176). Wording amended against the shipped shapes: the "prior schema version" is a sealed run record of version 6, which TeA's `score` reports as `sealed-run-record carries "schemaVersion" 6 where this build reads 7` before any engine call, and the engine names as `schema-version-mismatch` (exit 5); `evaluation.json` moves to `schemaVersion` 2 with `operationPhases` keyed by interface and then operation, and a version 1 file exits 10 on its schema version.
 
 ### Story 1.43: Keep ungraded framework errors out of target findings
 
@@ -2353,6 +2357,44 @@ So that `whole-body` is satisfied by evidence the oracles examine.
 
 **Dependencies:** 1.48, 1.99. 1.48 sets the oracle pattern and its fixtures; 1.99 regenerates the test-review and trace corpora this story also regenerates.
 **Gate:** `node tools/generate-contracts.js --check`, `node tools/generate-probes.js --check`, `test:contract-oracles`, `test:probe-corpus`, `npm test`, suite-only staged preflight for each suite.
+
+### Story 1.101: Name a stale stamp on every artifact `score` reads
+
+Added 2026-10-02 in Story 1.42's build. eval-quality 5.0.0 reads the stamp of each sealed run record and of the eval contract before it parses either (eval-quality #173), so a stale one is a named `schema-version-mismatch` with exit 5. `score` still parses the isolation manifest, the evaluator configuration, the scoring policy, the preflight verdict and the private manifest without comparing their stamps, so a stale artifact parses when its shape happens to fit or fails as an anonymous `schema-parse-failure`. TeA's own `score` reports the stamp of every artifact it validates before any engine call (`records.js`), so a TeA run names a stale one already; the gap is a direct `eval-quality score` call, which is how the CI baseline replay, the replay tests and any adopter harness reach the engine. The story decides where to close it: the engine owns the comparison, so it goes through lane 3's release path, and TeA keeps its own reads unchanged.
+
+As an adopter or a CI replay calling `eval-quality score` directly,
+I want every versioned artifact `score` reads to be compared with the version the build reads before it is parsed,
+So that a stale artifact is named and never scored under a shape it no longer has (CAP-9, AD-5, AD-11).
+
+**Acceptance Criteria:**
+
+**Given** an isolation manifest, an evaluator configuration, a scoring policy, a preflight verdict or a private manifest stamped for another version
+**When** `eval-quality score` reads it
+**Then** the call fails with `schema-version-mismatch` naming the artifact path, the stamp and the version this build reads, exit 5, before the artifact's shape is read; an artifact stamped with the current version scores as before
+**And** each artifact has a fixture whose shape parses under the current schema while its stamp is stale, and reverting the comparison for one artifact makes that fixture score
+**And** the engine's changelog and `docs/reference/cli-commands.md` count the added readers, an engine release carries it, and TeA's peer floor, lockfile and `ARCHITECTURE-SPINE.md` AD-5 record move to it in the same pull request that adopts it.
+
+**Dependencies:** 1.42.
+**Gate:** the engine's `npm run validate`, `npm view eval-quality version`, then `npm test`, `npm run test:release-metadata` and the engine check in TeA.
+
+### Story 1.102: Refuse a duplicate interface identifier at compile
+
+Added 2026-10-02 in Story 1.42's build. An interface's `logicalId` is now part of an operation's identity: eval-quality 5.0.0 names an operation by the pair of its interface and its operation ID, and every lookup keys on it. `compile` does not check that `permittedInterfaces[].logicalId` is unique, so two interfaces sharing an identifier merge their operations into one pair namespace, and a contract that declares the same operation ID on each reports a duplicate pair that `seal` faults on as a misleading `schema-parse-failure`. The refusal needs an AD-5 code, so it is an engine change through lane 3's release path.
+
+As an adopter authoring a contract with several interfaces,
+I want `compile` to refuse two interfaces with one identifier and name them,
+So that an operation pair means one operation and no later stage reports a different failure for the same mistake (CAP-4, AD-5).
+
+**Acceptance Criteria:**
+
+**Given** a contract whose `permittedInterfaces` repeat one `logicalId`
+**When** `eval-quality compile` and `seal` read it
+**Then** `compile` exits with a new AD-5 code naming the repeated identifier and both interface positions, and `seal` is never reached for it; a contract with distinct identifiers compiles as before
+**And** the AD-5 registry, its spine table and the generated registry check list the code, and a fixture that repeats an identifier while declaring one operation ID on each interface fails `compile` with it and no longer with `schema-parse-failure`
+**And** the engine release that carries it moves TeA's peer floor, lockfile and AD-5 record in the pull request that adopts it, and `check` surfaces the same refusal for an evaluation folder.
+
+**Dependencies:** 1.42.
+**Gate:** the engine's `npm run validate` and `check:ad5-registry`, `npm view eval-quality version`, then `npm test`, `npm run test:release-metadata` and the engine check in TeA.
 
 ## Epic 2: Continuous proof in CI
 

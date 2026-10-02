@@ -38,7 +38,7 @@ inputDocuments:
 
 ## Executive Summary
 
-**Scope:** full epic-level test design for Stories 1.1 to 1.75, 1.80 to 1.83, 1.90 to 1.100 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.75, 1.80 to 1.83, 1.90 to 1.100. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
+**Scope:** full epic-level test design for Stories 1.1 to 1.75, 1.80 to 1.83, 1.90 to 1.102 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.75, 1.80 to 1.83, 1.90 to 1.102. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
 
 **Risk summary:**
 
@@ -1347,6 +1347,26 @@ Added 2026-10-02 in Story 1.48. Levels: contract oracle, engine coverage through
 | A reduced variant stays unsatisfied  | The same contract with oracles that each read every required key but one, or with a direction omitting one key, reports it unsatisfied                                                    | Contract oracle, engine | P1  | Widening the reduced variant reports it satisfied                                                |
 | A narrowed declaration is justified  | Each narrowed `requiredKeys` names a key the runner or workflow does not always emit, with the output that shows it, in `test/contracts/README.md`                                        | Static, review          | P1  | Narrowing a key the runner always emits fails the contract-source or README check the story adds |
 | Probe outcomes remain stable         | Regenerate and score the four suites; every probe verdict and exit code matches while coverage metadata and digests change                                                                | Baseline, live          | P1  | A changed probe verdict fails the baseline comparison                                            |
+
+### Story 1.101: Name a stale stamp on every artifact `score` reads
+
+Added 2026-10-02 in Story 1.42. Levels: engine unit and CLI contract, one fixture per artifact. Files: the engine's `tests/application/score.test.ts` and `tests/schemas/artifact-version.test.ts`, then TeA's `test:release-metadata` and the engine check.
+
+| AC                                      | Test                                                                                                                                                                     | Level                 | P   | Revert check                                                                |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------- | --- | --------------------------------------------------------------------------- |
+| A stale stamp is named before the parse | For each of the five artifacts, a fixture whose shape parses and whose stamp is stale fails `runScore` with `schema-version-mismatch` at the artifact's path; CLI exit 5 | Engine unit, contract | P0  | Removing one comparison lets that fixture score                             |
+| A current stamp scores as before        | The existing scoring fixtures and the committed TeA replays score byte for byte                                                                                          | Regression            | P0  | A comparison against the wrong constant fails every committed replay        |
+| The counts and the floor follow         | Engine `doc-counts` read the added readers; TeA's floor, lockfile and AD-5 record name the release                                                                       | Static, release       | P1  | Lowering TeA's floor or lockfile below the release fails the metadata check |
+
+### Story 1.102: Refuse a duplicate interface identifier at compile
+
+Added 2026-10-02 in Story 1.42. Levels: engine unit, compile contract, registry check. Files: the engine's `tests/compile/` and `tests/seal/`, `check:ad5-registry`, then TeA's `test:evaluate-check`.
+
+| AC                                        | Test                                                                                                                                                          | Level              | P   | Revert check                                                       |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ | --- | ------------------------------------------------------------------ |
+| A repeated identifier is named at compile | A contract with two interfaces sharing a `logicalId` fails `compile` with the new code naming the identifier and both positions; distinct identifiers compile | Engine unit        | P0  | Removing the rule compiles the contract or reports another failure |
+| The misleading seal fault is gone         | A repeated identifier that also declares one operation ID on each interface fails at `compile`, and `seal` is never reached                                   | Engine unit        | P0  | Restoring the old order reports `schema-parse-failure` from `seal` |
+| The registry and TeA follow               | `check:ad5-registry` lists the code in the spine table; a TeA evaluation folder with a repeated identifier exits 10 through `check`                           | Registry, contract | P1  | An unlisted code fails the registry check                          |
 
 ## The Dogfood Proof (AD-15)
 

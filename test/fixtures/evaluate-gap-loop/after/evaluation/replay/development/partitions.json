@@ -1,5 +1,13 @@
 {
-  "scoreInvocationId": "20260929T044125663Z-3fe6d94c",
+  "scoreInvocationId": "20261002T155114692Z-e52b8d6c",
+  "strengthAggregate": {
+    "status": "copied",
+    "reason": null,
+    "path": "runs/20261002T155041336Z-390cacf7/scores/20261002T155114692Z-e52b8d6c/strength-aggregate.json",
+    "digest": "sha256:3c317b1cb907626d51bc89b85d291783004a1d1e0b84aedf2041732dba9a2a1c",
+    "floors": "runs/20261002T155041336Z-390cacf7/scores/20261002T155114692Z-e52b8d6c/strength-floors.json",
+    "floorsDigest": "sha256:e84700d449bc14f307e48810dc166fab364dfdaa20ea30a2dbc492fe81c913c6"
+  },
   "development": [
     {
       "probeId": "P-001",

@@ -1,3 +1,5 @@
 {
-  "review": "outcome"
+  "review-cli": {
+    "review": "outcome"
+  }
 }
