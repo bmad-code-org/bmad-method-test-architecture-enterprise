@@ -23,7 +23,7 @@ inputDocuments:
 
 ## Overview
 
-This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and eighty-six stories, including H.1 (Stories 1.27 to 1.73, 1.80, 1.90 to 1.95 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
+This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and eighty-seven stories, including H.1 (Stories 1.27 to 1.74, 1.80, 1.90 to 1.95 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
 
 Evaluate is fully stacked. The stack runs system under test, then the evaluation (the mechanism that runs the system, collects evidence and makes judgments), then the Behavioral Evaluation Contract (what behavior matters, what evidence counts, how success and failure resolve), then eval-quality (contract sanity, evidence support, and whether the evaluation catches defects). TeA owns every layer above eval-quality, including each concern eval-quality states it leaves to the caller, so an adopter can evaluate any target end to end. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3 onward, Epic 2 and H.1 to close the plan gap audit; the Traceability section maps each audit item to the story that closes it.
 
@@ -150,7 +150,7 @@ None. Evaluate has no graphical interface.
 ### Epic 1: The Evaluate authoring loop
 
 An adopter describes a target, answers Evaluate's questions, chooses or builds the evaluation layer and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches the seeded defect, with the gaps named and closed. The epic closes by running Evaluate on `bmad-testarch-evaluate` itself, then proving the guidance on two more target kinds, on seeded weaknesses and on an evaluation framework its guides never name.
-Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.73, 1.80, 1.90 to 1.95.
+Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.74, 1.80, 1.90 to 1.95.
 
 **FRs covered:** FR1 to FR10, FR13, FR14.
 
@@ -239,25 +239,26 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 71    | 1.71  | 1.44                         |
 | 72    | 1.72  | 1.34, 1.44                   |
 | 73    | 1.73  | 1.44, 1.71                   |
-| 74    | 1.80  | 1.57                         |
-| 75    | 1.90  | 2.1                          |
-| 76    | 1.91  | 2.1                          |
-| 77    | 1.92  | 2.2                          |
-| 78    | 1.93  | 2.3                          |
-| 79    | 1.94  | 2.3                          |
-| 80    | 1.95  | 2.3                          |
-| 81    | 2.1   | 1.16, 1.26, 1.45             |
-| 82    | 2.2   | 2.1                          |
-| 83    | 2.3   | 2.2                          |
-| 84    | 2.4   | 2.3                          |
-| 85    | 2.5   | 2.4                          |
-| 86    | H.1   | 2.5                          |
+| 74    | 1.74  | 1.66                         |
+| 75    | 1.80  | 1.57                         |
+| 76    | 1.90  | 2.1                          |
+| 77    | 1.91  | 2.1                          |
+| 78    | 1.92  | 2.2                          |
+| 79    | 1.93  | 2.3                          |
+| 80    | 1.94  | 2.3                          |
+| 81    | 1.95  | 2.3                          |
+| 82    | 2.1   | 1.16, 1.26, 1.45             |
+| 83    | 2.2   | 2.1                          |
+| 84    | 2.3   | 2.2                          |
+| 85    | 2.4   | 2.3                          |
+| 86    | 2.5   | 2.4                          |
+| 87    | H.1   | 2.5                          |
 
 ### Parallel lanes (from 2026-10-01)
 
 The table above gives every story's dependencies. Since Story 1.40 merged, the stories not yet built run in three parallel lanes, each a serial relay: a story's coordinator hands off to the next story in its lane, and the lanes merge into `main` independently. A lane groups stories that share modules or a dependency chain, so two lanes rarely edit the same file. Stories keep their numbers and rows above; the lane gives the order to run them in. `sprint-status.yaml` carries the same lists under `parallel_lanes`.
 
-**Lane 1: run integrity, scoring and evaluators** (main checkout): 1.41, 1.68, 1.43, 1.44, 1.67, 1.66, 1.65, 1.64, 1.69, 1.70, 1.71, 1.72, 1.73. Story 1.68 reads the files 1.41 changes, so it follows directly. Story 1.65 turns the single release report into a per-interface report and 1.64 adds call sites that 1.65 would otherwise rewrite, so 1.66, 1.65, 1.64 run in that order. Story 1.44 rewrites the `evaluate-learn` fixture's evaluator, which lane 3's 1.55 and 1.56 own, so those two wait for it. Story 1.69 reuses the module Story 1.68 builds and edits `run.js`, which 1.64 and 1.65 also edit, so it runs after them. Story 1.70 edits the promptfoo starter, fixture evaluator and guide section that Story 1.43 writes and no file the other lane 1 stories edit, so it joins the end. Stories 1.71 to 1.73 were appended from Story 1.44's final review and sit last: 1.71 edits `command-evaluator.js`, `frameworks.js`, the starters and the evaluator guide that Story 1.44 writes, 1.72 edits `agent-adapters.js`, `evaluators.js`, `run.js` and `sealed-brief-agent.js` and so runs after the other `run.js` editors (1.64, 1.65, 1.69), and 1.73 extends the probe and declaration that 1.71 bounds, so it follows 1.71.
+**Lane 1: run integrity, scoring and evaluators** (main checkout): 1.41, 1.68, 1.43, 1.44, 1.67, 1.66, 1.65, 1.64, 1.69, 1.70, 1.71, 1.72, 1.73, 1.74. Story 1.68 reads the files 1.41 changes, so it follows directly. Story 1.65 turns the single release report into a per-interface report and 1.64 adds call sites that 1.65 would otherwise rewrite, so 1.66, 1.65, 1.64 run in that order. Story 1.44 rewrites the `evaluate-learn` fixture's evaluator, which lane 3's 1.55 and 1.56 own, so those two wait for it. Story 1.69 reuses the module Story 1.68 builds and edits `run.js`, which 1.64 and 1.65 also edit, so it runs after them. Story 1.70 edits the promptfoo starter, fixture evaluator and guide section that Story 1.43 writes and no file the other lane 1 stories edit, so it joins the end. Stories 1.71 to 1.73 were appended from Story 1.44's final review and sit last: 1.71 edits `command-evaluator.js`, `frameworks.js`, the starters and the evaluator guide that Story 1.44 writes, 1.72 edits `agent-adapters.js`, `evaluators.js`, `run.js` and `sealed-brief-agent.js` and so runs after the other `run.js` editors (1.64, 1.65, 1.69), and 1.73 extends the probe and declaration that 1.71 bounds, so it follows 1.71. Story 1.74 was appended from Story 1.66's build; it edits `arm.js`, which no other lane 1 story after 1.66 edits, and joins the end.
 
 **Lane 2: confinement and process lifecycle** (own worktree): 1.62, 1.57, 1.58, 1.59, 1.60, 1.63, 1.61, 1.52, 1.53, 1.54, 1.80. Story 1.62 goes first because it extracts the shared sandbox primitives the confinement stories build on. Story 1.60 may remove 1.63's premise, so 1.63 is re-read after it. Story 1.58 precedes 1.54, since both track the run's private scratch directories. Stories 1.52 to 1.54 touch the preflight and workspace modules the confinement stories also edit, so they run after them.
 
@@ -266,7 +267,7 @@ The table above gives every story's dependencies. Since Story 1.40 merged, the s
 Rules the lanes share:
 
 - Rebase onto the latest `origin/main` immediately before merging. In `CHANGELOG.md`, `sprint-status.yaml`, `epics.md`, `test-design-epic-1.md`, `docs/reference/tea-evaluate-cli.md`, the `package.json` test chain and `quality.yaml`, keep both sides, then rerun the suites the story touches.
-- A finding that becomes a new story takes the next free number in its lane's range: lane 1 from 1.69, lane 2 from 1.80, lane 3 from 1.90. The story joins the end of its own lane, and its row, `epics.md` section and `test-design-epic-1.md` section follow the rule in the relay protocol.
+- A finding that becomes a new story takes the next free number in its lane's range: lane 1 from 1.75, lane 2 from 1.80, lane 3 from 1.90. The story joins the end of its own lane, and its row, `epics.md` section and `test-design-epic-1.md` section follow the rule in the relay protocol.
 - A lane that needs an eval-quality change it does not own asks the coordinator, who routes it to lane 3's publisher.
 - Story H.1 runs once every lane has drained.
 
@@ -1794,6 +1795,15 @@ So that no evidence artifact holds a value the host injected (AD-4, AD-8).
 **Dependencies:** 1.11, 1.38.
 **Gate:** `test:evaluate-api`, `test:evaluate-arms`, `npm test`.
 
+(Amended 2026-10-01 in Story 1.66's build: the scrub matches in every letter case by case folding (lower, upper, capitalized per word and mixed), so a normalizer that capitalizes each word or mixes cases is covered; the observation, a fault's message and cause, a cut text's leading part (`scrubCutText`), a number's text (`numberHoldsSecret`) and an object key all use it.
+The secret's forms also hold its lower-case, upper-case and Turkish-rule mappings, taken before each form is escaped, for the mappings case folding does not reach (`ß` to `SS`, `ı` and `I`); the fold reads `İ` and `i` with a combining dot as one `i`.
+The first criterion's revert reads as written: the case-sensitive scrub leaves the capitalized and mixed echoes in as well.
+The third criterion's revert is reworded.
+The fault path has no set of its own any more (`anyCase` is gone), and the matching is case-insensitive by construction, so rebuilding a lowercased set and handing it to the new scrub leaks nothing.
+What fails is the fault path scrubbing with the earlier case-sensitive code while the observation uses the new matching; that lets the uppercased echo through the fault's message, its cause or both, which the case catches.
+The comparison folds the text and the forms by case (no regular expression is built over the forms, since a pattern holding every form of a large secret exceeds what the engine compiles), the forms are built once per distinct set of values on a port and folded once per `secrets` array, and secrets that overlap in a text are replaced as one span.
+A secret holding a letter beyond ASCII that the target changes unevenly (one word capitalized, the rest not) and then writes as `\uXXXX` is not matched (this includes an ASCII secret that a Turkish-locale capitalizer echoes as `Admin-İndex-Token`), since the escape digits of a letter differ with its case; Story 1.74 closes it.)
+
 ### Story 1.67: Emit the label-free calibration inputs a records harness feeds its scorer
 
 Added 2026-10-01 in Story 1.40 from its builder Analyze (determinism lens). A `records` harness proves its rubric scores with `<records>/calibration-judgments.json`, whose `scorerInput` must equal, key for key, the observation the runtime derives from each labelled item, and whose `scorerConfigurationDigest` is `digestArtifact` over the configuration without its two calibration bindings. Story 1.40 documents both, but a harness in any language can reproduce them only by hand, and a mismatch shows only as a `check` exit 10.
@@ -1946,6 +1956,26 @@ So that a changed dependency under an unchanged version cannot reuse the old sco
 
 **Dependencies:** 1.44, 1.71.
 **Gate:** skill gates, `npm test`, engine check.
+
+### Story 1.74: Scrub an echo whose letters change case unevenly and reach the evidence as \uXXXX escapes
+
+Added 2026-10-01 in Story 1.66's build. Story 1.66 scrubs a secret in every letter case, but it derives the `\uXXXX` escapes of a secret from the secret in whole-text cases (as written, lower, upper, the Turkish mappings). A letter beyond ASCII has other escape digits in each case (`ü` is `\u00fc`, `Ü` is `\u00dc`), so a secret holding such a letter, echoed with some letters in one case and some in another (a word capitalized, the rest not) and then written with its non-ASCII characters escaped (Python's `ensure_ascii`, Go's HTML escaping with a non-ASCII writer), reaches the evidence unscrubbed. The reference states the limit.
+
+As an adopter whose target echoes what it was sent through a serializer that escapes non-ASCII characters,
+I want such an echo scrubbed whatever mix of letter cases it comes back in,
+So that no evidence artifact holds a value the host injected (AD-4, AD-8).
+
+**Acceptance Criteria:**
+
+**Given** an `api` registry entry whose auth value holds letters beyond ASCII (a Latin letter with a diaeresis, a Greek and a Cyrillic letter, and a letter outside the BMP, which escapes as a surrogate pair, and an ASCII value that a Turkish-locale capitalizer turns into `Admin-İndex-Token`) and a fake port that echoes it capitalized per word and alternating, written with every non-ASCII character as `\uXXXX` in lower- and upper-case hex, as one level and as the second of two levels of JSON escaping
+**When** the call goes through `hostEnvironmentPort`
+**Then** the observation holds `[redacted]` in each place, a `test:evaluate-api` case beside Story 1.66's matrix; matching only the escapes of the whole-text cases leaves the echo in, which the case catches
+**And** a fault's message and cause quoting the echo scrub with the same matching, and a cut text ending in the leading part of such an echo (four or more characters, cut inside an escape too) is replaced, a `test:evaluate-api` case; a cut text matched against the whole-text cases leaves the leading part in
+**And** the matching grows linearly with the secret: a secret of forty letters beyond ASCII compiles to a pattern whose source stays under a stated bound and scrubs a megabyte of ordinary text in a stated time, a `test:evaluate-api` case; enumerating each mix of cases fails it
+**And** the reference's sentence that states the limit is replaced by the behavior, and a case reading the section fails when the limit sentence returns.
+
+**Dependencies:** 1.66.
+**Gate:** `test:evaluate-api`, `npm test`.
 
 ### Story 1.80: Bring a partial-clone project, its tags and a very large history into the withheld repository
 
