@@ -2,7 +2,7 @@
 title: 'Story 1.49: Prove test-design mutation rollback before claiming it'
 type: 'bugfix'
 created: '2026-10-02'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '1e0494715e0e5e80c7f48e1d348fd806fbd6f046'

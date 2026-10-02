@@ -61,6 +61,12 @@ const RE_EXECUTION_CAP = 0;
  */
 function testDesignOracleHolds(entry, result) {
   if (entry.kind === 'run-measured') return result.unmeasurable === undefined && result.shape.rows > 0;
+  if (entry.kind === 'projection-coherence') {
+    throw new QualificationError(
+      QUALIFICATION_EXITS.authoring,
+      `${entry.oracleId} guards the runner's projection, which no stored design can make incoherent, so no stored run evidences it`,
+    );
+  }
   if (result.unmeasurable !== undefined) return null;
   const mentioned = result.mentions[entry.risk.id];
   if (typeof mentioned !== 'boolean') {
