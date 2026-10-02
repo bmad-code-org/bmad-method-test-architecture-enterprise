@@ -84,6 +84,11 @@ function refuseAssertion(assertion) {
       );
     }
   }
+  if (base === 'regex' && typeof value === 'string' && value.startsWith('file://')) {
+    throw new Error(
+      `promptfoo assertion ${named} is refused: its pattern is the file reference ${quoted(value)}, whose content promptfoo compiles and this guard cannot check; write the pattern inline`,
+    );
+  }
   if (base === 'regex' && typeof value === 'string' && !compiles(value)) {
     throw new Error(
       `promptfoo assertion ${named} is refused: its pattern ${quoted(value)} does not compile, so promptfoo grades it a failure; fix the pattern`,

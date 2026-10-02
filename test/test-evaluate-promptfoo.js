@@ -478,6 +478,12 @@ function resultShapes() {
       weightless.gradingResult.componentResults?.[0]?.reason === 'Expected output to contain "figs"',
     `installed promptfoo did not turn a failed assertion of weight 0 into a pass: ${JSON.stringify(weightless?.gradingResult)?.slice(0, 200)}`,
   );
+  // A pattern file whose content does not compile is graded a failure after the wrapper's check.
+  const patternFile = promptfooResult('asserts-regex-file.yaml', stdout, 100, ['pattern.txt']);
+  check(
+    patternFile?.gradingResult?.pass === false && /Invalid regex pattern/.test(patternFile.gradingResult.reason ?? ''),
+    `installed promptfoo did not grade an invalid pattern file as a failure: ${JSON.stringify(patternFile?.gradingResult)?.slice(0, 200)}`,
+  );
   // A pattern that does not compile is graded a failure.
   const invalidPattern = promptfooResult('asserts-regex.yaml', stdout, 100);
   check(
@@ -489,6 +495,7 @@ function resultShapes() {
     [templated, [REFUSED, '"not-contains"', 'is a template promptfoo renders, which can run code']],
     [weightless, [REFUSED, '"contains"', 'a zero weight turns a failed assertion into a pass']],
     [invalidPattern, [REFUSED, '"regex"', 'does not compile']],
+    [patternFile, [REFUSED, '"regex"', 'file reference', 'write the pattern inline']],
   ]) {
     if (!real) continue;
     refuseResults([real], observation, messages, undefined, UNGRADED);
@@ -820,6 +827,25 @@ function guardCases() {
               : !refused(message),
         );
       }
+    }
+  }
+  // A pattern that is a file reference: promptfoo compiles the file's content after the wrapper's check.
+  for (const reference of ['file://pattern.txt', 'file://pattern.json', 'file:///absolute/pattern.txt']) {
+    for (const type of ['regex', 'not-regex']) {
+      for (const [where, results] of placements({ type, value: reference, metric: 'forbidden-shellfish' })) {
+        add(
+          `${type} with ${reference} (${where}) should be refused`,
+          results,
+          ({ message = '' }) =>
+            refused(message) &&
+            message.includes(`assertion ${named(type)}`) &&
+            message.includes('file reference') &&
+            message.includes('write the pattern inline'),
+        );
+      }
+    }
+    for (const [where, results] of placements({ type: 'contains', value: reference, metric: 'forbidden-shellfish' })) {
+      add(`contains with ${reference} (${where}) should be admitted`, results, ({ message = '' }) => !refused(message));
     }
   }
   // A weight of zero.

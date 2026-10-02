@@ -63,9 +63,10 @@ Sources: repository `github.com/promptfoo/promptfoo` at `main` `d59f045c4cda1193
   A string `value` that starts with neither `file://` nor `package:`, and a string element of an array `value` that does not start with `file://`, goes through `nunjucks.renderString` (autoescape off, no sandbox) before the handler grades it.
   The template can reach the JavaScript `Function` constructor: `{{ range.constructor("process.getBuiltinModule(\"fs\").writeFileSync(\"marker\", \"ran\"); return \"shellfish\"")() }}` as the value of `not-contains` wrote the marker file in promptfoo's working directory and its return value decided the expected value.
   `{{ output }}` derives the expected value from the output, and `{#` and `{%` openers render too (`{# c #}pears` and `{% if true %}pears{% endif %}` graded as `pears`).
-  So an allow-listed type does not by itself run no adopter code: its value can.
+  So an allow-listed type can still run adopter code through its value.
   After a handler returns, `assertion.weight === 0` returns the result with `pass: true`: `contains` with `value: figs` and `weight: 0` against an output without `figs` returned a component `pass: true`, `score: 0` and the reason `Expected output to contain "figs"`.
   The `regex` handler compiles `new RegExp(renderedValue)` with no flags and, when it throws, returns a graded `pass: false` with the reason `Invalid regex pattern: ...`; `not-regex` returns the same failure (no inversion).
+  A `regex` or `not-regex` string `value` that is a `file://` reference is read by the data loader and its content compiled after the wrapper's check: a pattern file holding `[` returned a graded `pass: false` `Invalid regex pattern`.
   A nunjucks `metric` renders too, but the wrapper keys on the raw metric, so no row is admitted for it.
 
 ## Autoevals

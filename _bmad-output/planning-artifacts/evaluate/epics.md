@@ -1955,9 +1955,10 @@ A `transform` is refused when it holds any value other than `null` or `undefined
 A failing `transform`, the one source of an ungraded result among admitted assertions, is refused, so the end-to-end ungraded case rewrites the result after promptfoo returns (an object `value` on `contains` is ungraded in promptfoo, and the real shape is held by a unit).
 
 Amended 2026-10-02 in Story 1.70's round 1 review, from the installed promptfoo 0.123.1 (`evaluation-framework-facts.md`, the round 1 check): three more refusals, each with a unit, a rendered-starter case and a live promptfoo case.
-promptfoo renders a string `value` (and a string element of an array `value`) that is not a `file://` or `package:` reference through nunjucks, which reaches the JavaScript `Function` constructor, so an allow-listed type does not by itself run no adopter code: a value containing `{{`, `{%` or `{#` is refused naming the type and the reason (the value is a template promptfoo renders, which can run code).
+promptfoo renders a string `value` (and a string element of an array `value`) that is not a `file://` or `package:` reference through nunjucks, which reaches the JavaScript `Function` constructor, so an allow-listed type can still run adopter code through its value: a value containing `{{`, `{%` or `{#` is refused naming the type and the reason (the value is a template promptfoo renders, which can run code).
 A `weight` of `0` is refused: promptfoo reports a failed assertion as a pass when `assertion.weight === 0`.
 A `regex` or `not-regex` assertion with a string `value` that `new RegExp` rejects is refused: promptfoo grades the pattern error as a failure of the target.
+Round 2 added a `regex` or `not-regex` string `value` that is a `file://` reference: promptfoo compiles the file's content after the wrapper's check, so it is refused and the pattern is written inline.
 
 ### Story 1.71: Bound a framework version probe with its own timeout
 

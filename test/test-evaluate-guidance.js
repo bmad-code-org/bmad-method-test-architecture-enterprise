@@ -1981,6 +1981,17 @@ function checkPromptfooRefusals(run, selected, destination, evaluation) {
     for (const pattern of ['^Summary', 'a{2}'])
       everywhere({ metric: 'forbidden-shellfish', type, value: pattern }, `${type} pattern ${pattern}`, 'admitted');
   }
+  for (const type of ['regex', 'not-regex']) {
+    everywhere(
+      { metric: 'forbidden-shellfish', type, value: 'file://pattern.txt' },
+      `${type} pattern file`,
+      'refused',
+      `"${type}"`,
+      'file reference',
+      'write the pattern inline',
+    );
+  }
+  everywhere(value('file://pattern.txt'), 'a data file for contains', 'admitted');
   // Only a regex pattern is compiled: any other type takes the same text as a literal.
   everywhere(value('['), 'a literal bracket for contains', 'admitted');
   everywhere(element('('), 'a literal parenthesis in an array for contains-any', 'admitted');
@@ -2028,8 +2039,10 @@ function checkPromptfooRefusals(run, selected, destination, evaluation) {
   const original = fs.readFileSync(assertionsFile, 'utf8');
   const marker = path.join(evaluation, 'marker');
   const code = path.join(evaluation, 'boom.py');
+  const patternFile = path.join(evaluation, 'pattern.txt');
   const live = (label, attack, mentions, ran = []) => {
     try {
+      fs.writeFileSync(patternFile, '[');
       fs.writeFileSync(code, "def get_assert(output, context):\n    raise RuntimeError('deliberate assertion error')\n");
       const assertions = YAML.parse(original);
       assertions[1] = { ...attack, metric: 'required-pears' };
@@ -2055,6 +2068,7 @@ function checkPromptfooRefusals(run, selected, destination, evaluation) {
     } finally {
       fs.writeFileSync(assertionsFile, original);
       fs.rmSync(code, { force: true });
+      fs.rmSync(patternFile, { force: true });
       fs.rmSync(marker, { force: true });
     }
   };
@@ -2070,6 +2084,7 @@ function checkPromptfooRefusals(run, selected, destination, evaluation) {
     ['is refused:', '"not-contains"', 'is a template promptfoo renders, which can run code'],
     [marker],
   );
+  live('a pattern file', { type: 'regex', value: `file://${patternFile}` }, ['is refused:', '"regex"', 'file reference']);
   live('an invalid pattern', { type: 'regex', value: '[' }, ['is refused:', '"regex"', 'does not compile']);
   live('a zero weight', { type: 'contains', value: 'figs', weight: 0 }, [
     'is refused:',
@@ -2097,6 +2112,10 @@ const REFUSAL_MARKERS = [
   'whose string `value` does not compile as a regular expression stops the trial',
   'An assertion with `weight: 0` stops the trial',
   'then reports a failed assertion as a pass',
+  'to match literal braces write a `regex` or `not-regex` pattern with escaped braces such as `[{][{]`',
+  'because promptfoo grades the pattern error as a failure of the target',
+  'the guards below keep a value or a key of an admitted type from doing either, or from reporting a grade the target did not earn',
+  "whose string `value` is a `file://` reference stops the trial too, because promptfoo compiles the file's content after the wrapper's check, so write the pattern inline",
   'An assertion that carries a `transform` (any value other than null) stops the trial as well',
   'the row would grade text the target did not produce',
   'belongs in a `command` evaluator you own, where a crash exits non-zero',
@@ -2888,7 +2907,12 @@ function checkGapsGuidance(guide, engine, failures) {
   requireText(guide, '`ci --tier pr` exits 13 on drift', 'gaps.md exit 13', failures);
   requireText(guide, 'run `tea-evaluate compare --accept` once the adopter confirms', 'gaps.md exit 13 accept', failures);
   requireText(guide, 'a framework result with no grade', 'gaps.md exit 12', failures);
-  requireText(guide, 'an assertion that runs adopter code or calls a model; see `evaluator.md`', 'gaps.md exit 12', failures);
+  requireText(
+    guide,
+    'an assertion that runs adopter code, calls a model or would report a grade the target did not earn; see `evaluator.md`',
+    'gaps.md exit 12',
+    failures,
+  );
   // Story 1.44: an installed framework that is missing, different or changed is the same class, with its two recoveries.
   requireText(
     guide,

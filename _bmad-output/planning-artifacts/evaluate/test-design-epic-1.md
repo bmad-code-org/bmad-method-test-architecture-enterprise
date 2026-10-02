@@ -1142,7 +1142,7 @@ The fifth row adds the `promptfoo-refused` example, which the guidance test runs
 
 Amended 2026-10-02 in Story 1.70's round 1 review (`evaluation-framework-facts.md`, the round 1 check):
 The third row also covers a string `value` and a string element of an array `value` that contain `{{`, `{%` or `{#` (a template promptfoo renders through nunjucks, which can run code), as units for the fixture and the starter (first, third of three, a second result, the `not-` form), through the rendered starter, and live: promptfoo runs a template that writes a marker file in its temporary directory and the wrapper refuses the result with the code already run.
-A `regex` or `not-regex` pattern that `new RegExp` rejects, and `weight: 0` (promptfoo then reports a failed assertion as a pass), are refused the same way, with `weight: 1` and `weight: 0.5` admitted.
+A `regex` or `not-regex` pattern that `new RegExp` rejects or that is a `file://` reference (promptfoo compiles the file's content after the wrapper's check), and `weight: 0` (promptfoo then reports a failed assertion as a pass), are refused the same way, with `weight: 1` and `weight: 0.5` admitted.
 The fourth row pins the ten specified types as a literal list that each file's export must equal, apart from the installed enumeration, and the two refusal blocks must be byte-identical.
 
 ### Story 1.71: Bound a framework version probe with its own timeout

@@ -2,7 +2,7 @@
 title: 'Story 1.70: Refuse promptfoo assertions that run adopter code or call a model'
 type: 'bugfix'
 created: '2026-10-02'
-status: 'review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '349bf6f3'
@@ -227,8 +227,44 @@ The skill edit went through `/bmad-workflow-builder` Edit run headless again (me
 
 ### Gates
 
-Green on the last state of the tree (see the list in Gates, rerun after this round).
-Measured local wall time before this round and after it (machine under load, other lanes running): see the Gates section.
+Green on the last state of the tree: `test:evaluate-promptfoo` (3306 checks), `test:evaluate-guidance`, `test:evaluate-evaluators`, `test:evaluate-learned-framework`, `test:evaluate-check`, `test:evaluate-boundaries`, `test:schema-versions`, `test:schemas`, `test:boundary`, `test:direction`, `test:doc-counts`, `test:doc-claims`, `test:shards`, `test:ci-coverage`, `test:changelog`, `test:bmad-output-gated`, `test:conflict-markers`, `test:evaluate-gap-loop`, `lint`, `lint:md`, `format:check`, `docs:validate-links`.
+Measured local wall time (machine under load, other lanes running): `test:evaluate-promptfoo` 79.8 seconds before this round (2317 checks) and 64 after (3306); `test:evaluate-guidance` 64.3 before and 53 after.
+The load, not the code, moved the wall time between runs; the CPU time (user plus system) was 54.5 and 51.3 seconds before.
+`tools/test-shard-weights.json` is unchanged (96 and 92).
+
+### Left undone
+
+`test:evaluate-ci` and `test:release-metadata` were not re-run after this round, and the full `npm test` is unrun (the coordinator's time bound; CI carries them).
+The record's Implementation Notes were not rewritten for the round: this section is the account of it.
+
+## Review round 2
+
+Two lenses raised one guard gap and five small items; each was reproduced or checked before its fix.
+The unmodified scratch copy passes: `test:evaluate-promptfoo` 3386 checks, 0 failures; `test:evaluate-guidance` green.
+
+### Fixed
+
+1. A `regex` or `not-regex` whose string `value` is a `file://` reference (medium).
+   Reproduced: a pattern file holding `[` returned a graded `pass: false` `Invalid regex pattern`, since promptfoo compiles the file's content after the wrapper's check.
+   Both refusal blocks (still byte-identical) refuse a base-`regex` string `value` that starts with `file://`, naming the type and the reason (promptfoo compiles the file's content, which the guard cannot check; write the pattern inline).
+   Tests: units for `file://pattern.txt`, `.json` and an absolute path, for `regex` and `not-regex`, in the four placements, with `contains` and the same data files admitted; live promptfoo through `resultShapes` (a `pattern.txt` companion holding `[`, refused through the fixture and the starter in process); the rendered starter (payloads and a live run with a pattern file in the project's temporary directory).
+   Guide sentence beside the regex sentence; facts file, `epics.md`, `test-design-epic-1.md` and CHANGELOG amended.
+   Revert: guard removed, 50 failures in `test:evaluate-promptfoo` (of 3386) and a guidance failure.
+2. The `gaps.md` exit 12 row says "runs adopter code, calls a model or would report a grade the target did not earn", and the guidance pin moved with it (removing the clause fails guidance, 1).
+3. `REFUSAL_MARKERS` gained the literal-brace repair, the regex reason clause, the "guards below" framing sentence and the `file://` regex sentence; removing each once in a scratch copy fails guidance (1 each).
+   The weight cases through the rendered starter (`weight: 0` refused, `1` and `0.5` admitted) were already in place from round 1; a widened weight guard fails guidance.
+4. The doubled comma in the CHANGELOG entry is gone, and the entry lists the `file://` regex pattern.
+5. The two-sentence guide line is split after "prefix." (one sentence per line).
+6. The double negative in the facts file and `epics.md` reads "an allow-listed type can still run adopter code through its value".
+
+### Gates
+
+Green: `test:evaluate-promptfoo`, `test:evaluate-guidance`, `test:doc-claims`, `test:doc-counts`, `test:changelog`, `test:shards`, `lint`, `lint:md`, `format:check`.
+Local wall time (machine under load): `test:evaluate-promptfoo` 62.2 seconds (3386 checks), `test:evaluate-guidance` 51.2 seconds; round 1 measured 64 and 53.
+
+### Left undone
+
+The slower gates (`test:evaluate-ci`, `test:release-metadata`, the rest of the chain) were not re-run after this round; CI carries them.
 
 ## Left undone, reported
 
