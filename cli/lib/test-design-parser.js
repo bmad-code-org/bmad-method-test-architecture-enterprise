@@ -31,10 +31,11 @@ function inlineText(token) {
  *
  * A heading labels in two positions only.
  *
- * - Its last word is Example, Illustration or Reference (`Appendix: Scoring Reference`,
- *   `Worked Example`, `High Risks (Example)`). A heading that is the single word
- *   `Reference` labels here too.
- * - Its first word is Example or Illustration, after an optional `Worked`, and one of these
+ * - Its last word is Example(s), Illustration(s) or Reference(s) (`Appendix: Scoring Reference`,
+ *   `Worked Example`, `High Risks (Example)`, `Appendix: References`). A heading that is
+ *   the single word `Reference` labels here too. A `## References` heading labels its
+ *   tables; a `References:` citation line labels nothing.
+ * - Its first word is Example(s) or Illustration(s), after an optional `Worked`, and one of these
  *   follows: a colon or a spaced dash, optionally after one number or one letter
  *   (`Example: a checkout register`, `Example 1: checkout`, `Example A - checkout`), or
  *   the word Register or Table, optionally after `Risk` (`Example Register`,
