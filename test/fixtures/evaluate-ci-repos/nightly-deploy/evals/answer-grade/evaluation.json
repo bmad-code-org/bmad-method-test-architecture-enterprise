@@ -45,7 +45,8 @@
   "tiers": [
     "pr",
     "merge",
-    "scheduled"
+    "scheduled",
+    "release"
   ],
   "strengthFloor": {
     "defect": 1,

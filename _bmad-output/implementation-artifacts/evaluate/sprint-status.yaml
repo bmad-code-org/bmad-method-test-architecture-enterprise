@@ -117,6 +117,8 @@ development_status:
   1-94-score-each-stored-workflow-in-the-ci-probe-leg: backlog
   1-95-gate-the-replay-totals-the-story-count-and-the-lane-lists: backlog
   1-96-check-the-derivable-fields-of-a-ci-plan: backlog
+  1-97-gate-an-existing-publish-or-deploy-job-on-the-evaluation-job: backlog
+  1-98-the-ai-feature-evaluation-passes-its-own-ci-tiers: backlog
   epic-1-retrospective: optional
 
   epic-2: in-progress
@@ -178,6 +180,8 @@ parallel_lanes:
     - 1-94-score-each-stored-workflow-in-the-ci-probe-leg
     - 1-95-gate-the-replay-totals-the-story-count-and-the-lane-lists
     - 1-96-check-the-derivable-fields-of-a-ci-plan
+    - 1-97-gate-an-existing-publish-or-deploy-job-on-the-evaluation-job
+    - 1-98-the-ai-feature-evaluation-passes-its-own-ci-tiers
 owner_handoff:
   - key: h-1-accept-the-dogfood-baseline-and-turn-its-pr-replay-green
     owner: Murat

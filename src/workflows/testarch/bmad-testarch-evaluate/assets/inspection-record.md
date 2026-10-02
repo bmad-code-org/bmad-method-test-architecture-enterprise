@@ -42,4 +42,15 @@ The contract may cite written files as evidence. An AD-19 defect signature addre
 | Issue 42, reverted limit edit | Over-limit request was approved                      | Seed a boundary fault in `references/limits.md`           |
 | Earlier evaluation run        | All requests were declined and a loose oracle passed | Add a gameability probe against the always-decline answer |
 
+## CI
+
+Stage 12 appends this section as each inspection finishes.
+
+- Existing CI: `.github/workflows/ci.yml` on `pull_request`; `nightly.yml` on `schedule` with `RESERVATION_MODEL_KEY`; required check `test` (the adopter's answer).
+- Merge flow: squash merges after one review, no queue.
+- Release flow: `release.yml` on `v*` tags, with `docs/RELEASING.md` naming the tag as the gate.
+- Risk profile: one `critical` behavior, three trials over thirteen probes, a missed defect ships within a day.
+- Tier exits: `pr` 0, `merge` 0, `release` 2 (returned to Stage 3).
+- Hand-off status: done, or an open item such as a declined baseline or a missing `bmad-testarch-ci`.
+
 Replace this worked record with the inspected target's facts and source paths. Record the selected target kind and interface in `evaluation.json` alone.

@@ -44,6 +44,7 @@
   "trials": 3,
   "tiers": [
     "pr",
+    "merge",
     "release"
   ],
   "strengthFloor": {

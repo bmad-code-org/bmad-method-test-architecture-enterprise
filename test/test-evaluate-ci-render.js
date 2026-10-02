@@ -634,6 +634,19 @@ function checkStepSentences() {
   for (const [label, sentence] of sentences) {
     check(hasSentence(step, sentence), `${STEP} lacks the sentence for ${label}, whole and at a sentence start`);
   }
+  // The events of the tiers that name no trigger of their own come from the repository (Story 2.4, round 1).
+  for (const [label, clause] of [
+    [
+      'merge is merge_group when the pipeline lists it',
+      '`merge` is `merge_group` when the pipeline already lists it and `push` to the default branch otherwise',
+    ],
+    [
+      'release is the event of the repository release or deploy workflow',
+      "`release` is the event the repository's existing release or deploy workflow starts on, read from its workflows (a `push` of a tag pattern, `release` of type `published`, or the deploy workflow's own trigger)",
+    ],
+    ['release falls back to a published release', 'and `release` of type `published` when they name none'],
+  ])
+    check(step.includes(clause), `${STEP} lacks the trigger clause for ${label}`);
   check(
     step.includes('`.github/workflows/*.yml` and `.github/workflows/*.yaml` are `github-actions`'),
     `${STEP} lacks the .yml and .yaml platform map for edit mode`,

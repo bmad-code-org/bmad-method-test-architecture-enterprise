@@ -38,7 +38,7 @@ inputDocuments:
 
 ## Executive Summary
 
-**Scope:** full epic-level test design for Stories 1.1 to 1.73, 1.80, 1.90 to 1.96 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.73, 1.80, 1.90 to 1.95. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
+**Scope:** full epic-level test design for Stories 1.1 to 1.73, 1.80, 1.90 to 1.98 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.73, 1.80, 1.90 to 1.98. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
 
 **Risk summary:**
 
@@ -1191,6 +1191,27 @@ Added 2026-10-01 in Story 2.4's build. Levels: unit, integration. Files: `cli/li
 | An inapplicable or missing check exits 10     | `api-conformance` over the MCP fixture; a rubric contract with no `judge-calibration` on one live tier              | Integration | P1  | Removing the rule passes both                       |
 | A check with no reason exits 10               | A copy empties one default placement's `reason`; `check` and `ci` exit 10 with rule `placement-reason`              | Integration | P1  | Removing the rule passes the plan                   |
 | Committed plans and the template keep passing | `test:evaluate-ci` over both repository plans, the three fixture plans and the template                             | Integration | P1  | A rule that rejects a committed plan fails its case |
+
+### Story 1.97: Gate an existing publish or deploy job on the evaluation job
+
+Added 2026-10-01 in Story 2.4's first review. Levels: static, contract, replay. Files: `cli/lib/evaluate/schemas/evaluation-ci-plan.schema.json`, `cli/lib/evaluate/ci-plan.js`, `src/workflows/testarch/bmad-testarch-ci/steps-c/step-03b-render-evaluation-plans.md`, `test/test-evaluate-ci.js`, `test/test-evaluate-ci-render.js`, `test/eval-ci.js`.
+
+| AC                                           | Test                                                                                               | Level    | P   | Revert check                                       |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------- | -------- | --- | -------------------------------------------------- |
+| The named job waits for the evaluation job   | `test:evaluate-ci-render` parses a rendered workflow and finds the wait                            | Static   | P0  | Dropping the wait from the step fails the case     |
+| The plan field is validated                  | `test:evaluate-ci` accepts a job id and refuses a name that is not one                             | Contract | P1  | Removing the schema rule passes the bad name       |
+| A missing or conflicting job renders nothing | A plan naming no job; two plans gating one job                                                     | Static   | P1  | Rendering anyway fails the case                    |
+| A live rendering holds                       | An `evaluation-plan` case of the `ci` behavioral suite, captured by hand through `npm run eval:ci` | Replay   | P0  | `test:eval-replay` holds the capture to the scorer |
+
+### Story 1.98: The AI-feature evaluation passes its own CI tiers
+
+Added 2026-10-01 in Story 2.4's first review. Levels: integration. Files: `test/fixtures/evaluate-authoring/ai-feature/evaluation/`, `test/fixtures/evaluate-ci-repos/*/evals/answer-grade/`, `test/test-evaluate-ci.js`, `test/test-evaluate-authoring.js`.
+
+| AC                                        | Test                                                                                              | Level       | P   | Revert check                                       |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------- | ----------- | --- | -------------------------------------------------- |
+| `pr` exits 0 once accepted                | `test:evaluate-ci` runs `ci --tier pr` over a copy of each repository with its committed baseline | Integration | P0  | Restoring a disagreeing oracle exits 11            |
+| The zero-action floors are met or removed | `ci --tier release` and `--tier scheduled` over each repository                                   | Integration | P0  | Restoring the floor with no eligible probe exits 2 |
+| The Story 1.24 proof stays valid          | `test:evaluate-authoring` over the changed bytes                                                  | Integration | P1  | A drifted replay bundle fails it                   |
 
 ## The Dogfood Proof (AD-15)
 

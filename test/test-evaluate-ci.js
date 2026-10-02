@@ -2373,51 +2373,165 @@ const REPOSITORIES = {
   'nightly-deploy': { root: 'test/fixtures/evaluate-ci-repos/nightly-deploy', folder: 'evals/answer-grade' },
 };
 const AI_FEATURE = 'test/fixtures/evaluate-authoring/ai-feature/evaluation';
+const TEMPLATE = path.join(ROOT, 'src', 'workflows', 'testarch', 'bmad-testarch-evaluate', 'assets', 'evaluation-ci-plan.template.json');
+/** The files a reason can cite to show an inspection of the repository: its pipelines, its merge rules and its release or deploy note. */
+const EVIDENCE_FILE = /^(?:\.github\/workflows\/|docs\/|CONTRIBUTING\.md$)/;
+const FILE_TOKEN = /[.\w/-]+\.(?:yml|yaml|md|json|mjs)\b/g;
+
+/** A repository as the stage read it: its relative file paths and their text, so a revert case can change one. */
+function loadRepository(root) {
+  const files = new Map();
+  const walk = (directory) => {
+    for (const entry of fs.readdirSync(path.join(ROOT, root, directory), { withFileTypes: true })) {
+      const relative = path.posix.join(directory, entry.name);
+      if (['node_modules', 'runs'].includes(entry.name)) continue;
+      if (entry.isDirectory()) walk(relative);
+      else if (/\.(?:ya?ml|md|json|mjs)$/.test(entry.name)) files.set(relative, fs.readFileSync(path.join(ROOT, root, relative), 'utf8'));
+    }
+  };
+  walk('');
+  return { root, files };
+}
 
 /** The `id@tier` of every live check a plan places. */
 function livePlacements(plan) {
   return new Set(plan.checks.filter((item) => planModule.LIVE_CHECKS.includes(item.id)).map((item) => `${item.id}@${item.placement.tier}`));
 }
 
-/** The repository files a reason cites: tokens that name a file the repository holds. */
-function citedFiles(reason, repository) {
-  return [...new Set(reason.match(/[.\w/-]+\.(?:yml|yaml|md|json|mjs|toml)\b/g) ?? [])].filter((token) =>
-    fs.existsSync(path.join(ROOT, repository, token)),
-  );
+/** The repository files a reason names, existing or not. Paths under `runs/` and `baseline/` are generated evidence, not repository files. */
+const fileTokens = (reason) => [...new Set(reason.replaceAll(/\b(?:runs|baseline)\/\S*/g, '').match(FILE_TOKEN) ?? [])];
+
+/** The repository path a token names: the path itself, or the one file whose path ends with it (`ci.yml`, `server/grade.mjs`). */
+function resolveToken(repository, token) {
+  if (repository.files.has(token)) return token;
+  return [...repository.files.keys()].find((name) => name.endsWith(`/${token.replace(/^\//, '')}`)) ?? null;
+}
+
+/** What the repository's pipelines can start: a schedule, a tag or deploy event, a merge queue. */
+function repositoryEvents(repository) {
+  const workflows = [...repository.files].filter(([name]) => name.startsWith('.github/workflows/'));
+  const any = (pattern) => workflows.some(([, text]) => pattern.test(text));
+  return {
+    schedule: any(/^\s*schedule:/m),
+    release: any(/^\s*tags:/m) || any(/^\s*release:/m) || workflows.some(([name]) => /deploy|release/.test(name)),
+    mergeGroup: any(/^\s*merge_group:/m),
+  };
+}
+
+/** The facts a committed placement relies on must be true of the repository, and its notes must exist. */
+function repositoryFactProblems(name, repository, expected) {
+  const problems = [];
+  const events = repositoryEvents(repository);
+  for (const [fact, value] of Object.entries(expected.events))
+    if (events[fact] !== value) problems.push(`${name}: the repository ${value ? 'lacks' : 'holds'} its ${fact} event`);
+  for (const note of expected.notes) if (!repository.files.has(note)) problems.push(`${name}: ${note} is missing`);
+  return problems;
 }
 
 /**
- * What two repositories' plans must show (the second Story 2.4 criterion): a live check placed differently, and a reason
- * that cites a file of its own repository for every placement that differs. A stage that ignored the inspection and wrote
- * AD-10's default table for both fails the first rule; a reason that names no file of its repository fails the second.
+ * What a plan must be for one repository: every check the guide keeps for this evaluation, every live check on every live
+ * tier the plan uses, tiers whose event the repository has, and reasons whose files all exist.
  */
-function planDifferences([first, second]) {
+function planProblems(name, plan, repository, required) {
   const problems = [];
-  const live = [first, second].map((side) => livePlacements(side.plan));
-  const differing = [...live[0]].filter((item) => !live[1].has(item)).map((item) => [0, item]);
-  differing.push(...[...live[1]].filter((item) => !live[0].has(item)).map((item) => [1, item]));
-  if (differing.length === 0) problems.push('the two plans place every live check alike');
-  for (const [side, placement] of differing) {
-    const [id, tier] = placement.split('@');
-    const check = [first, second][side].plan.checks.find((item) => item.id === id && item.placement.tier === tier);
-    if (citedFiles(check.placement.reason ?? '', [first, second][side].repository).length === 0)
-      problems.push(`${placement} in ${[first, second][side].repository} gives a reason that cites no file of that repository`);
+  const ids = new Set(plan.checks.map((item) => item.id));
+  for (const id of required) if (!ids.has(id)) problems.push(`${name}: the plan drops ${id}`);
+  for (const id of ids) if (!required.includes(id)) problems.push(`${name}: the plan holds ${id}, which the evaluation cannot run`);
+  const pr = new Set(plan.checks.filter((item) => item.placement.tier === 'pr').map((item) => item.id));
+  for (const id of planModule.DETERMINISTIC_CHECKS) if (required.includes(id) && !pr.has(id)) problems.push(`${name}: ${id} is not on pr`);
+  // The merge tier holds only the live preflight; the rest of the live set sits on scheduled and release.
+  const liveTiers = new Set(
+    plan.checks
+      .filter((item) => planModule.LIVE_CHECKS.includes(item.id) && item.placement.tier !== 'merge')
+      .map((item) => item.placement.tier),
+  );
+  if (!ids.has('preflight-live')) problems.push(`${name}: no live preflight is placed`);
+  for (const tier of liveTiers)
+    for (const id of ['held-out', 'twin-run', 'strength-comparison'])
+      if (!plan.checks.some((item) => item.id === id && item.placement.tier === tier))
+        problems.push(`${name}: ${id} is missing from the ${tier} tier`);
+  const events = repositoryEvents(repository);
+  if (liveTiers.has('scheduled') && !events.schedule) problems.push(`${name}: a scheduled tier without a schedule in the repository`);
+  if (liveTiers.has('release') && !events.release) problems.push(`${name}: a release tier without a release or deploy workflow`);
+  for (const item of plan.checks) {
+    const where = `${name}: ${item.id} on ${item.placement.tier}`;
+    const reason = item.placement.reason?.trim() ?? '';
+    if (reason === '') problems.push(`${where} records no placement.reason`);
+    for (const token of fileTokens(reason))
+      if (resolveToken(repository, token) === null) problems.push(`${where} cites ${token}, which the repository does not hold`);
   }
   return problems;
 }
 
+/**
+ * What two repositories' plans must show (the second Story 2.4 criterion): a live check placed differently, and a reason that
+ * cites a pipeline, merge-rule or release note of its own repository for every placement that differs. A stage that ignored the
+ * inspection and wrote AD-10's default table for both fails the first rule; a reason that names no such file of its repository
+ * fails the second.
+ */
+function planDifferences(sides) {
+  const problems = [];
+  const live = sides.map((side) => livePlacements(side.plan));
+  const differing = [];
+  for (const [index, mine] of live.entries())
+    for (const placement of mine) if (!live[1 - index].has(placement)) differing.push([index, placement]);
+  if (differing.length === 0) problems.push('the two plans place every live check alike');
+  for (const [index, placement] of differing) {
+    const [id, tier] = placement.split('@');
+    const side = sides[index];
+    const check = side.plan.checks.find((item) => item.id === id && item.placement.tier === tier);
+    const cited = fileTokens(check.placement.reason ?? '')
+      .map((token) => resolveToken(side.repository, token))
+      .filter((resolved) => resolved !== null && EVIDENCE_FILE.test(resolved));
+    if (cited.length === 0)
+      problems.push(
+        `${placement} in ${side.repository.root} gives a reason that cites no pipeline, merge-rule or release file of that repository`,
+      );
+  }
+  return problems;
+}
+
+/** The checks the guide keeps for this evaluation: the template's ids less the ones it deletes. */
+function requiredChecks(evaluation) {
+  const ids = new Set(read(TEMPLATE).checks.map((item) => item.id));
+  const contract = read(path.join(evaluation, 'contract.json'));
+  if (!Array.isArray(contract.rubrics) || contract.rubrics.length === 0) ids.delete('judge-calibration');
+  if (read(path.join(evaluation, 'evaluation.json')).interface !== 'api') ids.delete('api-conformance');
+  return [...ids];
+}
+
+/** A plan built from the template for a revert case: the live set on `tiers`, each reason citing `file`. */
+function syntheticPlan(tiers, file, drop = []) {
+  const template = read(TEMPLATE);
+  const checks = template.checks
+    .filter((item) => !['judge-calibration'].includes(item.id) && !drop.includes(item.id))
+    .filter((item) => item.placement.tier === 'pr' || tiers.includes(item.placement.tier))
+    .filter((item) => item.id !== 'preflight-live' || item.placement.tier === tiers[0])
+    .map((item) => ({ ...structuredClone(item), placement: { ...item.placement, reason: `${file} gives the event of this tier` } }));
+  return { schemaVersion: 1, checks };
+}
+
 function checkRepositoryPlans() {
+  const expectations = {
+    'tagged-release': {
+      events: { schedule: false, release: true, mergeGroup: false },
+      notes: ['CONTRIBUTING.md', 'docs/RELEASING.md'],
+      liveTiers: ['release'],
+    },
+    'nightly-deploy': {
+      events: { schedule: true, release: true, mergeGroup: true },
+      notes: ['CONTRIBUTING.md', 'docs/DEPLOYING.md'],
+      liveTiers: ['scheduled', 'release'],
+    },
+  };
   const loaded = Object.entries(REPOSITORIES).map(([name, { root, folder }]) => {
     const evaluation = path.join(ROOT, root, folder);
     const result = planModule.readPlan(evaluation);
+    if (result.absent) assert.fail(`${name}: no plan was committed at ${root}/${folder}/ci/evaluation-ci-plan.json`);
     assert.deepEqual(result.findings, [], `${name}: the committed plan fails validation`);
-    assert.ok(result.plan, `${name}: no plan was committed`);
     // The same validation `check` runs, through the real CLI.
     const checked = cli(evaluation, 'check');
     assert.equal(checked.status, 0, `${name}: ${checked.output}`);
-    // Every placement, default ones included, records the reason the inspection gave.
-    for (const item of result.plan.checks)
-      assert.ok(item.placement.reason?.trim(), `${name}: ${item.id} on ${item.placement.tier} records no placement.reason`);
     // evaluation.json names the tiers the plan uses.
     const evaluationJson = read(path.join(evaluation, 'evaluation.json'));
     assert.deepEqual(
@@ -2447,7 +2561,6 @@ function checkRepositoryPlans() {
         `${name}: ${directory}`,
       );
     }
-    const sourceJson = read(path.join(source, 'evaluation.json'));
     const strip = (value) => {
       const copy = structuredClone(value);
       delete copy.tiers;
@@ -2457,61 +2570,137 @@ function checkRepositoryPlans() {
     };
     assert.deepEqual(
       strip(evaluationJson),
-      strip(sourceJson),
+      strip(read(path.join(source, 'evaluation.json'))),
       `${name}: evaluation.json differs from the AI-feature evaluation beyond tiers, launch and keys`,
     );
     assert.equal(evaluationJson.launch.root, '../../app', `${name}: the evaluation launches the repository's own app`);
     assert.ok(fs.existsSync(path.join(ROOT, root, 'app', 'server', 'grade.mjs')), `${name}: the app is missing`);
-    return { repository: root, plan: result.plan };
+    // The plan is what a live session wrote against the guide committed now: the record holds the digests it read and left.
+    const record = read(path.join(ROOT, root, 'capture-record.json'));
+    assert.match(record.model, /^claude-/, `${name}: the capture record names no model`);
+    assert.ok(record.turns > 0 && record.durationMs > 0, `${name}: the capture record holds no session`);
+    assert.doesNotMatch(record.prompt, /\b(?:pr|merge|scheduled|release|tier|tiers)\b/i, `${name}: the session prompt names a placement`);
+    const skillRoot = path.join(ROOT, 'src', 'workflows', 'testarch', 'bmad-testarch-evaluate');
+    for (const [relative, digest] of Object.entries(record.sessionRead))
+      assert.equal(
+        sha(fs.readFileSync(path.join(skillRoot, relative))),
+        digest,
+        `${name}: ${relative} changed since the live session read it; run the session again`,
+      );
+    for (const [relative, digest] of Object.entries(record.wrote))
+      assert.equal(
+        sha(fs.readFileSync(path.join(ROOT, root, relative))),
+        digest,
+        `${name}: ${relative} is not the file the live session wrote`,
+      );
+    return { name, repository: loadRepository(root), plan: result.plan, required: requiredChecks(evaluation) };
   });
 
-  // The repositories keep the facts the plans were inspected from, so the committed placements stay meaningful.
-  const workflows = (root) =>
-    fs
-      .readdirSync(path.join(ROOT, root, '.github', 'workflows'))
-      .map((name) => [name, fs.readFileSync(path.join(ROOT, root, '.github', 'workflows', name), 'utf8')]);
-  const [tagged, nightly] = Object.values(REPOSITORIES).map(({ root }) => workflows(root));
-  assert.ok(
-    tagged.some(([, text]) => /tags:\s*\['v\*'\]/.test(text)),
-    'tagged-release releases on tags',
-  );
-  assert.ok(
-    !tagged.some(([, text]) => /schedule:|GRADER_MODEL_KEY/.test(text)),
-    'tagged-release has no schedule and no model secret in CI',
-  );
-  assert.ok(
-    nightly.some(([, text]) => /schedule:/.test(text) && /secrets\.GRADER_MODEL_KEY/.test(text)),
-    'nightly-deploy runs a scheduled job with a model secret',
-  );
-  assert.ok(!nightly.some(([, text]) => /tags:/.test(text)), 'nightly-deploy has no tag release');
-
+  // The committed plans are complete, their events exist, and every file a reason names is real.
+  for (const side of loaded) {
+    assert.deepEqual(repositoryFactProblems(side.name, side.repository, expectations[side.name]), [], `${side.name}: repository facts`);
+    assert.deepEqual(planProblems(side.name, side.plan, side.repository, side.required), [], `${side.name}: the committed plan`);
+    const tiers = new Set(
+      side.plan.checks
+        .filter((item) => planModule.LIVE_CHECKS.includes(item.id) && item.placement.tier !== 'merge')
+        .map((item) => item.placement.tier),
+    );
+    assert.deepEqual([...tiers].sort(), [...expectations[side.name].liveTiers].sort(), `${side.name}: the tiers that hold its live checks`);
+  }
   assert.deepEqual(planDifferences(loaded), [], 'the committed plans do not differ as the inspection of their repositories requires');
 
-  // The revert check: a stage that ignores the inspection and writes the default table for both repositories fails the assertion.
-  const template = read(
-    path.join(ROOT, 'src', 'workflows', 'testarch', 'bmad-testarch-evaluate', 'assets', 'evaluation-ci-plan.template.json'),
-  );
-  const defaults = {
-    checks: template.checks
-      .filter((item) => item.placement.tier !== 'merge' || item.id === 'preflight-live')
-      .map((item) => ({ ...item, placement: { ...item.placement, reason: 'AD-10 default' } })),
+  // Revert cases on synthetic plans for each side, so no case rests on committed data or on one side only.
+  const [tagged, nightly] = loaded;
+  const taggedFile = '.github/workflows/release.yml';
+  const nightlyFile = '.github/workflows/nightly.yml';
+  const synthetic = () => [
+    { ...tagged, plan: syntheticPlan(['release'], taggedFile) },
+    { ...nightly, plan: syntheticPlan(['scheduled', 'release'], nightlyFile) },
+  ];
+  assert.deepEqual(planDifferences(synthetic()), [], 'the synthetic pair does not differ');
+  // 1. A stage that writes the same placements for both repositories.
+  const identical = synthetic();
+  identical[1] = { ...identical[1], plan: structuredClone(identical[0].plan) };
+  assert.ok(planDifferences(identical).includes('the two plans place every live check alike'), 'identical placements passed');
+  // 2. A differing placement whose reason cites nothing, a file of the other repository, only a generic file or a file that does not exist, on each side.
+  const otherFile = [nightlyFile, taggedFile];
+  const citations = {
+    nothing: () => 'a reason that cites nothing',
+    'the other repository': (side) => `${otherFile[side]} gives the event of this tier`,
+    'only package.json': () => 'package.json gives the event of this tier',
+    'only README.md': () => 'README.md gives the event of this tier',
+    'a file that does not exist': () => '.github/workflows/missing.yml gives the event of this tier',
   };
-  const same = planDifferences(loaded.map(({ repository }) => ({ repository, plan: defaults })));
-  assert.ok(same.includes('the two plans place every live check alike'), 'identical default plans passed the difference assertion');
-  // A differing placement whose reason names no file of its repository fails too.
-  const unreasoned = structuredClone(loaded);
-  for (const item of unreasoned[0].plan.checks) item.placement.reason = 'a reason that cites nothing';
+  for (const [label, reason] of Object.entries(citations)) {
+    for (const side of [0, 1]) {
+      const sides = synthetic();
+      for (const item of sides[side].plan.checks) item.placement.reason = reason(side);
+      assert.ok(
+        planDifferences(sides).some((problem) => problem.includes('cites no pipeline')),
+        `side ${side}: a reason that cites ${label} passed the difference assertion`,
+      );
+    }
+  }
+  // 3. Checks dropped from a plan, each by a case of its own.
+  for (const [label, drop] of [
+    ['gameability', 'gameability'],
+    ['oracle-agreement', 'oracle-agreement'],
+    ['held-out', 'held-out'],
+    ['replay', 'replay'],
+  ]) {
+    for (const side of [0, 1]) {
+      const sides = synthetic();
+      sides[side].plan.checks = sides[side].plan.checks.filter((item) => item.id !== drop);
+      const found = planProblems(sides[side].name, sides[side].plan, sides[side].repository, sides[side].required);
+      assert.ok(
+        found.some(
+          (problem) =>
+            problem.includes(`drops ${label}`) || problem.includes(`${label} is missing`) || problem.includes(`${label} is not on pr`),
+        ),
+        `side ${side}: dropping ${label} passed: ${JSON.stringify(found)}`,
+      );
+    }
+  }
+  const reduced = synthetic()[0];
+  reduced.plan.checks = reduced.plan.checks.filter((item) => item.placement.tier === 'pr' || item.id === 'preflight-live');
   assert.ok(
-    planDifferences(unreasoned).some((problem) => problem.includes('cites no file')),
-    'a reason citing no file passed',
+    planProblems(reduced.name, reduced.plan, reduced.repository, reduced.required).some((problem) =>
+      problem.includes('is missing from the release tier'),
+    ),
+    'a plan cut to the pr checks and a live preflight passed',
   );
-  // A file of the other repository does not count.
-  const foreign = structuredClone(loaded);
-  for (const item of foreign[0].plan.checks) item.placement.reason = '.github/workflows/nightly.yml has a schedule trigger';
+  // 4. A tier whose event the repository does not have.
+  const noSchedule = synthetic()[0];
+  noSchedule.plan = syntheticPlan(['scheduled', 'release'], taggedFile);
   assert.ok(
-    planDifferences(foreign).some((problem) => problem.includes('cites no file')),
-    'a file of the other repository passed',
+    planProblems(noSchedule.name, noSchedule.plan, noSchedule.repository, noSchedule.required).some((problem) =>
+      problem.includes('without a schedule'),
+    ),
+    'a scheduled tier without a schedule passed',
   );
+  // 5. The repository facts the reasons rely on, changed one at a time.
+  const changed = (side, edit) => {
+    const repository = { ...side.repository, files: new Map(side.repository.files) };
+    edit(repository.files);
+    return repository;
+  };
+  const nightlyCi = '.github/workflows/ci.yml';
+  for (const [label, side, edit, name] of [
+    [
+      'merge_group removed from nightly',
+      nightly,
+      (files) => files.set(nightlyCi, files.get(nightlyCi).replace('merge_group:', 'workflow_dispatch:')),
+      'nightly-deploy',
+    ],
+    ['merge_group added to tagged', tagged, (files) => files.set(nightlyCi, `${files.get(nightlyCi)}\n  merge_group:\n`), 'tagged-release'],
+    ['CONTRIBUTING.md removed from tagged', tagged, (files) => files.delete('CONTRIBUTING.md'), 'tagged-release'],
+    ['RELEASING.md removed from tagged', tagged, (files) => files.delete('docs/RELEASING.md'), 'tagged-release'],
+    ['DEPLOYING.md removed from nightly', nightly, (files) => files.delete('docs/DEPLOYING.md'), 'nightly-deploy'],
+    ['schedule added to tagged', tagged, (files) => files.set(nightlyCi, `on:\n  schedule:\n    - cron: '0 0 * * *'\n`), 'tagged-release'],
+  ]) {
+    const repository = changed(side, edit);
+    assert.ok(repositoryFactProblems(name, repository, expectations[name]).length > 0, `${label} passed the repository facts`);
+  }
 }
 
 async function main() {
