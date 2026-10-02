@@ -1,0 +1,12 @@
+{
+  "path": "/grade",
+  "query": {},
+  "body": {
+    "answer": "abcdefg"
+  },
+  "expect": {
+    "status": 200,
+    "decision": "reject",
+    "reason": "too-short"
+  }
+}

@@ -1,0 +1,116 @@
+{
+  "probeId": "P-012",
+  "probeClass": "defect",
+  "behaviorId": "B-002",
+  "expectedClean": false,
+  "rationale": "[held-out] A valid strict answer is rejected by a distinct decision regression.",
+  "defects": [
+    {
+      "defectId": "D-006",
+      "behaviorId": "B-002",
+      "summary": "[held-out] A valid strict answer is rejected by a distinct decision regression.",
+      "severity": "material",
+      "source": "controlled-mutation",
+      "manifestationWitness": {
+        "legId": "p-012-manifest-decision-reject",
+        "interfaceId": "answer-grade",
+        "operationId": "grade-answer",
+        "inputs": {
+          "path": {},
+          "query": {
+            "strict": "1"
+          },
+          "header": {},
+          "body": {
+            "kind": "json",
+            "value": {
+              "answer": "abcdefghijklmnop"
+            }
+          }
+        },
+        "relation": {
+          "op": "all",
+          "operands": [
+            {
+              "op": "deep-equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/p-012-manifest-decision-reject/call-inputs/body"
+                },
+                {
+                  "literal": {
+                    "answer": "abcdefghijklmnop"
+                  }
+                }
+              ]
+            },
+            {
+              "op": "deep-equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/p-012-manifest-decision-reject/call-inputs/query"
+                },
+                {
+                  "literal": {
+                    "strict": "1"
+                  }
+                }
+              ]
+            },
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/p-012-manifest-decision-reject/response-body/decision"
+                },
+                {
+                  "literal": "reject"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "defectSignature": {
+    "interfaceKind": "api",
+    "observableChannel": "response-body",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": null,
+          "header": null,
+          "body": {
+            "answer": {
+              "literal": "abcdefgh"
+            }
+          },
+          "argument": null,
+          "option": null,
+          "environment": null,
+          "stdin": null,
+          "arguments": null
+        }
+      },
+      "predicate": {
+        "op": "equality",
+        "operands": [
+          {
+            "pointer": "/interactions/observed/response-body/decision"
+          },
+          {
+            "literal": "reject"
+          }
+        ]
+      }
+    },
+    "method": "POST",
+    "pathTemplate": "/grade"
+  },
+  "qualification": {
+    "route": "controlled-mutation",
+    "mutation": "M-006"
+  }
+}

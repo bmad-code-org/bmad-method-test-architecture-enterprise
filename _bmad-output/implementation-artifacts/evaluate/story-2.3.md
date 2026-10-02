@@ -2,7 +2,7 @@
 title: 'Story 2.3: Render evaluation plans in bmad-testarch-ci'
 type: 'feature'
 created: '2026-10-01'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '1096cffa0546721c025367bdf3aad12e37d483c8'

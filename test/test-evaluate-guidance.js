@@ -1,8 +1,8 @@
 /**
  * Guards the Evaluate skill's stage list: `SKILL.md` names twelve stages, in
  * order, each pointing at an existing `references/<stage>.md` guide. Stories
- * 1.12 to 1.14, 1.23 and 2.4 extend this file as those guides gain real
- * content and craft.
+ * 1.12 to 1.26 and 2.4 extend this file as those guides gain real content and
+ * craft; Story 2.4 fills the ci guide.
  */
 
 'use strict';
@@ -20,6 +20,7 @@ const { calibrationProblems } = require('../cli/lib/evaluate/calibration');
 const { declarationProblems } = require('../cli/lib/evaluate/frameworks');
 
 const Ajv = AjvModule.default ?? AjvModule;
+const { planEntryShapeProblems } = require('./lib/evaluate-plan-shape');
 
 const SKILL_ROOT = path.join(__dirname, '..', 'src', 'workflows', 'testarch', 'bmad-testarch-evaluate');
 const SKILL_MD_PATH = path.join(SKILL_ROOT, 'SKILL.md');
@@ -2640,6 +2641,448 @@ function checkGapsGuidance(guide, engine, failures) {
     failures.push('gaps.md must digest the corpus before check');
 }
 
+/** The gate names the installed eval-quality-gates binary lists, read from its own help text. */
+function installedGateNames() {
+  const packagePath = require.resolve('eval-quality/package.json');
+  const manifest = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
+  const binary = path.join(path.dirname(packagePath), manifest.bin['eval-quality-gates']);
+  const run = spawnSync(process.execPath, [binary, '--help'], { encoding: 'utf8' });
+  return [...run.stdout.matchAll(/^ {2}([a-z]+(?:-[a-z]+)*) {2,}every /gm)].map((match) => match[1]);
+}
+
+/** A repository file a reason cites. */
+const CI_FILE_TOKEN = /[.\w/-]+\.(?:yml|yaml|md|json|mjs)\b/g;
+
+/** The paragraph that starts with `Worked example.` in a section. */
+function workedExample(body) {
+  return body.split('\n\n').find((paragraph) => paragraph.startsWith('Worked example.')) ?? '';
+}
+
+/** The assets the ci guide is held to, read once and replaceable by a negative case. */
+function ciAssets() {
+  return {
+    template: JSON.parse(fs.readFileSync(ASSET('evaluation-ci-plan.template.json'), 'utf8')),
+    readme: fs.readFileSync(ASSET('README.md'), 'utf8'),
+  };
+}
+
+/** The ci stage guide (Story 2.4): inspection headings, placement rules, the plan template and the tagged plan examples. */
+function checkCiGuidance(guide, failures, assets = ciAssets()) {
+  const plan = require('../cli/lib/evaluate/ci-plan');
+  const INSPECTIONS = [
+    [
+      '## Inspect existing CI',
+      [
+        'platform',
+        'workflow',
+        'events that start it',
+        'checks the adopter requires before merge',
+        'which events receive which secrets',
+        'in one message',
+        'hands off in create mode',
+      ],
+      [
+        '.github/workflows/ci.yml',
+        '.github/workflows/nightly.yml',
+        '${{ secrets.RESERVATION_MODEL_KEY }}',
+        'The adopter confirms that `ci` is the one required check',
+        'a scheduled run has the key, so a live check that calls the model has a home on `scheduled`',
+      ],
+    ],
+    [
+      '## Inspect the merge flow',
+      ['branch protection', 'merge queue', 'review', 'Every repository has a post-merge event', 'no reason to move a `merge` check'],
+      ['`CONTRIBUTING.md`', '`merge_group`', 'keeps its `merge` default', 'ten minutes', 'forty'],
+    ],
+    [
+      '## Inspect the release flow',
+      [
+        'tag-triggered publish workflows',
+        'deploy workflows',
+        'cadence',
+        "whatever starts the repository's release or deploy workflow",
+        'A `scheduled` run gates nothing unless the deploy waits for it',
+      ],
+      ['`.github/workflows/release.yml`', '`NPM_TOKEN`', '`docs/RELEASING.md`', 'The tag push is the `release` event'],
+    ],
+    [
+      '## Inspect the risk profile',
+      ['severities', 'cost of one live trial', 'reach of a missed defect', '`critical` behaviors justify blocking `release`'],
+      [
+        'one `critical` behavior',
+        'three trials over thirteen probes',
+        'about forty model calls',
+        'run the live set nightly on `scheduled` and again on `release`, and never on `pr`',
+      ],
+    ],
+  ];
+  for (const heading of [
+    ...INSPECTIONS.map(([name]) => name),
+    '## Place each check',
+    '## Keep the deterministic checks on pr',
+    '## Place the live checks',
+    '## Offer eval-quality-gates',
+    '## Write the plan',
+    '## Hand the plan to the CI skill',
+  ])
+    requireHeading(guide, heading, 'ci.md', failures);
+  for (const [heading, markers, example] of INSPECTIONS) {
+    for (const marker of markers) requireText(headingBody(guide, heading), marker, `ci.md ${heading}`, failures);
+    const paragraph = workedExample(headingBody(guide, heading));
+    if (paragraph === '') failures.push(`ci.md ${heading} has no paragraph that starts with "Worked example."`);
+    for (const marker of example) requireText(paragraph, marker, `ci.md ${heading} worked example`, failures);
+  }
+
+  // The defaults are the runtime's: the guide points at them and the template carries them, and no table copies them.
+  const place = headingBody(guide, '## Place each check');
+  for (const marker of [
+    "Start every check at AD-10's default tier",
+    '`DEFAULT_TIERS` in the installed `ci-plan.js`',
+    '`assets/evaluation-ci-plan.template.json` carries every one as data',
+    'copy no table',
+  ])
+    requireText(place, marker, 'ci.md default tiers', failures);
+  if (/^\|.*\|\s*$/m.test(guide)) failures.push('ci.md carries a table, which would copy AD-10 default tiers');
+  for (const [label, ids] of [
+    ['deterministic', plan.DETERMINISTIC_CHECKS],
+    ['live', plan.LIVE_CHECKS],
+  ]) {
+    const sentence = place.match(new RegExp(`The ${label} set \\(([^)]*)\\)`))?.[1];
+    const named = [...(sentence ?? '').matchAll(/`([a-z-]+)`/g)].map((match) => match[1]);
+    if (JSON.stringify(named) !== JSON.stringify(ids))
+      failures.push(`ci.md names the ${label} set as ${JSON.stringify(named)}, the runtime holds ${JSON.stringify(ids)}`);
+  }
+  for (const marker of [
+    '`placement`: the chosen `tier`, the `defaultTier` and a `reason`',
+    'Write the `reason` for every check, default placements included',
+    "name the file or the adopter's answer the placement came from",
+    'Record `defaultTier` as the tier AD-10 gives the check for this adopter',
+    'is a deviation: the runtime refuses it without a reason',
+    'has the tier of its own entry as its default',
+    '`preflight-live` defaults to `merge` on every entry the plan keeps',
+    'lists every deviation with its reason',
+    '`preflight-live` defaults to `merge` when the target needs no secret',
+  ])
+    requireText(place, marker, 'ci.md placement rules', failures);
+  const pr = headingBody(guide, '## Keep the deterministic checks on pr');
+  for (const marker of [
+    'the gameability arm (`gameability`), contract-source freshness (part of `check`) and oracle-versus-scorer agreement (`oracle-agreement`) on `pr`',
+    'No inspection moves them',
+    'CAP-11 requires them on every pull request and the runtime refuses a plan that places one elsewhere',
+    'Every check that reads `baseline/` (`replay`, `gameability`, `oracle-agreement`, and `twin-run` and `strength-comparison` on the live tiers) exits 64',
+    'tea-evaluate compare --evaluation <evaluation-folder> --accept',
+  ])
+    requireText(pr, marker, 'ci.md pr placement', failures);
+  const live = headingBody(guide, '## Place the live checks');
+  for (const marker of [
+    'the held-out partition (`held-out`) on `scheduled` and `release`',
+    'judge calibration (`judge-calibration`) on `scheduled` and `release` whenever the contract declares a rubric',
+    'Never place a live check on `pr`',
+    'a live `preflight-live` on `merge` when the target needs no secret and the merge flow allows its run time',
+    "A skill or agent target always needs the runner's model credentials, so its live tiers are `scheduled`, `release` and manual dispatch only",
+    '`schedule` and `manual-dispatch` for `scheduled`',
+    "Declare the runner's credential keys as `permittedEnvironmentKeys`",
+    'registry `environmentKeys`',
+    'Keys carry names alone.',
+    'the same names as the CI secrets to add',
+    "Keep the template's `enforcement` values",
+  ])
+    requireText(live, marker, 'ci.md live placement', failures);
+  const gates = headingBody(guide, '## Offer eval-quality-gates');
+  for (const marker of [
+    'is opt-in',
+    'add only the ones the adopter adopts',
+    'npm exec --prefix {tea_evaluations_folder} -- eval-quality-gates --help',
+    'never guess a section',
+    'add a section for each adopted gate and never rewrite, reorder or reformat a section that exists',
+    'adopt it as it stands',
+    'joins the plan as a `gate` check on `pr`',
+    'its `command` is led by `eval-quality-gates`',
+  ])
+    requireText(gates, marker, 'ci.md gates', failures);
+  const write = headingBody(guide, '## Write the plan');
+  for (const marker of [
+    'assets/evaluation-ci-plan.template.json',
+    '<evaluation-folder>/ci/evaluation-ci-plan.json',
+    'fill every `reason`',
+    'set `evaluation.json` `tiers` to the tiers the plan places a check on',
+    'repair every `ci-plan` finding',
+    'leave `<invocationId>` literal',
+    'Delete the checks the evaluation cannot run',
+    '`judge-calibration` when the contract declares no rubric and `gameability` when no probe takes the gameability route, which pass as no-ops',
+    'Keep the one `preflight-live` set that fits',
+    '`api-conformance` for an evaluation that declares no HTTP target, which the runtime exits 64 on',
+    'edit it in place',
+    'Show the adopter the placement table with each deviation and its reason before the hand-off.',
+    'once they confirm it, accept it with',
+    'tea-evaluate compare --evaluation <evaluation-folder> --accept',
+    'An adopter who declines leaves the baseline an open item',
+    'With no accepted baseline, skip the tier runs and record that in the `## CI` section',
+    "and Stage 11's guide lists the repair for each exit",
+    'tea-evaluate ci --evaluation <evaluation-folder> --tier <tier>',
+    'for each tier that can run on this machine',
+    'show the adopter each exit',
+    'A blocking exit names the stage that owns its repair',
+    'an oracle that disagrees with its scorer returns to Stage 5',
+    'a strength floor on a class with no eligible probe returns to Stage 3 or Stage 8',
+    'Record the exit and that stage in the `## CI` section, tell the adopter, and carry on with the hand-off',
+    'Record every tier the plan places a check on, with its exit or the reason it was not run',
+    'derive `tiers` again',
+    'or a single entry moved off its default',
+    'the `merge` entry when the target needs no secret, the `scheduled` and `release` entries when it does',
+  ])
+    requireText(write, marker, 'ci.md write the plan', failures);
+  const handoff = headingBody(guide, '## Hand the plan to the CI skill');
+  for (const marker of [
+    'Invoke `bmad-testarch-ci` in edit mode',
+    'or in create mode when the inspection found no pipeline file',
+    'the rendering rules belong to its `steps-c/step-03b-render-evaluation-plans.md`',
+    'Name in the request the concrete event of this repository for each tier it should render',
+    'Gating an existing publish or deploy job on the evaluation job is outside what that step does',
+    "give the adopter the request and the plan's path and record the hand-off as an open item in the inspection record",
+    'a declined baseline or a missing `bmad-testarch-ci` stays a named open item in the `## CI` section and does not reopen the stage',
+    'Stage 12 is complete when the plan passes `check`',
+    'the secrets the live tiers need',
+    'every tier that exited non-zero with the stage that owns its repair',
+    "whether a publish or deploy job waits for the evaluation job, which is the adopter's to wire",
+  ])
+    requireText(handoff, marker, 'ci.md hand-off', failures);
+  for (const marker of [
+    "Write the findings of every inspection as a `## CI` section of the run's inspection record at `{test_artifacts}/evaluate/<evaluationId>/inspection-record.md`",
+    'end the section with the hand-off status',
+  ])
+    requireText(headingBody(guide, '## Inspect existing CI'), marker, 'ci.md working state', failures);
+  for (const marker of [
+    'name the missing prerequisite and return to its stage before inspecting CI',
+    "Inside TeA's own package, run `node cli/evaluate.js` from the repository root.",
+  ])
+    requireText(guide, marker, 'ci.md orientation', failures);
+
+  // Round 2: the rules the first markers left unread, one sentence each.
+  const roundTwo = [
+    [
+      '## Inspect the merge flow',
+      [
+        'Squash merges and the absence of a queue are therefore no reason to move a `merge` check.',
+        'The reason to move one is cost or risk the adopter states',
+        'Every repository has a post-merge event',
+      ],
+    ],
+    [
+      '## Inspect the release flow',
+      [
+        "or the deploy workflow's own trigger, a nightly one included",
+        'A repository with none of these gets a published release from step-03b, and the reason says so.',
+        'A `scheduled` run gates nothing unless the deploy waits for it.',
+      ],
+    ],
+    [
+      '## Inspect the risk profile',
+      [
+        'When severity and cost do not justify a scheduled run, delete the scheduled entries and say why in the `reason` of the release entries.',
+      ],
+    ],
+    [
+      '## Place each check',
+      [
+        '`preflight-live` defaults to `merge` when the target needs no secret and to `scheduled` and `release` otherwise.',
+        '`replay`) needs no secret and calls no model.',
+        'needs a live target, a model judge or a run to compare.',
+      ],
+    ],
+    [
+      '## Place the live checks',
+      [
+        'Without a schedule trigger in the repository, say so in the `reason` and put the set on `release`.',
+        'places the live set twice at its defaults: on `scheduled` for `.github/workflows/nightly.yml`, and on `release` for the trigger of the deploy workflow in `.github/workflows/deploy.yml`',
+      ],
+    ],
+    [
+      '## Write the plan',
+      [
+        'and set `trigger` to match the tier',
+        'a tier that differs from its default with no reason, a deterministic check placed off `pr`, a live check on `pr`, and a command not led by its tool are authoring defects',
+        'show the adopter the latest clean scored run and, once they confirm it, accept it',
+        '(`pr` always, and each live tier whose target launches here and whose credentials exist)',
+      ],
+    ],
+  ];
+  for (const [heading, markers] of roundTwo)
+    for (const marker of markers) requireText(headingBody(guide, heading), marker, `ci.md ${heading} (round 2)`, failures);
+
+  // Rendering belongs to the CI skill, and an adopter never runs the unclaimed registry name.
+  const prose = guide.replaceAll(/```[\s\S]*?```/g, '');
+  for (const forbidden of [
+    'if: always()',
+    'upload-artifact',
+    'continue-on-error',
+    'actions/checkout',
+    'npm ci --prefix',
+    'npm install --prefix',
+    'job per tier',
+    'step per tier',
+    'runs/` upload',
+    'upload of the',
+    'runs the `pr` tier first',
+  ])
+    if (prose.includes(forbidden)) failures.push(`ci.md restates a rendering rule of bmad-testarch-ci: ${forbidden}`);
+  // Phrases that would turn an AC-critical rule around.
+  for (const forbidden of [
+    'on `pr` too',
+    'adopter prefers',
+    'Add all the gates',
+    'every gate',
+    'Show the adopter nothing',
+    'optional step',
+    'a missing merge queue',
+    'may run on `pr`',
+    'may need a secret',
+    'may be moved off `pr`',
+  ]) {
+    if (prose.includes(forbidden)) failures.push(`ci.md carries a phrase that reverses a rule: ${forbidden}`);
+  }
+  const warning = 'A bare `npx tea-evaluate` fetches an unclaimed registry name, so never write it for an adopter.';
+  requireText(guide, warning, 'ci.md AD-20', failures);
+  const withoutWarning = prose.replace(warning, '');
+  if (/\bnpx\b/.test(withoutWarning)) failures.push('ci.md writes npx outside its one warning sentence');
+  const spans = [...withoutWarning.matchAll(/`([^`\n]+)`/g)].map((match) => match[1]);
+  for (const span of spans) {
+    for (const tool of ['tea-evaluate', 'eval-quality-gates']) {
+      if (!new RegExp(`\\b${tool}\\b`).test(span)) continue;
+      const adopter = span.includes(`npm exec --prefix {tea_evaluations_folder} -- ${tool}`);
+      const local = tool === 'tea-evaluate' && span.startsWith('node cli/evaluate.js');
+      if (!adopter && !local && /\s/.test(span.trim())) failures.push(`ci.md writes a command without the --prefix form: ${span}`);
+    }
+  }
+  const unticked = withoutWarning.replaceAll(/`[^`\n]+`/g, '');
+  if (/\b(?:tea-evaluate|eval-quality-gates) [a-z-]+ /.test(unticked)) failures.push('ci.md writes a command outside a code span');
+  const installed = '{tea_evaluations_folder}/node_modules/bmad-method-test-architecture-enterprise/cli/lib/evaluate';
+  for (const pointer of [`${installed}/schemas/evaluation-ci-plan.schema.json`, `${installed}/ci-plan.js`])
+    requireText(guide, pointer, 'ci.md runtime pointer', failures);
+
+  // The plan examples meet the runtime's schema and placement rules and the shape of the template.
+  const plans = taggedExamples(guide, 'ci-plan');
+  if (plans.length !== 2) failures.push(`ci.md needs two tagged ci-plan examples; found ${plans.length}`);
+  for (const [index, example] of plans.entries()) {
+    const found = plan.planFindings(example);
+    if (found.length > 0) failures.push(`ci.md ci-plan example ${index + 1} fails the runtime: ${JSON.stringify(found)}`);
+    for (const entry of example.checks ?? []) {
+      for (const problem of planEntryShapeProblems(entry, `ci.md ci-plan example ${index + 1}`)) failures.push(problem);
+      if ((entry.placement?.reason?.match(CI_FILE_TOKEN) ?? []).length === 0)
+        failures.push(`ci.md ci-plan example ${index + 1} gives ${entry.id} a reason that cites no file`);
+    }
+  }
+  for (const entry of plans[1]?.checks ?? []) {
+    const reason = entry.placement?.reason ?? '';
+    const anchors = {
+      scheduled: ['.github/workflows/nightly.yml', '.github/workflows/deploy.yml'],
+      release: ['.github/workflows/deploy.yml', '.github/workflows/nightly.yml'],
+    }[entry.placement?.tier];
+    if (anchors === undefined || !reason.includes(anchors[0]) || reason.includes(anchors[1]))
+      failures.push(`ci.md second ci-plan example anchors ${entry.id} on ${entry.placement?.tier} to the wrong workflow`);
+  }
+  for (const entry of plans[0]?.checks ?? [])
+    if (
+      entry.placement?.defaultTier === 'merge' &&
+      entry.placement.tier !== 'merge' &&
+      /merge queue|no queue|squash/i.test(entry.placement.reason ?? '')
+    )
+      failures.push('ci.md first ci-plan example moves a merge check for the lack of a queue, which the merge-flow section rules out');
+  const deviation = plans[0]?.checks?.find((entry) => entry.placement.tier !== entry.placement.defaultTier);
+  if (deviation === undefined) failures.push('ci.md has no ci-plan example that deviates from the default tier');
+  else {
+    const stripped = structuredClone(plans[0]);
+    for (const entry of stripped.checks) delete entry.placement.reason;
+    if (!plan.planFindings(stripped).some((item) => item.rule === 'placement-reason'))
+      failures.push('ci.md deviation example does not exercise the runtime reason rule');
+  }
+  if (!plans[0]?.checks?.some((entry) => entry.placement.tier === entry.placement.defaultTier))
+    failures.push('ci.md first ci-plan example shows no placement at its default');
+  if (plans[1]?.checks?.some((entry) => entry.placement.tier !== entry.placement.defaultTier))
+    failures.push('ci.md second ci-plan example moves a check off its default, where the text says it keeps the defaults');
+  if (plans[0] && plans[1] && JSON.stringify(plans[0]) === JSON.stringify(plans[1]))
+    failures.push('ci.md two ci-plan examples are identical, so the guide does not show a placement that differs');
+
+  // The credential keys sit in a registry entry the runtime accepts.
+  const registries = taggedExamples(guide, 'ci-registry');
+  if (registries.length !== 1 || !(registries[0]?.environmentKeys?.length > 0))
+    failures.push('ci.md needs one registry example that declares credential keys');
+  else {
+    const validate = new Ajv({ strict: false, allErrors: true }).compile(
+      JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'cli', 'lib', 'evaluate', 'schemas', 'evaluation.schema.json'), 'utf8')),
+    );
+    const starter = JSON.parse(fs.readFileSync(ASSET('evaluation.json'), 'utf8'));
+    if (!validate({ ...starter, registry: registries }))
+      failures.push(`ci.md registry example fails the runtime schema: ${JSON.stringify(validate.errors)}`);
+    if (registries[0].environmentKeys.some((key) => !/^[A-Z][A-Z0-9_]*$/.test(key)))
+      failures.push('ci.md registry example names a value or a non-key');
+  }
+
+  // The gate example: a gate the installed binary lists, a section added beside untouched ones, a check led by the binary.
+  const names = installedGateNames();
+  if (names.length < 8) failures.push(`the installed eval-quality-gates lists ${names.length} gates; expected eight or more`);
+  const [before] = taggedExamples(guide, 'gates-config-before');
+  const [after] = taggedExamples(guide, 'gates-config-after');
+  const [gatePlan] = taggedExamples(guide, 'gate-check');
+  if (!before || !after || !gatePlan) failures.push('ci.md lacks the gates-config-before, gates-config-after or gate-check example');
+  else {
+    const added = Object.keys(after).filter((key) => !(key in before));
+    for (const key of Object.keys(before))
+      if (JSON.stringify(after[key]) !== JSON.stringify(before[key]))
+        failures.push(`ci.md gates example rewrites the existing ${key} section`);
+    if (added.length !== 1 || !names.includes(added[0]))
+      failures.push(`ci.md gates example adds ${JSON.stringify(added)}, which is not one gate the binary lists`);
+    const found = plan.planFindings(gatePlan);
+    if (found.length > 0) failures.push(`ci.md gate-check example fails the runtime: ${JSON.stringify(found)}`);
+    const entry = gatePlan.checks?.[0];
+    if (
+      entry?.kind !== 'gate' ||
+      entry.id !== added[0] ||
+      entry.command?.[0] !== 'eval-quality-gates' ||
+      entry.command[1] !== added[0] ||
+      entry.placement?.tier !== 'pr'
+    )
+      failures.push('ci.md gate-check example is not the adopted gate as a pr gate check');
+    for (const problem of planEntryShapeProblems(entry ?? { placement: {} }, 'ci.md gate-check example')) failures.push(problem);
+  }
+
+  // The plan template: valid at the defaults, every default present with its shape, the reasons left for the stage.
+  const { template, readme } = assets;
+  const templateFindings = plan.planFindings(template);
+  if (templateFindings.length > 0)
+    failures.push(`assets/evaluation-ci-plan.template.json fails the runtime: ${JSON.stringify(templateFindings)}`);
+  const present = new Set(template.checks.map((entry) => `${entry.id}:${entry.placement.tier}`));
+  for (const [id, tiers] of Object.entries(plan.DEFAULT_TIERS))
+    for (const tier of id === 'preflight-live' ? ['merge', 'scheduled', 'release'] : tiers)
+      if (!present.has(`${id}:${tier}`)) failures.push(`assets/evaluation-ci-plan.template.json lacks ${id} on ${tier}`);
+  for (const entry of template.checks) {
+    const where = `template ${entry.id} on ${entry.placement.tier}`;
+    if (entry.placement.tier !== entry.placement.defaultTier) failures.push(`${where} leaves its default tier`);
+    if (entry.placement.reason !== '') failures.push(`${where} ships a reason the stage did not write`);
+    if (!entry.command.includes('<evaluation-folder>')) failures.push(`${where} names no <evaluation-folder> to replace`);
+    if (entry.kind !== 'evaluate') failures.push(`${where} is not an evaluate check`);
+    for (const problem of planEntryShapeProblems(entry, 'template')) failures.push(problem);
+  }
+  requireText(readme, '`evaluation-ci-plan.template.json` becomes `ci/evaluation-ci-plan.json`', 'assets/README.md', failures);
+}
+
+/** SKILL.md runs Stage 12: its goal, its resume reads, its body, and no stage reported as pending or unavailable. */
+function checkSkillStage12(skillContent, failures) {
+  if (!skillContent.includes('finish it with the CI plan that enforces it'))
+    failures.push('SKILL.md goal does not finish the evaluation with the CI plan');
+  const workflow = skillContent.match(/## Workflow\n([\s\S]*?)(?:\n## |$)/)?.[1] ?? '';
+  for (const phrase of ['pending', 'not yet available', 'not available', 'Placeholder'])
+    if (workflow.includes(phrase) || /completes through Stage 11/.test(skillContent))
+      failures.push(`SKILL.md reports a stage as unfinished: ${phrase}`);
+  requireText(skillContent, '`<evaluation-folder>/ci/evaluation-ci-plan.json`, and any', 'SKILL.md resume', failures);
+  const stage12 = headingBody(skillContent, '### Stage 12: CI').trim();
+  if (
+    stage12 !==
+    "Inspect the adopter's repository, place each check in a tier, write `<evaluation-folder>/ci/evaluation-ci-plan.json` and hand it to `bmad-testarch-ci`. Load `references/ci.md`."
+  )
+    failures.push(`SKILL.md Stage 12 reads ${JSON.stringify(stage12)}`);
+}
+
 async function main() {
   const failures = [];
   let skillContent;
@@ -2679,15 +3122,12 @@ async function main() {
     }
   }
 
-  // Stage 12 remains a placeholder; the stop and verdict boundaries apply.
-  if (!workflowSection.includes('stop')) {
-    failures.push("SKILL.md's Workflow section has no rule to stop on a placeholder stage guide");
-  }
+  // The verdict boundary applies to every stage.
   if (!workflowSection.includes('never compute a verdict')) {
     failures.push("SKILL.md's Workflow section has no rule against computing a verdict outside eval-quality's CLI");
   }
-  if (!skillContent.includes('through Stage 11') || !skillContent.includes('Stage 12 CI wiring is pending'))
-    failures.push('SKILL.md does not enable stages 8 through 11 and stop at Stage 12');
+  checkSkillStage12(skillContent, failures);
+  if (/Placeholder\./.test(fs.readFileSync(REFERENCE('ci'), 'utf8'))) failures.push('references/ci.md is still a placeholder');
   if (!/^description:.*scored behavioral evaluations and repair gaps/m.test(skillContent))
     failures.push('SKILL.md discovery description omits scoring or gap repair');
   const stage6 = headingBody(skillContent, '### Stage 6: Adapters');
@@ -2761,6 +3201,7 @@ async function main() {
     ['harness', (guide, found) => checkHarnessGuidance(guide, found)],
     ['run', (guide, found) => checkRunGuidance(guide, found)],
     ['gaps', (guide, found) => checkGapsGuidance(guide, engine, found)],
+    ['ci', (guide, found) => checkCiGuidance(guide, found)],
   ]) {
     try {
       const guide = fs.readFileSync(REFERENCE(name), 'utf8');
@@ -3008,6 +3449,317 @@ async function main() {
             'keeps what each probe printed',
           ),
       ],
+      [
+        'ci tier table reintroduced',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace('copy no table.', 'copy no table.\n\n| a | b |\n| - | - |'),
+      ],
+      [
+        'ci default tier start removal',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace("Start every check at AD-10's default tier, then", 'Then'),
+      ],
+      [
+        'ci deterministic set mismatch',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace('`oracle-agreement`, `replay`)', '`oracle-agreement`)'),
+      ],
+      ['ci live rule removal', 'ci', checkCiGuidance, (text) => text.replace('Never place a live check on `pr`.', '')],
+      [
+        'ci live rule reversed',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace('Never place a live check on `pr`.', 'When the adopter asks, place the live set on `pr` too.'),
+      ],
+      [
+        'ci merge preference added',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace('and the merge flow allows its run time', 'or `merge` when the adopter prefers'),
+      ],
+      ['ci pr placement removal', 'ci', checkCiGuidance, (text) => text.replace('No inspection moves them.', '')],
+      [
+        'ci runtime refusal removal',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace(' and the runtime refuses a plan that places one elsewhere', ''),
+      ],
+      [
+        'ci baseline readers shortened',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace('`replay`, `gameability`, `oracle-agreement`', '`replay`, `oracle-agreement`'),
+      ],
+      [
+        'ci inspection example stub',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace(/Worked example\. `CONTRIBUTING\.md`[^\n]*/, 'Worked example. A merge queue exists.'),
+      ],
+      [
+        'ci risk example stub',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace(/Worked example\. The contract declares[^\n]*/, 'Worked example. Price the run.'),
+      ],
+      [
+        'ci release example stub',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace(/Worked example\. `\.github\/workflows\/release\.yml`[^\n]*/, 'Worked example. A tag releases.'),
+      ],
+      [
+        'ci deviation example reason removal',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace(/"reason": "The target needs no secret, but CONTRIBUTING.md[^"]*"/, '"reason": ""'),
+      ],
+      [
+        'ci deviation example tier corruption',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace('"defaultTier": "merge"', '"defaultTier": "nightly"'),
+      ],
+      [
+        'ci deviation example trigger corruption',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace('"trigger": ["release"]', '"trigger": ["schedule"]'),
+      ],
+      [
+        'ci scheduled example tier argument corruption',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace('"--tier", "scheduled"]', '"--tier", "pr"]'),
+      ],
+      [
+        'ci example reason cites no file',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace(/"reason": "\.github\/workflows\/nightly\.yml runs[^"]*"/, '"reason": "Default."'),
+      ],
+      [
+        'ci second example moved off its defaults',
+        'ci',
+        checkCiGuidance,
+        (text) =>
+          text.replace(
+            '"tier": "release",\n        "defaultTier": "release",\n        "reason": ".github/workflows/deploy.yml',
+            '"tier": "release",\n        "defaultTier": "scheduled",\n        "reason": ".github/workflows/deploy.yml',
+          ),
+      ],
+      [
+        'ci registry key casing',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace('"environmentKeys": ["RESERVATION_MODEL_KEY"]', '"environmentKeys": ["reservation_model_key"]'),
+      ],
+      [
+        'ci gates config rewrite',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace('"allowlist": ["MIT", "ISC"] }\n}', '"allowlist": ["MIT"] }\n}'),
+      ],
+      ['ci gate section from outside the binary', 'ci', checkCiGuidance, (text) => text.replaceAll('lockfile-age', 'lockfile-freshness')],
+      [
+        'ci gate check command corruption',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace('["eval-quality-gates", "lockfile-age"]', '["lockfile-age"]'),
+      ],
+      ['ci all gates adopted', 'ci', checkCiGuidance, (text) => text.replace('add only the ones the adopter adopts', 'Add all the gates')],
+      [
+        'ci bare command',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace('`npm exec --prefix {tea_evaluations_folder} -- tea-evaluate compare', '`tea-evaluate compare'),
+      ],
+      [
+        'ci unticked npx command',
+        'ci',
+        checkCiGuidance,
+        (text) =>
+          text.replace(
+            'Stage 12 is complete when',
+            'Run npx tea-evaluate check --evaluation <evaluation-folder> first. Stage 12 is complete when',
+          ),
+      ],
+      [
+        'ci npx gates help',
+        'ci',
+        checkCiGuidance,
+        (text) =>
+          text.replace('`npm exec --prefix {tea_evaluations_folder} -- eval-quality-gates --help`', '`npx eval-quality-gates --help`'),
+      ],
+      [
+        'ci rendering rule restated',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace('Stage 12 is complete when', 'Render one job per tier. Stage 12 is complete when'),
+      ],
+      [
+        'ci hand-off removal',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace('Invoke `bmad-testarch-ci` in edit mode', 'Tell the adopter about the CI skill'),
+      ],
+      [
+        'ci create mode removal',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace(', or in create mode when the inspection found no pipeline file', ''),
+      ],
+      [
+        'ci pending path removal',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace(' and record the hand-off as an open item in the inspection record', ''),
+      ],
+      [
+        'ci hand-off event removal',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace('Name in the request the concrete event of this repository for each tier it should render', 'Name the plan'),
+      ],
+      [
+        'ci baseline confirmation removal',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace('once they confirm it, accept it with', 'accept it with'),
+      ],
+      [
+        'ci show-nothing reversal',
+        'ci',
+        checkCiGuidance,
+        (text) =>
+          text.replace(
+            'Show the adopter the placement table with each deviation and its reason before the hand-off.',
+            'Show the adopter nothing before the hand-off.',
+          ),
+      ],
+      ['ci tier run removal', 'ci', checkCiGuidance, (text) => text.replace(' for each tier that can run on this machine', '')],
+      [
+        'ci blocking exit route removal',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace('A blocking exit names the stage that owns its repair', 'A blocking exit is noted'),
+      ],
+      [
+        'ci tier exit record removal',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace(' Record every tier the plan places a check on, with its exit or the reason it was not run.', ''),
+      ],
+      [
+        'ci judge calibration claim reversed',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace('which pass as no-ops', 'which the runtime exits 64 on'),
+      ],
+      [
+        'ci gameability delete rule removed',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace(' and `gameability` when no probe takes the gameability route', ''),
+      ],
+      [
+        'ci no-baseline skip removed',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace('With no accepted baseline, skip the tier runs and record that in the `## CI` section. ', ''),
+      ],
+      [
+        'ci completion reopened by an open item',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace('stays a named open item in the `## CI` section and does not reopen the stage', 'reopens the stage'),
+      ],
+      ['ci nightly release event dropped', 'ci', checkCiGuidance, (text) => text.replace(', a nightly one included', '')],
+      [
+        'ci published release fallback dropped',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace(' A repository with none of these gets a published release from step-03b, and the reason says so.', ''),
+      ],
+      [
+        'ci merge move reason reversed',
+        'ci',
+        checkCiGuidance,
+        (text) =>
+          text.replace('The reason to move one is cost or risk the adopter states', 'The reason to move one is a missing merge queue'),
+      ],
+      [
+        'ci tier runs limited to pr',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace('(`pr` always, and each live tier whose target launches here and whose credentials exist)', '(`pr` only)'),
+      ],
+      [
+        'ci live set placed twice sentence dropped',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace(/The same evaluation in a repository that deploys nightly[^\n]*\n/, ''),
+      ],
+      [
+        'ci second example release reason names the nightly workflow',
+        'ci',
+        checkCiGuidance,
+        (text) =>
+          text.replace(
+            '.github/workflows/deploy.yml ships main to production on its own schedule',
+            '.github/workflows/nightly.yml ships main to production on its own schedule',
+          ),
+      ],
+      [
+        'ci no-schedule rule dropped',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace(' Without a schedule trigger in the repository, say so in the `reason` and put the set on `release`.', ''),
+      ],
+      [
+        'ci preflight secret default dropped',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace(' and to `scheduled` and `release` otherwise', ''),
+      ],
+      ['ci trigger match dropped', 'ci', checkCiGuidance, (text) => text.replace(', and set `trigger` to match the tier', '')],
+      [
+        'ci deterministic set may need a secret',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace('`replay`) needs no secret and calls no model.', '`replay`) may need a secret.'),
+      ],
+      [
+        'ci baseline accepted unseen',
+        'ci',
+        checkCiGuidance,
+        (text) =>
+          text.replace(
+            'show the adopter the latest clean scored run and, once they confirm it, accept it with',
+            'accept the latest run with',
+          ),
+      ],
+      [
+        'ci reversal beside an intact marker',
+        'ci',
+        checkCiGuidance,
+        (text) =>
+          text.replace(
+            'Never place a live check on `pr`.',
+            'Never place a live check on `pr`. The one exception is `preflight-live`, which may run on `pr`.',
+          ),
+      ],
+      ['ci working state removal', 'ci', checkCiGuidance, (text) => text.replace(', and end the section with the hand-off status', '')],
+      ['ci re-entry removal', 'ci', checkCiGuidance, (text) => text.replace('edit it in place', 'start again')],
+      [
+        'ci prerequisite route-back removal',
+        'ci',
+        checkCiGuidance,
+        (text) => text.replace('return to its stage before inspecting CI', 'go on'),
+      ],
       ['gaps loop removal', 'gaps', (text, found) => checkGapsGuidance(text, engine, found), (text) => text.replace(/^4\. Rerun.*\n/m, '')],
     ];
     for (const [label, file, check, corrupt] of negativeCases) {
@@ -3023,6 +3775,88 @@ async function main() {
     }
   } catch (error) {
     failures.push(`guidance negative checks: ${error.stack}`);
+  }
+  // The template and the Stage 12 text are held by their own revert cases.
+  try {
+    const realGuide = fs.readFileSync(REFERENCE('ci'), 'utf8');
+    const assetCases = [
+      ['ci template wrong trigger', (assets) => void (assets.template.checks[0].trigger = ['schedule'])],
+      [
+        'ci template held-out warning dropped',
+        (assets) =>
+          void (assets.template.checks.find((entry) => entry.id === 'held-out' && entry.tier === 'scheduled').enforcement = 'block'),
+      ],
+      [
+        'ci template strength comparison warning dropped',
+        (assets) =>
+          void (assets.template.checks.find((entry) => entry.id === 'strength-comparison' && entry.tier === 'release').enforcement =
+            'block'),
+      ],
+      [
+        'ci template tier argument',
+        (assets) =>
+          void (assets.template.checks.find((entry) => entry.id === 'twin-run' && entry.tier === 'release').command[5] = 'scheduled'),
+      ],
+      [
+        'ci template evidence of another check',
+        (assets) =>
+          void (assets.template.checks.find((entry) => entry.id === 'held-out' && entry.tier === 'release').evidence = [
+            'runs/<invocationId>/checks/twin-run/stdout',
+          ]),
+      ],
+      [
+        'ci template tier argument dropped',
+        (assets) => {
+          const entry = assets.template.checks.find((item) => item.id === 'twin-run' && item.tier === 'scheduled');
+          entry.command = entry.command.slice(0, 4);
+        },
+      ],
+      [
+        'ci template gameability evidence moved',
+        (assets) => void (assets.template.checks.find((item) => item.id === 'gameability').evidence = ['baseline/scores']),
+      ],
+      [
+        'ci template entry dropped',
+        (assets) => void (assets.template.checks = assets.template.checks.filter((entry) => entry.id !== 'gameability')),
+      ],
+      ['ci template ships a reason', (assets) => void (assets.template.checks[3].placement.reason = 'AD-10 default')],
+      ['ci template names no folder', (assets) => void (assets.template.checks[0].command = ['tea-evaluate', 'check'])],
+      [
+        'ci template live check on pr',
+        (assets) => void (assets.template.checks.find((entry) => entry.id === 'twin-run').placement.tier = 'pr'),
+      ],
+      [
+        'ci assets README line dropped',
+        (assets) => void (assets.readme = assets.readme.replace('evaluation-ci-plan.template.json', 'plan.json')),
+      ],
+    ];
+    for (const [label, corrupt] of assetCases) {
+      const assets = ciAssets();
+      corrupt(assets);
+      const rejected = [];
+      checkCiGuidance(realGuide, rejected, assets);
+      if (rejected.length === 0) failures.push(`${label} passed the guidance gate`);
+    }
+    const realSkill = fs.readFileSync(SKILL_MD_PATH, 'utf8');
+    for (const [label, corrupt] of [
+      [
+        'skill stage 12 pending',
+        (text) => text.replace('and hand it to `bmad-testarch-ci`.', 'and hand it to `bmad-testarch-ci`. Stage 12 is pending.'),
+      ],
+      [
+        'skill stage 12 unavailable',
+        (text) => text.replace('### Stage 12: CI\n\n', '### Stage 12: CI\n\nStage 12 is not yet available; stop here.\n\n'),
+      ],
+      ['skill stage 12 reference removed', (text) => text.replace('Load `references/ci.md`.', '')],
+      ['skill stage 12 plan path', (text) => text.replace('write `<evaluation-folder>/ci/evaluation-ci-plan.json`', 'write the plan')],
+      ['skill resume plan removed', (text) => text.replace('any `<evaluation-folder>/ci/evaluation-ci-plan.json`, and', 'and')],
+    ]) {
+      const rejected = [];
+      checkSkillStage12(corrupt(realSkill), rejected);
+      if (rejected.length === 0) failures.push(`${label} passed the guidance gate`);
+    }
+  } catch (error) {
+    failures.push(`ci asset negative checks: ${error.stack}`);
   }
   // The fixtures carry the shipped probe byte for byte, so what they prove is what adopters copy.
   const shippedProbe = fs.readFileSync(ASSET(path.join('evaluators', 'installed-version.mjs')));
@@ -3069,7 +3903,7 @@ async function main() {
     process.exit(1);
   }
   console.log(
-    `evaluate-guidance: ${EXPECTED_STAGES.length} stages, eleven worked guides, 36 engine-valid tagged probes, seven runtime-valid mutations, contract examples, and valid templates`,
+    `evaluate-guidance: ${EXPECTED_STAGES.length} stages, twelve worked guides, 36 engine-valid tagged probes, seven runtime-valid mutations, contract examples, and valid templates`,
   );
 }
 

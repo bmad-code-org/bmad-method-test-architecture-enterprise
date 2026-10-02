@@ -23,7 +23,7 @@ inputDocuments:
 
 ## Overview
 
-This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and eighty-seven stories, including H.1 (Stories 1.27 to 1.74, 1.80, 1.90 to 1.95 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
+This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and ninety stories, including H.1 (Stories 1.27 to 1.74, 1.80, 1.90 to 1.98 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
 
 Evaluate is fully stacked. The stack runs system under test, then the evaluation (the mechanism that runs the system, collects evidence and makes judgments), then the Behavioral Evaluation Contract (what behavior matters, what evidence counts, how success and failure resolve), then eval-quality (contract sanity, evidence support, and whether the evaluation catches defects). TeA owns every layer above eval-quality, including each concern eval-quality states it leaves to the caller, so an adopter can evaluate any target end to end. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3 onward, Epic 2 and H.1 to close the plan gap audit; the Traceability section maps each audit item to the story that closes it.
 
@@ -150,7 +150,7 @@ None. Evaluate has no graphical interface.
 ### Epic 1: The Evaluate authoring loop
 
 An adopter describes a target, answers Evaluate's questions, chooses or builds the evaluation layer and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches the seeded defect, with the gaps named and closed. The epic closes by running Evaluate on `bmad-testarch-evaluate` itself, then proving the guidance on two more target kinds, on seeded weaknesses and on an evaluation framework its guides never name.
-Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.74, 1.80, 1.90 to 1.95.
+Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.74, 1.80, 1.90 to 1.98.
 
 **FRs covered:** FR1 to FR10, FR13, FR14.
 
@@ -247,12 +247,15 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 79    | 1.93  | 2.3                          |
 | 80    | 1.94  | 2.3                          |
 | 81    | 1.95  | 2.3                          |
-| 82    | 2.1   | 1.16, 1.26, 1.45             |
-| 83    | 2.2   | 2.1                          |
-| 84    | 2.3   | 2.2                          |
-| 85    | 2.4   | 2.3                          |
-| 86    | 2.5   | 2.4                          |
-| 87    | H.1   | 2.5                          |
+| 82    | 1.96  | 2.4                          |
+| 83    | 1.97  | 2.3, 2.4                     |
+| 84    | 1.98  | 1.24, 2.4                    |
+| 85    | 2.1   | 1.16, 1.26, 1.45             |
+| 86    | 2.2   | 2.1                          |
+| 87    | 2.3   | 2.2                          |
+| 88    | 2.4   | 2.3                          |
+| 89    | 2.5   | 2.4                          |
+| 90    | H.1   | 2.5                          |
 
 ### Parallel lanes (from 2026-10-01)
 
@@ -262,7 +265,7 @@ The table above gives every story's dependencies. Since Story 1.40 merged, the s
 
 **Lane 2: confinement and process lifecycle** (own worktree): 1.62, 1.57, 1.58, 1.59, 1.60, 1.63, 1.61, 1.52, 1.53, 1.54, 1.80. Story 1.62 goes first because it extracts the shared sandbox primitives the confinement stories build on. Story 1.60 may remove 1.63's premise, so 1.63 is re-read after it. Story 1.58 precedes 1.54, since both track the run's private scratch directories. Stories 1.52 to 1.54 touch the preflight and workspace modules the confinement stories also edit, so they run after them.
 
-**Lane 3: engine releases, dogfood and Epic 2** (own worktree): 1.45, 2.1, 2.2, 2.3, 2.4, 1.47, 1.49, 1.48, 1.42, 1.50, 1.55, 1.56, 1.51, 1.46, 2.5, 1.90, 1.91, 1.92, 1.93, 1.94, 1.95. Story 1.45 starts the longest serial chain (1.45, 2.1 to 2.5, then H.1), so it runs first, and 2.5 runs last because it baselines every fixture and so waits for each story that changes committed evidence bytes (1.42, 1.44, 1.50, 1.51, 1.55, 1.56). Stories 1.47, 1.49 and 1.48 regenerate the test-design probes, so they run together with 1.48 last. Stories 1.42 and 1.50 both change the HTTP probe port and run back to back. Story 1.46 records live runs of the Evaluate skill, so it follows the skill-guide stories in other lanes (1.43, 1.44, 1.61, 1.67, 1.70). Lane 3 owns every eval-quality release, because 1.42, 1.45, 1.48, 1.50 and 1.55 each need a published engine and one publisher keeps the dependency pin and `package-lock.json` ordered. Stories 1.90 and 1.91 follow 2.5: 1.90 edits the baseline `check` and `compare` read, and 1.91 re-accepts the fixture baselines Stories 2.2 to 2.5 commit, so it waits for every one of them.
+**Lane 3: engine releases, dogfood and Epic 2** (own worktree): 1.45, 2.1, 2.2, 2.3, 2.4, 1.47, 1.49, 1.48, 1.42, 1.50, 1.55, 1.56, 1.51, 1.46, 2.5, 1.90, 1.91, 1.92, 1.93, 1.94, 1.95, 1.96, 1.97, 1.98. Story 1.45 starts the longest serial chain (1.45, 2.1 to 2.5, then H.1), so it runs first, and 2.5 runs last because it baselines every fixture and so waits for each story that changes committed evidence bytes (1.42, 1.44, 1.50, 1.51, 1.55, 1.56). Stories 1.47, 1.49 and 1.48 regenerate the test-design probes, so they run together with 1.48 last. Stories 1.42 and 1.50 both change the HTTP probe port and run back to back. Story 1.46 records live runs of the Evaluate skill, so it follows the skill-guide stories in other lanes (1.43, 1.44, 1.61, 1.67, 1.70). Lane 3 owns every eval-quality release, because 1.42, 1.45, 1.48, 1.50 and 1.55 each need a published engine and one publisher keeps the dependency pin and `package-lock.json` ordered. Stories 1.90 and 1.91 follow 2.5: 1.90 edits the baseline `check` and `compare` read, and 1.91 re-accepts the fixture baselines Stories 2.2 to 2.5 commit, so it waits for every one of them.
 
 Rules the lanes share:
 
@@ -2121,6 +2124,68 @@ So that a count that drifts fails where it drifts (CAP-12).
 **Dependencies:** 2.3.
 **Gate:** `test:eval-replay`, `test:doc-counts`, `npm test`.
 
+### Story 1.96: Check the derivable fields of a CI plan
+
+Added 2026-10-01 in Story 2.4's build. The ci stage fills fields of `ci/evaluation-ci-plan.json` that follow from other fields, and nothing in `tea-evaluate check` holds them: a check's `trigger` (the schema accepts any non-empty set of the five events, so a `pr` check can name `schedule`), the `tiers` of `evaluation.json` (nothing under `cli/lib/evaluate/` reads it besides its schema, so it can disagree with the plan), a `<evaluation-folder>` placeholder left in a `command` from the plan template, a `preflight-live` entry whose `defaultTier` disagrees with the registry (the runtime accepts any of `merge`, `scheduled` and `release`, so a self-consistent but wrong default hides a deviation from the closing summary), a check placed with an empty or missing `reason` (the runtime asks for one only on a check moved off its default, so a plan that fills none passes), and a check the evaluation cannot run (an `api-conformance` entry with no HTTP target exits 64 only when `ci` runs it, and a contract that declares a rubric can omit `judge-calibration` from both live tiers unnoticed).
+
+As an adopter who runs the ci stage,
+I want `tea-evaluate check` to report these defects,
+So that the runtime validates the plan the stage writes and the guide asks the model for judgment only (CAP-11).
+
+**Acceptance Criteria:**
+
+**Given** a plan whose check names a trigger its tier does not use
+**When** `tea-evaluate check` or `tea-evaluate ci` reads it
+**Then** a `ci-plan` finding of rule `trigger` exits 10, where `pr` allows `pull-request`, `merge` allows `merge`, `scheduled` allows `schedule` and `manual-dispatch`, and `release` allows `release` and `manual-dispatch`
+**And** `evaluation.json` `tiers` that differ from the set of tiers the plan places a check on exit 10 with rule `tiers`
+**And** a `command` or an `evidence` path holding `<evaluation-folder>` exits 10 with rule `placeholder`, while `<invocationId>` stays valid
+**And** an `api-conformance` check over an evaluation with no HTTP target, and a contract that declares a rubric with no `judge-calibration` check on `scheduled` and on `release`, exit 10 with rule `applicability`
+**And** a `preflight-live` entry on a target whose registry names no `environmentKeys` and is not a skill or agent runner that carries a `defaultTier` other than `merge`, or a target that needs a secret that carries `merge`, exits 10 with rule `placement-default`
+**And** a check with no non-blank `reason` exits 10 with rule `placement-reason` whether it sits on its default tier or off it, so the template at `assets/evaluation-ci-plan.template.json`, which ships empty reasons, fails `check` until the stage fills them
+**And** the committed plans keep passing, the template validates once `test:evaluate-guidance` fills its reasons, the guide's `## Write the plan` drops the manual `trigger` and `tiers` steps it then leaves to `check`, and each rule is a `test:evaluate-ci` case that fails when its rule is removed
+
+**Dependencies:** 2.4.
+**Gate:** `test:evaluate-ci`, `test:evaluate-check`, `test:evaluate-guidance`, `npm test`.
+
+### Story 1.97: Gate an existing publish or deploy job on the evaluation job
+
+Added 2026-10-01 in Story 2.4's first review. A `scheduled` or `release` evaluation job gates nothing unless the repository's own publish or deploy job waits for it, and `bmad-testarch-ci` may not change a job it did not write (step 03b changes only the event guards of section 3 item 7). The plan has no way to say that this job waits for that one, so a repository whose deploy runs nightly on its own cron (the `nightly-deploy` fixture) ends with an evaluation that reports and blocks nothing.
+
+As an adopter whose release or deploy is a workflow of its own,
+I want the evaluation job to gate it,
+So that a blocking exit stops the shipment (CAP-11).
+
+**Acceptance Criteria:**
+
+**Given** a plan check that names an existing pipeline job the tier must gate (and tiers whose triggers resolve to one GitHub event, which step 03b tells apart with a ref or cron guard from Story 2.4's second review round, so the gate lands on the evaluation job of the right tier; a tier whose only event another tier took, such as a `release` tier on a deploy workflow that has `workflow_dispatch` alone beside a `scheduled` tier that takes it, is named in the summary as wired to no event until this story gives it one)
+**When** `bmad-testarch-ci` renders the plan in edit or create mode
+**Then** that job waits for the tier's evaluation job, through `needs` inside one workflow file or through a `workflow_run` trigger across files, and the story records which and why
+**And** the plan schema and `ci-plan.js` define and validate the field, `tea-evaluate check` reports a name that is not a job id as a `ci-plan` finding, and the CI skill's step 03b may edit that one job, reports the edit in its summary and restores it on re-render
+**And** a name that matches no job, or a job another plan's tier already gates in a way that conflicts, is reported and renders nothing for that plan
+**And** `test:evaluate-ci` validates the field, `test:evaluate-ci-render` fails when the step drops the wait, and an `evaluation-plan` case of the `ci` behavioral suite captures a live rendering of it (`node tools/generate-contracts.js` and `generate-probes.js` regenerated)
+
+**Dependencies:** 2.3, 2.4.
+**Gate:** `bmad-testarch-ci` edit gates, `npm test`.
+
+### Story 1.98: The AI-feature evaluation passes its own CI tiers
+
+Added 2026-10-01 in Story 2.4's first review. A reviewer scored and accepted a baseline for each fixture repository of Story 2.4 and ran its tiers. `ci --tier pr` exits 11 in both: `oracle-agreement` reads `disagrees` on P-006 O-004, P-012 O-004 and P-009 O-003 and O-004. `ci --tier merge` exits 0 and `ci --tier scheduled` of `nightly-deploy` exits 0 with two warnings. `ci --tier release` exits 2 in both repositories: `twin-run` fails the zero-action floor and `held-out` fails both the gameability floor and the zero-action floor, all with `no-eligible-probe`. The evaluation is the Story 1.24 AI-feature one, so the two repositories end red once an adopter follows the stage to its end.
+
+As an adopter who copies the AI-feature example,
+I want its evaluation to pass the tiers its plan places,
+So that the example ends green and a red tier means a regression (CAP-11, CAP-12).
+
+**Acceptance Criteria:**
+
+**Given** the AI-feature evaluation under `test/fixtures/evaluate-authoring/ai-feature/` and its copies in `test/fixtures/evaluate-ci-repos/`
+**When** a clean copy-workspace run is scored and accepted with `compare --accept`
+**Then** `tea-evaluate ci --tier pr` exits 0, the oracle disagreements above are repaired in the oracles or the probes they read, and the cause of each is recorded
+**And** every probe class whose held-out or twin partition holds no eligible probe (the zero-action class of both partitions and the gameability class of the held-out one) either loses its floor where no eligible probe can exist or gains a probe that makes one eligible, so `twin-run` and `held-out` exit 0 on `release` and `scheduled` in both repositories and the `scheduled` warnings of `nightly-deploy` are gone
+**And** the repositories commit their baselines, `test:evaluate-ci` runs the `pr` tier over each repository and the live tiers it can run locally and expects exit 0, and the Story 1.24 replay bundles and `test:evaluate-authoring` stay green or are re-recorded with the reason
+
+**Dependencies:** 1.24, 2.4.
+**Gate:** `test:evaluate-ci`, `test:evaluate-authoring`, `npm test`.
+
 ## Epic 2: Continuous proof in CI
 
 The evaluation Epic 1 produced is proven on every pull request, with the evidence to audit it.
@@ -2222,14 +2287,14 @@ So that no evaluation ends locally working and unenforced, and each check runs w
 **When** `/bmad-workflow-builder` Edit writes `references/ci.md` and the `ci/evaluation-ci-plan.json` template
 **Then** before writing the plan the stage inspects the adopter's repository, each under its own heading with a worked example: existing CI (platform, workflows, required checks, which events receive which secrets), merge flow (branch protection, merge queue, review requirement), release flow (tags, publish or deploy workflows, cadence) and risk profile (the severities the contract declares, cost per live trial, the reach of a missed defect)
 **And** it derives each check's tier from that inspection with AD-10's table as the default, records `placement.reason` naming the file or answer each placement came from, and records every deviation from the default
-**And** it places the gameability arm, contract-source freshness and oracle-versus-scorer agreement on `pr`, the held-out partition and judge calibration on `scheduled` and `release`, sets live tiers for skill and agent targets to `scheduled`, `release` and manual dispatch only, declares the runner's credential keys as `permittedEnvironmentKeys`, and invokes `bmad-testarch-ci` in edit mode
+**And** it places the gameability arm, contract-source freshness and oracle-versus-scorer agreement on `pr`, the held-out partition and judge calibration on `scheduled` and `release`, sets live tiers for skill and agent targets to `scheduled`, `release` and manual dispatch only, declares the runner's credential keys as `permittedEnvironmentKeys`, and invokes `bmad-testarch-ci` in edit mode (amended 2026-10-01 in Story 2.4: step 03b of `bmad-testarch-ci` reads the `release` event from the repository's release or deploy workflow and the `merge` event from a `merge_group` the pipeline lists, and tells tiers that share one GitHub event apart with a ref or cron guard, the one edit the story makes to the CI skill, because the renderer otherwise left a tag-releasing repository's live set running nowhere; create mode when the inspection finds no pipeline file; `defaultTier` is the tier AD-10 gives the check for the adopter, so a check the table lists on `scheduled` and `release` has one entry per tier with its own tier as default and `preflight-live` for a target that needs no secret defaults to `merge`; the stage sets `evaluation.json` `tiers` to the tiers the plan uses, accepts the first baseline through `compare --accept` with the adopter's confirmation, runs each tier that can run on the machine and shows the adopter every exit (a blocking exit returns to the stage that owns it, and the hand-off still proceeds), and records its inspection facts and hand-off status as a `## CI` section of the run's inspection record; `SKILL.md` runs Stage 12; the plan template is `assets/evaluation-ci-plan.template.json`, every check at its default with an empty `reason`)
 **And** `eval-quality-gates` is offered as opt-in, adds only sections for gates the adopter adopts, never rewrites an existing section, and adds each adopted gate to the plan as a `gate` check
 **And** the guidance test asserts each heading and placement rule, and the plan template validates against the runtime schema
 
 **Given** two fixture repositories under `test/fixtures/evaluate-ci-repos/`, one releasing on tags with no model secret in CI and one deploying nightly with a model secret on scheduled runs, each carrying the Story 1.24 AI-feature evaluation
 **When** a maintainer session runs the ci stage on each through the local Claude Code CLI
 **Then** both produced plans validate against the runtime schema and are committed, they differ in the placement of at least one live check, and each differing placement's `reason` cites a file from its repository
-**And** `test:evaluate-ci` validates both committed plans and asserts that difference, so a stage that ignores the inspection and writes the default table fails it
+**And** `test:evaluate-ci` validates both committed plans and asserts that difference, so a stage that ignores the inspection and writes the default table fails it (amended 2026-10-01 in Story 2.4: the repositories are `test/fixtures/evaluate-ci-repos/tagged-release` and `nightly-deploy`, each with its workflows, `CONTRIBUTING.md`, a release or deploy note, `app/` (the AI-feature target) and `evals/answer-grade/` (the Story 1.24 evaluation, launching `../../app`); the assertion compares the sets of live placements, `id@tier`, and requires every differing placement's `reason` to cite a file of its own repository; every placement of both plans carries a `reason`, `evaluation.json` `tiers` equals the plan's tiers, and `check` passes)
 
 **Dependencies:** 2.3.
 **Gate:** skill gates (no registration change), `npm test`.
