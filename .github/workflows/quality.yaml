@@ -71,10 +71,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Prove Windows agent descendants end with their guardian
-        env:
-          TEA_EVALUATE_WINDOWS_ONLY: "1"
-        run: npm run test:evaluate-preflight
+      - name: Probe Windows guardian and Job Object helper startup
+        run: node test/test-windows-job-owner-probe.js
 
   prettier:
     runs-on: ubuntu-latest

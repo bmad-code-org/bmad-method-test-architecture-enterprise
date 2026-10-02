@@ -2,6 +2,16 @@ param([Parameter(Mandatory = $true)][int]$GuardianPid)
 
 $ErrorActionPreference = 'Stop'
 
+function Write-Trace([string]$Stage) {
+    if (-not $env:TEA_WINDOWS_JOB_TRACE) { return }
+    try {
+        $line = "{0} powershell {1} {2}`n" -f [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds(), $PID, $Stage
+        [System.IO.File]::AppendAllText($env:TEA_WINDOWS_JOB_TRACE, $line)
+    } catch { }
+}
+
+Write-Trace 'helper-enter'
+Write-Trace 'helper-add-type-start'
 Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
@@ -60,6 +70,7 @@ public static class TeaWindowsJob {
     public static extern bool CloseHandle(IntPtr handle);
 }
 '@
+Write-Trace 'helper-add-type-done'
 
 $job = [IntPtr]::Zero
 $guardian = [IntPtr]::Zero
@@ -69,6 +80,7 @@ try {
     }
 
     $job = [TeaWindowsJob]::CreateJobObject([IntPtr]::Zero, $null)
+    Write-Trace "helper-job-created handle=$job"
     if ($job -eq [IntPtr]::Zero) {
         throw "CreateJobObject failed: $([Runtime.InteropServices.Marshal]::GetLastWin32Error())"
     }
@@ -81,8 +93,10 @@ try {
     if (-not [TeaWindowsJob]::SetInformationJobObject($job, 9, [ref]$limits, [uint32]$size)) {
         throw "SetInformationJobObject failed: $([Runtime.InteropServices.Marshal]::GetLastWin32Error())"
     }
+    Write-Trace 'helper-kill-on-close-set'
 
     $guardian = [TeaWindowsJob]::OpenProcess(0x101, $false, $GuardianPid) # PROCESS_TERMINATE | PROCESS_SET_QUOTA
+    Write-Trace "helper-guardian-opened handle=$guardian"
     if ($guardian -eq [IntPtr]::Zero) {
         throw "OpenProcess failed: $([Runtime.InteropServices.Marshal]::GetLastWin32Error())"
     }
@@ -90,6 +104,7 @@ try {
     if (-not [TeaWindowsJob]::AssignProcessToJobObject($job, $assignedProcess)) {
         throw "AssignProcessToJobObject failed: $([Runtime.InteropServices.Marshal]::GetLastWin32Error())"
     }
+    Write-Trace 'helper-guardian-assigned'
     if ($env:TEA_WINDOWS_JOB_OWNER_TEST_FAILURE -eq 'after-assign') {
         throw 'forced failure after Job Object assignment'
     }
@@ -99,13 +114,16 @@ try {
 
     [Console]::Out.WriteLine('READY')
     [Console]::Out.Flush()
+    Write-Trace 'helper-ready-written'
     [Console]::In.ReadToEnd() | Out-Null
 } catch {
+    Write-Trace "helper-error $($_.Exception.Message)"
     [Console]::Out.WriteLine("ERROR $($_.Exception.Message)")
     [Console]::Out.Flush()
     [Console]::In.ReadToEnd() | Out-Null
     exit 1
 } finally {
+    Write-Trace 'helper-closing-handles'
     if ($guardian -ne [IntPtr]::Zero) { [TeaWindowsJob]::CloseHandle($guardian) | Out-Null }
     if ($job -ne [IntPtr]::Zero) { [TeaWindowsJob]::CloseHandle($job) | Out-Null }
 }
