@@ -54,11 +54,14 @@
  *
  * The pre-fix deployment is asked which release each interface runs at two
  * more points (Story 1.64), since the legs and the trials reach it after the
- * qualification: after the witness legs and after the last trial of the arm.
- * `holdInterfaces` is the one loop over a deployment's interfaces that the
- * three points share, and `holdToReport` the one derivation of a request and
- * of a refusal. The post-fix deployment is reached only by the qualification
- * arms, so it is asked once.
+ * qualification: once after the witness legs (`preflight` and `run`) and once
+ * after the last trial of the arm (`run`). `holdInterfaces` is the one loop
+ * over a deployment's interfaces that the three points share, and
+ * `holdToReport` the one derivation of a request and of a refusal. The
+ * qualification asks once per probe, so an arm of N probes asks each pre-fix
+ * origin N + 2 times in a `run` (N before the arms, then one request at each
+ * later point); the post-fix deployment is reached only by the qualification
+ * arms and is asked N times, once per probe.
  */
 
 'use strict';

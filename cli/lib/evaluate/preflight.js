@@ -59,8 +59,8 @@
  *      workspace and working directory it ran in; a leg the adapter refuses or
  *      cannot run is written under `faults/` and ends the run (exit 10 for a
  *      denial, 12 otherwise). The pre-fix deployment of each historical arm
- *      is then asked again which release each of its HTTP interfaces runs
- *      (Story 1.64), and a release that changed refuses every probe on that
+ *      is then asked again, once a leg ran, which release each of its HTTP
+ *      interfaces runs (Story 1.64), and a release that changed refuses every probe on that
  *      pre-fix release before the CLI reads the run directory: the probes
  *      leave `probes.json` and `observations.json`;
  *   9. the adopter's project read again (exit 12 on any change, with the
@@ -1075,21 +1075,20 @@ async function runInWorkspaces({
       log(`runPreflight refused the plan: ${error.message}`);
     }
     // The legs reached each pre-fix deployment after the qualification asked it, so it is asked again before anything reads
-    // what the legs measured. A refused probe leaves the probe list and the observations the CLI reads (Story 1.64).
+    // what the legs measured. A refused probe leaves the probe list and the observations the CLI reads (Story 1.64). A plan
+    // the engine refused before any leg ran sent nothing to a deployment since the qualification, so nothing is asked.
     let observations = recorder.observations;
-    const refusals = await holdAfterLegs({
-      routes: historicalByRevision,
-      contract,
-      registry,
-      seed: run.seed,
-      stop,
-      signal,
-    });
+    const refusals =
+      recorder.calls() === 0 ? [] : await holdAfterLegs({ routes: historicalByRevision, contract, registry, seed: run.seed, stop, signal });
     if (refusals.length > 0) {
+      // Every probe on a refused route is refused, so no arm runs there: the route leaves the run, and `run.json`'s
+      // `deployments` names the arms that run.
+      for (const release of new Set(refusals.map((refusal) => refusal.release))) {
+        delete run.deployments?.[historicalByRevision.get(release).label];
+        historicalByRevision.delete(release);
+      }
       for (const { probeId, file, reason } of refusals) recordRefusal({ run, writer, writeRun, log }, { probeId, file, reason });
       const refusedIds = new Set(refusals.map((refusal) => refusal.probeId));
-      // Every probe on the route is refused, so no arm runs there: the route leaves the run.
-      for (const { release } of refusals) historicalByRevision.delete(release);
       for (let index = qualified.length - 1; index >= 0; index -= 1) {
         if (refusedIds.has(qualified[index].probe.probeId)) qualified.splice(index, 1);
       }

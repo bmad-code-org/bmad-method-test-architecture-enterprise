@@ -189,11 +189,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - A deployment-routed historical probe holds the pre-fix deployment to its release across the witness legs and the trials (Story 1.64, AD-7, AD-8).
-  `preflight` and `run` ask the pre-fix deployment which release each of its HTTP interfaces runs at three points: before the qualification arms, after the witness legs and after the last trial of the arm `historical:<pre-fix release>`.
-  The two later points go through the same port, policy and refusal as the first, each interface in sorted order, the first answer that refuses stopping the asking; the post-fix deployment is reached by the qualification arms alone and is asked once.
-  A release that changed after the legs refuses every probe on the pre-fix release before the CLI reads the run directory: the probes leave `probes.json` and `observations.json`, no trial runs, and `run.json`'s `refused` and `refused/<probeId>.json` name the point, the interface, the identifier reported and the one declared.
+  `run` asks the pre-fix deployment which release each of its HTTP interfaces runs at three points: before the qualification arms, after the witness legs and after the last trial of the arm `historical:<pre-fix release>`; `preflight` runs no trial and asks at the first two.
+  The two later points go through the same port, policy and refusal as the first, each interface in sorted order, the first answer that refuses stopping the asking; the post-fix deployment is reached by the qualification arms alone and is asked before the arms only.
+  A release that changed after the legs refuses every probe on the pre-fix release before the CLI reads the run directory: the probes leave `probes.json` and `observations.json`, the arm leaves `run.json`'s `deployments`, no trial runs, and `run.json`'s `refused` and `refused/<probeId>.json` name the point, the interface, the identifier reported and the one declared.
   A release that changed while the trials ran refuses every probe on the arm before any trial set is sealed; the trials' evidence stays in the run directory and `score` names the probes as refused.
-  A deployment that keeps its release is asked three times at each of its HTTP interface origins.
+  The asking before the arms is once per probe, so a deployment that keeps its release is asked, at each origin, once per probe before the arms and once at each later point: an arm of N probes sends each pre-fix origin N + 2 requests in a `run` and each post-fix origin N.
   A pre-fix deployment that cannot answer at a later point stops the run with exit 12, naming the point; a run whose every probe is refused at a later point exits 12 as when it was refused at the qualification.
   `run.json`'s `releases` keeps what each interface reported before the arms.
 - A deployment-routed historical probe asks every HTTP interface of each deployment which release it runs (Story 1.65, AD-7, AD-8).

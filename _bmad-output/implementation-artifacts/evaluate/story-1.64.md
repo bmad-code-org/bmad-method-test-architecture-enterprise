@@ -114,10 +114,10 @@ context:
   `deploymentRoute` returns `members: []` and the route loop pushes `{ probeId, file, reports, legIds }` for each qualified deployment probe (`qualifyDeploymentProbe` returns `preFixReports`, and the `qualified` entry carries its `file`).
   Placement (the spec's decision with a fallback): the ask comes right after `engine.runPreflight` returns and before `observations.json` is written, `treeUnchanged('legs')` and the CLI's verdict.
   Spike (below) showed eval-quality's preflight CLI accepts a probes list without a refused probe and observations without its legs, so the fallback was not needed.
-  `holdAfterLegs` asks each historical deployment route in sorted release order and returns one refusal per probe of a refused route; each is recorded, the probe leaves `qualified`, `probes.json` is rewritten (`writer.replaceJson`), the probe's witness legs leave the observations (matched by the observation's `probeId`, the leg ID), and the route leaves `historicalByRevision`, so `run.js` builds no arm for it.
+  `holdAfterLegs` asks each historical deployment route in sorted release order and returns one refusal per probe of a refused route; each is recorded, the probe leaves `qualified`, `probes.json` is rewritten (`writer.replaceJson`), the probe's witness legs leave the observations (matched by the observation's `probeId`, the leg ID), and the route leaves `historicalByRevision` and `run.json`'s `deployments`, so `run.js` builds no arm for it and the record names only arms that ran (round 1).
   Each leg's own file under `observations/` stays, as the trials' evidence stays.
   `run.json`'s `releases` keeps the entries of a probe refused later (what was reported before the arms).
-  The ask also runs in the planning-refusal path (no leg ran), where it is harmless and the CLI refuses the plan next; I did not add a branch for it.
+  The ask is skipped when no leg ran (`recorder.calls() === 0`, the planning-refusal path): a refusal would name legs that never ran and an unreachable deployment would turn the plan refusal's exit into 12 (round 1).
 - `run.js`.
   A deployment arm carries `route`.
   After the last trial of the arm, `holdDeployment({ point: 'trials' })` runs before the next arm, `writer.verify('after the trials')` and any sealing; a refusal records every probe of the arm (`recordRefusal`, `refusedIds`) and marks the arm `refused`.
@@ -164,7 +164,7 @@ The counts are failed checks of 70, identical on the copy made before the last c
   The refusal covering the first probe of the arm only: 4 fail (the two-probe arm).
   The no-arm stop after the trials dropped (`sealable.length === 0`): 1 fails, the run whose only probe is refused after the trials exits 0 with no trial set.
 - AC 3, three requests at each origin.
-  Asking only before the arms (both later asks dropped): 42 fail, among them the qualified case's three-point log of the pre-fix servers, each log two requests short.
+  Asking only before the arms (both later asks dropped): 42 of 70 fail under `--held-releases-only`, all from `checkHeldReleases`; the qualified case's three-point log of the pre-fix servers (each log two requests short) lives in `checkReportedInterfaces`, which `--reported-interfaces-only` runs: 1 of 156 fails there.
   Asking the report of each probe separately, with no dedupe of equal reports: 7 fail (the request logs of the two-probe cases).
 - AC 4, the port and the policy.
   There is no way to send the request outside the port, which `holdToReport` takes as `port`; the criterion's observable effect is a denied request that exits 0 with no refusal, which I reproduced by reading a later denial as the release held (`DENIAL_FAULT` at a later point returns `{ reported: release }`): 4 fail, the redirect case (no refusal recorded, the probe qualified and the trials ran).
@@ -207,10 +207,56 @@ My own read of the final diff against the frozen block, row by row of the I/O ma
 ### Departures from the plan text
 
 - `holdToReport` is not exported (the Task line said it would be); nothing outside `historical.js` calls it.
+- The frozen decision says the ask comes "right after `treeUnchanged('legs')` and before `observations.json` is written".
+  That order cannot hold, since the base tree writes `observations.json` before `treeUnchanged('legs')`.
+  The ask sits after the legs and before the verdict reads anything: ask, then `observations.json`, then `treeUnchanged('legs')`, then `writer.verify('after the legs')`.
+  A run whose project changed during the legs and whose release changed too leaves a refusal in `run.json` and `refused/` and then stops with exit 12 on the tree change; no check pins the order.
 - The second criterion's trials stay in the run directory and so does `probes/<probeId>.probe.json` of a probe refused after the trials, since the verdict read it before the trials ran; the reference says so.
 - A probe refused after the legs keeps no `probes/<probeId>.probe.json` and leaves the probe list and the observations the CLI reads; each leg's own file under `observations/` stays.
 
 ## Undone
 
 Nothing.
-No finding is left over for a new story: the evaluator qualification attempts of a sealed-brief agent run before the trials against the same pre-fix deployment, and the final ask after the arm's last trial covers them (a release that changed at any earlier moment refuses the arm there), so the three points leave no window.
+No finding is left over for a new story: a sealed-brief agent's evaluator qualification skips historical arms (`expectedOutcome` returns null for every arm but `clean` and `mutated:*`, and the comment above `qualifyEvaluator` in `run.js` says historical and gameability arms are not qualified), so after the legs only the trials reach the pre-fix deployment, and the ask after the arm's last trial covers them: a release that changed at any earlier moment refuses the arm there.
+
+## Round 1 (2026-10-02)
+
+Review findings of PR #296 at f50bf9e3, applied to the staged tree.
+
+1. Two pre-fix releases (test quality 1).
+   `withSecondRelease` adds P-005 on `grader-1.5.0` (sorts after `grader-1.4.2`) at a pre-fix server pair of its own, authorized in the registry, with the post-fix deployment of P-004.
+   Three `run` cases: the later route changes after the legs (P-005 refused naming the point, its arm never runs and leaves `deployments`, P-004 asked at all three points, trials run, seals); the later route changes while its trials run (both arms' trials run, P-005 refused after the trials, P-004 seals); the mirror, the first route changing after the legs (P-004 refused, the later route still asked after the legs, runs its trials, is asked after them and seals).
+   Each reads all six servers' request logs.
+2. The exit 12 stop at the trials point (test quality 2).
+   `held-trials-crash` (`run`): the pre-fix grader ends its process on the report request after the last trial; asserts exit 12, `after the trials` and the could-not-answer in the message, `outcome.stage` `trial`, no `trial-sets.json`, `refused` empty.
+   `held-legs-crash` asserts `outcome.stage` `leg`.
+3. Order of the ask (test quality 3): recorded as a departure from the plan text (see "Departures from the plan text").
+4. AC 3 revert counts of the two lanes given separately (test quality 4), above.
+5. `run.json`'s `deployments` (adversarial 3).
+   A route refused after the legs leaves `deployments` (the reference says so, and that an arm refused after the trials stays, since its trials ran); `held-legs-first` and the two-release cases read it.
+6. The planning-refusal path (compliance 3).
+   The ask is skipped when `recorder.calls() === 0`.
+   A case reaches it cheaply through the engine wrapper `test:evaluate-preflight` uses (`NODE_OPTIONS=--require=.../wrap-engine.cjs`, `structural-before-legs`): the pre-fix grader, which would end its process on a second report request, is not asked, no refusal names legs that never ran, and the exit is the CLI's own.
+   "Harmless" is gone from the Implementation Notes.
+7. Counts per probe (adversarial 1, compliance 1): the reference (the `release` bullet, the asking paragraphs, `preflight` steps 6 and 7, `run` step 4, the `deployments` sentence), the CHANGELOG, the `historical.js` header and the AD-8 amendment say `run` asks at three points and `preflight` at two, the qualification asks once per probe, so an arm of N probes sends each pre-fix origin N + 2 requests in a `run` and each post-fix origin N.
+   `preflight` step 6 gains the ask after the legs, its exit 12 and the refused probes leaving `probes.json`; step 7 says `probes.json` holds the qualified probes that remain.
+8. The AD-8 amendment names the exception: a probe refused after the trials stays in `probes.json` and the verdict and keeps its `probes/<probeId>.probe.json`.
+9. The Undone sentence on a sealed-brief agent's evaluator qualification is reworded: historical arms are skipped there.
+10. `npm run docs:build` ran in this checkout on the round's docs: exit 0 in about 5 seconds, no error in its output.
+
+Reverts, each once on a scratch copy of the final tree (the unmodified copy passes 79 checks; failed checks of 79 under `--held-releases-only` unless noted).
+The round 0 observations above were counted on the 70-check lane; the whole set was rerun on this tree:
+
+- The three item-1 mutants: the legs ask covers the first route only (`.slice(0, 1)` over the sorted routes): 4 fail; the legs asking stops after the first refused route (`break`): 1 fails (the mirror run's request log of the later route); the trials ask on the first deployment arm only: 2 fail.
+  The legs refusal that drops every historical route (over-refusal): 4 fail.
+- The stops: the trials-point exit 12 message without the point: 1 fails; the legs-point stop recorded in the stage `qualification`: 1 fails.
+- `run.json`'s `deployments` keeping a refused route: 3 fail.
+- The ask after a plan refusal (the `recorder.calls() === 0` guard dropped): 1 fails.
+- The earlier set: the legs ask dropped 38; the trials ask dropped 18; both dropped 50 (and 1 of 156 under `--reported-interfaces-only`); the later asks stopping at the first interface 23; a later denial read as the release held 4; the refused arm still sealed 8; the refused legs kept in `observations.json` 7; the refused probes kept in `probes.json` 17; the refused route kept in `historicalByRevision` 8; the legs refusal covering the first probe only 6; the trials refusal covering the first probe only 4; equal reports asked per probe 7; written order 2; the label without the point 1; the refusal without the point 15; the exit 12 message without the point at both points 2; the no-arm stop after the trials dropped 1; the reference sentence removed 1.
+
+Gates on the final tree: `test:evaluate-arms` 727 checks, `test:evaluate-check` 1,018, `test:evaluate-run` 571, `test:evaluate-preflight` 300, `test:evaluate-guidance`, `test:evaluate-boundaries` 427, `test:doc-claims`, `test:doc-counts`, `test:shards`, `test:ci-coverage`, `test:schema-versions`, `test:changelog`, `lint`, `lint:md`, `format:check`, `docs:validate-links`, `npm run docs:build`.
+`--held-releases-only` alone: 79 checks.
+
+Weight of `test:evaluate-arms`, alone, the committed head (f50bf9e3, `git archive`) beside this tree, one run each, on a machine another lane was loading: 286.3 seconds before this round (713 checks), 305.6 after (727 checks), +19.3 seconds wall.
+The round 0 figure (218.6 and 246.8 seconds) came from a quieter machine, so only the difference between the two runs here is comparable: this round adds about 19 seconds (four `run` cases and one `preflight` case).
+Unrun: the full `npm test` (CI shards), as the owner told the relay.
