@@ -1,0 +1,15 @@
+{
+  "path": "/grade",
+  "query": {
+    "strict": "1"
+  },
+  "body": {
+    "answer": "abcdefghijklmnop"
+  },
+  "expect": {
+    "status": 200,
+    "decision": "pass",
+    "reason": "accepted",
+    "mode": "strict"
+  }
+}

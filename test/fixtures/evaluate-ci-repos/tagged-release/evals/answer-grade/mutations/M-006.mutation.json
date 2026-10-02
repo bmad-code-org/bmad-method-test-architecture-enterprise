@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "mutationId": "M-006",
+  "mutationSource": "accepted grade relabelled as rejection",
+  "targetArtifact": "server/grade.mjs",
+  "operator": {
+    "kind": "replace-exact",
+    "find": "? 'reject' : 'pass';",
+    "replace": "? 'reject' : 'reject';",
+    "occurrences": 1
+  },
+  "expectedObservableFailure": "valid answer is rejected in HTTP response body"
+}

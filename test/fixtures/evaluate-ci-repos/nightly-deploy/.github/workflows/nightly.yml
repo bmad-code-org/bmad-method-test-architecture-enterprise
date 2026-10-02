@@ -1,0 +1,20 @@
+name: nightly
+on:
+  schedule:
+    - cron: '17 2 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm run smoke
+        env:
+          GRADER_MODEL_KEY: ${{ secrets.GRADER_MODEL_KEY }}

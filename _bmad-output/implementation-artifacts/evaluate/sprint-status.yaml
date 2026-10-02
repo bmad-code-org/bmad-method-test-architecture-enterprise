@@ -118,13 +118,16 @@ development_status:
   1-93-prove-the-merge-scheduled-and-release-rendering-and-the-re-render-of-evaluation-plans: backlog
   1-94-score-each-stored-workflow-in-the-ci-probe-leg: backlog
   1-95-gate-the-replay-totals-the-story-count-and-the-lane-lists: backlog
+  1-96-check-the-derivable-fields-of-a-ci-plan: backlog
+  1-97-gate-an-existing-publish-or-deploy-job-on-the-evaluation-job: backlog
+  1-98-the-ai-feature-evaluation-passes-its-own-ci-tiers: backlog
   epic-1-retrospective: optional
 
   epic-2: in-progress
   2-1-compare-runs-and-accept-a-baseline: done
   2-2-plan-ci-tiers-and-run-them-with-tea-evaluate-ci: done
-  2-3-render-evaluation-plans-in-bmad-testarch-ci: review
-  2-4-finish-the-evaluation-with-its-ci-stage: backlog
+  2-3-render-evaluation-plans-in-bmad-testarch-ci: done
+  2-4-finish-the-evaluation-with-its-ci-stage: review
   2-5-tea-runs-its-pr-tier-and-documents-evaluate: backlog
   epic-2-retrospective: optional
 parallel_lanes:
@@ -180,6 +183,9 @@ parallel_lanes:
     - 1-93-prove-the-merge-scheduled-and-release-rendering-and-the-re-render-of-evaluation-plans
     - 1-94-score-each-stored-workflow-in-the-ci-probe-leg
     - 1-95-gate-the-replay-totals-the-story-count-and-the-lane-lists
+    - 1-96-check-the-derivable-fields-of-a-ci-plan
+    - 1-97-gate-an-existing-publish-or-deploy-job-on-the-evaluation-job
+    - 1-98-the-ai-feature-evaluation-passes-its-own-ci-tiers
 owner_handoff:
   - key: h-1-accept-the-dogfood-baseline-and-turn-its-pr-replay-green
     owner: Murat

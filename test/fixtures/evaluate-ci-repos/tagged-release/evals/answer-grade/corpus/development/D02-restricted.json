@@ -1,0 +1,12 @@
+{
+  "path": "/grade",
+  "query": {},
+  "body": {
+    "answer": "my private note"
+  },
+  "expect": {
+    "status": 200,
+    "decision": "reject",
+    "reason": "restricted-term"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "probeId": "P-003",
+  "probeClass": "zero-action",
+  "behaviorId": "B-003",
+  "expectedClean": true,
+  "rationale": "[malformed] Missing answer returns 400 and an error.",
+  "defects": [],
+  "qualification": {
+    "route": "clean-control",
+    "noKnownDefectStatement": "No known defect in the frozen target revision."
+  }
+}

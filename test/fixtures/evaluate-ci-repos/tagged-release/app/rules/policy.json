@@ -1,0 +1,4 @@
+{
+  "restrictedTerms": ["unsafe", "private"],
+  "minimumLength": 8
+}

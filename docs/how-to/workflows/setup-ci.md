@@ -453,7 +453,7 @@ git push -u origin test-ci-setup
 
 ## Evaluation Plans
 
-If the repository holds an evaluation written with `bmad-testarch-evaluate`, the CI workflow finds its `ci/evaluation-ci-plan.json` and renders it into the same pipeline file. A standalone run picks up existing plans after the quality gates step, and an edit-mode run detects them first and renders them into the pipeline it loaded. Evaluate writes the plan and this workflow writes every pipeline file.
+If the repository holds an evaluation written with `bmad-testarch-evaluate`, the CI workflow finds its `ci/evaluation-ci-plan.json` and renders it into the same pipeline file. A standalone run picks up existing plans after the quality gates step, and an edit-mode run detects them first and renders them into the pipeline it loaded. Evaluate writes the plan and this workflow writes every pipeline file. The last stage of `bmad-testarch-evaluate` invokes this workflow in edit mode on the pipeline file once the plan is written, or in create mode when the repository has no pipeline file.
 
 For each tier the plan places a check on, the pipeline gets one job, `evaluation-pr` for the `pr` tier:
 

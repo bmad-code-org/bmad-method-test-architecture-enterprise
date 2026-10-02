@@ -1,0 +1,277 @@
+{
+  "schemaVersion": 1,
+  "checks": [
+    {
+      "id": "check",
+      "tier": "pr",
+      "trigger": [
+        "pull-request"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "check",
+        "--evaluation",
+        "evals/answer-grade"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/checks/check/stdout"
+      ],
+      "placement": {
+        "tier": "pr",
+        "defaultTier": "pr",
+        "reason": "Deterministic, needs no secret and calls no model; CAP-11 puts it on every pull request, and .github/workflows/ci.yml runs on pull_request."
+      }
+    },
+    {
+      "id": "compile",
+      "tier": "pr",
+      "trigger": [
+        "pull-request"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "evals/answer-grade",
+        "--tier",
+        "pr"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/checks/compile/eval-contract.json"
+      ],
+      "placement": {
+        "tier": "pr",
+        "defaultTier": "pr",
+        "reason": "Deterministic, needs no secret and calls no model; CAP-11 puts it on every pull request, and .github/workflows/ci.yml runs on pull_request."
+      }
+    },
+    {
+      "id": "seal",
+      "tier": "pr",
+      "trigger": [
+        "pull-request"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "evals/answer-grade",
+        "--tier",
+        "pr"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/checks/seal/sealed-evaluator-brief.json"
+      ],
+      "placement": {
+        "tier": "pr",
+        "defaultTier": "pr",
+        "reason": "Deterministic, needs no secret and calls no model; CAP-11 puts it on every pull request, and .github/workflows/ci.yml runs on pull_request."
+      }
+    },
+    {
+      "id": "api-conformance",
+      "tier": "pr",
+      "trigger": [
+        "pull-request"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "evals/answer-grade",
+        "--tier",
+        "pr"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/checks/api-conformance/stdout"
+      ],
+      "placement": {
+        "tier": "pr",
+        "defaultTier": "pr",
+        "reason": "Deterministic, needs no secret and calls no model; CAP-11 puts it on every pull request, and .github/workflows/ci.yml runs on pull_request. The evaluation declares an HTTP target (POST /grade), so the check applies."
+      }
+    },
+    {
+      "id": "gameability",
+      "tier": "pr",
+      "trigger": [
+        "pull-request"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "evals/answer-grade",
+        "--tier",
+        "pr"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/replay/scores"
+      ],
+      "placement": {
+        "tier": "pr",
+        "defaultTier": "pr",
+        "reason": "Deterministic, needs no secret and calls no model; CAP-11 puts it on every pull request, and .github/workflows/ci.yml runs on pull_request. Probe P-009 takes the gameability route."
+      }
+    },
+    {
+      "id": "oracle-agreement",
+      "tier": "pr",
+      "trigger": [
+        "pull-request"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "evals/answer-grade",
+        "--tier",
+        "pr"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "baseline/scores"
+      ],
+      "placement": {
+        "tier": "pr",
+        "defaultTier": "pr",
+        "reason": "Deterministic, needs no secret and calls no model; CAP-11 puts it on every pull request, and .github/workflows/ci.yml runs on pull_request."
+      }
+    },
+    {
+      "id": "replay",
+      "tier": "pr",
+      "trigger": [
+        "pull-request"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "evals/answer-grade",
+        "--tier",
+        "pr"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/replay/preflight-verdict.json",
+        "runs/<invocationId>/replay/scores"
+      ],
+      "placement": {
+        "tier": "pr",
+        "defaultTier": "pr",
+        "reason": "Deterministic, needs no secret and calls no model; CAP-11 puts it on every pull request, and .github/workflows/ci.yml runs on pull_request."
+      }
+    },
+    {
+      "id": "preflight-live",
+      "tier": "merge",
+      "trigger": [
+        "merge"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "preflight",
+        "--evaluation",
+        "evals/answer-grade"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/checks/preflight-live/stdout"
+      ],
+      "placement": {
+        "tier": "merge",
+        "defaultTier": "merge",
+        "reason": "The target (app/server/grade.mjs) needs no secret: evaluation.json registry environmentKeys is empty. A post-merge event exists in the push to main; CONTRIBUTING.md squash merges and no merge queue do not move it, and no cap on post-merge run time is stated. The preflight runs a local stub in seconds."
+      }
+    },
+    {
+      "id": "twin-run",
+      "tier": "release",
+      "trigger": [
+        "release"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "evals/answer-grade",
+        "--tier",
+        "release"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/checks/twin-run/stdout"
+      ],
+      "placement": {
+        "tier": "release",
+        "defaultTier": "release",
+        "reason": "The repository has no schedule trigger (.github/workflows has none; docs/RELEASING.md: \"no scheduled job\"), so no scheduled entry exists. The tag push of v* that starts .github/workflows/release.yml is the release gate (docs/RELEASING.md). The target is a local stub, so a live run makes no model call and costs no credits (evaluation.json registry, app/DESCRIPTION.md)."
+      }
+    },
+    {
+      "id": "held-out",
+      "tier": "release",
+      "trigger": [
+        "release"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "evals/answer-grade",
+        "--tier",
+        "release"
+      ],
+      "enforcement": "block",
+      "evidence": [
+        "runs/<invocationId>/checks/held-out/stdout"
+      ],
+      "placement": {
+        "tier": "release",
+        "defaultTier": "release",
+        "reason": "The repository has no schedule trigger (.github/workflows has none; docs/RELEASING.md: \"no scheduled job\"), so no scheduled entry exists. The tag push of v* that starts .github/workflows/release.yml is the release gate (docs/RELEASING.md). Contract declares a critical behavior (B-001), so a blocking release gate is justified; consumers pin versions and a shipped defect stays about six weeks (docs/RELEASING.md)."
+      }
+    },
+    {
+      "id": "strength-comparison",
+      "tier": "release",
+      "trigger": [
+        "release"
+      ],
+      "kind": "evaluate",
+      "command": [
+        "tea-evaluate",
+        "ci",
+        "--evaluation",
+        "evals/answer-grade",
+        "--tier",
+        "release"
+      ],
+      "enforcement": "warn",
+      "evidence": [
+        "runs/<invocationId>/checks/strength-comparison/stdout"
+      ],
+      "placement": {
+        "tier": "release",
+        "defaultTier": "release",
+        "reason": "The repository has no schedule trigger (.github/workflows has none; docs/RELEASING.md: \"no scheduled job\"), so no scheduled entry exists. The tag push of v* that starts .github/workflows/release.yml is the release gate (docs/RELEASING.md). Strength regression against the baseline is a warning class (AD-10)."
+      }
+    }
+  ]
+}

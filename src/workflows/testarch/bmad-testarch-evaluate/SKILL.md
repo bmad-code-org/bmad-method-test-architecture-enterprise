@@ -7,7 +7,7 @@ description: 'Run scored behavioral evaluations and repair gaps. Use when the us
 
 ## Overview
 
-**Goal:** Take an adopter from a described target through a scored development and held-out evaluation with named gaps and repairs. This build completes through Stage 11. CI proof follows in Stage 12.
+**Goal:** Take an adopter from a described target through a scored development and held-out evaluation with named gaps and repairs, and finish it with the CI plan that enforces it.
 
 **Role:** You are the Master Test Architect.
 
@@ -64,11 +64,9 @@ Activation is complete. Begin the workflow below.
 
 ## Workflow
 
-Evaluate is one continuous loop over twelve stages, run inline rather than as separate step files: each stage's craft lives in its own `references/` guide, loaded when that stage is reached. Work under `{tea_evaluations_folder}` unless the adopter names another location. On resume, read the existing inspection record, `evaluation.json`, any `requirements.md`, and any `{test_artifacts}/evaluate/<evaluationId>/gap-report.md` before choosing a stage. Before Stage 3, require the adopter's confirmation in the statement and compare `requirements.digest` with eval-quality's `digestBytes` over the committed file; otherwise return to intake. Continue from the first incomplete stage, or the adopter's requested stage when its prerequisites hold.
+Evaluate is one continuous loop over twelve stages, run inline rather than as separate step files: each stage's craft lives in its own `references/` guide, loaded when that stage is reached. Work under `{tea_evaluations_folder}` unless the adopter names another location. On resume, read the existing inspection record, `evaluation.json`, any `requirements.md`, any `<evaluation-folder>/ci/evaluation-ci-plan.json`, and any `{test_artifacts}/evaluate/<evaluationId>/gap-report.md` before choosing a stage. Before Stage 3, require the adopter's confirmation in the statement and compare `requirements.digest` with eval-quality's `digestBytes` over the committed file; otherwise return to intake. Continue from the first incomplete stage, or the adopter's requested stage when its prerequisites hold. `assets/README.md` says how to fill each template under `assets/`.
 
-At activation, tell the adopter that this build can plan mutations, choose policy, run and score the evaluation, and repair gaps through Stage 11. Stage 12 CI wiring is pending.
-
-If the loaded `references/<stage>.md` guide is a placeholder (it says "Placeholder." and names the story that fills it), tell the adopter that stage is not yet available and stop there. Never improvise the stage's craft yourself, and never compute a verdict, score, or pass/fail decision outside `eval-quality`'s own CLI (AD-6): a placeholder stage has no craft to improvise from, and a verdict this skill computed itself would not be one `eval-quality` sealed.
+Never improvise the stage's craft yourself, and never compute a verdict, score, or pass/fail decision outside `eval-quality`'s own CLI (AD-6): a verdict this skill computed itself would not be one `eval-quality` sealed.
 
 ### Stage 1: Inspection
 
@@ -124,7 +122,7 @@ Interpret a weak result and close the gap. Load `references/gaps.md`.
 
 ### Stage 12: CI
 
-Wire continuous proof into the adopter's CI. Load `references/ci.md`.
+Inspect the adopter's repository, place each check in a tier, write `<evaluation-folder>/ci/evaluation-ci-plan.json` and hand it to `bmad-testarch-ci`. Load `references/ci.md`.
 
 ## On Complete
 

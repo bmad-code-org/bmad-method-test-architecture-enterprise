@@ -1,0 +1,12 @@
+{
+  "probeId": "P-002",
+  "probeClass": "zero-action",
+  "behaviorId": "B-001",
+  "expectedClean": true,
+  "rationale": "[negative] A restricted term embedded in an answer is rejected.",
+  "defects": [],
+  "qualification": {
+    "route": "clean-control",
+    "noKnownDefectStatement": "No known defect in the frozen target revision."
+  }
+}

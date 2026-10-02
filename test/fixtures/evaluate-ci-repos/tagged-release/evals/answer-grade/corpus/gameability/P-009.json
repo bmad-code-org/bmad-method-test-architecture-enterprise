@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "steps": {
+    "valid-boundary": {
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"decision\": \"pass\", \"reason\": \"accepted\"}"
+    },
+    "restricted": {
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"decision\": \"pass\", \"reason\": \"restricted-term\"}"
+    },
+    "short": {
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"decision\": \"pass\", \"reason\": \"accepted\"}"
+    },
+    "strict-boundary": {
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"decision\": \"pass\", \"reason\": \"accepted\"}"
+    },
+    "strict-short": {
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"decision\": \"pass\", \"reason\": \"accepted\"}"
+    },
+    "missing": {
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"decision\": \"pass\", \"reason\": \"accepted\"}"
+    },
+    "nonstring": {
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"decision\": \"pass\", \"reason\": \"accepted\"}"
+    }
+  }
+}
