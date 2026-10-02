@@ -3270,7 +3270,7 @@
   },
   "test-design": {
     "contractId": "tea-test-design-behavioral",
-    "corpusDigest": "sha256:5e6580798f74a0e1715fb6d6512e12b0d61d7c58864d3c3c2a9188109ad03a00",
+    "corpusDigest": "sha256:8fe2392194ae2738934a2fceb0f835d17e164d2a296bcb750250f41ecbfa3f0d",
     "probeCount": 16,
     "strength": {
       "defect": {
@@ -3285,7 +3285,7 @@
       },
       "zero-action": null
     },
-    "unsatisfiedCoverageRules": ["malformed-input", "state-change-read-back", "whole-body"],
+    "unsatisfiedCoverageRules": ["malformed-input", "state-change-read-back"],
     "probes": {
       "P-001": {
         "probeClass": "defect",
@@ -3438,8 +3438,7 @@
         "strictPromotable": true,
         "basis": [
           "coverage gap malformed-input unsatisfied at or above the severity floor",
-          "coverage gap state-change-read-back unsatisfied at or above the severity floor",
-          "coverage gap whole-body unsatisfied at or above the severity floor"
+          "coverage gap state-change-read-back unsatisfied at or above the severity floor"
         ],
         "qualification": null,
         "strength": {
@@ -3486,6 +3485,18 @@
             }
           ],
           "outcomes": [
+            {
+              "probeId": "P-011",
+              "state": "passed-clean-control",
+              "severity": "material",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-011",
+              "state": "passed-clean-control",
+              "severity": "material",
+              "trialIndex": 1
+            },
             {
               "probeId": "P-011",
               "state": "passed-clean-control",
@@ -3707,6 +3718,18 @@
             {
               "probeId": "P-016",
               "state": "missed",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-016",
+              "state": "confirmed",
+              "severity": "critical",
+              "trialIndex": 1
+            },
+            {
+              "probeId": "P-016",
+              "state": "confirmed",
               "severity": "critical",
               "trialIndex": 1
             },

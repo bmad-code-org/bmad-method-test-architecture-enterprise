@@ -228,11 +228,32 @@ Material-risk vocabulary is read from the original document text, so the words o
 What a green `test-contract-oracles.js` buys here is narrow, so it is worth stating plainly.
 It says the contract and the harness agree about material vocabulary in the document and unsupported vocabulary in scored risk rows. The 1-3 scale, score arithmetic, band placement, coverage levels and pairwise priority ordering remain harness checks.
 
-Fifteen oracles, in three kinds.
+Seventeen oracles, in four kinds.
 One `run-measured` per fixture set asserts that the shared parser found at least one risk-register row. A document with none is refused before it is scored.
 One `material-vocabulary` per material risk, five on the seeded set and none on the clean one, asserts the document reaches the deciding vocabulary of a risk the epic supports in as many words.
 One `unsupported-vocabulary` per ruled-out risk, four on each set, asserts that no risk row scored above 3 describes a risk the epic rules out.
-The two `run-measured` behaviors grade `material` and the other thirteen grade `critical`.
+One `projection-coherence` per fixture set, numbered after every oracle above so `O-001` to `O-015` keep their numbers, reads the whole projection: all four keys, in the direction and in the check.
+The two `run-measured` behaviors and the two `projection-coherence` behaviors grade `material` and the other thirteen grade `critical`.
+
+### Why one oracle reads all four keys
+
+eval-quality's `whole-body` coverage rule (its AD-20 rule 2 and AD-31) is satisfied when, for every operation that declares more than one required response key, one oracle's direction and check both address every one of those keys at one step.
+The test-design operation declares four, `design`, `riskRowCount`, `scoredRiskDescriptions` and `scoredRiskCount`, and the rule holds a parent pointer such as `.../stdout` not to address a key.
+Every oracle above read a subset, so the rule reported a gap although the material oracles read the complete Markdown. The engine's reading is the intended one: oracles that each read a different key are not a whole-body reading of the response.
+The `projection-coherence` oracle reads every key and fails only for a defect in the runner's projection. The workflow's Markdown is still judged by the material oracles.
+Its direction names the four key pointers and the design artifact, and its check is the conjunction of five claims.
+The projection is exactly the four declared keys, each of its declared type, which a missing key would otherwise slip past: under `not(equality(...))` an absent number reads as not zero.
+`design` equals the design artifact the run wrote, which is the complete original Markdown, and has a non-blank character.
+`scoredRiskCount` is zero exactly when `scoredRiskDescriptions` is empty.
+`riskRowCount` is not zero whenever `scoredRiskCount` is not.
+`equality` takes two evidence pointers, but the vocabulary has no ordering between two evidence values and no pointer to a collection's length, so "the scored count equals the number of descriptions" and "the row count is not less than the scored count" need an enumeration over the declared cardinality bound of 200, which costs 60 to 68 KB of JSON per oracle.
+That was judged too large, so the oracle states the zero agreement and the implication, and a count that names two rows beside one description passes it.
+`test/test-contract-oracles.js` asserts the two relations directly on every stored projection instead, together with the equality of `design` and the artifact, so a runner that miscounts or truncates the document fails that suite without going through the oracle.
+`projectionIsCoherent` in `tools/generate-contracts.js` is the same predicate in JavaScript and the harness-side scorer of these oracles.
+The projection is derived from the document by one function, so the stored runs hold the oracle and the direct assertions. The suite plants incoherent projections, one per claim, and evaluates the oracle and its twin on each, and the three planted cases the oracle passes are recorded limits.
+It also scores the zero-action probe against the real contract and against versions of it in which the oracle reads only the scored descriptions, reads exactly the three keys other than one, or names every key but one in its direction, and requires eval-quality's coverage result to be satisfied for the real contract and unsatisfied for the others. Removing the oracle leaves `whole-body` unsatisfied, and widening the reduced oracle to every key satisfies it again.
+Neither oracle has a defect probe, for the reason `test/probes/README.md` records.
+The gameability probe's signature leaves the seeded set's oracle out of its conjunction, because the oracle reads the design artifact and a defect signature cannot address a file a command wrote.
 Each token group becomes one anchored, case-insensitive regex whose spaces are `\s+`, and a matcher's groups are conjoined with `all`: `matchesGroups` lowercases and collapses whitespace before it searches, and without the `\s+` a token like "feature flag" would miss wherever the document wrapped the line between the two words, and the oracle would disagree with its own scorer.
 No lookahead and no backreference anywhere, for the reason the regex limit below records.
 

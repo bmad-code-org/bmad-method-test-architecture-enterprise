@@ -153,7 +153,13 @@ const {
 // Same rule for test-design: the generator owns the correspondence between each
 // oracle and the harness predicate it is paired with, so it is imported rather
 // than restated here.
-const { testDesignOracleSpecs, testDesignStepId } = require('../tools/generate-contracts');
+const {
+  testDesignOracleSpecs,
+  testDesignStepId,
+  projectionCoherenceExpression,
+  projectionCoherenceTargets,
+  TEST_DESIGN_PROJECTION_KEYS,
+} = require('../tools/generate-contracts');
 const {
   readDesign: readTestDesign,
   bandFor: testDesignBandFor,
@@ -165,6 +171,7 @@ const {
 } = require('./eval-test-design');
 
 const { scoringPolicy } = require('./lib/eval-quality-inputs');
+const { runSuite, storedProbePort, suites: probeSuites } = require('./lib/probe-scoring');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const CONTRACT_ROOT = path.join(__dirname, 'contracts');
@@ -900,6 +907,22 @@ async function checkTestDesignOracles(evaluator) {
       artifact.kind === 'text'
         ? { kind: 'json', value: scoredRiskProjection(parsed.ok ? parsed.design : { risks: [], text: artifact.value }) }
         : { kind: 'absent' };
+    // The document the projection carries and the two relations between its counts that the contract's vocabulary
+    // cannot state without an enumeration of every count up to the declared bound. They are asserted here on every
+    // stored projection, directly, so a runner that truncates the document or miscounts fails this suite whether or
+    // not the oracle or its twin would notice.
+    if (projection.kind === 'json') {
+      const { design, riskRowCount, scoredRiskCount, scoredRiskDescriptions } = projection.value;
+      assert(design === artifact.value, `${item.id}: the projection's design is the complete document the run wrote`);
+      assert(
+        scoredRiskCount === scoredRiskDescriptions.length,
+        `${item.id}: the projection's scoredRiskCount (${scoredRiskCount}) is the number of scoredRiskDescriptions (${scoredRiskDescriptions.length})`,
+      );
+      assert(
+        riskRowCount >= scoredRiskCount,
+        `${item.id}: the projection's riskRowCount (${riskRowCount}) is not less than its scoredRiskCount (${scoredRiskCount})`,
+      );
+    }
     for (const set of groundTruth.fixtureSets ?? []) {
       const stepId = testDesignStepId(set);
       const results = evaluateOracles(evaluator, contract, {
@@ -919,6 +942,16 @@ async function checkTestDesignOracles(evaluator) {
         // through the one oracle that reads the run's shape; the rest have no
         // measurement to agree or disagree with.
         for (const spec of own) {
+          // The projection of a refused document is still a projection: its Markdown is the text, with no row.
+          if (spec.kind === 'projection-coherence') {
+            assert(
+              agrees(results.get(spec.id), artifact.kind === 'text' ? spec.scorer(null, projection.value, artifact.value) : null),
+              `${label}: ${spec.id} (${spec.kind}) reads the projection of the document the harness refuses (${read.reason})`,
+              `oracle ${describe(results.get(spec.id))}`,
+            );
+            evaluated += 1;
+            continue;
+          }
           if (spec.kind !== 'run-measured') {
             skippedRefused += 1;
             continue;
@@ -935,7 +968,7 @@ async function checkTestDesignOracles(evaluator) {
 
       const scored = scoreTestDesignRun(setsById.get(set.id), read.design, categories);
       for (const spec of own) {
-        const scorer = spec.scorer(scored);
+        const scorer = spec.scorer(scored, projection.value, artifact.value);
         if (scorer === false) seenFalse.add(spec.id);
         assert(
           agrees(results.get(spec.id), scorer),
@@ -1630,6 +1663,115 @@ async function checkTestDesignOracles(evaluator) {
       describe(results.get(materialSpec.id)),
     );
   }
+  // The projection is derived from the document by one function, so no document makes it incoherent and no
+  // stored run can fail the projection-coherence oracles: the stored-run assertions above hold on every stored
+  // projection. A projection the runner never emits fails them, so each case plants one, names the conjunct it
+  // breaks and compares the oracle with the harness scorer. A case may name the design artifact that sits
+  // beside the projection; it defaults to the projection's own design.
+  const coherentBase = scoredRiskProjection(readTestDesign({ kind: 'text', value: scoredRegister }).design);
+  assert(
+    coherentBase.riskRowCount === 1 && coherentBase.scoredRiskCount === 1 && coherentBase.scoredRiskDescriptions.length === 1,
+    'the base projection has one counted row, one scored row and one description',
+  );
+  const plantedProjections = [
+    ['a coherent projection', coherentBase, true],
+    ['a register whose rows are all guard rows', { ...coherentBase, scoredRiskCount: 0, scoredRiskDescriptions: [] }, true],
+    ['a blank document', { ...coherentBase, design: '' }, false],
+    ['a whitespace-only document', { ...coherentBase, design: ' \n\t ' }, false],
+    ['a scored count with an empty description list', { ...coherentBase, scoredRiskDescriptions: [] }, false],
+    ['a zero scored count with a description', { ...coherentBase, scoredRiskCount: 0 }, false],
+    ['a scored row the register never counted', { ...coherentBase, riskRowCount: 0 }, false],
+    ['a projection with a fifth key', { ...coherentBase, extra: 1 }, false],
+    ['a row count written as a string', { ...coherentBase, riskRowCount: '1' }, false],
+    ['a description list written as a string', { ...coherentBase, scoredRiskDescriptions: 'none' }, false],
+    ['a design written as a number', { ...coherentBase, design: 1 }, false],
+    ['a scored count written as a string', { ...coherentBase, scoredRiskCount: '1' }, false],
+    // The vocabulary has no ordering between two evidence values and no pointer to a collection's length, so
+    // the three cases below pass the oracle, and the twin says the same. Each is a recorded limit that the
+    // stored-run assertions cover for the projections a runner really emits.
+    ['a scored count that disagrees with a non-empty list', { ...coherentBase, scoredRiskCount: 2 }, true],
+    [
+      'a scored count above the row count with that many descriptions',
+      { ...coherentBase, scoredRiskCount: 5, scoredRiskDescriptions: Array.from({ length: 5 }, () => 'a risk') },
+      true,
+    ],
+    ['a negative scored count beside a description', { ...coherentBase, scoredRiskCount: -1 }, true],
+    // The two cases below give a design that is a prefix of the artifact or another document, and each must fail.
+    [
+      'a design that is a truncated copy of the artifact',
+      { ...coherentBase, design: coherentBase.design.slice(0, 60) },
+      false,
+      coherentBase.design,
+    ],
+    [
+      'a design that is a different document',
+      { ...coherentBase, design: '# Test Design: Epic 9\n\nAnother document.\n' },
+      false,
+      coherentBase.design,
+    ],
+  ];
+  for (const set of groundTruth.fixtureSets ?? []) {
+    const spec = specs.find((entry) => entry.setId === set.id && entry.kind === 'projection-coherence');
+    assert(spec !== undefined, `${set.id} states one projection-coherence oracle`);
+    if (spec === undefined) continue;
+    for (const [name, projection, coherent, artifactText = projection.design] of plantedProjections) {
+      const results = evaluateOracles(evaluator, contract, {
+        [testDesignStepId(set)]: observation({
+          operationId: TEST_DESIGN_OPERATION,
+          exitCode: 0,
+          stdout: { kind: 'json', value: projection },
+          artifacts: { design: { kind: 'text', value: artifactText } },
+        }),
+      });
+      if (coherent === false) seenFalse.add(spec.id);
+      assert(
+        spec.scorer(null, projection, artifactText) === coherent,
+        `${spec.id}: the harness scorer says ${name} is ${coherent ? 'coherent' : 'incoherent'}`,
+      );
+      assert(
+        agrees(results.get(spec.id), coherent),
+        `${spec.id}: the oracle says ${name} is ${coherent ? 'coherent' : 'incoherent'}`,
+        describe(results.get(spec.id)),
+      );
+    }
+    // A projection missing a key resolves no verdict and so can never read as coherent.
+    for (const key of TEST_DESIGN_PROJECTION_KEYS) {
+      const { [key]: _dropped, ...partial } = coherentBase;
+      const results = evaluateOracles(evaluator, contract, {
+        [testDesignStepId(set)]: observation({
+          operationId: TEST_DESIGN_OPERATION,
+          exitCode: 0,
+          stdout: { kind: 'json', value: partial },
+          artifacts: { design: { kind: 'text', value: coherentBase.design } },
+        }),
+      });
+      assert(
+        agrees(results.get(spec.id), null),
+        `${spec.id}: a projection without ${key} is not read as coherent`,
+        describe(results.get(spec.id)),
+      );
+    }
+    assert(
+      JSON.stringify(spec.oracle.check) === JSON.stringify(projectionCoherenceExpression(`/interactions/${testDesignStepId(set)}/stdout`)),
+      `${spec.id}: the contract's check is the coherence expression over its own step`,
+    );
+    // The direction names what the check reads, apart from the stdout root that `shape` reads, and the design artifact is among it.
+    const stdoutRoot = `/interactions/${testDesignStepId(set)}/stdout`;
+    const pointersRead = new Set();
+    JSON.stringify(spec.oracle.check, (key, value) => {
+      if (key === 'pointer' && typeof value === 'string' && value !== stdoutRoot) pointersRead.add(value);
+      return value;
+    });
+    assert(
+      JSON.stringify([...pointersRead].sort()) === JSON.stringify([...spec.oracle.direction.evidenceTargets].sort()),
+      `${spec.id}: the direction names exactly the pointers the check reads`,
+      `direction ${spec.oracle.direction.evidenceTargets.join(', ')}; check ${[...pointersRead].join(', ')}`,
+    );
+    assert(
+      spec.oracle.direction.evidenceTargets.includes(`/interactions/${testDesignStepId(set)}/artifact/design`),
+      `${spec.id}: the direction names the design artifact its design must equal`,
+    );
+  }
   // Every oracle but the shape one has to have been seen failing somewhere, or this
   // check has only ever confirmed that a correct run passes.
   for (const spec of specs) {
@@ -1638,6 +1780,147 @@ async function checkTestDesignOracles(evaluator) {
   }
   console.log(
     `  ${colors.dim}${evaluated} oracle evaluation(s) across ${cases.length} stored document(s) and ${(groundTruth.fixtureSets ?? []).length} set(s); ${skippedRefused} on a document the harness refused${colors.reset}`,
+  );
+}
+
+/**
+ * The `whole-body` coverage result eval-quality reports for one version of the test-design contract.
+ *
+ * The rule is decided inside `runScore` and surfaces on the evidence artifact's `coverageGaps`, so a
+ * contract is judged by scoring the corpus's zero-action probe against it with the stored runs answering
+ * the legs. The contract is the only thing that varies between calls.
+ *
+ * @returns {Promise<boolean>} true when the rule is satisfied, false when it is a recorded gap.
+ */
+async function wholeBodySatisfied(suite, contract, probe) {
+  const variant = { ...suite, contract, probes: [probe], evidence: await suite.evidenceFor(contract) };
+  const outcome = await runSuite(variant, {
+    port: storedProbePort(variant),
+    runId: 'coverage',
+    modelSnapshot: 'stored-replay',
+    signal: AbortSignal.timeout(60_000),
+  });
+  const artifact = outcome.scored[0]?.result.artifact;
+  assert(
+    Array.isArray(artifact?.coverageGaps),
+    `the zero-action probe scores an evidence artifact with coverage gaps against ${contract.contractId}`,
+  );
+  // A satisfied rule leaves no record, so the rule's name is held where it can be seen: the engine publishes it, and
+  // the variants that must be unsatisfied would find no entry to read if it were renamed.
+  return !(artifact?.coverageGaps ?? []).some((gap) => gap.rule === 'whole-body' && !gap.satisfied);
+}
+
+/**
+ * Story 1.48: whole-document coverage for a structured design artifact.
+ *
+ * eval-quality's `whole-body` rule is satisfied when one oracle's direction and check both address every
+ * required response key of an operation at one step. The test-design operation declares four keys, and a
+ * parent pointer does not address a key, so the rule needs an oracle that names each key pointer. The
+ * contract states one per fixture set. Each version below is the same contract with that oracle changed,
+ * scored by the published engine, so the engine's own coverage function is the judge: the real contract
+ * and the one whose oracle reads only the scored descriptions share an artifact and differ in evidence
+ * targets, and they cannot both report the same result.
+ */
+async function checkTestDesignCoverage() {
+  console.log('\ntest-design.contract.json whole-body coverage, scored by eval-quality');
+  const contract = readJson(path.join(CONTRACT_ROOT, 'test-design.contract.json'), 'the test-design contract');
+  const groundTruth = await loadTestDesignGroundTruth();
+  if (!groundTruth) unreadable('the test-design ground truth is missing or not valid JSON');
+  const suite = (await probeSuites()).find((entry) => entry.id === 'test-design');
+  if (suite === undefined) unreadable('the probe corpus holds no test-design suite');
+  const probe = suite.probes.find((entry) => entry.probeClass === 'zero-action');
+  if (probe === undefined) unreadable('the test-design corpus holds no zero-action probe');
+
+  assert(
+    require('eval-quality').DISCIPLINE_RULES.includes('whole-body'),
+    'eval-quality publishes the whole-body rule these fixtures are scored on',
+  );
+  const projectionSpecs = testDesignOracleSpecs(groundTruth).filter((spec) => spec.kind === 'projection-coherence');
+  assert(
+    projectionSpecs.length === (groundTruth.fixtureSets ?? []).length && projectionSpecs.length > 0,
+    'the contract states one projection-coherence oracle per fixture set',
+  );
+  const specOf = new Map(projectionSpecs.map((spec) => [spec.id, spec]));
+  const rootOf = (spec) => `/interactions/${testDesignStepId({ id: spec.setId })}/stdout`;
+  const keyPointer = (spec, key) => `${rootOf(spec)}/${key}`;
+
+  /** The contract with each projection-coherence oracle replaced by what `replace` returns for it. */
+  const withOracles = (replace) => ({
+    ...contract,
+    oracles: contract.oracles.map((oracle) => (specOf.has(oracle.id) ? replace(oracle, specOf.get(oracle.id)) : oracle)),
+  });
+  // The oracle as it would read if it held only the scored descriptions: one key in its direction, one in its check.
+  const descriptionsOnly = (oracle, spec) => ({
+    ...oracle,
+    direction: { ...oracle.direction, relation: 'for-all', evidenceTargets: [keyPointer(spec, 'scoredRiskDescriptions')] },
+    check: {
+      op: 'for-all',
+      collection: { pointer: keyPointer(spec, 'scoredRiskDescriptions') },
+      predicate: { op: 'regex', operands: [{ pointer: '@/' }], pattern: String.raw`^\s*\S[\s\S]*$` },
+    },
+  });
+  // That reduced oracle widened to the whole projection again, from the generator's own expression and targets.
+  const widened = (oracle, spec) => ({
+    ...descriptionsOnly(oracle, spec),
+    direction: { ...oracle.direction, relation: 'all', evidenceTargets: projectionCoherenceTargets(rootOf(spec)) },
+    check: projectionCoherenceExpression(rootOf(spec)),
+  });
+  // An oracle that reads exactly the three keys other than `key`: its direction names those three and its check is the
+  // conjunction of their existence, so each variant is one key short of the real oracle in both channels.
+  const withoutKey = (key) => (oracle, spec) => {
+    const pointers = TEST_DESIGN_PROJECTION_KEYS.filter((other) => other !== key).map((other) => keyPointer(spec, other));
+    assert(
+      pointers.length === TEST_DESIGN_PROJECTION_KEYS.length - 1,
+      `the variant without ${key} names ${pointers.length} keys in its direction`,
+    );
+    return {
+      ...oracle,
+      direction: { ...oracle.direction, relation: 'all', evidenceTargets: pointers },
+      check: { op: 'all', operands: pointers.map((pointer) => ({ op: 'existence', operands: [{ pointer }] })) },
+    };
+  };
+  const withoutOracles = {
+    ...contract,
+    oracles: contract.oracles.filter((oracle) => !specOf.has(oracle.id)),
+    behaviors: contract.behaviors.filter((behavior) => !behavior.oracles.some((id) => specOf.has(id))),
+  };
+
+  assert(
+    (await wholeBodySatisfied(suite, contract, probe)) === true,
+    'the real contract satisfies whole-body: one oracle per step reads the complete projection',
+  );
+  assert(
+    (await wholeBodySatisfied(suite, withoutOracles, probe)) === false,
+    'the contract without its projection oracles leaves whole-body unsatisfied, which is the gap this story closes',
+  );
+  assert(
+    (await wholeBodySatisfied(suite, withOracles(descriptionsOnly), probe)) === false,
+    'an oracle that reads only the scored-risk descriptions leaves whole-body unsatisfied',
+  );
+  assert(
+    (await wholeBodySatisfied(suite, withOracles(widened), probe)) === true,
+    'widening that reduced oracle to every key in its direction and its check satisfies whole-body',
+  );
+  for (const key of TEST_DESIGN_PROJECTION_KEYS) {
+    assert(
+      (await wholeBodySatisfied(suite, withOracles(withoutKey(key)), probe)) === false,
+      `an oracle that reads exactly the three keys other than ${key} leaves whole-body unsatisfied`,
+    );
+  }
+  // Both channels have to name a key: a direction that drops one while the check still reads it is no coverage.
+  assert(
+    (await wholeBodySatisfied(
+      suite,
+      withOracles((oracle, spec) => ({
+        ...oracle,
+        direction: {
+          ...oracle.direction,
+          evidenceTargets: oracle.direction.evidenceTargets.filter((target) => target !== keyPointer(spec, 'design')),
+        },
+      })),
+      probe,
+    )) === false,
+    'an oracle whose check reads every key and whose direction omits one leaves whole-body unsatisfied',
   );
 }
 
@@ -1943,6 +2226,7 @@ async function main() {
   await checkFragmentSelectionOracles(evaluator);
   await checkRoutingOracles(evaluator);
   await checkTestDesignOracles(evaluator);
+  await checkTestDesignCoverage();
   await checkTraceOracles(evaluator);
   await checkNfrOracles(evaluator);
   checkNfrUnknownWitness(evaluator);

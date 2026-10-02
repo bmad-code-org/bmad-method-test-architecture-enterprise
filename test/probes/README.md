@@ -116,18 +116,24 @@ of the risk's vocabulary anywhere in the body, including a paragraph explaining 
 apply.
 P-016 is the gameability probe and it is the weakness this contract has no way to close: a document
 with the reference run's mentions map and the generic register's grounding block satisfies all ten
-oracles the contract states for the seeded set while reporting nothing the epic supports.
+oracles the contract states for the seeded set over the stdout projection while reporting nothing the epic supports.
 Its defect signature is the conjunction of those ten checks, because nothing expressible over a
 markdown body separates that document from a correct one.
 What separates them is the row-scoped scorer, which matches each declared risk against one register
 row in an admitted category.
 
-This corpus is generated and byte-checked and it is not scored yet.
-`test/lib/probe-scoring.js` declares one evidence source per suite and has none for `test-design`, so
-`npm run test:probe-corpus` never reaches these probes and `expected-strength.json` carries no line
-for them.
-The evidence a source would answer from is already on disk under `test/replay/test-design/` and every
-probe cites it, so what is left is the wiring.
+The contract's `O-016` and `O-017` are the two `projection-coherence` oracles, one per fixture set, and no probe
+is written for them. A defect probe needs a stored run whose document makes the oracle resolve false, and the
+runner derives its projection from the document with one function, so no document makes the projection
+incoherent. These oracles guard the runner against a projection it should never emit, which
+`test/test-contract-oracles.js` proves with planted projections, and they hold the contract's `whole-body`
+coverage. `O-016` and `O-017` also read the design artifact beside stdout, which a defect signature cannot address, so they are outside P-016's conjunction. `tools/generate-probes.js` checks them against the corpus and fails when the contract states any
+other oracle past the per-set ones.
+
+This corpus is generated, byte-checked and scored by the deterministic gate.
+`testDesignEvidence` in `test/lib/probe-scoring.js` answers each leg from the documents stored under
+`test/replay/test-design/`, which every probe cites, and `npm run test:probe-corpus` records the sixteen
+probes in `expected-strength.json`.
 
 ## What the vocabulary cannot say
 

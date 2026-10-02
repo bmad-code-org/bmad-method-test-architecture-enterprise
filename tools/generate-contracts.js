@@ -4180,6 +4180,133 @@ function scoredUnsupportedRiskExpression(pointer, groups) {
   };
 }
 
+/** The four keys the runner's JSON stdout declares as required, in the order the descriptor lists them. */
+const TEST_DESIGN_PROJECTION_KEYS = ['design', 'riskRowCount', 'scoredRiskDescriptions', 'scoredRiskCount'];
+
+/** The type each key of the projection carries, in the vocabulary of the descriptor's `types` and of the `shape` operator. */
+const TEST_DESIGN_PROJECTION_TYPES = {
+  design: 'string',
+  riskRowCount: 'number',
+  scoredRiskDescriptions: 'array',
+  scoredRiskCount: 'number',
+};
+
+/** A document with at least one non-whitespace character, anchored and free of nested quantifiers. */
+const NON_BLANK_PATTERN = String.raw`^\s*\S[\s\S]*$`;
+
+/**
+ * The interaction-rooted pointer of the design artifact one step wrote, from that step's stdout root.
+ *
+ * @param {string} root The interaction-rooted pointer of the step's stdout.
+ */
+function testDesignArtifactPointer(root) {
+  return `${root.slice(0, -'/stdout'.length)}/artifact/design`;
+}
+
+/**
+ * Every pointer the projection-coherence oracle of one step addresses, in both its direction and its check:
+ * the four keys of the stdout projection and the design artifact the runner reads the Markdown from.
+ *
+ * @param {string} root The interaction-rooted pointer of the step's stdout.
+ */
+function projectionCoherenceTargets(root) {
+  return [...TEST_DESIGN_PROJECTION_KEYS.map((key) => `${root}/${key}`), testDesignArtifactPointer(root)];
+}
+
+/**
+ * The runner's projection read whole, as a check over all four of its keys and the artifact its `design`
+ * must equal.
+ *
+ * eval-quality's `whole-body` rule asks for one oracle whose direction and check both address every
+ * required response key of an operation at one step, and a parent pointer does not address a key.
+ * `equality` takes two evidence pointers, but the vocabulary has no ordering between two evidence values
+ * and no pointer to a collection's length, so exact count equality and `>=` between the counts need an
+ * enumeration over the declared cardinality bound (200), which costs 60 to 68 KB of JSON per oracle. The
+ * relations below are the ones the vocabulary states without it, and `test/test-contract-oracles.js`
+ * asserts the two it leaves out on every stored projection instead.
+ *
+ * - The projection has exactly the four declared keys, each of its declared type. Without this conjunct an
+ *   absent number reads as "not zero" under `not(equality(...))` and a missing key would pass.
+ * - `design` equals the design artifact the run wrote, the complete original Markdown, and has a
+ *   non-blank character.
+ * - `scoredRiskCount` and `scoredRiskDescriptions` agree on whether any scored row exists: the count is
+ *   zero exactly when the list is empty.
+ * - `riskRowCount` is not zero whenever `scoredRiskCount` is not.
+ *
+ * Each conjunct fails for a projection no correct runner emits, and `projectionIsCoherent` is the same
+ * predicate in JavaScript, which `test/test-contract-oracles.js` holds against the evaluated oracle.
+ *
+ * @param {string} root The interaction-rooted pointer of the step's stdout.
+ */
+function projectionCoherenceExpression(root) {
+  const count = { pointer: `${root}/scoredRiskCount` };
+  const rows = { pointer: `${root}/riskRowCount` };
+  const noScoredRows = { op: 'equality', operands: [count, { literal: 0 }] };
+  const emptyList = {
+    op: 'count-tolerance',
+    operands: [{ pointer: `${root}/scoredRiskDescriptions` }],
+    expected: 0,
+    tolerance: 0,
+    relative: false,
+  };
+  return {
+    op: 'all',
+    operands: [
+      {
+        op: 'shape',
+        operands: [{ pointer: root }],
+        descriptor: {
+          requiredKeys: [...TEST_DESIGN_PROJECTION_KEYS],
+          permittedKeys: [...TEST_DESIGN_PROJECTION_KEYS],
+          types: { ...TEST_DESIGN_PROJECTION_TYPES },
+        },
+      },
+      { op: 'deep-equality', operands: [{ pointer: `${root}/design` }, { pointer: testDesignArtifactPointer(root) }] },
+      { op: 'regex', operands: [{ pointer: `${root}/design` }], pattern: NON_BLANK_PATTERN },
+      {
+        op: 'any',
+        operands: [
+          { op: 'all', operands: [noScoredRows, emptyList] },
+          {
+            op: 'all',
+            operands: [
+              { op: 'not', operands: [noScoredRows] },
+              { op: 'not', operands: [emptyList] },
+            ],
+          },
+        ],
+      },
+      { op: 'any', operands: [noScoredRows, { op: 'not', operands: [{ op: 'equality', operands: [rows, { literal: 0 }] }] }] },
+    ],
+  };
+}
+
+/**
+ * The JavaScript twin of `projectionCoherenceExpression`.
+ *
+ * @param {unknown} projection What the runner wrote to stdout.
+ * @param {unknown} artifactText The text of the design artifact the run wrote.
+ * @returns {boolean}
+ */
+function projectionIsCoherent(projection, artifactText) {
+  if (projection === null || typeof projection !== 'object' || Array.isArray(projection)) return false;
+  const keys = Object.keys(projection);
+  const kindOf = (value) => (Array.isArray(value) ? 'array' : typeof value);
+  const shaped =
+    keys.length === TEST_DESIGN_PROJECTION_KEYS.length &&
+    TEST_DESIGN_PROJECTION_KEYS.every(
+      (key) => Object.hasOwn(projection, key) && kindOf(projection[key]) === TEST_DESIGN_PROJECTION_TYPES[key],
+    );
+  if (!shaped) return false;
+  const { design, riskRowCount, scoredRiskDescriptions, scoredRiskCount } = projection;
+  return (
+    design === artifactText &&
+    /\S/.test(design) &&
+    (scoredRiskCount === 0) === (scoredRiskDescriptions.length === 0) &&
+    (scoredRiskCount === 0 || riskRowCount !== 0)
+  );
+}
+
 /**
  * Every oracle this contract states, with the harness predicate each one is paired
  * with, in a stable order.
@@ -4207,6 +4334,14 @@ function scoredUnsupportedRiskExpression(pointer, groups) {
  *
  * A green test-contract-oracles.js says the contract and harness agree on those
  * readings. Arithmetic, band placement and coverage mapping remain harness checks.
+ *
+ * WHY ONE ORACLE PER SET READS THE WHOLE PROJECTION
+ *
+ * Each oracle above reads a subset of the four keys the runner declares required, and
+ * eval-quality's `whole-body` rule asks for one oracle that addresses every one of
+ * them, in its direction and in its check, at one step. The projection-coherence
+ * oracles come last so the ids above keep their numbers, and projectionCoherenceExpression
+ * says what they check.
  *
  * @param {object} groundTruth Parsed test/fixtures/test-design-eval/ground-truth.json.
  * @returns {Array<object>}
@@ -4294,6 +4429,37 @@ function testDesignOracleSpecs(groundTruth) {
       });
     }
   }
+
+  // After every per-set oracle, so O-001 to O-015 keep their numbers. One oracle per set reads the whole
+  // projection, which is what the `whole-body` coverage rule asks for and no per-key oracle above supplies.
+  for (const set of groundTruth.fixtureSets ?? []) {
+    const root = testDesignStdoutPointer(testDesignStepId(set));
+    specs.push({
+      id: nextId(),
+      setId: set.id,
+      kind: 'projection-coherence',
+      riskId: null,
+      oracle: {
+        polarity: 'expects-hold',
+        commentary:
+          `${set.id}: the runner's projection of the document has exactly its four keys, each of its declared type, and they agree. The design equals ` +
+          'the design artifact and is non-blank, the scored descriptions are empty exactly when the scored count is zero, and a scored row implies a nonzero row count.',
+        direction: {
+          polarity: 'expects-hold',
+          relation: 'all',
+          scope: `The runner's whole projection of the test design document written for ${set.id}: its design, its row count, its scored descriptions and its scored count, and the design artifact its design is read from.`,
+          negativeDomain:
+            'A projection with a missing, extra or mistyped key, a design that is blank or is not the document the run wrote, a scored count that disagrees with its scored descriptions about being empty, or a scored row it never counted.',
+          evidenceTargets: projectionCoherenceTargets(root),
+        },
+        check: projectionCoherenceExpression(root),
+      },
+      // The harness reads the same document through the same parser, so a projection the runner built from
+      // it is coherent whenever the harness scored the run. The second and third arguments are that projection
+      // and the design artifact the run wrote.
+      scorer: (_scored, projection, artifactText) => projectionIsCoherent(projection, artifactText),
+    });
+  }
   return specs;
 }
 
@@ -4316,6 +4482,13 @@ const TEST_DESIGN_BEHAVIORS = {
     risk: 'ungrounded-risk',
     requirement: 'no-invented-risks',
     success: 'No scored risk-register row above the 1–3 guard band reports a risk the feature description rules out.',
+  },
+  'projection-coherence': {
+    severity: 'material',
+    risk: 'unscoreable-deliverable',
+    requirement: 'projection-coherent',
+    success:
+      "The runner's projection of the written document has its four declared keys, a design equal to the document and counts that agree with its scored descriptions.",
   },
 };
 
@@ -4389,9 +4562,9 @@ function buildTestDesignContract() {
             // uses. The workflow writes its single Markdown deliverable.
             descriptorChannel: { kind: 'stream', channel: 'stdout' },
             responseDescriptor: {
-              requiredKeys: ['design', 'riskRowCount', 'scoredRiskDescriptions', 'scoredRiskCount'],
-              permittedKeys: ['design', 'riskRowCount', 'scoredRiskDescriptions', 'scoredRiskCount'],
-              types: { design: 'string', riskRowCount: 'number', scoredRiskDescriptions: 'array', scoredRiskCount: 'number' },
+              requiredKeys: [...TEST_DESIGN_PROJECTION_KEYS],
+              permittedKeys: [...TEST_DESIGN_PROJECTION_KEYS],
+              types: { ...TEST_DESIGN_PROJECTION_TYPES },
               successIndicator: '',
               channelRoles: {
                 '/design': 'payload',
@@ -4606,6 +4779,12 @@ module.exports = {
   EVAL_CONTRACT_SCHEMA_VERSION,
   testDesignOracleSpecs,
   testDesignStepId,
+  projectionCoherenceExpression,
+  projectionCoherenceTargets,
+  testDesignArtifactPointer,
+  projectionIsCoherent,
+  TEST_DESIGN_PROJECTION_KEYS,
+  TEST_DESIGN_PROJECTION_TYPES,
   buildTestReviewContract,
   buildFragmentSelectionContract,
   buildNfrContract,

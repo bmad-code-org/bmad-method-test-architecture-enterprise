@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-22-2026 18:09
-last_updated: 10-01-2026 12:40
+last_updated: 10-02-2026 04:36
 project: "bmad-method-test-architecture-enterprise: Evaluate"
 project_key: NOKEY
 tracking_system: file-system
@@ -83,8 +83,8 @@ development_status:
   1-45-aggregate-development-strength-through-eval-quality: done
   1-46-close-the-dogfood-suites-coverage-gaps: backlog
   1-47-distinguish-reference-risk-tables-from-the-scored-register: done
-  1-48-report-whole-document-coverage-for-a-structured-design-artifact: backlog
-  1-49-prove-test-design-mutation-rollback-before-claiming-it: review
+  1-48-report-whole-document-coverage-for-a-structured-design-artifact: review
+  1-49-prove-test-design-mutation-rollback-before-claiming-it: done
   1-50-send-malformed-raw-http-bodies-through-an-api-probe: backlog
   1-51-isolate-interaction-plans-by-evaluation-partition: backlog
   1-52-stop-agent-descendants-on-windows: backlog
@@ -123,6 +123,7 @@ development_status:
   1-97-gate-an-existing-publish-or-deploy-job-on-the-evaluation-job: backlog
   1-98-the-ai-feature-evaluation-passes-its-own-ci-tiers: backlog
   1-99-prove-mutation-rollback-for-the-test-review-trace-nfr-and-ci-probe-corpora: backlog
+  1-100-report-whole-body-coverage-for-the-routing-test-review-and-trace-contracts: backlog
   epic-1-retrospective: optional
 
   epic-2: in-progress
@@ -190,6 +191,7 @@ parallel_lanes:
     - 1-97-gate-an-existing-publish-or-deploy-job-on-the-evaluation-job
     - 1-98-the-ai-feature-evaluation-passes-its-own-ci-tiers
     - 1-99-prove-mutation-rollback-for-the-test-review-trace-nfr-and-ci-probe-corpora
+    - 1-100-report-whole-body-coverage-for-the-routing-test-review-and-trace-contracts
 owner_handoff:
   - key: h-1-accept-the-dogfood-baseline-and-turn-its-pr-replay-green
     owner: Murat

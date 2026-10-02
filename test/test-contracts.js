@@ -579,7 +579,7 @@ function writeBaseline(observed) {
       'The status this repository expects from each contract under test/contracts/.',
       '',
       'test/contracts/README.md records the finding behind whatever a contract here is not',
-      '`compiles`: which failure code it carries against the locked eval-quality release, and why.',
+      '`compiles`: which failure code it carries against the lockfile-resolved eval-quality release, and why.',
       '',
       'A contract whose status moves in either direction fails test/test-contracts.js. Moving to',
       '`compiles` is the good direction and still fails, on purpose: a baseline nobody has to update is',

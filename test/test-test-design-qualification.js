@@ -399,6 +399,19 @@ async function checkFailingSteps(digestBytes) {
     `an oracle with no reading gave ${noReading.error?.exitCode ?? 'a qualified result'}: ${noReading.error?.message}; expected 10`,
   );
 
+  // A projection-coherence oracle guards the runner's projection, which no stored design can break, so no
+  // cycle can qualify a defect for it and the corpus carries no probe for it.
+  const coherence = await outcome(
+    fixture('coherence', {
+      ...BROWSER_CASE,
+      entry: { kind: 'projection-coherence', oracleId: 'O-016', risk: null },
+    }),
+  );
+  check(
+    coherence.error?.exitCode === 10 && /guards the runner's projection/.test(coherence.error.message) && coherence.qualified === undefined,
+    `a projection-coherence oracle gave ${coherence.error?.exitCode ?? 'a qualified result'}: ${coherence.error?.message}; expected 10`,
+  );
+
   // The default arm must read the workspace file of its own phase. After the restore the file is rewritten
   // with the mutated bytes while the digest still reads as the original, so only a rerun that scores the
   // restored workspace file (not text captured earlier, not a stored design) sees the difference.

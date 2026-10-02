@@ -989,23 +989,21 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
       const edited = structuredClone(patch.base === 'workflow' ? workflowContract : patch.base === 'numeric' ? numericContract : contract);
       for (const edit of patch.patches ?? [patch]) setJsonPointer(edited, edit.path, edit.value);
       if (index === 1) {
-        const response = spawnSync(
-          process.execPath,
-          [
-            path.join(__dirname, '..', 'cli', 'skill-runner.js'),
-            '--agent',
-            'custom',
-            '--agent-cmd',
-            './agent.js',
-            '--skill-root',
-            'skill',
-            '--timeout-ms',
-            '30000',
-          ],
-          { cwd: path.join(__dirname, 'fixtures', 'evaluate', 'stub-agent'), input: 'Say alpha.', encoding: 'utf8' },
+        const descriptor = edited.permittedInterfaces[0].operations[0].responseDescriptor;
+        assert.ok(descriptor.requiredKeys.length > 1, 'the whole-body example declares more than one required key');
+        const keyPointers = descriptor.requiredKeys.map((key) => '/interactions/answer-run/stdout/' + key);
+        assert.deepStrictEqual(edited.oracles[0].direction.evidenceTargets, keyPointers);
+        assert.deepStrictEqual(
+          edited.oracles[0].check.operands.map((operand) => operand.operands[0].pointer),
+          keyPointers,
         );
-        assert.strictEqual(response.status, 0, response.stderr);
-        assert.strictEqual(edited.oracles[0].check.operands[1].operands[1].literal, response.stdout);
+        assert.ok(!keyPointers.includes('/interactions/answer-run/stdout'), 'a parent pointer does not address a key');
+        const answered = (value) => engine.makeResolveOperand({ 'answer-run': { exitCode: 0, stdout: { kind: 'json', value } } }, {});
+        const resolves = (value) =>
+          engine.resolveCheck(edited.oracles[0].check, answered(value), () => false, {}, 1000, 'whole-body example').resolution;
+        assert.strictEqual(resolves({ status: 'accepted', amount: 7 }), 'true');
+        assert.strictEqual(resolves({ status: 'accepted', amount: 8 }), 'false');
+        assert.strictEqual(resolves({ status: 'rejected', amount: 7 }), 'false');
       }
       if (index === 2) {
         assert.strictEqual(edited.permittedInterfaces[0].operations[0].invocation.executable, 'numeric-amount');
@@ -2484,6 +2482,9 @@ function checkGapsGuidance(guide, engine, failures) {
   };
   checkKeys('## Map engine outcomes to repairs', ['Outcome state', 'Concrete repair'], [...engine.OUTCOME_STATES]);
   const allTables = headingBody(guide, '## Map discipline and preflight checks to repairs');
+  const wholeBodyRow = allTables.split('\n').find((line) => /^\| `whole-body`\s+\|/.test(line)) ?? '';
+  for (const phrase of ['every required response key pointer', 'parent pointer'])
+    if (!wholeBodyRow.includes(phrase)) failures.push(`gaps.md whole-body row lacks "${phrase}"`);
   const requestShapes = taggedExamples(allTables, 'request-shape');
   const inputBindings = taggedExamples(allTables, 'input-binding');
   if (requestShapes.length !== 1 || inputBindings.length !== 1 || [...allTables.matchAll(/```json\n/g)].length !== 2) {

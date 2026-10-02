@@ -37,23 +37,50 @@ Check the process indicator and substantive answer separately. An exit code of z
 
 ### whole-body
 
-Compare the full answer when the body is the result, or parse its declared fields. A keyword search can miss contradictory text elsewhere. Without this rule, a response containing the expected token can pass while the full answer is wrong.
+When a response declares more than one required key, one oracle names every required key pointer in both its direction `evidenceTargets` and its check. A parent pointer such as `/interactions/answer-run/stdout` never addresses a key, so an oracle that reads the body root or one key at a time leaves the rule unsatisfied. A response that is plain text is compared whole. A keyword search can miss contradictory text elsewhere. Without this rule, a response containing the expected token can pass while another declared key is wrong.
 
 <!-- example:contract-patch -->
 
 ```json
 {
-  "path": "/oracles/0/check",
-  "value": {
-    "op": "all",
-    "operands": [
-      { "op": "equality", "operands": [{ "pointer": "/interactions/answer-run/exit-code" }, { "literal": 0 }] },
-      {
-        "op": "equality",
-        "operands": [{ "pointer": "/interactions/answer-run/stdout" }, { "literal": "skill: stub-skill\nrequest: Say alpha.\n" }]
+  "patches": [
+    {
+      "path": "/permittedInterfaces/0/operations/0/responseDescriptor",
+      "value": {
+        "requiredKeys": ["status", "amount"],
+        "permittedKeys": ["status", "amount"],
+        "types": {
+          "status": "string",
+          "amount": "number"
+        },
+        "successIndicator": null,
+        "channelRoles": null,
+        "collectionLocations": null
       }
-    ]
-  }
+    },
+    {
+      "path": "/oracles/0",
+      "value": {
+        "id": "O-001",
+        "polarity": "expects-hold",
+        "commentary": "The answer carries the accepted status and the amount that was sent, each through its own key.",
+        "direction": {
+          "polarity": "expects-hold",
+          "relation": "all",
+          "scope": "The status and amount keys in the JSON stdout of answer-run.",
+          "negativeDomain": "The status is wrong, the amount is changed, or either key is missing.",
+          "evidenceTargets": ["/interactions/answer-run/stdout/status", "/interactions/answer-run/stdout/amount"]
+        },
+        "check": {
+          "op": "all",
+          "operands": [
+            { "op": "equality", "operands": [{ "pointer": "/interactions/answer-run/stdout/status" }, { "literal": "accepted" }] },
+            { "op": "equality", "operands": [{ "pointer": "/interactions/answer-run/stdout/amount" }, { "literal": 7 }] }
+          ]
+        }
+      }
+    }
+  ]
 }
 ```
 
