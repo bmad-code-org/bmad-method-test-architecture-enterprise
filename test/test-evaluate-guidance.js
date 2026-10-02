@@ -969,6 +969,7 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
     };
     const numericOperation = numericContract.permittedInterfaces[0].operations[0];
     numericContract.permittedInterfaces[0].logicalId = 'numeric-amount';
+    numericContract.interactionPlan[0].interfaceId = 'numeric-amount';
     numericOperation.invocation = { executable: 'numeric-amount', subcommandPath: [] };
     numericOperation.requestShape.option = { requiredKeys: [], permittedKeys: [], types: {} };
     numericContract.interactionPlan[0].inputBinding.option = null;
@@ -1166,6 +1167,16 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
     assertEngineSuccess('seal', complete[0], tempRoot, 'worked contract', failures);
     for (const marker of ['oracle checks', 'interaction plan', 'test data', 'sealed brief digest'])
       requireText(contractGuide.toLowerCase(), marker, 'contract.md sealing lesson', failures);
+    // Story 1.42: an operation ID is scoped to its interface, so a step, a sibling-group member and a phase each name both.
+    for (const marker of [
+      "Name each step's `interfaceId` and `operationId`",
+      'two interfaces may declare the same one',
+      '`{ interfaceId, operationId }` pairs',
+      '`{ interfaceId: { operationId: phase } }`',
+    ])
+      requireText(contractGuide, marker, 'contract.md interface-qualified operations', failures);
+    for (const step of complete[0].interactionPlan)
+      if (typeof step.interfaceId !== 'string') failures.push(`the worked contract's step ${step.stepId} names no interfaceId`);
     const contractStage = skillContent.match(/### Stage 4: Contract\n([\s\S]*?)(?:\n### |$)/)?.[1] ?? '';
     for (const marker of ['sourceSpecDigest', 'digestBytes', 'requirements.md', 'requirements.digest'])
       requireText(contractStage, marker, 'SKILL.md Stage 4', failures);
@@ -1879,6 +1890,13 @@ function checkEvaluatorGuidance(guide, failures) {
     const body = headingBody(guide, heading);
     for (const marker of markers) requireText(body, marker, `evaluator.md ${heading}`, failures);
   }
+  // Story 1.42: a sealed observation names its interface beside its operation, in a harness's records and in each calibration input.
+  requireText(
+    headingBody(guide, '## Emit judgment rows or sealed records'),
+    'Every sealed observation carries `interfaceId`, the interface that declares the operation it exercised, beside `operationId`',
+    'evaluator.md ## Emit judgment rows or sealed records interface identity',
+    failures,
+  );
   // Story 1.67: a records harness copies the runtime's calibration inputs verbatim.
   requireText(
     headingBody(guide, '## Emit judgment rows or sealed records'),
@@ -2458,7 +2476,16 @@ function checkGapsGuidance(guide, engine, failures) {
     ['## Read a loose oracle', ['gameability probe', 'fails qualification', 'does not resolve `caught`', 'clean control', 'oracle']],
     [
       '## Separate process from outcome',
-      ['interpretation.json', '`process`', '`outcome`', '`firstMaterialError`', 'lowest-sequence', 'sequence 3'],
+      [
+        'interpretation.json',
+        '`process`',
+        '`outcome`',
+        '`firstMaterialError`',
+        'lowest-sequence',
+        'sequence 3',
+        '`interfaceId`',
+        'its own phase',
+      ],
     ],
     [
       '## Read held-out results',

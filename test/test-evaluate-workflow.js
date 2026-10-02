@@ -250,7 +250,14 @@ const UNIT_REGISTRY = { targetFor: () => ({ infrastructureExitCodes: [3] }) };
 
 /** A plan step over the fixture's operations, `option` and `stdin` its bindings. */
 function planStep(stepId, operationId, { after = null, option = null, stdin = null } = {}) {
-  return { stepId, operationId, after, cardinality: 'exactly-one', inputBinding: { argument: null, option, environment: null, stdin } };
+  return {
+    stepId,
+    interfaceId: 'records',
+    operationId,
+    after,
+    cardinality: 'exactly-one',
+    inputBinding: { argument: null, option, environment: null, stdin },
+  };
 }
 
 async function runUnitArm(plan, answers, { label = 'unit', exitCodes = {} } = {}) {
@@ -303,6 +310,7 @@ async function checkOtherKinds() {
   };
   const apiStep = (stepId, operationId, bound) => ({
     stepId,
+    interfaceId: 'items',
     operationId,
     after: null,
     cardinality: 'exactly-one',
@@ -311,6 +319,7 @@ async function checkOtherKinds() {
   const plan = [
     {
       stepId: 'describe',
+      interfaceId: 'tools',
       operationId: 'describe',
       after: null,
       cardinality: 'exactly-one',
@@ -345,6 +354,7 @@ async function checkOtherKinds() {
     JSON.stringify(header.steps.at(-1)) ===
       JSON.stringify({
         stepId: 'get',
+        interfaceId: 'items',
         operationId: 'get-item',
         skipped: {
           reason: 'captured-value-unsendable',
@@ -406,6 +416,7 @@ const LAUNCH_REFUSED_REASON = `the system refused to launch the command for the 
 function launchRefusedEntry(bindings) {
   return {
     stepId: 'read-back',
+    interfaceId: 'records',
     operationId: 'read-back',
     skipped: {
       reason: 'captured-value-unsendable',
@@ -473,7 +484,7 @@ async function checkLaunchTooLarge() {
   const entry = skipped.arm?.steps.find((candidate) => candidate.stepId === 'read-back');
   check(
     skipped.error === undefined &&
-      JSON.stringify(Object.keys(entry ?? {})) === JSON.stringify(['stepId', 'operationId', 'skipped']) &&
+      JSON.stringify(Object.keys(entry ?? {})) === JSON.stringify(['stepId', 'interfaceId', 'operationId', 'skipped']) &&
       entry.skipped.reason === 'captured-value-unsendable' &&
       entry.skipped.bindings.length === 1 &&
       entry.skipped.bindings.every((site) => JSON.stringify(Object.keys(site)) === JSON.stringify(['binding', 'pointer', 'reason'])) &&
@@ -600,6 +611,7 @@ async function checkLaunchTooLarge() {
   };
   const first = {
     stepId: 'first',
+    interfaceId: 'items',
     operationId: 'post-item',
     after: null,
     cardinality: 'exactly-one',
@@ -610,6 +622,7 @@ async function checkLaunchTooLarge() {
       'an HTTP request',
       {
         stepId: 'second',
+        interfaceId: 'items',
         operationId: 'post-item',
         after: null,
         cardinality: 'exactly-one',
@@ -620,6 +633,7 @@ async function checkLaunchTooLarge() {
       'a tool call',
       {
         stepId: 'second',
+        interfaceId: 'tools',
         operationId: 'describe',
         after: null,
         cardinality: 'exactly-one',
@@ -702,6 +716,7 @@ async function checkUnits() {
         JSON.stringify(skipped) ===
           JSON.stringify({
             stepId: 'read-back',
+            interfaceId: 'records',
             operationId: 'read-back',
             skipped: { reason: 'captured-value-absent', bindings: [{ binding: 'option.id', pointer: CAPTURE }] },
           }),
@@ -1110,6 +1125,7 @@ async function checkMissingValue() {
       JSON.stringify(steps.at(-1)) ===
         JSON.stringify({
           stepId: 'read-back',
+          interfaceId: 'records',
           operationId: 'read-back',
           skipped: { reason: 'captured-value-absent', bindings: [{ binding: 'option.id', pointer: CAPTURE }] },
         }),
@@ -1365,6 +1381,7 @@ const REFUSED_PLANS = [
     edit: (contract) => {
       contract.interactionPlan.push({
         stepId: 'reread',
+        interfaceId: 'records',
         operationId: 'read-back',
         after: 'read-back',
         cardinality: 'exactly-one',

@@ -2549,6 +2549,18 @@ function captureProblems(name, record, bytes) {
     else if (sha(bytes.get(relative) ?? Buffer.alloc(0)) !== digest)
       problems.push(`${name}: ${relative} is not the file the live session wrote`);
   }
+  // A file the session wrote and a later story migrated (Story 1.42) names the digest the session wrote and the one it holds now.
+  for (const migration of record.migrations ?? []) {
+    if (
+      !WROTE_KEYS.includes(migration.file) ||
+      !DIGEST.test(migration.from ?? '') ||
+      migration.to !== record.wrote?.[migration.file] ||
+      migration.from === migration.to
+    )
+      problems.push(
+        `${name}: the capture record's migration of ${migration.file} does not lead from the session's digest to the recorded one`,
+      );
+  }
   if (!DIGEST.test(record.repositoryRead ?? '')) problems.push(`${name}: the capture record digests no repository file`);
   else if (repositoryReadDigest(bytes) !== record.repositoryRead)
     problems.push(`${name}: a repository file changed since the live session read it; run the session again`);
