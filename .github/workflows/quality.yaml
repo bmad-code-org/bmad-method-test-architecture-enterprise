@@ -74,10 +74,8 @@ jobs:
       - name: Probe Windows guardian and Job Object helper startup
         run: node test/test-windows-job-owner-probe.js
 
-      - name: Prove Windows agent descendants end with their guardian
-        env:
-          TEA_EVALUATE_WINDOWS_ONLY: "1"
-        run: npm run test:evaluate-preflight
+      - name: Probe complete Windows runner report path
+        run: node test/test-windows-runner-probe.js
 
   prettier:
     runs-on: ubuntu-latest

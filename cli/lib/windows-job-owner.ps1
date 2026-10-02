@@ -12,6 +12,10 @@ function Write-Trace([string]$Stage) {
 
 Write-Trace 'helper-enter'
 Write-Trace "helper-runtime ps=$($PSVersionTable.PSVersion) edition=$($PSVersionTable.PSEdition) clr=$([Environment]::Version) temp=$([bool]$env:TEMP) tmp=$([bool]$env:TMP) systemroot=$([bool]$env:SystemRoot) windir=$([bool]$env:windir) userprofile=$([bool]$env:USERPROFILE)"
+if ($env:TEA_WINDOWS_JOB_OWNER_TEST_FAILURE -eq 'stderr-exit') {
+    [Console]::Error.WriteLine('forced helper stderr before readiness')
+    exit 17
+}
 $addTypeStarted = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
 Write-Trace 'helper-add-type-start'
 Add-Type -TypeDefinition @'

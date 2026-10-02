@@ -43,7 +43,7 @@ The home keeps its state across the calls of one trial or arm, so an agent's ses
   "subcommandPaths": [[]],
   "artifacts": {},
   "environmentKeys": [],
-  "maxElapsedMs": 60000,
+  "maxElapsedMs": 160000,
   "infrastructureExitCodes": [3, 4, 5, 6],
   "network": "host"
 }

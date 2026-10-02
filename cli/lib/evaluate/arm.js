@@ -536,9 +536,14 @@ function hostEnvironmentPort({ port, registry }) {
       const registered = request?.kind === 'cli' && registry.targetFor(request.interfaceId, request.executable) !== undefined;
       const injected = registered ? registry.hostEnvironment(request.interfaceId, [], request.executable) : {};
       const channels = request?.channels ?? {};
-      const augmented = registered
-        ? { ...request, channels: { ...channels, environment: { ...injected, ...channels.environment } } }
-        : request;
+      const environment = { ...injected, ...channels.environment };
+      if (registered && process.platform === 'win32' && request.executable === 'tea-skill-runner') {
+        for (const key of Object.keys(environment)) {
+          if (key.toUpperCase() === 'SYSTEMROOT') delete environment[key];
+        }
+        if (typeof process.env.SystemRoot === 'string') environment.SystemRoot = process.env.SystemRoot;
+      }
+      const augmented = registered ? { ...request, channels: { ...channels, environment } } : request;
       // A tool server starts with the host's values for its entry's keys, which its authorization carries.
       const server =
         request?.kind === 'mcp' && registry.serverFor(request.interfaceId) !== undefined

@@ -69,6 +69,12 @@ function buildMinimalEnv(envPass = [], sourceEnv = process.env, adapterEnvNames 
       env[name] = sourceEnv[name];
     }
   }
+  // The helper executable is selected from the host's SystemRoot. A target's
+  // environment selection cannot redirect that lookup to its working tree.
+  if (platform === 'win32' && process.platform === 'win32') {
+    if (process.env.SystemRoot === undefined) delete env.SystemRoot;
+    else env.SystemRoot = process.env.SystemRoot;
+  }
   return env;
 }
 

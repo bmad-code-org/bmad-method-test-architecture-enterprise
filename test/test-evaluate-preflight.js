@@ -70,6 +70,8 @@ const { spawn, spawnSync } = require('node:child_process');
 const { INFRASTRUCTURE_EXIT_CODES } = require('../cli/skill-runner');
 const { EXIT_CODES } = require('../cli/lib/runner-exit-codes');
 const { ENGINE_CLI_ENV, engineCliPath } = require('../cli/lib/evaluate/engine');
+const { hostEnvironmentPort } = require('../cli/lib/evaluate/arm');
+const { createRegistry } = require('../cli/lib/evaluate/registry');
 const { scratchDirectories } = require('./lib/scratch-directories');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
@@ -423,6 +425,27 @@ function childrenOf(pid) {
 /** Real-runner Windows cases use node as the agent executable, including on hosts that do not run .js files directly. */
 async function checkWindowsSupervision() {
   if (process.platform !== 'win32') return;
+  const runnerEntry = readJson(path.join(PREFLIGHT_FIXTURE, 'evaluation.json')).registry[0];
+  const runnerRegistry = createRegistry([runnerEntry], { root: PROJECT_ROOT });
+  const runnerPolicy = runnerRegistry.commandTargetPolicy({ cwd: PROJECT_ROOT, interfaceIds: [runnerEntry.interfaceId] });
+  check(
+    runnerPolicy.authorizations[0].permittedEnvironmentKeys.includes('SystemRoot'),
+    'the Windows tea-skill-runner policy did not permit the host SystemRoot needed by its Job Object helper',
+  );
+  const carried = await hostEnvironmentPort({
+    registry: runnerRegistry,
+    port: { probe: async () => ({ stderr: '' }) },
+  }).probe({
+    kind: 'cli',
+    interfaceId: runnerEntry.interfaceId,
+    executable: runnerEntry.executable,
+    channels: { environment: { SystemRoot: String.raw`C:\target-poison`, SYSTEMROOT: String.raw`C:\other-poison` } },
+  });
+  check(
+    carried.request.channels.environment.SystemRoot === process.env.SystemRoot &&
+      Object.keys(carried.request.channels.environment).filter((key) => key.toUpperCase() === 'SYSTEMROOT').length === 1,
+    `the target overrode the host SystemRoot: ${JSON.stringify(carried.request.channels.environment)}`,
+  );
   // Match the guardian's separate Job Object setup bound, with room for
   // process startup and the supervisor's missing-report backstop.
   const windowsSetupMs = 90_000;
@@ -443,6 +466,7 @@ setInterval(beat, 100);\n`,
     `const fs = require('node:fs');
 const { spawn } = require('node:child_process');
 const [file, mode] = process.argv.slice(2);
+fs.writeFileSync(file + '.entry', String(process.pid));
 const heartbeat = file + '.heartbeat';
 const child = spawn(process.execPath, [${JSON.stringify(childScript)}, heartbeat], { detached: true, stdio: 'ignore' });
 child.unref();
@@ -495,6 +519,19 @@ const ready = setInterval(() => {
     while (!fs.existsSync(file) && Date.now() < deadline) await delay(50);
     return fs.existsSync(file) ? Number(fs.readFileSync(file, 'utf8')) : null;
   };
+  const waitForTraceTime = async (file, stage, closed) => {
+    const deadline = Date.now() + 40_000;
+    let runnerClosed = false;
+    closed.then(() => (runnerClosed = true));
+    while (Date.now() <= deadline) {
+      const trace = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
+      const match = new RegExp(`^(\\d+) node \\d+ ${stage}\\b`, 'm').exec(trace);
+      if (match) return Number(match[1]);
+      if (runnerClosed) return null;
+      await delay(50);
+    }
+    return null;
+  };
   const observeWindowsPids = (pids, heartbeatFile) => {
     const observedAt = Date.now();
     let heartbeatAgeMs = null;
@@ -506,26 +543,19 @@ const ready = setInterval(() => {
     if (!Number.isSafeInteger(pids?.agent) || !Number.isSafeInteger(pids?.child)) {
       return { heartbeatAgeMs, error: `invalid recorded PIDs: ${JSON.stringify(pids)}` };
     }
-    const query = spawnSync(
-      'powershell.exe',
-      [
-        '-NoProfile',
-        '-NonInteractive',
-        '-Command',
-        `Get-Process -Id ${pids.agent},${pids.child} -ErrorAction SilentlyContinue | ForEach-Object { "$($_.Id):$($_.ProcessName)" }`,
-      ],
-      { encoding: 'utf8', timeout: 5000 },
-    );
-    const seen = (query.stdout ?? '').trim().split(/\r?\n/).filter(Boolean);
+    const alive = (pid) => {
+      try {
+        process.kill(pid, 0);
+        return true;
+      } catch {
+        return false;
+      }
+    };
     return {
       heartbeatAgeMs,
-      agentAlive: seen.some((line) => line.startsWith(`${pids.agent}:`)),
-      childAlive: seen.some((line) => line.startsWith(`${pids.child}:`)),
+      agentAlive: alive(pids.agent),
+      childAlive: alive(pids.child),
       probeMs: Date.now() - observedAt,
-      status: query.status,
-      seen,
-      error: query.error?.message,
-      stderr: query.stderr?.trim(),
     };
   };
 
@@ -587,6 +617,89 @@ const ready = setInterval(() => {
     }
     await Promise.race([normalClosed, delay(5000)]);
     endCase('normal exit');
+  }
+
+  progress('project-local helper shadow: begin');
+  const shadowDirectory = tempDir('windows-helper-shadow');
+  const shadowMarker = path.join(shadowDirectory, 'fake-helper-ran');
+  const shadowFile = path.join(shadowDirectory, 'agent.json');
+  const shadowHelper = path.join(shadowDirectory, 'powershell.exe');
+  const compileScript = path.join(shadowDirectory, 'compile.ps1');
+  fs.writeFileSync(
+    compileScript,
+    `$ErrorActionPreference = 'Stop'
+Add-Type -TypeDefinition @'
+using System;
+using System.IO;
+class FakePowerShell {
+  static void Main() {
+    File.WriteAllText(Environment.GetEnvironmentVariable("TEA_FAKE_POWERSHELL_MARKER"), "ran");
+    Console.WriteLine("READY");
+    Console.ReadLine();
+  }
+}
+'@ -OutputAssembly $args[0] -OutputType ConsoleApplication
+`,
+  );
+  const trustedPowerShell = path.join(process.env.SystemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+  const compiled = spawnSync(
+    trustedPowerShell,
+    ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', compileScript, shadowHelper],
+    { encoding: 'utf8', timeout: windowsSetupMs },
+  );
+  check(
+    compiled.status === 0 && fs.existsSync(shadowHelper),
+    `the project-local fake PowerShell did not compile: ${compiled.error?.message ?? ''}\n${compiled.stdout ?? ''}${compiled.stderr ?? ''}`,
+  );
+  if (fs.existsSync(shadowHelper)) {
+    const shadowEnv = Object.fromEntries(Object.entries(BASE_ENV).filter(([name]) => name.toUpperCase() !== 'PATH'));
+    const shadowRun = spawn(
+      process.execPath,
+      [
+        RUNNER,
+        '--skill-root',
+        STUB_SKILL,
+        ...options,
+        '--agent-arg',
+        shadowFile,
+        '--agent-arg',
+        'exit',
+        '--env-pass',
+        'TEA_FAKE_POWERSHELL_MARKER',
+      ],
+      {
+        cwd: shadowDirectory,
+        env: {
+          ...shadowEnv,
+          PATH: `${shadowDirectory}${path.delimiter}${process.env.PATH ?? ''}`,
+          TEA_FAKE_POWERSHELL_MARKER: shadowMarker,
+        },
+        stdio: ['pipe', 'pipe', 'pipe'],
+      },
+    );
+    let shadowOutput = '';
+    shadowRun.stdout.on('data', (chunk) => (shadowOutput += chunk));
+    shadowRun.stderr.on('data', (chunk) => (shadowOutput += chunk));
+    shadowRun.stdin.end('Say alpha.');
+    const shadowClosed = ended(shadowRun);
+    let shadowPids = null;
+    try {
+      const ending = await Promise.race([shadowClosed, delay(windowsSetupMs + 30_000).then(() => null)]);
+      shadowPids = fs.existsSync(shadowFile) ? readPids(shadowFile) : null;
+      check(
+        ending?.code === 0 && shadowOutput.includes('windows agent answered'),
+        `a Windows runner with a project-local fake PowerShell ${ending === null ? 'timed out' : `returned ${ending.code}`}; expected the real helper to run\n${shadowOutput}`,
+      );
+      check(!fs.existsSync(shadowMarker), 'the guardian executed a project-local fake powershell.exe');
+    } finally {
+      shadowRun.kill('SIGKILL');
+      if (shadowPids !== null) {
+        reap(shadowPids.agent);
+        reap(shadowPids.child);
+      }
+      await Promise.race([shadowClosed, delay(5000)]);
+      endCase('project-local helper shadow');
+    }
   }
 
   progress('dual kill: begin');
@@ -685,26 +798,26 @@ const ready = setInterval(() => {
       ownerPids !== null && ownerChildVerified && helper !== null,
       `the Windows helper-death case did not verify its runner, supervisor, leader, guardian, agent, child and sole Job Object owner: ${JSON.stringify({ ownerPids, ownerSupervisor, ownerLeader, guardian, helper, ownerAgentVerified, ownerChildVerified })}\n${ownerStderr}`,
     );
+    const helperKilledAt = Date.now();
     if (helper !== null) reap(helper);
+    const ownerPidCheck = ownerPids === null || helper === null ? Promise.resolve(null) : observeBothBy(ownerPids, helperKilledAt + 10_000);
     const ending = await Promise.race([ownerClosed, delay(15_000).then(() => null)]);
     check(
       ending?.code === EXIT_CODES['environment-transport'],
       `a Windows runner whose ready Job Object helper died ${ending === null ? 'waited over 15 s' : `returned ${ending.code}`}; expected transport failure\n${ownerStderr}`,
     );
-    if (ownerPids !== null) {
-      check(await processEnds(ownerPids.agent, 10_000), `Windows agent ${ownerPids.agent} survived its Job Object helper's death`);
-      check(await processEnds(ownerPids.child, 10_000), `Windows agent child ${ownerPids.child} survived its Job Object helper's death`);
-    }
+    const ownerPidsEnded = await ownerPidCheck;
+    check(
+      Number.isFinite(ownerPidsEnded?.agentEndedAt),
+      `Windows agent ${ownerPids?.agent ?? 'unrecorded'} survived its Job Object helper's death beyond 10 s: ${JSON.stringify(ownerPidsEnded)}`,
+    );
+    check(
+      Number.isFinite(ownerPidsEnded?.childEndedAt),
+      `Windows agent child ${ownerPids?.child ?? 'unrecorded'} survived the same 10 s deadline: ${JSON.stringify(ownerPidsEnded)}`,
+    );
   } finally {
     ownerRun.kill('SIGKILL');
-    for (const pid of [
-      ownerSupervisor,
-      ownerLeader,
-      guardian,
-      helper,
-      ...(ownerAgentVerified ? [ownerPids.agent] : []),
-      ...(ownerChildVerified ? [ownerPids.child] : []),
-    ]) {
+    for (const pid of [ownerSupervisor, ownerLeader, guardian, helper, ...(ownerPids === null ? [] : [ownerPids.agent, ownerPids.child])]) {
       if (pid !== null && pid !== undefined) reap(pid);
     }
     await Promise.race([ownerClosed, delay(5000)]);
@@ -713,10 +826,24 @@ const ready = setInterval(() => {
 
   progress('wall clock timeout: begin');
   const timeoutFile = path.join(directory, 'timeout.json');
+  const timeoutTrace = path.join(directory, 'timeout.trace');
   const timeoutRun = spawn(
     process.execPath,
-    [RUNNER, '--skill-root', STUB_SKILL, ...options, '--agent-arg', timeoutFile, '--agent-arg', 'wait', '--timeout-ms', '15000'],
-    { cwd: PROJECT_ROOT, env: BASE_ENV, stdio: ['pipe', 'pipe', 'pipe'] },
+    [
+      RUNNER,
+      '--skill-root',
+      STUB_SKILL,
+      ...options,
+      '--agent-arg',
+      timeoutFile,
+      '--agent-arg',
+      'wait',
+      '--timeout-ms',
+      '15000',
+      '--env-pass',
+      'TEA_WINDOWS_JOB_TRACE',
+    ],
+    { cwd: PROJECT_ROOT, env: { ...BASE_ENV, TEA_WINDOWS_JOB_TRACE: timeoutTrace }, stdio: ['pipe', 'pipe', 'pipe'] },
   );
   let timeoutStderr = '';
   timeoutRun.stdout.resume();
@@ -727,15 +854,23 @@ const ready = setInterval(() => {
   try {
     timeoutPids = await waitForPids(timeoutFile, timeoutClosed);
     check(timeoutPids !== null, 'the Windows timeout case recorded no agent and child PIDs');
+    const timedAt = await waitForTraceTime(timeoutTrace, 'leader-wallclock-timeout', timeoutClosed);
+    const timeoutPidCheck = timeoutPids === null || timedAt === null ? Promise.resolve(null) : observeBothBy(timeoutPids, timedAt + 10_000);
     const ending = await Promise.race([timeoutClosed, delay(40_000).then(() => null)]);
     check(
       ending?.code === EXIT_CODES['environment-timeout'],
       `a Windows runner past its wall clock ${ending === null ? 'waited over 40 s' : `returned ${ending.code}`}; expected timeout\n${timeoutStderr}`,
     );
-    if (timeoutPids !== null) {
-      check(await processEnds(timeoutPids.agent, 10_000), `Windows agent ${timeoutPids.agent} survived its timeout`);
-      check(await processEnds(timeoutPids.child, 10_000), `Windows agent child ${timeoutPids.child} survived its timeout`);
-    }
+    const timeoutPidsEnded = await timeoutPidCheck;
+    check(Number.isFinite(timedAt), `the Windows runner recorded no wall clock timeout marker\n${timeoutStderr}`);
+    check(
+      Number.isFinite(timeoutPidsEnded?.agentEndedAt),
+      `Windows agent ${timeoutPids?.agent ?? 'unrecorded'} survived its timeout beyond 10 s: ${JSON.stringify(timeoutPidsEnded)}`,
+    );
+    check(
+      Number.isFinite(timeoutPidsEnded?.childEndedAt),
+      `Windows agent child ${timeoutPids?.child ?? 'unrecorded'} survived the same 10 s deadline: ${JSON.stringify(timeoutPidsEnded)}`,
+    );
   } finally {
     timeoutRun.kill('SIGKILL');
     if (timeoutPids === null && fs.existsSync(timeoutFile)) timeoutPids = readPids(timeoutFile);
@@ -748,6 +883,7 @@ const ready = setInterval(() => {
   }
 
   for (const [failureMode, failureDetail] of [
+    ['stderr-exit', 'forced helper stderr before readiness'],
     ['1', 'forced Windows Job Object setup failure'],
     ['assign', 'AssignProcessToJobObject failed'],
     ['after-assign', 'forced failure after Job Object assignment'],
@@ -781,18 +917,20 @@ const ready = setInterval(() => {
     failedRunner.stdin.end('Say alpha.');
     const failedClosed = ended(failedRunner);
     let failedPids = null;
+    let failedEntryPid = null;
     let failedEnding = null;
     try {
       failedEnding = await Promise.race([failedClosed, delay(startupWaitMs + 5000).then(() => null)]);
       if (failedEnding === null) failedRunner.kill('SIGKILL');
       failedPids = fs.existsSync(failedFile) ? readPids(failedFile) : null;
+      failedEntryPid = fs.existsSync(`${failedFile}.entry`) ? Number(fs.readFileSync(`${failedFile}.entry`, 'utf8')) : null;
       check(
         failedEnding?.code === EXIT_CODES['environment-transport'] && failedStderr.includes(failureDetail),
-        `Windows Job Object ${failureMode} setup failure ${failedEnding === null ? `waited over ${(startupWaitMs + 5000) / 1000} s` : `returned ${failedEnding.code}`}; expected transport failure naming ${failureDetail}. Agent PID: ${failedPids?.agent ?? 'unrecorded'}; child PID: ${failedPids?.child ?? 'unrecorded'}\n${failedStdout}${failedStderr}`,
+        `Windows Job Object ${failureMode} setup failure ${failedEnding === null ? `waited over ${(startupWaitMs + 5000) / 1000} s` : `returned ${failedEnding.code}`}; expected transport failure naming ${failureDetail}. Agent entry PID: ${failedEntryPid ?? 'unrecorded'}; agent PID: ${failedPids?.agent ?? 'unrecorded'}; child PID: ${failedPids?.child ?? 'unrecorded'}\n${failedStdout}${failedStderr}`,
       );
       check(
-        failedPids === null,
-        `the Windows agent started after ${failureMode} Job Object setup failed: agent ${failedPids?.agent ?? 'unrecorded'}, child ${failedPids?.child ?? 'unrecorded'}`,
+        failedEntryPid === null && failedPids === null,
+        `the Windows agent started after ${failureMode} Job Object setup failed: entry ${failedEntryPid ?? 'unrecorded'}, agent ${failedPids?.agent ?? 'unrecorded'}, child ${failedPids?.child ?? 'unrecorded'}`,
       );
       if (failedPids !== null) {
         check(await processEnds(failedPids.agent, 10_000), `Windows agent ${failedPids.agent} survived the failed setup beyond 10 s`);
@@ -801,6 +939,10 @@ const ready = setInterval(() => {
     } finally {
       if (failedEnding === null) failedRunner.kill('SIGKILL');
       if (failedPids === null && fs.existsSync(failedFile)) failedPids = readPids(failedFile);
+      if (failedEntryPid === null && fs.existsSync(`${failedFile}.entry`)) {
+        failedEntryPid = Number(fs.readFileSync(`${failedFile}.entry`, 'utf8'));
+      }
+      reap(failedEntryPid);
       if (failedPids !== null) {
         reap(failedPids.agent);
         reap(failedPids.child);
@@ -2127,7 +2269,11 @@ function checkRunnerRules() {
           for (const leg of operation.sensitivityWitness.legs) delete leg.inputs.option['timeout-ms'];
         }),
     ],
-    ['a runner --timeout-ms at the entry ceiling', 'skill-runner', (folder) => addRunnerOption(folder, 'timeout-ms', '60000')],
+    [
+      'a runner --timeout-ms at the entry ceiling',
+      'skill-runner',
+      (folder) => addRunnerOption(folder, 'timeout-ms', String(readJson(path.join(folder, 'evaluation.json')).registry[0].maxElapsedMs)),
+    ],
     [
       'a plan step alone handing the runner another skill root',
       'skill-root',

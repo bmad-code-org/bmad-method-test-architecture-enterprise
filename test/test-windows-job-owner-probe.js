@@ -17,6 +17,7 @@ const agentFile = path.join(directory, 'agent.cjs');
 const supervisorFile = path.join(__dirname, '..', 'cli', 'lib', 'agent-supervisor.js');
 const helperFile = path.join(__dirname, '..', 'cli', 'lib', 'windows-job-owner.ps1');
 const minimalEnv = buildMinimalEnv(['TEA_WINDOWS_JOB_TRACE'], { ...process.env, TEA_WINDOWS_JOB_TRACE: traceFile }, [], 'win32');
+const trustedPowerShell = path.join(minimalEnv.SystemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
 const typeDefinition = /Add-Type -TypeDefinition @'\r?\n([\s\S]*?)\r?\n'@/.exec(fs.readFileSync(helperFile, 'utf8'))?.[1];
 if (!typeDefinition) throw new Error('could not isolate the Windows Job Object helper Add-Type definition');
 const addTypeFile = path.join(directory, 'add-type.ps1');
@@ -39,7 +40,7 @@ const measureAddType = () =>
   new Promise((resolve) => {
     const startedAt = Date.now();
     const child = spawn(
-      'powershell.exe',
+      trustedPowerShell,
       ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', addTypeFile],
       {
         env: minimalEnv,
