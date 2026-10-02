@@ -1,0 +1,3 @@
+- type: contains
+  value: pears
+  transform: "output.replace('pears', 'figs')"
