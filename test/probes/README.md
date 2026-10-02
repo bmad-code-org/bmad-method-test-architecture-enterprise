@@ -41,7 +41,7 @@ temporary workspace: the clean arm scores a copy of the reference design, the on
 yields the stored seeded design is applied, the mutated arm scores it, the original bytes are restored
 and their digest compared, and the clean arm scores again. Each arm is the projection
 `test/lib/test-design-result.js` stores for the replay corpus, and its result must equal the stored
-run's, so the evidence a probe cites is what the cycle performed. The workspace sits under the runtime's private root, outside the checkout, and a signal removes it. A failed step stops the generator
+run's, so the evidence a probe cites is what the cycle performed. The workspace sits under the runtime's private root, outside the checkout, and the end of the cycle removes it. A killed generator leaves a pid-named parent that the next cycle reclaims. A failed step stops the generator
 before it writes anything. `npm run test:test-design-qualification` plants each failure. The test-review,
 trace, nfr and ci corpora still state the claim from two stored files; Story 1.99 qualifies them.
 

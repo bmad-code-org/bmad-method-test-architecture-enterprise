@@ -36,13 +36,7 @@ const { isDeepStrictEqual } = require('node:util');
 
 const { QUALIFICATION_EXITS, QualificationError, countOccurrences, runMutationCycle } = require('../../cli/lib/evaluate/mutation');
 const { loadEngine } = require('../../cli/lib/evaluate/engine');
-const {
-  WorkspaceRefusal,
-  cleanUpOnSignal,
-  makePrivateParent,
-  makeScratchDirectory,
-  removeScratchDirectory,
-} = require('../../cli/lib/evaluate/workspace');
+const { WorkspaceRefusal, makePrivateParent, makeScratchDirectory, removeScratchDirectory } = require('../../cli/lib/evaluate/workspace');
 const { removeDeadPrivateParents } = require('./scratch-directories');
 const { projectTestDesignResult } = require('./test-design-result');
 
@@ -114,20 +108,19 @@ function deriveReplaceExact(original, mutated) {
   let endAfter = after.length - tail;
   const span = () => ({ find: before.slice(start, endBefore).join(''), replace: after.slice(start, endAfter).join('') });
   // Each pass widens by a line on either side, so a span that is still not unique after every line has been added never will be.
-  for (let widened = 0; countOccurrences(Buffer.from(original), Buffer.from(span().find)) !== 1; widened += 1) {
-    if ((start === 0 && endBefore === before.length) || widened > before.length) {
-      throw new QualificationError(
-        QUALIFICATION_EXITS.authoring,
-        'no replace-exact operator over whole lines reproduces the stored mutated design',
-      );
-    }
+  for (let widened = 0; widened <= before.length; widened += 1) {
+    const candidate = span();
+    if (countOccurrences(Buffer.from(original), Buffer.from(candidate.find)) === 1) return candidate;
     if (start > 0) start -= 1;
     if (endBefore < before.length) {
       endBefore += 1;
       endAfter += 1;
     }
   }
-  return span();
+  throw new QualificationError(
+    QUALIFICATION_EXITS.authoring,
+    'no replace-exact operator over whole lines reproduces the stored mutated design',
+  );
 }
 
 /**
@@ -140,6 +133,11 @@ function scoreDocument({ text, entry, set, categories }) {
   const result = projectTestDesignResult(text, set, categories);
   const holds = testDesignOracleHolds(entry, result);
   return { verdict: holds === true ? 'held' : holds === false ? 'violated' : 'inconclusive', result };
+}
+
+/** The digest the cycle's evidence uses (eval-quality's `digestBytes`) of a stored design file's bytes. */
+async function digestStoredDesign(file) {
+  return (await loadEngine()).digestBytes(fs.readFileSync(file));
 }
 
 let reaped = false;
@@ -208,7 +206,9 @@ async function qualifyTestDesignMutation({
 
   reapDeadWorkspaces();
   // The runtime's convention for a disposable directory: a pid-named parent under the user's private root,
-  // outside the checkout whatever TMPDIR is, removed by the end of the cycle and by an interrupting signal.
+  // outside the checkout whatever TMPDIR is, removed when the cycle ends. A signal ends the process by its
+  // default action, since a handler cannot run inside a cycle whose arm is synchronous and would only swallow
+  // the signal; the dead process's parent is reclaimed by the next cycle (`reapDeadWorkspaces`).
   const scratch = [];
   let parent;
   let root;
@@ -219,7 +219,6 @@ async function qualifyTestDesignMutation({
     if (!(error instanceof WorkspaceRefusal)) throw error;
     throw new QualificationError(QUALIFICATION_EXITS.infrastructure, `${mutationId}: ${error.message}`);
   }
-  const releaseSignals = cleanUpOnSignal([{ directory: parent, top: parent, kind: 'directory', repository: null }], new AbortController());
   try {
     const file = path.join(root, TARGET_ARTIFACT);
     fs.writeFileSync(file, reference);
@@ -256,7 +255,6 @@ async function qualifyTestDesignMutation({
     }
     return { mutation, evidence };
   } finally {
-    releaseSignals();
     removeScratchDirectory(parent);
   }
 }
@@ -264,6 +262,7 @@ async function qualifyTestDesignMutation({
 module.exports = {
   TARGET_ARTIFACT,
   deriveReplaceExact,
+  digestStoredDesign,
   qualifyTestDesignMutation,
   scoreDocument,
   testDesignOracleHolds,

@@ -45,10 +45,12 @@ const crypto = require('node:crypto');
 
 const prettier = require('prettier');
 
+const { privateRootBase, privateRootIn } = require('../cli/lib/evaluate/workspace');
+
 const { QualificationError } = require('../cli/lib/evaluate/mutation');
 const { loadEngine } = require('../cli/lib/evaluate/engine');
 const { TARGET_ARTIFACT, deriveReplaceExact, qualifyTestDesignMutation, scoreDocument } = require('./lib/test-design-qualification');
-const { GeneratorError, buildTestDesignProbes, loadGeneratorCorpus, writeCorpora } = require('../tools/generate-probes');
+const { GeneratorError, buildTestDesignProbes, loadGeneratorCorpus, run, writeCorpora } = require('../tools/generate-probes');
 const { scratchDirectories } = require('./lib/scratch-directories');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
@@ -77,7 +79,8 @@ const replayResult = (id) => JSON.parse(fs.readFileSync(path.join(REPLAY_ROOT, i
 function gitStatus() {
   const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('GIT_')));
   const result = spawnSync('git', ['status', '--porcelain=v1', '--untracked-files=all'], { cwd: PROJECT_ROOT, env, encoding: 'utf8' });
-  return result.status === 0 ? result.stdout : `git exited ${result.status} ${result.stderr}`;
+  if (result.status !== 0) throw new Error(`git status exited ${result.status}: ${result.stderr}`);
+  return result.stdout;
 }
 
 /** Every workspace directory an arm ran in, so the suite can show each is outside the checkout and gone. */
@@ -396,6 +399,33 @@ async function checkFailingSteps(digestBytes) {
     `an oracle with no reading gave ${noReading.error?.exitCode ?? 'a qualified result'}: ${noReading.error?.message}; expected 10`,
   );
 
+  // The default arm must read the workspace file of its own phase. After the restore the file is rewritten
+  // with the mutated bytes while the digest still reads as the original, so only a rerun that scores the
+  // restored workspace file (not text captured earlier, not a stored design) sees the difference.
+  const restoredFixture = fixture('restored-file', BROWSER_CASE);
+  let workspaceFile = null;
+  let mutatedArmRan2 = false;
+  let rewritten = false;
+  const rewriting = await outcome({
+    ...restoredFixture,
+    arm: (input) => {
+      workspaceFile = input.file;
+      if (input.phase === 'mutated') mutatedArmRan2 = true;
+      return trackedScore(input);
+    },
+    digestBytes: (bytes) => {
+      if (mutatedArmRan2 && !rewritten && Buffer.from(bytes).equals(referenceBytes())) {
+        rewritten = true;
+        fs.writeFileSync(workspaceFile, mutatedBytes());
+      }
+      return digestBytes(bytes);
+    },
+  });
+  check(
+    rewritten && rewriting.error?.exitCode === 12 && rewriting.qualified === undefined,
+    `a restored workspace file rewritten after its digest stopped with ${rewriting.error?.exitCode ?? 'a qualified result'}: ${rewriting.error?.message}; expected 12`,
+  );
+
   const sourceTouched = fixture('source-touched', BROWSER_CASE);
   const touched = await outcome({
     ...sourceTouched,
@@ -436,6 +466,12 @@ function checkDerivedMutation() {
   check(
     leading.text === 'new\na\nb\n' && leading.find === 'a\n',
     `an insertion before the first line gave the anchor ${JSON.stringify(leading.find)}`,
+  );
+  // Two repeated lines become three: the unique span is the whole document, reached on the last pass.
+  const wholeDocument = applied('row\nrow\n', 'row\nrow\nrow\n');
+  check(
+    wholeDocument.text === 'row\nrow\nrow\n' && wholeDocument.find === 'row\nrow\n',
+    `a span that is unique only as the whole document gave ${JSON.stringify(wholeDocument.find)}`,
   );
   const unterminated = applied('a\nb', 'a\nc');
   check(unterminated.text === 'a\nc', 'a document without a final newline did not round-trip');
@@ -540,6 +576,41 @@ async function checkGenerator(digestBytes) {
     return { ...qualified, evidence };
   });
   check(silent instanceof GeneratorError, 'a cycle result that states no rollback claim still produced a corpus');
+  // Each conjunct of the digest-backed claim, broken alone: the evidence otherwise stays the cycle's own.
+  const forged = (mutationId, patch) =>
+    rejection(async (options) => {
+      const qualified = await spy(options);
+      return options.mutationId === mutationId
+        ? { ...qualified, evidence: { ...qualified.evidence, ...patch(qualified.evidence) } }
+        : qualified;
+    });
+  const digestCases = [
+    ['a pre-mutation digest that is not the reference design', () => ({ preDigest: 'sha256:other' })],
+    ['a restored digest that differs', () => ({ restoredDigest: 'sha256:other' })],
+    ['a mutated digest equal to the pre-mutation digest', (evidence) => ({ mutatedDigest: evidence.preDigest })],
+    ['a mutated digest that is not the stored seeded design', () => ({ mutatedDigest: 'sha256:other' })],
+    [
+      'a last re-pass that did not hold',
+      (evidence) => ({ rePasses: evidence.rePasses.map((rePass) => ({ ...rePass, verdict: 'violated' })) }),
+    ],
+    ['no re-pass at all', () => ({ rePasses: [] })],
+  ];
+  for (const [index, [name, patch]] of digestCases.entries()) {
+    const error = await forged(`M-00${index + 2}`, patch);
+    check(error instanceof GeneratorError && error.message.includes('did not verify its rollback'), `${name} still produced a corpus`);
+  }
+  const invented = await rejection(async (options) => {
+    const qualified = await spy(options);
+    const evidence = {
+      rollbackVerified: true,
+      preDigest: 'sha256:x',
+      restoredDigest: 'sha256:x',
+      mutatedDigest: 'sha256:y',
+      rePasses: [{ verdict: 'held' }],
+    };
+    return options.mutationId === 'M-005' ? { ...qualified, evidence } : qualified;
+  });
+  check(invented instanceof GeneratorError, 'a cycle result with invented digests and no cycle behind it still produced a corpus');
   // A claim with no digests behind it is not the cycle's evidence.
   const fabricated = await rejection(async (options) => {
     const qualified = await spy(options);
@@ -603,26 +674,67 @@ async function checkBuildBeforeWrite() {
   check(fs.readdirSync(written).length === 2, 'the corpora that built were not written');
 }
 
+/**
+ * `run` is what `main` returns to the shell: 2 when a later corpus cannot be built, with the root untouched,
+ * and 0 once every corpus builds and the root holds them.
+ */
+async function checkRunExit() {
+  const prettierConfig = await prettier.resolveConfig(COMMITTED_PROBES);
+  const quiet = async (work) => {
+    const { log, error } = { log: console.log, error: console.error };
+    console.log = () => {};
+    console.error = () => {};
+    try {
+      return await work();
+    } finally {
+      console.log = log;
+      console.error = error;
+    }
+  };
+  const probeRoot = scratch.make('run-root');
+  fs.writeFileSync(path.join(probeRoot, 'early.probes.json'), '[\n  "stale"\n]\n');
+  const before = treeDigest(probeRoot);
+  const failing = [
+    targetListEntry('early.probes.json', ['fresh']),
+    {
+      relativePath: 'late.probes.json',
+      build: () => {
+        throw new QualificationError(12, 'planted: a later corpus could not be built');
+      },
+    },
+  ];
+  const code = await quiet(() => run({ probeRoot, targetList: failing, check: false, prettierConfig }));
+  check(code === 2, `a corpus that cannot be built made the generator exit ${code}; expected 2`);
+  check(treeDigest(probeRoot) === before, 'the generator touched the probe root although a corpus could not be built');
+  const sound = await quiet(() =>
+    run({ probeRoot, targetList: [targetListEntry('early.probes.json', ['fresh'])], check: false, prettierConfig }),
+  );
+  check(
+    sound === 0 && fs.readFileSync(path.join(probeRoot, 'early.probes.json'), 'utf8').includes('fresh'),
+    'a root whose corpora build was not written',
+  );
+  const stale = await quiet(() =>
+    run({ probeRoot, targetList: [targetListEntry('early.probes.json', ['other'])], check: true, prettierConfig }),
+  );
+  check(stale === 1, `a stale corpus in check mode made the generator exit ${stale}; expected 1`);
+}
+
 function targetListEntry(relativePath, probes) {
   return { relativePath, build: () => probes };
 }
 
-/** A SIGTERM mid-cycle removes the workspace before the process ends by that signal. */
-async function checkSignalCleanup() {
-  const options = fixture('signal', BROWSER_CASE);
-  const { mutationId, referencePath, mutatedPath, entry, set, stored } = options;
+/** A child process that qualifies the browser mutation with `armSource` for its mutated arm, and what it printed. */
+function qualifyingChild(label, armSource) {
+  const { mutationId, referencePath, mutatedPath, entry, set, stored } = fixture(label, BROWSER_CASE);
   const payload = JSON.stringify({ mutationId, referencePath, mutatedPath, entry, set, categories: [...CATEGORIES], stored });
   const library = path.join(__dirname, 'lib', 'test-design-qualification.js');
   const script = `
+    const fs = require('node:fs');
     const { qualifyTestDesignMutation, scoreDocument } = require(${JSON.stringify(library)});
     const options = JSON.parse(process.argv[1]);
     options.categories = new Set(options.categories);
-    options.arm = async (input) => {
-      if (input.phase === 'mutated') {
-        process.stdout.write('READY ' + input.file + '\\n');
-        setInterval(() => {}, 1000);
-        await new Promise(() => {});
-      }
+    options.arm = (input) => {
+      ${armSource}
       return scoreDocument(input);
     };
     qualifyTestDesignMutation(options).then(() => process.exit(0), () => process.exit(1));
@@ -633,27 +745,62 @@ async function checkSignalCleanup() {
     output += chunk;
   });
   const ended = new Promise((resolve) => child.once('exit', (code, signal) => resolve({ code, signal })));
-  const deadline = Date.now() + 30_000;
-  while (!/READY (.+)\n/.test(output) && Date.now() < deadline && child.exitCode === null) {
-    await new Promise((resolve) => setTimeout(resolve, 25));
-  }
-  const file = /READY (.+)\n/.exec(output)?.[1];
-  check(file !== undefined, 'the child never reached its mutated arm');
-  child.kill('SIGTERM');
+  return { child, ended, printed: () => output };
+}
+
+/** How a child ended, with a bound so a hung child fails the case and does not stall the suite. */
+async function endedWithin(child, ended, milliseconds) {
   let timer;
   const result = await Promise.race([
     ended,
     new Promise((resolve) => {
-      timer = setTimeout(() => resolve({ code: null, signal: 'timeout' }), 30_000);
+      timer = setTimeout(() => resolve({ code: null, signal: 'timeout' }), milliseconds);
     }),
   ]).finally(() => clearTimeout(timer));
   if (result.signal === 'timeout') child.kill('SIGKILL');
-  check(result.signal === 'SIGTERM', `an interrupted cycle ended by ${result.signal ?? `exit ${result.code}`}; expected SIGTERM`);
-  if (file !== undefined) {
-    const parent = path.dirname(path.dirname(file));
-    check(!fs.existsSync(path.dirname(file)), 'a SIGTERM mid-cycle left the workspace behind');
-    check(!fs.existsSync(parent), 'a SIGTERM mid-cycle left the private parent behind');
-    fs.rmSync(parent, { recursive: true, force: true });
+  return result;
+}
+
+/**
+ * A signal ends a cycle by its default action: the production arm is synchronous, so the whole cycle runs
+ * in one turn of the event loop and a handler would be removed before the loop could run it, which leaves
+ * the process alive and the signal swallowed. The child here busy-waits in its mutated arm.
+ * A killed cycle leaves its pid-named parent, and the next cycle in any process reclaims it.
+ */
+async function checkSignals() {
+  for (const signal of ['SIGINT', 'SIGTERM']) {
+    const { child, ended, printed } = qualifyingChild(
+      `signal-${signal}`,
+      `if (input.phase === 'mutated') { fs.writeSync(1, 'READY ' + input.file + '\\n'); for (const end = Date.now() + 4000; Date.now() < end; ) { /* a synchronous arm */ } }`,
+    );
+    const deadline = Date.now() + 30_000;
+    while (!/READY (.+)\n/.test(printed()) && Date.now() < deadline && child.exitCode === null) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    const file = /READY (.+)\n/.exec(printed())?.[1];
+    check(file !== undefined, `the ${signal} child never reached its mutated arm`);
+    child.kill(signal);
+    const result = await endedWithin(child, ended, 30_000);
+    check(result.signal === signal, `a cycle sent ${signal} ended by ${result.signal ?? `exit ${result.code}`}; the signal must end it`);
+
+    // Dead processes' parents: the one the killed cycle left, and one planted under a pid known to be dead.
+    const left = file === undefined ? [] : [path.dirname(path.dirname(file))];
+    const dead = spawnSync(process.execPath, ['-e', '']);
+    const planted = path.join(privateRootIn(privateRootBase()), `run-${dead.pid}-planted`);
+    fs.mkdirSync(planted);
+    fs.writeFileSync(path.join(planted, 'design.md'), 'x');
+    left.push(planted);
+    check(
+      left.every((directory) => fs.existsSync(directory)),
+      `a cycle sent ${signal} left no parent, so the reap has nothing to remove`,
+    );
+    const next = qualifyingChild(`reaper-${signal}`, '');
+    const reaped = await endedWithin(next.child, next.ended, 60_000);
+    check(reaped.code === 0, `the cycle after the ${signal} one ended with ${reaped.signal ?? `exit ${reaped.code}`}; expected 0`);
+    for (const directory of left) {
+      check(!fs.existsSync(directory), `a cycle did not reclaim the dead process's parent ${directory}`);
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
   }
 }
 
@@ -666,7 +813,8 @@ async function main() {
     checkDerivedMutation();
     await checkGenerator(digestBytes);
     await checkBuildBeforeWrite();
-    await checkSignalCleanup();
+    await checkRunExit();
+    await checkSignals();
   } finally {
     scratch.removeAll();
   }
