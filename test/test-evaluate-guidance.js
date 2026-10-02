@@ -2199,6 +2199,48 @@ function checkMutationGuidance(guide, failures) {
     requireText(toolLesson, marker, 'mutation.md tool-result lesson', failures);
 }
 
+/** The runtime's `evaluation.json` schema, compiled, and the skill's starter manifest a guide's fragment is merged into. */
+function evaluationValidator() {
+  const schema = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'cli', 'lib', 'evaluate', 'schemas', 'evaluation.schema.json')));
+  return {
+    validate: new Ajv({ strict: false, allErrors: true }).compile(schema),
+    starter: JSON.parse(fs.readFileSync(ASSET('evaluation.json'), 'utf8')),
+  };
+}
+
+/**
+ * The harness guide's `systemPaths` fragment is a tagged `evaluation.json` fragment that passes the runtime schema when merged into
+ * the starter manifest, and the schema refuses the same fragment with a relative path, so the validation can fail (Story 1.61).
+ */
+function checkSystemPathsFragment(guide, failures) {
+  const examples = taggedExamples(headingBody(guide, '## Declare what a confined target reads'), 'evaluation-fragment');
+  if (examples.length !== 1) {
+    failures.push(`harness.md needs one tagged evaluation-fragment example declaring systemPaths; found ${examples.length}`);
+    return;
+  }
+  const { validate, starter } = evaluationValidator();
+  const fragment = examples[0];
+  if (!validate({ ...starter, ...fragment }))
+    failures.push(`harness.md systemPaths fragment fails runtime schema: ${JSON.stringify(validate.errors)}`);
+  const paths = fragment.registry?.[0]?.systemPaths;
+  if (!Array.isArray(paths) || paths.length === 0 || !paths.every((entry) => typeof entry === 'string' && path.posix.isAbsolute(entry)))
+    failures.push('harness.md systemPaths fragment must declare its first registry entry with absolute systemPaths');
+  if (
+    fragment.registry?.length !== 1 ||
+    fragment.registry[0].interfaceId !== 'verdict' ||
+    JSON.stringify(paths) !== '["/opt/verdict-rules"]'
+  )
+    failures.push(
+      'harness.md systemPaths fragment must declare the verdict entry with systemPaths ["/opt/verdict-rules"], which its prose names',
+    );
+  if (fragment.confinement === false || fragment.registry?.[0]?.network === 'host')
+    failures.push('harness.md systemPaths fragment must keep the default confinement and network');
+  const relative = structuredClone(fragment);
+  if (Array.isArray(relative.registry?.[0]?.systemPaths)) relative.registry[0].systemPaths = ['opt/relative'];
+  if (validate({ ...starter, ...relative }))
+    failures.push('the runtime schema accepts a relative systemPaths entry, so the fragment check proves nothing');
+}
+
 /** The harness guide's confined skill target is a tagged registry entry that passes the runtime schema and equals its working fixture (Story 1.59). */
 function checkConfinedSkillExample(guide, failures) {
   const examples = taggedExamples(guide, 'registry');
@@ -2206,9 +2248,7 @@ function checkConfinedSkillExample(guide, failures) {
     failures.push(`harness.md needs one tagged registry example of the confined skill target; found ${examples.length}`);
     return;
   }
-  const schema = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'cli', 'lib', 'evaluate', 'schemas', 'evaluation.schema.json')));
-  const validate = new Ajv({ strict: false, allErrors: true }).compile(schema);
-  const starter = JSON.parse(fs.readFileSync(ASSET('evaluation.json'), 'utf8'));
+  const { validate, starter } = evaluationValidator();
   if (!validate({ ...starter, registry: examples }))
     failures.push(`harness.md confined skill registry fails runtime schema: ${JSON.stringify(validate.errors)}`);
   const fixture = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'evaluate', 'preflight', 'evaluation.json'), 'utf8'));
@@ -2226,6 +2266,7 @@ function checkHarnessGuidance(guide, failures) {
     '## Record evaluator conditions',
     '## Verify isolation',
     '## Run a skill or agent target confined',
+    '## Declare what a confined target reads',
   ])
     requireHeading(guide, heading, 'harness.md', failures);
   for (const marker of [
@@ -2266,13 +2307,48 @@ function checkHarnessGuidance(guide, failures) {
     'A login the agent stored under the adopter',
     'cannot read the evaluation folder',
     'No other home is reachable from it',
-    'Declare `"network": "host"` on the registry entry of a skill or agent target',
-    'until Story 1.83 gives a confined target a route to the hosts its entry authorizes',
-    '`run.json` records under `hostNetwork`',
-    'macOS Seatbelt ignores the field',
   ])
     requireText(guide, marker, 'harness.md', failures);
+  // Story 1.61 names the `network` declaration in the criterion: its passage is held under its own heading.
+  const confinedTarget = headingBody(guide, '## Run a skill or agent target confined');
+  for (const marker of [
+    'On Linux a confined target also runs in a network namespace of its own with a loopback and nothing else, which cuts an agent off from its model provider.',
+    'Declare `"network": "host"` on the registry entry of a skill or agent target',
+    ', and of any target that calls a model, an outside service or a database on the host,',
+    'until Story 1.83 gives a confined target a route to the hosts its entry authorizes',
+    '`run.json` records under `hostNetwork`',
+    '; every other entry keeps the default, `"network": "isolated"`',
+    'macOS Seatbelt ignores the field',
+  ])
+    requireText(confinedTarget, marker, 'harness.md ## Run a skill or agent target confined', failures);
   checkConfinedSkillExample(guide, failures);
+  // Story 1.61: what a confined target reads outside its workspace, the audit's list of the rest, and the one fragment that declares it.
+  const reads = headingBody(guide, '## Declare what a confined target reads');
+  for (const marker of [
+    "reads the whole host except the evaluation folder, the project's git directory and the user's private root",
+    'The audit lists every path it opens outside what the trial was granted',
+    "the Node installation the runtime runs from and the operating system's own directories",
+    "`observedMounts` entry of the trial set's isolation manifest",
+    '`score` then exits 3 (Invalid) with one `mount outside allowlist` reason per path',
+    'Executing a binary reads it, so a toolchain outside those grants is listed too',
+    '`systemPaths`: absolute host paths',
+    "A command, tool-server or HTTP entry takes the field, and an HTTP entry's list covers the service it starts",
+    'Ask the adopter to confirm each path before declaring it',
+    'name the narrowest directory that holds it',
+    'The list grants reads only',
+    'a confined target writes nothing outside its workspace and its private directories',
+    "the audit lists every access to the evaluation folder, the project's git directory or the user's private root even under a declared path",
+    'Two entries that start the same target declare the same `systemPaths` and the same `network`, or `check` exits 10',
+    "the workspace, the call's temp directory, the private home, the Node installation",
+    'each free of double quotes, backslashes and control characters',
+    'such as a language installation, a rules directory or a cache',
+    'This `evaluation.json` fragment declares `/opt/verdict-rules`, the one directory the `verdict` target reads beyond the system',
+    "Merge its `registry` entry into the evaluation's registry",
+    'It keeps the default network and runs confined',
+    'then run `check` and rerun development',
+  ])
+    requireText(reads, marker, 'harness.md ## Declare what a confined target reads', failures);
+  checkSystemPathsFragment(guide, failures);
   const rows = tableRows(
     guide,
     '## Choose risk and trials',
@@ -2321,6 +2397,7 @@ function checkRunGuidance(guide, failures) {
   for (const heading of [
     '## Install the private latest-spec runtime',
     '## Check, compile, seal and preflight',
+    '## Run confined',
     '## Run development and score',
     '## Read development strength before held-out',
     '## Run held-out after development review',
@@ -2361,6 +2438,45 @@ function checkRunGuidance(guide, failures) {
     './node_modules/.bin/eval-quality compile',
   ])
     requireText(guide, marker, 'run.md', failures);
+  // Story 1.61: each platform's mechanism and observer, the exit-12 refusal, the opt-out, the network namespace and what run.json records.
+  const confined = headingBody(guide, '## Run confined');
+  for (const marker of [
+    'confine every process they start, before any of them starts',
+    'Seatbelt through `/usr/bin/sandbox-exec` on macOS',
+    'Bubblewrap through `bwrap` on Linux (`apt-get install bubblewrap`)',
+    '`/usr/bin/log stream` on macOS',
+    '`strace` on Linux (`apt-get install strace`, version 6.1 or later, which needs ptrace)',
+    'a mechanism the host refuses (a kernel that forbids unprivileged user namespaces',
+    'an observer that cannot confirm itself',
+    'or an evaluation folder or temp directory whose path holds a double quote, a backslash or a control character',
+    'the run observes no file-system access',
+    "Use the opt-out for a target that must write outside its workspace, commit or read the project's git directory, or for a project whose history exceeds about six million objects (fetch a partial clone's full history first: clone again without `--filter`)",
+    'On Linux an entry that keeps the default `"network": "isolated"`',
+    '`run.json` records what the targets ran under',
+    "tell the adopter which entries keep the host's network",
+    "Only a `bubblewrap` run isolates the entries `hostNetwork` leaves out; under `seatbelt` and `opt-out` every entry keeps the host's network",
+    'The runtime first confines a trivial process and confirms the observer',
+    'A host with neither mechanism',
+    'a container that forbids a network namespace',
+    'a temp directory inside the evaluation folder',
+    'stops the command with exit 12 and names the reason',
+    "from inside a Seatbelt sandbox, such as an agent's tool on macOS, is refused as well",
+    'start it from an unsandboxed terminal',
+    'Repair the named host condition and rerun `preflight`',
+    'Set `"confinement": false` in `evaluation.json` to run the targets unconfined',
+    '`run.json` then records `"confinement": "opt-out"`',
+    'so its `observedMounts` are empty and carry no evidence',
+    'the target can reach the evaluation folder, and `score` says so in its summary',
+    "record the adopter's reason in the evaluation notes",
+    'a network namespace of their own with a loopback and nothing else',
+    'an HTTP service the target starts stays reachable from the runtime through a bridge the runtime owns, provided the service listens on `127.0.0.1` or `::1`, since any other address stops the call',
+    'An entry that declares `"network": "host"` keeps the host\'s network and with it a route to the host\'s abstract Unix sockets',
+    'macOS Seatbelt ignores the field',
+    '`confinement` is `seatbelt`, `bubblewrap` or `opt-out`',
+    '`hostNetwork` lists the interface ID of every entry that declares `"network": "host"` and is `[]` when none does',
+    'Read both before reading a verdict',
+  ])
+    requireText(confined, marker, 'run.md ## Run confined', failures);
   const strength = headingBody(guide, '## Read development strength before held-out');
   for (const marker of [
     'strength-aggregate.json',
@@ -2412,6 +2528,73 @@ function checkRunGuidance(guide, failures) {
     failures.push('run.md check-through-score command sequence or required arguments changed');
 }
 
+/**
+ * The gaps guide maps an isolation violation read from `observedMounts` to its repair (Story 1.61): where the path is read, the
+ * four causes with the repair each names, the two readings of an empty list, and the network and exit-12 repairs beside them.
+ */
+function checkIsolationViolationGuidance(guide, failures) {
+  const heading = '## Map an isolation violation to its repair';
+  const body = headingBody(guide, heading);
+  for (const marker of [
+    '`observedMounts` entry of `runs/<invocationId>/trial-sets/<probeId>/isolation-manifest.json`',
+    'eval-quality records each one as an isolation violation',
+    'so `score` exits 3 (Invalid) with one `mount outside allowlist: <path>` reason per path',
+    'rerun from `check` as the loop below describes',
+    'Leave the manifest as the run wrote it',
+    'An empty `observedMounts` is evidence only where the audit ran and kept every report',
+    '`run.json` records `"confinement": "opt-out"`',
+    "on macOS the kernel's log can lose reports when the host is saturated",
+    "Linux's trace holds every traced syscall of the call, apart from file access through io_uring",
+    "on macOS a process that reads after the trial's last read of the log goes unseen",
+    '(`run.json` records `"confinement": "opt-out"`) observes nothing',
+    'so rerun a surprising empty list on a quiet host',
+    'A Linux target whose call to a model provider, an outside service or a database on the host fails to connect runs in a network namespace with a loopback and nothing else',
+    'Declare `"network": "host"` on its entry, confirm `run.json` lists the entry under `hostNetwork`, and rerun',
+    "the entry then keeps a route to the host's abstract Unix sockets until Story 1.83",
+    "An exit 12 that names file-system confinement or its audit is a host or project condition: repair it as the run guide's `## Run confined` describes",
+    'find each further cause (a project history too large to pack, a partial clone) in the [Evaluate CLI reference](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/docs/reference/tea-evaluate-cli.md#file-system-confinement)',
+  ])
+    requireText(body, marker, `gaps.md ${heading}`, failures);
+  const rows = tableRows(guide, heading, ['Observed path', 'Cause', 'Concrete repair'], failures);
+  // Each row: the observed path it starts with, its exact cause, and the phrases its repair holds.
+  const expected = [
+    [
+      'A toolchain, runtime, rules or cache directory the target should read',
+      'The entry does not declare it',
+      ['`systemPaths`', 'every entry that starts that target', '`check` exits 10', 'run `check`', 'rerun development'],
+    ],
+    [
+      'A file the target should not read, such as a credential, another project or a dotfile',
+      'The target or its input reaches beyond its task',
+      ['Repair the target or the probe input', 'declaring the path would hide the defect'],
+    ],
+    [
+      "A path under the evaluation folder, the project's git directory or the user's private root",
+      "The target searched for evaluation material, the git history or the runtime's private scratch root",
+      ['`systemPaths` cannot grant these', 'lists every access to them', '`"confinement": false`', "adopter's recorded reason"],
+    ],
+    [
+      'A write outside the workspace',
+      'The target writes where a confined run allows no write',
+      [
+        '`TMPDIR` or `HOME`, which the runtime provides',
+        'no registry field declares a writable path',
+        'a target that must write elsewhere or commit opts out with `"confinement": false`',
+        "adopter's recorded reason",
+      ],
+    ],
+  ];
+  if (rows.length !== expected.length) failures.push(`gaps.md ${heading} table holds ${rows.length} rows; expected ${expected.length}`);
+  for (const [index, [observed, cause, markers]] of expected.entries()) {
+    const row = rows[index] ?? [];
+    if (row.length !== 3 || row[0] !== observed)
+      failures.push(`gaps.md ${heading} row ${index + 1} no longer reads ${JSON.stringify(observed)}`);
+    if (row[1] !== cause) failures.push(`gaps.md ${heading} row ${index + 1} cause is no longer ${JSON.stringify(cause)}`);
+    for (const marker of markers)
+      if (!(row[2] ?? '').includes(marker)) failures.push(`gaps.md ${heading} row ${index + 1} repair lacks ${JSON.stringify(marker)}`);
+  }
+}
+
 function checkGapsGuidance(guide, engine, failures) {
   for (const heading of [
     '## Read the strength vector',
@@ -2420,6 +2603,7 @@ function checkGapsGuidance(guide, engine, failures) {
     '## Read held-out results',
     '## Map engine outcomes to repairs',
     '## Map discipline and preflight checks to repairs',
+    '## Map an isolation violation to its repair',
     '## Map AD-10 exits and classes to repairs',
     '## Author, rerun and rescore',
   ])
@@ -2492,6 +2676,18 @@ function checkGapsGuidance(guide, engine, failures) {
         failures.push(`gaps.md ${heading} lacks concrete repair: ${row.join(' | ')}`);
   };
   checkKeys('## Map engine outcomes to repairs', ['Outcome state', 'Concrete repair'], [...engine.OUTCOME_STATES]);
+  checkIsolationViolationGuidance(guide, failures);
+  // Story 1.61: the dogfood mutations M-001 and M-002 replace two exit-table rows byte for byte, so the rows stay as they are.
+  for (const id of ['M-001', 'M-002']) {
+    const { operator } = JSON.parse(
+      fs.readFileSync(path.join(__dirname, 'evaluations', 'bmad-testarch-evaluate', 'mutations', `${id}.mutation.json`), 'utf8'),
+    );
+    const found = guide.split(operator.find).length - 1;
+    if (found !== operator.occurrences)
+      failures.push(
+        `gaps.md holds ${found} of the ${operator.occurrences} occurrence(s) of the row ${id} replaces: ${JSON.stringify(operator.find)}`,
+      );
+  }
   const allTables = headingBody(guide, '## Map discipline and preflight checks to repairs');
   const wholeBodyRow = allTables.split('\n').find((line) => /^\| `whole-body`\s+\|/.test(line)) ?? '';
   for (const phrase of ['every required response key pointer', 'parent pointer'])
