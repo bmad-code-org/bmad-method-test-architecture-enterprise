@@ -229,7 +229,7 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 61    | 1.61  | 1.31                         |
 | 62    | 1.62  | 1.31                         |
 | 63    | 1.63  | 1.31                         |
-| 64    | 1.64  | 1.38                         |
+| 64    | 1.64  | 1.38, 1.65                   |
 | 65    | 1.65  | 1.38                         |
 | 66    | 1.66  | 1.11, 1.38                   |
 | 67    | 1.67  | 1.40                         |
@@ -1751,8 +1751,12 @@ So that every trial a verdict counts ran against the release my probe names (AD-
 **And** the later requests go through the evaluation's HTTP port and eval-quality's policy as the first does, so a denial or an answer with no string at the pointer refuses the probe with its reason, a `test:evaluate-arms` case; sending them outside the port lets the case exit 0 with no refusal, which the case catches
 **And** the reference's `### Against deployments` states the three points at which the release is asked, and the case reading the section fails when its sentence is removed.
 
-**Dependencies:** 1.38.
+**Dependencies:** 1.38, 1.65.
 **Gate:** `test:evaluate-arms`, `npm test`.
+
+(Amended 2026-10-01 in Story 1.65's build: each deployment names one report per HTTP interface (`reports`), so the pre-fix deployment is asked at each of the three points once per interface, each request through `holdToReport` to that interface's own origin, in sorted interface-ID order.
+The third criterion reads: a deployment that keeps its release is asked three times at each of its HTTP interface origins, and asking only before the arms leaves two requests short in each log.
+The first two criteria change the release at the first interface's origin or at a later one; the case puts the change on the second interface's origin as well.)
 
 ### Story 1.65: Ask every HTTP interface of a deployment which release it runs
 
@@ -1770,10 +1774,19 @@ So that every call a trial makes reaches the release the digests name (AD-7, AD-
 **And** `check` refuses under `historical` a deployment whose reports leave an HTTP interface of the registry without one, or name an interface the registry does not serve over HTTP, a `test:evaluate-check` case each, and `deploymentPair` holds the same rules with exit 12, a `test:evaluate-arms` unit; dropping the rule lets an origin go unasked, which the cases catch
 **And** the probe schema carries a report per interface (its shape is the build's call, and the reference documents it), a `test:evaluate-check` `schema` case for a missing report and one with an extra or empty field; a registry with one HTTP interface keeps a probe that names one report valid
 **And** the reference's `### Against deployments` states that every HTTP interface's origin is asked, and the case reading the section fails when its sentence is removed
-**And** if the build shows that one report suffices, it amends this story with the reason, the reference and AD-8 state the reason, and `check` refuses a report for an interface other than the one the operation belongs to, a `test:evaluate-check` case; dropping the refusal lets the case exit 0.
+**And** `check` refuses a report keyed by an interface other than the one its operation belongs to, naming the interface the operation belongs to, a `test:evaluate-check` case on the second interface's key; dropping the refusal lets the run ask an interface for an operation it does not serve.
 
 **Dependencies:** 1.38.
 **Gate:** `test:evaluate-arms`, `test:evaluate-check`, `npm test`.
+
+(Amended 2026-10-01 in Story 1.65's build: one report does not suffice, since a second origin can run another release than the first, so the closing alternative is replaced by the criterion above.
+The probe field is `reports`, an object keyed by registry HTTP interface ID whose values are `{ operationId, pointer }`, one for every HTTP interface of the registry and for no other; the single `report` is gone, with no alias, since nothing is released.
+The runtime asks the pre-fix deployment first and each deployment's interfaces in sorted interface-ID order, each through the port to that interface's own origin under the request label `report-<side>-<interfaceId>` (an interface ID is a kebab-case slug, so it is valid in a label).
+The first answer that refuses the probe (another identifier, no string at the pointer, a denial) stops the asking, so a refusal needs one finding and a qualified probe has sent each deployment exactly one report request per HTTP interface.
+Each refusal names the side, the interface, the identifier reported or what was found, and the one declared.
+`run.json`'s `releases[<probeId>][<side>]` stays `{ declared, reported }` and `reported` becomes an object keyed by interface ID.
+`check` refuses, as one finding each, an HTTP interface of the registry with no report, a report keyed by an interface the registry does not serve over HTTP, and an operation declared on another interface than its key; `deploymentPair` holds the same rules with exit 12 through the same `reportsProblems`.
+Story 1.64 repeats the asking after the witness legs and after the trials, once per interface through the same `holdToReport`, so it now depends on this story.)
 
 ### Story 1.66: Scrub an observation in every letter case
 

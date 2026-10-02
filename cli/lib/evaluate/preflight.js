@@ -27,19 +27,20 @@
  *      a worktree at the fix commit's parent and passing in one at the fix
  *      commit, or, on the deployment route, failing against the pre-fix
  *      deployment and passing against the post-fix one, each deployment first
- *      asked which release it reports and held to the declared one, recorded
- *      in `run.json`'s `releases`), each arm run by the
+ *      asked, at the origin of each HTTP interface, which release it reports
+ *      and held to the declared one, recorded by interface in `run.json`'s
+ *      `releases`), each arm run by the
  *      single-trial arm executor (`arm.js`) and
  *      judged by the deterministic evaluator (`evaluator.js`); the evidence
  *      is written under `runs/<invocationId>/qualification/<probeId>/` as far
  *      as the qualification got, and a step that fails exits 10, 11 or 12
  *      with no qualified probe written. A historical probe with no revisions
  *      to address, naming a deployment the registry's HTTP policy does not
- *      authorize, or naming one that reports another release than the one it
- *      declares or whose report request is denied or answered with no string
- *      at the pointer, is refused with its reason (`run.json`'s `refused` and
- *      `refused/<probeId>.json`) and left out of everything after, which does
- *      not fail the run;
+ *      authorize, or naming one whose origin for any HTTP interface reports
+ *      another release than the one it declares or whose report request is
+ *      denied or answered with no string at the pointer, is refused with its
+ *      reason (`run.json`'s `refused` and `refused/<probeId>.json`) and left
+ *      out of everything after, which does not fail the run;
  *   6. the adopter's project read again and compared with its reading before
  *      the workspaces were made (exit 12 on any change);
  *   7. one mutated workspace per mutation, reproducing the pristine one, its
@@ -850,7 +851,7 @@ async function runInWorkspaces({
           });
           if (historical.refused === undefined) {
             qualified.push(historical);
-            // The release each deployment reported, beside the one the probe declares.
+            // The release each deployment reported at each HTTP interface, beside the one the probe declares.
             run.releases ??= {};
             run.releases[probe.probeId] = Object.fromEntries(
               ['preFix', 'fix'].map((side) => [

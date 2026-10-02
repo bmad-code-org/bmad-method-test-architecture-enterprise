@@ -48,7 +48,7 @@
  *   deployment, in that order, and the pass-after arm alone at the post-fix
  *   one, and no call to a deployment starts the workspace's service; the
  *   probe records the digests of the two release identifiers, `run.json`
- *   records each side's declared and reported release, `qualifyProbe`
+ *   records each side's declared release and the release each interface reported, `qualifyProbe`
  *   admits it and `score` reduces it to `caught`. A pre-fix deployment that
  *   answers as the fix does exits 11; a pre-fix or a post-fix deployment the
  *   registry does not authorize is refused with eval-quality's
@@ -74,10 +74,25 @@
  *   reason, an unresolvable or stalled host, the lookup's bound), the lookup
  *   and the port exchange under `maxElapsedMs` 2147483647 with no
  *   `TimeoutOverflowWarning`, `originKey` over an IPv4-mapped address,
- *   `deploymentPair`'s exit 12 reasons (the report's among them) and
+ *   `deploymentPair`'s exit 12 reasons (the reports' among them, a report for
+ *   every HTTP interface of the registry and for no other) and `reportsProblems`, and
  *   `routeIdentity`, and a static
  *   case reads the reference's `### From worktrees` and
  *   `### Against deployments` sections.
+ * - Reported interfaces (Story 1.65): the same copy with a second HTTP
+ *   interface, `ledger`, in the test's own project and four loopback servers
+ *   (one per interface and deployment, each with its own request log). A
+ *   probe whose deployments each name a report for both interfaces sends each
+ *   server exactly one report request and records what each interface
+ *   reported in `run.json`'s `releases`. The pre-fix deployment's second
+ *   origin, the post-fix deployment's second origin, a second interface's
+ *   request the policy denies, one whose answer holds no string and one that
+ *   reports the auth value in another letter case each refuse the probe naming
+ *   the interface, with the logs showing the first answer that refuses stops
+ *   the asking (the keys sorted, the pre-fix deployment first, the post-fix
+ *   deployment unasked after a pre-fix refusal). `--reported-interfaces-only`
+ *   runs these cases, the `deploymentPair` and `reportsProblems` units and the
+ *   read of the reference alone, for the revert checks.
  * - Rubric: a contract declaring R-101, judged by the stub judge through the
  *   `custom` agent adapter: one judge call per trial (six over two arms of
  *   three), a `judgeResults` entry per criterion in every record, the judge's
@@ -109,7 +124,7 @@ const { ENGINE_CLI_ENV, loadAdapters, loadEngine } = require('../cli/lib/evaluat
 const { AGENT_ADAPTERS } = require('../cli/lib/agent-adapters');
 const { qualifyGameabilityProbes, syntheticPort } = require('../cli/lib/evaluate/gameability');
 const { deploymentPair, historicalRevisions, qualifyHistoricalProbe, routeIdentity } = require('../cli/lib/evaluate/historical');
-const { isJsonPointer, quotedIdentifier, reportProblems } = require('../cli/lib/evaluate/release-report');
+const { isJsonPointer, quotedIdentifier, reportProblems, reportsProblems } = require('../cli/lib/evaluate/release-report');
 const {
   DeploymentUnreachable,
   degenerateApiPort,
@@ -977,6 +992,14 @@ const DEPLOYMENT_READY_MS = 20_000;
  * deployment outlives a killed suite.
  */
 const LIFELINE = "process.stdin.on('end', () => process.exit(0)).resume(); require(process.argv[1]);";
+/**
+ * The same service under a path prefix (Story 1.65): the fixture's grader answers `/release` alone, and eval-quality
+ * refuses two `api` operations that share a method and a path template, so a second HTTP interface of one project
+ * needs a path of its own. The wrapper cuts `prefix` from each request's path before the grader sees it, and a path
+ * outside the prefix is answered 404, so a request that reached the wrong interface's origin finds no release.
+ */
+const prefixed = (prefix) =>
+  `const http = require('node:http'); const create = http.createServer; http.createServer = (handler) => create((request, response) => { request.url = request.url.startsWith(${JSON.stringify(`${prefix}/`)}) ? request.url.slice(${prefix.length}) : '/outside-the-prefix'; handler(request, response); }); ${LIFELINE}`;
 
 /** Every deployment server the test started, each stopped by the case that wants it gone and all of them as the route's cases end. */
 const deploymentServers = [];
@@ -987,15 +1010,16 @@ const deploymentServers = [];
  * service under `mode` (`lenient`, the defect; `strict`, the fix), binding a
  * port the system chooses and reporting it, with its own request log, and
  * answering the release report request with `release`. `policy` adds lines to
- * its policy file (how it answers that request, or where it crashes).
+ * its policy file (how it answers that request, or where it crashes). With
+ * `prefix`, it answers under that path prefix alone (`prefixed`).
  */
-async function startDeployment(label, mode, release, policy = '') {
+async function startDeployment(label, mode, release, policy = '', prefix = null) {
   const directory = scratch.make(`deployment-${label}`);
   fs.mkdirSync(path.join(directory, 'rules'));
   fs.writeFileSync(path.join(directory, 'rules', 'policy.txt'), `mode: ${mode}\n${policy}`);
   const portFile = path.join(directory, 'port');
   const log = path.join(directory, 'requests.jsonl');
-  const child = spawn(process.execPath, ['-e', LIFELINE, GRADER, '--policy=rules/policy.txt'], {
+  const child = spawn(process.execPath, ['-e', prefix === null ? LIFELINE : prefixed(prefix), GRADER, '--policy=rules/policy.txt'], {
     cwd: directory,
     env: { PATH: process.env.PATH, PORT: '0', PORT_FILE: portFile, GRADER_LOG: log, GRADER_TOKEN, GRADER_RELEASE: release },
     stdio: ['pipe', 'ignore', 'ignore'],
@@ -1099,8 +1123,8 @@ function makeDeploymentProject(label, { preFix, fix, authorized, edit = () => {}
     qualification: {
       route: 'historical',
       deployments: {
-        preFix: { release: PRE_RELEASE, report: { ...REPORT }, origins: { grader: preFix } },
-        fix: { release: FIX_RELEASE, report: { ...REPORT }, origins: { grader: fix } },
+        preFix: { release: PRE_RELEASE, reports: { grader: { ...REPORT } }, origins: { grader: preFix } },
+        fix: { release: FIX_RELEASE, reports: { grader: { ...REPORT } }, origins: { grader: fix } },
       },
     },
   };
@@ -1123,6 +1147,15 @@ function makeDeploymentProject(label, { preFix, fix, authorized, edit = () => {}
 async function checkDeployments() {
   try {
     await checkDeploymentRoute();
+  } finally {
+    stopDeployments();
+  }
+}
+
+/** The cases of Story 1.65, with every deployment server they started stopped as they end. */
+async function checkInterfaces() {
+  try {
+    await checkReportedInterfaces();
   } finally {
     stopDeployments();
   }
@@ -1195,11 +1228,11 @@ async function checkDeploymentRoute() {
       JSON.stringify(recordedRun.releases) ===
         JSON.stringify({
           'P-004': {
-            preFix: { declared: PRE_RELEASE, reported: PRE_RELEASE },
-            fix: { declared: FIX_RELEASE, reported: FIX_RELEASE },
+            preFix: { declared: PRE_RELEASE, reported: { grader: PRE_RELEASE } },
+            fix: { declared: FIX_RELEASE, reported: { grader: FIX_RELEASE } },
           },
         }),
-      `run.json records the releases ${JSON.stringify(recordedRun.releases)}; expected each deployment's reported release beside the declared one`,
+      `run.json records the releases ${JSON.stringify(recordedRun.releases)}; expected each deployment's reported release at each interface beside the declared one`,
     );
     const runner = (recordedRun.runner ?? []).find((entry) => entry.interfaceId === 'grader');
     check(
@@ -1376,13 +1409,62 @@ async function checkDeploymentRoute() {
   );
 }
 
+/** The second HTTP interface of the registry the Story 1.65 cases add, which sorts after the fixture's `grader`. */
+const LEDGER = 'ledger';
+/** The deployed port the `ledger` entry names, which no deployment of a case listens on: the origins its `deployments` list authorize are the ones a run reaches. */
+const LEDGER_PORT = 41_000;
+/** How each deployment reports its release at `ledger`: that interface's own copy of the contract's report operation. */
+const LEDGER_REPORT = Object.freeze({ operationId: 'report-ledger-release', pointer: '/release' });
+/** The path prefix the `ledger` servers answer under, and so the path of the `ledger` report operation. */
+const LEDGER_PREFIX = '/ledger';
+
+/**
+ * An `edit` for `makeDeploymentProject` that gives the project's own copy a second HTTP interface (Story 1.65): a
+ * `ledger` registry entry reached over HTTP alone, authorizing the origins of `ledger.pre` and `ledger.post`, the
+ * contract's `ledger` interface with a copy of the report operation under the `ledger` path prefix, and a report and an origin for `ledger` in both
+ * deployments of the probe. The committed `test/fixtures/evaluate-api` project keeps its bytes. `edit` then runs over
+ * the same project.
+ */
+function withLedger({ pre, post }, edit = () => {}) {
+  return (context) => {
+    const { folder, probe } = context;
+    editJson(path.join(folder, 'evaluation.json'), (evaluation) => {
+      const { server, ...deployed } = evaluation.registry[0];
+      evaluation.registry.push({ ...deployed, interfaceId: LEDGER, port: LEDGER_PORT, deployments: [pre, post].map(authorizing) });
+      evaluation.operationPhases[LEDGER_REPORT.operationId] = 'outcome';
+    });
+    editJson(path.join(folder, 'contract.json'), (contract) => {
+      const [grader] = contract.permittedInterfaces;
+      const report = grader.operations.find((operation) => operation.operationId === REPORT.operationId);
+      contract.permittedInterfaces.push({
+        ...structuredClone(grader),
+        logicalId: LEDGER,
+        operations: [
+          { ...structuredClone(report), operationId: LEDGER_REPORT.operationId, pathTemplate: `${LEDGER_PREFIX}${report.pathTemplate}` },
+        ],
+      });
+    });
+    const { preFix, fix } = probe.qualification.deployments;
+    preFix.reports[LEDGER] = { ...LEDGER_REPORT };
+    preFix.origins[LEDGER] = pre.origin;
+    fix.reports[LEDGER] = { ...LEDGER_REPORT };
+    fix.origins[LEDGER] = post.origin;
+    edit(context);
+  };
+}
+
 /**
  * Runs `command` over a deployment project whose probe P-004 names the given
  * deployments, and reads what it left: the run's exit status and output, the
  * refusals `run.json` records, and `refused/P-004.json`.
  */
-function runReport(label, { command = 'run', preFix, fix, authorized, edit }) {
-  const project = makeDeploymentProject(label, { preFix: preFix.origin, fix: fix.origin, authorized, edit });
+function runReport(label, { command = 'run', preFix, fix, authorized, edit, ledger }) {
+  const project = makeDeploymentProject(label, {
+    preFix: preFix.origin,
+    fix: fix.origin,
+    authorized,
+    edit: ledger === undefined ? edit : withLedger(ledger, edit),
+  });
   const ran = evaluate([command, '--evaluation', project.folder], project.env);
   const directory = runDirectoryOf(project.folder);
   const record = directory === null ? null : readIfWritten(path.join(directory, 'run.json'));
@@ -1506,7 +1588,7 @@ async function checkReportedReleases() {
     });
     const side = quotedPre === null ? 'post-fix' : 'pre-fix';
     held(`a run whose ${side} deployment reports the auth value ${what}`, echoed, [
-      `the ${side} deployment reports release ${quotedPre ?? quotedFix} where the probe declares`,
+      `the ${side} deployment's "grader" interface reports release ${quotedPre ?? quotedFix} where the probe declares`,
     ]);
     const leaked = textUnder(echoed.directory).filter(({ text }) => text.toLowerCase().includes(GRADER_TOKEN.toLowerCase()));
     check(
@@ -1573,7 +1655,7 @@ async function checkReportedReleases() {
     preFix: pre,
     fix: post,
     authorized: [pre, post],
-    edit: ({ probe }) => (probe.qualification.deployments.preFix.report = { ...REPORT, pointer: '/ok' }),
+    edit: ({ probe }) => (probe.qualification.deployments.preFix.reports.grader = { ...REPORT, pointer: '/ok' }),
   });
   held('a run whose report pointer finds a boolean', boolean, [
     `pre-fix deployment ${PRE_RELEASE}`,
@@ -1590,6 +1672,213 @@ async function checkReportedReleases() {
       Array.isArray(crashed.record?.refused) &&
       crashed.record.refused.length === 0,
     `a pre-fix deployment that ends its process on the report request exited ${crashed.ran.status} with the refusals ${JSON.stringify(crashed.record?.refused)}; expected 12, "could not answer" and no refusal\n${crashed.ran.output}`,
+  );
+}
+
+/**
+ * One report request per HTTP interface (Story 1.65): over a registry of two HTTP interfaces, `grader` and `ledger`,
+ * and four loopback servers (one per interface and deployment, each with its own request log), the runtime asks each
+ * deployment's every origin which release it runs before either arm, the pre-fix deployment first, the interfaces in
+ * sorted order, and the first answer that refuses the probe stops the asking. Each case reads the servers' own logs
+ * against a baseline taken before its run, and puts the answer that refuses on the later element of the pair it
+ * compares: the second interface, the post-fix side.
+ */
+async function checkReportedInterfaces() {
+  const preGrader = await startDeployment('interfaces-pre-grader', 'lenient', PRE_RELEASE);
+  const preLedger = await startDeployment('interfaces-pre-ledger', 'lenient', PRE_RELEASE, '', LEDGER_PREFIX);
+  const postGrader = await startDeployment('interfaces-post-grader', 'strict', FIX_RELEASE);
+  const postLedger = await startDeployment('interfaces-post-ledger', 'strict', FIX_RELEASE, '', LEDGER_PREFIX);
+  const all = { preGrader, preLedger, postGrader, postLedger };
+  /** How many requests each server has received so far, the baseline a case reads its own change against. */
+  const snapshotAll = () => new Map(Object.values(all).map((server) => [server, requestsTo(server).length]));
+  /** What `server` received since `before`, as paths. A server a case starts for itself has no baseline and counts from its first request. */
+  const requestsSince = (before, server) =>
+    requestsTo(server)
+      .slice(before.get(server) ?? 0)
+      .map((request) => request.path);
+  /** What each of the four servers received since `before`, by name. */
+  const received = (before) => Object.fromEntries(Object.entries(all).map(([name, server]) => [name, requestsSince(before, server)]));
+  const run = (label, options = {}) => {
+    const servers = { preGrader, preLedger, postGrader, postLedger, ...options.servers };
+    return runReport(label, {
+      command: options.command ?? 'run',
+      preFix: servers.preGrader,
+      fix: servers.postGrader,
+      authorized: [servers.preGrader, servers.postGrader],
+      ledger: { pre: servers.preLedger, post: servers.postLedger },
+      edit: options.edit,
+    });
+  };
+  /** The refusal of a probe: its record, its file, the reasons it names, and nothing recorded for it as qualified. */
+  const refused = (what, { ran, directory, record, refusal, file }, reasons) => {
+    check(ran.status === 0, `${what} exited ${ran.status}; expected 0\n${ran.output}`);
+    check(
+      record?.refused?.length === 1 && refusal.probeId === 'P-004' && reasons.every((reason) => refusal.reason.includes(reason)),
+      `${what}: run.json records the refusals ${JSON.stringify(record?.refused)}; expected P-004 refused, its reason naming ${JSON.stringify(reasons)}`,
+    );
+    check(JSON.stringify(file) === JSON.stringify(refusal), `${what}: refused/P-004.json reads ${JSON.stringify(file)}`);
+    check(record?.releases === undefined, `${what}: run.json records the releases ${JSON.stringify(record?.releases)} of a refused probe`);
+    check(
+      directory !== null && !fs.existsSync(path.join(directory, 'qualification', 'P-004')),
+      `${what} wrote qualification evidence for the refused probe`,
+    );
+  };
+  // Every origin runs the declared release: the probe qualifies, each of the four servers logs exactly one report
+  // request, and `run.json` records what each interface reported.
+  const planned = '/grade?answer=forty-two';
+  const beforeQualified = snapshotAll();
+  const qualified = run('interfaces-qualified');
+  check(
+    qualified.ran.status === 0,
+    `a run over two interfaces that report the declared releases exited ${qualified.ran.status}; expected 0\n${qualified.ran.output}`,
+  );
+  check(
+    qualified.record?.refused?.length === 0,
+    `a run over two interfaces that report the declared releases refused ${JSON.stringify(qualified.record?.refused)}`,
+  );
+  check(
+    JSON.stringify(qualified.record?.releases) ===
+      JSON.stringify({
+        'P-004': {
+          preFix: { declared: PRE_RELEASE, reported: { grader: PRE_RELEASE, ledger: PRE_RELEASE } },
+          fix: { declared: FIX_RELEASE, reported: { grader: FIX_RELEASE, ledger: FIX_RELEASE } },
+        },
+      }),
+    `run.json records the releases ${JSON.stringify(qualified.record?.releases)}; expected what each interface of each deployment reported`,
+  );
+  const gotQualified = received(beforeQualified);
+  check(
+    gotQualified.preLedger.length === 1 &&
+      gotQualified.preLedger[0] === '/release' &&
+      gotQualified.postLedger.length === 1 &&
+      gotQualified.postLedger[0] === '/release' &&
+      gotQualified.preGrader.filter((path) => path === '/release').length === 1 &&
+      gotQualified.postGrader.filter((path) => path === '/release').length === 1 &&
+      gotQualified.preGrader[0] === '/release' &&
+      gotQualified.postGrader[0] === '/release' &&
+      gotQualified.postGrader.includes(planned),
+    `a qualified run's report requests reached the servers as ${JSON.stringify(gotQualified)}; expected one to each of the four, the pre-fix and post-fix grader ones before their arms`,
+  );
+  check(
+    JSON.stringify(sealedProbes(qualified.directory)?.sort()) === '["P-001","P-004"]',
+    `a run over two interfaces that report the declared releases sealed ${JSON.stringify(sealedProbes(qualified.directory))}; expected the clean control and P-004`,
+  );
+
+  // The pre-fix deployment's second origin runs another release: the probe is refused naming the second interface,
+  // the identifier it reported and the one declared, the first interface asked once and no arm run, the post-fix
+  // deployment left unasked. Asking the first interface alone would let the probe qualify.
+  const staleLedger = await startDeployment('interfaces-pre-ledger-stale', 'lenient', 'grader-9.9.9', '', LEDGER_PREFIX);
+  const beforeStale = snapshotAll();
+  const stale = run('interfaces-stale-second', { servers: { preLedger: staleLedger } });
+  refused('a run whose pre-fix second interface reports another release', stale, [
+    'pre-fix deployment',
+    `"ledger" interface reports release "grader-9.9.9" where the probe declares "${PRE_RELEASE}"`,
+  ]);
+  check(
+    JSON.stringify(sealedProbes(stale.directory)) === '["P-001"]',
+    `a run whose pre-fix second interface reports another release sealed ${JSON.stringify(sealedProbes(stale.directory))}; expected the clean control alone`,
+  );
+  const gotStale = Object.fromEntries(
+    Object.entries({ ...all, preLedger: staleLedger }).map(([name, server]) => [name, requestsSince(beforeStale, server)]),
+  );
+  check(
+    JSON.stringify(gotStale) === JSON.stringify({ preGrader: ['/release'], preLedger: ['/release'], postGrader: [], postLedger: [] }),
+    `a run whose pre-fix second interface reports another release sent ${JSON.stringify(gotStale)}; expected the report requests to both pre-fix origins and nothing to the post-fix ones`,
+  );
+
+  // The first interface reports another release and the second does too: the refusal names the first in sorted order
+  // and the second origin stays unasked, since a refusal needs one finding.
+  const staleGrader = await startDeployment('interfaces-pre-grader-stale', 'lenient', 'grader-8.8.8');
+  const staleBoth = await startDeployment('interfaces-pre-ledger-stale-too', 'lenient', 'grader-9.9.9', '', LEDGER_PREFIX);
+  const beforeBoth = snapshotAll();
+  // The probe names its reports with `ledger` first, so the order of the asking is the sorted one and no order of the keys.
+  const both = run('interfaces-stale-both', {
+    command: 'preflight',
+    servers: { preGrader: staleGrader, preLedger: staleBoth },
+    edit: ({ probe }) => {
+      const { preFix } = probe.qualification.deployments;
+      preFix.reports = { [LEDGER]: preFix.reports[LEDGER], grader: preFix.reports.grader };
+    },
+  });
+  refused('a run whose pre-fix interfaces both report another release', both, [
+    `"grader" interface reports release "grader-8.8.8" where the probe declares "${PRE_RELEASE}"`,
+  ]);
+  check(!both.refusal?.reason.includes('grader-9.9.9'), 'the refusal names the second interface, which was to stay unasked');
+  check(
+    requestsSince(beforeBoth, staleGrader).join(',') === '/release' &&
+      requestsSince(beforeBoth, staleBoth).length === 0 &&
+      requestsSince(beforeBoth, postGrader).length === 0 &&
+      requestsSince(beforeBoth, postLedger).length === 0,
+    `a run whose pre-fix interfaces both report another release sent ${JSON.stringify({
+      first: requestsSince(beforeBoth, staleGrader),
+      second: requestsSince(beforeBoth, staleBoth),
+    })}; expected one report request to the first origin and nothing after it`,
+  );
+
+  // The post-fix deployment's second origin runs another release, every other origin the declared one: the pre-fix
+  // deployment is asked at both its origins first, the post-fix grader once, and the refusal names the post-fix side.
+  const movedLedger = await startDeployment('interfaces-post-ledger-moved', 'strict', 'grader-9.9.9', '', LEDGER_PREFIX);
+  const beforeMoved = snapshotAll();
+  const moved = run('interfaces-stale-post-second', { command: 'preflight', servers: { postLedger: movedLedger } });
+  refused('a run whose post-fix second interface reports another release', moved, [
+    'post-fix deployment',
+    `"ledger" interface reports release "grader-9.9.9" where the probe declares "${FIX_RELEASE}"`,
+  ]);
+  check(
+    JSON.stringify({
+      preGrader: requestsSince(beforeMoved, preGrader),
+      preLedger: requestsSince(beforeMoved, preLedger),
+      postGrader: requestsSince(beforeMoved, postGrader),
+      postLedger: requestsSince(beforeMoved, movedLedger),
+    }) === JSON.stringify({ preGrader: ['/release'], preLedger: ['/release'], postGrader: ['/release'], postLedger: ['/release'] }),
+    'a run whose post-fix second interface reports another release did not ask every origin once and no arm',
+  );
+
+  // The second interface's request is held to eval-quality's policy as the first interface's is: an operation whose
+  // method the registry does not authorize is denied before anything is sent to the second origin, the first having
+  // been asked.
+  const beforeDenied = snapshotAll();
+  const denied = run('interfaces-denied-second', {
+    command: 'preflight',
+    edit: ({ folder }) =>
+      editJson(path.join(folder, 'contract.json'), (contract) => {
+        const operation = contract.permittedInterfaces[1].operations.find(
+          (candidate) => candidate.operationId === LEDGER_REPORT.operationId,
+        );
+        operation.method = 'DELETE';
+      }),
+  });
+  refused('a run whose second interface report request the policy denies', denied, [
+    `pre-fix deployment ${PRE_RELEASE}`,
+    'report-ledger-release',
+    '"ledger" interface',
+    'method-not-authorized',
+  ]);
+  check(
+    JSON.stringify(received(beforeDenied)) === JSON.stringify({ preGrader: ['/release'], preLedger: [], postGrader: [], postLedger: [] }),
+    `a run whose second interface report request the policy denies sent ${JSON.stringify(received(beforeDenied))}; expected one request to the first origin alone`,
+  );
+
+  // An answer with no string at the pointer, from the second interface's origin on the post-fix side.
+  const nothing = await startDeployment('interfaces-post-ledger-missing', 'strict', FIX_RELEASE, 'release: missing\n', LEDGER_PREFIX);
+  const unread = run('interfaces-unread-second', { command: 'preflight', servers: { postLedger: nothing } });
+  refused('a run whose post-fix second interface answers with nothing', unread, [
+    `post-fix deployment ${FIX_RELEASE}`,
+    'did not report its release through report-ledger-release for its "ledger" interface',
+    'the JSON pointer "/release" finds nothing in its answer',
+  ]);
+
+  // The second interface reports the registry's auth value in another letter case: the refusal quotes `[redacted]` and
+  // no file of the run holds the value in any case.
+  const echo = await startDeployment('interfaces-pre-ledger-echo', 'lenient', GRADER_TOKEN.toUpperCase(), '', LEDGER_PREFIX);
+  const echoed = run('interfaces-echo-second', { command: 'preflight', servers: { preLedger: echo } });
+  refused('a run whose second interface reports the auth value upper-cased', echoed, [
+    `"ledger" interface reports release "[redacted]" where the probe declares "${PRE_RELEASE}"`,
+  ]);
+  const leaked = textUnder(echoed.directory).filter(({ text }) => text.toLowerCase().includes(GRADER_TOKEN.toLowerCase()));
+  check(
+    leaked.length === 0 && !echoed.ran.output.toLowerCase().includes(GRADER_TOKEN.toLowerCase()),
+    `a run whose second interface reports the auth value upper-cased left it in ${JSON.stringify(leaked.map(({ file }) => file))} or the output`,
   );
 }
 
@@ -1642,10 +1931,22 @@ function checkHistoricalReference() {
   // Story 1.38: the section states the comparison of the reported release with the declared one, the report request
   // and the record of each side's two identifiers.
   check(
-    deployments.includes('`report`') &&
+    deployments.includes('`reports`') &&
       deployments.includes('It refuses the probe when that string is not the declared `release`, naming both identifiers') &&
       deployments.includes("`run.json`'s `releases`"),
     'the reference\'s "### Against deployments" section does not state that the probe is refused when the reported string is not the declared release, naming both identifiers, or where run.json records them',
+  );
+  // Story 1.65: every HTTP interface's origin is asked, one report each, and the sentence that one operation asks the
+  // deployment's other interfaces nothing is gone.
+  check(
+    deployments.includes(
+      "The run asks the origin of every HTTP interface of the registry which release it runs: `reports` names one report for each, and each request goes to that interface's own origin.",
+    ),
+    'the reference\'s "### Against deployments" section does not state that the origin of every HTTP interface is asked which release it runs',
+  );
+  check(
+    !deployments.includes("asks the deployment's other interfaces nothing") && !deployments.includes('One operation reports one interface'),
+    'the reference\'s "### Against deployments" section still says that one operation reports one interface\'s release and the other interfaces are asked nothing',
   );
 }
 
@@ -1845,8 +2146,8 @@ async function checkDeploymentUnits() {
   }
 
   const contract = readJson(path.join(API_FIXTURE, 'evals', 'grader', 'contract.json'));
-  const preFix = { release: 'r1', report: REPORT, origins: { grader: 'http://127.0.0.1:1' } };
-  const fix = { release: 'r2', report: REPORT, origins: { grader: 'http://127.0.0.1:2' } };
+  const preFix = { release: 'r1', reports: { grader: REPORT }, origins: { grader: 'http://127.0.0.1:1' } };
+  const fix = { release: 'r2', reports: { grader: REPORT }, origins: { grader: 'http://127.0.0.1:2' } };
   const pairs = [
     [{ route: 'historical' }, /names neither a fixCommit nor deployments/],
     [{ route: 'historical', deployments: {} }, /names no preFix and no fix deployment/],
@@ -1865,29 +2166,126 @@ async function checkDeploymentUnits() {
     // Story 1.38: the report each deployment names, which `check` holds first and this guard holds again.
     [
       { route: 'historical', deployments: { preFix: { release: 'r1', origins: preFix.origins }, fix } },
-      /its preFix deployment names no report/,
+      /its preFix deployment names no reports/,
     ],
     [
-      { route: 'historical', deployments: { preFix, fix: { ...fix, report: { operationId: 'report-version', pointer: '/release' } } } },
-      /deployments\.fix\.report\.operationId names "report-version", which no interface of the contract declares/,
+      {
+        route: 'historical',
+        deployments: { preFix, fix: { ...fix, reports: { grader: { operationId: 'report-version', pointer: '/release' } } } },
+      },
+      /deployments\.fix\.reports\.grader\.operationId names "report-version", which no interface of the contract declares/,
     ],
     [
-      { route: 'historical', deployments: { preFix, fix: { ...fix, report: { operationId: 'grade-answer', pointer: '/release' } } } },
+      {
+        route: 'historical',
+        deployments: { preFix, fix: { ...fix, reports: { grader: { operationId: 'grade-answer', pointer: '/release' } } } },
+      },
       /"grade-answer", which requires input in its query channel/,
     ],
     [
-      { route: 'historical', deployments: { preFix: { ...preFix, report: { ...REPORT, pointer: 'release' } }, fix } },
-      /deployments\.preFix\.report\.pointer is "release", which is no JSON pointer/,
+      { route: 'historical', deployments: { preFix: { ...preFix, reports: { grader: { ...REPORT, pointer: 'release' } } }, fix } },
+      /deployments\.preFix\.reports\.grader\.pointer is "release", which is no JSON pointer/,
     ],
     [
-      { route: 'historical', deployments: { preFix, fix: { ...fix, report: { ...REPORT, pointer: '/a/~2' } } } },
-      /deployments\.fix\.report\.pointer is "\/a\/~2"/,
+      { route: 'historical', deployments: { preFix, fix: { ...fix, reports: { grader: { ...REPORT, pointer: '/a/~2' } } } } },
+      /deployments\.fix\.reports\.grader\.pointer is "\/a\/~2"/,
     ],
   ];
   const graderEntry = { kind: 'api', interfaceId: 'grader' };
   for (const [qualification, expected] of pairs) {
     const pair = deploymentPair(qualification, [graderEntry], contract);
     check(expected.test(pair.unaddressable ?? ''), `deploymentPair(${JSON.stringify(qualification)}) gave ${JSON.stringify(pair)}`);
+  }
+  // Story 1.65: one report for every HTTP interface of the registry and for no other, each keyed by the interface its
+  // operation belongs to. The second interface of the registry sorts after the first, and each refusal falls on it, on
+  // the post-fix side or on both interfaces' order of keys, so a rule that read only the first element misses it.
+  const ledgerReport = { operationId: 'report-ledger-release', pointer: '/release' };
+  const twoInterfaceContract = structuredClone(contract);
+  twoInterfaceContract.permittedInterfaces.push({
+    ...structuredClone(contract.permittedInterfaces[0]),
+    logicalId: 'ledger',
+    operations: [{ ...structuredClone(contract.permittedInterfaces[0].operations[1]), operationId: ledgerReport.operationId }],
+  });
+  const ledgerEntry = { kind: 'api', interfaceId: 'ledger' };
+  const bothInterfaces = (side, reports) => ({
+    release: side.release,
+    reports,
+    origins: { grader: side.origins.grader, ledger: `http://127.0.0.1:${side === preFix ? 3 : 4}` },
+  });
+  const bothReports = { grader: REPORT, ledger: ledgerReport };
+  const twoPairs = [
+    [
+      { preFix: bothInterfaces(preFix, bothReports), fix: bothInterfaces(fix, { grader: REPORT }) },
+      /deployments\.fix\.reports names \["grader"\] and no report for "ledger"/,
+    ],
+    [
+      { preFix: bothInterfaces(preFix, { ledger: ledgerReport }), fix: bothInterfaces(fix, bothReports) },
+      /deployments\.preFix\.reports names \["ledger"\] and no report for "grader"/,
+    ],
+    [
+      { preFix: bothInterfaces(preFix, bothReports), fix: bothInterfaces(fix, { grader: REPORT, ledger: { ...REPORT } }) },
+      /deployments\.fix\.reports\.ledger\.operationId names "report-release", which the contract declares on interface "grader"/,
+    ],
+    [
+      { preFix: bothInterfaces(preFix, { ...bothReports, status: ledgerReport }), fix: bothInterfaces(fix, bothReports) },
+      /deployments\.preFix\.reports\.status names an interface the registry does not serve over HTTP/,
+    ],
+    [
+      {
+        preFix: bothInterfaces(preFix, bothReports),
+        fix: bothInterfaces(fix, { grader: REPORT, ledger: { operationId: 'report-ledger-release' } }),
+      },
+      /its fix deployment names no report \(an operationId and a pointer\) for ledger/,
+    ],
+    [{ preFix: bothInterfaces(preFix, 'reports'), fix: bothInterfaces(fix, bothReports) }, /its preFix deployment names no reports/],
+  ];
+  for (const [deployments, expected] of twoPairs) {
+    const pair = deploymentPair({ route: 'historical', deployments }, [graderEntry, ledgerEntry], twoInterfaceContract);
+    check(
+      expected.test(pair.unaddressable ?? ''),
+      `deploymentPair over ${JSON.stringify(deployments)} gave ${JSON.stringify(pair)}; expected ${expected}`,
+    );
+  }
+  const wholeTwo = { preFix: bothInterfaces(preFix, bothReports), fix: bothInterfaces(fix, bothReports) };
+  const twoPair = deploymentPair({ route: 'historical', deployments: wholeTwo }, [graderEntry, ledgerEntry], twoInterfaceContract);
+  check(
+    twoPair.preFix === wholeTwo.preFix && twoPair.fix === wholeTwo.fix,
+    `deploymentPair over a report for each of two interfaces gave ${JSON.stringify(twoPair)}`,
+  );
+  // A registry of one HTTP interface keeps a probe that names one report, and a report for a second interface it does not serve is refused.
+  const oneReport = deploymentPair({ route: 'historical', deployments: { preFix, fix } }, [graderEntry], twoInterfaceContract);
+  check(
+    oneReport.preFix === preFix,
+    `deploymentPair over a registry of one HTTP interface and one report gave ${JSON.stringify(oneReport)}`,
+  );
+  for (const [what, interfaces, reports, expected] of [
+    [
+      'a registry that is unread',
+      null,
+      { ledger: { ...REPORT } },
+      [/reports\.ledger\.operationId names "report-release", which the contract declares on interface "grader"/],
+    ],
+    ['no interface left without a report', ['grader'], { grader: REPORT }, []],
+    [
+      'reports of two interfaces, each in the findings in sorted order',
+      ['grader', 'ledger'],
+      { ledger: { operationId: 'grade-answer', pointer: 'x' }, grader: { operationId: 'grade-answer', pointer: 'x' } },
+      [
+        /reports\.grader\.pointer/,
+        /reports\.grader\.operationId names "grade-answer", which requires input/,
+        /reports\.ledger\.pointer/,
+        /reports\.ledger\.operationId names "grade-answer", which the contract declares on interface "grader"/,
+        /reports\.ledger\.operationId names "grade-answer", which requires input/,
+      ],
+    ],
+    ['an entry that is no object', ['grader'], { grader: 'report-release' }, []],
+    ['a reports that is no object', ['grader'], 'report-release', []],
+  ]) {
+    const findings = reportsProblems({ reports, contract: twoInterfaceContract, interfaces, where: 'd' });
+    check(
+      findings.length === expected.length && expected.every((pattern, at) => pattern.test(findings[at] ?? '')),
+      `reportsProblems over ${what} gave ${JSON.stringify(findings)}; expected ${expected.length} finding(s) matching ${expected}`,
+    );
   }
   for (const other of [
     { kind: 'cli', interfaceId: 'runner' },
@@ -1990,11 +2388,11 @@ async function checkDeploymentUnits() {
       /which 2 interfaces of the contract declare/,
     ],
     [
-      'an operation of an interface the registry does not serve',
+      'an operation of another interface than the one its key names',
       (edited) => {
         edited.permittedInterfaces[0].logicalId = 'status';
       },
-      /of interface "status", which the registry does not serve over HTTP/,
+      /which the contract declares on interface "status"/,
     ],
   ]) {
     const pair = reportedOver(edit);
@@ -2031,7 +2429,7 @@ async function checkDeploymentUnits() {
     ['#/release', false],
   ]) {
     check(isJsonPointer(pointer) === valid, `isJsonPointer(${JSON.stringify(pointer)}) is ${!valid}; expected ${valid}`);
-    const findings = reportProblems({ report: { operationId: 'report-release', pointer }, contract, interfaces: ['grader'], where: 'r' });
+    const findings = reportProblems({ report: { operationId: 'report-release', pointer }, interfaceId: 'grader', contract, where: 'r' });
     check(findings.length === (valid ? 0 : 1), `reportProblems over pointer ${JSON.stringify(pointer)} gave ${JSON.stringify(findings)}`);
   }
   const backslash = String.fromCodePoint(0x5c);
@@ -3000,6 +3398,14 @@ async function runCase(name, body) {
 
 async function main() {
   try {
+    if (process.argv.includes('--reported-interfaces-only')) {
+      // The cases of Story 1.65's report request per HTTP interface alone, which its revert checks run: the cases over
+      // four servers, the `deploymentPair` and `reportsProblems` units and the read of the reference.
+      await runCase('the reported interfaces', checkInterfaces);
+      await runCase('the deployment units', checkDeploymentUnits);
+      await runCase('the historical reference', checkHistoricalReference);
+      return finish();
+    }
     if (process.argv.includes('--reported-releases-only')) {
       // The cases of Story 1.38's release report request alone, which the revert checks of Stories 1.38 and 1.66 run.
       await runCase('the reported releases', async () => {
@@ -3019,6 +3425,7 @@ async function main() {
     await runCase('a mutation beside a historical probe', checkMutationBesideHistorical);
     await runCase('the historical refusals', checkHistoricalRefusals);
     await runCase('the deployment route', checkDeployments);
+    await runCase('the reported interfaces', checkInterfaces);
     await runCase('the deployment units', checkDeploymentUnits);
     await runCase('the historical reference', checkHistoricalReference);
     await runCase('the rubric judge', checkRubric);
