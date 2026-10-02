@@ -71,7 +71,7 @@
   "test:evaluate-preflight": 98,
   "test:evaluate-private": 55,
   "test:evaluate-promptfoo": 60.1,
-  "test:evaluate-records": 203,
+  "test:evaluate-records": 208,
   "test:evaluate-run": 170.6,
   "test:evaluate-tool-use": 47,
   "test:evaluate-workflow": 47.5,
