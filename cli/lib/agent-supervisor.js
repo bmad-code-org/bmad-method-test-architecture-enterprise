@@ -59,7 +59,9 @@
  * resumes, however long it stays suspended.
  *
  * Windows has no process groups: the leader stays in the supervisor's
- * console, and signals, the lifeline and the timeout reach the agent alone.
+ * console. Before the guardian starts the agent, a PowerShell helper assigns
+ * the guardian to a kill-on-close Job Object. Ordinary descendants inherit
+ * the job, whose sole handle closes when the guardian's pipe closes.
  *
  * Usage (from `run-agent.js` only):
  *   node agent-supervisor.js <runnerPid> <timeoutMs> <command> [args...]
@@ -71,6 +73,7 @@
 
 const fs = require('node:fs');
 const net = require('node:net');
+const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
 
 /** The runner's report pipe, in the supervisor. */
@@ -124,16 +127,26 @@ function guard([command, ...args]) {
   lifeline.on('error', () => {});
   let stopping = false;
   let finished = false;
+  let agent = null;
+  let job = null;
+  let abandoned = false;
+  let failSetup = null;
+  let pendingStop = null;
   const stop = (signal) => {
     if (stopping || finished) return;
     stopping = true;
+    if (!GROUPS && agent === null) {
+      pendingStop = signal;
+      if (failSetup !== null) failSetup(new Error(`guardian stopped by ${signal} during Windows Job Object setup`));
+      return;
+    }
     if (GROUPS) {
       try {
         process.kill(-process.pid, signal);
       } catch {
         /* The group ended. */
       }
-    } else {
+    } else if (agent !== null) {
       agent.kill(signal);
     }
     setTimeout(() => {
@@ -143,32 +156,106 @@ function guard([command, ...args]) {
         } catch {
           /* The group ended. */
         }
-      } else agent.kill('SIGKILL');
+      } else if (agent !== null) agent.kill('SIGKILL');
     }, GRACE_MS);
   };
   for (const name of STOPPING) process.on(name, () => stop(name));
-  lifeline.once('close', () => stop('SIGTERM'));
-  // Install the lifeline first. A leader killed during startup closes it before the agent can outlive it.
-  const agent = spawn(command, args, { stdio: 'inherit' });
-  if (agent.pid !== undefined) write(5, `${agent.pid}\n`);
-  agent.once('error', (error) => {
-    if (finished) return;
-    finished = true;
-    write(3, JSON.stringify({ spawnError: { code: error.code ?? null, message: error.message } }));
-    process.exit(0);
+  lifeline.once('close', () => {
+    abandoned = true;
+    stop('SIGTERM');
+    if (job !== null && !finished) job.stdin.end();
   });
-  agent.once('exit', (status, signal) => {
-    if (finished) return;
-    finished = true;
-    write(3, JSON.stringify({ status, signal }));
-    if (GROUPS) {
-      try {
-        process.kill(-process.pid, 'SIGKILL');
-      } catch {
-        /* The group ended. */
+
+  const launch = () => {
+    if (abandoned || stopping || finished) return;
+    agent = spawn(command, args, { stdio: 'inherit' });
+    if (agent.pid !== undefined) write(5, `${agent.pid}\n`);
+    if (stopping) agent.kill('SIGTERM');
+    agent.once('error', (error) => {
+      if (finished) return;
+      finished = true;
+      write(3, JSON.stringify({ spawnError: { code: error.code ?? null, message: error.message } }));
+      if (job !== null) job.stdin.end();
+      process.exit(0);
+    });
+    agent.once('exit', (status, signal) => {
+      if (finished) return;
+      finished = true;
+      write(3, JSON.stringify({ status, signal }));
+      if (GROUPS) {
+        try {
+          process.kill(-process.pid, 'SIGKILL');
+        } catch {
+          /* The group ended. */
+        }
+      } else {
+        job.stdin.end();
+        process.exit(0);
       }
-    } else process.exit(0);
+    });
+  };
+
+  // The guardian joins the kill-on-close job before it can start the agent.
+  if (GROUPS) return launch();
+  job = spawn(
+    'powershell.exe',
+    [
+      '-NoLogo',
+      '-NoProfile',
+      '-NonInteractive',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-File',
+      path.join(__dirname, 'windows-job-owner.ps1'),
+      '-GuardianPid',
+      String(process.pid),
+    ],
+    {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      windowsHide: true,
+    },
+  );
+  let ready = false;
+  let output = '';
+  let diagnostic = '';
+  const setupTimer = setTimeout(() => failSetup(new Error('Windows Job Object setup timed out')), 15_000);
+  failSetup = (error) => {
+    if (ready || finished) return;
+    finished = true;
+    clearTimeout(setupTimer);
+    write(
+      3,
+      JSON.stringify({
+        spawnError: {
+          code: error.code ?? 'JOB_OBJECT',
+          message: `Windows Job Object setup failed: ${error.message}${diagnostic ? `: ${diagnostic.trim()}` : ''}`,
+        },
+      }),
+    );
+    job.stdin.destroy();
+    job.kill();
+    process.exit(0);
+  };
+  job.stdin.on('error', () => {});
+  job.stdout.setEncoding('utf8');
+  job.stdout.on('data', (chunk) => {
+    output += chunk;
+    if (output.length > 8192) return failSetup(new Error('Windows Job Object helper sent excessive output'));
+    const newline = output.indexOf('\n');
+    if (newline === -1) return;
+    const line = output.slice(0, newline).trim();
+    if (line.startsWith('ERROR ')) return failSetup(new Error(line.slice('ERROR '.length)));
+    if (line !== 'READY') return failSetup(new Error('Windows Job Object helper sent an invalid readiness report'));
+    ready = true;
+    clearTimeout(setupTimer);
+    if (abandoned) return job.stdin.end();
+    launch();
   });
+  job.stderr.setEncoding('utf8');
+  job.stderr.on('data', (chunk) => (diagnostic += chunk.slice(0, Math.max(0, 4096 - diagnostic.length))));
+  job.once('error', failSetup);
+  job.once('exit', (status) => failSetup(new Error(`Windows Job Object helper exited ${status} before readiness`)));
+  if (pendingStop !== null) failSetup(new Error(`guardian stopped by ${pendingStop} during Windows Job Object setup`));
 }
 
 /** Calls `callback` after `ms`, past the 2^31-1 ms one timer can hold. */

@@ -2485,6 +2485,20 @@ async function runTests() {
         'minimal env includes only variables that are actually set',
         JSON.stringify(sparseEnv),
       );
+      const systemSource = { PATH: '/usr/bin', TEMP: 'temp', TMP: 'tmp', SystemRoot: 'system', SECRET_TOKEN: 'nope' };
+      const windowsEnv = buildMinimalEnv([], systemSource, [], 'win32');
+      const posixEnv = buildMinimalEnv([], systemSource, [], 'darwin');
+      assert(
+        windowsEnv.TEMP === 'temp' &&
+          windowsEnv.TMP === 'tmp' &&
+          windowsEnv.SystemRoot === 'system' &&
+          !('SECRET_TOKEN' in windowsEnv) &&
+          !('TEMP' in posixEnv) &&
+          !('TMP' in posixEnv) &&
+          !('SystemRoot' in posixEnv),
+        'minimal env passes Windows system paths only on Windows',
+        JSON.stringify({ windowsEnv, posixEnv }),
+      );
 
       for (const name of ['claude', 'codex']) {
         const adapter = AGENT_ADAPTERS[name];

@@ -1287,7 +1287,7 @@ The other options are those of TeA's own runners: `--agent-cmd`, `--agent-arg`, 
 | 2    | usage: a missing or malformed option, an empty prompt or one that is not UTF-8, or a skill root outside the working directory                                                                                             |
 | 3    | configuration: an unknown agent, or a skill root that does not exist or holds no `SKILL.md`                                                                                                                               |
 | 4    | transport: the agent failed to start or exited non-zero, a process supervising it ended before the agent or without reporting, standard output closed before the reply was written, or the runner met an unexpected error |
-| 5    | timeout: the agent outlived `--timeout-ms`; its process group got `SIGTERM`, then `SIGKILL` 2 s later if it was still running                                                                                             |
+| 5    | timeout: the agent outlived `--timeout-ms`; on POSIX its process group got `SIGTERM`, then `SIGKILL` 2 s later if it was still running; on Windows the Job Object closes when the agent ends and stops its descendants    |
 | 6    | parser: reserved by the shared runner table                                                                                                                                                                               |
 
 A registry entry for the runner declares `infrastructureExitCodes` 3 to 6, and `check` holds it to that.

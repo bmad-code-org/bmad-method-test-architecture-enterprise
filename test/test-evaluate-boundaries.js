@@ -8,7 +8,9 @@
  * parse is a `parse` violation, never a silent skip. A symbolic link under
  * `cli/` is a `symlink` violation, and any file other than `.js`, `.cjs`,
  * `.mjs` code or `.json`, `.md`, `.yml`, `.yaml` data (a `.ts` file Node runs
- * natively, an extensionless script) is an `unscanned` violation. The rules
+ * natively, an extensionless script) is an `unscanned` violation. The exact
+ * Windows Job Object helper is a PowerShell exception; its framework names
+ * and forbidden engine and rollback tokens are scanned as text. The rules
  * are closed: none of them tracks where a value came from.
  *
  * Eight rules (Stories 1.4 to 1.7, AD-1, AD-4, AD-5, AD-6, AD-8):
@@ -1021,6 +1023,20 @@ function scanCli(cliRoot) {
       }
     }
     if (DATA_EXTENSIONS.has(extension)) continue;
+    if (relative === 'cli/lib/windows-job-owner.ps1') {
+      for (const forbidden of ['eval-quality', 'rollbackVerified']) {
+        const offset = lowered.indexOf(forbidden.toLowerCase());
+        if (offset !== -1) {
+          violations.push({
+            file: relative,
+            line: lineAt(source, offset),
+            rule: forbidden === 'eval-quality' ? 'engine-import' : 'rollback-literal',
+            message: `the Windows Job Object helper names "${forbidden}"`,
+          });
+        }
+      }
+      continue;
+    }
     if (!SOURCE_EXTENSIONS.has(extension)) {
       violations.push({
         file: relative,
@@ -1890,6 +1906,24 @@ const PLANTS = [
     rule: 'unscanned',
     file: 'run-engine',
     source: "#!/usr/bin/env node\nrequire('eval-quality');\n",
+  },
+  {
+    name: 'another PowerShell script under cli',
+    rule: 'unscanned',
+    file: 'lib/other.ps1',
+    source: "Write-Output 'other'\n",
+  },
+  {
+    name: 'an engine invocation in the Windows helper',
+    rule: 'engine-import',
+    file: 'lib/windows-job-owner.ps1',
+    source: "Start-Process 'EVAL-QUALITY'\n",
+  },
+  {
+    name: 'a rollback literal in the Windows helper',
+    rule: 'rollback-literal',
+    file: 'lib/windows-job-owner.ps1',
+    source: "Write-Output 'RoLlBaCkVeRiFiEd'\n",
   },
   {
     name: 'seal on a rebound Object',

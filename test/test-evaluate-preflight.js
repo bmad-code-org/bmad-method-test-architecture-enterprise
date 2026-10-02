@@ -587,8 +587,147 @@ const ready = setInterval(() => {
     await Promise.race([dualClosed, delay(5000)]);
   }
 
-  const failedFile = path.join(directory, 'failed.json');
-  const failedRunner = spawn(
+  const ownerFile = path.join(directory, 'owner-death.json');
+  const ownerRun = spawn(
+    process.execPath,
+    [RUNNER, '--skill-root', STUB_SKILL, ...options, '--agent-arg', ownerFile, '--agent-arg', 'wait', '--timeout-ms', '120000'],
+    { cwd: PROJECT_ROOT, env: BASE_ENV, stdio: ['pipe', 'pipe', 'pipe'] },
+  );
+  let ownerStderr = '';
+  ownerRun.stdout.resume();
+  ownerRun.stderr.on('data', (chunk) => (ownerStderr += chunk));
+  ownerRun.stdin.end('Say alpha.');
+  const ownerClosed = ended(ownerRun);
+  let ownerPids = null;
+  let ownerSupervisor = null;
+  let ownerLeader = null;
+  let guardian = null;
+  let helper = null;
+  try {
+    ownerPids = await waitForPids(ownerFile);
+    [ownerSupervisor] = childrenOf(ownerRun.pid);
+    [ownerLeader] = childrenOf(ownerSupervisor ?? 0);
+    [guardian] = childrenOf(ownerLeader ?? 0);
+    helper = childrenOf(guardian ?? 0).find((pid) => pid !== ownerPids?.agent);
+    check(
+      ownerPids !== null && helper !== undefined,
+      `the Windows helper-death case did not start its agent, child and Job Object owner: ${JSON.stringify({ ownerPids, ownerSupervisor, ownerLeader, guardian, helper })}`,
+    );
+    if (helper !== undefined) reap(helper);
+    const ending = await Promise.race([ownerClosed, delay(15_000).then(() => null)]);
+    check(
+      ending?.code === EXIT_CODES['environment-transport'],
+      `a Windows runner whose ready Job Object helper died ${ending === null ? 'waited over 15 s' : `returned ${ending.code}`}; expected transport failure\n${ownerStderr}`,
+    );
+    if (ownerPids !== null) {
+      check(await processEnds(ownerPids.agent, 10_000), `Windows agent ${ownerPids.agent} survived its Job Object helper's death`);
+      check(await processEnds(ownerPids.child, 10_000), `Windows agent child ${ownerPids.child} survived its Job Object helper's death`);
+    }
+  } finally {
+    ownerRun.kill('SIGKILL');
+    for (const pid of [ownerSupervisor, ownerLeader, guardian, helper, ownerPids?.agent, ownerPids?.child]) {
+      if (pid !== null && pid !== undefined) reap(pid);
+    }
+    await Promise.race([ownerClosed, delay(5000)]);
+  }
+
+  const timeoutFile = path.join(directory, 'timeout.json');
+  const timeoutRun = spawn(
+    process.execPath,
+    [RUNNER, '--skill-root', STUB_SKILL, ...options, '--agent-arg', timeoutFile, '--agent-arg', 'wait', '--timeout-ms', '15000'],
+    { cwd: PROJECT_ROOT, env: BASE_ENV, stdio: ['pipe', 'pipe', 'pipe'] },
+  );
+  let timeoutStderr = '';
+  timeoutRun.stdout.resume();
+  timeoutRun.stderr.on('data', (chunk) => (timeoutStderr += chunk));
+  timeoutRun.stdin.end('Say alpha.');
+  const timeoutClosed = ended(timeoutRun);
+  let timeoutPids = null;
+  try {
+    timeoutPids = await waitForPids(timeoutFile);
+    check(timeoutPids !== null, 'the Windows timeout case recorded no agent and child PIDs');
+    const ending = await Promise.race([timeoutClosed, delay(40_000).then(() => null)]);
+    check(
+      ending?.code === EXIT_CODES['environment-timeout'],
+      `a Windows runner past its wall clock ${ending === null ? 'waited over 40 s' : `returned ${ending.code}`}; expected timeout\n${timeoutStderr}`,
+    );
+    if (timeoutPids !== null) {
+      check(await processEnds(timeoutPids.agent, 10_000), `Windows agent ${timeoutPids.agent} survived its timeout`);
+      check(await processEnds(timeoutPids.child, 10_000), `Windows agent child ${timeoutPids.child} survived its timeout`);
+    }
+  } finally {
+    timeoutRun.kill('SIGKILL');
+    if (timeoutPids === null && fs.existsSync(timeoutFile)) timeoutPids = readPids(timeoutFile);
+    if (timeoutPids !== null) {
+      reap(timeoutPids.agent);
+      reap(timeoutPids.child);
+    }
+    await Promise.race([timeoutClosed, delay(5000)]);
+  }
+
+  for (const [failureMode, failureDetail] of [
+    ['1', 'forced Windows Job Object setup failure'],
+    ['assign', 'AssignProcessToJobObject failed'],
+    ['after-assign', 'forced failure after Job Object assignment'],
+  ]) {
+    const failedFile = path.join(directory, `failed-${failureMode}.json`);
+    const failedRunner = spawn(
+      process.execPath,
+      [
+        RUNNER,
+        '--skill-root',
+        STUB_SKILL,
+        ...options,
+        '--agent-arg',
+        failedFile,
+        '--agent-arg',
+        'exit',
+        '--env-pass',
+        'TEA_WINDOWS_JOB_OWNER_TEST_FAILURE',
+      ],
+      {
+        cwd: PROJECT_ROOT,
+        env: { ...BASE_ENV, TEA_WINDOWS_JOB_OWNER_TEST_FAILURE: failureMode },
+        stdio: ['pipe', 'pipe', 'pipe'],
+      },
+    );
+    let failedStdout = '';
+    let failedStderr = '';
+    failedRunner.stdout.on('data', (chunk) => (failedStdout += chunk));
+    failedRunner.stderr.on('data', (chunk) => (failedStderr += chunk));
+    failedRunner.stdin.end('Say alpha.');
+    const failedClosed = ended(failedRunner);
+    let failedPids = null;
+    let failedEnding = null;
+    try {
+      failedEnding = await Promise.race([failedClosed, delay(30_000).then(() => null)]);
+      if (failedEnding === null) failedRunner.kill('SIGKILL');
+      failedPids = fs.existsSync(failedFile) ? readPids(failedFile) : null;
+      check(
+        failedEnding?.code === EXIT_CODES['environment-transport'] && failedStderr.includes(failureDetail),
+        `Windows Job Object ${failureMode} setup failure ${failedEnding === null ? 'waited over 30 s' : `returned ${failedEnding.code}`}; expected transport failure naming ${failureDetail}. Agent PID: ${failedPids?.agent ?? 'unrecorded'}; child PID: ${failedPids?.child ?? 'unrecorded'}\n${failedStdout}${failedStderr}`,
+      );
+      check(
+        failedPids === null,
+        `the Windows agent started after ${failureMode} Job Object setup failed: agent ${failedPids?.agent ?? 'unrecorded'}, child ${failedPids?.child ?? 'unrecorded'}`,
+      );
+      if (failedPids !== null) {
+        check(await processEnds(failedPids.agent, 10_000), `Windows agent ${failedPids.agent} survived the failed setup beyond 10 s`);
+        check(await processEnds(failedPids.child, 10_000), `Windows agent child ${failedPids.child} survived the failed setup beyond 10 s`);
+      }
+    } finally {
+      if (failedEnding === null) failedRunner.kill('SIGKILL');
+      if (failedPids === null && fs.existsSync(failedFile)) failedPids = readPids(failedFile);
+      if (failedPids !== null) {
+        reap(failedPids.agent);
+        reap(failedPids.child);
+      }
+      await Promise.race([failedClosed, delay(5000)]);
+    }
+  }
+
+  const setupRaceFile = path.join(directory, 'setup-race.json');
+  const setupRace = spawn(
     process.execPath,
     [
       RUNNER,
@@ -596,50 +735,38 @@ const ready = setInterval(() => {
       STUB_SKILL,
       ...options,
       '--agent-arg',
-      failedFile,
+      setupRaceFile,
       '--agent-arg',
       'exit',
       '--env-pass',
       'TEA_WINDOWS_JOB_OWNER_TEST_FAILURE',
+      '--timeout-ms',
+      '500',
     ],
-    {
-      cwd: PROJECT_ROOT,
-      env: { ...BASE_ENV, TEA_WINDOWS_JOB_OWNER_TEST_FAILURE: '1' },
-      stdio: ['pipe', 'pipe', 'pipe'],
-    },
+    { cwd: PROJECT_ROOT, env: { ...BASE_ENV, TEA_WINDOWS_JOB_OWNER_TEST_FAILURE: 'ready-delay' }, stdio: ['pipe', 'pipe', 'pipe'] },
   );
-  let failedStdout = '';
-  let failedStderr = '';
-  failedRunner.stdout.on('data', (chunk) => (failedStdout += chunk));
-  failedRunner.stderr.on('data', (chunk) => (failedStderr += chunk));
-  failedRunner.stdin.end('Say alpha.');
-  const failedClosed = ended(failedRunner);
-  let failedPids = null;
-  let failedEnding = null;
+  let setupRaceStderr = '';
+  setupRace.stdout.resume();
+  setupRace.stderr.on('data', (chunk) => (setupRaceStderr += chunk));
+  setupRace.stdin.end('Say alpha.');
+  const setupRaceClosed = ended(setupRace);
+  let setupRacePids = null;
   try {
-    failedEnding = await Promise.race([failedClosed, delay(30_000).then(() => null)]);
-    if (failedEnding === null) failedRunner.kill('SIGKILL');
-    failedPids = fs.existsSync(failedFile) ? readPids(failedFile) : null;
+    const ending = await Promise.race([setupRaceClosed, delay(20_000).then(() => null)]);
+    setupRacePids = fs.existsSync(setupRaceFile) ? readPids(setupRaceFile) : null;
     check(
-      failedEnding?.code === EXIT_CODES['environment-transport'] && failedStderr.includes('Windows Job Object setup failed'),
-      `Windows Job Object setup failure ${failedEnding === null ? 'waited over 30 s' : `returned ${failedEnding.code}`}; expected transport failure naming setup. Agent PID: ${failedPids?.agent ?? 'unrecorded'}; child PID: ${failedPids?.child ?? 'unrecorded'}\n${failedStdout}${failedStderr}`,
+      ending?.code === EXIT_CODES['environment-timeout'],
+      `a Windows runner stopped during Job Object setup ${ending === null ? 'waited over 20 s' : `returned ${ending.code}`}; expected timeout\n${setupRaceStderr}`,
     );
-    check(
-      failedPids === null,
-      `the Windows agent started after Job Object setup failed: agent ${failedPids?.agent ?? 'unrecorded'}, child ${failedPids?.child ?? 'unrecorded'}`,
-    );
-    if (failedPids !== null) {
-      check(await processEnds(failedPids.agent, 10_000), `Windows agent ${failedPids.agent} survived the failed setup beyond 10 s`);
-      check(await processEnds(failedPids.child, 10_000), `Windows agent child ${failedPids.child} survived the failed setup beyond 10 s`);
-    }
+    check(setupRacePids === null, `a Windows agent started after setup was stopped: ${JSON.stringify(setupRacePids)}`);
   } finally {
-    if (failedEnding === null) failedRunner.kill('SIGKILL');
-    if (failedPids === null && fs.existsSync(failedFile)) failedPids = readPids(failedFile);
-    if (failedPids !== null) {
-      reap(failedPids.agent);
-      reap(failedPids.child);
+    setupRace.kill('SIGKILL');
+    if (setupRacePids === null && fs.existsSync(setupRaceFile)) setupRacePids = readPids(setupRaceFile);
+    if (setupRacePids !== null) {
+      reap(setupRacePids.agent);
+      reap(setupRacePids.child);
     }
-    await Promise.race([failedClosed, delay(5000)]);
+    await Promise.race([setupRaceClosed, delay(5000)]);
   }
 }
 
