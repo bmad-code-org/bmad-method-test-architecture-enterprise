@@ -202,6 +202,7 @@ const {
 } = require('./eval-ci');
 const { scoreRun: scoreAtddRun, signatureOf: atddSignatureOf } = require('./eval-atdd');
 const { digest, redactArgs } = require('./lib/eval-record');
+const { projectTestDesignResult } = require('./lib/test-design-result');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const REPLAY_ROOT = path.join(__dirname, 'replay');
@@ -1404,11 +1405,9 @@ function testDesignScoringInputs(groundTruth, set) {
 /**
  * One stored test-design document, scored the way the harness scores it.
  *
- * The result is the scored object reduced to what a reader can check by hand: the
- * document-global mentions the contract's oracles are paired with, the per-group
- * shape counts, and the identity of every check that did not pass. A document
- * readDesign refuses records `{ "unmeasurable": <failure class> }`, the class runCase
- * reports for that environment failure.
+ * The projection lives in `test/lib/test-design-result.js`, where the probe
+ * generator's mutation qualification reads the same function, so a stored result
+ * and a performed arm cannot disagree about what a document scores.
  *
  * @param {{directory: string}} item
  * @param {object} expected The case's expected.json.
@@ -1419,47 +1418,7 @@ function testDesignScoringInputs(groundTruth, set) {
 function replayTestDesignCase(item, expected, set, categories) {
   const designPath = path.join(item.directory, expected.storedOutput?.design ?? 'design.md');
   if (!fs.existsSync(designPath)) unreadable(`${item.id}: no stored document at ${path.relative(PROJECT_ROOT, designPath)}`);
-  const read = readTestDesign({ kind: 'text', value: fs.readFileSync(designPath, 'utf8') });
-  if (!read.ok) return { unmeasurable: read.failureClass };
-
-  const scored = scoreTestDesignRun(set, read.design, categories);
-  const resolvable = scored.orderingChecks.filter((check) => check.resolvable);
-  return {
-    mentions: scored.mentions,
-    shape: scored.shape,
-    shapeFailures: scored.shapeFailures,
-    links: { total: scored.links.total, resolved: scored.links.resolved, dangling: scored.links.dangling },
-    grounding: {
-      declared: scored.grounding.declared,
-      matched: scored.grounding.matched,
-      missed: scored.grounding.missed,
-      topSeverityMissed: scored.grounding.topSeverityMissed,
-    },
-    ungrounded: scored.ungrounded,
-    ceiling: scored.ceiling,
-    unscoredRiskTables: scored.unscoredRiskTables,
-    coverage: {
-      evaluated: scored.coverageChecks.length,
-      satisfied: scored.coverageChecks.filter((check) => check.ok).length,
-      failures: scored.coverageChecks
-        .filter((check) => !check.ok)
-        .map((check) => ({ riskId: check.riskId, reason: check.reason, levels: check.levels })),
-    },
-    ordering: {
-      pairs: scored.orderingChecks.length,
-      resolvable: resolvable.length,
-      satisfied: resolvable.filter((check) => check.ok).length,
-      flattened: scored.flattenedPriorities,
-      failures: resolvable
-        .filter((check) => !check.ok)
-        .map((check) => ({
-          higher: check.higher,
-          lower: check.lower,
-          higherPriority: check.higherPriority,
-          lowerPriority: check.lowerPriority,
-        })),
-    },
-  };
+  return projectTestDesignResult(fs.readFileSync(designPath, 'utf8'), set, categories);
 }
 
 /**

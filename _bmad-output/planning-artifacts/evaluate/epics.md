@@ -23,7 +23,7 @@ inputDocuments:
 
 ## Overview
 
-This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and ninety-one stories, including H.1 (Stories 1.27 to 1.75, 1.80, 1.90 to 1.98 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
+This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and ninety-two stories, including H.1 (Stories 1.27 to 1.75, 1.80, 1.90 to 1.99 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
 
 Evaluate is fully stacked. The stack runs system under test, then the evaluation (the mechanism that runs the system, collects evidence and makes judgments), then the Behavioral Evaluation Contract (what behavior matters, what evidence counts, how success and failure resolve), then eval-quality (contract sanity, evidence support, and whether the evaluation catches defects). TeA owns every layer above eval-quality, including each concern eval-quality states it leaves to the caller, so an adopter can evaluate any target end to end. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3 onward, Epic 2 and H.1 to close the plan gap audit; the Traceability section maps each audit item to the story that closes it.
 
@@ -150,7 +150,7 @@ None. Evaluate has no graphical interface.
 ### Epic 1: The Evaluate authoring loop
 
 An adopter describes a target, answers Evaluate's questions, chooses or builds the evaluation layer and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches the seeded defect, with the gaps named and closed. The epic closes by running Evaluate on `bmad-testarch-evaluate` itself, then proving the guidance on two more target kinds, on seeded weaknesses and on an evaluation framework its guides never name.
-Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.75, 1.80, 1.90 to 1.98.
+Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.75, 1.80, 1.90 to 1.99.
 
 **FRs covered:** FR1 to FR10, FR13, FR14.
 
@@ -251,12 +251,13 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 83    | 1.96  | 2.4                          |
 | 84    | 1.97  | 2.3, 2.4                     |
 | 85    | 1.98  | 1.24, 2.4                    |
-| 86    | 2.1   | 1.16, 1.26, 1.45             |
-| 87    | 2.2   | 2.1                          |
-| 88    | 2.3   | 2.2                          |
-| 89    | 2.4   | 2.3                          |
-| 90    | 2.5   | 2.4                          |
-| 91    | H.1   | 2.5                          |
+| 86    | 1.99  | 1.49                         |
+| 87    | 2.1   | 1.16, 1.26, 1.45             |
+| 88    | 2.2   | 2.1                          |
+| 89    | 2.3   | 2.2                          |
+| 90    | 2.4   | 2.3                          |
+| 91    | 2.5   | 2.4                          |
+| 92    | H.1   | 2.5                          |
 
 ### Parallel lanes (from 2026-10-01)
 
@@ -266,7 +267,7 @@ The table above gives every story's dependencies. Since Story 1.40 merged, the s
 
 **Lane 2: confinement and process lifecycle** (own worktree): 1.62, 1.57, 1.58, 1.59, 1.60, 1.63, 1.61, 1.52, 1.53, 1.54, 1.80. Story 1.62 goes first because it extracts the shared sandbox primitives the confinement stories build on. Story 1.60 may remove 1.63's premise, so 1.63 is re-read after it. Story 1.58 precedes 1.54, since both track the run's private scratch directories. Stories 1.52 to 1.54 touch the preflight and workspace modules the confinement stories also edit, so they run after them.
 
-**Lane 3: engine releases, dogfood and Epic 2** (own worktree): 1.45, 2.1, 2.2, 2.3, 2.4, 1.47, 1.49, 1.48, 1.42, 1.50, 1.55, 1.56, 1.51, 1.46, 2.5, 1.90, 1.91, 1.92, 1.93, 1.94, 1.95, 1.96, 1.97, 1.98. Story 1.45 starts the longest serial chain (1.45, 2.1 to 2.5, then H.1), so it runs first, and 2.5 runs last because it baselines every fixture and so waits for each story that changes committed evidence bytes (1.42, 1.44, 1.50, 1.51, 1.55, 1.56). Stories 1.47, 1.49 and 1.48 regenerate the test-design probes, so they run together with 1.48 last. Stories 1.42 and 1.50 both change the HTTP probe port and run back to back. Story 1.46 records live runs of the Evaluate skill, so it follows the skill-guide stories in other lanes (1.43, 1.44, 1.61, 1.67, 1.70). Lane 3 owns every eval-quality release, because 1.42, 1.45, 1.48, 1.50 and 1.55 each need a published engine and one publisher keeps the dependency pin and `package-lock.json` ordered. Stories 1.90 and 1.91 follow 2.5: 1.90 edits the baseline `check` and `compare` read, and 1.91 re-accepts the fixture baselines Stories 2.2 to 2.5 commit, so it waits for every one of them.
+**Lane 3: engine releases, dogfood and Epic 2** (own worktree): 1.45, 2.1, 2.2, 2.3, 2.4, 1.47, 1.49, 1.48, 1.42, 1.50, 1.55, 1.56, 1.51, 1.46, 2.5, 1.90, 1.91, 1.92, 1.93, 1.94, 1.95, 1.96, 1.97, 1.98, 1.99. Story 1.45 starts the longest serial chain (1.45, 2.1 to 2.5, then H.1), so it runs first, and 2.5 runs last because it baselines every fixture and so waits for each story that changes committed evidence bytes (1.42, 1.44, 1.50, 1.51, 1.55, 1.56). Stories 1.47, 1.49 and 1.48 regenerate the test-design probes, so they run together with 1.48 last. Stories 1.42 and 1.50 both change the HTTP probe port and run back to back. Story 1.46 records live runs of the Evaluate skill, so it follows the skill-guide stories in other lanes (1.43, 1.44, 1.61, 1.67, 1.70). Lane 3 owns every eval-quality release, because 1.42, 1.45, 1.48, 1.50 and 1.55 each need a published engine and one publisher keeps the dependency pin and `package-lock.json` ordered. Stories 1.90 and 1.91 follow 2.5: 1.90 edits the baseline `check` and `compare` read, and 1.91 re-accepts the fixture baselines Stories 2.2 to 2.5 commit, so it waits for every one of them.
 
 Rules the lanes share:
 
@@ -2223,6 +2224,25 @@ So that the example ends green and a red tier means a regression (CAP-11, CAP-12
 
 **Dependencies:** 1.24, 2.4.
 **Gate:** `test:evaluate-ci`, `test:evaluate-authoring`, `npm test`.
+
+### Story 1.99: Prove mutation rollback for the test-review, trace, nfr and ci probe corpora
+
+Added 2026-10-02 in Story 1.49's build. Story 1.49 qualifies each test-design controlled-mutation probe through a performed cycle in a disposable copy. `tools/generate-probes.js` still writes `rollbackVerified: true` as a constant for the eighteen other controlled-mutation probes (nine test-review plants, three trace, three nfr and three ci), each of which cites a stored baseline and a stored mutated output. The nine test-review probes name the seeded spec file of the plant (`test/fixtures/test-review-eval/seeded/`) as their `targetArtifact`, and its clean control is a different file; the trace, nfr and ci probes name their corpus's `ground-truth.json`. AD-8 rejects that pattern for every corpus, and the cycle Story 1.49 added (`test/lib/test-design-qualification.js` over `runMutationCycle`) was built around a design document that one exact edit turns into the stored seeded one. The other corpora's plants are not such edits (a registry row planted in a fixture tree, a coverage gap withheld from a summary, a report domain or workflow element), so each corpus needs its own statement of the mutation and the arm that scores it.
+
+As a maintainer of the TeA probe corpora,
+I want each of those probes qualified in a disposable copy with a verified restore,
+So that no corpus claims rollback from two stored files (CAP-7, AD-8).
+
+**Acceptance Criteria:**
+
+**Given** the controlled-mutation probes of the test-review, trace, nfr and ci corpora
+**When** the qualification is performed for each probe
+**Then** a disposable copy of the probe's target runs the clean arm, applies one exact mutation, runs the mutated arm, restores the original bytes, verifies the artifact digest and reruns the clean arm, through `runMutationCycle`; only that sequence sets `rollbackVerified: true`, and the repository's `git status` is unchanged
+**And** a failed restore, mismatched digest, missing baseline pass or missing mutated failure emits no probe with a true rollback claim in any corpus; fixtures exercise each failure per corpus and reverting a guard makes them fail
+**And** `tools/generate-probes.js` holds no `rollbackVerified: true` literal, the regenerated probes, corpus checks, replay and every staged preflight keep their expected outcomes, and `npm test` passes.
+
+**Dependencies:** 1.49.
+**Gate:** `test:test-design-qualification` and the new per-corpus suites, `test:probe-sources`, `test:probe-corpus`, `npm test`.
 
 ## Epic 2: Continuous proof in CI
 
