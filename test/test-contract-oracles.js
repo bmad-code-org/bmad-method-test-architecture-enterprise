@@ -1696,7 +1696,7 @@ async function checkTestDesignOracles(evaluator) {
       true,
     ],
     ['a negative scored count beside a description', { ...coherentBase, scoredRiskCount: -1 }, true],
-    // The design has to be the document the run wrote, not a prefix of it or another document.
+    // The two cases below give a design that is a prefix of the artifact or another document, and each must fail.
     [
       'a design that is a truncated copy of the artifact',
       { ...coherentBase, design: coherentBase.design.slice(0, 60) },
@@ -1754,6 +1754,22 @@ async function checkTestDesignOracles(evaluator) {
     assert(
       JSON.stringify(spec.oracle.check) === JSON.stringify(projectionCoherenceExpression(`/interactions/${testDesignStepId(set)}/stdout`)),
       `${spec.id}: the contract's check is the coherence expression over its own step`,
+    );
+    // The direction names what the check reads, apart from the stdout root that `shape` reads, and the design artifact is among it.
+    const stdoutRoot = `/interactions/${testDesignStepId(set)}/stdout`;
+    const pointersRead = new Set();
+    JSON.stringify(spec.oracle.check, (key, value) => {
+      if (key === 'pointer' && typeof value === 'string' && value !== stdoutRoot) pointersRead.add(value);
+      return value;
+    });
+    assert(
+      JSON.stringify([...pointersRead].sort()) === JSON.stringify([...spec.oracle.direction.evidenceTargets].sort()),
+      `${spec.id}: the direction names exactly the pointers the check reads`,
+      `direction ${spec.oracle.direction.evidenceTargets.join(', ')}; check ${[...pointersRead].join(', ')}`,
+    );
+    assert(
+      spec.oracle.direction.evidenceTargets.includes(`/interactions/${testDesignStepId(set)}/artifact/design`),
+      `${spec.id}: the direction names the design artifact its design must equal`,
     );
   }
   // Every oracle but the shape one has to have been seen failing somewhere, or this

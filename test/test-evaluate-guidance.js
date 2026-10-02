@@ -998,6 +998,12 @@ function checkContractGuidance(skillContent, contractGuide, oracleGuide, adapter
           keyPointers,
         );
         assert.ok(!keyPointers.includes('/interactions/answer-run/stdout'), 'a parent pointer does not address a key');
+        const answered = (value) => engine.makeResolveOperand({ 'answer-run': { exitCode: 0, stdout: { kind: 'json', value } } }, {});
+        const resolves = (value) =>
+          engine.resolveCheck(edited.oracles[0].check, answered(value), () => false, {}, 1000, 'whole-body example').resolution;
+        assert.strictEqual(resolves({ status: 'accepted', amount: 7 }), 'true');
+        assert.strictEqual(resolves({ status: 'accepted', amount: 8 }), 'false');
+        assert.strictEqual(resolves({ status: 'rejected', amount: 7 }), 'false');
       }
       if (index === 2) {
         assert.strictEqual(edited.permittedInterfaces[0].operations[0].invocation.executable, 'numeric-amount');
@@ -2476,6 +2482,9 @@ function checkGapsGuidance(guide, engine, failures) {
   };
   checkKeys('## Map engine outcomes to repairs', ['Outcome state', 'Concrete repair'], [...engine.OUTCOME_STATES]);
   const allTables = headingBody(guide, '## Map discipline and preflight checks to repairs');
+  const wholeBodyRow = allTables.split('\n').find((line) => /^\| `whole-body`\s+\|/.test(line)) ?? '';
+  for (const phrase of ['every required response key pointer', 'parent pointer'])
+    if (!wholeBodyRow.includes(phrase)) failures.push(`gaps.md whole-body row lacks "${phrase}"`);
   const requestShapes = taggedExamples(allTables, 'request-shape');
   const inputBindings = taggedExamples(allTables, 'input-binding');
   if (requestShapes.length !== 1 || inputBindings.length !== 1 || [...allTables.matchAll(/```json\n/g)].length !== 2) {
