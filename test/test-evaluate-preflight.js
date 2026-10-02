@@ -174,8 +174,9 @@ function ended(child) {
 
 /** Kills a pid a failing case left running, so a regression cannot leak processes past the suite. */
 function reap(pid) {
+  if (!Number.isSafeInteger(pid) || pid <= 0 || pid === process.pid) return;
   try {
-    if (pid !== null) process.kill(pid, 'SIGKILL');
+    process.kill(pid, 'SIGKILL');
   } catch {
     // Already gone.
   }
@@ -401,6 +402,7 @@ function startRunner(args, input, { detached = false } = {}) {
 
 /** The pids of the children of `pid`. */
 function childrenOf(pid) {
+  if (!Number.isSafeInteger(pid) || pid <= 0) return [];
   const listed =
     process.platform === 'win32'
       ? spawnSync(
@@ -455,6 +457,10 @@ const ready = setInterval(() => {
 }, 10);\n`,
   );
   const progress = (phase) => fs.writeSync(2, `[Windows preflight] ${phase}\n`);
+  const endCase = (phase) => {
+    progress(`${phase}: end (${failures.length} accumulated failure(s))`);
+    for (const failure of failures) fs.writeSync(2, `[Windows preflight] failure: ${failure}\n`);
+  };
   const options = ['--agent', 'custom', '--agent-cmd', process.execPath, '--agent-arg', agentScript];
   const readPids = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
   const waitForPids = async (file) => {
@@ -574,7 +580,7 @@ const ready = setInterval(() => {
       reap(normal.child);
     }
     await Promise.race([normalClosed, delay(5000)]);
-    progress('normal exit: end');
+    endCase('normal exit');
   }
 
   progress('dual kill: begin');
@@ -632,7 +638,7 @@ const ready = setInterval(() => {
       reap(dualPids.child);
     }
     await Promise.race([dualClosed, delay(5000)]);
-    progress('dual kill: end');
+    endCase('dual kill');
   }
 
   progress('helper death: begin');
@@ -652,17 +658,28 @@ const ready = setInterval(() => {
   let ownerLeader = null;
   let guardian = null;
   let helper = null;
+  let ownerAgentVerified = false;
+  let ownerChildVerified = false;
   try {
     ownerPids = await waitForPids(ownerFile);
-    [ownerSupervisor] = childrenOf(ownerRun.pid);
-    [ownerLeader] = childrenOf(ownerSupervisor ?? 0);
-    [guardian] = childrenOf(ownerLeader ?? 0);
-    helper = childrenOf(guardian ?? 0).find((pid) => pid !== ownerPids?.agent);
-    check(
-      ownerPids !== null && helper !== undefined,
-      `the Windows helper-death case did not start its agent, child and Job Object owner: ${JSON.stringify({ ownerPids, ownerSupervisor, ownerLeader, guardian, helper })}`,
+    if (ownerPids !== null) {
+      [ownerSupervisor] = childrenOf(ownerRun.pid);
+      [ownerLeader] = childrenOf(ownerSupervisor);
+      [guardian] = childrenOf(ownerLeader);
+      const guardianChildren = childrenOf(guardian);
+      ownerAgentVerified = guardianChildren.includes(ownerPids.agent);
+      ownerChildVerified = ownerAgentVerified && childrenOf(ownerPids.agent).includes(ownerPids.child);
+      const helpers = guardianChildren.filter((pid) => pid !== ownerPids.agent);
+      if (ownerChildVerified && helpers.length === 1) [helper] = helpers;
+    }
+    progress(
+      `helper discovery: ${JSON.stringify({ ownerPids, ownerSupervisor, ownerLeader, guardian, helper, ownerAgentVerified, ownerChildVerified, stderr: ownerStderr })}`,
     );
-    if (helper !== undefined) reap(helper);
+    check(
+      ownerPids !== null && ownerChildVerified && helper !== null,
+      `the Windows helper-death case did not verify its runner, supervisor, leader, guardian, agent, child and sole Job Object owner: ${JSON.stringify({ ownerPids, ownerSupervisor, ownerLeader, guardian, helper, ownerAgentVerified, ownerChildVerified })}\n${ownerStderr}`,
+    );
+    if (helper !== null) reap(helper);
     const ending = await Promise.race([ownerClosed, delay(15_000).then(() => null)]);
     check(
       ending?.code === EXIT_CODES['environment-transport'],
@@ -674,11 +691,18 @@ const ready = setInterval(() => {
     }
   } finally {
     ownerRun.kill('SIGKILL');
-    for (const pid of [ownerSupervisor, ownerLeader, guardian, helper, ownerPids?.agent, ownerPids?.child]) {
+    for (const pid of [
+      ownerSupervisor,
+      ownerLeader,
+      guardian,
+      helper,
+      ...(ownerAgentVerified ? [ownerPids.agent] : []),
+      ...(ownerChildVerified ? [ownerPids.child] : []),
+    ]) {
       if (pid !== null && pid !== undefined) reap(pid);
     }
     await Promise.race([ownerClosed, delay(5000)]);
-    progress('helper death: end');
+    endCase('helper death');
   }
 
   progress('wall clock timeout: begin');
@@ -714,7 +738,7 @@ const ready = setInterval(() => {
       reap(timeoutPids.child);
     }
     await Promise.race([timeoutClosed, delay(5000)]);
-    progress('wall clock timeout: end');
+    endCase('wall clock timeout');
   }
 
   for (const [failureMode, failureDetail] of [
@@ -776,7 +800,7 @@ const ready = setInterval(() => {
         reap(failedPids.child);
       }
       await Promise.race([failedClosed, delay(5000)]);
-      progress(`setup failure ${failureMode}: end`);
+      endCase(`setup failure ${failureMode}`);
     }
   }
 
@@ -822,7 +846,7 @@ const ready = setInterval(() => {
       reap(setupRacePids.child);
     }
     await Promise.race([setupRaceClosed, delay(5000)]);
-    progress('setup race: end');
+    endCase('setup race');
   }
 }
 
