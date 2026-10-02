@@ -1461,8 +1461,7 @@ async function scoreAttempt(context, { probe, directory, set, corpusDigest }) {
       engine,
       corpusDigest,
       probeId: probe.probeId,
-      records: set.records,
-      manifest: set.manifestFile,
+      set,
     });
   } catch (error) {
     if (!(error instanceof AttemptInputError)) throw error;

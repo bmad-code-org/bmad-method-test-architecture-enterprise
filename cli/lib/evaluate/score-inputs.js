@@ -25,9 +25,9 @@
  *     amended 2026-10-01).
  *
  * The enumeration lives here once, so a later engine call routes through the
- * same hold. `holdAttemptInputs` (Story 1.69) holds the inputs of one
- * evaluator attempt's score call the same way, reading each through the run
- * directory writer, which holds it to the digest the runtime wrote.
+ * same hold.
+ * `holdAttemptInputs` (Story 1.69) holds the inputs of one evaluator attempt's score call the same way.
+ * It reads each through the run directory writer, which holds it to the digest the runtime wrote.
  */
 
 'use strict';
@@ -130,8 +130,9 @@ class HeldInputs {
 
   /**
    * @param {object} options
-   * @param {((relative: string) => Buffer) | null} [options.read] reads a held input again after a call; null reads the
-   *   input's file as a regular file. An evaluator attempt's inputs are read through the run directory writer.
+   * @param {((relative: string) => Buffer) | null} [options.read] reads a held input again after a call.
+   *   Null reads the input's file as a regular file.
+   *   An evaluator attempt's inputs are read through the run directory writer.
    * @param {string} [options.accepted] what a held file was accepted as, for the message of a file that cannot be read again
    */
   constructor({ engine, index, entries, read = null, accepted = 'the regular file the input check accepted' }) {
@@ -356,16 +357,15 @@ function holdScoreInputs({ runDirectory, index, record, engine }) {
  * @param {{ digestBytes: (bytes: Buffer) => string }} options.engine
  * @param {string} options.corpusDigest
  * @param {string} options.probeId
- * @param {string[]} options.records the attempt's record files, run-relative
- * @param {string} options.manifest the attempt's isolation manifest, run-relative
+ * @param {{ records: string[], manifestFile: string }} options.set the attempt's sealed set: its record files and isolation manifest, run-relative
  * @returns {HeldInputs}
  * @throws {AttemptInputError} naming the first input that is not what the runtime wrote
  */
-function holdAttemptInputs({ read, engine, corpusDigest, probeId, records, manifest }) {
+function holdAttemptInputs({ read, engine, corpusDigest, probeId, set }) {
   const index = {
     ...RUN_FILES,
     corpusDigest,
-    trialSets: [{ probeId, probe: attemptProbeFile(probeId), records, isolationManifest: manifest }],
+    trialSets: [{ probeId, probe: attemptProbeFile(probeId), records: set.records, isolationManifest: set.manifestFile }],
   };
   const entries = scoreInputList({ runDirectory: '', index, record: {} }).map((input) => {
     let bytes;

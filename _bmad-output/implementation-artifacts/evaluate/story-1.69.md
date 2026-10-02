@@ -132,7 +132,7 @@ context:
 - Docs: `Score input integrity` gains the paragraph that `run` holds an attempt's call the same way; `Qualifying a sealed-brief agent` and the exit 3-5 and 12 rows state it.
   The skill's guides say nothing about the old limit (grepped `src/workflows/testarch/bmad-testarch-evaluate`), so the skill is untouched and no builder pass ran.
 - `package.json` gains `test:evaluate-held-attempts` after `test:evaluate-agents` in the chain, which counts 109 steps (README, in digits); `tools/test-shard-weights.json` carries its weight.
-- Matrix audit: a record, the contract, the policy, the probe, the preflight verdict, the configuration or the manifest rewritten and kept (`rewrite-<kind>`); each rewritten for the call and restored (`restore-<kind>`); a well-formed artifact with altered votes (`forge-votes`); the same artifact reformatted or with a repeated last key (`reformat-artifact`, `duplicate-key-artifact`); the artifact removed or an earlier one staged (`restore-and-unstage`, `stage-stashed`, and over an Invalid call in `checkHeldAttemptsLaterProbes`); an input already changed at the hold (the unit, since nothing a call can race with runs between `writer.verify` and the hold); an unchanged qualification (`checkHeldAttempts`, and the existing qualification cases, which now run through the comparison); an Invalid attempt unchanged (`checkEvaluatorQualification`'s second attempt exit 3 and its `invalid:` lines, and the reason attack's baseline); a call that exits 7; the static read.
+- Matrix audit: a record, the contract, the policy, the probe, the preflight verdict, the configuration or the manifest rewritten and kept (`rewrite-<kind>`); each rewritten for the call and restored (`restore-<kind>`); a well-formed artifact with altered votes (`forge-votes`); the same artifact reformatted or with a repeated last key (`reformat-artifact`, `duplicate-key-artifact`); the artifact removed or an earlier one staged (`restore-and-unstage`, `stage-stashed`, and over an Invalid call in `checkHeldAttemptsLaterProbes`); an input already changed at the hold (the unit, since only a delayed process that outlives an earlier probe's call could reach it); an unchanged qualification (`checkHeldAttempts`, and the existing qualification cases, which now run through the comparison); an Invalid attempt unchanged (`checkEvaluatorQualification`'s second attempt exit 3 and its `invalid:` lines, and the reason attack's baseline); a call that exits 7; the static read.
   Each ran and passed in the verification output.
 
 ### Departures from the plan text
@@ -140,17 +140,21 @@ context:
 - AC 1's revert wording does not hold in full, as in Story 1.68: removing the check after the call alone leaves the in-process comparison refusing every attack, so only the naming of the file fails.
   With the check and the comparison both removed the rewritten bytes are scored: a record, the policy or a probe rewrite copies evidence and votes, while a contract, preflight verdict, configuration or manifest rewrite goes Invalid with no evidence and the run exits 11.
   `epics.md` and `test-design-epic-1.md` carry the observed behavior, dated 2026-10-02.
-- The cases run as `test:evaluate-held-attempts`, not inside `test:evaluate-evaluators`: `test:evaluate-agents` already weighs 323.3 seconds in CI, and the new cases weigh about 247 more, so the plan's script would have crossed 400.
+- The cases run as their own script, `test:evaluate-held-attempts`.
+  `test:evaluate-agents` already weighs 323.3 seconds in CI, and the new cases weigh about 270 more, so one script would have crossed 400.
   The script joins the chain (109 steps), so the plan's gate lines name it.
 - The hold-time refusal has no end-to-end case.
-  The runtime verifies the run directory just before sealing an attempt's record, and nothing a call can race with runs between that verify and the hold, so the unit drives it, and drives `scoreAttempt`'s stop over a real writer.
+  The hold reads through `writer.read`, which holds every file to the digest the runtime wrote.
+  `writer.verify` runs once per attempt, before its probe loop, so for a later probe of an arm the window holds the earlier probe's score call.
+  A rewrite that call makes is named by its own check after the call, or stopped by `writeQualifiedProbe`'s read, so only a delayed process that outlives the call could reach the hold.
+  The unit drives the hold for the first probe and for a later one, and drives `scoreAttempt`'s stop over a real writer.
 - The check order in `scoreAttempt` changed: the staged file is read and compared before the exit-3 branch and before the "exit other than 0, 2 or 3" stop, so an exit the held bytes do not give is named as a mismatch and an exit they do give (4, 5 or 64 with no artifact) still reaches the old stop.
   A staged link or non-file is a stop of its own; before, `fs.existsSync` followed it and `copyIn` read it.
 - The argv builder moved into `HeldInputs.scoreArguments` and `score` uses it as well, so the order of the call's arguments lives once; the recorded argv of `score` is unchanged, which `test:evaluate-held-inputs`' byte-for-byte reruns pin.
 
 ## Revert observations
 
-Each exercised once on the final tree, by applying the one edit that undoes the change in a scratch copy of the checkout (node_modules linked, under the scratchpad directory, never the working tree), running the named case, and discarding the copy.
+Each exercised once on the final tree, by applying the one edit that undoes the change in a scratch copy of the checkout (node_modules linked, under the scratchpad directory), running the named case, and discarding the copy.
 `test:evaluate-held-attempts` passes unmodified: 315 checks (312 under `--held-attempts-only`, which skips the per-project temp-directory checks).
 Counts are failed checks of the total the run reached; a case that throws stops the checks after it, so those totals are smaller.
 
@@ -170,7 +174,7 @@ Counts are failed checks of the total the run reached; a case that throws stops 
 - The hold reading through an unverified `readFileSync` in `scoreAttempt`: 10 of 313 (the kept rewrites no longer name the file as one the runtime wrote, and the static read names the direct read).
 - The hold's error not wrapped as an `AttemptInputError`: 22 of 35 of the hold's unit; the stop's `instanceof` guard removed: 1 of 35 (the hold's error is no longer a stop).
 - A hold reading from `/dev/null` in place of the writer: 29 of 35.
-- `test:evaluate-boundaries`: the caller-module test dropped fails 2 of 442 (`reproduce` asked for in `score.js` and `reproduceAggregate` in `held-refusal.js` go unreported); `reproduce` allowed in `score.js` instead of `held-refusal.js` fails 3 of 443 (the real `held-refusal.js`, the clean plant and the plant in `score.js`); the one-call-per-caller count dropped fails 1 of 442 (the second call in `heldRefusal`).
+- `test:evaluate-boundaries`: the caller-module test dropped fails 2 of 442 (`reproduce` asked for in `score.js` and `reproduceAggregate` in `held-refusal.js` go unreported); `reproduce` allowed in `score.js` in place of `held-refusal.js` fails 3 of 443 (the real `held-refusal.js`, the clean plant and the plant in `score.js`); the one-call-per-caller count dropped fails 1 of 442 (the second call in `heldRefusal`).
 
 ## Gates
 
@@ -233,5 +237,62 @@ New comments and docs are one sentence per line (`held-refusal.js`, `scoreAttemp
 ## Left undone
 
 Nothing is left for a new story.
-No finding was left open: the hold-time refusal has no end-to-end case because nothing can race it, which the unit covers and the plan text now says.
+No finding was left open: the hold-time refusal has no end-to-end case because no test can land a delayed writer in the window deterministically, which the unit covers and the plan text now says.
 The full `npm test` is unrun locally by instruction; CI runs it.
+
+## Review round 1
+
+Three lenses (compliance, adversarial, test quality) reviewed f8ae85de and raised the findings below; none was invalid.
+The new cases ran on the fixed tree; the mutations below are the one edit that undoes each fix, applied in a scratch copy of the checkout (node_modules linked, under the scratchpad directory) and run with `--held-attempts-only`.
+
+### Findings and dispositions
+
+- Compliance 1, the seven `restore-<kind>` cases accepted any refusal: fixed.
+  They now require a text only the comparison produces (`stand behind: the staged evidence artifact` or `stand behind: the call`), which the re-read's `can no longer be read` never matches.
+  Mutation: the race engine's `restore-<kind>` modes no longer restore, so each becomes a kept rewrite; 7 of 450 checks fail, one per kind.
+- Compliance 2, "kept and restored on a later attempt and a later probe" was true of the record alone: fixed by running the cases.
+  Each of the seven inputs is now rewritten and kept on the later probe of an arm (call 4 of the P-003 project) as well as on the later attempt; each is restored on the later attempt only.
+  Restoring all seven on the later probe too would have added about 30 seconds more than the budget; the later probe's comparison is covered by altered votes, an edited reason line and an artifact staged over an Invalid call.
+  The CHANGELOG, the test header and `test-design-epic-1.md` say exactly that.
+  Added weight of the round: 38.8 seconds of local CPU (131.2 to 170.0) for 17 new runs, under 60.
+- Compliance 3, the stated reason for the missing end-to-end hold case was false for a later probe: fixed.
+  `epics.md`, this record and the test comment now say the hold reads through `writer.read`, `writer.verify` runs once per attempt before its probe loop, and the window for a later probe holds the earlier probe's score call, whose own check names a rewrite it made.
+  Only a delayed process that outlives the call could reach the hold, and no test can land one deterministically.
+  The unit now drives the hold for a later probe (P-003 with its probe file rewritten after the earlier probe's files stand) through `scoreAttempt`, which stops with exit 12 and no engine call.
+  Mutation: the stop's `instanceof` guard removed, 2 of 37; the hold's error not wrapped, 23 of 37; a hold that reads from the wrong place, 30 of 37.
+- Compliance 4, the matrix row "or is signalled" had no case: fixed.
+  The race engine's `sigkill` mode kills its own process after the real call, and `checkHeldAttemptsUndocumentedExit` runs it beside the exit-7 case on the fourth call, asserting exit 12, `was killed by SIGKILL and reported no exit code`, four engine calls, no evidence and no report.
+  Mutation: the `EngineStageError` catch removed from `scoreAttempt`, 2 of 450 (both the exit-7 and the killed case).
+- Compliance 5, writing rules: fixed.
+  One sentence per line in `score-inputs.js` (the module header and the `scoreArguments` and constructor JSDoc), `race-engine.js`, `test-evaluate-evaluators.js` (the header, the case comments and the `CASES` comment), `test-evaluate-boundaries.js`, `ARCHITECTURE-SPINE.md` (the Story 1.69 amendments) and this record; the "never the working tree" clause is gone.
+  A scan of every added comment and markdown line of `git diff origin/main` found no other line with two sentences outside the frozen block and the coordinator's quoted spec.
+- Adversarial 1, test quality 1 and 3, the static read: fixed.
+  `scoreAttempt` passes `set` to `holdAttemptInputs`, so its body names neither `set.records` nor `set.manifestFile`.
+  The static read refuses an input read through the writer (`writer.read(` and `writer.readJson(`) except the hold's own `read: (relative) => writer.read(relative)`, `set.records` and `set.manifestFile`, `regularFileBytes`, `copyIn(`, any use of `produced` beyond its declaration, `out: produced` and the one `stagedArtifact(produced)`, and requires exactly one `stagedArtifact(` call.
+  Every alternative of every rule has a plant (`record-<n>`, `RUN_FILES`, a destructured `readFileSync`, the `probes/` template and each new one), and the case fails for an alternative that has none.
+  Mutation: each of the 22 alternatives replaced by a never-matching one fails 1 of 79 static checks (the `writer.read(` alternative 2, since a second reader is planted too); the staged-artifact count rule removed, 2 of 81; the `produced` rule removed, 1 of 81; the hold-reader requirement removed, 1 of 81; the required write removed, 1 of 81; a second `stagedArtifact(produced)` read in `scoreAttempt`, 6 of 84.
+- Test quality 2, the diagnostic-lines comparison was only attacked with a changed line count: fixed.
+  The race engine's `edit-diagnostic` mode pipes the call's stderr and extends its last `eval-quality:` line, keeping the count, the exit and the artifact; `checkHeldAttemptsLaterProbes` asserts the diagnostics refusal on the Invalid call.
+  Mutation: the comparison by line count alone, 4 of 450; the comparison removed, 8 of 450.
+- Test quality 4, no attack changed only the artifact's last byte: fixed with two modes.
+  `drop-final-newline` removes the final newline and `blank-final-newline` replaces it with a space; both assert the `differs` refusal.
+  The mutant that ignores the last byte of both sides (`subarray(0, -1)`) still refuses a removal, since the lengths differ, and survives 450 of 450 with that mode alone; the in-place `blank-final-newline` kills it, 6 of 459.
+- Shard weights: fixed from the CI timings of the green run on this head.
+  `test:evaluate-run` 170.6 to 230.4 and `test:evaluate-partitions` 55 to 80 (more than 15 percent off); `test:evaluate-agents` 323.3, `test:evaluate-evaluators` 248.1 and `test:evaluate-held-inputs` 50.8 stay (13.9, 11.2 and 11.8 percent off).
+  `test:evaluate-held-attempts` is 270.9: the CI measure 209.1 plus the added 38.8 local seconds times the 1.594 CI-over-local ratio of that script (209.1 over 131.2).
+  The weights give eight shards of 553.6 to 553.7 seconds, under 13 minutes.
+  The later local readings of the script were 148.4 and 170.0 seconds under different machine load, so the CI measure of this head should replace 270.9.
+
+### Mutation counts after the fixes
+
+Taken on the fixed tree (the case count is 450 of the group's cases before `blank-final-newline` joined, 459 with it).
+
+- The check after the call removed, 14 of 450; it and the comparison removed, 110 of 451 (the record, policy and probe rewrites still copy evidence, and the contract, preflight verdict, configuration and manifest rewrites go Invalid, exit 11); the comparison removed with the check kept, 76 of 450; `changedSince` over the first input only, 18 of 450.
+- A parsed comparison in place of the byte comparison, 18 of 450; the exit comparison removed, 1 of 450; the lines comparison removed, 8 of 450; the removed-artifact branch removed, 5 of 450; the artifact-where-none branch removed, 4 of 450; the staged-link stop removed, 1 of 450.
+- A re-score serialized with a trailing newline, 33 of 204 (the first unchanged qualification exits 12 and the cases after it cannot finish).
+- A hold that reads without the writer's digest check, 19 of 452; the later probe's rewrites kept are among those that fail.
+
+### Gates
+
+Green on the fixed tree: `test:evaluate-held-attempts` 462 checks, `test:evaluate-agents` 330, `test:evaluate-evaluators` 486, `test:evaluate-boundaries` 442, `test:evaluate-held-inputs` 210, `test:evaluate-partitions`, `test:evaluate-guidance`, `test:shards`, `test:ci-coverage`, `test:doc-counts`, `test:doc-claims`, `test:changelog`, `lint`, `lint:md`, `format:check` and `docs:validate-links`.
+The full `npm test` is unrun (CI runs the chain).

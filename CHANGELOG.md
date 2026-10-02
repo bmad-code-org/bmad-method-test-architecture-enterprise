@@ -315,7 +315,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The comparison only refuses, and the recorded argv of each attempt, run by hand with a fresh `--out`, still reproduces its evidence byte for byte.
   The comparison moved from `score.js` to `cli/lib/evaluate/held-refusal.js` so `score` and `run` share it and its wording, and `score`'s behavior and text are unchanged.
   `test:evaluate-boundaries` follows it there and refuses a re-score asked for in `score.js` or `run.js`.
-  The new `test:evaluate-held-attempts` script (`--group=held-attempts` of `test/test-evaluate-evaluators.js`, in the `npm test` chain of 109 steps) rewrites each input for the real engine's read, kept and restored, on a later attempt and a later probe.
+  The new `test:evaluate-held-attempts` script (`--group=held-attempts` of `test/test-evaluate-evaluators.js`, in the `npm test` chain of 109 steps) rewrites each input for the real engine's read, kept on a later attempt and a later probe and restored on a later attempt.
   It also substitutes, reformats, links, removes and restages artifacts and exits, and a static read fails when `scoreAttempt` names an input without `score-inputs.js`.
   The reference's `Score input integrity` and `Qualifying a sealed-brief agent` sections state the check.
 - The test-design contract reports whole-document coverage (Story 1.48, eval-quality's AD-20 rule 2 and AD-31).

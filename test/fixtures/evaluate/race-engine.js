@@ -53,11 +53,18 @@
  *   artifact is the same parsed value in other bytes (indented, with its top
  *   keys in reverse order, or with a repeated last key, which the engine's lexical
  *   scanner refuses).
- * - `restore-and-rescore`: the input `TEA_RACE_KIND` names is rewritten for the real call and put back, and then a second
- *   call over the restored inputs stages the artifact the held bytes give, so only the first call's exit and diagnostics disagree.
+ * - `restore-and-rescore`: the input `TEA_RACE_KIND` names is rewritten for the real call and put back.
+ *   A second call over the restored inputs then stages the artifact the held bytes give.
+ *   Only the first call's exit and diagnostics disagree with the held bytes.
  * - `exit-<code>`: the call exits that code whatever the real call did and left staged.
- * - `forge-votes`: the staged artifact keeps everything but its probe's first trial vote, whose state is flipped between
- *   `caught` and `missed`.
+ * - `sigkill`: the process kills itself with SIGKILL after the real call, so the call has no exit code.
+ * - `forge-votes`: the staged artifact keeps everything but its probe's first trial vote.
+ *   That vote's state is flipped between `caught` and `missed`.
+ * - `drop-final-newline`: the staged artifact loses its last byte, the newline the engine ends it with.
+ * - `blank-final-newline`: the staged artifact's last byte, the newline the engine ends it with, becomes a space.
+ *   Its length is the engine's own.
+ * - `edit-diagnostic`: the call's stderr is passed through with the text of its last `eval-quality:` line extended.
+ *   The count of lines, the exit and the artifact are the real call's.
  * - `stage-stashed`: after the real call the evidence artifact an earlier
  *   score kept for the probe (`TEA_RACE_STASH_DIR/<probe>/evidence-artifact.json`)
  *   is copied to `--out`, whether or not the call staged one.
@@ -66,8 +73,10 @@
  * probe.
  *
  * Story 1.69 reuses them over the `eval-quality score` call `tea-evaluate run` makes for each attempt of a sealed-brief agent evaluator's qualification.
- * Its records lie under `evaluator-qualification/` and not `trial-sets/`, and the run directory is found from either.
- * `TEA_RACE_NTH`, when set, limits the modes to the n-th `score` call the log holds (counting from 1), so a later attempt can be attacked and the earlier ones scored as they are.
+ * Its records lie under `evaluator-qualification/` and not `trial-sets/`.
+ * The run directory is found from either.
+ * `TEA_RACE_NTH`, when set, limits the modes to the n-th `score` call the log holds (counting from 1).
+ * A later attempt can be attacked and the earlier ones scored as they are.
  * `TEA_RACE_KEEP`, when set, names a directory the staged artifact of every call that was not attacked is copied to (`<dir>/<probe>/evidence-artifact.json`).
  * `TEA_RACE_STASH_DIR` can then name it for `restore-and-restage` and `stage-stashed`.
  *
@@ -241,7 +250,18 @@ if (inputKind !== null && attacking && argv.includes(INPUTS[inputKind][0])) {
   }
 }
 
-const real = spawnSync(process.execPath, [engineCliPath({}), ...argv], { stdio: 'inherit' });
+// `edit-diagnostic` reads the call's stderr to edit it; every other mode lets it through.
+const editing = mode === 'edit-diagnostic' && attacking;
+const real = spawnSync(process.execPath, [engineCliPath({}), ...argv], {
+  stdio: editing ? ['inherit', 'inherit', 'pipe'] : 'inherit',
+  encoding: 'utf8',
+});
+if (editing) {
+  const lines = real.stderr.split('\n');
+  const last = lines.findLastIndex((line) => line.startsWith('eval-quality: '));
+  if (last !== -1) lines[last] += ' (edited)';
+  process.stderr.write(lines.join('\n'));
+}
 if (attack?.[1] === 'restore' && original !== null) fs.writeFileSync(inputFile, original);
 if (mode === 'restore-and-rescore' && attacking) {
   // The artifact is the one the restored inputs give, staged by a second call whose own exit and streams are dropped, so
@@ -311,6 +331,14 @@ if (mode === 'swap-scores') {
   // The last duplicate wins when parsed, so the value is the same and the bytes are not.
   const text = fs.readFileSync(out, 'utf8').trimEnd();
   fs.writeFileSync(out, `${text.slice(0, -1)},"schemaVersion":${JSON.parse(text).schemaVersion}}\n`);
+} else if (mode === 'sigkill' && attacking) {
+  process.kill(process.pid, 'SIGKILL');
+} else if (mode === 'blank-final-newline' && attacking) {
+  const bytes = fs.readFileSync(out);
+  bytes[bytes.length - 1] = 0x20;
+  fs.writeFileSync(out, bytes);
+} else if (mode === 'drop-final-newline' && attacking) {
+  fs.writeFileSync(out, fs.readFileSync(out).subarray(0, -1));
 } else if (/^exit-\d+$/.test(mode) && attacking) {
   forcedExit = Number(mode.slice('exit-'.length));
 } else if (mode === 'forge-votes' && attacking) {

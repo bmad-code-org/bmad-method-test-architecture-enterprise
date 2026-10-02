@@ -40,10 +40,11 @@
  *     only to destructure it, test it against null and hand it to
  *     `this.#engine.serializeArtifact`. `aggregateStrength` (Story 1.45) is the
  *     other exemption: one call in the same file's `reproduceAggregate`, its
- *     result bound to `aggregate`, which is only serialized. The re-score is
- *     asked for once, in `held-refusal.js`'s `heldRefusal`, which `score.js` and
- *     `run.js` (an evaluator attempt's call, Story 1.69) both call, and the
- *     re-aggregation once, in `score.js`'s `heldAggregateRefusal`. A returned or aliased
+ *     result bound to `aggregate`, which is only serialized.
+ *     The re-score is asked for once, in `held-refusal.js`'s `heldRefusal`.
+ *     `score.js` and `run.js` (an evaluator attempt's call, Story 1.69) both call it.
+ *     The re-aggregation is asked for once, in `score.js`'s `heldAggregateRefusal`.
+ *     A returned or aliased
  *     `runScore`, a rest element or a renamed key over the result, and a
  *     `ladder` anywhere else under `cli/` fail. `preflightFromObservations`
  *     and `seal` fail there too.
@@ -161,7 +162,10 @@ const REPRODUCTION_STAGE = 'runScore';
 const REPRODUCTION_METHOD = 'reproduce';
 const AGGREGATION_STAGE = 'aggregateStrength';
 const AGGREGATION_METHOD = 'reproduceAggregate';
-/** Where each re-score is asked for: the module and the function in it, once. `run.js` asks for neither; it calls `heldRefusal`. */
+/**
+ * Where each re-score is asked for: the module and the function in it, once.
+ * `run.js` asks for neither, and calls `heldRefusal`.
+ */
 const REPRODUCTION_CALLERS = {
   reproduce: { module: HELD_REFUSAL_MODULE, caller: 'heldRefusal' },
   reproduceAggregate: { module: SCORE_MODULE, caller: 'heldAggregateRefusal' },

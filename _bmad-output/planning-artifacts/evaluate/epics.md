@@ -1907,7 +1907,11 @@ Every outcome of a call that ran is compared, exit 3 included (an Invalid attemp
 The staged bytes the comparison accepted are the bytes copied into `evidence-artifact.json` and read for the vote (the earlier `copyIn` read the staging path a second time).
 `test:evaluate-boundaries` follows `heldRefusal` to `held-refusal.js` (the one file that asks for `reproduce`, once) and keeps `score.js`'s `heldAggregateRefusal` as the one that asks for `reproduceAggregate`; it plants a `reproduce` call in `score.js` and in `run.js`.
 The cases run as their own script, `test:evaluate-held-attempts` (`--group=held-attempts` of `test/test-evaluate-evaluators.js`), since `test:evaluate-agents` already weighs 323 seconds in CI; it joins the `npm test` chain, which counts 109 steps.
-The hold-time refusal has no end-to-end case: the runtime verifies the run directory just before sealing the attempt's record and nothing a call can race with runs between the verify and the hold, so the hold is driven over a real run directory writer in a unit.
+The hold-time refusal has no end-to-end case.
+The hold reads each input through `writer.read`, which holds every file to the digest the runtime wrote.
+`writer.verify` runs once per attempt, before its probe loop, so for a later probe of an arm the window between that verify and the hold holds the earlier probe's score call.
+A rewrite that call makes is named by its own check after the call, or stopped by `writeQualifiedProbe`'s read of the probe file, so only a delayed process that outlives the call could reach the hold, and no test can land one deterministically.
+The hold is driven over a real run directory writer in a unit, for the first probe and for a later one, and `scoreAttempt`'s stop is driven through it.
 
 ### Story 1.70: Refuse promptfoo assertions that run adopter code or call a model
 
