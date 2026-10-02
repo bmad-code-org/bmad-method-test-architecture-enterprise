@@ -247,4 +247,8 @@ Two regression lenses read head f8b605ba. The references/ci.md, SKILL.md and pla
 
 Targeted mutants (17, all caught): the shared-event clause and the `pull_request` clause of step 03b fail `test:evaluate-ci-render`; six reversed or dropped guide rules and two template drifts fail `test:evaluate-guidance`; the repository and record rows fail `test:evaluate-ci`, where the `repositoryRead` digest stops a changed fixture file first and the fourteen in-test revert cases prove the fact assertions behind it. Skipped: nothing from the brief. A 100-mutant sweep was not run; the new checks were proven by the revert cases that run inside `test:evaluate-ci` and `test:evaluate-guidance` and by a few targeted mutants.
 
+## Round 3
+
+One medium finding. The shared-event clause of step 03b item 7 could leave a tier no event fires: a deploy workflow with `workflow_dispatch` alone maps `release` to it, a `scheduled` tier with the trigger `["schedule", "manual-dispatch"]` takes it, and `release` is guarded out of every event. Fixed with one clause: such a tier is named in the summary as wired to no event until Story 1.97's gating, and no guard excludes a tier from every event. `test:evaluate-ci-render` holds the sentence and a revert case, the contract and probes were regenerated, and Story 1.97's context names the case.
+
 ## Review Triage Log

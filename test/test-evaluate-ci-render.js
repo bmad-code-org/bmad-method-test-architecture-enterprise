@@ -662,6 +662,10 @@ function checkStepSentences() {
     ['a tag push is told apart by its ref', "`startsWith(github.ref, 'refs/tags/')` (or the tag pattern) for a tag push"],
     ['a cron is told apart by its schedule', "`github.event.schedule == '<its cron>'` for each cron"],
     [
+      'a tier left with no event is named and never guarded out of every event',
+      "When a tier's only resolved event is one that another tier took, name that tier in the summary as wired to no event until the gating of Story 1.97, and render no guard that excludes a tier from every event.",
+    ],
+    [
       'one tier takes workflow_dispatch',
       'give `workflow_dispatch` to the one tier whose `trigger` names it and guard the others out of it',
     ],

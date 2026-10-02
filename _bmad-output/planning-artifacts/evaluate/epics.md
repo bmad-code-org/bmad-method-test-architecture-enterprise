@@ -2127,7 +2127,7 @@ So that a blocking exit stops the shipment (CAP-11).
 
 **Acceptance Criteria:**
 
-**Given** a plan check that names an existing pipeline job the tier must gate (and tiers whose triggers resolve to one GitHub event, which step 03b tells apart with a ref or cron guard from Story 2.4's second review round, so the gate lands on the evaluation job of the right tier)
+**Given** a plan check that names an existing pipeline job the tier must gate (and tiers whose triggers resolve to one GitHub event, which step 03b tells apart with a ref or cron guard from Story 2.4's second review round, so the gate lands on the evaluation job of the right tier; a tier whose only event another tier took, such as a `release` tier on a deploy workflow that has `workflow_dispatch` alone beside a `scheduled` tier that takes it, is named in the summary as wired to no event until this story gives it one)
 **When** `bmad-testarch-ci` renders the plan in edit or create mode
 **Then** that job waits for the tier's evaluation job, through `needs` inside one workflow file or through a `workflow_run` trigger across files, and the story records which and why
 **And** the plan schema and `ci-plan.js` define and validate the field, `tea-evaluate check` reports a name that is not a job id as a `ci-plan` finding, and the CI skill's step 03b may edit that one job, reports the edit in its summary and restores it on re-render
