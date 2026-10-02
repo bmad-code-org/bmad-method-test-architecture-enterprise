@@ -528,8 +528,10 @@ else process.stdout.write('windows agent answered\\n');\n`,
   }
 
   const failedFile = path.join(directory, 'failed.json');
-  const failed = runRunner(
+  const failedRunner = spawn(
+    process.execPath,
     [
+      RUNNER,
       '--skill-root',
       STUB_SKILL,
       ...options,
@@ -540,13 +542,45 @@ else process.stdout.write('windows agent answered\\n');\n`,
       '--env-pass',
       'TEA_WINDOWS_JOB_OWNER_TEST_FAILURE',
     ],
-    { env: { ...BASE_ENV, TEA_WINDOWS_JOB_OWNER_TEST_FAILURE: '1' }, timeout: 30_000 },
+    {
+      cwd: PROJECT_ROOT,
+      env: { ...BASE_ENV, TEA_WINDOWS_JOB_OWNER_TEST_FAILURE: '1' },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    },
   );
-  check(
-    failed.status === EXIT_CODES['environment-transport'] && failed.stderr.includes('Windows Job Object setup failed'),
-    `Windows Job Object setup failure returned ${failed.status}; expected transport failure naming setup\n${failed.output}`,
-  );
-  check(!fs.existsSync(failedFile), 'the Windows agent started after Job Object setup failed');
+  let failedStdout = '';
+  let failedStderr = '';
+  failedRunner.stdout.on('data', (chunk) => (failedStdout += chunk));
+  failedRunner.stderr.on('data', (chunk) => (failedStderr += chunk));
+  failedRunner.stdin.end('Say alpha.');
+  const failedClosed = ended(failedRunner);
+  let failedPids = null;
+  let failedEnding = null;
+  try {
+    failedEnding = await Promise.race([failedClosed, delay(30_000).then(() => null)]);
+    if (failedEnding === null) failedRunner.kill('SIGKILL');
+    failedPids = fs.existsSync(failedFile) ? readPids(failedFile) : null;
+    check(
+      failedEnding?.code === EXIT_CODES['environment-transport'] && failedStderr.includes('Windows Job Object setup failed'),
+      `Windows Job Object setup failure ${failedEnding === null ? 'waited over 30 s' : `returned ${failedEnding.code}`}; expected transport failure naming setup. Agent PID: ${failedPids?.agent ?? 'unrecorded'}; child PID: ${failedPids?.child ?? 'unrecorded'}\n${failedStdout}${failedStderr}`,
+    );
+    check(
+      failedPids === null,
+      `the Windows agent started after Job Object setup failed: agent ${failedPids?.agent ?? 'unrecorded'}, child ${failedPids?.child ?? 'unrecorded'}`,
+    );
+    if (failedPids !== null) {
+      check(await processEnds(failedPids.agent, 10_000), `Windows agent ${failedPids.agent} survived the failed setup beyond 10 s`);
+      check(await processEnds(failedPids.child, 10_000), `Windows agent child ${failedPids.child} survived the failed setup beyond 10 s`);
+    }
+  } finally {
+    if (failedEnding === null) failedRunner.kill('SIGKILL');
+    if (failedPids === null && fs.existsSync(failedFile)) failedPids = readPids(failedFile);
+    if (failedPids !== null) {
+      reap(failedPids.agent);
+      reap(failedPids.child);
+    }
+    await Promise.race([failedClosed, delay(5000)]);
+  }
 }
 
 function checkWindowsRunnerReference() {
