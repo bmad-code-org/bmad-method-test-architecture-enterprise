@@ -203,6 +203,11 @@ function readCalibration(folder) {
   }
 }
 
+/** The digest of the labelled file's bytes: what a configuration binds as `tea.judgeCalibrationDigest` and a run records. */
+function labelledDigest(labelled, engine) {
+  return engine.digestBytes(labelled.bytes);
+}
+
 /**
  * The criteria of a calibration report whose agreement is below its `minimumAgreement`, each as a sentence; empty when
  * every criterion meets it. `run` stops with exit 11 on any, and `tea-evaluate ci` reads the same report with this.
@@ -258,7 +263,7 @@ async function runCalibration({ calibration, evaluation, contract, engine, write
       exitCode: 11,
       message: `judge calibration agreement fell below ${report.minimumAgreement}; see judge-calibration.json`,
     });
-  return { digest: engine.digestBytes(calibration.bytes), report };
+  return { digest: labelledDigest(calibration, engine), report };
 }
 
 module.exports = {
@@ -267,6 +272,7 @@ module.exports = {
   calibrationOperationId,
   calibrationProblems,
   calibrationShortfalls,
+  labelledDigest,
   readCalibration,
   runCalibration,
 };

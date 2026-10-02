@@ -127,7 +127,7 @@ const AjvModule = require('ajv/dist/2020');
 
 const { engineSchemaPath, loadEngine, schemaVersionProblems } = require('./engine');
 const { CALIBRATION_PATH, calibrationProblems, readCalibration } = require('./calibration');
-const { verifyRecordsCalibration } = require('./records-calibration');
+const { readConfiguration, recordsDirectory, verifyRecordsCalibration } = require('./records-calibration');
 const { readPlan } = require('./ci-plan');
 const { MANIFEST_NAME } = require('./folder');
 const { addFormats } = require('./formats');
@@ -1218,9 +1218,7 @@ function checkRecordsCalibration(report, folder, evaluator, evaluation, contract
   if (calibrationProblems(evaluation, contract, labelled?.value, engine).length > 0) return;
   let configuration;
   try {
-    const stats = fs.lstatSync(path.join(root, 'evaluator-configuration.json'));
-    if (!stats.isFile()) throw new Error('it is not a regular file');
-    configuration = JSON.parse(fs.readFileSync(path.join(root, 'evaluator-configuration.json'), 'utf8'));
+    configuration = readConfiguration(root);
   } catch (error) {
     report.add(
       configurationFile,
@@ -1368,14 +1366,8 @@ function checkEvaluator(report, folder, evaluation, contract, conditions, engine
   if (kind === 'records') {
     if (typeof evaluator.records !== 'string') return;
     // Only a directory inside the folder, reached through no link, is the folder's own.
-    const spelled = path.join(fs.realpathSync(folder), ...evaluator.records.split('/'));
-    let real;
-    try {
-      real = fs.realpathSync(path.join(folder, ...evaluator.records.split('/')));
-    } catch {
-      real = null;
-    }
-    if (real !== spelled || !fs.statSync(real).isDirectory()) {
+    const real = recordsDirectory(folder, evaluator.records);
+    if (real === null) {
       report.add(
         MANIFEST_NAME,
         'evaluator',
