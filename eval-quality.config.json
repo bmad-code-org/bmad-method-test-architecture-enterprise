@@ -601,7 +601,7 @@
     "roots": [
       {
         "path": "cli",
-        "extensions": [".js"]
+        "extensions": [".js", ".cjs"]
       },
       {
         "path": "tools",

@@ -1704,11 +1704,13 @@ So that the authored evaluation runs confined on the first try and an observed m
 
 **Given** the skill's `references/harness.md`, `references/run.md` and `references/gaps.md`
 **When** `test:evaluate-guidance` reads them
-**Then** the harness guide teaches `systemPaths` with a tagged `evaluation.json` fragment the guidance test validates against the runtime schema, the run guide names each platform's mechanism, the exit-12 refusal and the `"confinement": false` opt-out with what `run.json` records, and the gaps guide maps an isolation violation from `observedMounts` to its repair; deleting any passage fails the test
+**Then** the harness guide teaches `systemPaths` and the entry's `network` (a Linux skill or agent target, or any target that calls a model or an outside service, declares `"network": "host"` until Story 1.83) with a tagged `evaluation.json` fragment the guidance test validates against the runtime schema, the run guide names each platform's mechanism, the exit-12 refusal, the `"confinement": false` opt-out and the network namespace with what `run.json` records (`confinement` and `hostNetwork`), and the gaps guide maps an isolation violation from `observedMounts` to its repair; deleting any passage fails the test
 **And** the change goes through `bmad-workflow-builder` with a clean Analyze gate (AD-16, AD-18).
 
-**Dependencies:** 1.31.
+**Dependencies:** 1.31, 1.63.
 **Gate:** builder Analyze, `test:evaluate-guidance`, `npm test`.
+
+(Amended 2026-10-02 in Story 1.63's first review round: Story 1.63 edits `harness.md`, `adapters.md` and `ci.md` for the `network` declaration, and `run.md` and `gaps.md` stay with this story, which teaches the same declaration there and reads the new `hostNetwork` field of `run.json` beside `confinement`.)
 
 ### Story 1.62: Share one sandbox primitive layer across TeA's isolation modules
 
@@ -1739,9 +1741,9 @@ So that a process it starts cannot ask a host service to run a job outside the s
 
 **Acceptance Criteria:**
 
-**Given** a Bubblewrap target on a Linux runner and a listener on an abstract Unix socket address owned by the runtime
+**Given** a Bubblewrap target whose entry keeps the default network (`"network": "isolated"`) on a Linux runner and a listener on an abstract Unix socket address owned by the runtime
 **When** the target attempts to connect to that address
-**Then** the connection fails while an HTTP service the target started stays reachable from the runtime; removing the isolation lets the connection through and fails the case
+**Then** the connection fails while an HTTP service the target started stays reachable from the runtime; removing the isolation lets the connection through and fails the case, and an entry that declares `"network": "host"` reaches the address, which is the case's control
 **And** the reference names what the audit and the sandbox still do not see, with no claim the mechanism cannot back.
 
 **Dependencies:** 1.31, 1.60.
@@ -1750,6 +1752,10 @@ So that a process it starts cannot ask a host service to run a job outside the s
 (Amended 2026-10-02 in Story 1.63's build: the mechanism is a network namespace of the target's own (`--unshare-net`) with a bridge the runtime owns, because abstract sockets are per network namespace and no unprivileged mechanism available to a Bubblewrap run on the CI runners hides them while sharing the namespace.
 The Linux cases run in the ubuntu CI job alone, and the bridge's protocol, the host forwarder, the readiness semantics and the error paths are tested on every host over Unix sockets.
 The finding that path-based sockets stay connectable is Story 1.82.)
+
+(Amended 2026-10-02 in Story 1.63's first review round: the isolation is the default and a registry entry declares what it needs.
+Every entry, a command, a tool server or a started HTTP service, takes `network`, `"isolated"` by default or `"host"`; under Bubblewrap a `host` entry runs without `--unshare-net` and without a bridge, and Seatbelt accepts the field and ignores it.
+A skill or agent target on Linux calls its model provider and a started service may call a model, so the isolated default would cut them off, and `"confinement": false` would drop their file-system confinement too; the run records each entry that declares `host` as a route to the host's abstract sockets, which Story 1.83 closes by giving an isolated entry a route to the hosts it authorizes.)
 
 ### Story 1.64: Hold the release across the witness legs and the trials
 
@@ -2082,7 +2088,7 @@ So that a process it starts cannot ask a host service to run a job outside the s
 
 **Acceptance Criteria:**
 
-**Given** a Bubblewrap target on a Linux runner and listeners the runtime serves on Unix socket files outside the target's grants (one under the temp directory, and where the host has them `/run/dbus/system_bus_socket` and `/var/run/docker.sock`)
+**Given** a Bubblewrap target on a Linux runner, a listener the runtime serves on a Unix socket file under the temp directory outside the target's grants, and the host's existing `/run/dbus/system_bus_socket` and `/var/run/docker.sock` where present (root-owned, so a case connects to them and the runtime binds neither)
 **When** the target connects to each
 **Then** each connection fails while an HTTP service the target started stays reachable from the runtime through the bridge; removing the mechanism lets the connection through and fails the case
 **And** a socket the target's own grants hold (one in its workspace or in a private directory of the call, the bridge's socket included) stays connectable, a case that fails while the mechanism blocks every socket
@@ -2091,6 +2097,27 @@ So that a process it starts cannot ask a host service to run a job outside the s
 
 **Dependencies:** 1.63.
 **Gate:** `test:evaluate-run`, `test:evaluate-confinement`, `test:evaluate-api`, `npm test`, and the Linux CI job.
+
+### Story 1.83: Give a confined Linux target a route to the hosts its registry entry authorizes
+
+Added 2026-10-02 in Story 1.63's first review round. Story 1.63 isolates every Bubblewrap target in a network namespace of its own and lets an entry declare `"network": "host"` where it needs the network, which the skill and agent targets do, since an agent CLI calls its model provider. An entry that declares `host` keeps the host's whole network and with it a route to the host's abstract Unix sockets, so the AD-8 gap stays open for exactly the targets that run an agent.
+
+As an adopter evaluating a skill or agent on Linux,
+I want a confined target to reach the hosts its registry entry authorizes and no other,
+So that an agent runs isolated, with a route to its model provider alone, and `network: host` retires (AD-8).
+
+**Acceptance Criteria:**
+
+**Given** a Bubblewrap target whose entry keeps the default network and authorizes one host and port (a loopback fixture standing in for a model provider)
+**When** the target connects to that host through the egress route the runtime gives it, and then to another host and to an abstract Unix socket the runtime serves
+**Then** the first connection reaches the fixture and the other two fail; the route is a runtime-owned egress proxy reached through the same bridge mechanism as a started service, so the namespace keeps a loopback and nothing else, and removing the proxy's host limit lets the second connection through, which fails the case
+**And** the proxy forwards a connection only for a host and port the entry authorizes, decided by eval-quality's `evaluateTarget` as the HTTP port's calls are, a refusal naming the host and the entry in the run's record, a case that sends a request for an unauthorized address
+**And** an entry that authorizes no host reaches none, and an entry that declares `"network": "host"` still runs as Story 1.63 left it until the field is removed from the schema in this story's last step, which leaves `check` refusing it with the entry named and a pointer to the authorization
+**And** the proxy's socket and its authorization are private to the call and removed with it on every path, a signal that ends the run included, a case that kills the run mid-call
+**And** `docs/reference/tea-evaluate-cli.md`, the skill's harness, adapters, ci and run guides and the `tea-skill-runner` section teach the authorization in place of `"network": "host"`, and a case reading each fails while the old declaration remains.
+
+**Dependencies:** 1.63.
+**Gate:** `test:evaluate-run`, `test:evaluate-api`, `test:evaluate-confinement`, `test:evaluate-guidance`, `npm test`, and the Linux CI job.
 
 ### Story 1.90: Verify the baseline manifest's file digests
 

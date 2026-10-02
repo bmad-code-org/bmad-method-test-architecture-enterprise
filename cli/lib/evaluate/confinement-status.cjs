@@ -30,9 +30,11 @@
  * `fail\n`, and after `ok` copies bytes both ways. Anything else (another host,
  * a port that is not a number, a line past `BRIDGE_LINE_BYTES` or without its
  * newline, a first line that does not arrive within `BRIDGE_LINE_MS`) is
- * answered `fail\n` and opens no outbound connection. The listener never holds
- * this process's event loop open, and closes with every connection it holds
- * when the target ends. A connection the target itself makes to the socket
+ * answered `fail\n` and opens no outbound connection. The listening socket
+ * never holds this process's event loop open. When the target ends it stops
+ * listening and cuts every connection that carries nothing yet; a connection
+ * already spliced drains what the target wrote before it ended, for at most
+ * `BRIDGE_DRAIN_MS`. A connection the target itself makes to the socket
  * reaches this namespace's own loopback alone.
  *
  * The file is also a module for the runtime's tests: required, it starts
@@ -53,6 +55,8 @@ const BRIDGE_LINE_BYTES = 64;
 const BRIDGE_LINE_MS = 5000;
 /** How long a bridge connection may take to reach the port it names. */
 const BRIDGE_CONNECT_MS = 5000;
+/** How long a spliced connection may keep draining once the target has ended. */
+const BRIDGE_DRAIN_MS = 2000;
 
 /**
  * The host and port a bridge line names, or `null` for a line that is no
@@ -167,6 +171,8 @@ function serveConnection(client, { connectMs, lineBytes, lineMs }) {
         return;
       }
       client.write('ok\n');
+      // From here the connection carries the target's own bytes: it is let drain when the target ends (`serveBridge`).
+      client.spliced = true;
       splice(client, upstream);
     });
     client.once('close', () => upstream.destroy());
@@ -176,13 +182,17 @@ function serveConnection(client, { connectMs, lineBytes, lineMs }) {
 /**
  * Listens on the Unix socket `socketPath` and serves the bridge protocol. The
  * server is unreferenced, so it never keeps its process alive; `close()` stops
- * it, removes the socket and destroys every connection it holds.
+ * it, removes the socket, cuts the connections that carry nothing yet and cuts
+ * the spliced ones after `drainMs`.
  *
  * @param {string} socketPath
- * @param {{ connectMs?: number, lineBytes?: number, lineMs?: number }} [options] ceilings, for a test to shorten
+ * @param {{ connectMs?: number, lineBytes?: number, lineMs?: number, drainMs?: number }} [options] ceilings, for a test to shorten
  * @returns {Promise<{ server: net.Server, close: () => void }>} resolves once it listens; rejects with the listen error
  */
-function serveBridge(socketPath, { connectMs = BRIDGE_CONNECT_MS, lineBytes = BRIDGE_LINE_BYTES, lineMs = BRIDGE_LINE_MS } = {}) {
+function serveBridge(
+  socketPath,
+  { connectMs = BRIDGE_CONNECT_MS, lineBytes = BRIDGE_LINE_BYTES, lineMs = BRIDGE_LINE_MS, drainMs = BRIDGE_DRAIN_MS } = {},
+) {
   const connections = new Set();
   const server = net.createServer({ allowHalfOpen: true }, (client) => {
     connections.add(client);
@@ -199,7 +209,13 @@ function serveBridge(socketPath, { connectMs = BRIDGE_CONNECT_MS, lineBytes = BR
         server,
         close() {
           server.close();
-          for (const connection of connections) connection.destroy();
+          // A spliced connection drains what the target wrote just before it ended, and a deadline cuts one that never
+          // ends; a connection that has not been spliced carries nothing and is cut at once.
+          for (const connection of connections) if (connection.spliced !== true) connection.destroy();
+          const cut = setTimeout(() => {
+            for (const connection of connections) connection.destroy();
+          }, drainMs);
+          cut.unref();
         },
       });
     });
@@ -284,4 +300,14 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { BRIDGE_HOSTS, BRIDGE_LINE_BYTES, BRIDGE_LINE_MS, parseArguments, parseBridgeLine, serveBridge, splice };
+module.exports = {
+  BRIDGE_HOSTS,
+  BRIDGE_CONNECT_MS,
+  BRIDGE_DRAIN_MS,
+  BRIDGE_LINE_BYTES,
+  BRIDGE_LINE_MS,
+  parseArguments,
+  parseBridgeLine,
+  serveBridge,
+  splice,
+};

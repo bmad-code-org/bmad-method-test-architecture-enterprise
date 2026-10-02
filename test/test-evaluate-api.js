@@ -111,13 +111,16 @@ const { syntheticPort } = require('../cli/lib/evaluate/gameability');
 const {
   HTTP_PORT_MODULE,
   authorizationOf,
+  bridgeDirectoryBase,
+  makeBridgeDirectory,
   callServer,
   createApiPort,
   degenerateApiPort,
   portConfiguration,
   probeHttpPort,
 } = require('../cli/lib/evaluate/http-target');
-const { startForwarder } = require('../cli/lib/evaluate/confinement-relay');
+const relayModule = require('../cli/lib/evaluate/confinement-relay');
+const shimModule = require('../cli/lib/evaluate/confinement-status.cjs');
 const { createRegistry, registryProblems } = require('../cli/lib/evaluate/registry');
 const { runTrial } = require('../cli/lib/evaluate/run');
 const { bridgeRouter } = require('../cli/lib/evaluate/sealed-brief-agent');
@@ -4204,6 +4207,52 @@ function refusedAt(port) {
   });
 }
 
+/** A port number nothing listens on now (the system gave it and it was released); with a retry for the rare reuse, `withFreePort`. */
+function freeNumber() {
+  return new Promise((resolve) => {
+    const probe = net.createServer();
+    probe.listen(0, '127.0.0.1', () => {
+      const { port } = probe.address();
+      probe.close(() => resolve(port));
+    });
+  });
+}
+
+/** Runs `run` with a free port number, again with another while it answers `{ taken: true }` (another process took the number first). */
+async function withFreePort(run) {
+  let result;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    result = await run(await freeNumber());
+    if (result?.taken !== true) return result;
+  }
+  return result;
+}
+
+/** How a connection to the loopback port ends within a second: `refused`, `closed with no byte`, or `data` / `held`. */
+function connectionOutcome(port) {
+  return new Promise((resolve) => {
+    const socket = net.connect({ host: '127.0.0.1', port });
+    let bytes = 0;
+    let connected = false;
+    const done = (value) => {
+      clearTimeout(timer);
+      socket.destroy();
+      resolve(value);
+    };
+    const timer = setTimeout(() => done(connected ? 'held' : 'timeout'), 1000);
+    socket.on('connect', () => {
+      connected = true;
+    });
+    socket.on('data', (chunk) => {
+      bytes += chunk.length;
+      done('data');
+    });
+    socket.on('end', () => done(bytes === 0 ? 'closed with no byte' : 'data'));
+    socket.on('close', () => done(connected && bytes === 0 ? 'closed with no byte' : 'closed'));
+    socket.on('error', (error) => done(error.code === 'ECONNREFUSED' ? 'refused' : error.code));
+  });
+}
+
 /** One GET to the loopback: `{ status, body }`, the body parsed when it is JSON. */
 function getLoopback(port, pathname, headers = {}) {
   return new Promise((resolve) => {
@@ -4241,7 +4290,11 @@ function getLoopback(port, pathname, headers = {}) {
  * Linux job's confined pipeline (each handoff) is what holds the bridged readiness, since a check made on the host never
  * sees a server inside the namespace.
  */
-async function checkBridgedServer() {
+/**
+ * What the bridged-server cases share: the fixture's entries and request, the stand-in for the confined mechanism that starts
+ * the fixture's server through the real status shim (`bridging`), and the projects, environment and `callServer` over them.
+ */
+async function bridgedHarness() {
   const shim = path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate', 'confinement-status.cjs');
   const { nodeCommandMechanism } = await loadAdapters();
   const [entry] = readJson(path.join(FIXTURE, EVALUATION, 'evaluation.json')).registry;
@@ -4304,6 +4357,36 @@ async function checkBridgedServer() {
   };
   const signal = () => new AbortController().signal;
 
+  return {
+    shim,
+    nodeCommandMechanism,
+    entry,
+    chosenEntry,
+    request,
+    bridging,
+    projectWith,
+    environmentOf,
+    serverOf,
+    listened,
+    bridgedServer,
+    signal,
+  };
+}
+
+async function checkBridgedServer() {
+  const {
+    entry,
+    request,
+    bridging,
+    projectWith,
+    environmentOf,
+    serverOf,
+    listened,
+    bridgedServer,
+    signal,
+    nodeCommandMechanism,
+    chosenEntry,
+  } = await bridgedHarness();
   // A call through the port: answered through the forwarder, its directories on the run's scratch list while it runs.
   const project = projectWith('bridged-call');
   const httpPort = await probeHttpPort(project.folder);
@@ -4338,9 +4421,9 @@ async function checkBridgedServer() {
   check(
     onList?.onScratchList === true &&
       bridgedCall?.directoryHeld === true &&
-      path.basename(bridgedCall.bridge) === 'sock' &&
-      path.dirname(bridgedCall.bridge).startsWith(path.join(temp, 'tea-evaluate-netbridge-')),
-    `the call's bridge was ${JSON.stringify(record)}; expected a socket in a tea-evaluate-netbridge-* directory under the temp directory, on the run's scratch list while the call ran`,
+      path.basename(bridgedCall.bridge) === 'b' &&
+      path.dirname(bridgedCall.bridge).startsWith(path.join(temp, 'tea-nb-')),
+    `the call's bridge was ${JSON.stringify(record)}; expected a socket in a tea-nb-* directory under the temp directory, on the run's scratch list while the call ran`,
   );
   check(
     scratchList.length === 0 && fs.readdirSync(temp).length === 0,
@@ -4400,23 +4483,19 @@ async function checkBridgedServer() {
   );
   check(await eventually(() => livingSessions(reporting).length === 0), 'a bridged server outlived its call');
 
-  // A chosen port the host's own namespace holds (here, the server itself) cannot be listened on twice: refused as taken.
+  // A chosen port another process already holds is refused before the server starts, as without a bridge.
   const chosen = projectWith('bridged-chosen');
-  const chosenPort = await new Promise((resolve) => {
-    const probe = net.createServer();
-    probe.listen(0, '127.0.0.1', () => {
-      const { port } = probe.address();
-      probe.close(() => resolve(port));
-    });
-  });
+  const holding = net.createServer();
+  const chosenPort = await new Promise((resolve) => holding.listen(0, '127.0.0.1', () => resolve(holding.address().port)));
   const taken = bridgedServer(chosen, chosenEntry, { call: { port: chosenPort } });
   const takenError = await taken.start(signal(), '127.0.0.1').catch((error) => error);
   check(
-    String(takenError?.message).includes(`another process listens on 127.0.0.1 port ${chosenPort}, which was chosen for the server`),
-    `a chosen port the forwarder could not take gave ${takenError?.message ?? 'a ready server'}`,
+    String(takenError?.message).includes(`another process listens on 127.0.0.1 port ${chosenPort}, which was chosen for the server`) &&
+      sessions(chosen).length === 0,
+    `a chosen port another process holds gave ${takenError?.message ?? 'a ready server'} (the server logged ${JSON.stringify(sessions(chosen))})`,
   );
   await taken.stop();
-  check(await eventually(() => livingSessions(chosen).length === 0), 'a server whose bridge could not listen outlived its call');
+  await new Promise((resolve) => holding.close(resolve));
 
   // A server that has not bound is not ready; one that never binds ends at readyTimeoutMs with the message it always had.
   const slow = projectWith('bridged-slow', ['start: delay 1200']);
@@ -4431,97 +4510,7 @@ async function checkBridgedServer() {
     `a server that binds after 1200ms was ready early (${earlyReady}) or ended as ${JSON.stringify(slowPort?.message ?? slowPort)} after ${Date.now() - began}ms`,
   );
   await waiting.stop();
-  const never = projectWith('bridged-never', ['start: delay 8000']);
-  const neverPort = await new Promise((resolve) => {
-    const probe = net.createServer();
-    probe.listen(0, '127.0.0.1', () => {
-      const { port } = probe.address();
-      probe.close(() => resolve(port));
-    });
-  });
-  const silent = bridgedServer(
-    never,
-    { ...chosenEntry, server: { ...chosenEntry.server, readyTimeoutMs: 1500 } },
-    { call: { port: neverPort } },
-  );
-  const pendingSilent = silent.start(signal(), '127.0.0.1').catch((error) => error);
-  // While the call waits for a server that has not bound, nothing listens on the port the call is configured for: a forwarder
-  // that listened before the server bound would answer here and be taken for the server.
-  await new Promise((resolve) => setTimeout(resolve, 500));
-  check(
-    (await refusedAt(neverPort)) === true && silent.isReady() === false,
-    `something listened on the chosen port ${neverPort} while its server had not bound (ready: ${silent.isReady()})`,
-  );
-  const silentError = await pendingSilent;
-  check(
-    String(silentError?.message).endsWith(
-      `did not accept a connection on 127.0.0.1 port ${neverPort} within readyTimeoutMs (1500ms); the last attempt failed with ECONNREFUSED`,
-    ),
-    `a bridged server that never binds gave ${silentError?.message ?? 'a ready server'}`,
-  );
-  await silent.stop();
-  check(
-    (await refusedAt(neverPort)) === true,
-    `something listened on the chosen port ${neverPort} after a server that never bound was stopped`,
-  );
-  check(await eventually(() => livingSessions(never).length === 0), 'a bridged server that never bound outlived its call');
-
-  // A server that exits before it binds ends the call with its exit, and nothing listens on the host.
-  const failing = projectWith('bridged-failing', ['start: fail']);
-  const failingPort = await new Promise((resolve) => {
-    const probe = net.createServer();
-    probe.listen(0, '127.0.0.1', () => {
-      const { port } = probe.address();
-      probe.close(() => resolve(port));
-    });
-  });
-  const exiting = bridgedServer(failing, chosenEntry, { call: { port: failingPort } });
-  const exitError = await exiting.start(signal(), '127.0.0.1').catch((error) => error);
-  check(
-    String(exitError?.message).includes('exited 3 before it accepted a connection'),
-    `a bridged server that exits before it binds gave ${exitError?.message ?? 'a ready server'}`,
-  );
-  await exiting.stop();
-  check((await refusedAt(failingPort)) === true, `something listened on port ${failingPort} after a server that never started was stopped`);
-
-  // The forwarder keeps the number it is asked for when the host has it free, takes another when it may and refuses when it may not.
-  const freeNumber = await new Promise((resolve) => {
-    const probe = net.createServer();
-    probe.listen(0, '127.0.0.1', () => {
-      const { port } = probe.address();
-      probe.close(() => resolve(port));
-    });
-  });
-  const kept = await startForwarder({
-    socketPath: path.join(shortDirectory(), 'sock'),
-    address: '127.0.0.1',
-    targetPort: 9,
-    port: freeNumber,
-  });
-  check(kept.port === freeNumber, `a forwarder asked for the free port ${freeNumber} listened on ${kept.port}`);
-  const holder = net.createServer();
-  const heldNumber = await new Promise((resolve) => holder.listen(0, '127.0.0.1', () => resolve(holder.address().port)));
-  const moved = await startForwarder({
-    socketPath: path.join(shortDirectory(), 'sock'),
-    address: '127.0.0.1',
-    targetPort: 9,
-    port: heldNumber,
-  });
-  check(moved.port !== heldNumber && moved.port > 0, `a forwarder asked for the held port ${heldNumber} listened on ${moved.port}`);
-  const insisting = await startForwarder({
-    socketPath: path.join(shortDirectory(), 'sock'),
-    address: '127.0.0.1',
-    targetPort: 9,
-    port: heldNumber,
-    strict: true,
-  }).catch((error) => error);
-  check(insisting?.code === 'EADDRINUSE', `a strict forwarder asked for the held port ${heldNumber} gave ${insisting?.code ?? insisting}`);
-  await kept.close();
-  await moved.close();
-  check((await refusedAt(freeNumber)) === true, `a closed forwarder still listened on ${freeNumber}`);
-  await new Promise((resolve) => holder.close(resolve));
-
-  // An address no bridge reaches, and a temp directory too long for a socket path, are refused before anything starts.
+  // An address no bridge reaches is refused before anything starts.
   let ran = 0;
   const refusing = bridgedServer(projectWith('bridged-address'), entry, {
     mechanism: { bridges: true, run: () => (ran += 1) && new Promise(() => {}) },
@@ -4533,31 +4522,604 @@ async function checkBridgedServer() {
       ran === 0,
     `a bridged server asked to listen on a non-loopback address gave ${addressError?.message ?? 'a ready server'} (started ${ran})`,
   );
-  const longTemp = path.join(shortDirectory(), 'x'.repeat(90));
-  fs.mkdirSync(longTemp);
-  const listLong = [];
-  const longError = await withEnvironment({ TMPDIR: longTemp }, () =>
-    createApiPort({
-      entries: [entry],
-      httpPort,
-      cwd: project.root,
-      targetOf: () => serverOf(project),
-      readEnvironment: environmentOf(project),
-      mechanism: { bridges: true, run: () => (ran += 1) && new Promise(() => {}) },
+}
+
+/**
+ * A bridge socket that stands in for a network namespace on a host that has one loopback: it speaks the shim's protocol and
+ * answers a port asked inside the "namespace" by connecting to the real port `map` gives for it, so a server can listen on one
+ * port while the runtime's forwarder holds another, which a shim on a shared loopback cannot show. `onReady` runs once the
+ * upstream has connected, just before the `ok`.
+ */
+function standInBridge(socketPath, { map, onReady = () => {} }) {
+  const connections = new Set();
+  const server = net.createServer({ allowHalfOpen: true }, (client) => {
+    connections.add(client);
+    client.once('close', () => connections.delete(client));
+    client.on('error', () => client.destroy());
+    let buffer = Buffer.alloc(0);
+    const onData = (chunk) => {
+      buffer = Buffer.concat([buffer, chunk]);
+      const newline = buffer.indexOf(10);
+      if (newline === -1) return;
+      client.off('data', onData);
+      client.pause();
+      const asked = /^(\S+) (\d+)$/.exec(buffer.toString('utf8', 0, newline));
+      const real = asked === null ? undefined : map.get(Number(asked[2]));
+      const rest = buffer.subarray(newline + 1);
+      if (real === undefined) {
+        client.end('fail\n');
+        return;
+      }
+      if (rest.length > 0) client.unshift(rest);
+      const upstream = net.connect({ host: '127.0.0.1', port: real, allowHalfOpen: true });
+      let connected = false;
+      upstream.once('error', () => {
+        if (!connected) client.end('fail\n');
+      });
+      upstream.once('connect', () => {
+        connected = true;
+        onReady();
+        client.write('ok\n');
+        shimModule.splice(client, upstream);
+      });
+    };
+    client.on('data', onData);
+  });
+  return new Promise((resolve) =>
+    server.listen(socketPath, () =>
+      resolve({
+        close() {
+          server.close();
+          for (const connection of connections) connection.destroy();
+        },
+      }),
+    ),
+  );
+}
+
+/** Writes `text` to `file` so a reader that sees the file sees all of it. */
+function writeWhole(file, text) {
+  fs.writeFileSync(`${file}.part`, text);
+  fs.renameSync(`${file}.part`, file);
+}
+
+/**
+ * The confined mechanism's bridging with the namespace stood in (`standInBridge`): the fixture's server runs on a port of its
+ * own (the one it bound, `S`), the call is told another (a free host port `P` it writes to the port file, or the chosen one),
+ * and the bridge maps `P` to `S`, so the runtime's forwarder on `P` and the server on `S` do not meet on the shared loopback.
+ */
+function standInMechanism(nodeCommandMechanism, { map, onReady, record = [] }) {
+  return {
+    bridges: true,
+    run: async (call, signal) => {
+      record.push(call);
+      const bridge = await standInBridge(call.bridge, { map, onReady });
+      const realPortFile = path.join(shortDirectory(), 'real-port');
+      const running = nodeCommandMechanism.run(
+        { ...call, bridge: undefined, env: { ...call.env, PORT: '0', PORT_FILE: realPortFile } },
+        signal,
+      );
+      let settled = false;
+      running.then(
+        () => (settled = true),
+        () => (settled = true),
+      );
+      while (!fs.existsSync(realPortFile) && !settled) await new Promise((resolve) => setTimeout(resolve, 20));
+      if (fs.existsSync(realPortFile)) {
+        const real = Number(fs.readFileSync(realPortFile, 'utf8'));
+        if (typeof call.portFile === 'string') {
+          const reported = await freeNumber();
+          map.set(reported, real);
+          writeWhole(call.portFile, String(reported));
+        } else {
+          map.set(Number(call.env.PORT), real);
+        }
+      }
+      return running.finally(() => bridge.close());
+    },
+  };
+}
+
+/** The shim idling as a bridge: its socket, and a way to end it. */
+async function startShimBridge(shim) {
+  const directory = shortDirectory();
+  const socket = path.join(directory, 'b');
+  const child = spawn(
+    process.execPath,
+    [shim, '--bridge', socket, path.join(directory, 'status'), process.execPath, '-e', 'setInterval(() => {}, 1000)'],
+    {
+      stdio: 'ignore',
+    },
+  );
+  const deadline = Date.now() + 10_000;
+  while (!fs.existsSync(socket) && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 20));
+  return { socket, stop: () => child.kill('SIGTERM') };
+}
+
+/** A server of the test's own that echoes, on `host`; its port and a way to close it with its connections. */
+async function listenOwn(host, handler = (socket) => socket.pipe(socket)) {
+  const sockets = new Set();
+  const server = net.createServer((socket) => {
+    sockets.add(socket);
+    socket.once('close', () => sockets.delete(socket));
+    socket.on('error', () => {});
+    handler(socket);
+  });
+  await new Promise((resolve) => server.listen(0, host, resolve));
+  return {
+    port: server.address().port,
+    close: () =>
+      new Promise((resolve) => {
+        server.close(resolve);
+        for (const socket of sockets) socket.destroy();
+      }),
+  };
+}
+
+/** What a client reads of `size` bytes a server sends after the client wrote `request` and half-closed, reading slowly. */
+function readSlowly(port, host, request, size) {
+  return new Promise((resolve) => {
+    const socket = net.connect({ host, port, allowHalfOpen: true });
+    let bytes = 0;
+    const done = () => {
+      clearTimeout(timer);
+      socket.destroy();
+      resolve(bytes);
+    };
+    const timer = setTimeout(done, 20_000);
+    socket.on('connect', () => socket.end(request));
+    socket.on('data', (chunk) => {
+      bytes += chunk.length;
+      if (bytes >= size) return done();
+      socket.pause();
+      setTimeout(() => socket.resume(), 5);
+    });
+    socket.on('end', done);
+    socket.on('error', done);
+  });
+}
+
+/**
+ * The bridge's two halves where the shared loopback hid them (Story 1.63), over a stood-in namespace and the real halves:
+ *
+ * - A server that reports a port the host has free is reached on that same number (the runtime listens on the number the
+ *   server reported); a chosen port is the runtime's before the server starts (a connection that arrives early is closed with
+ *   no byte, a server that never binds ends at `readyTimeoutMs`, one that exits ends the call with its exit, and nothing listens
+ *   once the call is stopped) and the call answers on it once the server is ready.
+ * - A call stopped when the bridge answers, and one stopped while the forwarder starts, end with the abort and leave no
+ *   listener.
+ * - An entry that declares `network: host` is started directly with no bridge directory.
+ * - A temp directory too long for a socket path puts the bridge directory under `/tmp`, and one with no room even there is refused.
+ * - `startForwarder` keeps a free number, moves from a held one when it may, refuses it when it may not, closes within a second
+ *   with a live connection, carries 4 MiB to a slow half-closing client and listens on `::1` where the host has it; `openBridge`
+ *   keeps the bytes after `ok`, names a bad answer and refuses a socket that is a link or no socket.
+ */
+async function checkBridgedServerStandIn() {
+  const harness = await bridgedHarness();
+  const { entry, chosenEntry, request, projectWith, environmentOf, serverOf, listened, bridgedServer, signal, nodeCommandMechanism, shim } =
+    harness;
+  const { relayModule: relay } = { relayModule };
+
+  // A server that reports a port the host has free is reached on that number.
+  const reporting = projectWith('standin-report');
+  const reportMap = new Map();
+  const reported = bridgedServer(reporting, entry, { mechanism: standInMechanism(nodeCommandMechanism, { map: reportMap }) });
+  const keptPort = await reported.start(signal(), '127.0.0.1').catch((error) => error);
+  const inside = listened(reporting)[0]?.port;
+  check(
+    Number.isInteger(keptPort) && reportMap.has(keptPort) && reportMap.get(keptPort) === inside && keptPort !== inside,
+    `a server that reported the free port ${[...reportMap.keys()]} (it bound ${inside}) was ready on ${JSON.stringify(keptPort?.message ?? keptPort)}; expected the number it reported`,
+  );
+  if (Number.isInteger(keptPort)) {
+    const answered = await getLoopback(keptPort, '/policy', { authorization: `Bearer ${TOKEN}` });
+    check(
+      answered.status === 200 && answered.body?.ok === true,
+      `a request to the reported port ${keptPort} was answered ${JSON.stringify(answered)}`,
+    );
+  }
+  await reported.stop();
+  check(
+    !Number.isInteger(keptPort) || (await refusedAt(keptPort)) === true,
+    `the runtime still listened on ${keptPort} after the call's server was stopped`,
+  );
+
+  // A chosen port: ready and answering once the server has bound.
+  const chosen = projectWith('standin-chosen');
+  const chosenResult = await withFreePort(async (port) => {
+    const map = new Map();
+    const server = bridgedServer(chosen, chosenEntry, { call: { port }, mechanism: standInMechanism(nodeCommandMechanism, { map }) });
+    const ready = await server.start(signal(), '127.0.0.1').catch((error) => error);
+    const answered = Number.isInteger(ready) ? await getLoopback(ready, '/policy', { authorization: `Bearer ${TOKEN}` }) : null;
+    await server.stop();
+    return {
+      taken: String(ready?.message).includes('another process listens'),
+      ready,
+      port,
+      answered,
+      refusedAfter: await refusedAt(port),
+    };
+  });
+  check(
+    chosenResult.ready === chosenResult.port && chosenResult.answered?.status === 200 && chosenResult.refusedAfter === true,
+    `a chosen-port server through the stood-in bridge was ready on ${JSON.stringify(chosenResult.ready?.message ?? chosenResult.ready)} (chosen ${chosenResult.port}), answered ${JSON.stringify(chosenResult.answered)}, and the port was ${chosenResult.refusedAfter} after its stop`,
+  );
+
+  // A chosen port is held from before the server starts: an early connection is closed with no byte, a server that never binds
+  // ends at readyTimeoutMs, and nothing listens once the call is stopped.
+  const never = projectWith('standin-never', ['start: delay 8000']);
+  const neverResult = await withFreePort(async (port) => {
+    const server = bridgedServer(
+      never,
+      { ...chosenEntry, server: { ...chosenEntry.server, readyTimeoutMs: 1500 } },
+      { call: { port }, mechanism: standInMechanism(nodeCommandMechanism, { map: new Map() }) },
+    );
+    const pending = server.start(signal(), '127.0.0.1').catch((error) => error);
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    const early = await connectionOutcome(port);
+    const readyEarly = server.isReady();
+    const error = await pending;
+    await server.stop();
+    return {
+      taken: String(error?.message).includes('another process listens'),
+      early,
+      readyEarly,
+      error,
+      port,
+      refusedAfter: await refusedAt(port),
+    };
+  });
+  check(
+    neverResult.early === 'closed with no byte' && neverResult.readyEarly === false,
+    `a connection to the chosen port ${neverResult.port} while its server had not bound ended as ${JSON.stringify(neverResult.early)} (ready: ${neverResult.readyEarly}); expected the runtime's listener to close it with no byte`,
+  );
+  check(
+    String(neverResult.error?.message).endsWith(
+      `did not accept a connection on 127.0.0.1 port ${neverResult.port} within readyTimeoutMs (1500ms); the last attempt failed with ECONNREFUSED`,
+    ),
+    `a bridged server that never binds gave ${neverResult.error?.message ?? 'a ready server'}`,
+  );
+  check(
+    neverResult.refusedAfter === true,
+    `something listened on the chosen port ${neverResult.port} after a server that never bound was stopped`,
+  );
+  check(await eventually(() => livingSessions(never).length === 0), 'a bridged server that never bound outlived its call');
+  const failing = projectWith('standin-failing', ['start: fail']);
+  const failed = await withFreePort(async (port) => {
+    const server = bridgedServer(failing, chosenEntry, {
+      call: { port },
+      mechanism: standInMechanism(nodeCommandMechanism, { map: new Map() }),
+    });
+    const error = await server.start(signal(), '127.0.0.1').catch((error_) => error_);
+    await server.stop();
+    return { taken: String(error?.message).includes('another process listens'), error, port, refusedAfter: await refusedAt(port) };
+  });
+  check(
+    String(failed.error?.message).includes('exited 3 before it accepted a connection') && failed.refusedAfter === true,
+    `a bridged server that exits before it binds gave ${failed.error?.message ?? 'a ready server'} and its port was ${failed.refusedAfter} afterwards`,
+  );
+
+  // A call stopped when the bridge answers, and one stopped while the forwarder starts, end with the abort and leave no listener.
+  for (const [label, late] of [
+    ['when the bridge answers', false],
+    ['while the forwarder starts', true],
+  ]) {
+    const echo = await listenOwn('127.0.0.1');
+    const port = await freeNumber();
+    const directory = shortDirectory();
+    let server = null;
+    let forwarders = 0;
+    const mechanism = {
+      bridges: true,
+      run: async (call, abort) => {
+        const bridge = await standInBridge(call.bridge, {
+          map: new Map([[port, echo.port]]),
+          onReady: () => (late ? undefined : server.stop()),
+        });
+        writeWhole(call.portFile, String(port));
+        return new Promise((resolve) =>
+          abort.addEventListener(
+            'abort',
+            () =>
+              setTimeout(() => {
+                bridge.close();
+                resolve({ exitCode: 0, stdout: '', stderr: '' });
+              }, 300),
+            { once: true },
+          ),
+        );
+      },
+    };
+    server = callServer({
+      entry,
+      portFile: path.join(directory, 'port'),
+      bridge: path.join(directory, 'b'),
+      cwd: directory,
+      target: 'unused',
+      environment: {},
+      mechanism,
       maxOutputBytes: 1024,
-      scratch: listLong,
+      relay: {
+        bridgeAccepts: relay.bridgeAccepts,
+        startForwarder: (options) => {
+          forwarders += 1;
+          if (late) server.stop();
+          return relay.startForwarder(options);
+        },
+      },
+    });
+    const error = await server.start(signal(), '127.0.0.1').catch((error_) => error_);
+    await server.stop();
+    check(
+      String(error?.message).includes('aborted while its server started') && !server.isReady(),
+      `a call stopped ${label} ended as ${JSON.stringify(error?.message ?? error)}; expected the abort to end it`,
+    );
+    check((await refusedAt(port)) === true, `a call stopped ${label} left the runtime listening on ${port}`);
+    // Stopped before the forwarder starts, the call never starts it; stopped while it starts, it starts it once and closes it.
+    check(forwarders === (late ? 1 : 0), `a call stopped ${label} started the forwarder ${forwarders} time(s); expected ${late ? 1 : 0}`);
+    await echo.close();
+  }
+
+  // An entry that declares `network: host` is started directly: no bridge directory and no bridge in the request.
+  const hosted = projectWith('standin-host');
+  const hostedHttpPort = await probeHttpPort(hosted.folder);
+  const hostedTemp = shortDirectory();
+  const hostedScratch = [];
+  const hostedCalls = [];
+  const hostedAnswer = await withEnvironment({ TMPDIR: hostedTemp }, () =>
+    createApiPort({
+      entries: [{ ...entry, network: 'host' }],
+      httpPort: hostedHttpPort,
+      cwd: hosted.root,
+      targetOf: () => serverOf(hosted),
+      readEnvironment: environmentOf(hosted),
+      mechanism: {
+        bridges: true,
+        run: (call, abort) => {
+          hostedCalls.push(call);
+          return nodeCommandMechanism.run(call, abort);
+        },
+      },
+      maxOutputBytes: 1024 * 1024,
+      scratch: hostedScratch,
     })
       .probe(request)
       .catch((error) => error),
   );
   check(
-    String(longError?.message).includes('longer than 100 bytes') && String(longError.message).includes('TMPDIR') && ran === 0,
-    `a temp directory too long for a socket path gave ${longError?.message ?? 'an answer'}`,
+    hostedAnswer?.status === 200 &&
+      hostedCalls.length === 1 &&
+      hostedCalls[0].bridge === undefined &&
+      !fs.readdirSync(hostedTemp).some((name) => name.startsWith('tea-nb-')) &&
+      hostedScratch.length === 0,
+    `a started service whose entry declares network host was answered ${JSON.stringify(hostedAnswer?.status ?? hostedAnswer?.message)} with the bridges ${JSON.stringify(hostedCalls.map((call) => call.bridge))}; expected none and a direct start`,
+  );
+
+  // A temp directory too long for a socket path puts the bridge directory under /tmp, and the call works.
+  const longTemp = path.join(shortDirectory(), 'y'.repeat(150));
+  fs.mkdirSync(longTemp);
+  check(Buffer.byteLength(longTemp) >= 150, 'the long temp directory of the case is not 150 bytes long');
+  const longBase = bridgeDirectoryBase(longTemp);
+  check(
+    longBase === '/tmp',
+    `a ${Buffer.byteLength(longTemp)}-byte temp directory chose ${longBase} for the bridge directory; expected /tmp`,
+  );
+  const shortBase = bridgeDirectoryBase(shortDirectory());
+  check(shortBase !== '/tmp' || shortBase === fs.realpathSync.native(shortBase), `a short temp directory chose ${shortBase}`);
+  const longProject = projectWith('standin-long');
+  const longHttpPort = await probeHttpPort(longProject.folder);
+  const longScratch = [];
+  const longCalls = [];
+  const longAnswer = await withEnvironment({ TMPDIR: longTemp }, () =>
+    createApiPort({
+      entries: [entry],
+      httpPort: longHttpPort,
+      cwd: longProject.root,
+      targetOf: () => serverOf(longProject),
+      readEnvironment: environmentOf(longProject),
+      mechanism: harness.bridging(longCalls),
+      maxOutputBytes: 1024 * 1024,
+      scratch: longScratch,
+    })
+      .probe(request)
+      .catch((error) => error),
   );
   check(
-    listLong.length === 0 && fs.readdirSync(longTemp).length === 0,
-    `a refused bridge directory stayed on the scratch list ${JSON.stringify(listLong)} or in ${JSON.stringify(fs.readdirSync(longTemp))}`,
+    longAnswer?.status === 200 &&
+      longCalls.length === 1 &&
+      /^\/(private\/)?tmp\/tea-nb-[A-Za-z0-9]{6}\/b$/.test(longCalls[0].bridge ?? '') &&
+      Buffer.byteLength(longCalls[0].bridge ?? '') <= 100 &&
+      longScratch.length === 0,
+    `a call with a ${Buffer.byteLength(longTemp)}-byte TMPDIR was answered ${JSON.stringify(longAnswer?.status ?? longAnswer?.message)} with the bridge ${JSON.stringify(longCalls[0]?.bridge)}; expected a socket under /tmp and the call to work`,
   );
+  check(!fs.readdirSync('/tmp').some((name) => name.startsWith('tea-nb-')), 'a bridge directory was left under /tmp');
+  const tooLong = [];
+  let tooLongError = null;
+  try {
+    makeBridgeDirectory(tooLong, { temp: longTemp, fallback: longTemp });
+  } catch (error) {
+    tooLongError = error;
+  }
+  check(
+    String(tooLongError?.message).includes('longer than 100 bytes') &&
+      String(tooLongError.message).includes('TMPDIR') &&
+      tooLong.length === 0,
+    `a temp directory and a fallback with no room for a socket gave ${tooLongError?.message ?? 'a directory'} (scratch ${JSON.stringify(tooLong)})`,
+  );
+  check(
+    fs.readdirSync(longTemp).length === 0,
+    `a refused bridge directory stayed in the temp directory: ${JSON.stringify(fs.readdirSync(longTemp))}`,
+  );
+
+  // `startForwarder`.
+  const keptResult = await withFreePort(async (number) => {
+    try {
+      const forwarder = await relay.startForwarder({
+        socketPath: path.join(shortDirectory(), 'b'),
+        address: '127.0.0.1',
+        targetPort: 9,
+        port: number,
+      });
+      const result = { number, port: forwarder.port };
+      await forwarder.close();
+      return { ...result, refusedAfter: await refusedAt(number) };
+    } catch (error) {
+      return error.code === 'EADDRINUSE' ? { taken: true } : { error };
+    }
+  });
+  check(
+    keptResult.port === keptResult.number && keptResult.refusedAfter === true,
+    `a forwarder asked for the free port ${keptResult.number} listened on ${keptResult.port ?? keptResult.error}, and it was ${keptResult.refusedAfter} once closed`,
+  );
+  const holder = await listenOwn('127.0.0.1');
+  const moved = await relay.startForwarder({
+    socketPath: path.join(shortDirectory(), 'b'),
+    address: '127.0.0.1',
+    targetPort: 9,
+    port: holder.port,
+  });
+  check(moved.port !== holder.port && moved.port > 0, `a forwarder asked for the held port ${holder.port} listened on ${moved.port}`);
+  const insisting = await relay
+    .startForwarder({ socketPath: path.join(shortDirectory(), 'b'), address: '127.0.0.1', targetPort: 9, port: holder.port, strict: true })
+    .catch((error) => error);
+  check(insisting?.code === 'EADDRINUSE', `a strict forwarder asked for the held port ${holder.port} gave ${insisting?.code ?? insisting}`);
+  await moved.close();
+  await holder.close();
+
+  const live = await listenOwn('127.0.0.1');
+  const bridge = await startShimBridge(shim);
+  try {
+    // close() lets go within a second of a live connection through a live bridge to a live server.
+    const forwarder = await relay.startForwarder({ socketPath: bridge.socket, address: '127.0.0.1', targetPort: live.port, port: 0 });
+    const held = await new Promise((resolve) => {
+      const socket = net.connect({ host: '127.0.0.1', port: forwarder.port }, () => socket.write('hello'));
+      socket.on('data', (chunk) => resolve({ socket, text: String(chunk) }));
+      socket.on('error', () => resolve({ socket, text: 'error' }));
+      setTimeout(() => resolve({ socket, text: 'timeout' }), 5000);
+    });
+    check(
+      held.text === 'hello',
+      `a connection through the forwarder, the bridge and a live server got ${JSON.stringify(held.text)}; expected the echo`,
+    );
+    const seen = new Promise((resolve) => {
+      held.socket.once('close', () => resolve(true));
+      held.socket.once('end', () => resolve(true));
+      setTimeout(() => resolve(false), 2000);
+    });
+    const closeBegan = Date.now();
+    await forwarder.close();
+    check(
+      Date.now() - closeBegan < 1000 && (await seen) === true,
+      `closing a forwarder that held a live connection took ${Date.now() - closeBegan} ms and the client ${(await seen) ? 'saw' : 'did not see'} the close; expected under a second and the close`,
+    );
+    held.socket.destroy();
+
+    // 4 MiB to a client that half-closes and reads slowly.
+    const SIZE = 4 * 1024 * 1024;
+    const answering = await listenOwn('127.0.0.1', (socket) => {
+      socket.on('data', () => {});
+      socket.on('end', () => socket.end(Buffer.alloc(SIZE, 'x')));
+    });
+    const big = await relay.startForwarder({ socketPath: bridge.socket, address: '127.0.0.1', targetPort: answering.port, port: 0 });
+    const received = await readSlowly(big.port, '127.0.0.1', 'go', SIZE);
+    check(received === SIZE, `a slow half-closing client received ${received} of ${SIZE} byte(s) through the forwarder`);
+    await big.close();
+    await answering.close();
+  } finally {
+    bridge.stop();
+    await live.close();
+  }
+  const ipv6 = Object.values(os.networkInterfaces())
+    .flat()
+    .some((address) => address?.address === '::1');
+  if (ipv6) {
+    const echoSix = await listenOwn('::1');
+    const sixBridge = await startShimBridge(shim);
+    try {
+      const sixth = await relay.startForwarder({ socketPath: sixBridge.socket, address: '::1', targetPort: echoSix.port, port: 0 });
+      const echoed = await new Promise((resolve) => {
+        const socket = net.connect({ host: '::1', port: sixth.port }, () => socket.write('six'));
+        socket.on('data', (chunk) => {
+          socket.destroy();
+          resolve(String(chunk));
+        });
+        socket.on('error', (error) => resolve(error.code));
+        setTimeout(() => resolve('timeout'), 5000);
+      });
+      check(echoed === 'six', `a forwarder on ::1 carried ${JSON.stringify(echoed)}; expected the echo`);
+      await sixth.close();
+    } finally {
+      sixBridge.stop();
+      await echoSix.close();
+    }
+  } else {
+    console.log('  skipped the IPv6 forwarder case: this host has no ::1 address');
+  }
+
+  // `openBridge` against a scripted bridge.
+  const scripted = async (answerBytes) => {
+    const socket = path.join(shortDirectory(), 'b');
+    const sockets = new Set();
+    const server = net.createServer((client) => {
+      sockets.add(client);
+      client.on('error', () => {});
+      client.once('data', () => client.write(answerBytes));
+    });
+    await new Promise((resolve) => server.listen(socket, resolve));
+    return {
+      socket,
+      close: () => {
+        server.close();
+        for (const client of sockets) client.destroy();
+      },
+    };
+  };
+  for (const [label, bytes, expected] of [
+    ['an answer ok with bytes after it in one write', 'ok\nhello', 'ok'],
+    ['an answer that is neither ok nor fail', 'nope\n', 'protocol'],
+    ['nine bytes with no newline', 'aaaaaaaaa', 'protocol'],
+    ['an answer fail', 'fail\n', 'ECONNREFUSED'],
+  ]) {
+    const fake = await scripted(bytes);
+    const opened = await relay.openBridge(fake.socket, '127.0.0.1', 80, 2000);
+    if (expected === 'ok') {
+      const first =
+        opened.socket === undefined
+          ? null
+          : await new Promise((resolve) => {
+              opened.socket.once('data', (chunk) => resolve(String(chunk)));
+              opened.socket.resume();
+              setTimeout(() => resolve('timeout'), 2000);
+            });
+      check(first === 'hello', `${label} left ${JSON.stringify(first ?? opened)}; expected the bytes after ok kept for the reader`);
+      opened.socket?.destroy();
+    } else {
+      check(opened.reason === expected, `${label} gave ${JSON.stringify(opened)}; expected the reason ${expected}`);
+    }
+    fake.close();
+  }
+  check(
+    (await relay.openBridge(path.join(shortDirectory(), 'absent'), '127.0.0.1', 80)).reason === 'ENOENT',
+    'a bridge socket that does not exist yet was not ENOENT',
+  );
+  const target = await scripted('ok\n');
+  const linkDirectory = shortDirectory();
+  const link = path.join(linkDirectory, 'link');
+  fs.symlinkSync(target.socket, link);
+  const plainFile = path.join(linkDirectory, 'plain');
+  fs.writeFileSync(plainFile, 'not a socket');
+  for (const [label, candidate] of [
+    ['a link to a socket', link],
+    ['a regular file', plainFile],
+  ]) {
+    const refused = await relay.openBridge(candidate, '127.0.0.1', 80);
+    let thrown = null;
+    await relay.bridgeAccepts(candidate, '127.0.0.1', 80).catch((error) => (thrown = error));
+    check(
+      typeof refused.refusal === 'string' && refused.socket === undefined && thrown !== null && String(thrown.message).includes(candidate),
+      `${label} in the bridge's place gave ${JSON.stringify(refused)} and ${thrown?.message ?? 'no refusal'}; expected the runtime to refuse it, naming the path`,
+    );
+  }
+  target.close();
 }
 
 /** Runs one case; an exception is a failed check, so the cases after it still run and every failure is reported. */
@@ -4592,6 +5154,7 @@ async function main() {
     await runCase('the denials', checkDenials);
     await runCase("a started service's port", checkPortReport);
     await runCase('the bridged server', checkBridgedServer);
+    await runCase('the bridged server, stood in', checkBridgedServerStandIn);
     await runCase('the sealed-brief agent', checkSealedBriefAgent);
     await runCase('the gameability arm', checkGameability);
     await runCase('the check rules', checkCheckRules);

@@ -145,6 +145,8 @@ A command entry:
 - `maxElapsedMs` (at most 2147483647), and optional `maxOutputBytes` (8 MiB by default): ceilings a run may lower.
 - `infrastructureExitCodes`: the exit codes by which the target reports that it could not run.
   TeA's own per-workflow runners declare 1 (an uncaught exception) and 3 to 6; `tea-test-review`, which exits 1 on a failing verdict, declares 2 and 3; `tea-skill-runner` never exits 1 and declares 3 to 6.
+- `network`: `"isolated"` (the default) or `"host"`, on a command, tool-server or HTTP entry; see [File-system confinement](#file-system-confinement).
+  A Linux skill or agent target declares `"host"`.
 
 A tool-server entry (`kind: "mcp"`) serves an `mcp` interface of the contract:
 
@@ -291,7 +293,7 @@ No other process can answer on a port the service holds.
 A service that writes no port within `readyTimeoutMs`, or writes anything other than a port number, is a target that could not run (exit 12).
 The runtime reads the file without following a link and without waiting on it, so a link, a named pipe, a device or a file longer than 16 bytes in its place counts as anything other than a port number.
 The file's directory is on the run's list of private directories, so a signal that ends the run removes it.
-Under Bubblewrap the service runs in a network namespace of its own and the port it reports is the one it bound there (see [File-system confinement](#file-system-confinement)); the runtime's listener takes the same number on the host when it is free, and the call goes to the port the listener holds.
+Under Bubblewrap an entry that keeps the default network runs its service in a network namespace of its own and the port it reports is the one it bound there (see [File-system confinement](#file-system-confinement)); the runtime's listener takes the same number on the host when it is free, and the call goes to the port the listener holds.
 
 Without `portFileEnvironmentKey`, the runtime chooses the port, for a service that cannot report its own.
 It takes a free port, releases it just before the service starts, and passes its number in `portEnvironmentKey`.
@@ -401,7 +403,7 @@ Each target runs confined, and so does every process it starts, one still runnin
 An agent CLI keeps its session and settings state under `HOME`, so each confined sandbox gets one private home directory, which the runtime makes beneath the run's private parent (named `tea-evaluate-target-home-<random>`) and removes with the run; a `run` trial removes its own when the trial ends.
 The confinement withholds the user's private root as described above and re-grants the one home beneath it, so the target reads and writes its own home and nothing else under the root: no other trial's, stage's or run's home, and no listing of the parent or the root (Bubblewrap's empty file system over the root holds only the path to the home; Seatbelt answers metadata requests for the root and the parent, so a module load, `realpath`, `mkdir -p` and `cd` inside the home resolve, and still refuses to list them).
 `HOME` names the home for every confined call, and `XDG_CONFIG_HOME`, `XDG_CACHE_HOME` and `XDG_DATA_HOME` name `.config`, `.cache` and `.local/share` inside it.
-These variables replace any host value, including one a registry entry's `environmentKeys` names, so a confined skill or agent target runs without opting out of confinement.
+These variables replace any host value, including one a registry entry's `environmentKeys` names, so a confined skill or agent target keeps its state without opting out of confinement.
 The home is the one directory the target may write beyond its workspace and the call's own directories: your real home and the project stay unwritable, the evaluation folder and the user's private root stay closed to reads and writes, and the runtime refuses a home inside the workspace or the evaluation folder.
 Its state lasts across the calls of one trial or arm, so an agent's session continues, and each independent arm or leg starts with an empty home, a new directory that replaces and removes the old one: the next trial, the baseline, mutated and re-pass arms of a qualification, and each leg of a `preflight`.
 Credentials an agent needs reach it through `environmentKeys`, which passes environment values; a login an agent stored under your real home is not found under the private home, so give such an agent its API key variable instead.
@@ -447,15 +449,20 @@ A registry entry names what its target legitimately reads outside the workspace 
 A tool-server entry and an HTTP entry (for its started service) take `systemPaths` the same way.
 The audit grants a process the system paths of the target it runs, so `check` refuses two entries that start the same target with different `systemPaths`.
 A Bubblewrap that fails before it starts the target (a refused bind, say) ends the call as an infrastructure error naming Bubblewrap's message, since no target ran.
-A Bubblewrap target and every process it starts run in a network namespace of their own with a loopback and nothing else, so the host's abstract Unix sockets, a desktop session's D-Bus among them, do not exist for them.
+A Bubblewrap target whose entry keeps the default network, and every process it starts, run in a network namespace of their own with a loopback and nothing else, so the host's abstract Unix sockets, a desktop session's D-Bus among them, do not exist for them.
 A host that cannot create the network namespace is refused at selection (exit 12), as one that cannot start Bubblewrap is.
 An HTTP service the target starts stays reachable from the runtime through a bridge the runtime owns: the confined process serves a Unix socket in a private directory of the call, and the runtime listens on the address and port the call is configured for and forwards each connection through that socket, with no network path between the namespaces.
 A service that reports its port reports the one it bound inside the namespace; the runtime listens on the same number when the host has it free and on a port the system gives otherwise, and the call is configured for the port the runtime listens on.
-A command target and a tool server have a loopback only and no bridge.
-A Bubblewrap target has no network beyond that loopback, so a target that needs the host's network (a database on the host's loopback, an outside service) does not run under Bubblewrap and needs `"confinement": false`.
+Under Bubblewrap an isolated started service must listen on `127.0.0.1` or `::1`, and an address the registry authorizes for it that is any other stops the call.
+A command target and a tool server with the default network have a loopback only and no bridge.
+An isolated Bubblewrap target has no network beyond that loopback, so a target that needs the host's network (a database on the host's loopback, an outside service, a model provider) declares `"network": "host"` on its entry.
+Each command, tool-server and HTTP entry takes `network`: `"isolated"` (the default) or `"host"`, and `check` refuses any other value.
+An entry that declares `"network": "host"` keeps the host's network under Bubblewrap, and its started service, if it has one, is reached directly with no bridge.
+A Linux skill or agent target (`tea-skill-runner` or any agent CLI), or any target that calls a model or an outside service, declares `"network": "host"` until Story 1.83 gives a confined target a route to the hosts its entry authorizes.
+An entry that declares `"network": "host"` keeps a route to the host's abstract Unix sockets, which Story 1.83 closes, and `run.json` lists each such entry under `hostNetwork` while the isolation manifest's forbidden-input notes name them.
 The evaluation layer's processes keep the host's network, since the evaluation's HTTP port reaches the forwarded service over the host's loopback.
 Path-based Unix sockets that the read-only `/` still shows (`/run/dbus/system_bus_socket`, `/var/run/docker.sock`, an agent socket under `/tmp`) stay connectable, and Story 1.82 closes that route.
-macOS Seatbelt is unchanged: it has no abstract sockets, and its Mach services are a separate channel the profile does not close.
+macOS Seatbelt is unchanged: it has no abstract sockets, it accepts `network` and ignores it, and its Mach services are a separate channel the profile does not close.
 
 A confined run's isolation manifests account for each forbidden input with a note naming the confinement that withheld it (`Withheld as well by macOS Seatbelt (sandbox-exec) file-system confinement: ...`, or `Linux Bubblewrap (bwrap)`); an opted-out run's note says the runtime does not sandbox the target's file system.
 `score` over an opted-out run says so in its summary line, and its `score.json` records the run's `confinement`, so an opted-out verdict is marked as one.
@@ -745,7 +752,7 @@ The isolation manifest records what the trials were granted and what the runtime
 For CLI targets, each issued step can report target use on one stderr line: `TEA_EVALUATE_USAGE_JSON:{"inputTokens":7,"outputTokens":11,"costUsd":"0.00125"}`. Token counts must be nonnegative safe integers and cost must be a nonnegative decimal string. `tea-skill-runner` translates supported agent CLI reports into this line while keeping the agent's answer on stdout. A malformed or repeated report stops the run with a target-report error. The sealed record stores the sum of that trial's issued step reports, and the isolation manifest stores the exact sum of its trials. Qualification and preflight calls do not count.
 When a target gives no complete report, the closed record and manifest schemas still hold zero for missing use. `run.json` lists the affected trial and step in `unreportedResourceUse`. An empty list means every issued target call reported use, including an explicit measured zero. API and MCP calls have no usage report contract and appear as unreported when issued.
 The observed mounts are the paths the confinement's audit saw the trials' targets open outside what they were granted (see [File-system confinement](#file-system-confinement)), none in a clean run and none in a run that opted out, which observes no file-system access.
-The runtime observes no network access, so the network allowlist and the observed network targets are empty; a Bubblewrap target has a loopback and nothing else (see [File-system confinement](#file-system-confinement)), and a macOS target keeps the host's network.
+The runtime observes no network access, so the network allowlist and the observed network targets are empty; a Bubblewrap target with the default network has a loopback and nothing else (see [File-system confinement](#file-system-confinement)), and an entry that declares `"network": "host"` and a macOS target keep the host's network.
 Each forbidden input's note says what the runtime hands the target and names the confinement that withheld the rest, or, in a run that opted out, that the runtime does not sandbox the target's file system.
 The evaluator configuration carries the `sealedBriefDigest` of the run's sealed brief, and `decodingParameters["tea.evaluatorKind"]`, the evaluation layer's kind.
 Its `modelSnapshot` and `systemPromptDigest` come from `policy/evaluator-conditions.json`, which an evaluation whose target or evaluator uses a model commits (`check` requires it, naming a model other than `none`, once a registry entry runs `tea-skill-runner`, which always runs an agent); under a sealed-brief agent they are the agent's `evaluator.modelSnapshot` and the digest of the runtime's evaluator template (see [The evaluation layer](#the-evaluation-layer)):
@@ -1275,6 +1282,7 @@ The other options are those of TeA's own runners: `--agent-cmd`, `--agent-arg`, 
 | 6    | parser: reserved by the shared runner table                                                                                                                                                                               |
 
 A registry entry for the runner declares `infrastructureExitCodes` 3 to 6, and `check` holds it to that.
+On Linux the entry also declares `"network": "host"`, since the agent calls its model provider and the default network of a Bubblewrap target has a loopback only (see [File-system confinement](#file-system-confinement)).
 Its target is the bin name `tea-skill-runner`, which `npm exec` resolves from the evaluation's installed TeA, or a path to `skill-runner.js`.
 The agent runs in its own process group.
 When the agent exits, every process left in that group receives `SIGKILL` at once.

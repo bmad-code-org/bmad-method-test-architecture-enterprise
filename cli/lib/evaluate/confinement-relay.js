@@ -25,29 +25,60 @@
 'use strict';
 
 const net = require('node:net');
+const path = require('node:path');
+
+const fs = require('node:fs');
+
+const { BRIDGE_HOSTS, splice } = require('./confinement-status.cjs');
+
+/** `O_PATH` on Linux: a descriptor that names a file without opening it. */
+const O_PATH = 0x20_00_00;
 
 /**
- * The hosts the shim connects to inside the namespace: its own loopback. The shim (`confinement-status.cjs`) is a single file a
- * target's sandbox reads, so it keeps its own copy of this list and of `splice` below; `test:evaluate-confinement` holds the
- * two lists equal.
+ * The path the runtime connects to for the bridge's socket, and what releases it. The bridge directory is one the confined
+ * target may write, so a target could swap the socket for a link to a socket of the host's; the runtime therefore never
+ * connects through the path it was given. On Linux it opens the socket as a descriptor that follows no link (`O_PATH |
+ * O_NOFOLLOW`), requires a socket owned by the runtime's user, and connects through `/proc/self/fd/<n>`, so the object
+ * checked is the object connected to; a failure there refuses, with its cause, and never falls back to the plain path.
+ * Where `/proc/self/fd` is absent (macOS) the path is connected to after an `lstat` that refuses a link or anything
+ * that is no socket.
+ *
+ * @param {string} socketPath
+ * @param {{ procfs?: string }} [options] `procfs` is the descriptor directory, for a case that stands in for a host without one
+ * @returns {{ path: string, release: () => void } | { missing: true } | { refusal: string }}
  */
-const BRIDGE_HOSTS = Object.freeze(['127.0.0.1', '::1', 'localhost']);
-
-/**
- * Copies bytes both ways between two sockets, each side's end passed to the other (a client that closes its sending side
- * still reads the answer), a side's failure ending the other at once and a side's close ending the other once what it was
- * handed is written.
- */
-function splice(first, second) {
-  first.pipe(second);
-  second.pipe(first);
-  for (const [from, to] of [
-    [first, second],
-    [second, first],
-  ]) {
-    from.on('error', () => to.destroy());
-    from.on('close', () => to.destroySoon());
+function pinSocket(socketPath, { procfs = '/proc/self/fd' } = {}) {
+  const owned = (stat) => stat.isSocket() && (typeof process.getuid !== 'function' || stat.uid === process.getuid());
+  const cause = (error) => `${error.code ?? error.message}`;
+  if (fs.existsSync(procfs)) {
+    let descriptor;
+    try {
+      descriptor = fs.openSync(socketPath, O_PATH | fs.constants.O_NOFOLLOW);
+    } catch (error) {
+      if (error.code === 'ENOENT') return { missing: true };
+      return { refusal: `the bridge's socket ${socketPath} cannot be opened without following a link: ${cause(error)}` };
+    }
+    try {
+      if (!owned(fs.fstatSync(descriptor))) {
+        fs.closeSync(descriptor);
+        return { refusal: `${socketPath} is no socket owned by the runtime's user, so the runtime does not connect to it` };
+      }
+    } catch (error) {
+      fs.closeSync(descriptor);
+      return { refusal: `the bridge's socket ${socketPath} cannot be checked: ${cause(error)}` };
+    }
+    return { path: path.join(procfs, String(descriptor)), release: () => fs.closeSync(descriptor) };
   }
+  let stat;
+  try {
+    stat = fs.lstatSync(socketPath);
+  } catch (error) {
+    if (error.code === 'ENOENT') return { missing: true };
+    return { refusal: `the bridge's socket ${socketPath} cannot be checked: ${cause(error)}` };
+  }
+  if (!owned(stat))
+    return { refusal: `${socketPath} is no socket owned by the runtime's user (or is a link), so the runtime does not connect to it` };
+  return { path: socketPath, release: () => {} };
 }
 
 /** How long one readiness question waits for the bridge's answer. */
@@ -80,17 +111,31 @@ function bridgeHostOf(address) {
  * `{ reason }` otherwise: the socket error's code (`ENOENT` while the shim has
  * not made its socket yet, `ECONNREFUSED` while it does not listen), the
  * bridge's `fail` as `ECONNREFUSED` (a valid request fails only to reach the
- * port it names), `timeout`, `closed` or `protocol`.
+ * port it names), `timeout`, `closed` or `protocol`; `{ refusal }` when the
+ * socket is one the runtime will not connect to (`pinSocket`).
  *
  * @param {string} socketPath
  * @param {string} host
  * @param {number} port
  * @param {number} [timeoutMs]
- * @returns {Promise<{ socket: net.Socket } | { reason: string }>}
+ * @returns {Promise<{ socket: net.Socket } | { reason: string } | { refusal: string }>}
  */
 function openBridge(socketPath, host, port, timeoutMs = BRIDGE_ANSWER_MS) {
+  const pinned = pinSocket(socketPath);
+  if (pinned.missing === true) return Promise.resolve({ reason: 'ENOENT' });
+  if (pinned.refusal !== undefined) return Promise.resolve({ refusal: pinned.refusal });
   return new Promise((resolve) => {
-    const socket = net.connect({ path: socketPath, allowHalfOpen: true });
+    const socket = net.connect({ path: pinned.path, allowHalfOpen: true });
+    // The descriptor that pins the socket is needed until the connection is made.
+    let held = true;
+    const release = () => {
+      if (!held) return;
+      held = false;
+      pinned.release();
+    };
+    socket.once('connect', release);
+    socket.once('error', release);
+    socket.once('close', release);
     let received = Buffer.alloc(0);
     let settled = false;
     const settle = (value) => {
@@ -138,10 +183,11 @@ function openBridge(socketPath, host, port, timeoutMs = BRIDGE_ANSWER_MS) {
  * @param {string} host
  * @param {number} port
  * @param {number} [timeoutMs]
- * @returns {Promise<true | string>}
+ * @returns {Promise<true | string>} rejects with the refusal when the runtime will not connect to the socket (`pinSocket`)
  */
 async function bridgeAccepts(socketPath, host, port, timeoutMs = BRIDGE_ANSWER_MS) {
   const opened = await openBridge(socketPath, host, port, timeoutMs);
+  if (opened.refusal !== undefined) throw new Error(opened.refusal);
   if (opened.socket === undefined) return opened.reason;
   opened.socket.destroy();
   return true;
@@ -207,4 +253,4 @@ async function startForwarder({ socketPath, address, targetPort, port, strict = 
   };
 }
 
-module.exports = { BRIDGE_ANSWER_MS, BRIDGE_HOSTS, bridgeAccepts, bridgeHostOf, openBridge, startForwarder };
+module.exports = { BRIDGE_ANSWER_MS, BRIDGE_HOSTS, bridgeAccepts, bridgeHostOf, openBridge, pinSocket, startForwarder };

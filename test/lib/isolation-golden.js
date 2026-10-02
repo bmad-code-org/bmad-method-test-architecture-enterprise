@@ -136,6 +136,10 @@ function collectGeneratedOutputs() {
       const bubblewrapBridgeWrapped = confinement
         .targetSandbox({ confinement: bubblewrapConfinement, workspace, git, privateRoot, home: rootHome, status: statusDirectory })
         .wrap('/fixture/bin/node', ['server.js'], [privateDirectory, bridgeDirectory], [], { bridge: `${bridgeDirectory}/bridge.sock` });
+      // An entry that declares `network: host` keeps the host's network: the same command with no network namespace (Story 1.63).
+      const bubblewrapHostWrapped = confinement
+        .targetSandbox({ confinement: bubblewrapConfinement, workspace, git, privateRoot, home: rootHome, status: statusDirectory })
+        .wrap('/fixture/bin/node', ['agent.js'], [privateDirectory], [], { network: 'host' });
       const outputs = {
         'isolate.buildSandboxProfile': isolate.buildSandboxProfile(
           ['/proj/out/test-review.md', '/proj/out/verdict.json'],
@@ -220,6 +224,7 @@ function collectGeneratedOutputs() {
         }),
         'confinement.targetSandbox.wrap.bubblewrap.audit': { ...bubblewrapAuditWrapped },
         'confinement.targetSandbox.wrap.bubblewrap.bridge': { ...bubblewrapBridgeWrapped },
+        'confinement.targetSandbox.wrap.bubblewrap.host': { ...bubblewrapHostWrapped },
       };
       // The Node installation the runtime runs from is a read grant of every call, and the host's own.
       const nodeInstallation = confinement.nodeInstallRoot(process.execPath);

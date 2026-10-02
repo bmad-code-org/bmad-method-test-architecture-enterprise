@@ -715,9 +715,13 @@ function delay(ms, signal) {
 /** The name of the file a server reports its port in, inside the call's private directory. */
 const PORT_FILE_NAME = 'port';
 /** The name of the Unix socket a bridged server's shim serves, inside the call's private bridge directory. */
-const BRIDGE_SOCKET_NAME = 'sock';
+const BRIDGE_SOCKET_NAME = 'b';
+/** The prefix of a call's bridge directory; short, since a Unix socket path holds about 100 bytes. */
+const BRIDGE_DIRECTORY_PREFIX = 'tea-nb-';
 /** The longest Unix socket path every platform binds (macOS holds 103 bytes, Linux 107). */
 const BRIDGE_SOCKET_PATH_BYTES = 100;
+/** Where a bridge directory goes when the temp directory leaves no room for its socket: the bridge exists on Linux, which has it. */
+const BRIDGE_FALLBACK_DIRECTORY = '/tmp';
 /** The most bytes a port file holds: a port number with a line ending and a little whitespace around it. */
 const PORT_FILE_MAX_BYTES = 16;
 /** What `readIfWritten` gives for a port file that names no port whatever it holds: a link, a file that is not regular, a long one. */
@@ -791,6 +795,7 @@ function callServer({
   environment,
   mechanism,
   maxOutputBytes,
+  relay = { bridgeAccepts, startForwarder },
 }) {
   const reports = entry.server.portFileEnvironmentKey !== undefined;
   if (reports && typeof portFile !== 'string')
@@ -810,7 +815,7 @@ function callServer({
   let bridgeHost = null;
 
   /** Whether `address:candidate` accepts a connection now, asked of the server itself or, behind a bridge, of its namespace. */
-  const acceptsAt = (host, candidate) => (bridge === null ? accepts(host, candidate) : bridgeAccepts(bridge, bridgeHost, candidate));
+  const acceptsAt = (host, candidate) => (bridge === null ? accepts(host, candidate) : relay.bridgeAccepts(bridge, bridgeHost, candidate));
 
   /** Where the server was to listen, as a sentence names it. */
   function where() {
@@ -866,6 +871,10 @@ function callServer({
       if (!reports && (await accepts(address, port)) === true) {
         throw new Error(`another process listens on ${address} port ${port}, which was chosen for the server ${entry.server.target}`);
       }
+      // A chosen port is the host's port the call is configured for: the runtime holds it from here, before the server starts,
+      // so no other process can take it between the check above and the server's readiness. A connection that arrives
+      // before the server has bound is answered by the bridge's `fail` and closed; readiness stays the bridge's `ok`.
+      if (bridge !== null && !reports) await listenForwarder(port, port, true);
       const env = {
         ...(process.env.PATH === undefined ? {} : { PATH: process.env.PATH }),
         ...environment,
@@ -911,7 +920,8 @@ function callServer({
             // A number read while the server was writing it is a prefix of the port: once the file stops changing, the
             // port it names is the one the server bound.
             if (!reports || readIfWritten(portFile) === report.text) {
-              port = bridge === null ? candidate : await forward(candidate);
+              if (bridge !== null && reports) port = await listenForwarder(candidate, candidate, false);
+              else if (bridge === null) port = candidate;
               ready = true;
               return port;
             }
@@ -933,23 +943,18 @@ function callServer({
   }
 
   /**
-   * Behind a bridge, the runtime's listener for a server that bound `bound` inside its namespace: on the port the call is
-   * configured for, the chosen one (which another process must not hold), or for a server that reports its port the
-   * same number when the host has it free and a port the system gives otherwise. Resolves with the port it listens on.
+   * Behind a bridge, the runtime's listener on the host for the server that listens on `targetPort` inside its namespace:
+   * on `wanted`, the port the call is configured for. A chosen port is insisted on (`strict`: another process must not
+   * hold it); for a server that reports its port `wanted` is the number it bound, kept when the host has it free, and
+   * a port the system gives otherwise. Resolves with the port it listens on.
    */
-  async function forward(bound) {
+  async function listenForwarder(targetPort, wanted, strict) {
     if (stopped) throw new Error('the call was aborted while its server started');
     try {
-      forwarder = await startForwarder({
-        socketPath: bridge,
-        address: bridgeHost,
-        targetPort: bound,
-        port: reports ? bound : port,
-        strict: !reports,
-      });
+      forwarder = await relay.startForwarder({ socketPath: bridge, address: bridgeHost, targetPort, port: wanted, strict });
     } catch (error) {
       if (error.code === 'EADDRINUSE') {
-        throw new Error(`another process listens on ${address} port ${port}, which was chosen for the server ${entry.server.target}`);
+        throw new Error(`another process listens on ${address} port ${wanted}, which was chosen for the server ${entry.server.target}`);
       }
       throw new Error(`the runtime could not listen on ${address} for the server ${entry.server.target}: ${error.code ?? error.message}`);
     }
@@ -1167,7 +1172,7 @@ function createApiPort({ entries, httpPort, cwd, targetOf, readEnvironment, mech
       try {
         // A server behind a bridge gets a private directory for the Unix socket its shim serves, which only that call's
         // server may write; it joins the scratch list like the port directory.
-        if (launched !== null && mechanism.bridges === true) bridgeDirectory = makeBridgeDirectory(scratch);
+        if (launched !== null && mechanism.bridges === true && launched.network !== 'host') bridgeDirectory = makeBridgeDirectory(scratch);
         const launchedPort = launched === null || reports ? null : await freePort();
         const configurationAt = (port) =>
           portConfiguration({
@@ -1222,14 +1227,41 @@ function defaultPortOf(entry) {
 }
 
 /**
+ * The directory a call's bridge directory is made in: the temp directory when the socket's path under it fits a Unix
+ * socket (`BRIDGE_SOCKET_PATH_BYTES`), else `fallback`. A run's temp directory can be long (a runner points `TMPDIR` at
+ * a deep workspace), and a bridge directory has to be reachable by the sandbox and by the runtime alone, which `/tmp` is as
+ * much as the temp directory is.
+ *
+ * @param {string} [temp] the temp directory
+ * @param {string} [fallback]
+ * @returns {string}
+ */
+function bridgeDirectoryBase(temp = os.tmpdir(), fallback = BRIDGE_FALLBACK_DIRECTORY) {
+  // The directory's name is the prefix and six random characters.
+  const socketPathUnder = (base) => Buffer.byteLength(path.join(base, `${BRIDGE_DIRECTORY_PREFIX}XXXXXX`, BRIDGE_SOCKET_NAME));
+  let real = temp;
+  try {
+    real = fs.realpathSync.native(temp);
+  } catch {
+    // The directory is made under the spelling it has.
+  }
+  return socketPathUnder(real) <= BRIDGE_SOCKET_PATH_BYTES ? real : fallback;
+}
+
+/**
  * A private directory for one call's bridge socket, on the run's scratch list
  * (so a signal that ends the run removes it too), by its real path, which the
  * server's sandbox binds and the runtime connects through. A path too long for
- * a Unix socket is refused here, naming the temp directory, since the shim
- * would otherwise fail to listen with an error that names neither.
+ * a Unix socket even under the fallback is refused here, naming the temp
+ * directory, since the shim would otherwise fail to listen with an error that
+ * names neither.
+ *
+ * @param {string[]} scratch
+ * @param {{ temp?: string, fallback?: string }} [options] where to make it, for a case to drive the choice
  */
-function makeBridgeDirectory(scratch) {
-  const made = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-evaluate-netbridge-'));
+function makeBridgeDirectory(scratch, { temp = os.tmpdir(), fallback = BRIDGE_FALLBACK_DIRECTORY } = {}) {
+  const base = bridgeDirectoryBase(temp, fallback);
+  const made = fs.mkdtempSync(path.join(base, BRIDGE_DIRECTORY_PREFIX));
   scratch.push(made);
   let directory = made;
   try {
@@ -1241,7 +1273,7 @@ function makeBridgeDirectory(scratch) {
   if (Buffer.byteLength(path.join(directory, BRIDGE_SOCKET_NAME)) > BRIDGE_SOCKET_PATH_BYTES) {
     releasePortDirectory(scratch, directory);
     throw new Error(
-      `the bridge's socket path under ${os.tmpdir()} is longer than ${BRIDGE_SOCKET_PATH_BYTES} bytes, which a Unix socket cannot bind; point TMPDIR at a shorter directory`,
+      `the bridge's socket path under ${base} is longer than ${BRIDGE_SOCKET_PATH_BYTES} bytes, which a Unix socket cannot bind, and so is the one under ${fallback}; point TMPDIR at a shorter directory`,
     );
   }
   return directory;
@@ -1317,6 +1349,8 @@ module.exports = {
   deploymentAuthorizations,
   httpPortFile,
   isApiEntry,
+  makeBridgeDirectory,
+  bridgeDirectoryBase,
   missingCredentials,
   originKey,
   originTarget,

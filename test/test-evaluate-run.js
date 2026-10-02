@@ -142,7 +142,7 @@ const { judgeTrial } = require('../cli/lib/evaluate/evaluator');
 const { recordObservation, createArtifactValidator } = require('../cli/lib/evaluate/records');
 const { RunDirectory, RunDirectoryError } = require('../cli/lib/evaluate/run-directory');
 const { readObservedMounts, runTrial, setRecommendation } = require('../cli/lib/evaluate/run');
-const { createRegistry } = require('../cli/lib/evaluate/registry');
+const { createRegistry, registryProblems } = require('../cli/lib/evaluate/registry');
 const { BRIDGE_HOSTS, bridgeAccepts, bridgeHostOf, startForwarder } = require('../cli/lib/evaluate/confinement-relay');
 const { executableOnPath } = require('../cli/lib/isolation-primitives');
 const {
@@ -161,6 +161,7 @@ const {
   MECHANISM_NAMES,
   PLATFORM_ENV,
   confinedCommandMechanism,
+  forbiddenInputNote,
   confinedMcpMechanism,
   layerPrefix,
   makeAuditDirectory,
@@ -7550,7 +7551,8 @@ async function checkBridgeShim() {
     held.socket.destroy();
 
     // A target that exits by itself: its code is the shim's, the status file holds the start mark alone, the socket is gone,
-    // and a connection the listener holds does not keep the shim alive (an open socket would hold its event loop).
+    // and a connection the listener holds keeps the shim alive for the drain deadline (2 s) at most.
+    const exitBegan = Date.now();
     const exiting = await shimmed(socketDirectory(), {
       target: [process.execPath, '-e', 'setTimeout(() => process.exit(7), 700)'],
     });
@@ -7561,8 +7563,8 @@ async function checkBridgeShim() {
     );
     const exitedAs = await Promise.race([exiting.exited, sleep(10_000).then(() => null)]);
     check(
-      exitedAs !== null && exitedAs.code === 7 && exitedAs.signal === null,
-      `a shim whose target exited 7 ended as ${JSON.stringify(exitedAs)}; expected exit 7 within the time of the target`,
+      exitedAs !== null && exitedAs.code === 7 && exitedAs.signal === null && Date.now() - exitBegan < 7000,
+      `a shim whose target exited 7 ended as ${JSON.stringify(exitedAs)} after ${Date.now() - exitBegan} ms; expected exit 7 within the target's time and the 2 s a spliced connection may drain`,
     );
     check(
       JSON.stringify(readJson(exiting.status)) === JSON.stringify({ started: true }) && !fs.existsSync(exiting.bridge),
@@ -7619,6 +7621,197 @@ async function checkBridgeShim() {
 }
 
 /**
+ * Reads everything a connection through a bridge yields once `host port` is asked: the bytes after the bridge's `ok`, how many
+ * of them and whether the answer was `ok`. The reader pauses between chunks when `slow`, so what the bridge holds back from a
+ * slow reader is what it has to deliver once the target is gone. With `halfClose` the client ends its side after `request`.
+ */
+function throughBridge(socketPath, port, { request = '', halfClose = false, slow = false, ms = 20_000 } = {}) {
+  return new Promise((resolve) => {
+    const socket = net.connect({ path: socketPath, allowHalfOpen: true });
+    let head = '';
+    let answered = false;
+    let bytes = 0;
+    let sample = '';
+    const done = () => {
+      clearTimeout(timer);
+      socket.destroy();
+      resolve({ answered, bytes, head, sample });
+    };
+    const timer = setTimeout(done, ms);
+    socket.on('connect', () => {
+      socket.write(`127.0.0.1 ${port}\n${request}`);
+      if (halfClose) socket.end();
+    });
+    socket.on('data', (chunk) => {
+      let body = chunk;
+      if (!answered) {
+        head += chunk.toString('latin1');
+        const newline = head.indexOf('\n');
+        if (newline === -1) return;
+        answered = head.slice(0, newline) === 'ok';
+        body = Buffer.from(head.slice(newline + 1), 'latin1');
+        if (!answered) return done();
+      }
+      bytes += body.length;
+      if (sample.length < 16) sample += body.toString('latin1', 0, 16);
+      if (slow) {
+        socket.pause();
+        setTimeout(() => socket.resume(), 5);
+      }
+    });
+    socket.on('end', done);
+    socket.on('error', done);
+  });
+}
+
+/** A Node server program for a shim's target: answers each connection as `behavior` says and prints its port to `portFile`. */
+function targetServer(portFile, behavior) {
+  return [
+    process.execPath,
+    '-e',
+    `
+    const net = require('node:net');
+    const fs = require('node:fs');
+    const body = Buffer.alloc(4 * 1024 * 1024, 'x');
+    const behavior = ${JSON.stringify(behavior)};
+    const server = net.createServer((socket) => {
+      socket.on('error', () => {});
+      if (behavior === 'end-then-exit') {
+        socket.on('finish', () => process.exit(0));
+        socket.end(body);
+      } else if (behavior === 'reply-after-end') {
+        socket.on('data', () => {});
+        socket.on('end', () => socket.end(body));
+      } else if (behavior === 'reset') {
+        socket.resetAndDestroy();
+      }
+    });
+    server.listen(0, '127.0.0.1', () => fs.writeFileSync(${JSON.stringify(portFile)}, String(server.address().port)));
+  `,
+  ];
+}
+
+/** Waits for a port file a target program writes, and returns the port. */
+async function portFrom(file) {
+  const deadline = Date.now() + 10_000;
+  while (!fs.existsSync(file) && Date.now() < deadline) await sleep(20);
+  return fs.existsSync(file) ? Number(fs.readFileSync(file, 'utf8')) : 0;
+}
+
+/**
+ * What the bridge's two halves carry and when they let go (Story 1.63), over Unix sockets on every host. Through the shim: a
+ * target that writes a 4 MiB body, ends and exits at once still delivers every byte (the listener drains the spliced
+ * connection and cuts it only at its deadline); a client that writes, half-closes and reads slowly receives all 4 MiB of the
+ * answer; an upstream that resets after the bridge's `ok` ends the connection without a `fail` among its bytes; a client that
+ * goes before the upstream connects leaves no connection on the port; a refused line's connection is cut within about a
+ * second when its client never ends its side. The connect ceiling (`BRIDGE_CONNECT_MS`) has no case: a connection that
+ * hangs needs a route that drops packets, which no loopback gives portably.
+ */
+async function checkBridgeShimStreams() {
+  const SIZE = 4 * 1024 * 1024;
+  const shims = [];
+  const shimmed = async (where, options) => {
+    const started = await startBridgeShim(where, options);
+    shims.push(started);
+    return started;
+  };
+  try {
+    // A target that ends a 4 MiB body and exits.
+    const endingDirectory = socketDirectory();
+    const ending = await shimmed(endingDirectory, { target: targetServer(path.join(endingDirectory, 'port'), 'end-then-exit') });
+    const endingPort = await portFrom(path.join(endingDirectory, 'port'));
+    const fetched = await throughBridge(ending.bridge, endingPort);
+    check(
+      fetched.answered && fetched.bytes === SIZE,
+      `a target that ended a ${SIZE}-byte body and exited delivered ${fetched.bytes} byte(s) through the bridge (answered: ${fetched.answered})`,
+    );
+    const endingExit = await Promise.race([ending.exited, sleep(10_000).then(() => null)]);
+    check(
+      endingExit !== null && endingExit.code === 0,
+      `the shim of a target that ended its answer ended as ${JSON.stringify(endingExit)}; expected exit 0`,
+    );
+
+    // A client that writes, half-closes and reads slowly.
+    const replyDirectory = socketDirectory();
+    const replying = await shimmed(replyDirectory, { target: targetServer(path.join(replyDirectory, 'port'), 'reply-after-end') });
+    const replyPort = await portFrom(path.join(replyDirectory, 'port'));
+    const replied = await throughBridge(replying.bridge, replyPort, { request: 'go', halfClose: true, slow: true });
+    check(
+      replied.answered && replied.bytes === SIZE,
+      `a client that half-closed and read slowly received ${replied.bytes} of ${SIZE} byte(s) (answered: ${replied.answered})`,
+    );
+
+    // An upstream that resets the connection after the bridge's ok: no `fail` among the bytes the client reads.
+    const resetDirectory = socketDirectory();
+    const resetting = await shimmed(resetDirectory, { target: targetServer(path.join(resetDirectory, 'port'), 'reset') });
+    const resetPort = await portFrom(path.join(resetDirectory, 'port'));
+    const reset = await throughBridge(resetting.bridge, resetPort, { ms: 5000 });
+    check(
+      !reset.head.includes('fail') && reset.bytes === 0,
+      `an upstream that reset the connection after the bridge's ok left the client ${JSON.stringify(reset.head)} and ${reset.bytes} byte(s); expected no fail`,
+    );
+
+    // A client that goes before the upstream connects leaves nothing connected on the port, and the shim goes on serving.
+    const holder = await listenEchoing();
+    try {
+      const early = net.connect({ path: ending.bridge });
+      early.on('error', () => {});
+      const goneDirectory = socketDirectory();
+      const serving = await shimmed(goneDirectory);
+      const gone = net.connect({ path: serving.bridge });
+      gone.on('error', () => {});
+      gone.write(`127.0.0.1 ${holder.address().port}\n`);
+      gone.destroy();
+      early.destroy();
+      await sleep(600);
+      check(
+        holder.sockets.size === 0,
+        `a client that left before the upstream connected left ${holder.sockets.size} connection(s) on the port`,
+      );
+      const after = await exchange(serving.bridge, `127.0.0.1 ${holder.address().port}\n`, { until: 'ok\n' });
+      check(after === 'ok\n', `the shim answered ${JSON.stringify(after)} after a client left early; expected "ok\\n"`);
+    } finally {
+      await closeServer(holder);
+    }
+
+    // A refused line whose client never ends its own side is cut about a second later: a write after that meets a closed peer.
+    const cutDirectory = socketDirectory();
+    const cutting = await shimmed(cutDirectory);
+    const cut = await new Promise((resolve) => {
+      const socket = net.connect({ path: cutting.bridge, allowHalfOpen: true });
+      let ended = false;
+      const result = (value) => {
+        clearTimeout(timer);
+        socket.destroy();
+        resolve(value);
+      };
+      const timer = setTimeout(() => result('held'), 4000);
+      socket.on('connect', () => socket.write('not a line\n'));
+      socket.on('data', () => {});
+      socket.on('end', () => {
+        ended = true;
+        setTimeout(() => socket.write('x'), 1600);
+        setTimeout(() => socket.write('y'), 1900);
+      });
+      socket.on('error', () => result(ended ? 'cut' : 'error before the answer'));
+      socket.on('close', () => result(ended ? 'cut' : 'closed before the answer'));
+    });
+    check(
+      cut === 'cut',
+      `a refused line whose client never ended its side was ${JSON.stringify(cut)}; expected the connection cut within about 2 s`,
+    );
+  } finally {
+    for (const started of shims) {
+      if (started.child.exitCode === null && started.child.signalCode === null) {
+        started.child.kill('SIGTERM');
+        await Promise.race([started.exited, sleep(5000)]);
+        if (started.child.exitCode === null && started.child.signalCode === null) started.child.kill('SIGKILL');
+      }
+    }
+  }
+}
+
+/**
  * The network namespace of a Bubblewrap target (Story 1.63) as the vectors and the selection state it, on any host: the
  * target's vector and both probes carry `--unshare-net` and the evaluation layer's does not; a host that refuses the
  * namespace is refused at selection and by `run` with exit 12, naming Bubblewrap's words and the opt-out; a call that names
@@ -7664,6 +7857,23 @@ async function checkNetworkNamespaceUnits() {
       `the bridge names ${JSON.stringify(bridgeHostOf(address))} for ${JSON.stringify(address)}; expected ${JSON.stringify(host)}`,
     );
   }
+
+  // An entry that declares `network: host` runs its call without the namespace; a bridge is for the isolated default alone.
+  const hosted = sandbox.wrap('/bin/true', [], [], [], { network: 'host' });
+  check(
+    !hosted.args.includes('--unshare-net') && hosted.args.includes('--unshare-pid') && hosted.args.includes('--die-with-parent'),
+    `a call whose entry declares network host has the vector ${hosted.args.join(' ')}; expected the target's isolation without --unshare-net`,
+  );
+  let hostBridge = null;
+  try {
+    sandbox.wrap('/bin/true', [], [bridgeDirectory], [], { bridge: path.join(bridgeDirectory, 'b'), network: 'host' });
+  } catch (error) {
+    hostBridge = error;
+  }
+  check(
+    hostBridge?.name === 'ConfinementError' && hostBridge.message.includes('no bridge'),
+    `a bridge for a host-network call was not refused: ${hostBridge}`,
+  );
 
   // A call that names a bridge.
   const socket = path.join(bridgeDirectory, 'bridge.sock');
@@ -7718,6 +7928,23 @@ async function checkNetworkNamespaceUnits() {
   const mechanism = confinedCommandMechanism(base, fake('bubblewrap'));
   const signal = new AbortController().signal;
   await mechanism.run({ target: '/bin/true', subcommandPath: [], argv: [], env: {}, bridge: socket }, signal);
+  const networks = [];
+  const hostMechanism = confinedCommandMechanism(
+    base,
+    {
+      ...fake('bubblewrap'),
+      wrap: (target, args, writable, readable, options) => (networks.push(options.network), { target, args, statusFile: null }),
+    },
+    () => [],
+    [],
+    (target) => (target === '/bin/host' ? 'host' : 'isolated'),
+  );
+  await hostMechanism.run({ target: '/bin/host', subcommandPath: [], argv: [], env: {} }, signal);
+  await hostMechanism.run({ target: '/bin/other', subcommandPath: [], argv: [], env: {} }, signal);
+  check(
+    JSON.stringify(networks) === JSON.stringify(['host', 'isolated']),
+    `the mechanism asked for the networks ${JSON.stringify(networks)}; expected host for the declared target and isolated for the other`,
+  );
   await mechanism.run({ target: '/bin/true', subcommandPath: [], argv: [], env: {} }, signal);
   await confinedMcpMechanism(base, fake('bubblewrap')).callTool({ target: '/bin/true', targetArgs: [], env: {} }, signal);
   check(
@@ -7779,6 +8006,151 @@ while [ "$1" != "--" ]; do shift; done; shift; exec "$@"
     `a run on a host that refuses the network namespace exited ${ran.status}; expected 12 naming Bubblewrap's message and the opt-out\n${ran.output}`,
   );
   check(runDirectoryOf(project.folder, 0) === null, 'a run refused for the network namespace wrote a run directory');
+}
+
+/**
+ * The per-entry `network` field (Story 1.63): a command, tool-server and HTTP entry take `isolated` or `host`, any other value
+ * is refused by the registry check naming the entry (and by `tea-evaluate check`, exit 10), and two entries that start one
+ * target must agree, since a call finds its entry by its target; the isolation manifest's notes name the entries that keep
+ * the host's network under Bubblewrap and no other confinement's; `run.json` lists them as `hostNetwork`, and a run whose
+ * entry declares `host` still completes confined.
+ */
+async function checkNetworkField() {
+  const verdict = readJson(path.join(FIXTURE, EVALUATION, 'evaluation.json')).registry[0];
+  const server = {
+    kind: 'mcp',
+    interfaceId: 'tools',
+    target: 'bin/tools.js',
+    targetArgs: [],
+    tools: ['t'],
+    environmentKeys: [],
+    maxElapsedMs: 1000,
+  };
+  for (const value of ['isolated', 'host']) {
+    for (const entry of [verdict, server]) {
+      const problems = registryProblems([{ ...entry, network: value }]);
+      check(
+        !problems.some((problem) => problem.includes('network')),
+        `an entry with network ${value} was refused: ${JSON.stringify(problems)}`,
+      );
+    }
+  }
+  for (const [label, value] of [
+    ['an unknown value', 'bridged'],
+    ['a boolean', true],
+    ['an empty string', ''],
+  ]) {
+    const problems = registryProblems([{ ...verdict, network: value }]);
+    check(
+      problems.some((problem) => problem.startsWith('registry[0]/network ')),
+      `${label} for network was not refused naming the entry: ${JSON.stringify(problems)}`,
+    );
+  }
+  const same = registryProblems([
+    { ...verdict, interfaceId: 'one', network: 'host' },
+    { ...verdict, interfaceId: 'two', executable: 'other' },
+  ]);
+  check(
+    same.some((problem) => problem.includes('registry[1]') && problem.includes('another network')),
+    `two entries that start one target with different networks were not refused: ${JSON.stringify(same)}`,
+  );
+  const alike = registryProblems([
+    { ...verdict, interfaceId: 'one', network: 'host' },
+    { ...verdict, interfaceId: 'two', executable: 'other', network: 'host' },
+  ]);
+  check(
+    !alike.some((problem) => problem.includes('another network')),
+    `two entries that agree on the network were refused: ${JSON.stringify(alike)}`,
+  );
+
+  const bubblewrap = { mode: 'bubblewrap', executable: '/usr/bin/bwrap', evaluationFolder: '/eval' };
+  const seatbelt = { mode: 'seatbelt', executable: '/usr/bin/sandbox-exec', evaluationFolder: '/eval' };
+  const noted = forbiddenInputNote(bubblewrap, ['assistant', 'grader']);
+  check(
+    noted.includes('"assistant", "grader" declare "network": "host"') && noted.includes('abstract Unix sockets'),
+    `the Bubblewrap note names ${JSON.stringify(noted.slice(-320))}; expected the entries that keep the host's network`,
+  );
+  check(
+    !forbiddenInputNote(bubblewrap, []).includes('network') &&
+      !forbiddenInputNote(seatbelt, ['assistant']).includes('network') &&
+      !forbiddenInputNote({ mode: 'opt-out' }, ['assistant']).includes('network'),
+    'a note named the host network for a run with no such entry, a Seatbelt run or an opted-out run',
+  );
+
+  const bogus = makeProject('network-bogus', {
+    edit: ({ folder }) => editJson(path.join(folder, 'evaluation.json'), (evaluation) => (evaluation.registry[0].network = 'bridged')),
+  });
+  const refused = evaluate(['check', '--evaluation', bogus.folder], bogus.env);
+  check(
+    refused.status === 10 && refused.output.includes('/registry/0/network must be equal to one of the allowed values ("isolated", "host")'),
+    `check over an entry with network "bridged" exited ${refused.status}; expected 10 naming /registry/0/network and the allowed values\n${refused.output}`,
+  );
+
+  const hosted = makeProject('network-host', {
+    edit: ({ folder }) => editJson(path.join(folder, 'evaluation.json'), (evaluation) => (evaluation.registry[0].network = 'host')),
+  });
+  const ran = evaluate(['run', '--evaluation', hosted.folder], hosted.env);
+  check(ran.status === 0, `a run whose entry declares network host exited ${ran.status}; expected 0\n${ran.output}`);
+  const runDirectory = runDirectoryOf(hosted.folder);
+  const record = runDirectory === null ? {} : readJson(path.join(runDirectory, 'run.json'));
+  check(
+    JSON.stringify(record.hostNetwork) === JSON.stringify(['verdict']) && record.confinement === CONFINEMENT,
+    `run.json records hostNetwork ${JSON.stringify(record.hostNetwork)} and confinement ${JSON.stringify(record.confinement)}; expected ["verdict"] and ${CONFINEMENT}`,
+  );
+  const note =
+    runDirectory === null
+      ? ''
+      : Object.values(readJson(path.join(runDirectory, 'trial-sets', 'P-001', 'isolation-manifest.json')).forbiddenInputAccounting)[0].note;
+  check(
+    CONFINEMENT === 'bubblewrap' ? note.includes('"verdict" declare "network": "host"') : !note.includes('network'),
+    `the isolation manifest's note is ${JSON.stringify(note.slice(-260))}; expected it to name the entry under Bubblewrap and no network under Seatbelt`,
+  );
+  const plain = makeProject('network-default');
+  const plainRan = evaluate(['run', '--evaluation', plain.folder], plain.env);
+  const plainDirectory = runDirectoryOf(plain.folder);
+  check(
+    plainRan.status === 0 &&
+      plainDirectory !== null &&
+      JSON.stringify(readJson(path.join(plainDirectory, 'run.json')).hostNetwork) === '[]',
+    `a run whose entries keep the default recorded hostNetwork ${JSON.stringify(plainDirectory === null ? null : readJson(path.join(plainDirectory, 'run.json')).hostNetwork)}; expected []`,
+  );
+
+  // The registry hands each call its entry's network: a run on a (stood-in) Linux host passes `--unshare-net` to the Bubblewrap
+  // command of every target call whose entry keeps the default and none whose entry declares host. The stub `bwrap` logs the
+  // arguments of each call and runs its command; the stub `strace` confirms its probe and traces nothing, so the run ends at
+  // the first call's audit (exit 12), after the calls the log holds.
+  const stubs = tempDir('network-wiring-stubs');
+  const log = path.join(stubs, 'bwrap.log');
+  const stub = (name, body) => fs.writeFileSync(path.join(stubs, name), `#!/bin/sh\n${body}\n`, { mode: 0o755 });
+  stub('bwrap', `echo "$*" >> ${JSON.stringify(log)}\nwhile [ "$1" != "--" ]; do shift; done; shift; exec "$@"`);
+  stub(
+    'strace',
+    String.raw`out=""; prev=""
+for a in "$@"; do if [ "$prev" = "-o" ]; then out="$a"; fi; prev="$a"; done
+case "$prev" in
+  */tea-evaluate-observer-probe-*) printf '1 openat(AT_FDCWD</>, "%s", O_RDONLY) = 3<%s>\n' "$prev" "$prev" > "$out"; exit 0 ;;
+esac
+while [ "$1" != "--" ]; do shift; done; shift; exec "$@"`,
+  );
+  const targetCalls = (project) => {
+    fs.rmSync(log, { force: true });
+    evaluate(['run', '--evaluation', project.folder], {
+      ...project.env,
+      PATH: `${stubs}${path.delimiter}${process.env.PATH}`,
+      [PLATFORM_ENV]: 'linux',
+    });
+    return (fs.existsSync(log) ? fs.readFileSync(log, 'utf8').split('\n') : []).filter((line) => line.includes('confinement-status.cjs'));
+  };
+  const hostedCalls = targetCalls(hosted);
+  const plainCalls = targetCalls(plain);
+  check(
+    hostedCalls.length > 0 && hostedCalls.every((line) => !line.includes('--unshare-net')),
+    `the target calls of a run whose entry declares network host were ${JSON.stringify(hostedCalls.map((line) => line.slice(0, 60)))}; expected at least one and none with --unshare-net`,
+  );
+  check(
+    plainCalls.length > 0 && plainCalls.every((line) => line.includes('--unshare-net')),
+    `the target calls of a run whose entry keeps the default were ${JSON.stringify(plainCalls.map((line) => line.slice(0, 60)))}; expected at least one and each with --unshare-net`,
+  );
 }
 
 /** The probe a confined process runs: connects to what `kind` names and prints what happened. */
@@ -7853,8 +8225,8 @@ async function checkAbstractSocketRoute() {
   const pathSocket = path.join(socketDirectory(), 'host.sock');
   const pathServer = net.createServer((socket) => socket.end());
   await new Promise((resolve) => pathServer.listen(pathSocket, resolve));
-  const attempt = async (kind, target, { stripped = false } = {}) => {
-    const wrapped = sandbox.wrap(process.execPath, ['-e', CONNECT_PROBE, kind, target]);
+  const attempt = async (kind, target, { stripped = false, network = 'isolated' } = {}) => {
+    const wrapped = sandbox.wrap(process.execPath, ['-e', CONNECT_PROBE, kind, target], [], [], { network });
     const ran = await launch(stripped ? withoutNetwork(wrapped) : wrapped);
     return ran.status === 0 ? ran.stdout.trim() : `exit ${ran.status}: ${ran.stderr.trim()}`;
   };
@@ -7872,6 +8244,12 @@ async function checkAbstractSocketRoute() {
       check(
         control === 'connected',
         `with --unshare-net taken out of the vector, a confined process connecting to ${what} got ${JSON.stringify(control)}; expected connected, since the case proves nothing otherwise`,
+      );
+      // An entry that declares "network": "host" keeps the host's network, so the same process reaches it.
+      const hosted = await attempt(kind, target, { network: 'host' });
+      check(
+        hosted === 'connected',
+        `a confined process whose entry declares network host, connecting to ${what}, got ${JSON.stringify(hosted)}; expected connected`,
       );
     }
     const reached = await attempt('path', pathSocket);
@@ -7967,17 +8345,19 @@ async function checkAbstractSocketRoute() {
 }
 
 /**
- * The reference's claims about the network (Story 1.63) held against the cases that back them: every claim is a sentence of
- * the reference, names the cases that back it (each a case a suite runs), and every sentence that speaks of the network,
- * namespaces, sockets, the bridge or Mach services is a claim of the table or one of the earlier stories' sentences listed
- * beside it, so a sentence no case backs fails here. The old sentence that said a Bubblewrap target shares the host's
- * network namespace is gone.
+ * The sentences of the reference that speak of the network, namespaces, sockets or the reach of a target, service or process,
+ * and are neither a claim of the table nor one of the earlier stories' sentences listed beside it: what a claim no case backs
+ * looks like to `checkBridgeReference`. Inside the confinement section the screen is wide (a sentence naming Bubblewrap, a
+ * target, a service, a process or an entry together with reach, connect, listen, internet, a route, a model provider or the
+ * host's network); outside it the screen is the words only this story's claims use.
+ *
+ * @param {string} reference the reference's text
+ * @param {Array<[string, string[]]>} claims
+ * @returns {string[]}
  */
-function checkBridgeReference() {
-  const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
+function unbackedNetworkSentences(reference, claims) {
   const heading = '### File-system confinement\n';
   const start = reference.indexOf(heading);
-  check(start !== -1, 'the reference has no "### File-system confinement" section');
   const next = start === -1 ? -1 : reference.indexOf('\n## ', start);
   const section = start === -1 ? '' : reference.slice(start + heading.length, next === -1 ? undefined : next);
   const sentencesOf = (text) =>
@@ -7985,7 +8365,55 @@ function checkBridgeReference() {
       .split('\n')
       .flatMap((line) => line.split(/(?<=\.) (?=[A-Z`])/))
       .map((sentence) => sentence.replace(/^[-\s]+/, ''));
+  // The earlier stories' sentences that mention a socket, the bridge, a namespace or a host for their own reasons.
+  const earlier = [
+    "can neither read, write nor connect to a unix socket under the user's private root directory",
+    'Every other process the run starts to run your code or an agent',
+    'On Linux the runtime runs the Bubblewrap command under `strace -f',
+    'These variables replace any host value',
+    'reads the rest of the host, since Node, git and your toolchain read from the system',
+    "The target's git sees the evaluated commit's full history",
+    "cannot change its worktree's git state",
+    'The audit lists a path once, by its real path',
+    'A target that reads one ungranted file while the host is saturated',
+    'A registry entry names what its target legitimately reads outside the workspace',
+    'Every symbolic link under `launch.root`',
+    'It also refuses a pre-fix origin that reaches a post-fix one',
+    'The token file, the configuration file that names it',
+    'Seatbelt denies each read and write under the root',
+    "An exec or link read through a process's own links",
+  ];
+  const known = (sentence) => claims.some(([claim]) => claim === sentence) || earlier.some((prior) => sentence.startsWith(prior));
+  const insideScreen =
+    /(Bubblewrap|isolated|target|service|process|entry).*(reach|connect|listen|internet|route|model provider|outside service|host's network|host network)|(reach|connect|internet|route).*(Bubblewrap|isolated|target|service)|network|abstract|loopback|forward|\bbridge\b|socket|namespace|D-Bus|\bMach\b|firewall|egress|proxy/i;
+  const outsideScreen =
+    /abstract|D-Bus|socket|reach.*host|internet|network namespace|loopback and nothing else|forwarded service|bridge the runtime owns/i;
+  const inside = new Set(sentencesOf(section));
+  return [
+    ...sentencesOf(section).filter((sentence) => insideScreen.test(sentence) && !known(sentence)),
+    ...sentencesOf(reference).filter((sentence) => !inside.has(sentence) && outsideScreen.test(sentence) && !known(sentence)),
+  ];
+}
+
+/**
+ * The reference's claims about the network (Story 1.63) held against the cases that back them: every claim is a sentence of
+ * the reference, names the cases that back it (each a case a suite runs), and every sentence that speaks of the network,
+ * namespaces, sockets or the reach of a target is a claim of the table or one of the earlier stories' sentences, so a sentence
+ * no case backs fails here (`unbackedNetworkSentences`; scratch sentences of the kinds a claim takes are each screened out
+ * below). The old sentence that said a Bubblewrap target shares the host's network namespace is gone.
+ */
+function checkBridgeReference() {
+  const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
+  check(reference.includes('### File-system confinement\n'), 'the reference has no "### File-system confinement" section');
   const claims = [
+    [
+      '`network`: `"isolated"` (the default) or `"host"`, on a command, tool-server or HTTP entry; see [File-system confinement](#file-system-confinement).',
+      ['the network field'],
+    ],
+    [
+      "Under Bubblewrap an entry that keeps the default network runs its service in a network namespace of its own and the port it reports is the one it bound there (see [File-system confinement](#file-system-confinement)); the runtime's listener takes the same number on the host when it is free, and the call goes to the port the listener holds.",
+      ['the bridged server', 'the bridged server, stood in'],
+    ],
     [
       'Linux: Bubblewrap, through `bwrap` on `PATH` (`apt-get install bubblewrap`), in an unprivileged user namespace with a read-only view of `/`, a process-id namespace and procfs of its own, a network namespace of its own, and an empty `/run/user`.',
       ['the network namespace units'],
@@ -7995,7 +8423,7 @@ function checkBridgeReference() {
       ['the network namespace units'],
     ],
     [
-      "A Bubblewrap target and every process it starts run in a network namespace of their own with a loopback and nothing else, so the host's abstract Unix sockets, a desktop session's D-Bus among them, do not exist for them.",
+      "A Bubblewrap target whose entry keeps the default network, and every process it starts, run in a network namespace of their own with a loopback and nothing else, so the host's abstract Unix sockets, a desktop session's D-Bus among them, do not exist for them.",
       ['the abstract socket route', 'the network namespace units'],
     ],
     [
@@ -8008,15 +8436,35 @@ function checkBridgeReference() {
     ],
     [
       'A service that reports its port reports the one it bound inside the namespace; the runtime listens on the same number when the host has it free and on a port the system gives otherwise, and the call is configured for the port the runtime listens on.',
+      ['the bridged server', 'the bridged server, stood in'],
+    ],
+    [
+      'Under Bubblewrap an isolated started service must listen on `127.0.0.1` or `::1`, and an address the registry authorizes for it that is any other stops the call.',
       ['the bridged server'],
     ],
     [
-      'A command target and a tool server have a loopback only and no bridge.',
+      'A command target and a tool server with the default network have a loopback only and no bridge.',
       ['the abstract socket route', 'the network namespace units'],
     ],
     [
-      'A Bubblewrap target has no network beyond that loopback, so a target that needs the host\'s network (a database on the host\'s loopback, an outside service) does not run under Bubblewrap and needs `"confinement": false`.',
+      'An isolated Bubblewrap target has no network beyond that loopback, so a target that needs the host\'s network (a database on the host\'s loopback, an outside service, a model provider) declares `"network": "host"` on its entry.',
       ['the abstract socket route'],
+    ],
+    [
+      'Each command, tool-server and HTTP entry takes `network`: `"isolated"` (the default) or `"host"`, and `check` refuses any other value.',
+      ['the network field'],
+    ],
+    [
+      'An entry that declares `"network": "host"` keeps the host\'s network under Bubblewrap, and its started service, if it has one, is reached directly with no bridge.',
+      ['the abstract socket route', 'the network namespace units', 'the bridged server, stood in'],
+    ],
+    [
+      'A Linux skill or agent target (`tea-skill-runner` or any agent CLI), or any target that calls a model or an outside service, declares `"network": "host"` until Story 1.83 gives a confined target a route to the hosts its entry authorizes.',
+      ['the network field', 'the abstract socket route'],
+    ],
+    [
+      'An entry that declares `"network": "host"` keeps a route to the host\'s abstract Unix sockets, which Story 1.83 closes, and `run.json` lists each such entry under `hostNetwork` while the isolation manifest\'s forbidden-input notes name them.',
+      ['the network field', 'the abstract socket route'],
     ],
     [
       "The evaluation layer's processes keep the host's network, since the evaluation's HTTP port reaches the forwarded service over the host's loopback.",
@@ -8027,23 +8475,17 @@ function checkBridgeReference() {
       ['the abstract socket route'],
     ],
     [
-      'macOS Seatbelt is unchanged: it has no abstract sockets, and its Mach services are a separate channel the profile does not close.',
-      ['the Seatbelt network and Mach services'],
+      'macOS Seatbelt is unchanged: it has no abstract sockets, it accepts `network` and ignores it, and its Mach services are a separate channel the profile does not close.',
+      ['the Seatbelt network and Mach services', 'the network field'],
     ],
     [
-      "Under Bubblewrap the service runs in a network namespace of its own and the port it reports is the one it bound there (see [File-system confinement](#file-system-confinement)); the runtime's listener takes the same number on the host when it is free, and the call goes to the port the listener holds.",
-      ['the bridged server'],
-    ],
-    [
-      "The runtime observes no network access, so the network allowlist and the observed network targets are empty; a Bubblewrap target has a loopback and nothing else (see [File-system confinement](#file-system-confinement)), and a macOS target keeps the host's network.",
+      'The runtime observes no network access, so the network allowlist and the observed network targets are empty; a Bubblewrap target with the default network has a loopback and nothing else (see [File-system confinement](#file-system-confinement)), and an entry that declares `"network": "host"` and a macOS target keep the host\'s network.',
       ['the network namespace units', 'the Seatbelt network and Mach services'],
     ],
-  ];
-  // The earlier stories' sentences of the section that mention a socket, the bridge or a namespace for their own reasons.
-  const earlier = [
-    "can neither read, write nor connect to a unix socket under the user's private root directory",
-    'Every other process the run starts to run your code or an agent',
-    'On Linux the runtime runs the Bubblewrap command under `strace -f',
+    [
+      'On Linux the entry also declares `"network": "host"`, since the agent calls its model provider and the default network of a Bubblewrap target has a loopback only (see [File-system confinement](#file-system-confinement)).',
+      ['the network field'],
+    ],
   ];
   // The cases of this suite, and of the HTTP suite, whose runner lists each as `await runCase('<name>', ...)` on a line of its own.
   const apiSource = fs.readFileSync(path.join(PROJECT_ROOT, 'test', 'test-evaluate-api.js'), 'utf8');
@@ -8051,26 +8493,49 @@ function checkBridgeReference() {
     ...CASES.map(({ name }) => name),
     ...[...apiSource.matchAll(/^\s*await runCase\(['"]([^'"]+)['"], /gm)].map((match) => match[1]),
   ]);
-  const whole = sentencesOf(reference);
+  const lines = new Set(
+    reference
+      .split('\n')
+      .flatMap((line) => line.split(/(?<=\.) (?=[A-Z`])/))
+      .map((sentence) => sentence.replace(/^[-\s]+/, '')),
+  );
   for (const [sentence, backedBy] of claims) {
-    check(whole.includes(sentence), `the reference does not state: ${sentence}`);
+    check(lines.has(sentence), `the reference does not state: ${sentence}`);
     for (const name of backedBy) {
       check(caseNames.has(name), `the reference's claim "${sentence.slice(0, 60)}..." names the case "${name}", which no suite runs`);
     }
   }
-  const speaksOfNetwork = /network|abstract|loopback|forward|\bbridge\b|socket|namespace|D-Bus|\bMach\b/i;
-  const unbacked = sentencesOf(section)
-    .filter((sentence) => speaksOfNetwork.test(sentence))
-    .filter((sentence) => !claims.some(([claim]) => claim === sentence) && !earlier.some((prior) => sentence.startsWith(prior)));
-  check(unbacked.length === 0, `the reference's confinement section makes network claims no case backs: ${JSON.stringify(unbacked)}`);
-  // Outside the section, a sentence that says what a Bubblewrap target's network or namespace is must be a claim too.
-  const elsewhere = whole
-    .filter((sentence) => /network namespace|loopback and nothing else|forwarded service|bridge the runtime owns/i.test(sentence))
-    .filter((sentence) => !claims.some(([claim]) => claim === sentence));
-  check(
-    elsewhere.length === 0,
-    `the reference makes network claims outside the confinement section no case backs: ${JSON.stringify(elsewhere)}`,
-  );
+  const unbacked = unbackedNetworkSentences(reference, claims);
+  check(unbacked.length === 0, `the reference makes network claims no case backs: ${JSON.stringify(unbacked)}`);
+  // Sentences of the kinds an unbacked claim takes, each placed in the confinement section and, for the narrow screen, after it.
+  const scratch = [
+    'A Bubblewrap target can connect to the internet through the host.',
+    'A confined service reaches the host over its own network.',
+    'A target on Linux has a route to its model provider.',
+    'A Bubblewrap process may listen on any address.',
+    'An entry that declares `"network": "isolated"` can reach an outside service.',
+    'The runtime puts a firewall around every target.',
+    'An abstract socket of the host is closed to a macOS target.',
+  ];
+  const heading = '### File-system confinement\n';
+  const at = reference.indexOf(heading) + heading.length;
+  for (const sentence of scratch) {
+    const inSection = `${reference.slice(0, at)}${sentence}\n${reference.slice(at)}`;
+    check(
+      unbackedNetworkSentences(inSection, claims).includes(sentence),
+      `an unbacked sentence in the confinement section passed the screen: ${sentence}`,
+    );
+  }
+  for (const sentence of [
+    'An abstract socket of the host is closed to every target.',
+    'A service started by the runtime can reach the host.',
+    'Nothing reaches the internet from a target.',
+  ]) {
+    check(
+      unbackedNetworkSentences(`${reference}\n## Elsewhere\n\n${sentence}\n`, claims).includes(sentence),
+      `an unbacked sentence outside the confinement section passed the screen: ${sentence}`,
+    );
+  }
   check(
     !/shares the host's network namespace/.test(reference) && !/Story 1\.63 closes that route/.test(reference),
     "the reference still says a Bubblewrap target shares the host's network namespace",
@@ -8096,12 +8561,15 @@ async function checkSeatbeltNetworkAndMach() {
   const server = net.createServer((socket) => socket.end());
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   try {
-    const wrapped = sandbox.wrap(process.execPath, ['-e', CONNECT_PROBE, 'tcp', String(server.address().port)]);
-    const connected = await runToEnd(wrapped.target, wrapped.args, { cwd: workspace });
-    check(
-      connected.stdout.trim() === 'connected',
-      `a Seatbelt target connecting to the host's loopback got ${JSON.stringify(connected.stdout.trim())}; expected connected`,
-    );
+    // Seatbelt has no network namespace: the field is accepted, and the target connects whichever value its entry declares.
+    for (const network of ['isolated', 'host']) {
+      const wrapped = sandbox.wrap(process.execPath, ['-e', CONNECT_PROBE, 'tcp', String(server.address().port)], [], [], { network });
+      const connected = await runToEnd(wrapped.target, wrapped.args, { cwd: workspace });
+      check(
+        connected.stdout.trim() === 'connected',
+        `a Seatbelt target with network ${network} connecting to the host's loopback got ${JSON.stringify(connected.stdout.trim())}; expected connected`,
+      );
+    }
     const asked = sandbox.wrap('/usr/bin/dscl', ['.', '-read', '/Users/root', 'UniqueID']);
     const answered = await runToEnd(asked.target, asked.args, { cwd: workspace });
     check(
@@ -8162,7 +8630,9 @@ const CASES = [
   { name: 'the score input reference', body: checkScoreInputReference, group: 'held-inputs' },
   { name: "the bridge's admission token reference", body: checkBridgeTokenReference, group: 'confinement' },
   { name: 'the bridge shim', body: checkBridgeShim, group: 'confinement' },
+  { name: 'the bridge shim streams', body: checkBridgeShimStreams, group: 'confinement' },
   { name: 'the network namespace units', body: checkNetworkNamespaceUnits, group: 'confinement' },
+  { name: 'the network field', body: checkNetworkField, group: 'confinement' },
   { name: 'the abstract socket route', body: checkAbstractSocketRoute, group: 'confinement' },
   { name: 'the Seatbelt network and Mach services', body: checkSeatbeltNetworkAndMach, group: 'confinement' },
   { name: 'the network reference', body: checkBridgeReference, group: 'confinement' },
