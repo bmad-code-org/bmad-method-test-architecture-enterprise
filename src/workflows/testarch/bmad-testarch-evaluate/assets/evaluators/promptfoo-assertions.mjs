@@ -32,11 +32,23 @@ export const ALLOWED_ASSERTION_TYPES = [
 // Its own tests are `.js`, `.cjs`, `.mjs`, `.ts`, `.cts` and `.mts` without regard to case, and `.py` and `.rb` exactly.
 // The guard takes all of them without regard to case.
 const CODE_EXTENSIONS = ['.js', '.cjs', '.mjs', '.ts', '.cts', '.mts', '.py', '.rb'];
+// promptfoo renders every string value that is not a file or package reference through nunjucks, which can reach the JavaScript Function constructor.
+const TEMPLATE_OPENERS = ['{{', '{%', '{#'];
 const QUOTED_LIMIT = 200;
 const REPAIR = 'an assertion that needs code belongs in a command evaluator you own';
+const TEMPLATE_REPAIR = `write a literal as a regex or not-regex pattern with escaped braces such as [{][{]; ${REPAIR}`;
 
 function quoted(text) {
   return JSON.stringify(String(text).slice(0, QUOTED_LIMIT));
+}
+
+// The call promptfoo's regex handler makes; it grades a pattern that does not compile as a failure.
+function compiles(pattern) {
+  try {
+    return new RegExp(pattern) instanceof RegExp;
+  } catch {
+    return false;
+  }
 }
 
 function loadsCode(reference, { packages }) {
@@ -48,7 +60,8 @@ function loadsCode(reference, { packages }) {
   return CODE_EXTENSIONS.some((extension) => target.endsWith(extension));
 }
 
-// promptfoo has already run the assertion when this refuses it: a code reference or a transform ran, and a model-graded type called its model.
+// promptfoo has already run the assertion when this refuses it: a code reference, a template or a transform ran, and a model-graded type called its model.
+// A pattern that does not compile and a weight of zero run nothing; they refuse a grade the target did not earn.
 function refuseAssertion(assertion) {
   const { type } = assertion ?? {};
   const base = typeof type === 'string' && type.startsWith('not-') ? type.slice('not-'.length) : type;
@@ -61,13 +74,29 @@ function refuseAssertion(assertion) {
   const { value } = assertion;
   const references = Array.isArray(value) ? value.map((item) => [item, false]) : [[value, true]];
   for (const [reference, packages] of references) {
-    if (typeof reference === 'string' && loadsCode(reference, { packages })) {
+    if (typeof reference !== 'string') continue;
+    if (loadsCode(reference, { packages })) {
       throw new Error(`promptfoo assertion ${named} is refused: its value ${quoted(reference)} loads adopter code; ${REPAIR}`);
     }
+    if (TEMPLATE_OPENERS.some((opener) => reference.includes(opener))) {
+      throw new Error(
+        `promptfoo assertion ${named} is refused: its value ${quoted(reference)} is a template promptfoo renders, which can run code; ${TEMPLATE_REPAIR}`,
+      );
+    }
+  }
+  if (base === 'regex' && typeof value === 'string' && !compiles(value)) {
+    throw new Error(
+      `promptfoo assertion ${named} is refused: its pattern ${quoted(value)} does not compile, so promptfoo grades it a failure; fix the pattern`,
+    );
   }
   if (assertion.transform !== undefined && assertion.transform !== null) {
     throw new Error(
       `promptfoo assertion ${named} is refused: its transform rewrites the output, so the assertion would grade text the target did not produce; ${REPAIR}`,
+    );
+  }
+  if (assertion.weight === 0) {
+    throw new Error(
+      `promptfoo assertion ${named} is refused: a zero weight turns a failed assertion into a pass; drop the weight or set it above zero`,
     );
   }
 }

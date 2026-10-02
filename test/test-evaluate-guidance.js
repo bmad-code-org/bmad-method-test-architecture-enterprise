@@ -1945,6 +1945,48 @@ function checkPromptfooRefusals(run, selected, destination, evaluation) {
   }
   everywhere(element('package:x:y'), 'a package: array element', 'admitted');
 
+  // A template value, a pattern that does not compile and a weight of zero.
+  for (const template of ['{{ output }}', '{# note #}pears', '{% if true %}pears{% endif %}', '{{ range.constructor("return 1")() }}']) {
+    everywhere(
+      value(template),
+      `template string value ${template}`,
+      'refused',
+      '"contains"',
+      JSON.stringify(template),
+      'is a template promptfoo renders, which can run code',
+    );
+    everywhere(
+      element(template),
+      `template array element ${template}`,
+      'refused',
+      JSON.stringify(template),
+      'is a template promptfoo renders, which can run code',
+    );
+  }
+  for (const braces of ['{pears}', '{ {', 'a{2}', '}}']) {
+    everywhere(value(braces), `string value ${braces}`, 'admitted');
+    everywhere(element(braces), `array element ${braces}`, 'admitted');
+  }
+  for (const type of ['regex', 'not-regex']) {
+    for (const pattern of ['[', '(', '(?<']) {
+      everywhere(
+        { metric: 'forbidden-shellfish', type, value: pattern },
+        `${type} pattern ${pattern}`,
+        'refused',
+        `"${type}"`,
+        'does not compile',
+        JSON.stringify(pattern),
+      );
+    }
+    for (const pattern of ['^Summary', 'a{2}'])
+      everywhere({ metric: 'forbidden-shellfish', type, value: pattern }, `${type} pattern ${pattern}`, 'admitted');
+  }
+  // Only a regex pattern is compiled: any other type takes the same text as a literal.
+  everywhere(value('['), 'a literal bracket for contains', 'admitted');
+  everywhere(element('('), 'a literal parenthesis in an array for contains-any', 'admitted');
+  everywhere({ ...value('pears'), weight: 0 }, 'weight 0', 'refused', '"contains"', 'a zero weight turns a failed assertion into a pass');
+  for (const weight of [1, 0.5]) everywhere({ ...value('pears'), weight }, `weight ${weight}`, 'admitted');
+
   // A transform, however it behaves; a null one is a YAML key left empty.
   for (const transform of ["output.replace('pears', 'figs')", 'output.notAFunction()', '', 0, false]) {
     everywhere(
@@ -1979,43 +2021,67 @@ function checkPromptfooRefusals(run, selected, destination, evaluation) {
     'the quoted value was not capped',
   );
 
-  // promptfoo itself: a raising Python file as the value of an assertion. The file sits in the project and its absolute
-  // path is the reference, since the starter runs promptfoo in a temporary directory and copies only asserts.yaml.
-  const code = path.join(evaluation, 'boom.py');
+  // promptfoo itself. The attack replaces the second of three assertions in the starter's own asserts.yaml, which the
+  // starter copies into a temporary directory; a file the code needs sits in the project, and its absolute path is the
+  // reference, since promptfoo resolves a relative one from that temporary directory.
   const assertionsFile = path.join(evaluation, 'evaluator', 'asserts.yaml');
   const original = fs.readFileSync(assertionsFile, 'utf8');
-  try {
-    fs.writeFileSync(code, "def get_assert(output, context):\n    raise RuntimeError('deliberate assertion error')\n");
-    const assertions = YAML.parse(original);
-    assertions[1].value = `file://${code}`;
-    fs.writeFileSync(
-      assertionsFile,
-      YAML.stringify(
-        assertions.map((assertion, index) => ({
-          ...assertion,
-          metric: ['required-apples', 'required-pears', 'forbidden-shellfish'][index],
-        })),
-      ),
-    );
-    const live = run(['--stdout-prefix=Selected summary:'], {
-      observations: [{ observationId: 'decoy', stdout: { kind: 'text', value: 'Decoy summary: apples, pears\n' } }, selected],
-    });
-    assert.notStrictEqual(live.status, 0, `promptfoo template turned a raising Python value into rows: ${live.stdout}`);
-    assert.ok(
-      live.stderr.includes('is refused:') && live.stderr.includes('"contains"') && live.stderr.includes('loads adopter code'),
-      `the live refusal lost its diagnostic: ${live.stderr.slice(0, 400)}`,
-    );
-    assert.ok(!live.stdout.includes('"rows"'), 'the live refusal printed rows');
-  } finally {
-    fs.writeFileSync(assertionsFile, original);
-    fs.rmSync(code, { force: true });
-  }
+  const marker = path.join(evaluation, 'marker');
+  const code = path.join(evaluation, 'boom.py');
+  const live = (label, attack, mentions, ran = []) => {
+    try {
+      fs.writeFileSync(code, "def get_assert(output, context):\n    raise RuntimeError('deliberate assertion error')\n");
+      const assertions = YAML.parse(original);
+      assertions[1] = { ...attack, metric: 'required-pears' };
+      fs.writeFileSync(
+        assertionsFile,
+        YAML.stringify(
+          assertions.map((assertion, index) => ({
+            ...assertion,
+            metric: ['required-apples', 'required-pears', 'forbidden-shellfish'][index],
+          })),
+        ),
+      );
+      const result = run(['--stdout-prefix=Selected summary:'], {
+        observations: [{ observationId: 'decoy', stdout: { kind: 'text', value: 'Decoy summary: apples, pears\n' } }, selected],
+      });
+      assert.notStrictEqual(result.status, 0, `promptfoo template turned ${label} into rows: ${result.stdout}`);
+      assert.ok(
+        mentions.every((mention) => result.stderr.includes(mention)),
+        `the live refusal of ${label} lost its diagnostic: ${result.stderr.slice(0, 400)}`,
+      );
+      assert.ok(!result.stdout.includes('"rows"'), `the live refusal of ${label} printed rows`);
+      for (const file of ran) assert.ok(fs.existsSync(file), `promptfoo did not run the code of ${label} before the refusal`);
+    } finally {
+      fs.writeFileSync(assertionsFile, original);
+      fs.rmSync(code, { force: true });
+      fs.rmSync(marker, { force: true });
+    }
+  };
+  live('a raising Python value', { type: 'contains', value: `file://${code}` }, ['is refused:', '"contains"', 'loads adopter code']);
+  // The template writes the marker inside the project's temporary directory and returns a value the output holds, so
+  // without the guard the graded failure is a `fail` row of the starter.
+  live(
+    'a template value that runs code',
+    {
+      type: 'not-contains',
+      value: `{{ range.constructor("process.getBuiltinModule(\\"fs\\").writeFileSync(\\"${marker}\\", \\"ran\\"); return \\"Selected\\"")() }}`,
+    },
+    ['is refused:', '"not-contains"', 'is a template promptfoo renders, which can run code'],
+    [marker],
+  );
+  live('an invalid pattern', { type: 'regex', value: '[' }, ['is refused:', '"regex"', 'does not compile']);
+  live('a zero weight', { type: 'contains', value: 'figs', weight: 0 }, [
+    'is refused:',
+    '"contains"',
+    'a zero weight turns a failed assertion into a pass',
+  ]);
 }
 
 const FAILURE_BOUNDARY = '## Separate ungraded framework errors from graded target failures';
 // What the guide's failure-boundary section says about the assertions the starter refuses (Story 1.70).
 const REFUSAL_MARKERS = [
-  'A graded result still stops the trial when its assertion runs code or calls a model',
+  'A graded result still stops the trial when its assertion runs code, calls a model, or would report a grade the target did not earn',
   'neither `error` nor the shape of the result separates a crash from a failure',
   'The starter admits the assertion types',
   'each also with a `not-` prefix',
@@ -2026,6 +2092,11 @@ const REFUSAL_MARKERS = [
   'a string `value` that starts with `package:`',
   'A `file://` reference to a `.json`, `.yaml`, `.yml` or `.txt` file is data and stays admitted',
   'a `package:` string inside an array `value`',
+  'that contains `{{`, `{%` or `{#` stops the trial too',
+  'promptfoo renders it as a nunjucks template, which can run code',
+  'whose string `value` does not compile as a regular expression stops the trial',
+  'An assertion with `weight: 0` stops the trial',
+  'then reports a failed assertion as a pass',
   'An assertion that carries a `transform` (any value other than null) stops the trial as well',
   'the row would grade text the target did not produce',
   'belongs in a `command` evaluator you own, where a crash exits non-zero',
@@ -3668,6 +3739,24 @@ async function main() {
             'An assertion that carries a `transform` (any value other than null) stops the trial as well',
             'A transform is fine',
           ),
+      ],
+      [
+        'evaluator refusal template removal',
+        'evaluator',
+        (text, found) => checkEvaluatorGuidance(text, found),
+        (text) => text.replace('that contains `{{`, `{%` or `{#` stops the trial too', 'is read as text'),
+      ],
+      [
+        'evaluator refusal pattern removal',
+        'evaluator',
+        (text, found) => checkEvaluatorGuidance(text, found),
+        (text) => text.replace('whose string `value` does not compile as a regular expression stops the trial', 'is graded'),
+      ],
+      [
+        'evaluator refusal weight removal',
+        'evaluator',
+        (text, found) => checkEvaluatorGuidance(text, found),
+        (text) => text.replace('An assertion with `weight: 0` stops the trial', 'A weight is fine'),
       ],
       [
         'evaluator refusal command route removal',

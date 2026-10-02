@@ -129,6 +129,7 @@ context:
 - The criterion names `AssertionTypeSchema`; its union ends in `custom()`, which accepts any string (`bogus`, `not-not-contains`), so the unit reads its two enumerating members, `BaseAssertionTypesSchema` and `NotPrefixedAssertionTypesSchema`, and refuses every installed type outside the list as well.
 - After the `transform` guard no assertion the fixture admits makes promptfoo return an ungraded result (a failing `transform` was the only source; an object or absent `value` on `contains` is ungraded in promptfoo, but the fixture maps by type and value and refuses that metric first).
   The `run` case for an ungraded row therefore rewrites the result after promptfoo returns, like its two siblings, and `resultShapes` holds the real shape from `asserts-ungraded.yaml` (with the assertion list set to the keyed one before the import).
+- AC 2's "in both evaluators" holds for the starter only: the fixture maps by type and value, so it carries pass and fail rows for `contains:pears` and `not-contains:shellfish` alone; for every other listed form `test/test-evaluate-promptfoo.js` checks that the fixture does not refuse it, and the starter maps the pass and fail rows of every listed form. `epics.md` carries a dated clause on the AC (Review round 1).
 - The match for a code file runs on the resolved path, which the plan text did not say: promptfoo resolves the path first, so `file://boom.py/` and `file://./a/../boom.py` run the Python file (verified live).
 - The fixture's `javascript` exemption in `assertionKey` was removed as the Decisions say; nothing observable depends on it once the type refusal comes first, so no revert check exists for its removal alone (the combined revert below restores both).
 - The guidance live case writes `boom.py` into the project and gives its absolute path, because the starter copies only `asserts.yaml` into promptfoo's temporary directory.
@@ -183,6 +184,51 @@ The path scan matches the baseline (two high findings, `SKILL.md` bare `_bmad` a
 
 - Enhancement 1 (medium, validate `asserts.yaml` before spawning promptfoo): the story's Decisions state the trade, since a pre-check would duplicate promptfoo's parser and the guide carries the consequence (promptfoo has already run the code when the wrapper refuses); a pinned sentence says so.
 - Enhancement 3 (low, move the exit 12 causes out of the `gaps.md` table cell): `test:evaluate-guidance` holds the exit mapping and one concrete repair per row, and the padding comes from the repository's formatter.
+
+## Review round 1
+
+Three reviewers on PR #301 (adversarial, compliance, test quality) raised seven findings.
+Each was reproduced against the installed promptfoo 0.123.1 before its plan text was written, and each revert was run once on a scratch copy of the final tree (`cp -c -R`, under the scratchpad directory).
+The unmodified scratch copy passes: `test:evaluate-promptfoo` 3306 checks, 0 failures; `test:evaluate-guidance` green.
+The skill edit went through `/bmad-workflow-builder` Edit run headless again (memlog direction logged, Analyze afterwards: 0 critical, 0 high, 2 medium, 3 low).
+
+### Fixed
+
+1. Adversarial 1 (high): a template value runs adopter code.
+   promptfoo renders a string `value` that is neither a `file://` nor a `package:` reference, and a string element of an array `value` that is not a `file://` reference, through nunjucks, which reaches `Function` (`range.constructor`).
+   Reproduced: `not-contains` with a `{{ range.constructor("...writeFileSync(...marker...)")() }}` value wrote the marker file in promptfoo's working directory and its return value decided the expected value; `{{ output }}` derived the expected value from the output; `{# c #}pears` and `{% if true %}pears{% endif %}` rendered to `pears`.
+   Both evaluators now refuse a string `value`, or a string element of an array `value`, that contains `{{`, `{%` or `{#`, naming the type and the reason (the value is a template promptfoo renders, which can run code) and the lighter route for literal braces (a `regex` or `not-regex` pattern such as `[{][{]`, verified live).
+   Tests: units for a string, an array element, the third of three, a second result and the `not-` form, with `{{`, `{#`, `{%` and near misses (`{pears}`, `{ {`, `}}`, `[{][{]`, `\{\{user`); the rendered starter (four templates, four near misses, string and array element); live promptfoo in `resultShapes` (the template writes `marker` in the test's temporary directory only, the test asserts the marker exists, so the code had run, and the result is refused through the fixture and, with a metric the starter keys, through the starter in process); live through the rendered starter in `test:evaluate-guidance` (the marker path is inside the guidance project's temporary directory; the test asserts the marker exists after the refusal).
+   The guide's value-guard paragraph names the template guard, and its framing no longer says admitted values run no code on their own: the types run none and the guards keep a value or a key from doing so.
+   Reverts (promptfoo suite failures, of 3306): guard removed 290; only `{{` tested 128; only `{{` and `{%` 64; array elements skipped 144; the guidance test fails (1) for each, and 3 for the guide sentence removed.
+   With the guard removed the live starter prints a `fail` row quoting stdout and the marker exists (checked directly); with it, the refusal fires and the marker exists, since promptfoo had already run the code.
+2. Adversarial 2 (medium, a pre-existing defect found on the way): `weight: 0`.
+   Reproduced: `contains figs` with `weight: 0` against an output without `figs` returned a component `pass: true` with the failure text as its reason.
+   Both evaluators refuse `weight` equal to `0`, naming the type and the reason (a zero weight turns a failed assertion into a pass); `weight: 1`, `0.5`, `2`, the string `'0'`, `null` and an absent weight stay admitted.
+   Tests: units in both placements (string and array assertions, third of three, second result, `not-` form), the rendered starter (payloads and live), live promptfoo in `resultShapes`.
+   Reverts: guard removed 18; refusing any falsy weight 2496 (the run aborted at 3287 checks); refusing a weight below 1 48; the guidance test fails (1) each.
+3. Compliance 1 (medium): an invalid `regex` pattern became a `fail` row.
+   Reproduced: `regex` with `[`, and `not-regex` with `(`, return a graded `pass: false` `Invalid regex pattern: ...`.
+   Both evaluators compile a string `value` of a base type `regex` with `new RegExp` (the call promptfoo's handler makes, no flags) and refuse a pattern that throws, naming the type and that the pattern does not compile; other types take the same text as a literal, and a non-string value is left to promptfoo.
+   Tests as for finding 2, plus `contains` with `[` admitted in the units and the rendered starter.
+   Reverts: guard removed 82; applied to `regex` only 40; applied to every type 40 (the guidance test fails for that one once the literal-bracket case exists); the guidance test fails (1) each.
+4. Compliance 2: the CHANGELOG entry says which refusals run through promptfoo itself (`javascript`, `file://boom.py`, `transform`, template, `weight: 0` and invalid `regex`) and which through the fixture and the rendered starter, and lists the three new refusals in plain words.
+5. Compliance 3: the parenthesis in `test-design-epic-1.md` around the Story 1.43 note matches `epics.md`.
+6. Compliance 4: the AC 2 departure is in this record, and a dated clause is on the AC in `epics.md`.
+7. Test quality 1 (low): `allowList` pins the ten specified types as a literal list that each export must equal, apart from the installed enumeration, and derives the types to refuse from the installed `BaseAssertionTypesSchema.options` minus that list.
+   Reverts: `is-json` replaced by `similar` in the fixture only 7, in the starter only 11, in both files 14 (it passed before).
+   The refusal blocks are compared byte for byte by one unit (a comment added in the fixture only: 1 failure), and the fixture's `transform` throw is wrapped as the starter's is (compliance 5).
+8. Builder Analyze (Fixed): architecture 1 (the section framing and the starter comment name a grade the target did not earn), leanness 1 (the Function-constructor parenthetical is cut from the guide and stays in the code comment), enhancement 1 (the template refusal and the guide name the regex route for literal braces), enhancement 2 (the regex and weight refusals name their repair).
+
+### Skipped
+
+- Builder enhancement 3 (low, report every violation at once): the refusal contract is single-error, and every precedence test reads the first violation.
+- A `run` case through `tea-evaluate run` for each new refusal: the fixture maps by type and value, so it refuses these results at `assertionKey` even without the guard; the live promptfoo case in `resultShapes`, the starter in process and the live rendered-starter case carry the revert.
+
+### Gates
+
+Green on the last state of the tree (see the list in Gates, rerun after this round).
+Measured local wall time before this round and after it (machine under load, other lanes running): see the Gates section.
 
 ## Left undone, reported
 

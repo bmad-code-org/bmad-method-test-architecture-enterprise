@@ -747,7 +747,7 @@ Added 2026-09-27 in Story 1.23. Levels: integration over real eval-quality, unit
 | Grade set is complete and unique                 | Missing, duplicate and malformed components stop the trial with no record, including a partial grade set where one assertion succeeded         | Unit, integration                  | P1  | Permitting a partial set writes a record                                               |
 | Guide names the failure boundary                 | Assert the evaluator guide distinguishes ungraded framework errors from graded target failures by exact section and runnable examples          | Guidance                           | P1  | Removing the distinction fails the guidance assertion                                  |
 
-The installed promptfoo grades a thrown assertion as a failing component, so a thrown `javascript` assertion or a crashing code file stays a target `fail` row under this story; Story 1.70 closes it (added 2026-10-01); closed in Story 1.70's build, 2026-10-02: both evaluators refuse such an assertion).
+The installed promptfoo grades a thrown assertion as a failing component, so a thrown `javascript` assertion or a crashing code file stays a target `fail` row under this story; Story 1.70 closes it (added 2026-10-01; closed in Story 1.70's build, 2026-10-02: both evaluators now refuse such an assertion).
 
 ### Story 1.44: Record installed framework versions in evaluator provenance
 
@@ -1139,6 +1139,11 @@ Its matcher units run an independent table of references and verdicts: `.js`, `.
 The fourth row compares the two files' exports, reads the installed `BaseAssertionTypesSchema` and `NotPrefixedAssertionTypesSchema` (the `AssertionTypeSchema` union ends in `custom()` and accepts any string), and refuses every installed type outside the list.
 The ungraded `run` case rewrites the result after promptfoo returns, since no admitted assertion makes promptfoo return one the fixture can map; a unit holds the real shape (an object `value` on `contains`).
 The fifth row adds the `promptfoo-refused` example, which the guidance test runs through the rendered starter.
+
+Amended 2026-10-02 in Story 1.70's round 1 review (`evaluation-framework-facts.md`, the round 1 check):
+The third row also covers a string `value` and a string element of an array `value` that contain `{{`, `{%` or `{#` (a template promptfoo renders through nunjucks, which can run code), as units for the fixture and the starter (first, third of three, a second result, the `not-` form), through the rendered starter, and live: promptfoo runs a template that writes a marker file in its temporary directory and the wrapper refuses the result with the code already run.
+A `regex` or `not-regex` pattern that `new RegExp` rejects, and `weight: 0` (promptfoo then reports a failed assertion as a pass), are refused the same way, with `weight: 1` and `weight: 0.5` admitted.
+The fourth row pins the ten specified types as a literal list that each file's export must equal, apart from the installed enumeration, and the two refusal blocks must be byte-identical.
 
 ### Story 1.71: Bound a framework version probe with its own timeout
 

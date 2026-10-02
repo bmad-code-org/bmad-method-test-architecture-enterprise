@@ -267,7 +267,7 @@ syncBuiltinESMExports();
   }
 }
 
-function promptfooResult(assertionFile, stdout, expectedStatus = 0, companions = []) {
+function promptfooResult(assertionFile, stdout, expectedStatus = 0, companions = [], inspect = () => {}) {
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-promptfoo-shape-'));
   try {
     fs.writeFileSync(path.join(temporary, 'outputs.json'), JSON.stringify([stdout]));
@@ -298,6 +298,7 @@ function promptfooResult(assertionFile, stdout, expectedStatus = 0, companions =
     );
     const file = path.join(temporary, 'results.jsonl');
     check(fs.existsSync(file), `${assertionFile}: promptfoo produced no JSONL: ${result.output}`);
+    inspect(temporary);
     return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8').trim()) : null;
   } finally {
     fs.rmSync(temporary, { recursive: true, force: true });
@@ -458,6 +459,46 @@ function resultShapes() {
     'installed promptfoo did not grade the rewritten output of a transform as a failure for an output that holds the value',
   );
   if (rewritten) refuseResults([rewritten], observation, [REFUSED, '"contains"', 'its transform rewrites the output'], undefined, UNGRADED);
+  // A template value runs promptfoo's nunjucks engine, which reaches Function: this one writes `marker` in promptfoo's
+  // working directory (the temporary directory) and decides the expected value, so a graded failure follows from code the
+  // adopter wrote. The wrapper refuses it with the code already run.
+  let templateRan = false;
+  const templated = promptfooResult('asserts-template.yaml', stdout, 100, [], (directory) => {
+    templateRan = fs.existsSync(path.join(directory, 'marker'));
+  });
+  check(templateRan, 'installed promptfoo did not run the code of a template value');
+  check(
+    templated?.gradingResult?.pass === false,
+    `a template value did not arrive as a graded failure: ${JSON.stringify(templated?.gradingResult)?.slice(0, 200)}`,
+  );
+  // A zero weight turns the failure of an assertion into a pass.
+  const weightless = promptfooResult('asserts-weight.yaml', stdout);
+  check(
+    weightless?.gradingResult?.pass === true &&
+      weightless.gradingResult.componentResults?.[0]?.reason === 'Expected output to contain "figs"',
+    `installed promptfoo did not turn a failed assertion of weight 0 into a pass: ${JSON.stringify(weightless?.gradingResult)?.slice(0, 200)}`,
+  );
+  // A pattern that does not compile is graded a failure.
+  const invalidPattern = promptfooResult('asserts-regex.yaml', stdout, 100);
+  check(
+    invalidPattern?.gradingResult?.pass === false && /Invalid regex pattern/.test(invalidPattern.gradingResult.reason ?? ''),
+    `installed promptfoo did not grade an invalid pattern as a failure: ${JSON.stringify(invalidPattern?.gradingResult)?.slice(0, 200)}`,
+  );
+  const starterFile = evaluatorFiles().starter;
+  for (const [real, messages] of [
+    [templated, [REFUSED, '"not-contains"', 'is a template promptfoo renders, which can run code']],
+    [weightless, [REFUSED, '"contains"', 'a zero weight turns a failed assertion into a pass']],
+    [invalidPattern, [REFUSED, '"regex"', 'does not compile']],
+  ]) {
+    if (!real) continue;
+    refuseResults([real], observation, messages, undefined, UNGRADED);
+    // The starter maps by metric alone, so without its guard each of these results becomes a row.
+    const [outcome] = importBatch(starterFile, [[real]], observation).outcomes;
+    check(
+      messages.every((message) => outcome.message?.includes(message)),
+      `starter: a real promptfoo result lost its refusal ${messages.join(', ')}: ${JSON.stringify(outcome).slice(0, 200)}`,
+    );
+  }
   // promptfoo returns no grade at all when an allow-listed assertion has no usable value: the shape Story 1.43 refuses.
   // The fixture maps assertions by type and value, so the assertion list is set to the keyed one before the import:
   // the refusal under test is the ungraded result.
@@ -495,12 +536,15 @@ function resultShapes() {
 // The import functions of both evaluators: the fixture's own and the skill's starter beside a copy of the fixture's
 // mapping.json (the starter reads it). A child process imports the module and runs every case of a batch, which keeps
 // the test free of a computed import and costs one process start for thousands of cases.
+let evaluatorFileCache;
 function evaluatorFiles() {
+  if (evaluatorFileCache) return evaluatorFileCache;
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-promptfoo-starter-'));
   projects.push(directory);
   fs.copyFileSync(STARTER, path.join(directory, 'promptfoo-assertions.mjs'));
   fs.copyFileSync(path.join(EVALUATOR, 'mapping.json'), path.join(directory, 'mapping.json'));
-  return { fixture: path.join(EVALUATOR, 'promptfoo.mjs'), starter: path.join(directory, 'promptfoo-assertions.mjs') };
+  evaluatorFileCache = { fixture: path.join(EVALUATOR, 'promptfoo.mjs'), starter: path.join(directory, 'promptfoo-assertions.mjs') };
+  return evaluatorFileCache;
 }
 
 const BATCH_DRIVER = `
@@ -613,6 +657,53 @@ const REFERENCES = [
   ['a package: reference', false, false],
 ];
 
+// Strings promptfoo renders through nunjucks (refused) and near misses it renders to themselves (admitted).
+const TEMPLATES = [
+  ['{{ output }}', true],
+  ['{{output}}', true],
+  ['{# comment #}pears', true],
+  ['{% if true %}pears{% endif %}', true],
+  ['{%- set x = 1 -%}pears', true],
+  ['pears {{', true],
+  ['{# ', true],
+  ['{{ range.constructor("return 1")() }}', true],
+  ['file://list.json{{', true],
+  ['[{][{]', false],
+  [String.raw`\{\{user`, false],
+  ['{pears}', false],
+  ['{ {', false],
+  ['{', false],
+  ['}} {', false],
+  ['#{', false],
+  ['{ %', false],
+  ['%}', false],
+  ['{x}}', false],
+];
+
+// Patterns `new RegExp` rejects (refused for `regex` and `not-regex`) and patterns it takes.
+const PATTERNS = [
+  ['[', true],
+  ['(', true],
+  ['*', true],
+  ['(?<', true],
+  ['a{2,1}', true],
+  ['pears', false],
+  ['^Summary', false],
+  ['[ab]', false],
+  ['a{2}', false],
+  ['(?:x|y)', false],
+];
+
+const WEIGHTS = [
+  [0, true],
+  [1, false],
+  [0.5, false],
+  [2, false],
+  ['0', false],
+  [null, false],
+  [undefined, false],
+];
+
 const TRANSFORMS = [
   ["output.replace('pears', 'figs')", true],
   ['output.notAFunction()', true],
@@ -688,6 +779,66 @@ function guardCases() {
       }
     }
   }
+  // A template, as a string value and as an element of an array value, for a type and its `not-` form.
+  for (const [template, expected] of TEMPLATES) {
+    for (const [type, value] of [
+      ['contains', template],
+      ['not-icontains', template],
+      ['contains-any', ['pears', template]],
+      ['not-contains-all', [template]],
+    ]) {
+      for (const [where, results] of placements({ type, value, metric: 'forbidden-shellfish' })) {
+        add(
+          `${type} with ${JSON.stringify(value)} (${where}) should be ${expected ? 'refused' : 'admitted'}`,
+          results,
+          ({ message = '' }) =>
+            expected
+              ? refused(message) &&
+                message.includes(`assertion ${named(type)}`) &&
+                message.includes('is a template promptfoo renders, which can run code') &&
+                message.includes('escaped braces') &&
+                message.includes(JSON.stringify(template))
+              : !refused(message),
+        );
+      }
+    }
+  }
+  // A pattern that does not compile, for `regex` and `not-regex`; other types take any text.
+  for (const [pattern, expected] of PATTERNS) {
+    for (const type of ['regex', 'not-regex', 'contains']) {
+      const wanted = expected && type !== 'contains';
+      for (const [where, results] of placements({ type, value: pattern, metric: 'forbidden-shellfish' })) {
+        add(
+          `${type} with pattern ${JSON.stringify(pattern)} (${where}) should be ${wanted ? 'refused' : 'admitted'}`,
+          results,
+          ({ message = '' }) =>
+            wanted
+              ? refused(message) &&
+                message.includes(`assertion ${named(type)}`) &&
+                message.includes('does not compile') &&
+                message.includes(JSON.stringify(pattern))
+              : !refused(message),
+        );
+      }
+    }
+  }
+  // A weight of zero.
+  for (const [weight, expected] of WEIGHTS) {
+    for (const type of ['contains', 'not-regex']) {
+      for (const [where, results] of placements({ type, value: 'pears', metric: 'forbidden-shellfish', weight })) {
+        add(
+          `${type} with weight ${JSON.stringify(weight)} (${where}) should be ${expected ? 'refused' : 'admitted'}`,
+          results,
+          ({ message = '' }) =>
+            expected
+              ? refused(message) &&
+                message.includes(`assertion ${named(type)}`) &&
+                message.includes('a zero weight turns a failed assertion into a pass')
+              : !refused(message),
+        );
+      }
+    }
+  }
   // A transform.
   for (const [transform, expected] of TRANSFORMS) {
     for (const type of ['contains', 'not-regex']) {
@@ -749,6 +900,25 @@ async function allowList(files) {
     return parsed.success ? parsed.data : undefined;
   };
   check(!defined('not-a-real-type') && negated('not-a-real-type') === undefined, 'the installed type enumeration accepted a made-up type');
+  // The contract: the ten types that run no adopter code and call no model. The installed enumeration says which of them
+  // exist, and which types outside this list the evaluators must refuse.
+  const specified = [
+    'contains',
+    'icontains',
+    'contains-all',
+    'contains-any',
+    'icontains-all',
+    'icontains-any',
+    'equals',
+    'starts-with',
+    'regex',
+    'is-json',
+  ];
+  const sources = Object.fromEntries(['fixture', 'starter'].map((label) => [label, fs.readFileSync(files[label], 'utf8')]));
+  const refusalBlock = (source) =>
+    source.slice(source.indexOf('// The assertion types that run no adopter code'), source.indexOf('function assertionKey'));
+  check(refusalBlock(sources.fixture).length > 1000, 'the fixture lost the refusal block this unit compares');
+  check(refusalBlock(sources.fixture) === refusalBlock(sources.starter), 'the fixture and the starter refusal blocks differ');
   const exported = {};
   for (const label of ['fixture', 'starter']) {
     const file = files[label];
@@ -760,8 +930,12 @@ async function allowList(files) {
     const { allowed } = importBatch(file, []);
     exported[label] = allowed;
     listed.push(...allowed);
-    const outside = forms(base.filter((type) => !allowed.includes(type)));
-    const inside = forms(allowed);
+    check(
+      JSON.stringify(allowed) === JSON.stringify(specified),
+      `${label}: the allow-list is ${allowed.join(', ')}, expected ${specified.join(', ')}`,
+    );
+    const outside = forms(base.filter((type) => !specified.includes(type)));
+    const inside = forms(specified);
     for (const form of outside)
       probes.push([
         `${label}: ${form} was not refused`,
@@ -799,7 +973,7 @@ async function allowList(files) {
       check(verify(outcomes[index]), `${label}: ${description}: ${JSON.stringify(outcomes[index]).slice(0, 220)}`);
     }
     check(listed.length === 10 && new Set(listed).size === 10, `${label}: the allow-list changed size: ${listed.join(', ')}`);
-    for (const type of listed) {
+    for (const type of specified) {
       check(defined(type), `${label}: ${type} is not an assertion type of the installed promptfoo`);
       check(negated(type) === `not-${type}`, `${label}: the installed promptfoo does not define ${type} with a not- prefix`);
     }

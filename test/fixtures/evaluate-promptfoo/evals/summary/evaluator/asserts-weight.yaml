@@ -1,0 +1,4 @@
+- type: contains
+  value: figs
+  metric: required-pears
+  weight: 0

@@ -59,6 +59,14 @@ Sources: repository `github.com/promptfoo/promptfoo` at `main` `d59f045c4cda1193
   An element of an array `value` goes to the data loader only: `["file://boom.py"]` returns no grade (`Unsupported file type`), and `["package:x:y"]` is a literal substring that grades like any text.
   `contextTransform` (a throwing one), `provider` (an `exec:` provider) and `rubricPrompt` on `contains` are inert and grade `pass: true`; `transform: ""` is inert too.
   A `contains` assertion whose `value` is an object or absent returns no grade, with an `error` of `Invariant failed: "contains" assertion type must have a string or number value`; no assertion the fixture admits returns an ungraded result any more, since a failing `transform`, the earlier source of one, is refused (Story 1.70).
+- **Story 1.70 review round 1 check, 2026-10-02.** Read from `evaluator-DlYW7Rgb.js` of the installed `promptfoo@0.123.1` and run live from a system temporary directory.
+  A string `value` that starts with neither `file://` nor `package:`, and a string element of an array `value` that does not start with `file://`, goes through `nunjucks.renderString` (autoescape off, no sandbox) before the handler grades it.
+  The template can reach the JavaScript `Function` constructor: `{{ range.constructor("process.getBuiltinModule(\"fs\").writeFileSync(\"marker\", \"ran\"); return \"shellfish\"")() }}` as the value of `not-contains` wrote the marker file in promptfoo's working directory and its return value decided the expected value.
+  `{{ output }}` derives the expected value from the output, and `{#` and `{%` openers render too (`{# c #}pears` and `{% if true %}pears{% endif %}` graded as `pears`).
+  So an allow-listed type does not by itself run no adopter code: its value can.
+  After a handler returns, `assertion.weight === 0` returns the result with `pass: true`: `contains` with `value: figs` and `weight: 0` against an output without `figs` returned a component `pass: true`, `score: 0` and the reason `Expected output to contain "figs"`.
+  The `regex` handler compiles `new RegExp(renderedValue)` with no flags and, when it throws, returns a graded `pass: false` with the reason `Invalid regex pattern: ...`; `not-regex` returns the same failure (no inversion).
+  A nunjucks `metric` renders too, but the wrapper keys on the raw metric, so no row is admitted for it.
 
 ## Autoevals
 
