@@ -14,7 +14,7 @@ TeA also ships `tea-skill-runner`, the command an evaluation registers to run a 
 ## Prerequisites
 
 - Node.js 22.20 or later, with TeA installed in the evaluations folder (`{tea_evaluations_folder}`, `evals` in these examples) through its private `package.json` (`npm install --prefix evals`), which provides the `tea-evaluate` bin. The adopter's root manifest stays untouched, so every invocation names the folder: `npm exec --prefix evals -- tea-evaluate ...`.
-- `eval-quality` 5.0.0 or later, a devDependency of the same private `package.json`.
+- `eval-quality` 6.0.0 or later, a devDependency of the same private `package.json`.
   TeA declares it as an optional peer dependency, so a project that installs TeA only for its other workflows never receives it.
   Without it, `tea-evaluate` exits 12 and names the missing package.
 
@@ -270,6 +270,8 @@ TeA holds no HTTP client of its own.
 The port's default export builds eval-quality's environment-probe port from configuration alone (where each interface is, eval-quality's HTTP target policy, auth headers and a transport), and eval-quality's `evaluateTarget` decides every allow or deny, once per request and once per redirect hop, so the port classifies no address and a fix to the policy reaches it with eval-quality.
 It resolves a host once per hop, to its first address, and sends to the address eval-quality allowed with the host in the Host header.
 
+An API request body can be `json`, `absent`, or `{ "kind": "raw", "base64": "...", "contentType": "application/json" }`. Raw base64 must be canonical. The port decodes it into exact request bytes and sends the declared content type. Raw requests cannot declare Content-Type in `channels.header`; `body.contentType` is the sole request declaration. For raw calls, the port replaces configured auth Content-Type and framing headers with the declared type and computed framing. The port computes Content-Length for nonempty raw bytes and uses chunked transfer framing for an empty raw body; it refuses caller supplied framing headers. An absent body adds no inferred content type. The port checks the decoded byte count against `maxRequestBytes`.
+
 `tea-evaluate` never loads the port into its own process.
 For each call it starts the port file as a Node process of its own, whose last lines hand the port to TeA's host, which serves the call over file descriptor 3, a channel the runtime opens for its protocol alone; keep those lines when you edit the file.
 What the port prints on its standard output and error is its own: the runtime keeps both, up to 1 MiB together, and quotes their end when a call fails, so a `console.log` in the port breaks nothing, and printing past that ceiling ends the call.
@@ -474,6 +476,8 @@ Every arm runs the contract's `interactionPlan` once, one request for each step 
 ### Binding kinds
 
 Each key of a step's `inputBinding` channels is sent as its binding says:
+
+For an API step, `inputBinding.body` can also hold the raw body object above. The runtime sends those bytes and records the complete raw object in `callInputs.body`, with `bodyEncoding: "raw"`; the defect signature can select that exact request. JSON and absent calls record `bodyEncoding: null`.
 
 - `literal`: the value as written.
 - `captured`: the value its pointer (`/interactions/<stepId>/<channel>/<key>`) resolves to on the observation the named earlier step recorded in the same arm, read by eval-quality's own `makeResolveOperand`, the reading `eval-quality score` gives the pointer; a workflow binds a later step to an identifier an earlier step minted this way.

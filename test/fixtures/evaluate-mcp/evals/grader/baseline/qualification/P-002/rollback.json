@@ -47,7 +47,8 @@
               "value": {
                 "ok": true,
                 "answer": "forty-two",
-                "verdict": "accepted"
+                "verdict": "accepted",
+                "secret": "[redacted]"
               }
             }
           }

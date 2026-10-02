@@ -1,6 +1,6 @@
 [
   {
-    "schemaVersion": 5,
+    "schemaVersion": 6,
     "parentDigest": null,
     "revisionCount": 0,
     "probeId": "P-001",
@@ -148,7 +148,7 @@
     }
   },
   {
-    "schemaVersion": 5,
+    "schemaVersion": 6,
     "parentDigest": null,
     "revisionCount": 0,
     "probeId": "P-002",
@@ -323,7 +323,7 @@
     }
   },
   {
-    "schemaVersion": 5,
+    "schemaVersion": 6,
     "parentDigest": null,
     "revisionCount": 0,
     "probeId": "P-003",
@@ -498,7 +498,7 @@
     }
   },
   {
-    "schemaVersion": 5,
+    "schemaVersion": 6,
     "parentDigest": null,
     "revisionCount": 0,
     "probeId": "P-004",

@@ -5,19 +5,19 @@
   "argv": [
     "preflight",
     "--contract",
-    "/private/tmp/tea-replay-36A2is/before/evaluation/runs/20261002T154941955Z-9183b477/contract.json",
+    "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/story150-evidence-mVk3d2/gap-before/evaluation/runs/20261002T210634961Z-e0c16be1/contract.json",
     "--probes",
-    "/private/tmp/tea-replay-36A2is/before/evaluation/runs/20261002T154941955Z-9183b477/probes.json",
+    "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/story150-evidence-mVk3d2/gap-before/evaluation/runs/20261002T210634961Z-e0c16be1/probes.json",
     "--observations",
-    "/private/tmp/tea-replay-36A2is/before/evaluation/runs/20261002T154941955Z-9183b477/observations.json",
+    "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/story150-evidence-mVk3d2/gap-before/evaluation/runs/20261002T210634961Z-e0c16be1/observations.json",
     "--run-id",
-    "20261002T154941955Z-9183b477",
+    "20261002T210634961Z-e0c16be1",
     "--out",
-    "/tmp/tea-evaluate-p501/run-7750-KZT1Ms/tea-evaluate-engine-ByCSEy/preflight-verdict.json"
+    "/tmp/tea-evaluate-p501/run-91155-2X52FG/tea-evaluate-engine-HfSGAa/preflight-verdict.json"
   ],
   "exitCode": 0,
   "signal": null,
   "error": null,
   "stdout": "",
-  "stderr": "eval-quality: preflight: 20261002T154941955Z-9183b477: leg \"witness-missing\": planned\neval-quality: preflight: 20261002T154941955Z-9183b477: leg \"witness-missing\": observed\neval-quality: preflight: 20261002T154941955Z-9183b477: leg \"witness-clean\": planned\neval-quality: preflight: 20261002T154941955Z-9183b477: leg \"witness-clean\": observed\neval-quality: preflight: 20261002T154941955Z-9183b477: leg \"preflight-control-observe\": planned\neval-quality: preflight: 20261002T154941955Z-9183b477: leg \"preflight-control-observe\": observed\neval-quality: preflight: 20261002T154941955Z-9183b477: leg \"preflight-control-observe-2\": planned\neval-quality: preflight: 20261002T154941955Z-9183b477: leg \"preflight-control-observe-2\": observed\neval-quality: preflight: 20261002T154941955Z-9183b477: leg \"manifest-p-010\": planned\neval-quality: preflight: 20261002T154941955Z-9183b477: leg \"manifest-p-010\": observed\neval-quality: preflight: 20261002T154941955Z-9183b477: leg \"manifest-p-011\": planned\neval-quality: preflight: 20261002T154941955Z-9183b477: leg \"manifest-p-011\": observed\neval-quality: preflight: 20261002T154941955Z-9183b477: leg \"manifest-p-012\": planned\neval-quality: preflight: 20261002T154941955Z-9183b477: leg \"manifest-p-012\": observed\neval-quality: preflight: 20261002T154941955Z-9183b477: leg \"manifest-p-013\": planned\neval-quality: preflight: 20261002T154941955Z-9183b477: leg \"manifest-p-013\": observed\neval-quality: preflight: 20261002T154941955Z-9183b477: reduced 8 leg(s): passed\n"
+  "stderr": "eval-quality: preflight: 20261002T210634961Z-e0c16be1: leg \"witness-missing\": planned\neval-quality: preflight: 20261002T210634961Z-e0c16be1: leg \"witness-missing\": observed\neval-quality: preflight: 20261002T210634961Z-e0c16be1: leg \"witness-clean\": planned\neval-quality: preflight: 20261002T210634961Z-e0c16be1: leg \"witness-clean\": observed\neval-quality: preflight: 20261002T210634961Z-e0c16be1: leg \"preflight-control-observe\": planned\neval-quality: preflight: 20261002T210634961Z-e0c16be1: leg \"preflight-control-observe\": observed\neval-quality: preflight: 20261002T210634961Z-e0c16be1: leg \"preflight-control-observe-2\": planned\neval-quality: preflight: 20261002T210634961Z-e0c16be1: leg \"preflight-control-observe-2\": observed\neval-quality: preflight: 20261002T210634961Z-e0c16be1: leg \"manifest-p-010\": planned\neval-quality: preflight: 20261002T210634961Z-e0c16be1: leg \"manifest-p-010\": observed\neval-quality: preflight: 20261002T210634961Z-e0c16be1: leg \"manifest-p-011\": planned\neval-quality: preflight: 20261002T210634961Z-e0c16be1: leg \"manifest-p-011\": observed\neval-quality: preflight: 20261002T210634961Z-e0c16be1: leg \"manifest-p-012\": planned\neval-quality: preflight: 20261002T210634961Z-e0c16be1: leg \"manifest-p-012\": observed\neval-quality: preflight: 20261002T210634961Z-e0c16be1: leg \"manifest-p-013\": planned\neval-quality: preflight: 20261002T210634961Z-e0c16be1: leg \"manifest-p-013\": observed\neval-quality: preflight: 20261002T210634961Z-e0c16be1: reduced 8 leg(s): passed\n"
 }

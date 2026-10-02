@@ -10,7 +10,8 @@
       "value": {
         "ok": true,
         "answer": "alpha",
-        "verdict": "accepted"
+        "verdict": "accepted",
+        "secret": "[redacted]"
       }
     }
   },
@@ -25,7 +26,8 @@
       "value": {
         "ok": true,
         "answer": "beta",
-        "verdict": "accepted"
+        "verdict": "accepted",
+        "secret": "[redacted]"
       }
     }
   },
@@ -40,7 +42,8 @@
       "value": {
         "ok": true,
         "answer": "alpha",
-        "verdict": "accepted"
+        "verdict": "accepted",
+        "secret": "[redacted]"
       }
     }
   },
@@ -55,7 +58,8 @@
       "value": {
         "ok": true,
         "answer": "alpha",
-        "verdict": "accepted"
+        "verdict": "accepted",
+        "secret": "[redacted]"
       }
     }
   },
@@ -70,7 +74,8 @@
       "value": {
         "ok": true,
         "answer": "forty-two",
-        "verdict": "rejected"
+        "verdict": "rejected",
+        "secret": "[redacted]"
       }
     }
   }

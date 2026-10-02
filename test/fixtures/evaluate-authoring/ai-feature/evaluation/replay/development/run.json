@@ -1,9 +1,9 @@
 {
-  "invocationId": "20261002T154804523Z-186fe7af",
-  "seed": "20261002T154804523Z-186fe7af",
+  "invocationId": "20261002T210321664Z-57c4fa54",
+  "seed": "20261002T210321664Z-57c4fa54",
   "command": "run",
   "teaVersion": "1.27.2",
-  "evalQualityVersion": "5.0.0",
+  "evalQualityVersion": "6.0.0",
   "commit": null,
   "dirty": false,
   "evaluationFolder": {
@@ -17,11 +17,12 @@
     "dirty": false
   },
   "workspaces": {
-    "pristine": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-pristine-05e5b0af-e294-44ef-be5a-85be59b64165/target",
-    "mutated:M-001": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-001-47a9490e-ae7c-40be-bb0a-9acfb13eb88f/target",
-    "mutated:M-002": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-002-65d735fa-2ec0-4e39-89c9-f37f18264888/target",
-    "mutated:M-003": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-003-bc177ce4-4630-4bbe-9491-326ebe426cc5/target",
-    "mutated:M-004": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-004-582e7334-3fd4-494c-b82d-bd7de130ace0/target"
+    "pristine": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-pristine-64b34c7d-c0bd-47d6-9691-5d6ad7844110/target",
+    "mutated:M-001": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-001-a9f4aa92-6d47-42b7-964d-726cb8f6500c/target",
+    "mutated:M-002": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-002-afa82d99-610f-49f1-b346-1d4c50b97b17/target",
+    "mutated:M-003": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-003-af51bc51-621e-43d2-96fc-015ec72384a1/target",
+    "mutated:M-004": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-004-70462c79-9b42-4af6-9db3-84ce46ce2959/target",
+    "mutated:M-008": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-008-4d327eed-0d25-4386-bc41-22d53c5f2227/target"
   },
   "confinement": "seatbelt",
   "hostNetwork": [],
@@ -31,72 +32,77 @@
   },
   "refused": [],
   "artifacts": {
-    "contract": "sha256:58b4c060b4dd6b8c9e960c40e0e762277c00d09fa8d4513c1f5e51887e1e6a53",
+    "contract": "sha256:be52715bc36a52e551194ba3d904b74c4a315ecadc009a2b2bd5fc2ebbcc0b6d",
     "operationPhases": "sha256:d1f72d746d2017b00c471b144b21ac6fb7b75a3c110de59f6a871f908dc863d4",
-    "evaluatorConfiguration": "sha256:406329a667d27a0da0cb2681f0ecfa07bd34fefeeeac37479799c1dd854286e6",
-    "preflightVerdict": "sha256:1a1b427e687ca21b4e6f0266c273e54190dd3e5bdc3d218c8be06126f1229192",
+    "evaluatorConfiguration": "sha256:cecf436ade6a881889efa5f1fc612f62ff1f8dbf4fe0b6ffcdd8317772046493",
+    "preflightVerdict": "sha256:d9caa9d865711e5037b93d1438cac4b0bf06497dbe468d166dc5911c36e42e15",
     "probes": {
-      "P-001": "sha256:eb29c10d432433c60dd2e52de6933cb72f581073635b12b9d096cbfcaa3dd483",
-      "P-002": "sha256:68f16af170797495335be12acc1df0fb44d8272feec3808f01b8f12774e9aff4",
-      "P-003": "sha256:38cebbe4dcd5872b04f7782dd0b87bfc5f94981c2708d046ca55614ec25c5c48",
-      "P-004": "sha256:19bc5b9ca7c1eae6860fd5065c385ad2d279956ad2520c7c7516e599b7eca974",
-      "P-005": "sha256:bd4585e224107fa5270c41edf1e6c0e838cb6593ea730f2c5315af87b2f70235",
-      "P-010": "sha256:68ce2eaa1c835e71c8ba48ca924fbefb16f9678ad0654524bbd6500dc8126d80",
-      "P-006": "sha256:325da89d32b680ce747912757c16c9ca59269110eb4aca260cf13533c1c5a372",
-      "P-007": "sha256:4e52c85bfc9182b917e530a4de9f5234c8efa43152ab94e25d887633a9ee5f2d",
-      "P-008": "sha256:97431da989d5837ea10dc8287437c1907af967ac2875c298768fae4421d30108",
-      "P-009": "sha256:ffac746c0e418ead779c0055ec20e62fc12157311776c81ce16d8dddea707fa2"
+      "P-001": "sha256:431b0ec07fbea15bfc475adb455dd636ec1cdf49d3f4f06b71d002e7643c6a21",
+      "P-002": "sha256:4f89f07a6eb0241883b5c5534b8d701a338081192569ae4acb4eb2d6a9c0d2f1",
+      "P-003": "sha256:340186250df420e00cfeb2069c4f0cfc869f3f901a9337c82b08053edbd4be36",
+      "P-004": "sha256:8be287142da47e5cedbf895c7a973482d29275196870ae1518315e3911550196",
+      "P-005": "sha256:16625c6741d548f042bcb985385258acdd27a87ad843e941ee7e59e2b3c4e6d5",
+      "P-010": "sha256:bd8415432d82d1898874505ff97a9ff8b5da65868ce4235a53954c68525701f3",
+      "P-006": "sha256:87e9e1e86e207608dbb967d5bcf056b4d6306022ee142ff45cc75388164e5677",
+      "P-007": "sha256:d67087164d708bbf162d24745d4ad114ce30c4d4105dc19feaf37887733971e4",
+      "P-008": "sha256:8870c7f14eaa41c87fa32dbfc399b1fb91f0b7c599d6d5f51e17cdef5fde9609",
+      "P-014": "sha256:bac3faedf0d69525d233d5458470c59713f546f868772a642c2def64afb7a55c",
+      "P-009": "sha256:7b804e66b20bd54de895321546616d9ec36d852f45642978d46cdb30e82306ce"
     },
     "records": {
-      "trial-sets/P-001/record-1.json": "sha256:71eb60c450648b8d480ee6e7630010988357983f5d08d2975d19b7bc1be69b2c",
-      "trial-sets/P-001/record-2.json": "sha256:0b119c492e720c92e080f931383b9886f02400e6c7a503acf96d2712249b6ba6",
-      "trial-sets/P-001/record-3.json": "sha256:c106edf3a2f4e571136f3b1179a67ae7252917c48350b71df8af7137843975f8",
-      "trial-sets/P-002/record-1.json": "sha256:6c5cd03a96fbc3a6f3bde320cc053012a292331ff9334fc2d9b8c76bc0afc34d",
-      "trial-sets/P-002/record-2.json": "sha256:e683a5af2ab4bd827a2078fdfe175d998ba4507b1d7eec4b8ac617c00fdbfb1c",
-      "trial-sets/P-002/record-3.json": "sha256:df49e482fbcd62e3ada730a42ccb5d0c9e5201919befbf396108eda43e1d1d3b",
-      "trial-sets/P-003/record-1.json": "sha256:0efdd72c3901474778ea305a7729153bf6c0ab77411a9f646d1d7cf770f8a6f0",
-      "trial-sets/P-003/record-2.json": "sha256:7125fa8e46c19a4b8533080b54ef2b435de036ed97a5452d292ff2812f072d39",
-      "trial-sets/P-003/record-3.json": "sha256:caf973151939abd2b29aca48611b774a0544c919fe3a75c6154379cb7054b512",
-      "trial-sets/P-004/record-1.json": "sha256:32f4814e083ad7b17f7de2d2e7633947ab6dd1eaf6aeafe39ceaeca2f265d2df",
-      "trial-sets/P-004/record-2.json": "sha256:7cbf45cb229d11bddaebc53cf7681deee522f9da9dd9363958dbe16748850a5c",
-      "trial-sets/P-004/record-3.json": "sha256:f166758041c26698833a81b57471cea36820a7af283a9a079cf9047d7d33c86f",
-      "trial-sets/P-005/record-1.json": "sha256:a40a7cee804538a570c4856e022c8e7b4e34c57331563bc1c40c37d420ee313f",
-      "trial-sets/P-005/record-2.json": "sha256:2a1e3781498d6397ad0a7111d18c1cec77cda5d7723ccb391e2dac736add5270",
-      "trial-sets/P-005/record-3.json": "sha256:9326b52a6e7dd849ebeb97af0827521f29f8d24f7239a15fc6181a62f64c36df",
-      "trial-sets/P-010/record-1.json": "sha256:9fe4d16ad061fb02fbf2036e8e62be663f2ea47e7f9d6238283562f8a4e0ad6f",
-      "trial-sets/P-010/record-2.json": "sha256:6626973e6f7348ef04fe20d8a3afb1950d7c87b8c98097137ef83cbf4957ae22",
-      "trial-sets/P-010/record-3.json": "sha256:295ea811890867305828c819ab55629bc2002fb43433dd68847d27e63268690e",
-      "trial-sets/P-006/record-1.json": "sha256:d92b4183b131aeec1b220597152ba27cdf32d7533b8e3f50387108903746c5e3",
-      "trial-sets/P-006/record-2.json": "sha256:8f437e04fd685ed73e17376259b467d873bb8800d61d5af7922fb82d59b9868a",
-      "trial-sets/P-006/record-3.json": "sha256:014e7fb4621d62faf86f78509396fcb839e149f87753d2bc3af07b2cc2a5b28f",
-      "trial-sets/P-007/record-1.json": "sha256:da5bd4c0be35677ca042b7d58ceb43e71fb7c2cc2abba2f99a81216486427fe3",
-      "trial-sets/P-007/record-2.json": "sha256:04bf38ef05b49cc55ce28971beb32b22d4f40fce9d79c0f63c647f92c7528c0a",
-      "trial-sets/P-007/record-3.json": "sha256:941396d42d95490d5e2573e15f1778b73750b4307b152cf4fd27e146ee645824",
-      "trial-sets/P-008/record-1.json": "sha256:6b6c9ad13bac7b3cc4c05897b2d2a736bfad60a1a7db2889c1ecf2be1bf1d43c",
-      "trial-sets/P-008/record-2.json": "sha256:c6380ad4ad1b3db8d0e1aa0a986bc96a402edc8bbcfc57e356a4f1061c7fb1e6",
-      "trial-sets/P-008/record-3.json": "sha256:1e58f963cddf50cc55d582a4745cf5dca73adec5c4a94c936acb36ada0d39ceb",
-      "trial-sets/P-009/record-1.json": "sha256:7d012bf9493d638f6d373b8473e04e37eede3301d65048bd69f34c46e633a9d6",
-      "trial-sets/P-009/record-2.json": "sha256:b57d9fc823ce062240c2e3668ed9b847114e15bccbe85701abdf32b934641260",
-      "trial-sets/P-009/record-3.json": "sha256:6a4d8410838895f787c0cd4d6fbe4350d7300d9d27d82ee63ea08f8d15cfd420"
+      "trial-sets/P-001/record-1.json": "sha256:4fd80686221718f85d5cbc7ccb3414401134dfd3224eb27dd0e74e93088dbb31",
+      "trial-sets/P-001/record-2.json": "sha256:243011dcf192cff58259e914185787dce318e361ea4430326515386330db7997",
+      "trial-sets/P-001/record-3.json": "sha256:1b8a7d3f0dd0ffb6aba9d8d8217470203f92121955b031b61fcf43e028e8f5ee",
+      "trial-sets/P-002/record-1.json": "sha256:8a8014f6eb4d204450617c4d638644e8fa01dabae35ddc0f61964bd13023c231",
+      "trial-sets/P-002/record-2.json": "sha256:adeea39128f46db583598b78fcf83850f1c6576689394e00569586a02dfd908d",
+      "trial-sets/P-002/record-3.json": "sha256:78f7f12983ee0f8cb2c62cc715e852613be4e075bffe920d6c41e46d0b2649ed",
+      "trial-sets/P-003/record-1.json": "sha256:96d5bc50100f84cd31c21e366bac5ac0f27e4836e6310882a5c2641e37f67ef0",
+      "trial-sets/P-003/record-2.json": "sha256:25629c17c3dd1a36e73d89b4bd075ac2854c616c9539db0f089c6c5378d985bd",
+      "trial-sets/P-003/record-3.json": "sha256:c2bcab01c025e4aba83d55e470ae4e3d1709977d653fe27f7f5a7bc17a52386d",
+      "trial-sets/P-004/record-1.json": "sha256:85e29fdcb7cf402e86c7d2ba5718590c4a4aa8c63b4de5b0877540878994f61f",
+      "trial-sets/P-004/record-2.json": "sha256:b967a4f2263874984bde64a7a4eb314774833268f41fbfa0733d3babcd7e6556",
+      "trial-sets/P-004/record-3.json": "sha256:331bcd3e5b86a13e271255047f1de6ee0d2e3b1dde56b4937005c4420d686668",
+      "trial-sets/P-005/record-1.json": "sha256:1262f211cacdc7ae13f42af84229d89490bbc74c7f6ffa5ceaa10a5157e4bf07",
+      "trial-sets/P-005/record-2.json": "sha256:32f88f375609c468f9799cf6ab3893e0813343ab0b323661152128cd90843319",
+      "trial-sets/P-005/record-3.json": "sha256:5d6c70156d4400f0c8dc195612f8139eb0556ddaa5593f7f3eb9b8bf74e46e4b",
+      "trial-sets/P-010/record-1.json": "sha256:98c10048f80d27a52e5d21694d6f73b5792c9db533353ebb140c72c7612abae7",
+      "trial-sets/P-010/record-2.json": "sha256:a37c768f13f6b6b91f9a531c8642d398b5c2a44c5d57af616391a5f276c3275a",
+      "trial-sets/P-010/record-3.json": "sha256:902c99f61f69fce2f92885df308b39246cf17419b92883cdd3e54ee8ced3924e",
+      "trial-sets/P-006/record-1.json": "sha256:da3078f3e61cd4c40e174cb9fbd250f278b6ad72e9adecc25ea1a14828024e6c",
+      "trial-sets/P-006/record-2.json": "sha256:b0959185684cf16bc66b5057b71fc165f18ea76d67fc8c6e4e1d97ff5aef5aee",
+      "trial-sets/P-006/record-3.json": "sha256:ad38b29c507af26e7217c028aaaea2b139eaae9fa711346fc77b8a238afaedba",
+      "trial-sets/P-007/record-1.json": "sha256:2e3bd816dc8ec74a38f034c6f0e231898b683ebdb2fc8667538d1c157bd33c14",
+      "trial-sets/P-007/record-2.json": "sha256:4e5386b7eb7af26dd60020f3a3803dc6aa2b469e514d3fb5a4fb831a099f548e",
+      "trial-sets/P-007/record-3.json": "sha256:8a2d2c396a3d5bbff8167db14bc55320a414815b23dd68f65804e02cc0897f9f",
+      "trial-sets/P-008/record-1.json": "sha256:b5851c5078876f7c53cfbc76ece04e63f61d43111ed49bb7f61f262aa47e534a",
+      "trial-sets/P-008/record-2.json": "sha256:aa0987332223725c49608c4c76fbcba8e6775f32402d4c45e031384ab6f68fe6",
+      "trial-sets/P-008/record-3.json": "sha256:5fbbc9a44727c6552e7d3e6061b549c9c0bb048aa8c4136f97944d8c41eef6a3",
+      "trial-sets/P-014/record-1.json": "sha256:58e2fca8f6290a7ab081aa785c119fdc23d72577de87352de4809e0fb174af3a",
+      "trial-sets/P-014/record-2.json": "sha256:f131bd407a6037ee30bbdbd89f9fd0c1e6f31685226b54cba39424669fa58628",
+      "trial-sets/P-014/record-3.json": "sha256:5ece56550076798a51df34cf71b20168de52d7aa56a97b7870528849f236f2c1",
+      "trial-sets/P-009/record-1.json": "sha256:19d5ff4b6e264787f2184e05b06aee7267c065a9f60527055198fc11daf23ca1",
+      "trial-sets/P-009/record-2.json": "sha256:6133aa8e73ccb60e9448bb2a99c245d99a654b5be05cd24b5d6ece432dc5008d",
+      "trial-sets/P-009/record-3.json": "sha256:232bfaf231f73d1ac1b5fe82af2d176c94535eacb763ec818f7b6f8c183c1d36"
     },
     "isolationManifests": {
-      "P-001": "sha256:aad130bdc5ee062ef335f14b47bc9f88a71b191b1a5d8f6d8fa6d1cb535b8c6e",
-      "P-002": "sha256:c6b4e7c1ec525b660c2905306bddebea2c45102349ac9bc8a12d935335dc1265",
-      "P-003": "sha256:4a5e9bb4b90772f387e90040b941a1baae73c61f1f4dd2eb0c893a35014353e5",
-      "P-004": "sha256:ffa049dcb86b297344294cb326fb01a6782fdfd090afdb2dcac81bbd8c0594c8",
-      "P-005": "sha256:a5fd71b359856fd08c0e77a524fd1b760b94c64f715aa1d3b7b1cda3d15d83fd",
-      "P-010": "sha256:e7da7249df6af96b4b79a0883f267331f453f81edb71fc3268920adccea344da",
-      "P-006": "sha256:48eadc6b7e8a87b011fc8e30467375ae6f2fb2b38f4f9c9fc2ba3af3c8aa99a3",
-      "P-007": "sha256:84a886fb7ed46b62872c344492ac6f990d8926ea29498e6aaa57a96869188f6e",
-      "P-008": "sha256:d2c748b97935c8797bf84e96e8773334a8f9abfac3b2073667ee937bfde8dc36",
-      "P-009": "sha256:c66cf653e641de77208ebf4922136bb563a39509dda993e9f93c865f3b30d188"
+      "P-001": "sha256:a4950f387b6f0322f8ae616e59ff2554e9d323911f4ff311c1e269de2f87f435",
+      "P-002": "sha256:65104ca5d48e347ef010da0a97eae516337d68dfa2d45f494a7d5b00d53ad1be",
+      "P-003": "sha256:bedb48f94cb4f2d4fa652d7c039b2f864ddbf749837e4d8ba257deb2a03bfc09",
+      "P-004": "sha256:188c86fed490fcae2556b8a034f1a5244f460b94e2d780e1fe09604454115d7a",
+      "P-005": "sha256:71b00e4fa352ed6f2f7502099ce2c70272cc33fb98aa54e93b626a15db03d76a",
+      "P-010": "sha256:2b455c38c51f0f9b9ffac4cab2fb4e8e694db9096c3e6a6715b3ecb0361bee14",
+      "P-006": "sha256:464a175205acf890c60b8c9a56ef9fd32be151929e0f6d0532163de6fc38a3b1",
+      "P-007": "sha256:fdd420307b99ccb3ed5e4df2ff7c716507c30268e6c833c198009a02b4588c7b",
+      "P-008": "sha256:bf9cf0ed0b5b60f99f6cec02bd3c5e83a82f0f5dc8d47a11e68ef253bd2bd410",
+      "P-014": "sha256:8347d86d369a88df895c02128e9e89a990a00da85b9d0f944c91a26ce83befd1",
+      "P-009": "sha256:deec782e380b4de9c47b1644bae2ae7fcaf01cb855a9f36ca415df22ffc0594c"
     }
   },
-  "contractDigest": "sha256:d2adb433ba17bfb3216a6ab484dc7289f86b6060f2416493606c6d2216f073e1",
-  "corpusDigest": "sha256:6393eae8fdfed9deac0c1fe8ede0223989a5512ddd90a83b415a7c6510551792",
+  "contractDigest": "sha256:633761ad3c1e5466c303d7b780f2d1c53855dff08f23b0fdfb685be544a86281",
+  "corpusDigest": "sha256:ede94d415a729daa87004caa8351963bb6b467ce62ba67df232fce5db1f2741b",
   "policyDigest": "sha256:6ef9cc6a776f78bef0445cfdce5e459f6268f289e32f889b8e34a9ba154f3f3c",
-  "sealedBriefDigest": "sha256:6ecc8418ec31fb7499e79e6465a63f5e1e3637c06c118cc9a388e9812667f4e1",
-  "evaluatorConfigurationDigest": "sha256:00ef4e6e2f2abc8a4fc280190af5ac40c0faf813530b0a817d5a7e2729e712b4",
+  "sealedBriefDigest": "sha256:2136bbf3d5fc9e5c2db280d2ade0d09e05d91cda56819e8f68eeebc10f6acc84",
+  "evaluatorConfigurationDigest": "sha256:8f4465edec83d14dd83bad2e7e67b33e0a98530cc7e67bc2c28e325e434a9a41",
   "partition": "development",
   "heldOutProbes": [
     "P-011",
@@ -124,7 +130,7 @@
         "target": "server/grade.mjs",
         "targetArgs": []
       },
-      "httpProbePortDigest": "sha256:801ef17d0bc63b5cdfa692baf55f4c47a610121afc4289620bcb795037e9684c"
+      "httpProbePortDigest": "sha256:812ecb853ca0890f137a59ecce7564580cc463d84ed943b558541c9ea4a0d555"
     }
   ],
   "evaluator": {
@@ -144,6 +150,7 @@
       "mutated:M-002",
       "mutated:M-003",
       "mutated:M-004",
+      "mutated:M-008",
       "gameability:P-009"
     ]
   },
@@ -159,7 +166,8 @@
         "strict-boundary",
         "strict-short",
         "missing",
-        "nonstring"
+        "nonstring",
+        "raw-invalid-json"
       ]
     },
     {
@@ -172,7 +180,8 @@
         "strict-boundary",
         "strict-short",
         "missing",
-        "nonstring"
+        "nonstring",
+        "raw-invalid-json"
       ]
     },
     {
@@ -185,7 +194,8 @@
         "strict-boundary",
         "strict-short",
         "missing",
-        "nonstring"
+        "nonstring",
+        "raw-invalid-json"
       ]
     },
     {
@@ -198,7 +208,8 @@
         "strict-boundary",
         "strict-short",
         "missing",
-        "nonstring"
+        "nonstring",
+        "raw-invalid-json"
       ]
     },
     {
@@ -211,7 +222,8 @@
         "strict-boundary",
         "strict-short",
         "missing",
-        "nonstring"
+        "nonstring",
+        "raw-invalid-json"
       ]
     },
     {
@@ -224,7 +236,8 @@
         "strict-boundary",
         "strict-short",
         "missing",
-        "nonstring"
+        "nonstring",
+        "raw-invalid-json"
       ]
     },
     {
@@ -237,7 +250,8 @@
         "strict-boundary",
         "strict-short",
         "missing",
-        "nonstring"
+        "nonstring",
+        "raw-invalid-json"
       ]
     },
     {
@@ -250,7 +264,8 @@
         "strict-boundary",
         "strict-short",
         "missing",
-        "nonstring"
+        "nonstring",
+        "raw-invalid-json"
       ]
     },
     {
@@ -263,7 +278,8 @@
         "strict-boundary",
         "strict-short",
         "missing",
-        "nonstring"
+        "nonstring",
+        "raw-invalid-json"
       ]
     },
     {
@@ -276,7 +292,8 @@
         "strict-boundary",
         "strict-short",
         "missing",
-        "nonstring"
+        "nonstring",
+        "raw-invalid-json"
       ]
     },
     {
@@ -289,7 +306,8 @@
         "strict-boundary",
         "strict-short",
         "missing",
-        "nonstring"
+        "nonstring",
+        "raw-invalid-json"
       ]
     },
     {
@@ -302,7 +320,8 @@
         "strict-boundary",
         "strict-short",
         "missing",
-        "nonstring"
+        "nonstring",
+        "raw-invalid-json"
       ]
     },
     {
@@ -315,7 +334,8 @@
         "strict-boundary",
         "strict-short",
         "missing",
-        "nonstring"
+        "nonstring",
+        "raw-invalid-json"
       ]
     },
     {
@@ -328,7 +348,8 @@
         "strict-boundary",
         "strict-short",
         "missing",
-        "nonstring"
+        "nonstring",
+        "raw-invalid-json"
       ]
     },
     {
@@ -341,16 +362,59 @@
         "strict-boundary",
         "strict-short",
         "missing",
-        "nonstring"
+        "nonstring",
+        "raw-invalid-json"
+      ]
+    },
+    {
+      "conditionArm": "mutated:M-008",
+      "trialIndex": 1,
+      "stepIds": [
+        "valid-boundary",
+        "restricted",
+        "short",
+        "strict-boundary",
+        "strict-short",
+        "missing",
+        "nonstring",
+        "raw-invalid-json"
+      ]
+    },
+    {
+      "conditionArm": "mutated:M-008",
+      "trialIndex": 2,
+      "stepIds": [
+        "valid-boundary",
+        "restricted",
+        "short",
+        "strict-boundary",
+        "strict-short",
+        "missing",
+        "nonstring",
+        "raw-invalid-json"
+      ]
+    },
+    {
+      "conditionArm": "mutated:M-008",
+      "trialIndex": 3,
+      "stepIds": [
+        "valid-boundary",
+        "restricted",
+        "short",
+        "strict-boundary",
+        "strict-short",
+        "missing",
+        "nonstring",
+        "raw-invalid-json"
       ]
     }
   ],
-  "startedAt": "2026-10-02T15:48:03.924Z",
-  "durationMs": 49851,
+  "startedAt": "2026-10-02T21:03:21.065Z",
+  "durationMs": 63610,
   "completed": true,
   "outcome": {
     "stage": "trial",
     "exitCode": 0,
-    "message": "10 trial set(s) of 3 trial(s) sealed over clean, mutated:M-001, mutated:M-002, mutated:M-003, mutated:M-004, gameability:P-009; score them with tea-evaluate score --run 20261002T154804523Z-186fe7af"
+    "message": "11 trial set(s) of 3 trial(s) sealed over clean, mutated:M-001, mutated:M-002, mutated:M-003, mutated:M-004, mutated:M-008, gameability:P-009; score them with tea-evaluate score --run 20261002T210321664Z-57c4fa54"
   }
 }

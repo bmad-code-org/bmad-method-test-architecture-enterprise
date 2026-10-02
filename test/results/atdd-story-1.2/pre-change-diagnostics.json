@@ -18,7 +18,7 @@
       },
       {
         "path": "test/contracts/atdd.contract.json",
-        "sha256": "f5459c198f90ec195951c7b74b06050a8509906f336c078feda799b4db967ff9"
+        "sha256": "b27799e977324c54f2f653f547d459af5d130d6bf63dcaa02a801d9b572487db"
       }
     ],
     "diagnosticWitnesses": [

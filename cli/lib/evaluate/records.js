@@ -277,6 +277,7 @@ function recordObservation({
       query: callInputs.query ?? null,
       header: callInputs.header ?? null,
       body: callInputs.body ?? null,
+      bodyEncoding: callInputs.bodyEncoding === 'raw' ? 'raw' : null,
       argument: callInputs.argument ?? null,
       option: callInputs.option ?? null,
       environment: callInputs.environment ?? null,

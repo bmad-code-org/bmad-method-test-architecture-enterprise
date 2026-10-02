@@ -636,8 +636,7 @@ function bridgeRouter({
     if (typeof input.method !== 'string' || typeof input.path !== 'string' || !input.path.startsWith('/')) {
       return refused(entry, 'an api call needs method and path, a path that starts with /');
     }
-    // A request's body is one JSON object, the only body a record can carry (`callInputs.body`), as a tool call's
-    // arguments are one object.
+    // This direct evaluator API tool accepts one JSON object as its body, matching its object-shaped tool arguments.
     if (input.body !== undefined && (input.body === null || typeof input.body !== 'object' || Array.isArray(input.body))) {
       return refused(entry, 'an api call takes body as an object');
     }

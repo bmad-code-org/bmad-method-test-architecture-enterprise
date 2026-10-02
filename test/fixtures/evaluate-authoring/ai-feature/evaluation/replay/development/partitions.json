@@ -1,0 +1,322 @@
+{
+  "scoreInvocationId": "20261002T210841140Z-87e7f7a7",
+  "strengthAggregate": {
+    "status": "copied",
+    "reason": null,
+    "path": "runs/20261002T210321664Z-57c4fa54/scores/20261002T210841140Z-87e7f7a7/strength-aggregate.json",
+    "digest": "sha256:4426a5e96bcfa2adb988f3776dbdfc925811629d70ff82f3543055f9991f99b1",
+    "floors": "runs/20261002T210321664Z-57c4fa54/scores/20261002T210841140Z-87e7f7a7/strength-floors.json",
+    "floorsDigest": "sha256:e84700d449bc14f307e48810dc166fab364dfdaa20ea30a2dbc492fe81c913c6"
+  },
+  "development": [
+    {
+      "probeId": "P-001",
+      "probeClass": "zero-action",
+      "outcome": {
+        "catchThreshold": 0.9,
+        "caught": false,
+        "caughtCount": 0,
+        "exercised": true,
+        "invalidatedAttempts": [],
+        "probeId": "P-001",
+        "severity": "material",
+        "trialVotes": [
+          {
+            "state": "passed-clean-control",
+            "trialIndex": 1
+          },
+          {
+            "state": "passed-clean-control",
+            "trialIndex": 2
+          },
+          {
+            "state": "passed-clean-control",
+            "trialIndex": 3
+          }
+        ],
+        "validCount": 3
+      }
+    },
+    {
+      "probeId": "P-002",
+      "probeClass": "zero-action",
+      "outcome": {
+        "catchThreshold": 0.9,
+        "caught": false,
+        "caughtCount": 0,
+        "exercised": true,
+        "invalidatedAttempts": [],
+        "probeId": "P-002",
+        "severity": "critical",
+        "trialVotes": [
+          {
+            "state": "passed-clean-control",
+            "trialIndex": 1
+          },
+          {
+            "state": "passed-clean-control",
+            "trialIndex": 2
+          },
+          {
+            "state": "passed-clean-control",
+            "trialIndex": 3
+          }
+        ],
+        "validCount": 3
+      }
+    },
+    {
+      "probeId": "P-003",
+      "probeClass": "zero-action",
+      "outcome": {
+        "catchThreshold": 0.9,
+        "caught": false,
+        "caughtCount": 0,
+        "exercised": true,
+        "invalidatedAttempts": [],
+        "probeId": "P-003",
+        "severity": "material",
+        "trialVotes": [
+          {
+            "state": "passed-clean-control",
+            "trialIndex": 1
+          },
+          {
+            "state": "passed-clean-control",
+            "trialIndex": 2
+          },
+          {
+            "state": "passed-clean-control",
+            "trialIndex": 3
+          }
+        ],
+        "validCount": 3
+      }
+    },
+    {
+      "probeId": "P-004",
+      "probeClass": "zero-action",
+      "outcome": {
+        "catchThreshold": 0.9,
+        "caught": false,
+        "caughtCount": 0,
+        "exercised": true,
+        "invalidatedAttempts": [],
+        "probeId": "P-004",
+        "severity": "material",
+        "trialVotes": [
+          {
+            "state": "passed-clean-control",
+            "trialIndex": 1
+          },
+          {
+            "state": "passed-clean-control",
+            "trialIndex": 2
+          },
+          {
+            "state": "passed-clean-control",
+            "trialIndex": 3
+          }
+        ],
+        "validCount": 3
+      }
+    },
+    {
+      "probeId": "P-005",
+      "probeClass": "defect",
+      "outcome": {
+        "catchThreshold": 0.9,
+        "caught": true,
+        "caughtCount": 3,
+        "exercised": true,
+        "invalidatedAttempts": [],
+        "probeId": "P-005",
+        "severity": "critical",
+        "trialVotes": [
+          {
+            "state": "caught",
+            "trialIndex": 1
+          },
+          {
+            "state": "caught",
+            "trialIndex": 2
+          },
+          {
+            "state": "caught",
+            "trialIndex": 3
+          }
+        ],
+        "validCount": 3
+      }
+    },
+    {
+      "probeId": "P-010",
+      "probeClass": "defect",
+      "outcome": {
+        "catchThreshold": 0.9,
+        "caught": true,
+        "caughtCount": 3,
+        "exercised": true,
+        "invalidatedAttempts": [],
+        "probeId": "P-010",
+        "severity": "critical",
+        "trialVotes": [
+          {
+            "state": "caught",
+            "trialIndex": 1
+          },
+          {
+            "state": "caught",
+            "trialIndex": 2
+          },
+          {
+            "state": "caught",
+            "trialIndex": 3
+          }
+        ],
+        "validCount": 3
+      }
+    },
+    {
+      "probeId": "P-006",
+      "probeClass": "defect",
+      "outcome": {
+        "catchThreshold": 0.9,
+        "caught": true,
+        "caughtCount": 3,
+        "exercised": true,
+        "invalidatedAttempts": [],
+        "probeId": "P-006",
+        "severity": "material",
+        "trialVotes": [
+          {
+            "state": "caught",
+            "trialIndex": 1
+          },
+          {
+            "state": "caught",
+            "trialIndex": 2
+          },
+          {
+            "state": "caught",
+            "trialIndex": 3
+          }
+        ],
+        "validCount": 3
+      }
+    },
+    {
+      "probeId": "P-007",
+      "probeClass": "defect",
+      "outcome": {
+        "catchThreshold": 0.9,
+        "caught": true,
+        "caughtCount": 3,
+        "exercised": true,
+        "invalidatedAttempts": [],
+        "probeId": "P-007",
+        "severity": "material",
+        "trialVotes": [
+          {
+            "state": "caught",
+            "trialIndex": 1
+          },
+          {
+            "state": "caught",
+            "trialIndex": 2
+          },
+          {
+            "state": "caught",
+            "trialIndex": 3
+          }
+        ],
+        "validCount": 3
+      }
+    },
+    {
+      "probeId": "P-008",
+      "probeClass": "defect",
+      "outcome": {
+        "catchThreshold": 0.9,
+        "caught": true,
+        "caughtCount": 3,
+        "exercised": true,
+        "invalidatedAttempts": [],
+        "probeId": "P-008",
+        "severity": "material",
+        "trialVotes": [
+          {
+            "state": "caught",
+            "trialIndex": 1
+          },
+          {
+            "state": "caught",
+            "trialIndex": 2
+          },
+          {
+            "state": "caught",
+            "trialIndex": 3
+          }
+        ],
+        "validCount": 3
+      }
+    },
+    {
+      "probeId": "P-014",
+      "probeClass": "defect",
+      "outcome": {
+        "catchThreshold": 0.9,
+        "caught": true,
+        "caughtCount": 3,
+        "exercised": true,
+        "invalidatedAttempts": [],
+        "probeId": "P-014",
+        "severity": "material",
+        "trialVotes": [
+          {
+            "state": "caught",
+            "trialIndex": 1
+          },
+          {
+            "state": "caught",
+            "trialIndex": 2
+          },
+          {
+            "state": "caught",
+            "trialIndex": 3
+          }
+        ],
+        "validCount": 3
+      }
+    },
+    {
+      "probeId": "P-009",
+      "probeClass": "gameability",
+      "outcome": {
+        "catchThreshold": 0.9,
+        "caught": true,
+        "caughtCount": 3,
+        "exercised": true,
+        "invalidatedAttempts": [],
+        "probeId": "P-009",
+        "severity": "critical",
+        "trialVotes": [
+          {
+            "state": "caught",
+            "trialIndex": 1
+          },
+          {
+            "state": "caught",
+            "trialIndex": 2
+          },
+          {
+            "state": "caught",
+            "trialIndex": 3
+          }
+        ],
+        "validCount": 3
+      }
+    }
+  ],
+  "held-out": []
+}

@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "mutationId": "M-008",
+  "mutationSource": "invalid JSON parser rejection becomes accepted grade",
+  "targetArtifact": "server/grade.mjs",
+  "operator": {
+    "kind": "replace-exact",
+    "find": "response.writeHead(400).end(JSON.stringify({ error: 'invalid JSON' }));",
+    "replace": "response.writeHead(200).end(JSON.stringify({ decision: 'pass', reason: 'accepted' }));",
+    "occurrences": 1
+  },
+  "expectedObservableFailure": "malformed JSON receives HTTP 200 and a passing grade"
+}

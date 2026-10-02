@@ -1,0 +1,27 @@
+{
+  "stage": "aggregate-strength",
+  "cli": "/Users/murat/opensource/_wt/evaluate-lane3/node_modules/eval-quality/dist/cli/main.js",
+  "substituted": false,
+  "argv": [
+    "aggregate-strength",
+    "--evidence",
+    "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/story150-evidence-mVk3d2/gap-before/evaluation/runs/20261002T210634961Z-e0c16be1/scores/20261002T210700941Z-dbe298d0/P-010/evidence-artifact.json",
+    "--evidence",
+    "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/story150-evidence-mVk3d2/gap-before/evaluation/runs/20261002T210634961Z-e0c16be1/scores/20261002T210700941Z-dbe298d0/P-011/evidence-artifact.json",
+    "--evidence",
+    "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/story150-evidence-mVk3d2/gap-before/evaluation/runs/20261002T210634961Z-e0c16be1/scores/20261002T210700941Z-dbe298d0/P-012/evidence-artifact.json",
+    "--evidence",
+    "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/story150-evidence-mVk3d2/gap-before/evaluation/runs/20261002T210634961Z-e0c16be1/scores/20261002T210700941Z-dbe298d0/P-013/evidence-artifact.json",
+    "--floors",
+    "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/story150-evidence-mVk3d2/gap-before/evaluation/runs/20261002T210634961Z-e0c16be1/scores/20261002T210700941Z-dbe298d0/strength-floors.json",
+    "--policy",
+    "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/story150-evidence-mVk3d2/gap-before/evaluation/runs/20261002T210634961Z-e0c16be1/scoring-policy.json",
+    "--out",
+    "/tmp/tea-evaluate-p501/run-12975-NdDg6U/tea-evaluate-aggregate-3gYV4A/strength-aggregate.json"
+  ],
+  "exitCode": 0,
+  "signal": null,
+  "error": null,
+  "stdout": "",
+  "stderr": ""
+}

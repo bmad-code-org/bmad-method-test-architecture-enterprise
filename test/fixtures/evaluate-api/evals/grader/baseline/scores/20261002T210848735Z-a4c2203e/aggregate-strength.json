@@ -1,0 +1,23 @@
+{
+  "stage": "aggregate-strength",
+  "cli": "/Users/murat/opensource/_wt/evaluate-lane3/node_modules/eval-quality/dist/cli/main.js",
+  "substituted": false,
+  "argv": [
+    "aggregate-strength",
+    "--evidence",
+    "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/story150-evidence-mVk3d2/baseline-api/evals/grader/runs/20261002T210844358Z-01e854ae/scores/20261002T210848735Z-a4c2203e/P-001/evidence-artifact.json",
+    "--evidence",
+    "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/story150-evidence-mVk3d2/baseline-api/evals/grader/runs/20261002T210844358Z-01e854ae/scores/20261002T210848735Z-a4c2203e/P-002/evidence-artifact.json",
+    "--floors",
+    "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/story150-evidence-mVk3d2/baseline-api/evals/grader/runs/20261002T210844358Z-01e854ae/scores/20261002T210848735Z-a4c2203e/strength-floors.json",
+    "--policy",
+    "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/story150-evidence-mVk3d2/baseline-api/evals/grader/runs/20261002T210844358Z-01e854ae/scoring-policy.json",
+    "--out",
+    "/tmp/tea-evaluate-p501/run-66540-vYQgWD/tea-evaluate-aggregate-Wc3hD2/strength-aggregate.json"
+  ],
+  "exitCode": 0,
+  "signal": null,
+  "error": null,
+  "stdout": "",
+  "stderr": ""
+}

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "parentDigest": null,
   "revisionCount": 0,
   "probeId": "P-012",
@@ -23,15 +23,15 @@
     "expectedObservableFailure": "valid answer is rejected in HTTP response body",
     "baselinePassEvidence": {
       "storage": "public",
-      "path": "runs/20261002T154856929Z-62e31cc1/qualification/P-012/baseline-pass.json",
+      "path": "runs/20261002T210500587Z-7ca5bf43/qualification/P-012/baseline-pass.json",
       "privateRef": null,
-      "digest": "sha256:e75ef2bdef9b1f46f0e41b9c1cddcd49e00b78d93b2ed159edc832095466e2eb"
+      "digest": "sha256:a3c37cbbf2c45b8b8133f913d6538def0712612cde71e1f6988e63ca77b4ae51"
     },
     "mutatedFailEvidence": {
       "storage": "public",
-      "path": "runs/20261002T154856929Z-62e31cc1/qualification/P-012/mutated-fail.json",
+      "path": "runs/20261002T210500587Z-7ca5bf43/qualification/P-012/mutated-fail.json",
       "privateRef": null,
-      "digest": "sha256:79a6d6ca7f2d747865120e60613eb93d44cb28e630cfc5fbf52694e117137a08"
+      "digest": "sha256:151bac58caa4499e51f3935841fdd072324dab82328e0d3b0d092a95d3698110"
     },
     "rollbackVerified": true
   },
@@ -45,9 +45,9 @@
       "oracleEvidence": [
         {
           "storage": "public",
-          "path": "runs/20261002T154856929Z-62e31cc1/qualification/P-012/mutated-fail.json",
+          "path": "runs/20261002T210500587Z-7ca5bf43/qualification/P-012/mutated-fail.json",
           "privateRef": null,
-          "digest": "sha256:79a6d6ca7f2d747865120e60613eb93d44cb28e630cfc5fbf52694e117137a08"
+          "digest": "sha256:151bac58caa4499e51f3935841fdd072324dab82328e0d3b0d092a95d3698110"
         }
       ],
       "source": "controlled-mutation",

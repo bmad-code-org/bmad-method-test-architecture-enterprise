@@ -1,0 +1,350 @@
+{
+  "scoreInvocationId": "20261002T210603448Z-3b195f2f",
+  "strengthAggregate": {
+    "status": "copied",
+    "reason": null,
+    "path": "runs/20261002T210531658Z-f68d8772/scores/20261002T210603448Z-3b195f2f/strength-aggregate.json",
+    "digest": "sha256:7a7277ff84cde5def0df3cd70f1d1f3ec77b079c3e7657ac624ab2f42646312c",
+    "floors": "runs/20261002T210531658Z-f68d8772/scores/20261002T210603448Z-3b195f2f/strength-floors.json",
+    "floorsDigest": "sha256:e84700d449bc14f307e48810dc166fab364dfdaa20ea30a2dbc492fe81c913c6"
+  },
+  "development": [
+    {
+      "probeId": "P-001",
+      "probeClass": "zero-action",
+      "outcome": {
+        "catchThreshold": 0.9,
+        "caught": false,
+        "caughtCount": 0,
+        "exercised": true,
+        "invalidatedAttempts": [],
+        "probeId": "P-001",
+        "severity": "critical",
+        "trialVotes": [
+          {
+            "state": "passed-clean-control",
+            "trialIndex": 1
+          },
+          {
+            "state": "passed-clean-control",
+            "trialIndex": 2
+          },
+          {
+            "state": "passed-clean-control",
+            "trialIndex": 3
+          }
+        ],
+        "validCount": 3
+      }
+    },
+    {
+      "probeId": "P-002",
+      "probeClass": "zero-action",
+      "outcome": {
+        "catchThreshold": 0.9,
+        "caught": false,
+        "caughtCount": 0,
+        "exercised": true,
+        "invalidatedAttempts": [],
+        "probeId": "P-002",
+        "severity": "material",
+        "trialVotes": [
+          {
+            "state": "passed-clean-control",
+            "trialIndex": 1
+          },
+          {
+            "state": "passed-clean-control",
+            "trialIndex": 2
+          },
+          {
+            "state": "passed-clean-control",
+            "trialIndex": 3
+          }
+        ],
+        "validCount": 3
+      }
+    },
+    {
+      "probeId": "P-003",
+      "probeClass": "zero-action",
+      "outcome": {
+        "catchThreshold": 0.9,
+        "caught": false,
+        "caughtCount": 0,
+        "exercised": true,
+        "invalidatedAttempts": [],
+        "probeId": "P-003",
+        "severity": "material",
+        "trialVotes": [
+          {
+            "state": "passed-clean-control",
+            "trialIndex": 1
+          },
+          {
+            "state": "passed-clean-control",
+            "trialIndex": 2
+          },
+          {
+            "state": "passed-clean-control",
+            "trialIndex": 3
+          }
+        ],
+        "validCount": 3
+      }
+    },
+    {
+      "probeId": "P-004",
+      "probeClass": "zero-action",
+      "outcome": {
+        "catchThreshold": 0.9,
+        "caught": false,
+        "caughtCount": 0,
+        "exercised": true,
+        "invalidatedAttempts": [],
+        "probeId": "P-004",
+        "severity": "material",
+        "trialVotes": [
+          {
+            "state": "passed-clean-control",
+            "trialIndex": 1
+          },
+          {
+            "state": "passed-clean-control",
+            "trialIndex": 2
+          },
+          {
+            "state": "passed-clean-control",
+            "trialIndex": 3
+          }
+        ],
+        "validCount": 3
+      }
+    },
+    {
+      "probeId": "P-014",
+      "probeClass": "zero-action",
+      "outcome": {
+        "catchThreshold": 0.9,
+        "caught": false,
+        "caughtCount": 0,
+        "exercised": true,
+        "invalidatedAttempts": [],
+        "probeId": "P-014",
+        "severity": "critical",
+        "trialVotes": [
+          {
+            "state": "passed-clean-control",
+            "trialIndex": 1
+          },
+          {
+            "state": "passed-clean-control",
+            "trialIndex": 2
+          },
+          {
+            "state": "passed-clean-control",
+            "trialIndex": 3
+          }
+        ],
+        "validCount": 3
+      }
+    },
+    {
+      "probeId": "P-016",
+      "probeClass": "zero-action",
+      "outcome": {
+        "catchThreshold": 0.9,
+        "caught": false,
+        "caughtCount": 0,
+        "exercised": true,
+        "invalidatedAttempts": [],
+        "probeId": "P-016",
+        "severity": "material",
+        "trialVotes": [
+          {
+            "state": "passed-clean-control",
+            "trialIndex": 1
+          },
+          {
+            "state": "passed-clean-control",
+            "trialIndex": 2
+          },
+          {
+            "state": "passed-clean-control",
+            "trialIndex": 3
+          }
+        ],
+        "validCount": 3
+      }
+    },
+    {
+      "probeId": "P-005",
+      "probeClass": "defect",
+      "outcome": {
+        "catchThreshold": 0.9,
+        "caught": true,
+        "caughtCount": 3,
+        "exercised": true,
+        "invalidatedAttempts": [],
+        "probeId": "P-005",
+        "severity": "critical",
+        "trialVotes": [
+          {
+            "state": "caught",
+            "trialIndex": 1
+          },
+          {
+            "state": "caught",
+            "trialIndex": 2
+          },
+          {
+            "state": "caught",
+            "trialIndex": 3
+          }
+        ],
+        "validCount": 3
+      }
+    },
+    {
+      "probeId": "P-006",
+      "probeClass": "defect",
+      "outcome": {
+        "catchThreshold": 0.9,
+        "caught": true,
+        "caughtCount": 3,
+        "exercised": true,
+        "invalidatedAttempts": [],
+        "probeId": "P-006",
+        "severity": "material",
+        "trialVotes": [
+          {
+            "state": "caught",
+            "trialIndex": 1
+          },
+          {
+            "state": "caught",
+            "trialIndex": 2
+          },
+          {
+            "state": "caught",
+            "trialIndex": 3
+          }
+        ],
+        "validCount": 3
+      }
+    },
+    {
+      "probeId": "P-007",
+      "probeClass": "defect",
+      "outcome": {
+        "catchThreshold": 0.9,
+        "caught": true,
+        "caughtCount": 3,
+        "exercised": true,
+        "invalidatedAttempts": [],
+        "probeId": "P-007",
+        "severity": "material",
+        "trialVotes": [
+          {
+            "state": "caught",
+            "trialIndex": 1
+          },
+          {
+            "state": "caught",
+            "trialIndex": 2
+          },
+          {
+            "state": "caught",
+            "trialIndex": 3
+          }
+        ],
+        "validCount": 3
+      }
+    },
+    {
+      "probeId": "P-008",
+      "probeClass": "defect",
+      "outcome": {
+        "catchThreshold": 0.9,
+        "caught": true,
+        "caughtCount": 3,
+        "exercised": true,
+        "invalidatedAttempts": [],
+        "probeId": "P-008",
+        "severity": "material",
+        "trialVotes": [
+          {
+            "state": "caught",
+            "trialIndex": 1
+          },
+          {
+            "state": "caught",
+            "trialIndex": 2
+          },
+          {
+            "state": "caught",
+            "trialIndex": 3
+          }
+        ],
+        "validCount": 3
+      }
+    },
+    {
+      "probeId": "P-009",
+      "probeClass": "gameability",
+      "outcome": {
+        "catchThreshold": 0.9,
+        "caught": true,
+        "caughtCount": 3,
+        "exercised": true,
+        "invalidatedAttempts": [],
+        "probeId": "P-009",
+        "severity": "material",
+        "trialVotes": [
+          {
+            "state": "caught",
+            "trialIndex": 1
+          },
+          {
+            "state": "caught",
+            "trialIndex": 2
+          },
+          {
+            "state": "caught",
+            "trialIndex": 3
+          }
+        ],
+        "validCount": 3
+      }
+    },
+    {
+      "probeId": "P-017",
+      "probeClass": "gameability",
+      "outcome": {
+        "catchThreshold": 0.9,
+        "caught": true,
+        "caughtCount": 3,
+        "exercised": true,
+        "invalidatedAttempts": [],
+        "probeId": "P-017",
+        "severity": "critical",
+        "trialVotes": [
+          {
+            "state": "caught",
+            "trialIndex": 1
+          },
+          {
+            "state": "caught",
+            "trialIndex": 2
+          },
+          {
+            "state": "caught",
+            "trialIndex": 3
+          }
+        ],
+        "validCount": 3
+      }
+    }
+  ],
+  "held-out": []
+}

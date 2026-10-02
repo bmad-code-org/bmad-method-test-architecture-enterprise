@@ -4246,6 +4246,7 @@ function literalObservation(channel, response, operationId = 'judge-request') {
       query: null,
       header: null,
       body: null,
+      bodyEncoding: null,
       argument: null,
       option: null,
       environment: null,

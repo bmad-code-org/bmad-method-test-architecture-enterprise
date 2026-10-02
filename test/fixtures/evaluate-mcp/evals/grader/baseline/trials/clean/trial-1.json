@@ -2,7 +2,7 @@
   "conditionArm": "clean",
   "trialIndex": 1,
   "workspace": "trial-clean-1",
-  "elapsedMs": 100,
+  "elapsedMs": 97,
   "oracles": [
     {
       "oracleId": "O-001",
@@ -40,7 +40,8 @@
           "value": {
             "ok": true,
             "answer": "forty-two",
-            "verdict": "accepted"
+            "verdict": "accepted",
+            "secret": "[redacted]"
           }
         }
       }

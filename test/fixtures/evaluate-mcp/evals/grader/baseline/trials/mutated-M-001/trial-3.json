@@ -2,7 +2,7 @@
   "conditionArm": "mutated:M-001",
   "trialIndex": 3,
   "workspace": "trial-mutated-M-001-3",
-  "elapsedMs": 97,
+  "elapsedMs": 100,
   "oracles": [
     {
       "oracleId": "O-001",
@@ -40,7 +40,8 @@
           "value": {
             "ok": true,
             "answer": "forty-two",
-            "verdict": "rejected"
+            "verdict": "rejected",
+            "secret": "[redacted]"
           }
         }
       }

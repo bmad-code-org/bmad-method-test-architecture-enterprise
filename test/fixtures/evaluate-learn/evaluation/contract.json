@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 6,
+  "schemaVersion": 7,
   "parentDigest": "sha256:1220189ac0c1e9284af95143f48d8831a9cf4f77aa20eb27490c6837287380dc",
   "revisionCount": 4,
   "contractId": "pantry-summary-contract",

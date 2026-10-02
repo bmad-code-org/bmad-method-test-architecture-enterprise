@@ -263,9 +263,28 @@ export default function createHttpProbePort({ policy, targets, auth = {}, transp
       for (const item of Array.isArray(value) ? value : [value]) url.searchParams.append(name, queryText(item));
     }
     let method = request.method;
-    let body = request.channels.body.kind === 'json' ? Buffer.from(JSON.stringify(request.channels.body.value)) : undefined;
+    let droppedBody = false;
+    let body;
+    if (request.channels.body.kind === 'json') body = Buffer.from(JSON.stringify(request.channels.body.value));
+    if (request.channels.body.kind === 'raw') body = Buffer.from(request.channels.body.base64, 'base64');
     const declaredHeaders = { ...request.channels.header };
-    if (body !== undefined && !Object.keys(declaredHeaders).some((name) => name.toLowerCase() === 'content-type')) {
+    const contentTypeNames = Object.keys(declaredHeaders).filter((name) => name.toLowerCase() === 'content-type');
+    if (request.channels.body.kind === 'raw') {
+      try {
+        http.validateHeaderValue('Content-Type', request.channels.body.contentType);
+      } catch {
+        throw new RuntimeFault('schema-parse-failure', 'ProbeRequest', 'the raw body contentType is not a valid HTTP header value');
+      }
+      if (contentTypeNames.length > 0) {
+        throw new RuntimeFault('schema-parse-failure', 'ProbeRequest', 'the raw body declares Content-Type through body.contentType');
+      }
+      declaredHeaders['content-type'] = request.channels.body.contentType;
+      if (Object.keys(declaredHeaders).some((name) => ['content-length', 'transfer-encoding'].includes(name.toLowerCase()))) {
+        throw new RuntimeFault('schema-parse-failure', 'ProbeRequest', 'a raw body uses framing computed from its decoded bytes');
+      }
+      if (body.byteLength === 0) declaredHeaders['transfer-encoding'] = 'chunked';
+      else declaredHeaders['content-length'] = String(body.byteLength);
+    } else if (body !== undefined && contentTypeNames.length === 0) {
       declaredHeaders['content-type'] = 'application/json';
     }
     const credentials = auth[request.interfaceId] ?? {};
@@ -382,6 +401,20 @@ export default function createHttpProbePort({ policy, targets, auth = {}, transp
         }
         // Credentials go to the origin they were configured for and to no origin a redirect names.
         const headers = { ...declaredHeaders, ...(url.origin === originalOrigin ? credentials : {}), host: url.host };
+        if (droppedBody) {
+          for (const name of Object.keys(headers)) {
+            if (['content-type', 'content-length', 'transfer-encoding'].includes(name.toLowerCase())) delete headers[name];
+          }
+        }
+        if (request.channels.body.kind === 'raw' && body !== undefined) {
+          for (const name of Object.keys(headers)) {
+            if (name.toLowerCase() === 'content-type') delete headers[name];
+            if (['content-length', 'transfer-encoding'].includes(name.toLowerCase())) delete headers[name];
+          }
+          headers['content-type'] = request.channels.body.contentType;
+          if (body.byteLength === 0) headers['transfer-encoding'] = 'chunked';
+          else headers['content-length'] = String(body.byteLength);
+        }
         let answer;
         try {
           answer = await whileActive(() =>
@@ -420,7 +453,10 @@ export default function createHttpProbePort({ policy, targets, auth = {}, transp
           if (becomesGet(answer.status, method)) {
             method = 'GET';
             body = undefined;
-            delete declaredHeaders['content-type'];
+            droppedBody = true;
+            for (const name of Object.keys(declaredHeaders)) {
+              if (['content-type', 'content-length', 'transfer-encoding'].includes(name.toLowerCase())) delete declaredHeaders[name];
+            }
           }
           continue;
         }

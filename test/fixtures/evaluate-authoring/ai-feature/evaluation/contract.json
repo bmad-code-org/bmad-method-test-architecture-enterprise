@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 6,
+  "schemaVersion": 7,
   "parentDigest": "sha256:5b7218c116a3974fd8b3a47a1f4e38ab322153a072e47a1d229cfa49275c55e8",
   "revisionCount": 1,
   "contractId": "answer-grade-contract-v1",
@@ -202,17 +202,19 @@
     {
       "id": "O-003",
       "polarity": "expects-hold",
-      "commentary": "Missing and non-string answers each return HTTP 400 and an error body.",
+      "commentary": "Missing, non-string, and malformed JSON requests each return HTTP 400 and the documented error.",
       "direction": {
         "polarity": "expects-hold",
         "relation": "all",
-        "scope": "HTTP status and parsed JSON response body for missing.",
+        "scope": "HTTP status and parsed JSON response body for missing, nonstring, and raw-invalid-json.",
         "negativeDomain": "A malformed request is accepted or lacks an error.",
         "evidenceTargets": [
           "/interactions/missing/response-status",
           "/interactions/missing/response-body/error",
           "/interactions/nonstring/response-status",
-          "/interactions/nonstring/response-body/error"
+          "/interactions/nonstring/response-body/error",
+          "/interactions/raw-invalid-json/response-status",
+          "/interactions/raw-invalid-json/response-body/error"
         ]
       },
       "check": {
@@ -267,6 +269,33 @@
                   },
                   {
                     "literal": "answer must be a string"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "all",
+            "operands": [
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/raw-invalid-json/response-status"
+                  },
+                  {
+                    "literal": 400
+                  }
+                ]
+              },
+              {
+                "op": "equality",
+                "operands": [
+                  {
+                    "pointer": "/interactions/raw-invalid-json/response-body/error"
+                  },
+                  {
+                    "literal": "invalid JSON"
                   }
                 ]
               }
@@ -669,6 +698,23 @@
           }
         }
       }
+    },
+    {
+      "stepId": "raw-invalid-json",
+      "interfaceId": "answer-grade",
+      "operationId": "grade-answer",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "path": null,
+        "query": null,
+        "header": null,
+        "body": {
+          "kind": "raw",
+          "base64": "eyJhbnN3ZXIiOg==",
+          "contentType": "application/json"
+        }
+      }
     }
   ],
   "scopedResources": null,
@@ -688,7 +734,7 @@
     "resources": null
   },
   "budgets": {
-    "maxToolCalls": 7,
+    "maxToolCalls": 8,
     "maxWallClockMinutes": 2,
     "maxCostUsd": "0.00"
   },
@@ -699,6 +745,6 @@
   "requiredEvidence": [
     "HTTP status and parsed JSON response body for every interaction."
   ],
-  "probeStepBound": 7,
+  "probeStepBound": 8,
   "fixtureReset": null
 }

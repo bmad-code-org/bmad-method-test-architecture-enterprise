@@ -1,14 +1,14 @@
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "parentDigest": null,
   "revisionCount": 0,
   "probeId": "P-002",
   "probeClass": "defect",
   "behaviorId": "B-001",
   "systemId": "verdict-ci",
-  "implementationDigest": "sha256:0ab3b7fd2f82693d6e86bd20629b5cdc55f32e81038be224c27f23e5ab315667",
+  "implementationDigest": "sha256:f2b0e88f69bdfafaac7041a613d0df991ce19e14e64ea599f3f5bb7addc01eab",
   "artifactDigest": "sha256:2a7782e752bb92cbe4c7e2039710d647fccd5e79d023d121c650d664cfdf1d7d",
-  "commitDigest": "sha256:0ab3b7fd2f82693d6e86bd20629b5cdc55f32e81038be224c27f23e5ab315667",
+  "commitDigest": "sha256:f2b0e88f69bdfafaac7041a613d0df991ce19e14e64ea599f3f5bb7addc01eab",
   "rationale": "Seeded defect: M-001 relaxes the policy to lenient, and the verdict command then rejects the request on stdout.",
   "qualification": {
     "route": "controlled-mutation",
@@ -23,13 +23,13 @@
     "expectedObservableFailure": "The verdict command rejects the request, so its stdout says verdict: rejected.",
     "baselinePassEvidence": {
       "storage": "public",
-      "path": "runs/20261002T154421225Z-04b7b3ad/qualification/P-002/baseline-pass.json",
+      "path": "runs/20261002T210854524Z-a66a1e0c/qualification/P-002/baseline-pass.json",
       "privateRef": null,
       "digest": "sha256:f1d0735a23d91bde52e09405920943f513b436c6778a11e15e3ee155e3d8508e"
     },
     "mutatedFailEvidence": {
       "storage": "public",
-      "path": "runs/20261002T154421225Z-04b7b3ad/qualification/P-002/mutated-fail.json",
+      "path": "runs/20261002T210854524Z-a66a1e0c/qualification/P-002/mutated-fail.json",
       "privateRef": null,
       "digest": "sha256:02e0a2ff06ef748ab538afe239182a96a1eb81055a39364e50b9038f9f37975a"
     },
@@ -45,7 +45,7 @@
       "oracleEvidence": [
         {
           "storage": "public",
-          "path": "runs/20261002T154421225Z-04b7b3ad/qualification/P-002/mutated-fail.json",
+          "path": "runs/20261002T210854524Z-a66a1e0c/qualification/P-002/mutated-fail.json",
           "privateRef": null,
           "digest": "sha256:02e0a2ff06ef748ab538afe239182a96a1eb81055a39364e50b9038f9f37975a"
         }

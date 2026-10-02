@@ -563,7 +563,7 @@ The starter skeleton and the source repository's [contract fill](https://github.
 
 ```json
 {
-  "schemaVersion": 6,
+  "schemaVersion": 7,
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "tea-evaluate-contract-starter",

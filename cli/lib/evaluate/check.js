@@ -643,6 +643,7 @@ function infrastructureObservation(stepId, exitCode, callInputs = {}) {
       query: null,
       header: null,
       body: null,
+      bodyEncoding: null,
       argument: callInputs.argument ?? null,
       option: callInputs.option ?? null,
       environment: callInputs.environment ?? null,

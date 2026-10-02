@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "parentDigest": null,
   "revisionCount": 0,
   "probeId": "P-006",
@@ -23,15 +23,15 @@
     "expectedObservableFailure": "valid answer receives too-short in HTTP response body",
     "baselinePassEvidence": {
       "storage": "public",
-      "path": "runs/20261002T154804523Z-186fe7af/qualification/P-006/baseline-pass.json",
+      "path": "runs/20261002T210321664Z-57c4fa54/qualification/P-006/baseline-pass.json",
       "privateRef": null,
-      "digest": "sha256:dff6b9f395739b4a085fab01d430bba34f4c6c9044e395ad7908f29e597e721b"
+      "digest": "sha256:dcd777e77c804fc47168a5f3fc6737ee410d4659d6e10f17ea26b4b658dc8848"
     },
     "mutatedFailEvidence": {
       "storage": "public",
-      "path": "runs/20261002T154804523Z-186fe7af/qualification/P-006/mutated-fail.json",
+      "path": "runs/20261002T210321664Z-57c4fa54/qualification/P-006/mutated-fail.json",
       "privateRef": null,
-      "digest": "sha256:757dfdfb873da464ee90e01e665ae60d24db83b061b9ad6788555c72e814afc3"
+      "digest": "sha256:705bce55df192049eb4a4d16b3388b26d08659eb32610e801093a4870c87e22c"
     },
     "rollbackVerified": true
   },
@@ -45,9 +45,9 @@
       "oracleEvidence": [
         {
           "storage": "public",
-          "path": "runs/20261002T154804523Z-186fe7af/qualification/P-006/mutated-fail.json",
+          "path": "runs/20261002T210321664Z-57c4fa54/qualification/P-006/mutated-fail.json",
           "privateRef": null,
-          "digest": "sha256:757dfdfb873da464ee90e01e665ae60d24db83b061b9ad6788555c72e814afc3"
+          "digest": "sha256:705bce55df192049eb4a4d16b3388b26d08659eb32610e801093a4870c87e22c"
         }
       ],
       "source": "controlled-mutation",

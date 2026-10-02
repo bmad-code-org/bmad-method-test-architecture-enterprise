@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "parentDigest": null,
   "revisionCount": 0,
   "probeId": "P-002",
@@ -14,7 +14,7 @@
     "route": "clean-control",
     "baselinePassEvidence": {
       "storage": "public",
-      "path": "runs/20261002T154633138Z-c018df7f/qualification/P-002/baseline-pass.json",
+      "path": "runs/20261002T210531658Z-f68d8772/qualification/P-002/baseline-pass.json",
       "privateRef": null,
       "digest": "sha256:1c25e4bfe39d78c316ebdf07b1771e5f241d5ef0f6e9619e76bf3fe78f7622af"
     },

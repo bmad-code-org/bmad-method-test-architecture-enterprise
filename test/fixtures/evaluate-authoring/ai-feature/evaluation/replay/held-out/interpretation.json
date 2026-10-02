@@ -1,0 +1,2617 @@
+{
+  "scoreInvocationId": "20261002T210530355Z-cd012923",
+  "strengthAggregate": {
+    "status": "copied",
+    "reason": null,
+    "path": "runs/20261002T210500587Z-7ca5bf43/scores/20261002T210530355Z-cd012923/strength-aggregate.json",
+    "digest": "sha256:eb3f312410cc27c12c9b75e77f542fe7db2c99dd8996c712d497fb8d3f22a739",
+    "floors": "runs/20261002T210500587Z-7ca5bf43/scores/20261002T210530355Z-cd012923/strength-floors.json",
+    "floorsDigest": "sha256:e84700d449bc14f307e48810dc166fab364dfdaa20ea30a2dbc492fe81c913c6"
+  },
+  "probes": [
+    {
+      "probeId": "P-011",
+      "evidence": "runs/20261002T210500587Z-7ca5bf43/scores/20261002T210530355Z-cd012923/P-011/evidence-artifact.json",
+      "scoreExitCode": 0,
+      "scoreRecord": "runs/20261002T210500587Z-7ca5bf43/scores/20261002T210530355Z-cd012923/P-011/score.json",
+      "scoreFailure": null,
+      "trials": [
+        {
+          "record": "trial-sets/P-011/record-1.json",
+          "trialIndex": 1,
+          "findings": [
+            {
+              "behaviorId": "B-001",
+              "confidence": 1,
+              "evidenceArtifacts": [],
+              "findingId": "F-001",
+              "findingType": "defect",
+              "observationIds": [
+                "trial-1-restricted"
+              ],
+              "oracleId": "O-001",
+              "probeId": "P-011",
+              "quotedEvidence": [
+                {
+                  "artifactId": null,
+                  "channel": "response-body",
+                  "quote": "{\"decision\":\"pass\",\"reason\":\"accepted\"}"
+                }
+              ],
+              "severity": "critical",
+              "summary": "O-001 is violated: its check resolved false over trial-1-restricted, where expects-hold holds on true.",
+              "citations": [
+                {
+                  "observationId": "trial-1-restricted",
+                  "sequence": 2,
+                  "interfaceId": "answer-grade",
+                  "operationId": "grade-answer",
+                  "provenance": "evaluator-chosen",
+                  "phase": "outcome"
+                }
+              ],
+              "oracleEvidencePointers": [
+                "/interactions/restricted/response-status",
+                "/interactions/restricted/response-body/decision",
+                "/interactions/restricted/response-body/reason"
+              ]
+            }
+          ],
+          "process": [],
+          "outcome": [
+            "F-001"
+          ],
+          "firstMaterialError": {
+            "findingId": "F-001",
+            "observationId": "trial-1-restricted",
+            "sequence": 2,
+            "interfaceId": "answer-grade",
+            "operationId": "grade-answer",
+            "provenance": "evaluator-chosen",
+            "phase": "outcome"
+          }
+        },
+        {
+          "record": "trial-sets/P-011/record-2.json",
+          "trialIndex": 2,
+          "findings": [
+            {
+              "behaviorId": "B-001",
+              "confidence": 1,
+              "evidenceArtifacts": [],
+              "findingId": "F-001",
+              "findingType": "defect",
+              "observationIds": [
+                "trial-2-restricted"
+              ],
+              "oracleId": "O-001",
+              "probeId": "P-011",
+              "quotedEvidence": [
+                {
+                  "artifactId": null,
+                  "channel": "response-body",
+                  "quote": "{\"decision\":\"pass\",\"reason\":\"accepted\"}"
+                }
+              ],
+              "severity": "critical",
+              "summary": "O-001 is violated: its check resolved false over trial-2-restricted, where expects-hold holds on true.",
+              "citations": [
+                {
+                  "observationId": "trial-2-restricted",
+                  "sequence": 2,
+                  "interfaceId": "answer-grade",
+                  "operationId": "grade-answer",
+                  "provenance": "evaluator-chosen",
+                  "phase": "outcome"
+                }
+              ],
+              "oracleEvidencePointers": [
+                "/interactions/restricted/response-status",
+                "/interactions/restricted/response-body/decision",
+                "/interactions/restricted/response-body/reason"
+              ]
+            }
+          ],
+          "process": [],
+          "outcome": [
+            "F-001"
+          ],
+          "firstMaterialError": {
+            "findingId": "F-001",
+            "observationId": "trial-2-restricted",
+            "sequence": 2,
+            "interfaceId": "answer-grade",
+            "operationId": "grade-answer",
+            "provenance": "evaluator-chosen",
+            "phase": "outcome"
+          }
+        },
+        {
+          "record": "trial-sets/P-011/record-3.json",
+          "trialIndex": 3,
+          "findings": [
+            {
+              "behaviorId": "B-001",
+              "confidence": 1,
+              "evidenceArtifacts": [],
+              "findingId": "F-001",
+              "findingType": "defect",
+              "observationIds": [
+                "trial-3-restricted"
+              ],
+              "oracleId": "O-001",
+              "probeId": "P-011",
+              "quotedEvidence": [
+                {
+                  "artifactId": null,
+                  "channel": "response-body",
+                  "quote": "{\"decision\":\"pass\",\"reason\":\"accepted\"}"
+                }
+              ],
+              "severity": "critical",
+              "summary": "O-001 is violated: its check resolved false over trial-3-restricted, where expects-hold holds on true.",
+              "citations": [
+                {
+                  "observationId": "trial-3-restricted",
+                  "sequence": 2,
+                  "interfaceId": "answer-grade",
+                  "operationId": "grade-answer",
+                  "provenance": "evaluator-chosen",
+                  "phase": "outcome"
+                }
+              ],
+              "oracleEvidencePointers": [
+                "/interactions/restricted/response-status",
+                "/interactions/restricted/response-body/decision",
+                "/interactions/restricted/response-body/reason"
+              ]
+            }
+          ],
+          "process": [],
+          "outcome": [
+            "F-001"
+          ],
+          "firstMaterialError": {
+            "findingId": "F-001",
+            "observationId": "trial-3-restricted",
+            "sequence": 2,
+            "interfaceId": "answer-grade",
+            "operationId": "grade-answer",
+            "provenance": "evaluator-chosen",
+            "phase": "outcome"
+          }
+        }
+      ],
+      "engine": {
+        "outcomes": [
+          {
+            "checkResolution": {
+              "children": [
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "false"
+                },
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "false"
+                }
+              ],
+              "introductionCondition": null,
+              "resolution": "false"
+            },
+            "corroboration": "agrees",
+            "disposition": "violated",
+            "oracleId": "O-001",
+            "probeId": "P-011",
+            "resolvedFrom": null,
+            "selectedObservationIds": [
+              "trial-1-restricted"
+            ],
+            "severity": "critical",
+            "state": "caught",
+            "trialIndex": 1
+          },
+          {
+            "checkResolution": {
+              "children": [
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                }
+              ],
+              "introductionCondition": null,
+              "resolution": "true"
+            },
+            "corroboration": "agrees",
+            "disposition": "held",
+            "oracleId": "O-002",
+            "probeId": "P-011",
+            "resolvedFrom": null,
+            "selectedObservationIds": [
+              "trial-1-valid-boundary"
+            ],
+            "severity": "critical",
+            "state": "confirmed",
+            "trialIndex": 1
+          },
+          {
+            "checkResolution": {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    }
+                  ],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    }
+                  ],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    }
+                  ],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                }
+              ],
+              "introductionCondition": null,
+              "resolution": "true"
+            },
+            "corroboration": "agrees",
+            "disposition": "held",
+            "oracleId": "O-003",
+            "probeId": "P-011",
+            "resolvedFrom": null,
+            "selectedObservationIds": [
+              "trial-1-missing",
+              "trial-1-nonstring",
+              "trial-1-raw-invalid-json"
+            ],
+            "severity": "critical",
+            "state": "confirmed",
+            "trialIndex": 1
+          },
+          {
+            "checkResolution": {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    }
+                  ],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    }
+                  ],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                }
+              ],
+              "introductionCondition": null,
+              "resolution": "true"
+            },
+            "corroboration": "agrees",
+            "disposition": "held",
+            "oracleId": "O-004",
+            "probeId": "P-011",
+            "resolvedFrom": null,
+            "selectedObservationIds": [
+              "trial-1-strict-boundary",
+              "trial-1-strict-short"
+            ],
+            "severity": "critical",
+            "state": "confirmed",
+            "trialIndex": 1
+          },
+          {
+            "checkResolution": {
+              "children": [
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "false"
+                },
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "false"
+                }
+              ],
+              "introductionCondition": null,
+              "resolution": "false"
+            },
+            "corroboration": "agrees",
+            "disposition": "violated",
+            "oracleId": "O-001",
+            "probeId": "P-011",
+            "resolvedFrom": null,
+            "selectedObservationIds": [
+              "trial-2-restricted"
+            ],
+            "severity": "critical",
+            "state": "caught",
+            "trialIndex": 2
+          },
+          {
+            "checkResolution": {
+              "children": [
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                }
+              ],
+              "introductionCondition": null,
+              "resolution": "true"
+            },
+            "corroboration": "agrees",
+            "disposition": "held",
+            "oracleId": "O-002",
+            "probeId": "P-011",
+            "resolvedFrom": null,
+            "selectedObservationIds": [
+              "trial-2-valid-boundary"
+            ],
+            "severity": "critical",
+            "state": "confirmed",
+            "trialIndex": 2
+          },
+          {
+            "checkResolution": {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    }
+                  ],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    }
+                  ],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    }
+                  ],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                }
+              ],
+              "introductionCondition": null,
+              "resolution": "true"
+            },
+            "corroboration": "agrees",
+            "disposition": "held",
+            "oracleId": "O-003",
+            "probeId": "P-011",
+            "resolvedFrom": null,
+            "selectedObservationIds": [
+              "trial-2-missing",
+              "trial-2-nonstring",
+              "trial-2-raw-invalid-json"
+            ],
+            "severity": "critical",
+            "state": "confirmed",
+            "trialIndex": 2
+          },
+          {
+            "checkResolution": {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    }
+                  ],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    }
+                  ],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                }
+              ],
+              "introductionCondition": null,
+              "resolution": "true"
+            },
+            "corroboration": "agrees",
+            "disposition": "held",
+            "oracleId": "O-004",
+            "probeId": "P-011",
+            "resolvedFrom": null,
+            "selectedObservationIds": [
+              "trial-2-strict-boundary",
+              "trial-2-strict-short"
+            ],
+            "severity": "critical",
+            "state": "confirmed",
+            "trialIndex": 2
+          },
+          {
+            "checkResolution": {
+              "children": [
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "false"
+                },
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "false"
+                }
+              ],
+              "introductionCondition": null,
+              "resolution": "false"
+            },
+            "corroboration": "agrees",
+            "disposition": "violated",
+            "oracleId": "O-001",
+            "probeId": "P-011",
+            "resolvedFrom": null,
+            "selectedObservationIds": [
+              "trial-3-restricted"
+            ],
+            "severity": "critical",
+            "state": "caught",
+            "trialIndex": 3
+          },
+          {
+            "checkResolution": {
+              "children": [
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                }
+              ],
+              "introductionCondition": null,
+              "resolution": "true"
+            },
+            "corroboration": "agrees",
+            "disposition": "held",
+            "oracleId": "O-002",
+            "probeId": "P-011",
+            "resolvedFrom": null,
+            "selectedObservationIds": [
+              "trial-3-valid-boundary"
+            ],
+            "severity": "critical",
+            "state": "confirmed",
+            "trialIndex": 3
+          },
+          {
+            "checkResolution": {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    }
+                  ],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    }
+                  ],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    }
+                  ],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                }
+              ],
+              "introductionCondition": null,
+              "resolution": "true"
+            },
+            "corroboration": "agrees",
+            "disposition": "held",
+            "oracleId": "O-003",
+            "probeId": "P-011",
+            "resolvedFrom": null,
+            "selectedObservationIds": [
+              "trial-3-missing",
+              "trial-3-nonstring",
+              "trial-3-raw-invalid-json"
+            ],
+            "severity": "critical",
+            "state": "confirmed",
+            "trialIndex": 3
+          },
+          {
+            "checkResolution": {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    }
+                  ],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    }
+                  ],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                }
+              ],
+              "introductionCondition": null,
+              "resolution": "true"
+            },
+            "corroboration": "agrees",
+            "disposition": "held",
+            "oracleId": "O-004",
+            "probeId": "P-011",
+            "resolvedFrom": null,
+            "selectedObservationIds": [
+              "trial-3-strict-boundary",
+              "trial-3-strict-short"
+            ],
+            "severity": "critical",
+            "state": "confirmed",
+            "trialIndex": 3
+          }
+        ],
+        "reducedProbeOutcomes": [
+          {
+            "catchThreshold": 0.9,
+            "caught": true,
+            "caughtCount": 3,
+            "exercised": true,
+            "invalidatedAttempts": [],
+            "probeId": "P-011",
+            "severity": "critical",
+            "trialVotes": [
+              {
+                "state": "caught",
+                "trialIndex": 1
+              },
+              {
+                "state": "caught",
+                "trialIndex": 2
+              },
+              {
+                "state": "caught",
+                "trialIndex": 3
+              }
+            ],
+            "validCount": 3
+          }
+        ],
+        "strength": {
+          "basis": "measured",
+          "comparable": true,
+          "denominator": "unique qualified probe identifiers exercised per class, across 3 completed trials",
+          "note": "1 admitted probe over 3 completed trials.",
+          "vector": {
+            "defect": {
+              "caught": 1,
+              "exercised": 1,
+              "rate": 1
+            },
+            "gameability": null,
+            "zero-action": null
+          }
+        },
+        "contractVerdict": "PASS"
+      }
+    },
+    {
+      "probeId": "P-012",
+      "evidence": "runs/20261002T210500587Z-7ca5bf43/scores/20261002T210530355Z-cd012923/P-012/evidence-artifact.json",
+      "scoreExitCode": 0,
+      "scoreRecord": "runs/20261002T210500587Z-7ca5bf43/scores/20261002T210530355Z-cd012923/P-012/score.json",
+      "scoreFailure": null,
+      "trials": [
+        {
+          "record": "trial-sets/P-012/record-1.json",
+          "trialIndex": 1,
+          "findings": [
+            {
+              "behaviorId": "B-002",
+              "confidence": 1,
+              "evidenceArtifacts": [],
+              "findingId": "F-001",
+              "findingType": "defect",
+              "observationIds": [
+                "trial-1-valid-boundary"
+              ],
+              "oracleId": "O-002",
+              "probeId": "P-012",
+              "quotedEvidence": [
+                {
+                  "artifactId": null,
+                  "channel": "response-body",
+                  "quote": "{\"decision\":\"reject\",\"reason\":\"accepted\"}"
+                }
+              ],
+              "severity": "material",
+              "summary": "O-002 is violated: its check resolved false over trial-1-valid-boundary, where expects-hold holds on true.",
+              "citations": [
+                {
+                  "observationId": "trial-1-valid-boundary",
+                  "sequence": 1,
+                  "interfaceId": "answer-grade",
+                  "operationId": "grade-answer",
+                  "provenance": "evaluator-chosen",
+                  "phase": "outcome"
+                }
+              ],
+              "oracleEvidencePointers": [
+                "/interactions/valid-boundary/response-status",
+                "/interactions/valid-boundary/response-body/decision",
+                "/interactions/valid-boundary/response-body/reason"
+              ]
+            }
+          ],
+          "process": [],
+          "outcome": [
+            "F-001"
+          ],
+          "firstMaterialError": {
+            "findingId": "F-001",
+            "observationId": "trial-1-valid-boundary",
+            "sequence": 1,
+            "interfaceId": "answer-grade",
+            "operationId": "grade-answer",
+            "provenance": "evaluator-chosen",
+            "phase": "outcome"
+          }
+        },
+        {
+          "record": "trial-sets/P-012/record-2.json",
+          "trialIndex": 2,
+          "findings": [
+            {
+              "behaviorId": "B-002",
+              "confidence": 1,
+              "evidenceArtifacts": [],
+              "findingId": "F-001",
+              "findingType": "defect",
+              "observationIds": [
+                "trial-2-valid-boundary"
+              ],
+              "oracleId": "O-002",
+              "probeId": "P-012",
+              "quotedEvidence": [
+                {
+                  "artifactId": null,
+                  "channel": "response-body",
+                  "quote": "{\"decision\":\"reject\",\"reason\":\"accepted\"}"
+                }
+              ],
+              "severity": "material",
+              "summary": "O-002 is violated: its check resolved false over trial-2-valid-boundary, where expects-hold holds on true.",
+              "citations": [
+                {
+                  "observationId": "trial-2-valid-boundary",
+                  "sequence": 1,
+                  "interfaceId": "answer-grade",
+                  "operationId": "grade-answer",
+                  "provenance": "evaluator-chosen",
+                  "phase": "outcome"
+                }
+              ],
+              "oracleEvidencePointers": [
+                "/interactions/valid-boundary/response-status",
+                "/interactions/valid-boundary/response-body/decision",
+                "/interactions/valid-boundary/response-body/reason"
+              ]
+            }
+          ],
+          "process": [],
+          "outcome": [
+            "F-001"
+          ],
+          "firstMaterialError": {
+            "findingId": "F-001",
+            "observationId": "trial-2-valid-boundary",
+            "sequence": 1,
+            "interfaceId": "answer-grade",
+            "operationId": "grade-answer",
+            "provenance": "evaluator-chosen",
+            "phase": "outcome"
+          }
+        },
+        {
+          "record": "trial-sets/P-012/record-3.json",
+          "trialIndex": 3,
+          "findings": [
+            {
+              "behaviorId": "B-002",
+              "confidence": 1,
+              "evidenceArtifacts": [],
+              "findingId": "F-001",
+              "findingType": "defect",
+              "observationIds": [
+                "trial-3-valid-boundary"
+              ],
+              "oracleId": "O-002",
+              "probeId": "P-012",
+              "quotedEvidence": [
+                {
+                  "artifactId": null,
+                  "channel": "response-body",
+                  "quote": "{\"decision\":\"reject\",\"reason\":\"accepted\"}"
+                }
+              ],
+              "severity": "material",
+              "summary": "O-002 is violated: its check resolved false over trial-3-valid-boundary, where expects-hold holds on true.",
+              "citations": [
+                {
+                  "observationId": "trial-3-valid-boundary",
+                  "sequence": 1,
+                  "interfaceId": "answer-grade",
+                  "operationId": "grade-answer",
+                  "provenance": "evaluator-chosen",
+                  "phase": "outcome"
+                }
+              ],
+              "oracleEvidencePointers": [
+                "/interactions/valid-boundary/response-status",
+                "/interactions/valid-boundary/response-body/decision",
+                "/interactions/valid-boundary/response-body/reason"
+              ]
+            }
+          ],
+          "process": [],
+          "outcome": [
+            "F-001"
+          ],
+          "firstMaterialError": {
+            "findingId": "F-001",
+            "observationId": "trial-3-valid-boundary",
+            "sequence": 1,
+            "interfaceId": "answer-grade",
+            "operationId": "grade-answer",
+            "provenance": "evaluator-chosen",
+            "phase": "outcome"
+          }
+        }
+      ],
+      "engine": {
+        "outcomes": [
+          {
+            "checkResolution": {
+              "children": [
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                }
+              ],
+              "introductionCondition": null,
+              "resolution": "true"
+            },
+            "corroboration": "agrees",
+            "disposition": "held",
+            "oracleId": "O-001",
+            "probeId": "P-012",
+            "resolvedFrom": null,
+            "selectedObservationIds": [
+              "trial-1-restricted"
+            ],
+            "severity": "material",
+            "state": "confirmed",
+            "trialIndex": 1
+          },
+          {
+            "checkResolution": {
+              "children": [
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "false"
+                },
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                }
+              ],
+              "introductionCondition": null,
+              "resolution": "false"
+            },
+            "corroboration": "agrees",
+            "disposition": "violated",
+            "oracleId": "O-002",
+            "probeId": "P-012",
+            "resolvedFrom": null,
+            "selectedObservationIds": [
+              "trial-1-valid-boundary"
+            ],
+            "severity": "material",
+            "state": "caught",
+            "trialIndex": 1
+          },
+          {
+            "checkResolution": {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    }
+                  ],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    }
+                  ],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    }
+                  ],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                }
+              ],
+              "introductionCondition": null,
+              "resolution": "true"
+            },
+            "corroboration": "agrees",
+            "disposition": "held",
+            "oracleId": "O-003",
+            "probeId": "P-012",
+            "resolvedFrom": null,
+            "selectedObservationIds": [
+              "trial-1-missing",
+              "trial-1-nonstring",
+              "trial-1-raw-invalid-json"
+            ],
+            "severity": "material",
+            "state": "confirmed",
+            "trialIndex": 1
+          },
+          {
+            "checkResolution": {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "false"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    }
+                  ],
+                  "introductionCondition": null,
+                  "resolution": "false"
+                },
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    }
+                  ],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                }
+              ],
+              "introductionCondition": null,
+              "resolution": "false"
+            },
+            "corroboration": "disagrees",
+            "disposition": "violated",
+            "oracleId": "O-004",
+            "probeId": "P-012",
+            "resolvedFrom": null,
+            "selectedObservationIds": [
+              "trial-1-strict-boundary",
+              "trial-1-strict-short"
+            ],
+            "severity": "material",
+            "state": "confirmed",
+            "trialIndex": 1
+          },
+          {
+            "checkResolution": {
+              "children": [
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                }
+              ],
+              "introductionCondition": null,
+              "resolution": "true"
+            },
+            "corroboration": "agrees",
+            "disposition": "held",
+            "oracleId": "O-001",
+            "probeId": "P-012",
+            "resolvedFrom": null,
+            "selectedObservationIds": [
+              "trial-2-restricted"
+            ],
+            "severity": "material",
+            "state": "confirmed",
+            "trialIndex": 2
+          },
+          {
+            "checkResolution": {
+              "children": [
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "false"
+                },
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                }
+              ],
+              "introductionCondition": null,
+              "resolution": "false"
+            },
+            "corroboration": "agrees",
+            "disposition": "violated",
+            "oracleId": "O-002",
+            "probeId": "P-012",
+            "resolvedFrom": null,
+            "selectedObservationIds": [
+              "trial-2-valid-boundary"
+            ],
+            "severity": "material",
+            "state": "caught",
+            "trialIndex": 2
+          },
+          {
+            "checkResolution": {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    }
+                  ],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    }
+                  ],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    }
+                  ],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                }
+              ],
+              "introductionCondition": null,
+              "resolution": "true"
+            },
+            "corroboration": "agrees",
+            "disposition": "held",
+            "oracleId": "O-003",
+            "probeId": "P-012",
+            "resolvedFrom": null,
+            "selectedObservationIds": [
+              "trial-2-missing",
+              "trial-2-nonstring",
+              "trial-2-raw-invalid-json"
+            ],
+            "severity": "material",
+            "state": "confirmed",
+            "trialIndex": 2
+          },
+          {
+            "checkResolution": {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "false"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    }
+                  ],
+                  "introductionCondition": null,
+                  "resolution": "false"
+                },
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    }
+                  ],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                }
+              ],
+              "introductionCondition": null,
+              "resolution": "false"
+            },
+            "corroboration": "disagrees",
+            "disposition": "violated",
+            "oracleId": "O-004",
+            "probeId": "P-012",
+            "resolvedFrom": null,
+            "selectedObservationIds": [
+              "trial-2-strict-boundary",
+              "trial-2-strict-short"
+            ],
+            "severity": "material",
+            "state": "confirmed",
+            "trialIndex": 2
+          },
+          {
+            "checkResolution": {
+              "children": [
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                }
+              ],
+              "introductionCondition": null,
+              "resolution": "true"
+            },
+            "corroboration": "agrees",
+            "disposition": "held",
+            "oracleId": "O-001",
+            "probeId": "P-012",
+            "resolvedFrom": null,
+            "selectedObservationIds": [
+              "trial-3-restricted"
+            ],
+            "severity": "material",
+            "state": "confirmed",
+            "trialIndex": 3
+          },
+          {
+            "checkResolution": {
+              "children": [
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "false"
+                },
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                }
+              ],
+              "introductionCondition": null,
+              "resolution": "false"
+            },
+            "corroboration": "agrees",
+            "disposition": "violated",
+            "oracleId": "O-002",
+            "probeId": "P-012",
+            "resolvedFrom": null,
+            "selectedObservationIds": [
+              "trial-3-valid-boundary"
+            ],
+            "severity": "material",
+            "state": "caught",
+            "trialIndex": 3
+          },
+          {
+            "checkResolution": {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    }
+                  ],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    }
+                  ],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    }
+                  ],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                }
+              ],
+              "introductionCondition": null,
+              "resolution": "true"
+            },
+            "corroboration": "agrees",
+            "disposition": "held",
+            "oracleId": "O-003",
+            "probeId": "P-012",
+            "resolvedFrom": null,
+            "selectedObservationIds": [
+              "trial-3-missing",
+              "trial-3-nonstring",
+              "trial-3-raw-invalid-json"
+            ],
+            "severity": "material",
+            "state": "confirmed",
+            "trialIndex": 3
+          },
+          {
+            "checkResolution": {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "false"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    }
+                  ],
+                  "introductionCondition": null,
+                  "resolution": "false"
+                },
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    }
+                  ],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                }
+              ],
+              "introductionCondition": null,
+              "resolution": "false"
+            },
+            "corroboration": "disagrees",
+            "disposition": "violated",
+            "oracleId": "O-004",
+            "probeId": "P-012",
+            "resolvedFrom": null,
+            "selectedObservationIds": [
+              "trial-3-strict-boundary",
+              "trial-3-strict-short"
+            ],
+            "severity": "material",
+            "state": "confirmed",
+            "trialIndex": 3
+          }
+        ],
+        "reducedProbeOutcomes": [
+          {
+            "catchThreshold": 0.9,
+            "caught": true,
+            "caughtCount": 3,
+            "exercised": true,
+            "invalidatedAttempts": [],
+            "probeId": "P-012",
+            "severity": "material",
+            "trialVotes": [
+              {
+                "state": "caught",
+                "trialIndex": 1
+              },
+              {
+                "state": "caught",
+                "trialIndex": 2
+              },
+              {
+                "state": "caught",
+                "trialIndex": 3
+              }
+            ],
+            "validCount": 3
+          }
+        ],
+        "strength": {
+          "basis": "measured",
+          "comparable": true,
+          "denominator": "unique qualified probe identifiers exercised per class, across 3 completed trials",
+          "note": "1 admitted probe over 3 completed trials.",
+          "vector": {
+            "defect": {
+              "caught": 1,
+              "exercised": 1,
+              "rate": 1
+            },
+            "gameability": null,
+            "zero-action": null
+          }
+        },
+        "contractVerdict": "PASS"
+      }
+    },
+    {
+      "probeId": "P-013",
+      "evidence": "runs/20261002T210500587Z-7ca5bf43/scores/20261002T210530355Z-cd012923/P-013/evidence-artifact.json",
+      "scoreExitCode": 0,
+      "scoreRecord": "runs/20261002T210500587Z-7ca5bf43/scores/20261002T210530355Z-cd012923/P-013/score.json",
+      "scoreFailure": null,
+      "trials": [
+        {
+          "record": "trial-sets/P-013/record-1.json",
+          "trialIndex": 1,
+          "findings": [
+            {
+              "behaviorId": "B-003",
+              "confidence": 1,
+              "evidenceArtifacts": [],
+              "findingId": "F-001",
+              "findingType": "defect",
+              "observationIds": [
+                "trial-1-missing",
+                "trial-1-nonstring",
+                "trial-1-raw-invalid-json"
+              ],
+              "oracleId": "O-003",
+              "probeId": "P-013",
+              "quotedEvidence": [
+                {
+                  "artifactId": null,
+                  "channel": "response-body",
+                  "quote": "{\"decision\":\"pass\",\"reason\":\"accepted\"}"
+                }
+              ],
+              "severity": "material",
+              "summary": "O-003 is violated: its check resolved false over trial-1-missing, trial-1-nonstring, trial-1-raw-invalid-json, where expects-hold holds on true.",
+              "citations": [
+                {
+                  "observationId": "trial-1-missing",
+                  "sequence": 6,
+                  "interfaceId": "answer-grade",
+                  "operationId": "grade-answer",
+                  "provenance": "evaluator-chosen",
+                  "phase": "outcome"
+                },
+                {
+                  "observationId": "trial-1-nonstring",
+                  "sequence": 7,
+                  "interfaceId": "answer-grade",
+                  "operationId": "grade-answer",
+                  "provenance": "evaluator-chosen",
+                  "phase": "outcome"
+                },
+                {
+                  "observationId": "trial-1-raw-invalid-json",
+                  "sequence": 8,
+                  "interfaceId": "answer-grade",
+                  "operationId": "grade-answer",
+                  "provenance": "evaluator-chosen",
+                  "phase": "outcome"
+                }
+              ],
+              "oracleEvidencePointers": [
+                "/interactions/missing/response-status",
+                "/interactions/missing/response-body/error",
+                "/interactions/nonstring/response-status",
+                "/interactions/nonstring/response-body/error",
+                "/interactions/raw-invalid-json/response-status",
+                "/interactions/raw-invalid-json/response-body/error"
+              ]
+            }
+          ],
+          "process": [],
+          "outcome": [
+            "F-001"
+          ],
+          "firstMaterialError": {
+            "findingId": "F-001",
+            "observationId": "trial-1-missing",
+            "sequence": 6,
+            "interfaceId": "answer-grade",
+            "operationId": "grade-answer",
+            "provenance": "evaluator-chosen",
+            "phase": "outcome"
+          }
+        },
+        {
+          "record": "trial-sets/P-013/record-2.json",
+          "trialIndex": 2,
+          "findings": [
+            {
+              "behaviorId": "B-003",
+              "confidence": 1,
+              "evidenceArtifacts": [],
+              "findingId": "F-001",
+              "findingType": "defect",
+              "observationIds": [
+                "trial-2-missing",
+                "trial-2-nonstring",
+                "trial-2-raw-invalid-json"
+              ],
+              "oracleId": "O-003",
+              "probeId": "P-013",
+              "quotedEvidence": [
+                {
+                  "artifactId": null,
+                  "channel": "response-body",
+                  "quote": "{\"decision\":\"pass\",\"reason\":\"accepted\"}"
+                }
+              ],
+              "severity": "material",
+              "summary": "O-003 is violated: its check resolved false over trial-2-missing, trial-2-nonstring, trial-2-raw-invalid-json, where expects-hold holds on true.",
+              "citations": [
+                {
+                  "observationId": "trial-2-missing",
+                  "sequence": 6,
+                  "interfaceId": "answer-grade",
+                  "operationId": "grade-answer",
+                  "provenance": "evaluator-chosen",
+                  "phase": "outcome"
+                },
+                {
+                  "observationId": "trial-2-nonstring",
+                  "sequence": 7,
+                  "interfaceId": "answer-grade",
+                  "operationId": "grade-answer",
+                  "provenance": "evaluator-chosen",
+                  "phase": "outcome"
+                },
+                {
+                  "observationId": "trial-2-raw-invalid-json",
+                  "sequence": 8,
+                  "interfaceId": "answer-grade",
+                  "operationId": "grade-answer",
+                  "provenance": "evaluator-chosen",
+                  "phase": "outcome"
+                }
+              ],
+              "oracleEvidencePointers": [
+                "/interactions/missing/response-status",
+                "/interactions/missing/response-body/error",
+                "/interactions/nonstring/response-status",
+                "/interactions/nonstring/response-body/error",
+                "/interactions/raw-invalid-json/response-status",
+                "/interactions/raw-invalid-json/response-body/error"
+              ]
+            }
+          ],
+          "process": [],
+          "outcome": [
+            "F-001"
+          ],
+          "firstMaterialError": {
+            "findingId": "F-001",
+            "observationId": "trial-2-missing",
+            "sequence": 6,
+            "interfaceId": "answer-grade",
+            "operationId": "grade-answer",
+            "provenance": "evaluator-chosen",
+            "phase": "outcome"
+          }
+        },
+        {
+          "record": "trial-sets/P-013/record-3.json",
+          "trialIndex": 3,
+          "findings": [
+            {
+              "behaviorId": "B-003",
+              "confidence": 1,
+              "evidenceArtifacts": [],
+              "findingId": "F-001",
+              "findingType": "defect",
+              "observationIds": [
+                "trial-3-missing",
+                "trial-3-nonstring",
+                "trial-3-raw-invalid-json"
+              ],
+              "oracleId": "O-003",
+              "probeId": "P-013",
+              "quotedEvidence": [
+                {
+                  "artifactId": null,
+                  "channel": "response-body",
+                  "quote": "{\"decision\":\"pass\",\"reason\":\"accepted\"}"
+                }
+              ],
+              "severity": "material",
+              "summary": "O-003 is violated: its check resolved false over trial-3-missing, trial-3-nonstring, trial-3-raw-invalid-json, where expects-hold holds on true.",
+              "citations": [
+                {
+                  "observationId": "trial-3-missing",
+                  "sequence": 6,
+                  "interfaceId": "answer-grade",
+                  "operationId": "grade-answer",
+                  "provenance": "evaluator-chosen",
+                  "phase": "outcome"
+                },
+                {
+                  "observationId": "trial-3-nonstring",
+                  "sequence": 7,
+                  "interfaceId": "answer-grade",
+                  "operationId": "grade-answer",
+                  "provenance": "evaluator-chosen",
+                  "phase": "outcome"
+                },
+                {
+                  "observationId": "trial-3-raw-invalid-json",
+                  "sequence": 8,
+                  "interfaceId": "answer-grade",
+                  "operationId": "grade-answer",
+                  "provenance": "evaluator-chosen",
+                  "phase": "outcome"
+                }
+              ],
+              "oracleEvidencePointers": [
+                "/interactions/missing/response-status",
+                "/interactions/missing/response-body/error",
+                "/interactions/nonstring/response-status",
+                "/interactions/nonstring/response-body/error",
+                "/interactions/raw-invalid-json/response-status",
+                "/interactions/raw-invalid-json/response-body/error"
+              ]
+            }
+          ],
+          "process": [],
+          "outcome": [
+            "F-001"
+          ],
+          "firstMaterialError": {
+            "findingId": "F-001",
+            "observationId": "trial-3-missing",
+            "sequence": 6,
+            "interfaceId": "answer-grade",
+            "operationId": "grade-answer",
+            "provenance": "evaluator-chosen",
+            "phase": "outcome"
+          }
+        }
+      ],
+      "engine": {
+        "outcomes": [
+          {
+            "checkResolution": {
+              "children": [
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                }
+              ],
+              "introductionCondition": null,
+              "resolution": "true"
+            },
+            "corroboration": "agrees",
+            "disposition": "held",
+            "oracleId": "O-001",
+            "probeId": "P-013",
+            "resolvedFrom": null,
+            "selectedObservationIds": [
+              "trial-1-restricted"
+            ],
+            "severity": "material",
+            "state": "confirmed",
+            "trialIndex": 1
+          },
+          {
+            "checkResolution": {
+              "children": [
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                }
+              ],
+              "introductionCondition": null,
+              "resolution": "true"
+            },
+            "corroboration": "agrees",
+            "disposition": "held",
+            "oracleId": "O-002",
+            "probeId": "P-013",
+            "resolvedFrom": null,
+            "selectedObservationIds": [
+              "trial-1-valid-boundary"
+            ],
+            "severity": "material",
+            "state": "confirmed",
+            "trialIndex": 1
+          },
+          {
+            "checkResolution": {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "false"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "false"
+                    }
+                  ],
+                  "introductionCondition": null,
+                  "resolution": "false"
+                },
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "false"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "false"
+                    }
+                  ],
+                  "introductionCondition": null,
+                  "resolution": "false"
+                },
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    }
+                  ],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                }
+              ],
+              "introductionCondition": null,
+              "resolution": "false"
+            },
+            "corroboration": "agrees",
+            "disposition": "violated",
+            "oracleId": "O-003",
+            "probeId": "P-013",
+            "resolvedFrom": null,
+            "selectedObservationIds": [
+              "trial-1-missing",
+              "trial-1-nonstring",
+              "trial-1-raw-invalid-json"
+            ],
+            "severity": "material",
+            "state": "caught",
+            "trialIndex": 1
+          },
+          {
+            "checkResolution": {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    }
+                  ],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    }
+                  ],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                }
+              ],
+              "introductionCondition": null,
+              "resolution": "true"
+            },
+            "corroboration": "agrees",
+            "disposition": "held",
+            "oracleId": "O-004",
+            "probeId": "P-013",
+            "resolvedFrom": null,
+            "selectedObservationIds": [
+              "trial-1-strict-boundary",
+              "trial-1-strict-short"
+            ],
+            "severity": "material",
+            "state": "confirmed",
+            "trialIndex": 1
+          },
+          {
+            "checkResolution": {
+              "children": [
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                }
+              ],
+              "introductionCondition": null,
+              "resolution": "true"
+            },
+            "corroboration": "agrees",
+            "disposition": "held",
+            "oracleId": "O-001",
+            "probeId": "P-013",
+            "resolvedFrom": null,
+            "selectedObservationIds": [
+              "trial-2-restricted"
+            ],
+            "severity": "material",
+            "state": "confirmed",
+            "trialIndex": 2
+          },
+          {
+            "checkResolution": {
+              "children": [
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                }
+              ],
+              "introductionCondition": null,
+              "resolution": "true"
+            },
+            "corroboration": "agrees",
+            "disposition": "held",
+            "oracleId": "O-002",
+            "probeId": "P-013",
+            "resolvedFrom": null,
+            "selectedObservationIds": [
+              "trial-2-valid-boundary"
+            ],
+            "severity": "material",
+            "state": "confirmed",
+            "trialIndex": 2
+          },
+          {
+            "checkResolution": {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "false"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "false"
+                    }
+                  ],
+                  "introductionCondition": null,
+                  "resolution": "false"
+                },
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "false"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "false"
+                    }
+                  ],
+                  "introductionCondition": null,
+                  "resolution": "false"
+                },
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    }
+                  ],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                }
+              ],
+              "introductionCondition": null,
+              "resolution": "false"
+            },
+            "corroboration": "agrees",
+            "disposition": "violated",
+            "oracleId": "O-003",
+            "probeId": "P-013",
+            "resolvedFrom": null,
+            "selectedObservationIds": [
+              "trial-2-missing",
+              "trial-2-nonstring",
+              "trial-2-raw-invalid-json"
+            ],
+            "severity": "material",
+            "state": "caught",
+            "trialIndex": 2
+          },
+          {
+            "checkResolution": {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    }
+                  ],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    }
+                  ],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                }
+              ],
+              "introductionCondition": null,
+              "resolution": "true"
+            },
+            "corroboration": "agrees",
+            "disposition": "held",
+            "oracleId": "O-004",
+            "probeId": "P-013",
+            "resolvedFrom": null,
+            "selectedObservationIds": [
+              "trial-2-strict-boundary",
+              "trial-2-strict-short"
+            ],
+            "severity": "material",
+            "state": "confirmed",
+            "trialIndex": 2
+          },
+          {
+            "checkResolution": {
+              "children": [
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                }
+              ],
+              "introductionCondition": null,
+              "resolution": "true"
+            },
+            "corroboration": "agrees",
+            "disposition": "held",
+            "oracleId": "O-001",
+            "probeId": "P-013",
+            "resolvedFrom": null,
+            "selectedObservationIds": [
+              "trial-3-restricted"
+            ],
+            "severity": "material",
+            "state": "confirmed",
+            "trialIndex": 3
+          },
+          {
+            "checkResolution": {
+              "children": [
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                }
+              ],
+              "introductionCondition": null,
+              "resolution": "true"
+            },
+            "corroboration": "agrees",
+            "disposition": "held",
+            "oracleId": "O-002",
+            "probeId": "P-013",
+            "resolvedFrom": null,
+            "selectedObservationIds": [
+              "trial-3-valid-boundary"
+            ],
+            "severity": "material",
+            "state": "confirmed",
+            "trialIndex": 3
+          },
+          {
+            "checkResolution": {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "false"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "false"
+                    }
+                  ],
+                  "introductionCondition": null,
+                  "resolution": "false"
+                },
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "false"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "false"
+                    }
+                  ],
+                  "introductionCondition": null,
+                  "resolution": "false"
+                },
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    }
+                  ],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                }
+              ],
+              "introductionCondition": null,
+              "resolution": "false"
+            },
+            "corroboration": "agrees",
+            "disposition": "violated",
+            "oracleId": "O-003",
+            "probeId": "P-013",
+            "resolvedFrom": null,
+            "selectedObservationIds": [
+              "trial-3-missing",
+              "trial-3-nonstring",
+              "trial-3-raw-invalid-json"
+            ],
+            "severity": "material",
+            "state": "caught",
+            "trialIndex": 3
+          },
+          {
+            "checkResolution": {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    }
+                  ],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                },
+                {
+                  "children": [
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    },
+                    {
+                      "children": [],
+                      "introductionCondition": null,
+                      "resolution": "true"
+                    }
+                  ],
+                  "introductionCondition": null,
+                  "resolution": "true"
+                }
+              ],
+              "introductionCondition": null,
+              "resolution": "true"
+            },
+            "corroboration": "agrees",
+            "disposition": "held",
+            "oracleId": "O-004",
+            "probeId": "P-013",
+            "resolvedFrom": null,
+            "selectedObservationIds": [
+              "trial-3-strict-boundary",
+              "trial-3-strict-short"
+            ],
+            "severity": "material",
+            "state": "confirmed",
+            "trialIndex": 3
+          }
+        ],
+        "reducedProbeOutcomes": [
+          {
+            "catchThreshold": 0.9,
+            "caught": true,
+            "caughtCount": 3,
+            "exercised": true,
+            "invalidatedAttempts": [],
+            "probeId": "P-013",
+            "severity": "material",
+            "trialVotes": [
+              {
+                "state": "caught",
+                "trialIndex": 1
+              },
+              {
+                "state": "caught",
+                "trialIndex": 2
+              },
+              {
+                "state": "caught",
+                "trialIndex": 3
+              }
+            ],
+            "validCount": 3
+          }
+        ],
+        "strength": {
+          "basis": "measured",
+          "comparable": true,
+          "denominator": "unique qualified probe identifiers exercised per class, across 3 completed trials",
+          "note": "1 admitted probe over 3 completed trials.",
+          "vector": {
+            "defect": {
+              "caught": 1,
+              "exercised": 1,
+              "rate": 1
+            },
+            "gameability": null,
+            "zero-action": null
+          }
+        },
+        "contractVerdict": "PASS"
+      }
+    }
+  ]
+}
