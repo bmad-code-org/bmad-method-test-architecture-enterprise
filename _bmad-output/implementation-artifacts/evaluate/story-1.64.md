@@ -2,7 +2,7 @@
 title: 'Story 1.64: Hold the release across the witness legs and the trials'
 type: 'feature'
 created: '2026-10-02'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '934312b7'

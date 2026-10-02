@@ -40,7 +40,11 @@
  *     only to destructure it, test it against null and hand it to
  *     `this.#engine.serializeArtifact`. `aggregateStrength` (Story 1.45) is the
  *     other exemption: one call in the same file's `reproduceAggregate`, its
- *     result bound to `aggregate`, which is only serialized. A returned or aliased
+ *     result bound to `aggregate`, which is only serialized.
+ *     The re-score is asked for once, in `held-refusal.js`'s `heldRefusal`.
+ *     `score.js` and `run.js` (an evaluator attempt's call, Story 1.69) both call it.
+ *     The re-aggregation is asked for once, in `score.js`'s `heldAggregateRefusal`.
+ *     A returned or aliased
  *     `runScore`, a rest element or a renamed key over the result, and a
  *     `ladder` anywhere else under `cli/` fail. `preflightFromObservations`
  *     and `seal` fail there too.
@@ -152,11 +156,20 @@ const ENGINE_MODULE = path.join('lib', 'evaluate', 'engine.js');
  */
 const REPRODUCTION_MODULE = path.join('lib', 'evaluate', 'score-inputs.js');
 const SCORE_MODULE = path.join('lib', 'evaluate', 'score.js');
+/** The comparison of a call with its held inputs, shared by `score.js` and `run.js` (Story 1.69). */
+const HELD_REFUSAL_MODULE = path.join('lib', 'evaluate', 'held-refusal.js');
 const REPRODUCTION_STAGE = 'runScore';
 const REPRODUCTION_METHOD = 'reproduce';
 const AGGREGATION_STAGE = 'aggregateStrength';
 const AGGREGATION_METHOD = 'reproduceAggregate';
-const REPRODUCTION_CALLERS = { reproduce: 'heldRefusal', reproduceAggregate: 'heldAggregateRefusal' };
+/**
+ * Where each re-score is asked for: the module and the function in it, once.
+ * `run.js` asks for neither, and calls `heldRefusal`.
+ */
+const REPRODUCTION_CALLERS = {
+  reproduce: { module: HELD_REFUSAL_MODULE, caller: 'heldRefusal' },
+  reproduceAggregate: { module: SCORE_MODULE, caller: 'heldAggregateRefusal' },
+};
 const REPRODUCTION_RESULT = new Set(['artifact', 'ladder', 'qualification']);
 // `artifact` is guarded as well (see the rule in `fileViolations`); only `ladder` and `qualification` have readable fields.
 const REPRODUCTION_READS = new Map([
@@ -572,7 +585,7 @@ function skillRunnerViolations(node, value, report) {
 }
 
 /** Every boundary violation in one parsed file. */
-function fileViolations({ source, ast, isEngine, isReproduction, isScoreModule, isSkillRunner, file, projectRoot }) {
+function fileViolations({ source, ast, isEngine, isReproduction, callerModule = null, isSkillRunner, file, projectRoot }) {
   const found = [];
   const report = (node, rule, message) => found.push({ line: node.loc.start.line, rule, message });
   const excerpt = (node) => {
@@ -760,8 +773,9 @@ function fileViolations({ source, ast, isEngine, isReproduction, isScoreModule, 
       }
     }
 
-    // engine-stage: the re-score and the re-aggregation are asked for from one place each, `score.js`'s `heldRefusal` and
-    // `heldAggregateRefusal`, and the answer's artifact or aggregate is only compared there.
+    // engine-stage: the re-score and the re-aggregation are asked for from one place each, `held-refusal.js`'s `heldRefusal`
+    // (which `score.js` and `run.js` both call, Story 1.69) and `score.js`'s `heldAggregateRefusal`, and the answer's artifact
+    // or aggregate is only compared there.
     if (
       !isReproduction &&
       node.type === 'CallExpression' &&
@@ -770,12 +784,13 @@ function fileViolations({ source, ast, isEngine, isReproduction, isScoreModule, 
       Object.hasOwn(REPRODUCTION_CALLERS, node.callee.property.name)
     ) {
       const name = node.callee.property.name;
-      const allowed = isScoreModule && enclosingFunctionName(node) === REPRODUCTION_CALLERS[name] && reproductionCalls[name] === 0;
+      const { module, caller } = REPRODUCTION_CALLERS[name];
+      const allowed = callerModule === module && enclosingFunctionName(node) === caller && reproductionCalls[name] === 0;
       if (allowed) reproductionCalls[name] += 1;
-      else report(node, 'engine-stage', `calls ${name} outside the one place score.js asks for it (${REPRODUCTION_CALLERS[name]})`);
+      else report(node, 'engine-stage', `calls ${name} outside the one place that asks for it (${caller} in ${path.basename(module)})`);
     }
     if (
-      isScoreModule &&
+      callerModule !== null &&
       node.type === 'Identifier' &&
       node.name === 'expected' &&
       ['heldRefusal', 'heldAggregateRefusal'].includes(enclosingFunctionName(node))
@@ -1033,7 +1048,7 @@ function scanCli(cliRoot) {
       ast,
       isEngine: file === engineFile,
       isReproduction: file === path.join(cliRoot, REPRODUCTION_MODULE),
-      isScoreModule: file === path.join(cliRoot, SCORE_MODULE),
+      callerModule: [SCORE_MODULE, HELD_REFUSAL_MODULE].find((module) => file === path.join(cliRoot, module)) ?? null,
       isSkillRunner: file === path.join(cliRoot, SKILL_RUNNER),
       file,
       projectRoot: path.dirname(cliRoot),
@@ -1519,17 +1534,50 @@ const PLANTS = [
     source: 'function other(held, bytes) {\n  return held.reproduceAggregate(bytes);\n}\nmodule.exports = { other };\n',
   },
   {
-    name: 'reproduce asked for outside heldRefusal in score.js',
+    name: 'reproduce asked for outside heldRefusal in held-refusal.js',
     rule: 'engine-stage',
-    file: 'lib/evaluate/score.js',
+    file: 'lib/evaluate/held-refusal.js',
     source: 'async function elsewhere(held, set) {\n  return held.reproduce(set);\n}\nmodule.exports = { elsewhere };\n',
   },
   {
     name: 'reproduce asked for twice in heldRefusal',
     rule: 'engine-stage',
-    file: 'lib/evaluate/score.js',
+    file: 'lib/evaluate/held-refusal.js',
     source:
       'async function heldRefusal(held, set) {\n  const expected = await held.reproduce(set);\n  const again = await held.reproduce(set);\n  return expected.exitCode + again.exitCode;\n}\nmodule.exports = { heldRefusal };\n',
+  },
+  {
+    name: 'reproduce asked for in score.js, in a function named heldRefusal',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score.js',
+    source:
+      'async function heldRefusal(held, set) {\n  const expected = await held.reproduce(set);\n  return expected.exitCode;\n}\nmodule.exports = { heldRefusal };\n',
+  },
+  {
+    name: 'reproduce asked for in score.js, elsewhere',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/score.js',
+    source: 'async function scoreProbe(held, set) {\n  return held.reproduce(set);\n}\nmodule.exports = { scoreProbe };\n',
+  },
+  {
+    name: 'reproduce asked for in run.js, in a function named heldRefusal',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/run.js',
+    source:
+      'async function heldRefusal(held, set) {\n  const expected = await held.reproduce(set);\n  return expected.exitCode;\n}\nmodule.exports = { heldRefusal };\n',
+  },
+  {
+    name: 'reproduce asked for in scoreAttempt of run.js',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/run.js',
+    source: 'async function scoreAttempt(held, set) {\n  return held.reproduce(set);\n}\nmodule.exports = { scoreAttempt };\n',
+  },
+  {
+    name: 'reproduceAggregate asked for in held-refusal.js, in a function named heldAggregateRefusal',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/held-refusal.js',
+    source:
+      'function heldAggregateRefusal(held, bytes) {\n  const expected = held.reproduceAggregate(bytes);\n  return expected.exitCode;\n}\nmodule.exports = { heldAggregateRefusal };\n',
   },
   {
     name: 'the aggregate answer parsed in heldAggregateRefusal',
@@ -1541,7 +1589,7 @@ const PLANTS = [
   {
     name: 'the whole answer returned from heldRefusal',
     rule: 'engine-stage',
-    file: 'lib/evaluate/score.js',
+    file: 'lib/evaluate/held-refusal.js',
     source:
       'async function heldRefusal(held, set) {\n  const expected = await held.reproduce(set);\n  return expected;\n}\nmodule.exports = { heldRefusal };\n',
   },
@@ -2051,19 +2099,43 @@ const CLEAN_PLANTS = [
     ].join('\n'),
   },
   {
-    name: 'score.js asking for the re-score and the re-aggregation once each and comparing them',
-    file: 'lib/evaluate/score.js',
+    name: 'held-refusal.js asking for the re-score once and comparing it',
+    file: 'lib/evaluate/held-refusal.js',
     source: [
       'async function heldRefusal(held, set, staged) {',
       '  const expected = await held.reproduce(set);',
       '  if (expected.artifact === null) return staged === null ? null : "none";',
       '  return expected.artifact.equals(staged) && expected.exitCode === 0 ? expected.lines : "differs";',
       '}',
+      'module.exports = { heldRefusal };',
+      '',
+    ].join('\n'),
+  },
+  {
+    name: 'score.js asking for the re-aggregation once and comparing it, and run.js calling the shared comparison',
+    file: 'lib/evaluate/score.js',
+    source: [
+      "const { heldRefusal } = require('./held-refusal');",
       'function heldAggregateRefusal(held, bytes, staged) {',
       '  const expected = held.reproduceAggregate(bytes);',
       '  return expected.aggregate === null ? expected.exitCode : expected.aggregate.equals(staged);',
       '}',
-      'module.exports = { heldRefusal, heldAggregateRefusal };',
+      'async function scoreProbe(held, set, staged) {',
+      '  return heldRefusal({ held, set, staged });',
+      '}',
+      'module.exports = { heldAggregateRefusal, scoreProbe };',
+      '',
+    ].join('\n'),
+  },
+  {
+    name: 'run.js calling the shared comparison and asking for no re-score of its own',
+    file: 'lib/evaluate/run.js',
+    source: [
+      "const { heldRefusal } = require('./held-refusal');",
+      'async function scoreAttempt(held, set, staged) {',
+      '  return heldRefusal({ held, set: held.index.trialSets[0], staged });',
+      '}',
+      'module.exports = { scoreAttempt };',
       '',
     ].join('\n'),
   },
@@ -2170,7 +2242,7 @@ function rollbackLiteralsIn(file) {
     ast: parseSource(file, source),
     isEngine: false,
     isReproduction: false,
-    isScoreModule: false,
+    callerModule: null,
     isSkillRunner: false,
     file,
     projectRoot: PROJECT_ROOT,
