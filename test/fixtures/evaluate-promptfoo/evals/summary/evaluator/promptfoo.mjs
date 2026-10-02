@@ -13,19 +13,113 @@ const keys = new Map([
   ['contains:pears', 'required-pears'],
   ['not-contains:shellfish', 'forbidden-shellfish'],
 ]);
-const knownKeys = new Set(keys.values());
+
+// The assertion types that run no adopter code and call no model. Each is also admitted with a `not-` prefix.
+export const ALLOWED_ASSERTION_TYPES = [
+  'contains',
+  'icontains',
+  'contains-all',
+  'contains-any',
+  'icontains-all',
+  'icontains-any',
+  'equals',
+  'starts-with',
+  'regex',
+  'is-json',
+];
+// promptfoo runs a `file://` value as code when the path before its first colon, once resolved, ends in one of these.
+// Its own tests are `.js`, `.cjs`, `.mjs`, `.ts`, `.cts` and `.mts` without regard to case, and `.py` and `.rb` exactly.
+// The guard takes all of them without regard to case.
+const CODE_EXTENSIONS = ['.js', '.cjs', '.mjs', '.ts', '.cts', '.mts', '.py', '.rb'];
+// promptfoo renders every string value that is not a file or package reference through nunjucks, which can reach the JavaScript Function constructor.
+const TEMPLATE_OPENERS = ['{{', '{%', '{#'];
+const QUOTED_LIMIT = 200;
+const REPAIR = 'an assertion that needs code belongs in a command evaluator you own';
+const TEMPLATE_REPAIR = `write a literal as a regex or not-regex pattern with escaped braces such as [{][{]; ${REPAIR}`;
+
+function quoted(text) {
+  return JSON.stringify(String(text).slice(0, QUOTED_LIMIT));
+}
+
+// The call promptfoo's regex handler makes; it grades a pattern that does not compile as a failure.
+function compiles(pattern) {
+  try {
+    return new RegExp(pattern) instanceof RegExp;
+  } catch {
+    return false;
+  }
+}
+
+function loadsCode(reference, { packages }) {
+  if (packages && reference.startsWith('package:')) return true;
+  if (!reference.startsWith('file://')) return false;
+  const fileReference = reference.slice('file://'.length);
+  const colon = fileReference.indexOf(':');
+  const target = path.resolve('/', colon === -1 ? fileReference : fileReference.slice(0, colon)).toLowerCase();
+  return CODE_EXTENSIONS.some((extension) => target.endsWith(extension));
+}
+
+// promptfoo has already run the assertion when this refuses it: a code reference, a template or a transform ran, and a model-graded type called its model.
+// A pattern that does not compile and a weight of zero run nothing; they refuse a grade the target did not earn.
+function refuseAssertion(assertion) {
+  const { type } = assertion ?? {};
+  const base = typeof type === 'string' && type.startsWith('not-') ? type.slice('not-'.length) : type;
+  const named = typeof type === 'string' ? quoted(type) : '(none)';
+  if (typeof base !== 'string' || !ALLOWED_ASSERTION_TYPES.includes(base)) {
+    throw new Error(
+      `promptfoo assertion type ${named} is refused: only assertions that run no adopter code and call no model are admitted (${ALLOWED_ASSERTION_TYPES.join(', ')}, each also with a not- prefix); ${REPAIR}`,
+    );
+  }
+  const { value } = assertion;
+  const references = Array.isArray(value) ? value.map((item) => [item, false]) : [[value, true]];
+  for (const [reference, packages] of references) {
+    if (typeof reference !== 'string') continue;
+    if (loadsCode(reference, { packages })) {
+      throw new Error(`promptfoo assertion ${named} is refused: its value ${quoted(reference)} loads adopter code; ${REPAIR}`);
+    }
+    if (TEMPLATE_OPENERS.some((opener) => reference.includes(opener))) {
+      throw new Error(
+        `promptfoo assertion ${named} is refused: its value ${quoted(reference)} is a template promptfoo renders, which can run code; ${TEMPLATE_REPAIR}`,
+      );
+    }
+  }
+  if (base === 'regex' && typeof value === 'string' && value.startsWith('file://')) {
+    throw new Error(
+      `promptfoo assertion ${named} is refused: its pattern is the file reference ${quoted(value)}, whose content promptfoo compiles and this guard cannot check; write the pattern inline`,
+    );
+  }
+  if (base === 'regex' && typeof value === 'string' && !compiles(value)) {
+    throw new Error(
+      `promptfoo assertion ${named} is refused: its pattern ${quoted(value)} does not compile, so promptfoo grades it a failure; fix the pattern`,
+    );
+  }
+  if (assertion.transform !== undefined && assertion.transform !== null) {
+    throw new Error(
+      `promptfoo assertion ${named} is refused: its transform rewrites the output, so the assertion would grade text the target did not produce; ${REPAIR}`,
+    );
+  }
+  if (assertion.weight === 0) {
+    throw new Error(
+      `promptfoo assertion ${named} is refused: a zero weight turns a failed assertion into a pass; drop the weight or set it above zero`,
+    );
+  }
+}
 
 function assertionKey(assertion) {
   const byTypeAndValue = keys.get(`${assertion?.type}:${assertion?.value}`);
   const metric = assertion?.metric;
-  if (
-    (metric !== undefined && (!knownKeys.has(metric) || (byTypeAndValue !== undefined && metric !== byTypeAndValue))) ||
-    (metric !== undefined && assertion?.type !== 'javascript' && byTypeAndValue === undefined)
-  ) {
+  if (metric !== undefined && (byTypeAndValue === undefined || metric !== byTypeAndValue)) {
     throw new Error('promptfoo assertion metric conflicts with its type and value');
   }
   return byTypeAndValue ?? metric;
 }
+
+const LIVE_CASES = [
+  ['--single', 'asserts-single.yaml'],
+  ['--error', 'asserts-error.yaml'],
+  ['--code-file', 'asserts-code-file.yaml', 'boom.py'],
+  ['--transform', 'asserts-transform.yaml'],
+];
 
 function completedStatus(status, stderr = '') {
   if (status !== 0 && status !== 100) throw new Error(`promptfoo exited ${status} before completing evaluation: ${stderr}`);
@@ -49,6 +143,7 @@ export function rowsFromResults(results, observation) {
   const stdout = observation.stdout.value;
   const rows = [];
   for (const result of results) {
+    for (const assertion of Array.isArray(result.testCase?.assert) ? result.testCase.assert : []) refuseAssertion(assertion);
     const graded = result.gradingResult !== undefined && result.gradingResult !== null;
     if (result.response?.output !== undefined && (typeof result.response.output !== 'string' || result.response.output.trimEnd() !== stdout.trimEnd())) {
       throw new Error('promptfoo output differs from the cited stdout observation');
@@ -115,12 +210,11 @@ function main() {
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-promptfoo-'));
   try {
     fs.writeFileSync(path.join(temporary, 'outputs.json'), JSON.stringify([observation.stdout.value]));
-    const assertions = process.argv.includes('--single')
-      ? 'asserts-single.yaml'
-      : process.argv.includes('--ungraded')
-        ? 'asserts-ungraded.yaml'
-        : 'asserts.yaml';
+    // A flag selects another assertion file for the live cases. promptfoo resolves a `file://` value from its working
+    // directory, so the code file a case references is copied beside asserts.yaml.
+    const [assertions, ...companions] = LIVE_CASES.find(([flag]) => process.argv.includes(flag))?.slice(1) ?? ['asserts.yaml'];
     fs.copyFileSync(path.join(directory, assertions), path.join(temporary, 'asserts.yaml'));
+    for (const companion of companions) fs.copyFileSync(path.join(directory, companion), path.join(temporary, companion));
     const command = spawnSync(
       process.execPath,
       [promptfooEntrypoint(), 'eval', '--assertions', 'asserts.yaml', '--model-outputs', 'outputs.json', '--output', 'results.jsonl', '--no-cache', '--no-write', '--no-table'],

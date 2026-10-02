@@ -1,4 +1,4 @@
 - type: contains
-  value:
-    word: pears
+  value: figs
   metric: required-pears
+  weight: 0
