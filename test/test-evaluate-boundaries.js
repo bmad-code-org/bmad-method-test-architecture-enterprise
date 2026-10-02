@@ -2159,6 +2159,44 @@ function plantedTree(plant) {
   return { root, cliRoot };
 }
 
+/**
+ * The `rollback-literal` violations of one file outside `cli/`, found by the same walker `scanCli` runs.
+ * Story 1.49: the test-design qualification module reaches the flag through the runtime's cycle, so it holds no literal either.
+ */
+function rollbackLiteralsIn(file) {
+  const source = fs.readFileSync(file, 'utf8');
+  const { found } = fileViolations({
+    source,
+    ast: parseSource(file, source),
+    isEngine: false,
+    isReproduction: false,
+    isScoreModule: false,
+    isSkillRunner: false,
+    file,
+    projectRoot: PROJECT_ROOT,
+  });
+  return found.filter((violation) => violation.rule === 'rollback-literal');
+}
+
+/** Files outside `cli/` that state the rollback flag from a cycle's result and never write it true. */
+const ROLLBACK_CHECKED_FILES = ['test/lib/test-design-qualification.js'];
+
+function checkRollbackLiteralOutsideCli() {
+  const scratchRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-boundaries-rollback-'));
+  try {
+    const planted = path.join(scratchRoot, 'planted.js');
+    fs.writeFileSync(planted, 'module.exports = { rollbackVerified: true };\n');
+    check(rollbackLiteralsIn(planted).length === 1, 'the rollback-literal walker missed a planted literal outside cli/');
+  } finally {
+    fs.rmSync(scratchRoot, { recursive: true, force: true });
+  }
+  for (const relative of ROLLBACK_CHECKED_FILES) {
+    for (const violation of rollbackLiteralsIn(path.join(PROJECT_ROOT, relative))) {
+      check(false, `${relative}:${violation.line} [rollback-literal] ${violation.message}`);
+    }
+  }
+}
+
 function proveScanner() {
   for (const plant of PLANTS) {
     const { root, cliRoot } = plantedTree(plant);
@@ -3023,6 +3061,7 @@ function checkRepositoryMoves() {
 function main() {
   proveScanner();
   scanRepository();
+  checkRollbackLiteralOutsideCli();
   proveMoveCheck();
   checkRepositoryMoves();
   if (failures.length > 0) {

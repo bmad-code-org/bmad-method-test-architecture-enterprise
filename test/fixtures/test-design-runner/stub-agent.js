@@ -29,11 +29,14 @@
  *   arithmetic-off    a document whose score cell disagrees with probability x impact
  *   band-misfiled     a document filing a score-9 risk under the Score 1-2 heading
  *   generic-register  a register of four risks the epic rules out in as many words
+ *   reference-table   the seeded set's browser-risk document with a labeled reference example
+ *                     appended: its register rows, its coverage row and its score-9 browser
+ *                     risk belong to no register, so the run scores as the browser case does
  *   wrong-key         the correct document under the next epic's number, so the harness
  *                     finds its own path absent and the document beside it, and scores
  *                     the run as a behavior failure
  *
- * The three defect documents belong to the seeded set, because each defect is scored
+ * The defect documents and the reference-table document belong to the seeded set, because each defect is scored
  * against the risks that set declares. Asking for one while the clean set is staged is
  * a caller mistake, and it is refused: answering it would hand the harness a document
  * written about another epic.
@@ -95,6 +98,7 @@ const DOCUMENT_FOR = {
   'arithmetic-off': (set) => (set === 'seeded' ? 'seeded-arithmetic-off' : null),
   'band-misfiled': (set) => (set === 'seeded' ? 'seeded-band-misfiled' : null),
   'generic-register': (set) => (set === 'seeded' ? 'seeded-generic-register' : null),
+  'reference-table': (set) => (set === 'seeded' ? 'seeded-z-reference-table-scored-risk' : null),
 };
 
 const namedRoot = /^- `\{project-root\}`: `([^`]+)`$/m.exec(prompt)?.[1] ?? null;

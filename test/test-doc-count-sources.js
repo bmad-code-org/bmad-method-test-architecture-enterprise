@@ -230,6 +230,43 @@ check('the cross-copy guard refuses when a sibling tea-index.csv lists a row the
   assert.strictEqual(fs.readFileSync(ATDD_CSV, 'utf8'), original, "bmad-testarch-atdd's tea-index.csv must be restored exactly");
 });
 
+check('the replay counts are recomputed independently and agree with each other', () => {
+  const root = path.join(PROJECT_ROOT, 'test', 'replay');
+  const cases = fs
+    .readdirSync(root)
+    .filter((entry) => fs.statSync(path.join(root, entry)).isDirectory())
+    .flatMap((suiteId) =>
+      fs
+        .readdirSync(path.join(root, suiteId))
+        .filter((entry) => fs.statSync(path.join(root, suiteId, entry)).isDirectory())
+        .map((caseId) => ({ suiteId, caseId })),
+    );
+  assert.strictEqual(source.REPLAY_TOTAL, cases.length);
+  const perSuite = {
+    'fragment-selection': source.REPLAY_FRAGMENT_SELECTION,
+    atdd: source.REPLAY_ATDD,
+    'test-review': source.REPLAY_TEST_REVIEW,
+    'test-design': source.REPLAY_TEST_DESIGN,
+    trace: source.REPLAY_TRACE,
+    'bmad-tea-routing': source.REPLAY_ROUTING,
+    nfr: source.REPLAY_NFR,
+    ci: source.REPLAY_CI,
+  };
+  for (const [suiteId, count] of Object.entries(perSuite)) {
+    assert.strictEqual(count, cases.filter((entry) => entry.suiteId === suiteId).length, `${suiteId} replay count`);
+  }
+  assert.strictEqual(
+    Object.values(perSuite).reduce((sum, count) => sum + count, 0),
+    source.REPLAY_TOTAL,
+    'the suites account for every case',
+  );
+  assert.strictEqual(
+    source.REPLAY_REAL_CAPTURES + source.REPLAY_CAPTURED + source.REPLAY_CONSTRUCTED,
+    source.REPLAY_TOTAL,
+    'the origins account for every case',
+  );
+});
+
 check("every doc-counts entry's counts array names its sources in the order its pattern's capture groups carry them", () => {
   const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
   const entries = config['doc-counts'].entries;

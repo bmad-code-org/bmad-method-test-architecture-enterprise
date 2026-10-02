@@ -38,7 +38,7 @@ inputDocuments:
 
 ## Executive Summary
 
-**Scope:** full epic-level test design for Stories 1.1 to 1.75, 1.80, 1.90 to 1.98 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.75, 1.80, 1.90 to 1.98. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
+**Scope:** full epic-level test design for Stories 1.1 to 1.75, 1.80, 1.90 to 1.99 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.75, 1.80, 1.90 to 1.99. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
 
 **Risk summary:**
 
@@ -791,11 +791,11 @@ Added 2026-09-28 by Story 1.16's proof run. Levels: live (the gap-loop session a
 
 Added in Story 1.27's review. Levels: parser, contract oracle, replay, and staged preflight. The fixture must make the reference context explicit and keep a real scored register in the same document.
 
-| AC                                 | Test                                                                                                           | Level                   | P   | Revert check                                                    |
-| ---------------------------------- | -------------------------------------------------------------------------------------------------------------- | ----------------------- | --- | --------------------------------------------------------------- |
-| Reference rows stay contextual     | Put a ruled-out category in a labeled reference table; verify it changes no register count or exclusion oracle | Parser, contract oracle | P1  | Restoring table-global parsing fires the oracle                 |
-| Scored rows still count            | Put the same category in the scored register above 3; verify harness and oracle both fire                      | Contract oracle, replay | P0  | Filtering both tables makes the scored-register assertion fail  |
-| Live projection stays in agreement | Run the staged preflight and full gate with the reference and register fixtures                                | Integration             | P1  | Divergent parser and projection fail the oracle agreement check |
+| AC                                 | Test                                                                                                                                                                                       | Level                   | P   | Revert check                                                                                                                     |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------- | --- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Reference rows stay contextual     | Put a ruled-out category in a labeled reference table; verify it changes no register count or exclusion oracle                                                                             | Parser, contract oracle | P1  | Restoring table-global parsing fires the oracle                                                                                  |
+| Scored rows still count            | Put the same category in the scored register above 3; verify harness and oracle both fire                                                                                                  | Contract oracle, replay | P0  | Filtering both tables makes the scored-register assertion fail                                                                   |
+| Live projection stays in agreement | Drive a reference-table stub design through the real runner and harness, compare the parser's projection with the harness row count, and run the staged preflight as a no-regression check | Integration             | P1  | A runner that parses table-globally fails the harness's projection check, and a projection that counts reference rows is refused |
 
 ### Story 1.48: Report whole-document coverage for a structured design artifact
 
@@ -1267,6 +1267,16 @@ Added 2026-10-01 in Story 2.4's first review. Levels: integration. Files: `test/
 | `pr` exits 0 once accepted                                                   | `test:evaluate-ci` runs `ci --tier pr` over a copy of each repository with its committed baseline | Integration | P0  | Restoring a disagreeing oracle exits 11            |
 | Every class without an eligible probe has its floor removed or a probe added | `ci --tier release` and `--tier scheduled` over each repository (release exits 2 in both today)   | Integration | P0  | Restoring the floor with no eligible probe exits 2 |
 | The Story 1.24 proof stays valid                                             | `test:evaluate-authoring` over the changed bytes                                                  | Integration | P1  | A drifted replay bundle fails it                   |
+
+### Story 1.99: Prove mutation rollback for the test-review, trace, nfr and ci probe corpora
+
+Added 2026-10-02 in Story 1.49. Levels: mutation qualification in a disposable copy per corpus, negative integration fixtures, corpus check and staged preflight. Files: `tools/generate-probes.js`, `test/lib/`, one qualification suite per corpus.
+
+| AC                                   | Test                                                                                                                                         | Level                       | P   | Revert check                                                        |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- | --- | ------------------------------------------------------------------- |
+| True rollback follows a real restore | Run each clean, mutate, fail, restore, digest and clean-rerun sequence in a disposable copy per probe; inspect the evidence and the worktree | Integration, file isolation | P0  | Hard-coding `rollbackVerified: true` in any builder fails the suite |
+| Failed steps cannot qualify          | Break the baseline, mutation outcome, restore and digest separately in each corpus; each case emits no probe with a true rollback claim      | Negative integration        | P0  | Omitting one guard lets its planted failure qualify                 |
+| Behavioral baseline stays stable     | Regenerate probes, run corpus and replay gates, then the staged suite-only preflight of each corpus; compare every probe outcome             | Corpus, replay, live        | P1  | A drifted witness or outcome fails the baseline comparison          |
 
 ## The Dogfood Proof (AD-15)
 

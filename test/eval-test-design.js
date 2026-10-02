@@ -1431,47 +1431,92 @@ async function runCase(set, options, agent, runIndex, categories) {
       };
     }
 
-    // No design at the resolved path while the test-design folder holds one under
-    // another run key is a run that resolved the wrong scope. That is the run's
-    // answer, so it is scored as a design with no risk row, and the file it did
-    // write is named. The run's own progress checkpoint is not a deliverable.
-    if (observation.artifacts.design?.kind === 'absent') {
-      const misplaced = misplacedDeliverables(
-        path.join(workspace.projectDir, 'test-artifacts', 'test-design'),
-        /^test-design-(?!progress-).+\.md$/,
-        [path.posix.basename(designArtifactPaths(set).design)],
-      );
-      if (misplaced.length > 0) {
-        const { reason, evidence } = misplacedEvidence('test-artifacts/test-design', misplaced);
-        return {
-          ok: true,
-          scored: scoreRun(set, EMPTY_DESIGN, categories),
-          mutations: await corpusMutations(workspace),
-          misplaced: reason,
-          artifactEvidence: evidence,
-        };
-      }
-    }
-
-    const design = readDesign(observation.artifacts.design);
-    if (!design.ok) return design;
-    const projection = observation.stdout;
-    if (!projection || projection.kind === 'absent') {
-      return { ok: false, failureClass: 'environment-missing-artifact', reason: 'no scored-risk projection was returned' };
-    }
-    if (projection.kind !== 'json' || JSON.stringify(projection.value) !== JSON.stringify(scoredRiskProjection(design.design))) {
-      return { ok: false, failureClass: 'environment-parser', reason: 'the scored-risk projection disagrees with the design document' };
-    }
-
-    return {
-      ok: true,
-      scored: scoreRun(set, design.design, categories),
-      mutations: await corpusMutations(workspace),
-      artifactEvidence: artifactEvidence(designArtifactPaths(set).design, design.design.text),
-    };
+    return await interpretObservation(set, observation, workspace, categories);
   } finally {
     fs.rmSync(workspace.dir, { recursive: true, force: true });
   }
+}
+
+/**
+ * Score one observation of a run: the misplaced-deliverable answer, the projection agreement and
+ * the scored design. Split from `runCase` so a test can hand it an observation whose projection
+ * disagrees with the design, which no real runner produces.
+ *
+ * @param {object} set
+ * @param {object} observation The command adapter's observation.
+ * @param {{dir: string, projectDir: string}} workspace The staged workspace the run used.
+ * @param {Set<string>} categories
+ */
+async function interpretObservation(set, observation, workspace, categories) {
+  // No design at the resolved path while the test-design folder holds one under
+  // another run key is a run that resolved the wrong scope. That is the run's
+  // answer, so it is scored as a design with no risk row, and the file it did
+  // write is named. The run's own progress checkpoint is not a deliverable.
+  if (observation.artifacts.design?.kind === 'absent') {
+    const misplaced = misplacedDeliverables(
+      path.join(workspace.projectDir, 'test-artifacts', 'test-design'),
+      /^test-design-(?!progress-).+\.md$/,
+      [path.posix.basename(designArtifactPaths(set).design)],
+    );
+    if (misplaced.length > 0) {
+      const { reason, evidence } = misplacedEvidence('test-artifacts/test-design', misplaced);
+      return {
+        ok: true,
+        scored: scoreRun(set, EMPTY_DESIGN, categories),
+        mutations: await corpusMutations(workspace),
+        misplaced: reason,
+        artifactEvidence: evidence,
+      };
+    }
+  }
+
+  const design = readObservedDesign(observation.artifacts.design, observation.stdout);
+  if (!design.ok) return design;
+
+  return {
+    ok: true,
+    scored: scoreRun(set, design.design, categories),
+    mutations: await corpusMutations(workspace),
+    artifactEvidence: artifactEvidence(designArtifactPaths(set).design, design.design.text),
+    exclusions: referenceExclusionNote(design.design.referenceTables),
+  };
+}
+
+/**
+ * The tables the parser left out of the register because the document labels them reference
+ * examples, as one sentence for a reader of the run, or an empty string when it left out none.
+ *
+ * A labeled section that holds part of a split register drops those rows from every count with
+ * no refusal, so the run's own output has to say which tables went.
+ *
+ * @param {Array<{label: string, rows: number}>} referenceTables From readDesign.
+ * @returns {string}
+ */
+function referenceExclusionNote(referenceTables) {
+  if (!referenceTables || referenceTables.length === 0) return '';
+  const listed = referenceTables.map((table) => `"${String(table.label).slice(0, 80)}" (${table.rows} row${table.rows === 1 ? '' : 's'})`);
+  return `the parser left out ${referenceTables.length} table(s) the document labels as reference examples: ${listed.join(', ')}`;
+}
+
+/**
+ * The design a run wrote, read only when the runner's stdout projection agrees with it.
+ *
+ * The runner derives the projection from the same parser, so a disagreement means the
+ * runner and the harness read different documents or different rules.
+ *
+ * @param {object} artifact The tagged design artifact off the observation.
+ * @param {object} projection The tagged stdout off the observation.
+ */
+function readObservedDesign(artifact, projection) {
+  const design = readDesign(artifact);
+  if (!design.ok) return design;
+  if (!projection || projection.kind === 'absent') {
+    return { ok: false, failureClass: 'environment-missing-artifact', reason: 'no scored-risk projection was returned' };
+  }
+  if (projection.kind !== 'json' || JSON.stringify(projection.value) !== JSON.stringify(scoredRiskProjection(design.design))) {
+    return { ok: false, failureClass: 'environment-parser', reason: 'the scored-risk projection disagrees with the design document' };
+  }
+  return design;
 }
 
 function preflight({ agents, agentCmd }) {
@@ -1761,6 +1806,7 @@ async function main() {
           continue;
         }
         if (outcome.misplaced) console.error(`  ${colors.red}${set.id} run ${runIndex + 1}: ${outcome.misplaced}${colors.reset}`);
+        if (outcome.exclusions) console.log(`  ${colors.yellow}${set.id} run ${runIndex + 1}: ${outcome.exclusions}${colors.reset}`);
         caseScores.push(outcome.scored);
         totals.mutations += outcome.mutations;
         const signature = signatureOf(outcome.scored, outcome.mutations);
@@ -1771,7 +1817,11 @@ async function main() {
             repetition: runIndex + 1,
             signature,
             metricContributions: numericContributions(testDesignDiagnosticProjection(outcome.scored, outcome.mutations)),
-            evidence: [{ kind: 'output-signature', value: signature }, ...outcome.artifactEvidence],
+            evidence: [
+              { kind: 'output-signature', value: signature },
+              ...outcome.artifactEvidence,
+              ...(outcome.exclusions ? [{ kind: 'summary', value: outcome.exclusions }] : []),
+            ],
           }),
         );
       }
@@ -2010,6 +2060,9 @@ module.exports = {
   readRisks,
   readCoverage,
   readDesign,
+  readObservedDesign,
+  referenceExclusionNote,
+  interpretObservation,
   scoreRun,
   documentMentions,
   signatureOf,

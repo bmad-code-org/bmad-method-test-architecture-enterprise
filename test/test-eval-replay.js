@@ -100,11 +100,11 @@
  * the parser, so a green run here proves nothing about what a live agent emits."
  * The same sentence applies here, and harder. This suite proves the scorers are
  * deterministic and that they reproduce recorded history. It proves nothing about
- * whether they handle real agent output correctly. One hundred thirty-five of the one
- * hundred forty cases produce a number and one hundred twenty of those are
- * constructed. Fifteen carry captured bytes: twelve from the ATDD fixture corpus, two
- * from the CLI parser fixtures and one from a live eval:ci run over the evaluation-plan
- * project. The test-review captures score as measured misses because their reports
+ * whether they handle real agent output correctly. Almost every case produces a number and
+ * almost every one of those is constructed. The cases that carry captured bytes come
+ * from the ATDD fixture corpus, from the CLI parser fixtures and from a live eval:ci
+ * run over the evaluation-plan project; the corpus counts live in
+ * test/lib/doc-count-sources.js, which counts the cases and their origins. The test-review captures score as measured misses because their reports
  * document no finding. A verdict whose findings array is empty is a
  * reviewer that named nothing. The routing replay corpus also preserves all four
  * successful clarification branches, and every routing replay remains constructed.
@@ -202,6 +202,7 @@ const {
 } = require('./eval-ci');
 const { scoreRun: scoreAtddRun, signatureOf: atddSignatureOf } = require('./eval-atdd');
 const { digest, redactArgs } = require('./lib/eval-record');
+const { projectTestDesignResult } = require('./lib/test-design-result');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const REPLAY_ROOT = path.join(__dirname, 'replay');
@@ -392,8 +393,16 @@ const ATDD_GROUND_TRUTH = path.join(__dirname, 'fixtures', 'atdd-eval', 'ground-
  * a byte of scored content changing beyond `links.trace_report_path`, which names
  * the matrix at its new path. No test-review, fragment-selection, test-design,
  * routing, ci, atdd or nfr case moved.
+ *
+ * 16 is the test-design parser leaving labeled reference tables out of the
+ * register and the coverage map (`referenceLabelOf` in cli/lib/test-design-parser.js).
+ * No stored design labels a table a reference, so every earlier case reproduces and
+ * is reported as a version stamp only. The new seeded-z-reference-table-scored-risk
+ * case appends a labeled worked example to the browser-risk case and stores the
+ * same result: the example's duplicate R-001, out-of-scale R-099, score-9 browser
+ * row and dangling coverage link would each move it if they were read as the design's own.
  */
-const SCORER_VERSION = 15;
+const SCORER_VERSION = 16;
 
 const colors = {
   reset: '[0m',
@@ -1396,11 +1405,9 @@ function testDesignScoringInputs(groundTruth, set) {
 /**
  * One stored test-design document, scored the way the harness scores it.
  *
- * The result is the scored object reduced to what a reader can check by hand: the
- * document-global mentions the contract's oracles are paired with, the per-group
- * shape counts, and the identity of every check that did not pass. A document
- * readDesign refuses records `{ "unmeasurable": <failure class> }`, the class runCase
- * reports for that environment failure.
+ * The projection lives in `test/lib/test-design-result.js`, where the probe
+ * generator's mutation qualification reads the same function, so a stored result
+ * and a performed arm cannot disagree about what a document scores.
  *
  * @param {{directory: string}} item
  * @param {object} expected The case's expected.json.
@@ -1411,47 +1418,7 @@ function testDesignScoringInputs(groundTruth, set) {
 function replayTestDesignCase(item, expected, set, categories) {
   const designPath = path.join(item.directory, expected.storedOutput?.design ?? 'design.md');
   if (!fs.existsSync(designPath)) unreadable(`${item.id}: no stored document at ${path.relative(PROJECT_ROOT, designPath)}`);
-  const read = readTestDesign({ kind: 'text', value: fs.readFileSync(designPath, 'utf8') });
-  if (!read.ok) return { unmeasurable: read.failureClass };
-
-  const scored = scoreTestDesignRun(set, read.design, categories);
-  const resolvable = scored.orderingChecks.filter((check) => check.resolvable);
-  return {
-    mentions: scored.mentions,
-    shape: scored.shape,
-    shapeFailures: scored.shapeFailures,
-    links: { total: scored.links.total, resolved: scored.links.resolved, dangling: scored.links.dangling },
-    grounding: {
-      declared: scored.grounding.declared,
-      matched: scored.grounding.matched,
-      missed: scored.grounding.missed,
-      topSeverityMissed: scored.grounding.topSeverityMissed,
-    },
-    ungrounded: scored.ungrounded,
-    ceiling: scored.ceiling,
-    unscoredRiskTables: scored.unscoredRiskTables,
-    coverage: {
-      evaluated: scored.coverageChecks.length,
-      satisfied: scored.coverageChecks.filter((check) => check.ok).length,
-      failures: scored.coverageChecks
-        .filter((check) => !check.ok)
-        .map((check) => ({ riskId: check.riskId, reason: check.reason, levels: check.levels })),
-    },
-    ordering: {
-      pairs: scored.orderingChecks.length,
-      resolvable: resolvable.length,
-      satisfied: resolvable.filter((check) => check.ok).length,
-      flattened: scored.flattenedPriorities,
-      failures: resolvable
-        .filter((check) => !check.ok)
-        .map((check) => ({
-          higher: check.higher,
-          lower: check.lower,
-          higherPriority: check.higherPriority,
-          lowerPriority: check.lowerPriority,
-        })),
-    },
-  };
+  return projectTestDesignResult(fs.readFileSync(designPath, 'utf8'), set, categories);
 }
 
 /**

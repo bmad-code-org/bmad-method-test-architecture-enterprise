@@ -103,6 +103,13 @@ const { RUNNER_CAPABILITIES: TEST_DESIGN_RUNNER_DECLARED_CAPABILITIES } = requir
 const {
   RUNNER_CAPABILITIES: TEST_DESIGN_HARNESS_DECLARED_CAPABILITIES,
   THRESHOLDS: TEST_DESIGN_THRESHOLDS,
+  readDesign: readTestDesignForProjection,
+  readObservedDesign: readObservedTestDesign,
+  interpretObservation: interpretTestDesignObservation,
+  loadGroundTruth: loadTestDesignGroundTruth,
+  stageWorkspace: stageTestDesignWorkspace,
+  referenceExclusionNote,
+  scoredRiskProjection,
 } = require('./eval-test-design');
 const {
   EXIT_CODES: NFR_EXIT_CODES,
@@ -1573,6 +1580,125 @@ function checkTestDesignHarnessSmoke(runDir) {
     'the three scored risks are counted and the Document guard is excluded',
     JSON.stringify(generic.record?.runners?.[0]?.measurements?.ungroundedRisks),
   );
+
+  // The browser-risk document with a labeled reference example appended. The runner derives its
+  // projection and the harness reads it back; the example's rows (a duplicate R-001, an R-099 with an
+  // out-of-scale factor, a score-9 browser risk and a coverage row linking R-099) belong to no register,
+  // so the run scores as the browser case does: six rows, one invented risk, every link resolved.
+  const reference = runTestDesignHarness(runDir, 'reference-table', SEEDED_DESIGN_CASE);
+  const referenceMeasurements = reference.record?.runners?.[0]?.measurements;
+  assert(reference.status === 1, 'a design with a labeled reference example is scored, not refused', `exit ${reference.status}`);
+  assert(
+    reference.record?.failureClass === 'quality' &&
+      JSON.stringify(recordedFailures(reference)) === JSON.stringify(['1 risk(s) the epic rules out in as many words']),
+    'the only failure is the one scored browser risk, with no projection refusal',
+    JSON.stringify(recordedFailures(reference)),
+  );
+  const referenceNotes = (reference.record?.runners?.[0]?.diagnostics ?? []).flatMap((entry) =>
+    (entry.evidence ?? [])
+      .filter((item) => item.kind === 'summary' && item.value.includes('the parser left out'))
+      .map((item) => item.value),
+  );
+  assert(
+    referenceNotes.length === 1 &&
+      referenceNotes[0].includes('left out 2 table(s)') &&
+      referenceNotes[0].includes('"Appendix: Scoring Reference" (2 rows)'),
+    'the run record names the two reference tables the parser left out, so the stub served the reference design',
+    JSON.stringify(referenceNotes),
+  );
+  assert(/the parser left out 2 table\(s\)/.test(reference.stdout), 'the console names the reference tables the parser left out');
+  const plainDiagnostics = (generic.record?.runners?.[0]?.diagnostics ?? []).flatMap((entry) => entry.evidence ?? []);
+  assert(
+    !plainDiagnostics.some((item) => String(item.value).includes('the parser left out')) && !/the parser left out/.test(generic.stdout),
+    'a design with no labeled table carries no exclusion note',
+  );
+  assert(
+    referenceMeasurements?.ungroundedRisks === 1 &&
+      Math.abs(referenceMeasurements?.riskPrecision - 5 / 6) < 1e-9 &&
+      referenceMeasurements?.scaleComplianceAccuracy === 1 &&
+      referenceMeasurements?.riskLinkResolutionAccuracy === 1,
+    'the reference rows join no precision, scale or link figure',
+    JSON.stringify(referenceMeasurements),
+  );
+}
+
+/** The harness refuses a runner projection that disagrees with the document it reads back. */
+async function checkTestDesignProjectionAgreement() {
+  console.log('\ntest-design runner projection and harness agreement');
+  const design = fs.readFileSync(
+    path.join(__dirname, 'replay', 'test-design', 'seeded-z-reference-table-scored-risk', 'design.md'),
+    'utf8',
+  );
+  const artifact = { kind: 'text', value: design };
+  const agreed = readTestDesignForProjection(artifact);
+  assert(agreed.ok, 'the reference-example design reads');
+  if (!agreed.ok) return;
+  const projection = scoredRiskProjection(agreed.design);
+  assert(
+    projection.riskRowCount === 6 && projection.scoredRiskCount === 5,
+    'the projection counts the six register rows and five scored rows only',
+    JSON.stringify(projection),
+  );
+  assert(readObservedTestDesign(artifact, { kind: 'json', value: projection }).ok, 'the harness accepts the projection the parser derives');
+  const withReferenceRows = { ...projection, riskRowCount: projection.riskRowCount + 2 };
+  const refused = readObservedTestDesign(artifact, { kind: 'json', value: withReferenceRows });
+  assert(
+    !refused.ok && refused.failureClass === 'environment-parser' && /disagrees/.test(refused.reason),
+    'a projection that counts the reference rows is refused',
+    JSON.stringify(refused),
+  );
+
+  // The same refusals at the call site the harness uses for a run: a hand-built observation through
+  // interpretObservation, which no real runner can produce. A call site that reads the design without
+  // checking the projection fails the first three.
+  const groundTruth = await loadTestDesignGroundTruth();
+  const set = groundTruth.fixtureSets.find((entry) => entry.id === 'seeded-offline-order-capture');
+  const categories = new Set(groundTruth.riskCategories);
+  const workspace = await stageTestDesignWorkspace(set);
+  try {
+    const observe = (stdout) => ({ artifacts: { design: artifact }, stdout });
+    const accepted = await interpretTestDesignObservation(set, observe({ kind: 'json', value: projection }), workspace, categories);
+    assert(
+      accepted.ok && accepted.scored.shape.rows === 6,
+      'a run whose projection agrees is scored on its six register rows',
+      JSON.stringify(accepted.ok),
+    );
+    assert(
+      accepted.ok && accepted.exclusions.includes('left out 2 table(s)'),
+      'a scored run names the reference tables the parser left out',
+      JSON.stringify(accepted.exclusions),
+    );
+    const miscounted = await interpretTestDesignObservation(
+      set,
+      observe({ kind: 'json', value: withReferenceRows }),
+      workspace,
+      categories,
+    );
+    assert(
+      !miscounted.ok && miscounted.failureClass === 'environment-parser',
+      'a run whose projection miscounts the rows is refused',
+      JSON.stringify(miscounted),
+    );
+    const reworded = {
+      ...projection,
+      scoredRiskDescriptions: projection.scoredRiskDescriptions.map((text, index) => (index === 0 ? `${text} (edited)` : text)),
+    };
+    const changed = await interpretTestDesignObservation(set, observe({ kind: 'json', value: reworded }), workspace, categories);
+    assert(
+      !changed.ok && changed.failureClass === 'environment-parser',
+      'a run whose projection changes only a scored description is refused',
+      JSON.stringify(changed),
+    );
+    const silent = await interpretTestDesignObservation(set, observe({ kind: 'absent' }), workspace, categories);
+    assert(
+      !silent.ok && silent.failureClass === 'environment-missing-artifact',
+      'a run with no projection is a missing artifact, not a parser failure',
+      JSON.stringify(silent),
+    );
+  } finally {
+    fs.rmSync(workspace.dir, { recursive: true, force: true });
+  }
+  assert(referenceExclusionNote([]) === '', 'a design with no reference table has no exclusion note');
 }
 
 /** The reservations fixture's default port, the one its own playwright.config.ts falls back to. */
@@ -2300,6 +2426,7 @@ async function main() {
     checkCiHarnessSmoke(runDir);
     checkTraceHarnessSmoke(runDir);
     checkTestDesignHarnessSmoke(runDir);
+    await checkTestDesignProjectionAgreement();
     await checkAtddHarnessSmoke(runDir);
   } finally {
     fs.rmSync(runDir, { recursive: true, force: true });
