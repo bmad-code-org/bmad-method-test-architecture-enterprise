@@ -165,8 +165,15 @@ The third is a graded failure that is a crash: `file://boom.py` raised, promptfo
 A `command` evaluator that depends on an installed framework declares it in `evaluator/frameworks.json`, a tracked file the evaluator tree digest covers.
 A package in `node_modules` sits outside that tree, so without a declaration an upgrade would change the judgments while the scoring configuration stays the same.
 Each entry names the package, the one exact version expected and a version probe.
+Declare `installState` when plugins or transitive packages can change judgments, a package is locally patched, or a dependency range can resolve to different installed trees under one top-level version. The version alone suffices when that exact package release is the complete judgment dependency and its installed files cannot be changed independently.
+Set `installState.source` to `tree` to digest the package's installed files in sorted path order. Set it to `lockfile` to digest the package's entry in the nearest npm `package-lock.json`. The declaration names the source and never pins an observed digest.
+Each source covers one declared package. Declare every plugin or transitive package that contributes judgments as a separate framework entry, including a hoisted package outside the first package's installed tree. Use `tree` for linked or locally patched packages; their installed files can differ from a lockfile entry under the same version.
 The probe is an executable under `evaluator/` that prints `{"package": "<name>", "version": "<installed version>"}` for the installed package and exits non-zero when the package is not installed.
 `assets/evaluators/installed-version.mjs` is that probe for any Node package: pass the package name as its argument.
+For declared install state, pass `tree` or `lockfile` as its second argument. The probe then prints `installSource` and `installDigest` beside `package` and `version`, with the digest in `sha256:<64 lowercase hex digits>` form. The reported source must equal `installState.source`. A missing, malformed or mismatched observation stops `run` with exit 12 before any affected trial seals.
+Place the shipped Node probe beside the evaluator wrapper so both resolve `node_modules` from the same location. If the wrapper loads packages from another location, write a custom probe that resolves from that wrapper's actual location.
+When the wrapper imports a nested package, add `--importer <package>` after the source argument in the tracked `probe.args`. Repeat it in import order for deeper nesting. For example, `["acme-evals-helper", "tree", "--importer", "acme-evals", "--importer", "acme-evals-plugin"]` resolves `acme-evals` from beside the probe, `acme-evals-plugin` from that package, then `acme-evals-helper` from the plugin. Each step uses Node's nearest `node_modules` search from the previous package's directory; an importer that cannot be resolved makes the probe exit non-zero.
+For a linked importer, the probe follows the importer's real path before resolving the next package, matching Node's default module resolution. If two same-name dependency copies live inside different importer trees, declare each importer package with `tree` as a separate framework entry; each importer tree digest includes its nested copy. `frameworks.json` still names a package once.
 Run `node evaluator/installed-version.mjs <package>` to read the version, and copy that value into `frameworks.json` and `LEARNED.md`.
 An evaluator with no installed framework dependency declares `"frameworks": []`.
 Declare the framework and any plugin or provider package whose behavior produces the judgments.
@@ -187,6 +194,30 @@ Install the declared version exactly (`npm install --save-exact <package>@<versi
 }
 ```
 
+For a framework with a separately installed judgment plugin, declare each package and its source:
+
+<!-- example:frameworks-install-state -->
+
+```json
+{
+  "schemaVersion": 1,
+  "frameworks": [
+    {
+      "package": "acme-evals",
+      "version": "1.2.3",
+      "installState": { "source": "tree" },
+      "probe": { "command": "evaluator/installed-version.mjs", "args": ["acme-evals", "tree"] }
+    },
+    {
+      "package": "acme-evals-plugin",
+      "version": "2.0.0",
+      "installState": { "source": "tree" },
+      "probe": { "command": "evaluator/installed-version.mjs", "args": ["acme-evals-plugin", "tree"] }
+    }
+  ]
+}
+```
+
 For a framework in another language, write the probe in that language.
 The run launches it with only the base environment and the evaluator's `environmentKeys`, in an empty private working directory and under the run's confinement, so it activates no virtual environment. `probe.probeTimeoutMs` is optional and defaults to 10,000 ms (10 seconds). `tea-evaluate check` accepts integers from 1 to 60,000 ms (60 seconds). The effective bound is the smaller of that value and `evaluator.timeoutMs`; the command evaluator keeps its own timeout. `framework-versions.json` records each probe's effective bound.
 It must find the same installation the wrapper uses, by a path relative to its own file or a pinned interpreter, and read installed metadata (in Python, `importlib.metadata.version`) without importing or running the framework.
@@ -198,6 +229,7 @@ For each framework, multiply its effective bound by one initial read plus two re
 A package that is missing, installed at a version other than the declared one, or changed during the run ends the run with exit 12 and seals no record for the affected trial.
 Either reinstall the declared version or make the deliberate upgrade below.
 The observed versions join the evaluator configuration, so a changed version changes the scoring version, and `framework-versions.json` in the run directory keeps the declared and observed versions, and the output of any probe that failed.
+The observed `installDigest` also joins `tea.evaluatorFrameworks`, `framework-versions.json` and `run.json` when `installState` is declared. A changed digest under the same version changes the configuration digest and scoring version. The run rechecks it before each evaluator launch and after each trial.
 `tea-evaluate check` runs no probe.
 It refuses an absent or malformed declaration, and it reads `evaluator/LEARNED.md`: the "Framework and installed version" section carries one backticked `package@version` for each declared package, and a different version, a missing one or a package the declaration omits is a finding.
 Write the runtime and any other version in that section as plain prose, because every backticked `package@version` there is read as a record.

@@ -134,7 +134,7 @@ async function observeFrameworks({ folder, evaluator, frameworks, scratch, env =
       entry.fault = `${label} was still running at its ${effectiveTimeoutMs}ms probe timeout${effectiveTimeoutMs < requestedTimeoutMs ? ' (capped by evaluator.timeoutMs)' : ''}`;
     } else if (outcome.failure) entry.fault = `${label} did not finish: ${outcome.failure}`;
     else if (outcome.status === 0) {
-      const answer = readProbeAnswer(framework.package, stdout);
+      const answer = readProbeAnswer(framework, stdout);
       if ('fault' in answer) entry.fault = `${label}: ${answer.fault}`;
       else entry.observed = answer;
     } else {

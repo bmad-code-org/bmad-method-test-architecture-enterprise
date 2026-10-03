@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:tea:evaluate:schema:evaluator-frameworks",
   "title": "evaluator/frameworks.json",
-  "description": "The installed frameworks a command evaluator depends on (Stories 1.44 and 1.71, AD-21): per framework its package, the one exact version expected and a version probe, a tracked executable under evaluator/ that prints { package, version } for the installed package. A probe may set probeTimeoutMs from 1 to 60000; an omitted value defaults to 10000 and evaluator.timeoutMs caps it. An evaluator with no installed framework dependency declares an empty list. tea-evaluate check refuses a declaration off this schema and run observes each installed version through its probe. The tea-evaluate runtime owns this schema.",
+  "description": "The installed frameworks a command evaluator depends on (Stories 1.44, 1.71 and 1.73, AD-21): per framework its package, one exact version and a tracked probe under evaluator/. An optional installState source is tree or lockfile; the probe must then report an observed installDigest beside package and version. A probe may set probeTimeoutMs from 1 to 60000; an omitted value defaults to 10000 and evaluator.timeoutMs caps it. An evaluator with no installed framework dependency declares an empty list. The tea-evaluate runtime owns this schema.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schemaVersion", "frameworks"],
@@ -20,6 +20,12 @@
             "description": "One exact version starting with a digit: no tag, range, wildcard segment, space or backtick.",
             "type": "string",
             "pattern": "^(?!.*\\.[xX](?:\\.|$))[0-9][\\w.+!~-]*$"
+          },
+          "installState": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["source"],
+            "properties": { "source": { "enum": ["tree", "lockfile"] } }
           },
           "probe": {
             "type": "object",

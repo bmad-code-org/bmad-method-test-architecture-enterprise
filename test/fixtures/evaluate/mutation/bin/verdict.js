@@ -259,6 +259,11 @@ if (text.includes('sabotage: adopter') && process.env.VERDICT_TOUCH) {
   fs.appendFileSync(process.env.VERDICT_TOUCH, 'written by the verdict stub outside its workspace\n');
 }
 if (act === 'touch' && process.env.VERDICT_TOUCH) fs.appendFileSync(process.env.VERDICT_TOUCH, `written by the verdict stub in ${workspaceDirectory}\n`);
+if (act === 'patch-lockfile' && process.env.VERDICT_TOUCH) {
+  const lock = JSON.parse(fs.readFileSync(process.env.VERDICT_TOUCH, 'utf8'));
+  lock.packages['node_modules/probe-fw'].resolved = 'file:patched-by-target';
+  fs.writeFileSync(process.env.VERDICT_TOUCH, `${JSON.stringify(lock, null, 2)}\n`);
+}
 if (act === 'bump' && process.env.VERDICT_TOUCH) {
   const manifest = JSON.parse(fs.readFileSync(process.env.VERDICT_TOUCH, 'utf8'));
   fs.writeFileSync(process.env.VERDICT_TOUCH, `${JSON.stringify({ ...manifest, version: '9.9.9' }, null, 2)}\n`);

@@ -2705,6 +2705,17 @@ function plantFrameworks(folder, { frameworks = [FRAMEWORK_ENTRY], declaration, 
 
 /** Story 1.44's refusals: a declaration that is absent, malformed or inconsistent with LEARNED.md, each exit 10. */
 const FRAMEWORK_CASES = [
+  ...[{ source: 'unknown' }, {}, { source: 'tree', extra: true }, 'tree'].map((installState) => ({
+    name: `an invalid install state ${JSON.stringify(installState)}`,
+    file: 'evaluator/frameworks.json',
+    rule: 'evaluator',
+    plant: (folder) =>
+      plantFrameworks(folder, {
+        frameworks: [{ ...FRAMEWORK_ENTRY, installState }],
+        learned: learnedRecord('acme-evals@1.2.3'),
+      }),
+    expect: (output) => [[output.includes('frameworks[0].installState must be'), 'the invalid install state was not named']],
+  })),
   ...[0, 60_001, 1.5, '10000'].map((probeTimeoutMs) => ({
     name: `a probe timeout outside the allowed integer range: ${JSON.stringify(probeTimeoutMs)}`,
     file: 'evaluator/frameworks.json',
@@ -3385,6 +3396,14 @@ EVALUATOR_CASES.push(
 
 /** Story 1.17's legitimate evaluator folders: each exits 0, a rubric under a non-deterministic kind with no judge included. */
 const EVALUATOR_CLEAN_CASES = [
+  ...['tree', 'lockfile'].map((source) => ({
+    name: `a command evaluator with a ${source} install state`,
+    plant: (folder) =>
+      plantFrameworks(folder, {
+        frameworks: [{ ...FRAMEWORK_ENTRY, installState: { source } }],
+        learned: learnedRecord('acme-evals@1.2.3'),
+      }),
+  })),
   ...[1, 60_000].map((probeTimeoutMs) => ({
     name: `a command evaluator with a ${probeTimeoutMs}ms probe timeout`,
     plant: (folder) =>

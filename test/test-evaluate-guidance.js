@@ -2343,6 +2343,24 @@ function checkEvaluatorGuidance(guide, failures) {
     'a different version, a missing one or a package the declaration omits is a finding',
     '`package@version`',
     'update `LEARNED.md` and `frameworks.json` together',
+    'Declare `installState` when plugins or transitive packages can change judgments',
+    'The version alone suffices when that exact package release is the complete judgment dependency',
+    'Set `installState.source` to `tree`',
+    'Set it to `lockfile`',
+    'The declaration names the source and never pins an observed digest.',
+    'Declare every plugin or transitive package that contributes judgments as a separate framework entry',
+    'Use `tree` for linked or locally patched packages',
+    'The probe then prints `installSource` and `installDigest` beside `package` and `version`',
+    'The reported source must equal `installState.source`.',
+    'Place the shipped Node probe beside the evaluator wrapper',
+    "write a custom probe that resolves from that wrapper's actual location",
+    'Repeat it in import order for deeper nesting.',
+    '["acme-evals-helper", "tree", "--importer", "acme-evals", "--importer", "acme-evals-plugin"]',
+    "Each step uses Node's nearest `node_modules` search from the previous package's directory",
+    "For a linked importer, the probe follows the importer's real path",
+    'declare each importer package with `tree` as a separate framework entry',
+    'each importer tree digest includes its nested copy',
+    'A changed digest under the same version changes the configuration digest and scoring version.',
   ])
     requireText(versions, marker, `evaluator.md ${FRAMEWORK_VERSIONS}`, failures);
   // The declaration the guide teaches meets the runtime's own rules, and the probe it names ships.
@@ -2355,6 +2373,23 @@ function checkEvaluatorGuidance(guide, failures) {
     if (probe?.command !== 'evaluator/installed-version.mjs' || !fs.existsSync(ASSET(path.join('evaluators', 'installed-version.mjs'))))
       failures.push(`evaluator.md ${FRAMEWORK_VERSIONS} example names a probe the assets do not ship`);
   } else failures.push(`evaluator.md ${FRAMEWORK_VERSIONS} needs one frameworks example`);
+  const installExamples = taggedExamples(versions, 'frameworks-install-state');
+  if (installExamples.length === 1) {
+    const example = installExamples[0];
+    const problems = declarationProblems(example);
+    if (
+      problems.length > 0 ||
+      example.frameworks.length !== 2 ||
+      example.frameworks.some(
+        (entry) =>
+          entry.installState?.source !== 'tree' ||
+          entry.probe.command !== 'evaluator/installed-version.mjs' ||
+          entry.probe.args[0] !== entry.package ||
+          entry.probe.args[1] !== entry.installState.source,
+      )
+    )
+      failures.push(`evaluator.md ${FRAMEWORK_VERSIONS} install-state example is invalid: ${problems.join('; ')}`);
+  } else failures.push(`evaluator.md ${FRAMEWORK_VERSIONS} needs one tagged install-state example`);
   const learning = headingBody(guide, '## Learn an unfamiliar framework');
   for (const [index, markers] of [
     ['primary sources only', 'documentation', 'repository', 'API reference', 'examples', 'changelog', 'secondary summary'],
