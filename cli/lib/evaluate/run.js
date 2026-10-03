@@ -522,6 +522,7 @@ async function runTrial(context) {
       mounts: [],
       observedMounts: async () => [],
       auditChannel: () => null,
+      hostSocketReport: () => null,
       toolCalls: [],
     });
   }
@@ -565,7 +566,7 @@ async function runTrial(context) {
       // The audit's observer could not start (Story 1.60): a trial no audit watches yields no record.
       throw stop({ stage: 'trial', exitCode: 12, message: `${label} yields no record: ${error?.message ?? error}` });
     }
-    const { port: adapter, observedMounts, auditChannel } = probePort;
+    const { port: adapter, observedMounts, auditChannel, hostSocketReport } = probePort;
     releaseHome = probePort.releaseHome;
     const port = hostEnvironmentPort({ port: adapter, registry });
     const began = Date.now();
@@ -605,6 +606,7 @@ async function runTrial(context) {
       // What the confinement's audit saw the target open outside what it was granted, read once the trial's calls ended.
       observedMounts,
       auditChannel,
+      hostSocketReport,
       // The commands and tool calls the runtime made for the plan, each an observed call.
       toolCalls: executed.steps.filter((step) => step.skipped === undefined).map((step) => callLabel(step.request)),
     });
@@ -645,6 +647,35 @@ function channelEntry(arm, trial) {
   };
 }
 
+/**
+ * The `run.json` entry of one trial whose calls left host sockets reachable (Story 1.82), or `null`: a call hides at most as many
+ * Unix sockets as its Bubblewrap command leaves room for, ranked by who can create them, so a host holding more sockets of other users
+ * than that leaves the rest reachable, and the entry names how many calls were cut and the most sockets one call left.
+ */
+function socketTruncationEntry(arm, trial) {
+  const report = trial.hostSocketReport;
+  if (report === null || report === undefined || report.truncatedCalls === 0) return null;
+  return {
+    conditionArm: arm.conditionArm,
+    trialIndex: trial.trialIndex,
+    calls: report.calls,
+    truncatedCalls: report.truncatedCalls,
+    socketsLeftReachable: report.socketsLeftReachable,
+  };
+}
+
+/** The sentence the run's summary adds for trials that left host sockets reachable, naming each with its counts, `''` when none did. */
+function leftSocketsNote(entries) {
+  if (entries.length === 0) return '';
+  const named = entries
+    .map(
+      (entry) =>
+        `${entry.conditionArm} trial ${entry.trialIndex} (${entry.truncatedCalls} of ${entry.calls} call(s), up to ${entry.socketsLeftReachable} socket(s))`,
+    )
+    .join(', ');
+  return `; the host held more Unix sockets than a call can hide, so ${named} left sockets of other users reachable`;
+}
+
 /** The sentence the run's summary adds for the lossy trials, naming each with its counts, `''` when no trial is lossy. */
 function lostCanaryNote(entries) {
   const lossy = entries.filter((entry) => entry.completeness === 'lossy');
@@ -674,7 +705,7 @@ function lostCanaryNote(entries) {
 async function concludeTrial(context, facts) {
   if (convertsRows(context.snapshot.layer.evaluator.kind)) return concludeWithRows(context, facts);
   const { arm, trialIndex, contract, evaluation, policy, writer, stop } = context;
-  const { label, evidenceFile, executed, began, evidence, mounts, observedMounts, auditChannel, toolCalls } = facts;
+  const { label, evidenceFile, executed, began, evidence, mounts, observedMounts, auditChannel, hostSocketReport, toolCalls } = facts;
   const elapsedMs = Date.now() - began;
   const judgments = {};
   for (const probe of arm.probes) {
@@ -728,6 +759,8 @@ async function concludeTrial(context, facts) {
     observedMounts: await readObservedMounts(observedMounts, { stop, label }),
     // Read once the audit's observed mounts are, which ends the canary reads the count needs (Story 1.81); `null` where nothing audited the trial.
     auditChannel: auditChannel(),
+    // What the calls' lists of host sockets left reachable once their budget ran out (Story 1.82); `null` where nothing hides sockets.
+    hostSocketReport: hostSocketReport(),
     toolCalls,
     resourceUse: executed.resourceUse ?? ZERO,
     unreportedSteps: executed.unreportedSteps ?? [],
@@ -743,7 +776,7 @@ async function concludeTrial(context, facts) {
  */
 async function concludeWithRows(context, facts) {
   const { arm, trialIndex, contract, folder, writer, stop, signal, snapshot, sealedBrief, scratch, env } = context;
-  const { label, evidenceFile, executed, began, evidence, port, mounts, observedMounts, auditChannel, toolCalls } = facts;
+  const { label, evidenceFile, executed, began, evidence, port, mounts, observedMounts, auditChannel, hostSocketReport, toolCalls } = facts;
   const { evaluator, mapping, validate } = snapshot.layer;
   // The evaluator runs from the evaluation folder, so the run holds the layer's files to the bytes it digested
   // before each launch and after each trial, and the frameworks it declares the same way. In a confined run no
@@ -892,6 +925,8 @@ async function concludeWithRows(context, facts) {
     observedMounts: await readObservedMounts(observedMounts, { stop, label }),
     // Read once the audit's observed mounts are, which ends the canary reads the count needs (Story 1.81); `null` where nothing audited the trial.
     auditChannel: auditChannel(),
+    // What the calls' lists of host sockets left reachable once their budget ran out (Story 1.82); `null` where nothing hides sockets.
+    hostSocketReport: hostSocketReport(),
     toolCalls: [...toolCalls, ...bridged],
     resourceUse,
     unreportedSteps: [...(executed.unreportedSteps ?? []), ...(router?.unreportedSteps ?? [])],
@@ -1339,9 +1374,12 @@ async function runTrialSets(given) {
   const manifestDigests = {};
   const unreportedResourceUse = [];
   const observedMountsChannel = [];
+  const hostSocketTruncation = [];
   for (const arm of sealable) {
     for (const trial of arm.trials) {
       if (trial.auditChannel !== null) observedMountsChannel.push(channelEntry(arm, trial));
+      const truncated = socketTruncationEntry(arm, trial);
+      if (truncated !== null) hostSocketTruncation.push(truncated);
       if (trial.unreportedSteps.length > 0) {
         unreportedResourceUse.push({ conditionArm: arm.conditionArm, trialIndex: trial.trialIndex, stepIds: trial.unreportedSteps });
       }
@@ -1378,6 +1416,7 @@ async function runTrialSets(given) {
     trialCount,
     unreportedResourceUse,
     observedMountsChannel,
+    hostSocketTruncation,
     evaluatorRecord: {
       kind,
       identity: configuration.evaluatorIdentity,
@@ -1814,6 +1853,7 @@ async function completeRun(
     trialCount,
     unreportedResourceUse,
     observedMountsChannel = [],
+    hostSocketTruncation = [],
     evaluatorRecord,
     model,
     judge,
@@ -1868,7 +1908,7 @@ async function completeRun(
     message:
       trialCount === null
         ? `${trialSets.length} trial set(s) taken from the records evaluator's records over ${[...new Set(trialSets.map((set) => set.conditionArm))].join(', ')}; score them with tea-evaluate score --run ${invocationId}`
-        : `${trialSets.length} trial set(s) of ${trialCount} trial(s) sealed over ${arms.map((arm) => arm.conditionArm).join(', ')}; score them with tea-evaluate score --run ${invocationId}${lostCanaryNote(observedMountsChannel)}`,
+        : `${trialSets.length} trial set(s) of ${trialCount} trial(s) sealed over ${arms.map((arm) => arm.conditionArm).join(', ')}; score them with tea-evaluate score --run ${invocationId}${lostCanaryNote(observedMountsChannel)}${leftSocketsNote(hostSocketTruncation)}`,
   });
   // The project must be as it was, and the run directory exactly what the
   // runtime wrote, before run.json says completed; that write is the run's last.
@@ -1893,7 +1933,7 @@ async function completeRun(
       arms: trialCount === null ? [...new Set(trialSets.map((set) => set.conditionArm))] : arms.map((arm) => arm.conditionArm),
     },
     trialCount,
-    ...(trialCount === null ? {} : { unreportedResourceUse, observedMountsChannel }),
+    ...(trialCount === null ? {} : { unreportedResourceUse, observedMountsChannel, hostSocketTruncation }),
     startedAt: new Date(startedAt).toISOString(),
     durationMs: Date.now() - startedAt,
     completed: true,
@@ -1916,6 +1956,8 @@ module.exports = {
   readObservedMounts,
   // A trial's audit channel entry and the summary's note on the trials that lost canary reads; their unit drives both directly.
   channelEntry,
+  socketTruncationEntry,
+  leftSocketsNote,
   lostCanaryNote,
   setRecommendation,
   // An evaluator attempt's score call; its unit drives the hold's refusal directly, which no engine call can race with.

@@ -57,6 +57,20 @@
  *                (`confinement-status.cjs`, `confinement-relay.js`,
  *                `http-target.js`). A command target and a tool server have no
  *                bridge. Seatbelt has no abstract sockets and is unchanged.
+ *   sockets      a path-based Unix socket is a file, and the read-only view of
+ *                `/` does not stop a `connect()` to it, so under Bubblewrap each
+ *                call lists the sockets the kernel reports bound on the host
+ *                (`host-sockets.js`) and mounts an empty device file over each
+ *                one outside the call's own grants (Story 1.82): a target cannot
+ *                ask the Docker daemon or the system bus to run a job outside
+ *                the sandbox. The list is ranked by who can create a socket
+ *                (the well-known service sockets, root and the system accounts,
+ *                the runtime's own user, then every other user in turns) and cut to the
+ *                mounts the call's own command leaves room for; a call whose
+ *                room cannot hold the first three ranks is refused (exit 12),
+ *                and what the room cut is recorded in `run.json`
+ *                (`hostSocketTruncation`). A socket bound after the call
+ *                started stays reachable for that call, and Seatbelt hides none.
  *   layer        every other process the run starts to run adopter or agent
  *                code (a `command` evaluator, a sealed-brief agent and the
  *                bridge relay it starts, the rubric judge, the evaluation's HTTP
@@ -105,6 +119,7 @@
 
 const crypto = require('node:crypto');
 const { signedStatus } = require('./confinement-status.cjs');
+const { BUBBLEWRAP_ARGUMENT_LIMIT, isSocketFile, listHostSockets, socketBudget } = require('./host-sockets');
 const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -343,11 +358,77 @@ function bubblewrapIsolation() {
 const BUBBLEWRAP_NETWORK = Object.freeze(['--unshare-net']);
 
 /**
+ * What hides a host socket from a target (Story 1.82): the empty device file is mounted over the socket's file, so a
+ * `connect()` finds no socket there and answers `ECONNREFUSED`, as it does for a path nothing listens on.
+ */
+const SOCKET_MASK_SOURCE = '/dev/null';
+
+/** The directories the vector replaces with mounts of its own (`--dev /dev`, `--proc /proc`), so a socket in them needs no mount and takes no budget. */
+const SOCKET_REPLACED_DIRECTORIES = Object.freeze(['/dev', '/proc']);
+
+/**
+ * Where a call's socket mounts reach Bubblewrap (Story 1.82): a file of NUL-separated arguments the launcher opens as this
+ * descriptor and `--args` reads, so the number of sockets a host holds cannot overflow the argument limit of the call's `exec`.
+ */
+const SOCKET_ARGUMENTS_FD = 3;
+
+/**
+ * The launcher of a call that hides sockets: it opens the arguments file named by its first argument as `SOCKET_ARGUMENTS_FD`
+ * and executes the rest of its arguments in its own place, so the process Bubblewrap runs in is the one the runtime started.
+ */
+const SOCKET_LAUNCHER = Object.freeze(['/bin/sh', '-c', `exec ${SOCKET_ARGUMENTS_FD}<"$1" || exit 126; shift; exec "$@"`, 'sh']);
+
+/**
+ * What the launcher's shell leaves in the environment of the program it executes: dash exports the `PWD` it settled on and resets
+ * `IFS`, `OPTIND` and `PPID` whenever the call's environment held them, and bash (the `sh` of some hosts) decrements `SHLVL` and sets
+ * `_` and `OLDPWD`.
+ * `env` restores each to what the call's environment held (an unset one stays unset), so a variable whose name is a valid shell
+ * identifier and that the shell does not initialize reaches the target as the call gave it.
+ * A name no shell can hold, an exported shell function and the variables bash initializes itself are the shell's to change (Story 1.89).
+ */
+const SHELL_VARIABLES = Object.freeze(['PWD', 'OLDPWD', 'SHLVL', '_', 'IFS', 'OPTIND', 'PPID']);
+
+/** The program that restores `SHELL_VARIABLES` between the launcher's shell and the command. */
+const ENVIRONMENT_PROGRAM = '/usr/bin/env';
+
+/**
  * What the probes run a trivial process under: the target's isolation, whatever
  * binds the target gets, so what a probe confirms is what a target runs under.
  */
 function bubblewrapProbeArguments(executable) {
   return [executable, '--unshare-user', ...BUBBLEWRAP_NETWORK, '--ro-bind', '/', '/', '--dev', '/dev', ...bubblewrapIsolation(), '--'];
+}
+
+/** The Bubblewrap arguments that mount an empty device file over each of `sockets`; a path no argument can carry is a `ConfinementError`. */
+function socketMaskArguments(sockets) {
+  return sockets.flatMap((socket) => {
+    if (typeof socket !== 'string' || !path.isAbsolute(socket) || socket.includes('\0')) {
+      throw new ConfinementError(`the host socket ${JSON.stringify(socket)} has no absolute path a mount can name`);
+    }
+    return ['--ro-bind', SOCKET_MASK_SOURCE, socket];
+  });
+}
+
+/**
+ * The command a call that hides sockets starts: the launcher, the arguments file, and `env` restoring the variables the launcher's
+ * shell touches to what `environment` held (an unset one stays unset), then `argv`.
+ * A first word with `=` in it would be read by `env` as an assignment, so it is refused.
+ */
+function launchedCommand(socketFile, environment, argv) {
+  if (String(argv[0]).includes('=')) {
+    throw new ConfinementError(
+      `the executable ${JSON.stringify(argv[0])} holds "=", which the socket launcher's env would read as an assignment`,
+    );
+  }
+  const held = (name) => typeof environment?.[name] === 'string';
+  // The options come first: `env` reads an assignment as the end of them.
+  const restore = [
+    ...SHELL_VARIABLES.filter((name) => !held(name)).flatMap((name) => ['-u', name]),
+    ...SHELL_VARIABLES.filter(held).map((name) => `${name}=${environment[name]}`),
+  ];
+  // Dash stops on an `OPTIND` that is no number (`Illegal number`), so the shell never sees one the call held.
+  const shell = held('OPTIND') ? [ENVIRONMENT_PROGRAM, '-u', 'OPTIND', ...SOCKET_LAUNCHER] : SOCKET_LAUNCHER;
+  return [...shell, socketFile, ENVIRONMENT_PROGRAM, ...restore, ...argv];
 }
 
 /**
@@ -361,7 +442,13 @@ function bubblewrapProbeArguments(executable) {
  * system, so nothing under it can be read or written. A network namespace of
  * its own (`BUBBLEWRAP_NETWORK`) unless the entry declares `network: 'host'`:
  * a started HTTP server listens in it and the runtime reaches it through the
- * bridge of `confinement-relay.js`.
+ * bridge of `confinement-relay.js`. Each of `sockets` (real paths of the host's
+ * path-based Unix sockets, `host-sockets.js`) is covered by an empty device file
+ * (Story 1.82); the mounts come before the binds, so a grant bound over one wins.
+ * A socket's path goes into the vector as it is, since an argument carries any
+ * character and a socket another user bound must not be able to refuse every call.
+ * With `socketsFd`, the mounts are read from that descriptor (`--args`) and not
+ * carried inline, so the number of sockets cannot overflow the argument limit.
  */
 function bubblewrapTargetArguments({
   executable,
@@ -374,6 +461,8 @@ function bubblewrapTargetArguments({
   statusFile,
   statusMount,
   network = 'isolated',
+  sockets = [],
+  socketsFd = null,
 }) {
   const realOf = (candidate) => assertProfileSafePath(spellings(candidate).at(-1), refuseUnsafePath);
   const binds = [workspace, ...writable, ...(statusMount === statusFile ? [statusFile] : [])].flatMap((entry) => {
@@ -406,6 +495,7 @@ function bubblewrapTargetArguments({
           realOf(privateRoot),
         ];
   const withheld = realOf(evaluationFolder);
+  const masks = socketMaskArguments(sockets);
   return [
     executable,
     '--unshare-user',
@@ -416,6 +506,7 @@ function bubblewrapTargetArguments({
     '--dev',
     '/dev',
     ...bubblewrapIsolation(),
+    ...(socketsFd !== null && masks.length > 0 ? ['--args', String(socketsFd)] : masks),
     ...binds,
     ...gitArguments,
     ...privateArguments,
@@ -640,6 +731,10 @@ function layerPrefix(confinement) {
  *   `observer` its selection probed.
  * @param {string|null} [options.status] under Bubblewrap, a private directory where the status of a target a signal
  *   ended is written (`confinement-status.cjs`)
+ * @param {(options: { except: string[], limit: number }) => (string[]|{ sockets: string[], left?: number, refused?: string|null })} [options.hostSockets]
+ *   under Bubblewrap, the host's path-based Unix sockets a call must not reach (`host-sockets.js` reads the kernel's table), asked for
+ *   each call with the real paths its grants and the sandbox's own mounts already cover, and the number of mounts the call's command
+ *   leaves room for (`limit`); a case replaces it with a fixed list
  */
 function targetSandbox({
   confinement,
@@ -649,6 +744,7 @@ function targetSandbox({
   home: initialHome = null,
   audit = null,
   status = null,
+  hostSockets = listHostSockets,
 }) {
   const git = gitAccess === null ? null : { metadata: null, view: null, alternates: [], ...gitAccess };
   if (typeof workspace !== 'string' || workspace.length === 0) {
@@ -702,6 +798,11 @@ function targetSandbox({
   }
   const observer = audit === null ? null : makeObserver({ confinement, audit, cwd: workspace });
   let calls = 0;
+  // What the calls' lists of host sockets left reachable (Story 1.82): the calls that listed, those whose budget cut the list
+  // (sockets of other users stayed reachable) and the most sockets one call left.
+  let socketCalls = 0;
+  let socketCallsCut = 0;
+  let socketsLeftMost = 0;
   // What the sandbox may read, besides the system's own directories, for one call: the paths the call may write, its
   // declared system paths, the private home and the worktree's own entry in the git directory and the private repository.
   const readRoots = (granted) =>
@@ -746,8 +847,14 @@ function targetSandbox({
      * directory `writable` names, which is the call's grant and the audit's.
      * `network` (Bubblewrap alone) is `isolated`, the default, or `host` for an
      * entry that declares it: the call keeps the host's network and has no bridge.
+     * `sockets` (Bubblewrap alone) is the list of host sockets to hide, for a call made again after a socket it hid went away:
+     * the call's own earlier list without the vanished ones, so no socket another process creates meanwhile joins it. Without
+     * it the call asks `hostSockets` for a list, with room for the mounts its own command leaves (`socketBudget`).
+     * A call that hides sockets carries them in a file the launcher hands Bubblewrap (`SOCKET_LAUNCHER`), which `socketFile`
+     * names and the call's end removes. `environment` is the environment the call's process starts with; the launcher gives
+     * the target's the variables its shell touches as they were.
      */
-    wrap(target, args, writable = [], readable = [], { bridge = null, network = 'isolated' } = {}) {
+    wrap(target, args, writable = [], readable = [], { bridge = null, network = 'isolated', sockets: own = null, environment = {} } = {}) {
       const grants = [...writable, ...(home === null || rootHome !== null ? [] : [home])];
       if (confinement.mode === 'seatbelt') {
         const profile = seatbeltTargetProfile({
@@ -781,35 +888,97 @@ function targetSandbox({
       // out of the target's otherwise empty private root and out of the target home's parent listing.
       const statusMount =
         privateRoot !== null && isInside(privateRoot, statusFile) ? path.join('/dev', path.basename(statusFile)) : statusFile;
-      const vector = bubblewrapTargetArguments({
-        executable: confinement.executable,
-        workspace,
-        writable: grants,
-        evaluationFolder,
-        git,
-        privateRoot,
-        rootHome,
-        statusFile,
-        statusMount,
-        network,
-      });
-      const command = [
-        vector[0],
-        ...vector.slice(1),
-        process.execPath,
-        STATUS_SHIM,
-        ...(bridge === null ? [] : ['--bridge', bridge]),
-        statusMount,
-        target,
-        ...args,
-      ];
-      const holdKey = (wrapped) => Object.defineProperty(wrapped, 'statusKey', { value: statusKey });
-      if (observer === null) return holdKey({ target: command[0], args: command.slice(1), statusFile });
+      const targetVector = (hidden, socketsFd) =>
+        bubblewrapTargetArguments({
+          executable: confinement.executable,
+          workspace,
+          writable: grants,
+          evaluationFolder,
+          git,
+          privateRoot,
+          rootHome,
+          statusFile,
+          statusMount,
+          network,
+          sockets: hidden,
+          socketsFd,
+        });
+      const tail = [process.execPath, STATUS_SHIM, ...(bridge === null ? [] : ['--bridge', bridge]), statusMount, target, ...args];
+      // Bubblewrap counts the whole command line and what `--args` reads toward one bound, the target's own arguments included, so
+      // the room for mounts is what the command leaves: the vector, the shim and the target's arguments, and `--args <descriptor>`.
+      const commandLength = targetVector([], null).length + tail.length + 2;
+      const room = socketBudget(commandLength);
+      let sockets = own;
+      if (own === null) {
+        // Every socket the host serves that the call does not own: the call's grants and what the sandbox covers or replaces
+        // (`/dev` and `/proc`, which the vector mounts of its own) stay out.
+        let listed;
+        try {
+          listed = hostSockets({
+            except: [
+              workspace,
+              ...grants,
+              ...withheldRoots(),
+              ...(fs.existsSync('/run/user') ? ['/run/user'] : []),
+              ...SOCKET_REPLACED_DIRECTORIES,
+            ].flatMap(spellings),
+            limit: room,
+          });
+        } catch (error) {
+          fs.rmSync(statusFile, { force: true });
+          throw error;
+        }
+        const { sockets: listedSockets, left = 0, refused = null } = Array.isArray(listed) ? { sockets: listed } : listed;
+        if (refused !== null) {
+          fs.rmSync(statusFile, { force: true });
+          throw new ConfinementError(
+            `${refused}; the call's own command takes ${commandLength} of the ${BUBBLEWRAP_ARGUMENT_LIMIT} arguments Bubblewrap accepts, and a socket left reachable could be a host service's`,
+          );
+        }
+        sockets = listedSockets;
+        socketCalls += 1;
+        if (left > 0) {
+          socketCallsCut += 1;
+          socketsLeftMost = Math.max(socketsLeftMost, left);
+        }
+      }
+      if (sockets.length > room) {
+        fs.rmSync(statusFile, { force: true });
+        throw new ConfinementError(`the call hides ${sockets.length} sockets and its command leaves room for ${room}`);
+      }
+      // The mounts of the hidden sockets reach Bubblewrap through a file, so a host with very many sockets cannot overflow the
+      // argument limit of the call's `exec`; the file is the runtime's, and the status directory is the target's to read at most.
+      const socketFile = sockets.length === 0 ? null : path.join(status, `sockets-${calls}-${crypto.randomBytes(8).toString('hex')}.args`);
+      if (socketFile !== null) {
+        fs.writeFileSync(
+          socketFile,
+          socketMaskArguments(sockets)
+            .map((argument) => `${argument}\0`)
+            .join(''),
+          { mode: 0o600 },
+        );
+      }
+      const vector = targetVector(sockets, socketFile === null ? null : SOCKET_ARGUMENTS_FD);
+      const command = [...vector, ...tail];
+      // The key, the sockets the call hides and the file that carries their mounts stay out of what a caller copies: a call whose
+      // Bubblewrap failed to start with sockets hidden may have lost the race with a socket that went away, and is made again.
+      const holdKey = (wrapped) =>
+        Object.defineProperties(wrapped, {
+          statusKey: { value: statusKey },
+          hiddenSockets: { value: sockets },
+          socketFile: { value: socketFile },
+        });
+      // The launcher goes outermost, before `strace`, so the audit traces Bubblewrap alone, as it does for a call hiding nothing.
+      const launched = (argv) => (socketFile === null ? argv : launchedCommand(socketFile, environment, argv));
+      if (observer === null) {
+        const [first, ...rest] = launched(command);
+        return holdKey({ target: first, args: rest, statusFile });
+      }
       const file = path.join(audit.directory, `trace-${calls}-${crypto.randomBytes(6).toString('hex')}.txt`);
-      const traced = [...straceCommand(confinement.observer.executable, file), ...command];
+      const [first, ...rest] = launched([...straceCommand(confinement.observer.executable, file), ...command]);
       return holdKey({
-        target: traced[0],
-        args: traced.slice(1),
+        target: first,
+        args: rest,
         statusFile,
         trace: {
           file,
@@ -857,6 +1026,18 @@ function targetSandbox({
      */
     auditChannel() {
       return observer === null ? null : observer.channel();
+    },
+    /**
+     * What the calls' lists of host sockets left reachable because the call's budget of mounts ran out: `{ calls, truncatedCalls,
+     * socketsLeftReachable }`, the calls that listed, how many of them left sockets of other users reachable, and the most sockets
+     * one call left (the retry of a call keeps the list of its first start and counts once). `null` where the sandbox hides no
+     * socket (Seatbelt). A call whose budget could not hold the sockets of root, of the system accounts and of the user running
+     * it is refused and counts nowhere.
+     */
+    socketReport() {
+      return confinement.mode === 'bubblewrap'
+        ? { calls: socketCalls, truncatedCalls: socketCallsCut, socketsLeftReachable: socketsLeftMost }
+        : null;
     },
     /** Ends the audit's observer. */
     release() {
@@ -1203,53 +1384,85 @@ function confinedCommandMechanism(base, sandbox, systemPathsOf = () => [], scrat
         ...(typeof request.portFile === 'string' ? [path.dirname(request.portFile)] : []),
         ...(bridge === null ? [] : [path.dirname(bridge)]),
       ];
-      const temporary = callTemporary(scratch);
-      let wrapped = null;
-      let started = false;
-      let read = false;
-      try {
-        wrapped = sandbox.wrap(
-          request.target,
-          [...request.subcommandPath, ...request.argv],
-          [...writable, temporary],
-          systemPathsOf(request.target),
-          { bridge, network: networkOf(request.target) },
-        );
-        const result = await base.run(
-          {
-            ...request,
-            target: wrapped.target,
-            subcommandPath: [],
-            argv: wrapped.args,
-            env: withTemporary(request.env, temporary, sandbox.home ?? null),
-          },
-          signal,
-        );
-        const status = recordedStatus(wrapped.statusFile, wrapped.statusKey);
-        read = true;
-        started = status.started;
-        if (status.valid === false) throw new ConfinementError('the confined target status failed integrity verification');
-        if (!status.started) {
-          // Bubblewrap exited before its shim ran: the exit code is its own, not a behavior of the target.
-          const said = stderrTail(result?.stderr?.value ?? result?.stderr);
-          throw new ConfinementError(
-            `${MECHANISM_NAMES.bubblewrap} could not start the target ${JSON.stringify(request.target)}${said ? `: ${said}` : ''}`,
+      // The list of sockets a call is made again over: the first start asks for one, a later start keeps its own.
+      let sockets = null;
+      for (;;) {
+        const temporary = callTemporary(scratch);
+        let wrapped = null;
+        let started = false;
+        let read = false;
+        try {
+          const environment = withTemporary(request.env, temporary, sandbox.home ?? null);
+          wrapped = sandbox.wrap(
+            request.target,
+            [...request.subcommandPath, ...request.argv],
+            [...writable, temporary],
+            systemPathsOf(request.target),
+            { bridge, network: networkOf(request.target), sockets, environment },
           );
+          const result = await base.run(
+            {
+              ...request,
+              target: wrapped.target,
+              subcommandPath: [],
+              argv: wrapped.args,
+              env: environment,
+            },
+            signal,
+          );
+          const status = recordedStatus(wrapped.statusFile, wrapped.statusKey);
+          read = true;
+          started = status.started;
+          if (status.valid === false) throw new ConfinementError('the confined target status failed integrity verification');
+          if (!status.started) {
+            const again = socketsToRetry(wrapped, signal, status);
+            if (again !== null) {
+              sockets = again;
+              continue;
+            }
+            // Bubblewrap exited before its shim ran: the exit code is its own, not a behavior of the target.
+            const said = stderrTail(result?.stderr?.value ?? result?.stderr);
+            throw new ConfinementError(
+              `${MECHANISM_NAMES.bubblewrap} could not start the target ${JSON.stringify(request.target)}${said ? `: ${said}` : ''}`,
+            );
+          }
+          if (status.valid === true && status.complete !== true)
+            throw new ConfinementError('the confined target status failed integrity verification');
+          return status.signal === null ? result : { ...result, exitCode: -os.constants.signals[status.signal] };
+        } finally {
+          // What the call's processes opened is read however the call ended; a call that never started has nothing to read.
+          if (wrapped !== null && !read) started = recordedStatus(wrapped.statusFile, wrapped.statusKey).started;
+          await sandbox.collect?.(wrapped, { started });
+          releaseSocketFile(wrapped);
+          releaseTemporary(scratch, temporary);
         }
-        if (status.valid === true && status.complete !== true)
-          throw new ConfinementError('the confined target status failed integrity verification');
-        return status.signal === null ? result : { ...result, exitCode: -os.constants.signals[status.signal] };
-      } finally {
-        // What the call's processes opened is read however the call ended; a call that never started has nothing to read.
-        if (wrapped !== null && !read) started = recordedStatus(wrapped.statusFile, wrapped.statusKey).started;
-        await sandbox.collect?.(wrapped, { started });
-        releaseTemporary(scratch, temporary);
       }
     },
     readArtifact(absolute, maxOutputBytes) {
       return base.readArtifact(absolute, maxOutputBytes);
     },
   };
+}
+
+/**
+ * The sockets a call whose Bubblewrap never started its shim is made again over, or `null` when it is not made again (Story
+ * 1.82). A socket it hid went away between the list and the mount, and Bubblewrap cannot make a mount point of a file that is
+ * gone on a read-only `/`, so it refuses to start. The call is made again over its own list without the sockets that are no
+ * longer socket files, so a socket another process creates meanwhile cannot join it and each
+ * start has fewer than the one before: the starts are bounded by the list. Only a status file that still holds the runtime's own
+ * untouched line (`started === false`) is a call that never started, so a target that ran, and one that damaged its status file,
+ * is never run again, and neither is a run that was aborted or a call with no hidden socket that went away.
+ */
+function socketsToRetry(wrapped, signal, status) {
+  if (status?.started !== false || status.valid !== true || signal?.aborted === true) return null;
+  const hidden = wrapped.hiddenSockets ?? [];
+  const remaining = hidden.filter((socket) => isSocketFile(socket));
+  return remaining.length < hidden.length ? remaining : null;
+}
+
+/** Removes the file that carried a call's socket mounts, once the call has ended. */
+function releaseSocketFile(wrapped) {
+  if (typeof wrapped?.socketFile === 'string') fs.rmSync(wrapped.socketFile, { force: true });
 }
 
 /**
@@ -1263,39 +1476,63 @@ function confinedCommandMechanism(base, sandbox, systemPathsOf = () => [], scrat
 function confinedMcpMechanism(base, sandbox, systemPathsOf = () => [], scratch = [], networkOf = () => 'isolated') {
   return {
     async callTool(request, signal) {
-      const temporary = callTemporary(scratch);
-      let wrapped = null;
-      let status = null;
-      try {
-        wrapped = sandbox.wrap(request.target, request.targetArgs, [temporary], systemPathsOf(request.target), {
-          network: networkOf(request.target),
-        });
-        const result = await base.callTool(
-          {
-            ...request,
-            target: wrapped.target,
-            targetArgs: wrapped.args,
-            env: withTemporary(request.env, temporary, sandbox.home ?? null),
-          },
-          signal,
-        );
-        status = recordedStatus(wrapped.statusFile, wrapped.statusKey);
-        if (status.valid === false) throw new ConfinementError('the confined tool server status failed integrity verification');
-        if (typeof result.exitCode !== 'number') return result;
-        if (!status.started) {
-          // With no start mark the exit code may be Bubblewrap's own, so it says nothing about the tool server.
-          throw new ConfinementError(
-            `the status file of the confined tool server ${JSON.stringify(request.target)} holds no start mark, so its exit code ${result.exitCode} cannot be told from ${MECHANISM_NAMES.bubblewrap}'s own`,
-          );
+      let sockets = null;
+      for (;;) {
+        const temporary = callTemporary(scratch);
+        let wrapped = null;
+        let status = null;
+        try {
+          const environment = withTemporary(request.env, temporary, sandbox.home ?? null);
+          wrapped = sandbox.wrap(request.target, request.targetArgs, [temporary], systemPathsOf(request.target), {
+            network: networkOf(request.target),
+            sockets,
+            environment,
+          });
+          let result;
+          try {
+            result = await base.callTool(
+              {
+                ...request,
+                target: wrapped.target,
+                targetArgs: wrapped.args,
+                env: environment,
+              },
+              signal,
+            );
+          } catch (error) {
+            // A server whose Bubblewrap never started ends the session before it answers, which the adapter throws.
+            status = recordedStatus(wrapped.statusFile, wrapped.statusKey);
+            const again = socketsToRetry(wrapped, signal, status);
+            if (again !== null) {
+              sockets = again;
+              continue;
+            }
+            throw error;
+          }
+          status = recordedStatus(wrapped.statusFile, wrapped.statusKey);
+          if (status.valid === false) throw new ConfinementError('the confined tool server status failed integrity verification');
+          if (typeof result.exitCode !== 'number') return result;
+          if (!status.started) {
+            const again = socketsToRetry(wrapped, signal, status);
+            if (again !== null) {
+              sockets = again;
+              continue;
+            }
+            // With no start mark the exit code may be Bubblewrap's own, so it says nothing about the tool server.
+            throw new ConfinementError(
+              `the status file of the confined tool server ${JSON.stringify(request.target)} holds no start mark, so its exit code ${result.exitCode} cannot be told from ${MECHANISM_NAMES.bubblewrap}'s own`,
+            );
+          }
+          if (status.valid === true && status.complete !== true)
+            throw new ConfinementError('the confined tool server status failed integrity verification');
+          return status.signal === null ? result : { ...result, exitCode: -os.constants.signals[status.signal] };
+        } finally {
+          // A call that threw before its status was read left the file behind: read it now, so a started target is still held to its trace.
+          if (wrapped !== null && status === null) status = recordedStatus(wrapped.statusFile, wrapped.statusKey);
+          await sandbox.collect?.(wrapped, { started: status?.started === true });
+          releaseSocketFile(wrapped);
+          releaseTemporary(scratch, temporary);
         }
-        if (status.valid === true && status.complete !== true)
-          throw new ConfinementError('the confined tool server status failed integrity verification');
-        return status.signal === null ? result : { ...result, exitCode: -os.constants.signals[status.signal] };
-      } finally {
-        // A call that threw before its status was read left the file behind: read it now, so a started target is still held to its trace.
-        if (wrapped !== null && status === null) status = recordedStatus(wrapped.statusFile, wrapped.statusKey);
-        await sandbox.collect?.(wrapped, { started: status?.started === true });
-        releaseTemporary(scratch, temporary);
       }
     },
   };
