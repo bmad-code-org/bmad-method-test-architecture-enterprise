@@ -82,6 +82,7 @@ context:
 - The final test reviewer found that qualification resource use omitted the post-attempt version read. A delayed-read qualification case failed before the accounting fix and passed afterward. The adversarial and architecture reviewers passed their final checks.
 - The post-rebase integration review found that the merged Windows supervisor can spend up to 105,000 ms in Job Object setup before the version probe's agent clock begins. The prior 8,000 ms per-read ceiling could understate a Windows trial's sealed wall-clock allowance. Shared supervisor bounds now give Windows 113,000 ms per read; the cross-platform ceiling check exercises both values. The acceptance behavior is unchanged.
 - The final native Codex integration and evidence lenses passed after that fix. On the rebased tree, the focused version gate, API, MCP, preflight, CLI, comparison, documentation build and static gates passed. PR CI covers the complete final tree.
+- The first final-head CI run reached `lint:md` at the end of shard 8 with no assertion failure, then GitHub canceled the job at its 15-minute bound. Under coverage the expanded evaluator suite took 491.2 seconds against a stale 248.1-second shard weight. The measured evaluator, run and boundaries weights were updated, distributing about 612 seconds of estimated work to each shard, and the job cap became 20 minutes. CI was rerun on that correction.
 
 ## Spec Change Log
 

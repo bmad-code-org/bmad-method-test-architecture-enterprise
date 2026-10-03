@@ -186,10 +186,9 @@ jobs:
   chain:
     name: chain (${{ matrix.shard }}/8)
     runs-on: ubuntu-latest
-    # Each shard carries about eight minutes of the chain by the weights, plus
-    # about a minute of setup. The cap leaves room for a loaded runner and
-    # still bounds a stalled registry request or a hung child.
-    timeout-minutes: 15
+    # Current measured weights pack about ten minutes per shard, plus setup.
+    # The cap allows loaded runners while bounding a stalled request or child.
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
