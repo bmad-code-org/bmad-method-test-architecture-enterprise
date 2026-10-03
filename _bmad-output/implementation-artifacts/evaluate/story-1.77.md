@@ -45,12 +45,14 @@ context:
 - A collision between operations no report names makes no finding here and stays the CI plan's `compile` check; with no probe naming a report there is no compile call either.
 - Two probes that each name a report for a different interface are refused by Story 1.65's coverage rule already; the case holds the one collision finding beside those findings. Epics AC 2 and the test-design row are amended to say so.
 
+Round 3 (regressions only, one Opus reviewer): pass, five mutants killed. CodeRabbit: one finding (Story 1.95 gated lane 3 only), valid, fixed and resolved.
+
 Round 2 (adversarial and edge, verification): the adversarial and edge reviewer found cross-probe collection untested (**medium**, patched with a case where only the second probe's report collides), the finding sitting on a probe whose own report does not collide (**low**, patched: it sits on the first probe whose report the line names), a report collision hidden behind an earlier one (**low**, documented) and a stale code map (**low**, patched).
 The verification reviewer found three surviving mutants (**medium**, patched): the other-refusal stand-in line named no operation so a rule accepting any `eval-quality:` line passed (it now names the reported operation), no case named two ordinary operations of the reported interface so an interface-only filter passed (a stand-in line added), and cross-probe collection (the second-probe case above).
 
 ## Verification
 
-- `npm run test:evaluate-check` (1126 checks) and `npm run test:evaluate-arms` (732 checks) pass.
+- `npm run test:evaluate-check` (1128 checks) and `npm run test:evaluate-arms` (732 checks) pass.
 - Revert observations: narrowing the trigger back to `> 1` fails 11 checks; compiling for any `historical` probe, keeping every refusal, and the 1.75 wording each fail their own cases (round 1 verification).
 - `npm run lint`, `npm run format:check`, `npm run lint:md`, `npm run docs:validate-links` pass.
 
