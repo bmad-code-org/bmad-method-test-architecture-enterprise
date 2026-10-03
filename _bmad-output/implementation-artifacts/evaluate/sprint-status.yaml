@@ -110,7 +110,7 @@ development_status:
   1-72-observe-the-sealed-brief-agent-evaluators-installed-adapter-version: done
   1-73-bind-the-declared-frameworks-install-state-not-only-their-versions: done
   1-74-scrub-an-echo-whose-letters-change-case-unevenly-and-reach-the-evidence-as-escapes: done
-  1-75-name-a-report-operation-signature-collision-at-check-before-the-run: backlog
+  1-75-name-a-report-operation-signature-collision-at-check-before-the-run: review
   1-80-bring-a-partial-clone-project-its-tags-and-a-very-large-history-into-the-withheld-repository: backlog
   1-81-record-how-much-of-the-macos-audit-the-kernels-log-lost: backlog
   1-82-give-a-bubblewrap-target-no-route-to-the-hosts-path-based-unix-sockets: backlog
@@ -132,6 +132,7 @@ development_status:
   1-103-prove-the-story-1-42-review-fixes-against-their-mutants: backlog
   1-104-count-only-behavior-linked-oracles-for-success-separation: backlog
   1-76-require-an-explicit-custom-agent-version-response: backlog
+  1-77-name-a-report-operations-collision-with-any-other-api-operation-at-check: backlog
   epic-1-retrospective: optional
 
   epic-2: in-progress
@@ -161,6 +162,7 @@ parallel_lanes:
     - 1-74-scrub-an-echo-whose-letters-change-case-unevenly-and-reach-the-evidence-as-escapes
     - 1-75-name-a-report-operation-signature-collision-at-check-before-the-run
     - 1-76-require-an-explicit-custom-agent-version-response
+    - 1-77-name-a-report-operations-collision-with-any-other-api-operation-at-check
   lane-2-confinement-and-process-lifecycle:
     - 1-62-share-one-sandbox-primitive-layer-across-teas-isolation-mod
     - 1-57-withhold-the-committed-evaluation-folder-from-a-confined-ta
@@ -217,6 +219,7 @@ owner_handoff:
     status: backlog
     depends_on:
       - 1-76-require-an-explicit-custom-agent-version-response
+      - 1-77-name-a-report-operations-collision-with-any-other-api-operation-at-check
       - 1-84-teach-a-linux-skill-targets-network-declaration-in-the-ci-guide-and-rerun-its-live-sessions
       - 1-104-count-only-behavior-linked-oracles-for-success-separation
       - 2-5-tea-runs-its-pr-tier-and-documents-evaluate

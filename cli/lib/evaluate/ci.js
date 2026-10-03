@@ -593,7 +593,7 @@ async function runGate(context, entry) {
 // evaluate checks
 
 async function checkCheck(context) {
-  const findings = await checkEvaluation(context.folder);
+  const findings = await checkEvaluation(context.folder, { env: context.env });
   const text = findings.map((entry) => findingLine(entry.file, entry.rule, entry.message));
   text.push(
     findings.length === 0

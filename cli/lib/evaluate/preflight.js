@@ -517,7 +517,7 @@ async function pipeline(
   },
   state,
 ) {
-  const findings = await checkEvaluation(folder);
+  const findings = await checkEvaluation(folder, { env });
   if (findings.length > 0) {
     return new PreflightOutcome({ stage: 'check', exitCode: 10, message: `${findings.length} authoring defect(s)`, findings });
   }

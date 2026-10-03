@@ -93,7 +93,11 @@ function tempDir(label) {
 }
 
 function runCli(args, options = {}) {
-  const result = spawnSync(process.execPath, [CLI, ...args], { cwd: options.cwd ?? PROJECT_ROOT, encoding: 'utf8', env: process.env });
+  const result = spawnSync(process.execPath, [CLI, ...args], {
+    cwd: options.cwd ?? PROJECT_ROOT,
+    encoding: 'utf8',
+    env: { ...process.env, ...options.env },
+  });
   if (result.error) throw result.error;
   return { status: result.status, stdout: result.stdout, stderr: result.stderr, output: `${result.stdout}${result.stderr}` };
 }
@@ -470,9 +474,12 @@ function plantHistorical(folder, boundary) {
  * is a deployed copy of it) whose `deployments` authorize every origin named
  * for it, so a finding the case expects is the only one `check` has. Each
  * other interface is also declared by the contract, with its own copy of the
- * report operation (`reportOf`).
+ * report operation (`reportOf`), served at a path of its own
+ * (`/<interfaceId>/release`), since eval-quality's compile refuses two `api`
+ * operations that share a method and a path; `collide` leaves the copy at
+ * `GET /release`, the grader's own, which compile refuses (Story 1.75).
  */
-function plantApiHistorical(folder, deployments) {
+function plantApiHistorical(folder, deployments, { collide = false } = {}) {
   editJson(folder, 'probes/P-002.probe.json', (value) => {
     value.qualification = { route: 'historical', deployments };
     value.defects[0].source = 'natural';
@@ -505,7 +512,13 @@ function plantApiHistorical(folder, deployments) {
         value.permittedInterfaces.push({
           ...structuredClone(grader),
           logicalId: id,
-          operations: [{ ...structuredClone(report), operationId: reportOf(id).operationId }],
+          operations: [
+            {
+              ...structuredClone(report),
+              operationId: reportOf(id).operationId,
+              pathTemplate: collide ? report.pathTemplate : `/${id}/release`,
+            },
+          ],
         });
       }
     });
@@ -531,6 +544,7 @@ function checkReportOperationReusedAcrossInterfaces() {
   editJson(folder, 'contract.json', (value) => {
     const other = structuredClone(value.permittedInterfaces[0]);
     other.logicalId = 'status';
+    for (const operation of other.operations) operation.pathTemplate = `/status${operation.pathTemplate}`;
     value.permittedInterfaces.push(other);
   });
   editJson(folder, 'evaluation.json', (value) => (value.operationPhases.status = structuredClone(value.operationPhases.grader)));
@@ -538,6 +552,209 @@ function checkReportOperationReusedAcrossInterfaces() {
   check(
     historicalFindingsOf(result.stdout).length === 0,
     `a report operation declared on two interfaces drew a historical finding\n${result.output}`,
+  );
+}
+
+/**
+ * An engine CLI stand-in (`TEA_EVALUATE_ENGINE_CLI`): it appends its argv to the file `SHIM_LOG` names, prints the line
+ * `SHIM_LINE` holds on the stream `SHIM_STREAM` names (`stderr`, the default, `stdout` or `none`) and exits with
+ * `SHIM_EXIT` (4, the compile refusal, by default).
+ */
+function engineShim() {
+  const file = path.join(tempDir('engine-shim'), 'shim.js');
+  fs.writeFileSync(
+    file,
+    [
+      "const fs = require('node:fs');",
+      "fs.appendFileSync(process.env.SHIM_LOG, `${process.argv.slice(2).join(' ')}\\n`);",
+      "const stream = process.env.SHIM_STREAM ?? 'stderr';",
+      'if (stream !== "none") process[stream].write(`${process.env.SHIM_LINE}\\n`);',
+      'process.exit(Number(process.env.SHIM_EXIT ?? 4));',
+    ].join('\n'),
+  );
+  return file;
+}
+
+/** The files under `directory` with their bytes, to read a folder `check` was not to write to. */
+function snapshotOf(directory) {
+  const entries = [];
+  const walk = (current) => {
+    for (const entry of fs.readdirSync(current, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      const full = path.join(current, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else entries.push(`${path.relative(directory, full)}:${sha256Hex(fs.readFileSync(full))}`);
+    }
+  };
+  walk(directory);
+  return entries;
+}
+
+/**
+ * Story 1.75 (route B): when the probes' deployments name report operations on two or more interfaces, `check` runs
+ * eval-quality's own compile and quotes a `duplicate-operation-signature` refusal as one `historical` finding, so two
+ * interfaces whose report operations share a method and a path exit 10 at `check` and not at the run's compile. TeA
+ * compares no template: the finding carries the engine's line.
+ */
+async function checkReportSignatureCollision() {
+  const label = 'report operations of two interfaces at one method and path';
+  const privateTemp = tempDir('check-temp');
+  const environment = { TMPDIR: privateTemp, TEMP: privateTemp, TMP: privateTemp };
+
+  // Collision: exit 10, one historical finding quoting the engine's line.
+  const collided = copyApi();
+  plantApiHistorical(collided, TWO_INTERFACE_DEPLOYMENTS, { collide: true });
+  await writeCorpusIndex(collided);
+  const before = snapshotOf(collided);
+  const result = runCli(['check', '--evaluation', collided], { env: environment });
+  check(result.status === 10, `${label}: check exited ${result.status}; expected 10\n${result.output}`);
+  const findings = historicalFindingsOf(result.stdout);
+  check(findings.length === 1 && findingsOf(result.stdout).length === 1, `${label}: expected one historical finding\n${result.output}`);
+  const [finding = ''] = findings;
+  check(finding.startsWith('probes/P-002.probe.json: [historical] '), `${label}: the finding does not name the probe\n${finding}`);
+  for (const needle of [
+    'logicalId=grader',
+    'logicalId=ledger',
+    'operationId=report-release',
+    'operationId=report-ledger-release',
+    '("GET /release")',
+    'duplicate-operation-signature',
+  ]) {
+    check(finding.includes(needle), `${label}: the finding does not name ${needle}\n${finding}`);
+  }
+  const direct = spawnSync(
+    process.execPath,
+    [engineCliPath({}), 'compile', '--in', path.join(collided, 'contract.json'), '--out', path.join(tempDir('direct'), 'out.json')],
+    { encoding: 'utf8' },
+  );
+  const engineLine = direct.stderr.split('\n').find((line) => line.includes('duplicate-operation-signature'));
+  check(
+    direct.status === 4 && engineLine !== undefined && finding.includes(engineLine.trim()),
+    `${label}: the finding does not quote the engine's own refusal line (${engineLine})\n${finding}`,
+  );
+  check(
+    JSON.stringify(snapshotOf(collided)) === JSON.stringify(before),
+    `${label}: check changed the evaluation folder (compile output or record written under it)`,
+  );
+  check(
+    fs.readdirSync(privateTemp).length === 0,
+    `${label}: check left ${JSON.stringify(fs.readdirSync(privateTemp))} in its temporary directory`,
+  );
+
+  // Distinct paths: exit 0.
+  const distinct = copyApi();
+  plantApiHistorical(distinct, TWO_INTERFACE_DEPLOYMENTS);
+  await writeCorpusIndex(distinct);
+  const clean = runCli(['check', '--evaluation', distinct], { env: environment });
+  check(clean.status === 0, `report operations at distinct paths: check exited ${clean.status}; expected 0\n${clean.output}`);
+
+  // The stand-in refuses compile with a line of the chosen code and logs each call.
+  const shim = engineShim();
+  const refused = (code) => `eval-quality: ${code}: EvalContract.permittedInterfaces: stand-in refusal`;
+  const shimmed = (folder, line, { exit = 4, stream = 'stderr' } = {}) => {
+    const log = path.join(tempDir('shim-log'), 'calls.log');
+    const run = runCli(['check', '--evaluation', folder], {
+      env: { ...environment, [ENGINE_CLI_ENV]: shim, SHIM_LOG: log, SHIM_LINE: line, SHIM_EXIT: String(exit), SHIM_STREAM: stream },
+    });
+    return { run, calls: fs.existsSync(log) ? fs.readFileSync(log, 'utf8').trim().split('\n') : [] };
+  };
+
+  // The stand-in's collision line is quoted as it is printed, which shows the rule runs the engine stage and computes nothing.
+  const quoted = shimmed(distinct, refused('duplicate-operation-signature'));
+  check(
+    quoted.run.status === 10 &&
+      historicalFindingsOf(quoted.run.stdout).length === 1 &&
+      quoted.run.stdout.includes(refused('duplicate-operation-signature')) &&
+      quoted.calls.length === 1 &&
+      quoted.calls[0].startsWith('compile --in '),
+    `a collision line the engine printed was not quoted from one compile call\n${quoted.run.output}\n${quoted.calls}`,
+  );
+
+  // A collision line on stdout is quoted too.
+  const onStdout = shimmed(distinct, refused('duplicate-operation-signature'), { stream: 'stdout' });
+  check(
+    onStdout.run.status === 10 &&
+      historicalFindingsOf(onStdout.run.stdout).length === 1 &&
+      onStdout.run.stdout.includes(refused('duplicate-operation-signature')),
+    `a collision line printed on stdout was not quoted\n${onStdout.run.output}`,
+  );
+
+  // Several probes that name two reports: one compile, one finding, on the first of them.
+  const several = copyApi();
+  plantApiHistorical(several, TWO_INTERFACE_DEPLOYMENTS);
+  const second = JSON.parse(fs.readFileSync(path.join(several, 'probes', 'P-002.probe.json'), 'utf8'));
+  fs.writeFileSync(path.join(several, 'probes', 'P-003.probe.json'), `${JSON.stringify({ ...second, probeId: 'P-003' }, null, 2)}\n`);
+  await writeCorpusIndex(several);
+  const many = shimmed(several, refused('duplicate-operation-signature'));
+  const manyFindings = historicalFindingsOf(many.run.stdout);
+  check(
+    many.run.status === 10 &&
+      manyFindings.length === 1 &&
+      manyFindings[0].startsWith('probes/P-002.probe.json: [historical] ') &&
+      many.calls.length === 1,
+    `two probes naming two reports did not draw one finding on P-002 from one compile call (findings ${JSON.stringify(manyFindings)}, calls ${JSON.stringify(many.calls)})\n${many.run.output}`,
+  );
+
+  // One report: no compile call, no finding.
+  const single = copyApi();
+  plantApiHistorical(single, DEPLOYMENTS);
+  await writeCorpusIndex(single);
+  const one = shimmed(single, refused('duplicate-operation-signature'));
+  check(
+    one.run.status === 0 && one.calls.length === 0,
+    `a probe naming a report for one interface drew a compile call or a finding (exit ${one.run.status}, calls ${JSON.stringify(one.calls)})\n${one.run.output}`,
+  );
+
+  // Another refusal: this rule stays quiet; `run` and the compile check own it.
+  const other = shimmed(distinct, refused('unknown-interface'));
+  check(
+    other.run.status === 0 && historicalFindingsOf(other.run.stdout).length === 0 && other.calls.length === 1,
+    `a compile refusal for another cause drew a finding from this rule (exit ${other.run.status})\n${other.run.output}`,
+  );
+
+  // A compile fault (5), a usage exit (64) and a refusal with no collision line draw no finding.
+  for (const [name, options] of [
+    ['exit 5', { exit: 5 }],
+    ['exit 64', { exit: 64 }],
+    ['exit 3, which no compile documents', { exit: 3 }],
+    ['exit 4 with no duplicate-operation-signature line', { exit: 4, stream: 'none' }],
+  ]) {
+    const quiet = shimmed(distinct, refused('duplicate-operation-signature'), options);
+    check(
+      quiet.run.status === 0 && historicalFindingsOf(quiet.run.stdout).length === 0 && quiet.calls.length === 1,
+      `a compile that ended at ${name} drew a finding from this rule (exit ${quiet.run.status}, calls ${quiet.calls.length})\n${quiet.run.output}`,
+    );
+  }
+
+  // A temporary directory that cannot be made leaves the stage unrun; this rule stays quiet.
+  const noTemp = runCli(['check', '--evaluation', collided], {
+    env: { TMPDIR: path.join(privateTemp, 'missing'), TEMP: path.join(privateTemp, 'missing'), TMP: path.join(privateTemp, 'missing') },
+  });
+  check(
+    noTemp.status === 0 && historicalFindingsOf(noTemp.stdout).length === 0,
+    `a temporary directory that cannot be made drew a finding from this rule (exit ${noTemp.status})\n${noTemp.output}`,
+  );
+
+  // `preflight` and `run` stop at the check stage with the same finding, before any engine stage of their own.
+  const stopped = runCli(['preflight', '--evaluation', collided], { env: environment });
+  check(
+    stopped.status === 10 &&
+      historicalFindingsOf(stopped.stdout).length === 1 &&
+      stopped.stdout.includes('duplicate-operation-signature') &&
+      stopped.stdout.includes(engineLine.trim()),
+    `preflight over the colliding registry did not stop at the check stage with the engine's line (exit ${stopped.status})\n${stopped.output}`,
+  );
+
+  // Engine unavailable: the stage cannot start; this rule stays quiet.
+  const unavailable = runCli(['check', '--evaluation', distinct], {
+    env: { ...environment, [ENGINE_CLI_ENV]: path.join(privateTemp, 'no-such-eval-quality') },
+  });
+  check(
+    unavailable.status === 0 && historicalFindingsOf(unavailable.stdout).length === 0,
+    `an engine stage that cannot start drew a finding from this rule (exit ${unavailable.status})\n${unavailable.output}`,
+  );
+  check(
+    fs.readdirSync(privateTemp).length === 0,
+    `the cases left ${JSON.stringify(fs.readdirSync(privateTemp))} in the temporary directory`,
   );
 }
 
@@ -1881,7 +2098,11 @@ const HARDENING_CASES = [
         const other = structuredClone(grader);
         other.logicalId = 'status';
         other.operations = [
-          { ...grader.operations.find((operation) => operation.operationId === 'report-release'), operationId: 'report-status' },
+          {
+            ...grader.operations.find((operation) => operation.operationId === 'report-release'),
+            operationId: 'report-status',
+            pathTemplate: '/status/release',
+          },
         ];
         value.permittedInterfaces.push(other);
       });
@@ -4015,6 +4236,7 @@ async function main() {
     await checkWindowsRunnerBudget();
     checkOperationPhaseCoverage();
     checkReportOperationReusedAcrossInterfaces();
+    await checkReportSignatureCollision();
     checkSymlinkRefused();
     checkForgedFindingLine();
     await checkRuntimeUnits();
