@@ -19,7 +19,12 @@
  *                itself made under the same token has come back through the
  *                stream, since the stream delivers events in order. Attribution
  *                is by token alone, so other sandboxes, runs and processes
- *                never mix in.
+ *                never mix in. The log loses reports without a trace when the
+ *                host is saturated, so a canary read of a file no target can
+ *                reach is made through the same token every 50 ms while the
+ *                trial runs, and the count of canaries the log delivered
+ *                against the count sent says how complete the trial's
+ *                reports were (Story 1.81).
  *
  *   Bubblewrap   the command runs as the child of `strace -f --seccomp-bpf`,
  *                started outside the namespace, so no target process can
@@ -50,6 +55,10 @@ const SENTINEL_MS = 3000;
 
 /** How long a `log stream` lives at most, which bounds one a killed runtime leaves behind (a trial that outlasts it exits 12). */
 const LOG_TIMEOUT = '4h';
+
+/** How often a canary read is made while a trial runs, and how many may be running at once on a host too busy to start them promptly. */
+const CANARY_MS = 50;
+const CANARY_IN_FLIGHT = 8;
 
 /** How long the barrier waits for the stream to return a read the runtime made, and how often it makes another. */
 const BARRIER_MS = 10_000;
@@ -213,6 +222,11 @@ class ReportStream {
     this.carry = '';
     this.decoder = new StringDecoder('utf8');
     this.sentinelCount = 0;
+    this.canarySent = new Set();
+    this.canaryReported = new Set();
+    this.canaryCount = 0;
+    this.canaryTimer = null;
+    this.canaryRunning = new Set();
     this.lost = false;
     this.ended = null;
     this.child = null;
@@ -301,30 +315,92 @@ class ReportStream {
       return;
     }
     if (report.path.startsWith(`${this.directory}/sentinel-`) && !report.denied) this.sentinels.add(report.path);
+    else if (report.path.startsWith(`${this.directory}/canary-`) && !report.denied) this.canaryReported.add(report.path);
     else this.paths.add(report.path);
+  }
+
+  /**
+   * One read of the file `name` (a fresh file beneath the audit directory, which no target can reach) under the sandbox's
+   * token, which the stream should report: its path, whether the read process started and whether it ran to a clean end.
+   */
+  async tokenRead(name) {
+    const file = path.join(this.directory, name);
+    fs.writeFileSync(file, `${name}\n`, { mode: 0o600 });
+    const safe = assertProfileSafePath(file, (value) =>
+      this.fail(`the audit path ${JSON.stringify(value)} cannot be carried into a profile`),
+    );
+    const outcome = await new Promise((resolve) => {
+      const child = spawn(this.sandboxExec, ['-p', sentinelProfile(safe, this.token), '/bin/cat', file], { stdio: 'ignore' });
+      let started = false;
+      child.once('spawn', () => {
+        started = true;
+      });
+      // A read process a target stopped or starved ends here, so the barrier ends at its deadline.
+      const timer = setTimeout(() => killChild(child), SENTINEL_MS);
+      child.once('error', () => {
+        clearTimeout(timer);
+        resolve({ started, ok: false });
+      });
+      child.once('exit', (code) => {
+        clearTimeout(timer);
+        resolve({ started, ok: code === 0 });
+      });
+    });
+    return { file, ...outcome };
   }
 
   /** One read of a fresh sentinel under the sandbox's token, which the stream should report; its path. */
   async sentinelRead() {
-    const sentinel = path.join(this.directory, `sentinel-${this.sentinelCount++}`);
-    fs.writeFileSync(sentinel, 'sentinel\n', { mode: 0o600 });
-    const safe = assertProfileSafePath(sentinel, (value) =>
-      this.fail(`the audit path ${JSON.stringify(value)} cannot be carried into a profile`),
-    );
-    await new Promise((resolve) => {
-      const child = spawn(this.sandboxExec, ['-p', sentinelProfile(safe, this.token), '/bin/cat', sentinel], { stdio: 'ignore' });
-      // A sentinel process a target stopped or starved ends here, so the barrier ends at its deadline.
-      const timer = setTimeout(() => killChild(child), SENTINEL_MS);
-      child.once('error', () => {
-        clearTimeout(timer);
-        resolve();
-      });
-      child.once('exit', () => {
-        clearTimeout(timer);
-        resolve();
-      });
-    });
-    return sentinel;
+    return (await this.tokenRead(`sentinel-${this.sentinelCount++}`)).file;
+  }
+
+  /**
+   * One canary read: a file read through the sandbox's token that the log should report. A canary counts as sent once its
+   * process has started, so one that a target killed or stopped, or a starved host could not finish, counts as a canary the log
+   * did not deliver and can only make the trial lossy; no target can hide a loss by ending its canaries. Returns whether
+   * the process started.
+   */
+  async canaryRead() {
+    const { file, started } = await this.tokenRead(`canary-${this.canaryCount++}`);
+    if (started) this.canarySent.add(file);
+    fs.rmSync(file, { force: true });
+    return started;
+  }
+
+  /** Starts the canary reads, one every `CANARY_MS` while fewer than `CANARY_IN_FLIGHT` run. */
+  startCanaries() {
+    if (this.canaryTimer !== null) return;
+    const tick = () => {
+      if (this.canaryRunning.size < CANARY_IN_FLIGHT) {
+        // A canary the runtime could not make is one fewer sent; the final canary still accounts for the trial.
+        const read = this.canaryRead()
+          .catch(() => {})
+          .finally(() => this.canaryRunning.delete(read));
+        this.canaryRunning.add(read);
+      }
+      this.canaryTimer = setTimeout(tick, CANARY_MS);
+      this.canaryTimer.unref();
+    };
+    tick();
+  }
+
+  /**
+   * Ends the canary reads and waits for the ones running; with `final`, makes one more, so a trial that lasted less than a tick
+   * still has a canary. A final canary whose process cannot start leaves the trial with nothing measured, so it is a failure.
+   */
+  async stopCanaries({ final = false } = {}) {
+    clearTimeout(this.canaryTimer);
+    this.canaryTimer = null;
+    await Promise.all(this.canaryRunning);
+    if (final && !(await this.canaryRead()))
+      throw this.fail("the audit's final canary read could not start, so how complete the log's reports were is unmeasured");
+  }
+
+  /** The canaries sent and the ones the log delivered, as read so far; a trial's are final once `stopCanaries` and the barrier are done. */
+  canaries() {
+    let delivered = 0;
+    for (const file of this.canarySent) if (this.canaryReported.has(file)) delivered += 1;
+    return { sent: this.canarySent.size, delivered, lostEvents: this.lost };
   }
 
   /**
@@ -348,6 +424,8 @@ class ReportStream {
   }
 
   close() {
+    clearTimeout(this.canaryTimer);
+    this.canaryTimer = null;
     killChild(this.child);
   }
 }

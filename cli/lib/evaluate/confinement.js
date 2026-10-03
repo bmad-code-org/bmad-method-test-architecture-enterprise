@@ -140,6 +140,11 @@ const MECHANISM_NAMES = Object.freeze({ seatbelt: 'macOS Seatbelt (sandbox-exec)
 
 const SANDBOX_EXEC = '/usr/bin/sandbox-exec';
 const PLATFORM_ENV = 'TEA_EVALUATE_CONFINEMENT_PLATFORM';
+/**
+ * The `log` executable the macOS audit streams the kernel's reports through, which a case replaces with a stub that drops
+ * reports (Story 1.81). It names an absolute path, and the runtime trusts it as it trusts the `strace` on `PATH`.
+ */
+const LOG_ENV = 'TEA_EVALUATE_AUDIT_LOG';
 
 /** What Bubblewrap starts in a target's place, so a signal that ends the target is not read as an exit code. */
 const STATUS_SHIM = path.join(__dirname, 'confinement-status.cjs');
@@ -485,12 +490,15 @@ function probeObserver(mechanism, env) {
     tempUsable = false;
   }
   if (mechanism.mode === 'seatbelt') {
-    const key = `${mechanism.executable}|${LOG_EXECUTABLE}`;
-    if (!tempUsable) return { observer: { executable: LOG_EXECUTABLE } };
+    const logExecutable = env?.[LOG_ENV] || LOG_EXECUTABLE;
+    if (!path.isAbsolute(logExecutable))
+      return { failure: `${LOG_ENV} names ${JSON.stringify(logExecutable)}, which is not an absolute path` };
+    const key = `${mechanism.executable}|${logExecutable}`;
+    if (!tempUsable) return { observer: { executable: logExecutable } };
     if (confirmedObservers.has(key)) return confirmedObservers.get(key);
-    const failure = probeReportStream({ sandboxExec: mechanism.executable, fail: (message) => new ConfinementError(message) });
+    const failure = probeReportStream({ sandboxExec: mechanism.executable, logExecutable });
     if (failure !== null) return { failure };
-    return confirmedObservers.set(key, { observer: { executable: LOG_EXECUTABLE } }).get(key);
+    return confirmedObservers.set(key, { observer: { executable: logExecutable } }).get(key);
   }
   const strace = executableOnPath('strace', env);
   if (strace === null) return { failure: 'strace is not on PATH' };
@@ -841,6 +849,15 @@ function targetSandbox({
     async observedMounts() {
       return observer === null ? [] : observer.observedMounts();
     },
+    /**
+     * How complete the reports behind `observedMounts` were, once it has been read: `{ canariesSent, canariesDelivered,
+     * logReportedLoss }`, the reads of a file no target can reach that the audit made through the sandbox's own token, the ones
+     * the kernel's log delivered and whether the log itself reported lost events (Story 1.81); `null` for a port that does not
+     * audit. Linux's trace loses nothing and sends no canary.
+     */
+    auditChannel() {
+      return observer === null ? null : observer.channel();
+    },
     /** Ends the audit's observer. */
     release() {
       observer?.release();
@@ -871,9 +888,12 @@ function makeObserver({ confinement, audit, cwd }) {
             `the audit's log stream did not report the runtime's first read within the barrier${stream.said() ? ` (${stream.said()})` : ''}`,
           );
         }
+        stream.startCanaries();
       },
       collect: async () => {},
       async observedMounts() {
+        // The canaries end with the trial's calls; the final one and the barrier's sentinel then come back through the stream after every report of the trial.
+        await stream.stopCanaries({ final: true });
         const confirmed = await stream.confirm(audit.barrierMs);
         stream.read();
         const gone = stream.endedBecause();
@@ -889,6 +909,10 @@ function makeObserver({ confinement, audit, cwd }) {
           );
         }
         return [...stream.paths].sort();
+      },
+      channel() {
+        const { sent, delivered, lostEvents } = stream.canaries();
+        return { canariesSent: sent, canariesDelivered: delivered, logReportedLoss: lostEvents };
       },
       release: () => stream.close(),
     };
@@ -924,6 +948,8 @@ function makeObserver({ confinement, audit, cwd }) {
       if (failure !== null) throw failure;
       return [...paths].sort();
     },
+    // `strace` reports every traced syscall of the call, so the trace has no canaries to count (Story 1.81).
+    channel: () => ({ canariesSent: 0, canariesDelivered: 0, logReportedLoss: false }),
     release: () => {},
   };
 }
@@ -1299,6 +1325,7 @@ function forbiddenInputNote(confinement, hostNetwork = []) {
 
 module.exports = {
   MECHANISM_NAMES,
+  LOG_ENV,
   PLATFORM_ENV,
   confinedCommandMechanism,
   confinedMcpMechanism,
