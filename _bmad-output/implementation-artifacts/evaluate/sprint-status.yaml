@@ -130,6 +130,7 @@ development_status:
   1-101-name-a-stale-stamp-on-every-artifact-score-reads: backlog
   1-102-refuse-a-duplicate-interface-identifier-at-compile: backlog
   1-103-prove-the-story-1-42-review-fixes-against-their-mutants: backlog
+  1-104-count-only-behavior-linked-oracles-for-success-separation: backlog
   1-76-require-an-explicit-custom-agent-version-response: backlog
   epic-1-retrospective: optional
 
@@ -206,6 +207,7 @@ parallel_lanes:
     - 1-101-name-a-stale-stamp-on-every-artifact-score-reads
     - 1-102-refuse-a-duplicate-interface-identifier-at-compile
     - 1-103-prove-the-story-1-42-review-fixes-against-their-mutants
+    - 1-104-count-only-behavior-linked-oracles-for-success-separation
 owner_handoff:
   - key: h-1-accept-the-dogfood-baseline-and-turn-its-pr-replay-green
     owner: Murat

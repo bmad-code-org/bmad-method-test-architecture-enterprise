@@ -2,7 +2,7 @@
 title: 'Story 1.55: Recognize process and answer separation for scalar CLI output'
 type: 'bugfix'
 created: '2026-10-02'
-status: 'in-progress'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '7338b5c04fb312d7e976672c05750974ad322b1a'
@@ -52,9 +52,9 @@ context:
 
 **Execution:**
 
-- [ ] `bmad-eval-quality/src/core/coverage/satisfaction.ts` and coverage tests: recognize exact scalar process and answer checks, retaining negative and structured behavior.
-- [ ] `bmad-eval-quality/CHANGELOG.md` and generated coverage artifacts: validate, merge and publish the engine change, then verify npm version and tag.
-- [ ] `package-lock.json`, pantry fixture and `test/test-evaluate-learned-framework.js`: install published engine and prove three-trial clean and mutated replays with PASS evidence.
+- [x] `bmad-eval-quality/src/core/coverage/satisfaction.ts` and coverage tests: recognize exact scalar process and answer checks, retaining negative and structured behavior.
+- [x] `bmad-eval-quality/CHANGELOG.md` and generated coverage artifacts: validate, merge and publish the engine change, then verify npm version and tag.
+- [x] `package-lock.json`, pantry fixture and `test/test-evaluate-learned-framework.js`: install published engine and prove three-trial clean and mutated replays with PASS evidence.
 - [ ] TeA `CHANGELOG.md`, sprint row and story record: document the change and run all gates.
 
 **Acceptance Criteria:**
@@ -67,9 +67,23 @@ context:
 
 ## Implementation Notes
 
+- Engine PR [#179](https://github.com/bmad-code-org/bmad-eval-quality/pull/179) merged at `f8d6816031167835a2f26cfdafca540b1a9baefb` after all watched checks and native Codex reviews passed. Its scalar CLI branch requires an affirmative oracle naming the same step's exit code and whole stdout in both direction and conjunctive equality checks. Root `channelRoles: {"": "payload"}` is supported; a diagnostic role is rejected. Structured response checks keep their previous rule. No generated coverage corpus or table changed.
+- The engine PR also repaired its website audit gate after GHSA-ch52-4w7c-c8xp blocked CI. `http-cache-semantics@4.2.0` remains the latest npm release and no patched version exists as of 2026-10-03. The narrow, expiring exception applies only to Astro's locked static GitHub Pages build graph and keeps other high severity findings and incomplete or failed audits red. The documentation build reported `output: "static"` and 17 generated pages. The exception expires 2026-10-17.
+- Engine Publish run `37092731848` completed successfully. npm `latest` is `eval-quality@6.0.1`; `v6.0.1` dereferences to release commit `906d950cbe8166c64ab8e8090a564f5428347280` on engine `main`.
+- TeA keeps the `latest` devDependency, raises the optional peer floor to `>=6.0.1`, and resolves `6.0.1` in `package-lock.json`. The pantry contract and probes were already correct, so no contract or probe regeneration was needed. The test asserts `PASS` and an empty gap list on development P-001, P-004 and P-002 and held-out P-003, while retaining three expected votes per probe.
+- Red-phase check on eval-quality 6.0.0: `test:evaluate-learned-framework` failed exactly four new assertions, one for each artifact with a critical `success-indicator-separation` gap. On published 6.0.1 it passed 120 checks. `test:atdd-workflow-guidance`, `test:release-metadata`, `test:guard-publish`, `format:check`, `lint:md`, `lint`, `docs:validate-links` and `docs:build` passed after rebasing onto TeA `c17cfafa`. A full local `npm test` was stopped at the relay owner's direction to avoid concurrent load with lane 2; it will be rerun after lane 2 exits.
+
 ## Spec Change Log
 
 ## Review Triage Log
+
+| Finding                                                              | Decision                | Evidence                                                                                                                                                          |
+| -------------------------------------------------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Story record claimed the full TeA gate had passed before it finished | Fixed                   | Verification now records the stopped lane 3 run and pending rerun after lane 2 exits.                                                                             |
+| Release guard and release-metadata test still accepted engine 6.0.0  | Fixed                   | Raised both floors to 6.0.1; focused guard and release-metadata suites pass.                                                                                      |
+| Architecture and CLI reference named the old engine floor            | Fixed                   | Updated the stack record and CLI prerequisite to 6.0.1; formatting and link checks pass.                                                                          |
+| Engine separation rule counts an oracle that no behavior references  | Deferred to Story 1.104 | The same contract-wide scan affects scalar and structured responses. Story 1.104 specifies negative fixtures, revert checks, the engine release and TeA adoption. |
+| H.1 hand-off text still started after Story 2.5                      | Fixed                   | The dependency row and H.1 instructions now wait for all lanes, including Story 1.104.                                                                            |
 
 ## Verification
 
@@ -77,4 +91,5 @@ context:
 
 - `npm run validate` in eval-quality: all engine checks pass.
 - `node --input-type=module -e "const m = await import('eval-quality'); if (typeof m.evaluateTarget !== 'function') process.exit(1)"` in TeA: published export exists.
-- `npm run test:evaluate-learned-framework`, `npm run test:atdd-workflow-guidance`, `npm run test:release-metadata`, `npm test` in TeA: focused and full gates pass.
+- `npm run test:evaluate-learned-framework`, `npm run test:atdd-workflow-guidance`, `npm run test:release-metadata`, `npm run test:guard-publish`, `npm run docs:validate-links`, `npm run docs:build`, `npm run format:check`, `npm run lint:md` and `npm run lint` in TeA: passed after the rebase.
+- `npm test` in TeA: pending until lane 2's full test exits, per the relay owner's process ownership instruction.

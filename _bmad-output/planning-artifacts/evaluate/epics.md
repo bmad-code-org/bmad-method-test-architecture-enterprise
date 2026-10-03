@@ -23,11 +23,11 @@ inputDocuments:
 
 ## Overview
 
-This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and one hundred one stories, including H.1 (Stories 1.27 to 1.76, 1.80 to 1.84, 1.90 to 1.103 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
+This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and one hundred two stories, including H.1 (Stories 1.27 to 1.76, 1.80 to 1.84, 1.90 to 1.104 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
 
 Evaluate is fully stacked. The stack runs system under test, then the evaluation (the mechanism that runs the system, collects evidence and makes judgments), then the Behavioral Evaluation Contract (what behavior matters, what evidence counts, how success and failure resolve), then eval-quality (contract sanity, evidence support, and whether the evaluation catches defects). TeA owns every layer above eval-quality, including each concern eval-quality states it leaves to the caller, so an adopter can evaluate any target end to end. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3 onward, Epic 2 and H.1 to close the plan gap audit; the Traceability section maps each audit item to the story that closes it.
 
-Every story lands as its own pull request against `main`, in the order written. Stories keep their numbers: the ten stories added by the amendment carry the next free numbers and sit in this document at their execution position, which the Epic Dependencies table also gives. A fresh coordinator session runs each story: a worker builds it, an independent reviewer session gives the final review, the coordinator merges it and hands the next story to a new coordinator. Story H.1 names the release, baseline and replay steps that close the plan; the coordinator of the story they follow runs them.
+Every story lands as its own pull request against `main`, in the order written. Stories keep their numbers: the ten stories added by the amendment carry the next free numbers and sit in this document at their execution position, which the Epic Dependencies table also gives. A fresh coordinator session runs each story: a worker builds it, an independent reviewer session gives the final review, the coordinator merges it and hands the next story to a new coordinator. Story H.1 names the release, baseline and replay steps that close the plan; the owner coordinator runs them after every lane drains.
 
 ## Build Rules For Every Story
 
@@ -150,7 +150,7 @@ None. Evaluate has no graphical interface.
 ### Epic 1: The Evaluate authoring loop
 
 An adopter describes a target, answers Evaluate's questions, chooses or builds the evaluation layer and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches the seeded defect, with the gaps named and closed. The epic closes by running Evaluate on `bmad-testarch-evaluate` itself, then proving the guidance on two more target kinds, on seeded weaknesses and on an evaluation framework its guides never name.
-Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.76, 1.80 to 1.84, 1.90 to 1.103.
+Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.76, 1.80 to 1.84, 1.90 to 1.104.
 
 **FRs covered:** FR1 to FR10, FR13, FR14.
 
@@ -162,7 +162,7 @@ The evaluation Epic 1 produces runs in the adopter's CI on every pull request, w
 
 ## Epic Dependencies
 
-Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `eval-quality` devDependency to the published release carrying it, and every later TeA story runs on that release. Epic 1's stories run in the order this table lists them, which is the order they are written in. Epic 2 depends on Epic 1's runtime and on the evaluation Story 1.16 authors. Story H.1 is the owner's and runs after Story 2.5 merges; eval-quality 4.0.0, the release it once waited for, shipped during Story 1.2.
+Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `eval-quality` devDependency to the published release carrying it, and every later TeA story runs on that release. Epic 1's stories run in the order this table lists them, which is the order they are written in. Epic 2 depends on Epic 1's runtime and on the evaluation Story 1.16 authors. Story H.1 is the owner's and runs after every lane drains, including the engine patch and TeA adoption in Story 1.104.
 
 | Order | Story | Depends on                   |
 | ----- | ----- | ---------------------------- |
@@ -260,13 +260,14 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 92    | 1.101 | 1.42                         |
 | 93    | 1.102 | 1.42                         |
 | 94    | 1.103 | 1.42                         |
-| 95    | 1.76  | 1.72                         |
-| 96    | 2.1   | 1.16, 1.26, 1.45             |
-| 97    | 2.2   | 2.1                          |
-| 98    | 2.3   | 2.2                          |
-| 99    | 2.4   | 2.3                          |
-| 100   | 2.5   | 2.4                          |
-| 101   | H.1   | 2.5                          |
+| 95    | 1.104 | 1.55                         |
+| 96    | 1.76  | 1.72                         |
+| 97    | 2.1   | 1.16, 1.26, 1.45             |
+| 98    | 2.2   | 2.1                          |
+| 99    | 2.3   | 2.2                          |
+| 100   | 2.4   | 2.3                          |
+| 101   | 2.5   | 2.4                          |
+| 102   | H.1   | 1.76, 1.84, 1.104, 2.5       |
 
 ### Parallel lanes (from 2026-10-01)
 
@@ -276,7 +277,7 @@ The table above gives every story's dependencies. Since Story 1.40 merged, the s
 
 **Lane 2: confinement and process lifecycle** (own worktree): 1.62, 1.57, 1.58, 1.59, 1.60, 1.63, 1.61, 1.52, 1.53, 1.54, 1.80, 1.81, 1.82, 1.83, 1.84. Story 1.62 goes first because it extracts the shared sandbox primitives the confinement stories build on. Story 1.60 may remove 1.63's premise, so 1.63 is re-read after it. Story 1.58 precedes 1.54, since both track the run's private scratch directories. Stories 1.52 to 1.54 touch the preflight and workspace modules the confinement stories also edit, so they run after them. Stories 1.82 and 1.83 follow 1.63, whose vector, bridge and `network` field they build on. Story 1.84 was appended from Story 1.61's build and follows 1.61, whose guides it extends; it joins the end, where its two live sessions can wait for the owner.
 
-**Lane 3: engine releases, dogfood and Epic 2** (own worktree): 1.45, 2.1, 2.2, 2.3, 2.4, 1.47, 1.49, 1.48, 1.42, 1.50, 1.55, 1.56, 1.51, 1.46, 2.5, 1.90, 1.91, 1.92, 1.93, 1.94, 1.95, 1.96, 1.97, 1.98, 1.99, 1.100, 1.101, 1.102, 1.103. Story 1.45 starts the longest serial chain (1.45, 2.1 to 2.5, then H.1), so it runs first, and 2.5 runs last because it baselines every fixture and so waits for each story that changes committed evidence bytes (1.42, 1.44, 1.50, 1.51, 1.55, 1.56). Stories 1.47, 1.49 and 1.48 regenerate the test-design probes, so they run together with 1.48 last. Stories 1.42 and 1.50 both change the HTTP probe port and run back to back. Story 1.46 records live runs of the Evaluate skill, so it follows the skill-guide stories in other lanes (1.43, 1.44, 1.61, 1.67, 1.70). Lane 3 owns every eval-quality release, because 1.42, 1.45, 1.50 and 1.55 each need a published engine and one publisher keeps the dependency pin and `package-lock.json` ordered. Stories 1.90 and 1.91 follow 2.5: 1.90 edits the baseline `check` and `compare` read, and 1.91 re-accepts the fixture baselines Stories 2.2 to 2.5 commit, so it waits for every one of them.
+**Lane 3: engine releases, dogfood and Epic 2** (own worktree): 1.45, 2.1, 2.2, 2.3, 2.4, 1.47, 1.49, 1.48, 1.42, 1.50, 1.55, 1.56, 1.51, 1.46, 2.5, 1.90, 1.91, 1.92, 1.93, 1.94, 1.95, 1.96, 1.97, 1.98, 1.99, 1.100, 1.101, 1.102, 1.103, 1.104. Story 1.45 starts the longest serial chain (1.45, 2.1 to 2.5), so it runs first, and 2.5 waits for every story that changes committed evidence bytes before it baselines the fixtures (1.42, 1.44, 1.50, 1.51, 1.55, 1.56). Stories 1.47, 1.49 and 1.48 regenerate the test-design probes, so they run together with 1.48 last. Stories 1.42 and 1.50 both change the HTTP probe port and run back to back. Story 1.46 records live runs of the Evaluate skill, so it follows the skill-guide stories in other lanes (1.43, 1.44, 1.61, 1.67, 1.70). Lane 3 owns every eval-quality release, because 1.42, 1.45, 1.50 and 1.55 each need a published engine and one publisher keeps the dependency pin and `package-lock.json` ordered. Stories 1.90 and 1.91 follow 2.5: 1.90 edits the baseline `check` and `compare` read, and 1.91 re-accepts the fixture baselines Stories 2.2 to 2.5 commit, so it waits for every one of them.
 
 Rules the lanes share:
 
@@ -2465,6 +2466,25 @@ So that the two-interface attribution of Story 1.42 stays protected at every loo
 **Dependencies:** 1.42.
 **Gate:** `npm run test:evaluate-check`, `test:evaluate-interpret`, `test:evaluate-arms`, `test:evaluate-agents`, `test:evaluate-mcp`, `test:evaluate-run`, `test:evaluate-records`, `test:evaluate-calibration`, `test:evaluate-ci`, `test:evaluate-compare`, then `npm test`.
 
+### Story 1.104: Count only behavior-linked oracles for success separation
+
+Added 2026-10-03 from Story 1.55's independent review. The engine's `success-indicator-separation` rule scans all contract oracles. An oracle that no behavior references can therefore satisfy the rule without supplying evidence for a behavior. Both the scalar CLI and structured-response branches share this gap.
+
+As an adopter evaluating a contract,
+I want success and answer checks counted only when a behavior uses their oracle,
+So that an orphan check cannot hide a missing success-separation requirement.
+
+**Acceptance Criteria:**
+
+**Given** a scalar CLI contract with an exact exit-code and whole-stdout oracle that no behavior references
+**When** `eval-quality compile` and coverage evaluation run
+**Then** coverage reports `success-indicator-separation` unsatisfied; linking the oracle to the behavior satisfies it, and removing the behavior-link check makes the negative fixture fail
+**And** the equivalent structured-response fixture rejects an unlinked success/payload oracle and accepts the linked oracle, while the existing valid scalar and structured cases remain satisfied
+**And** the published engine patch is adopted by TeA with its peer floor and lockfile updated; the pantry fixture retains PASS because its oracle is behavior-linked.
+
+**Dependencies:** 1.55.
+**Gate:** engine `npm run validate`, `npm view eval-quality version`, then TeA `npm run test:evaluate-learned-framework`, `npm run test:release-metadata` and `npm test`.
+
 ### Story 1.76: Require an explicit custom-agent version response
 
 Added 2026-10-02 from Story 1.72's independent review. Story 1.72 accepts a single semantic-version token anywhere in a custom agent command's version output. A command that prints a dependency version as incidental output can therefore bind that dependency version as `tea.evaluatorAgentVersion`. The custom command is responsible for reporting its own version, but the response format should identify which value it is reporting. This story changes the custom adapter's response contract; the built-in adapter keeps its vendor-specific parser.
@@ -2632,9 +2652,9 @@ So that Evaluate is continuously proven where it is built, and users can read ho
 
 ### Story H.1: Accept the dogfood baseline and turn its `pr` replay green
 
-Run by the coordinator of Story 2.5 once it merges. No `/bmad-build` worker runs this story.
+Run by the owner coordinator after all three lanes have drained, including Story 1.104. No `/bmad-build` worker runs this story.
 
-**Engine status (verified 2026-09-23):** eval-quality 4.0.0 is published and is npm `latest`, carrying the target-policy export (#158) and trial-set scoring with `EvidenceArtifact` version 4 (#143). Story 1.2 put TeA on it and Story 1.4 floors the peer range at `>=4.0.0`, which Story 1.6 raises to `>=4.1.2`, Story 1.8 to `>=4.1.4`, Story 1.10 to `>=4.2.0` and Story 1.11 to `>=4.3.0`, so every Epic 1 and Epic 2 check, the `test:evaluate-*` scripts the 2026-09-23 amendment adds included, runs on the published engine from the story that adds it. No engine release or floor raise remains for this story.
+**Engine status (2026-10-03):** eval-quality 6.0.1 is published and Story 1.55 raises TeA's peer floor to that release. Story 1.104 will publish and adopt a later engine patch before H.1 runs. H.1 uses the published engine resolved by the final merged TeA lockfile.
 
 As the owner,
 I want the dirty proof run replaced by a clean one on the merged tree,
@@ -2642,12 +2662,12 @@ So that the `pr` replay of `bmad-testarch-evaluate` has an accepted baseline to 
 
 **Steps, each with what it proves:**
 
-1. On `main` after Story 2.5 merges, `npm ci` then `npm test`. Proves every check is green on the merged tree and the published engine.
+1. On `main` after all lanes drain, `npm ci` then `npm test`. Proves every check is green on the merged tree and the published engine.
 2. `node cli/evaluate.js run --evaluation test/evaluations/bmad-testarch-evaluate/evaluation.json` and `score` on that committed tree, with live legs through the local Claude Code CLI. Proves a clean (`dirty: false`) run: preflight passed, `passed-clean-control`, `caught` at `minimumTrialCount`, rollback proved.
 3. `node cli/evaluate.js compare --accept --evaluation test/evaluations/bmad-testarch-evaluate/evaluation.json` in a branch, and open the pull request. Add the `bmad-testarch-evaluate` replay as an `npm test` chain script, which the `chain` matrix of `quality.yaml` runs (amended 2026-09-25 in Story 1.9), in the same pull request. Proves the baseline enters `baseline/` only through a reviewed pull request (AD-12).
 4. `node cli/evaluate.js ci --tier pr --evaluation test/evaluations/bmad-testarch-evaluate/evaluation.json`, locally and in the pull request's `quality.yaml` run. Proves the `pr` replay reproduces the committed evidence, closing AD-15's last condition.
 
-**Dependencies:** 2.5.
+**Dependencies:** 1.76, 1.84, 1.104, 2.5.
 
 ## Traceability
 

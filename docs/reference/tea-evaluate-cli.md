@@ -14,7 +14,7 @@ TeA also ships `tea-skill-runner`, the command an evaluation registers to run a 
 ## Prerequisites
 
 - Node.js 22.20 or later, with TeA installed in the evaluations folder (`{tea_evaluations_folder}`, `evals` in these examples) through its private `package.json` (`npm install --prefix evals`), which provides the `tea-evaluate` bin. The adopter's root manifest stays untouched, so every invocation names the folder: `npm exec --prefix evals -- tea-evaluate ...`.
-- `eval-quality` 6.0.0 or later, a devDependency of the same private `package.json`.
+- `eval-quality` 6.0.1 or later, a devDependency of the same private `package.json`.
   TeA declares it as an optional peer dependency, so a project that installs TeA only for its other workflows never receives it.
   Without it, `tea-evaluate` exits 12 and names the missing package.
 
