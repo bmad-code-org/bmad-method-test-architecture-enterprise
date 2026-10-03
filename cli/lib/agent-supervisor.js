@@ -79,6 +79,7 @@ const fs = require('node:fs');
 const net = require('node:net');
 const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
+const { SUPERVISOR_BACKSTOP_MS: BACKSTOP_MS, WINDOWS_SETUP_MS, WINDOWS_STARTUP_SLACK_MS } = require('./agent-supervisor-bounds');
 
 /** Synchronous, opt-in trace for the Windows guardian startup probe. */
 function trace(stage, detail = '') {
@@ -118,15 +119,6 @@ const QUIET_MS = 100;
  * cannot keep the runner waiting.
  */
 const DRAIN_MS = 2000;
-
-/** How long past the wall clock the supervisor waits for the leader: its grace period and some slack. */
-const BACKSTOP_MS = 5000;
-
-/** Cold Windows PowerShell startup took 25.8 s in CI; setup has a separate 90 s bound. */
-const WINDOWS_SETUP_MS = 90_000;
-
-/** Allows cold Node startup before the guardian's own setup timer begins. */
-const WINDOWS_STARTUP_SLACK_MS = 15_000;
 
 /** A Windows leader cannot wait indefinitely for its supervisor report pipe to drain. */
 const WINDOWS_REPORT_WRITE_MS = 2000;

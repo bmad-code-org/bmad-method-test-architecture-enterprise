@@ -23,7 +23,7 @@ inputDocuments:
 
 ## Overview
 
-This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and one hundred stories, including H.1 (Stories 1.27 to 1.75, 1.80 to 1.84, 1.90 to 1.103 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
+This document breaks the Evaluate capability (`SPEC.md`, CAP-1 to CAP-14) into two epics and one hundred one stories, including H.1 (Stories 1.27 to 1.76, 1.80 to 1.84, 1.90 to 1.103 were appended to Epic 1 from findings made while building it), bound by the twenty-three architecture decisions in `ARCHITECTURE-SPINE.md` (cited as AD-n). `SPEC.md` stands in for the PRD: its capabilities are the functional requirements and its constraints are the non-functional requirements.
 
 Evaluate is fully stacked. The stack runs system under test, then the evaluation (the mechanism that runs the system, collects evidence and makes judgments), then the Behavioral Evaluation Contract (what behavior matters, what evidence counts, how success and failure resolve), then eval-quality (contract sanity, evidence support, and whether the evaluation catches defects). TeA owns every layer above eval-quality, including each concern eval-quality states it leaves to the caller, so an adopter can evaluate any target end to end. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3 onward, Epic 2 and H.1 to close the plan gap audit; the Traceability section maps each audit item to the story that closes it.
 
@@ -150,7 +150,7 @@ None. Evaluate has no graphical interface.
 ### Epic 1: The Evaluate authoring loop
 
 An adopter describes a target, answers Evaluate's questions, chooses or builds the evaluation layer and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches the seeded defect, with the gaps named and closed. The epic closes by running Evaluate on `bmad-testarch-evaluate` itself, then proving the guidance on two more target kinds, on seeded weaknesses and on an evaluation framework its guides never name.
-Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.75, 1.80 to 1.84, 1.90 to 1.103.
+Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 to 1.76, 1.80 to 1.84, 1.90 to 1.103.
 
 **FRs covered:** FR1 to FR10, FR13, FR14.
 
@@ -260,18 +260,19 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 92    | 1.101 | 1.42                         |
 | 93    | 1.102 | 1.42                         |
 | 94    | 1.103 | 1.42                         |
-| 95    | 2.1   | 1.16, 1.26, 1.45             |
-| 96    | 2.2   | 2.1                          |
-| 97    | 2.3   | 2.2                          |
-| 98    | 2.4   | 2.3                          |
-| 99    | 2.5   | 2.4                          |
-| 100   | H.1   | 2.5                          |
+| 95    | 1.76  | 1.72                         |
+| 96    | 2.1   | 1.16, 1.26, 1.45             |
+| 97    | 2.2   | 2.1                          |
+| 98    | 2.3   | 2.2                          |
+| 99    | 2.4   | 2.3                          |
+| 100   | 2.5   | 2.4                          |
+| 101   | H.1   | 2.5                          |
 
 ### Parallel lanes (from 2026-10-01)
 
 The table above gives every story's dependencies. Since Story 1.40 merged, the stories not yet built run in three parallel lanes, each a serial relay: a story's coordinator hands off to the next story in its lane, and the lanes merge into `main` independently. A lane groups stories that share modules or a dependency chain, so two lanes rarely edit the same file. Stories keep their numbers and rows above; the lane gives the order to run them in. `sprint-status.yaml` carries the same lists under `parallel_lanes`.
 
-**Lane 1: run integrity, scoring and evaluators** (main checkout): 1.41, 1.68, 1.43, 1.44, 1.67, 1.66, 1.65, 1.64, 1.69, 1.70, 1.71, 1.72, 1.73, 1.74, 1.75. Story 1.68 reads the files 1.41 changes, so it follows directly. Story 1.65 turns the single release report into a per-interface report and 1.64 adds call sites that 1.65 would otherwise rewrite, so 1.66, 1.65, 1.64 run in that order. Story 1.44 rewrites the `evaluate-learn` fixture's evaluator, which lane 3's 1.55 and 1.56 own, so those two wait for it. Story 1.69 reuses the module Story 1.68 builds and edits `run.js`, which 1.64 and 1.65 also edit, so it runs after them. Story 1.70 edits the promptfoo starter, fixture evaluator and guide section that Story 1.43 writes and no file the other lane 1 stories edit, so it joins the end. Stories 1.71 to 1.73 were appended from Story 1.44's final review and sit last: 1.71 edits `command-evaluator.js`, `frameworks.js`, the starters and the evaluator guide that Story 1.44 writes, 1.72 edits `agent-adapters.js`, `evaluators.js`, `run.js` and `sealed-brief-agent.js` and so runs after the other `run.js` editors (1.64, 1.65, 1.69), and 1.73 extends the probe and declaration that 1.71 bounds, so it follows 1.71. Story 1.74 was appended from Story 1.66's build; it edits `arm.js`, which no other lane 1 story after 1.66 edits, and joins the end. Story 1.75 was appended from Story 1.65's round 1 review; it extends the report rules that 1.65 writes in `check.js` and `release-report.js`, so it needs only 1.65 and joins the end.
+**Lane 1: run integrity, scoring and evaluators** (main checkout): 1.41, 1.68, 1.43, 1.44, 1.67, 1.66, 1.65, 1.64, 1.69, 1.70, 1.71, 1.72, 1.73, 1.74, 1.75, 1.76. Story 1.68 reads the files 1.41 changes, so it follows directly. Story 1.65 turns the single release report into a per-interface report and 1.64 adds call sites that 1.65 would otherwise rewrite, so 1.66, 1.65, 1.64 run in that order. Story 1.44 rewrites the `evaluate-learn` fixture's evaluator, which lane 3's 1.55 and 1.56 own, so those two wait for it. Story 1.69 reuses the module Story 1.68 builds and edits `run.js`, which 1.64 and 1.65 also edit, so it runs after them. Story 1.70 edits the promptfoo starter, fixture evaluator and guide section that Story 1.43 writes and no file the other lane 1 stories edit, so it joins the end. Stories 1.71 to 1.73 were appended from Story 1.44's final review and sit last: 1.71 edits `command-evaluator.js`, `frameworks.js`, the starters and the evaluator guide that Story 1.44 writes, 1.72 edits `agent-adapters.js`, `evaluators.js`, `run.js` and `sealed-brief-agent.js` and so runs after the other `run.js` editors (1.64, 1.65, 1.69), and 1.73 extends the probe and declaration that 1.71 bounds, so it follows 1.71. Story 1.74 was appended from Story 1.66's build; it edits `arm.js`, which no other lane 1 story after 1.66 edits, and joins the end. Story 1.75 was appended from Story 1.65's round 1 review; it extends the report rules that 1.65 writes in `check.js` and `release-report.js`, so it needs only 1.65 and joins the end. Story 1.76 was appended from Story 1.72's review; it tightens the custom adapter's version response contract and follows the initial version binding.
 
 **Lane 2: confinement and process lifecycle** (own worktree): 1.62, 1.57, 1.58, 1.59, 1.60, 1.63, 1.61, 1.52, 1.53, 1.54, 1.80, 1.81, 1.82, 1.83, 1.84. Story 1.62 goes first because it extracts the shared sandbox primitives the confinement stories build on. Story 1.60 may remove 1.63's premise, so 1.63 is re-read after it. Story 1.58 precedes 1.54, since both track the run's private scratch directories. Stories 1.52 to 1.54 touch the preflight and workspace modules the confinement stories also edit, so they run after them. Stories 1.82 and 1.83 follow 1.63, whose vector, bridge and `network` field they build on. Story 1.84 was appended from Story 1.61's build and follows 1.61, whose guides it extends; it joins the end, where its two live sessions can wait for the owner.
 
@@ -280,7 +281,7 @@ The table above gives every story's dependencies. Since Story 1.40 merged, the s
 Rules the lanes share:
 
 - Rebase onto the latest `origin/main` immediately before merging. In `CHANGELOG.md`, `sprint-status.yaml`, `epics.md`, `test-design-epic-1.md`, `docs/reference/tea-evaluate-cli.md`, the `package.json` test chain and `quality.yaml`, keep both sides, then rerun the suites the story touches.
-- A finding that becomes a new story takes the next free number in its lane's range: lane 1 from 1.76, lane 2 from 1.80, lane 3 from 1.90. The story joins the end of its own lane, and its row, `epics.md` section and `test-design-epic-1.md` section follow the rule in the relay protocol.
+- A finding that becomes a new story takes the next free number in its lane's range: lane 1 from 1.77, lane 2 from 1.80, lane 3 from 1.90. The story joins the end of its own lane, and its row, `epics.md` section and `test-design-epic-1.md` section follow the rule in the relay protocol.
 - A lane that needs an eval-quality change it does not own asks the coordinator, who routes it to lane 3's publisher.
 - Story H.1 runs once every lane has drained.
 
@@ -2463,6 +2464,27 @@ So that the two-interface attribution of Story 1.42 stays protected at every loo
 
 **Dependencies:** 1.42.
 **Gate:** `npm run test:evaluate-check`, `test:evaluate-interpret`, `test:evaluate-arms`, `test:evaluate-agents`, `test:evaluate-mcp`, `test:evaluate-run`, `test:evaluate-records`, `test:evaluate-calibration`, `test:evaluate-ci`, `test:evaluate-compare`, then `npm test`.
+
+### Story 1.76: Require an explicit custom-agent version response
+
+Added 2026-10-02 from Story 1.72's independent review. Story 1.72 accepts a single semantic-version token anywhere in a custom agent command's version output. A command that prints a dependency version as incidental output can therefore bind that dependency version as `tea.evaluatorAgentVersion`. The custom command is responsible for reporting its own version, but the response format should identify which value it is reporting. This story changes the custom adapter's response contract; the built-in adapter keeps its vendor-specific parser.
+
+As an adopter using a custom sealed-brief agent command,
+I want its version response to name the agent version explicitly,
+So that incidental dependency versions cannot silently become evaluator provenance (CAP-13, AD-21).
+
+**Acceptance Criteria:**
+
+**Given** a custom sealed-brief agent command whose version response is one line of JSON containing `agentVersion` as a semantic-version string
+**When** `tea-evaluate run` prepares the evaluator
+**Then** the custom adapter parses that field in `cli/lib/agent-adapters.js`, records it in `tea.evaluatorAgentVersion` and `run.json.evaluator.version`, and still changes the configuration digest and scoring version when that field changes; replacing the keyed parser with Story 1.72's free-text parser makes the dedicated contract test fail
+**And** plain text containing one dependency version, JSON with only `dependencyVersion`, malformed JSON, multiple lines, and an invalid `agentVersion` exit 12 before calibration, qualification or a trial record; removing the keyed requirement lets the plain-text dependency case proceed and fails the refusal test
+**And** the built-in bridged adapter continues to parse its own documented CLI output; routing it through the custom JSON parser fails a built-in adapter test
+**And** `score` and accepted-baseline replay of a recorded custom-agent run still work after removing the custom command, with identical evidence bytes and no version probe; introducing a version read in either path fails that test
+**And** the public CLI reference and evaluator guide state the custom response shape, show a valid example, and explain the required update for existing custom commands; removing either example fails `test:evaluate-guidance` or the documentation contract test.
+
+**Dependencies:** 1.72.
+**Gate:** `npm run test:evaluate-evaluators`, `npm run test:evaluate-guidance`, `npm run docs:validate-links`, `npm run docs:build`, then `npm test`.
 
 ## Epic 2: Continuous proof in CI
 

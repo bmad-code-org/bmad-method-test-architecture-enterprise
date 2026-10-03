@@ -2192,6 +2192,16 @@ function checkEvaluatorGuidance(guide, failures) {
     const body = headingBody(guide, heading);
     for (const marker of markers) requireText(body, marker, `evaluator.md ${heading}`, failures);
   }
+  const adapterVersionGuide = headingBody(guide, '### Installed agent adapter version');
+  for (const marker of [
+    'configured agent executable',
+    'tea.evaluatorAgentVersion',
+    'evaluator.version',
+    'configuration digest and scoring version',
+    'fresh qualification',
+    'evaluator/LEARNED.md',
+  ])
+    requireText(adapterVersionGuide, marker, 'evaluator.md installed agent adapter version', failures);
   // Story 1.42: a sealed observation names its interface beside its operation, in a harness's records and in each calibration input.
   requireText(
     headingBody(guide, '## Emit judgment rows or sealed records'),

@@ -1020,10 +1020,8 @@ class FakePowerShell {
 
 function checkWindowsRunnerReference() {
   const reference = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
-  const supervisor = fs.readFileSync(path.join(PROJECT_ROOT, 'cli', 'lib', 'agent-supervisor.js'), 'utf8');
   const section = /^## tea-skill-runner\n([\s\S]*?)(?=^## |$(?![\s\S]))/m.exec(reference)?.[1] ?? '';
-  const setupBoundText = /const WINDOWS_SETUP_MS = ([\d_]+);/.exec(supervisor)?.[1] ?? '';
-  const setupBound = Number(setupBoundText.replaceAll('_', ''));
+  const { WINDOWS_SETUP_MS: setupBound } = require('../cli/lib/agent-supervisor-bounds');
   check(
     section.includes('Windows Job Object') &&
       section.includes('kill-on-close') &&

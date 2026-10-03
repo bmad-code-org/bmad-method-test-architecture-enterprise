@@ -38,7 +38,7 @@ inputDocuments:
 
 ## Executive Summary
 
-**Scope:** full epic-level test design for Stories 1.1 to 1.75, 1.80 to 1.84, 1.90 to 1.103 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.75, 1.80 to 1.84, 1.90 to 1.103. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
+**Scope:** full epic-level test design for Stories 1.1 to 1.76, 1.80 to 1.84, 1.90 to 1.103 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.76, 1.80 to 1.84, 1.90 to 1.103. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
 
 **Risk summary:**
 
@@ -1187,6 +1187,18 @@ Added 2026-10-01 in Story 1.44's final review. Levels: integration over real eva
 | A changed digest under one version is a changed dependency    | Patch one file inside the fixture package, then edit its lockfile entry, between runs; assert a different digest each time; change it before a launch and after a trial; assert exit 12 and no sealed record        | Integration                        | P0  | Comparing versions alone at either recheck lets the patched package judge                   |
 | The shipped probe reports both sources                        | Run `installed-version.mjs` over the fixture package for `lockfile` and `tree`; patch one file and assert the `tree` digest differs with the version fixed                                                          | Integration                        | P1  | A probe that reports the version alone fails the patched-file case                          |
 | The guide teaches when to declare it                          | Assert the evaluator guide's framework-version section names both sources, when to declare `installState` and when the version suffices, by exact section                                                           | Guidance                           | P2  | Removing either teaching or a source fails the assertion                                    |
+
+### Story 1.76: Require an explicit custom-agent version response
+
+Added 2026-10-02 from Story 1.72's review. Levels: adapter unit, integration over real eval-quality, guidance. Files: `test/test-evaluate-evaluators.js` (`test:evaluate-evaluators`), `test/test-evaluate-guidance.js` (`test:evaluate-guidance`), and the custom evaluator fixture agents.
+
+| AC                                            | Test                                                                                                                                                                                                    | Level                     | P   | Revert check                                                               |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- | --- | -------------------------------------------------------------------------- |
+| A keyed custom response binds the version     | Run the custom fixture with one-line JSON `agentVersion`, then change only that value; assert both recorded fields, configuration digest and scoring version differ                                     | Integration               | P0  | Restoring the free-text parser fails the keyed-response contract assertion |
+| Incidental versions cannot bind               | Try plain dependency-version text, JSON with only `dependencyVersion`, malformed JSON, multiple lines and an invalid `agentVersion`; assert exit 12 before calibration, qualification and trial sealing | Adapter unit, integration | P0  | Removing the keyed requirement lets the plain dependency text through      |
+| Built-in parsing stays independent            | Give the built-in bridged adapter its documented CLI version output and assert it parses without a JSON response                                                                                        | Adapter unit              | P1  | Routing built-in output through the custom parser fails                    |
+| Recorded evidence replays without the command | Remove the custom fixture executable after a scored run; replay its accepted baseline and compare evidence bytes and launch counts                                                                      | Integration               | P1  | Adding a version read to score or replay fails after removal               |
+| Documentation teaches the response            | Assert the evaluator guide and public CLI reference each show the JSON shape and the required custom-command update                                                                                     | Guidance                  | P2  | Removing either example fails its exact assertion                          |
 
 ### Story 1.75: Name a report-operation signature collision at check, before the run
 

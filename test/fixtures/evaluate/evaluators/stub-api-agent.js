@@ -29,6 +29,7 @@
  *
  *   --capture <file>   append one JSON line per run: the prompt, the tools the
  *                      bridge listed and every tool result
+ *   --version          report the installed stub version without starting the bridge
  */
 
 'use strict';
@@ -41,6 +42,10 @@ const flag = (name, fallback) => {
   const at = argv.indexOf(name);
   return at === -1 ? fallback : argv[at + 1];
 };
+if (argv.includes('--version')) {
+  process.stdout.write('stub-api-agent 1.0.0\n');
+  process.exit(0);
+}
 const capture = flag('--capture', null);
 const config = JSON.parse(fs.readFileSync(flag('--mcp-config', null), 'utf8'));
 const prompt = fs.readFileSync(0, 'utf8');

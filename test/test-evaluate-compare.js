@@ -132,8 +132,55 @@ function scoreReads(folder, runDirectory) {
   return [...names].sort();
 }
 
+/** The copy keeps the source's detached commit, deleted tracked files and nested Git metadata. */
+function checkWorkingTreeCopy() {
+  const project = test.project('copy-working-tree');
+  const git = (...args) => {
+    const result = spawnSync('git', ['-C', project.repository, ...args], { encoding: 'utf8' });
+    assert.equal(result.status, 0, `${args.join(' ')}: ${result.stderr}`);
+    return result.stdout.trim();
+  };
+  const tracked = path.join(project.repository, 'tracked-copy-regression.txt');
+  const staged = path.join(project.repository, 'staged-copy-regression.txt');
+  const branchOnly = path.join(project.repository, 'branch-tip-only.txt');
+  fs.writeFileSync(tracked, 'tracked at the detached commit\n');
+  fs.writeFileSync(staged, 'staged deletion at the detached commit\n');
+  commitAll(project.repository, 'add tracked copy file');
+  fs.writeFileSync(branchOnly, 'only at the branch tip\n');
+  commitAll(project.repository, 'advance the branch');
+  git('checkout', '--quiet', '--detach', 'HEAD~1');
+  const sourceHead = git('rev-parse', 'HEAD');
+  fs.unlinkSync(tracked);
+  fs.unlinkSync(staged);
+  git('add', '--update', 'staged-copy-regression.txt');
+  const nestedMetadata = path.join(project.repository, 'nested', '.git', 'config');
+  fs.mkdirSync(path.dirname(nestedMetadata), { recursive: true });
+  fs.writeFileSync(nestedMetadata, '[core]\n');
+
+  const copiedFolder = copyOf(project);
+  const copiedRepository = path.resolve(copiedFolder, '..', '..');
+  const copiedHead = spawnSync('git', ['-C', copiedRepository, 'rev-parse', 'HEAD'], { encoding: 'utf8' });
+  assert.equal(copiedHead.status, 0, copiedHead.stderr);
+  assert.equal(copiedHead.stdout.trim(), sourceHead, 'the copy checked out the branch tip instead of the detached HEAD');
+  assert.equal(
+    spawnSync('git', ['-C', copiedRepository, 'symbolic-ref', '--quiet', 'HEAD'], { encoding: 'utf8' }).status,
+    1,
+    'the copy reattached a detached HEAD',
+  );
+  assert.equal(
+    fs.existsSync(path.join(copiedRepository, 'tracked-copy-regression.txt')),
+    false,
+    'the copy restored a deleted tracked file',
+  );
+  assert.equal(fs.existsSync(path.join(copiedRepository, 'staged-copy-regression.txt')), false, 'the copy restored a staged deletion');
+  assert.equal(fs.existsSync(path.join(copiedRepository, 'branch-tip-only.txt')), false, 'the copy kept a later branch file');
+  assert.equal(fs.readFileSync(path.join(copiedRepository, 'nested', '.git', 'config'), 'utf8'), '[core]\n');
+}
+
 async function main() {
   try {
+    checkWorkingTreeCopy();
+    if (process.argv.includes('--copy-only')) return;
     const engine = await loadEngine();
     const project = test.project('compare');
 

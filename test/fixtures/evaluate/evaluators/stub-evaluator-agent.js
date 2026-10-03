@@ -56,6 +56,15 @@
  *                      to <log>: whether the prompt is a calibration call, and
  *                      `allowed` or `refused <code>` (Story 1.31: a confined
  *                      run's agent holds the evaluation folder read-only)
+ *   --version-file <file> --version-read-counter <file> --version-flip-at-read <n>
+ *                      report the file's version under --version; optionally
+ *                      change it on the numbered version read
+ *   --flip-version-on-agent <n>
+ *                      change the version file after numbered agent run <n>
+ *   --require-version-env <name>
+ *                      fail a version read unless the named variable is allowed through
+ *   --version-delay-at-read <n> --version-delay-ms <ms>
+ *                      slow one numbered version read to exercise resource accounting
  */
 
 'use strict';
@@ -68,11 +77,34 @@ const flag = (name, fallback) => {
   const at = argv.indexOf(name);
   return at === -1 ? fallback : argv[at + 1];
 };
+if (argv.includes('--version')) {
+  const file = flag('--version-file', null);
+  const reads = flag('--version-read-counter', null);
+  const flipAt = Number(flag('--version-flip-at-read', '0'));
+  const requiredEnvironment = flag('--require-version-env', null);
+  if (requiredEnvironment !== null && process.env[requiredEnvironment] !== 'allowed') process.exit(4);
+  if (reads !== null) {
+    const count = (fs.existsSync(reads) ? Number(fs.readFileSync(reads, 'utf8')) : 0) + 1;
+    fs.writeFileSync(reads, String(count));
+    if (count === flipAt) fs.writeFileSync(file, '1.0.1\n');
+    if (count === Number(flag('--version-delay-at-read', '0')))
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, Number(flag('--version-delay-ms', '0')));
+  }
+  const reported = file === null ? '1.0.0' : fs.readFileSync(file, 'utf8').trim();
+  if (reported === 'hang') while (true) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000);
+  else if (reported === 'fail') process.exit(3);
+  else {
+    process.stdout.write(reported === 'malformed' ? 'unknown\n' : `stub-evaluator-agent ${reported}\n`);
+    process.exit(0);
+  }
+}
 const requestedMode = flag('--mode', 'normal');
 const modeFrom = Number(flag('--mode-from', '1'));
 let mode = requestedMode;
 const capture = flag('--capture', null);
 const counter = flag('--counter', null);
+const versionFile = flag('--version-file', null);
+const flipVersionOnAgent = Number(flag('--flip-version-on-agent', '0'));
 const configFile = flag('--mcp-config', null);
 const config = configFile === null ? {} : JSON.parse(fs.readFileSync(configFile, 'utf8'));
 const prompt = fs.readFileSync(0, 'utf8');
@@ -205,6 +237,8 @@ async function main() {
   else if (mode === 'forged') process.stdout.write(`Judged.\n${block('0'.repeat(32))}`);
   else if (mode === 'two-blocks') process.stdout.write(`Judged.\n${block(nonce)}${block(nonce)}`);
   else process.stdout.write(`Judged.\n${block(nonce)}`);
+  if (versionFile !== null && flipVersionOnAgent > 0 && counter !== null && Number(fs.readFileSync(counter, 'utf8')) === flipVersionOnAgent)
+    fs.writeFileSync(versionFile, '1.0.1\n');
 }
 
 main().then(
