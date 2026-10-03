@@ -83,7 +83,8 @@ context:
 | Release guard and release-metadata test still accepted engine 6.0.0  | Fixed                   | Raised both floors to 6.0.1; focused guard and release-metadata suites pass.                                                                                      |
 | Architecture and CLI reference named the old engine floor            | Fixed                   | Updated the stack record and CLI prerequisite to 6.0.1; formatting and link checks pass.                                                                          |
 | Engine separation rule counts an oracle that no behavior references  | Deferred to Story 1.104 | The same contract-wide scan affects scalar and structured responses. Story 1.104 specifies negative fixtures, revert checks, the engine release and TeA adoption. |
-| H.1 hand-off text still started after Story 2.5                      | Fixed                   | The dependency row and H.1 instructions now wait for all lanes, including Story 1.104.                                                                            |
+| H.1 hand-off text still started after Story 2.5                      | Fixed                   | The dependency row, H.1 instructions and sprint owner hand-off now wait for all lanes, including Story 1.104.                                                     |
+| FR10 and CAP-10 maps omitted the new coverage story                  | Fixed                   | Both maps now name Story 1.104 and its orphan-oracle negative fixtures.                                                                                           |
 
 ## Verification
 

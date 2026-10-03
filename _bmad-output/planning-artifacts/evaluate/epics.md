@@ -128,22 +128,22 @@ None. Evaluate has no graphical interface.
 
 ### FR Coverage Map
 
-| Requirement   | Stories                                        |
-| ------------- | ---------------------------------------------- |
-| FR1 (CAP-1)   | 1.3, 1.12, 1.13, 1.24                          |
-| FR2 (CAP-2)   | 1.12, 1.24                                     |
-| FR3 (CAP-3)   | 1.4, 1.12, 1.16, 1.21, 1.24, 1.46, 1.56        |
-| FR4 (CAP-4)   | 1.4, 1.13, 1.16, 1.24                          |
-| FR5 (CAP-5)   | 1.9, 1.13, 1.21, 1.24                          |
-| FR6 (CAP-6)   | 1.1, 1.5, 1.6, 1.10, 1.11, 1.13, 1.18, 1.19    |
-| FR7 (CAP-7)   | 1.7, 1.9, 1.14, 1.16, 1.56                     |
-| FR8 (CAP-8)   | 1.8, 1.14                                      |
-| FR9 (CAP-9)   | 1.6, 1.8, 1.14, 1.16, 1.17, 1.45, 1.56         |
-| FR10 (CAP-10) | 1.14, 1.16, 1.22, 1.25, 1.42, 1.45, 1.46, 1.55 |
-| FR11 (CAP-11) | 2.2, 2.3, 2.4, 2.5, H.1                        |
-| FR12 (CAP-12) | 1.8, 2.1, 2.5, H.1                             |
-| FR13 (CAP-13) | 1.17, 1.19, 1.20, 1.23, 1.26, 1.43, 1.44       |
-| FR14 (CAP-14) | 1.21, 2.2                                      |
+| Requirement   | Stories                                               |
+| ------------- | ----------------------------------------------------- |
+| FR1 (CAP-1)   | 1.3, 1.12, 1.13, 1.24                                 |
+| FR2 (CAP-2)   | 1.12, 1.24                                            |
+| FR3 (CAP-3)   | 1.4, 1.12, 1.16, 1.21, 1.24, 1.46, 1.56               |
+| FR4 (CAP-4)   | 1.4, 1.13, 1.16, 1.24                                 |
+| FR5 (CAP-5)   | 1.9, 1.13, 1.21, 1.24                                 |
+| FR6 (CAP-6)   | 1.1, 1.5, 1.6, 1.10, 1.11, 1.13, 1.18, 1.19           |
+| FR7 (CAP-7)   | 1.7, 1.9, 1.14, 1.16, 1.56                            |
+| FR8 (CAP-8)   | 1.8, 1.14                                             |
+| FR9 (CAP-9)   | 1.6, 1.8, 1.14, 1.16, 1.17, 1.45, 1.56                |
+| FR10 (CAP-10) | 1.14, 1.16, 1.22, 1.25, 1.42, 1.45, 1.46, 1.55, 1.104 |
+| FR11 (CAP-11) | 2.2, 2.3, 2.4, 2.5, H.1                               |
+| FR12 (CAP-12) | 1.8, 2.1, 2.5, H.1                                    |
+| FR13 (CAP-13) | 1.17, 1.19, 1.20, 1.23, 1.26, 1.43, 1.44              |
+| FR14 (CAP-14) | 1.21, 2.2                                             |
 
 ## Epic List
 
@@ -2671,22 +2671,22 @@ So that the `pr` replay of `bmad-testarch-evaluate` has an accepted baseline to 
 
 ## Traceability
 
-| Capability | Stories                                     | Proven by                                                                                                                                               |
-| ---------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| CAP-1      | 1.3, 1.12, 1.13, 1.24                       | guidance test; 1.10, 1.11 and 1.16 contracts declare `mcp`, `api`, `cli`; 1.24 inspection records and vendor redirect                                   |
-| CAP-2      | 1.12, 1.24                                  | guidance test (six families, confirmation halt); 1.16 and 1.24 requirements statements                                                                  |
-| CAP-3      | 1.4, 1.12, 1.16, 1.21, 1.24, 1.56           | `test:evaluate-check`; tagged corpus examples; `test:evaluate-authoring` section coverage; 1.56 malformed refusal defect probe                          |
-| CAP-4      | 1.4, 1.13, 1.16, 1.24                       | skeleton compile and seal test; tagged contract examples; 1.16 and 1.24 compile and seal exit 0                                                         |
-| CAP-5      | 1.9, 1.13, 1.21, 1.24                       | `test:evaluate-arms`; `test:evaluate-calibration`; tagged oracle and rubric examples                                                                    |
-| CAP-6      | 1.1, 1.5, 1.6, 1.10, 1.11, 1.13, 1.18, 1.19 | `test:evaluate-preflight`, `-mcp`, `-api`, `-workflow`, `-tool-use`                                                                                     |
-| CAP-7      | 1.7, 1.9, 1.14, 1.16, 1.56                  | `test:evaluate-mutation`; tagged mutation examples; 1.16 rollback evidence; 1.56 guard-bypass rollback                                                  |
-| CAP-8      | 1.8, 1.14                                   | template schema validation; guidance test (risk table)                                                                                                  |
-| CAP-9      | 1.6, 1.8, 1.14, 1.16, 1.17, 1.45, 1.56      | `test:evaluate-run`; `test:evaluate-evaluators`; 1.16 live verdicts; 1.45 engine-owned aggregate; 1.56 malformed defect score                           |
-| CAP-10     | 1.14, 1.16, 1.22, 1.25, 1.45, 1.55          | guidance test over exported vocabularies; `test:evaluate-interpret`; `test:evaluate-gap-loop`; 1.45 class-floor gate; 1.55 scalar CLI coverage fixtures |
-| CAP-11     | 2.2, 2.3, 2.4, 2.5, H.1                     | `test:evaluate-ci` (placement, gameability, freshness, agreement); rendering test; the `quality.yaml` `chain` matrix; H.1 step 4                        |
-| CAP-12     | 1.8, 2.1, 2.5, H.1                          | `run.json`; `test:evaluate-compare`; H.1 step 3                                                                                                         |
-| CAP-13     | 1.17, 1.19, 1.20, 1.23, 1.26                | `test:evaluate-evaluators`, `-tool-use`, `-promptfoo`, `-learned-framework`; template rendering in the guidance test                                    |
-| CAP-14     | 1.21, 2.2                                   | `test:evaluate-partitions`, `test:evaluate-calibration`; `scheduled` and `release` tier cases                                                           |
+| Capability | Stories                                     | Proven by                                                                                                                                                                                      |
+| ---------- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CAP-1      | 1.3, 1.12, 1.13, 1.24                       | guidance test; 1.10, 1.11 and 1.16 contracts declare `mcp`, `api`, `cli`; 1.24 inspection records and vendor redirect                                                                          |
+| CAP-2      | 1.12, 1.24                                  | guidance test (six families, confirmation halt); 1.16 and 1.24 requirements statements                                                                                                         |
+| CAP-3      | 1.4, 1.12, 1.16, 1.21, 1.24, 1.56           | `test:evaluate-check`; tagged corpus examples; `test:evaluate-authoring` section coverage; 1.56 malformed refusal defect probe                                                                 |
+| CAP-4      | 1.4, 1.13, 1.16, 1.24                       | skeleton compile and seal test; tagged contract examples; 1.16 and 1.24 compile and seal exit 0                                                                                                |
+| CAP-5      | 1.9, 1.13, 1.21, 1.24                       | `test:evaluate-arms`; `test:evaluate-calibration`; tagged oracle and rubric examples                                                                                                           |
+| CAP-6      | 1.1, 1.5, 1.6, 1.10, 1.11, 1.13, 1.18, 1.19 | `test:evaluate-preflight`, `-mcp`, `-api`, `-workflow`, `-tool-use`                                                                                                                            |
+| CAP-7      | 1.7, 1.9, 1.14, 1.16, 1.56                  | `test:evaluate-mutation`; tagged mutation examples; 1.16 rollback evidence; 1.56 guard-bypass rollback                                                                                         |
+| CAP-8      | 1.8, 1.14                                   | template schema validation; guidance test (risk table)                                                                                                                                         |
+| CAP-9      | 1.6, 1.8, 1.14, 1.16, 1.17, 1.45, 1.56      | `test:evaluate-run`; `test:evaluate-evaluators`; 1.16 live verdicts; 1.45 engine-owned aggregate; 1.56 malformed defect score                                                                  |
+| CAP-10     | 1.14, 1.16, 1.22, 1.25, 1.45, 1.55, 1.104   | guidance test over exported vocabularies; `test:evaluate-interpret`; `test:evaluate-gap-loop`; 1.45 class-floor gate; 1.55 scalar CLI coverage fixtures; 1.104 orphan-oracle negative fixtures |
+| CAP-11     | 2.2, 2.3, 2.4, 2.5, H.1                     | `test:evaluate-ci` (placement, gameability, freshness, agreement); rendering test; the `quality.yaml` `chain` matrix; H.1 step 4                                                               |
+| CAP-12     | 1.8, 2.1, 2.5, H.1                          | `run.json`; `test:evaluate-compare`; H.1 step 3                                                                                                                                                |
+| CAP-13     | 1.17, 1.19, 1.20, 1.23, 1.26                | `test:evaluate-evaluators`, `-tool-use`, `-promptfoo`, `-learned-framework`; template rendering in the guidance test                                                                           |
+| CAP-14     | 1.21, 2.2                                   | `test:evaluate-partitions`, `test:evaluate-calibration`; `scheduled` and `release` tier cases                                                                                                  |
 
 ### Plan gap audit closure
 

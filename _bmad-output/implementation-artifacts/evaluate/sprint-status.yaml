@@ -212,8 +212,11 @@ owner_handoff:
   - key: h-1-accept-the-dogfood-baseline-and-turn-its-pr-replay-green
     owner: Murat
     note: "Owner-only (epics.md Story H.1). Kept outside development_status so no
-      /bmad-build worker picks it up. Runs on main after Story 2.5 merges;
-      eval-quality 4.0.0 is already published and TeA runs on it."
+      /bmad-build worker picks it up. Runs on main after all three lanes drain,
+      using the published engine resolved by the final TeA lockfile."
     status: backlog
     depends_on:
+      - 1-76-require-an-explicit-custom-agent-version-response
+      - 1-84-teach-a-linux-skill-targets-network-declaration-in-the-ci-guide-and-rerun-its-live-sessions
+      - 1-104-count-only-behavior-linked-oracles-for-success-separation
       - 2-5-tea-runs-its-pr-tier-and-documents-evaluate
