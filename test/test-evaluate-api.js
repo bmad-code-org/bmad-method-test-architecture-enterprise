@@ -123,6 +123,7 @@ const relayModule = require('../cli/lib/evaluate/confinement-relay');
 const shimModule = require('../cli/lib/evaluate/confinement-status.cjs');
 const { createRegistry, registryProblems } = require('../cli/lib/evaluate/registry');
 const { runTrial } = require('../cli/lib/evaluate/run');
+const { requestKey } = require('../cli/lib/evaluate/workspace');
 const { bridgeRouter } = require('../cli/lib/evaluate/sealed-brief-agent');
 const { expectedOutcomeCount } = require('./lib/conformance-counts');
 const { scratchDirectories } = require('./lib/scratch-directories');
@@ -554,18 +555,22 @@ async function unitService() {
   const received = [];
   const server = http.createServer((request, response) => {
     const url = new URL(request.url, 'http://unit');
-    let body = '';
-    request.setEncoding('utf8');
+    const chunks = [];
     request.on('data', (chunk) => {
-      body += chunk;
+      chunks.push(chunk);
     });
     request.on('end', () => {
+      const bodyBytes = Buffer.concat(chunks);
       received.push({
         method: request.method,
         path: url.pathname,
         host: request.headers.host,
         authorization: request.headers.authorization,
         apiKey: request.headers['x-api-key'],
+        contentType: request.headers['content-type'],
+        contentLength: request.headers['content-length'],
+        transferEncoding: request.headers['transfer-encoding'],
+        bodyBase64: bodyBytes.toString('base64'),
       });
       const hop = /^\/hop\/(\d+)$/.exec(url.pathname);
       const port = server.address().port;
@@ -575,7 +580,15 @@ async function unitService() {
         '/to-unlisted-host': [302, `http://no-such-host.invalid:${port}/echo`],
         '/to-unresolvable': [302, `http://unresolvable.test:${port}/echo`],
         '/bad-location': [302, 'http://[::1'],
+        '/raw-307': [307, '/raw'],
+        '/raw-303': [303, '/raw'],
       };
+      if (url.pathname === '/raw') {
+        response
+          .writeHead(200, { 'content-type': 'application/json' })
+          .end(JSON.stringify({ base64: bodyBytes.toString('base64'), contentType: request.headers['content-type'] ?? null }));
+        return;
+      }
       if (url.pathname === '/multibyte') {
         const pad = 'a'.repeat(Number(url.searchParams.get('pad') ?? 0));
         response.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' }).end(`${pad}${MULTIBYTE}`);
@@ -588,9 +601,13 @@ async function unitService() {
         const [status, location] = redirects[url.pathname];
         response.writeHead(status, { location }).end();
       } else {
-        response
-          .writeHead(200, { 'content-type': 'application/json', 'set-cookie': 'a=1' })
-          .end(JSON.stringify({ method: request.method, query: url.search, body: body === '' ? null : JSON.parse(body) }));
+        response.writeHead(200, { 'content-type': 'application/json', 'set-cookie': 'a=1' }).end(
+          JSON.stringify({
+            method: request.method,
+            query: url.search,
+            body: bodyBytes.length === 0 ? null : JSON.parse(bodyBytes.toString('utf8')),
+          }),
+        );
       }
     });
   });
@@ -683,6 +700,186 @@ async function checkPortUnits() {
     check(
       posted.observation?.body?.value?.body?.answer === 7 && posted.decisions === 1,
       `a JSON body was answered ${JSON.stringify(posted.observation ?? posted.error?.message)}`,
+    );
+    const malformedBytes = Buffer.from('{"broken":');
+    const rawBody = { kind: 'raw', base64: malformedBytes.toString('base64'), contentType: 'application/json; charset=utf-8' };
+    const rawRequest = request('POST', '/raw', { body: rawBody });
+    const raw = await counted('raw malformed JSON', () => port.probe(rawRequest));
+    check(
+      raw.observation?.status === 200 &&
+        raw.observation.body.value.base64 === rawBody.base64 &&
+        service.received[0]?.bodyBase64 === rawBody.base64 &&
+        service.received[0]?.contentType === rawBody.contentType,
+      `raw malformed JSON reached the target as ${JSON.stringify(service.received)}`,
+    );
+    const rawValid = await counted('raw valid JSON', () =>
+      port.probe(
+        request('POST', '/raw', {
+          body: { kind: 'raw', base64: Buffer.from('{"ok":true}').toString('base64'), contentType: 'application/json' },
+        }),
+      ),
+    );
+    check(
+      rawValid.observation?.status === 200 && service.received[0]?.bodyBase64 === Buffer.from('{"ok":true}').toString('base64'),
+      'raw valid JSON changed before the target received it',
+    );
+    const binaryBytes = Buffer.from([0x00, 0x80, 0xff, 0x41]);
+    const binaryBody = { kind: 'raw', base64: binaryBytes.toString('base64'), contentType: 'application/octet-stream' };
+    const binaryRaw = await counted('binary raw body', () => port.probe(request('POST', '/raw', { body: binaryBody })));
+    check(
+      binaryRaw.observation?.status === 200 &&
+        service.received[0]?.bodyBase64 === binaryBody.base64 &&
+        service.received[0]?.contentType === binaryBody.contentType &&
+        service.received[0]?.contentLength === String(binaryBytes.byteLength),
+      `binary raw bytes changed on the wire: ${JSON.stringify(service.received)}`,
+    );
+    const emptyRawRequest = request('POST', '/raw', { body: { kind: 'raw', base64: '', contentType: 'application/json' } });
+    const emptyRaw = await counted('empty raw body', () => port.probe(emptyRawRequest));
+    check(
+      emptyRaw.observation?.status === 200 &&
+        service.received[0]?.bodyBase64 === '' &&
+        service.received[0]?.contentType === 'application/json' &&
+        service.received[0]?.transferEncoding === 'chunked' &&
+        service.received[0]?.contentLength === undefined,
+      `empty raw lost its zero-byte body, declared content type, or chunked framing: ${JSON.stringify(service.received)}`,
+    );
+    const absentRequest = request('POST', '/raw');
+    const absent = await counted('absent body', () => port.probe(absentRequest));
+    check(
+      absent.observation?.status === 200 &&
+        service.received[0]?.bodyBase64 === '' &&
+        service.received[0]?.contentType === undefined &&
+        service.received[0]?.transferEncoding === undefined &&
+        service.received[0]?.contentLength === '0',
+      `absent body acquired raw framing or a content type: ${JSON.stringify(service.received)}`,
+    );
+    check(
+      new Set([
+        requestKey(rawRequest),
+        requestKey({
+          ...rawRequest,
+          channels: { ...rawRequest.channels, body: { ...rawBody, base64: Buffer.from('{"broken";').toString('base64') } },
+        }),
+        requestKey(emptyRawRequest),
+        requestKey(absentRequest),
+        requestKey(request('POST', '/raw', { body: { kind: 'json', value: { ok: true } } })),
+      ]).size === 5,
+      'raw byte changes, empty raw, JSON and absent must have distinct request identities',
+    );
+    const badBase64 = await counted('noncanonical base64', () =>
+      port.probe(request('POST', '/raw', { body: { kind: 'raw', base64: 'Zh==', contentType: 'application/json' } })),
+    );
+    check(
+      badBase64.error?.code === 'schema-parse-failure' && badBase64.sends === 0 && service.received.length === 0,
+      'noncanonical base64 reached the target',
+    );
+    const mismatch = await counted('content type conflict', () =>
+      port.probe(request('POST', '/raw', { header: { 'Content-Type': 'text/plain' }, body: rawBody })),
+    );
+    check(
+      mismatch.error?.code === 'schema-parse-failure' && mismatch.sends === 0 && service.received.length === 0,
+      'a conflicting Content-Type header reached the target',
+    );
+    const duplicateType = await counted('duplicate content type', () =>
+      port.probe(
+        request('POST', '/raw', { header: { 'Content-Type': rawBody.contentType, 'content-type': rawBody.contentType }, body: rawBody }),
+      ),
+    );
+    check(
+      duplicateType.error?.code === 'schema-parse-failure' && duplicateType.sends === 0 && service.received.length === 0,
+      'case-variant duplicate Content-Type headers reached the target',
+    );
+    const invalidContentType = await counted('invalid content type', () =>
+      port.probe(request('POST', '/raw', { body: { ...rawBody, contentType: 'application/json\0bad' } })),
+    );
+    check(
+      invalidContentType.error?.code === 'schema-parse-failure' && invalidContentType.sends === 0 && service.received.length === 0,
+      'an invalid Content-Type reached the target',
+    );
+    const declared = await counted('duplicate matching content type header', () =>
+      port.probe(request('POST', '/raw', { header: { 'Content-Type': rawBody.contentType }, body: rawBody })),
+    );
+    check(
+      declared.error?.code === 'schema-parse-failure' && declared.sends === 0 && service.received.length === 0,
+      `a matching duplicate Content-Type header reached the target: ${JSON.stringify({ error: declared.error?.message, received: service.received })}`,
+    );
+    const authHeaders = createHttpProbePort({
+      policy: { authorizations: [authorization('127.0.0.1')] },
+      targets: { unit: { scheme: 'http', host: '127.0.0.1', port: service.port } },
+      auth: { unit: { 'Content-Type': 'text/plain', 'Content-Length': '1' } },
+    });
+    service.received.length = 0;
+    const normalizedAuth = await authHeaders.probe(rawRequest);
+    check(
+      normalizedAuth.status === 200 &&
+        service.received[0]?.contentType === rawBody.contentType &&
+        service.received[0]?.contentLength === String(malformedBytes.byteLength) &&
+        service.received[0]?.bodyBase64 === rawBody.base64,
+      `raw bytes or authoritative headers changed under configured auth: ${JSON.stringify(service.received)}`,
+    );
+    service.received.length = 0;
+    await authHeaders.probe(request('POST', '/raw-303', { body: rawBody }));
+    check(
+      service.received[1]?.method === 'GET' &&
+        service.received[1]?.contentType === undefined &&
+        service.received[1]?.contentLength === undefined &&
+        service.received[1]?.transferEncoding === undefined,
+      `a 303 redirect restored body headers from auth: ${JSON.stringify(service.received)}`,
+    );
+    const framed = await counted('caller framing conflict', () =>
+      port.probe(request('POST', '/raw', { header: { 'Content-Length': '1' }, body: rawBody })),
+    );
+    check(framed.error?.code === 'schema-parse-failure' && framed.sends === 0, 'caller framing changed the raw byte count');
+    const rawAtCapBytes = Buffer.alloc(64, 0x80);
+    const rawAtCap = await counted('raw body at its cap', () =>
+      port.probe(
+        request('POST', '/raw', {
+          body: { kind: 'raw', base64: rawAtCapBytes.toString('base64'), contentType: 'application/octet-stream' },
+        }),
+      ),
+    );
+    check(
+      rawAtCap.observation?.status === 200 &&
+        service.received[0]?.bodyBase64 === rawAtCapBytes.toString('base64') &&
+        service.received[0]?.contentLength === '64',
+      'a 64-byte raw body failed at maxRequestBytes 64',
+    );
+    const oversizedBase64 = Buffer.alloc(65).toString('base64');
+    const originalBufferFrom = Buffer.from;
+    let portDecodedOversize = false;
+    Buffer.from = function (...args) {
+      if (args[0] === oversizedBase64 && args[1] === 'base64') {
+        portDecodedOversize = true;
+      }
+      return originalBufferFrom.apply(this, args);
+    };
+    let rawOversize;
+    try {
+      rawOversize = await counted('raw body past its cap', () =>
+        port.probe(request('POST', '/raw', { body: { kind: 'raw', base64: oversizedBase64, contentType: 'application/octet-stream' } })),
+      );
+    } finally {
+      Buffer.from = originalBufferFrom;
+    }
+    check(
+      rawOversize.error?.code === 'budget-exhausted' && rawOversize.sends === 0 && !portDecodedOversize,
+      'the port decoded 65 raw bytes before rejecting maxRequestBytes 64',
+    );
+    const rawPreserved = await counted('307 raw redirect', () => port.probe(request('POST', '/raw-307', { body: rawBody })));
+    check(
+      rawPreserved.observation?.status === 200 &&
+        service.received[1]?.bodyBase64 === rawBody.base64 &&
+        service.received[1]?.contentType === rawBody.contentType,
+      '307 redirect changed raw bytes or content type',
+    );
+    const rawDropped = await counted('303 raw redirect', () => port.probe(request('POST', '/raw-303', { body: rawBody })));
+    check(
+      rawDropped.observation?.status === 200 &&
+        service.received[1]?.method === 'GET' &&
+        service.received[1]?.bodyBase64 === '' &&
+        service.received[1]?.contentType === undefined &&
+        service.received[1]?.transferEncoding === undefined,
+      '303 redirect kept a raw body, content type, or framing',
     );
     const denied = await counted('an unlisted method', () => port.probe(request('DELETE', '/echo')));
     check(
@@ -1147,6 +1344,41 @@ async function checkUnits() {
           body: { kind: 'json', value: { answer: 'forty-two' } },
         }),
     `an HTTP step's path, header and body are recorded as ${JSON.stringify(boundRecord?.callInputs)} from ${JSON.stringify(boundArm.steps[0]?.request)}`,
+  );
+  const rawStep = structuredClone(contract);
+  const rawStepBody = { kind: 'raw', base64: Buffer.from('{"answer":').toString('base64'), contentType: 'application/json' };
+  rawStep.interactionPlan[0].inputBinding.body = rawStepBody;
+  const rawStepArm = await runArm({
+    contract: rawStep,
+    port: answering({ kind: 'api', status: 400, headers: {}, body: { kind: 'json', value: { error: 'invalid JSON' } } }),
+    registry: null,
+    label: 'raw-trial',
+  });
+  check(
+    JSON.stringify(rawStepArm.steps[0]?.request.channels.body) === JSON.stringify(rawStepBody) &&
+      JSON.stringify(rawStepArm.stepObservations['grade-run']?.callInputs.body) === JSON.stringify(rawStepBody) &&
+      rawStepArm.stepObservations['grade-run']?.callInputs.bodyEncoding === 'raw' &&
+      boundRecord?.callInputs.bodyEncoding === null &&
+      recorded?.callInputs.bodyEncoding === null,
+    `a raw scored step lost its body-kind marker or exact bytes: ${JSON.stringify(rawStepArm.stepObservations['grade-run'])}`,
+  );
+  const mimicStep = structuredClone(contract);
+  mimicStep.interactionPlan[0].inputBinding.body = {
+    kind: { literal: 'raw' },
+    base64: { literal: rawStepBody.base64 },
+    contentType: { literal: rawStepBody.contentType },
+  };
+  const mimicArm = await runArm({
+    contract: mimicStep,
+    port: answering({ kind: 'api', status: 200, headers: {}, body: { kind: 'absent' } }),
+    registry: null,
+    label: 'json-mimic',
+  });
+  check(
+    mimicArm.steps[0]?.request.channels.body.kind === 'json' &&
+      JSON.stringify(mimicArm.stepObservations['grade-run']?.callInputs.body) === JSON.stringify(rawStepBody) &&
+      mimicArm.stepObservations['grade-run']?.callInputs.bodyEncoding === null,
+    'a JSON body shaped like a raw body acquired the raw marker',
   );
   const malformedBody = structuredClone(bound);
   malformedBody.permittedInterfaces[0].operations[0].requestShape.body = {

@@ -1,6 +1,6 @@
 [
   {
-    "schemaVersion": 5,
+    "schemaVersion": 6,
     "parentDigest": null,
     "revisionCount": 0,
     "probeId": "P-001",
@@ -90,7 +90,7 @@
     }
   },
   {
-    "schemaVersion": 5,
+    "schemaVersion": 6,
     "parentDigest": null,
     "revisionCount": 0,
     "probeId": "P-002",

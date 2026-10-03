@@ -7,7 +7,7 @@
     "status": 200,
     "headers": {
       "content-type": "application/json",
-      "date": "Fri, 02 Oct 2026 15:48:26 GMT",
+      "date": "Fri, 02 Oct 2026 22:33:58 GMT",
       "connection": "close",
       "transfer-encoding": "chunked"
     },
@@ -28,7 +28,7 @@
     "status": 200,
     "headers": {
       "content-type": "application/json",
-      "date": "Fri, 02 Oct 2026 15:48:26 GMT",
+      "date": "Fri, 02 Oct 2026 22:33:58 GMT",
       "connection": "close",
       "transfer-encoding": "chunked"
     },
@@ -49,7 +49,7 @@
     "status": 200,
     "headers": {
       "content-type": "application/json",
-      "date": "Fri, 02 Oct 2026 15:48:26 GMT",
+      "date": "Fri, 02 Oct 2026 22:33:59 GMT",
       "connection": "close",
       "transfer-encoding": "chunked"
     },
@@ -70,7 +70,7 @@
     "status": 200,
     "headers": {
       "content-type": "application/json",
-      "date": "Fri, 02 Oct 2026 15:48:26 GMT",
+      "date": "Fri, 02 Oct 2026 22:33:59 GMT",
       "connection": "close",
       "transfer-encoding": "chunked"
     },
@@ -91,7 +91,7 @@
     "status": 200,
     "headers": {
       "content-type": "application/json",
-      "date": "Fri, 02 Oct 2026 15:48:27 GMT",
+      "date": "Fri, 02 Oct 2026 22:33:59 GMT",
       "connection": "close",
       "transfer-encoding": "chunked"
     },
@@ -111,7 +111,7 @@
     "status": 200,
     "headers": {
       "content-type": "application/json",
-      "date": "Fri, 02 Oct 2026 15:48:27 GMT",
+      "date": "Fri, 02 Oct 2026 22:33:59 GMT",
       "connection": "close",
       "transfer-encoding": "chunked"
     },
@@ -131,7 +131,7 @@
     "status": 200,
     "headers": {
       "content-type": "application/json",
-      "date": "Fri, 02 Oct 2026 15:48:27 GMT",
+      "date": "Fri, 02 Oct 2026 22:34:00 GMT",
       "connection": "close",
       "transfer-encoding": "chunked"
     },
@@ -151,7 +151,7 @@
     "status": 200,
     "headers": {
       "content-type": "application/json",
-      "date": "Fri, 02 Oct 2026 15:48:27 GMT",
+      "date": "Fri, 02 Oct 2026 22:34:00 GMT",
       "connection": "close",
       "transfer-encoding": "chunked"
     },
@@ -172,7 +172,27 @@
     "status": 200,
     "headers": {
       "content-type": "application/json",
-      "date": "Fri, 02 Oct 2026 15:48:28 GMT",
+      "date": "Fri, 02 Oct 2026 22:34:00 GMT",
+      "connection": "close",
+      "transfer-encoding": "chunked"
+    },
+    "body": {
+      "kind": "json",
+      "value": {
+        "decision": "pass",
+        "reason": "accepted"
+      }
+    }
+  },
+  {
+    "probeId": "p-014-manifest-raw-invalid-json",
+    "interfaceId": "answer-grade",
+    "operationId": "grade-answer",
+    "kind": "api",
+    "status": 200,
+    "headers": {
+      "content-type": "application/json",
+      "date": "Fri, 02 Oct 2026 22:34:00 GMT",
       "connection": "close",
       "transfer-encoding": "chunked"
     },

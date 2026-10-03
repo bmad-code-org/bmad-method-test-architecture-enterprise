@@ -1,0 +1,165 @@
+{
+  "schemaVersion": 6,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "probeId": "P-014",
+  "probeClass": "defect",
+  "behaviorId": "B-003",
+  "systemId": "answer-grade",
+  "implementationDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
+  "artifactDigest": "sha256:44003d0495db12a6b2f463ae6cfc395877ca83e4694cde3107902dde75f843b5",
+  "commitDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
+  "rationale": "[malformed] A malformed raw request is spuriously accepted.",
+  "qualification": {
+    "route": "controlled-mutation",
+    "mutationSource": "invalid JSON parser rejection becomes accepted grade",
+    "mutationOperator": "replace-exact: \"response.writeHead(400).end(JSON.stringify({ error: 'invalid JSON' }));\" -> \"response.writeHead(200).end(JSON.stringify({ decision: 'pass', reason: 'accepted' }));\" (occurrences 1)",
+    "targetArtifact": {
+      "storage": "public",
+      "path": "server/grade.mjs",
+      "privateRef": null,
+      "digest": "sha256:44003d0495db12a6b2f463ae6cfc395877ca83e4694cde3107902dde75f843b5"
+    },
+    "expectedObservableFailure": "malformed JSON receives HTTP 200 and a passing grade",
+    "baselinePassEvidence": {
+      "storage": "public",
+      "path": "runs/20261002T223329843Z-c1997103/qualification/P-014/baseline-pass.json",
+      "privateRef": null,
+      "digest": "sha256:370dcee7e2551b9849f015de9532d5530b5d6a7e9405ce666a2a5404ca5619d0"
+    },
+    "mutatedFailEvidence": {
+      "storage": "public",
+      "path": "runs/20261002T223329843Z-c1997103/qualification/P-014/mutated-fail.json",
+      "privateRef": null,
+      "digest": "sha256:eed56fe1e8653e1cf1e8dc6680094cbd79064d4c74431e576976c00009507992"
+    },
+    "rollbackVerified": true
+  },
+  "expectedClean": false,
+  "defects": [
+    {
+      "defectId": "D-008",
+      "behaviorId": "B-003",
+      "summary": "Malformed JSON is accepted by the parser and graded as a pass.",
+      "severity": "material",
+      "oracleEvidence": [
+        {
+          "storage": "public",
+          "path": "runs/20261002T223329843Z-c1997103/qualification/P-014/mutated-fail.json",
+          "privateRef": null,
+          "digest": "sha256:eed56fe1e8653e1cf1e8dc6680094cbd79064d4c74431e576976c00009507992"
+        }
+      ],
+      "source": "controlled-mutation",
+      "manifestationWitness": {
+        "legId": "p-014-manifest-raw-invalid-json",
+        "interfaceId": "answer-grade",
+        "operationId": "grade-answer",
+        "inputs": {
+          "path": {},
+          "query": {},
+          "header": {},
+          "body": {
+            "kind": "raw",
+            "base64": "eyJhbnN3ZXIiOg==",
+            "contentType": "application/json"
+          }
+        },
+        "relation": {
+          "op": "all",
+          "operands": [
+            {
+              "op": "deep-equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/p-014-manifest-raw-invalid-json/call-inputs/body"
+                },
+                {
+                  "literal": {
+                    "kind": "raw",
+                    "base64": "eyJhbnN3ZXIiOg==",
+                    "contentType": "application/json"
+                  }
+                }
+              ]
+            },
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/p-014-manifest-raw-invalid-json/response-status"
+                },
+                {
+                  "literal": 200
+                }
+              ]
+            },
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/p-014-manifest-raw-invalid-json/response-body/decision"
+                },
+                {
+                  "literal": "pass"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "defectSignature": {
+    "interfaceKind": "api",
+    "observableChannel": "response-body",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": null,
+          "header": null,
+          "body": {
+            "kind": "raw",
+            "base64": "eyJhbnN3ZXIiOg==",
+            "contentType": "application/json"
+          },
+          "argument": null,
+          "option": null,
+          "environment": null,
+          "stdin": null,
+          "arguments": null
+        }
+      },
+      "predicate": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/observed/response-status"
+              },
+              {
+                "literal": 200
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/observed/response-body/decision"
+              },
+              {
+                "literal": "pass"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "method": "POST",
+    "pathTemplate": "/grade"
+  }
+}

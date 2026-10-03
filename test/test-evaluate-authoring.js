@@ -65,7 +65,10 @@ function sameBytes(actual, expected, label) {
 
 function recordedInput(channels) {
   return {
-    value: channels.body?.value ?? normalizedStdin(channels.stdin?.value),
+    value:
+      channels.body?.kind === 'raw'
+        ? { rawBase64: channels.body.base64, contentType: channels.body.contentType }
+        : (channels.body?.value ?? normalizedStdin(channels.stdin?.value)),
     query: channels.query ?? {},
   };
 }
@@ -267,6 +270,13 @@ function heldOutOnlyInputs(folder, heldOut) {
             value: normalizedStdin(fs.readFileSync(path.join(folder, 'corpus/requests', name), 'utf8')),
             query: {},
           }));
+  const rawDevelopment = path.join(folder, 'corpus/development/D08-invalid-json.txt');
+  if (channel === 'body' && fs.existsSync(rawDevelopment)) {
+    developmentCorpus.push({
+      value: { rawBase64: fs.readFileSync(rawDevelopment).toString('base64'), contentType: 'application/json' },
+      query: {},
+    });
+  }
   assert.ok(developmentCorpus.length > 0, 'missing independent development corpus');
   const privateWitnesses = heldOut.flatMap((id) => {
     const probe = readJson(path.join(folder, 'probes', `${id}.probe.json`));
@@ -418,11 +428,56 @@ function runReplay(folder, runName, out, expectedProbeIds, heldOutOnly) {
         for (const observation of trial.observations) {
           const channel = observation.callInputs.body === null ? 'stdin' : 'body';
           const actual = {
-            value: channel === 'stdin' ? normalizedStdin(observation.callInputs.stdin) : observation.callInputs.body,
+            value:
+              channel === 'stdin'
+                ? normalizedStdin(observation.callInputs.stdin)
+                : observation.callInputs.bodyEncoding === 'raw'
+                  ? { rawBase64: observation.callInputs.body.base64, contentType: observation.callInputs.body.contentType }
+                  : observation.callInputs.body,
             query: observation.callInputs.query ?? {},
           };
           assertPublicInput(actual, heldOutOnly, `${runName} ${set.probeId} trial`);
         }
+      }
+    }
+    if (runName === 'development' && folder.endsWith(path.join('ai-feature', 'evaluation')) && set.probeId === 'P-014') {
+      const source = readJson(path.join(folder, 'probes/P-014.probe.json'));
+      const raw = source.defects[0].manifestationWitness.inputs.body;
+      assert.deepEqual(source.defectSignature.condition.selector.inputBinding.body, raw, 'P-014 selector binds the witness bytes');
+      const predicate = source.defectSignature.condition.predicate;
+      assert.equal(predicate.op, 'all', 'P-014 requires every defect-signature condition');
+      assert.ok(
+        predicate.operands.some(
+          (operand) =>
+            operand.op === 'equality' &&
+            operand.operands[0]?.pointer === '/interactions/observed/response-status' &&
+            operand.operands[1]?.literal === 200,
+        ),
+        'P-014 only matches HTTP 200',
+      );
+      assert.equal(raw.contentType, 'application/json', 'P-014 declares the corpus content type');
+      assert.deepEqual(
+        Buffer.from(raw.base64, 'base64'),
+        fs.readFileSync(path.join(folder, 'corpus/development/D08-invalid-json.txt')),
+        'P-014 sends the frozen malformed JSON bytes',
+      );
+      for (const [phase, expectedStatus, expectedBody] of [
+        ['baseline-pass', 400, { error: 'invalid JSON' }],
+        ['mutated-fail', 200, { decision: 'pass', reason: 'accepted' }],
+      ]) {
+        const qualification = readJson(path.join(replay, `qualification/P-014/${phase}.json`));
+        const step = qualification.steps.find((entry) => entry.stepId === 'raw-invalid-json');
+        assert.deepEqual(step?.request?.channels?.body, raw, `P-014 ${phase} request bytes`);
+        assert.equal(step?.observation?.status, expectedStatus, `P-014 ${phase} status`);
+        assert.deepEqual(step?.observation?.body?.value, expectedBody, `P-014 ${phase} response`);
+      }
+      assert.equal(set.records.length, 3, 'P-014 has three scored trials');
+      for (const record of set.records) {
+        const trial = readJson(path.join(replay, record));
+        const observed = trial.observations.find((entry) => entry.observationId.endsWith('raw-invalid-json'));
+        assert.deepEqual(observed?.callInputs?.body, raw, `P-014 ${record} raw body`);
+        assert.equal(observed?.callInputs?.bodyEncoding, 'raw', `P-014 ${record} body encoding`);
+        assert.equal(observed?.responseStatus, 200, `P-014 ${record} parser mutation`);
       }
     }
     const artifact = path.join(out, `${runName}-${set.probeId}-evidence.json`);

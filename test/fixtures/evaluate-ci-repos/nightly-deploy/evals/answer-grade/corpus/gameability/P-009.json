@@ -49,6 +49,13 @@
         "content-type": "application/json"
       },
       "body": "{\"decision\": \"pass\", \"reason\": \"accepted\"}"
+    },
+    "raw-invalid-json": {
+      "status": 400,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":\"invalid JSON\"}"
     }
   }
 }

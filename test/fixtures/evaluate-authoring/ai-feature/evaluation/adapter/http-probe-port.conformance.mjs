@@ -59,6 +59,21 @@ async function startStub(scenario) {
         response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ ok: true }));
         break;
       }
+      case '/raw': {
+        const chunks = [];
+        request.on('data', (chunk) => chunks.push(chunk));
+        request.on('end', () => {
+          response.writeHead(200, { 'content-type': 'application/json' }).end(
+            JSON.stringify({
+              base64: Buffer.concat(chunks).toString('base64'),
+              contentType: request.headers['content-type'] ?? null,
+              contentLength: request.headers['content-length'] ?? null,
+              transferEncoding: request.headers['transfer-encoding'] ?? null,
+            }),
+          );
+        });
+        break;
+      }
       case '/fault': {
         response.writeHead(500, { 'content-type': 'text/plain' }).end('fault');
         break;
@@ -175,6 +190,47 @@ async function checkAdapter(name, port, expected, signal) {
   }
 }
 
+/** A bounded wire check over the copied port, including bytes outside UTF-8 text. */
+async function checkRawAdapter() {
+  const stub = await startStub('resolves');
+  const bytes = Buffer.from([0, 128, 255]);
+  const contentType = 'application/octet-stream';
+  const port = createHttpProbePort({
+    policy: policyFor(stub.port),
+    targets: targetsFor(stub.port),
+  });
+  const rawRequest = request(STUB, 'POST', '/raw');
+  rawRequest.channels.body = { kind: 'raw', base64: bytes.toString('base64'), contentType };
+  let watchdog;
+  try {
+    const observed = await Promise.race([
+      port.probe(rawRequest),
+      new Promise((_, reject) => {
+        watchdog = setTimeout(() => reject(new Error('raw request timed out')), 2000);
+      }),
+    ]);
+    const received = observed.body?.value;
+    if (
+      observed.status === 200 &&
+      received?.base64 === bytes.toString('base64') &&
+      received?.contentType === contentType &&
+      received?.contentLength === String(bytes.byteLength) &&
+      received?.transferEncoding === null
+    ) {
+      console.log('pass adapter/raw-bytes');
+    } else {
+      console.error(`fail adapter/raw-bytes: ${JSON.stringify(received)}`);
+      process.exitCode = 1;
+    }
+  } catch (error) {
+    console.error(`fail adapter/raw-bytes: ${error.message}`);
+    process.exitCode = 1;
+  } finally {
+    clearTimeout(watchdog);
+    await stub.close();
+  }
+}
+
 /** The same authorized target with a short cap for transport phase checks. */
 function cappedPort(transport) {
   return createHttpProbePort({
@@ -227,6 +283,7 @@ try {
   const report = await runEnvironmentProbePortConformance(subject);
   console.log(formatConformanceReport(report));
   process.exitCode = report.passed ? 0 : 1;
+  await checkRawAdapter();
 
   // Custom transport hooks can ignore AbortSignal. Each phase must still settle at the declared cap.
   await checkAdapter('resolve-cap', cappedPort({ resolve: () => new Promise(() => {}) }), 'budget-exhausted');

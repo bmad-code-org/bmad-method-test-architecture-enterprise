@@ -5,19 +5,19 @@
   "argv": [
     "preflight",
     "--contract",
-    "/private/tmp/tea-replay-1OarSn/after/evaluation/runs/20261002T155041336Z-390cacf7/contract.json",
+    "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/story150-evidence-mVk3d2/gap-after/evaluation/runs/20261002T210702390Z-217ccccc/contract.json",
     "--probes",
-    "/private/tmp/tea-replay-1OarSn/after/evaluation/runs/20261002T155041336Z-390cacf7/probes.json",
+    "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/story150-evidence-mVk3d2/gap-after/evaluation/runs/20261002T210702390Z-217ccccc/probes.json",
     "--observations",
-    "/private/tmp/tea-replay-1OarSn/after/evaluation/runs/20261002T155041336Z-390cacf7/observations.json",
+    "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/story150-evidence-mVk3d2/gap-after/evaluation/runs/20261002T210702390Z-217ccccc/observations.json",
     "--run-id",
-    "20261002T155041336Z-390cacf7",
+    "20261002T210702390Z-217ccccc",
     "--out",
-    "/tmp/tea-evaluate-p501/run-51684-gIlrmG/tea-evaluate-engine-MkD5ST/preflight-verdict.json"
+    "/tmp/tea-evaluate-p501/run-13504-8Xgg2E/tea-evaluate-engine-lyerhE/preflight-verdict.json"
   ],
   "exitCode": 0,
   "signal": null,
   "error": null,
   "stdout": "",
-  "stderr": "eval-quality: preflight: 20261002T155041336Z-390cacf7: leg \"witness-missing\": planned\neval-quality: preflight: 20261002T155041336Z-390cacf7: leg \"witness-missing\": observed\neval-quality: preflight: 20261002T155041336Z-390cacf7: leg \"witness-clean\": planned\neval-quality: preflight: 20261002T155041336Z-390cacf7: leg \"witness-clean\": observed\neval-quality: preflight: 20261002T155041336Z-390cacf7: leg \"preflight-control-observe\": planned\neval-quality: preflight: 20261002T155041336Z-390cacf7: leg \"preflight-control-observe\": observed\neval-quality: preflight: 20261002T155041336Z-390cacf7: leg \"preflight-control-observe-2\": planned\neval-quality: preflight: 20261002T155041336Z-390cacf7: leg \"preflight-control-observe-2\": observed\neval-quality: preflight: 20261002T155041336Z-390cacf7: leg \"manifest-p-005\": planned\neval-quality: preflight: 20261002T155041336Z-390cacf7: leg \"manifest-p-005\": observed\neval-quality: preflight: 20261002T155041336Z-390cacf7: leg \"manifest-p-006\": planned\neval-quality: preflight: 20261002T155041336Z-390cacf7: leg \"manifest-p-006\": observed\neval-quality: preflight: 20261002T155041336Z-390cacf7: leg \"manifest-p-007\": planned\neval-quality: preflight: 20261002T155041336Z-390cacf7: leg \"manifest-p-007\": observed\neval-quality: preflight: 20261002T155041336Z-390cacf7: leg \"manifest-p-008\": planned\neval-quality: preflight: 20261002T155041336Z-390cacf7: leg \"manifest-p-008\": observed\neval-quality: preflight: 20261002T155041336Z-390cacf7: reduced 8 leg(s): passed\n"
+  "stderr": "eval-quality: preflight: 20261002T210702390Z-217ccccc: leg \"witness-missing\": planned\neval-quality: preflight: 20261002T210702390Z-217ccccc: leg \"witness-missing\": observed\neval-quality: preflight: 20261002T210702390Z-217ccccc: leg \"witness-clean\": planned\neval-quality: preflight: 20261002T210702390Z-217ccccc: leg \"witness-clean\": observed\neval-quality: preflight: 20261002T210702390Z-217ccccc: leg \"preflight-control-observe\": planned\neval-quality: preflight: 20261002T210702390Z-217ccccc: leg \"preflight-control-observe\": observed\neval-quality: preflight: 20261002T210702390Z-217ccccc: leg \"preflight-control-observe-2\": planned\neval-quality: preflight: 20261002T210702390Z-217ccccc: leg \"preflight-control-observe-2\": observed\neval-quality: preflight: 20261002T210702390Z-217ccccc: leg \"manifest-p-005\": planned\neval-quality: preflight: 20261002T210702390Z-217ccccc: leg \"manifest-p-005\": observed\neval-quality: preflight: 20261002T210702390Z-217ccccc: leg \"manifest-p-006\": planned\neval-quality: preflight: 20261002T210702390Z-217ccccc: leg \"manifest-p-006\": observed\neval-quality: preflight: 20261002T210702390Z-217ccccc: leg \"manifest-p-007\": planned\neval-quality: preflight: 20261002T210702390Z-217ccccc: leg \"manifest-p-007\": observed\neval-quality: preflight: 20261002T210702390Z-217ccccc: leg \"manifest-p-008\": planned\neval-quality: preflight: 20261002T210702390Z-217ccccc: leg \"manifest-p-008\": observed\neval-quality: preflight: 20261002T210702390Z-217ccccc: reduced 8 leg(s): passed\n"
 }

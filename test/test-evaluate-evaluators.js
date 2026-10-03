@@ -4246,6 +4246,7 @@ function literalObservation(channel, response, operationId = 'judge-request') {
       query: null,
       header: null,
       body: null,
+      bodyEncoding: null,
       argument: null,
       option: null,
       environment: null,
@@ -5445,8 +5446,8 @@ async function checkInstalledFrameworks() {
   );
   const firstRecord = readJson(path.join(firstRun, 'run.json'));
   check(
-    firstRecord.evaluatorConfigurationDigest === 'sha256:13d3e8c6a106d3dc802b2d2e57b39e8e4c149e31cfbdb0981eb163fcd081d4a2',
-    `the legacy declaration changed its Story 1.44 configuration digest to ${firstRecord.evaluatorConfigurationDigest}`,
+    firstRecord.evaluatorConfigurationDigest === 'sha256:1a7fc1dbd34afbc6f7ef3c8b2dbe8790502acd1bf544c80adad1929717c26697',
+    `the legacy declaration differs from the engine 6.0 configuration digest: ${firstRecord.evaluatorConfigurationDigest}`,
   );
   check(
     canonical(firstRecord.evaluator.frameworks) === canonical(observed),

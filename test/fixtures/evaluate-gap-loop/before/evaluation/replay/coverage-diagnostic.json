@@ -1,7 +1,7 @@
 [
   {
-    "rule": "malformed-input",
     "relevancePredicate": "malformed-input-relevance",
+    "rule": "malformed-input",
     "satisfactionPredicate": "malformed-input-satisfaction",
     "satisfied": false,
     "severity": "critical"

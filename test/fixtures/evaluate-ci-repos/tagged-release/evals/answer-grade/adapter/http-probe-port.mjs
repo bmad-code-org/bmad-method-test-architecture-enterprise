@@ -263,9 +263,31 @@ export default function createHttpProbePort({ policy, targets, auth = {}, transp
       for (const item of Array.isArray(value) ? value : [value]) url.searchParams.append(name, queryText(item));
     }
     let method = request.method;
-    let body = request.channels.body.kind === 'json' ? Buffer.from(JSON.stringify(request.channels.body.value)) : undefined;
+    let droppedBody = false;
+    let body;
+    if (request.channels.body.kind === 'json') body = Buffer.from(JSON.stringify(request.channels.body.value));
+    const rawBase64 = request.channels.body.kind === 'raw' ? request.channels.body.base64 : undefined;
+    // The parser has checked canonical base64. Its decoded byte count needs no allocation before the policy cap.
+    const rawByteLength =
+      rawBase64 === undefined ? undefined : (rawBase64.length / 4) * 3 - (rawBase64.endsWith('==') ? 2 : rawBase64.endsWith('=') ? 1 : 0);
     const declaredHeaders = { ...request.channels.header };
-    if (body !== undefined && !Object.keys(declaredHeaders).some((name) => name.toLowerCase() === 'content-type')) {
+    const contentTypeNames = Object.keys(declaredHeaders).filter((name) => name.toLowerCase() === 'content-type');
+    if (request.channels.body.kind === 'raw') {
+      try {
+        http.validateHeaderValue('Content-Type', request.channels.body.contentType);
+      } catch {
+        throw new RuntimeFault('schema-parse-failure', 'ProbeRequest', 'the raw body contentType is not a valid HTTP header value');
+      }
+      if (contentTypeNames.length > 0) {
+        throw new RuntimeFault('schema-parse-failure', 'ProbeRequest', 'the raw body declares Content-Type through body.contentType');
+      }
+      declaredHeaders['content-type'] = request.channels.body.contentType;
+      if (Object.keys(declaredHeaders).some((name) => ['content-length', 'transfer-encoding'].includes(name.toLowerCase()))) {
+        throw new RuntimeFault('schema-parse-failure', 'ProbeRequest', 'a raw body uses framing computed from its decoded bytes');
+      }
+      if (rawByteLength === 0) declaredHeaders['transfer-encoding'] = 'chunked';
+      else declaredHeaders['content-length'] = String(rawByteLength);
+    } else if (body !== undefined && contentTypeNames.length === 0) {
       declaredHeaders['content-type'] = 'application/json';
     }
     const credentials = auth[request.interfaceId] ?? {};
@@ -368,9 +390,11 @@ export default function createHttpProbePort({ policy, targets, auth = {}, transp
           if (signal?.aborted) throw new RuntimeFault('aborted', 'ProbeRequest', 'the request was aborted');
           if (cap.signal.aborted) throw capped(`the exchange passed maxElapsedMs (${initialAuthorization.maxElapsedMs}ms)`);
         }
-        if (body !== undefined && body.byteLength > authorization.maxRequestBytes) {
-          throw capped(`the request body of ${body.byteLength} bytes passes maxRequestBytes (${authorization.maxRequestBytes})`);
+        const bodyByteLength = body?.byteLength ?? (droppedBody ? undefined : rawByteLength);
+        if (bodyByteLength !== undefined && bodyByteLength > authorization.maxRequestBytes) {
+          throw capped(`the request body of ${bodyByteLength} bytes passes maxRequestBytes (${authorization.maxRequestBytes})`);
         }
+        if (body === undefined && !droppedBody && rawBase64 !== undefined) body = Buffer.from(rawBase64, 'base64');
         if (hop === 0 && prepare !== undefined) {
           try {
             await whileActive(() => prepare({ scheme, host, port, address: decision.canonicalAddress, method }, exchange));
@@ -382,6 +406,20 @@ export default function createHttpProbePort({ policy, targets, auth = {}, transp
         }
         // Credentials go to the origin they were configured for and to no origin a redirect names.
         const headers = { ...declaredHeaders, ...(url.origin === originalOrigin ? credentials : {}), host: url.host };
+        if (droppedBody) {
+          for (const name of Object.keys(headers)) {
+            if (['content-type', 'content-length', 'transfer-encoding'].includes(name.toLowerCase())) delete headers[name];
+          }
+        }
+        if (request.channels.body.kind === 'raw' && body !== undefined) {
+          for (const name of Object.keys(headers)) {
+            if (name.toLowerCase() === 'content-type') delete headers[name];
+            if (['content-length', 'transfer-encoding'].includes(name.toLowerCase())) delete headers[name];
+          }
+          headers['content-type'] = request.channels.body.contentType;
+          if (body.byteLength === 0) headers['transfer-encoding'] = 'chunked';
+          else headers['content-length'] = String(body.byteLength);
+        }
         let answer;
         try {
           answer = await whileActive(() =>
@@ -420,7 +458,10 @@ export default function createHttpProbePort({ policy, targets, auth = {}, transp
           if (becomesGet(answer.status, method)) {
             method = 'GET';
             body = undefined;
-            delete declaredHeaders['content-type'];
+            droppedBody = true;
+            for (const name of Object.keys(declaredHeaders)) {
+              if (['content-type', 'content-length', 'transfer-encoding'].includes(name.toLowerCase())) delete declaredHeaders[name];
+            }
           }
           continue;
         }

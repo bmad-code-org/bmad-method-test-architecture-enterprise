@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "parentDigest": null,
   "revisionCount": 0,
   "probeId": "P-001",
@@ -14,9 +14,9 @@
     "route": "clean-control",
     "baselinePassEvidence": {
       "storage": "public",
-      "path": "runs/20261002T154416884Z-54130882/qualification/P-001/baseline-pass.json",
+      "path": "runs/20261002T210850303Z-60b5ecc1/qualification/P-001/baseline-pass.json",
       "privateRef": null,
-      "digest": "sha256:0891810632e1bf47ee0e5dd16f4a63dc75b586ab095ebd23cca67f607c7eb982"
+      "digest": "sha256:ab3a0e60f64db45e11dbd1af606192f713de29d0a902eb30e4d489243f1a1261"
     },
     "revisionCommitDigest": "sha256:1ab37ae347e02e5f63f6361380a39bd3186c68dba859fbc87afd023ca6787c96",
     "noKnownDefectStatement": "The strict policy has no known defect."

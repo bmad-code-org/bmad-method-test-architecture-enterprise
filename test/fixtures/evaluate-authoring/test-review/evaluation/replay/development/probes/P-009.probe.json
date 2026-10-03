@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "parentDigest": null,
   "revisionCount": 0,
   "probeId": "P-009",
@@ -15,13 +15,13 @@
     "degenerateResponse": "Flag every valid assertion as missing.",
     "naiveOracleSatisfiedEvidence": {
       "storage": "public",
-      "path": "runs/20261002T154633138Z-c018df7f/qualification/P-009/naive-oracle-satisfied.json",
+      "path": "runs/20261002T210531658Z-f68d8772/qualification/P-009/naive-oracle-satisfied.json",
       "privateRef": null,
       "digest": "sha256:651fd6feeb65d47fedee96fa65142b907bee1cbd59bf3d18102c7eef354b5776"
     },
     "disciplinedOracleRejectedEvidence": {
       "storage": "public",
-      "path": "runs/20261002T154633138Z-c018df7f/qualification/P-009/disciplined-oracle-rejected.json",
+      "path": "runs/20261002T210531658Z-f68d8772/qualification/P-009/disciplined-oracle-rejected.json",
       "privateRef": null,
       "digest": "sha256:e054daf28ad14ae7ee9e5f6559208b620aa1d51381296c574923e6d399429cdc"
     }

@@ -1,0 +1,54 @@
+{
+  "invocationId": "20261002T210700941Z-dbe298d0",
+  "run": "20261002T210634961Z-e0c16be1",
+  "exitCode": 0,
+  "scores": [
+    {
+      "probeId": "P-010",
+      "exitCode": 0,
+      "failure": null,
+      "record": "runs/20261002T210634961Z-e0c16be1/scores/20261002T210700941Z-dbe298d0/P-010/score.json",
+      "evidence": "runs/20261002T210634961Z-e0c16be1/scores/20261002T210700941Z-dbe298d0/P-010/evidence-artifact.json"
+    },
+    {
+      "probeId": "P-011",
+      "exitCode": 0,
+      "failure": null,
+      "record": "runs/20261002T210634961Z-e0c16be1/scores/20261002T210700941Z-dbe298d0/P-011/score.json",
+      "evidence": "runs/20261002T210634961Z-e0c16be1/scores/20261002T210700941Z-dbe298d0/P-011/evidence-artifact.json"
+    },
+    {
+      "probeId": "P-012",
+      "exitCode": 0,
+      "failure": null,
+      "record": "runs/20261002T210634961Z-e0c16be1/scores/20261002T210700941Z-dbe298d0/P-012/score.json",
+      "evidence": "runs/20261002T210634961Z-e0c16be1/scores/20261002T210700941Z-dbe298d0/P-012/evidence-artifact.json"
+    },
+    {
+      "probeId": "P-013",
+      "exitCode": 0,
+      "failure": null,
+      "record": "runs/20261002T210634961Z-e0c16be1/scores/20261002T210700941Z-dbe298d0/P-013/score.json",
+      "evidence": "runs/20261002T210634961Z-e0c16be1/scores/20261002T210700941Z-dbe298d0/P-013/evidence-artifact.json"
+    }
+  ],
+  "strengthAggregate": {
+    "status": "copied",
+    "reason": null,
+    "partition": "held-out",
+    "exitCode": 0,
+    "call": "runs/20261002T210634961Z-e0c16be1/scores/20261002T210700941Z-dbe298d0/aggregate-strength.json",
+    "aggregate": "runs/20261002T210634961Z-e0c16be1/scores/20261002T210700941Z-dbe298d0/strength-aggregate.json",
+    "aggregateDigest": "sha256:8f2f06cca2d0d0335e98cefaa677cfc6af22badfe3e92758e223f01dc6f5b0f8",
+    "floors": "runs/20261002T210634961Z-e0c16be1/scores/20261002T210700941Z-dbe298d0/strength-floors.json",
+    "floorsDigest": "sha256:e84700d449bc14f307e48810dc166fab364dfdaa20ea30a2dbc492fe81c913c6",
+    "evidenceDigests": {
+      "P-010": "sha256:4eab434a23944572519a946cbf570a467ee5ffc5104adc7a85bf2c6445436df9",
+      "P-011": "sha256:9e9368701ab3d384d7848961b1f12cbcd255d3cceabbee7d43d803ddea52a2c8",
+      "P-012": "sha256:7942ee8ca4ed6328deb7501c32421ac76ce44c1eb4ba3af015f0a8c1fce71115",
+      "P-013": "sha256:91ca7e5e3ef28093c48202f75a0ef06b36e4302eaffbccfd22238184da06705e"
+    }
+  },
+  "refused": [],
+  "confinement": "seatbelt"
+}

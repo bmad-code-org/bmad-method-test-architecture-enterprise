@@ -3,7 +3,7 @@
   "phase": "disciplined-oracle-rejected",
   "degenerateResponse": {
     "path": "corpus/gameability/P-009.json",
-    "digest": "sha256:90a4363b4452d973cc79ef514f797aab3c583bc27127d0e9b08bafab8e62d61b"
+    "digest": "sha256:029ab397f992096151b9fb02e5dbca11cf1dc1818338ddc1732f2d09a41bc8ad"
   },
   "verdict": "violated",
   "oracles": [
@@ -291,6 +291,43 @@
           "value": {
             "decision": "pass",
             "reason": "accepted"
+          }
+        }
+      }
+    },
+    {
+      "stepId": "raw-invalid-json",
+      "request": {
+        "probeId": "degenerate-raw-invalid-json",
+        "interfaceId": "answer-grade",
+        "operationId": "grade-answer",
+        "kind": "api",
+        "method": "POST",
+        "pathTemplate": "/grade",
+        "channels": {
+          "path": {},
+          "query": {},
+          "header": {},
+          "body": {
+            "kind": "raw",
+            "base64": "eyJhbnN3ZXIiOg==",
+            "contentType": "application/json"
+          }
+        }
+      },
+      "observation": {
+        "probeId": "degenerate-raw-invalid-json",
+        "interfaceId": "answer-grade",
+        "operationId": "grade-answer",
+        "kind": "api",
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "kind": "json",
+          "value": {
+            "error": "invalid JSON"
           }
         }
       }

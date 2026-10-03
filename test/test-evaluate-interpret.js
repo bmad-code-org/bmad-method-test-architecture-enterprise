@@ -243,7 +243,7 @@ async function checkReusedOperation() {
     const [firstRecord] = recordPaths;
     const recordFile = path.join(run, firstRecord);
     const prior = read(recordFile);
-    prior.schemaVersion = 6;
+    prior.schemaVersion = 7;
     fs.writeFileSync(recordFile, `${JSON.stringify(prior, null, 2)}\n`);
     const runFile = path.join(run, 'run.json');
     const runRecord = read(runFile);
@@ -252,7 +252,7 @@ async function checkReusedOperation() {
     const scoreDirectories = fs.readdirSync(path.join(run, 'scores')).length;
     const refused = test.cli(folder, 'score', ['--run', path.basename(run)], env);
     assert.equal(refused.status, 10, refused.output);
-    assert.match(refused.output, /sealed-run-record carries "schemaVersion" 6 where this build reads 7/);
+    assert.match(refused.output, /sealed-run-record carries "schemaVersion" 7 where this build reads 8/);
     assert.equal(fs.readdirSync(path.join(run, 'scores')).length, scoreDirectories, 'a prior-version record reached the scorer');
   } finally {
     scratch.removeAll();

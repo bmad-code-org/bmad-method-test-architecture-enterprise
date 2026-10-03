@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "parentDigest": null,
   "revisionCount": 0,
   "probeId": "P-001",
@@ -14,9 +14,9 @@
     "route": "clean-control",
     "baselinePassEvidence": {
       "storage": "public",
-      "path": "runs/20261002T154804523Z-186fe7af/qualification/P-001/baseline-pass.json",
+      "path": "runs/20261002T223329843Z-c1997103/qualification/P-001/baseline-pass.json",
       "privateRef": null,
-      "digest": "sha256:f34cde86b0800699a09e3753cde06ed66c744504b4b88072ffd4aa20dbb6111a"
+      "digest": "sha256:23b3e8dc3dce17d845d05e255239ef88446b3159c75d2e9f4dd1afd8932a3249"
     },
     "revisionCommitDigest": "sha256:9588c4d7233a407e7e488558546b2276a81505a749e8c4a9098637318f695a42",
     "noKnownDefectStatement": "No known defect in the frozen target revision."

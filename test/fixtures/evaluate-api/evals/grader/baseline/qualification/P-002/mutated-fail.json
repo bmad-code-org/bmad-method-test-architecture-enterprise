@@ -46,7 +46,7 @@
         "status": 200,
         "headers": {
           "content-type": "application/json",
-          "date": "Fri, 02 Oct 2026 15:44:07 GMT",
+          "date": "Fri, 02 Oct 2026 21:08:45 GMT",
           "connection": "close",
           "transfer-encoding": "chunked"
         },
@@ -55,7 +55,8 @@
           "value": {
             "ok": true,
             "answer": "forty-two",
-            "verdict": "rejected"
+            "verdict": "rejected",
+            "secret": "[redacted]"
           }
         }
       }

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "parentDigest": null,
   "revisionCount": 0,
   "probeId": "P-002",
@@ -23,15 +23,15 @@
     "expectedObservableFailure": "The grader rejects the answer, so its result says verdict rejected.",
     "baselinePassEvidence": {
       "storage": "public",
-      "path": "runs/20261002T154416884Z-54130882/qualification/P-002/baseline-pass.json",
+      "path": "runs/20261002T210850303Z-60b5ecc1/qualification/P-002/baseline-pass.json",
       "privateRef": null,
-      "digest": "sha256:c07c8c77d836b62f887ed75f858ee8fc3d8597346f7067124753a618eb858c3c"
+      "digest": "sha256:dc283fb5b94ced5fd00bbc6131a91f6928f3a965c48b3bb7f110d6d77f00e9ae"
     },
     "mutatedFailEvidence": {
       "storage": "public",
-      "path": "runs/20261002T154416884Z-54130882/qualification/P-002/mutated-fail.json",
+      "path": "runs/20261002T210850303Z-60b5ecc1/qualification/P-002/mutated-fail.json",
       "privateRef": null,
-      "digest": "sha256:908cfcd2a9d9a9c618a8c5bd6307687e935d34ad750c553c478f368554db016d"
+      "digest": "sha256:0e8ee858a650a5f9dac14eaa976dd866c80b707eda97dbf7bde6fd7944ab15d6"
     },
     "rollbackVerified": true
   },
@@ -45,9 +45,9 @@
       "oracleEvidence": [
         {
           "storage": "public",
-          "path": "runs/20261002T154416884Z-54130882/qualification/P-002/mutated-fail.json",
+          "path": "runs/20261002T210850303Z-60b5ecc1/qualification/P-002/mutated-fail.json",
           "privateRef": null,
-          "digest": "sha256:908cfcd2a9d9a9c618a8c5bd6307687e935d34ad750c553c478f368554db016d"
+          "digest": "sha256:0e8ee858a650a5f9dac14eaa976dd866c80b707eda97dbf7bde6fd7944ab15d6"
         }
       ],
       "source": "controlled-mutation",

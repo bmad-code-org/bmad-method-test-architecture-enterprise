@@ -941,7 +941,8 @@ async function runArm({
       const pathValues = bound(binding.path, 'path');
       const query = bound(binding.query, 'query');
       const header = bound(binding.header, 'header');
-      const body = bound(binding.body, 'body');
+      const rawBody = binding.body?.kind === 'raw' ? binding.body : null;
+      const body = rawBody ?? bound(binding.body, 'body');
       request = {
         probeId: `${label}-${step.stepId}`,
         interfaceId: iface.logicalId,
@@ -953,10 +954,10 @@ async function runArm({
           path: pathValues ?? {},
           query: query ?? {},
           header: headerValues(header, step.stepId),
-          body: body === null ? { kind: 'absent' } : { kind: 'json', value: body },
+          body: rawBody ?? (body === null ? { kind: 'absent' } : { kind: 'json', value: body }),
         },
       };
-      callInputs = { path: pathValues, query, header, body };
+      callInputs = { path: pathValues, query, header, body, ...(rawBody === null ? {} : { bodyEncoding: 'raw' }) };
     } else if (iface.kind === 'mcp' && typeof operation.toolName === 'string') {
       const toolArguments = bound(binding.arguments, 'arguments');
       request = {

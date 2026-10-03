@@ -5,9 +5,9 @@
   "argv": [
     "seal",
     "--in",
-    "/private/tmp/tea-replay-1OarSn/after/evaluation/runs/20261002T155041336Z-390cacf7/contract.json",
+    "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/story150-evidence-mVk3d2/gap-after/evaluation/runs/20261002T210702390Z-217ccccc/contract.json",
     "--out",
-    "/tmp/tea-evaluate-p501/run-51684-gIlrmG/tea-evaluate-engine-f9295W/sealed-evaluator-brief.json"
+    "/tmp/tea-evaluate-p501/run-13504-8Xgg2E/tea-evaluate-engine-YcbtbB/sealed-evaluator-brief.json"
   ],
   "exitCode": 0,
   "signal": null,

@@ -1,0 +1,129 @@
+{
+  "probeId": "P-014",
+  "probeClass": "defect",
+  "behaviorId": "B-003",
+  "expectedClean": false,
+  "rationale": "[malformed] A malformed raw request is spuriously accepted.",
+  "defects": [
+    {
+      "defectId": "D-008",
+      "behaviorId": "B-003",
+      "summary": "Malformed JSON is accepted by the parser and graded as a pass.",
+      "severity": "material",
+      "source": "controlled-mutation",
+      "manifestationWitness": {
+        "legId": "p-014-manifest-raw-invalid-json",
+        "interfaceId": "answer-grade",
+        "operationId": "grade-answer",
+        "inputs": {
+          "path": {},
+          "query": {},
+          "header": {},
+          "body": {
+            "kind": "raw",
+            "base64": "eyJhbnN3ZXIiOg==",
+            "contentType": "application/json"
+          }
+        },
+        "relation": {
+          "op": "all",
+          "operands": [
+            {
+              "op": "deep-equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/p-014-manifest-raw-invalid-json/call-inputs/body"
+                },
+                {
+                  "literal": {
+                    "kind": "raw",
+                    "base64": "eyJhbnN3ZXIiOg==",
+                    "contentType": "application/json"
+                  }
+                }
+              ]
+            },
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/p-014-manifest-raw-invalid-json/response-status"
+                },
+                {
+                  "literal": 200
+                }
+              ]
+            },
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/p-014-manifest-raw-invalid-json/response-body/decision"
+                },
+                {
+                  "literal": "pass"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "defectSignature": {
+    "interfaceKind": "api",
+    "observableChannel": "response-body",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": null,
+          "header": null,
+          "body": {
+            "kind": "raw",
+            "base64": "eyJhbnN3ZXIiOg==",
+            "contentType": "application/json"
+          },
+          "argument": null,
+          "option": null,
+          "environment": null,
+          "stdin": null,
+          "arguments": null
+        }
+      },
+      "predicate": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/observed/response-status"
+              },
+              {
+                "literal": 200
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/observed/response-body/decision"
+              },
+              {
+                "literal": "pass"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "method": "POST",
+    "pathTemplate": "/grade"
+  },
+  "qualification": {
+    "route": "controlled-mutation",
+    "mutation": "M-008"
+  }
+}

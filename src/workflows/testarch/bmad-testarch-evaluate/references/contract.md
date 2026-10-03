@@ -440,6 +440,34 @@ Pair the marker with a read-back operation and a step whose `after` names the wr
 
 Name each step's `interfaceId` and `operationId`: an operation ID is unique only within its interface, so two interfaces may declare the same one and the step says which it means. A sibling group's operation members are `{ interfaceId, operationId }` pairs, and `evaluation.json` classifies every pair under `operationPhases` as `{ interfaceId: { operationId: phase } }`. Set `cardinality` per step, identify `testData.principals` when authorization matters, and set `probeStepBound` high enough for every planned step. The worked workflow has two required steps, an operator principal, and a bound of two. `after` orders a dependent step. A `captured` binding reads a prior observation from the same trial. A missing or unsendable capture leaves the dependent step unissued and must appear in preflight.
 
+For an API parser check, bind the exact malformed JSON bytes as a raw body:
+
+```json
+{
+  "interactionPlan": [
+    {
+      "stepId": "raw-invalid-json",
+      "interfaceId": "answer-grade",
+      "operationId": "grade-answer",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "path": null,
+        "query": null,
+        "header": null,
+        "body": {
+          "kind": "raw",
+          "base64": "eyJhbnN3ZXIiOg==",
+          "contentType": "application/json"
+        }
+      }
+    }
+  ]
+}
+```
+
+The base64 value encodes `{"answer":`. An oracle can point to `/interactions/raw-invalid-json/response-status` and require `400` for the parser error.
+
 <!-- example:contract-patch -->
 
 ```json
@@ -563,7 +591,7 @@ The starter skeleton and the source repository's [contract fill](https://github.
 
 ```json
 {
-  "schemaVersion": 6,
+  "schemaVersion": 7,
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "tea-evaluate-contract-starter",
