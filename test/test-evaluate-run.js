@@ -5305,13 +5305,27 @@ async function checkAuditChannelUnits() {
     );
     // A target that freezes the runtime for two seconds (a stop signal to its parent) leaves no tick to run, so the canaries
     // the cadence called for in that time count as sent and undelivered.
+    // A parent that resumes a stopped child (a shell's job control) undoes the freeze at once, so the case measures the
+    // largest gap between two ticks of its own timer and judges the gap rule only when the freeze happened.
+    let largestGapMs = 0;
     const frozen = await read('/usr/bin/log', {
       waitMs: 0,
       act: async (sandbox) => {
+        let last = process.hrtime.bigint();
+        const probe = setInterval(() => {
+          const now = process.hrtime.bigint();
+          largestGapMs = Math.max(largestGapMs, Number(now - last) / 1e6);
+          last = now;
+        }, 10);
         const wrapped = sandbox.wrap('/bin/sh', ['-c', 'kill -STOP $PPID; sleep 2; kill -CONT $PPID']);
         await new Promise((resolve) => spawn(wrapped.target, wrapped.args, { cwd: workspace, stdio: 'ignore' }).once('exit', resolve));
+        clearInterval(probe);
       },
     });
+    check(
+      largestGapMs >= 1500,
+      `the runtime was not frozen (its largest timer gap was ${Math.round(largestGapMs)} ms): the parent of this run resumed it, as a shell's job control does, so the gap rule was not exercised; run the suite directly from a shell prompt`,
+    );
     check(
       frozen.channel.canariesSent >= 20 &&
         frozen.channel.canariesDelivered < frozen.channel.canariesSent &&
