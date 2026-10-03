@@ -420,6 +420,11 @@ function pipeline() {
   check(heldOutScore.status === 0, `held-out score exited ${heldOutScore.status}: ${heldOutScore.output}`);
   if (heldOutScore.status !== 0) return;
   const heldOutEvidence = scored(heldOutRun, 'P-003');
+  const heldOutEvidenceVotes = heldOutEvidence.reducedProbeOutcomes[0].trialVotes.map((vote) => vote.state);
+  check(
+    heldOutEvidenceVotes.length === 3 && heldOutEvidenceVotes.every((state) => state === 'caught'),
+    `P-003 evidence votes: ${heldOutEvidenceVotes}`,
+  );
   check(
     heldOutEvidence.contractVerdict === 'PASS' && heldOutEvidence.coverageGaps.length === 0,
     `P-003 contract verdict or coverage gaps: ${heldOutEvidence.contractVerdict}, ${JSON.stringify(heldOutEvidence.coverageGaps)}`,
