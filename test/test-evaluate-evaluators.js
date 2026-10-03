@@ -1685,7 +1685,7 @@ async function checkSealedBriefCiReplayStartsNoVersionProbe() {
   const tripwire = path.join(path.dirname(agentScript), 'invoked.log');
   fs.writeFileSync(
     agentScript,
-    `require('node:fs').appendFileSync(${JSON.stringify(tripwire)}, process.argv.slice(2).join(' ') + '\\n'); process.exit(1);\n`,
+    `require('node:fs').appendFileSync(${JSON.stringify(tripwire)}, process.argv.slice(2).join(' ') + '\\n'); process.stderr.write('the removed agent CLI was invoked: ' + process.argv.slice(2).join(' ') + '\\n'); process.exit(1);\n`,
   );
   // The wire is live: one direct call is recorded, then cleared, so an empty log below means no call and not a dead wire.
   const probed = spawnSync(process.execPath, [agentScript, '--version'], { encoding: 'utf8' });

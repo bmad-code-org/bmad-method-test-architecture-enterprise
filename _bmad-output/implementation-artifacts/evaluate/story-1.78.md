@@ -64,3 +64,5 @@ Round 1 (blind, edge case, verification gap; three Opus reviewers):
 - The launch-count assertion could not fire, since the tripwire replaced the stub that writes the capture (blind 5): **low**, patched. It is dropped from this case; Story 1.76's identical line stays.
 - The tripwire guards `agentArgs[0]`, not `agentCommand` (edge 2): **low**, skipped. The custom adapter's `versionArgv` always prepends `agentArgs`, so the probe path is covered.
 - The record said seven checks, rewrote "the other score files" wrongly and kept a short baseline SHA (blind 4 and 7, verification 3 and 4): **low**, patched.
+
+CodeRabbit (one finding, **low**, valid, fixed and resolved): the tripwire exited 1 without a message, so a failing check's captured output gave no reason. It now writes the rejected invocation to stderr before exiting; the log assertion stays.
