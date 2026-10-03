@@ -386,14 +386,12 @@ function pipeline() {
     const evidence = scored(run, probeId);
     const votes = evidence.reducedProbeOutcomes[0].trialVotes.map((vote) => vote.state);
     check(votes.length === 3 && votes.every((state) => state === expected), `${probeId} votes: ${votes}`);
+    check(
+      evidence.contractVerdict === 'PASS' && evidence.coverageGaps.length === 0,
+      `${probeId} contract verdict or coverage gaps: ${evidence.contractVerdict}, ${JSON.stringify(evidence.coverageGaps)}`,
+    );
   }
   const defectEvidence = scored(run, 'P-002');
-  check(
-    defectEvidence.contractVerdict === 'CONCERNS' &&
-      JSON.stringify(defectEvidence.coverageGaps.map((gap) => [gap.rule, gap.satisfied])) ===
-        JSON.stringify([['success-indicator-separation', false]]),
-    `unexpected contract concern scope: ${JSON.stringify(defectEvidence.coverageGaps)}`,
-  );
   check(
     defectEvidence.strength?.comparable === true && defectEvidence.strength.vector.defect.rate === 1,
     `mutated probe lost comparable defect strength: ${JSON.stringify(defectEvidence.strength)}`,
@@ -421,6 +419,11 @@ function pipeline() {
   const heldOutScore = command(process.execPath, [CLI, 'score', '--evaluation', folder, '--run', path.basename(heldOutRun)]);
   check(heldOutScore.status === 0, `held-out score exited ${heldOutScore.status}: ${heldOutScore.output}`);
   if (heldOutScore.status !== 0) return;
+  const heldOutEvidence = scored(heldOutRun, 'P-003');
+  check(
+    heldOutEvidence.contractVerdict === 'PASS' && heldOutEvidence.coverageGaps.length === 0,
+    `P-003 contract verdict or coverage gaps: ${heldOutEvidence.contractVerdict}, ${JSON.stringify(heldOutEvidence.coverageGaps)}`,
+  );
   const heldOutIndex = read(path.join(heldOutRun, 'trial-sets.json'));
   check(
     JSON.stringify(heldOutIndex.trialSets.map((set) => set.probeId)) === JSON.stringify(['P-003']) &&

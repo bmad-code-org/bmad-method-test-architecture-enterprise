@@ -90,7 +90,7 @@ development_status:
   1-52-stop-agent-descendants-on-windows: done
   1-53-bound-an-agent-whose-guardian-is-stopped: done
   1-54-reclaim-auxiliary-scratch-after-a-killed-preflight: backlog
-  1-55-recognize-process-and-answer-separation-for-scalar-cli: backlog
+  1-55-recognize-process-and-answer-separation-for-scalar-cli: in-progress
   1-56-prove-malformed-cli-refusal-against-a-controlled-defect: backlog
   1-57-withhold-the-committed-evaluation-folder-from-a-confined-ta: done
   1-58-keep-the-bridges-admission-token-and-the-runs-private-direc: done
