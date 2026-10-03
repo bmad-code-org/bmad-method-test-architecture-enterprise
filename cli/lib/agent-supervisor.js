@@ -8,8 +8,8 @@
  * child: a shell, a tool call or a sub-agent the agent started lives on. It
  * also returns only once every copy of the pipes it gave its child is closed,
  * so a process that inherited them and left the agent's process group (for a
- * new session) would keep the runner waiting for as long as it lives. Three
- * processes stand in between:
+ * new session) would keep the runner waiting for as long as it lives. The
+ * supervisor, leader, and guardian stand in between:
  *
  * - The supervisor, `spawnSync`'s direct child, stays in the runner's process
  *   group, so a terminal's Ctrl-C or Ctrl-\ and a signal to the runner's whole
@@ -24,6 +24,9 @@
  * - The guardian starts the agent in its own group and holds a separate
  *   lifeline from the leader. If the leader and supervisor both die, the
  *   guardian still stops the group when that lifeline closes.
+ * - On POSIX, a detached watchdog waits on a leader-only pipe and kills the
+ *   guardian's group if the leader dies while the guardian is stopped. The
+ *   guardian waits for watchdog readiness before starting the agent.
  *
  * The agent's standard input, output and error are pipes the leader owns and
  * the guardian passes through: the leader copies the runner's input to the
@@ -79,6 +82,7 @@ const fs = require('node:fs');
 const net = require('node:net');
 const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
+const { POSIX_SETUP_MS: WATCHDOG_SETUP_MS, POSIX_STARTUP_SLACK_MS } = require('./agent-supervisor-bounds');
 const { SUPERVISOR_BACKSTOP_MS: BACKSTOP_MS, WINDOWS_SETUP_MS, WINDOWS_STARTUP_SLACK_MS } = require('./agent-supervisor-bounds');
 
 /** Synchronous, opt-in trace for the Windows guardian startup probe. */
@@ -136,6 +140,48 @@ const STOPPING = GROUPS ? ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGQUIT'] : ['SIGINT'
 
 const LEADER_FLAG = '--group-leader';
 const GUARDIAN_FLAG = '--agent-guardian';
+const WATCHDOG_FLAG = '--guardian-watchdog';
+
+/** A detached owner whose only lifeline is a pipe held by the leader. */
+function watchGuardian([guardianArgument]) {
+  const guardianPid = Number(guardianArgument);
+  if (!Number.isSafeInteger(guardianPid) || guardianPid <= 0 || process.env.TEA_POSIX_WATCHDOG_TEST_FAILURE) process.exit(1);
+  try {
+    process.kill(-guardianPid, 0);
+  } catch {
+    process.exit(1);
+  }
+  let command = '';
+  let finished = false;
+  const lost = () => {
+    if (finished) return;
+    finished = true;
+    try {
+      process.kill(-guardianPid, 'SIGKILL');
+    } catch {
+      // The guardian group has ended.
+    }
+    process.exit(0);
+  };
+  process.stdin.setEncoding('utf8');
+  process.stdin.on('data', (chunk) => {
+    command += chunk;
+    if (command.includes('done\n')) {
+      finished = true;
+      process.exit(0);
+    }
+    if (command.length > 64) lost();
+  });
+  process.stdin.once('end', lost);
+  process.stdin.once('error', lost);
+  process.stdin.resume();
+  const delayMs = Number(process.env.TEA_POSIX_WATCHDOG_TEST_DELAY_MS ?? 0);
+  const reportReady = () => {
+    if (!finished && write(1, 'READY\n')) lost();
+  };
+  if (Number.isInteger(delayMs) && delayMs > 0 && delayMs < WATCHDOG_SETUP_MS) setTimeout(reportReady, delayMs);
+  else reportReady();
+}
 
 /** The guardian is the agent's group leader. Its lifeline is held only by the leader. */
 function guard([command, ...args]) {
@@ -183,6 +229,13 @@ function guard([command, ...args]) {
     stop('SIGTERM');
     if (job !== null && !finished) job.stdin.end();
   });
+
+  const failPosixSetup = (message) => {
+    if (finished || stopping) return;
+    finished = true;
+    write(3, JSON.stringify({ spawnError: { code: 'WATCHDOG', message: `POSIX watchdog setup failed: ${message}` } }));
+    process.exit(0);
+  };
 
   const launch = () => {
     trace('guardian-launch-check', `abandoned=${abandoned} stopping=${stopping} finished=${finished}`);
@@ -244,8 +297,28 @@ function guard([command, ...args]) {
     });
   };
 
-  // The guardian joins the kill-on-close job before it can start the agent.
-  if (GROUPS) return launch();
+  // Each platform arms independent ownership before the guardian starts the agent.
+  if (GROUPS) {
+    const arm = new net.Socket({ fd: 6, readable: true, writable: false });
+    let armMessage = '';
+    let armed = false;
+    const armTimer = setTimeout(() => failPosixSetup('readiness timed out'), WATCHDOG_SETUP_MS);
+    arm.on('error', (error) => failPosixSetup(error.message));
+    arm.on('data', (chunk) => {
+      armMessage += chunk;
+      if (armMessage.length > 64) return failPosixSetup('invalid readiness message');
+      if (!armMessage.includes('\n')) return;
+      clearTimeout(armTimer);
+      if (armMessage !== 'armed\n') return failPosixSetup('invalid readiness message');
+      armed = true;
+      arm.destroy();
+      launch();
+    });
+    arm.on('end', () => {
+      if (!armed) failPosixSetup('leader closed the arm pipe');
+    });
+    return;
+  }
   const systemRoot = process.env.SystemRoot;
   const powershell =
     systemRoot && path.isAbsolute(systemRoot) ? path.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe') : null;
@@ -489,10 +562,22 @@ function lead([supervisorArgument, timeoutArgument, command, ...args]) {
   // Pipes this process owns: a process the agent leaves behind may hold them,
   // and the runner's, which only this process and the supervisor hold, stay out of its reach.
   const agent = spawn(process.execPath, [__filename, GUARDIAN_FLAG, command, ...args], {
-    stdio: ['pipe', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe'],
+    stdio: GROUPS ? ['pipe', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe'] : ['pipe', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe'],
     detached: GROUPS,
   });
   trace('leader-guardian-spawned', `pid=${agent.pid}`);
+  let watchdog = null;
+  if (GROUPS && agent.pid !== undefined) {
+    try {
+      watchdog = spawn(process.execPath, [__filename, WATCHDOG_FLAG, String(agent.pid)], {
+        detached: true,
+        stdio: ['pipe', 'pipe', 'ignore'],
+      });
+    } catch {
+      // Closing the arm pipe makes the guardian report setup failure.
+    }
+  }
+  if (GROUPS) agent.stdio[6].on('error', () => {});
   if (GROUPS && agent.pid !== undefined) {
     trace('leader-guardian-pid-write-start', `pid=${agent.pid}`);
     const error = write(LIFELINE_FD, `agent ${agent.pid}\n`);
@@ -599,8 +684,15 @@ function lead([supervisorArgument, timeoutArgument, command, ...args]) {
     settled = true;
     clearTimeout(killTimer);
     agent.stdio[4].end();
-    // Everything left in the agent's group ends with the turn.
+    // The group kill is issued before the watchdog is released from ownership.
     if (GROUPS && agent.pid !== undefined) signalGroup('SIGKILL');
+    if (GROUPS) {
+      agent.stdio[6].end();
+      if (watchdog?.stdin) {
+        watchdog.stdin.end('done\n');
+        watchdog.stdout?.destroy();
+      }
+    }
     input.destroy();
     agent.stdin.destroy();
     const drainOutputs = () => {
@@ -635,6 +727,43 @@ function lead([supervisorArgument, timeoutArgument, command, ...args]) {
     }
   };
 
+  if (watchdog?.stdin && watchdog.stdout) {
+    let ownerReady = false;
+    let ownerOutput = '';
+    const setupTimer = setTimeout(() => {
+      if (ownerReady || settled) return;
+      agent.stdio[6].end();
+      watchdog.kill('SIGKILL');
+    }, WATCHDOG_SETUP_MS);
+    watchdog.stdin.on('error', () => {});
+    watchdog.stdout.setEncoding('utf8');
+    watchdog.stdout.on('data', (chunk) => {
+      ownerOutput += chunk;
+      if (ownerOutput.length > 64) {
+        watchdog.kill('SIGKILL');
+        return;
+      }
+      if (!ownerOutput.includes('\n')) return;
+      if (ownerOutput !== 'READY\n') {
+        watchdog.kill('SIGKILL');
+        return;
+      }
+      ownerReady = true;
+      clearTimeout(setupTimer);
+      if (!settled) agent.stdio[6].end('armed\n');
+    });
+    watchdog.once('error', () => {
+      clearTimeout(setupTimer);
+      if (!ownerReady) agent.stdio[6].end();
+      else if (!settled) finish({ failure: 'the POSIX watchdog ended before the agent did' });
+    });
+    watchdog.once('close', () => {
+      clearTimeout(setupTimer);
+      if (!ownerReady) agent.stdio[6].end();
+      else if (!settled) finish({ failure: 'the POSIX watchdog ended before the agent did' });
+    });
+  } else if (GROUPS) agent.stdio[6].end();
+
   // The agent's wall clock starts after the guardian confirms its real PID.
   agent.stdio[5].on('data', (chunk) => {
     trace('leader-agent-pid-data', chunk);
@@ -644,7 +773,15 @@ function lead([supervisorArgument, timeoutArgument, command, ...args]) {
     if (!Number.isSafeInteger(pid) || pid <= 0) return;
     agentPid = pid;
     wallClockStarted = true;
-    if (GROUPS) return;
+    if (GROUPS) {
+      write(LIFELINE_FD, 'ready\n');
+      after(Number(timeoutArgument), () => {
+        if (settled) return;
+        timedOut = true;
+        stop('SIGTERM');
+      });
+      return;
+    }
     trace('leader-agent-ready', `pid=${pid} timeout=${timeoutArgument}`);
     sendWindowsReport('ready\n', 'agent-ready', () => trace('leader-supervisor-ready-written', `pid=${pid}`));
     after(Number(timeoutArgument), () => {
@@ -697,13 +834,6 @@ function lead([supervisorArgument, timeoutArgument, command, ...args]) {
       setTimeout(complete, 1000);
     }
   });
-
-  if (GROUPS)
-    after(Number(timeoutArgument), () => {
-      if (settled) return;
-      timedOut = true;
-      stop('SIGTERM');
-    });
 
   let pending = '';
   lifeline.on('data', (chunk) => {
@@ -774,7 +904,9 @@ function supervise([runnerPidArgument, timeoutArgument, command, ...args]) {
     if (overdue) {
       const failure =
         overduePhase === 'setup'
-          ? `the agent's group leader gave no report ${WINDOWS_STARTUP_SLACK_MS}ms past the Windows Job Object setup bound`
+          ? GROUPS
+            ? `the agent's group leader gave no report after the POSIX watchdog setup bound`
+            : `the agent's group leader gave no report ${WINDOWS_STARTUP_SLACK_MS}ms past the Windows Job Object setup bound`
           : `the agent's group leader gave no report ${BACKSTOP_MS}ms past the agent's ${timeout}ms wall clock`;
       return fail(failure);
     }
@@ -809,7 +941,10 @@ function supervise([runnerPidArgument, timeoutArgument, command, ...args]) {
       after(timeout + BACKSTOP_MS, () => backstop('agent'));
     }
   });
-  if (GROUPS) after(timeout + BACKSTOP_MS, () => backstop('agent'));
+  if (GROUPS)
+    after(WATCHDOG_SETUP_MS + POSIX_STARTUP_SLACK_MS, () => {
+      if (!ready) backstop('setup');
+    });
   else
     after(WINDOWS_SETUP_MS + WINDOWS_STARTUP_SLACK_MS, () => {
       if (!ready) backstop('setup');
@@ -840,4 +975,5 @@ function supervise([runnerPidArgument, timeoutArgument, command, ...args]) {
 const argv = process.argv.slice(2);
 if (argv[0] === LEADER_FLAG) lead(argv.slice(1));
 else if (argv[0] === GUARDIAN_FLAG) guard(argv.slice(1));
+else if (argv[0] === WATCHDOG_FLAG && GROUPS) watchGuardian(argv.slice(1));
 else supervise(argv);

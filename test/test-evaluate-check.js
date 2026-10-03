@@ -155,8 +155,20 @@ async function checkWindowsRunnerBudget() {
   );
   const posix = await checkEvaluation(folder, { platform: 'linux' });
   check(
-    !posix.some((finding) => finding.rule === 'skill-runner'),
-    'the Windows setup allowance changed the POSIX skill-runner authoring rule',
+    posix.some((finding) => finding.rule === 'skill-runner' && finding.message.includes('40000 ms reserved for POSIX')),
+    'the POSIX authoring check accepted a 60000 ms ceiling that can expire before watchdog setup and agent execution finish',
+  );
+  editJson(folder, 'evaluation.json', (evaluation) => (evaluation.registry[0].maxElapsedMs = 70_000));
+  const boundary = await checkEvaluation(folder, { platform: 'linux' });
+  check(
+    boundary.some((finding) => finding.rule === 'skill-runner'),
+    'the POSIX authoring check accepted a ceiling equal to its literal plus startup and completion reserve',
+  );
+  editJson(folder, 'evaluation.json', (evaluation) => (evaluation.registry[0].maxElapsedMs = 70_001));
+  const aboveBoundary = await checkEvaluation(folder, { platform: 'linux' });
+  check(
+    !aboveBoundary.some((finding) => finding.rule === 'skill-runner'),
+    'the POSIX authoring check rejected a ceiling above its literal plus startup and completion reserve',
   );
 }
 
