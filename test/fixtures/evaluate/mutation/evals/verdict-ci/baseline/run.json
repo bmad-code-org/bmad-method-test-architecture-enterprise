@@ -1,9 +1,9 @@
 {
-  "invocationId": "20261002T210854524Z-a66a1e0c",
-  "seed": "20261002T210854524Z-a66a1e0c",
+  "invocationId": "20261003T041121879Z-34490448",
+  "seed": "20261003T041121879Z-34490448",
   "command": "run",
   "teaVersion": "1.27.2",
-  "evalQualityVersion": "6.0.0",
+  "evalQualityVersion": "6.0.1",
   "commit": null,
   "dirty": false,
   "evaluationFolder": {
@@ -17,8 +17,8 @@
     "dirty": false
   },
   "workspaces": {
-    "pristine": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-pristine-7538bbc0-2e42-47f9-b42f-39045d3de5f8/target",
-    "mutated:M-001": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-001-2e964b61-de43-419c-886b-e2f5ab7befa5/target"
+    "pristine": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-pristine-6f1bd031-0744-4020-bcc2-a4136dd98ca1/target",
+    "mutated:M-001": "/private/var/folders/3b/5kzs662j47v6vdz26gbkvlgc0000gn/T/tea-evaluate-mutated-M-001-813edbe6-751c-4539-958c-ec7fd944509f/target"
   },
   "confinement": "seatbelt",
   "hostNetwork": [],
@@ -31,22 +31,22 @@
     "contract": "sha256:8ea60e474d31a1674dc07385a5568ed3a0eaf35927c592f95e6853f5c61f935f",
     "operationPhases": "sha256:5968839c26b1e9180cd0f5f131da9bbe1255e8db1c82014b003342110437d071",
     "evaluatorConfiguration": "sha256:5c21130303c35f7675cbc7f8ee9748ac9d3ddff4da01372ed0e4ebe63376acb0",
-    "preflightVerdict": "sha256:c3f66260e37fa54de0c29b7d47e7ad7138cd6ee5331bf0d722873333bbc0c2eb",
+    "preflightVerdict": "sha256:636d281c1992c4046e844394b9ff84f267cb8b93ba75a115792ac9fd3f18e41d",
     "probes": {
-      "P-001": "sha256:81c35897596beeabd1a759fcd9bc9a11d9363117a9737ecef849b1d2e6769c2b",
-      "P-002": "sha256:ea9a87ee0f5266e202d6c2257b9a17a8a8e575b89e08bcba055f8b3c3e51451f"
+      "P-001": "sha256:660694b63af89bb8c909a92193dccd973d2a94b94b883c3efccd1c1c696c142d",
+      "P-002": "sha256:e73580706e444eccbbeb8b4fd610edaa2ea162cd9132bfa37f605bcba04adc1b"
     },
     "records": {
-      "trial-sets/P-001/record-1.json": "sha256:1e21991ba0242384a418ae1d43b7f7f132571ec3712eefce097c4f4944286f3a",
-      "trial-sets/P-001/record-2.json": "sha256:77a6c80b1876027ab97c0b48a077d45cccf0afafa8d32a9a529eb66bb8c7a646",
-      "trial-sets/P-001/record-3.json": "sha256:c66530191306e065e6402d27752c9a8d5bf0a1cbc37799e2e59b8aa06458fd7f",
-      "trial-sets/P-002/record-1.json": "sha256:5c82e6f8d415bba9cfc5afd18c4acde55a0608359801cd3b91049c575211cd0d",
-      "trial-sets/P-002/record-2.json": "sha256:c58340f1b3d03d6f8f92ee96f730ad1314ddb144c0a451eb6ca776a2df355b76",
-      "trial-sets/P-002/record-3.json": "sha256:339a0e68f8e941f9e268c91eb2f30cae02b7be301e10cd5cc73965c9931af282"
+      "trial-sets/P-001/record-1.json": "sha256:60c471e2721930ee4b18bf023bbc924b8b66eb79a6527c3bb952605a074baec0",
+      "trial-sets/P-001/record-2.json": "sha256:e43762414a89780dea28fbfdd763d527eda4cc6ed430b13a2c201561d639264b",
+      "trial-sets/P-001/record-3.json": "sha256:e096b9eaefd60406c4a309fe9511bc17d1199d68fe408ae233b7b1c57e3f07ae",
+      "trial-sets/P-002/record-1.json": "sha256:9aa49270d706a360970b01896b206af8626a9f30174b2fe84e9ac79f56e72743",
+      "trial-sets/P-002/record-2.json": "sha256:cdf6cb32685ee8ac101e6db067f188fb8852e92b8b4ec792fddbfeede76e2c0d",
+      "trial-sets/P-002/record-3.json": "sha256:3228752ee83ca5f2f1638d1798d71392a5be9683eece6e50aae4082180205b7c"
     },
     "isolationManifests": {
-      "P-001": "sha256:5714a09a5a7fbbfec95c77c7eaf27c8e8689da08f70bb2e5884256970bb9ceea",
-      "P-002": "sha256:368777e8beb81b8f1c06e215903be893a9ccf8c1d367f764193698a0fab06823"
+      "P-001": "sha256:33251082d780e2585d3244dd6bbc2234e9fad0f45c3636fd2483e824cd6c8e4a",
+      "P-002": "sha256:9fd44edfbd59b77a721669a7e5b97619e62c350e4165ecd12cbf0ab7752e6194"
     }
   },
   "contractDigest": "sha256:aa84c14ee6830cd6ca2e331ae5b4581fbadf8b5245aa2450b90e4dbdf9c9d9bd",
@@ -129,12 +129,12 @@
       ]
     }
   ],
-  "startedAt": "2026-10-02T21:08:54.063Z",
-  "durationMs": 2688,
+  "startedAt": "2026-10-03T04:11:21.416Z",
+  "durationMs": 2684,
   "completed": true,
   "outcome": {
     "stage": "trial",
     "exitCode": 0,
-    "message": "2 trial set(s) of 3 trial(s) sealed over clean, mutated:M-001; score them with tea-evaluate score --run 20261002T210854524Z-a66a1e0c"
+    "message": "2 trial set(s) of 3 trial(s) sealed over clean, mutated:M-001; score them with tea-evaluate score --run 20261003T041121879Z-34490448"
   }
 }

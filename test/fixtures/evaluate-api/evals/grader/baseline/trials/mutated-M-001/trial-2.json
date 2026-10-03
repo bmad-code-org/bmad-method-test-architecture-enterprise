@@ -2,7 +2,7 @@
   "conditionArm": "mutated:M-001",
   "trialIndex": 2,
   "workspace": "trial-mutated-M-001-2",
-  "elapsedMs": 212,
+  "elapsedMs": 200,
   "oracles": [
     {
       "oracleId": "O-001",
@@ -43,7 +43,7 @@
         "status": 200,
         "headers": {
           "content-type": "application/json",
-          "date": "Fri, 02 Oct 2026 21:08:48 GMT",
+          "date": "Sat, 03 Oct 2026 04:11:37 GMT",
           "connection": "close",
           "transfer-encoding": "chunked"
         },

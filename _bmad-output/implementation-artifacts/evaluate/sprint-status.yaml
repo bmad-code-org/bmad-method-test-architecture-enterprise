@@ -90,7 +90,7 @@ development_status:
   1-52-stop-agent-descendants-on-windows: done
   1-53-bound-an-agent-whose-guardian-is-stopped: done
   1-54-reclaim-auxiliary-scratch-after-a-killed-preflight: backlog
-  1-55-recognize-process-and-answer-separation-for-scalar-cli: backlog
+  1-55-recognize-process-and-answer-separation-for-scalar-cli: done
   1-56-prove-malformed-cli-refusal-against-a-controlled-defect: backlog
   1-57-withhold-the-committed-evaluation-folder-from-a-confined-ta: done
   1-58-keep-the-bridges-admission-token-and-the-runs-private-direc: done
@@ -130,6 +130,7 @@ development_status:
   1-101-name-a-stale-stamp-on-every-artifact-score-reads: backlog
   1-102-refuse-a-duplicate-interface-identifier-at-compile: backlog
   1-103-prove-the-story-1-42-review-fixes-against-their-mutants: backlog
+  1-104-count-only-behavior-linked-oracles-for-success-separation: backlog
   1-76-require-an-explicit-custom-agent-version-response: backlog
   epic-1-retrospective: optional
 
@@ -206,12 +207,16 @@ parallel_lanes:
     - 1-101-name-a-stale-stamp-on-every-artifact-score-reads
     - 1-102-refuse-a-duplicate-interface-identifier-at-compile
     - 1-103-prove-the-story-1-42-review-fixes-against-their-mutants
+    - 1-104-count-only-behavior-linked-oracles-for-success-separation
 owner_handoff:
   - key: h-1-accept-the-dogfood-baseline-and-turn-its-pr-replay-green
     owner: Murat
     note: "Owner-only (epics.md Story H.1). Kept outside development_status so no
-      /bmad-build worker picks it up. Runs on main after Story 2.5 merges;
-      eval-quality 4.0.0 is already published and TeA runs on it."
+      /bmad-build worker picks it up. Runs on main after all three lanes drain,
+      using the published engine resolved by the final TeA lockfile."
     status: backlog
     depends_on:
+      - 1-76-require-an-explicit-custom-agent-version-response
+      - 1-84-teach-a-linux-skill-targets-network-declaration-in-the-ci-guide-and-rerun-its-live-sessions
+      - 1-104-count-only-behavior-linked-oracles-for-success-separation
       - 2-5-tea-runs-its-pr-tier-and-documents-evaluate

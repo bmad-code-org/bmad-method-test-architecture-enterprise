@@ -38,7 +38,7 @@ inputDocuments:
 
 ## Executive Summary
 
-**Scope:** full epic-level test design for Stories 1.1 to 1.76, 1.80 to 1.84, 1.90 to 1.103 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.76, 1.80 to 1.84, 1.90 to 1.103. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
+**Scope:** full epic-level test design for Stories 1.1 to 1.76, 1.80 to 1.84, 1.90 to 1.104 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.76, 1.80 to 1.84, 1.90 to 1.104. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
 
 **Risk summary:**
 
@@ -1419,6 +1419,16 @@ Added 2026-10-02 in Story 1.42's merge. Levels: mutation, integration over real 
 | Each survivor's test kills its mutant          | Apply each listed mutant in a /tmp copy and run the suites that read the site; record the failing test per mutant                                       | Mutation | P0  | A mutant that still passes every suite has no test and is added in this PR |
 | The capture-record guard rejects a false entry | Set a `migrations` entry's `from` to a wrong digest, remove the entry, and change `evaluation.json` beyond the declared migration; each fails the suite | Contract | P0  | A guard that checks only the entry's shape passes the false `from`         |
 | Unreachable sites are recorded with the reason | Read the story record for each site no compiled contract reaches and the engine rule that blocks it                                                     | Record   | P2  | An unexplained untested site fails the review                              |
+
+### Story 1.104: Count only behavior-linked oracles for success separation
+
+Added 2026-10-03 from Story 1.55's independent review. Levels: engine coverage unit, TeA integration. Files: engine coverage satisfaction and CLI/structured fixtures, TeA pantry fixture and release metadata.
+
+| AC                                    | Test                                                                                                                                                                                                                  | Level       | P   | Revert check                                                         |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | --- | -------------------------------------------------------------------- |
+| Scalar orphan oracle leaves a gap     | Compile a scalar CLI contract with an exact exit-code and whole-stdout oracle omitted from the behavior's oracle list; evaluate coverage and assert unsatisfied separation. Link that oracle and assert satisfaction. | Engine unit | P0  | Removing the behavior-link filter satisfies the orphan fixture       |
+| Structured orphan oracle leaves a gap | Repeat with structured success and payload fields; assert the orphan fails and linked oracle passes.                                                                                                                  | Engine unit | P0  | Reverting the filter satisfies the orphan fixture                    |
+| Pantry and release follow             | After publishing the engine, assert the pantry's behavior-linked O-001 still yields PASS and no gaps, and the peer floor and lockfile resolve the release.                                                            | Integration | P1  | An unlinked pantry oracle or stale dependency fails the focused gate |
 
 ## The Dogfood Proof (AD-15)
 

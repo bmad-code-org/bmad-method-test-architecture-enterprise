@@ -20,3 +20,7 @@ The final remaining engine flag describes evidence the target does not emit:
 The response descriptor now declares `collectionLocations: []`, because stdout is a scalar text line. The engine consequently no longer reports `per-record` or `omission-and-completeness` as unsatisfied. O-001 still compares the whole summary byte for byte, and M-001 demonstrates the missing `pears` is detected.
 
 No waiver was claimed. A waiver requires an adopter-approved machine-checkable condition and expiry. The current engine provides per-probe strength artifacts and no run-wide `strengthFloor` gate. The measured result proves the nominated pears-removal mutation was caught in its three development and three held-out trials; it does not establish a class-wide detection rate.
+
+## Post-release resolution
+
+Story 1.55 rescored this fixture with published eval-quality 6.0.1. The engine now recognizes O-001's paired exit-code 0 and exact whole-stdout checks for the same scalar CLI step. `test:evaluate-learned-framework` confirms `contractVerdict: PASS` and an empty `coverageGaps` list in development P-001, P-004 and P-002, and held-out P-003. Each keeps its three historical trial votes. The earlier invocations and their `CONCERNS` verdicts remain above as the record of the gap that led to this repair.
