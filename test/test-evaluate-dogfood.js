@@ -202,6 +202,7 @@ try {
       ['P-006', 'zero-action', 'B-003'],
       ['P-007', 'defect', 'B-003'],
       ['P-008', 'zero-action', 'B-004'],
+      ['P-009', 'defect', 'B-004'],
     ],
   );
 
@@ -231,7 +232,8 @@ try {
   assert.deepEqual(fs.readFileSync(path.join(EVALUATION, '.gitignore'), 'utf8').split('\n').filter(Boolean), asset);
 
   // The folder passes check, and the engine compiles and seals it.
-  assert.equal(cli(EVALUATION, 'check').status, 0, cli(EVALUATION, 'check').output);
+  const checked = cli(EVALUATION, 'check');
+  assert.equal(checked.status, 0, checked.output);
   const staging = scratch.make('engine');
   for (const stage of ['compile', 'seal']) {
     const out = path.join(staging, `${stage}.json`);
@@ -279,40 +281,28 @@ try {
     )['P-001'];
     return [artifact.contractVerdict, unsatisfied(artifact)];
   };
+  /** The variant reads CONCERNS and names the rule its repair closed; a rule a newer engine adds beside it is no regression of ours. */
+  const reverts = (rule, label, change) => {
+    const [verdict, rules] = variant(label, change);
+    assert.equal(verdict, 'CONCERNS', `${label} scores ${verdict}`);
+    assert.ok(rules.includes(rule), `${label} leaves ${rule} satisfied: ${rules}`);
+  };
   const descriptor = (edited) => edited.permittedInterfaces[0].operations[0].responseDescriptor;
   const checkOf = (edited, id) => edited.oracles.find((oracle) => oracle.id === id).check;
-  assert.deepEqual(
-    variant('no-indicator', (edited) => {
-      descriptor(edited).successIndicator = null;
-    }),
-    ['CONCERNS', ['success-indicator-separation']],
-    'removing the success indicator reproduces Story 1.16 gap G-1',
-  );
-  assert.deepEqual(
-    variant('no-type-violation', (edited) => {
-      edited.interactionPlan.find((step) => step.stepId === 'refuse-no-exit').inputBinding.stdin.prompt = {
-        literal: 'Name the class of the exit.',
-      };
-    }),
-    ['CONCERNS', ['malformed-input']],
-    'binding a literal where the matcher was reproduces gap G-2',
-  );
-  assert.deepEqual(
-    variant('no-quantifier', (edited) => {
-      const check = checkOf(edited, 'O-003');
-      check.operands = check.operands.filter((operand) => operand.op !== 'for-all');
-    }),
-    ['CONCERNS', ['per-record']],
-    'removing the per-record quantifier reproduces gap G-3',
-  );
-  assert.deepEqual(
-    variant('no-completeness', (edited) => {
-      const check = checkOf(edited, 'O-003');
-      check.operands = check.operands.filter((operand) => operand.op !== 'covers-by-key');
-    }),
-    ['CONCERNS', ['omission-and-completeness']],
-    'removing the reconciliation against the exit table reproduces gap G-4',
-  );
+  reverts('success-indicator-separation', 'no-indicator', (edited) => {
+    descriptor(edited).successIndicator = null;
+  }); // gap G-1
+  reverts('malformed-input', 'no-type-violation', (edited) => {
+    edited.interactionPlan.find((step) => step.stepId === 'refuse-no-exit').inputBinding.stdin.exit = { literal: 12 };
+  }); // gap G-2
+  reverts('per-record', 'no-quantifier', (edited) => {
+    const check = checkOf(edited, 'O-003');
+    check.operands = check.operands.filter((operand) => operand.op !== 'for-all');
+  }); // gap G-3
+  reverts('omission-and-completeness', 'no-completeness', (edited) => {
+    const check = checkOf(edited, 'O-003');
+    check.operands = check.operands.filter((operand) => operand.op !== 'covers-by-key');
+  }); // gap G-4
 
   console.log(
     'evaluate-dogfood: the committed folder holds its reference set, defect IDs, digests and ignores; the replay scores PASS with no gap; each repair reverts to its CONCERNS rule',

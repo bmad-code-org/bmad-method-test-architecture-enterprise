@@ -3,10 +3,10 @@
   "probeClass": "zero-action",
   "behaviorId": "B-004",
   "expectedClean": true,
-  "rationale": "[malformed] The declared stdin.prompt key receives a type-violating value, so the request names no command and no exit; the clean skill refuses and gives no class.",
+  "rationale": "[malformed] The declared stdin.exit key receives a type-violating value, so the request names no usable exit; the clean skill refuses and gives no class.",
   "defects": [],
   "qualification": {
     "route": "clean-control",
-    "noKnownDefectStatement": "No guide change is known to make Stage 11 invent a class at this revision."
+    "noKnownDefectStatement": "The gaps guide says a request that names no command and exit has no class at this revision, which the guidance gate holds."
   }
 }

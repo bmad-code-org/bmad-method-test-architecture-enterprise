@@ -3,7 +3,7 @@
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "bmad-testarch-evaluate",
-  "sourceSpecDigest": "sha256:7bf7d0267225d6f1089582af9812da5a4fbb0a19293134e3a6525dee21476b42",
+  "sourceSpecDigest": "sha256:6aec0ba2b9477862ff58c95fd5e92722d5829f46678adce791595f41829f9204",
   "behaviors": [
     {
       "id": "B-001",
@@ -82,9 +82,9 @@
     },
     {
       "id": "B-004",
-      "description": "Stage 11 refuses to guess a class when a request names no failed tea-evaluate command and exit: it answers with a refusal and no class.",
+      "description": "Stage 11 refuses to guess a class when a request names no usable exit of a failed tea-evaluate command: its gaps guide says such a request has no class, so the reply claims a refusal and carries no class.",
       "severity": "material",
-      "observableSuccessCriterion": "Given a malformed request that names no command and no exit, the runner prints one JSON object whose status is \"refused\" and which carries no class.",
+      "observableSuccessCriterion": "Given a request whose exit field is not a number, the runner prints one JSON object whose status is \"refused\" and which carries no class.",
       "requirementLinks": [
         {
           "scheme": "tea-evaluate-spec",
@@ -287,7 +287,7 @@
     {
       "id": "O-004",
       "polarity": "expects-hold",
-      "commentary": "A request that names no failed command and exit gives Stage 11 nothing to classify. The reply must claim a refusal and carry no class, so the oracle reads the claim and the absence of the class field together.",
+      "commentary": "The gaps guide says a request that names no command or no exit, or an exit its table does not list, has no class. The reply must claim a refusal and carry no class, so the oracle reads the claim and the absence of the class field together.",
       "direction": {
         "polarity": "expects-hold",
         "relation": "all",
@@ -380,9 +380,11 @@
                 "prompt"
               ],
               "permittedKeys": [
+                "exit",
                 "prompt"
               ],
               "types": {
+                "exit": "number",
                 "prompt": "string"
               }
             }
@@ -696,7 +698,7 @@
             "literal": "claude"
           },
           "agent-arg": {
-            "literal": "--json-schema={\"type\":\"object\",\"properties\":{\"basis\":{\"type\":\"string\",\"description\":\"One sentence naming what the request asked or failed to ask.\"},\"status\":{\"type\":\"string\",\"enum\":[\"answered\",\"refused\"],\"description\":\"answered when the request names a failed tea-evaluate command and its exit and you give its AD-10 class; refused when it names none.\"},\"class\":{\"type\":\"string\",\"description\":\"The AD-10 class the gaps guide assigns to the named command and exit. Omit this property when status is refused.\"}},\"required\":[\"basis\",\"status\"],\"additionalProperties\":false}"
+            "literal": "--json-schema={\"type\":\"object\",\"properties\":{\"basis\":{\"type\":\"string\",\"description\":\"One sentence saying what the request asked and why you answered or refused.\"},\"status\":{\"type\":\"string\",\"enum\":[\"answered\",\"refused\"],\"description\":\"answered when you give an AD-10 class, refused when you give none.\"},\"class\":{\"type\":\"string\",\"description\":\"The AD-10 class you give. Omit this property when status is refused.\"}},\"required\":[\"basis\",\"status\"],\"additionalProperties\":false}"
           },
           "capability": {
             "literal": "read-only"
@@ -714,6 +716,9 @@
         "environment": null,
         "stdin": {
           "prompt": {
+            "literal": "Run only Stage 11 (Gaps) of this skill for the request below. Answer from the skill's own guides; do not run commands and do not write files.\n\nThe request is the JSON object that carries this text. Its exit field is the exit code of a failed `node cli/evaluate.js run --evaluation test/evaluations/example --partition development`, the one failed command, with no evidence artifact.\n\nGive the AD-10 class the gaps guide assigns to that source and exit, or refuse. Put any explanation in the object's basis field. Your entire reply must be exactly one JSON object on one line and nothing else: no text before or after it, no Markdown, no backticks and no code fence. It must parse with JSON.parse as written. Answer with status \"answered\" and a class, or with status \"refused\" and no class property:\n{\"basis\": \"<one sentence>\", \"status\": \"answered or refused\", \"class\": \"<the class as the guide names it>\"}\n"
+          },
+          "exit": {
             "matcher": "type-violating"
           }
         }

@@ -1424,7 +1424,7 @@ Select an unseen request that needs lookup only early. List `P-006` in `heldOutP
 
 ## AI feature
 
-An HTTP answer-grading feature in a web application. The worked interface is `api`.
+An HTTP answer-grading feature. The worked interface is `api`.
 
 ### Representative inputs
 

@@ -5,9 +5,11 @@
  * guide a mutation edited changes the answer and a guide left alone gives the committed one. It takes the runner's
  * command line (`--skill-root`, `--agent-arg=--json-schema=<schema>`, the prompt on stdin) and prints one JSON object.
  *
- * What it reads: the exit table of `references/gaps.md` and the sentence of `references/inspection.md` that states the
- * web-application rule. It reads nothing else, so it stands in for the model on exactly the four questions the
- * evaluation asks, and an unrecognized request is a refusal, as a model's reading of a request that names nothing is.
+ * What it reads: the exit table and the sentence on a request with no usable exit in `references/gaps.md`, and the
+ * sentence of `references/inspection.md` that states the web-application rule. It reads nothing else, so it stands in
+ * for the model on exactly the four questions the evaluation asks. It does not follow `SKILL.md` to a stage and it takes
+ * the first statement of a rule it finds, so stage routing and a second, contradicting statement are left to the live
+ * run and to `test:evaluate-guidance`.
  */
 'use strict';
 
@@ -59,7 +61,15 @@ if (properties.has('exits')) {
 } else if (exitsNamed.length === 1 && properties.has('class') && !properties.has('status')) {
   reply.class = classOf(`tea-evaluate ${exitsNamed[0]}`);
 } else {
-  reply.status = 'refused';
+  // A request whose `exit` field is no number names no usable exit, and the gaps guide's sentence on such a request decides.
+  const request = JSON.parse(prompt);
+  const sentence = /A request that names no command or no exit[^:]*(has no class|is an? ([a-z ]+)):/.exec(guide('gaps.md'));
+  if (typeof request.exit !== 'number' && sentence?.[2] !== undefined) {
+    reply.status = 'answered';
+    reply.class = sentence[2];
+  } else {
+    reply.status = 'refused';
+  }
 }
 
 process.stdout.write(`${JSON.stringify(reply)}\n`);
