@@ -851,8 +851,8 @@ function targetSandbox({
     },
     /**
      * How complete the reports behind `observedMounts` were, once it has been read: `{ canariesSent, canariesDelivered,
-     * logReportedLoss }`, the reads of a file no target can reach that the audit made through the sandbox's own token, the ones
-     * the kernel's log delivered and whether the log itself reported lost events (Story 1.81); `null` for a port that does not
+     * logReportedLoss }`, the reads of a file no target can reach that the audit attempted through the sandbox's own token (one the host could not start,
+     * one a cap skipped and one a frozen runtime missed count as sent), the ones the kernel's log delivered and whether the log itself reported lost events (Story 1.81); `null` for a port that does not
      * audit. Linux's trace loses nothing and sends no canary.
      */
     auditChannel() {

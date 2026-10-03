@@ -5223,8 +5223,9 @@ async function checkAuditChannelUnits() {
       return file;
     };
     // The sandbox's audit over `observer`'s log (and `sandboxExec`, when a case stands in for the kernel's executable): started,
-    // idle for `waitMs`, then `act` runs a call of the target, then the mounts and the channel are read.
-    const read = async (observer, { waitMs, sandboxExec = confinement.executable, act = null }) => {
+    // idle for `waitMs` (or while `idle` runs, when a case acts during the wait), then `act` runs a call of the target, then the
+    // mounts and the channel are read.
+    const read = async (observer, { waitMs, sandboxExec = confinement.executable, act = null, idle = null }) => {
       const directory = fs.realpathSync(tempDir('audit-channel'));
       const sandbox = targetSandbox({
         confinement: { ...confinement, executable: sandboxExec, observer: { executable: observer } },
@@ -5233,7 +5234,7 @@ async function checkAuditChannelUnits() {
       });
       try {
         await sandbox.start();
-        await new Promise((resolve) => setTimeout(resolve, waitMs));
+        await (idle === null ? new Promise((resolve) => setTimeout(resolve, waitMs)) : idle(sandbox));
         if (act !== null) await act(sandbox);
         const mounts = await sandbox.observedMounts();
         return { mounts, channel: sandbox.auditChannel(), directory };
@@ -5249,7 +5250,10 @@ async function checkAuditChannelUnits() {
     );
     // A trial that runs for a second has one about every 50 ms, delivered through the real log (rarely a report is lost on a busy host).
     const quiet = await read('/usr/bin/log', { waitMs: 1200 });
-    check(quiet.channel.canariesSent >= 5, `a trial that ran for 1.2 seconds sent ${JSON.stringify(quiet.channel)}; expected at least 5`);
+    check(
+      quiet.channel.canariesSent >= 12,
+      `a trial that ran for 1.2 seconds sent ${JSON.stringify(quiet.channel)}; expected at least 12, half of the nominal 24 at one every 50 ms`,
+    );
     checkReport(
       quiet.channel.canariesDelivered === quiet.channel.canariesSent && quiet.channel.logReportedLoss === false,
       `the real log lost canaries: ${JSON.stringify(quiet.channel)}`,
@@ -5280,6 +5284,68 @@ async function checkAuditChannelUnits() {
     check(
       killed.channel.canariesSent >= 2 && killed.channel.canariesDelivered === 0,
       `canaries a target killed were recorded as ${JSON.stringify(killed.channel)}; expected them counted as sent and undelivered`,
+    );
+    // A host whose process table is full, or a target that stops the canary's executable from starting, cannot hide the loss
+    // either: a canary counts as sent when it is attempted, so the ones that could not start are counted and undelivered.
+    const refusing = script('refusing-sandbox-exec', `exec ${confinement.executable} "$@"`);
+    const unspawnable = await read('/usr/bin/log', {
+      waitMs: 0,
+      sandboxExec: refusing,
+      idle: async () => {
+        fs.chmodSync(refusing, 0o000);
+        await new Promise((resolve) => setTimeout(resolve, 600));
+        fs.chmodSync(refusing, 0o755);
+      },
+    });
+    check(
+      unspawnable.channel.canariesSent >= 8 &&
+        unspawnable.channel.canariesDelivered < unspawnable.channel.canariesSent &&
+        channelEntry(arm, { trialIndex: 1, auditChannel: unspawnable.channel }).completeness === 'lossy',
+      `canaries that could not be spawned for 600 ms were recorded as ${JSON.stringify(unspawnable.channel)}; expected them counted as sent and undelivered, so lossy`,
+    );
+    // A target that freezes the runtime for two seconds (a stop signal to its parent) leaves no tick to run, so the canaries
+    // the cadence called for in that time count as sent and undelivered.
+    const frozen = await read('/usr/bin/log', {
+      waitMs: 0,
+      act: async (sandbox) => {
+        const wrapped = sandbox.wrap('/bin/sh', ['-c', 'kill -STOP $PPID; sleep 2; kill -CONT $PPID']);
+        await new Promise((resolve) => spawn(wrapped.target, wrapped.args, { cwd: workspace, stdio: 'ignore' }).once('exit', resolve));
+      },
+    });
+    check(
+      frozen.channel.canariesSent >= 20 &&
+        frozen.channel.canariesDelivered < frozen.channel.canariesSent &&
+        channelEntry(arm, { trialIndex: 1, auditChannel: frozen.channel }).completeness === 'lossy',
+      `a runtime frozen for 2 seconds was recorded as ${JSON.stringify(frozen.channel)}; expected the canaries it missed counted as sent and undelivered, so lossy`,
+    );
+    // No more than `CANARY_IN_FLIGHT` canary reads run at once on a host too slow to finish them, and a tick the cap skips
+    // counts as a canary sent and undelivered.
+    const slots = tempDir('audit-channel-slots');
+    const started = path.join(tempDir('audit-channel-started'), 'started.log');
+    const slow = script(
+      'slow-sandbox-exec',
+      `case "$*" in *canary-*) echo started >>${started}; mkdir ${slots}/$$; sleep 1; rmdir ${slots}/$$; exit 0 ;; esac\nexec ${confinement.executable} "$@"`,
+    );
+    let mostAtOnce = 0;
+    const crowded = await read('/usr/bin/log', {
+      waitMs: 1200,
+      sandboxExec: slow,
+      idle: async () => {
+        const poll = setInterval(() => {
+          mostAtOnce = Math.max(mostAtOnce, fs.readdirSync(slots).length);
+        }, 5);
+        await new Promise((resolve) => setTimeout(resolve, 1200));
+        clearInterval(poll);
+      },
+    });
+    const spawned = fs.readFileSync(started, 'utf8').split('\n').filter(Boolean).length;
+    check(
+      mostAtOnce >= 6 && mostAtOnce <= 8,
+      `${mostAtOnce} canary reads ran at once while each took a second; expected the cap of 8 to hold and be reached`,
+    );
+    check(
+      crowded.channel.canariesSent - spawned >= 6 && crowded.channel.canariesDelivered < crowded.channel.canariesSent,
+      `${spawned} canary reads were started and ${JSON.stringify(crowded.channel)} recorded; expected the ticks the cap skipped counted as sent and undelivered`,
     );
     // A final canary whose process cannot start leaves nothing measured, which is a failure of the audit and not a complete trial.
     const vanishing = script('vanishing-sandbox-exec', `exec ${confinement.executable} "$@"`);
@@ -5571,6 +5637,14 @@ async function checkEvaluatorSwap() {
     const answered =
       runDirectory === null ? null : readJson(path.join(runDirectory, 'trials', 'clean', 'trial-1.json')).evaluator?.answer?.rows?.[0];
     const record = runDirectory === null ? {} : readJson(path.join(runDirectory, 'trial-sets', 'P-001', 'record-1.json'));
+    // The row-converting evaluator's trials record their audit channel as the deterministic evaluator's do (Story 1.81).
+    const channel = runDirectory === null ? undefined : readJson(path.join(runDirectory, 'run.json')).observedMountsChannel;
+    if (confined) checkChannelRecords(channel, auditedTrials(), { lossless: false });
+    else
+      check(
+        JSON.stringify(channel) === '[]',
+        `an unconfined run records the audit channel ${JSON.stringify(channel)}; expected an empty list`,
+      );
     check(
       fs.readFileSync(path.join(project.folder, 'evaluator', 'impl.js')).equals(implBytes),
       `${label}: evaluator/impl.js does not hold the committed bytes after the run`,

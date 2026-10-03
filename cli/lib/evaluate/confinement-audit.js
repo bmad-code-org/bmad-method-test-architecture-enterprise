@@ -59,6 +59,8 @@ const LOG_TIMEOUT = '4h';
 /** How often a canary read is made while a trial runs, and how many may be running at once on a host too busy to start them promptly. */
 const CANARY_MS = 50;
 const CANARY_IN_FLIGHT = 8;
+/** The longest the runtime may go without attempting a canary before the trial counts as having missed some: a freeze, a starved host or a refused spawn all show as a gap. */
+const CANARY_GAP_MS = 4 * CANARY_MS;
 
 /** How long the barrier waits for the stream to return a read the runtime made, and how often it makes another. */
 const BARRIER_MS = 10_000;
@@ -119,6 +121,11 @@ function nodeInstallRoot(execPath) {
   if (prefix === path.parse(prefix).root) return directory;
   // A node in the user's own `bin` would grant the whole home directory, so only its directory is granted then.
   return isInside(prefix, os.homedir()) ? directory : prefix;
+}
+
+/** The monotonic clock in milliseconds, which keeps counting while the runtime is stopped. */
+function monotonicMs() {
+  return Number(process.hrtime.bigint()) / 1e6;
 }
 
 /** A random token no other sandbox, run or process holds. */
@@ -227,6 +234,8 @@ class ReportStream {
     this.canaryCount = 0;
     this.canaryTimer = null;
     this.canaryRunning = new Set();
+    this.canaryLast = null;
+    this.canaryMissed = 0;
     this.lost = false;
     this.ended = null;
     this.child = null;
@@ -355,28 +364,50 @@ class ReportStream {
   }
 
   /**
-   * One canary read: a file read through the sandbox's token that the log should report. A canary counts as sent once its
-   * process has started, so one that a target killed or stopped, or a starved host could not finish, counts as a canary the log
-   * did not deliver and can only make the trial lossy; no target can hide a loss by ending its canaries. Returns whether
-   * the process started.
+   * One canary read: a file read through the sandbox's token that the log should report. A canary counts as sent when it is
+   * attempted, before its file is written or its process started, so one a target killed or stopped, one a starved host or a
+   * full process table could not start and one whose file could not be written all count as canaries the log did not deliver
+   * and can only make the trial lossy; no target can hide a loss by ending or preventing its canaries. Returns whether the
+   * process started.
    */
   async canaryRead() {
-    const { file, started } = await this.tokenRead(`canary-${this.canaryCount++}`);
-    if (started) this.canarySent.add(file);
-    fs.rmSync(file, { force: true });
-    return started;
+    const name = `canary-${this.canaryCount++}`;
+    const file = path.join(this.directory, name);
+    this.canarySent.add(file);
+    try {
+      return (await this.tokenRead(name)).started;
+    } finally {
+      fs.rmSync(file, { force: true });
+    }
   }
 
-  /** Starts the canary reads, one every `CANARY_MS` while fewer than `CANARY_IN_FLIGHT` run. */
+  /**
+   * Notes that the runtime is attempting a canary (or the trial is ending) now. A gap since the last attempt of more than
+   * `CANARY_GAP_MS` means the cadence stopped (the runtime was frozen, its timers starved), so the canaries it called for in
+   * that time count as sent and undelivered.
+   */
+  noteCanaryAttempt() {
+    const now = monotonicMs();
+    if (this.canaryLast !== null && now - this.canaryLast > CANARY_GAP_MS) {
+      this.canaryMissed += Math.floor((now - this.canaryLast) / CANARY_MS) - 1;
+    }
+    this.canaryLast = now;
+  }
+
+  /** Starts the canary reads, one every `CANARY_MS`; a tick that finds `CANARY_IN_FLIGHT` running counts as a canary sent and undelivered. */
   startCanaries() {
     if (this.canaryTimer !== null) return;
+    this.canaryLast = monotonicMs();
     const tick = () => {
+      this.noteCanaryAttempt();
       if (this.canaryRunning.size < CANARY_IN_FLIGHT) {
-        // A canary the runtime could not make is one fewer sent; the final canary still accounts for the trial.
+        // A canary the runtime could not make is sent and undelivered; the final canary still accounts for the trial.
         const read = this.canaryRead()
           .catch(() => {})
           .finally(() => this.canaryRunning.delete(read));
         this.canaryRunning.add(read);
+      } else {
+        this.canarySent.add(path.join(this.directory, `canary-${this.canaryCount++}`));
       }
       this.canaryTimer = setTimeout(tick, CANARY_MS);
       this.canaryTimer.unref();
@@ -391,16 +422,18 @@ class ReportStream {
   async stopCanaries({ final = false } = {}) {
     clearTimeout(this.canaryTimer);
     this.canaryTimer = null;
+    if (this.canaryLast !== null) this.noteCanaryAttempt();
+    this.canaryLast = null;
     await Promise.all(this.canaryRunning);
-    if (final && !(await this.canaryRead()))
-      throw this.fail("the audit's final canary read could not start, so how complete the log's reports were is unmeasured");
+    const started = final ? await this.canaryRead().catch(() => false) : true;
+    if (!started) throw this.fail("the audit's final canary read could not start, so how complete the log's reports were is unmeasured");
   }
 
   /** The canaries sent and the ones the log delivered, as read so far; a trial's are final once `stopCanaries` and the barrier are done. */
   canaries() {
     let delivered = 0;
     for (const file of this.canarySent) if (this.canaryReported.has(file)) delivered += 1;
-    return { sent: this.canarySent.size, delivered, lostEvents: this.lost };
+    return { sent: this.canarySent.size + this.canaryMissed, delivered, lostEvents: this.lost };
   }
 
   /**
