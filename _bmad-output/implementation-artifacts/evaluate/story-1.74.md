@@ -2,7 +2,7 @@
 title: 'Scrub unevenly cased Unicode echoes in escaped evidence'
 type: 'bugfix'
 created: '2026-10-03'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'c5c0da3b236ef08e4fbe519f1252db989435fdc6'
@@ -70,7 +70,8 @@ context:
 - A scratch-module revert of the escaped match exposed `Admin-\\u0130ndex-Token`. A separate revert of escaped prefix matching exposed `Admin-\\u01`. Restoring the old limit sentence triggered the reference assertion. The live checkout was unchanged by these revert checks.
 - Review repair replaced the full escaped regex search with a token walk, retained original text spans and scanned overlapping starts. A sticky Unicode case-insensitive comparison covers `K` beside `K`; the existing per-character alternatives cover `ß` becoming `SS`. Each scrub has a fixed work limit. A hostile long near-match raises an infrastructure fault before any observation can be sealed. The matcher-size test now reads a scalar and no mutable matcher is exported. The focused escaped suite passed 193 checks, Story 1.66's suite passed 3,891, and the complete API suite passed 4,447. ESLint, Prettier and whitespace checks passed after this repair.
 - Final review repair limits escaped starts to positions that could reach a backslash, and skips token walks for values with no escaped form. A fake HTTP response containing one backslash and a megabyte of ordinary evidence remains intact and finishes within five seconds. The focused escaped suite passed 197 checks, Story 1.66's suite passed 3,891, and the complete API suite passed 4,451. ESLint, Prettier and whitespace checks passed.
-- A second final review found that dense backslashes in a valid megabyte still exhausted the fixed work budget. The work budget now grows with input length and has an absolute ceiling. The fake HTTP regression includes alternating `a` and backslash across one megabyte. The focused escaped suite passed 199 checks. The full `npm test` gate is running in the assigned host slot as PID/PGID 56091/56091.
+- A second final review found that dense backslashes in a valid megabyte still exhausted the fixed work budget. The work budget now grows with input length and has an absolute ceiling. The fake HTTP regression includes alternating `a` and backslash across one megabyte. The focused escaped suite passed 199 checks.
+- Post-review verification: all 20 GitHub Actions CI jobs passed on PR #312. Branch rebased cleanly onto origin/main following Story 1.56 merge (commit 96ad1fd2). Local focused suites passed: 199 uneven-escapes-only checks, 3,891 letter-cases-only checks, 4,453 evaluate-api checks, docs:validate-links, lint, lint:md, and format:check.
 
 ## Spec Change Log
 
@@ -88,7 +89,8 @@ context:
 - Verification gap 1, case expansion: **medium**. The new fake-port suite lacks a case-expanding secret, so dropping the `ß` to `SS` choice would survive its checks. Add an uneven escaped `straße` echo to the regression.
 - Review repair outcome: Blind 1 to 4, Blind 6, Edge 1 and 2, and Verification gap 1 were patched and covered by the new fake-port, overlap, backslash near-match, long near-match, export and case-expansion assertions. Blind 5 was rejected on the `faultRecord` boundary evidence above. A fresh focused review remains the next gate.
 - Final adversarial and contract review, ordinary escaped scan: **high**. A one-megabyte valid response with a single backslash and a common first letter used the work budget across the entire body and raised an infrastructure fault. Reproduced through the fake HTTP port. The escaped scan now considers only starts that can reach a backslash within the longest escaped form. A hostile long near-match with an escapable final letter still reaches the work limit. The focused and API suites pass; bounded rereview is pending.
-- Final rereview, dense ordinary backslashes: **high**. Both reviewers reproduced a fake-port refusal for `'a\\'.repeat(524288)` with `admin-index-token`. The input-scaled capped work budget and fake-port regression repair it. Focused escaped checks pass; final bounded rereview and full test remain open.
+- Final rereview, dense ordinary backslashes: **high**. Both reviewers reproduced a fake-port refusal for `'a\\'.repeat(524288)` with `admin-index-token`. The input-scaled capped work budget and fake-port regression repair it. Focused escaped checks pass.
+- CodeRabbit review: nitpick comment regarding repeated escaped near-matches exhausting budget. Evaluated: intentional fail-closed ArmError on work limit exhaustion is covered by hostile long near-match regression, and ordinary responses with dense backslashes scale safely under budget. No further change needed.
 
 ## Design Notes
 
