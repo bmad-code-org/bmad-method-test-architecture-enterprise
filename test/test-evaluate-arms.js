@@ -489,6 +489,12 @@ async function checkGameability() {
     check(false, 'the gameability run wrote no run directory');
     return;
   }
+  // The arm launched nothing, so nothing audited it and the run records no audit channel entry for its trials (Story 1.81).
+  const gameabilityRecord = readJson(path.join(runDirectory, 'run.json'));
+  check(
+    JSON.stringify(gameabilityRecord.observedMountsChannel) === '[]',
+    `the gameability run records the audit channel ${JSON.stringify(gameabilityRecord.observedMountsChannel)}; expected an empty list`,
+  );
   const naive = written(path.join(runDirectory, 'qualification', 'P-003', 'naive-oracle-satisfied.json'), 'the naive evidence');
   const disciplined = written(
     path.join(runDirectory, 'qualification', 'P-003', 'disciplined-oracle-rejected.json'),
