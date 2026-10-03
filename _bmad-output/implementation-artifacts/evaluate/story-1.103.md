@@ -57,23 +57,24 @@ The mutants ran in four scratch copies under the session's scratchpad, one file 
 - **`test/test-evaluate-ci.js`.** The Story 2.4 capture-record guard moved out of `checkRepositoryPlans` into its own case, `the capture-record guard`, a table where each failure is a named case (see below).
   `captureProblems` refuses a `migrations` entry that names anything beyond `file`, `story` and `change`, and `reverseSchema2Migration` requires the migrated file to be the runtime's own serialization with phases keyed under interfaces its registry declares (`JSON.stringify(value, null, 2)` and a newline), so a whitespace edit no longer survives the rebuild.
 - **`cli/lib/evaluate/arm.js`.** The `operationsByPair` comment now says when compile refuses a pair declared twice (one transport signature, or a check that cites the step) and that the arm refuses an uncited step on it.
-- **`test/lib/scratch-directories.js`.** The reaper of dead private parents leaves a parent that a live suite holds through a `.held-by-test` file naming its process id (see the flake note).
+- **`test/lib/scratch-directories.js`.** `holdPrivateParents(pid)` writes the holder's process id to a file named for `pid` in `/tmp/tea-evaluate-test-holds-p<uid>`, beside the private root and outside every parent, and the reaper of dead private parents leaves every parent named `run-<pid>-*` while that holder runs. A hold is written before the parent exists, whole and renamed into place, and a reaper the holder started itself ignores it.
+- **`test/test-evaluate-mutation.js` and `test/test-test-design-qualification.js`.** The auxiliary-journal edge case holds its planted dead pid, the killed-engine-stage case and the qualification signal case hold the pid of the child they kill, and the qualification case holds its planted dead pid.
 - **Plan.** `epics.md` Story 1.103 and `test-design-epic-1.md` amend the guard criterion (see the amendment below).
 
 ## Acceptance criteria and their revert checks
 
-| Criterion                                                               | What fails on a revert                                                                                                                      |
-| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| Every listed survivor fails a named test                                | The mutant table below: each of the 37 reachable mutants fails the test named beside it. Reverting any new case lets its mutant pass again. |
-| A surviving mutant gets a test                                          | Eight mutants survived the review round's tests (S2, S3, S5, C2, Ar4, K3, K7, K8). Each now has a case and fails on it.                     |
-| The capture-record guard fails on a false entry, an absent one, an edit | Eleven guard mutants (G1 to G10 and G6b) each fail a named case of `the capture-record guard`.                                              |
-| Unreachable sites are recorded with the reason                          | `check.js` `infrastructureObservation` is the one site no contract can reach (below).                                                       |
+| Criterion                                                               | What fails on a revert                                                                                                                                                                    |
+| ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Every listed survivor fails a named test                                | The mutant table below: each of the 37 reachable mutants fails the test named beside it. Reverting any new case lets its mutant pass again.                                               |
+| A surviving mutant gets a test                                          | Thirteen mutants survived the review round's tests and the first version of this story's (S2, S3, S5, C2, Ar4, K3, K7, K8, A1b, K1c, K2c, K7b, K8b). Each now has a case and fails on it. |
+| The capture-record guard fails on a false entry, an absent one, an edit | Eleven guard mutants (G1 to G10 and G6b) each fail a named case of `the capture-record guard`.                                                                                            |
+| Unreachable sites are recorded with the reason                          | `check.js` `infrastructureObservation` is the one site no contract can reach (below).                                                                                                     |
 
 ## Mutants
 
 Each mutant is one edit to one file of a scratch copy.
 `Suite` is the suite that read the site.
-`New` marks the eight survivors of the review round's tests and the test this story added.
+`New` marks the thirteen survivors (S2, S3, S5, C2, Ar4, K3, K7, K8, A1b, K1c, K2c, K7b, K8b) and the test this story added for each.
 
 | ID  | Site and edit                                                                                                      | Suite       | Failing test                                                                                                                                                                        |
 | --- | ------------------------------------------------------------------------------------------------------------------ | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -156,13 +157,19 @@ G8 and G9 survived the first version of the table, which is why their two cases 
   Story 1.42 removed the `interfaceId` line from it.
   The engine reads an observation only through evidence pointers, and the pointer grammar's `EVIDENCE_CHANNELS` (`eval-quality/dist/core/schemas/pointer.js`: response-body, response-headers, response-status, stdout, stderr, exit-code, artifact, call-inputs) names no channel that reads `interfaceId`.
   No compiled contract can make a check read the field, so no test can observe it and the mutant stays alive by construction.
-- **A shared-root flake in `checkInterruptedReplay` (real, fixed).** Four concurrent runs of the case failed five times in eight, with `the next ci run removed run-<pid>-otherfol` (and, in the first baseline run, a missing `removed the replay scratch directory`).
+- **A shared-root flake class (real, closed for the cases below).** Four concurrent runs of `checkInterruptedReplay` failed five times in eight, with `the next ci run removed run-<pid>-otherfol` (and, in the first baseline run, a missing `removed the replay scratch directory`).
   The case plants parents named for a dead process under the shared `/tmp/tea-evaluate-p<uid>` and waits on the parent of a `ci` it kills.
   Every suite's `scratchDirectories` start and `removeAll` runs `removeDeadPrivateParents`, which removes the parent of every dead process under that root, so a suite finishing at the same time deleted another suite's planted or killed parent.
-  An `fs` hook that logged the callers showed `removeDeadPrivateParents` as the only remover.
-  The runtime's own sweep is not involved: it skips another folder's parent.
-  The case now marks each parent it plants, and the killed `ci`'s parent before it is killed, with `.held-by-test` holding its process id, and the reaper skips a parent whose holder is alive.
-  Twelve concurrent runs passed afterwards.
+  An `fs` hook that logged the callers showed `removeDeadPrivateParents` as the only remover, and the runtime's own sweep skips another folder's parent.
+  The first fix put a hold file inside each parent.
+  It left a window between creating a parent and marking it, treated an empty or `0` hold as live, and could not serve the cases whose parents the runtime inspects.
+  The hold is now a file beside the root, keyed by the owner's process id and written before the parent exists, so it needs no marking window and touches no parent.
+  It names a positive process id only, and an empty hold is left for its writer to finish.
+  The cases closed: the interrupted-replay case (planted parents and the killed `ci`'s parent), `checkAuxiliaryJournalEdges` (planted dead-pid parents), `checkKilledEngineStage` (the killed preflight's parent) and the qualification signal case (the killed cycle's parent and its planted one).
+  The qualification case also stopped passing vacuously when another suite's reaper removed what the next cycle was meant to reclaim: the next cycle is a process the holder started, which ignores the hold.
+  Twelve concurrent runs of the interrupted-replay case passed with a tight-loop reaper running, ten more runs of `--auxiliary-only` passed in isolation, and the hold unit case (`the scratch holds`) has seven mutants of the hold that behave differently, all killed (an eighth, dropping the release's `clear`, changes nothing a test can see).
+  Still open: the other kill sites of `test/test-evaluate-mutation.js` (`child.kill('SIGKILL')` near the lines that read a dead run's parent) are the same class and hold nothing, and a suite run from a checkout without this change reaps the parents of the checkouts that have it.
+  `--auxiliary-only` failed two runs in ten under a tight-loop reaper while another lane's `test-evaluate-run` was running, and the hook showed no removal by this checkout's reaper, so the foreign reaper is the likely cause.
 - **Where the mutants ran.** Every experiment ran in a `git archive HEAD` copy with a link to `node_modules`, one file edited and restored per mutant.
   The harness lives in the session scratchpad and is not committed.
 - **Version of the engine.** The suites ran against eval-quality 6.0.1, the installed release.
@@ -172,7 +179,7 @@ G8 and G9 survived the first version of the table, which is why their two cases 
 
 Gates run in this checkout on the final tree:
 
-- `test:evaluate-check` (1130 checks), `-interpret`, `-arms`, `-agents`, `-mcp`, `-run`, `-records`, `-calibration`, `-ci`, `-compare`.
+- `test:evaluate-check` (1132 checks), `-interpret`, `-arms`, `-agents`, `-mcp`, `-run`, `-records`, `-calibration`, `-ci`, `-compare`.
 - `npx eslint . --max-warnings 0`, `npm run format:check`, `npm run lint:md`, `npm run docs:validate-links`.
 - The full `npm test` was not run; CI carries it.
 

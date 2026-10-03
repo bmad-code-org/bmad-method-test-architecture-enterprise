@@ -99,7 +99,7 @@ const {
   treeDigest,
 } = require('../cli/lib/evaluate/workspace');
 const { createArtifactValidator } = require('../cli/lib/evaluate/records');
-const { scratchDirectories } = require('./lib/scratch-directories');
+const { holdPrivateParents, scratchDirectories } = require('./lib/scratch-directories');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const EVALUATE = path.join(PROJECT_ROOT, 'cli', 'evaluate.js');
@@ -1595,6 +1595,8 @@ async function checkKilledEngineStage() {
     stdio: 'ignore',
   });
   const closed = new Promise((resolve) => child.once('close', (code, signal) => resolve({ code, signal })));
+  // The parent this CLI makes is held before it exists, so the reaper of a suite running at the same time leaves it once the CLI is killed.
+  holdPrivateParents(child.pid);
   let parent;
   let otherChild;
   let otherClosed;
@@ -1732,6 +1734,8 @@ function checkAuxiliaryJournalEdges() {
   fs.mkdirSync(runs, { recursive: true });
   const journal = journalDirectory(runs);
   const dead = spawnSync(process.execPath, ['-e', '']).pid;
+  // The parents planted under the dead pid are held before they exist, so the reaper of a suite running at the same time leaves them.
+  holdPrivateParents(dead);
   const oldBase = tempDir('auxiliary-old-base');
   const oldRoot = privateRootIn(oldBase);
   const currentRoot = privateRootIn(privateRootBase());

@@ -39,7 +39,13 @@ const baselines = require('./lib/evaluate-baseline');
 const { repositoryFiles, repositoryReadDigest } = require('./lib/evaluate-ci-repos');
 const { planEntryShapeProblems } = require('./lib/evaluate-plan-shape');
 const { suite } = require('./lib/evaluate-story-121');
-const { HOLD_NAME, scratchDirectories } = require('./lib/scratch-directories');
+const {
+  holdPrivateParents,
+  liveHolder,
+  releasePrivateParents,
+  removeDeadPrivateParents,
+  scratchDirectories,
+} = require('./lib/scratch-directories');
 
 const ROOT = path.join(__dirname, '..');
 const CLI = path.join(ROOT, 'cli', 'evaluate.js');
@@ -193,8 +199,6 @@ const scratchNames = (temp) => fs.readdirSync(temp).filter((name) => name.starts
 
 /** The user's private root (`workspace.js` `makePrivateParent`): `/tmp/tea-evaluate-p<uid>`, whatever the run's TMPDIR is. */
 const PRIVATE_ROOT = path.join('/tmp', `tea-evaluate-p${process.getuid()}`);
-/** Marks a private parent as held by this suite, so the scratch reaper of a suite running at the same time leaves it. */
-const holdParent = (parentName) => fs.writeFileSync(path.join(PRIVATE_ROOT, parentName, HOLD_NAME), String(process.pid));
 const privateNames = () => (fs.existsSync(PRIVATE_ROOT) ? fs.readdirSync(PRIVATE_ROOT) : []);
 /** The private parents (`run-<pid>-*`) the process `pid` holds under the private root. */
 const privateParents = (pid) => privateNames().filter((name) => name.startsWith(`run-${pid}-`));
@@ -1574,49 +1578,54 @@ async function checkInterruptedReplay() {
   // staging included, and the next ci run over the same folder removes all of it.
   fs.rmSync(mark, { force: true });
   const killedRun = ciChild(folder, 'pr', env({ TEA_EVALUATE_ENGINE_CLI: wrapper, KILL_AT: 'score', KILL_HOW: 'hang', KILL_MARK: mark }));
-  assert.ok(await appears(mark), 'the replay did not reach the engine stage');
-  // The parent is held while this suite runs: the reaper of a suite running at the same time removes the parent of every dead
-  // process, which this one is about to become, before the next ci run gets to it.
-  for (const parent of privateParents(killedRun.child.pid)) holdParent(parent);
-  // ci first, so no cleanup runs, then the stage it was waiting on.
-  killedRun.child.kill('SIGKILL');
-  await killedRun.exited;
-  process.kill(Number(fs.readFileSync(mark, 'utf8')), 'SIGKILL');
-  const killedPid = killedRun.child.pid;
-  assert.equal(replaysOf(killedPid).length, 1, `a killed ci left ${JSON.stringify(privateNames())}`);
-  const [replay] = replaysOf(killedPid);
-  const owner = read(path.join(replay, '.tea-evaluate-ci-owner.json'));
-  assert.equal(owner.folder, fs.realpathSync.native(folder));
-  assert.equal(owner.pid, killedPid);
-  assert.ok(fs.readdirSync(path.join(replay, 'score-staging')).length > 0, 'the staging is not inside the scratch directory');
-  const dead = spawnSync(process.execPath, ['-e', ''], { encoding: 'utf8' });
-  // A parent whose owner is another folder's, and one whose owner is alive, are not this ci's to remove.
-  const planted = [];
-  const plant = (parentName, name, value) => {
-    const parent = path.join(PRIVATE_ROOT, parentName);
-    fs.mkdirSync(path.join(parent, name), { recursive: true });
-    holdParent(parentName);
-    fs.writeFileSync(path.join(parent, name, '.tea-evaluate-ci-owner.json'), `${JSON.stringify(value)}\n`);
-    planted.push(parent);
-    return parentName;
-  };
+  // The parent this ci makes is held before it exists: the reaper of a suite running at the same time removes the parent of
+  // every dead process, which this ci is about to become, before the next ci run gets to it.
+  holdPrivateParents(killedRun.child.pid);
   try {
-    const live = plant(`run-${process.pid}-liveown`, 'tea-evaluate-replay-live-owner', {
-      pid: process.pid,
-      folder: fs.realpathSync.native(folder),
-    });
-    const other = plant(`run-${dead.pid}-otherfol`, 'tea-evaluate-replay-other-folder', {
-      pid: dead.pid,
-      folder: path.join(temp, 'some-other-evaluation'),
-    });
-    const again = ci(folder, 'pr', env());
-    assert.equal(again.status, 0, again.output);
-    assert.match(again.stderr, /removed the replay scratch directory/);
-    assert.deepEqual(privateParents(killedPid), [], "the next ci run did not remove the dead owner's scratch directory of this folder");
-    for (const name of [live, other]) assert.ok(privateNames().includes(name), `the next ci run removed ${name}`);
-    assert.deepEqual(scratchNames(temp), [], 'the next ci run left a scratch directory in the temporary directory');
+    assert.ok(await appears(mark), 'the replay did not reach the engine stage');
+    // ci first, so no cleanup runs, then the stage it was waiting on.
+    killedRun.child.kill('SIGKILL');
+    await killedRun.exited;
+    process.kill(Number(fs.readFileSync(mark, 'utf8')), 'SIGKILL');
+    const killedPid = killedRun.child.pid;
+    assert.equal(replaysOf(killedPid).length, 1, `a killed ci left ${JSON.stringify(privateNames())}`);
+    const [replay] = replaysOf(killedPid);
+    const owner = read(path.join(replay, '.tea-evaluate-ci-owner.json'));
+    assert.equal(owner.folder, fs.realpathSync.native(folder));
+    assert.equal(owner.pid, killedPid);
+    assert.ok(fs.readdirSync(path.join(replay, 'score-staging')).length > 0, 'the staging is not inside the scratch directory');
+    const dead = spawnSync(process.execPath, ['-e', ''], { encoding: 'utf8' });
+    holdPrivateParents(dead.pid);
+    // A parent whose owner is another folder's, and one whose owner is alive, are not this ci's to remove.
+    const planted = [];
+    const plant = (parentName, name, value) => {
+      const parent = path.join(PRIVATE_ROOT, parentName);
+      fs.mkdirSync(path.join(parent, name), { recursive: true });
+      fs.writeFileSync(path.join(parent, name, '.tea-evaluate-ci-owner.json'), `${JSON.stringify(value)}\n`);
+      planted.push(parent);
+      return parentName;
+    };
+    try {
+      const live = plant(`run-${process.pid}-liveown`, 'tea-evaluate-replay-live-owner', {
+        pid: process.pid,
+        folder: fs.realpathSync.native(folder),
+      });
+      const other = plant(`run-${dead.pid}-otherfol`, 'tea-evaluate-replay-other-folder', {
+        pid: dead.pid,
+        folder: path.join(temp, 'some-other-evaluation'),
+      });
+      const again = ci(folder, 'pr', env());
+      assert.equal(again.status, 0, again.output);
+      assert.match(again.stderr, /removed the replay scratch directory/);
+      assert.deepEqual(privateParents(killedPid), [], "the next ci run did not remove the dead owner's scratch directory of this folder");
+      for (const name of [live, other]) assert.ok(privateNames().includes(name), `the next ci run removed ${name}`);
+      assert.deepEqual(scratchNames(temp), [], 'the next ci run left a scratch directory in the temporary directory');
+    } finally {
+      for (const parent of planted) fs.rmSync(parent, { recursive: true, force: true });
+    }
   } finally {
-    for (const parent of planted) fs.rmSync(parent, { recursive: true, force: true });
+    // A case that fails before the second ci run leaves the killed ci's parent, which its hold keeps from every reaper.
+    for (const name of privateParents(killedRun.child.pid)) fs.rmSync(path.join(PRIVATE_ROOT, name), { recursive: true, force: true });
   }
 }
 
@@ -3081,6 +3090,61 @@ function checkCaptureRecordGuard() {
   }
 }
 
+/**
+ * The holds of `test/lib/scratch-directories.js` (Story 1.103): the reaper of dead processes' private parents leaves a parent
+ * a live suite holds, and a hold whose text names no live positive process id holds nothing.
+ */
+function checkScratchHolds() {
+  const gone = spawnSync(process.execPath, ['-e', ''], { encoding: 'utf8' }).pid;
+  for (const [text, expected] of [
+    [String(process.pid), true],
+    ['', false],
+    ['0', false],
+    ['-1', false],
+    ['x', false],
+    ['1.5', false],
+    [String(gone), false],
+  ])
+    assert.equal(liveHolder(text), expected, `a hold reading ${JSON.stringify(text)} is ${expected ? 'live' : 'no hold'}`);
+  const base = scratch.make('holds-base');
+  const root = path.join(base, `tea-evaluate-p${process.getuid()}`);
+  fs.mkdirSync(root, { mode: 0o700 });
+  const second = spawnSync(process.execPath, ['-e', ''], { encoding: 'utf8' }).pid;
+  const third = spawnSync(process.execPath, ['-e', ''], { encoding: 'utf8' }).pid;
+  holdPrivateParents(gone, base);
+  for (const owner of [gone, second, third]) fs.mkdirSync(path.join(root, `run-${owner}-planted`));
+  // A hold left by a suite that is gone holds nothing.
+  fs.mkdirSync(path.join(base, `tea-evaluate-test-holds-p${process.getuid()}`), { recursive: true });
+  fs.writeFileSync(path.join(base, `tea-evaluate-test-holds-p${process.getuid()}`, String(third)), String(second));
+  // A hold file read half written is empty, and an empty hold is not removed: the writer is about to finish it.
+  const holds = path.join(base, `tea-evaluate-test-holds-p${process.getuid()}`);
+  fs.writeFileSync(path.join(holds, String(second)), '');
+  removeDeadPrivateParents(base);
+  assert.deepEqual(fs.readdirSync(root).sort(), [`run-${gone}-planted`], 'the reaper removed a held parent or kept an unheld one');
+  assert.equal(fs.existsSync(path.join(holds, String(third))), false, 'the reaper kept a hold whose suite is gone');
+  assert.equal(fs.existsSync(path.join(holds, String(second))), true, 'the reaper removed a hold that reads empty');
+  // A reaper this suite started reaps what the suite holds, the cycle a holding case waits on. One that a started process
+  // started in turn does not: it is another suite's reaper as far as the hold goes.
+  const library = path.join(__dirname, 'lib', 'scratch-directories.js');
+  const reap = `require(${JSON.stringify(library)}).removeDeadPrivateParents(${JSON.stringify(base)})`;
+  const grandchild = spawnSync(
+    process.execPath,
+    ['-e', `require('node:child_process').execFileSync(process.execPath, ['-e', ${JSON.stringify(reap)}])`],
+    { encoding: 'utf8' },
+  );
+  assert.equal(grandchild.status, 0, grandchild.stderr);
+  assert.deepEqual(fs.readdirSync(root), [`run-${gone}-planted`], 'a reaper two processes down removed a parent the suite holds');
+  const child = spawnSync(process.execPath, ['-e', reap], { encoding: 'utf8' });
+  assert.equal(child.status, 0, child.stderr);
+  assert.deepEqual(fs.readdirSync(root), [], "the suite's own reaper left the parent the suite holds");
+  fs.mkdirSync(path.join(root, `run-${gone}-again`));
+  removeDeadPrivateParents(base);
+  assert.deepEqual(fs.readdirSync(root), [`run-${gone}-again`], 'the holding process itself removed a parent it holds');
+  releasePrivateParents();
+  removeDeadPrivateParents(base);
+  assert.deepEqual(fs.readdirSync(root), [], 'a released hold still kept its parent');
+}
+
 async function main() {
   const cases = [
     ['the committed plans and baselines', checkFixturePlans],
@@ -3108,6 +3172,7 @@ async function main() {
     ['the committed live tiers', checkCommittedLiveTiers],
     ['the plans of two repositories', checkRepositoryPlans],
     ['the capture-record guard', checkCaptureRecordGuard],
+    ['the scratch holds', checkScratchHolds],
     ['the live tiers', checkLiveTiers],
     ['the strength floor', checkStrengthFloors],
     ['a weak target', checkWeakProject],

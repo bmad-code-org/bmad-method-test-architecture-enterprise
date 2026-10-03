@@ -29,19 +29,72 @@ function alive(pid) {
 }
 
 /**
- * A file a suite puts in a private parent it plants or waits on, holding the process id of the suite. The reaper below leaves
- * such a parent alone while that process runs: a case that checks what the next `ci` removes of a dead run's parent would
- * otherwise lose the parent to the reaper of a suite running at the same time.
+ * Holds on private parents, kept outside the private root. The reaper below removes the parent of every dead process under
+ * the root every run of the user shares, so a case that plants a parent under a dead process id, or waits on the parent of a
+ * process it is about to kill, loses it to the reaper of any suite running at the same time. A case holds the owner's process
+ * id before the parent exists: `holdPrivateParents(pid)` writes the holder's own process id to a file named for `pid` in a
+ * directory beside the root, and the reaper leaves every parent named `run-<pid>-*` while the holder runs. The hold sits
+ * outside the parent because the runtime inspects what a parent holds, and a file of the test's inside it would change that. A
+ * reaper the holder started itself (its parent process is the holder) ignores the hold, since that is the cycle the holding
+ * case waits on.
  */
-const HOLD_NAME = '.held-by-test';
+const HOLDS_NAME = `tea-evaluate-test-holds-p${typeof process.getuid === 'function' ? process.getuid() : 'w'}`;
+const holdsDirectory = (base = '/tmp') => path.join(base, HOLDS_NAME);
+const holdsMade = new Set();
 
-/** Whether a suite that is still running holds the private parent `directory`. */
-function held(directory) {
+/** Whether `text`, the content of a hold file, names a positive process id that still runs (`kill(0)` and `kill(-1)` never say no). */
+function liveHolder(text) {
+  const pid = Number(text);
+  return Number.isInteger(pid) && pid > 0 && alive(pid);
+}
+
+/** Holds every private parent named for the process `ownerPid` until this process releases it or ends. Call before the parent exists. */
+function holdPrivateParents(ownerPid, base = '/tmp') {
+  if (process.platform === 'win32') return;
+  fs.mkdirSync(holdsDirectory(base), { recursive: true, mode: 0o700 });
+  // Written whole and renamed into place: a reaper that read the file half written would see no holder and remove the hold.
+  const file = path.join(holdsDirectory(base), String(ownerPid));
+  const staged = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(staged, String(process.pid));
+  fs.renameSync(staged, file);
+  holdsMade.add(`${base}\0${ownerPid}`);
+}
+
+/** Releases the holds this process made. */
+function releasePrivateParents() {
+  for (const key of holdsMade) {
+    const [base, ownerPid] = key.split('\0');
+    const file = path.join(holdsDirectory(base), ownerPid);
+    try {
+      if (fs.readFileSync(file, 'utf8') === String(process.pid)) fs.rmSync(file, { force: true });
+    } catch {
+      // Already gone.
+    }
+  }
+  holdsMade.clear();
+}
+
+/** Whether a running suite holds the parents named for `ownerPid`; a hold of a gone suite is removed. */
+function held(ownerPid, base = '/tmp') {
+  const file = path.join(holdsDirectory(base), String(ownerPid));
+  let text;
   try {
-    return alive(Number(fs.readFileSync(path.join(directory, HOLD_NAME), 'utf8')));
+    text = fs.readFileSync(file, 'utf8');
   } catch {
     return false;
   }
+  // A process the holder started is the holder's own cycle, whose reaping is what the holding case waits for.
+  if (liveHolder(text) && Number(text) !== process.ppid) return true;
+  // Only a hold that names a gone process is removed: text that is not a process id may be a write in progress.
+  const holder = Number(text);
+  if (Number.isInteger(holder) && holder > 0 && !alive(holder)) {
+    try {
+      fs.rmSync(file, { force: true });
+    } catch {
+      // The next reaper tries again.
+    }
+  }
+  return false;
 }
 
 /**
@@ -61,9 +114,15 @@ function removeDeadPrivateParents(base = '/tmp') {
   } catch {
     return;
   }
+  // A hold whose suite is gone is removed whether or not a parent is named for it.
+  try {
+    for (const name of fs.readdirSync(holdsDirectory(base))) if (/^\d+$/.test(name)) held(Number(name), base);
+  } catch {
+    // No holds yet.
+  }
   for (const name of names) {
     const match = /^run-(\d+)-/.exec(name);
-    if (match === null || alive(Number(match[1])) || held(path.join(root, name))) continue;
+    if (match === null || alive(Number(match[1])) || held(Number(match[1]), base)) continue;
     try {
       removeTree(path.join(root, name));
     } catch {
@@ -113,9 +172,10 @@ function scratchDirectories(prefix) {
     make: (label) => fs.mkdtempSync(path.join(parent, `${label}-`)),
     removeAll: () => {
       removeTree(parent);
+      releasePrivateParents();
       removeDeadPrivateParents();
     },
   };
 }
 
-module.exports = { HOLD_NAME, removeDeadPrivateParents, scratchDirectories };
+module.exports = { holdPrivateParents, liveHolder, releasePrivateParents, removeDeadPrivateParents, scratchDirectories };
