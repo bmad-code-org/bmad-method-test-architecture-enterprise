@@ -38,7 +38,7 @@ inputDocuments:
 
 ## Executive Summary
 
-**Scope:** full epic-level test design for Stories 1.1 to 1.77, 1.80 to 1.85, 1.90 to 1.111 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.77, 1.80 to 1.85, 1.90 to 1.111. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
+**Scope:** full epic-level test design for Stories 1.1 to 1.78, 1.80 to 1.85, 1.90 to 1.111 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; later story findings appended Stories 1.27 to 1.78, 1.80 to 1.85, 1.90 to 1.111. Their scenarios, risks and gates are below, and sections appear in execution order. Every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
 
 **Risk summary:**
 
@@ -1221,6 +1221,15 @@ Added 2026-10-03 in Story 1.75's round 1 review. Levels: contract, static. Files
 | An ordinary-only collision draws no finding from this rule | A registry whose collision is between two ordinary operations while no probe names a report; assert this rule's finding is absent, so the CI plan's compile check keeps that verdict                                                    | Contract | P1  | A rule that fires on every collision fails the case                        |
 | The finding names the engine line's operations             | A registry where the engine line names a report operation and an ordinary one; assert the finding quotes the line and does not call both operations reports                                                                             | Contract | P1  | A finding that assumes both operations are reports fails the assertion     |
 | The reference states the widened trigger                   | Read `### Against deployments` and the `historical` row of the rules table under their headings and fail while "two or more interfaces" remains                                                                                         | Static   | P2  | Restoring the 1.75 wording fails the read                                  |
+
+### Story 1.78: Prove a sealed-brief accepted-baseline replay through ci starts no agent version probe
+
+Added 2026-10-03 in Story 1.76's round 1 verification review. Levels: integration. Files: `test/test-evaluate-ci.js` (`test:evaluate-ci`) and `test/test-evaluate-evaluators.js` (`test:evaluate-evaluators`).
+
+| AC                                                   | Test                                                                                                                                                                                                                              | Level       | P   | Revert check                                                                       |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | --- | ---------------------------------------------------------------------------------- |
+| A sealed-brief CI replay starts no version probe     | Accept a sealed-brief run, replace its agent command with a tripwire that records any invocation, run `tea-evaluate ci` at the `pr` tier; assert the `replay` row passes, bytes equal the baseline's and the wire records nothing | Integration | P0  | Adding a version read to the replay path or to `liveRun` fails the row or the wire |
+| No other `pr` check starts the agent for its version | The same run; assert every other `pr` row of that evaluation leaves the wire untouched                                                                                                                                            | Integration | P1  | A check that reads the version fails the wire assertion                            |
 
 ### Story 1.75: Name a report-operation signature collision at check, before the run
 

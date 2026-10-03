@@ -392,7 +392,12 @@ const AGENT_ADAPTERS = {
   custom: {
     command: null,
     versionArgv: (extra = []) => [...extra, '--version'],
-    parseVersion: (output) => parseInstalledVersion(output),
+    // A custom command names its own version: stdout is one line of JSON, `{"agentVersion":"1.2.3"}`.
+    // Free text could carry a dependency's version as easily as the agent's, so stderr stays free for
+    // the command's own logging and no free-text fallback exists.
+    parseVersion: (output) => parseCustomAgentVersion(output),
+    versionStreams: 'stdout',
+    versionExpectation: 'one line of JSON on stdout, such as {"agentVersion":"1.2.3"}, whose agentVersion is a three-part semantic version',
     defaultModel: null,
     modelFlags: [],
     // The custom runner contract is intentionally small: read the complete
@@ -459,18 +464,88 @@ async function observeAgentVersion({ evaluator, scratch, env = process.env, spaw
     if (result.outcome.timedOut) throw new Error(`the agent version probe timed out after ${AGENT_VERSION_TIMEOUT_MS} ms`);
     if (result.outcome.spawnError || result.outcome.failure || result.outcome.status !== 0)
       throw new Error(`the agent version probe failed: ${JSON.stringify(result.outcome)}`);
-    const version = adapter.parseVersion(`${result.stdout}\n${result.stderr}`);
-    if (version === null) throw new Error('the agent version probe returned no parseable version');
+    const version = adapter.parseVersion(adapter.versionStreams === 'stdout' ? result.stdout : `${result.stdout}\n${result.stderr}`);
+    if (version === null)
+      throw new Error(
+        `the agent version probe returned no parseable version${adapter.versionExpectation ? `; expected ${adapter.versionExpectation}` : ''}`,
+      );
     return version;
   } finally {
     releaseScratchDirectory(scratch, cwd);
   }
 }
 
+/** The longest version string a record may carry; a longer answer is not a version. */
+const MAX_AGENT_VERSION_LENGTH = 256;
+
+/** Semantic Versioning 2.0.0: no leading zeros in numeric parts, no empty prerelease or build identifier. */
+const SEMANTIC_VERSION =
+  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+
 /** Common CLI version shape, with vendor-specific argv kept in this adapter table. */
 function parseInstalledVersion(output) {
   const matches = [...output.matchAll(/(?:^|\s)v?(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)(?=\s|$)/g)];
-  return matches.length === 1 ? matches[0][1] : null;
+  return matches.length === 1 && matches[0][1].length <= MAX_AGENT_VERSION_LENGTH ? matches[0][1] : null;
+}
+
+/** True when `"agentVersion"` is a key of the top-level object more than once; JSON.parse would keep the last silently. */
+function repeatsAgentVersionKey(line) {
+  // The line is already valid JSON, so the scan only tracks strings, containers and where a key may stand.
+  const containers = [];
+  let expectKey = false;
+  let seen = 0;
+  for (let at = 0; at < line.length; at += 1) {
+    const char = line[at];
+    switch (char) {
+      case '"': {
+        let end = at + 1;
+        while (line[end] !== '"') end += line[end] === '\\' ? 2 : 1;
+        if (containers.at(-1) === '{' && expectKey) {
+          expectKey = false;
+          if (containers.length === 1 && JSON.parse(line.slice(at, end + 1)) === 'agentVersion') seen += 1;
+        }
+        at = end;
+
+        break;
+      }
+      case '{':
+      case '[': {
+        containers.push(char);
+        expectKey = char === '{';
+
+        break;
+      }
+      case '}':
+      case ']': {
+        containers.pop();
+        expectKey = false;
+
+        break;
+      }
+      case ',': {
+        expectKey = containers.at(-1) === '{';
+
+        break;
+      }
+      // No default
+    }
+  }
+  return seen > 1;
+}
+
+/** A custom command's keyed version response: one line of JSON whose `agentVersion` is a semantic version, or null. */
+function parseCustomAgentVersion(output) {
+  const line = output.replace(/\r?\n$/, '');
+  if (line.length === 0 || /[\r\n]/.test(line)) return null;
+  let response;
+  try {
+    response = JSON.parse(line);
+  } catch {
+    return null;
+  }
+  const version = response !== null && typeof response === 'object' && !Array.isArray(response) ? response.agentVersion : undefined;
+  if (typeof version !== 'string' || version.length > MAX_AGENT_VERSION_LENGTH || !SEMANTIC_VERSION.test(version)) return null;
+  return repeatsAgentVersionKey(line) ? null : version;
 }
 
 /** Turn a built-in CLI's structured answer into its reply and a complete usage report, when available. */

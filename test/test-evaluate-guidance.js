@@ -2274,6 +2274,9 @@ function checkEvaluatorGuidance(guide, failures) {
   const adapterVersionGuide = headingBody(guide, '### Installed agent adapter version');
   for (const marker of [
     'configured agent executable',
+    '{"agentVersion":"1.2.3"}',
+    'one line of JSON whose `agentVersion` is a three-part semantic version',
+    'change that output to the JSON line',
     'tea.evaluatorAgentVersion',
     'evaluator.version',
     'configuration digest and scoring version',
@@ -2281,6 +2284,20 @@ function checkEvaluatorGuidance(guide, failures) {
     'evaluator/LEARNED.md',
   ])
     requireText(adapterVersionGuide, marker, 'evaluator.md installed agent adapter version', failures);
+  // Story 1.76: the public CLI reference states the same custom response, with its example and the update for existing commands.
+  const cliReference = fs.readFileSync(path.join(__dirname, '..', 'docs', 'reference', 'tea-evaluate-cli.md'), 'utf8');
+  for (const marker of [
+    '{"agentVersion":"1.2.3"}',
+    'one line of JSON whose `agentVersion` is a three-part semantic version',
+    'stderr is free for its own logging',
+    'must change that output to the JSON line',
+  ])
+    requireText(
+      headingBody(cliReference, '### The evaluation layer'),
+      marker,
+      'docs/reference/tea-evaluate-cli.md custom agent version response',
+      failures,
+    );
   // Story 1.42: a sealed observation names its interface beside its operation, in a harness's records and in each calibration input.
   requireText(
     headingBody(guide, '## Emit judgment rows or sealed records'),
