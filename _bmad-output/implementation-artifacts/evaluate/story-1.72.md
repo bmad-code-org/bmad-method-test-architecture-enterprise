@@ -2,9 +2,9 @@
 title: "Observe the sealed-brief agent evaluator's installed adapter version"
 type: 'bugfix'
 created: '2026-10-02'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
-review_loop_iteration: 0
+review_loop_iteration: 3
 baseline_commit: '39076311dce7ed3cb1a12f6d33d3591abfc23b2d'
 context:
   - '{project-root}/_bmad-output/planning-artifacts/evaluate/epics.md'
@@ -81,6 +81,7 @@ context:
 - The independent review found that a custom command's incidental dependency version can satisfy the generic one-token parser. Story 1.76 now defines an explicit keyed custom response and revert checks; its backlog row and lane queue entry are part of this PR.
 - The final test reviewer found that qualification resource use omitted the post-attempt version read. A delayed-read qualification case failed before the accounting fix and passed afterward. The adversarial and architecture reviewers passed their final checks.
 - The post-rebase integration review found that the merged Windows supervisor can spend up to 105,000 ms in Job Object setup before the version probe's agent clock begins. The prior 8,000 ms per-read ceiling could understate a Windows trial's sealed wall-clock allowance. Shared supervisor bounds now give Windows 113,000 ms per read; the cross-platform ceiling check exercises both values. The acceptance behavior is unchanged.
+- The final native Codex integration and evidence lenses passed after that fix. On the rebased tree, the focused version gate, API, MCP, preflight, CLI, comparison, documentation build and static gates passed. PR CI covers the complete final tree.
 
 ## Spec Change Log
 
