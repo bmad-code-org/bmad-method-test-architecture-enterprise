@@ -136,7 +136,7 @@ const { readPlan } = require('./ci-plan');
 const { MANIFEST_NAME } = require('./folder');
 const { addFormats } = require('./formats');
 const { HTTP_PORT_MODULE, originTarget, sharedOrigin } = require('./http-target');
-const { reportedInterfaces, reportsProblems, signatureCollisionLine } = require('./release-report');
+const { lineNamesOperation, reportedOperations, reportsProblems, signatureCollisionLine } = require('./release-report');
 const {
   apiRegistryProblems,
   kindOf,
@@ -865,8 +865,9 @@ function checkProbeAgainstRegistry(report, relative, probe, context, registry) {
  * each naming an operation of that `api` interface of the contract that needs
  * no input, with a JSON pointer (`reportsProblems`). Whether an origin is one
  * the registry's policy authorizes is eval-quality's to decide at run time.
- * Whether two interfaces' report operations collide on a method and path is
- * eval-quality's compile to say (`checkReportCollision`, Story 1.75).
+ * Whether a report operation collides with another operation of the contract
+ * on a method and path is eval-quality's compile to say (`checkReportCollision`,
+ * Stories 1.75 and 1.77).
  */
 function historicalBoundaryProblems(qualification, registry, contract) {
   const { fixCommit, deployments } = qualification ?? {};
@@ -1515,26 +1516,34 @@ function checkEvaluator(report, folder, evaluation, contract, conditions, engine
 }
 
 /**
- * Story 1.75: when a deployment-routed probe names report operations on two or more interfaces, eval-quality's compile
- * says whether the contract keeps them apart. It refuses `duplicate-operation-signature` across the whole contract
- * (a method and an erased path template is unique among all `api` operations of all interfaces, AD-40), which `run`
- * meets at exit 4. TeA compares no template (AD-1): the one `historical` finding quotes the engine's own line, which
- * names both interfaces, both operation IDs and the shared method and path. No other outcome of compile is this rule's.
+ * Stories 1.75 and 1.77: when a deployment-routed probe names a report operation, eval-quality's compile says whether the
+ * contract keeps it apart from every other operation. It refuses `duplicate-operation-signature` across the whole
+ * contract (a method and an erased path template is unique among all `api` operations of all interfaces, AD-40), which
+ * `run` meets at exit 4. The refusal can name two report operations or a report operation and an ordinary one, and
+ * TeA compares no template (AD-1): the one `historical` finding quotes the engine's own line, which names both
+ * interfaces, both operation IDs and the shared method and path, and words itself around those operations. The rule
+ * keeps only a refusal whose line names an operation a probe's report names (by interface and operation ID, no
+ * template), so a collision between other operations, of any shape, stays the CI plan's `compile` check and `run`'s,
+ * as does every other outcome of compile.
  */
-function checkReportCollision(report, folder, relative, env) {
+function checkReportCollision(report, folder, reportingProbes, env) {
   const line = signatureCollisionLine(path.join(folder, CONTRACT_NAME), env);
   if (line === null) return;
+  // The finding sits on the first probe whose own report the line names. A collision the line shows between operations no
+  // report names is not this rule's: it stays the CI plan's `compile` check and `run`'s.
+  const probe = reportingProbes.find(({ operations }) => lineNamesOperation(line, operations));
+  if (probe === undefined) return;
   report.add(
-    relative,
+    probe.relative,
     'historical',
-    `the deployments name report operations on more than one interface, and eval-quality's compile refuses the contract for two operations that share an identity (${line}); change one of the operations the line names (each interface's report operation needs a method and path template of its own)`,
+    `a deployment's report operation shares an identity with another operation of the contract, and eval-quality's compile refuses the contract (${line}); change one of the two operations the line names (a method and path template is unique among the api operations of the contract)`,
   );
 }
 
 /** Checks every committed probe; returns the qualification routes they take. */
 function checkProbes(report, folder, context, behaviors, mutations, registry, env) {
   const routes = new Set();
-  let collisionProbe = null;
+  const reportingProbes = [];
   for (const entry of listDirectory(folder, 'probes') ?? []) {
     const relative = `probes/${entry.name}`;
     const match = PROBE_FILE.exec(entry.name);
@@ -1554,15 +1563,13 @@ function checkProbes(report, folder, context, behaviors, mutations, registry, en
     if (typeof probe.qualification?.route === 'string') routes.add(probe.qualification.route);
     checkProbe(report, relative, probe, context, behaviors, mutations, registry);
     if (probe.qualification?.route === 'gameability') checkGameability(report, folder, relative, probe, context, behaviors, registry);
-    if (
-      collisionProbe === null &&
-      probe.qualification?.route === 'historical' &&
-      reportedInterfaces(probe.qualification.deployments).length > 1
-    )
-      collisionProbe = relative;
+    if (probe.qualification?.route === 'historical') {
+      const named = reportedOperations(probe.qualification.deployments);
+      if (named.length > 0) reportingProbes.push({ relative, operations: named });
+    }
   }
-  // The refusal is contract-wide, so one compile and one finding cover every probe; it sits on the first probe that names two reports.
-  if (collisionProbe !== null) checkReportCollision(report, folder, collisionProbe, env);
+  // The refusal is contract-wide, so one compile and one finding cover every probe; it sits on the first probe whose report the engine's line names.
+  if (reportingProbes.length > 0) checkReportCollision(report, folder, reportingProbes, env);
   return routes;
 }
 

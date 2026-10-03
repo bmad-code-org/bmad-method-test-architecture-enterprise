@@ -140,7 +140,7 @@ development_status:
   1-110-designate-one-oracle-per-behavior-in-the-both-view: backlog
   1-111-guide-stage-6-preflight-by-partition-and-refuse-an-unpartitioned-plan-preflight: backlog
   1-76-require-an-explicit-custom-agent-version-response: review
-  1-77-name-a-report-operations-collision-with-any-other-api-operation-at-check: backlog
+  1-77-name-a-report-operations-collision-with-any-other-api-operation-at-check: review
   1-78-prove-sealed-brief-accepted-baseline-replay-through-ci-starts-no-agent-version-probe: backlog
   epic-1-retrospective: optional
 
@@ -173,6 +173,15 @@ parallel_lanes:
     - 1-76-require-an-explicit-custom-agent-version-response
     - 1-77-name-a-report-operations-collision-with-any-other-api-operation-at-check
     - 1-78-prove-sealed-brief-accepted-baseline-replay-through-ci-starts-no-agent-version-probe
+    - 1-103-prove-the-story-1-42-review-fixes-against-their-mutants
+    - 1-99-prove-mutation-rollback-for-the-test-review-trace-nfr-and-ci-probe-corpora
+    - 1-94-score-each-stored-workflow-in-the-ci-probe-leg
+    - 1-100-report-whole-body-coverage-for-the-routing-test-review-and-trace-contracts
+    - 1-105-partition-rubrics-in-a-partition-plan
+    - 1-106-partition-waivers-in-a-partition-plan
+    - 1-107-partition-evaluator-mappings-in-a-partition-plan
+    - 1-109-partition-gameability-degenerate-responses
+    - 1-110-designate-one-oracle-per-behavior-in-the-both-view
   lane-2-confinement-and-process-lifecycle:
     - 1-62-share-one-sandbox-primitive-layer-across-teas-isolation-mod
     - 1-57-withhold-the-committed-evaluation-folder-from-a-confined-ta
@@ -190,6 +199,12 @@ parallel_lanes:
     - 1-83-give-a-confined-linux-target-a-route-to-the-hosts-its-registry-entry-authorizes
     - 1-84-teach-a-linux-skill-targets-network-declaration-in-the-ci-guide-and-rerun-its-live-sessions
     - 1-85-show-a-sparse-checkout-project-to-the-targets-git-as-the-project-shows-it
+    - 1-92-stop-tea-evaluate-ci-at-once-on-a-signal-while-an-engine-stage-runs
+    - 1-108-compile-and-seal-each-partition-view-in-ci
+    - 1-96-check-the-derivable-fields-of-a-ci-plan
+    - 1-93-prove-the-merge-scheduled-and-release-rendering-and-the-re-render-of-evaluation-plans
+    - 1-97-gate-an-existing-publish-or-deploy-job-on-the-evaluation-job
+    - 1-95-gate-the-replay-totals-the-story-count-and-the-lane-lists
   lane-3-engine-releases-dogfood-and-epic-2:
     - 1-45-aggregate-development-strength-through-eval-quality
     - 2-1-compare-runs-and-accept-a-baseline
@@ -205,28 +220,13 @@ parallel_lanes:
     - 1-56-prove-malformed-cli-refusal-against-a-controlled-defect
     - 1-51-isolate-interaction-plans-by-evaluation-partition
     - 1-46-close-the-dogfood-suites-coverage-gaps
+    - 1-101-name-a-stale-stamp-on-every-artifact-score-reads
+    - 1-102-refuse-a-duplicate-interface-identifier-at-compile
+    - 1-104-count-only-behavior-linked-oracles-for-success-separation
+    - 1-98-the-ai-feature-evaluation-passes-its-own-ci-tiers
     - 2-5-tea-runs-its-pr-tier-and-documents-evaluate
     - 1-90-verify-the-baseline-manifests-file-digests
     - 1-91-keep-machine-paths-out-of-a-committed-baseline
-    - 1-92-stop-tea-evaluate-ci-at-once-on-a-signal-while-an-engine-stage-runs
-    - 1-93-prove-the-merge-scheduled-and-release-rendering-and-the-re-render-of-evaluation-plans
-    - 1-94-score-each-stored-workflow-in-the-ci-probe-leg
-    - 1-95-gate-the-replay-totals-the-story-count-and-the-lane-lists
-    - 1-96-check-the-derivable-fields-of-a-ci-plan
-    - 1-97-gate-an-existing-publish-or-deploy-job-on-the-evaluation-job
-    - 1-98-the-ai-feature-evaluation-passes-its-own-ci-tiers
-    - 1-99-prove-mutation-rollback-for-the-test-review-trace-nfr-and-ci-probe-corpora
-    - 1-100-report-whole-body-coverage-for-the-routing-test-review-and-trace-contracts
-    - 1-101-name-a-stale-stamp-on-every-artifact-score-reads
-    - 1-102-refuse-a-duplicate-interface-identifier-at-compile
-    - 1-103-prove-the-story-1-42-review-fixes-against-their-mutants
-    - 1-104-count-only-behavior-linked-oracles-for-success-separation
-    - 1-105-partition-rubrics-in-a-partition-plan
-    - 1-106-partition-waivers-in-a-partition-plan
-    - 1-107-partition-evaluator-mappings-in-a-partition-plan
-    - 1-108-compile-and-seal-each-partition-view-in-ci
-    - 1-109-partition-gameability-degenerate-responses
-    - 1-110-designate-one-oracle-per-behavior-in-the-both-view
     - 1-111-guide-stage-6-preflight-by-partition-and-refuse-an-unpartitioned-plan-preflight
 owner_handoff:
   - key: h-1-accept-the-dogfood-baseline-and-turn-its-pr-replay-green

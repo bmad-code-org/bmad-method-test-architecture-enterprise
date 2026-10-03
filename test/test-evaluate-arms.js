@@ -2738,16 +2738,25 @@ function checkHistoricalReference() {
     'the reference\'s "### Against deployments" section does not state the three points at which the pre-fix deployment is asked which release it runs',
   );
   // Story 1.75: `check` names a report-operation signature collision before the run, the rules table's `historical` row
-  // names the finding, and the sentence that `check` exits 0 for such a registry is gone.
+  // names the finding, and the sentence that `check` exits 0 for such a registry is gone. Story 1.77 widens the trigger
+  // from reports on two or more interfaces to any report, whichever operation the report operation collides with.
   const rulesRow = text.split('\n').find((line) => line.startsWith('| `historical` ')) ?? '';
   check(
     deployments.includes(
-      "When a probe's deployments name report operations on two or more interfaces, `check` runs eval-quality's own compile and, when it refuses the contract for a duplicate operation signature, exits 10 with one `historical` finding that quotes the engine's line",
+      "When a probe's deployments name a report operation, `check` runs eval-quality's own compile and, when it refuses the contract for a duplicate operation signature whose line names a report operation, exits 10 with one `historical` finding that quotes the engine's line",
     ) &&
+      deployments.includes('A collision between two operations that no report names stays the CI plan') &&
+      deployments.includes("so a report operation's collision behind another collision shows once that one is fixed") &&
+      deployments.includes('another report operation or an ordinary `api` operation of the contract') &&
+      deployments.includes('so one reported interface is enough') &&
+      !deployments.includes('two or more interfaces') &&
       !deployments.includes('`check` exits 0 for such a registry') &&
       deployments.includes("is left to the CI plan's `compile` check and to `run`.") &&
-      rulesRow.includes("a duplicate operation signature that eval-quality's compile refuses"),
-    'the reference does not state, in "### Against deployments" and the `historical` rules row, that `check` names a report-operation signature collision, or still says that `check` exits 0 for such a registry',
+      rulesRow.includes(
+        "when a probe's deployments name a report operation, a duplicate operation signature between that report operation and another operation that eval-quality's compile refuses",
+      ) &&
+      !rulesRow.includes('two or more interfaces'),
+    'the reference does not state, in "### Against deployments" and the `historical` rules row, that `check` names a report-operation signature collision for any named report, or still says "two or more interfaces" or that `check` exits 0 for such a registry',
   );
   check(
     !deployments.includes("asks the deployment's other interfaces nothing") && !deployments.includes('One operation reports one interface'),

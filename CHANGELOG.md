@@ -205,6 +205,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Two HTTP interfaces that serve their release at one method and path used to pass `check` with exit 0 and fail `run` with exit 4 at compile.
   The refusal stays contract-wide, since a defect signature binds its operation by method and path with no interface ID, so give each interface's report operation a path of its own.
   An accepted contract, another refusal, a fault, a stage that cannot start, is killed or ends with an exit the CLI does not document, or a temporary directory that cannot be made draws no finding from this rule.
+- `tea-evaluate check` names a report operation's collision with any other `api` operation, not only with another report (Story 1.77, AD-1, AD-7, AD-40).
+  Story 1.75 ran the compile only when a `historical` probe's deployments named report operations on two or more interfaces, so a report operation that shared its method and path with an ordinary operation of the contract passed `check` and failed `run` at exit 4.
+  The compile now runs once for the whole contract when any `historical` probe names a report operation, and a `duplicate-operation-signature` refusal whose line names a report operation exits 10 with one `historical` finding on the first probe whose report the line names that quotes the engine's line and is worded around the two operations it names.
+  A collision between two operations that no report names stays the CI plan's `compile` check, whichever shape they have.
+  The engine names the first collision it meets, so a report operation's collision behind another one shows once that one is fixed.
 - BREAKING: `tea-evaluate` needs eval-quality 5.0.0 and attributes every observation to its interface (Story 1.42, AD-5, AD-23).
   The peer floor moves from `>=4.7.0` to `>=5.0.0`, and the lockfile resolves 5.0.0. eval-quality 5.0.0 names an operation by the pair of its interface and its operation ID, so two interfaces of one contract may declare the same operation ID.
   Every sealed observation the runtime records carries `interfaceId` beside `operationId`, on the command, tool-call and HTTP routes and on a sealed-brief agent's calls, and every interaction plan step names its `interfaceId`.
