@@ -82,6 +82,7 @@ const fs = require('node:fs');
 const net = require('node:net');
 const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
+const { POSIX_SETUP_MS: WATCHDOG_SETUP_MS, POSIX_STARTUP_SLACK_MS } = require('./agent-supervisor-bounds');
 const { SUPERVISOR_BACKSTOP_MS: BACKSTOP_MS, WINDOWS_SETUP_MS, WINDOWS_STARTUP_SLACK_MS } = require('./agent-supervisor-bounds');
 
 /** Synchronous, opt-in trace for the Windows guardian startup probe. */
@@ -140,10 +141,6 @@ const STOPPING = GROUPS ? ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGQUIT'] : ['SIGINT'
 const LEADER_FLAG = '--group-leader';
 const GUARDIAN_FLAG = '--agent-guardian';
 const WATCHDOG_FLAG = '--guardian-watchdog';
-/** The guardian and leader each bound readiness after they start. */
-const WATCHDOG_SETUP_MS = 10_000;
-/** Allows cold Node startup before the guardian's setup timer begins. */
-const POSIX_STARTUP_SLACK_MS = 15_000;
 
 /** A detached owner whose only lifeline is a pipe held by the leader. */
 function watchGuardian([guardianArgument]) {
@@ -154,7 +151,6 @@ function watchGuardian([guardianArgument]) {
   } catch {
     process.exit(1);
   }
-  if (write(1, 'READY\n')) process.exit(1);
   let command = '';
   let finished = false;
   const lost = () => {
@@ -179,6 +175,12 @@ function watchGuardian([guardianArgument]) {
   process.stdin.once('end', lost);
   process.stdin.once('error', lost);
   process.stdin.resume();
+  const delayMs = Number(process.env.TEA_POSIX_WATCHDOG_TEST_DELAY_MS ?? 0);
+  const reportReady = () => {
+    if (!finished && write(1, 'READY\n')) lost();
+  };
+  if (Number.isInteger(delayMs) && delayMs > 0 && delayMs < WATCHDOG_SETUP_MS) setTimeout(reportReady, delayMs);
+  else reportReady();
 }
 
 /** The guardian is the agent's group leader. Its lifeline is held only by the leader. */

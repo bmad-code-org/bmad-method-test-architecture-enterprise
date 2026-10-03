@@ -2,7 +2,7 @@
 title: 'Story 1.53: Bound an agent whose guardian is stopped'
 type: 'bugfix'
 created: '2026-10-02'
-status: 'in-progress'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '11d98b2f28c7fce70c585975b7cfbdbd356e42b4'
@@ -69,9 +69,25 @@ The first real-runner run before the supervisor fix failed one of 308 checks: th
 
 The full `npm test` initially reached its final lint stage and found a redundant `.filter()` in the new PID discovery test plus a duplicate `Fixed` heading in the changelog. Both were corrected. The complete rerun exited 0. One earlier full run's preflight integrity fixture rejected concurrent repository edits made during that run; the clean rerun passed its 316 preflight checks. The story matrix was formatted without changing its wording.
 
+After rebasing onto `c17cfafa87a0a02b77379eb5fac04f3a0fc463e5`, the changelog kept both this fix and Story 1.72's CI timing entry. The refreshed lockfile installs eval-quality 6.0.0. The rebased `test:evaluate-preflight` passed all 316 checks. Docs links/build, lint, markdown lint, format, release metadata, and the engine export check passed. The next full local `npm test` slot belongs to lane 3 PR #307.
+
+Review added the 25 s POSIX setup reserve to the shared supervised-agent ceiling, with a further 10 s of runner overhead in the registry authoring rule. The supervisor and ceiling now read the setup constants from one module. The reference names four POSIX supervisor processes and the corrected bound. Tests locate the guardian by its command, measure descendant exits against one deadline independent of runner reporting, delay watchdog readiness to check the agent's full wall clock, and kill an armed watchdog to check group teardown. Focused gates passed after these fixes: preflight 324, authoring check 1,058, evaluators 575.
+
 ## Spec Change Log
 
 ## Review Triage Log
+
+| Finding                               | Verdict and evidence                                                                                                                                            | Route |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| Blind 1: registry ceiling             | medium. `check.js` reserves no POSIX setup time, so an admitted `maxElapsedMs` can expire before the agent receives its full timeout.                           | patch |
+| Blind 2: version probe ceiling        | medium. `supervisedAgentCeilingMs` still adds only the 5 s backstop on POSIX, while watchdog setup can consume up to 25 s before the agent clock.               | patch |
+| Blind 3: reported bound               | medium. The runner reference still promises wall clock plus 7 s even though POSIX setup now precedes that clock.                                                | patch |
+| Blind 4: process count                | low. The reference calls the supervisor, leader and guardian three processes, then introduces a fourth POSIX watchdog. A direct prose correction is sufficient. | patch |
+| Blind 5: guardian discovery           | medium. The stopped-guardian test takes the leader's first child; process listing can return the watchdog first.                                                | patch |
+| Blind 6: descendant deadline          | medium. The test applies the descendant's 10 s bound after awaiting runner closure, so a slow report can falsely fail even when every PID ended on time.        | patch |
+| Edge 1: guardian discovery            | medium. Independently confirms Blind 5; identify the guardian by command before sending `SIGSTOP`.                                                              | patch |
+| Verification gap 1: delayed readiness | medium. No POSIX test delays watchdog readiness, so moving the timeout start back before launch would leave normal-startup cases green.                         | patch |
+| Verification gap 2: watchdog death    | medium. No real-runner case kills an armed watchdog and checks transport failure plus guardian-group teardown.                                                  | patch |
 
 ## Design Notes
 
@@ -81,7 +97,9 @@ The guardian is the group leader. A detached watchdog can hold no runner output 
 
 **Commands:**
 
-- `npm run test:evaluate-preflight`: passed, 316 checks.
+- `npm run test:evaluate-preflight`: passed, 324 checks after review fixes.
+- `npm run test:evaluate-check`: passed, 1,058 checks after review fixes.
+- `npm run test:evaluate-evaluators`: passed, 575 checks after review fixes.
 - `npm run docs:validate-links` and `npm run docs:build`: passed.
 - `npm run lint`, `npm run lint:md`, and `npm run format:check`: passed.
 - `npm test`: complete corrected rerun passed with exit 0.

@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-22-2026 18:09
-last_updated: 10-02-2026 19:29
+last_updated: 10-02-2026 23:16
 project: "bmad-method-test-architecture-enterprise: Evaluate"
 project_key: NOKEY
 tracking_system: file-system
@@ -88,7 +88,7 @@ development_status:
   1-50-send-malformed-raw-http-bodies-through-an-api-probe: done
   1-51-isolate-interaction-plans-by-evaluation-partition: backlog
   1-52-stop-agent-descendants-on-windows: done
-  1-53-bound-an-agent-whose-guardian-is-stopped: in-progress
+  1-53-bound-an-agent-whose-guardian-is-stopped: review
   1-54-reclaim-auxiliary-scratch-after-a-killed-preflight: backlog
   1-55-recognize-process-and-answer-separation-for-scalar-cli: backlog
   1-56-prove-malformed-cli-refusal-against-a-controlled-defect: backlog

@@ -96,6 +96,7 @@ const BASE_ENV = Object.fromEntries(
       name !== ENGINE_CLI_ENV &&
       name !== 'TEA_WINDOWS_JOB_OWNER_TEST_FAILURE' &&
       name !== 'TEA_POSIX_WATCHDOG_TEST_FAILURE' &&
+      name !== 'TEA_POSIX_WATCHDOG_TEST_DELAY_MS' &&
       !name.startsWith('TEA_EVALUATE_SHIM_') &&
       name !== 'TEA_EVALUATE_WRAP_RUNPREFLIGHT' &&
       name !== 'TEA_STUB_SECRET',
@@ -421,6 +422,18 @@ function childrenOf(pid) {
     .split(/\s+/)
     .filter(Boolean)
     .map(Number);
+}
+
+function childWithArgument(parentPid, argument) {
+  return childrenOf(parentPid).find((pid) =>
+    String(spawnSync('ps', ['-p', String(pid), '-o', 'command='], { encoding: 'utf8' }).stdout).includes(argument),
+  );
+}
+
+async function processEndBy(pid, deadline) {
+  if (!Number.isSafeInteger(pid)) return { ended: false, observedAt: Date.now() };
+  const ended = await processEnds(pid, Math.max(0, deadline - Date.now()));
+  return { ended, observedAt: Date.now() };
 }
 
 /** Real-runner Windows cases use node as the agent executable, including on hosts that do not run .js files directly. */
@@ -1041,8 +1054,12 @@ function checkPosixRunnerReference() {
     section.includes('detached watchdog') &&
       section.includes('leader-only pipe') &&
       section.includes('10 s') &&
-      section.includes('before the guardian starts the agent'),
-    'the tea-skill-runner reference must name its detached watchdog, leader-only pipe, prelaunch arm and 10 s descendant bound',
+      section.includes('before the guardian starts the agent') &&
+      section.includes('four processes supervise the agent') &&
+      section.includes('25 s startup reserve') &&
+      section.includes('7 s for supervisor backstop and output drain') &&
+      section.includes('40 s in `maxElapsedMs`'),
+    'the tea-skill-runner reference must name POSIX watchdog ownership, its four-process layout, startup and completion bound, 40 s adapter reserve, and 10 s descendant bound',
   );
 }
 
@@ -1234,34 +1251,34 @@ setInterval(() => {}, 1000);
   const ownedChild = await pidFrom(ownedPid);
   const [ownedSupervisor] = childrenOf(owned.child.pid);
   const [ownedLeader] = childrenOf(ownedSupervisor ?? 0);
-  const [ownedGuardian] = childrenOf(ownedLeader ?? 0);
+  const ownedGuardian = childWithArgument(ownedLeader, '--agent-guardian');
+  const ownedWatchdog = childWithArgument(ownedLeader, '--guardian-watchdog');
   const [ownedAgent] = childrenOf(ownedGuardian ?? 0);
   try {
     check(
       ownedSupervisor !== undefined &&
         ownedLeader !== undefined &&
         ownedGuardian !== undefined &&
+        ownedWatchdog !== undefined &&
         ownedAgent !== undefined &&
         ownedChild !== null,
-      'the stopped-guardian case did not start supervisor, leader, guardian, agent and child',
+      'the stopped-guardian case did not start supervisor, leader, guardian, watchdog, agent and child',
     );
     if (ownedGuardian !== undefined) process.kill(ownedGuardian, 'SIGSTOP');
     if (ownedLeader !== undefined) process.kill(ownedLeader, 'SIGKILL');
     if (ownedSupervisor !== undefined) process.kill(ownedSupervisor, 'SIGKILL');
-    const killedAt = Date.now();
-    const [ending, guardianEnded, agentEnded, childEnded] = await Promise.all([
-      Promise.race([owned.closed, delay(10_000).then(() => null)]),
-      ownedGuardian === undefined ? Promise.resolve(false) : processEnds(ownedGuardian, 10_000),
-      ownedAgent === undefined ? Promise.resolve(false) : processEnds(ownedAgent, 10_000),
-      ownedChild === null ? Promise.resolve(false) : processEnds(ownedChild, 10_000),
-    ]);
+    const deadline = Date.now() + 10_000;
+    const descendants = Promise.all([ownedGuardian, ownedAgent, ownedChild].map((pid) => processEndBy(pid, deadline)));
+    const report = Promise.race([owned.closed, delay(15_000).then(() => null)]);
+    const endedDescendants = await descendants;
+    const ending = await report;
     check(
       ending?.code === EXIT_CODES['environment-transport'],
       `the stopped-guardian runner did not report transport failure: ${ending?.code ?? 'still running'} ${ending?.stderr ?? ''}`,
     );
     check(
-      guardianEnded && agentEnded && childEnded && Date.now() - killedAt <= 10_000,
-      `the stopped guardian, agent or child survived 10 s after the dual kill: ${JSON.stringify({ guardianEnded, agentEnded, childEnded })}`,
+      endedDescendants.every(({ ended, observedAt }) => ended && observedAt <= deadline),
+      `the stopped guardian, agent or child survived 10 s after the dual kill: ${JSON.stringify(endedDescendants)}`,
     );
   } finally {
     if (ownedGuardian !== undefined) {
@@ -1295,6 +1312,81 @@ setInterval(() => {}, 1000);
     await Promise.race([unarmed.closed, delay(1000)]);
   }
   if (fs.existsSync(unarmedPid)) reap(Number(fs.readFileSync(unarmedPid, 'utf8')));
+
+  // Delayed watchdog readiness must leave the agent's full wall clock intact.
+  const delayedPid = path.join(tempDir('watchdog-delayed-readiness'), 'pid');
+  const delayedTrace = path.join(tempDir('watchdog-delayed-readiness-trace'), 'trace.log');
+  const delayedStartedAt = Date.now();
+  const delayed = startRunner(
+    ['--timeout-ms', '1500', '--env-pass', 'TEA_POSIX_WATCHDOG_TEST_DELAY_MS', '--env-pass', 'TEA_WINDOWS_JOB_TRACE'],
+    `Say alpha. STUB-ORPHAN ${delayedPid} STUB-SLEEP 30000`,
+    { env: { TEA_POSIX_WATCHDOG_TEST_DELAY_MS: '1200', TEA_WINDOWS_JOB_TRACE: delayedTrace } },
+  );
+  const delayedChild = await pidFrom(delayedPid, 6000);
+  try {
+    const delayedEnding = await Promise.race([delayed.closed, delay(15_000).then(() => null)]);
+    const traceLines = fs.existsSync(delayedTrace) ? fs.readFileSync(delayedTrace, 'utf8').split('\n') : [];
+    const timestampFor = (stage) => Number(traceLines.find((line) => line.includes(` ${stage} `))?.split(' ', 1)[0]);
+    const launchedAt = timestampFor('guardian-agent-spawned');
+    const readyAt = timestampFor('leader-agent-pid-data');
+    const finishedAt = timestampFor('leader-finish');
+    check(delayedChild !== null && Number.isFinite(launchedAt), 'the delayed-readiness agent did not start');
+    check(launchedAt - delayedStartedAt >= 1000, 'the agent started before delayed watchdog readiness');
+    check(
+      Number.isFinite(readyAt) && Number.isFinite(finishedAt) && finishedAt - readyAt >= 1500,
+      `the agent lost part of its 1500 ms wall clock after PID readiness: ready=${readyAt} finished=${finishedAt}`,
+    );
+    check(
+      delayedEnding?.code === EXIT_CODES['environment-timeout'],
+      `the delayed-readiness runner did not report an agent timeout: ${delayedEnding?.code ?? 'still running'} ${delayedEnding?.stderr ?? ''}`,
+    );
+    if (delayedChild !== null) check(await processEnds(delayedChild), `delayed-readiness agent child ${delayedChild} survived timeout`);
+  } finally {
+    delayed.child.kill('SIGKILL');
+    await Promise.race([delayed.closed, delay(1000)]);
+    if (delayedChild !== null) reap(delayedChild);
+  }
+
+  // Losing an armed owner must report transport failure and stop the entire guardian group.
+  const lostOwnerPid = path.join(tempDir('watchdog-killed'), 'pid');
+  const lostOwner = startRunner(long, `Say alpha. STUB-ORPHAN ${lostOwnerPid} STUB-SLEEP 30000`);
+  const lostOwnerChild = await pidFrom(lostOwnerPid);
+  const [lostOwnerSupervisor] = childrenOf(lostOwner.child.pid);
+  const [lostOwnerLeader] = childrenOf(lostOwnerSupervisor ?? 0);
+  const lostOwnerGuardian = childWithArgument(lostOwnerLeader, '--agent-guardian');
+  const lostOwnerWatchdog = childWithArgument(lostOwnerLeader, '--guardian-watchdog');
+  const [lostOwnerAgent] = childrenOf(lostOwnerGuardian ?? 0);
+  try {
+    check(
+      lostOwnerGuardian !== undefined && lostOwnerWatchdog !== undefined && lostOwnerAgent !== undefined && lostOwnerChild !== null,
+      'the watchdog-kill case did not start guardian, watchdog, agent and child',
+    );
+    if (lostOwnerWatchdog !== undefined) process.kill(lostOwnerWatchdog, 'SIGKILL');
+    const deadline = Date.now() + 10_000;
+    const descendants = Promise.all([lostOwnerGuardian, lostOwnerAgent, lostOwnerChild].map((pid) => processEndBy(pid, deadline)));
+    const report = Promise.race([lostOwner.closed, delay(15_000).then(() => null)]);
+    const endedDescendants = await descendants;
+    const ending = await report;
+    check(
+      ending?.code === EXIT_CODES['environment-transport'] && ending.stderr.includes('POSIX watchdog ended before the agent did'),
+      `the killed-watchdog runner did not report transport failure: ${ending?.code ?? 'still running'} ${ending?.stderr ?? ''}`,
+    );
+    check(
+      endedDescendants.every(({ ended, observedAt }) => ended && observedAt <= deadline),
+      `the guardian, agent or child survived 10 s after the watchdog died: ${JSON.stringify(endedDescendants)}`,
+    );
+  } finally {
+    if (lostOwnerGuardian !== undefined) {
+      try {
+        process.kill(-lostOwnerGuardian, 'SIGKILL');
+      } catch {
+        // The guardian group already ended.
+      }
+    }
+    lostOwner.child.kill('SIGKILL');
+    await Promise.race([lostOwner.closed, delay(1000)]);
+    if (lostOwnerChild !== null) reap(lostOwnerChild);
+  }
 
   // The supervisor stopped on its own: the leader reports its timeout to the runner and kills the stopped supervisor.
   const stoppedPid = path.join(tempDir('supervisor-stop'), 'pid');

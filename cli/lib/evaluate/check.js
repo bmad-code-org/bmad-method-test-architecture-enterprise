@@ -44,7 +44,8 @@
  *   the file declares `modelSnapshot` `none` with a `systemPromptDigest` other than the empty byte string's.
  * - `skill-runner`: a registry entry for `tea-skill-runner` does not declare the runner's infrastructure
  *   exit codes, or a leg or plan step for it leaves insufficient `maxElapsedMs` beyond its literal
- *   `timeout-ms`. Windows reserves 120 s for bounded Job Object setup and supervisor completion.
+ *   `timeout-ms`. POSIX reserves 40 s for watchdog setup and completion; Windows reserves 120 s
+ *   for bounded Job Object setup and completion.
  *   If the adapter's ceiling fires first, it records a fault and `preflight` exits 12.
  * - `gameability` (Story 1.9): a probe on the `gameability` route is not a `gameability`-class probe
  *   with `expectedClean: false` and no defects (it launches nothing, so nothing can witness a defect),
@@ -146,6 +147,7 @@ const {
   sharedTargetSystemPaths,
 } = require('./registry');
 const { AGENT_ADAPTERS, bridgedArgsRefused, resolveModel } = require('../agent-adapters');
+const { supervisedAgentCeilingMs } = require('../agent-supervisor-bounds');
 const { EVALUATOR_DIRECTORY, EvaluatorLayerError, evaluatorFiles, evaluatorOf, isKnownEvaluator } = require('./evaluators');
 const { FRAMEWORKS_PATH, LEARNED_PATH, declarationProblems, declaredFrameworks, learnedProblems } = require('./frameworks');
 const { answeredKind, degenerateResponsePath } = require('./gameability');
@@ -507,12 +509,12 @@ function checkSkillRunner(report, evaluation, contract, provision, platform = pr
     }
     const timeout = set.option['timeout-ms']?.literal;
     const milliseconds = typeof timeout === 'string' && /^[0-9]+$/.test(timeout) ? Number(timeout) : Number.NaN;
-    const allowanceMs = platform === 'win32' ? 120_000 : 0;
+    const allowanceMs = supervisedAgentCeilingMs(0, platform) + 10_000;
     if (!(milliseconds > 0 && milliseconds + allowanceMs < entry.maxElapsedMs)) {
       const detail =
         platform === 'win32'
           ? `the literal plus 120000 ms reserved for Windows Job Object setup, supervisor completion and runner overhead must be below the entry's maxElapsedMs (${entry.maxElapsedMs})`
-          : `a literal below the entry's maxElapsedMs (${entry.maxElapsedMs}) makes the runner stop its agent before the adapter kills the runner`;
+          : `the literal plus ${allowanceMs} ms reserved for POSIX watchdog setup, supervisor completion and runner overhead must be below the entry's maxElapsedMs (${entry.maxElapsedMs})`;
       report.add(
         CONTRACT_NAME,
         'skill-runner',

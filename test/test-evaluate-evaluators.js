@@ -1694,9 +1694,10 @@ async function checkAgentVersionAdapterBoundary() {
   const { supervisedAgentCeilingMs } = require('../cli/lib/agent-supervisor-bounds');
   check(
     AGENT_VERSION_CEILING_MS === supervisedAgentCeilingMs(AGENT_VERSION_TIMEOUT_MS) &&
-      supervisedAgentCeilingMs(AGENT_VERSION_TIMEOUT_MS, 'darwin') === 8000 &&
+      supervisedAgentCeilingMs(AGENT_VERSION_TIMEOUT_MS, 'darwin') === 33_000 &&
+      supervisedAgentCeilingMs(AGENT_VERSION_TIMEOUT_MS, 'linux') === 33_000 &&
       supervisedAgentCeilingMs(AGENT_VERSION_TIMEOUT_MS, 'win32') === 113_000,
-    'the version ceiling omitted supervisor cleanup or Windows Job Object setup time',
+    'the version ceiling omitted supervisor cleanup, POSIX watchdog setup, or Windows Job Object setup time',
   );
   check(
     JSON.stringify(AGENT_ADAPTERS.claude.versionArgv()) === '["--version"]' &&
