@@ -2748,8 +2748,8 @@ async function checkUnevenEscapedCases() {
     'an ambiguous near-match changed ordinary text',
   );
   check(performance.now() - nearStart < 5000, 'an ambiguous near-match took over five seconds');
-  const longNearSecret = `${'a'.repeat(9600)}b`;
-  const longNearText = `\\${'a'.repeat(19_200)}`;
+  const longNearSecret = `${'a'.repeat(9600)}ü`;
+  const longNearText = `${'a'.repeat(19_200)}\\u00ff`;
   const longNearStart = performance.now();
   let longNearRefusal;
   try {
@@ -2780,6 +2780,13 @@ async function checkUnevenEscapedCases() {
   const started = performance.now();
   check(scrub(ordinary, secretForms([forty])) === ordinary, 'the ordinary megabyte changed');
   check(performance.now() - started < 5000, 'scrubbing a megabyte took over five seconds');
+  const slashOrdinary = [`\\${'a'.repeat(1_048_575)}`, `${'a'.repeat(1_048_575)}\\`, 'a\\'.repeat(524_288)];
+  for (const text of slashOrdinary) {
+    const startedAt = performance.now();
+    const { observation } = await probe({ status: 200, headers: {}, body: { kind: 'text', value: text } }, 'admin-index-token');
+    check(observation.body.value === text, 'ordinary evidence with a backslash was refused or changed');
+    check(performance.now() - startedAt < 5000, 'ordinary evidence with a backslash took over five seconds');
+  }
   const reference = fs.readFileSync(path.join(__dirname, '../docs/reference/tea-evaluate-cli.md'), 'utf8');
   const httpSection = reference.split('## The registry')[1]?.split('\n## ')[0] ?? '';
   check(

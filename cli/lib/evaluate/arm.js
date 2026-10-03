@@ -195,10 +195,14 @@ function regexLiteral(text) {
 }
 
 /** Bound work on a hostile near-match. A refusal seals no target evidence. */
-const ESCAPED_MATCH_WORK_LIMIT = 2_000_000;
+const ESCAPED_MATCH_BASE_WORK_LIMIT = 2_000_000;
+const ESCAPED_MATCH_MAX_WORK_LIMIT = 64_000_000;
+function escapedWork(text) {
+  return { count: 0, limit: Math.min(ESCAPED_MATCH_MAX_WORK_LIMIT, ESCAPED_MATCH_BASE_WORK_LIMIT + 32 * text.length) };
+}
 const choiceMatchers = new Map();
 function choiceLength(text, offset, choice, work) {
-  if (++work.count > ESCAPED_MATCH_WORK_LIMIT) throw new ArmError('Escaped secret matching exceeded its work limit');
+  if (++work.count > work.limit) throw new ArmError('Escaped secret matching exceeded its work limit');
   if (text.startsWith(choice, offset)) return choice.length;
   let matcher = choiceMatchers.get(choice);
   if (matcher === undefined) {
@@ -242,7 +246,7 @@ function escapedCutPrefix(tail, tokens, work) {
     for (const offset of offsets) {
       if (offset === tail.length) return true;
       for (const choice of choices) {
-        if (++work.count > ESCAPED_MATCH_WORK_LIMIT) throw new ArmError('Escaped secret matching exceeded its work limit');
+        if (++work.count > work.limit) throw new ArmError('Escaped secret matching exceeded its work limit');
         const remaining = tail.length - offset;
         if (
           choice.length > remaining &&
@@ -342,9 +346,10 @@ function matcherFor(secrets) {
     for (const value of valuesByForms.get(secrets) ?? []) {
       const characters = [...value];
       const tokens = characters.map(escapedChoices);
+      if (!tokens.some((choices) => choices.some((choice) => choice.includes('\\')))) continue;
       const source = characters.length <= 512 ? tokens.map((choices) => `(?:${choices.map(regexLiteral).join('|')})`).join('') : '';
-      // Long values use the token walk, avoiding the regex compiler's size limit.
-      escaped.push({ tokens, source, heads: new Set(tokens[0].map((choice) => foldedText(choice[0], false).folded)) });
+      const longest = tokens.reduce((sum, choices) => sum + choices[0].length, 0);
+      escaped.push({ tokens, source, longest, heads: new Set(tokens[0].map((choice) => foldedText(choice[0], false).folded)) });
     }
     matcher =
       forms.length === 0
@@ -355,7 +360,7 @@ function matcherFor(secrets) {
             longest: Math.max(...forms.map((form) => form.length), 0),
             escaped,
             escapedSource: escaped.map(({ source }) => source).join('|'),
-            escapedLongest: Math.max(0, ...escaped.map(({ tokens }) => tokens.reduce((sum, choices) => sum + choices[0].length, 0))),
+            escapedLongest: Math.max(0, ...escaped.map(({ longest }) => longest)),
           };
     matchers.set(secrets, matcher);
   }
@@ -403,12 +408,20 @@ function scrubText(text, secrets) {
     }
   }
   if (text.includes('\\')) {
-    const work = { count: 0 };
-    for (const { tokens, heads } of escaped) {
-      for (let at = 0; at < text.length; at += 1) {
-        if (!heads.has(foldedText(text[at], false).folded)) continue;
-        const end = escapedTokenEnd(text, at, tokens, work);
-        if (end !== null && text.slice(at, end).includes('\\')) spans.push([at, end]);
+    const work = escapedWork(text);
+    for (const { tokens, heads, longest } of escaped) {
+      let checkedThrough = -1;
+      // An escaped echo must contain a backslash. Check only starts near one,
+      // including overlapping starts, so one slash in ordinary text does not
+      // make every occurrence of the secret's first letter consume the budget.
+      for (let slash = text.indexOf('\\'); slash !== -1; slash = text.indexOf('\\', slash + 1)) {
+        const first = Math.max(checkedThrough + 1, slash - longest + 1);
+        for (let at = first; at <= slash; at += 1) {
+          if (!heads.has(foldedText(text[at], false).folded)) continue;
+          const end = escapedTokenEnd(text, at, tokens, work);
+          if (end !== null && text.slice(at, end).includes('\\')) spans.push([at, end]);
+        }
+        checkedThrough = slash;
       }
     }
   }
@@ -486,7 +499,7 @@ function scrubCutText(text, secrets) {
     if (forms.some((form) => form.length > tail.length && form.startsWith(tail))) return `${scrubbed.slice(0, window + from)}${SCRUBBED}`;
   }
   const escapedWindow = Math.max(0, scrubbed.length - escapedLongest);
-  const work = { count: 0 };
+  const work = escapedWork(scrubbed);
   for (let at = escapedWindow; at <= scrubbed.length - MIN_CUT_PREFIX_LENGTH; at += 1) {
     const tail = scrubbed.slice(at);
     if (escaped.some(({ tokens, heads }) => heads.has(foldedText(tail[0], false).folded) && escapedCutPrefix(tail, tokens, work))) {
